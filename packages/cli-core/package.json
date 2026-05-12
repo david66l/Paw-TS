@@ -1,0 +1,20 @@
+{
+  "name": "@paw/cli-core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@paw/agent": "workspace:*",
+    "@paw/core": "workspace:*",
+    "@paw/harness": "workspace:*",
+    "@paw/settings": "workspace:*",
+    "@paw/workspace": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  }
+}

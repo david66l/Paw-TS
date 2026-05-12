@@ -1,0 +1,17 @@
+{
+  "name": "@paw/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "paw-ts": "./src/main.ts"
+  },
+  "dependencies": {
+    "@paw/cli-core": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "start": "bun run src/main.ts"
+  }
+}

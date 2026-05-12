@@ -1,0 +1,23 @@
+{
+  "name": "@paw/tui",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "paw-tui": "./src/main.tsx"
+  },
+  "dependencies": {
+    "@paw/core": "workspace:*",
+    "@paw/cli-core": "workspace:*",
+    "ink": "^5.0.1",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12"
+  },
+  "scripts": {
+    "test": "bun test test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "start": "bun run src/main.tsx"
+  }
+}

@@ -1,0 +1,17 @@
+# paw-ts — local / sensitive (never commit)
+#
+# Canonical paths used by @paw/settings and @paw/core:
+#   .paw/settings.local.json   — API keys, base URLs, MCP server env
+#   .paw/CLAUDE.local.md       — local-only project prefs
+#   .paw/sessions/*.jsonl      — run traces (may contain prompts / tool I/O)
+#   .paw/checkpoints/          — file snapshots for undo
+#   .paw/states/               — persisted run / app state
+.paw/
+
+# Optional dev env at monorepo subfolder
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
