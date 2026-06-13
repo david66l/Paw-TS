@@ -28,7 +28,7 @@ Usage:
   paw-ts config [--root <dir>] [--get <key>] [--set <key> <value>]
   paw-ts commit [--root <dir>] [--message <text>]
   paw-ts stub-run [--goal <text>] [--max-steps <n>] [--worktree]
-  paw-ts eval run [--suite <name>] [--repetitions <n>] [--output console|markdown|json]
+  paw-ts eval run [--suite <name>] [--sandbox] [--repetitions <n>] [--output console|markdown|json]
   paw-ts eval list
 `);
   process.exit(2);
@@ -173,6 +173,7 @@ async function main(): Promise<void> {
     const model = modelIdx !== -1 ? argv[modelIdx + 1] : undefined;
     const parIdx = argv.indexOf("--parallel");
     const parallel = parIdx !== -1 ? Number(argv[parIdx + 1]) : undefined;
+    const sandbox = argv.includes("--sandbox");
     const root = parseRootFromArgv(process.cwd(), argv);
 
     const r = await runEvalCommand({
@@ -183,6 +184,7 @@ async function main(): Promise<void> {
       output,
       parallel: Number.isFinite(parallel) ? parallel : undefined,
       workspaceRoot: root,
+      sandbox,
     });
     if (r.ok) {
       console.log(r.text);

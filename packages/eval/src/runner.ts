@@ -5,6 +5,11 @@
  * All runs use EvalDataCollector hooked into the orchestrator.
  */
 
+import { execSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { AgentOrchestrator, type AgentOrchestratorOptions } from "@paw/agent";
 import type { LanguageModel } from "@paw/models";
 import type { TestCase } from "./test-suite/types.js";
@@ -22,6 +27,8 @@ export interface EvalRunnerOptions {
   /** Optional LLM judge model for subjective scoring (Phase 2). */
   readonly judgeModel?: LanguageModel;
   readonly workspaceRoot?: string;
+  /** Run in an isolated git worktree to protect the working directory. */
+  readonly sandbox?: boolean;
   readonly settings?: Partial<EvalSettings>;
   readonly reportFormat?: ReportFormat;
   readonly onProgress?: (testCaseId: string, rep: number, total: number) => void;
@@ -51,6 +58,9 @@ export class EvalRunner {
 
   /**
    * Run a full test suite.
+   *
+   * When `sandbox` is enabled, creates a git worktree in a temp directory
+   * so the agent cannot modify the user's working copy.
    */
   async runSuite(
     suiteName: string,
@@ -61,36 +71,53 @@ export class EvalRunner {
     const allRecords: EvalRunRecord[] = [];
     let totalRuns = 0;
     const totalCases = cases.length * repetitions;
+    const originalWsRoot = this.opts.workspaceRoot ?? process.cwd();
+
+    // ── Sandbox setup ──
+    let sandboxPath: string | undefined;
+    if (this.opts.sandbox) {
+      sandboxPath = createSandbox(originalWsRoot);
+      console.log(`[sandbox] Isolated workspace: ${sandboxPath}`);
+    }
+    const activeWsRoot = sandboxPath ?? originalWsRoot;
 
     const suiteStart = Date.now();
 
-    for (const tc of cases) {
-      const reports: ScoreReport[] = [];
-      const caseStart = Date.now();
+    try {
+      for (const tc of cases) {
+        const reports: ScoreReport[] = [];
+        const caseStart = Date.now();
 
-      for (let rep = 0; rep < repetitions; rep++) {
-        totalRuns++;
-        this.opts.onProgress?.(tc.id, rep + 1, totalCases);
+        for (let rep = 0; rep < repetitions; rep++) {
+          totalRuns++;
+          this.opts.onProgress?.(tc.id, rep + 1, totalCases);
 
-        const record = await this.runSingleCase(tc, rep);
-        allRecords.push(record);
+          const record = await this.runSingleCase(tc, rep, activeWsRoot);
+          allRecords.push(record);
 
-        const report = await this.scoreRecord(record, tc);
-        reports.push(report);
+          const report = await this.scoreRecord(record, tc, activeWsRoot);
+          reports.push(report);
 
-        console.log(this.reporter.renderRun(report, record));
+          console.log(this.reporter.renderRun(report, record));
+        }
+
+        const caseElapsed = ((Date.now() - caseStart) / 1000).toFixed(1);
+        console.log(`  ⏱ ${caseElapsed}s`);
+
+        const agg = this.aggregator.aggregate(
+          tc.id,
+          reports,
+          this.settings.pass_threshold,
+        );
+        aggregateReports.push(agg);
+        console.log(this.reporter.renderAggregate(agg));
       }
-
-      const caseElapsed = ((Date.now() - caseStart) / 1000).toFixed(1);
-      console.log(`  ⏱ ${caseElapsed}s`);
-
-      const agg = this.aggregator.aggregate(
-        tc.id,
-        reports,
-        this.settings.pass_threshold,
-      );
-      aggregateReports.push(agg);
-      console.log(this.reporter.renderAggregate(agg));
+    } finally {
+      // ── Sandbox cleanup ──
+      if (sandboxPath) {
+        cleanupSandbox(sandboxPath);
+        console.log(`[sandbox] Cleaned up: ${sandboxPath}`);
+      }
     }
 
     const elapsed = ((Date.now() - suiteStart) / 1000).toFixed(1);
@@ -122,6 +149,7 @@ export class EvalRunner {
   private async runSingleCase(
     tc: TestCase,
     repIndex: number,
+    workspaceRoot: string,
   ): Promise<EvalRunRecord> {
     const runId = `eval-${tc.id}-rep${repIndex}-${Date.now()}`;
     const modelLabel = this.opts.model?.label ?? "default";
@@ -150,7 +178,7 @@ export class EvalRunner {
       const result = await orchestrator.run({
         runId,
         goal: tc.goal,
-        workspaceRoot: this.opts.workspaceRoot ?? process.cwd(),
+        workspaceRoot,
         maxSteps: 20, // reasonable limit for test cases
       });
 
@@ -176,13 +204,13 @@ export class EvalRunner {
   private async scoreRecord(
     record: EvalRunRecord,
     tc: TestCase,
+    workspaceRoot: string,
   ): Promise<ScoreReport> {
     const rules = tc.expected.rules ?? [];
     let { ruleResults, ruleScore, summary } = this.scorer.score(record, rules);
 
     // Post-run workspace verification for file_created/file_contains
-    const wsRoot = this.opts.workspaceRoot ?? process.cwd();
-    ruleResults = this.scorer.verifyWorkspaceRules(ruleResults, wsRoot);
+    ruleResults = this.scorer.verifyWorkspaceRules(ruleResults, workspaceRoot);
 
     // Recompute rule score after verification
     const passedCount = ruleResults.filter((r) => r.passed).length;
@@ -254,4 +282,31 @@ export class EvalRunner {
     ];
     return lines.join("\n");
   }
+}
+
+// ── Sandbox helpers ──
+
+function createSandbox(originalRoot: string): string {
+  const tmpDir = mkdtempSync(join(tmpdir(), "paw-eval-"));
+  const worktreePath = join(tmpDir, "workspace");
+  execSync(`git worktree add --detach "${worktreePath}" HEAD`, {
+    cwd: originalRoot,
+    stdio: "pipe",
+    timeout: 30_000,
+  });
+  return worktreePath;
+}
+
+function cleanupSandbox(sandboxPath: string): void {
+  try {
+    execSync(`git worktree remove --force "${sandboxPath}"`, {
+      stdio: "pipe",
+      timeout: 10_000,
+    });
+  } catch {
+    try { rmSync(sandboxPath, { recursive: true, force: true }); } catch { /* ok */ }
+  }
+  try {
+    rmSync(join(sandboxPath, ".."), { recursive: true, force: true });
+  } catch { /* ok */ }
 }

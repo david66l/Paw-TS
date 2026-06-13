@@ -25,6 +25,7 @@ export interface EvalCommandArgs {
   readonly output?: string; // console|markdown|json
   readonly parallel?: number;
   readonly workspaceRoot?: string;
+  readonly sandbox?: boolean;
 }
 
 export async function runEvalCommand(
@@ -77,6 +78,7 @@ async function runEval(
   const runnerOpts: EvalRunnerOptions = {
     model,
     workspaceRoot: args.workspaceRoot,
+    sandbox: args.sandbox,
     settings: {
       default_repetitions: args.repetitions,
       ...(args.parallel ? { parallel_runs: args.parallel } : {}),

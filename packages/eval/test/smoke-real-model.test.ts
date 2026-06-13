@@ -25,6 +25,7 @@ describe("Smoke: real model end-to-end", () => {
     const runner = new EvalRunner({
       model,
       workspaceRoot: process.cwd(),
+      sandbox: false, // set true to test isolation
       settings: { default_repetitions: 1 },
       reportFormat: "console",
     });
