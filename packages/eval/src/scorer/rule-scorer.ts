@@ -5,6 +5,9 @@
  * and checks each rule without any LLM calls.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import type { EvalRunRecord } from "../eval-record.js";
 import type { RuleSpec } from "../test-suite/types.js";
 import type { RuleResult } from "./types.js";
@@ -427,7 +430,6 @@ export class RuleScorer {
     };
   }
 
-  /** Rules that need workspace access are deferred. */
   private deferToRunner(
     ruleType: string,
     _params: Record<string, unknown>,
@@ -437,8 +439,94 @@ export class RuleScorer {
       ruleType: rule.type,
       params: rule.params,
       description: rule.description,
-      passed: true, // optimistic; runner will override with actual check
-      detail: `[DEFERRED] ${ruleType} check requires workspace state — runner will verify`,
+      passed: false,
+      detail: `[DEFERRED] ${ruleType} — pending workspace verification`,
     };
+  }
+
+  /**
+   * Verify file_created and file_contains rules against the actual workspace.
+   * Replaces [DEFERRED] results with real file-system checks.
+   */
+  verifyWorkspaceRules(
+    results: RuleResult[],
+    workspaceRoot: string,
+  ): RuleResult[] {
+    return results.map((r) => {
+      if (!r.detail?.startsWith("[DEFERRED]")) return r;
+
+      const params = r.params as Record<string, unknown>;
+      const path = String(params.path ?? "");
+
+      if (r.ruleType === "file_created") {
+        return this.verifyFileCreated(path, workspaceRoot, r);
+      }
+      if (r.ruleType === "file_contains") {
+        const text = String(params.text ?? "");
+        return this.verifyFileContains(path, text, workspaceRoot, r);
+      }
+      return r;
+    });
+  }
+
+  private verifyFileCreated(
+    relPath: string,
+    workspaceRoot: string,
+    rule: RuleResult,
+  ): RuleResult {
+    const fullPath = join(workspaceRoot, relPath);
+
+    try {
+      const exists = existsSync(fullPath);
+      if (exists) {
+        return {
+          ...rule,
+          passed: true,
+          detail: `File "${relPath}" exists`,
+        };
+      }
+      return {
+        ...rule,
+        passed: false,
+        detail: `File "${relPath}" was not created`,
+      };
+    } catch (e) {
+      return {
+        ...rule,
+        passed: false,
+        detail: `Cannot check file "${relPath}": ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
+  }
+
+  private verifyFileContains(
+    relPath: string,
+    text: string,
+    workspaceRoot: string,
+    rule: RuleResult,
+  ): RuleResult {
+    const fullPath = join(workspaceRoot, relPath);
+
+    try {
+      const content = readFileSync(fullPath, "utf-8");
+      if (content.includes(text)) {
+        return {
+          ...rule,
+          passed: true,
+          detail: `File "${relPath}" contains "${text}"`,
+        };
+      }
+      return {
+        ...rule,
+        passed: false,
+        detail: `File "${relPath}" does not contain "${text}"`,
+      };
+    } catch (e) {
+      return {
+        ...rule,
+        passed: false,
+        detail: `Cannot read file "${relPath}": ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
   }
 }

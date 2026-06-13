@@ -301,7 +301,7 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.edit_file" } },
-        { type: "file_contains", params: { text: "console.log" } },
+        { type: "file_contains", params: { path: "packages/agent/src/orchestrator.ts", text: "console.log" } },
       ],
     },
     difficulty: 1,

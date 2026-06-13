@@ -20,7 +20,7 @@ export const MULTI_STEP_SUITE: TestCase[] = [
         { type: "tool_called", params: { tool: "workspace.grep" } },
         { type: "tool_called", params: { tool: "workspace.read_file" } },
         { type: "tool_called", params: { tool: "workspace.edit_file" } },
-        { type: "file_contains", params: { text: "ContextManager consumer" } },
+        { type: "file_contains", params: { path: "packages/agent/src/orchestrator.ts", text: "ContextManager consumer" } },
         { type: "no_error", params: {} },
       ],
     },

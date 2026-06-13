@@ -7,6 +7,15 @@
 import { listBuiltinSuites, resolveSuite } from "../test-suite/loader.js";
 import { EvalRunner, type EvalRunnerOptions } from "../runner.js";
 import type { ReportFormat } from "../scorer/reporter.js";
+import { createDefaultLanguageModel, OpenAICompatibleModel } from "@paw/models";
+import {
+  defaultSettingsPath,
+  loadPawSettingsLocal,
+  resolveApiKey,
+  resolveBaseUrl,
+  resolveModel,
+} from "@paw/settings";
+import type { LanguageModel } from "@paw/models";
 
 export interface EvalCommandArgs {
   readonly subcommand: string;
@@ -62,7 +71,11 @@ async function runEval(
     }
   })();
 
+  // Resolve model from settings
+  const model = resolveEvalModel(args.workspaceRoot ?? process.cwd(), args.model);
+
   const runnerOpts: EvalRunnerOptions = {
+    model,
     workspaceRoot: args.workspaceRoot,
     settings: {
       default_repetitions: args.repetitions,
@@ -91,8 +104,56 @@ function listSuites(): { ok: boolean; text: string } {
   if (names.length === 0) {
     return { ok: true, text: "No built-in test suites available." };
   }
-  return {
-    ok: true,
-    text: `Available test suites:\n${names.map((n) => `  - ${n}`).join("\n")}`,
-  };
+  const lines = ["Available test suites:"];
+  let total = 0;
+  for (const name of names) {
+    const suite = resolveSuite(name);
+    const count = suite?.length ?? 0;
+    total += count;
+    lines.push(`  - ${name} (${count} cases)`);
+  }
+  lines.push(`  - all (${total} cases total)`);
+  return { ok: true, text: lines.join("\n") };
+}
+
+/** Resolve a LanguageModel from settings, optionally filtering by provider name. */
+function resolveEvalModel(
+  workspaceRoot: string,
+  providerName?: string,
+): LanguageModel {
+  // No explicit provider → use default detection
+  if (!providerName) {
+    return createDefaultLanguageModel(workspaceRoot);
+  }
+
+  try {
+    const settingsPath = defaultSettingsPath(workspaceRoot);
+    const s = loadPawSettingsLocal(settingsPath);
+    const provider = providerName.toLowerCase();
+
+    // Look for provider-specific settings
+    const providers = s.models as Record<string, Record<string, unknown>> | undefined;
+    const providerConfig = providers?.[provider];
+
+    if (providerConfig) {
+      const apiKey = resolveApiKey(s, provider as never) || String(providerConfig.apiKey ?? "");
+      const baseUrl = resolveBaseUrl(s, provider as never) || String(providerConfig.baseUrl ?? "https://api.deepseek.com");
+      const modelId = resolveModel(s, provider as never, String(providerConfig.model ?? "deepseek-chat"));
+
+      // Use OpenAICompatibleModel (works for DeepSeek, Qwen, and OpenAI)
+      return new OpenAICompatibleModel({
+        apiKey,
+        baseUrl,
+        model: modelId,
+        capabilities: { contextWindow: 128_000, maxOutputTokens: 8_192 },
+      });
+    }
+
+    // Provider not found in settings, fall back to default
+    console.warn(`[paw eval] Provider "${providerName}" not found in settings. Using default model.`);
+  } catch (e) {
+    console.warn(`[paw eval] Failed to resolve model "${providerName}": ${e instanceof Error ? e.message : String(e)}. Using default.`);
+  }
+
+  return createDefaultLanguageModel(workspaceRoot);
 }

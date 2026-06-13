@@ -62,8 +62,11 @@ export class EvalRunner {
     let totalRuns = 0;
     const totalCases = cases.length * repetitions;
 
+    const suiteStart = Date.now();
+
     for (const tc of cases) {
       const reports: ScoreReport[] = [];
+      const caseStart = Date.now();
 
       for (let rep = 0; rep < repetitions; rep++) {
         totalRuns++;
@@ -78,6 +81,9 @@ export class EvalRunner {
         console.log(this.reporter.renderRun(report, record));
       }
 
+      const caseElapsed = ((Date.now() - caseStart) / 1000).toFixed(1);
+      console.log(`  ⏱ ${caseElapsed}s`);
+
       const agg = this.aggregator.aggregate(
         tc.id,
         reports,
@@ -87,6 +93,7 @@ export class EvalRunner {
       console.log(this.reporter.renderAggregate(agg));
     }
 
+    const elapsed = ((Date.now() - suiteStart) / 1000).toFixed(1);
     const passed = aggregateReports.filter((r) => r.passed).length;
     const passRate =
       aggregateReports.length > 0
@@ -97,6 +104,7 @@ export class EvalRunner {
       suiteName,
       aggregateReports,
       passRate,
+      elapsed,
     );
 
     return {
@@ -170,7 +178,19 @@ export class EvalRunner {
     tc: TestCase,
   ): Promise<ScoreReport> {
     const rules = tc.expected.rules ?? [];
-    const { ruleResults, ruleScore, summary } = this.scorer.score(record, rules);
+    let { ruleResults, ruleScore, summary } = this.scorer.score(record, rules);
+
+    // Post-run workspace verification for file_created/file_contains
+    const wsRoot = this.opts.workspaceRoot ?? process.cwd();
+    ruleResults = this.scorer.verifyWorkspaceRules(ruleResults, wsRoot);
+
+    // Recompute rule score after verification
+    const passedCount = ruleResults.filter((r) => r.passed).length;
+    ruleScore = rules.length > 0 ? Math.round((passedCount / rules.length) * 100) : 100;
+    summary =
+      ruleResults.filter((r) => !r.passed).length === 0
+        ? `All ${rules.length} rule(s) passed`
+        : `${passedCount}/${rules.length} rule(s) passed`;
 
     let llmScoreValue: number | undefined;
     let dimensionScores: ScoreReport["dimensionScores"];
@@ -220,6 +240,7 @@ export class EvalRunner {
     suiteName: string,
     reports: AggregateScoreReport[],
     passRate: number,
+    elapsed: string,
   ): string {
     const lines = [
       `\n${"=".repeat(60)}`,
@@ -228,6 +249,7 @@ export class EvalRunner {
       `Pass rate: ${passRate}%  Threshold: ${this.settings.pass_threshold}/100`,
       `Rule weight: ${this.settings.rule_weight}  LLM weight: ${this.settings.llm_weight}`,
       `Failed cases: ${reports.filter((r) => !r.passed).map((r) => r.testCaseId).join(", ") || "(none)"}`,
+      `Total elapsed: ${elapsed}s`,
       `${"=".repeat(60)}`,
     ];
     return lines.join("\n");

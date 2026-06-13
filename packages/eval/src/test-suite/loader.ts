@@ -40,8 +40,11 @@ export function loadBuiltinSuite(name: string): TestCase[] | undefined {
   return BUILTIN_SUITES[name];
 }
 
-/** Resolve a suite name — first checks builtins, then falls back to file loading. */
+/** Resolve a suite name — first checks builtins, "all" returns all suites merged. */
 export function resolveSuite(name: string): TestCase[] | undefined {
+  if (name === "all") {
+    return Object.values(BUILTIN_SUITES).flat();
+  }
   return loadBuiltinSuite(name);
 }
 

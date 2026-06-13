@@ -19,9 +19,9 @@ export const CODE_GEN_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.write_file" } },
         { type: "file_created", params: { path: "packages/core/src/string-utils.ts" } },
-        { type: "file_contains", params: { text: "export function camelToSnake" } },
-        { type: "file_contains", params: { text: "export function snakeToCamel" } },
-        { type: "file_contains", params: { text: "@param" } },
+        { type: "file_contains", params: { path: "packages/core/src/string-utils.ts", text: "export function camelToSnake" } },
+        { type: "file_contains", params: { path: "packages/core/src/string-utils.ts", text: "export function snakeToCamel" } },
+        { type: "file_contains", params: { path: "packages/core/src/string-utils.ts", text: "@param" } },
         { type: "no_error", params: {} },
       ],
       llmJudgment: {
@@ -45,7 +45,7 @@ export const CODE_GEN_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.edit_file" } },
-        { type: "file_contains", params: { text: "string-utils" } },
+        { type: "file_contains", params: { path: "packages/core/src/index.ts", text: "string-utils" } },
       ],
     },
     difficulty: 1,
@@ -80,9 +80,9 @@ export const CODE_GEN_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
         { type: "tool_called", params: { tool: "workspace.write_file" } },
-        { type: "file_contains", params: { text: "describe" } },
-        { type: "file_contains", params: { text: "makeToolError" } },
-        { type: "file_contains", params: { text: "expect" } },
+        { type: "file_contains", params: { path: "test/errors.test.ts", text: "describe" } },
+        { type: "file_contains", params: { path: "test/errors.test.ts", text: "makeToolError" } },
+        { type: "file_contains", params: { path: "test/errors.test.ts", text: "expect" } },
       ],
       llmJudgment: {
         dimensions: ["completeness", "expertise"],
@@ -128,7 +128,7 @@ export const CODE_GEN_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.write_file" } },
         { type: "file_created", params: { path: "src/utils/validators/index.ts" } },
-        { type: "file_contains", params: { text: "isNonEmptyString" } },
+        { type: "file_contains", params: { path: "src/utils/validators/index.ts", text: "isNonEmptyString" } },
       ],
     },
     difficulty: 2,

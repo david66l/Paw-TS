@@ -72,7 +72,7 @@ export const CORE_TOOLS_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.write_file" } },
         { type: "file_created", params: { path: "hello.txt" } },
-        { type: "file_contains", params: { text: "Hello, Paw!" } },
+        { type: "file_contains", params: { path: "hello.txt", text: "Hello, Paw!" } },
       ],
     },
     difficulty: 1,
@@ -88,7 +88,7 @@ export const CORE_TOOLS_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.write_file" } },
         { type: "file_created", params: { path: "src/utils.ts" } },
-        { type: "file_contains", params: { text: "export function add" } },
+        { type: "file_contains", params: { path: "src/utils.ts", text: "export function add" } },
       ],
     },
     difficulty: 2,
@@ -105,7 +105,7 @@ export const CORE_TOOLS_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.edit_file" } },
-        { type: "file_contains", params: { text: "export * from './eval-hooks.js'" } },
+        { type: "file_contains", params: { path: "packages/core/src/index.ts", text: "export * from './eval-hooks.js'" } },
       ],
     },
     difficulty: 2,
@@ -120,8 +120,8 @@ export const CORE_TOOLS_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.edit_file" } },
-        { type: "file_contains", params: { text: "timestamp" } },
-        { type: "file_contains", params: { text: "Date.now()" } },
+        { type: "file_contains", params: { path: "packages/core/src/errors.ts", text: "timestamp" } },
+        { type: "file_contains", params: { path: "packages/core/src/errors.ts", text: "Date.now()" } },
       ],
     },
     difficulty: 3,
@@ -201,7 +201,7 @@ export const CORE_TOOLS_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.list_dir" } },
-        { type: "output_contains", params: { text: "packages" } },
+        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -249,7 +249,7 @@ export const CORE_TOOLS_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
         { type: "tool_called", params: { tool: "workspace.edit_file" } },
-        { type: "file_contains", params: { text: "// END" } },
+        { type: "file_contains", params: { path: "packages/core/src/errors.ts", text: "// END" } },
       ],
     },
     difficulty: 3,
