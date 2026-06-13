@@ -3,12 +3,32 @@
  */
 
 import type { TestCase, TestSuite } from "./types.js";
-import { CORE_TOOLS_SUITE, SHELL_SAFETY_SUITE } from "./builtin/index.js";
+import {
+  CORE_TOOLS_SUITE,
+  SHELL_SAFETY_SUITE,
+  CONTEXT_MGMT_SUITE,
+  MEMORY_RETRIEVAL_SUITE,
+  CODE_GEN_SUITE,
+  MULTI_STEP_SUITE,
+  ADVERSARIAL_SUITE,
+  HIGH_FREQ_SUITE,
+} from "./builtin/index.js";
 
 const BUILTIN_SUITES: Record<string, TestCase[]> = {
   "core-tools": CORE_TOOLS_SUITE,
   "shell-safety": SHELL_SAFETY_SUITE,
+  "context-mgmt": CONTEXT_MGMT_SUITE,
+  "memory-retrieval": MEMORY_RETRIEVAL_SUITE,
+  "code-gen": CODE_GEN_SUITE,
+  "multi-step": MULTI_STEP_SUITE,
+  "adversarial": ADVERSARIAL_SUITE,
+  "high-frequency": HIGH_FREQ_SUITE,
 };
+
+/** Total test case count across all builtin suites. */
+export function totalBuiltinCases(): number {
+  return Object.values(BUILTIN_SUITES).reduce((sum, s) => sum + s.length, 0);
+}
 
 /** List all available built-in suite names. */
 export function listBuiltinSuites(): string[] {

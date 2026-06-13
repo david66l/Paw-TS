@@ -11,6 +11,7 @@ import type { TestCase } from "./test-suite/types.js";
 import type { EvalRunRecord } from "./eval-record.js";
 import { EvalDataCollector } from "./data-collector.js";
 import { RuleScorer } from "./scorer/rule-scorer.js";
+import { llmScore } from "./scorer/llm-scorer.js";
 import { Aggregator } from "./scorer/aggregator.js";
 import { Reporter, type ReportFormat } from "./scorer/reporter.js";
 import { resolveEvalSettings, type EvalSettings } from "./eval-settings.js";
@@ -18,6 +19,8 @@ import type { ScoreReport, AggregateScoreReport } from "./scorer/types.js";
 
 export interface EvalRunnerOptions {
   readonly model?: LanguageModel;
+  /** Optional LLM judge model for subjective scoring (Phase 2). */
+  readonly judgeModel?: LanguageModel;
   readonly workspaceRoot?: string;
   readonly settings?: Partial<EvalSettings>;
   readonly reportFormat?: ReportFormat;
@@ -69,7 +72,7 @@ export class EvalRunner {
         const record = await this.runSingleCase(tc, rep);
         allRecords.push(record);
 
-        const report = this.scoreRecord(record, tc);
+        const report = await this.scoreRecord(record, tc);
         reports.push(report);
 
         console.log(this.reporter.renderRun(report, record));
@@ -160,13 +163,41 @@ export class EvalRunner {
 
   /**
    * Score a single run record against its test case expectations.
+   * Uses RuleScorer always; adds LlmScorer when judgeModel is available.
    */
-  private scoreRecord(record: EvalRunRecord, tc: TestCase): ScoreReport {
+  private async scoreRecord(
+    record: EvalRunRecord,
+    tc: TestCase,
+  ): Promise<ScoreReport> {
     const rules = tc.expected.rules ?? [];
     const { ruleResults, ruleScore, summary } = this.scorer.score(record, rules);
 
-    // For now, overall score = rule score (LLM scoring is Phase 2)
-    const overallScore = ruleScore;
+    let llmScoreValue: number | undefined;
+    let dimensionScores: ScoreReport["dimensionScores"];
+
+    // Phase 2: LLM judging when judge model is available
+    if (this.opts.judgeModel && tc.expected.llmJudgment) {
+      try {
+        const result = await llmScore(
+          this.opts.judgeModel,
+          record,
+          tc.expected.llmJudgment,
+        );
+        llmScoreValue = result.llmScore;
+        dimensionScores = result.dimensionScores;
+      } catch {
+        // LLM judge failed — fall back to rule-only scoring
+      }
+    }
+
+    // Weighted overall score
+    const ruleWeight = this.settings.rule_weight;
+    const llmWeight = this.settings.llm_weight;
+    const overallScore =
+      llmScoreValue !== undefined
+        ? Math.round(ruleScore * ruleWeight + llmScoreValue * llmWeight)
+        : ruleScore;
+
     const passed = overallScore >= this.settings.pass_threshold;
 
     return {
@@ -174,7 +205,9 @@ export class EvalRunner {
       repetitionIndex: record.repetitionIndex,
       overallScore,
       ruleScore,
+      llmScore: llmScoreValue,
       ruleResults,
+      dimensionScores,
       passed,
       summary,
     };
