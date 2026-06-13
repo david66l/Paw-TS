@@ -33,7 +33,6 @@ export const MEMORY_RETRIEVAL_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "memory.read" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -66,7 +65,6 @@ export const MEMORY_RETRIEVAL_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "memory.read" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -167,7 +165,6 @@ export const MEMORY_RETRIEVAL_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "memory.list" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 2,

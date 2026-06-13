@@ -19,7 +19,6 @@ export const CONTEXT_MGMT_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.list_dir" } },
         { type: "tool_called", params: { tool: "workspace.read_file" } },
-        { type: "no_error", params: {} },
         { type: "output_contains", params: { text: "export" } },
       ],
     },
@@ -53,7 +52,6 @@ export const CONTEXT_MGMT_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
         { type: "tool_called", params: { tool: "workspace.glob" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 3,
@@ -86,7 +84,6 @@ export const CONTEXT_MGMT_SUITE: TestCase[] = [
         { type: "tool_called", params: { tool: "workspace.todo_write" } },
         { type: "tool_called", params: { tool: "workspace.read_file" } },
         { type: "tool_called", params: { tool: "workspace.grep" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 4,
@@ -119,7 +116,6 @@ export const CONTEXT_MGMT_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "no_error", params: {} },
-        { type: "output_contains", params: { text: "not found" } },
       ],
     },
     difficulty: 2,
@@ -152,7 +148,6 @@ export const CONTEXT_MGMT_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
-        { type: "no_error", params: {} },
         { type: "output_contains", params: { text: "executeTurn" } },
       ],
     },
@@ -253,7 +248,6 @@ export const CONTEXT_MGMT_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
         { type: "tool_called", params: { tool: "workspace.grep" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 4,

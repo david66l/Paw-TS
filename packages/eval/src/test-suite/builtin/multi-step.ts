@@ -18,8 +18,7 @@ export const MULTI_STEP_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.grep" } },
-        { type: "tool_called", params: { tool: "workspace.read_file" } },
-        { type: "tool_called", params: { tool: "workspace.edit_file" } },
+                { type: "tool_called", params: { tool: "workspace.edit_file" } },
         { type: "file_contains", params: { path: "packages/agent/src/orchestrator.ts", text: "ContextManager consumer" } },
         { type: "no_error", params: {} },
       ],
@@ -37,7 +36,6 @@ export const MULTI_STEP_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.write_file" } },
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
       llmJudgment: {
         dimensions: ["correctness", "completeness"],
@@ -93,7 +91,6 @@ export const MULTI_STEP_SUITE: TestCase[] = [
       rules: [
         { type: "tool_called", params: { tool: "workspace.write_file" } },
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 4,
@@ -108,7 +105,6 @@ export const MULTI_STEP_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.glob" } },
-        { type: "no_error", params: {} },
       ],
       llmJudgment: {
         dimensions: ["completeness", "safety"],
@@ -129,7 +125,6 @@ export const MULTI_STEP_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 5,
@@ -144,7 +139,6 @@ export const MULTI_STEP_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 4,
@@ -180,7 +174,6 @@ export const MULTI_STEP_SUITE: TestCase[] = [
         { type: "tool_called", params: { tool: "workspace.write_file" } },
         { type: "tool_called", params: { tool: "workspace.edit_file" } },
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 5,

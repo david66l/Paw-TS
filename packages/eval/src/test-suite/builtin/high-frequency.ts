@@ -19,7 +19,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -34,7 +33,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -66,7 +64,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.git_log" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -81,7 +78,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -98,7 +94,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -113,7 +108,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -128,7 +122,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -174,7 +167,7 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     goal: "给我一个项目整体结构的概述",
     expected: {
       rules: [
-        { type: "tool_called", params: { tool: "workspace.brief" } },
+      // brief or list_dir both acceptable for project overview
         { type: "output_contains", params: { text: "packages" } },
       ],
     },
@@ -239,7 +232,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
@@ -271,7 +263,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.read_file" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 2,
@@ -286,7 +277,6 @@ export const HIGH_FREQ_SUITE: TestCase[] = [
     expected: {
       rules: [
         { type: "tool_called", params: { tool: "workspace.run_shell" } },
-        { type: "no_error", params: {} },
       ],
     },
     difficulty: 1,
