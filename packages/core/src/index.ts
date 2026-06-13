@@ -37,6 +37,7 @@ export {
   type ToolErrorCode,
   type ToolErrorPayload,
 } from "./errors.js";
+export type { EvalHooks } from "./eval-hooks.js";
 export type { RunEvent, RunEventEnvelope } from "./run-events.js";
 export {
   formatRunMetricsSummary,

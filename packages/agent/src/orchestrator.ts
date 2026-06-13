@@ -48,6 +48,7 @@ import {
   DEFAULT_KEEP_RECENT_TOOLS,
   restoreCheckpoint,
   type ContextBudgetSnapshot,
+  type EvalHooks,
   type TokenEstimator,
 } from "@paw/core";
 
@@ -147,6 +148,8 @@ export interface AgentOrchestratorOptions {
   readonly retrySleep?: (ms: number) => Promise<void>;
   /** When to run post-run memory extraction (requires subAgentLauncher). */
   readonly memoryExtraction?: "background" | "await" | "off";
+  /** Evaluation hooks for collecting trace data (non-invasive). */
+  readonly evalHooks?: EvalHooks;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -179,6 +182,7 @@ export class AgentOrchestrator {
   private readonly retrySleep: (ms: number) => Promise<void>;
   private readonly memoryExtraction: "background" | "await" | "off";
   private readonly circuitBreakers = new Map<string, CircuitBreaker>();
+  private readonly evalHooks?: EvalHooks;
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -203,6 +207,7 @@ export class AgentOrchestrator {
     this.retrySleep =
       opts?.retrySleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.memoryExtraction = opts?.memoryExtraction ?? "background";
+    this.evalHooks = opts?.evalHooks;
     if (opts?.skillsDir) {
       const skills = loadSkillsFromDirectory(opts.skillsDir);
       for (const skill of skills) {
@@ -693,6 +698,11 @@ export class AgentOrchestrator {
     }
 
     // 4. Model call
+    this.evalHooks?.beforeModelCall?.({
+      messages: ctxMgr.buildMessages(),
+      contextManager: ctxMgr,
+    });
+    const modelCallStart = Date.now();
     const { text, thinking, nativeToolCalls } = await this.invokeModel(
       model,
       ctxMgr.buildMessages(),
@@ -743,6 +753,18 @@ export class AgentOrchestrator {
         ? parseAgentActionFromModelText(text, { knownTools })
         : null;
 
+    const modelCallLatency = Date.now() - modelCallStart;
+    this.evalHooks?.afterModelCall?.({
+      turnIndex: ctx.turn,
+      responseText: text,
+      thinking,
+      toolCalls: toolCalls.length > 0
+        ? toolCalls.map((tc) => ({ tool: tc.tool, args: tc.args }))
+        : undefined,
+      usage: undefined, // filled by invokeModel's emit path; captured later by data collector
+      latencyMs: modelCallLatency,
+    });
+
     // 6. Dispatch via action handlers
     const actionResult = await handleAction(
       singleAction ? [singleAction] : [],
@@ -773,6 +795,7 @@ export class AgentOrchestrator {
         subAgentLauncher: this.subAgentLauncher,
         skillRegistry: this.skillRegistry,
         watcher: this.watcher,
+        evalHooks: this.evalHooks,
       },
     );
     return actionResult.state;

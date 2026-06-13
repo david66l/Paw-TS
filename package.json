@@ -5,7 +5,8 @@
   "description": "Paw TypeScript stack (canonical). Lives under paw-ts/ only — do not import ../src/paw. Spec: 架构设计v2.",
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
-    "typecheck": "bun run typecheck:core && bun run typecheck:settings && bun run typecheck:workspace && bun run typecheck:harness && bun run typecheck:models && bun run typecheck:store && bun run typecheck:agent && bun run typecheck:cli-core && bun run typecheck:cli && bun run typecheck:tui",
+    "typecheck": "bun run typecheck:core && bun run typecheck:settings && bun run typecheck:workspace && bun run typecheck:harness && bun run typecheck:models && bun run typecheck:store && bun run typecheck:agent && bun run typecheck:eval && bun run typecheck:cli-core && bun run typecheck:cli && bun run typecheck:tui",
+    "typecheck:eval": "cd packages/eval && bunx tsc --noEmit -p tsconfig.json",
     "typecheck:core": "cd packages/core && bunx tsc --noEmit -p tsconfig.json",
     "typecheck:settings": "cd packages/settings && bunx tsc --noEmit -p tsconfig.json",
     "typecheck:workspace": "cd packages/workspace && bunx tsc --noEmit -p tsconfig.json",

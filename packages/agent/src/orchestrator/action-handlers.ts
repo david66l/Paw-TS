@@ -3,7 +3,7 @@
  * Adding a new action type only requires registering a new handler here.
  */
 
-import type { AgentAction, AgentToolCallAction } from "@paw/core";
+import type { AgentAction, AgentToolCallAction, EvalHooks } from "@paw/core";
 import type { TaskPlanner } from "@paw/store";
 import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
@@ -43,6 +43,7 @@ export async function handleAction(
     readonly subAgentLauncher?: import("@paw/harness").SubAgentLauncher;
     readonly skillRegistry?: import("@paw/core").SkillRegistry;
     readonly watcher?: import("@paw/workspace").WorkspaceWatcher;
+    readonly evalHooks?: EvalHooks;
   },
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   // If there are sub-agent calls, route them separately
@@ -364,6 +365,7 @@ async function handleToolCalls(
     readonly todoStore?: import("@paw/core").TodoStore;
     readonly skillRegistry?: import("@paw/core").SkillRegistry;
     readonly watcher?: import("@paw/workspace").WorkspaceWatcher;
+    readonly evalHooks?: EvalHooks;
   },
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const nextFlags: TurnFlags = {
@@ -380,6 +382,7 @@ async function handleToolCalls(
     ctx.emit({ type: "tool.call", tool: call.tool, args: call.args });
   }
 
+  const toolStartTime = Date.now();
   const results = await executeToolCalls(
     calls,
     {
@@ -402,6 +405,20 @@ async function handleToolCalls(
       approvalPolicy: opts.approvalPolicy,
     },
   );
+  const toolDuration = Date.now() - toolStartTime;
+
+  // Eval hooks: notify after each tool call
+  for (let i = 0; i < calls.length; i++) {
+    const call = calls[i]!;
+    const tr = results[i]!;
+    opts.evalHooks?.afterToolCall?.({
+      tool: call.tool,
+      args: call.args,
+      result: tr.summary,
+      ok: tr.ok,
+      durationMs: Math.round(toolDuration / calls.length),
+    });
+  }
 
   const final = finalizeToolExecution(calls, results, {
     ctxMgr: ctx.ctxMgr,
@@ -439,6 +456,7 @@ async function handleRunAgent(
   opts: {
     readonly saveStateFn: () => void;
     readonly agentGroup?: AgentGroup;
+    readonly evalHooks?: EvalHooks;
   },
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const nextFlags: TurnFlags = {
@@ -471,11 +489,13 @@ async function handleRunAgent(
   });
 
   // Launch children and wait for batch completion
+  const agentStartTime = Date.now();
   const results = await opts.agentGroup.launchAll(
     calls,
     (call) => summarizer.summarizeForCall(ctx.ctxMgr, call),
     ctx.signal,
   );
+  const agentDuration = Date.now() - agentStartTime;
 
   // Emit merging_results state
   ctx.emit({
@@ -494,6 +514,13 @@ async function handleRunAgent(
       ok: r.status === "completed",
       summary: r.summary,
       detail: r.errors?.join("; ") || r.summary,
+    });
+    opts.evalHooks?.afterToolCall?.({
+      tool: call.tool,
+      args: call.args,
+      result: r.summary,
+      ok: r.status === "completed",
+      durationMs: Math.round(agentDuration / calls.length),
     });
   }
   ctx.ctxMgr.addToolResults(

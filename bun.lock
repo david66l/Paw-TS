@@ -23,6 +23,7 @@
       },
       "dependencies": {
         "@paw/cli-core": "workspace:*",
+        "@paw/eval": "workspace:*",
       },
     },
     "apps/tui": {
@@ -75,6 +76,20 @@
     "packages/core": {
       "name": "@paw/core",
       "version": "0.0.1",
+    },
+    "packages/eval": {
+      "name": "@paw/eval",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/agent": "workspace:*",
+        "@paw/core": "workspace:*",
+        "@paw/harness": "workspace:*",
+        "@paw/models": "workspace:*",
+        "@paw/settings": "workspace:*",
+      },
+      "devDependencies": {
+        "zod": "^3.22.0",
+      },
     },
     "packages/harness": {
       "name": "@paw/harness",
@@ -231,6 +246,8 @@
     "@paw/cli-core": ["@paw/cli-core@workspace:packages/cli-core"],
 
     "@paw/core": ["@paw/core@workspace:packages/core"],
+
+    "@paw/eval": ["@paw/eval@workspace:packages/eval"],
 
     "@paw/harness": ["@paw/harness@workspace:packages/harness"],
 

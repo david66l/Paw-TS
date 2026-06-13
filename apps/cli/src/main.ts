@@ -28,6 +28,8 @@ Usage:
   paw-ts config [--root <dir>] [--get <key>] [--set <key> <value>]
   paw-ts commit [--root <dir>] [--message <text>]
   paw-ts stub-run [--goal <text>] [--max-steps <n>] [--worktree]
+  paw-ts eval run [--suite <name>] [--repetitions <n>] [--output console|markdown|json]
+  paw-ts eval list
 `);
   process.exit(2);
 }
@@ -156,6 +158,38 @@ async function main(): Promise<void> {
     }
     console.log(result.message ?? "Committed.");
     process.exit(0);
+  }
+
+  if (argv[0] === "eval") {
+    const { runEvalCommand } = await import("@paw/eval");
+    const subcommand = argv[1] ?? "list";
+    const suiteIdx = argv.indexOf("--suite");
+    const suite = suiteIdx !== -1 ? argv[suiteIdx + 1] : undefined;
+    const repIdx = argv.indexOf("--repetitions");
+    const repetitions = repIdx !== -1 ? Number(argv[repIdx + 1]) : undefined;
+    const outIdx = argv.indexOf("--output");
+    const output = outIdx !== -1 ? argv[outIdx + 1] : undefined;
+    const modelIdx = argv.indexOf("--model");
+    const model = modelIdx !== -1 ? argv[modelIdx + 1] : undefined;
+    const parIdx = argv.indexOf("--parallel");
+    const parallel = parIdx !== -1 ? Number(argv[parIdx + 1]) : undefined;
+    const root = parseRootFromArgv(process.cwd(), argv);
+
+    const r = await runEvalCommand({
+      subcommand,
+      suite,
+      repetitions: Number.isFinite(repetitions) ? repetitions : undefined,
+      model,
+      output,
+      parallel: Number.isFinite(parallel) ? parallel : undefined,
+      workspaceRoot: root,
+    });
+    if (r.ok) {
+      console.log(r.text);
+      process.exit(0);
+    }
+    console.error(r.text);
+    process.exit(1);
   }
 
   if (argv[0] === "stub-run") {

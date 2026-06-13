@@ -1,0 +1,23 @@
+{
+  "name": "@paw/eval",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "test": "bun test test"
+  },
+  "dependencies": {
+    "@paw/core": "workspace:*",
+    "@paw/agent": "workspace:*",
+    "@paw/models": "workspace:*",
+    "@paw/settings": "workspace:*",
+    "@paw/harness": "workspace:*"
+  },
+  "devDependencies": {
+    "zod": "^3.22.0"
+  }
+}
