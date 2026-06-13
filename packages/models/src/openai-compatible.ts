@@ -1,6 +1,7 @@
 import type { ModelTokenUsage } from "@paw/core";
 
-import type { LanguageModel } from "./language-model.js";
+import type { LanguageModel, ModelCapabilities } from "./language-model.js";
+import { buildOpenAiMessageContent } from "./message-content.js";
 import type { ModelCompleteOptions } from "./model-options.js";
 import {
   parseOpenAiChatCompletionStreamDataPayload,
@@ -16,6 +17,7 @@ export interface OpenAICompatibleOptions {
   readonly apiKey: string;
   readonly baseUrl?: string;
   readonly model: string;
+  readonly capabilities?: ModelCapabilities;
 }
 
 function abortError(): Error {
@@ -31,6 +33,7 @@ function abortError(): Error {
  */
 export class OpenAICompatibleModel implements LanguageModel {
   readonly label: string;
+  readonly capabilities?: ModelCapabilities;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly model: string;
@@ -42,7 +45,12 @@ export class OpenAICompatibleModel implements LanguageModel {
       "",
     );
     this.model = opts.model;
-    this.label = `openai:${opts.model}`;
+    this.label = opts.baseUrl?.includes("dashscope")
+      ? `qwen:${opts.model}`
+      : opts.baseUrl?.includes("deepseek")
+        ? `deepseek:${opts.model}`
+        : `openai:${opts.model}`;
+    this.capabilities = opts.capabilities;
   }
 
   async complete(
@@ -53,11 +61,23 @@ export class OpenAICompatibleModel implements LanguageModel {
       throw abortError();
     }
     const url = `${this.baseUrl}/chat/completions`;
-    const body = {
+    const body: Record<string, unknown> = {
       model: this.model,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      messages: messages.map((m) => {
+        const payload: Record<string, unknown> = {
+          role: m.role,
+          content: buildOpenAiMessageContent(m),
+        };
+        if (m.thinking) {
+          payload.reasoning_content = m.thinking;
+        }
+        return payload;
+      }),
       temperature: 0.2,
     };
+    if (options?.tools && options.tools.length > 0) {
+      body.tools = options.tools;
+    }
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -84,29 +104,48 @@ export class OpenAICompatibleModel implements LanguageModel {
         ? (parsed as Record<string, unknown>)
         : null;
     const choices = root?.choices;
-    const first =
+    const firstChoice =
       Array.isArray(choices) &&
       choices[0] !== null &&
       typeof choices[0] === "object"
-        ? (choices[0] as Record<string, unknown>).message
+        ? (choices[0] as Record<string, unknown>)
         : undefined;
+    const finishReason =
+      typeof firstChoice?.finish_reason === "string"
+        ? firstChoice.finish_reason
+        : undefined;
+    const first = firstChoice?.message;
     const content =
       first !== null && typeof first === "object"
         ? (first as Record<string, unknown>).content
         : undefined;
     let text = typeof content === "string" ? content : "";
 
+    const reasoningContent =
+      first !== null && typeof first === "object"
+        ? (first as Record<string, unknown>).reasoning_content
+        : undefined;
+    const thinking =
+      typeof reasoningContent === "string" ? reasoningContent : undefined;
+
     // If the model returned tool_calls, convert them to JSON tool lines
-    const toolCalls = extractOpenAiToolCalls(first);
-    if (toolCalls.length > 0) {
-      const toolLines = toolCalls
-        .map((tc) => {
+    // AND collect as structured NativeToolCall objects
+    const rawToolCalls = extractOpenAiToolCalls(first);
+    const nativeToolCalls: import("./types.js").NativeToolCall[] = [];
+    if (rawToolCalls.length > 0) {
+      const toolLines = rawToolCalls
+        .map((tc, i) => {
           let args: Record<string, unknown> = {};
           try {
             args = JSON.parse(tc.arguments) as Record<string, unknown>;
           } catch {
             /* ignore parse errors */
           }
+          nativeToolCalls.push({
+            id: `call_${i}`,
+            name: tc.name,
+            arguments: args,
+          });
           return JSON.stringify({ tool: tc.name, args });
         })
         .join("\n");
@@ -114,7 +153,13 @@ export class OpenAICompatibleModel implements LanguageModel {
     }
 
     const usage = parseOpenAiUsageJson(root?.usage);
-    return { text, ...(usage !== undefined ? { usage } : {}) };
+    return {
+      text,
+      ...(thinking !== undefined ? { thinking } : {}),
+      ...(usage !== undefined ? { usage } : {}),
+      ...(finishReason ? { finishReason } : {}),
+      ...(nativeToolCalls.length > 0 ? { toolCalls: nativeToolCalls } : {}),
+    };
   }
 
   async *completeStream(
@@ -125,16 +170,25 @@ export class OpenAICompatibleModel implements LanguageModel {
       throw abortError();
     }
     const url = `${this.baseUrl}/chat/completions`;
-    const messagesPayload = messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-    const baseStreamBody = {
+    const messagesPayload = messages.map((m) => {
+      const payload: Record<string, unknown> = {
+        role: m.role,
+        content: buildOpenAiMessageContent(m),
+      };
+      if (m.thinking) {
+        payload.reasoning_content = m.thinking;
+      }
+      return payload;
+    });
+    const baseStreamBody: Record<string, unknown> = {
       model: this.model,
       messages: messagesPayload,
       temperature: 0.2,
       stream: true as const,
     };
+    if (options?.tools && options.tools.length > 0) {
+      baseStreamBody.tools = options.tools;
+    }
     let res = await fetch(url, {
       method: "POST",
       headers: {
@@ -179,6 +233,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     const decoder = new TextDecoder();
     let buffer = "";
     let lastUsage: ModelTokenUsage | undefined;
+    let lastFinishReason: string | undefined;
     // Accumulate tool calls by index
     const toolCallAcc: Map<
       number,
@@ -207,6 +262,9 @@ export class OpenAICompatibleModel implements LanguageModel {
           if (part.textDelta.length > 0) {
             yield { type: "text", delta: part.textDelta };
           }
+          if (part.thinkingDelta && part.thinkingDelta.length > 0) {
+            yield { type: "thinking", delta: part.thinkingDelta };
+          }
           if (part.toolCallDelta) {
             const delta = part.toolCallDelta;
             let entry = toolCallAcc.get(delta.index);
@@ -226,15 +284,12 @@ export class OpenAICompatibleModel implements LanguageModel {
             // Yield a tool_use chunk when we have both name and arguments
             if (entry.name && entry.arguments) {
               try {
-                const args = JSON.parse(entry.arguments) as Record<
-                  string,
-                  unknown
-                >;
+                JSON.parse(entry.arguments);
                 yield {
                   type: "tool_use",
                   id: entry.id || `call_${delta.index}`,
                   name: entry.name,
-                  input: JSON.stringify({ tool: entry.name, args }),
+                  input: entry.arguments,
                 };
                 // Remove so we don't yield again
                 toolCallAcc.delete(delta.index);
@@ -245,6 +300,9 @@ export class OpenAICompatibleModel implements LanguageModel {
           }
           if (part.usage !== undefined) {
             lastUsage = part.usage;
+          }
+          if (part.finishReason !== undefined) {
+            lastFinishReason = part.finishReason;
           }
         }
         if (done) {
@@ -259,8 +317,18 @@ export class OpenAICompatibleModel implements LanguageModel {
           if (!part.isDoneMarker && part.textDelta.length > 0) {
             yield { type: "text", delta: part.textDelta };
           }
+          if (
+            !part.isDoneMarker &&
+            part.thinkingDelta &&
+            part.thinkingDelta.length > 0
+          ) {
+            yield { type: "thinking", delta: part.thinkingDelta };
+          }
           if (part.usage !== undefined) {
             lastUsage = part.usage;
+          }
+          if (part.finishReason !== undefined) {
+            lastFinishReason = part.finishReason;
           }
         }
       }
@@ -270,6 +338,9 @@ export class OpenAICompatibleModel implements LanguageModel {
     yield {
       type: "done",
       ...(lastUsage !== undefined ? { usage: lastUsage } : {}),
+      ...(lastFinishReason !== undefined
+        ? { finishReason: lastFinishReason }
+        : {}),
     };
   }
 }

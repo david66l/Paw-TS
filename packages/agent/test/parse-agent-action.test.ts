@@ -27,6 +27,50 @@ describe("parseAgentActionFromModelText", () => {
     }
   });
 
+  test("parses OpenAI-style name/arguments (object)", () => {
+    const a = parseAgentActionFromModelText(
+      '{"name":"workspace.list_dir","arguments":{"path":"."}}',
+    );
+    expect(a).toEqual({
+      type: "tool_call",
+      tool: "workspace.list_dir",
+      args: { path: "." },
+    });
+  });
+
+  test("parses OpenAI-style name/arguments (JSON string)", () => {
+    const a = parseAgentActionFromModelText(
+      '{"name":"workspace.read_file","arguments":"{\\"path\\":\\"a.txt\\"}"}',
+    );
+    expect(a).toEqual({
+      type: "tool_call",
+      tool: "workspace.read_file",
+      args: { path: "a.txt" },
+    });
+  });
+
+  test("parses pretty-printed multi-line JSON", () => {
+    const a = parseAgentActionFromModelText(
+      'Let me check.\n{\n  "tool": "workspace.list_dir",\n  "args": {\n    "path": "."\n  }\n}',
+    );
+    expect(a).toEqual({
+      type: "tool_call",
+      tool: "workspace.list_dir",
+      args: { path: "." },
+    });
+  });
+
+  test("parses pretty-printed OpenAI-style multi-line JSON", () => {
+    const a = parseAgentActionFromModelText(
+      '{\n  "name": "workspace.list_dir",\n  "arguments": {\n    "path": "."\n  }\n}',
+    );
+    expect(a).toEqual({
+      type: "tool_call",
+      tool: "workspace.list_dir",
+      args: { path: "." },
+    });
+  });
+
   test("prefers last JSON line", () => {
     const a = parseAgentActionFromModelText(
       '{"action":"noop"}\n{"tool":"t","args":{}}',
@@ -130,7 +174,7 @@ describe("parseAgentActionsFromModelText", () => {
 {"tool":"workspace.list_dir","args":{"path":"."}}`;
     const { actions, text: prose } = parseAgentActionsFromModelText(text);
     expect(actions.length).toBe(1);
-    expect(actions[0]!.tool).toBe("workspace.list_dir");
+    expect(actions[0]?.tool).toBe("workspace.list_dir");
     expect(prose).toContain("Plan:");
     expect(prose).toContain("plan_update");
   });
@@ -150,8 +194,96 @@ describe("parseAgentActionsFromModelText", () => {
 {broken}`;
     const { actions, text: prose } = parseAgentActionsFromModelText(text);
     expect(actions.length).toBe(1);
-    expect(actions[0]!.tool).toBe("t");
+    expect(actions[0]?.tool).toBe("t");
     expect(prose).toContain("Go.");
     expect(prose).toContain("not json");
+  });
+
+  test("collects mixed Paw and OpenAI format tool calls", () => {
+    const text = `I'll do both.
+{"tool":"workspace.read_file","args":{"path":"a.txt"}}
+{"name":"workspace.list_dir","arguments":{"path":"."}}`;
+    const { actions, text: prose } = parseAgentActionsFromModelText(text);
+    expect(actions.length).toBe(2);
+    expect(actions[0]).toEqual({
+      type: "tool_call",
+      tool: "workspace.read_file",
+      args: { path: "a.txt" },
+    });
+    expect(actions[1]).toEqual({
+      type: "tool_call",
+      tool: "workspace.list_dir",
+      args: { path: "." },
+    });
+    expect(prose).toBe("I'll do both.");
+  });
+
+  test("collects OpenAI format with stringified arguments", () => {
+    const text = `Checking.
+{"name":"workspace.grep","arguments":"{\\"pattern\\":\\"foo\\"}"}`;
+    const { actions } = parseAgentActionsFromModelText(text);
+    expect(actions.length).toBe(1);
+    expect(actions[0]).toEqual({
+      type: "tool_call",
+      tool: "workspace.grep",
+      args: { pattern: "foo" },
+    });
+  });
+
+  test("collects pretty-printed multi-line tool calls", () => {
+    const text = `I'll read both files.
+{\n  "tool": "workspace.read_file",\n  "args": {\n    "path": "a.txt"\n  }\n}
+{\n  "name": "workspace.read_file",\n  "arguments": {\n    "path": "b.txt"\n  }\n}`;
+    const { actions, text: prose } = parseAgentActionsFromModelText(text);
+    expect(actions.length).toBe(2);
+    expect(actions[0]).toEqual({
+      type: "tool_call",
+      tool: "workspace.read_file",
+      args: { path: "a.txt" },
+    });
+    expect(actions[1]).toEqual({
+      type: "tool_call",
+      tool: "workspace.read_file",
+      args: { path: "b.txt" },
+    });
+    expect(prose).toBe("I'll read both files.");
+  });
+
+  test("rejects tool call not in knownTools set", () => {
+    const text = '{"tool":"workspace.unknown_tool","args":{"x":1}}';
+    const { actions } = parseAgentActionsFromModelText(text, {
+      knownTools: new Set(["workspace.read_file", "workspace.list_dir"]),
+    });
+    expect(actions.length).toBe(0);
+  });
+
+  test("accepts tool call in knownTools set", () => {
+    const text = '{"tool":"workspace.read_file","args":{"path":"x"}}';
+    const { actions } = parseAgentActionsFromModelText(text, {
+      knownTools: new Set(["workspace.read_file", "workspace.list_dir"]),
+    });
+    expect(actions.length).toBe(1);
+    expect(actions[0]?.tool).toBe("workspace.read_file");
+  });
+
+  test("knownTools filters false-positive JSON in code-like text", () => {
+    // Simulate model output that embeds a code snippet containing JSON
+    const text = `Here's the config:
+\`\`\`json
+{"tool":"some_sdk_method","args":{"mode":"strict"}}
+\`\`\`
+Now let me actually call the real tool.
+{"tool":"workspace.read_file","args":{"path":"src/config.ts"}}`;
+    const { actions } = parseAgentActionsFromModelText(text, {
+      knownTools: new Set(["workspace.read_file", "workspace.list_dir"]),
+    });
+    expect(actions.length).toBe(1);
+    expect(actions[0]?.tool).toBe("workspace.read_file");
+  });
+
+  test("without knownTools, all tool-call-like JSON is accepted", () => {
+    const text = '{"tool":"any.random.tool","args":{}}';
+    const { actions } = parseAgentActionsFromModelText(text);
+    expect(actions.length).toBe(1);
   });
 });

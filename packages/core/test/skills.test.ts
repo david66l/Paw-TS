@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  type SkillDefinition,
+  SkillRegistry,
   loadSkillsFromDirectory,
   renderSkillPrompt,
-  SkillRegistry,
-  type SkillDefinition,
 } from "../src/skills.js";
 
 function makeSkill(overrides?: Partial<SkillDefinition>): SkillDefinition {
@@ -50,7 +50,9 @@ describe("SkillRegistry", () => {
 
   test("catalogText includes skill info", () => {
     const reg = new SkillRegistry();
-    reg.register(makeSkill({ id: "s1", name: "Skill One", description: "Does one thing" }));
+    reg.register(
+      makeSkill({ id: "s1", name: "Skill One", description: "Does one thing" }),
+    );
     const text = reg.catalogText();
     expect(text).toContain("s1");
     expect(text).toContain("Skill One");
@@ -67,8 +69,18 @@ describe("renderSkillPrompt", () => {
     const skill = makeSkill({
       prompt: "Write {{type}} code for {{language}}",
       parameters: [
-        { name: "type", description: "Code type", type: "string", required: true },
-        { name: "language", description: "Language", type: "string", required: true },
+        {
+          name: "type",
+          description: "Code type",
+          type: "string",
+          required: true,
+        },
+        {
+          name: "language",
+          description: "Language",
+          type: "string",
+          required: true,
+        },
       ],
     });
     const result = renderSkillPrompt(skill, { type: "test", language: "TS" });
@@ -111,12 +123,19 @@ describe("loadSkillsFromDirectory", () => {
         description: "A test skill",
         version: "1.0.0",
         prompt: "Do {{action}}",
-        parameters: [{ name: "action", description: "Action", type: "string", required: true }],
+        parameters: [
+          {
+            name: "action",
+            description: "Action",
+            type: "string",
+            required: true,
+          },
+        ],
       }),
     );
     const skills = loadSkillsFromDirectory(tmpDir);
     expect(skills.length).toBe(1);
-    expect(skills[0]!.id).toBe("test_skill");
+    expect(skills[0]?.id).toBe("test_skill");
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -136,7 +155,7 @@ describe("loadSkillsFromDirectory", () => {
     );
     const skills = loadSkillsFromDirectory(tmpDir);
     expect(skills.length).toBe(1);
-    expect(skills[0]!.id).toBe("nested");
+    expect(skills[0]?.id).toBe("nested");
     rmSync(tmpDir, { recursive: true, force: true });
   });
 

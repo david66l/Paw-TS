@@ -70,12 +70,7 @@ export function createTemporaryWorktree(
   const worktreeName = `paw-isolated-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const worktreeRoot = path.join(tmpBase, worktreeName);
 
-  const add = runGit(gitRoot, [
-    "worktree",
-    "add",
-    "--detach",
-    worktreeRoot,
-  ]);
+  const add = runGit(gitRoot, ["worktree", "add", "--detach", worktreeRoot]);
   if (!add.ok) {
     try {
       fs.rmSync(tmpBase, { recursive: true, force: true });

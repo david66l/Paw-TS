@@ -5,7 +5,10 @@ export type {
 } from "./orchestrator.js";
 export { AgentOrchestrator } from "./orchestrator.js";
 export { resolvePlanSnapshotMaxItems } from "./resolve-plan-snapshot-max-items.js";
-export { parseAgentActionFromModelText } from "./parse-agent-action.js";
+export {
+  parseAgentActionFromModelText,
+  parseAgentActionsFromModelText,
+} from "./parse-agent-action.js";
 export { parseToolCallFromModelText } from "./parse-tool-call.js";
 export type { McpServerConfig, McpToolRef, McpCallResult } from "@paw/harness";
 export {

@@ -20,8 +20,14 @@
     "lint:fix": "biome check --write packages apps",
     "test:ts": "bun test packages/core packages/settings packages/workspace packages/harness packages/models packages/store packages/agent packages/cli-core apps/cli apps/tui",
     "cli": "bun run apps/cli/src/main.ts",
-    "tui": "bun run apps/tui/src/main.tsx",
-    "check:ts": "bun run lint && bun run typecheck && bun run test:ts"
+    "tui": "cd apps/tui && bun run src/main.tsx",
+    "tui:e2e": "cd apps/tui && bun run e2e:live",
+    "check:ts": "bun run lint && bun run typecheck && bun run test:ts",
+    "benchmark": "bun test benchmarks/",
+    "benchmark:judge": "bun test benchmarks/judge/",
+    "benchmark:swe": "cd benchmarks/swe-bench && python run.py",
+    "benchmark:repo": "bun test benchmarks/repobench/",
+    "benchmark:long": "bun test benchmarks/longbench/"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
@@ -30,6 +36,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "tiktoken": "^1.0.22"
   }
 }

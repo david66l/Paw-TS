@@ -1,6 +1,6 @@
 import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
 
-const DEFAULT_MAX_STEPS = 16;
+const DEFAULT_MAX_STEPS = 32;
 const HARD_CAP = 256;
 
 /** Effective model↔tool rounds: explicit spec wins, else settings, else default. */

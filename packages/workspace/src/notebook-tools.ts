@@ -46,9 +46,9 @@ function setSource(cell: NotebookCell, source: string): void {
   // Jupyter notebooks store source as string or string array.
   // We preserve the original style when possible.
   if (Array.isArray(cell.source)) {
-    cell.source = source.split("\n").map((line, i, arr) =>
-      i < arr.length - 1 ? line + "\n" : line
-    );
+    cell.source = source
+      .split("\n")
+      .map((line, i, arr) => (i < arr.length - 1 ? `${line}\n` : line));
   } else {
     cell.source = source;
   }

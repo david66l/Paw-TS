@@ -8,7 +8,9 @@
   },
   "dependencies": {
     "@paw/core": "workspace:*",
-    "@paw/workspace": "workspace:*"
+    "@paw/models": "workspace:*",
+    "@paw/workspace": "workspace:*",
+    "unbash": "^3.0.0"
   },
   "scripts": {
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",

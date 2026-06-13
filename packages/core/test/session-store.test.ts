@@ -1,10 +1,10 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { FileSystemSessionStore } from "../src/session-store.js";
 import type { RunEventEnvelope } from "../src/run-events.js";
+import { FileSystemSessionStore } from "../src/session-store.js";
 
 describe("FileSystemSessionStore", () => {
   let root: string;
@@ -47,8 +47,8 @@ describe("FileSystemSessionStore", () => {
     });
     const runs = store.listRuns();
     expect(runs.length).toBe(2);
-    expect(runs[0]!.runId).toBe("r2");
-    expect(runs[1]!.runId).toBe("r1");
+    expect(runs[0]?.runId).toBe("r2");
+    expect(runs[1]?.runId).toBe("r1");
   });
 
   test("getRunSummary captures goal and status", () => {
@@ -66,11 +66,11 @@ describe("FileSystemSessionStore", () => {
     });
     const s = store.getRunSummary("r1");
     expect(s).toBeDefined();
-    expect(s!.goal).toBe("do thing");
-    expect(s!.status).toBe("completed");
-    expect(s!.finalMessage).toBe("done");
-    expect(s!.startedAt).toBe(1000);
-    expect(s!.completedAt).toBe(2000);
+    expect(s?.goal).toBe("do thing");
+    expect(s?.status).toBe("completed");
+    expect(s?.finalMessage).toBe("done");
+    expect(s?.startedAt).toBe(1000);
+    expect(s?.completedAt).toBe(2000);
   });
 
   test("loadRun returns null for missing run", () => {
@@ -123,11 +123,15 @@ describe("FileSystemSessionStore", () => {
   test("handles corrupt lines gracefully", () => {
     const sessionsDir = path.join(root, ".paw", "sessions");
     const p = path.join(sessionsDir, "corrupt.jsonl");
-    writeFileSync(p, '{"runId":"corrupt","seq":1,"ts":1,"event":{"type":"run.started","goal":"ok"}}\nnot-json\n', "utf8");
+    writeFileSync(
+      p,
+      '{"runId":"corrupt","seq":1,"ts":1,"event":{"type":"run.started","goal":"ok"}}\nnot-json\n',
+      "utf8",
+    );
     const loaded = store.loadRun("corrupt");
     expect(loaded).not.toBeNull();
-    expect(loaded!.length).toBe(1);
-    expect(loaded![0]!.event.type).toBe("run.started");
+    expect(loaded?.length).toBe(1);
+    expect(loaded?.[0]?.event.type).toBe("run.started");
   });
 
   test("getRunSummary counts tool calls", () => {
@@ -157,7 +161,7 @@ describe("FileSystemSessionStore", () => {
     });
     const s = store.getRunSummary("r1");
     expect(s).toBeDefined();
-    expect(s!.toolCallCount).toBe(2);
+    expect(s?.toolCallCount).toBe(2);
   });
 
   test("loadRunPaginated returns a slice", () => {
@@ -171,10 +175,10 @@ describe("FileSystemSessionStore", () => {
     }
     const page = store.loadRunPaginated("r1", 1, 2);
     expect(page).toBeDefined();
-    expect(page!.total).toBe(5);
-    expect(page!.events.length).toBe(2);
-    expect(page!.events[0]!.seq).toBe(2);
-    expect(page!.events[1]!.seq).toBe(3);
+    expect(page?.total).toBe(5);
+    expect(page?.events.length).toBe(2);
+    expect(page?.events[0]?.seq).toBe(2);
+    expect(page?.events[1]?.seq).toBe(3);
   });
 
   test("loadRunPaginated returns null for missing run", () => {
@@ -190,8 +194,8 @@ describe("FileSystemSessionStore", () => {
     });
     const page = store.loadRunPaginated("r1", 10, 5);
     expect(page).toBeDefined();
-    expect(page!.events.length).toBe(0);
-    expect(page!.total).toBe(1);
+    expect(page?.events.length).toBe(0);
+    expect(page?.total).toBe(1);
   });
 
   test("replayRun yields all events in order", async () => {
@@ -210,8 +214,8 @@ describe("FileSystemSessionStore", () => {
       collected.push(ev);
     }
     expect(collected.length).toBe(3);
-    expect(collected[0]!.seq).toBe(1);
-    expect(collected[2]!.seq).toBe(3);
+    expect(collected[0]?.seq).toBe(1);
+    expect(collected[2]?.seq).toBe(3);
   });
 
   test("replayRun returns null for missing run", () => {
@@ -233,7 +237,7 @@ describe("FileSystemSessionStore", () => {
       collected.push(ev);
     }
     expect(collected.length).toBe(2);
-    expect(collected[0]!.event.type).toBe("run.started");
-    expect(collected[1]!.event.type).toBe("run.completed");
+    expect(collected[0]?.event.type).toBe("run.started");
+    expect(collected[1]?.event.type).toBe("run.completed");
   });
 });

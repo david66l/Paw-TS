@@ -97,11 +97,7 @@ describe("editWorkspaceFile — string mode", () => {
 
   test("diff stats count added and removed lines", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(
-      path.join(root, "a.txt"),
-      "line1\nline2\nline3\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "a.txt"), "line1\nline2\nline3\n", "utf8");
     const r = editWorkspaceFile(root, "a.txt", {
       startLine: 2,
       endLine: 2,
@@ -155,11 +151,7 @@ describe("editWorkspaceFile — string mode", () => {
 describe("editWorkspaceFile — line mode", () => {
   test("replaces single line by start_line", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(
-      path.join(root, "a.txt"),
-      "line1\nline2\nline3\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "a.txt"), "line1\nline2\nline3\n", "utf8");
     const r = editWorkspaceFile(root, "a.txt", {
       startLine: 2,
       newString: "REPLACED",
@@ -172,11 +164,7 @@ describe("editWorkspaceFile — line mode", () => {
 
   test("replaces line range", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(
-      path.join(root, "a.txt"),
-      "a\nb\nc\nd\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "a.txt"), "a\nb\nc\nd\n", "utf8");
     const r = editWorkspaceFile(root, "a.txt", {
       startLine: 2,
       endLine: 3,
@@ -190,11 +178,7 @@ describe("editWorkspaceFile — line mode", () => {
 
   test("multi-line replacement in line mode", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(
-      path.join(root, "a.txt"),
-      "a\nb\nc\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "a.txt"), "a\nb\nc\n", "utf8");
     const r = editWorkspaceFile(root, "a.txt", {
       startLine: 2,
       newString: "x\ny\nz",
@@ -206,11 +190,7 @@ describe("editWorkspaceFile — line mode", () => {
 
   test("deletes lines with empty newString", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(
-      path.join(root, "a.txt"),
-      "a\nb\nc\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "a.txt"), "a\nb\nc\n", "utf8");
     const r = editWorkspaceFile(root, "a.txt", {
       startLine: 2,
       endLine: 2,

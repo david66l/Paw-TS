@@ -15,12 +15,24 @@ describe("run_agent tool", () => {
 
   test("returns error for missing goal", async () => {
     const r = await executeTool(
-      { workspaceRoot: "/tmp", subAgentLauncher: { launch: async () => ({ result: "", stepsTaken: 0, status: "completed" as const }) } },
+      {
+        workspaceRoot: "/tmp",
+        subAgentLauncher: {
+          launch: async () => ({
+            summary: "",
+            status: "completed" as const,
+          }),
+          launchStreaming: async () => ({
+            summary: "",
+            status: "completed" as const,
+          }),
+        },
+      },
       "workspace.run_agent",
       {},
     );
     expect(r.ok).toBe(false);
-    expect(r.summary).toContain("missing goal");
+    expect(r.summary).toContain("missing required field: goal");
   });
 
   test("delegates to launcher", async () => {
@@ -28,8 +40,15 @@ describe("run_agent tool", () => {
     const launcher = {
       launch: async (goal: string, _maxSteps?: number) => {
         launched = true;
-        return { result: `Done: ${goal}`, stepsTaken: 3, status: "completed" as const };
+        return {
+          summary: `Done: ${goal}`,
+          status: "completed" as const,
+        };
       },
+      launchStreaming: async () => ({
+        summary: "",
+        status: "completed" as const,
+      }),
     };
     const r = await executeTool(
       { workspaceRoot: "/tmp", subAgentLauncher: launcher },

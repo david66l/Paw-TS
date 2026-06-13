@@ -41,16 +41,13 @@ export function loadPawSettingsLocal(filePath: string): PawSettingsLocal {
   return parsed.data;
 }
 
+import { redactSecrets } from "./credentials.js";
+
 /** Mask secrets for terminal output (never print full API keys). */
 export function redactSettingsForDisplay(
   s: PawSettingsLocal,
 ): Record<string, unknown> {
-  const { openai_api_key: ok, anthropic_api_key: ak, ...rest } = s;
-  return {
-    ...rest,
-    openai_api_key: maskKey(ok),
-    anthropic_api_key: maskKey(ak),
-  };
+  return redactSecrets(s) as Record<string, unknown>;
 }
 
 /** Write settings back to disk, preserving unknown keys. */
@@ -60,12 +57,5 @@ export function savePawSettingsLocal(
 ): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(settings, null, 2) + "\n", "utf8");
-}
-
-function maskKey(v: string | undefined): string {
-  if (!v || v.length < 8) {
-    return v ? "(set, hidden)" : "(not set)";
-  }
-  return `(set, …${v.slice(-4)})`;
+  fs.writeFileSync(filePath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
 }

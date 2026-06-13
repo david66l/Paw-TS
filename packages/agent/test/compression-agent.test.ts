@@ -1,20 +1,29 @@
 import { describe, expect, it } from "bun:test";
+import type { ChatMessage, LanguageModel } from "@paw/models";
 import { runCompressionAgent } from "../src/compression-agent.js";
-import type { SubAgentLauncher } from "@paw/harness";
 
-const fakeLauncher: SubAgentLauncher = {
-  launch: async (_goal: string, _maxSteps?: number) => {
-    return {
-      result: `## Active Task\nTest task\n\n## Goal\nDo something\n\n## Progress\nDone step 1\n\n## Key Decisions\n- Use approach A\n\n## Relevant Files\n- src/foo.ts\n\n## Errors & Fixes\n- None\n\n## Next Steps\nStep 2\n\n## Pending Questions\nNone`,
-      stepsTaken: 1,
-      status: "completed" as const,
-    };
-  },
-};
+const SUMMARY =
+  "## Active Task\nTest task\n\n## Goal\nDo something\n\n## Progress\nDone step 1\n\n## Key Decisions\n- Use approach A\n\n## Relevant Files\n- src/foo.ts\n\n## Errors & Fixes\n- None\n\n## Next Steps\nStep 2\n\n## Pending Questions\nNone";
+
+function fakeModel(text: string): LanguageModel {
+  return {
+    label: "fake-compression",
+    async complete() {
+      return { text };
+    },
+    async *completeStream() {
+      yield { type: "done" as const };
+    },
+  };
+}
 
 describe("runCompressionAgent", () => {
   it("returns summary and session memory", async () => {
-    const result = await runCompressionAgent(fakeLauncher, "Compress this", "run-1");
+    const result = await runCompressionAgent(
+      fakeModel(SUMMARY),
+      "Compress this",
+      "run-1",
+    );
     expect(result.summary).toContain("## Active Task");
     expect(result.sessionMemory.session).toBe("run-1");
     expect(result.sessionMemory.task).toBe("Test task");
@@ -24,33 +33,31 @@ describe("runCompressionAgent", () => {
   });
 
   it("handles empty result gracefully", async () => {
-    const emptyLauncher: SubAgentLauncher = {
-      launch: async () => ({
-        result: "",
-        stepsTaken: 0,
-        status: "completed" as const,
-      }),
-    };
-    const result = await runCompressionAgent(emptyLauncher, "Compress this", "run-2");
+    const result = await runCompressionAgent(
+      fakeModel(""),
+      "Compress this",
+      "run-2",
+    );
     expect(result.summary).toBe("");
     expect(result.sessionMemory.session).toBe("run-2");
     expect(result.sessionMemory.task).toBeUndefined();
   });
 
-  it("passes goal to launcher", async () => {
-    let receivedGoal = "";
-    const capturingLauncher: SubAgentLauncher = {
-      launch: async (_goal: string, _maxSteps?: number) => {
-        receivedGoal = _goal;
-        return {
-          result: "## Active Task\nCaptured",
-          stepsTaken: 1,
-          status: "completed" as const,
-        };
+  it("passes prompt to model", async () => {
+    let receivedUser = "";
+    const capturingModel: LanguageModel = {
+      label: "capture",
+      async complete(messages: readonly ChatMessage[]) {
+        receivedUser =
+          messages.find((m) => m.role === "user")?.content?.toString() ?? "";
+        return { text: "## Active Task\nCaptured" };
+      },
+      async *completeStream() {
+        yield { type: "done" as const };
       },
     };
-    await runCompressionAgent(capturingLauncher, "my prompt", "run-3");
-    expect(receivedGoal).toContain("Compress the following conversation");
-    expect(receivedGoal).toContain("my prompt");
+    await runCompressionAgent(capturingModel, "my prompt", "run-3");
+    expect(receivedUser).toContain("my prompt");
+    expect(receivedUser).toContain("## Active Task");
   });
 });

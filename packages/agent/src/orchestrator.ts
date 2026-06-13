@@ -1,58 +1,112 @@
+/**
+ * AgentOrchestrator: multi-turn model ↔ tool loop.
+ *
+ * Refactored from a monolithic 1300-line file to a state-machine-driven
+ * architecture with explicit phase handlers.
+ */
+
 import path from "node:path";
 
 import {
-  AutoMemoryStore,
-  ContextCompactor,
-  ContextManager,
-  CostTracker,
-  estimateMessageTokens,
-  formatTodosForPrompt,
-  isMutatingTool,
-  loadProjectMemory,
-  loadSkillsFromDirectory,
-  saveCheckpoint,
-  SessionMemoryStore,
-  skillsFromProjectMemory,
-  type AgentAction,
   type AppState,
   type AppStateStore,
+  type AgentToolCallAction,
+  AutoMemoryStore,
+  ContextCompactor,
+  CONTEXT_SUMMARY_PREFIX,
+  ContextManager,
+  type CostTracker,
+  MAX_STEPS_WARNING,
+  retrieveMemories,
   type ModelTokenUsage,
   type RunEvent,
   type RunEventEnvelope,
   type RunResult,
   type RunSpec,
+  SessionMemoryStore,
   type SessionStore,
   SkillRegistry,
   type SkillRegistry as SkillRegistryType,
   type TodoStore,
+  UnifiedMemoryStore,
+  stripContextSummaryMessages,
+  buildSystemPromptWithBudget,
+  allocateContextBudget,
+  buildRetrievalSignalsFromMessages,
+  extractCleanMemoryQuery,
+  extractFilePaths,
+  findPawRoot,
+  formatTodosForPrompt,
+  loadProjectMemory,
+  loadSkillsFromDirectory,
+  skillsFromProjectMemory,
+  measureContextBudget,
+  meetsCompressionSavingsThreshold,
+  shouldCompactHistory,
+  validateCompressionSummary,
+  getToolResultsDir,
+  DEFAULT_KEEP_RECENT_TOOLS,
+  restoreCheckpoint,
+  type ContextBudgetSnapshot,
+  type TokenEstimator,
 } from "@paw/core";
 
 import {
-  type ToolRunResult,
-  executeTool,
-  toolCatalogText,
-  toolRequiresApproval,
   McpClientManager,
   type McpServerConfig,
   type SubAgentLauncher,
+  toolCatalogText,
+  toolDefinitions,
+  toolNameReverseMap,
 } from "@paw/harness";
+
 import {
   type ChatMessage,
   type LanguageModel,
+  type NativeToolCall,
   createDefaultLanguageModel,
 } from "@paw/models";
+
+import { type PlanItem, TaskPlanner } from "@paw/store";
+
 import {
-  TaskPlanner,
-  planItemsFromUnknown,
-  planToSnapshotPayload,
-  type PlanItem,
-} from "@paw/store";
-import { extractMemories } from "./memory-extraction-agent.js";
+  type WorkspaceWatcher,
+  discoverContext,
+  extractAtMentions,
+  gitStatus,
+  loadPawMd,
+  resolveMentions,
+} from "@paw/workspace";
+
 import { runCompressionAgent } from "./compression-agent.js";
-import { parseAgentActionFromModelText, parseAgentActionsFromModelText } from "./parse-agent-action.js";
+import { buildChildSystemPrompt } from "./child-system-prompt.js";
+import { handleAction } from "./orchestrator/action-handlers.js";
+import { AgentGroup } from "./orchestrator/agent-group.js";
+import { runMemoryExtractionAfterRun } from "./orchestrator/memory-extraction.js";
+import type {
+  PhaseContext,
+  SharedContext,
+  TurnFlags,
+  TurnState,
+} from "./orchestrator/types.js";
+import {
+  parseAgentActionFromModelText,
+  parseAgentActionsFromModelText,
+} from "./parse-agent-action.js";
 import { resolveMaxSteps } from "./resolve-max-steps.js";
-import { formatToolResultEventDetail } from "./tool-result-detail.js";
-import { discoverContext, extractAtMentions, gitStatus, loadPawMd, resolveMentions, WorkspaceWatcher } from "@paw/workspace";
+import {
+  resolveMemoryRetrievalSettings,
+  toRetrieveMemoriesOptions,
+} from "./resolve-memory-retrieval.js";
+import { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";
+import {
+  CircuitBreaker,
+  CircuitBreakerOpenError,
+} from "./resilience/circuit-breaker.js";
+
+// ─────────────────────────────────────────────────────────────
+// Public options
+// ─────────────────────────────────────────────────────────────
 
 export interface AskUserResolveInput {
   readonly question: string;
@@ -65,85 +119,43 @@ export interface ToolApprovalInput {
 }
 
 export interface AgentOrchestratorOptions {
-  /** When omitted, `run()` uses `createDefaultLanguageModel(workspaceRoot)` from the spec. */
   readonly model?: LanguageModel;
   readonly onEvent?: (envelope: RunEventEnvelope) => void;
-  /**
-   * Max plan rows embedded in the post-`plan_update` user message (`planToSnapshotPayload` in `@paw/store`).
-   * Omit for the store default (64); use `0` for unlimited.
-   */
   readonly planSnapshotMaxItems?: number;
-  /**
-   * When set, `ask_user` appends the reply and continues the same run instead of completing early.
-   */
   readonly resolveAskUser?: (input: AskUserResolveInput) => Promise<string>;
-  /**
-   * When set, tools that {@link toolRequiresApproval} (or {@link approvalPolicy}) marks as gated
-   * wait for approval before {@link executeTool}. If omitted, gated tools still execute (compat).
-   */
   readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
-  /**
-   * Per-tool override for whether approval is required when {@link resolveToolApproval} is set.
-   * Return `undefined` to fall back to harness defaults.
-   */
   readonly approvalPolicy?: (tool: string) => boolean | undefined;
-  /**
-   * MCP server configurations to connect at run start and disconnect at completion.
-   * When provided, MCP tools are included in the tool catalog and routed via {@link McpClientManager}.
-   */
   readonly mcpServers?: readonly McpServerConfig[];
-  /**
-   * When set, every {@link RunEventEnvelope} is automatically persisted via
-   * {@link SessionStore.saveEvent} so runs can be replayed or reviewed later.
-   */
   readonly sessionStore?: SessionStore;
-  /**
-   * When set, the `workspace.todo_write` tool updates this store and the current
-   * task list is injected into the system prompt so the model sees open items.
-   */
   readonly todoStore?: TodoStore;
-  /**
-   * Optional context manager for sliding-window message history.
-   * When omitted, the orchestrator creates an internal default.
-   */
   readonly contextManager?: ContextManager;
-  /**
-   * Optional sub-agent launcher for the `workspace.run_agent` tool.
-   * When omitted, the tool returns an error.
-   */
   readonly subAgentLauncher?: SubAgentLauncher;
-  /**
-   * When set, the orchestrator saves a snapshot of its state after every turn
-   * so the conversation can be resumed later.
-   */
   readonly appStateStore?: AppStateStore;
-  /**
-   * Optional skill registry for the `workspace.run_skill` tool.
-   * When omitted, the tool returns an error.
-   */
   readonly skillRegistry?: SkillRegistryType;
-  /**
-   * Auto-load skills from this directory (recursively, `.json` files).
-   * Populates {@link skillRegistry} when set.
-   */
   readonly skillsDir?: string;
-  /**
-   * Optional cost tracker for token usage and cost estimation.
-   * When set, usage is accumulated and `cost.update` events are emitted.
-   */
   readonly costTracker?: CostTracker;
-  /**
-   * Optional filesystem watcher. When set, the orchestrator checks for
-   * external file modifications before each model call and injects a notice.
-   */
   readonly watcher?: WorkspaceWatcher;
+  /** When set to "read_only", child agents cannot execute mutating tools. */
+  readonly childPolicy?: "read_only" | "read_write";
+  /** Full agent (default) or lightweight child sub-agent. */
+  readonly runMode?: "full" | "child";
+  /** Structured parent context for {@link runMode} `"child"`. */
+  readonly sharedContext?: SharedContext;
+  /** Model for compression / memory extraction (defaults to main model). */
+  readonly auxiliaryModel?: LanguageModel;
+  /** Test injection: override retry sleep. Defaults to setTimeout. */
+  readonly retrySleep?: (ms: number) => Promise<void>;
+  /** When to run post-run memory extraction (requires subAgentLauncher). */
+  readonly memoryExtraction?: "background" | "await" | "off";
 }
 
-/**
- * Multi-turn orchestrator: model ↔ tool loop until the model omits a tool line
- * or `maxSteps` model calls are exhausted.
- */
+// ─────────────────────────────────────────────────────────────
+// Orchestrator
+// ─────────────────────────────────────────────────────────────
+
 export class AgentOrchestrator {
+  private static readonly COMPACT_COOLDOWN_TURNS = 5;
+
   private readonly overrideModel?: LanguageModel;
   private readonly onEvent?: (envelope: RunEventEnvelope) => void;
   private readonly planSnapshotMaxItems?: number;
@@ -159,6 +171,14 @@ export class AgentOrchestrator {
   private readonly skillRegistry: SkillRegistryType;
   private readonly costTracker?: CostTracker;
   private readonly watcher?: WorkspaceWatcher;
+  private readonly childPolicy?: "read_only" | "read_write";
+  private readonly runMode: "full" | "child";
+  private readonly sharedContext?: SharedContext;
+  private readonly auxiliaryModel?: LanguageModel;
+  private compactCooldownTurns = 0;
+  private readonly retrySleep: (ms: number) => Promise<void>;
+  private readonly memoryExtraction: "background" | "await" | "off";
+  private readonly circuitBreakers = new Map<string, CircuitBreaker>();
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -176,6 +196,13 @@ export class AgentOrchestrator {
     this.skillRegistry = opts?.skillRegistry ?? new SkillRegistry();
     this.costTracker = opts?.costTracker;
     this.watcher = opts?.watcher;
+    this.childPolicy = opts?.childPolicy;
+    this.runMode = opts?.runMode ?? "full";
+    this.sharedContext = opts?.sharedContext;
+    this.auxiliaryModel = opts?.auxiliaryModel;
+    this.retrySleep =
+      opts?.retrySleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.memoryExtraction = opts?.memoryExtraction ?? "background";
     if (opts?.skillsDir) {
       const skills = loadSkillsFromDirectory(opts.skillsDir);
       for (const skill of skills) {
@@ -188,37 +215,605 @@ export class AgentOrchestrator {
     return "AgentOrchestrator (TS): model + harness tool loop + run events.";
   }
 
-  private toolNeedsApprovalGate(tool: string, args?: Record<string, unknown>): boolean {
-    const o = this.approvalPolicy?.(tool);
-    if (o !== undefined) {
-      return o;
+  // ─────────────────────────────────────────────────────────
+  // Resume a previously saved run
+  // ─────────────────────────────────────────────────────────
+
+  async resumeRun(opts: {
+    readonly runId: string;
+    readonly workspaceRoot?: string;
+    readonly fromTurn?: number;
+    readonly abortSignal?: AbortSignal;
+  }): Promise<RunResult> {
+    if (!this.appStateStore) {
+      return {
+        runId: opts.runId,
+        status: "failed",
+        message: "Cannot resume: no appStateStore configured",
+      };
     }
-    return toolRequiresApproval(tool, undefined, args);
+
+    const loaded = await Promise.resolve(
+      this.appStateStore.load(opts.runId),
+    );
+    if (!loaded) {
+      return {
+        runId: opts.runId,
+        status: "failed",
+        message: `Cannot resume: no saved state found for run "${opts.runId}"`,
+      };
+    }
+
+    const workspaceRoot =
+      opts.workspaceRoot?.trim()
+        ? path.resolve(opts.workspaceRoot)
+        : loaded.workspaceRoot;
+
+    // If fromTurn is specified, restore file checkpoints to that turn
+    let resumeState = loaded;
+    if (opts.fromTurn !== undefined && opts.fromTurn >= 0) {
+      restoreCheckpoint(workspaceRoot, opts.runId, opts.fromTurn, {
+        backup: true,
+      });
+      resumeState = { ...loaded, turn: opts.fromTurn };
+    }
+
+    return this.run({
+      runId: opts.runId,
+      goal: resumeState.goal,
+      workspaceRoot,
+      maxSteps: resumeState.maxSteps,
+      abortSignal: opts.abortSignal,
+      resumeFromState: resumeState,
+    });
   }
 
-  /**
-   * Resolve @-mentions in user text, read the files, and return a formatted
-   * message that includes file contents inline so every model provider sees them.
-   */
+  // ─────────────────────────────────────────────────────────
+  // Main entry
+  // ─────────────────────────────────────────────────────────
+
+  async run(spec: RunSpec): Promise<RunResult> {
+    let init: Awaited<ReturnType<typeof this.initializeRun>> | undefined;
+    let agentGroup: AgentGroup | undefined;
+    let emitRunMetrics:
+      | ((status: "completed" | "failed") => void)
+      | undefined;
+
+    try {
+      init = await this.initializeRun(spec);
+      const {
+        runId,
+        workspaceRoot,
+        maxSteps,
+        startTurn,
+        model,
+        mcp,
+        toolDefs,
+        toolNameMap,
+        ctxMgr,
+        planner,
+        autoMemoryStore,
+        sessionMemoryStore,
+        compactor,
+        emit,
+        emitRunMetrics: _emitRunMetrics,
+        checkpointSeq,
+        shellSandbox,
+      } = init;
+      emitRunMetrics = _emitRunMetrics;
+      const signal = spec.abortSignal;
+
+      // Create AgentGroup for sub-agent management
+      if (this.subAgentLauncher) {
+        agentGroup = new AgentGroup({
+          parentRunId: runId,
+          parentOnEvent: (envelope) => {
+            this.onEvent?.(envelope);
+            this.sessionStore?.saveEvent(runId, envelope);
+          },
+          parentCtxMgr: ctxMgr,
+          parentWatcher: this.watcher,
+          launcher: this.subAgentLauncher,
+          depth: 0,
+        });
+      }
+
+      let flags: TurnFlags = {
+        autoContinueNudges: 0,
+        lastTurnHadToolCall: false,
+        hasEverUsedTools: false,
+      };
+
+      // Store for executeTurn access
+      const turnCompactor = compactor;
+      const turnSessionMemoryStore = sessionMemoryStore;
+      const turnAutoMemoryStore = autoMemoryStore;
+
+      planner.createPlan(runId, []);
+
+      for (let turn = startTurn; turn < maxSteps; turn++) {
+        if (signal?.aborted) {
+          await agentGroup?.cancelAll();
+          const message = "Run aborted.";
+          this.saveState(
+            runId,
+            spec.goal,
+            workspaceRoot,
+            turn,
+            maxSteps,
+            ctxMgr,
+            planner,
+            {
+              status: "failed",
+              message,
+            },
+          );
+          emit({ type: "run.completed", status: "failed", message });
+          emitRunMetrics("failed");
+          return { runId, status: "failed", message };
+        }
+
+        const phaseCtx: PhaseContext = {
+          runId,
+          workspaceRoot,
+          turn,
+          maxSteps,
+          signal,
+          model,
+          mcp,
+          toolDefs,
+          toolNameMap,
+          ctxMgr,
+          planner,
+          emit,
+          checkpointSeq,
+          specGoal: spec.goal,
+          shellSandbox,
+        };
+
+        const state = await this.executeTurn(
+          phaseCtx,
+          flags,
+          agentGroup,
+          turnCompactor,
+          turnSessionMemoryStore,
+          turnAutoMemoryStore,
+        );
+
+        if (state.type === "continue") {
+          flags = state.nextFlags;
+          continue;
+        }
+
+        if (state.type === "completed" || state.type === "failed") {
+          this.saveState(
+            runId,
+            spec.goal,
+            workspaceRoot,
+            turn + 1,
+            maxSteps,
+            ctxMgr,
+            planner,
+            {
+              status: state.type,
+              message: state.message,
+            },
+          );
+          emit({
+            type: "run.completed",
+            status: state.type,
+            message: state.message,
+          });
+          emitRunMetrics(state.type);
+          if (state.type === "completed") {
+            await this.maybeExtractMemoriesAfterRun(
+              runId,
+              ctxMgr,
+              turnAutoMemoryStore,
+              emit,
+              model,
+            );
+          }
+          return { runId, status: state.type, message: state.message };
+        }
+      }
+
+      const exhaustedMessage = "internal: model loop exhausted without return";
+      this.saveState(
+        runId,
+        spec.goal,
+        workspaceRoot,
+        maxSteps,
+        maxSteps,
+        ctxMgr,
+        planner,
+        {
+          status: "failed",
+          message: exhaustedMessage,
+        },
+      );
+      emitRunMetrics("failed");
+      return { runId, status: "failed", message: exhaustedMessage };
+    } catch (e) {
+      const message =
+        e instanceof Error
+          ? e.name === "AbortError"
+            ? "Run aborted."
+            : e.message
+          : String(e);
+      if (init) {
+        const { runId, workspaceRoot, maxSteps, ctxMgr, planner, emit } = init;
+        this.saveState(
+          runId,
+          spec.goal,
+          workspaceRoot,
+          maxSteps,
+          maxSteps,
+          ctxMgr,
+          planner,
+          {
+            status: "failed",
+            message,
+          },
+        );
+        emit({ type: "run.failed", message });
+        emit({ type: "run.completed", status: "failed", message });
+        emitRunMetrics("failed");
+        return { runId, status: "failed", message };
+      }
+      return { runId: spec.runId, status: "failed", message };
+    } finally {
+      await init?.mcp?.disconnectAll();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Turn execution (state-machine driven)
+  // ─────────────────────────────────────────────────────────
+
+  private async executeTurn(
+    ctx: PhaseContext,
+    flags: TurnFlags,
+    agentGroup: AgentGroup | undefined,
+    compactor: ContextCompactor,
+    sessionMemoryStore: SessionMemoryStore,
+    _autoMemoryStore: AutoMemoryStore,
+  ): Promise<TurnState> {
+    const {
+      runId,
+      workspaceRoot,
+      maxSteps,
+      signal,
+      model,
+      toolDefs,
+      toolNameMap,
+      ctxMgr,
+      planner,
+      emit,
+      specGoal,
+    } = ctx;
+
+    if (this.compactCooldownTurns > 0) {
+      this.compactCooldownTurns--;
+    }
+
+    emit({
+      type: "loop.tick",
+      turn: ctx.turn + 1,
+      maxSteps,
+      estimatedTokens:
+        ctxMgr.estimatedTokens +
+        AgentOrchestrator.estimateToolTokens(toolDefs, ctxMgr.estimator),
+    });
+    emit({ type: "phase", name: "model" });
+    emit({
+      type: "model.request",
+      label: model.label,
+      messageCount: ctxMgr.length,
+    });
+
+    // 1. Stale file check
+    const STALE_IGNORE = [
+      "node_modules",
+      ".git",
+      ".paw",
+      ".next",
+      "dist",
+      ".turbo",
+      "__pycache__",
+    ];
+    const staleFiles = (this.watcher?.takeExternallyModified() ?? []).filter(
+      (f) =>
+        !STALE_IGNORE.some(
+          (ign) =>
+            f.includes(`/${ign}/`) || f.startsWith(`${ign}/`) || f === ign,
+        ),
+    );
+    if (staleFiles.length > 0) {
+      const MAX_STALE = 30;
+      const shown = staleFiles.slice(0, MAX_STALE);
+      const suffix =
+        staleFiles.length > MAX_STALE
+          ? `\n... and ${staleFiles.length - MAX_STALE} more`
+          : "";
+      ctxMgr.addUser(
+        `Note: the following file(s) were modified externally since the last turn and may be stale:\n${shown.map((f) => `- ${f}`).join("\n")}${suffix}`,
+      );
+    }
+
+    // 2. Prune context (L1: persist oversized + evict beyond last N tool results)
+    const contextWindow = model.capabilities?.contextWindow ?? 128_000;
+    const pruneResult = ctxMgr.prune({
+      toolResultsDir: getToolResultsDir(workspaceRoot, runId),
+      keepRecentTools: DEFAULT_KEEP_RECENT_TOOLS,
+    });
+    if (pruneResult.pruned) {
+      emit({
+        type: "compression.prune.done",
+        freedTokens: pruneResult.freedTokens,
+        remainingTokens: ctxMgr.estimatedTokens,
+      });
+    }
+
+    const budgetSnapshot = AgentOrchestrator.measureBudget(
+      ctxMgr,
+      toolDefs,
+      contextWindow,
+    );
+    ctxMgr.setHistoryTokenBudget(budgetSnapshot.allocation.historyBudget);
+    AgentOrchestrator.emitContextBudget(emit, contextWindow, budgetSnapshot);
+
+    // 3. Auto-compact (history pool threshold)
+    const historyTokensBeforeCompact = budgetSnapshot.historyUsed;
+    const auxModel = this.auxiliaryModel ?? model;
+    if (
+      shouldCompactHistory(budgetSnapshot) &&
+      this.compactCooldownTurns <= 0 &&
+      !compactor.isDisabled &&
+      !compactor.shouldSkipDueToThrashing()
+    ) {
+      emit({
+        type: "compression.auto_compact.started",
+        beforeTokens: historyTokensBeforeCompact,
+      });
+      try {
+        const boundaries = compactor.determineBoundaries(
+          ctxMgr.buildMessages(),
+        );
+        const messages = ctxMgr.buildMessages();
+        const headMessages = stripContextSummaryMessages(
+          messages.slice(0, boundaries.headEnd + 1),
+        );
+        const middleMessages = stripContextSummaryMessages(
+          messages.slice(boundaries.headEnd + 1, boundaries.tailStart),
+        );
+        const tailMessages = stripContextSummaryMessages(
+          messages.slice(boundaries.tailStart),
+        );
+        if (middleMessages.length === 0) {
+          emit({
+            type: "compression.skipped",
+            reason: "no middle segment to compact",
+          });
+        } else {
+          const existing = sessionMemoryStore.load(runId);
+          const prompt = compactor.buildSummaryPrompt(
+            middleMessages,
+            existing ? sessionMemoryStore.toMarkdown(existing) : null,
+          );
+          const { summary, sessionMemory } = await runCompressionAgent(
+            auxModel,
+            prompt,
+            runId,
+            signal,
+          );
+
+          const quality = validateCompressionSummary(summary);
+          if (!quality.ok) {
+            compactor.recordResult(
+              historyTokensBeforeCompact,
+              historyTokensBeforeCompact,
+              false,
+            );
+            emit({
+              type: "compression.skipped",
+              reason: `summary quality: ${quality.reason}`,
+            });
+          } else {
+            const summaryMsg: ChatMessage = {
+              role: "user",
+              content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}`,
+            };
+            const newMessages = [...headMessages, summaryMsg, ...tailMessages];
+            const newHistory = newMessages.filter((m) => m.role !== "system");
+            const afterHistoryTokens =
+              ctxMgr.estimator.countMessages(newHistory);
+
+            if (
+              !meetsCompressionSavingsThreshold(
+                historyTokensBeforeCompact,
+                afterHistoryTokens,
+              )
+            ) {
+              compactor.recordResult(
+                historyTokensBeforeCompact,
+                historyTokensBeforeCompact,
+                false,
+              );
+              emit({
+                type: "compression.skipped",
+                reason: "insufficient compression savings (<15%)",
+              });
+            } else {
+              ctxMgr.replaceHistory(newMessages);
+              const memoryToSave = {
+                ...sessionMemory,
+                project: path.basename(workspaceRoot),
+              };
+              sessionMemoryStore.save(runId, memoryToSave);
+              emit({
+                type: "compression.auto_compact.done",
+                afterTokens: ctxMgr.historyEstimatedTokens,
+                summaryTokens: Math.ceil(summary.length / 4),
+              });
+              compactor.recordResult(
+                historyTokensBeforeCompact,
+                afterHistoryTokens,
+                true,
+              );
+              this.compactCooldownTurns =
+                AgentOrchestrator.COMPACT_COOLDOWN_TURNS;
+            }
+          }
+        }
+      } catch (err) {
+        compactor.recordResult(
+          historyTokensBeforeCompact,
+          historyTokensBeforeCompact,
+          false,
+        );
+        emit({
+          type: "compression.skipped",
+          reason: `compaction failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
+
+    // 4. Inject max-steps warning when within 3 turns of the limit
+    // Only fires once, after at least 5 turns have passed
+    const turnsRemaining = maxSteps - ctx.turn;
+    if (
+      turnsRemaining <= 3 &&
+      turnsRemaining > 0 &&
+      ctx.turn >= 5 &&
+      !flags._maxStepsWarned
+    ) {
+      ctxMgr.addUser(MAX_STEPS_WARNING);
+      flags._maxStepsWarned = true;
+    }
+
+    // 4. Model call
+    const { text, thinking, nativeToolCalls } = await this.invokeModel(
+      model,
+      ctxMgr.buildMessages(),
+      signal,
+      emit,
+      toolDefs,
+      toolNameMap,
+    );
+
+    // 5. Parse actions — prefer native tool_use over text scanning
+    emit({ type: "phase", name: "parse" });
+    const knownTools = new Set(toolNameMap.values());
+    let toolCalls: AgentToolCallAction[];
+    let reasoningText: string;
+
+    if (nativeToolCalls && nativeToolCalls.length > 0) {
+      // Native function calling: model returned structured tool_calls.
+      // Map sanitized names back to paw-ts dot-format tool names.
+      toolCalls = nativeToolCalls
+        .map((tc) => {
+          const originalName = toolNameMap.get(tc.name) ?? tc.name;
+          return {
+            type: "tool_call" as const,
+            tool: originalName,
+            args: tc.arguments,
+          };
+        })
+        .filter((tc): tc is AgentToolCallAction => knownTools.has(tc.tool));
+      // Deduplicate by tool+args (same logic as text parser)
+      const seen = new Set<string>();
+      toolCalls = toolCalls.filter((tc) => {
+        const key = `${tc.tool}:${JSON.stringify(tc.args)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      reasoningText = text;
+    } else {
+      // Fallback: text scanning for providers without native function calling
+      const parsed = parseAgentActionsFromModelText(text, { knownTools });
+      toolCalls = parsed.actions;
+      reasoningText = parsed.text;
+    }
+
+    // Parse non-tool actions only when no tool calls are present
+    const singleAction =
+      toolCalls.length === 0
+        ? parseAgentActionFromModelText(text, { knownTools })
+        : null;
+
+    // 6. Dispatch via action handlers
+    const actionResult = await handleAction(
+      singleAction ? [singleAction] : [],
+      toolCalls,
+      ctx,
+      flags,
+      reasoningText || text,
+      thinking,
+      {
+        resolveAskUser: this.resolveAskUser,
+        resolveToolApproval: this.resolveToolApproval,
+        approvalPolicy: this.approvalPolicy,
+        todoStore: this.todoStore,
+        planner,
+        planSnapshotMaxItems: this.planSnapshotMaxItems,
+        saveStateFn: () =>
+          this.saveState(
+            runId,
+            specGoal,
+            workspaceRoot,
+            ctx.turn + 1,
+            maxSteps,
+            ctxMgr,
+            planner,
+          ),
+        agentGroup,
+        childPolicy: this.childPolicy,
+        subAgentLauncher: this.subAgentLauncher,
+        skillRegistry: this.skillRegistry,
+        watcher: this.watcher,
+      },
+    );
+    return actionResult.state;
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Helpers (unchanged logic, extracted to private methods)
+  // ─────────────────────────────────────────────────────────
+
   private static resolveUserMentions(
     workspaceRoot: string,
     text: string,
-  ): { content: string; notFound: readonly string[] } {
+  ): {
+    content: string;
+    notFound: readonly string[];
+    imageAttachments?: readonly {
+      readonly type: "image" | "file";
+      readonly name: string;
+      readonly content: string;
+      readonly mimeType?: string;
+    }[];
+  } {
     const { strippedText, attachments, notFound } = resolveMentions(
       workspaceRoot,
       text,
     );
-    if (attachments.length === 0) {
-      return { content: text, notFound };
-    }
-    const fileBlocks = attachments
-      .map(
-        (a) =>
-          `<file path="${a.name}">\n${a.content}\n</file>`,
-      )
+    if (attachments.length === 0) return { content: text, notFound };
+    const imageAttachments = attachments.filter((a) => a.type === "image");
+    const fileAttachments = attachments.filter((a) => a.type === "file");
+    const fileBlocks = fileAttachments
+      .map((a) => `<file path="${a.name}">\n${a.content}\n</file>`)
       .join("\n\n");
-    const content = `<files>\n${fileBlocks}\n</files>\n\n${strippedText}`;
-    return { content, notFound };
+    let content = strippedText;
+    if (fileAttachments.length > 0) {
+      content = `<files>\n${fileBlocks}\n</files>\n\n${strippedText}`;
+    }
+    return {
+      content,
+      notFound,
+      ...(imageAttachments.length > 0 ? { imageAttachments } : {}),
+    };
   }
 
   private saveState(
@@ -231,46 +826,142 @@ export class AgentOrchestrator {
     planner: TaskPlanner,
     outcome?: { status: "completed" | "failed"; message: string },
   ): void {
-    if (!this.appStateStore) {
-      return;
-    }
+    if (!this.appStateStore) return;
+    const cleanGoal =
+      goal
+        .replace(
+          /^\[Context from previous session\][\s\S]*?\[Current user request\]\n/s,
+          "",
+        )
+        .replace(
+          /^\[Previous work session\][\s\S]*?\[Current user request\]\n/s,
+          "",
+        )
+        .trim() || goal.trim();
     const plan = planner.plan;
     const state: AppState = {
       runId,
-      goal,
+      goal: cleanGoal,
       workspaceRoot,
       turn,
       maxSteps,
       messages: ctxMgr.buildMessages(),
       ...(plan
-        ? {
-            plan: {
-              revision: plan.revision,
-              items: plan.items as unknown[],
-            },
-          }
+        ? { plan: { revision: plan.revision, items: plan.items as unknown[] } }
         : {}),
-      ...(this.todoStore
-        ? { todos: this.todoStore.items }
-        : {}),
+      ...(this.todoStore ? { todos: this.todoStore.items } : {}),
       ...(outcome ? { outcome } : {}),
       savedAt: Date.now(),
     };
     this.appStateStore.save(state);
   }
 
-  private async invokeModel(
+  private mergeUsage(
+    a?: ModelTokenUsage,
+    b?: ModelTokenUsage,
+  ): ModelTokenUsage | undefined {
+    if (!a && !b) return undefined;
+    const pt = a?.promptTokens !== undefined || b?.promptTokens !== undefined;
+    const ct =
+      a?.completionTokens !== undefined || b?.completionTokens !== undefined;
+    const tt = a?.totalTokens !== undefined || b?.totalTokens !== undefined;
+    const cpt =
+      a?.cachedPromptTokens !== undefined ||
+      b?.cachedPromptTokens !== undefined;
+    if (!pt && !ct && !tt && !cpt) return undefined;
+    return {
+      ...(pt
+        ? { promptTokens: (a?.promptTokens ?? 0) + (b?.promptTokens ?? 0) }
+        : {}),
+      ...(ct
+        ? {
+            completionTokens:
+              (a?.completionTokens ?? 0) + (b?.completionTokens ?? 0),
+          }
+        : {}),
+      ...(tt
+        ? { totalTokens: (a?.totalTokens ?? 0) + (b?.totalTokens ?? 0) }
+        : {}),
+      ...(cpt
+        ? {
+            cachedPromptTokens:
+              (a?.cachedPromptTokens ?? 0) + (b?.cachedPromptTokens ?? 0),
+          }
+        : {}),
+    };
+  }
+
+  private static normalizeToolCalls(
+    text: string,
+    nameMap?: Map<string, string>,
+  ): string {
+    let out = text
+      .replace(/<overview>[\s\S]*?<\/overview>/gi, "")
+      .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
+    if (nameMap && nameMap.size > 0) {
+      for (const [sanitized, original] of nameMap) {
+        out = out.split(`"${sanitized}"`).join(`"${original}"`);
+      }
+    }
+    out = out.replace(
+      /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/gi,
+      (_, json) => `\n${json.trim()}\n`,
+    );
+    const toolXmlRegex =
+      /<tool>([^<]+)<\/tool>\s*(?:<args>(\{[\s\S]*?\})<\/args>)?/gi;
+    out = out.replace(toolXmlRegex, (_m, name, argsJson) => {
+      let args: unknown = {};
+      if (argsJson) {
+        try {
+          args = JSON.parse(argsJson);
+        } catch {
+          /* ignore */
+        }
+      }
+      return `\n${JSON.stringify({ tool: name.trim(), args })}\n`;
+    });
+    out = out.replace(
+      /```json\s*(\{[\s\S]*?\})\s*```/g,
+      (_, json) => `\n${json.trim()}\n`,
+    );
+    return out.trim();
+  }
+
+  private static readonly MODEL_TIMEOUT_MS = 120_000;
+
+  private async invokeModelOnce(
     model: LanguageModel,
     messages: readonly ChatMessage[],
     signal: AbortSignal | undefined,
     emit: (event: RunEvent) => void,
-  ): Promise<{ text: string; usage?: ModelTokenUsage; thinking?: string }> {
+    tools?: readonly import("@paw/models").ToolDefinition[],
+    toolNameMap?: Map<string, string>,
+  ): Promise<{
+    text: string;
+    rawText: string;
+    usage?: ModelTokenUsage;
+    thinking?: string;
+    finishReason?: string;
+    /** Native structured tool calls (when provider supports function calling). */
+    nativeToolCalls?: readonly NativeToolCall[];
+  }> {
+    const timeout = AbortSignal.timeout(AgentOrchestrator.MODEL_TIMEOUT_MS);
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, timeout])
+      : timeout;
     const streamFn = model.completeStream;
+    const modelOpts = {
+      signal: combinedSignal,
+      ...(tools && tools.length > 0 ? { tools } : {}),
+    };
+
     if (typeof streamFn === "function") {
       let acc = "";
       let thinkingAcc = "";
       let usage: ModelTokenUsage | undefined;
-      for await (const chunk of streamFn.call(model, messages, { signal })) {
+      let finishReason: string | undefined;
+      const nativeToolCalls: NativeToolCall[] = [];
+      for await (const chunk of streamFn.call(model, messages, modelOpts)) {
         if (chunk.type === "text") {
           acc += chunk.delta;
           emit({ type: "model.chunk", text: acc });
@@ -278,57 +969,342 @@ export class AgentOrchestrator {
           thinkingAcc += chunk.delta;
           emit({ type: "model.thinking", text: thinkingAcc });
         } else if (chunk.type === "tool_use") {
-          // tool_use from stream is a preview; the orchestrator still parses
-          // the final text for the actual action. We could emit a preview event
-          // here in the future.
+          // Collect native tool_use as structured objects.
+          // Also emit as text for TUI display compatibility.
+          let parsedArgs: Record<string, unknown>;
+          try {
+            const raw = JSON.parse(chunk.input);
+            parsedArgs =
+              raw !== null && typeof raw === "object" && !Array.isArray(raw)
+                ? (raw as Record<string, unknown>)
+                : {};
+          } catch {
+            parsedArgs = {};
+          }
+          nativeToolCalls.push({
+            id: chunk.id,
+            name: chunk.name,
+            arguments: parsedArgs,
+          });
+          const display = JSON.stringify({ tool: chunk.name, args: parsedArgs });
+          acc += (acc ? "\n" : "") + display;
+          emit({ type: "model.chunk", text: acc });
         } else if (chunk.type === "done") {
           usage = chunk.usage;
+          finishReason = chunk.finishReason;
         }
       }
-      emit({
-        type: "model.done",
-        text: acc,
-        ...(thinkingAcc ? { thinking: thinkingAcc } : {}),
-        ...(usage !== undefined ? { usage } : {}),
-      });
       if (usage) {
         this.costTracker?.record(model.label, usage);
         const snap = this.costTracker?.snapshot();
-        if (snap) {
-          emit({ type: "cost.update", ...snap });
-        }
+        if (snap)
+          emit({
+            type: "cost.update",
+            ...snap,
+            turnPromptTokens: usage.promptTokens,
+            turnCompletionTokens: usage.completionTokens,
+            ...(usage.cachedPromptTokens !== undefined
+              ? { cachedPromptTokens: usage.cachedPromptTokens }
+              : {}),
+          });
       }
-      return { text: acc, thinking: thinkingAcc || undefined, usage };
+      const normalized = AgentOrchestrator.normalizeToolCalls(acc, toolNameMap);
+      return {
+        text: normalized,
+        rawText: acc,
+        thinking: thinkingAcc || undefined,
+        usage,
+        finishReason,
+        ...(nativeToolCalls.length > 0 ? { nativeToolCalls } : {}),
+      };
     }
-    const result = await model.complete(messages, { signal });
-    emit({ type: "model.chunk", text: result.text });
-    emit({
-      type: "model.done",
-      text: result.text,
-      ...(result.thinking !== undefined ? { thinking: result.thinking } : {}),
-      ...(result.usage !== undefined ? { usage: result.usage } : {}),
-    });
+
+    const result = await model.complete(messages, modelOpts);
+    const normalizedResult = AgentOrchestrator.normalizeToolCalls(
+      result.text,
+      toolNameMap,
+    );
+    emit({ type: "model.chunk", text: normalizedResult });
     if (result.usage) {
       this.costTracker?.record(model.label, result.usage);
       const snap = this.costTracker?.snapshot();
-      if (snap) {
-        emit({ type: "cost.update", ...snap });
-      }
+      if (snap)
+        emit({
+          type: "cost.update",
+          ...snap,
+          turnPromptTokens: result.usage.promptTokens,
+          turnCompletionTokens: result.usage.completionTokens,
+          ...(result.usage.cachedPromptTokens !== undefined
+            ? { cachedPromptTokens: result.usage.cachedPromptTokens }
+            : {}),
+        });
     }
-    return { text: result.text, thinking: result.thinking, usage: result.usage };
+    return {
+      text: normalizedResult,
+      rawText: result.text,
+      thinking: result.thinking,
+      usage: result.usage,
+      finishReason: result.finishReason,
+      ...(result.toolCalls && result.toolCalls.length > 0
+        ? { nativeToolCalls: result.toolCalls }
+        : {}),
+    };
   }
 
-  async run(spec: RunSpec): Promise<RunResult> {
-    const runId = spec.runId;
-    const workspaceRoot = path.resolve(
-      spec.workspaceRoot?.trim() ? spec.workspaceRoot : ".",
+  private async invokeModel(
+    model: LanguageModel,
+    messages: readonly ChatMessage[],
+    signal: AbortSignal | undefined,
+    emit: (event: RunEvent) => void,
+    tools?: readonly import("@paw/models").ToolDefinition[],
+    toolNameMap?: Map<string, string>,
+  ): Promise<{
+    text: string;
+    usage?: ModelTokenUsage;
+    thinking?: string;
+    nativeToolCalls?: readonly NativeToolCall[];
+  }> {
+    const result = await this.callModelWithRetry(
+      model,
+      messages,
+      signal,
+      emit,
+      tools,
+      toolNameMap,
     );
-    const signal = spec.abortSignal;
+    if (
+      result.finishReason === "length" ||
+      result.finishReason === "max_tokens"
+    ) {
+      emit({ type: "model.truncated", finishReason: result.finishReason });
+      const continueMessages = [
+        ...messages,
+        { role: "assistant" as const, content: result.text },
+        {
+          role: "user" as const,
+          content:
+            "[Continue from where you were cut off. Do not repeat any content — pick up exactly where the previous message stopped.]",
+        },
+      ];
+      const continued = await this.callModelWithRetry(
+        model,
+        continueMessages,
+        signal,
+        emit,
+        tools,
+        toolNameMap,
+      );
+      const combinedRawText = result.rawText + continued.rawText;
+      const combinedText = AgentOrchestrator.normalizeToolCalls(
+        combinedRawText,
+        toolNameMap,
+      );
+      const combinedUsage = this.mergeUsage(result.usage, continued.usage);
+      const combinedThinking =
+        [result.thinking, continued.thinking].filter(Boolean).join("") ||
+        undefined;
+      emit({
+        type: "model.done",
+        text: combinedText,
+        ...(combinedThinking ? { thinking: combinedThinking } : {}),
+        ...(combinedUsage !== undefined ? { usage: combinedUsage } : {}),
+      });
+      return {
+        text: combinedText,
+        thinking: combinedThinking,
+        usage: combinedUsage,
+        // Merge tool calls: the first response may have completed tool calls
+        // before truncation; the continuation has the rest.
+        nativeToolCalls: [
+          ...(result.nativeToolCalls ?? []),
+          ...(continued.nativeToolCalls ?? []),
+        ],
+      };
+    }
+    emit({
+      type: "model.done",
+      text: result.text,
+      ...(result.thinking ? { thinking: result.thinking } : {}),
+      ...(result.usage !== undefined ? { usage: result.usage } : {}),
+    });
+    return result;
+  }
+
+  private getOrCreateBreaker(label: string): CircuitBreaker {
+    let b = this.circuitBreakers.get(label);
+    if (!b) {
+      b = new CircuitBreaker(label);
+      this.circuitBreakers.set(label, b);
+    }
+    return b;
+  }
+
+  private emitCircuitBreakerEvent(
+    breaker: CircuitBreaker,
+    emit: (event: RunEvent) => void,
+  ): void {
+    const snap = breaker.snapshot();
+    if (snap.state === "open") {
+      emit({
+        type: "model.circuit_breaker.open",
+        label: breaker.label,
+        failures: snap.failures,
+      });
+    }
+  }
+
+  private async callModelWithRetry(
+    model: LanguageModel,
+    messages: readonly ChatMessage[],
+    signal: AbortSignal | undefined,
+    emit: (event: RunEvent) => void,
+    tools?: readonly import("@paw/models").ToolDefinition[],
+    toolNameMap?: Map<string, string>,
+    breakerArg?: CircuitBreaker,
+    attempt = 1,
+  ): Promise<{
+    text: string;
+    rawText: string;
+    usage?: ModelTokenUsage;
+    thinking?: string;
+    finishReason?: string;
+    nativeToolCalls?: readonly NativeToolCall[];
+  }> {
+    const breaker = breakerArg ?? this.getOrCreateBreaker(model.label);
+    breaker.guard();
+
+    try {
+      const result = await this.invokeModelOnce(
+        model,
+        messages,
+        signal,
+        emit,
+        tools,
+        toolNameMap,
+      );
+      const prevState = breaker.snapshot().state;
+      breaker.recordSuccess();
+      const newState = breaker.snapshot().state;
+      if (prevState !== newState && newState === "closed") {
+        emit({
+          type: "model.circuit_breaker.closed",
+          label: breaker.label,
+        });
+      }
+      return result;
+    } catch (err) {
+      const prevState = breaker.snapshot().state;
+      breaker.recordFailure();
+      const newState = breaker.snapshot().state;
+      if (prevState !== newState && newState === "open") {
+        this.emitCircuitBreakerEvent(breaker, emit);
+      }
+
+      // If the circuit breaker itself is the cause, don't retry
+      if (err instanceof CircuitBreakerOpenError) throw err;
+
+      const classification = classifyError(err);
+      if (!isRetryable(classification) || attempt >= 3) throw err;
+      const delay = computeRetryDelay(attempt, classification);
+      const msg = err instanceof Error ? err.message : String(err);
+      emit({
+        type: "model.retry.waiting",
+        attempt,
+        delayMs: Math.round(delay),
+        error: msg,
+        errorType: classification.type,
+      });
+      await this.retrySleep(delay);
+      return this.callModelWithRetry(
+        model,
+        messages,
+        signal,
+        emit,
+        tools,
+        toolNameMap,
+        breaker,
+        attempt + 1,
+      );
+    }
+  }
+
+  private async initializeRun(spec: RunSpec): Promise<{
+    runId: string;
+    workspaceRoot: string;
+    maxSteps: number;
+    startTurn: number;
+    model: LanguageModel;
+    mcp?: McpClientManager;
+    toolDefs: readonly import("@paw/models").ToolDefinition[];
+    toolNameMap: Map<string, string>;
+    ctxMgr: ContextManager;
+    planner: TaskPlanner;
+    autoMemoryStore: AutoMemoryStore;
+    sessionMemoryStore: SessionMemoryStore;
+    compactor: ContextCompactor;
+    emit: (event: RunEvent) => void;
+    emitRunMetrics: (status: "completed" | "failed") => void;
+    seq: { n: number };
+    checkpointSeq: { n: number };
+    shellSandbox: import("@paw/harness").ShellSandboxConfig;
+  }> {
+    const runId = spec.runId;
+    const workspaceRoot = (() => {
+      const given = spec.workspaceRoot?.trim()
+        ? path.resolve(spec.workspaceRoot)
+        : path.resolve(".");
+      return findPawRoot(given) ?? given;
+    })();
     const maxSteps = resolveMaxSteps(workspaceRoot, spec.maxSteps);
 
     const seq = { n: 0 };
     const checkpointSeq = { n: 0 };
+
+    // ── Run metrics accumulator ──
+    const metrics = {
+      modelLatencyMs: 0,
+      modelCalls: 0,
+      toolCalls: 0,
+      toolSuccesses: 0,
+      totalTokens: 0,
+      estimatedCost: 0,
+      costCurrency: "USD" as "CNY" | "USD",
+      steps: 0,
+      truncationCount: 0,
+    };
+    let modelCallStartTime = 0;
+    let runStartTime = 0;
+
     const emit = (event: RunEvent) => {
+      // Collect metrics from the event stream
+      if (event.type === "model.request") {
+        metrics.modelCalls++;
+        modelCallStartTime = Date.now();
+      }
+      if (event.type === "model.done") {
+        metrics.modelLatencyMs += Date.now() - modelCallStartTime;
+        if (event.usage) {
+          metrics.totalTokens +=
+            (event.usage.promptTokens ?? 0) +
+            (event.usage.completionTokens ?? 0);
+        }
+      }
+      if (event.type === "model.truncated") {
+        metrics.truncationCount++;
+      }
+      if (event.type === "tool.result") {
+        metrics.toolCalls++;
+        if (event.ok) metrics.toolSuccesses++;
+      }
+      if (event.type === "loop.tick") {
+        metrics.steps = Math.max(metrics.steps, event.turn);
+      }
+      if (event.type === "cost.update") {
+        metrics.estimatedCost =
+          event.estimatedCostUsd ?? event.estimatedCost ?? 0;
+        metrics.costCurrency = event.costCurrency ?? "USD";
+      }
+
       seq.n += 1;
       const envelope: RunEventEnvelope = {
         runId,
@@ -340,723 +1316,471 @@ export class AgentOrchestrator {
       this.sessionStore?.saveEvent(runId, envelope);
     };
 
+    const emitRunMetrics = (status: "completed" | "failed") => {
+      emit({
+        type: "run.metrics",
+        durationMs: Date.now() - runStartTime,
+        modelLatencyMs: metrics.modelLatencyMs,
+        modelCalls: metrics.modelCalls,
+        toolCalls: metrics.toolCalls,
+        toolSuccesses: metrics.toolSuccesses,
+        totalTokens: metrics.totalTokens,
+        estimatedCost: metrics.estimatedCost,
+        costCurrency: metrics.costCurrency,
+        steps: metrics.steps,
+        truncationCount: metrics.truncationCount,
+      });
+    };
+
+    runStartTime = Date.now();
     emit({ type: "run.started", goal: spec.goal });
 
     const model =
       this.overrideModel ?? createDefaultLanguageModel(workspaceRoot);
+    const ctxMgr = this.contextManager ?? new ContextManager();
+    const planner = new TaskPlanner();
+    let startTurn = 0;
+    const sessionMemoryStore = new SessionMemoryStore({ workspaceRoot });
+    const compactor = new ContextCompactor({}, ctxMgr.estimator);
 
     const mcp =
       this.mcpServers && this.mcpServers.length > 0
         ? new McpClientManager()
         : undefined;
+    let mcpConnectedCount = 0;
     if (mcp) {
       for (const cfg of this.mcpServers!) {
         try {
           await mcp.connect(cfg);
+          mcpConnectedCount++;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          emit({
-            type: "run.failed",
-            message: `MCP connect (${cfg.name}): ${msg}`,
-          });
-          emit({
-            type: "run.completed",
-            status: "failed",
-            message: `MCP connect (${cfg.name}): ${msg}`,
-          });
-          await mcp.disconnectAll();
-          return {
-            runId,
-            status: "failed",
-            message: `MCP connect (${cfg.name}): ${msg}`,
-          };
+          emit({ type: "mcp.connection_failed", server: cfg.name, error: msg });
         }
       }
     }
 
-    const systemParts = [
-      "You are Paw (TS harness). Follow user goals using the tools below.",
-      `Workspace root (all relative tool paths are under this directory): ${workspaceRoot}`,
-      'When you need a tool, output ONE JSON object on its own line at the end (valid JSON, no markdown fences). To call multiple tools at once, output multiple JSON objects, each on its own line. Tool shape: {"tool":"<id>","args":{...}} or {"name":"<id>","args":{...}}.',
-      'Other structured endings: {"action":"final_answer","summary":"..."}, {"action":"abort","reason":"..."}, {"action":"ask_user","question":"..."}, {"action":"plan_update","reason":"...","new_items":[],"deprecated_items":[]}.',
-      'After a plan_update, you may receive "Current plan (JSON):" with next_pending (next runnable row given dependencies, or null), all_complete (true when every row is completed or skipped), truncated/items_total when the item list was shortened.',
-      "After tool results, you may call another tool or answer without a JSON line.",
-      "Integrity: Do not claim you created, edited, deleted, or executed files or shell commands unless this conversation already contains a matching workspace.* tool result. To change files or run commands you MUST output the tool JSON line and continue until you receive Tool result (JSON).",
-      toolCatalogText(mcp),
-    ];
-    if (this.skillRegistry.list().length > 0) {
-      systemParts.push(this.skillRegistry.catalogText());
-    }
-    if (this.todoStore && this.todoStore.items.length > 0) {
-      systemParts.push(formatTodosForPrompt(this.todoStore.items));
-    }
-    try {
-      const git = gitStatus(workspaceRoot);
-      if (!git.error && git.branch) {
-        const parts: string[] = [];
-        parts.push(`Git branch: ${git.branch}`);
-        if (git.ahead) parts.push(`ahead ${git.ahead}`);
-        if (git.behind) parts.push(`behind ${git.behind}`);
-        if (git.staged?.length) parts.push(`${git.staged.length} staged`);
-        if (git.modified?.length) parts.push(`${git.modified.length} modified`);
-        if (git.untracked?.length) parts.push(`${git.untracked.length} untracked`);
-        if (parts.length > 1) {
-          systemParts.push(parts.join("\n"));
-        }
+    const toolDefs = toolDefinitions(mcp);
+    const toolNameMap = toolNameReverseMap(mcp);
+
+    const contextWindow = model.capabilities?.contextWindow ?? 128_000;
+
+    if (this.runMode === "child" && this.sharedContext) {
+      const systemContent = buildChildSystemPrompt({
+        sharedContext: this.sharedContext,
+        toolCatalog: toolCatalogText(mcp),
+        workspaceRoot,
+      });
+
+      if (spec.resumeFromState) {
+        const s = spec.resumeFromState;
+        startTurn = s.turn;
+        ctxMgr.setSystem(systemContent);
+        const history = s.messages.filter((m) => m.role !== "system");
+        if (history.length > 0) ctxMgr.replaceHistory(history);
+        if (s.todos && this.todoStore) this.todoStore.set(s.todos);
+      } else {
+        ctxMgr.setSystem(systemContent);
+        ctxMgr.addUser(spec.goal);
       }
-    } catch {
-      // ignore git errors
-    }
-    try {
-      const pawMd = loadPawMd(workspaceRoot);
-      if (pawMd.content) {
-        systemParts.push(`Project instructions (${pawMd.path}):\n${pawMd.content}`);
-      }
-    } catch {
-      // ignore paw.md read errors
+
+      const childAutoMemoryStore = new AutoMemoryStore({ workspaceRoot });
+      const initBudget = AgentOrchestrator.measureBudget(
+        ctxMgr,
+        toolDefs,
+        contextWindow,
+      );
+      ctxMgr.setHistoryTokenBudget(initBudget.allocation.historyBudget);
+      AgentOrchestrator.emitContextBudget(emit, contextWindow, initBudget);
+
+      return {
+        runId,
+        workspaceRoot,
+        maxSteps,
+        startTurn,
+        model,
+        mcp,
+        toolDefs,
+        toolNameMap,
+        ctxMgr,
+        planner,
+        autoMemoryStore: childAutoMemoryStore,
+        sessionMemoryStore,
+        compactor,
+        emit,
+        emitRunMetrics,
+        seq,
+        checkpointSeq,
+      };
     }
 
-    // Load project memory (.paw/CLAUDE.md and .paw/CLAUDE.local.md)
+    const skillsText =
+      this.skillRegistry.list().length > 0
+        ? this.skillRegistry.catalogText()
+        : undefined;
+    const todosText =
+      this.todoStore && this.todoStore.items.length > 0
+        ? formatTodosForPrompt(this.todoStore.items)
+        : undefined;
     const projectMemory = loadProjectMemory(workspaceRoot);
-    if (projectMemory.committed) {
-      systemParts.push(`Project rules (.paw/CLAUDE.md):\n${projectMemory.committed}`);
-    }
-    if (projectMemory.local) {
-      systemParts.push(`Local preferences (.paw/CLAUDE.local.md):\n${projectMemory.local}`);
-    }
 
-    // Register project memory as implicit skills
-    for (const skill of skillsFromProjectMemory(projectMemory.committed, projectMemory.local)) {
+    for (const skill of skillsFromProjectMemory(
+      projectMemory.committed,
+      projectMemory.local,
+    )) {
       if (!this.skillRegistry.has(skill.id)) {
         this.skillRegistry.register(skill);
       }
     }
 
-    // Load auto memory entries and inject as system reminders
+    // ── Memory retrieval (P3) ──
+    // Derive a clean query from spec.goal so that resumed session context
+    // (background + previous goals) does not pollute memory scoring.
+    const cleanMemoryQuery = extractCleanMemoryQuery(spec.goal);
+
     const autoMemoryStore = new AutoMemoryStore({ workspaceRoot });
-    const autoMemories = autoMemoryStore.list();
-    if (autoMemories.length > 0) {
-      const memoryLines = autoMemories.map((m) => `- ${m.name}: ${m.description}`);
-      systemParts.push(`Previous session memories:\n${memoryLines.join("\n")}`);
+    const memoryIndex = autoMemoryStore.loadIndex(200) ?? undefined;
+
+    const unifiedStore = new UnifiedMemoryStore({
+      workspaceRoot,
+      sessionId: runId,
+    });
+    const memoryRetrievalSettings = resolveMemoryRetrievalSettings(workspaceRoot);
+    const shellSandbox = resolveShellSandboxConfig(workspaceRoot);
+
+    const historyForSignals = spec.resumeFromState?.messages ?? [];
+    const retrievalSignals = buildRetrievalSignalsFromMessages(historyForSignals);
+    const queryFiles = [
+      ...new Set([
+        ...extractFilePaths(cleanMemoryQuery),
+        ...retrievalSignals.recentFiles,
+      ]),
+    ];
+    const retrievalQuery = {
+      goal: cleanMemoryQuery,
+      currentFile: queryFiles[0],
+      recentFiles: queryFiles,
+      recentToolNames: retrievalSignals.recentToolNames,
+      errorMessage: retrievalSignals.errorMessage,
+      workspaceRoot,
+      limit: 5,
+      maxTokens: 1500,
+    };
+    const memoryResult = await retrieveMemories(
+      unifiedStore,
+      retrievalQuery,
+      toRetrieveMemoriesOptions(memoryRetrievalSettings, {
+        workspaceRoot,
+        auxiliaryModel: this.auxiliaryModel,
+        signal: spec.abortSignal,
+      }),
+    );
+
+    emit({
+      type: "memory.retrieve.done",
+      query: cleanMemoryQuery,
+      totalCandidates: memoryResult.totalCandidates,
+      selectedCount: memoryResult.records.length,
+      scores: memoryResult.scores,
+      injectedTokens: memoryResult.injectedTokens,
+      retrievalMode: memoryResult.retrievalMode ?? memoryRetrievalSettings.mode,
+      usedLlmFallback: memoryResult.usedLlmFallback,
+      embeddingCacheHits: memoryResult.embeddingCacheHits,
+      embeddingCacheMisses: memoryResult.embeddingCacheMisses,
+      selectedMemories: memoryResult.records.map((record) => ({
+        id: record.id,
+        title: record.title,
+        source: record.source,
+        summary: record.summary,
+        relatedFiles: record.relatedFiles,
+      })),
+    });
+
+    const autoMemoryStoreForRun = autoMemoryStore;
+
+    let gitStatusLine: string | undefined;
+    try {
+      const git = gitStatus(workspaceRoot);
+      if (!git.error && git.branch) {
+        const parts: string[] = [`Git branch: ${git.branch}`];
+        if (git.ahead) parts.push(`ahead ${git.ahead}`);
+        if (git.behind) parts.push(`behind ${git.behind}`);
+        if (git.staged?.length) parts.push(`${git.staged.length} staged`);
+        if (git.modified?.length) parts.push(`${git.modified.length} modified`);
+        if (git.untracked?.length)
+          parts.push(`${git.untracked.length} untracked`);
+        if (parts.length > 1) gitStatusLine = parts.join(", ");
+      }
+    } catch {
+      /* ignore */
     }
 
-    const systemContent = systemParts.join("\n\n");
+    let pawMdContent: string | undefined;
+    try {
+      const pawMd = loadPawMd(workspaceRoot);
+      if (pawMd.content) pawMdContent = pawMd.content;
+    } catch {
+      /* ignore */
+    }
 
-    const ctxMgr = this.contextManager ?? new ContextManager();
-    const planner = new TaskPlanner();
-    let startTurn = 0;
+    const systemBudget = allocateContextBudget(contextWindow).systemBudget;
+    const promptBuild = buildSystemPromptWithBudget(
+      {
+        workspaceRoot,
+        toolCatalog: toolCatalogText(mcp),
+        skills: skillsText,
+        gitStatus: gitStatusLine,
+        pawMd: pawMdContent,
+        projectMemory,
+        relevantMemories:
+          memoryResult.records.length > 0 ? memoryResult.records : undefined,
+        memoryIndex,
+        todos: todosText,
+        modelLabel: model.label,
+        modelId: model.label,
+        memoryDir: autoMemoryStoreForRun.memoryDir,
+        hasAutoMemory: true,
+      },
+      systemBudget,
+      (text) => ctxMgr.estimator.count(text),
+    );
+    const systemContent = promptBuild.content;
 
-    // Session memory + compaction setup
-    const sessionMemoryStore = new SessionMemoryStore({ workspaceRoot });
-    const compactor = new ContextCompactor();
+    if (promptBuild.trimmed.length > 0) {
+      emit({
+        type: "context.budget.trimmed",
+        sections: promptBuild.trimmed.map((t) => t.section),
+        freedTokens: promptBuild.trimmed.reduce(
+          (sum, t) => sum + t.freedTokens,
+          0,
+        ),
+      });
+    }
 
-    // Resume from saved state if provided
     if (spec.resumeFromState) {
       const s = spec.resumeFromState;
       startTurn = s.turn;
-      if (s.messages.length > 0) {
-        ctxMgr.replaceHistory(s.messages);
-      }
+      // Always rebuild system prompt (tools/skills may have changed).
+      ctxMgr.setSystem(systemContent);
+      const history = s.messages.filter((m) => m.role !== "system");
+      if (history.length > 0) ctxMgr.replaceHistory(history);
       if (s.plan) {
         planner.createPlan(runId, []);
         try {
-          planner.applyUpdate(s.plan.items as readonly PlanItem[], [], "resume");
+          planner.applyUpdate(
+            s.plan.items as readonly PlanItem[],
+            [],
+            "resume",
+          );
         } catch {
-          // ignore plan restore errors
+          /* ignore plan restore errors */
         }
       }
-      if (s.todos && this.todoStore) {
-        this.todoStore.set(s.todos);
-      }
-      // Load previous session memory on resume
+      if (s.todos && this.todoStore) this.todoStore.set(s.todos);
+      // Inject session-memory summary only on cold resume (no prior turns in history).
       const prevMemory = sessionMemoryStore.load(runId);
-      if (prevMemory?.task) {
-        ctxMgr.addUser(`[Previous session context]\nTask: ${prevMemory.task}\nState: ${prevMemory.currentState ?? "unknown"}`);
+      if (prevMemory?.task && history.length <= 1) {
+        ctxMgr.addUser(
+          `[Previous session context]\nTask: ${prevMemory.task}\nState: ${prevMemory.currentState ?? "unknown"}`,
+        );
       }
-      emit({
-        type: "run.started",
-        goal: spec.goal,
-      });
+      emit({ type: "run.started", goal: spec.goal });
     } else {
       ctxMgr.setSystem(systemContent);
       const goalMentions = AgentOrchestrator.resolveUserMentions(
         workspaceRoot,
         spec.goal,
       );
-
-      // Auto-discover relevant files from the goal, excluding @-mentioned ones
       const mentionedPaths = extractAtMentions(spec.goal);
       const autoCtx = discoverContext(workspaceRoot, spec.goal, mentionedPaths);
       let userContent = goalMentions.content;
-      if (autoCtx.content) {
+      if (autoCtx.content)
         userContent = `${autoCtx.content}\n\n${goalMentions.content}`;
-      }
-
-      ctxMgr.addUser(userContent);
+      ctxMgr.addUser(userContent, goalMentions.imageAttachments);
     }
 
-    try {
-      let finalMessage = "";
-      planner.createPlan(runId, []);
+    const initBudget = AgentOrchestrator.measureBudget(
+      ctxMgr,
+      toolDefs,
+      contextWindow,
+    );
+    ctxMgr.setHistoryTokenBudget(initBudget.allocation.historyBudget);
+    AgentOrchestrator.emitContextBudget(emit, contextWindow, initBudget);
 
-      for (let turn = startTurn; turn < maxSteps; turn++) {
-        if (signal?.aborted) {
-          finalMessage = "Run aborted.";
-          this.saveState(runId, spec.goal, workspaceRoot, turn, maxSteps, ctxMgr, planner, {
-            status: "failed",
-            message: finalMessage,
-          });
-          emit({
-            type: "run.completed",
-            status: "failed",
-            message: finalMessage,
-          });
-          return { runId, status: "failed", message: finalMessage };
-        }
-
-        emit({ type: "loop.tick", turn: turn + 1, maxSteps });
-        emit({ type: "phase", name: "model" });
-        emit({
-          type: "model.request",
-          label: model.label,
-          messageCount: ctxMgr.length,
-        });
-
-        const staleFiles = this.watcher?.takeExternallyModified() ?? [];
-        if (staleFiles.length > 0) {
-          ctxMgr.addUser(
-            `Note: the following file(s) were modified externally since the last turn and may be stale:\n${staleFiles.map((f) => `- ${f}`).join("\n")}`,
-          );
-        }
-
-        // Layer 1: Prune old tool results before sending to model
-        const pruneResult = ctxMgr.prune();
-        if (pruneResult.pruned) {
-          emit({
-            type: "compression.prune.done",
-            freedTokens: pruneResult.freedTokens,
-            remainingTokens: ctxMgr.estimatedTokens,
-          });
-        }
-
-        // Layer 2/3: Session Memory + Auto-Compact
-        const CONTEXT_WINDOW = 200_000; // default for Claude 3.5 Sonnet
-        const compactCheck = compactor.check(ctxMgr.buildMessages(), CONTEXT_WINDOW);
-        if (
-          compactCheck.shouldCompact &&
-          this.subAgentLauncher &&
-          !compactor.isDisabled &&
-          !compactor.shouldSkipDueToThrashing()
-        ) {
-          emit({
-            type: "compression.auto_compact.started",
-            beforeTokens: compactCheck.currentTokens,
-          });
-
-          try {
-            const boundaries = compactor.determineBoundaries(ctxMgr.buildMessages());
-            const messages = ctxMgr.buildMessages();
-            const headMessages = messages.slice(0, boundaries.headEnd + 1);
-            const tailMessages = messages.slice(boundaries.tailStart);
-
-            // Load existing summary for anchored updates
-            const existing = sessionMemoryStore.load(runId);
-            const prompt = compactor.buildSummaryPrompt(
-              headMessages,
-              existing ? sessionMemoryStore.toMarkdown(existing) : null,
-            );
-
-            const { summary, sessionMemory } = await runCompressionAgent(
-              this.subAgentLauncher,
-              prompt,
-              runId,
-            );
-
-            // Replace compressed section with summary message
-            const summaryMsg: ChatMessage = {
-              role: "user",
-              content: `[Context Summary]\n${summary}`,
-            };
-            const newMessages = [...headMessages, summaryMsg, ...tailMessages];
-            ctxMgr.replaceHistory(newMessages);
-
-            // Save session memory
-            const memoryToSave = { ...sessionMemory, project: path.basename(workspaceRoot) };
-            sessionMemoryStore.save(runId, memoryToSave);
-
-            const afterTokens = ctxMgr.estimatedTokens;
-            emit({
-              type: "compression.auto_compact.done",
-              afterTokens,
-              summaryTokens: estimateMessageTokens(summaryMsg),
-            });
-
-            compactor.recordResult(compactCheck.currentTokens, afterTokens, true);
-          } catch (err) {
-            compactor.recordResult(compactCheck.currentTokens, compactCheck.currentTokens, false);
-            emit({
-              type: "compression.skipped",
-              reason: `compaction failed: ${err instanceof Error ? err.message : String(err)}`,
-            });
-          }
-        }
-
-        const { text, thinking } = await this.invokeModel(model, ctxMgr.buildMessages(), signal, emit);
-
-        emit({ type: "phase", name: "parse" });
-        const { actions: toolCalls, text: reasoningText } =
-          parseAgentActionsFromModelText(text);
-
-        // Parallel tool execution for multiple tool calls
-        if (toolCalls.length > 1) {
-          for (const action of toolCalls) {
-            emit({ type: "agent.action", action });
-          }
-
-          emit({ type: "phase", name: "tool" });
-          for (const call of toolCalls) {
-            emit({ type: "tool.call", tool: call.tool, args: call.args });
-          }
-
-          const approvals: boolean[] = [];
-          for (const call of toolCalls) {
-            const approveFn = this.resolveToolApproval;
-            const gated =
-              this.toolNeedsApprovalGate(call.tool, call.args as Record<string, unknown>) && approveFn !== undefined;
-            if (gated && approveFn) {
-              emit({
-                type: "tool.approval.pending",
-                tool: call.tool,
-                args: call.args,
-              });
-              const approved = await approveFn({
-                tool: call.tool,
-                args: call.args,
-              });
-              emit({
-                type: "tool.approval.resolved",
-                tool: call.tool,
-                approved,
-              });
-              approvals.push(approved);
-            } else {
-              approvals.push(true);
-            }
-          }
-
-          const results = await Promise.all(
-            toolCalls.map(async (call, i) => {
-              if (!approvals[i]) {
-                return {
-                  ok: false,
-                  summary: "tool execution denied by user",
-                  payload: { denied: true },
-                };
-              }
-              if (isMutatingTool(call.tool)) {
-                checkpointSeq.n += 1;
-                saveCheckpoint(workspaceRoot, runId, checkpointSeq.n, call.tool, call.args);
-              }
-              return executeTool(
-                {
-                  workspaceRoot,
-                  mcp,
-                  todoStore: this.todoStore,
-                  subAgentLauncher: this.subAgentLauncher,
-                  skillRegistry: this.skillRegistry,
-                  watcher: this.watcher,
-                  onShellChunk: (tool, chunk, isStderr) =>
-                    emit({
-                      type: "tool.result.chunk",
-                      tool,
-                      chunk,
-                      isStderr,
-                    }),
-                },
-                call.tool,
-                call.args,
-              );
-            }),
-          );
-
-          for (let i = 0; i < toolCalls.length; i++) {
-            const call = toolCalls[i]!;
-            const tr = results[i]!;
-            emit({
-              type: "tool.result",
-              tool: call.tool,
-              ok: tr.ok,
-              summary: tr.summary,
-              detail: formatToolResultEventDetail(tr),
-            });
-          }
-
-          ctxMgr.addAssistant(reasoningText || text, thinking);
-          ctxMgr.addToolResults(
-            results.map((tr, i) => ({
-              tool: toolCalls[i]!.tool,
-              ok: tr.ok,
-              summary: tr.summary,
-              payload: tr.payload,
-            })),
-          );
-
-          if (turn + 1 >= maxSteps) {
-            finalMessage = `Max steps (${maxSteps}) reached after parallel tools`;
-            this.saveState(
-              runId,
-              spec.goal,
-              workspaceRoot,
-              turn + 1,
-              maxSteps,
-              ctxMgr,
-              planner,
-              {
-                status: "completed",
-                message: finalMessage,
-              },
-            );
-            emit({
-              type: "run.completed",
-              status: "completed",
-              message: finalMessage,
-            });
-            return {
-              runId,
-              status: "completed",
-              message: finalMessage,
-            };
-          }
-          this.saveState(
-            runId,
-            spec.goal,
-            workspaceRoot,
-            turn + 1,
-            maxSteps,
-            ctxMgr,
-            planner,
-          );
-          // Background memory extraction (non-blocking)
-          this.maybeExtractMemories(autoMemoryStore, turn, ctxMgr.buildMessages(), runId, emit);
-          continue;
-        }
-
-        let action: AgentAction | null = null;
-        if (toolCalls.length === 1) {
-          action = toolCalls[0]!;
-        } else {
-          action = parseAgentActionFromModelText(text);
-        }
-
-        if (action) {
-          emit({ type: "agent.action", action });
-        }
-
-        if (!action) {
-          finalMessage = text.trim() || "(empty model output)";
-          this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner, {
-            status: "completed",
-            message: finalMessage,
-          });
-          emit({
-            type: "run.completed",
-            status: "completed",
-            message: finalMessage,
-          });
-          return { runId, status: "completed", message: finalMessage };
-        }
-
-        if (action.type === "final_answer") {
-          finalMessage = action.summary.trim() || "(empty summary)";
-          this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner, {
-            status: "completed",
-            message: finalMessage,
-          });
-          emit({
-            type: "run.completed",
-            status: "completed",
-            message: finalMessage,
-          });
-          return { runId, status: "completed", message: finalMessage };
-        }
-
-        if (action.type === "abort") {
-          finalMessage = action.reason.trim() || "Aborted.";
-          this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner, {
-            status: "failed",
-            message: finalMessage,
-          });
-          emit({
-            type: "run.completed",
-            status: "failed",
-            message: finalMessage,
-          });
-          return { runId, status: "failed", message: finalMessage };
-        }
-
-        if (action.type === "ask_user") {
-          if (this.resolveAskUser) {
-            emit({
-              type: "user.reply.required",
-              question: action.question,
-              timeoutSec: action.timeoutSec,
-            });
-            const reply = await this.resolveAskUser({
-              question: action.question,
-              timeoutSec: action.timeoutSec,
-            });
-            ctxMgr.addAssistant(text, thinking);
-            const replyMentions = AgentOrchestrator.resolveUserMentions(
-              workspaceRoot,
-              reply,
-            );
-            ctxMgr.addUser(replyMentions.content);
-            if (turn + 1 >= maxSteps) {
-              finalMessage = `Max steps (${maxSteps}) reached after ask_user`;
-              this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner, {
-                status: "completed",
-                message: finalMessage,
-              });
-              emit({
-                type: "run.completed",
-                status: "completed",
-                message: finalMessage,
-              });
-              return { runId, status: "completed", message: finalMessage };
-            }
-            // Save state after each successful turn so it can be resumed
-            this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner);
-            // Background memory extraction (non-blocking)
-            this.maybeExtractMemories(autoMemoryStore, turn, ctxMgr.buildMessages(), runId, emit);
-            continue;
-          }
-          finalMessage = `[Ask user] ${action.question}`;
-          this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner, {
-            status: "completed",
-            message: finalMessage,
-          });
-          emit({
-            type: "run.completed",
-            status: "completed",
-            message: finalMessage,
-          });
-          return { runId, status: "completed", message: finalMessage };
-        }
-
-        if (action.type === "plan_update") {
-          const parsedItems = planItemsFromUnknown(action.newItems);
-          try {
-            planner.applyUpdate(
-              parsedItems,
-              action.deprecatedItems,
-              action.reason,
-            );
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner, {
-              status: "failed",
-              message: msg,
-            });
-            emit({
-              type: "run.completed",
-              status: "failed",
-              message: msg,
-            });
-            return { runId, status: "failed", message: msg };
-          }
-          const p = planner.plan;
-          if (p) {
-            emit({
-              type: "plan.updated",
-              revision: p.revision,
-              itemCount: p.items.length,
-              reason: action.reason,
-            });
-          }
-          ctxMgr.addAssistant(text, thinking);
-          const snapshotOpts =
-            this.planSnapshotMaxItems !== undefined
-              ? { maxItems: this.planSnapshotMaxItems }
-              : undefined;
-          const planSnap = p ? planToSnapshotPayload(p, snapshotOpts) : null;
-          const planBlock = planSnap
-            ? `Current plan (JSON):\n${JSON.stringify(planSnap)}`
-            : "Current plan: (empty)";
-          ctxMgr.addUser(`Plan updated: ${action.reason}.\n\n${planBlock}`);
-          if (turn + 1 >= maxSteps) {
-            finalMessage = `Max steps (${maxSteps}) reached after plan_update`;
-            this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner, {
-              status: "completed",
-              message: finalMessage,
-            });
-            emit({
-              type: "run.completed",
-              status: "completed",
-              message: finalMessage,
-            });
-            return { runId, status: "completed", message: finalMessage };
-          }
-          this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner);
-          // Background memory extraction (non-blocking)
-          this.maybeExtractMemories(autoMemoryStore, turn, ctxMgr.buildMessages(), runId, emit);
-          continue;
-        }
-
-        const call = action;
-
-        emit({ type: "phase", name: "tool" });
-        emit({ type: "tool.call", tool: call.tool, args: call.args });
-
-        let tr: ToolRunResult;
-        const approveFn = this.resolveToolApproval;
-        const gated =
-          this.toolNeedsApprovalGate(call.tool) && approveFn !== undefined;
-
-        if (isMutatingTool(call.tool)) {
-          checkpointSeq.n += 1;
-          saveCheckpoint(workspaceRoot, runId, checkpointSeq.n, call.tool, call.args);
-        }
-
-        if (gated && approveFn) {
-          emit({
-            type: "tool.approval.pending",
-            tool: call.tool,
-            args: call.args,
-          });
-          const approved = await approveFn({
-            tool: call.tool,
-            args: call.args,
-          });
-          emit({
-            type: "tool.approval.resolved",
-            tool: call.tool,
-            approved,
-          });
-          if (!approved) {
-            tr = {
-              ok: false,
-              summary: "tool execution denied by user",
-              payload: { denied: true },
-            };
-          } else {
-            tr = await executeTool({ workspaceRoot, mcp, todoStore: this.todoStore, subAgentLauncher: this.subAgentLauncher, skillRegistry: this.skillRegistry, watcher: this.watcher, onShellChunk: (tool, chunk, isStderr) => emit({ type: "tool.result.chunk", tool, chunk, isStderr }) }, call.tool, call.args);
-          }
-        } else {
-          tr = await executeTool({ workspaceRoot, mcp, todoStore: this.todoStore, subAgentLauncher: this.subAgentLauncher, skillRegistry: this.skillRegistry, onShellChunk: (tool, chunk, isStderr) => emit({ type: "tool.result.chunk", tool, chunk, isStderr }) }, call.tool, call.args);
-        }
-
-        emit({
-          type: "tool.result",
-          tool: call.tool,
-          ok: tr.ok,
-          summary: tr.summary,
-          detail: formatToolResultEventDetail(tr),
-        });
-
-        ctxMgr.addAssistant(text, thinking);
-        const observation = JSON.stringify({
-          tool: call.tool,
-          ok: tr.ok,
-          summary: tr.summary,
-          payload: tr.payload,
-        });
-        ctxMgr.addUser(`Tool result (JSON):\n${observation.slice(0, 50_000)}`);
-
-        if (turn + 1 >= maxSteps) {
-          finalMessage = `Max steps (${maxSteps}) reached after tool ${call.tool}: ${tr.summary}`;
-          this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner, {
-            status: "completed",
-            message: finalMessage,
-          });
-          emit({
-            type: "run.completed",
-            status: "completed",
-            message: finalMessage,
-          });
-          return { runId, status: "completed", message: finalMessage };
-        }
-        // Save state after each successful tool turn
-        this.saveState(runId, spec.goal, workspaceRoot, turn + 1, maxSteps, ctxMgr, planner);
-        // Background memory extraction (non-blocking)
-        this.maybeExtractMemories(autoMemoryStore, turn, ctxMgr.buildMessages(), runId, emit);
-      }
-
-      const exhaustedMessage = "internal: model loop exhausted without return";
-      this.saveState(runId, spec.goal, workspaceRoot, maxSteps, maxSteps, ctxMgr, planner, {
-        status: "failed",
-        message: exhaustedMessage,
-      });
-      return {
-        runId,
-        status: "failed",
-        message: exhaustedMessage,
-      };
-    } catch (e) {
-      const message =
-        e instanceof Error
-          ? e.name === "AbortError"
-            ? "Run aborted."
-            : e.message
-          : String(e);
-      this.saveState(runId, spec.goal, workspaceRoot, maxSteps, maxSteps, ctxMgr, planner, {
-        status: "failed",
-        message,
-      });
-      emit({ type: "run.failed", message });
-      emit({
-        type: "run.completed",
-        status: "failed",
-        message,
-      });
-      return {
-        runId,
-        status: "failed",
-        message,
-      };
-    } finally {
-      await mcp?.disconnectAll();
-    }
+    return {
+      runId,
+      workspaceRoot,
+      maxSteps,
+      startTurn,
+      model,
+      mcp,
+      toolDefs,
+      toolNameMap,
+      ctxMgr,
+      planner,
+      autoMemoryStore: autoMemoryStoreForRun,
+      sessionMemoryStore,
+      compactor,
+      emit,
+      emitRunMetrics,
+      seq,
+      checkpointSeq,
+      shellSandbox,
+    };
   }
 
-  /**
-   * Fire a background memory extraction agent.
-   * Non-blocking — errors are swallowed.
-   */
-  private async maybeExtractMemories(
-    store: AutoMemoryStore,
-    turn: number,
-    messages: readonly ChatMessage[],
+  private async maybeExtractMemoriesAfterRun(
     runId: string,
+    ctxMgr: ContextManager,
+    autoMemoryStore: AutoMemoryStore,
     emit: (event: RunEvent) => void,
+    model: LanguageModel,
   ): Promise<void> {
-    if (!this.subAgentLauncher) return;
+    if (this.memoryExtraction === "off" || !this.auxiliaryModel) {
+      return;
+    }
 
-    // Only extract every 5 turns to avoid excessive LLM calls
-    if (turn % 5 !== 0) return;
+    const work = runMemoryExtractionAfterRun({
+      runId,
+      ctxMgr,
+      autoMemoryStore,
+      model: this.auxiliaryModel,
+      emit,
+    }).catch(() => {
+      /* background extraction must not fail the run */
+    });
 
-    const conversationText = messages
-      .slice(-20) // last 20 messages
-      .map((m) => {
-        const prefix = m.role === "user" ? "User" : m.role === "assistant" ? "Assistant" : "System";
-        return `[${prefix}]\n${m.content.slice(0, 2000)}`;
-      })
-      .join("\n\n");
-
-    try {
-      const { entries } = await extractMemories(this.subAgentLauncher, conversationText);
-      if (entries.length > 0) {
-        for (const entry of entries) {
-          store.save(entry);
-        }
-        emit({
-          type: "memory.extracted",
-          entries: entries.length,
-          runId,
-        });
-      }
-    } catch (err) {
-      // Log but don't fail the main loop
-      console.error("[memory extraction] failed:", err instanceof Error ? err.message : String(err));
+    if (this.memoryExtraction === "await") {
+      await work;
     }
   }
+
+  /** Tool JSON schemas are billed separately from chat messages by most providers. */
+  private static estimateToolTokens(
+    tools: readonly import("@paw/models").ToolDefinition[],
+    estimator: TokenEstimator,
+  ): number {
+    if (tools.length === 0) return 0;
+    return estimator.count(JSON.stringify(tools));
+  }
+
+  private static measureBudget(
+    ctxMgr: ContextManager,
+    toolDefs: readonly import("@paw/models").ToolDefinition[],
+    contextWindow: number,
+  ): ContextBudgetSnapshot {
+    return measureContextBudget({
+      contextWindow,
+      systemTokens: ctxMgr.systemEstimatedTokens,
+      toolsTokens: AgentOrchestrator.estimateToolTokens(
+        toolDefs,
+        ctxMgr.estimator,
+      ),
+      historyTokens: ctxMgr.historyEstimatedTokens,
+    });
+  }
+
+  private static _lastBudgetKey: string | null = null;
+
+  private static emitContextBudget(
+    emit: (event: RunEvent) => void,
+    contextWindow: number,
+    snapshot: ContextBudgetSnapshot,
+  ): void {
+    // Dedup: skip if values haven't changed since last emission
+    const key = `${snapshot.systemUsed}/${snapshot.allocation.systemBudget}/${snapshot.historyUsed}/${snapshot.allocation.historyBudget}`;
+    if (key === AgentOrchestrator._lastBudgetKey) return;
+    AgentOrchestrator._lastBudgetKey = key;
+
+    emit({
+      type: "context.budget",
+      contextWindow,
+      systemUsed: snapshot.systemUsed,
+      systemBudget: snapshot.allocation.systemBudget,
+      toolsUsed: snapshot.toolsUsed,
+      toolsBudget: snapshot.allocation.toolsBudget,
+      historyUsed: snapshot.historyUsed,
+      historyBudget: snapshot.allocation.historyBudget,
+      historyOverBudget: snapshot.historyOverBudget,
+      systemOverBudget: snapshot.systemOverBudget,
+      compactThreshold: snapshot.compactThreshold,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Error classification & retry policy
+// ---------------------------------------------------------------------------
+
+type RetryableErrorType =
+  | "rate_limit"
+  | "server_error"
+  | "timeout"
+  | "network"
+  | "transient"
+  | "non_retryable";
+
+interface ErrorClassification {
+  readonly type: RetryableErrorType;
+  readonly retryAfterMs?: number;
+}
+
+function classifyError(err: unknown): ErrorClassification {
+  if (!(err instanceof Error)) {
+    // Unknown non-Error throws are treated as non-retryable by default
+    return { type: "non_retryable" };
+  }
+  const msg = err.message;
+
+  // 429 rate limit — try to extract Retry-After
+  if (/\b429\b/.test(msg)) {
+    const retryAfterMatch = msg.match(/retry[_-]?after[\s:]*(\d+)/i);
+    if (retryAfterMatch) {
+      const seconds = parseInt(retryAfterMatch[1]!, 10);
+      if (Number.isFinite(seconds) && seconds > 0) {
+        return { type: "rate_limit", retryAfterMs: seconds * 1000 };
+      }
+    }
+    return { type: "rate_limit" };
+  }
+
+  // 5xx server errors
+  if (/\b5\d\d\b/.test(msg)) return { type: "server_error" };
+
+  // Non-retryable 4xx (auth, bad request, etc.)
+  if (/\b4\d\d\b/.test(msg)) return { type: "non_retryable" };
+
+  // Timeouts
+  if (/\btimeout\b|ETIMEDOUT/i.test(msg)) return { type: "timeout" };
+
+  // Network-level failures
+  if (/fetch|network|ECONN|ENOTFOUND|DNS|ECONNRESET/i.test(msg)) {
+    return { type: "network" };
+  }
+
+  // Default: unknown errors are non-retryable (whitelist approach)
+  return { type: "non_retryable" };
+}
+
+function isRetryable(classification: ErrorClassification): boolean {
+  return classification.type !== "non_retryable";
+}
+
+function computeRetryDelay(
+  attempt: number,
+  classification: ErrorClassification,
+): number {
+  const jitter = 0.5 + Math.random() * 0.5; // 0.5x – 1.0x
+
+  if (classification.type === "rate_limit") {
+    if (classification.retryAfterMs) {
+      return classification.retryAfterMs * jitter;
+    }
+    const fixed = [5_000, 10_000, 20_000];
+    return (fixed[attempt - 1] ?? 20_000) * jitter;
+  }
+
+  // Exponential backoff for server_error, timeout, network, transient
+  const base = 1_000 * 2 ** (attempt - 1);
+  return Math.min(base * jitter, 30_000);
 }

@@ -1,5 +1,7 @@
 import path from "node:path";
 
+export { findPawRoot } from "@paw/core";
+
 /** Resolve workspace root: `--root <dir>` from argv, else `cwd`. */
 export function parseRootFromArgv(
   cwd: string,

@@ -6,7 +6,10 @@
  */
 
 import type { ChatMessage } from "./context-manager.js";
-import { estimateMessageTokens, estimateMessagesTokens } from "./token-estimate.js";
+import {
+  ApproximateEstimator,
+  type TokenEstimator,
+} from "./token-estimator.js";
 
 export interface CompactorConfig {
   /** Context window fraction that triggers compaction (default 0.70). */
@@ -20,9 +23,9 @@ export interface CompactorConfig {
 }
 
 export const DEFAULT_COMPACTOR_CONFIG: CompactorConfig = {
-  thresholdRatio: 0.70,
+  thresholdRatio: 0.7,
   bufferTokens: 10_000,
-  tailTokenBudget: 0.20,
+  tailTokenBudget: 0.2,
   protectFirstN: 2,
 };
 
@@ -43,12 +46,14 @@ export interface CompactCheck {
 
 export class ContextCompactor {
   private readonly config: CompactorConfig;
+  private readonly estimator: TokenEstimator;
   private consecutiveFailures = 0;
-  private lastSavingsRatio: number | null = null;
+  private consecutiveLowSavings = 0;
   private disabled = false;
 
-  constructor(config?: Partial<CompactorConfig>) {
+  constructor(config?: Partial<CompactorConfig>, estimator?: TokenEstimator) {
     this.config = { ...DEFAULT_COMPACTOR_CONFIG, ...config };
+    this.estimator = estimator ?? new ApproximateEstimator();
   }
 
   /** True if auto-compact has been disabled by the circuit breaker. */
@@ -60,14 +65,14 @@ export class ContextCompactor {
   reset(): void {
     this.disabled = false;
     this.consecutiveFailures = 0;
-    this.lastSavingsRatio = null;
+    this.consecutiveLowSavings = 0;
   }
 
   /**
    * Check whether compaction should run.
    */
   check(messages: readonly ChatMessage[], contextWindow: number): CompactCheck {
-    const currentTokens = estimateMessagesTokens(messages);
+    const currentTokens = this.estimator.countMessages(messages);
     const thresholdTokens = Math.floor(
       contextWindow * this.config.thresholdRatio - this.config.bufferTokens,
     );
@@ -86,17 +91,25 @@ export class ContextCompactor {
    * - Middle: everything between head and tail (summarized).
    */
   determineBoundaries(messages: readonly ChatMessage[]): CompactBoundaries {
-    const headEnd = Math.min(this.config.protectFirstN - 1, messages.length - 1);
+    const headEnd = Math.min(
+      this.config.protectFirstN - 1,
+      messages.length - 1,
+    );
 
     const tailBudget = Math.floor(
-      (messages.reduce((sum, m) => sum + estimateMessageTokens(m), 0)) * this.config.tailTokenBudget,
+      messages.reduce((sum, m) => sum + this.estimator.countMessages([m]), 0) *
+        this.config.tailTokenBudget,
     );
 
     let tailTokens = 0;
     let tailStart = messages.length;
 
     for (let i = messages.length - 1; i > headEnd; i--) {
-      const msgTokens = estimateMessageTokens(messages[i]!);
+      const msg = messages[i];
+      if (!msg) {
+        continue;
+      }
+      const msgTokens = this.estimator.countMessages([msg]);
       if (tailTokens + msgTokens > tailBudget) {
         break;
       }
@@ -116,19 +129,24 @@ export class ContextCompactor {
    * Build the prompt sent to the compression agent.
    */
   buildSummaryPrompt(
-    headMessages: readonly ChatMessage[],
+    messagesToSummarize: readonly ChatMessage[],
     existingSummary: string | null,
   ): string {
-    const historyText = headMessages
+    const historyText = messagesToSummarize
       .map((m) => {
-        const prefix = m.role === "user" ? "User" : m.role === "assistant" ? "Assistant" : "System";
+        const prefix =
+          m.role === "user"
+            ? "User"
+            : m.role === "assistant"
+              ? "Assistant"
+              : "System";
         return `[${prefix}]\n${m.content}`;
       })
       .join("\n\n");
 
     const anchored = existingSummary
       ? `## Previous Summary\n${existingSummary}\n\nUpdate the summary with the new conversation below. Preserve information from the previous summary that is still relevant, and add new key points from the recent conversation.`
-      : `Summarize the following conversation, focusing on:`;
+      : "Summarize the following conversation, focusing on:";
 
     return `You are a context compression assistant. Your job is to distill a long conversation into a structured summary so the AI can continue working without re-reading the full history.
 
@@ -154,7 +172,11 @@ ${historyText}
   /**
    * Record the result of a compaction for anti-thrashing / circuit-breaker tracking.
    */
-  recordResult(beforeTokens: number, afterTokens: number, success: boolean): void {
+  recordResult(
+    beforeTokens: number,
+    afterTokens: number,
+    success: boolean,
+  ): void {
     if (!success) {
       this.consecutiveFailures++;
       if (this.consecutiveFailures >= 3) {
@@ -166,13 +188,30 @@ ${historyText}
     this.consecutiveFailures = 0;
     const savings = beforeTokens - afterTokens;
     const ratio = savings / Math.max(beforeTokens, 1);
-    this.lastSavingsRatio = ratio;
+    this.consecutiveLowSavings =
+      ratio < 0.15 ? this.consecutiveLowSavings + 1 : 0;
   }
 
   /**
    * Anti-thrashing check: skip compaction if the last two runs saved < 15%.
    */
   shouldSkipDueToThrashing(): boolean {
-    return this.lastSavingsRatio !== null && this.lastSavingsRatio < 0.15;
+    return this.consecutiveLowSavings >= 2;
   }
+}
+
+/** Prefix for L2 compact summary user messages. */
+export const CONTEXT_SUMMARY_PREFIX = "[Context Summary]";
+
+export function isContextSummaryMessage(msg: ChatMessage): boolean {
+  return (
+    msg.role === "user" && msg.content.startsWith(`${CONTEXT_SUMMARY_PREFIX}\n`)
+  );
+}
+
+/** Remove prior L2 summary messages before inserting a new one. */
+export function stripContextSummaryMessages(
+  messages: readonly ChatMessage[],
+): ChatMessage[] {
+  return messages.filter((m) => !isContextSummaryMessage(m));
 }

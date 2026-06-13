@@ -1,6 +1,10 @@
 import type { ModelTokenUsage } from "@paw/core";
 
-import type { LanguageModel } from "./language-model.js";
+import type { LanguageModel, ModelCapabilities } from "./language-model.js";
+import {
+  buildAnthropicUserContent,
+  type AnthropicContentBlock,
+} from "./message-content.js";
 import type { ModelCompleteOptions } from "./model-options.js";
 import type {
   ChatMessage,
@@ -12,6 +16,7 @@ export interface AnthropicCompatibleOptions {
   readonly apiKey: string;
   readonly baseUrl?: string;
   readonly model: string;
+  readonly capabilities?: ModelCapabilities;
 }
 
 function abortError(): Error {
@@ -21,19 +26,25 @@ function abortError(): Error {
 }
 
 /** Convert Paw ChatMessage[] to Anthropic message format. */
-function toAnthropicMessages(
-  messages: readonly ChatMessage[],
-): {
+function toAnthropicMessages(messages: readonly ChatMessage[]): {
   system: string | undefined;
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: Array<{
+    role: "user" | "assistant";
+    content: string | AnthropicContentBlock[];
+  }>;
 } {
   let system: string | undefined;
-  const out: Array<{ role: "user" | "assistant"; content: string }> = [];
+  const out: Array<{
+    role: "user" | "assistant";
+    content: string | AnthropicContentBlock[];
+  }> = [];
   for (const m of messages) {
     if (m.role === "system") {
       system = system ? `${system}\n\n${m.content}` : m.content;
+    } else if (m.role === "user") {
+      out.push({ role: "user", content: buildAnthropicUserContent(m) });
     } else {
-      out.push({ role: m.role, content: m.content });
+      out.push({ role: "assistant", content: m.content });
     }
   }
   return { system, messages: out };
@@ -45,6 +56,7 @@ function toAnthropicMessages(
  */
 export class AnthropicCompatibleModel implements LanguageModel {
   readonly label: string;
+  readonly capabilities?: ModelCapabilities;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly model: string;
@@ -57,6 +69,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     );
     this.model = opts.model;
     this.label = `anthropic:${opts.model}`;
+    this.capabilities = opts.capabilities;
   }
 
   async complete(
@@ -71,7 +84,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: msgs,
-      max_tokens: 4096,
+      max_tokens: this.capabilities?.maxOutputTokens ?? 4096,
     };
     if (system) {
       body.system = system;
@@ -88,9 +101,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     });
     const raw = await res.text();
     if (!res.ok) {
-      throw new Error(
-        `Anthropic HTTP ${res.status}: ${raw.slice(0, 500)}`,
-      );
+      throw new Error(`Anthropic HTTP ${res.status}: ${raw.slice(0, 500)}`);
     }
     let parsed: unknown;
     try {
@@ -104,10 +115,13 @@ export class AnthropicCompatibleModel implements LanguageModel {
         : null;
     const { text, thinking } = extractAnthropicContent(root);
     const usage = parseAnthropicUsage(root?.usage);
+    const finishReason =
+      typeof root?.stop_reason === "string" ? root.stop_reason : undefined;
     const result: ModelCompletionResult = {
       text,
       ...(usage !== undefined ? { usage } : {}),
       ...(thinking ? { thinking } : {}),
+      ...(finishReason ? { finishReason } : {}),
     };
     return result;
   }
@@ -124,7 +138,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: msgs,
-      max_tokens: 4096,
+      max_tokens: this.capabilities?.maxOutputTokens ?? 4096,
       stream: true,
     };
     if (system) {
@@ -154,7 +168,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
     const decoder = new TextDecoder();
     let buffer = "";
     let lastUsage: ModelTokenUsage | undefined;
-    let currentToolUse: { id: string; name: string; input: string } | null = null;
+    let lastFinishReason: string | undefined;
+    let currentToolUse: { id: string; name: string; input: string } | null =
+      null;
     try {
       while (true) {
         if (options?.signal?.aborted) {
@@ -200,6 +216,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
           if (part.usage !== undefined) {
             lastUsage = part.usage;
           }
+          if (part.finishReason !== undefined) {
+            lastFinishReason = part.finishReason;
+          }
         }
         if (done) {
           break;
@@ -219,6 +238,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
           if (part.usage !== undefined) {
             lastUsage = part.usage;
           }
+          if (part.finishReason !== undefined) {
+            lastFinishReason = part.finishReason;
+          }
         }
       }
     } finally {
@@ -227,13 +249,17 @@ export class AnthropicCompatibleModel implements LanguageModel {
     yield {
       type: "done",
       ...(lastUsage !== undefined ? { usage: lastUsage } : {}),
+      ...(lastFinishReason !== undefined
+        ? { finishReason: lastFinishReason }
+        : {}),
     };
   }
 }
 
-function extractAnthropicContent(
-  root: Record<string, unknown> | null,
-): { text: string; thinking?: string } {
+function extractAnthropicContent(root: Record<string, unknown> | null): {
+  text: string;
+  thinking?: string;
+} {
   const content = root?.content;
   if (!Array.isArray(content)) {
     return { text: "" };
@@ -265,9 +291,7 @@ function extractAnthropicContent(
   return result;
 }
 
-function parseAnthropicUsage(
-  raw: unknown,
-): ModelTokenUsage | undefined {
+function parseAnthropicUsage(raw: unknown): ModelTokenUsage | undefined {
   if (raw === null || typeof raw !== "object") {
     return undefined;
   }
@@ -279,9 +303,7 @@ function parseAnthropicUsage(
   }
   return {
     ...(inputTokens !== undefined ? { promptTokens: inputTokens } : {}),
-    ...(outputTokens !== undefined
-      ? { completionTokens: outputTokens }
-      : {}),
+    ...(outputTokens !== undefined ? { completionTokens: outputTokens } : {}),
   };
 }
 
@@ -292,6 +314,7 @@ function parseAnthropicStreamPayload(raw: string): {
   readonly toolUseDelta?: string;
   readonly toolUseStop: boolean;
   readonly usage?: ModelTokenUsage;
+  readonly finishReason?: string;
 } {
   let parsed: unknown;
   try {
@@ -309,14 +332,17 @@ function parseAnthropicStreamPayload(raw: string): {
 
   const type = root.type;
 
-  // message_delta carries usage at end of stream
+  // message_delta carries usage + stop_reason at end of stream
   if (type === "message_delta" || type === "message_stop") {
     const usage = parseAnthropicUsage(root.usage);
+    const finishReason =
+      typeof root.stop_reason === "string" ? root.stop_reason : undefined;
     return {
       textDelta: "",
       thinkingDelta: "",
       toolUseStop: false,
       ...(usage !== undefined ? { usage } : {}),
+      ...(finishReason ? { finishReason } : {}),
     };
   }
 

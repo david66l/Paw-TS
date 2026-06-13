@@ -47,7 +47,9 @@ export function estimateMessageTokens(message: ChatMessage): number {
 /**
  * Token count for an array of messages (e.g. the full conversation).
  */
-export function estimateMessagesTokens(messages: readonly ChatMessage[]): number {
+export function estimateMessagesTokens(
+  messages: readonly ChatMessage[],
+): number {
   let total = 0;
   for (const m of messages) {
     total += estimateMessageTokens(m);

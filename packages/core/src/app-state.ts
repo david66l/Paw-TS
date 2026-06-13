@@ -1,4 +1,10 @@
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import type { ChatMessage } from "./context-manager.js";
@@ -49,7 +55,8 @@ export class FileSystemAppStateStore implements AppStateStore {
   private readonly statesDir: string;
 
   constructor(opts?: { readonly statesDir?: string }) {
-    this.statesDir = opts?.statesDir ?? path.join(process.cwd(), ".paw", "states");
+    this.statesDir =
+      opts?.statesDir ?? path.join(process.cwd(), ".paw", "states");
     mkdirSync(this.statesDir, { recursive: true });
   }
 
@@ -128,7 +135,9 @@ export function isAppStateFinished(state: AppState): boolean {
 export function appStateSummary(state: AppState): string {
   const parts: string[] = [];
   parts.push(`Run ${state.runId}`);
-  parts.push(`goal: ${state.goal.slice(0, 60)}${state.goal.length > 60 ? "…" : ""}`);
+  parts.push(
+    `goal: ${state.goal.slice(0, 60)}${state.goal.length > 60 ? "…" : ""}`,
+  );
   if (state.outcome) {
     parts.push(`status: ${state.outcome.status}`);
   } else {

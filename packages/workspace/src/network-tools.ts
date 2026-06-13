@@ -19,7 +19,11 @@ export interface WebSearchOptions {
 }
 
 export interface WebSearchResult {
-  readonly results?: Array<{ readonly title: string; readonly url: string; readonly snippet: string }>;
+  readonly results?: Array<{
+    readonly title: string;
+    readonly url: string;
+    readonly snippet: string;
+  }>;
   readonly error?: string;
 }
 
@@ -61,7 +65,9 @@ function extractTitle(html: string): string | undefined {
   return undefined;
 }
 
-export async function fetchWebPage(opts: WebFetchOptions): Promise<WebFetchResult> {
+export async function fetchWebPage(
+  opts: WebFetchOptions,
+): Promise<WebFetchResult> {
   const url = opts.url.trim();
   if (!url) {
     return { error: "missing url" };
@@ -93,7 +99,7 @@ export async function fetchWebPage(opts: WebFetchOptions): Promise<WebFetchResul
     let text = stripHtml(html);
     const maxLen = opts.maxLength ?? 50_000;
     if (text.length > maxLen) {
-      text = text.slice(0, maxLen) + "\n\n[truncated]";
+      text = `${text.slice(0, maxLen)}\n\n[truncated]`;
     }
     return { content: text, title };
   } catch (e) {
@@ -107,7 +113,9 @@ export async function fetchWebPage(opts: WebFetchOptions): Promise<WebFetchResul
  * This scrapes the DuckDuckGo HTML results page. Fragile but works for
  * basic queries without rate limits.
  */
-export async function searchWeb(opts: WebSearchOptions): Promise<WebSearchResult> {
+export async function searchWeb(
+  opts: WebSearchOptions,
+): Promise<WebSearchResult> {
   const query = opts.query.trim();
   if (!query) {
     return { error: "missing query" };
@@ -117,7 +125,8 @@ export async function searchWeb(opts: WebSearchOptions): Promise<WebSearchResult
     const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const res = await fetch(searchUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0",
       },
     });
     if (!res.ok) {
@@ -144,9 +153,13 @@ function parseDuckDuckGoResults(
   const resultBlocks = html.split('<div class="result results_links">');
   for (let i = 1; i < resultBlocks.length && results.length < maxResults; i++) {
     const block = resultBlocks[i]!;
-    const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*>([\s\S]*?)<\/a>/);
+    const titleMatch = block.match(
+      /<a[^>]*class="result__a"[^>]*>([\s\S]*?)<\/a>/,
+    );
     const urlMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]*)"/);
-    const snippetMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+    const snippetMatch = block.match(
+      /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/,
+    );
     if (titleMatch && urlMatch) {
       const title = stripHtml(titleMatch[1]!).trim();
       let url = urlMatch[1]!;

@@ -28,6 +28,17 @@ export interface ModelCompletionResult {
   readonly usage?: ModelTokenUsage;
   /** Thinking content when model produces it. */
   readonly thinking?: string;
+  /** Provider's finish/stop reason. "length" or "max_tokens" means output was truncated. */
+  readonly finishReason?: string;
+  /** Native structured tool calls when provider supports function calling. */
+  readonly toolCalls?: readonly NativeToolCall[];
+}
+
+/** A tool call returned natively by the model provider (not parsed from text). */
+export interface NativeToolCall {
+  readonly id: string;
+  readonly name: string;
+  readonly arguments: Record<string, unknown>;
 }
 
 /**
@@ -43,4 +54,8 @@ export type ModelStreamChunk =
       readonly name: string;
       readonly input: string;
     }
-  | { readonly type: "done"; readonly usage?: ModelTokenUsage };
+  | {
+      readonly type: "done";
+      readonly usage?: ModelTokenUsage;
+      readonly finishReason?: string;
+    };

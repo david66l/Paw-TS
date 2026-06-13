@@ -67,7 +67,7 @@ export class FileSystemSessionStore implements SessionStore {
 
   saveEvent(runId: string, envelope: RunEventEnvelope): void {
     const p = this.runPath(runId);
-    const line = JSON.stringify(envelope) + "\n";
+    const line = `${JSON.stringify(envelope)}\n`;
     fs.appendFileSync(p, line, "utf8");
     this.maybePrune();
   }

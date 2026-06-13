@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { classifyShellCommand, interpretShellExitCode } from "../src/run-shell.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import {
+  classifyShellCommand,
+  interpretShellExitCode,
+  runShellInWorkspace,
+  runShellInWorkspaceStreaming,
+} from "../src/run-shell.js";
 
 describe("classifyShellCommand", () => {
   test("read-only commands", () => {
@@ -144,7 +153,9 @@ describe("classifyShellCommand", () => {
 
 describe("interpretShellExitCode", () => {
   test("exit code 0 is always success", () => {
-    expect(interpretShellExitCode("grep foo file", 0)).toEqual({ isError: false });
+    expect(interpretShellExitCode("grep foo file", 0)).toEqual({
+      isError: false,
+    });
     expect(interpretShellExitCode("rm file", 0)).toEqual({ isError: false });
     expect(interpretShellExitCode("npm test", 0)).toEqual({ isError: false });
   });
@@ -231,5 +242,111 @@ describe("interpretShellExitCode", () => {
       isError: true,
       message: "Command did not produce an exit code",
     });
+  });
+});
+
+describe("runShellInWorkspaceStreaming", () => {
+  test("stdout chunks are delivered", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-stream-"));
+    const chunks: { text: string; isStderr: boolean }[] = [];
+    const r = await runShellInWorkspaceStreaming(
+      root,
+      "echo streaming-stdout",
+      {
+        onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+      },
+    );
+    expect(r.exit_code).toBe(0);
+    expect(
+      chunks.some((c) => !c.isStderr && c.text.includes("streaming-stdout")),
+    ).toBe(true);
+  });
+
+  test("stderr chunks are delivered", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-stream-err-"));
+    const chunks: { text: string; isStderr: boolean }[] = [];
+    const r = await runShellInWorkspaceStreaming(
+      root,
+      "echo streaming-stderr >&2",
+      {
+        onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+      },
+    );
+    expect(r.exit_code).toBe(0);
+    expect(
+      chunks.some((c) => c.isStderr && c.text.includes("streaming-stderr")),
+    ).toBe(true);
+  });
+
+  test("mixed stdout and stderr are both delivered", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-stream-mix-"));
+    const chunks: { text: string; isStderr: boolean }[] = [];
+    const r = await runShellInWorkspaceStreaming(
+      root,
+      "echo out-mixed && echo err-mixed >&2",
+      {
+        onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+      },
+    );
+    expect(r.exit_code).toBe(0);
+    const stdoutCombined = chunks
+      .filter((c) => !c.isStderr)
+      .map((c) => c.text)
+      .join("");
+    const stderrCombined = chunks
+      .filter((c) => c.isStderr)
+      .map((c) => c.text)
+      .join("");
+    expect(stdoutCombined).toContain("out-mixed");
+    expect(stderrCombined).toContain("err-mixed");
+  });
+
+  test("final result includes all stdout and stderr", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-stream-final-"));
+    const chunks: { text: string; isStderr: boolean }[] = [];
+    const r = await runShellInWorkspaceStreaming(
+      root,
+      "echo final-out && echo final-err >&2",
+      {
+        onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+      },
+    );
+    expect(r.exit_code).toBe(0);
+    const stdoutChunks = chunks
+      .filter((c) => !c.isStderr)
+      .map((c) => c.text)
+      .join("");
+    const stderrChunks = chunks
+      .filter((c) => c.isStderr)
+      .map((c) => c.text)
+      .join("");
+    expect(r.stdout).toBe(stdoutChunks);
+    expect(r.stderr).toBe(stderrChunks);
+  });
+
+  test("returns error for rejected command without calling onChunk", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-stream-rej-"));
+    const chunks: { text: string; isStderr: boolean }[] = [];
+    const r = await runShellInWorkspaceStreaming(root, "sudo echo hi", {
+      onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+    });
+    expect(r.error).toBeDefined();
+    expect(chunks.length).toBe(0);
+  });
+});
+
+describe("runShellInWorkspace (sync smoke)", () => {
+  test("returns stdout", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-sync-"));
+    const r = runShellInWorkspace(root, "echo sync-smoke");
+    expect(r.stdout).toContain("sync-smoke");
+    expect(r.exit_code).toBe(0);
+  });
+
+  test("returns exit code 0 for success", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-sync-exit-"));
+    const r = runShellInWorkspace(root, "true");
+    expect(r.exit_code).toBe(0);
+    expect(r.stdout).toBe("");
   });
 });

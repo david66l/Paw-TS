@@ -64,8 +64,8 @@ describe("resolveMentions", () => {
     writeFileSync(path.join(dir, "note.txt"), "hello world", "utf8");
     const result = resolveMentions(dir, "read @note.txt");
     expect(result.attachments.length).toBe(1);
-    expect(result.attachments[0]!.name).toBe("note.txt");
-    expect(result.attachments[0]!.content).toBe("hello world");
+    expect(result.attachments[0]?.name).toBe("note.txt");
+    expect(result.attachments[0]?.content).toBe("hello world");
     expect(result.notFound.length).toBe(0);
     expect(result.strippedText).toBe("read");
   });
@@ -99,6 +99,18 @@ describe("resolveMentions", () => {
     writeFileSync(path.join(nestedDir, "b.txt"), "nested", "utf8");
     const result = resolveMentions(dir, "check @a/b.txt");
     expect(result.attachments.length).toBe(1);
-    expect(result.attachments[0]!.content).toBe("nested");
+    expect(result.attachments[0]?.content).toBe("nested");
+  });
+
+  test("resolves image files as base64 image attachments", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-mention-img-"));
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
+    writeFileSync(path.join(dir, "shot.png"), pngBytes);
+    const result = resolveMentions(dir, "what is @shot.png");
+    expect(result.attachments.length).toBe(1);
+    expect(result.attachments[0]?.type).toBe("image");
+    expect(result.attachments[0]?.mimeType).toBe("image/png");
+    expect(result.attachments[0]?.content).toBe(pngBytes.toString("base64"));
+    expect(result.strippedText).toBe("what is");
   });
 });

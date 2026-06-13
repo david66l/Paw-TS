@@ -7,17 +7,25 @@
     "paw-tui": "./src/main.tsx"
   },
   "dependencies": {
-    "@paw/core": "workspace:*",
+    "@opentui/core": "^0.2.7",
+    "@opentui/keymap": "^0.2.7",
+    "@opentui/solid": "^0.2.7",
+    "@paw/agent": "workspace:*",
     "@paw/cli-core": "workspace:*",
-    "ink": "^5.0.1",
-    "react": "^18.3.1"
+    "@paw/core": "workspace:*",
+    "@paw/harness": "workspace:*",
+    "@paw/models": "workspace:*",
+    "@paw/settings": "workspace:*",
+    "@paw/workspace": "workspace:*",
+    "solid-js": "^1.9.0"
   },
   "devDependencies": {
-    "@types/react": "^18.3.12"
+    "@types/bun": "^1.1.0"
   },
   "scripts": {
     "test": "bun test test",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
-    "start": "bun run src/main.tsx"
+    "start": "bun run src/main.tsx",
+    "e2e:live": "bun run scripts/e2e-live.ts"
   }
 }

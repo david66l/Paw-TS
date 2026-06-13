@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadProjectMemory } from "../src/project-memory.js";
@@ -25,14 +25,20 @@ describe("loadProjectMemory", () => {
   });
 
   it("reads committed memory", () => {
-    writeFileSync(path.join(pawDir, "CLAUDE.md"), "# Project Rules\nUse TypeScript.");
+    writeFileSync(
+      path.join(pawDir, "CLAUDE.md"),
+      "# Project Rules\nUse TypeScript.",
+    );
     const result = loadProjectMemory(tmpDir);
     expect(result.committed).toBe("# Project Rules\nUse TypeScript.");
     expect(result.local).toBeNull();
   });
 
   it("reads local memory", () => {
-    writeFileSync(path.join(pawDir, "CLAUDE.local.md"), "# Local Preferences\nUse 2 spaces.");
+    writeFileSync(
+      path.join(pawDir, "CLAUDE.local.md"),
+      "# Local Preferences\nUse 2 spaces.",
+    );
     const result = loadProjectMemory(tmpDir);
     expect(result.committed).toBeNull();
     expect(result.local).toBe("# Local Preferences\nUse 2 spaces.");

@@ -13,7 +13,13 @@ describe("editNotebook", () => {
       nbPath,
       JSON.stringify({
         cells: [
-          { cell_type: "code", source: "print(1)", metadata: {}, outputs: [], execution_count: null },
+          {
+            cell_type: "code",
+            source: "print(1)",
+            metadata: {},
+            outputs: [],
+            execution_count: null,
+          },
           { cell_type: "markdown", source: "# Hello", metadata: {} },
         ],
         metadata: {},
@@ -29,9 +35,7 @@ describe("editNotebook", () => {
     });
     expect(r.success).toBe(true);
     expect(r.cellCount).toBe(2);
-    const updated = JSON.parse(
-      require("node:fs").readFileSync(nbPath, "utf8"),
-    );
+    const updated = JSON.parse(require("node:fs").readFileSync(nbPath, "utf8"));
     expect(updated.cells[0].source).toBe("print(2)");
   });
 
@@ -55,9 +59,7 @@ describe("editNotebook", () => {
     });
     expect(r.success).toBe(true);
     expect(r.cellCount).toBe(1);
-    const updated = JSON.parse(
-      require("node:fs").readFileSync(nbPath, "utf8"),
-    );
+    const updated = JSON.parse(require("node:fs").readFileSync(nbPath, "utf8"));
     expect(updated.cells[0].cell_type).toBe("code");
   });
 
@@ -84,9 +86,7 @@ describe("editNotebook", () => {
     });
     expect(r.success).toBe(true);
     expect(r.cellCount).toBe(3);
-    const updated = JSON.parse(
-      require("node:fs").readFileSync(nbPath, "utf8"),
-    );
+    const updated = JSON.parse(require("node:fs").readFileSync(nbPath, "utf8"));
     expect(updated.cells[1].source).toBe("inserted");
   });
 
@@ -96,9 +96,7 @@ describe("editNotebook", () => {
     writeFileSync(
       nbPath,
       JSON.stringify({
-        cells: [
-          { cell_type: "code", source: "a", metadata: {} },
-        ],
+        cells: [{ cell_type: "code", source: "a", metadata: {} }],
         metadata: {},
         nbformat: 4,
         nbformat_minor: 5,

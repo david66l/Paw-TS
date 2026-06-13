@@ -13,5 +13,30 @@
 .env.*
 !.env.example
 
+# macOS
+.DS_Store
+
+# Backups / temp
+*.bak
+*.current
+
+# Build outputs
+.next/
+dist/
+build/
+
 # Dependencies
 node_modules/
+
+# Personal / interview materials (not product source)
+面试/
+简历*.md
+大厂筛选*.md
+
+# Local sandboxes and scratch projects
+personal-site/
+temp-site/
+测试project/
+web-project/
+memory/
+index.html

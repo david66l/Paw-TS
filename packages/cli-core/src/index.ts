@@ -11,7 +11,7 @@ export type {
   ToolApprovalInput,
 } from "./operations.js";
 export type { RunEventEnvelope } from "@paw/core";
-export { parseRootFromArgv, tailPositionalArgs } from "./root.js";
+export { findPawRoot, parseRootFromArgv, tailPositionalArgs } from "./root.js";
 export {
   createTemporaryWorktree,
   findGitRoot,

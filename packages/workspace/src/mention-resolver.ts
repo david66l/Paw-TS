@@ -8,6 +8,18 @@ import path from "node:path";
 
 import { readWorkspaceFile } from "./local-fs.js";
 
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
+
+function imageMimeType(filePath: string): string | undefined {
+  return IMAGE_MIME_BY_EXT[path.extname(filePath).toLowerCase()];
+}
+
 export interface MentionAttachment {
   readonly type: "image" | "file";
   readonly name: string;
@@ -42,9 +54,7 @@ export function extractAtMentions(text: string): string[] {
   }
   // Unquoted: @path (must be preceded by whitespace or start of string)
   // We process the text with quoted matches already removed to avoid double-counting
-  let remaining = text
-    .replace(doubleQuoted, "")
-    .replace(singleQuoted, "");
+  const remaining = text.replace(doubleQuoted, "").replace(singleQuoted, "");
   const unquoted = /(?:^|\s)@([\w./~_-]+)/g;
   for (const m of remaining.matchAll(unquoted)) {
     if (m[1]) mentions.push(m[1]);
@@ -88,6 +98,17 @@ export function resolveMentions(
     }
     if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) {
       notFound.push(raw);
+      continue;
+    }
+    const mimeType = imageMimeType(target);
+    if (mimeType) {
+      const data = fs.readFileSync(target);
+      attachments.push({
+        type: "image",
+        name: rel,
+        content: data.toString("base64"),
+        mimeType,
+      });
       continue;
     }
     const result = readWorkspaceFile(workspaceRoot, rel);

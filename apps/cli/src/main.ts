@@ -111,7 +111,10 @@ async function main(): Promise<void> {
           s = {};
         }
         s[key] = value;
-        savePawSettingsLocal(settingsPath, s as Parameters<typeof savePawSettingsLocal>[1]);
+        savePawSettingsLocal(
+          settingsPath,
+          s as Parameters<typeof savePawSettingsLocal>[1],
+        );
         console.log(`Set ${key}`);
         process.exit(0);
       } catch (e) {
@@ -144,7 +147,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     const msgIdx = argv.indexOf("--message");
-    const message = msgIdx !== -1 && argv[msgIdx + 1] ? argv[msgIdx + 1]! : "chore: update";
+    const message =
+      msgIdx !== -1 && argv[msgIdx + 1] ? argv[msgIdx + 1]! : "chore: update";
     const result = gitCommit(root, message);
     if (!result.ok) {
       console.error(`git commit failed: ${result.error}`);
@@ -170,7 +174,11 @@ async function main(): Promise<void> {
     }
     const useWorktree = argv.includes("--worktree");
     const root = parseRootFromArgv(process.cwd(), argv);
-    const r = await runStubRun(goal, { workspaceRoot: root, maxSteps, useWorktree });
+    const r = await runStubRun(goal, {
+      workspaceRoot: root,
+      maxSteps,
+      useWorktree,
+    });
     console.log(r.text);
     process.exit(r.exitCode);
   }

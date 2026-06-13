@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { findGitRoot, createTemporaryWorktree } from "../src/worktree.js";
 import { runStubRun } from "../src/operations.js";
+import { createTemporaryWorktree, findGitRoot } from "../src/worktree.js";
 
 describe("worktree", () => {
   test("findGitRoot returns null for non-git directory", () => {

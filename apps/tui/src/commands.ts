@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import {
   type StubRunOptions,
   type StubRunSession,
@@ -6,15 +8,20 @@ import {
   formatFsReadOutput,
   runStubRun,
 } from "@paw/cli-core";
-import { FileSystemSessionStore, listCheckpoints, undoLastCheckpoint } from "@paw/core";
+import {
+  FileSystemSessionStore,
+  type SkillRegistry,
+  listCheckpoints,
+  renderSkillPrompt,
+  undoLastCheckpoint,
+} from "@paw/core";
 import type { RunEventEnvelope } from "@paw/core";
 import {
+  type PawSettingsLocal,
   defaultSettingsPath,
   savePawSettingsLocal,
-  type PawSettingsLocal,
 } from "@paw/settings";
-import fs from "node:fs";
-import path from "node:path";
+import type { PersistentSession } from "./run-session-controller.js";
 
 export interface SlashContext {
   readonly cwd: string;
@@ -30,6 +37,44 @@ export interface SlashContext {
     StubRunOptions,
     "resolveAskUser" | "resolveToolApproval" | "approvalPolicy"
   >;
+  /** Skill registry for /skill-name user invocations. */
+  readonly skillRegistry?: SkillRegistry;
+  /** Directory to load skills from (passed to orchestrator for model-facing run_skill). */
+  readonly skillsDir?: string;
+  /** Persistent orchestrator session. When set, input is injected into the
+   *  existing conversation instead of starting a fresh run. */
+  readonly session?: PersistentSession;
+  /** Toggle light/dark theme at runtime. */
+  readonly toggleTheme?: () => void;
+}
+
+const KNOWN_COMMANDS = new Set([
+  "/exit",
+  "/quit",
+  "/help",
+  "/clear",
+  "/doctor",
+  "/fs-list",
+  "/fs-read",
+  "/stub",
+  "/run",
+  "/worktree",
+  "/undo",
+  "/checkpoints",
+  "/sessions",
+  "/replay",
+  "/init",
+  "/theme",
+]);
+
+function isSlashCommand(text: string, skillRegistry?: SkillRegistry): boolean {
+  const head = text.trim().split(/\s+/)[0] ?? "";
+  if (KNOWN_COMMANDS.has(head)) return true;
+  if (skillRegistry) {
+    const skillId = head.startsWith("/") ? head.slice(1) : head;
+    return skillRegistry.has(skillId);
+  }
+  return false;
 }
 
 /** Natural language or `/…` — same backend as `paw-ts` (doctor, fs-*, stub-run). */
@@ -41,18 +86,38 @@ export async function submitUserLine(
   if (!v) {
     return;
   }
-  if (!v.startsWith("/")) {
-    ctx.pushText(`> ${v}`);
+  if (!isSlashCommand(v, ctx.skillRegistry)) {
+    // TUI renders the user line and run events; avoid duplicate echo here.
+    if (!ctx.onRunEvent) {
+      ctx.pushText(`> ${v}`);
+    }
     try {
-      const r = await runStubRun(v, {
-        workspaceRoot: ctx.cwd,
-        onEvent: ctx.onRunEvent,
-        runSession: ctx.runSession,
-        resultTextFormat: "minimal",
-        ...ctx.orchestratorHooks,
-      });
-      if (r.text.trim()) {
-        ctx.pushText(r.text);
+      if (ctx.session) {
+        const signal = ctx.runSession?.begin();
+        try {
+          const result = await ctx.session.submit(v, signal);
+          if (
+            result.status === "completed" &&
+            result.message &&
+            !ctx.onRunEvent
+          ) {
+            ctx.pushText(result.message);
+          }
+        } finally {
+          ctx.runSession?.end();
+        }
+      } else {
+        const r = await runStubRun(v, {
+          workspaceRoot: ctx.cwd,
+          onEvent: ctx.onRunEvent,
+          runSession: ctx.runSession,
+          resultTextFormat: "minimal",
+          skillsDir: ctx.skillsDir,
+          ...ctx.orchestratorHooks,
+        });
+        if (r.text.trim()) {
+          ctx.pushText(r.text);
+        }
       }
     } catch (e: unknown) {
       ctx.pushText(e instanceof Error ? e.message : String(e));
@@ -94,8 +159,9 @@ export async function runSlashCommand(
         "/checkpoints — list checkpoints for the current run",
         "/sessions — list past runs",
         "/replay <runId> — replay a past run into the log",
+        "/theme — toggle light/dark theme",
         "Ctrl+C — abort active agent run if any; otherwise exit",
-        "Input — ←→ move cursor; ↑↓ recall history (bash-style); approval menu uses ↑↓ when shown.",
+        "Input — Enter to submit; Shift+Enter for newline; ←→ move cursor; ↑↓ recall history.",
         "When the agent asks to run a gated tool, use ↑↓ to choose Allow/Deny, then Enter.",
         "PAW_TUI_STRICT_TOOL_APPROVAL=1 — also prompt for read_file / list_dir (default: only unknown tools).",
       ].join("\n"),
@@ -105,6 +171,16 @@ export async function runSlashCommand(
 
   if (head === "/clear") {
     clear();
+    return;
+  }
+
+  if (head === "/theme") {
+    if (ctx.toggleTheme) {
+      ctx.toggleTheme();
+      pushText("Theme toggled.");
+    } else {
+      pushText("Theme toggle unavailable.");
+    }
     return;
   }
 
@@ -135,15 +211,32 @@ export async function runSlashCommand(
     const goal = parts.slice(1).join(" ") || "stub";
     pushText(`stub-run: ${goal}`);
     try {
-      const r = await runStubRun(goal, {
-        workspaceRoot: cwd,
-        onEvent: ctx.onRunEvent,
-        runSession: ctx.runSession,
-        resultTextFormat: "minimal",
-        ...ctx.orchestratorHooks,
-      });
-      if (r.text.trim()) {
-        pushText(r.text);
+      if (ctx.session) {
+        const signal = ctx.runSession?.begin();
+        try {
+          const result = await ctx.session.submit(goal, signal);
+          if (
+            result.status === "completed" &&
+            result.message &&
+            !ctx.onRunEvent
+          ) {
+            pushText(result.message);
+          }
+        } finally {
+          ctx.runSession?.end();
+        }
+      } else {
+        const r = await runStubRun(goal, {
+          workspaceRoot: cwd,
+          onEvent: ctx.onRunEvent,
+          runSession: ctx.runSession,
+          resultTextFormat: "minimal",
+          skillsDir: ctx.skillsDir,
+          ...ctx.orchestratorHooks,
+        });
+        if (r.text.trim()) {
+          pushText(r.text);
+        }
       }
     } catch (e: unknown) {
       pushText(e instanceof Error ? e.message : String(e));
@@ -153,6 +246,10 @@ export async function runSlashCommand(
 
   if (head === "/worktree") {
     const goal = parts.slice(1).join(" ") || "stub";
+    if (ctx.session) {
+      pushText("worktree: not supported in persistent session mode");
+      return;
+    }
     pushText(`worktree-run: ${goal}`);
     try {
       const r = await runStubRun(goal, {
@@ -161,6 +258,7 @@ export async function runSlashCommand(
         runSession: ctx.runSession,
         resultTextFormat: "minimal",
         useWorktree: true,
+        skillsDir: ctx.skillsDir,
         ...ctx.orchestratorHooks,
       });
       if (r.text.trim()) {
@@ -216,12 +314,18 @@ export async function runSlashCommand(
       return;
     }
     const lines = runs.slice(0, 20).map((r) => {
-      const status = r.status === "completed" ? "✓" : r.status === "failed" ? "✗" : "○";
+      const status =
+        r.status === "completed" ? "✓" : r.status === "failed" ? "✗" : "○";
       const goal = r.goal.slice(0, 50) + (r.goal.length > 50 ? "…" : "");
       const date = new Date(r.startedAt).toLocaleString();
       return `  ${status} ${r.runId} · ${goal} · ${r.toolCallCount} tools · ${date}`;
     });
-    pushText([`Past sessions (${runs.length} total, showing newest 20):`, ...lines].join("\n"));
+    pushText(
+      [
+        `Past sessions (${runs.length} total, showing newest 20):`,
+        ...lines,
+      ].join("\n"),
+    );
     return;
   }
 
@@ -263,17 +367,26 @@ export async function runSlashCommand(
       }
     }
 
+    const provider = args.provider || "anthropic";
     const settings: PawSettingsLocal = {
-      provider: args.provider || "anthropic",
-      model: args.model || "claude-sonnet-4-6",
+      provider,
       approval: args.approval || "normal",
-      max_steps: args["max-steps"] ? parseInt(args["max-steps"], 10) || 30 : 30,
+      max_steps: args["max-steps"]
+        ? Number.parseInt(args["max-steps"], 10) || 30
+        : 30,
     };
     if (args.key) {
-      if (settings.provider === "anthropic" || settings.provider === "openai") {
-        const keyField = `${settings.provider}_api_key` as const;
-        (settings as Record<string, unknown>)[keyField] = args.key;
+      const keyProviders = ["anthropic", "openai", "qwen", "deepseek"] as const;
+      if (keyProviders.includes(provider as (typeof keyProviders)[number])) {
+        settings.models = {
+          [provider]: {
+            model: args.model || "claude-sonnet-4-6",
+            apiKey: args.key,
+          },
+        };
       }
+    } else if (args.model) {
+      settings.model = args.model;
     }
 
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
@@ -284,5 +397,65 @@ export async function runSlashCommand(
     return;
   }
 
+  // Fallback: check skill registry for /skill-name user invocations
+  const { skillRegistry } = ctx;
+  if (skillRegistry) {
+    const skillId = head.startsWith("/") ? head.slice(1) : head;
+    if (skillRegistry.has(skillId)) {
+      const skill = skillRegistry.get(skillId)!;
+      const userArgs = parts.slice(1).join(" ");
+      let rendered = renderSkillPrompt(skill, parseSlashSkillArgs(userArgs));
+      // If the skill template didn't consume {{args}} (no placeholder), append user input
+      if (
+        userArgs &&
+        !skill.prompt.includes("{{args}}") &&
+        !skill.prompt.includes("{{ args }}")
+      ) {
+        rendered = `${rendered}\n\nUser request: ${userArgs}`;
+      }
+      pushText(`skill: ${skillId}`);
+      try {
+        if (ctx.session) {
+          const signal = ctx.runSession?.begin();
+          try {
+            const result = await ctx.session.submit(rendered, signal);
+            if (
+              result.status === "completed" &&
+              result.message &&
+              !ctx.onRunEvent
+            ) {
+              pushText(result.message);
+            }
+          } finally {
+            ctx.runSession?.end();
+          }
+        } else {
+          const r = await runStubRun(rendered, {
+            workspaceRoot: cwd,
+            onEvent: ctx.onRunEvent,
+            runSession: ctx.runSession,
+            resultTextFormat: "minimal",
+            skillsDir: ctx.skillsDir,
+            ...ctx.orchestratorHooks,
+          });
+          if (r.text.trim()) {
+            pushText(r.text);
+          }
+        }
+      } catch (e: unknown) {
+        pushText(e instanceof Error ? e.message : String(e));
+      }
+      return;
+    }
+  }
+
   pushText(`Unknown command: ${head} (see /help)`);
+}
+
+/** Parse slash-command args into a Record for skill template rendering. */
+function parseSlashSkillArgs(raw: string): Record<string, unknown> {
+  if (!raw.trim()) return {};
+  // Simple: pass as positional default arg. Skills with named params
+  // can be extended later with --key=value parsing.
+  return { args: raw.trim() };
 }

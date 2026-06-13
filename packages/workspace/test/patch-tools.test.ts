@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -21,10 +21,10 @@ describe("applyWorkspacePatch", () => {
     const r = applyWorkspacePatch(root, patch);
     expect(r.ok).toBe(true);
     expect(r.results.length).toBe(1);
-    expect(r.results[0]!.path).toBe("a.ts");
-    expect(r.results[0]!.ok).toBe(true);
-    expect(r.results[0]!.linesAdded).toBe(1);
-    expect(r.results[0]!.linesRemoved).toBe(1);
+    expect(r.results[0]?.path).toBe("a.ts");
+    expect(r.results[0]?.ok).toBe(true);
+    expect(r.results[0]?.linesAdded).toBe(1);
+    expect(r.results[0]?.linesRemoved).toBe(1);
 
     const content = readFileSync(path.join(root, "a.ts"), "utf8");
     expect(content).toBe("line1\nline2_modified\nline3\n");
@@ -49,11 +49,15 @@ describe("applyWorkspacePatch", () => {
     const r = applyWorkspacePatch(root, patch);
     expect(r.ok).toBe(true);
     expect(r.results.length).toBe(2);
-    expect(r.results[0]!.path).toBe("a.ts");
-    expect(r.results[1]!.path).toBe("b.ts");
+    expect(r.results[0]?.path).toBe("a.ts");
+    expect(r.results[1]?.path).toBe("b.ts");
 
-    expect(readFileSync(path.join(root, "a.ts"), "utf8")).toBe("alpha_modified\n");
-    expect(readFileSync(path.join(root, "b.ts"), "utf8")).toBe("beta_modified\n");
+    expect(readFileSync(path.join(root, "a.ts"), "utf8")).toBe(
+      "alpha_modified\n",
+    );
+    expect(readFileSync(path.join(root, "b.ts"), "utf8")).toBe(
+      "beta_modified\n",
+    );
   });
 
   test("rolls back on partial failure", () => {
@@ -130,7 +134,7 @@ describe("applyWorkspacePatch", () => {
 `;
     const r = applyWorkspacePatch(root, patch);
     expect(r.ok).toBe(true);
-    expect(r.results[0]!.path).toBe("src/foo.ts");
+    expect(r.results[0]?.path).toBe("src/foo.ts");
     expect(readFileSync(path.join(root, "src/foo.ts"), "utf8")).toBe("new\n");
   });
 });

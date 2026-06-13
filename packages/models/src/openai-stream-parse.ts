@@ -6,8 +6,10 @@ import type { ModelTokenUsage } from "@paw/core";
  */
 export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
   readonly textDelta: string;
+  readonly thinkingDelta?: string;
   readonly usage?: ModelTokenUsage;
   readonly isDoneMarker: boolean;
+  readonly finishReason?: string;
   readonly toolCallDelta?: OpenAiToolCallDelta;
 } {
   const t = raw.trim();
@@ -28,7 +30,9 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
     return { textDelta: "", isDoneMarker: false };
   }
   let textDelta = "";
+  let thinkingDelta: string | undefined;
   let toolCallDelta: OpenAiToolCallDelta | undefined;
+  let finishReason: string | undefined;
   const choices = root.choices;
   if (
     Array.isArray(choices) &&
@@ -36,12 +40,20 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
     typeof choices[0] === "object"
   ) {
     const c0 = choices[0] as Record<string, unknown>;
+    const fr = c0.finish_reason;
+    if (typeof fr === "string" && fr) {
+      finishReason = fr;
+    }
     const delta = c0.delta;
     if (delta !== null && typeof delta === "object") {
       const d = delta as Record<string, unknown>;
       const content = d.content;
       if (typeof content === "string") {
         textDelta = content;
+      }
+      const reasoning = d.reasoning_content;
+      if (typeof reasoning === "string") {
+        thinkingDelta = reasoning;
       }
       const toolCalls = d.tool_calls;
       if (Array.isArray(toolCalls) && toolCalls.length > 0) {
@@ -52,8 +64,10 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
   const usage = parseOpenAiUsageJson(root.usage);
   return {
     textDelta,
+    ...(thinkingDelta !== undefined ? { thinkingDelta } : {}),
     ...(usage !== undefined ? { usage } : {}),
     isDoneMarker: false,
+    ...(finishReason !== undefined ? { finishReason } : {}),
     ...(toolCallDelta !== undefined ? { toolCallDelta } : {}),
   };
 }
@@ -122,10 +136,18 @@ export function parseOpenAiUsageJson(
   ) {
     return undefined;
   }
+  // Extract cache tokens from prompt_tokens_details (OpenAI / DeepSeek compatible)
+  let cachedPromptTokens: number | undefined;
+  const details = u.prompt_tokens_details ?? u.promptTokensDetails;
+  if (details !== null && typeof details === "object") {
+    const d = details as Record<string, unknown>;
+    cachedPromptTokens = pickNum(d.cached_tokens ?? d.cachedTokens);
+  }
   return {
     ...(promptTokens !== undefined ? { promptTokens } : {}),
     ...(completionTokens !== undefined ? { completionTokens } : {}),
     ...(totalTokens !== undefined ? { totalTokens } : {}),
+    ...(cachedPromptTokens !== undefined ? { cachedPromptTokens } : {}),
   };
 }
 

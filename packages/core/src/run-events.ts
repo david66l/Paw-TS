@@ -13,6 +13,8 @@ export type RunEvent =
       readonly type: "loop.tick";
       readonly turn: number;
       readonly maxSteps: number;
+      /** Estimated total tokens in the current context window. */
+      readonly estimatedTokens: number;
     }
   | {
       readonly type: "run.completed";
@@ -22,7 +24,13 @@ export type RunEvent =
   | { readonly type: "run.failed"; readonly message: string }
   | {
       readonly type: "phase";
-      readonly name: "plan" | "model" | "tool" | "parse";
+      readonly name:
+        | "plan"
+        | "model"
+        | "tool"
+        | "parse"
+        | "waiting_children"
+        | "merging_results";
     }
   /** Parsed structured outcome (V2 §8.5) before orchestrator branches. */
   | { readonly type: "agent.action"; readonly action: AgentAction }
@@ -82,6 +90,12 @@ export type RunEvent =
       readonly completionTokens: number;
       readonly totalTokens: number;
       readonly estimatedCostUsd: number;
+      readonly costCurrency?: "CNY" | "USD";
+      /** Tokens billed for the latest model call only. */
+      readonly turnPromptTokens?: number;
+      readonly turnCompletionTokens?: number;
+      /** Prompt tokens served from the provider's prefix cache. */
+      readonly cachedPromptTokens?: number;
     }
   /** TaskPlanner applied a {@link AgentPlanUpdateAction} (TS orchestrator). */
   | {
@@ -112,11 +126,108 @@ export type RunEvent =
       readonly type: "compression.skipped";
       readonly reason: string;
     }
+  /** Per-pool context budget snapshot (system / tools / history). */
+  | {
+      readonly type: "context.budget";
+      readonly contextWindow: number;
+      readonly systemUsed: number;
+      readonly systemBudget: number;
+      readonly toolsUsed: number;
+      readonly toolsBudget: number;
+      readonly historyUsed: number;
+      readonly historyBudget: number;
+      readonly historyOverBudget: boolean;
+      readonly systemOverBudget: boolean;
+      readonly compactThreshold: number;
+    }
+  /** System prompt was trimmed to fit the system token budget. */
+  | {
+      readonly type: "context.budget.trimmed";
+      readonly sections: readonly string[];
+      readonly freedTokens: number;
+    }
   /** Memory extraction agent saved new entries. */
   | {
       readonly type: "memory.extracted";
       readonly entries: number;
+      readonly rejected: number;
       readonly runId: string;
+    }
+  /** Memory entry was rejected by the sensitive-info scanner. */
+  | {
+      readonly type: "memory.rejected";
+      readonly entry: string;
+      readonly reason: string;
+      readonly runId: string;
+    }
+  /** Memory retrieval completed before system prompt construction. */
+  | {
+      readonly type: "memory.retrieve.done";
+      readonly query: string;
+      readonly totalCandidates: number;
+      readonly selectedCount: number;
+      readonly scores: readonly number[];
+      readonly injectedTokens: number;
+      readonly retrievalMode?: "keyword" | "cascade";
+      readonly embeddingCacheHits?: number;
+      readonly embeddingCacheMisses?: number;
+      readonly usedLlmFallback?: boolean;
+      readonly selectedMemories: readonly {
+        readonly id: string;
+        readonly title: string;
+        readonly source: string;
+        readonly summary: string;
+        readonly relatedFiles: readonly string[];
+      }[];
+    }
+  /** Model output was truncated (finish_reason = length/max_tokens). */
+  | {
+      readonly type: "model.truncated";
+      readonly finishReason: string;
+    }
+  /** Orchestrator is retrying a transient LLM API failure. */
+  | {
+      readonly type: "model.retry.waiting";
+      readonly attempt: number;
+      readonly delayMs: number;
+      readonly error: string;
+      readonly errorType?: string;
+    }
+  /** Circuit breaker opened after repeated model failures. */
+  | {
+      readonly type: "model.circuit_breaker.open";
+      readonly label: string;
+      readonly failures: number;
+    }
+  /** Circuit breaker moved to half-open (probing). */
+  | {
+      readonly type: "model.circuit_breaker.half_open";
+      readonly label: string;
+    }
+  /** Circuit breaker closed after a successful probe. */
+  | {
+      readonly type: "model.circuit_breaker.closed";
+      readonly label: string;
+    }
+  /** MCP server connection failed; run continues without it. */
+  | {
+      readonly type: "mcp.connection_failed";
+      readonly server: string;
+      readonly error: string;
+    }
+  /** Run efficiency and quality metrics emitted at completion. */
+  | {
+      readonly type: "run.metrics";
+      readonly durationMs: number;
+      readonly modelLatencyMs: number;
+      readonly modelCalls: number;
+      readonly toolCalls: number;
+      readonly toolSuccesses: number;
+      readonly totalTokens: number;
+      readonly estimatedCost: number;
+      readonly costCurrency: "CNY" | "USD";
+      readonly steps: number;
+      readonly truncationCount: number;
     };
 
 export interface RunEventEnvelope {

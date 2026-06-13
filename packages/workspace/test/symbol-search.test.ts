@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -18,9 +18,9 @@ describe("symbol-search", () => {
     const r = searchWorkspaceSymbols(dir, "calculateTotal");
     expect(r.error).toBeUndefined();
     expect(r.matches?.length).toBe(1);
-    expect(r.matches![0]!.file).toBe("a.ts");
-    expect(r.matches![0]!.symbols[0]!.name).toBe("calculateTotal");
-    expect(r.matches![0]!.symbols[0]!.kind).toBe("function");
+    expect(r.matches?.[0]?.file).toBe("a.ts");
+    expect(r.matches?.[0]?.symbols[0]?.name).toBe("calculateTotal");
+    expect(r.matches?.[0]?.symbols[0]?.kind).toBe("function");
   });
 
   test("finds class and methods", () => {
@@ -38,7 +38,7 @@ describe("symbol-search", () => {
     expect(r.error).toBeUndefined();
     const match = r.matches?.find((m) => m.file === "b.ts");
     expect(match).toBeDefined();
-    const names = match!.symbols.map((s) => s.name);
+    const names = match?.symbols.map((s) => s.name);
     expect(names).toContain("UserManager");
     expect(names).toContain("UserManager.addUser");
     expect(names).toContain("UserManager.getCount");
@@ -64,10 +64,7 @@ type Handler = (req: Request) => Response;`,
 
   test("case-insensitive matching", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-sym-"));
-    writeFileSync(
-      path.join(dir, "d.ts"),
-      `function doSomething() {}`,
-    );
+    writeFileSync(path.join(dir, "d.ts"), "function doSomething() {}");
 
     const r = searchWorkspaceSymbols(dir, "dosomething");
     expect(r.matches?.length).toBe(1);
@@ -77,7 +74,7 @@ type Handler = (req: Request) => Response;`,
     const dir = mkdtempSync(path.join(tmpdir(), "paw-sym-"));
     writeFileSync(
       path.join(dir, "readme.md"),
-      `# MyProject\nfunction foo() {}`,
+      "# MyProject\nfunction foo() {}",
     );
 
     const r = searchWorkspaceSymbols(dir, "foo");
@@ -89,7 +86,7 @@ type Handler = (req: Request) => Response;`,
     mkdirSync(path.join(dir, ".hidden"), { recursive: true });
     writeFileSync(
       path.join(dir, ".hidden", "secret.ts"),
-      `function hiddenFn() {}`,
+      "function hiddenFn() {}",
     );
 
     const r = searchWorkspaceSymbols(dir, "hiddenFn");

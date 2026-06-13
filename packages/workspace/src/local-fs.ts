@@ -92,7 +92,7 @@ function computeDiffStats(
       undefined,
       { context: 3 },
     );
-    if (patch && patch.hunks) {
+    if (patch?.hunks) {
       for (const hunk of patch.hunks) {
         for (const line of hunk.lines) {
           if (line.startsWith("+")) linesAdded++;
@@ -162,12 +162,18 @@ export function editWorkspaceFile(
     const hasTrailingNewline = content.endsWith("\n");
     const lines = content.split(/\r?\n/);
     // Remove trailing empty element created by trailing newline
-    if (hasTrailingNewline && lines.length > 0 && lines[lines.length - 1] === "") {
+    if (
+      hasTrailingNewline &&
+      lines.length > 0 &&
+      lines[lines.length - 1] === ""
+    ) {
       lines.pop();
     }
     const totalLines = lines.length;
     if (startLine > totalLines) {
-      return { error: `start_line ${startLine} exceeds file length ${totalLines}` };
+      return {
+        error: `start_line ${startLine} exceeds file length ${totalLines}`,
+      };
     }
     const s = startLine;
     const e = endLine !== undefined ? Math.min(endLine, totalLines) : s;
@@ -300,12 +306,23 @@ export function writeWorkspaceFile(
     return { error: d.reason };
   }
   const filepath = d.resolvedPath;
+  const tmpPath = `${filepath}.paw.tmp`;
   try {
     if (createDirectories) {
       fs.mkdirSync(path.dirname(filepath), { recursive: true });
     }
-    fs.writeFileSync(filepath, content, { encoding: "utf8" });
+    // Atomic write: write to temp file, then rename
+    fs.writeFileSync(tmpPath, content, { encoding: "utf8" });
+    fs.renameSync(tmpPath, filepath);
   } catch (e) {
+    // Clean up temp file on failure
+    try {
+      if (fs.existsSync(tmpPath)) {
+        fs.unlinkSync(tmpPath);
+      }
+    } catch {
+      // ignore cleanup errors
+    }
     const msg = e instanceof Error ? e.message : String(e);
     return { error: msg };
   }
@@ -640,7 +657,7 @@ function globToRegex(pattern: string): RegExp {
       regex += "[^/]";
       i++;
     } else if (/[.+^${}()|[\]\\]/.test(c)) {
-      regex += "\\" + c;
+      regex += `\\${c}`;
       i++;
     } else {
       regex += c;
@@ -885,7 +902,11 @@ export function grepWorkspaceText(
 
   if (outputMode === "files_with_matches") {
     const filenames = [...new Set(matches.map((m) => m.path))];
-    const { items, wasTruncated } = applyHeadLimit(filenames, headLimit, offset);
+    const { items, wasTruncated } = applyHeadLimit(
+      filenames,
+      headLimit,
+      offset,
+    );
     return {
       mode: "files_with_matches",
       filenames: items,
@@ -931,7 +952,11 @@ export function grepWorkspaceText(
     });
   }
 
-  const { items, wasTruncated } = applyHeadLimit(grepMatches, headLimit, offset);
+  const { items, wasTruncated } = applyHeadLimit(
+    grepMatches,
+    headLimit,
+    offset,
+  );
   const formatted = formatGrepContent(items, showLineNumbers);
 
   return {

@@ -69,12 +69,50 @@ function isReadme(name: string): boolean {
 function isSourceFile(name: string): boolean {
   const ext = path.extname(name).toLowerCase();
   return [
-    ".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".kt",
-    ".scala", ".rb", ".php", ".cs", ".cpp", ".c", ".h", ".hpp",
-    ".swift", ".m", ".mm", ".r", ".pl", ".sh", ".bat", ".ps1",
-    ".lua", ".ex", ".exs", ".clj", ".cljs", ".hs", ".elm", ".erl",
-    ".fs", ".fsx", ".ml", ".mli", ".dart", ".groovy", ".nim",
-    ".vue", ".svelte", ".astro", ".solid",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".py",
+    ".rs",
+    ".go",
+    ".java",
+    ".kt",
+    ".scala",
+    ".rb",
+    ".php",
+    ".cs",
+    ".cpp",
+    ".c",
+    ".h",
+    ".hpp",
+    ".swift",
+    ".m",
+    ".mm",
+    ".r",
+    ".pl",
+    ".sh",
+    ".bat",
+    ".ps1",
+    ".lua",
+    ".ex",
+    ".exs",
+    ".clj",
+    ".cljs",
+    ".hs",
+    ".elm",
+    ".erl",
+    ".fs",
+    ".fsx",
+    ".ml",
+    ".mli",
+    ".dart",
+    ".groovy",
+    ".nim",
+    ".vue",
+    ".svelte",
+    ".astro",
+    ".solid",
   ].includes(ext);
 }
 
@@ -90,18 +128,37 @@ function countByExtension(files: FileInfo[]): Record<string, number> {
 function detectProjectType(files: FileInfo[]): string {
   const names = new Set(files.map((f) => f.name.toLowerCase()));
   if (names.has("package.json")) {
-    if (files.some((f) => f.name === "next.config.js" || f.name === "next.config.ts" || f.name === "next.config.mjs")) {
+    if (
+      files.some(
+        (f) =>
+          f.name === "next.config.js" ||
+          f.name === "next.config.ts" ||
+          f.name === "next.config.mjs",
+      )
+    ) {
       return "Next.js";
     }
-    if (files.some((f) => f.name === "vite.config.ts" || f.name === "vite.config.js")) {
+    if (
+      files.some(
+        (f) => f.name === "vite.config.ts" || f.name === "vite.config.js",
+      )
+    ) {
       return "Vite";
     }
-    if (files.some((f) => f.relPath.includes("src/app") || f.relPath.includes("app/"))) {
+    if (
+      files.some(
+        (f) => f.relPath.includes("src/app") || f.relPath.includes("app/"),
+      )
+    ) {
       return "Next.js App Router";
     }
     return "Node.js / JavaScript";
   }
-  if (names.has("pyproject.toml") || names.has("setup.py") || names.has("requirements.txt")) {
+  if (
+    names.has("pyproject.toml") ||
+    names.has("setup.py") ||
+    names.has("requirements.txt")
+  ) {
     return "Python";
   }
   if (names.has("cargo.toml")) {
@@ -116,16 +173,28 @@ function detectProjectType(files: FileInfo[]): string {
   if (names.has("gemfile")) {
     return "Ruby";
   }
-  if (names.has("pom.xml") || names.has("build.gradle") || names.has("build.gradle.kts")) {
+  if (
+    names.has("pom.xml") ||
+    names.has("build.gradle") ||
+    names.has("build.gradle.kts")
+  ) {
     return "Java / JVM";
   }
-  if (names.has("dockerfile") || names.has("docker-compose.yml") || names.has("docker-compose.yaml")) {
+  if (
+    names.has("dockerfile") ||
+    names.has("docker-compose.yml") ||
+    names.has("docker-compose.yaml")
+  ) {
     return "Docker";
   }
   return "Unknown";
 }
 
-function readFileSnippet(workspaceRoot: string, relPath: string, maxBytes: number): string | null {
+function readFileSnippet(
+  workspaceRoot: string,
+  relPath: string,
+  maxBytes: number,
+): string | null {
   try {
     const p = path.join(workspaceRoot, relPath);
     const fd = fs.openSync(p, "r");
@@ -144,7 +213,10 @@ function readFileSnippet(workspaceRoot: string, relPath: string, maxBytes: numbe
   }
 }
 
-export function generateBrief(workspaceRoot: string, opts?: BriefOptions): BriefResult {
+export function generateBrief(
+  workspaceRoot: string,
+  opts?: BriefOptions,
+): BriefResult {
   const targetPath = opts?.path?.trim() ? opts.path : ".";
   const guard = checkWorkspacePath(workspaceRoot, targetPath);
   if (!guard.allowed) {
@@ -220,14 +292,30 @@ export function generateBrief(workspaceRoot: string, opts?: BriefOptions): Brief
   };
 }
 
-function collectFiles(baseDir: string, dir: string, maxFiles: number, depth = 0): FileInfo[] {
+function collectFiles(
+  baseDir: string,
+  dir: string,
+  maxFiles: number,
+  depth = 0,
+): FileInfo[] {
   if (depth > 4) {
     return [];
   }
   const IGNORE_DIRS = new Set([
-    ".git", "node_modules", "__pycache__", ".venv", "venv",
-    "target", "dist", "build", ".pytest_cache", ".mypy_cache",
-    ".ruff_cache", ".coverage", "vendor", ".claude",
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "target",
+    "dist",
+    "build",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".coverage",
+    "vendor",
+    ".claude",
   ]);
   const results: FileInfo[] = [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -235,7 +323,14 @@ function collectFiles(baseDir: string, dir: string, maxFiles: number, depth = 0)
     if (results.length >= maxFiles) break;
     if (entry.isDirectory()) {
       if (IGNORE_DIRS.has(entry.name)) continue;
-      results.push(...collectFiles(baseDir, path.join(dir, entry.name), maxFiles - results.length, depth + 1));
+      results.push(
+        ...collectFiles(
+          baseDir,
+          path.join(dir, entry.name),
+          maxFiles - results.length,
+          depth + 1,
+        ),
+      );
     } else if (entry.isFile()) {
       const fullPath = path.join(dir, entry.name);
       const stat = fs.statSync(fullPath);

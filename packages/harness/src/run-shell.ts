@@ -2,6 +2,11 @@ import { spawn, spawnSync } from "node:child_process";
 
 import { checkWorkspacePath } from "@paw/workspace";
 
+import {
+  buildDockerShellExecSpec,
+  isShellSandboxEnabled,
+  type ShellSandboxConfig,
+} from "./sandbox/index.js";
 import { validateShellCommand } from "./shell-guard.js";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -18,22 +23,76 @@ export interface RunShellResult {
   readonly error?: string;
   /** Semantic interpretation of the exit code (e.g. "No matches found" for grep exit 1). */
   readonly interpretation?: string;
+  /** If true, the command requires user approval before execution. */
+  readonly requiresApproval?: boolean;
+  readonly approvalReason?: string;
+  readonly sandbox?: {
+    readonly mode: "workspace" | "strict";
+    readonly runtime: string;
+    readonly image: string;
+    readonly network: "deny" | "full";
+  };
 }
 
 // ---- Shell command classification (read-only vs mutating) ----
 
 /** Commands that only read or search — safe to run without approval. */
 const READ_COMMANDS = new Set([
-  "ls", "tree", "du", "pwd", "id", "whoami", "date", "env", "printenv",
-  "cat", "head", "tail", "less", "more", "wc", "stat", "file", "strings",
-  "jq", "awk", "cut", "sort", "uniq", "tr", "sed", "grep", "rg", "ag", "ack",
-  "find", "locate", "which", "whereis", "echo", "printf", "true", "false",
+  "ls",
+  "tree",
+  "du",
+  "pwd",
+  "id",
+  "whoami",
+  "date",
+  "env",
+  "printenv",
+  "cat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "wc",
+  "stat",
+  "file",
+  "strings",
+  "jq",
+  "awk",
+  "cut",
+  "sort",
+  "uniq",
+  "tr",
+  "sed",
+  "grep",
+  "rg",
+  "ag",
+  "ack",
+  "find",
+  "locate",
+  "which",
+  "whereis",
+  "echo",
+  "printf",
+  "true",
+  "false",
 ]);
 
 /** Commands that typically produce no stdout on success. */
 const SILENT_COMMANDS = new Set([
-  "mv", "cp", "rm", "mkdir", "rmdir", "chmod", "chown", "chgrp", "touch",
-  "ln", "cd", "export", "unset", "wait",
+  "mv",
+  "cp",
+  "rm",
+  "mkdir",
+  "rmdir",
+  "chmod",
+  "chown",
+  "chgrp",
+  "touch",
+  "ln",
+  "cd",
+  "export",
+  "unset",
+  "wait",
 ]);
 
 /** Semantic-neutral commands that don't change the read/write nature of a pipeline. */
@@ -81,7 +140,9 @@ export interface ShellCommandClassification {
  * Classify a shell command as read-only or mutating.
  * Handles compound commands (pipelines, && chains) by checking every segment.
  */
-export function classifyShellCommand(command: string): ShellCommandClassification {
+export function classifyShellCommand(
+  command: string,
+): ShellCommandClassification {
   const segments = splitCommandSegments(command);
   if (segments.length === 0) {
     return { isReadOnly: false, isSilent: false, commandType: "unknown" };
@@ -103,7 +164,18 @@ export function classifyShellCommand(command: string): ShellCommandClassificatio
 
     if (READ_COMMANDS.has(base)) {
       hasRead = true;
-      if (["grep", "rg", "ag", "ack", "find", "locate", "which", "whereis"].includes(base)) {
+      if (
+        [
+          "grep",
+          "rg",
+          "ag",
+          "ack",
+          "find",
+          "locate",
+          "which",
+          "whereis",
+        ].includes(base)
+      ) {
         hasSearch = true;
       }
       if (["ls", "tree", "du"].includes(base)) {
@@ -124,7 +196,8 @@ export function classifyShellCommand(command: string): ShellCommandClassificatio
 
   const isReadOnly = !hasWrite;
   // Only mark as silent when ALL non-neutral commands are in the explicit silent set
-  const isSilent = hasWrite && !hasRead && !hasSearch && !hasList && hasExplicitSilent;
+  const isSilent =
+    hasWrite && !hasRead && !hasSearch && !hasList && hasExplicitSilent;
 
   let commandType: ShellCommandClassification["commandType"] = "unknown";
   if (hasWrite) commandType = "write";
@@ -222,14 +295,72 @@ export function interpretShellExitCode(
   if (semantic) {
     return semantic(exitCode);
   }
-  return { isError: true, message: `Command failed with exit code ${exitCode}` };
+  return {
+    isError: true,
+    message: `Command failed with exit code ${exitCode}`,
+  };
 }
 
-export interface RunShellStreamingOptions {
+export interface RunShellOptions {
   readonly cwd?: string;
   readonly timeoutMs?: number;
+  readonly shellSandbox?: ShellSandboxConfig;
+}
+
+export interface RunShellStreamingOptions extends RunShellOptions {
   /** Called for each stdout/stderr chunk as it arrives. */
   readonly onChunk?: (chunk: string, isStderr: boolean) => void;
+}
+
+interface ShellSpawnTarget {
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly sandbox?: RunShellResult["sandbox"];
+}
+
+function resolveShellSpawnTarget(
+  workspaceRoot: string,
+  cwdPath: string,
+  command: string,
+  shellSandbox: ShellSandboxConfig | undefined,
+  win: boolean,
+): ShellSpawnTarget | { readonly error: string } {
+  if (isShellSandboxEnabled(shellSandbox)) {
+    if (win) {
+      return {
+        error:
+          "shell sandbox requires docker/podman and is not supported on native Windows cmd; use WSL or set sandbox.mode to off",
+      };
+    }
+    const spec = buildDockerShellExecSpec(shellSandbox, {
+      workspaceRoot,
+      cwdPath,
+      command,
+    });
+    if ("error" in spec) {
+      return spec;
+    }
+    return {
+      command: spec.runtime,
+      args: spec.args,
+      sandbox: {
+        mode: spec.mode,
+        runtime: spec.runtime,
+        image: spec.image,
+        network: spec.network,
+      },
+    };
+  }
+
+  return win
+    ? {
+        command: process.env.ComSpec ?? "cmd.exe",
+        args: ["/d", "/s", "/c", command],
+      }
+    : {
+        command: "/bin/sh",
+        args: ["-c", command],
+      };
 }
 
 function clampTimeoutMs(ms: number): number {
@@ -259,11 +390,18 @@ function resolveCwd(
 export function runShellInWorkspace(
   workspaceRoot: string,
   command: string,
-  options: { cwd?: string; timeoutMs?: number } = {},
+  options: RunShellOptions = {},
 ): RunShellResult {
   const guard = validateShellCommand(command);
   if (!guard.allowed) {
     return { error: guard.reason ?? "command rejected by shell guard" };
+  }
+  if (guard.requiresApproval) {
+    return {
+      error: guard.reason ?? "command requires approval",
+      requiresApproval: true,
+      approvalReason: guard.reason,
+    };
   }
 
   const cwdResult = resolveCwd(workspaceRoot, options.cwd);
@@ -274,20 +412,24 @@ export function runShellInWorkspace(
 
   const timeoutMs = clampTimeoutMs(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const win = process.platform === "win32";
-  const proc = win
-    ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command], {
-        cwd: cwdPath,
-        encoding: "utf8",
-        timeout: timeoutMs,
-        maxBuffer: MAX_OUTPUT_BYTES,
-        windowsHide: true,
-      })
-    : spawnSync("/bin/sh", ["-c", command], {
-        cwd: cwdPath,
-        encoding: "utf8",
-        timeout: timeoutMs,
-        maxBuffer: MAX_OUTPUT_BYTES,
-      });
+  const spawnTarget = resolveShellSpawnTarget(
+    workspaceRoot,
+    cwdPath,
+    command,
+    options.shellSandbox,
+    win,
+  );
+  if ("error" in spawnTarget) {
+    return { error: spawnTarget.error, cwd: cwdPath };
+  }
+
+  const proc = spawnSync(spawnTarget.command, [...spawnTarget.args], {
+    cwd: isShellSandboxEnabled(options.shellSandbox) ? undefined : cwdPath,
+    encoding: "utf8",
+    timeout: timeoutMs,
+    maxBuffer: MAX_OUTPUT_BYTES,
+    ...(win && !spawnTarget.sandbox ? { windowsHide: true } : {}),
+  });
 
   if (proc.error) {
     const e = proc.error as NodeJS.ErrnoException & { killed?: boolean };
@@ -315,6 +457,7 @@ export function runShellInWorkspace(
     stdout,
     stderr,
     cwd: cwdPath,
+    ...(spawnTarget.sandbox ? { sandbox: spawnTarget.sandbox } : {}),
   };
 }
 
@@ -333,6 +476,14 @@ export function runShellInWorkspaceStreaming(
       resolve({ error: guard.reason ?? "command rejected by shell guard" });
       return;
     }
+    if (guard.requiresApproval) {
+      resolve({
+        error: guard.reason ?? "command requires approval",
+        requiresApproval: true,
+        approvalReason: guard.reason,
+      });
+      return;
+    }
 
     const cwdResult = resolveCwd(workspaceRoot, options.cwd);
     if (cwdResult.error) {
@@ -343,6 +494,17 @@ export function runShellInWorkspaceStreaming(
 
     const timeoutMs = clampTimeoutMs(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     const win = process.platform === "win32";
+    const spawnTarget = resolveShellSpawnTarget(
+      workspaceRoot,
+      cwdPath,
+      command,
+      options.shellSandbox,
+      win,
+    );
+    if ("error" in spawnTarget) {
+      resolve({ error: spawnTarget.error, cwd: cwdPath });
+      return;
+    }
 
     const chunks: string[] = [];
     const errChunks: string[] = [];
@@ -350,12 +512,10 @@ export function runShellInWorkspaceStreaming(
     let totalBytes = 0;
     let killedByOutputLimit = false;
 
-    const proc = win
-      ? spawn(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command], {
-          cwd: cwdPath,
-          windowsHide: true,
-        })
-      : spawn("/bin/sh", ["-c", command], { cwd: cwdPath });
+    const proc = spawn(spawnTarget.command, [...spawnTarget.args], {
+      cwd: isShellSandboxEnabled(options.shellSandbox) ? undefined : cwdPath,
+      ...(win && !spawnTarget.sandbox ? { windowsHide: true } : {}),
+    });
 
     const timeoutId = setTimeout(() => {
       killedByTimeout = true;
@@ -403,7 +563,10 @@ export function runShellInWorkspaceStreaming(
         stderr: errChunks.join(""),
         timed_out: killedByTimeout,
         cwd: cwdPath,
-        error: killedByOutputLimit ? `output exceeded ${MAX_OUTPUT_BYTES} bytes limit` : undefined,
+        error: killedByOutputLimit
+          ? `output exceeded ${MAX_OUTPUT_BYTES} bytes limit`
+          : undefined,
+        ...(spawnTarget.sandbox ? { sandbox: spawnTarget.sandbox } : {}),
       };
       resolve(result);
     });

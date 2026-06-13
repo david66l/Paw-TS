@@ -5,68 +5,183 @@ import type {
   AgentToolCallAction,
 } from "@paw/core";
 
+/** Max distance (chars) from end of text to scan for JSON tool calls.
+ *  Tool-call JSON naturally appears near the end; earlier positions are
+ *  more likely to be code blocks, logs, or file contents that happen to
+ *  parse as JSON.  A 0 or negative value disables the proximity gate. */
+const DEFAULT_JSON_SCAN_WINDOW = 8_000;
+
+export interface ParseToolCallOptions {
+  /** Only accept tool names in this set.  Omit to accept any name. */
+  readonly knownTools?: ReadonlySet<string>;
+  /** Max chars from end of text to scan (default 8_000). ≤ 0 = entire text. */
+  readonly scanWindow?: number;
+}
+
 /**
- * Parse the last actionable JSON line from model output (incremental parity with Python parser).
+ * Extract every valid JSON object from text, including multi-line objects.
+ * Returns each object with its raw substring, character offsets, and a
+ * confidence hint (higher for JSON inside fenced code blocks).
+ */
+function extractJsonObjects(
+  text: string,
+  scanWindow: number,
+): Array<{
+  obj: Record<string, unknown>;
+  raw: string;
+  start: number;
+  end: number;
+  confidence: number;
+}> {
+  const results: Array<{
+    obj: Record<string, unknown>;
+    raw: string;
+    start: number;
+    end: number;
+    confidence: number;
+  }> = [];
+
+  const fencedRanges = findFencedCodeBlockRanges(text);
+  const windowStart =
+    scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
+
+  let i = windowStart;
+  while (i < text.length) {
+    const idx = text.indexOf("{", i);
+    if (idx === -1) break;
+
+    let found = false;
+    for (let j = idx + 1; j <= text.length; j++) {
+      const slice = text.slice(idx, j);
+      try {
+        const obj = JSON.parse(slice) as unknown;
+        if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+          const inFence = fencedRanges.some(
+            (r) => idx >= r.start && j <= r.end,
+          );
+          results.push({
+            obj: obj as Record<string, unknown>,
+            raw: slice,
+            start: idx,
+            end: j,
+            confidence: inFence
+              ? 1 /* CODE_BLOCK_CONFIDENCE */
+              : 0 /* BARE_JSON_CONFIDENCE */,
+          });
+          i = j;
+          found = true;
+          break;
+        }
+      } catch {
+        /* continue extending */
+      }
+    }
+    if (!found) {
+      i = idx + 1;
+    }
+  }
+  return results;
+}
+
+/** Return [start, end) ranges for every ```json … ``` fenced block. */
+function findFencedCodeBlockRanges(
+  text: string,
+): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  const re = /```(?:json)?\s*\n([\s\S]*?)```/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const bodyStart = m.index + m[0].indexOf("\n") + 1;
+    const bodyEnd = bodyStart + (m[1]?.length ?? 0);
+    ranges.push({ start: bodyStart, end: bodyEnd });
+  }
+  return ranges;
+}
+
+/**
+ * Parse the last actionable JSON object from model output.
  * Returns `null` when no recognized structured action — caller treats full text as free-form answer.
  */
 export function parseAgentActionFromModelText(
   text: string,
+  opts?: ParseToolCallOptions,
 ): AgentAction | null {
-  const lines = text.split(/\r?\n/);
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const t = lines[i]?.trim();
-    if (!t?.startsWith("{")) {
-      continue;
-    }
-    try {
-      const obj = JSON.parse(t) as Record<string, unknown>;
-      const action = parseActionFromJsonObject(obj);
-      if (action) {
-        return action;
-      }
-    } catch {
-      /* try previous line */
+  const scanWindow = opts?.scanWindow ?? DEFAULT_JSON_SCAN_WINDOW;
+  const objects = extractJsonObjects(text, scanWindow);
+  for (let i = objects.length - 1; i >= 0; i--) {
+    const action = parseActionFromJsonObject(objects[i]!.obj, opts?.knownTools);
+    if (action) {
+      return action;
     }
   }
   return null;
 }
 
 /**
- * Scan ALL lines and collect every valid `tool_call` JSON object.
+ * Scan ALL text and collect every valid `tool_call` JSON object.
  * Returns the collected tool calls plus the remaining prose text.
+ *
+ * When `knownTools` is supplied, tool calls whose tool name is NOT in the
+ * set are silently discarded — they are almost certainly false positives
+ * from code blocks, logs, or file contents.
  */
 export function parseAgentActionsFromModelText(
   text: string,
-): { actions: AgentToolCallAction[]; text: string } {
-  const lines = text.split(/\r?\n/);
+  opts?: ParseToolCallOptions,
+): {
+  actions: AgentToolCallAction[];
+  text: string;
+} {
+  const scanWindow = opts?.scanWindow ?? DEFAULT_JSON_SCAN_WINDOW;
+  const objects = extractJsonObjects(text, scanWindow);
   const actions: AgentToolCallAction[] = [];
   const seen = new Set<string>();
-  const nonToolLines: string[] = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("{")) {
-      try {
-        const obj = JSON.parse(trimmed) as Record<string, unknown>;
-        const action = parseActionFromJsonObject(obj);
-        if (action?.type === "tool_call") {
-          const key = `${action.tool}:${JSON.stringify(action.args)}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            actions.push(action);
-          }
-          continue;
-        }
-      } catch {
-        /* not valid JSON */
+  const toolRanges: Array<{ start: number; end: number }> = [];
+
+  for (const { obj, start, end } of objects) {
+    const action = parseActionFromJsonObject(obj, opts?.knownTools);
+    if (action?.type === "tool_call") {
+      const key = `${action.tool}:${JSON.stringify(action.args)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        actions.push(action);
       }
+      toolRanges.push({ start, end });
     }
-    nonToolLines.push(line);
   }
-  return { actions, text: nonToolLines.join("\n").trim() };
+
+  // Rebuild text with tool-call JSON objects removed
+  let prose = "";
+  let lastEnd = 0;
+  for (const { start, end } of toolRanges) {
+    prose += text.slice(lastEnd, start);
+    lastEnd = end;
+  }
+  prose += text.slice(lastEnd);
+
+  return { actions, text: prose.trim() };
+}
+
+function parseArguments(v: unknown): Record<string, unknown> | null {
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    return v as Record<string, unknown>;
+  }
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      /* ignore invalid JSON string */
+    }
+  }
+  return null;
 }
 
 function parseActionFromJsonObject(
   obj: Record<string, unknown>,
+  knownTools?: ReadonlySet<string>,
 ): AgentAction | null {
   const toolId =
     typeof obj.tool === "string" && obj.tool
@@ -75,10 +190,17 @@ function parseActionFromJsonObject(
         ? obj.name
         : null;
   if (toolId) {
+    // Reject tool calls whose name isn't in the known registry (if supplied).
+    // This eliminates false positives from code blocks and file contents.
+    if (knownTools && !knownTools.has(toolId)) {
+      return null;
+    }
+    // Prefer Paw format (args), fall back to OpenAI format (arguments)
+    const args = asRecord(obj.args) ?? parseArguments(obj.arguments) ?? {};
     return {
       type: "tool_call",
       tool: toolId,
-      args: asRecord(obj.args) ?? {},
+      args,
     };
   }
 

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { execSync } from "node:child_process";
 
-import { gitStatus, gitLog, gitDiff } from "../src/git-tools.js";
+import { gitDiff, gitLog, gitStatus } from "../src/git-tools.js";
 
 describe("git tools", () => {
   function initGitRepo(dir: string): void {
@@ -38,7 +38,7 @@ describe("git tools", () => {
     const r = gitStatus(root);
     expect(r.error).toBeUndefined();
     expect(r.modified?.length).toBe(1);
-    expect(r.modified![0]).toBe("a.txt");
+    expect(r.modified?.[0]).toBe("a.txt");
   });
 
   test("gitLog returns commits", () => {
@@ -50,7 +50,7 @@ describe("git tools", () => {
     const r = gitLog(root, 5);
     expect(r.error).toBeUndefined();
     expect(r.commits?.length).toBe(1);
-    expect(r.commits![0]!.message).toBe("first");
+    expect(r.commits?.[0]?.message).toBe("first");
   });
 
   test("gitDiff shows changes", () => {

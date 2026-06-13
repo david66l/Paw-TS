@@ -1,7 +1,16 @@
 import path from "node:path";
 
 import {
+  AutoMemoryStore,
+  type ToolErrorCode,
+  makeToolError,
+  renderSkillPrompt,
+} from "@paw/core";
+import type { ChatMessage } from "@paw/models";
+import {
+  LspClient,
   applyWorkspacePatch,
+  detectLspCommand,
   editNotebook,
   editWorkspaceFile,
   fetchWebPage,
@@ -17,18 +26,15 @@ import {
   searchWorkspaceSymbols,
   searchWorkspaceText,
   writeWorkspaceFile,
-  LspClient,
-  detectLspCommand,
 } from "@paw/workspace";
-import { renderSkillPrompt } from "@paw/core";
 
 import type { HarnessContext } from "./context.js";
 import type { McpClientManager } from "./mcp-client.js";
 import {
+  type RunShellResult,
   classifyShellCommand,
   interpretShellExitCode,
   runShellInWorkspace,
-  type RunShellResult,
   runShellInWorkspaceStreaming,
 } from "./run-shell.js";
 
@@ -38,6 +44,12 @@ export interface ToolRunResult {
   readonly payload: unknown;
   /** One-line human summary. */
   readonly summary: string;
+  /**
+   * Messages to inject into the conversation before the next model turn.
+   * Used by tools that expand into prompts (e.g. skills) so the model
+   * sees the expanded content without needing to re-read the result.
+   */
+  readonly newMessages?: readonly ChatMessage[];
 }
 
 const READ = "workspace.read_file" as const;
@@ -61,8 +73,34 @@ const RUN_SKILL = "workspace.run_skill" as const;
 const LSP = "workspace.lsp" as const;
 const APPLY_PATCH = "workspace.apply_patch" as const;
 const SYMBOL_SEARCH = "workspace.symbol_search" as const;
+const MEMORY_LIST = "memory.list" as const;
+const MEMORY_READ = "memory.read" as const;
 
-const BUILTIN_TOOLS = [READ, LIST, SEARCH, WRITE, EDIT, GLOB, GREP, SHELL, WEBFETCH, WEBSEARCH, TODO_WRITE, NOTEBOOK_EDIT, BRIEF, GIT_STATUS, GIT_LOG, GIT_DIFF, RUN_AGENT, RUN_SKILL, LSP, APPLY_PATCH, SYMBOL_SEARCH] as const;
+const BUILTIN_TOOLS = [
+  READ,
+  LIST,
+  SEARCH,
+  WRITE,
+  EDIT,
+  GLOB,
+  GREP,
+  SHELL,
+  WEBFETCH,
+  WEBSEARCH,
+  TODO_WRITE,
+  NOTEBOOK_EDIT,
+  BRIEF,
+  GIT_STATUS,
+  GIT_LOG,
+  GIT_DIFF,
+  RUN_AGENT,
+  RUN_SKILL,
+  LSP,
+  APPLY_PATCH,
+  SYMBOL_SEARCH,
+  MEMORY_LIST,
+  MEMORY_READ,
+] as const;
 
 export type BuiltinToolName = (typeof BUILTIN_TOOLS)[number];
 export type ToolName = BuiltinToolName | string;
@@ -75,7 +113,24 @@ export function toolRequiresApproval(
   mcp?: McpClientManager,
   args?: Record<string, unknown>,
 ): boolean {
-  if (tool === READ || tool === LIST || tool === SEARCH || tool === GLOB || tool === GREP || tool === WEBFETCH || tool === WEBSEARCH) return false;
+  if (
+    tool === READ ||
+    tool === LIST ||
+    tool === SEARCH ||
+    tool === GLOB ||
+    tool === GREP ||
+    tool === WEBFETCH ||
+    tool === WEBSEARCH ||
+    tool === BRIEF ||
+    tool === GIT_STATUS ||
+    tool === GIT_LOG ||
+    tool === GIT_DIFF ||
+    tool === SYMBOL_SEARCH ||
+    tool === LSP ||
+    tool === MEMORY_LIST ||
+    tool === MEMORY_READ
+  )
+    return false;
   if (tool === SHELL && args) {
     const cmd = typeof args.command === "string" ? args.command : "";
     if (cmd) {
@@ -95,6 +150,250 @@ export function listToolNames(mcp?: McpClientManager): readonly ToolName[] {
     built.push(`mcp:${t.serverName}/${t.toolName}`);
   }
   return built;
+}
+
+import type { ToolDefinition } from "@paw/models";
+
+/** Map from sanitized function names back to paw-ts tool names. */
+export function toolNameReverseMap(
+  mcp?: McpClientManager,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const t of listToolNames(mcp)) {
+    map.set(t.replace(/\./g, "_"), t);
+  }
+  return map;
+}
+
+/** OpenAI-format tool definitions for native function calling.
+ *  Names are sanitized (dots → underscores) for providers that restrict identifiers.
+ *  Use {@link toolNameReverseMap} to map results back to paw-ts tool names. */
+export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
+  const fn = (
+    name: string,
+    desc: string,
+    props: Record<string, unknown>,
+    required?: string[],
+  ): ToolDefinition => ({
+    type: "function",
+    function: {
+      name: name.replace(/\./g, "_"),
+      description: desc,
+      parameters: {
+        type: "object",
+        properties: props,
+        ...(required ? { required } : {}),
+      },
+    },
+  });
+  const defs: ToolDefinition[] = [
+    fn(
+      READ,
+      "Read a file from the workspace. Returns content with line numbers.",
+      {
+        path: { type: "string", description: "Relative path to the file" },
+        offset: { type: "integer", description: "Line offset from start" },
+        limit: { type: "integer", description: "Max lines to read" },
+      },
+      ["path"],
+    ),
+    fn(
+      LIST,
+      "List files and directories in the workspace.",
+      {
+        path: {
+          type: "string",
+          description: "Directory path relative to workspace root",
+        },
+        recursive: {
+          type: "boolean",
+          description: "Recurse into subdirectories",
+        },
+      },
+      ["path"],
+    ),
+    fn(
+      WRITE,
+      "Create or overwrite a file in the workspace.",
+      {
+        path: { type: "string", description: "Relative path to the file" },
+        content: { type: "string", description: "UTF-8 text content" },
+        create_directories: {
+          type: "boolean",
+          description: "Create parent directories if needed",
+        },
+      },
+      ["path", "content"],
+    ),
+    fn(
+      EDIT,
+      "Perform exact string replacements in an existing file.",
+      {
+        path: { type: "string", description: "Relative path to the file" },
+        old_string: { type: "string", description: "Text to find and replace" },
+        new_string: { type: "string", description: "Replacement text" },
+      },
+      ["path", "old_string", "new_string"],
+    ),
+    fn(
+      GLOB,
+      "Find files matching a glob pattern.",
+      {
+        pattern: { type: "string", description: "Glob pattern, e.g. **/*.ts" },
+        path: { type: "string", description: "Directory to search in" },
+        max_depth: { type: "integer", description: "Max directory depth" },
+      },
+      ["pattern"],
+    ),
+    fn(
+      GREP,
+      "Search file contents with a regex pattern.",
+      {
+        pattern: { type: "string", description: "Regex pattern to search for" },
+        path: { type: "string", description: "Directory or file to search" },
+        file_pattern: {
+          type: "string",
+          description: "File pattern filter, e.g. *.ts",
+        },
+        output_mode: {
+          type: "string",
+          description: "Output mode: content, files_with_matches, or count",
+        },
+        head_limit: { type: "integer", description: "Max lines to output" },
+      },
+      ["pattern"],
+    ),
+    fn(
+      SHELL,
+      "Execute a shell command in the workspace.",
+      {
+        command: { type: "string", description: "Shell command to execute" },
+        cwd: {
+          type: "string",
+          description: "Working directory, relative to workspace root",
+        },
+        timeout_sec: { type: "integer", description: "Timeout in seconds" },
+      },
+      ["command"],
+    ),
+    fn(
+      WEBFETCH,
+      "Fetch content from a URL and extract information.",
+      {
+        url: { type: "string", description: "URL to fetch" },
+        max_length: { type: "integer", description: "Max content length" },
+      },
+      ["url"],
+    ),
+    fn(
+      WEBSEARCH,
+      "Search the web and return results.",
+      {
+        query: { type: "string", description: "Search query" },
+        max_results: { type: "integer", description: "Max number of results" },
+      },
+      ["query"],
+    ),
+    fn(
+      TODO_WRITE,
+      "Create and manage a structured task list.",
+      {
+        todos: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              content: { type: "string" },
+              status: {
+                type: "string",
+                enum: ["pending", "in_progress", "done"],
+              },
+              priority: { type: "string", enum: ["low", "medium", "high"] },
+            },
+            required: ["id", "content", "status"],
+          },
+        },
+      },
+      ["todos"],
+    ),
+    fn(GIT_STATUS, "Show the working tree status.", {}),
+    fn(GIT_LOG, "Show recent commit history.", {
+      max_count: { type: "integer", description: "Number of commits to show" },
+    }),
+    fn(GIT_DIFF, "Show changes between commits or working tree.", {
+      path: { type: "string", description: "Optional file path to limit diff" },
+    }),
+    fn(
+      RUN_AGENT,
+      "Launch a sub-agent to handle a complex task.",
+      {
+        goal: { type: "string", description: "Goal for the sub-agent" },
+        max_steps: {
+          type: "integer",
+          description: "Max steps for the sub-agent",
+        },
+        agent_type: {
+          type: "string",
+          enum: ["simple", "research", "coding", "planning", "relay"],
+          description: "Sub-agent specialization",
+        },
+        child_policy: {
+          type: "string",
+          enum: ["read_only", "read_write"],
+          description: "Tool write policy for the sub-agent",
+        },
+      },
+      ["goal"],
+    ),
+    fn(
+      RUN_SKILL,
+      "Execute a skill within the conversation.",
+      {
+        skill_id: { type: "string", description: "ID of the skill to invoke" },
+        args: { type: "object", description: "Arguments for the skill" },
+      },
+      ["skill_id"],
+    ),
+    fn(
+      SYMBOL_SEARCH,
+      "Search for function/class/interface/type definitions by name (AST-based).",
+      {
+        query: { type: "string", description: "Symbol name or pattern" },
+        max_results: { type: "integer", description: "Max number of results" },
+      },
+      ["query"],
+    ),
+    fn(
+      MEMORY_LIST,
+      "List persistent auto-memory entries for this project (stored outside the workspace).",
+      {},
+    ),
+    fn(
+      MEMORY_READ,
+      "Read a persistent auto-memory entry by name (stored outside the workspace).",
+      {
+        name: {
+          type: "string",
+          description: "Memory entry name (filename without .md)",
+        },
+      },
+      ["name"],
+    ),
+  ];
+  if (mcp) {
+    for (const t of mcp.listTools()) {
+      defs.push({
+        type: "function",
+        function: {
+          name: `mcp:${t.serverName}/${t.toolName}`,
+          description: t.description ?? `MCP tool: ${t.toolName}`,
+          parameters: (t.inputSchema as Record<string, unknown>) ?? {},
+        },
+      });
+    }
+  }
+  return defs;
 }
 
 /** Short catalog for system prompts. */
@@ -122,6 +421,8 @@ export function toolCatalogText(mcp?: McpClientManager): string {
     `{"tool":"${LSP}","args":{"file":"<relative-path>","method":"hover|definition|references|completion","line":0,"character":0}}`,
     `{"tool":"${APPLY_PATCH}","args":{"patch":"<unified diff string>"}}`,
     `{"tool":"${SYMBOL_SEARCH}","args":{"query":"<symbol-name-or-pattern>","max_results":20}} — AST-based: find function/class/interface/type definitions by name (use instead of grep when you need precise symbol lookup)`,
+    `{"tool":"${MEMORY_LIST}","args":{}} — list persistent project memories (outside workspace)`,
+    `{"tool":"${MEMORY_READ}","args":{"name":"<memory-name>"}} — read full memory entry by name`,
   ];
 
   if (mcp) {
@@ -159,6 +460,132 @@ function num(v: unknown, d: number | undefined): number | undefined {
   return d;
 }
 
+interface JsonPropertySchema {
+  readonly type?: string;
+}
+
+interface JsonObjectSchema {
+  readonly properties?: Record<string, JsonPropertySchema>;
+  readonly required?: string[];
+}
+
+function schemaForTool(tool: string): JsonObjectSchema | null {
+  const sanitized = tool.replace(/\./g, "_");
+  const def = toolDefinitions().find((d) => d.function.name === sanitized);
+  const schema = def?.function.parameters;
+  return schema && typeof schema === "object"
+    ? (schema as JsonObjectSchema)
+    : null;
+}
+
+function matchesJsonType(value: unknown, expected: string): boolean {
+  if (expected === "integer") {
+    return Number.isInteger(value);
+  }
+  if (expected === "array") {
+    return Array.isArray(value);
+  }
+  if (expected === "object") {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+  if (expected === "boolean") {
+    return typeof value === "boolean";
+  }
+  if (expected === "number") {
+    return typeof value === "number";
+  }
+  if (expected === "string") {
+    return typeof value === "string";
+  }
+  return true;
+}
+
+function validateArgs(tool: string, args: unknown): ToolRunResult | null {
+  const schema = schemaForTool(tool);
+  if (!schema) {
+    return null;
+  }
+  const rec = asRecord(args) ?? (args == null ? {} : null);
+  if (!rec) {
+    return {
+      ok: false,
+      payload: makeToolError("E_SCHEMA_INVALID", "arguments must be an object"),
+      summary: `${tool}: E_SCHEMA_INVALID arguments must be an object`,
+    };
+  }
+  for (const name of schema.required ?? []) {
+    if (!(name in rec)) {
+      return {
+        ok: false,
+        payload: makeToolError(
+          "E_SCHEMA_INVALID",
+          `missing required field: ${name}`,
+          { field: name },
+        ),
+        summary: `${tool}: E_SCHEMA_INVALID missing required field: ${name}`,
+      };
+    }
+  }
+  for (const [name, prop] of Object.entries(schema.properties ?? {})) {
+    if (!(name in rec) || rec[name] === undefined || prop.type === undefined) {
+      continue;
+    }
+    if (!matchesJsonType(rec[name], prop.type)) {
+      return {
+        ok: false,
+        payload: makeToolError(
+          "E_SCHEMA_INVALID",
+          `field ${name} must be ${prop.type}`,
+          { field: name, expected: prop.type },
+        ),
+        summary: `${tool}: E_SCHEMA_INVALID field ${name} must be ${prop.type}`,
+      };
+    }
+  }
+  return null;
+}
+
+function toolErrorResult(
+  tool: string,
+  code: ToolErrorCode,
+  message: string,
+  detail?: Parameters<typeof makeToolError>[2],
+): ToolRunResult {
+  return {
+    ok: false,
+    payload: makeToolError(code, message, detail),
+    summary: `${tool}: ${code} ${message}`,
+  };
+}
+
+function errorCodeForToolPayload(payload: unknown): ToolErrorCode {
+  const rec = asRecord(payload);
+  const error = typeof rec?.error === "string" ? rec.error.toLowerCase() : "";
+  const risk = typeof rec?.risk === "string" ? rec.risk : "";
+  if (risk === "escaped" || risk === "sensitive") {
+    return "E_POLICY_DENIED";
+  }
+  if (
+    error.includes("escapes workspace") ||
+    error.includes("sensitive") ||
+    error.includes("disallowed") ||
+    error.includes("blocked pattern") ||
+    error.includes("blocked literal") ||
+    error.includes("blocked command") ||
+    error.includes("blocked:")
+  ) {
+    return "E_POLICY_DENIED";
+  }
+  if (
+    error.includes("enoent") ||
+    error.includes("not found") ||
+    error.includes("missing")
+  ) {
+    return "E_USER";
+  }
+  return "E_FATAL";
+}
+
 export async function executeTool(
   ctx: HarnessContext,
   tool: string,
@@ -177,15 +604,18 @@ export async function executeTool(
     return ctx.mcp.callTool(parsed.serverName, parsed.toolName, args);
   }
 
+  const schemaError = validateArgs(tool, args);
+  if (schemaError) {
+    return schemaError;
+  }
+
   const rec = asRecord(args) ?? {};
   if (tool === READ) {
     const path = typeof rec.path === "string" ? rec.path : "";
     if (!path) {
-      return {
-        ok: false,
-        payload: { error: "missing path" },
-        summary: "read_file: missing path",
-      };
+      return toolErrorResult("read_file", "E_USER", "missing path", {
+        field: "path",
+      });
     }
     const offset = num(rec.offset, 0) ?? 0;
     const limit = num(rec.limit, undefined);
@@ -194,7 +624,9 @@ export async function executeTool(
       ...(limit !== undefined ? { limit } : {}),
     });
     if (r.error) {
-      return { ok: false, payload: r, summary: `read_file: ${r.error}` };
+      return toolErrorResult("read_file", errorCodeForToolPayload(r), r.error, {
+        path,
+      });
     }
     return {
       ok: true,
@@ -207,7 +639,9 @@ export async function executeTool(
     const recursive = Boolean(rec.recursive);
     const r = listWorkspaceFiles(ctx.workspaceRoot, path, { recursive });
     if (r.error) {
-      return { ok: false, payload: r, summary: `list_dir: ${r.error}` };
+      return toolErrorResult("list_dir", errorCodeForToolPayload(r), r.error, {
+        path,
+      });
     }
     const n = Array.isArray(r.files) ? r.files.length : 0;
     return {
@@ -219,11 +653,9 @@ export async function executeTool(
   if (tool === SEARCH) {
     const pattern = typeof rec.pattern === "string" ? rec.pattern : "";
     if (!pattern) {
-      return {
-        ok: false,
-        payload: { error: "missing pattern" },
-        summary: "search: missing pattern",
-      };
+      return toolErrorResult("search", "E_USER", "missing pattern", {
+        field: "pattern",
+      });
     }
     const searchPath = typeof rec.path === "string" ? rec.path : ".";
     const filePattern =
@@ -257,7 +689,7 @@ export async function executeTool(
       ...(maxDepth !== undefined ? { maxDepth } : {}),
     });
     if (r.error) {
-      return { ok: false, payload: r, summary: `search: ${r.error}` };
+      return toolErrorResult("search", errorCodeForToolPayload(r), r.error);
     }
     const n =
       r.match_count ?? (Array.isArray(r.matches) ? r.matches.length : 0);
@@ -271,11 +703,9 @@ export async function executeTool(
   if (tool === GLOB) {
     const pattern = typeof rec.pattern === "string" ? rec.pattern : "";
     if (!pattern) {
-      return {
-        ok: false,
-        payload: { error: "missing pattern" },
-        summary: "glob: missing pattern",
-      };
+      return toolErrorResult("glob", "E_USER", "missing pattern", {
+        field: "pattern",
+      });
     }
     const globPath = typeof rec.path === "string" ? rec.path : ".";
     const maxDepth =
@@ -285,7 +715,7 @@ export async function executeTool(
       ...(maxDepth !== undefined ? { maxDepth } : {}),
     });
     if (r.error) {
-      return { ok: false, payload: r, summary: `glob: ${r.error}` };
+      return toolErrorResult("glob", errorCodeForToolPayload(r), r.error);
     }
     const tail = r.truncated ? " (truncated)" : "";
     return {
@@ -297,11 +727,9 @@ export async function executeTool(
   if (tool === GREP) {
     const pattern = typeof rec.pattern === "string" ? rec.pattern : "";
     if (!pattern) {
-      return {
-        ok: false,
-        payload: { error: "missing pattern" },
-        summary: "grep: missing pattern",
-      };
+      return toolErrorResult("grep", "E_USER", "missing pattern", {
+        field: "pattern",
+      });
     }
     const grepPath = typeof rec.path === "string" ? rec.path : ".";
     const filePattern =
@@ -336,8 +764,7 @@ export async function executeTool(
       num(rec["-B"], undefined) ?? num(rec.context_before, undefined);
     const contextAfter =
       num(rec["-A"], undefined) ?? num(rec.context_after, undefined);
-    const context =
-      num(rec["-C"], undefined) ?? num(rec.context, undefined);
+    const context = num(rec["-C"], undefined) ?? num(rec.context, undefined);
     const showLineNumbers =
       typeof rec["-n"] === "boolean"
         ? rec["-n"]
@@ -363,7 +790,7 @@ export async function executeTool(
       ...(offset > 0 ? { offset } : {}),
     });
     if (r.error) {
-      return { ok: false, payload: r, summary: `grep: ${r.error}` };
+      return toolErrorResult("grep", errorCodeForToolPayload(r), r.error);
     }
     if (r.mode === "count") {
       return {
@@ -391,11 +818,9 @@ export async function executeTool(
     const filePath = typeof rec.path === "string" ? rec.path : "";
     const content = typeof rec.content === "string" ? rec.content : "";
     if (!filePath) {
-      return {
-        ok: false,
-        payload: { error: "missing path" },
-        summary: "write_file: missing path",
-      };
+      return toolErrorResult("write_file", "E_USER", "missing path", {
+        field: "path",
+      });
     }
     const createDirectories =
       typeof rec.create_directories === "boolean"
@@ -407,11 +832,12 @@ export async function executeTool(
       createDirectories,
     });
     if (r.error) {
-      return {
-        ok: false,
-        payload: r,
-        summary: `write_file: ${r.error}`,
-      };
+      return toolErrorResult(
+        "write_file",
+        errorCodeForToolPayload(r),
+        r.error,
+        { path: filePath },
+      );
     }
     ctx.watcher?.markAgentWritten(filePath);
     return {
@@ -435,23 +861,18 @@ export async function executeTool(
           ? rec.newString
           : "";
     if (!filePath) {
-      return {
-        ok: false,
-        payload: { error: "missing path" },
-        summary: "edit_file: missing path",
-      };
+      return toolErrorResult("edit_file", "E_USER", "missing path", {
+        field: "path",
+      });
     }
     if (!oldString) {
-      return {
-        ok: false,
-        payload: { error: "missing old_string" },
-        summary: "edit_file: missing old_string",
-      };
+      return toolErrorResult("edit_file", "E_USER", "missing old_string", {
+        field: "old_string",
+      });
     }
     const startLine =
       num(rec.start_line, undefined) ?? num(rec.startLine, undefined);
-    const endLine =
-      num(rec.end_line, undefined) ?? num(rec.endLine, undefined);
+    const endLine = num(rec.end_line, undefined) ?? num(rec.endLine, undefined);
     const fuzzy =
       typeof rec.fuzzy === "boolean"
         ? rec.fuzzy
@@ -466,11 +887,9 @@ export async function executeTool(
       ...(fuzzy ? { fuzzy: true } : {}),
     });
     if (r.error) {
-      return {
-        ok: false,
-        payload: r,
-        summary: `edit_file: ${r.error}`,
-      };
+      return toolErrorResult("edit_file", errorCodeForToolPayload(r), r.error, {
+        path: filePath,
+      });
     }
     const diffHint =
       r.linesAdded !== undefined && r.linesRemoved !== undefined
@@ -486,11 +905,9 @@ export async function executeTool(
   if (tool === SHELL) {
     const cmd = typeof rec.command === "string" ? rec.command : "";
     if (!cmd.trim()) {
-      return {
-        ok: false,
-        payload: { error: "missing command" },
-        summary: "run_shell: missing command",
-      };
+      return toolErrorResult("run_shell", "E_USER", "missing command", {
+        field: "command",
+      });
     }
     const cwd =
       typeof rec.cwd === "string" && rec.cwd.trim() ? rec.cwd : undefined;
@@ -503,6 +920,7 @@ export async function executeTool(
     const shellOpts = {
       ...(cwd !== undefined ? { cwd } : {}),
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      ...(ctx.shellSandbox ? { shellSandbox: ctx.shellSandbox } : {}),
     };
     const onChunk = ctx.onShellChunk;
     const r = onChunk
@@ -513,11 +931,10 @@ export async function executeTool(
       : runShellInWorkspace(ctx.workspaceRoot, cmd, shellOpts);
     if (r.error) {
       const msg = r.timed_out ? "timeout" : r.error;
-      return {
-        ok: false,
-        payload: r,
-        summary: `run_shell: ${msg}`,
-      };
+      const code: ToolErrorCode = r.timed_out
+        ? "E_RETRY"
+        : errorCodeForToolPayload(r);
+      return toolErrorResult("run_shell", code, msg);
     }
     const code = r.exit_code ?? "?";
     const interpretation = interpretShellExitCode(cmd, r.exit_code);
@@ -526,9 +943,10 @@ export async function executeTool(
       interpretation: interpretation.message,
     };
     const isError = interpretation.isError && r.exit_code !== 0;
-    const summary = isError && interpretation.message
-      ? `run_shell: exit ${code} — ${interpretation.message}`
-      : `run_shell: exit ${code}`;
+    const summary =
+      isError && interpretation.message
+        ? `run_shell: exit ${code} — ${interpretation.message}`
+        : `run_shell: exit ${code}`;
     return {
       ok: !isError,
       payload: enriched,
@@ -537,7 +955,8 @@ export async function executeTool(
   }
   if (tool === WEBFETCH) {
     const url = typeof rec.url === "string" ? rec.url : "";
-    const maxLength = num(rec.max_length, undefined) ?? num(rec.maxLength, undefined);
+    const maxLength =
+      num(rec.max_length, undefined) ?? num(rec.maxLength, undefined);
     const r = await fetchWebPage({
       url,
       ...(maxLength !== undefined ? { maxLength } : {}),
@@ -561,7 +980,8 @@ export async function executeTool(
         summary: "web_search: missing query",
       };
     }
-    const maxResults = num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
+    const maxResults =
+      num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
     const r = await searchWeb({
       query,
       ...(maxResults !== undefined ? { maxResults } : {}),
@@ -593,11 +1013,15 @@ export async function executeTool(
         const id = typeof o.id === "string" ? o.id : "";
         const content = typeof o.content === "string" ? o.content : "";
         const status =
-          o.status === "pending" || o.status === "in_progress" || o.status === "done"
+          o.status === "pending" ||
+          o.status === "in_progress" ||
+          o.status === "done"
             ? o.status
             : "pending";
         const priority =
-          o.priority === "low" || o.priority === "medium" || o.priority === "high"
+          o.priority === "low" ||
+          o.priority === "medium" ||
+          o.priority === "high"
             ? o.priority
             : undefined;
         if (!id || !content) return null;
@@ -655,7 +1079,8 @@ export async function executeTool(
   }
   if (tool === BRIEF) {
     const briefPath = typeof rec.path === "string" ? rec.path : ".";
-    const maxFiles = num(rec.max_files, undefined) ?? num(rec.maxFiles, undefined);
+    const maxFiles =
+      num(rec.max_files, undefined) ?? num(rec.maxFiles, undefined);
     const r = generateBrief(ctx.workspaceRoot, {
       path: briefPath,
       ...(maxFiles !== undefined ? { maxFiles } : {}),
@@ -686,7 +1111,8 @@ export async function executeTool(
     return { ok: true, payload: r, summary: `git_status: ${summary}` };
   }
   if (tool === GIT_LOG) {
-    const maxCount = num(rec.max_count, undefined) ?? num(rec.maxCount, undefined) ?? 10;
+    const maxCount =
+      num(rec.max_count, undefined) ?? num(rec.maxCount, undefined) ?? 10;
     const r = gitLog(ctx.workspaceRoot, maxCount);
     if (r.error) {
       return { ok: false, payload: r, summary: `git_log: ${r.error}` };
@@ -695,7 +1121,8 @@ export async function executeTool(
     return { ok: true, payload: r, summary: `git_log: ${n} commit(s)` };
   }
   if (tool === GIT_DIFF) {
-    const diffPath = typeof rec.path === "string" && rec.path.trim() ? rec.path : undefined;
+    const diffPath =
+      typeof rec.path === "string" && rec.path.trim() ? rec.path : undefined;
     const r = gitDiff(ctx.workspaceRoot, diffPath);
     if (r.error) {
       return { ok: false, payload: r, summary: `git_diff: ${r.error}` };
@@ -720,12 +1147,22 @@ export async function executeTool(
         summary: "run_agent: sub-agent launcher not configured",
       };
     }
-    const maxSteps = num(rec.max_steps, undefined) ?? num(rec.maxSteps, undefined);
-    const r = await launcher.launch(goal, maxSteps);
+    const maxSteps =
+      num(rec.max_steps, undefined) ?? num(rec.maxSteps, undefined);
+    const sharedContext = ctx.buildSubAgentSharedContext?.({
+      goal,
+      args: rec,
+    });
+    const r = await launcher.launch(goal, maxSteps, {
+      args: rec,
+      sharedContext,
+      signal: ctx.abortSignal,
+      parentRunId: ctx.parentRunId,
+    });
     return {
       ok: r.status === "completed",
       payload: r,
-      summary: `run_agent: ${r.status} (${r.stepsTaken} steps)`,
+      summary: `run_agent: ${r.status} (${r.trace?.stepsTaken ?? 0} steps)`,
     };
   }
   if (tool === RUN_SKILL) {
@@ -757,8 +1194,11 @@ export async function executeTool(
     const rendered = renderSkillPrompt(skill, skillArgs);
     return {
       ok: true,
-      payload: { skillId, rendered, skill },
-      summary: `run_skill: ${skillId} rendered`,
+      payload: { skillId },
+      summary: `run_skill: ${skillId}`,
+      // Expanded skill prompt injected as a user message so the model
+      // follows it on the next turn without needing to re-read the result.
+      newMessages: [{ role: "user", content: rendered }],
     };
   }
   if (tool === LSP) {
@@ -781,9 +1221,13 @@ export async function executeTool(
         summary: `lsp: no LSP server for ${path.extname(filePath)}`,
       };
     }
-    const client = new LspClient("file://" + ctx.workspaceRoot);
+    const client = new LspClient(`file://${ctx.workspaceRoot}`);
     try {
-      await client.start({ command: cmd.command, args: cmd.args, cwd: ctx.workspaceRoot });
+      await client.start({
+        command: cmd.command,
+        args: cmd.args,
+        cwd: ctx.workspaceRoot,
+      });
       let result: unknown;
       switch (method) {
         case "hover":
@@ -850,17 +1294,56 @@ export async function executeTool(
         summary: "symbol_search: missing query",
       };
     }
-    const maxResults = num(rec.max_results, undefined) ?? num(rec.maxResults, undefined) ?? 20;
+    const maxResults =
+      num(rec.max_results, undefined) ?? num(rec.maxResults, undefined) ?? 20;
     const r = searchWorkspaceSymbols(ctx.workspaceRoot, query, { maxResults });
     if (r.error) {
       return { ok: false, payload: r, summary: `symbol_search: ${r.error}` };
     }
-    const totalSymbols = r.matches?.reduce((sum, m) => sum + m.symbols.length, 0) ?? 0;
+    const totalSymbols =
+      r.matches?.reduce((sum, m) => sum + m.symbols.length, 0) ?? 0;
     const tail = r.truncated ? " (truncated)" : "";
     return {
       ok: true,
       payload: r,
       summary: `symbol_search: ${totalSymbols} symbol(s) in ${r.matches?.length ?? 0} file(s)${tail}`,
+    };
+  }
+  if (tool === MEMORY_LIST) {
+    const store = new AutoMemoryStore({ workspaceRoot: ctx.workspaceRoot });
+    const entries = store.list().map((e) => ({
+      name: e.name,
+      type: e.type,
+      description: e.description,
+    }));
+    return {
+      ok: true,
+      payload: { entries, memory_dir: store.memoryDir },
+      summary: `memory.list: ${entries.length} entr${entries.length === 1 ? "y" : "ies"}`,
+    };
+  }
+  if (tool === MEMORY_READ) {
+    const name = typeof rec.name === "string" ? rec.name.trim() : "";
+    if (!name) {
+      return {
+        ok: false,
+        payload: { error: "missing name" },
+        summary: "memory.read: missing name",
+      };
+    }
+    const store = new AutoMemoryStore({ workspaceRoot: ctx.workspaceRoot });
+    const entry = store.load(name);
+    if (!entry) {
+      return {
+        ok: false,
+        payload: { error: `memory not found: ${name}` },
+        summary: `memory.read: not found (${name})`,
+      };
+    }
+    return {
+      ok: true,
+      payload: entry,
+      summary: `memory.read: ${name}`,
     };
   }
   return {

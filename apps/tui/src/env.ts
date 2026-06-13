@@ -9,3 +9,16 @@ export function tuiStrictToolApprovalFromEnv(): boolean {
   }
   return v === "1" || v === "true" || v === "yes" || v === "all";
 }
+
+/**
+ * Override TUI theme detection.
+ * Values: "light" | "dark" | "auto" (default).
+ * Example: `PAW_TUI_THEME=light bun run tui`
+ */
+export function tuiThemeFromEnv(): "light" | "dark" | "auto" {
+  const v = process.env.PAW_TUI_THEME?.trim().toLowerCase();
+  if (v === "light" || v === "dark") {
+    return v;
+  }
+  return "auto";
+}

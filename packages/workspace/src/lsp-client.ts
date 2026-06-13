@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import path from "node:path";
 
 interface LspMessage {
@@ -158,14 +158,22 @@ export class LspClient {
       return [];
     }
     const r = result as Record<string, unknown>;
-    const items = Array.isArray(r.items) ? r.items : Array.isArray(result) ? result : [];
+    const items = Array.isArray(r.items)
+      ? r.items
+      : Array.isArray(result)
+        ? result
+        : [];
     return items
-      .filter((i): i is Record<string, unknown> => i !== null && typeof i === "object")
+      .filter(
+        (i): i is Record<string, unknown> =>
+          i !== null && typeof i === "object",
+      )
       .map((i) => ({
         label: typeof i.label === "string" ? i.label : "",
         kind: typeof i.kind === "number" ? i.kind : undefined,
         detail: typeof i.detail === "string" ? i.detail : undefined,
-        documentation: typeof i.documentation === "string" ? i.documentation : undefined,
+        documentation:
+          typeof i.documentation === "string" ? i.documentation : undefined,
       }));
   }
 
@@ -201,12 +209,15 @@ export class LspClient {
         this.buffer = this.buffer.slice(headerEnd + 4);
         continue;
       }
-      const contentLength = parseInt(contentLengthMatch[1]!, 10);
+      const contentLength = Number.parseInt(contentLengthMatch[1]!, 10);
       const messageStart = headerEnd + 4;
       if (this.buffer.length < messageStart + contentLength) {
         return; // wait for more data
       }
-      const body = this.buffer.slice(messageStart, messageStart + contentLength);
+      const body = this.buffer.slice(
+        messageStart,
+        messageStart + contentLength,
+      );
       this.buffer = this.buffer.slice(messageStart + contentLength);
       this.handleMessage(body);
     }
@@ -261,7 +272,7 @@ export class LspClient {
     const absolute = path.isAbsolute(filePath)
       ? filePath
       : path.join(this._rootUri.replace("file://", ""), filePath);
-    return "file://" + absolute;
+    return `file://${absolute}`;
   }
 
   private parseLocations(result: unknown): LspLocation[] {
@@ -270,7 +281,10 @@ export class LspClient {
     }
     const items = Array.isArray(result) ? result : [result];
     return items
-      .filter((i): i is Record<string, unknown> => i !== null && typeof i === "object")
+      .filter(
+        (i): i is Record<string, unknown> =>
+          i !== null && typeof i === "object",
+      )
       .map((i) => ({
         uri: typeof i.uri === "string" ? i.uri : "",
         range: i.range as LspLocation["range"],
@@ -280,7 +294,9 @@ export class LspClient {
 }
 
 /** Detect the LSP command for a file based on extension. */
-export function detectLspCommand(filePath: string): { command: string; args: string[] } | null {
+export function detectLspCommand(
+  filePath: string,
+): { command: string; args: string[] } | null {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
     case ".ts":

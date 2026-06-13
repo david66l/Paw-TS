@@ -10,6 +10,7 @@
     "@paw/agent": "workspace:*",
     "@paw/core": "workspace:*",
     "@paw/harness": "workspace:*",
+    "@paw/models": "workspace:*",
     "@paw/settings": "workspace:*",
     "@paw/workspace": "workspace:*"
   },

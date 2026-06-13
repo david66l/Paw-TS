@@ -45,7 +45,7 @@ export function extractCheckpointTargets(
       const paths: string[] = [];
       for (const line of patchText.split(/\r?\n/)) {
         const m = line.match(/^\+\+\+\s+(?:b\/)?(.*)/);
-        if (m && m[1] && m[1] !== "/dev/null") {
+        if (m?.[1] && m[1] !== "/dev/null") {
           paths.push(m[1]);
         }
       }
@@ -53,9 +53,9 @@ export function extractCheckpointTargets(
     }
     case "workspace.run_shell": {
       // Shell commands may touch arbitrary files; we can't predict targets.
-      // Return empty so the checkpoint stores no per-file snapshot.
-      // A future enhancement could do a pre/post file-tree diff.
-      return [];
+      // Return a virtual target so the checkpoint stores metadata (command,
+      // cwd, timestamp) for audit / recovery purposes.
+      return ["__shell_cmd__"];
     }
     default:
       return [];
@@ -88,6 +88,22 @@ export function saveCheckpoint(
 
   const savedTargets: string[] = [];
   for (const rel of targets) {
+    if (rel === "__shell_cmd__") {
+      // Virtual target for shell commands — save metadata instead of file snapshot
+      const shellMeta = {
+        tool,
+        args,
+        savedAt: Date.now(),
+      };
+      fs.writeFileSync(
+        path.join(checkpointDir, ".shell-meta.json"),
+        JSON.stringify(shellMeta, null, 2),
+        "utf8",
+      );
+      savedTargets.push(rel);
+      continue;
+    }
+
     const full = path.join(workspaceRoot, rel);
     // Skip paths that escape workspace
     if (!full.startsWith(path.resolve(workspaceRoot))) continue;
@@ -95,23 +111,80 @@ export function saveCheckpoint(
     if (fs.existsSync(full) && fs.statSync(full).isFile()) {
       const content = fs.readFileSync(full);
       const hash = hashBytes(content);
-      const snapshotFile = path.join(checkpointDir, `${hash}-${sanitizeFileName(rel)}`);
+      const snapshotFile = path.join(
+        checkpointDir,
+        `${hash}-${sanitizeFileName(rel)}`,
+      );
       fs.writeFileSync(snapshotFile, content);
       savedTargets.push(rel);
     } else {
       // File doesn't exist yet — record as "will be created" so undo can delete it
-      const marker = path.join(checkpointDir, `.create-${sanitizeFileName(rel)}`);
+      const marker = path.join(
+        checkpointDir,
+        `.create-${sanitizeFileName(rel)}`,
+      );
       fs.writeFileSync(marker, "", "utf8");
       savedTargets.push(rel);
     }
   }
 
-  const meta: CheckpointEntry = { seq, tool, targets: savedTargets, savedAt: Date.now() };
+  const meta: CheckpointEntry = {
+    seq,
+    tool,
+    targets: savedTargets,
+    savedAt: Date.now(),
+  };
   fs.writeFileSync(
     path.join(checkpointDir, "_meta.json"),
     JSON.stringify(meta, null, 2),
     "utf8",
   );
+  return meta;
+}
+
+/** Internal: apply restore actions for a single checkpoint directory. */
+function applyCheckpointRestore(
+  checkpointDir: string,
+  workspaceRoot: string,
+): CheckpointEntry | null {
+  const metaPath = path.join(checkpointDir, "_meta.json");
+  if (!fs.existsSync(metaPath)) return null;
+
+  const meta: CheckpointEntry = JSON.parse(
+    fs.readFileSync(metaPath, "utf8"),
+  ) as CheckpointEntry;
+
+  for (const rel of meta.targets) {
+    if (rel === "__shell_cmd__") continue; // virtual target — no file action
+
+    const full = path.join(workspaceRoot, rel);
+    if (!full.startsWith(path.resolve(workspaceRoot))) continue;
+
+    const createMarker = path.join(
+      checkpointDir,
+      `.create-${sanitizeFileName(rel)}`,
+    );
+    if (fs.existsSync(createMarker)) {
+      // File was created by the tool → delete it on undo
+      try {
+        fs.unlinkSync(full);
+      } catch {
+        // ignore missing
+      }
+      continue;
+    }
+
+    // Find snapshot file by searching prefix
+    const prefix = sanitizeFileName(rel);
+    const snapshotFiles = fs
+      .readdirSync(checkpointDir)
+      .filter((n) => n.endsWith(`-${prefix}`));
+    if (snapshotFiles.length > 0) {
+      const snapshotFile = path.join(checkpointDir, snapshotFiles[0]!);
+      fs.copyFileSync(snapshotFile, full);
+    }
+  }
+
   return meta;
 }
 
@@ -131,49 +204,76 @@ export function undoLastCheckpoint(
   const dirs = fs
     .readdirSync(checkpointsDir)
     .filter((n) => /^\d+$/.test(n))
-    .map((n) => ({ name: n, seq: parseInt(n, 10) }))
+    .map((n) => ({ name: n, seq: Number.parseInt(n, 10) }))
     .sort((a, b) => b.seq - a.seq);
 
   for (const d of dirs) {
     const checkpointDir = path.join(checkpointsDir, d.name);
-    const metaPath = path.join(checkpointDir, "_meta.json");
-    if (!fs.existsSync(metaPath)) continue;
-
-    const meta: CheckpointEntry = JSON.parse(
-      fs.readFileSync(metaPath, "utf8"),
-    ) as CheckpointEntry;
-
-    for (const rel of meta.targets) {
-      const full = path.join(workspaceRoot, rel);
-      if (!full.startsWith(path.resolve(workspaceRoot))) continue;
-
-      const createMarker = path.join(checkpointDir, `.create-${sanitizeFileName(rel)}`);
-      if (fs.existsSync(createMarker)) {
-        // File was created by the tool → delete it on undo
-        try {
-          fs.unlinkSync(full);
-        } catch {
-          // ignore missing
-        }
-        continue;
-      }
-
-      // Find snapshot file by searching prefix
-      const prefix = sanitizeFileName(rel);
-      const snapshotFiles = fs
-        .readdirSync(checkpointDir)
-        .filter((n) => n.endsWith(`-${prefix}`));
-      if (snapshotFiles.length > 0) {
-        const snapshotFile = path.join(checkpointDir, snapshotFiles[0]!);
-        fs.copyFileSync(snapshotFile, full);
-      }
+    const meta = applyCheckpointRestore(checkpointDir, workspaceRoot);
+    if (meta) {
+      fs.rmSync(checkpointDir, { recursive: true, force: true });
+      return meta;
     }
-
-    // Remove the checkpoint dir after undo so `/undo` goes to the previous one
-    fs.rmSync(checkpointDir, { recursive: true, force: true });
-    return meta;
   }
   return null;
+}
+
+/**
+ * Restore a specific checkpoint by sequence number.
+ * Also removes all checkpoints with seq >= the restored one.
+ * Optionally backs up removed checkpoints before deletion.
+ */
+export function restoreCheckpoint(
+  workspaceRoot: string,
+  runId: string,
+  seq: number,
+  opts?: { backup?: boolean },
+): CheckpointEntry | null {
+  const checkpointsDir = path.join(
+    workspaceRoot,
+    ".paw",
+    "checkpoints",
+    sanitizeRunId(runId),
+  );
+  if (!fs.existsSync(checkpointsDir)) return null;
+
+  const targetDir = path.join(checkpointsDir, String(seq));
+  if (!fs.existsSync(targetDir)) return null;
+
+  const meta = applyCheckpointRestore(targetDir, workspaceRoot);
+  if (!meta) return null;
+
+  // Remove this checkpoint and any newer ones
+  const dirs = fs
+    .readdirSync(checkpointsDir)
+    .filter((n) => /^\d+$/.test(n))
+    .map((n) => Number.parseInt(n, 10))
+    .filter((n) => n >= seq);
+
+  if (opts?.backup) {
+    const backupDir = path.join(checkpointsDir, ".backup", String(Date.now()));
+    fs.mkdirSync(backupDir, { recursive: true });
+    for (const s of dirs) {
+      const src = path.join(checkpointsDir, String(s));
+      const dst = path.join(backupDir, String(s));
+      try {
+        fs.cpSync(src, dst, { recursive: true });
+      } catch {
+        // best-effort backup
+      }
+    }
+  }
+
+  for (const s of dirs) {
+    const dir = path.join(checkpointsDir, String(s));
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  }
+
+  return meta;
 }
 
 /** List all checkpoints for a run, newest first. */
@@ -195,7 +295,9 @@ export function listCheckpoints(
     const metaPath = path.join(checkpointsDir, name, "_meta.json");
     if (!fs.existsSync(metaPath)) continue;
     try {
-      const meta = JSON.parse(fs.readFileSync(metaPath, "utf8")) as CheckpointEntry;
+      const meta = JSON.parse(
+        fs.readFileSync(metaPath, "utf8"),
+      ) as CheckpointEntry;
       out.push(meta);
     } catch {
       // skip corrupt

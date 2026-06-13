@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 
 /** Path segments blocked for read/list (V2 path guard). */
@@ -12,6 +13,10 @@ export const SENSITIVE_PATH_SEGMENTS = new Set([
   "secrets",
   ".aws",
   ".gcloud",
+  ".netrc",
+  ".npmrc",
+  "authorized_keys",
+  "known_hosts",
 ]);
 
 export type PathRisk = "safe" | "sensitive" | "escaped" | "invalid";
@@ -41,6 +46,25 @@ export function isPathInsideRoot(
   );
 }
 
+function nearestExistingPath(absPath: string, rootAbs: string): string {
+  let current = absPath;
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return current;
+    }
+    if (!isPathInsideRoot(rootAbs, parent) && parent !== rootAbs) {
+      return parent;
+    }
+    current = parent;
+  }
+  return current;
+}
+
+function realpathExisting(absPath: string): string {
+  return fs.realpathSync.native?.(absPath) ?? fs.realpathSync(absPath);
+}
+
 function segments(absPath: string): string[] {
   return absPath.split(path.sep).filter((p) => p.length > 0);
 }
@@ -64,8 +88,10 @@ export function checkWorkspacePath(
   userPath: string,
 ): PathDecision {
   let rootAbs: string;
+  let rootReal: string;
   try {
     rootAbs = path.resolve(workspaceRoot);
+    rootReal = realpathExisting(rootAbs);
   } catch {
     return {
       allowed: false,
@@ -95,6 +121,26 @@ export function checkWorkspacePath(
       resolvedPath: candidate,
       risk: "escaped",
       reason: `Path escapes workspace root: ${rootAbs}`,
+    };
+  }
+
+  try {
+    const existing = nearestExistingPath(candidate, rootAbs);
+    const existingReal = realpathExisting(existing);
+    if (!isPathInsideRoot(rootReal, existingReal)) {
+      return {
+        allowed: false,
+        resolvedPath: candidate,
+        risk: "escaped",
+        reason: `Path escapes workspace root via symlink: ${rootReal}`,
+      };
+    }
+  } catch {
+    return {
+      allowed: false,
+      resolvedPath: candidate,
+      risk: "invalid",
+      reason: "Path could not be checked against real workspace path",
     };
   }
 

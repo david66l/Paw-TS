@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  formatTodosForPrompt,
-  InMemoryTodoStore,
-} from "../src/todo.js";
+import { InMemoryTodoStore, formatTodosForPrompt } from "../src/todo.js";
 
 describe("InMemoryTodoStore", () => {
   test("starts empty", () => {
@@ -15,7 +12,7 @@ describe("InMemoryTodoStore", () => {
     const store = new InMemoryTodoStore();
     store.add({ id: "1", content: "task a", status: "pending" });
     expect(store.items.length).toBe(1);
-    expect(store.items[0]!.content).toBe("task a");
+    expect(store.items[0]?.content).toBe("task a");
   });
 
   test("updates existing by id", () => {
@@ -23,18 +20,23 @@ describe("InMemoryTodoStore", () => {
     store.add({ id: "1", content: "task a", status: "pending" });
     store.add({ id: "1", content: "task a updated", status: "done" });
     expect(store.items.length).toBe(1);
-    expect(store.items[0]!.status).toBe("done");
-    expect(store.items[0]!.content).toBe("task a updated");
+    expect(store.items[0]?.status).toBe("done");
+    expect(store.items[0]?.content).toBe("task a updated");
   });
 
   test("update patches partial fields", () => {
     const store = new InMemoryTodoStore();
-    store.add({ id: "1", content: "task a", status: "pending", priority: "high" });
+    store.add({
+      id: "1",
+      content: "task a",
+      status: "pending",
+      priority: "high",
+    });
     const ok = store.update("1", { status: "in_progress" });
     expect(ok).toBe(true);
-    expect(store.items[0]!.status).toBe("in_progress");
-    expect(store.items[0]!.content).toBe("task a");
-    expect(store.items[0]!.priority).toBe("high");
+    expect(store.items[0]?.status).toBe("in_progress");
+    expect(store.items[0]?.content).toBe("task a");
+    expect(store.items[0]?.priority).toBe("high");
   });
 
   test("update returns false for missing id", () => {
@@ -68,11 +70,9 @@ describe("InMemoryTodoStore", () => {
   test("set replaces all", () => {
     const store = new InMemoryTodoStore();
     store.add({ id: "1", content: "a", status: "pending" });
-    store.set([
-      { id: "3", content: "c", status: "done" },
-    ]);
+    store.set([{ id: "3", content: "c", status: "done" }]);
     expect(store.items.length).toBe(1);
-    expect(store.items[0]!.id).toBe("3");
+    expect(store.items[0]?.id).toBe("3");
   });
 });
 
@@ -83,7 +83,12 @@ describe("formatTodosForPrompt", () => {
 
   test("formats items", () => {
     const items = [
-      { id: "1", content: "fix bug", status: "in_progress" as const, priority: "high" as const },
+      {
+        id: "1",
+        content: "fix bug",
+        status: "in_progress" as const,
+        priority: "high" as const,
+      },
       { id: "2", content: "write tests", status: "pending" as const },
     ];
     const text = formatTodosForPrompt(items);

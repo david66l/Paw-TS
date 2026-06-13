@@ -1,12 +1,12 @@
 /**
- * Compression agent — forks a sub-agent to generate a conversation summary.
- *
- * Uses the existing {@link SubAgentLauncher} so the summary runs in an
- * isolated orchestrator with its own context manager.
+ * Compression agent — single model call to generate a conversation summary.
  */
 
 import type { SessionMemory } from "@paw/core";
-import type { SubAgentLauncher } from "@paw/harness";
+import { parseMarkdownSections } from "@paw/core";
+import type { LanguageModel } from "@paw/models";
+
+import { completeAuxiliaryTask } from "./auxiliary-complete.js";
 
 export interface CompressionAgentResult {
   /** The markdown summary text that replaces compressed history. */
@@ -15,25 +15,34 @@ export interface CompressionAgentResult {
   readonly sessionMemory: SessionMemory;
 }
 
+const COMPRESSION_SYSTEM = `You are a context compression assistant. Distill conversation history into structured markdown so the AI can continue without re-reading the full thread. Be concise but preserve actionable information.`;
+
+const COMPRESSION_SECTIONS = `Respond with ONLY a markdown document containing these sections:
+## Active Task
+## Goal
+## Progress
+## Key Decisions
+## Relevant Files
+## Errors & Fixes
+## Next Steps
+## Pending Questions`;
+
 /**
- * Fork a sub-agent to summarize a conversation segment.
- *
- * The sub-agent receives a prompt with the conversation history and
- * returns a structured markdown summary.  The summary is parsed into
- * both a compact context message and a {@link SessionMemory} object.
+ * Summarize a conversation segment via one cheap completion (no sub-agent orchestrator).
  */
 export async function runCompressionAgent(
-  launcher: SubAgentLauncher,
+  model: LanguageModel,
   prompt: string,
   runId: string,
+  signal?: AbortSignal,
 ): Promise<CompressionAgentResult> {
-  const goal = `Compress the following conversation into a structured summary.\n\n${prompt}\n\nRespond with ONLY a markdown document containing these sections:\n## Active Task\n## Goal\n## Progress\n## Key Decisions\n## Relevant Files\n## Errors & Fixes\n## Next Steps\n## Pending Questions`;
+  const summary = await completeAuxiliaryTask({
+    model,
+    system: COMPRESSION_SYSTEM,
+    user: `${prompt}\n\n${COMPRESSION_SECTIONS}`,
+    signal,
+  });
 
-  const result = await launcher.launch(goal, 3);
-
-  const summary = result.result ?? "";
-
-  // Parse the summary into a SessionMemory object
   const sessionMemory = parseSummaryToSessionMemory(summary, runId);
 
   return { summary, sessionMemory };
@@ -47,10 +56,10 @@ function parseSummaryToSessionMemory(
 
   return {
     session: runId,
-    project: "", // filled in by caller
+    project: "",
     updatedAt: Date.now(),
     task: sections["active task"],
-    currentState: sections["progress"],
+    currentState: sections.progress,
     filesAndFunctions: sections["relevant files"]
       ?.split("\n")
       .filter((l) => l.trim().startsWith("- ") || l.trim().startsWith("`"))
@@ -68,28 +77,4 @@ function parseSummaryToSessionMemory(
         ? `Next Steps:\n${sections["next steps"] ?? ""}\n\nPending Questions:\n${sections["pending questions"] ?? ""}`
         : undefined,
   };
-}
-
-function parseMarkdownSections(text: string): Record<string, string> {
-  const sections: Record<string, string> = {};
-  const lines = text.split("\n");
-  let currentHeading: string | null = null;
-  const currentLines: string[] = [];
-
-  for (const line of lines) {
-    const headingMatch = line.match(/^##\s+(.+)$/i);
-    if (headingMatch) {
-      if (currentHeading) {
-        sections[currentHeading.toLowerCase()] = currentLines.join("\n").trim();
-      }
-      currentHeading = headingMatch[1]!;
-      currentLines.length = 0;
-    } else if (currentHeading) {
-      currentLines.push(line);
-    }
-  }
-  if (currentHeading) {
-    sections[currentHeading.toLowerCase()] = currentLines.join("\n").trim();
-  }
-  return sections;
 }

@@ -77,7 +77,9 @@ function walkAstForSymbols(
   }
 
   if (ts.isFunctionDeclaration(node) && node.name) {
-    const pos = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile));
+    const pos = sourceFile.getLineAndCharacterOfPosition(
+      node.name.getStart(sourceFile),
+    );
     symbols.push({
       name: node.name.text,
       kind: "function",
@@ -85,7 +87,9 @@ function walkAstForSymbols(
       character: pos.character + 1,
     });
   } else if (ts.isClassDeclaration(node) && node.name) {
-    const pos = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile));
+    const pos = sourceFile.getLineAndCharacterOfPosition(
+      node.name.getStart(sourceFile),
+    );
     symbols.push({
       name: node.name.text,
       kind: "class",
@@ -99,7 +103,9 @@ function walkAstForSymbols(
         member.name &&
         ts.isIdentifier(member.name)
       ) {
-        const mPos = sourceFile.getLineAndCharacterOfPosition(member.name.getStart(sourceFile));
+        const mPos = sourceFile.getLineAndCharacterOfPosition(
+          member.name.getStart(sourceFile),
+        );
         symbols.push({
           name: `${node.name.text}.${member.name.text}`,
           kind: ts.isMethodDeclaration(member) ? "method" : "property",
@@ -109,7 +115,9 @@ function walkAstForSymbols(
       }
     }
   } else if (ts.isInterfaceDeclaration(node)) {
-    const pos = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile));
+    const pos = sourceFile.getLineAndCharacterOfPosition(
+      node.name.getStart(sourceFile),
+    );
     symbols.push({
       name: node.name.text,
       kind: "interface",
@@ -117,7 +125,9 @@ function walkAstForSymbols(
       character: pos.character + 1,
     });
   } else if (ts.isTypeAliasDeclaration(node)) {
-    const pos = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile));
+    const pos = sourceFile.getLineAndCharacterOfPosition(
+      node.name.getStart(sourceFile),
+    );
     symbols.push({
       name: node.name.text,
       kind: "type",
@@ -127,7 +137,9 @@ function walkAstForSymbols(
   } else if (ts.isVariableStatement(node)) {
     for (const decl of node.declarationList.declarations) {
       if (ts.isIdentifier(decl.name)) {
-        const pos = sourceFile.getLineAndCharacterOfPosition(decl.name.getStart(sourceFile));
+        const pos = sourceFile.getLineAndCharacterOfPosition(
+          decl.name.getStart(sourceFile),
+        );
         symbols.push({
           name: decl.name.text,
           kind: "variable",
@@ -140,7 +152,9 @@ function walkAstForSymbols(
     // Named exports: export { a, b }
     if (node.exportClause && ts.isNamedExports(node.exportClause)) {
       for (const elem of node.exportClause.elements) {
-        const pos = sourceFile.getLineAndCharacterOfPosition(elem.name.getStart(sourceFile));
+        const pos = sourceFile.getLineAndCharacterOfPosition(
+          elem.name.getStart(sourceFile),
+        );
         symbols.push({
           name: elem.name.text,
           kind: "export",
@@ -152,7 +166,9 @@ function walkAstForSymbols(
   } else if (ts.isExportAssignment(node)) {
     // export default <expr>
     if (ts.isIdentifier(node.expression)) {
-      const pos = sourceFile.getLineAndCharacterOfPosition(node.expression.getStart(sourceFile));
+      const pos = sourceFile.getLineAndCharacterOfPosition(
+        node.expression.getStart(sourceFile),
+      );
       symbols.push({
         name: `default (${node.expression.text})`,
         kind: "export",
@@ -162,7 +178,9 @@ function walkAstForSymbols(
     }
   }
 
-  ts.forEachChild(node, (child) => walkAstForSymbols(child, sourceFile, symbols, depth + 1));
+  ts.forEachChild(node, (child) =>
+    walkAstForSymbols(child, sourceFile, symbols, depth + 1),
+  );
 }
 
 function extractSymbolsFromFile(filePath: string): SymbolInfo[] {
@@ -192,13 +210,20 @@ function extractSymbolsFromFile(filePath: string): SymbolInfo[] {
   const scriptKind = (() => {
     const ext = path.extname(filePath).toLowerCase();
     switch (ext) {
-      case ".tsx": return ts.ScriptKind.TSX;
-      case ".jsx": return ts.ScriptKind.JSX;
-      case ".js": return ts.ScriptKind.JS;
-      case ".mjs": return ts.ScriptKind.JS;
-      case ".cjs": return ts.ScriptKind.JS;
-      case ".json": return ts.ScriptKind.JSON;
-      default: return ts.ScriptKind.TS;
+      case ".tsx":
+        return ts.ScriptKind.TSX;
+      case ".jsx":
+        return ts.ScriptKind.JSX;
+      case ".js":
+        return ts.ScriptKind.JS;
+      case ".mjs":
+        return ts.ScriptKind.JS;
+      case ".cjs":
+        return ts.ScriptKind.JS;
+      case ".json":
+        return ts.ScriptKind.JSON;
+      default:
+        return ts.ScriptKind.TS;
     }
   })();
 
@@ -270,7 +295,11 @@ export function searchWorkspaceSymbols(
     useRegex?: boolean;
   } = {},
 ): SymbolSearchResponse {
-  const { maxResults = MAX_TOTAL_RESULTS, maxFiles = MAX_FILES, useRegex = false } = options;
+  const {
+    maxResults = MAX_TOTAL_RESULTS,
+    maxFiles = MAX_FILES,
+    useRegex = false,
+  } = options;
 
   let matcher: (name: string) => boolean;
   if (useRegex) {
@@ -298,7 +327,10 @@ export function searchWorkspaceSymbols(
     if (matched.length === 0) {
       continue;
     }
-    const rel = path.relative(workspaceRoot, filePath).split(path.sep).join("/");
+    const rel = path
+      .relative(workspaceRoot, filePath)
+      .split(path.sep)
+      .join("/");
     const capped = matched.slice(0, MAX_RESULTS_PER_FILE);
     matches.push({ file: rel, symbols: capped });
     totalSymbols += capped.length;

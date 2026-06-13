@@ -30,17 +30,26 @@ export class WorkspaceWatcher {
     this.active = true;
 
     try {
-      this.watcher = fs.watch(this.workspaceRoot, { recursive: true }, (_eventType, filename) => {
-        if (!filename || typeof filename !== "string") {
-          return;
-        }
-        // Ignore .git, .paw, and common build directories
-        const parts = filename.split(path.sep);
-        if (parts[0] === ".git" || parts[0] === ".paw" || parts[0] === "node_modules") {
-          return;
-        }
-        this.changedFiles.add(filename);
-      });
+      this.watcher = fs.watch(
+        this.workspaceRoot,
+        { recursive: true },
+        (_eventType, filename) => {
+          if (!filename || typeof filename !== "string") {
+            return;
+          }
+          // Ignore .git, .paw, node_modules, and common build artifacts
+          const parts = filename.split(path.sep);
+          if (
+            parts.includes(".git") ||
+            parts.includes(".paw") ||
+            parts.includes("node_modules") ||
+            parts.includes(".next")
+          ) {
+            return;
+          }
+          this.changedFiles.add(filename);
+        },
+      );
     } catch (err) {
       // fs.watch with recursive may fail on some platforms (e.g., Linux).
       // Fall back to non-recursive watch on the workspace root as best effort.
@@ -49,7 +58,13 @@ export class WorkspaceWatcher {
         this.watcher = fs.watch(this.workspaceRoot, (_eventType, filename) => {
           if (!filename || typeof filename !== "string") return;
           const parts = filename.split(path.sep);
-          if (parts[0] === ".git" || parts[0] === ".paw" || parts[0] === "node_modules") return;
+          if (
+            parts.includes(".git") ||
+            parts.includes(".paw") ||
+            parts.includes("node_modules") ||
+            parts.includes(".next")
+          )
+            return;
           this.changedFiles.add(filename);
         });
         this.active = true;

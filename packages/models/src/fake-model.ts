@@ -8,13 +8,38 @@ import type {
   ModelStreamChunk,
 } from "./types.js";
 
+export interface FakeModelResponse {
+  readonly text?: string;
+  readonly usage?: ModelTokenUsage;
+  readonly finishReason?: "stop" | "length" | "max_tokens";
+  readonly error?: Error | string;
+}
+
+export interface FakeLanguageModelOptions {
+  /** Preset responses served sequentially per call. Falls back to heuristics when exhausted. */
+  readonly responses?: readonly FakeModelResponse[];
+}
+
 /**
  * Deterministic model for tests and offline runs.
  * If the last user message looks like a write/read/list intent, returns a JSON tool line
  * the orchestrator can parse; otherwise returns plain assistant text.
+ *
+ * When `responses` is provided, each call consumes the next response in order.
+ * If a response has `error`, it is thrown instead of returned.
  */
 export class FakeLanguageModel implements LanguageModel {
   readonly label = "fake";
+  private readonly responses?: readonly FakeModelResponse[];
+  private _callCount = 0;
+
+  get callCount(): number {
+    return this._callCount;
+  }
+
+  constructor(opts?: FakeLanguageModelOptions) {
+    this.responses = opts?.responses;
+  }
 
   async complete(
     messages: readonly ChatMessage[],
@@ -22,6 +47,21 @@ export class FakeLanguageModel implements LanguageModel {
   ): Promise<ModelCompletionResult> {
     if (options?.signal?.aborted) {
       throw abortError();
+    }
+    this._callCount++;
+    const response = this.responses?.[this._callCount - 1];
+    if (response) {
+      if (response.error) {
+        throw response.error instanceof Error
+          ? response.error
+          : new Error(response.error);
+      }
+      const text = response.text ?? "";
+      return {
+        text,
+        usage: response.usage ?? estimateUsage(messages, text),
+        finishReason: response.finishReason,
+      };
     }
     const text = await this.computeText(messages);
     return {
@@ -42,7 +82,7 @@ export class FakeLanguageModel implements LanguageModel {
         delta: res.text.slice(i, i + step),
       };
     }
-    yield { type: "done", usage: res.usage };
+    yield { type: "done", usage: res.usage, finishReason: res.finishReason };
   }
 
   private async computeText(messages: readonly ChatMessage[]): Promise<string> {
@@ -53,8 +93,8 @@ export class FakeLanguageModel implements LanguageModel {
       .replace(/<auto-context>[\s\S]*?<\/auto-context>/g, "")
       .replace(/<files>[\s\S]*?<\/files>/g, "")
       .trim();
-    if (text.includes("Tool result")) {
-      return "Fake model: reviewed tool output; no further tools.";
+    if (text.startsWith("[Tool ") || text.includes("Tool result")) {
+      return `Fake model: reviewed tool output; no further tools.\n{"action":"final_answer","summary":"Fake model completed after reviewing tool results."}`;
     }
     const lower = text.toLowerCase();
     if (wantsWebsiteOrPortfolio(text)) {
@@ -90,11 +130,16 @@ export class FakeLanguageModel implements LanguageModel {
       const args = { pattern, path: inPath };
       return `Searching the workspace.\n{"tool":"workspace.search","args":${JSON.stringify(args)}}`;
     }
-    if (/\bread\s+(?:both|two)\b/.test(lower) || /\bread\s+files?\b/.test(lower)) {
+    if (
+      /\bread\s+(?:both|two)\b/.test(lower) ||
+      /\bread\s+files?\b/.test(lower)
+    ) {
       const quotes = [...text.matchAll(/["']([^"']*)["']/g)].map((m) => m[1]);
       const lines: string[] = [];
       for (const p of quotes.slice(0, 2)) {
-        lines.push(`{"tool":"workspace.read_file","args":{"path":${JSON.stringify(p)}}}`);
+        lines.push(
+          `{"tool":"workspace.read_file","args":{"path":${JSON.stringify(p)}}}`,
+        );
       }
       return `Reading files in parallel.\n${lines.join("\n")}`;
     }

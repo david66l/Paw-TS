@@ -30,6 +30,33 @@ describe("checkWorkspacePath", () => {
     expect(d.risk).toBe("sensitive");
     fs.rmSync(root, { recursive: true, force: true });
   });
+
+  test("rejects symlink escape for existing target", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-ws-"));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "paw-out-"));
+    fs.writeFileSync(path.join(outside, "secret.txt"), "nope");
+    fs.symlinkSync(outside, path.join(root, "linked"), "dir");
+
+    const d = checkWorkspacePath(root, "linked/secret.txt");
+    expect(d.allowed).toBe(false);
+    expect(d.risk).toBe("escaped");
+
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  });
+
+  test("rejects symlink escape when target file does not exist yet", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-ws-"));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "paw-out-"));
+    fs.symlinkSync(outside, path.join(root, "linked"), "dir");
+
+    const d = checkWorkspacePath(root, "linked/new.txt");
+    expect(d.allowed).toBe(false);
+    expect(d.risk).toBe("escaped");
+
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  });
 });
 
 describe("isPathInsideRoot", () => {

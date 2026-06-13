@@ -1,14 +1,14 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  type AppState,
   FileSystemAppStateStore,
   InMemoryAppStateStore,
   appStateSummary,
   isAppStateFinished,
-  type AppState,
 } from "../src/app-state.js";
 
 function makeState(overrides?: Partial<AppState>): AppState {
@@ -31,8 +31,8 @@ describe("InMemoryAppStateStore", () => {
     store.save(state);
     const loaded = store.load("r1");
     expect(loaded).not.toBeNull();
-    expect(loaded!.runId).toBe("r1");
-    expect(loaded!.goal).toBe("test goal");
+    expect(loaded?.runId).toBe("r1");
+    expect(loaded?.goal).toBe("test goal");
   });
 
   test("load missing returns null", () => {
@@ -46,8 +46,8 @@ describe("InMemoryAppStateStore", () => {
     store.save(makeState({ runId: "b", savedAt: 2000 }));
     const list = store.list();
     expect(list.length).toBe(2);
-    expect(list[0]!.runId).toBe("b");
-    expect(list[1]!.runId).toBe("a");
+    expect(list[0]?.runId).toBe("b");
+    expect(list[1]?.runId).toBe("a");
   });
 
   test("delete removes state", () => {
@@ -76,7 +76,7 @@ describe("FileSystemAppStateStore", () => {
     store.save(state);
     const loaded = store.load("r1");
     expect(loaded).not.toBeNull();
-    expect(loaded!.runId).toBe("r1");
+    expect(loaded?.runId).toBe("r1");
   });
 
   test("load missing returns null", () => {
@@ -88,7 +88,7 @@ describe("FileSystemAppStateStore", () => {
     store.save(makeState({ runId: "b", savedAt: 2000 }));
     const list = store.list();
     expect(list.length).toBe(2);
-    expect(list[0]!.runId).toBe("b");
+    expect(list[0]?.runId).toBe("b");
   });
 
   test("delete removes file", () => {

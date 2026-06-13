@@ -2,8 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid",
     "rootDir": ".",
     "outDir": "dist",
     "noEmit": true,

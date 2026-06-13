@@ -1,8 +1,8 @@
-import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { AutoMemoryStore, type AutoMemoryEntry } from "../src/auto-memory.js";
+import { type AutoMemoryEntry, AutoMemoryStore } from "../src/auto-memory.js";
 
 describe("AutoMemoryStore", () => {
   let tmpDir: string;
@@ -10,14 +10,20 @@ describe("AutoMemoryStore", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(path.join(tmpdir(), "paw-auto-memory-"));
-    store = new AutoMemoryStore({ workspaceRoot: tmpDir, memoryDir: path.join(tmpDir, "memory") });
+    store = new AutoMemoryStore({
+      workspaceRoot: tmpDir,
+      memoryDir: path.join(tmpDir, "memory"),
+    });
   });
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function makeEntry(name: string, overrides?: Partial<AutoMemoryEntry>): AutoMemoryEntry {
+  function makeEntry(
+    name: string,
+    overrides?: Partial<AutoMemoryEntry>,
+  ): AutoMemoryEntry {
     return {
       name,
       description: "Test description",
@@ -33,10 +39,10 @@ describe("AutoMemoryStore", () => {
       store.save(entry);
       const loaded = store.load("test-entry");
       expect(loaded).not.toBeNull();
-      expect(loaded!.name).toBe("test-entry");
-      expect(loaded!.description).toBe("Test description");
-      expect(loaded!.type).toBe("reference");
-      expect(loaded!.content).toBe("Test content");
+      expect(loaded?.name).toBe("test-entry");
+      expect(loaded?.description).toBe("Test description");
+      expect(loaded?.type).toBe("reference");
+      expect(loaded?.content).toBe("Test content");
     });
 
     it("returns null for missing entry", () => {
@@ -48,7 +54,7 @@ describe("AutoMemoryStore", () => {
       store.save(makeEntry("entry", { content: "First" }));
       store.save(makeEntry("entry", { content: "Second" }));
       const loaded = store.load("entry");
-      expect(loaded!.content).toBe("Second");
+      expect(loaded?.content).toBe("Second");
     });
 
     it("creates MEMORY.md index on buildIndex", () => {
@@ -58,6 +64,17 @@ describe("AutoMemoryStore", () => {
       expect(existsSync(indexPath)).toBe(true);
       const index = readFileSync(indexPath, "utf-8");
       expect(index).toContain("entry-a");
+    });
+
+    it("loadIndex returns truncated index", () => {
+      for (let i = 0; i < 5; i++) {
+        store.save(makeEntry(`entry-${i}`, { description: `desc ${i}` }));
+      }
+      store.buildIndex();
+      const full = store.loadIndex(200);
+      expect(full).toContain("entry-0");
+      const truncated = store.loadIndex(3);
+      expect(truncated).toContain("omitted");
     });
   });
 
@@ -110,12 +127,61 @@ describe("AutoMemoryStore", () => {
     });
   });
 
+  describe("upsert", () => {
+    it("creates when no similar entry exists", () => {
+      const action = store.upsert(makeEntry("new-entry"));
+      expect(action).toBe("created");
+      expect(store.load("new-entry")).not.toBeNull();
+    });
+
+    it("updates by matching description", () => {
+      store.save(makeEntry("original", { description: "Same desc" }));
+      const action = store.upsert(
+        makeEntry("different-name", {
+          description: "Same desc",
+          content: "Updated body",
+        }),
+      );
+      expect(action).toBe("updated");
+      expect(store.load("original")?.content).toBe("Updated body");
+      expect(store.load("different-name")).toBeNull();
+    });
+
+    it("updates by exact name", () => {
+      store.save(makeEntry("entry", { content: "v1" }));
+      const action = store.upsert(makeEntry("entry", { content: "v2" }));
+      expect(action).toBe("updated");
+      expect(store.load("entry")?.content).toBe("v2");
+    });
+
+    it("preserves createdAt on update", () => {
+      const created = 1_700_000_000_000;
+      store.save(
+        makeEntry("entry", { content: "v1", createdAt: created, updatedAt: created }),
+      );
+      store.upsert(
+        makeEntry("entry", {
+          content: "v2",
+          updatedAt: created + 1000,
+        }),
+      );
+      const loaded = store.load("entry");
+      expect(loaded?.createdAt).toBe(created);
+      expect(loaded?.updatedAt).toBe(created + 1000);
+    });
+  });
+
   describe("type validation", () => {
     it("accepts valid types", () => {
-      for (const type of ["user", "feedback", "project", "reference"] as const) {
+      for (const type of [
+        "user",
+        "feedback",
+        "project",
+        "reference",
+      ] as const) {
         store.save(makeEntry(type, { type }));
         const loaded = store.load(type);
-        expect(loaded!.type).toBe(type);
+        expect(loaded?.type).toBe(type);
       }
     });
 

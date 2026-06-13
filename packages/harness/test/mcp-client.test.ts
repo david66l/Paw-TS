@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  McpClientManager,
-  type McpServerConfig,
-} from "../src/mcp-client.js";
+import { McpClientManager, type McpServerConfig } from "../src/mcp-client.js";
 
 describe("McpClientManager", () => {
   test("parseToolId parses valid mcp tool ids", () => {

@@ -22,11 +22,31 @@ export {
 } from "./app-state.js";
 export {
   CostTracker,
+  estimateUsageCost,
+  resolveModelPricing,
+  type CostCurrency,
   type CostSnapshot,
   type ModelPricing,
+  type UsageRecord,
 } from "./cost-tracker.js";
-export { isPawError, PawError, type PawErrorCode } from "./errors.js";
+export {
+  isPawError,
+  makeToolError,
+  PawError,
+  type PawErrorCode,
+  type ToolErrorCode,
+  type ToolErrorPayload,
+} from "./errors.js";
 export type { RunEvent, RunEventEnvelope } from "./run-events.js";
+export {
+  formatRunMetricsSummary,
+  type RunMetrics,
+  type RunMetricsAccumulator,
+} from "./run-metrics.js";
+export {
+  evaluateRunFromEnvelopes,
+  evaluateRunFromJsonl,
+} from "./run-evaluator.js";
 export {
   estimateTokens,
   estimateMessageTokens,
@@ -38,16 +58,46 @@ export {
   type PruneResult,
 } from "./context-pruner.js";
 export {
+  DEFAULT_KEEP_RECENT_TOOLS,
+  DEFAULT_MAX_TOOL_OUTPUT_BYTES,
+  getToolResultsDir,
+  isPersistedToolResult,
+} from "./tool-result-storage.js";
+export {
   SessionMemoryStore,
   type SessionMemory,
 } from "./session-memory.js";
 export {
   ContextCompactor,
+  CONTEXT_SUMMARY_PREFIX,
   DEFAULT_COMPACTOR_CONFIG,
+  stripContextSummaryMessages,
+  isContextSummaryMessage,
   type CompactorConfig,
   type CompactBoundaries,
   type CompactCheck,
 } from "./context-compactor.js";
+export {
+  allocateContextBudget,
+  DEFAULT_BUDGET_RATIOS,
+  LARGE_WINDOW_BUDGET_RATIOS,
+  measureContextBudget,
+  resolveBudgetRatios,
+  shouldCompactHistory,
+  truncateTextToTokenBudget,
+  MEMORY_INJECTION_DETAIL_TOKENS,
+  type ContextBudgetAllocation,
+  type ContextBudgetRatios,
+  type ContextBudgetSnapshot,
+} from "./context-budget.js";
+export {
+  compressionSavingsRatio,
+  meetsCompressionSavingsThreshold,
+  MIN_COMPRESSION_SAVINGS_RATIO,
+  parseMarkdownSections,
+  REQUIRED_SUMMARY_SECTIONS,
+  validateCompressionSummary,
+} from "./compression-summary.js";
 export type { ModelTokenUsage } from "./token-usage.js";
 export type { RunResult, RunSpec, RunStatus } from "./run.js";
 export {
@@ -74,6 +124,7 @@ export {
 export {
   isMutatingTool,
   listCheckpoints,
+  restoreCheckpoint,
   saveCheckpoint,
   undoLastCheckpoint,
   type CheckpointEntry,
@@ -86,3 +137,54 @@ export {
   AutoMemoryStore,
   type AutoMemoryEntry,
 } from "./auto-memory.js";
+export { findPawRoot } from "./find-root.js";
+export {
+  buildSystemPrompt,
+  buildSystemPromptWithBudget,
+  MAX_STEPS_WARNING,
+  type SystemPromptOptions,
+  type SystemPromptBuildResult,
+  type SystemPromptTrimEntry,
+} from "./system-prompt.js";
+
+export {
+  DEFAULT_CASCADE_CONFIG,
+  formatMemoryManifest,
+  LLM_FALLBACK_SCORE,
+  shouldEscalateToLlmFallback,
+  type CascadeFallbackConfig,
+  type LlmMemorySelectFn,
+  type LlmMemorySelectInput,
+} from "./memory-retrieval-cascade.js";
+export {
+  retrieveMemories,
+  type RetrieveMemoriesOptions,
+} from "./memory-retrieve.js";
+export {
+  UnifiedMemoryStore,
+  type UnifiedMemoryStoreOptions,
+} from "./unified-memory-store.js";
+export {
+  KeywordMemoryRetriever,
+  DEFAULT_RETRIEVAL_CONFIG,
+  type RetrievalConfig,
+  type RetrievalQuery,
+  type MemoryRetrievalResult,
+  type MemoryRetriever,
+} from "./memory-retriever.js";
+export {
+  sessionMemoryToRecord,
+  autoMemoryToRecord,
+  extractCleanMemoryQuery,
+  extractFilePaths,
+  extractErrorSignatures,
+  inferTags,
+  buildRetrievalSignalsFromMessages,
+  isMemoryMetaQuery,
+  isArchitectureQuery,
+  isReferenceMemory,
+  type MemoryRetrievalSignals,
+  type MemoryRecord,
+  type MemorySource,
+  type MemoryScope,
+} from "./memory-record.js";

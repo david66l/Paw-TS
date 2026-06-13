@@ -26,7 +26,10 @@ export interface PatchResult {
   readonly summary: string;
 }
 
-function countLinesChanged(patch: ReturnType<typeof parsePatch>[number]): { added: number; removed: number } {
+function countLinesChanged(patch: ReturnType<typeof parsePatch>[number]): {
+  added: number;
+  removed: number;
+} {
   let added = 0;
   let removed = 0;
   for (const hunk of patch.hunks) {
@@ -56,7 +59,11 @@ export function applyWorkspacePatch(
   try {
     patches = parsePatch(patchText);
   } catch {
-    return { ok: false, results: [], summary: "apply_patch: failed to parse patch" };
+    return {
+      ok: false,
+      results: [],
+      summary: "apply_patch: failed to parse patch",
+    };
   }
 
   if (patches.length === 0) {
@@ -97,7 +104,10 @@ export function applyWorkspacePatch(
   const originals = new Map<string, string>();
   for (const t of targets) {
     try {
-      if (fs.existsSync(t.resolvedPath) && fs.statSync(t.resolvedPath).isFile()) {
+      if (
+        fs.existsSync(t.resolvedPath) &&
+        fs.statSync(t.resolvedPath).isFile()
+      ) {
         originals.set(t.resolvedPath, fs.readFileSync(t.resolvedPath, "utf8"));
       } else if (t.patch.isCreate !== true) {
         return {
@@ -121,7 +131,9 @@ export function applyWorkspacePatch(
 
   for (const t of targets) {
     const original = originals.get(t.resolvedPath) ?? "";
-    const patched = applyPatch(original, t.patch, { autoConvertLineEndings: true });
+    const patched = applyPatch(original, t.patch, {
+      autoConvertLineEndings: true,
+    });
 
     if (patched === false) {
       // Rollback: restore all already-written files
@@ -176,10 +188,7 @@ export function applyWorkspacePatch(
       }
       return {
         ok: false,
-        results: [
-          ...results,
-          { path: t.relPath, ok: false, error: msg },
-        ],
+        results: [...results, { path: t.relPath, ok: false, error: msg }],
         summary: `apply_patch: write error on ${t.relPath}: ${msg}`,
       };
     }

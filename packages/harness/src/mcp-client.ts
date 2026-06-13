@@ -153,8 +153,7 @@ export class McpClientManager {
         }
       }
 
-      const payload =
-        text || (result.content as unknown) || { result: "done" };
+      const payload = text || (result.content as unknown) || { result: "done" };
 
       return {
         ok: true,
