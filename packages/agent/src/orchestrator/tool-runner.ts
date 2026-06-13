@@ -62,29 +62,43 @@ export async function executeToolCalls(
   // 1. Collect approvals (sequential – UI prompts must be ordered)
   const approvals: boolean[] = [];
   for (const call of calls) {
-    const gated =
-      toolNeedsApprovalGate(
-        call.tool,
-        call.args as Record<string, unknown> | undefined,
-        approvalCtx.approvalPolicy,
-      ) && approvalCtx.resolveToolApproval !== undefined;
+    const needsApproval = toolNeedsApprovalGate(
+      call.tool,
+      call.args as Record<string, unknown> | undefined,
+      approvalCtx.approvalPolicy,
+    );
 
-    if (gated && approvalCtx.resolveToolApproval) {
-      toolCtx.emit({
-        type: "tool.approval.pending",
-        tool: call.tool,
-        args: call.args,
-      });
-      const approved = await approvalCtx.resolveToolApproval({
-        tool: call.tool,
-        args: call.args,
-      });
-      toolCtx.emit({
-        type: "tool.approval.resolved",
-        tool: call.tool,
-        approved,
-      });
-      approvals.push(approved);
+    if (needsApproval) {
+      if (approvalCtx.resolveToolApproval) {
+        toolCtx.emit({
+          type: "tool.approval.pending",
+          tool: call.tool,
+          args: call.args,
+        });
+        const approved = await approvalCtx.resolveToolApproval({
+          tool: call.tool,
+          args: call.args,
+        });
+        toolCtx.emit({
+          type: "tool.approval.resolved",
+          tool: call.tool,
+          approved,
+        });
+        approvals.push(approved);
+      } else {
+        // No human in the loop — deny mutating tools by default
+        toolCtx.emit({
+          type: "tool.approval.pending",
+          tool: call.tool,
+          args: call.args,
+        });
+        toolCtx.emit({
+          type: "tool.approval.resolved",
+          tool: call.tool,
+          approved: false,
+        });
+        approvals.push(false);
+      }
     } else {
       approvals.push(true);
     }

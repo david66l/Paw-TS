@@ -37,6 +37,8 @@ export {
   type ToolErrorCode,
   type ToolErrorPayload,
 } from "./errors.js";
+export { sanitizeUserInput } from "./input-sanitizer.js";
+export type { SanitizeResult } from "./input-sanitizer.js";
 export type { EvalHooks } from "./eval-hooks.js";
 export type { RunEvent, RunEventEnvelope } from "./run-events.js";
 export {

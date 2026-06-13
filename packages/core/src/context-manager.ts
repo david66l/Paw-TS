@@ -10,6 +10,7 @@ import {
   type PruneResult,
   pruneToolResults,
 } from "./context-pruner.js";
+import { sanitizeUserInput } from "./input-sanitizer.js";
 import {
   ApproximateEstimator,
   type TokenEstimator,
@@ -58,12 +59,22 @@ export class ContextManager {
     this.systemMessage = { role: "system", content };
   }
 
-  /** Append a user message (optionally with attachments). */
+  /** Append a user message (optionally with attachments). Sanitizes tool-like patterns from user input. */
   addUser(content: string, attachments?: readonly Attachment[]): void {
+    // Sanitize user input to neutralize fake tool results and tool-call patterns.
+    // System-injected messages (tool results, nudges, warnings) are NOT sanitized.
+    const isSystemInjected =
+      content.startsWith("[") ||
+      content.startsWith("Note:") ||
+      content.startsWith("CRITICAL") ||
+      content.startsWith("<") ||
+      content.startsWith("#");
+    const sanitized = isSystemInjected ? content : sanitizeUserInput(content).text;
+
     const msg: ChatMessage =
       attachments && attachments.length > 0
-        ? { role: "user", content, attachments }
-        : { role: "user", content };
+        ? { role: "user", content: sanitized, attachments }
+        : { role: "user", content: sanitized };
     this.history.push(msg);
     this.maybeTruncate();
   }
