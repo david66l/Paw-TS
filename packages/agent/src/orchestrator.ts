@@ -714,7 +714,11 @@ export class AgentOrchestrator {
 
     // 5. Parse actions — prefer native tool_use over text scanning
     emit({ type: "phase", name: "parse" });
-    const knownTools = new Set(toolNameMap.values());
+    // Accept both sanitized names (e.g. workspace_read_file) and original names
+    const knownTools = new Set([
+      ...toolNameMap.values(),
+      ...toolNameMap.keys(),
+    ]);
     let toolCalls: AgentToolCallAction[];
     let reasoningText: string;
 
@@ -978,7 +982,13 @@ export class AgentOrchestrator {
       ...(tools && tools.length > 0 ? { tools } : {}),
     };
 
-    if (typeof streamFn === "function") {
+    // Qwen3 via vLLM ≤0.22 doesn't emit tool_use stream chunks — use non-streaming
+    const isQwen =
+      model.label.toLowerCase().includes("qwen") ||
+      model.label.toLowerCase().includes("/qwen");
+    const useStreaming = typeof streamFn === "function" && !isQwen;
+
+    if (useStreaming) {
       let acc = "";
       let thinkingAcc = "";
       let usage: ModelTokenUsage | undefined;

@@ -166,6 +166,8 @@ export class EvalRunner {
       model: this.opts.model,
       evalHooks: collector,
       memoryExtraction: "off", // disable for evals
+      // Sandbox mode: auto-approve mutating tools (workspace is isolated)
+      resolveToolApproval: async () => true,
     };
 
     const orchestrator = new AgentOrchestrator(orchestratorOpts);

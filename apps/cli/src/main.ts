@@ -174,6 +174,9 @@ async function main(): Promise<void> {
     const parIdx = argv.indexOf("--parallel");
     const parallel = parIdx !== -1 ? Number(argv[parIdx + 1]) : undefined;
     const sandbox = argv.includes("--sandbox");
+    const saveTracesIdx = argv.indexOf("--save-traces");
+    const saveTraces =
+      saveTracesIdx !== -1 ? argv[saveTracesIdx + 1] : undefined;
     const root = parseRootFromArgv(process.cwd(), argv);
 
     const r = await runEvalCommand({
@@ -185,6 +188,7 @@ async function main(): Promise<void> {
       parallel: Number.isFinite(parallel) ? parallel : undefined,
       workspaceRoot: root,
       sandbox,
+      saveTraces,
     });
     if (r.ok) {
       console.log(r.text);

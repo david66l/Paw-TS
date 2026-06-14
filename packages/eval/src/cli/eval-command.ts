@@ -4,9 +4,11 @@
  * Wired into apps/cli/src/main.ts via the `eval` subcommand.
  */
 
+import { writeFileSync } from "node:fs";
 import { listBuiltinSuites, resolveSuite } from "../test-suite/loader.js";
 import { EvalRunner, type EvalRunnerOptions } from "../runner.js";
 import type { ReportFormat } from "../scorer/reporter.js";
+import { exportSuccessfulRuns, toJsonl } from "../training-data-exporter.js";
 import { createDefaultLanguageModel, OpenAICompatibleModel } from "@paw/models";
 import {
   defaultSettingsPath,
@@ -26,6 +28,7 @@ export interface EvalCommandArgs {
   readonly parallel?: number;
   readonly workspaceRoot?: string;
   readonly sandbox?: boolean;
+  readonly saveTraces?: string;
 }
 
 export async function runEvalCommand(
@@ -94,6 +97,23 @@ async function runEval(
 
   try {
     const result = await runner.runSuite(suiteName, cases);
+
+    // Export training data if requested
+    if (args.saveTraces && result.allRecords.length > 0) {
+      const conversations = exportSuccessfulRuns(
+        result.allRecords,
+        result.aggregateReports,
+        70,
+      );
+      if (conversations.length > 0) {
+        const jsonl = toJsonl(conversations);
+        writeFileSync(args.saveTraces, jsonl + "\n", "utf-8");
+        console.log(
+          `\n[export] Saved ${conversations.length} training conversations to ${args.saveTraces}`,
+        );
+      }
+    }
+
     return { ok: result.overallPassRate >= 70, text: result.formattedReport };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
