@@ -103,7 +103,7 @@ async function runEval(
       const conversations = exportSuccessfulRuns(
         result.allRecords,
         result.aggregateReports,
-        70,
+        100,  // only 100% perfect runs as training data
       );
       if (conversations.length > 0) {
         const jsonl = toJsonl(conversations);

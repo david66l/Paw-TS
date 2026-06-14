@@ -1,0 +1,24 @@
+{
+  "paw_validation": {
+    "file_name": "training_data/stage_e_validation_30.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content"
+    }
+  },
+  "paw_full": {
+    "file_name": "training_data/stage_c_deepseek_teacher.jsonl,training_data/stage_d_deepseek_pro.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content"
+    }
+  }
+}
