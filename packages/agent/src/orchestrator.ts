@@ -924,7 +924,8 @@ export class AgentOrchestrator {
   ): string {
     let out = text
       .replace(/<overview>[\s\S]*?<\/overview>/gi, "")
-      .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
+      .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+      .replace(/<think>[\s\S]*?<\/think>/gi, "");
     if (nameMap && nameMap.size > 0) {
       for (const [sanitized, original] of nameMap) {
         out = out.split(`"${sanitized}"`).join(`"${original}"`);

@@ -8,6 +8,7 @@ export function stripAssistantTextForScrollback(text: string): string {
   const withoutTags = text
     .replace(/<overview>[\s\S]*?<\/overview>/gi, "")
     .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .trim();
 
   const finalAction = parseAgentActionFromModelText(withoutTags);
