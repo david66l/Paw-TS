@@ -405,7 +405,7 @@ function getMemorySection(opts: {
     "",
     "**Step 2** — add a pointer to that file in `MEMORY.md`. `MEMORY.md` is an index, not a memory — each entry should be one line, under ~150 characters: `- [Title](file.md) — one-line hook`. It has no frontmatter. Never write memory content directly into `MEMORY.md`.",
     "",
-    "- `MEMORY.md` index is injected below (truncated after 200 lines) — use `memory.read` for full entry content",
+    "- `MEMORY.md` index is injected below — use `memory.read` for full entry content",
     "- Keep the name, description, and type fields in memory files up-to-date with the content",
     "- Organize memory semantically by topic, not chronologically",
     "- Update or remove memories that turn out to be wrong or outdated",
@@ -417,15 +417,8 @@ function getMemorySection(opts: {
   ];
 
   if (opts.memoryIndex) {
-    let index = opts.memoryIndex;
-    const maxLines = opts.maxMemoryIndexLines;
-    if (maxLines !== undefined) {
-      const lines = index.split("\n");
-      if (lines.length > maxLines) {
-        index = `${lines.slice(0, maxLines).join("\n")}\n...(truncated)`;
-      }
-    }
-    lines.push("", "## Memory index (MEMORY.md)", "", index);
+    // A.4: Sharded index — no longer truncated to 200 lines
+    lines.push("", "## Memory index (MEMORY.md)", "", opts.memoryIndex);
   }
 
   return lines.join("\n");

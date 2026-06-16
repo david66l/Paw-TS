@@ -30,6 +30,7 @@ const FIXTURE_MEMORIES: MemoryRecord[] = [
     tags: ["reference"],
     relatedFiles: ["packages/workspace/src/path-guard.ts"],
     relatedErrors: [],
+      priority: "mid"
   },
   {
     id: "memory-retriever",
@@ -43,6 +44,7 @@ const FIXTURE_MEMORIES: MemoryRecord[] = [
     tags: ["reference"],
     relatedFiles: ["packages/core/src/memory-retriever.ts"],
     relatedErrors: [],
+      priority: "mid"
   },
   {
     id: "cost-tracker",
@@ -56,6 +58,7 @@ const FIXTURE_MEMORIES: MemoryRecord[] = [
     tags: ["project"],
     relatedFiles: ["packages/core/src/cost-tracker.ts"],
     relatedErrors: [],
+      priority: "mid"
   },
   {
     id: "session-compactor",
@@ -69,6 +72,7 @@ const FIXTURE_MEMORIES: MemoryRecord[] = [
     tags: ["memory"],
     relatedFiles: ["packages/core/src/context-compactor.ts"],
     relatedErrors: [],
+      priority: "mid"
   },
   {
     id: "session-path-guard",
@@ -82,6 +86,7 @@ const FIXTURE_MEMORIES: MemoryRecord[] = [
     tags: [],
     relatedFiles: ["packages/workspace/src/path-guard.ts"],
     relatedErrors: [],
+      priority: "mid"
   },
   {
     id: "orchestrator-ref",
@@ -95,6 +100,7 @@ const FIXTURE_MEMORIES: MemoryRecord[] = [
     tags: ["reference"],
     relatedFiles: ["packages/agent/src/orchestrator.ts"],
     relatedErrors: [],
+    priority: "mid",
   },
   {
     id: "user-pref",
@@ -108,6 +114,7 @@ const FIXTURE_MEMORIES: MemoryRecord[] = [
     tags: ["user"],
     relatedFiles: [],
     relatedErrors: [],
+    priority: "mid",
   },
 ];
 

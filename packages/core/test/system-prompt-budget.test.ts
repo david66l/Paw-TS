@@ -15,6 +15,7 @@ function makeMemory(id: string, content: string): MemoryRecord {
     tags: [],
     relatedFiles: [],
     relatedErrors: [],
+    priority: "mid",
   };
 }
 

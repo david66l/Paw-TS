@@ -48,6 +48,8 @@ import {
   DEFAULT_KEEP_RECENT_TOOLS,
   restoreCheckpoint,
   type ContextBudgetSnapshot,
+  EmbeddingCache,
+  resolveEmbeddingConfig,
   type EvalHooks,
   type TokenEstimator,
 } from "@paw/core";
@@ -69,6 +71,11 @@ import {
   extractThinkBlocks,
 } from "@paw/models";
 
+import {
+  defaultSettingsPath,
+  loadPawSettingsLocal,
+} from "@paw/settings";
+
 import { type PlanItem, TaskPlanner } from "@paw/store";
 
 import {
@@ -85,6 +92,10 @@ import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
 import { runMemoryExtractionAfterRun } from "./orchestrator/memory-extraction.js";
+import {
+  extractSessionHighlightsToAutoMemory,
+  maybeGenerateShortSessionMemory,
+} from "./orchestrator/session-summarizer.js";
 import type {
   PhaseContext,
   SharedContext,
@@ -418,7 +429,39 @@ export class AgentOrchestrator {
               turnAutoMemoryStore,
               emit,
               model,
+              workspaceRoot,
             );
+
+            // A.2.3: Short high-value run → generate lightweight session memory
+            if (this.auxiliaryModel) {
+              const allMsgs = ctxMgr.buildMessages();
+              const filePaths = new Set<string>();
+              const errors: string[] = [];
+              for (const msg of allMsgs) {
+                for (const fp of extractFilePaths(msg.content)) {
+                  filePaths.add(fp);
+                }
+                if (
+                  msg.role === "user" &&
+                  msg.content.startsWith("[Tool ") &&
+                  msg.content.includes("failed")
+                ) {
+                  errors.push(msg.content.slice(0, 200));
+                }
+              }
+              maybeGenerateShortSessionMemory({
+                runId,
+                goal: spec.goal,
+                turn: turn + 1,
+                finalText: state.message,
+                filePaths: [...filePaths],
+                errors,
+                model: this.auxiliaryModel,
+                workspaceRoot,
+              }).catch(() => {
+                /* best-effort */
+              });
+            }
           }
           return { runId, status: state.type, message: state.message };
         }
@@ -669,6 +712,16 @@ export class AgentOrchestrator {
               );
               this.compactCooldownTurns =
                 AgentOrchestrator.COMPACT_COOLDOWN_TURNS;
+
+              // A.2.1: Extract decisions & errors from session memory
+              // into permanent AutoMemory (best-effort, non-blocking)
+              extractSessionHighlightsToAutoMemory({
+                sessionMemory: memoryToSave,
+                autoMemoryStore: _autoMemoryStore,
+                workspaceRoot,
+              }).catch(() => {
+                /* best-effort */
+              });
             }
           }
         }
@@ -1485,7 +1538,7 @@ export class AgentOrchestrator {
     const cleanMemoryQuery = extractCleanMemoryQuery(spec.goal);
 
     const autoMemoryStore = new AutoMemoryStore({ workspaceRoot });
-    const memoryIndex = autoMemoryStore.loadIndex(200) ?? undefined;
+    const memoryIndex = (autoMemoryStore.loadAllIndexShards() ?? autoMemoryStore.loadIndex(200)) ?? undefined;
 
     const unifiedStore = new UnifiedMemoryStore({
       workspaceRoot,
@@ -1502,6 +1555,25 @@ export class AgentOrchestrator {
         ...retrievalSignals.recentFiles,
       ]),
     ];
+    // Compute query embedding for semantic boost (best-effort)
+    let queryEmbedding: number[] | undefined;
+    try {
+      const settings = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
+      const embConfig = resolveEmbeddingConfig(
+        settings as Record<string, unknown> as {
+          memory_embedding_model?: string;
+          ollama_host?: string;
+        },
+      );
+      if (embConfig) {
+        const cache = new EmbeddingCache(embConfig);
+        queryEmbedding =
+          (await cache.computeEmbedding(cleanMemoryQuery)) ?? undefined;
+      }
+    } catch {
+      // Settings or embedding unavailable — fall back to text similarity
+    }
+
     const retrievalQuery = {
       goal: cleanMemoryQuery,
       currentFile: queryFiles[0],
@@ -1511,6 +1583,7 @@ export class AgentOrchestrator {
       workspaceRoot,
       limit: 5,
       maxTokens: 1500,
+      ...(queryEmbedding ? { queryEmbedding } : {}),
     };
     const memoryResult = await retrieveMemories(
       unifiedStore,
@@ -1681,6 +1754,7 @@ export class AgentOrchestrator {
     autoMemoryStore: AutoMemoryStore,
     emit: (event: RunEvent) => void,
     model: LanguageModel,
+    workspaceRoot: string,
   ): Promise<void> {
     if (this.memoryExtraction === "off" || !this.auxiliaryModel) {
       return;
@@ -1691,7 +1765,9 @@ export class AgentOrchestrator {
       ctxMgr,
       autoMemoryStore,
       model: this.auxiliaryModel,
+      auxiliaryModel: this.auxiliaryModel,
       emit,
+      workspaceRoot,
     }).catch(() => {
       /* background extraction must not fail the run */
     });

@@ -16,6 +16,7 @@ function makeRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
     tags: [],
     relatedFiles: [],
     relatedErrors: [],
+    priority: "mid",
     ...overrides,
   };
 }
@@ -589,5 +590,61 @@ Progress: completed
     });
 
     expect(result.records[0]?.id).toBe("ref");
+  });
+
+  it("boosts high priority memories", () => {
+    const store = new FakeStore();
+    store.add(
+      makeRecord({
+        id: "high",
+        title: "Important architecture",
+        summary: "Important project architecture decision",
+        priority: "high",
+      }),
+    );
+    store.add(
+      makeRecord({
+        id: "mid",
+        title: "Architecture notes",
+        summary: "Architecture notes",
+        priority: "mid",
+      }),
+    );
+
+    const retriever = new KeywordMemoryRetriever(store as any);
+    const result = retriever.retrieve({
+      goal: "architecture",
+      workspaceRoot: "/tmp",
+    });
+
+    expect(result.records[0]?.id).toBe("high");
+  });
+
+  it("penalizes low priority memories", () => {
+    const store = new FakeStore();
+    store.add(
+      makeRecord({
+        id: "low",
+        title: "Temp debug note",
+        summary: "Temp debug note about architecture",
+        priority: "low",
+      }),
+    );
+    store.add(
+      makeRecord({
+        id: "mid",
+        title: "Architecture overview",
+        summary: "Architecture overview",
+        priority: "mid",
+      }),
+    );
+
+    const retriever = new KeywordMemoryRetriever(store as any);
+    const result = retriever.retrieve({
+      goal: "architecture",
+      workspaceRoot: "/tmp",
+    });
+
+    expect(result.records[0]?.id).toBe("mid");
   });
 });

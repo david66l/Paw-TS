@@ -63,18 +63,20 @@ describe("AutoMemoryStore", () => {
       const indexPath = path.join(tmpDir, "memory", "MEMORY.md");
       expect(existsSync(indexPath)).toBe(true);
       const index = readFileSync(indexPath, "utf-8");
-      expect(index).toContain("entry-a");
+      // A.4: MEMORY.md is now a master index, check the shard for actual entries
+      expect(index).toContain("MEMORY-1.md");
+      const shard1 = readFileSync(path.join(tmpDir, "memory", "MEMORY-1.md"), "utf-8");
+      expect(shard1).toContain("entry-a");
     });
 
-    it("loadIndex returns truncated index", () => {
+    it("loadAllIndexShards returns concatenated shards", () => {
       for (let i = 0; i < 5; i++) {
         store.save(makeEntry(`entry-${i}`, { description: `desc ${i}` }));
       }
       store.buildIndex();
-      const full = store.loadIndex(200);
+      const full = store.loadAllIndexShards();
       expect(full).toContain("entry-0");
-      const truncated = store.loadIndex(3);
-      expect(truncated).toContain("omitted");
+      expect(full).toContain("entry-4");
     });
   });
 
@@ -117,8 +119,10 @@ describe("AutoMemoryStore", () => {
       store.buildIndex();
       const indexPath = path.join(tmpDir, "memory", "MEMORY.md");
       const index = readFileSync(indexPath, "utf-8");
-      expect(index).toContain("keep");
-      expect(index).not.toContain("to-delete");
+      // A.4: MEMORY.md is master, check shard for entries
+      const shard1 = readFileSync(path.join(tmpDir, "memory", "MEMORY-1.md"), "utf-8");
+      expect(shard1).toContain("keep");
+      expect(shard1).not.toContain("to-delete");
     });
 
     it("is safe for non-existent entries", () => {

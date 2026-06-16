@@ -96,11 +96,17 @@ Respond with ONLY a markdown document containing memory entries in this format:
 ## Entry 1
 - **Name**: short_id_without_spaces
 - **Type**: user | feedback | project | reference
+- **Priority**: high | mid | low
 - **Description**: One-line description
 - **Content**: Detailed content to remember
 
 ## Entry 2
 ...
+
+Priority guidelines:
+- **high**: Core architecture knowledge, hard user constraints, critical bug fixes, essential reference docs
+- **mid**: (default) Useful project facts, general preferences, non-critical fixes
+- **low**: Temporary debug notes, one-off test commands, abandoned approaches
 
 If there is nothing worth remembering, respond with "No memories to extract."
 
@@ -146,6 +152,7 @@ function parseMemoryEntries(text: string): AutoMemoryEntry[] {
 
     let name = "";
     let type: AutoMemoryEntry["type"] = "reference";
+    let priority: AutoMemoryEntry["priority"] = "mid";
     let description = "";
     const contentLines: string[] = [];
     let inContent = false;
@@ -153,6 +160,7 @@ function parseMemoryEntries(text: string): AutoMemoryEntry[] {
     for (const line of lines.slice(1)) {
       const nameMatch = line.match(/^-\s*\*\*Name\*\*:\s*([^\s:]+)/i);
       const typeMatch = line.match(/^-\s*\*\*Type\*\*:\s*(.+)$/i);
+      const priorityMatch = line.match(/^-\s*\*\*Priority\*\*:\s*(.+)$/i);
       const descMatch = line.match(/^-\s*\*\*Description\*\*:\s*(.+)$/i);
       const contentStart = line.match(/^-\s*\*\*Content\*\*:\s*(.*)$/i);
 
@@ -168,6 +176,11 @@ function parseMemoryEntries(text: string): AutoMemoryEntry[] {
         ) {
           type = t;
         }
+      } else if (priorityMatch) {
+        const p = priorityMatch[1]?.trim().toLowerCase();
+        if (p === "high" || p === "mid" || p === "low") {
+          priority = p;
+        }
       } else if (descMatch) {
         description = descMatch[1]!.trim();
       } else if (contentStart) {
@@ -182,6 +195,7 @@ function parseMemoryEntries(text: string): AutoMemoryEntry[] {
       entries.push({
         name,
         type,
+        priority,
         description,
         content: contentLines.join("\n").trim(),
       });

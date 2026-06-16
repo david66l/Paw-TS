@@ -6,11 +6,14 @@
  */
 
 import { MEMORY_INJECTION_DETAIL_TOKENS } from "./context-budget.js";
+import { EmbeddingCache } from "./embedding-cache.js";
 import {
   isArchitectureQuery,
   isMemoryMetaQuery,
   isReferenceMemory,
+  PRIORITY_COEFFICIENTS,
   type MemoryRecord,
+  type TaskProfile,
 } from "./memory-record.js";
 import { ApproximateEstimator } from "./token-estimator.js";
 import type { UnifiedMemoryStore } from "./unified-memory-store.js";
@@ -29,6 +32,52 @@ export const DEFAULT_RETRIEVAL_CONFIG: Required<RetrievalConfig> = {
   sessionRecencyHalfLifeDays: 7,
 };
 
+/** Per-profile token budget and retrieval limits (B.4). */
+export interface ProfileBudget {
+  readonly maxTokens: number;
+  readonly maxSessionTokens: number;
+  readonly recordLimit: number;
+  readonly maxSessionInTopK: number;
+  /** Boost factor for certain memory types in this profile. */
+  readonly preferredTags: readonly string[];
+  readonly tagBoost: number;
+}
+
+export const TASK_PROFILE_BUDGETS: Record<TaskProfile, ProfileBudget> = {
+  refactor_arch: {
+    maxTokens: 2000,
+    maxSessionTokens: 1000,
+    recordLimit: 8,
+    maxSessionInTopK: 3,
+    preferredTags: ["reference", "project"],
+    tagBoost: 1.15,
+  },
+  bug_fix: {
+    maxTokens: 1800,
+    maxSessionTokens: 1200,
+    recordLimit: 6,
+    maxSessionInTopK: 3,
+    preferredTags: ["bug", "error"],
+    tagBoost: 1.2,
+  },
+  simple_script: {
+    maxTokens: 500,
+    maxSessionTokens: 200,
+    recordLimit: 2,
+    maxSessionInTopK: 1,
+    preferredTags: [],
+    tagBoost: 1.0,
+  },
+  general: {
+    maxTokens: 1500,
+    maxSessionTokens: 800,
+    recordLimit: 5,
+    maxSessionInTopK: 2,
+    preferredTags: [],
+    tagBoost: 1.0,
+  },
+};
+
 export interface RetrievalQuery {
   readonly goal: string;
   readonly currentFile?: string;
@@ -40,6 +89,12 @@ export interface RetrievalQuery {
   readonly maxTokens?: number;
   readonly minScore?: number;
   readonly config?: RetrievalConfig;
+  /** Pre-computed query embedding for semantic boost (cosine similarity). */
+  readonly queryEmbedding?: number[];
+  /** Multiplier for semantic boost. Default 0.2 (max 20% boost from semantics). Set to 0 to disable. */
+  readonly semanticBoostWeight?: number;
+  /** Task profile for dynamic token allocation (refactor_arch/bug_fix/simple_script/general). */
+  readonly taskProfile?: "refactor_arch" | "bug_fix" | "simple_script" | "general";
 }
 
 export interface MemoryRetrievalResult {
@@ -82,9 +137,18 @@ export class KeywordMemoryRetriever implements MemoryRetriever {
     query: RetrievalQuery,
   ): readonly { record: MemoryRecord; score: number }[] {
     const all = this.store.listExcludingCurrent();
+    // Pre-compute expensive query-level operations once
+    const queryWords = this.tokenize(this.stripPathLikeText(query.goal));
+    const queryFiles = [query.currentFile, ...(query.recentFiles ?? [])].filter(
+      (f): f is string => !!f,
+    );
+    const errWords = query.errorMessage
+      ? this.tokenize(query.errorMessage)
+      : undefined;
+
     const scored = all.map((m) => ({
       record: m,
-      score: this.score(m, query),
+      score: this.scorePrecomputed(m, query, queryWords, queryFiles, errWords),
     }));
     const minScore = query.minScore ?? 15;
     return scored
@@ -97,9 +161,17 @@ export class KeywordMemoryRetriever implements MemoryRetriever {
     query: RetrievalQuery,
   ): readonly { record: MemoryRecord; score: number }[] {
     const all = this.store.listExcludingCurrent();
+    const queryWords = this.tokenize(this.stripPathLikeText(query.goal));
+    const queryFiles = [query.currentFile, ...(query.recentFiles ?? [])].filter(
+      (f): f is string => !!f,
+    );
+    const errWords = query.errorMessage
+      ? this.tokenize(query.errorMessage)
+      : undefined;
+
     return all.map((m) => ({
       record: m,
-      score: this.score(m, query),
+      score: this.scorePrecomputed(m, query, queryWords, queryFiles, errWords),
     }));
   }
 
@@ -109,16 +181,24 @@ export class KeywordMemoryRetriever implements MemoryRetriever {
     options?: { totalCandidates?: number },
   ): MemoryRetrievalResult {
     const cfg = { ...this.config, ...query.config };
-    const limit = query.limit ?? 5;
-    const maxTokens = query.maxTokens ?? 1500;
+    // B.4: Use task profile config for dynamic limits
+    const profile = query.taskProfile ?? "general";
+    const budget = TASK_PROFILE_BUDGETS[profile];
+    const limit = query.limit ?? budget.recordLimit;
+    const maxTokens = query.maxTokens ?? budget.maxTokens;
+    const profileCfg: Required<RetrievalConfig> = {
+      ...cfg,
+      maxSessionInTopK: budget.maxSessionInTopK,
+      maxSessionTokens: budget.maxSessionTokens,
+    };
     const all = this.store.listExcludingCurrent();
 
-    let selected = this.selectRecords(sorted, limit, maxTokens, cfg);
+    let selected = this.selectRecords(sorted, limit, maxTokens, profileCfg);
     let totalCandidates = options?.totalCandidates ?? sorted.length;
     let usedMetaFallback = false;
 
     if (selected.records.length === 0 && isMemoryMetaQuery(query.goal)) {
-      const fallback = this.selectMetaFallback(all, limit, maxTokens, cfg);
+      const fallback = this.selectMetaFallback(all, limit, maxTokens, profileCfg);
       selected = fallback;
       totalCandidates = fallback.candidateCount;
       usedMetaFallback = true;
@@ -223,10 +303,28 @@ export class KeywordMemoryRetriever implements MemoryRetriever {
   }
 
   private score(m: MemoryRecord, query: RetrievalQuery): number {
+    // Legacy wrapper — delegates to precomputed version
+    const queryWords = this.tokenize(this.stripPathLikeText(query.goal));
+    const queryFiles = [query.currentFile, ...(query.recentFiles ?? [])].filter(
+      (f): f is string => !!f,
+    );
+    const errWords = query.errorMessage
+      ? this.tokenize(query.errorMessage)
+      : undefined;
+    return this.scorePrecomputed(m, query, queryWords, queryFiles, errWords);
+  }
+
+  private scorePrecomputed(
+    m: MemoryRecord,
+    query: RetrievalQuery,
+    queryWords: string[],
+    queryFiles: string[],
+    errWords: string[] | undefined,
+  ): number {
     let score = 0;
 
     // 1. Keyword match — title/summary worth more than body content.
-    const queryWords = this.tokenize(this.stripPathLikeText(query.goal));
+    // (queryWords / queryFiles pre-computed in rankRecords)
 
     const headText = this.stripPathLikeText(
       [m.title, m.summary, ...m.tags].join(" "),
@@ -243,9 +341,7 @@ export class KeywordMemoryRetriever implements MemoryRetriever {
     const hasTextSignal = keywordMatches >= 2;
 
     // 2. Path match (current file + recent files vs memory related files)
-    const queryFiles = [query.currentFile, ...(query.recentFiles ?? [])].filter(
-      (f): f is string => !!f,
-    );
+    // (queryFiles pre-computed in rankRecords)
     for (const qf of queryFiles) {
       for (const relFile of m.relatedFiles) {
         score += this.pathMatchScore(qf, relFile, hasTextSignal);
@@ -253,8 +349,7 @@ export class KeywordMemoryRetriever implements MemoryRetriever {
     }
 
     // 3. Error signature match
-    if (query.errorMessage && m.relatedErrors.length > 0) {
-      const errWords = this.tokenize(query.errorMessage);
+    if (errWords && m.relatedErrors.length > 0) {
       for (const sig of m.relatedErrors) {
         if (errWords.some((w) => sig.toLowerCase().includes(w))) {
           score += 40;
@@ -321,12 +416,104 @@ export class KeywordMemoryRetriever implements MemoryRetriever {
       if (taskMatches >= 2) score += 25;
     }
 
+    // 8.5. Cross-session signal boost (A.2.2)
+    //       Boost session memories from OTHER runs when they share
+    //       files, errors, or tools with the current session.
+    if (m.source === "session") {
+      let crossBoost = 0;
+      // File overlap: same files touched in current and past session
+      if (
+        query.recentFiles &&
+        query.recentFiles.length > 0 &&
+        m.relatedFiles.length > 0
+      ) {
+        const overlap = m.relatedFiles.some((f) =>
+          query.recentFiles!.some((qf) => {
+            const qNorm = qf.replace(/\\/g, "/");
+            const mNorm = f.replace(/\\/g, "/");
+            return qNorm === mNorm || qNorm.endsWith("/" + mNorm.split("/").pop()!);
+          }),
+        );
+        if (overlap) crossBoost += 0.1;
+      }
+      // Error match: same error signature in current and past session
+      if (errWords && m.relatedErrors.length > 0) {
+        const hit = m.relatedErrors.some((sig) =>
+          errWords.some((w) => sig.toLowerCase().includes(w)),
+        );
+        if (hit) crossBoost += 0.15;
+      }
+      // Tool overlap: same tools used in current and past session
+      if (
+        query.recentToolNames &&
+        query.recentToolNames.length > 0 &&
+        m.tags.length > 0
+      ) {
+        const overlap = m.tags.some((t) =>
+          query.recentToolNames!.some((tn) => {
+            const short = tn.split(".").pop() ?? tn;
+            return t === tn || t === short;
+          }),
+        );
+        if (overlap) crossBoost += 0.05;
+      }
+      // Cap total cross-session boost at 20%
+      if (crossBoost > 0) {
+        score *= 1 + Math.min(crossBoost, 0.2);
+      }
+    }
+
     // 9. Reference memory boost
     if (isReferenceMemory(m)) score *= 1.2;
 
     // 10. Architecture query + reference boost
     if (isArchitectureQuery(query.goal) && isReferenceMemory(m)) {
       score += 30;
+    }
+
+    // 11. Semantic boost (cosine similarity or text fallback)
+    const boostWeight = query.semanticBoostWeight ?? 0.2;
+    if (boostWeight > 0) {
+      if (query.queryEmbedding && m.embedding && m.embedding.length > 0) {
+        // Cosine similarity with pre-computed embedding vectors
+        const cosineSim = EmbeddingCache.cosineSimilarity(
+          query.queryEmbedding,
+          m.embedding,
+        );
+        score *= 1 + cosineSim * boostWeight;
+      } else if (!query.queryEmbedding) {
+        // Pure-TS fallback: no Ollama available, use text similarity
+        const textSim = EmbeddingCache.textSimilarity(
+          query.goal,
+          [m.title, m.summary, m.content].join(" "),
+        );
+        score *= 1 + textSim * boostWeight * 0.75;
+      }
+    }
+
+    // 12. Priority coefficient (high×1.3, mid×1.0, low×0.7)
+    score *= PRIORITY_COEFFICIENTS[m.priority] ?? 1.0;
+
+    // 13. Profile-specific tag boost (B.4)
+    if (query.taskProfile) {
+      const profileBudget = TASK_PROFILE_BUDGETS[query.taskProfile];
+      const hasPreferredTag = profileBudget.preferredTags.some((t) =>
+        m.tags.includes(t),
+      );
+      if (hasPreferredTag && profileBudget.tagBoost !== 1.0) {
+        score *= profileBudget.tagBoost;
+      }
+    }
+
+    // 14. Expired memory penalty (B.1.valid_until)
+    if (m.validUntil > 0 && Date.now() > m.validUntil) {
+      score *= 0.1;  // heavily penalize, but don't fully remove
+    }
+
+    // 15. Linked-memory pre-boost (B.1.linked_memories)
+    // If a memory links to others, it's a hub — give a small boost
+    if (m.linkedMemories && m.linkedMemories.length > 0) {
+      score *= 1.05;
     }
 
     return score;

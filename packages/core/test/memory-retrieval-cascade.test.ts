@@ -21,6 +21,7 @@ function makeRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
     tags: [],
     relatedFiles: [],
     relatedErrors: [],
+    priority: "mid",
     ...overrides,
   };
 }

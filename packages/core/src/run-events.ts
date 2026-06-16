@@ -160,6 +160,15 @@ export type RunEvent =
       readonly reason: string;
       readonly runId: string;
     }
+  /** Memory reflection (B.2) completed — merges, archives, conflicts. */
+  | {
+      readonly type: "memory.reflected";
+      readonly modified: number;
+      readonly merges: number;
+      readonly archived: number;
+      readonly conflicts: number;
+      readonly runId: string;
+    }
   /** Memory retrieval completed before system prompt construction. */
   | {
       readonly type: "memory.retrieve.done";

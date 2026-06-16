@@ -139,7 +139,14 @@ export {
 export {
   AutoMemoryStore,
   type AutoMemoryEntry,
+  type MemoryPriority as AutoMemoryPriority,
 } from "./auto-memory.js";
+export {
+  EmbeddingCache,
+  resolveEmbeddingConfig,
+  type EmbeddingCacheEntry,
+  type EmbeddingConfig,
+} from "./embedding-cache.js";
 export { findPawRoot } from "./find-root.js";
 export {
   buildSystemPrompt,
@@ -186,8 +193,23 @@ export {
   isMemoryMetaQuery,
   isArchitectureQuery,
   isReferenceMemory,
+  classifyTask,
+  PRIORITY_COEFFICIENTS,
   type MemoryRetrievalSignals,
   type MemoryRecord,
   type MemorySource,
   type MemoryScope,
+  type MemoryPriority,
+  type TaskProfile,
 } from "./memory-record.js";
+export {
+  runReflection,
+  shouldRunReflection,
+  resetReflectionCounter,
+  type ReflectionPlan,
+  type ReflectionMergeAction,
+  type ReflectionArchiveAction,
+  type ReflectionConflictAction,
+  type ReflectorOptions,
+  type ReflectionState,
+} from "./memory-reflector.js";

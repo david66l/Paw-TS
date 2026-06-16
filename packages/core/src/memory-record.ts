@@ -7,11 +7,24 @@
 
 import type { AutoMemoryEntry } from "./auto-memory.js";
 import type { ChatMessage } from "./context-manager.js";
+import { EmbeddingCache } from "./embedding-cache.js";
 import type { SessionMemory } from "./session-memory.js";
 
 export type MemorySource = "session" | "auto" | "project" | "user_explicit";
 
 export type MemoryScope = "project" | "workspace" | "global";
+
+export type MemoryPriority = "high" | "mid" | "low";
+
+/** Task profile for dynamic token allocation in retrieval. */
+export type TaskProfile = "refactor_arch" | "bug_fix" | "simple_script" | "general";
+
+/** Priority coefficient multiplier for retrieval scoring. */
+export const PRIORITY_COEFFICIENTS: Record<MemoryPriority, number> = {
+  high: 1.3,
+  mid: 1.0,
+  low: 0.7,
+};
 
 export interface MemoryRecord {
   readonly id: string;
@@ -26,6 +39,16 @@ export interface MemoryRecord {
   readonly relatedFiles: readonly string[];
   /** Error signatures (error codes, exception names, key lines) — NOT full descriptions */
   readonly relatedErrors: readonly string[];
+  /** Decoded embedding vector for semantic boost (from AutoMemory YAML frontmatter). */
+  readonly embedding?: number[];
+  /** Priority tier — affects retrieval scoring (high×1.3, mid×1.0, low×0.7). */
+  readonly priority: MemoryPriority;
+  /** Tools used when this memory was created (for retrieval filtering). */
+  readonly toolsUsed: readonly string[];
+  /** Unix timestamp when this memory expires (0 = never). */
+  readonly validUntil: number;
+  /** Bidirectional links to other memory names. */
+  readonly linkedMemories: readonly string[];
 }
 
 // ── Mappers ──
@@ -51,6 +74,10 @@ export function sessionMemoryToRecord(sm: SessionMemory): MemoryRecord {
     tags: inferTags(sm),
     relatedFiles: sm.filesAndFunctions ?? [],
     relatedErrors: extractErrorSignatures(sm.errorsAndFixes),
+    priority: "mid",
+    toolsUsed: [],
+    validUntil: 0,
+    linkedMemories: [],
   };
 }
 
@@ -59,6 +86,10 @@ export function autoMemoryToRecord(
   mtime?: number,
 ): MemoryRecord {
   const ts = mtime ?? Date.now();
+  let embedding: number[] | undefined;
+  if (entry.embedding) {
+    embedding = EmbeddingCache.decodeEmbedding(entry.embedding) ?? undefined;
+  }
   return {
     id: entry.name,
     source: "auto",
@@ -70,7 +101,12 @@ export function autoMemoryToRecord(
     content: entry.content,
     tags: entry.tags ?? [entry.type],
     relatedFiles: entry.relatedFiles ?? extractFilePaths(entry.content),
-    relatedErrors: [],
+    relatedErrors: entry.error_signatures ?? [],
+    priority: entry.priority ?? "mid",
+    toolsUsed: entry.tools_used ?? [],
+    validUntil: entry.valid_until ?? 0,
+    linkedMemories: entry.linked_memories ?? [],
+    ...(embedding ? { embedding } : {}),
   };
 }
 
@@ -179,6 +215,72 @@ export function isArchitectureQuery(goal: string): boolean {
 /** Reference memories (architecture docs, long-lived project facts). */
 export function isReferenceMemory(record: MemoryRecord): boolean {
   return record.tags.includes("reference");
+}
+
+// ── Task classification (B.4) ──────────────────────────────────────────
+
+const REFACTOR_ARCH_KEYWORDS = [
+  "refactor", "重构", "架构", "architecture", "design", "设计",
+  "restructure", "reorganize", "拆分", "合并", "pattern", "migrate",
+  "迁移", "abstract", "interface", "modularize",
+];
+
+const BUG_FIX_KEYWORDS = [
+  "bug", "fix", "repair", "报错", "修复", "debug", "调试",
+  "error", "crash", "broken", "incorrect", "wrong", "issue",
+  "defect", "stack trace", "exception", "regression",
+];
+
+const SIMPLE_SCRIPT_KEYWORDS = [
+  "script", "脚本", "simple", "简单", "quick", "快速",
+  "one-off", "一次性", "scratch", "temp",
+];
+
+/**
+ * Classify the user's task from the goal text.
+ * Pure rule-based — zero LLM calls.
+ */
+export function classifyTask(
+  goal: string,
+  errorMessage?: string,
+): TaskProfile {
+  const lower = goal.toLowerCase();
+
+  // Bug fix: error present or explicit bug-related keywords
+  if (errorMessage) return "bug_fix";
+  if (BUG_FIX_KEYWORDS.some((kw) => matchWord(kw, lower))) return "bug_fix";
+
+  // Simple script: explicit short-task indicators, no error
+  if (SIMPLE_SCRIPT_KEYWORDS.some((kw) => matchWord(kw, lower))) {
+    return "simple_script";
+  }
+
+  // Refactor/architecture: large-scope structural keywords
+  if (REFACTOR_ARCH_KEYWORDS.some((kw) => matchWord(kw, lower))) {
+    return "refactor_arch";
+  }
+
+  return "general";
+}
+
+/** Match a keyword against text with word-boundary awareness. */
+function matchWord(keyword: string, text: string): boolean {
+  // Try word-boundary regex first; fallback to includes for CJK and
+  // multi-word keywords where boundaries are less reliable.
+  try {
+    const re = new RegExp(
+      `(?:^|[\\s\\-_.,;:!?()])${escapeRegExp(keyword)}(?:$|[\\s\\-_.,;:!?()])`,
+    );
+    if (re.test(text)) return true;
+  } catch {
+    // regex too complex — fall through
+  }
+  // Fallback for CJK and compound phrases
+  return text.includes(keyword);
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** Extract file paths from free-form text (heuristic). */
