@@ -137,6 +137,11 @@ export class AgentGroup {
     // Wait for all to settle (allow partial failures)
     const results = await Promise.allSettled(controllers.map((c) => c.promise));
 
+    // Clean up settled children to prevent unbounded map growth across turns
+    for (const c of controllers) {
+      this.children.delete(c.agentId);
+    }
+
     // Convert SettledResult[] to SubAgentResult[]
     return results.map((r, idx) => {
       if (r.status === "fulfilled") {

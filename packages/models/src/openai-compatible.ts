@@ -7,6 +7,7 @@ import {
   parseOpenAiChatCompletionStreamDataPayload,
   parseOpenAiUsageJson,
 } from "./openai-stream-parse.js";
+import { extractThinkBlocks } from "./think-extraction.js";
 import type {
   ChatMessage,
   ModelCompletionResult,
@@ -49,7 +50,9 @@ export class OpenAICompatibleModel implements LanguageModel {
       ? `qwen:${opts.model}`
       : opts.baseUrl?.includes("deepseek")
         ? `deepseek:${opts.model}`
-        : `openai:${opts.model}`;
+        : opts.model.toLowerCase().includes("qwen")
+          ? `qwen3:${opts.model}`
+          : `openai:${opts.model}`;
     this.capabilities = opts.capabilities;
   }
 
@@ -120,13 +123,19 @@ export class OpenAICompatibleModel implements LanguageModel {
         ? (first as Record<string, unknown>).content
         : undefined;
     let text = typeof content === "string" ? content : "";
+    const extracted = extractThinkBlocks(text);
+    text = extracted.text;
 
     const reasoningContent =
       first !== null && typeof first === "object"
         ? (first as Record<string, unknown>).reasoning_content
         : undefined;
-    const thinking =
+    const reasoningThinking =
       typeof reasoningContent === "string" ? reasoningContent : undefined;
+    const thinking =
+      extracted.thinking || reasoningThinking
+        ? [extracted.thinking, reasoningThinking].filter(Boolean).join("\n\n")
+        : undefined;
 
     // If the model returned tool_calls, convert them to JSON tool lines
     // AND collect as structured NativeToolCall objects

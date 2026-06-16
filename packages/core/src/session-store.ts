@@ -129,10 +129,18 @@ export class FileSystemSessionStore implements SessionStore {
     if (!fs.existsSync(p)) return null;
     const stream = fs.createReadStream(p, { encoding: "utf8" });
     let buffer = "";
+    let done = false;
+    const cleanup = () => {
+      if (!done) {
+        done = true;
+        stream.destroy();
+      }
+    };
     return {
       [Symbol.asyncIterator](): AsyncIterator<RunEventEnvelope> {
         return {
           async next(): Promise<IteratorResult<RunEventEnvelope>> {
+            if (done) return { value: undefined, done: true };
             while (true) {
               const newlineIndex = buffer.indexOf("\n");
               if (newlineIndex !== -1) {
@@ -155,6 +163,7 @@ export class FileSystemSessionStore implements SessionStore {
                 stream.once("error", () => resolve(null));
               });
               if (chunk === null) {
+                cleanup();
                 // Process any remaining buffer before ending
                 if (buffer.trim() !== "") {
                   const line = buffer;
@@ -172,6 +181,14 @@ export class FileSystemSessionStore implements SessionStore {
               }
               buffer += chunk;
             }
+          },
+          async return(): Promise<IteratorResult<RunEventEnvelope>> {
+            cleanup();
+            return { value: undefined, done: true };
+          },
+          async throw(e?: unknown): Promise<IteratorResult<RunEventEnvelope>> {
+            cleanup();
+            throw e;
           },
         };
       },

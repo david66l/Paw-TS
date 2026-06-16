@@ -112,7 +112,11 @@ function handleNoAction(
   }
 
   // Complete with plain text (conversational reply, no tools needed)
-  const displayText = text.trim() || "(empty model output)";
+  const displayText =
+    text.trim() ||
+    (thinking?.trim()
+      ? `[model produced only reasoning]\n${thinking.trim()}`
+      : "(empty model output)");
   ctx.ctxMgr.addAssistant(displayText, thinking);
   ctx.emit({ type: "model.done", text: displayText });
   return {

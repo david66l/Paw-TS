@@ -267,11 +267,21 @@ export class PawFooter {
     if (this.destroyed) return;
     this.destroyed = true;
     this.flush();
-    if (this.elapsedTimer) clearInterval(this.elapsedTimer);
-    if (this.spinnerTimer) clearInterval(this.spinnerTimer);
+    this.clearTimers();
     this.renderer.off(CliRenderEvents.DESTROY, this.handleDestroy);
     this.scrollback.destroy();
   };
+
+  private clearTimers(): void {
+    if (this.elapsedTimer) {
+      clearInterval(this.elapsedTimer);
+      this.elapsedTimer = null;
+    }
+    if (this.spinnerTimer) {
+      clearInterval(this.spinnerTimer);
+      this.spinnerTimer = null;
+    }
+  }
 
   // ── Height management ──
 
@@ -339,6 +349,7 @@ export class PawFooter {
         return;
       }
       if (this.options.onInterrupt()) {
+        this.clearTimers();
         this.patch({ streaming: false, inputBusy: false, phase: "idle" });
         this.refocusTextarea();
       } else {
@@ -542,14 +553,7 @@ export class PawFooter {
     }
 
     if (ev.type === "run.completed" || ev.type === "run.failed") {
-      if (this.elapsedTimer) {
-        clearInterval(this.elapsedTimer);
-        this.elapsedTimer = null;
-      }
-      if (this.spinnerTimer) {
-        clearInterval(this.spinnerTimer);
-        this.spinnerTimer = null;
-      }
+      this.clearTimers();
       this.patch({ spinnerChar: "", streaming: false, liveThinking: "", liveAssistant: "", phase: "idle" });
     }
 

@@ -50,36 +50,62 @@ export class LspClient {
   >();
   private initialized = false;
   private _rootUri: string;
+  private initTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(rootUri: string) {
     this._rootUri = rootUri;
   }
 
   async start(opts: LspClientOptions): Promise<void> {
+    // Kill any previous process before starting a new one
+    if (this.proc) {
+      this.killProcess();
+    }
+
     return new Promise((resolve, reject) => {
-      this.proc = spawn(opts.command, opts.args ?? [], {
+      const proc = spawn(opts.command, opts.args ?? [], {
         cwd: opts.cwd,
         stdio: ["pipe", "pipe", "pipe"],
       });
+      this.proc = proc;
 
-      this.proc.stdout?.on("data", (data: Buffer) => {
+      let settled = false;
+      const settle = (fn: (() => void) | undefined) => {
+        if (settled) return;
+        settled = true;
+        fn?.();
+        // Clean up event listeners on the process once settled
+        proc.removeAllListeners("error");
+        proc.removeAllListeners("exit");
+        if (this.initTimer) {
+          clearTimeout(this.initTimer);
+          this.initTimer = null;
+        }
+      };
+
+      proc.stdout?.on("data", (data: Buffer) => {
         this.buffer += data.toString("utf-8");
         this.processBuffer();
       });
 
-      this.proc.stderr?.on("data", (_data: Buffer) => {
+      proc.stderr?.on("data", (_data: Buffer) => {
         // stderr is often noisy; ignore for now
       });
 
-      this.proc.on("error", reject);
-      this.proc.on("exit", (code) => {
+      proc.on("error", (err) => {
+        settle(() => reject(err));
+      });
+      proc.on("exit", (code) => {
         if (code !== 0 && code !== null) {
-          reject(new Error(`LSP server exited with code ${code}`));
+          settle(() =>
+            reject(new Error(`LSP server exited with code ${code}`)),
+          );
         }
       });
 
       // Wait a tick for process to start, then initialize
-      setTimeout(() => {
+      this.initTimer = setTimeout(() => {
+        this.initTimer = null;
         this.sendRequest("initialize", {
           processId: process.pid,
           rootUri: this._rootUri,
@@ -88,9 +114,11 @@ export class LspClient {
           .then(() => {
             this.initialized = true;
             this.sendNotification("initialized", {});
-            resolve();
+            settle(() => resolve());
           })
-          .catch(reject);
+          .catch((err) => {
+            settle(() => reject(err));
+          });
       }, 100);
     });
   }
@@ -179,6 +207,8 @@ export class LspClient {
 
   async stop(): Promise<void> {
     if (!this.proc || this.proc.killed) {
+      this.proc = null;
+      this.initialized = false;
       return;
     }
     try {
@@ -187,9 +217,30 @@ export class LspClient {
       // ignore
     }
     this.sendNotification("exit", {});
+    this.killProcess();
+    this.initialized = false;
+  }
+
+  /** Kill the process and clean up all listeners and pending promises. */
+  private killProcess(): void {
+    if (this.initTimer) {
+      clearTimeout(this.initTimer);
+      this.initTimer = null;
+    }
+    if (!this.proc) return;
+    // Remove stdout/stderr listeners to prevent leaks
+    this.proc.stdout?.removeAllListeners("data");
+    this.proc.stderr?.removeAllListeners("data");
+    this.proc.removeAllListeners("error");
+    this.proc.removeAllListeners("exit");
     this.proc.kill();
     this.proc = null;
-    this.initialized = false;
+    // Reject all pending requests so they don't hang forever
+    for (const [id, pending] of this.pending) {
+      pending.reject(new Error("LSP client stopped"));
+      this.pending.delete(id);
+    }
+    this.buffer = "";
   }
 
   get isInitialized(): boolean {

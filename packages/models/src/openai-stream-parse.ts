@@ -1,4 +1,5 @@
 import type { ModelTokenUsage } from "@paw/core";
+import { extractThinkBlocks } from "./think-extraction.js";
 
 /**
  * One `data: …` payload from an OpenAI-style chat completions SSE stream.
@@ -49,11 +50,17 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
       const d = delta as Record<string, unknown>;
       const content = d.content;
       if (typeof content === "string") {
-        textDelta = content;
+        const extracted = extractThinkBlocks(content);
+        textDelta = extracted.text;
+        if (extracted.thinking) {
+          thinkingDelta = extracted.thinking;
+        }
       }
       const reasoning = d.reasoning_content;
       if (typeof reasoning === "string") {
-        thinkingDelta = reasoning;
+        thinkingDelta = thinkingDelta
+          ? `${thinkingDelta}\n\n${reasoning}`
+          : reasoning;
       }
       const toolCalls = d.tool_calls;
       if (Array.isArray(toolCalls) && toolCalls.length > 0) {

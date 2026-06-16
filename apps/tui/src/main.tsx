@@ -9,6 +9,7 @@ import {
   hasApiKey,
   loadPawSettingsLocal,
   resolveBaseUrl,
+  resolveModel,
 } from "@paw/settings";
 import { SkillRegistry, loadSkillsFromDirectory } from "@paw/core";
 import { PawFooter } from "./PawFooter.js";
@@ -55,7 +56,12 @@ function resolveModelLabel(): string {
       return `openai:${modelName}`;
     }
     if (provider === "qwen" || hasApiKey(s, "qwen")) {
-      return `qwen:${model || "qwen-plus"}`;
+      const base = resolveBaseUrl(s, "qwen");
+      const modelName = resolveModel(s, "qwen", "qwen-plus");
+      if (base && !base.includes("dashscope")) {
+        return `qwen3:${modelName}`;
+      }
+      return `qwen:${modelName}`;
     }
     if (provider === "deepseek" || hasApiKey(s, "deepseek")) {
       return `deepseek:${model || "deepseek-chat"}`;
@@ -126,6 +132,31 @@ async function main() {
   let resolveApproval: ((approved: boolean) => void) | null = null;
   let resolveAsk: ((answer: string) => void) | null = null;
 
+  const persistentSession = createPersistentSession({
+    workspaceRoot,
+    skillsDir,
+    resolveAskUser: async ({ question }) => {
+      return new Promise<string>((resolve) => {
+        resolveAsk = resolve;
+        footer.present({ type: "ask", question });
+      });
+    },
+    resolveToolApproval: async ({ tool }) => {
+      return new Promise<boolean>((resolve) => {
+        resolveApproval = resolve;
+        footer.present({ type: "approval", tool, selectedIndex: 0 });
+      });
+    },
+    approvalPolicy: approvalPolicyWhenStrict(tuiStrictToolApprovalFromEnv()),
+    onEvent: (envelope) => {
+      const ev = envelope.event;
+      if (ev.type === "run.started") {
+        currentRunId = envelope.runId;
+      }
+      footer.handleRunEvent(envelope);
+    },
+  });
+
   const footer = new PawFooter(renderer, {
     theme,
     contextWindow: 128_000,
@@ -163,33 +194,9 @@ async function main() {
       footer.present({ type: "prompt" });
     },
     onExit: () => {
+      persistentSession.dispose();
       footer.close();
       renderer.destroy();
-    },
-  });
-
-  const persistentSession = createPersistentSession({
-    workspaceRoot,
-    skillsDir,
-    resolveAskUser: async ({ question }) => {
-      return new Promise<string>((resolve) => {
-        resolveAsk = resolve;
-        footer.present({ type: "ask", question });
-      });
-    },
-    resolveToolApproval: async ({ tool }) => {
-      return new Promise<boolean>((resolve) => {
-        resolveApproval = resolve;
-        footer.present({ type: "approval", tool, selectedIndex: 0 });
-      });
-    },
-    approvalPolicy: approvalPolicyWhenStrict(tuiStrictToolApprovalFromEnv()),
-    onEvent: (envelope) => {
-      const ev = envelope.event;
-      if (ev.type === "run.started") {
-        currentRunId = envelope.runId;
-      }
-      footer.handleRunEvent(envelope);
     },
   });
 
@@ -204,6 +211,7 @@ async function main() {
           footer.handleRunEvent(envelope);
         },
         exit: () => {
+          persistentSession.dispose();
           footer.close();
           renderer.destroy();
         },

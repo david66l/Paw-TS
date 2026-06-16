@@ -66,6 +66,7 @@ import {
   type LanguageModel,
   type NativeToolCall,
   createDefaultLanguageModel,
+  extractThinkBlocks,
 } from "@paw/models";
 
 import { type PlanItem, TaskPlanner } from "@paw/store";
@@ -1042,11 +1043,22 @@ export class AgentOrchestrator {
               : {}),
           });
       }
-      const normalized = AgentOrchestrator.normalizeToolCalls(acc, toolNameMap);
+      // Some reasoning models stream <think> tags inside content deltas rather
+      // than emitting a separate reasoning stream. Extract them as a safety net
+      // so the orchestrator doesn't end up with empty text after normalization.
+      const finalExtracted = extractThinkBlocks(acc);
+      const finalText = finalExtracted.text || acc;
+      const finalThinking =
+        [thinkingAcc, finalExtracted.thinking].filter(Boolean).join("\n\n") ||
+        undefined;
+      const normalized = AgentOrchestrator.normalizeToolCalls(
+        finalText,
+        toolNameMap,
+      );
       return {
         text: normalized,
         rawText: acc,
-        thinking: thinkingAcc || undefined,
+        thinking: finalThinking,
         usage,
         finishReason,
         ...(nativeToolCalls.length > 0 ? { nativeToolCalls } : {}),
