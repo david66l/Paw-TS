@@ -14,7 +14,7 @@ describe("parseMarkdownLine", () => {
     codeFg: "#6aaef2",
   };
 
-  test("renders bold inline segments", () => {
+  test("渲染加粗行内片段", () => {
     const state = createMdParserState();
     const segments = parseMarkdownLine(
       "**关于你：**",
@@ -29,7 +29,7 @@ describe("parseMarkdownLine", () => {
     );
   });
 
-  test("renders unordered list prefix", () => {
+  test("渲染无序列表前缀", () => {
     const state = createMdParserState();
     const segments = parseMarkdownLine(
       "- item one",
@@ -42,7 +42,7 @@ describe("parseMarkdownLine", () => {
     expect(segments[0]?.text).toContain("•");
   });
 
-  test("renders table header row (not first column only)", () => {
+  test("渲染表格首行（不应只有第一列加粗）", () => {
     const state = createMdParserState();
     const header = parseMarkdownLine(
       "| Name | Value |",
@@ -75,7 +75,7 @@ describe("parseMarkdownLine", () => {
 });
 
 describe("formatToolResultSummary", () => {
-  test("dedupes repeated tool prefix", () => {
+  test("去除重复的工具名前缀", () => {
     expect(
       formatToolResultSummary(
         "workspace.memory.list",

@@ -23,6 +23,11 @@ import {
 } from "@paw/settings";
 import type { PersistentSession } from "./run-session-controller.js";
 
+/**
+ * slash 命令执行上下文。
+ *
+ * 由 TUI 主入口传入，包含渲染回调、运行会话、持久会话等依赖。
+ */
 export interface SlashContext {
   readonly cwd: string;
   readonly pushText: (message: string) => void;
@@ -30,24 +35,27 @@ export interface SlashContext {
   readonly exit: () => void;
   readonly clear: () => void;
   readonly runSession?: StubRunSession;
-  /** Current runId for checkpoint/session commands. */
+  /** 当前 runId，用于 checkpoint / session 相关命令。 */
   readonly currentRunId?: string;
-  /** Optional orchestrator hooks (ask-user bridge, tool approval). */
+  /** 可选的 orchestrator 桥接（询问用户、工具审批）。 */
   readonly orchestratorHooks?: Pick<
     StubRunOptions,
     "resolveAskUser" | "resolveToolApproval" | "approvalPolicy"
   >;
-  /** Skill registry for /skill-name user invocations. */
+  /** Skill 注册表，用于 `/skill-name` 用户调用。 */
   readonly skillRegistry?: SkillRegistry;
-  /** Directory to load skills from (passed to orchestrator for model-facing run_skill). */
+  /** skill 加载目录，传给 orchestrator 用于模型侧 run_skill。 */
   readonly skillsDir?: string;
-  /** Persistent orchestrator session. When set, input is injected into the
-   *  existing conversation instead of starting a fresh run. */
+  /**
+   * 持久化 orchestrator 会话。设置后，输入会注入到已有对话中，
+   * 而不是开启一次全新的运行。
+   */
   readonly session?: PersistentSession;
-  /** Toggle light/dark theme at runtime. */
+  /** 运行时切换浅色/深色主题。 */
   readonly toggleTheme?: () => void;
 }
 
+/** 内置 slash 命令集合。 */
 const KNOWN_COMMANDS = new Set([
   "/exit",
   "/quit",
@@ -67,6 +75,12 @@ const KNOWN_COMMANDS = new Set([
   "/theme",
 ]);
 
+/**
+ * 判断输入是否为 slash 命令或已注册 skill。
+ *
+ * @param text 用户输入
+ * @param skillRegistry 可选 skill 注册表
+ */
 function isSlashCommand(text: string, skillRegistry?: SkillRegistry): boolean {
   const head = text.trim().split(/\s+/)[0] ?? "";
   if (KNOWN_COMMANDS.has(head)) return true;
@@ -77,7 +91,15 @@ function isSlashCommand(text: string, skillRegistry?: SkillRegistry): boolean {
   return false;
 }
 
-/** Natural language or `/…` — same backend as `paw-ts` (doctor, fs-*, stub-run). */
+/**
+ * 处理用户输入的一行文本。
+ *
+ * 如果是自然语言或已注册 skill，则交给 orchestrator 执行；
+ * 如果是 slash 命令，则分发到 {@link runSlashCommand}。
+ *
+ * @param raw 原始输入
+ * @param ctx 执行上下文
+ */
 export async function submitUserLine(
   raw: string,
   ctx: SlashContext,
@@ -87,12 +109,13 @@ export async function submitUserLine(
     return;
   }
   if (!isSlashCommand(v, ctx.skillRegistry)) {
-    // TUI renders the user line and run events; avoid duplicate echo here.
+    // TUI 已经自行渲染用户行与运行事件，这里避免重复回显
     if (!ctx.onRunEvent) {
       ctx.pushText(`> ${v}`);
     }
     try {
       if (ctx.session) {
+        // 持久会话模式
         const signal = ctx.runSession?.begin();
         try {
           const result = await ctx.session.submit(v, signal);
@@ -107,6 +130,7 @@ export async function submitUserLine(
           ctx.runSession?.end();
         }
       } else {
+        // 一次性 stub-run 模式
         const r = await runStubRun(v, {
           workspaceRoot: ctx.cwd,
           onEvent: ctx.onRunEvent,
@@ -127,6 +151,12 @@ export async function submitUserLine(
   await runSlashCommand(v, ctx);
 }
 
+/**
+ * 执行 slash 命令。
+ *
+ * @param raw 原始命令行
+ * @param ctx 执行上下文
+ */
 export async function runSlashCommand(
   raw: string,
   ctx: SlashContext,
@@ -357,7 +387,7 @@ export async function runSlashCommand(
       return;
     }
 
-    // Parse optional args: --provider, --model, --key, --approval, --max-steps
+    // 解析可选参数：--provider, --model, --key, --approval, --max-steps
     const args: Record<string, string> = {};
     for (let i = 1; i < parts.length; i += 2) {
       const key = parts[i];
@@ -397,7 +427,7 @@ export async function runSlashCommand(
     return;
   }
 
-  // Fallback: check skill registry for /skill-name user invocations
+  // 兜底：检查是否为用户通过 `/skill-name` 调用已注册 skill
   const { skillRegistry } = ctx;
   if (skillRegistry) {
     const skillId = head.startsWith("/") ? head.slice(1) : head;
@@ -405,7 +435,7 @@ export async function runSlashCommand(
       const skill = skillRegistry.get(skillId)!;
       const userArgs = parts.slice(1).join(" ");
       let rendered = renderSkillPrompt(skill, parseSlashSkillArgs(userArgs));
-      // If the skill template didn't consume {{args}} (no placeholder), append user input
+      // 若 skill 模板未消费 {{args}}，则将用户输入追加到末尾
       if (
         userArgs &&
         !skill.prompt.includes("{{args}}") &&
@@ -452,10 +482,14 @@ export async function runSlashCommand(
   pushText(`Unknown command: ${head} (see /help)`);
 }
 
-/** Parse slash-command args into a Record for skill template rendering. */
+/**
+ * 将 slash 命令参数解析为 skill 模板可用的 Record。
+ *
+ * 当前仅作为默认位置参数传递；后续可扩展为 `--key=value` 解析。
+ *
+ * @param raw 参数原始字符串
+ */
 function parseSlashSkillArgs(raw: string): Record<string, unknown> {
   if (!raw.trim()) return {};
-  // Simple: pass as positional default arg. Skills with named params
-  // can be extended later with --key=value parsing.
   return { args: raw.trim() };
 }

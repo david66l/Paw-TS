@@ -1,16 +1,23 @@
 /**
- * JSX runtime shim for @opentui/solid.
+ * @opentui/solid 的 JSX 运行时垫片。
  *
- * The @opentui/solid package only ships type declarations for jsx-runtime,
- * not the actual JS module. This shim re-exports from solid-js which
- * provides the standard JSX runtime functions that opentui's components
- * produce when transformed by babel-preset-solid.
+ * @opentui/solid 只提供了 jsx-runtime 的类型声明，没有提供实际的 JS 模块。
+ * 该垫片从 solid-js 重新导出标准 JSX 运行时函数，供 babel-preset-solid
+ * 转换后的 OpenTUI 组件使用。
  */
-// solid-js/jsx-runtime exports: jsx, jsxs, Fragment
-// solid-js also has jsxDEV for dev mode
+
+// solid-js/jsx-runtime 导出：jsx, jsxs, Fragment
+// solid-js 在开发模式下还会使用 jsxDEV
 import { Fragment, jsx, jsxs } from "solid-js/h/jsx-runtime";
 
-// jsxDEV is used in development mode (NODE_ENV !== "production")
+/**
+ * 开发模式使用的 JSX 创建函数。
+ *
+ * @param type 组件类型或 HTML 标签名
+ * @param props 组件属性
+ * @param key 可选的 React/Solid key
+ * @returns JSX 元素
+ */
 function jsxDEV(
   type: any,
   props: any,

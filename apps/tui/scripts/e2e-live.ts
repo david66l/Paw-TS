@@ -1,7 +1,11 @@
 #!/usr/bin/env bun
 /**
- * Live E2E for TUI (same path as App.tsx) + UI formatting checks.
- * Usage: cd apps/tui && bun run e2e:live
+ * TUI 实时端到端测试脚本。
+ *
+ * 覆盖与 App.tsx 相同的执行路径，并额外检查 UI 格式化输出：
+ * HUD、上下文条、底部状态栏、工具图标、流式单调性、成本单调性等。
+ *
+ * 用法：cd apps/tui && bun run e2e:live
  */
 
 import fs from "node:fs";
@@ -20,10 +24,14 @@ import {
   createRunSessionController,
 } from "../src/run-session-controller.js";
 
+// 工作区根目录（paw-ts 项目根）
 const WORKSPACE = path.resolve(import.meta.dir, "../../..");
+// 全局超时：15 分钟
 const GLOBAL_TIMEOUT_MS = 900_000;
+// E2E 临时文件目录
 const E2E_TMP = path.join(WORKSPACE, "e2e-tmp");
 
+/** 单个测试场景结果。 */
 interface ScenarioResult {
   readonly name: string;
   readonly ok: boolean;
@@ -32,10 +40,19 @@ interface ScenarioResult {
   readonly errors: readonly string[];
 }
 
+/**
+ * 加载当前工作区设置。
+ */
 function loadSettings() {
   return loadPawSettingsLocal(defaultSettingsPath(WORKSPACE));
 }
 
+/**
+ * 检查模型服务提供商是否就绪。
+ *
+ * - ollama：探测本地 /api/tags
+ * - 其他：要求 settings.local.json 中配置了 API key
+ */
 async function providerReady(): Promise<{ ok: boolean; reason: string }> {
   try {
     const s = loadSettings();
@@ -67,6 +84,12 @@ async function providerReady(): Promise<{ ok: boolean; reason: string }> {
   }
 }
 
+/**
+ * 创建事件收集器。
+ *
+ * @param on 每个事件的回调
+ * @returns 事件数组与处理器
+ */
 function collectEvents(on: (e: RunEventEnvelope) => void) {
   const events: RunEventEnvelope[] = [];
   const handler = (e: RunEventEnvelope) => {
@@ -76,6 +99,12 @@ function collectEvents(on: (e: RunEventEnvelope) => void) {
   return { events, handler };
 }
 
+/**
+ * 运行一个 E2E 场景。
+ *
+ * @param name 场景名称
+ * @param fn 场景执行函数
+ */
 async function runScenario(
   name: string,
   fn: (ctx: {
@@ -88,6 +117,7 @@ async function runScenario(
   const logs: string[] = [];
   const { events, handler } = collectEvents((e) => {
     const t = e.event.type;
+    // 只记录关键事件，避免日志过大
     if (
       t === "run.failed" ||
       t === "tool.call" ||
@@ -136,6 +166,9 @@ async function runScenario(
   }
 }
 
+/**
+ * 向会话提交一行用户输入。
+ */
 async function submitLine(
   text: string,
   session: ReturnType<typeof createPersistentSession>,
@@ -155,6 +188,14 @@ async function submitLine(
   });
 }
 
+/**
+ * 断言 UI 格式化输出是否符合预期。
+ *
+ * 检查 HUD 前缀、上下文条、底部状态栏、完成状态与工具图标。
+ *
+ * @param events 运行事件列表
+ * @param ctxWindow 上下文窗口大小
+ */
 function assertUiFormatting(
   events: RunEventEnvelope[],
   ctxWindow: number,
@@ -236,6 +277,9 @@ function assertUiFormatting(
   return issues;
 }
 
+/**
+ * 断言模型流式输出单调递增。
+ */
 function assertStreamingMonotonic(events: RunEventEnvelope[]): string[] {
   const issues: string[] = [];
   let lastChunk = "";
@@ -263,6 +307,9 @@ function assertStreamingMonotonic(events: RunEventEnvelope[]): string[] {
   return issues;
 }
 
+/**
+ * 断言上下文在多轮对话中增长。
+ */
 function assertContextGrowth(events: RunEventEnvelope[]): string[] {
   const ticks = events
     .filter((e) => e.event.type === "loop.tick")
@@ -276,6 +323,9 @@ function assertContextGrowth(events: RunEventEnvelope[]): string[] {
   return [];
 }
 
+/**
+ * 断言成本单调不减。
+ */
 function assertCostMonotonic(events: RunEventEnvelope[]): string[] {
   const costs = events
     .filter((e) => e.event.type === "cost.update")
@@ -292,6 +342,7 @@ async function main() {
   console.log("=== Paw TUI live E2E ===\n");
   fs.mkdirSync(path.join(WORKSPACE, "e2e-tmp"), { recursive: true });
 
+  // 检查 provider 是否就绪
   const ready = await providerReady();
   if (!ready.ok) {
     console.error(`FAIL: ${ready.reason}`);
@@ -299,6 +350,7 @@ async function main() {
   }
   console.log(`Provider: ${ready.reason}\n`);
 
+  // 探测上下文窗口大小
   const sessionProbe = createPersistentSession({
     workspaceRoot: WORKSPACE,
     onEvent: () => {},
@@ -309,6 +361,7 @@ async function main() {
 
   const results: ScenarioResult[] = [];
 
+  // 场景 1：空输入边界
   results.push(
     await runScenario("boundary: empty input", async ({ sessionCtrl, session }) => {
       const pushLog: string[] = [];
@@ -318,6 +371,7 @@ async function main() {
     }),
   );
 
+  // 场景 2：/doctor 命令
   results.push(
     await runScenario("UI: /doctor", async ({ sessionCtrl, session, logs }) => {
       const pushLog: string[] = [];
@@ -329,6 +383,7 @@ async function main() {
     }),
   );
 
+  // 场景 3：/help 命令
   results.push(
     await runScenario("UI: /help", async ({ sessionCtrl, session }) => {
       const pushLog: string[] = [];
@@ -340,6 +395,7 @@ async function main() {
     }),
   );
 
+  // 场景 4：/fs-read 命令
   results.push(
     await runScenario("UI: /fs-read", async ({ sessionCtrl, session }) => {
       const pushLog: string[] = [];
@@ -351,6 +407,7 @@ async function main() {
     }),
   );
 
+  // 场景 5：/fs-list 命令
   results.push(
     await runScenario("UI: /fs-list", async ({ sessionCtrl, session }) => {
       const pushLog: string[] = [];
@@ -362,6 +419,7 @@ async function main() {
     }),
   );
 
+  // 场景 6：自然语言对话 + 流式检查
   results.push(
     await runScenario("agent: chat + stream", async ({ sessionCtrl, session, events, logs }) => {
       const pushLog: string[] = [];
@@ -386,6 +444,7 @@ async function main() {
     }),
   );
 
+  // 场景 7：list_dir 工具调用
   results.push(
     await runScenario("agent: list_dir", async ({ sessionCtrl, session, events }) => {
       const pushLog: string[] = [];
@@ -406,6 +465,7 @@ async function main() {
     }),
   );
 
+  // 场景 8：read_file 工具调用
   results.push(
     await runScenario("agent: read_file", async ({ sessionCtrl, session, events }) => {
       const pushLog: string[] = [];
@@ -423,6 +483,7 @@ async function main() {
     }),
   );
 
+  // 场景 9：写入 + 读取文件
   const writeRel = path.join("e2e-tmp", `write-${Date.now()}.txt`);
   const writeAbs = path.join(WORKSPACE, writeRel);
   const marker = `e2e-marker-${Date.now()}`;
@@ -457,6 +518,7 @@ async function main() {
     }),
   );
 
+  // 场景 10：读取不存在的文件边界
   results.push(
     await runScenario("agent: read failure boundary", async ({ sessionCtrl, session, events }) => {
       const pushLog: string[] = [];
@@ -477,6 +539,7 @@ async function main() {
     }),
   );
 
+  // 场景 11：多轮上下文 + 成本检查
   results.push(
     await runScenario("agent: multi-turn context + cost", async ({ sessionCtrl, session, events, logs }) => {
       const pushLog: string[] = [];
@@ -512,6 +575,7 @@ async function main() {
     }),
   );
 
+  // 汇总结果
   console.log("--- Results ---\n");
   let pass = 0;
   let fail = 0;
@@ -527,6 +591,7 @@ async function main() {
   process.exit(fail > 0 ? 1 : 0);
 }
 
+// 全局超时保险
 const timer = setTimeout(() => process.exit(2), GLOBAL_TIMEOUT_MS);
 main()
   .catch((e) => {

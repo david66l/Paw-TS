@@ -1,10 +1,10 @@
 /**
- * PawFooter — centralized state + scrollback + footer-height orchestration.
+ * PawFooter —— 底部状态栏、滚动日志与 footer 高度协调中心。
  *
- * Mirrors OpenCode’s RunFooter architecture:
- *   - Immutable scrollback via PawScrollbackStream (createScrollbackWriter)
- *   - Reactive footer via SolidJS signals driving PawFooterView
- *   - Dynamic footerHeight based on view + content rows
+ * 架构参考 OpenCode 的 RunFooter：
+ *   - 不可变滚动日志：通过 PawScrollbackStream（createScrollbackWriter）管理
+ *   - 响应式 footer：SolidJS signal 驱动 PawFooterView 重新渲染
+ *   - 动态高度：根据当前视图与内容行数调整 footerHeight
  */
 
 import {
@@ -22,6 +22,7 @@ import { PawFooterView } from "./PawFooterView.js";
 import { resolveApprovalKey } from "./footer-state.js";
 import type { RunEventEnvelope } from "@paw/core";
 
+/** Footer 完整状态。 */
 export interface FooterState {
   readonly modelLabel: string | null;
   readonly turn: number | null;
@@ -54,17 +55,20 @@ export interface FooterState {
   readonly liveAssistant: string;
 }
 
+/** Footer 当前视图类型。 */
 export type FooterView =
   | { type: "prompt" }
   | { type: "approval"; tool: string; selectedIndex: number }
   | { type: "ask"; question: string };
 
+/** 增量更新 Footer 状态的补丁。 */
 export type FooterPatch = Partial<FooterState> & {
   readonly approvalTool?: string;
   readonly askQuestion?: string;
   readonly approvalSelectedIndex?: number;
 };
 
+/** PawFooter 构造选项。 */
 export interface PawFooterOptions {
   readonly theme: PawTheme;
   readonly contextWindow: number;
@@ -75,6 +79,7 @@ export interface PawFooterOptions {
   readonly onExit: () => void;
 }
 
+// Footer 各区域占用的行数常量
 const TEXTAREA_MIN_ROWS = 1;
 const TEXTAREA_MAX_ROWS = 6;
 const STREAM_PREVIEW_ROWS = 4;
@@ -84,13 +89,22 @@ const BOTTOM_BAR_ROWS = 2;
 const HUD_ROWS = 1;
 const CONTEXT_BAR_ROWS = 1;
 
+/**
+ * PawFooter 主类。
+ *
+ * 负责：
+ * - 维护 footer 状态与视图（prompt / approval / ask）
+ * - 管理滚动日志写入
+ * - 处理键盘输入、历史记录、计时器与转圈圈动画
+ * - 根据内容动态调整 footer 高度
+ */
 export class PawFooter {
   private renderer: CliRenderer;
   private options: PawFooterOptions;
   private closed = false;
   private destroyed = false;
 
-  // ── SolidJS signals ──
+  // ── SolidJS 信号 ──
   private state: Accessor<FooterState>;
   private setState: Setter<FooterState>;
   private view: Accessor<FooterView>;
@@ -98,36 +112,37 @@ export class PawFooter {
   private _theme: Accessor<PawTheme>;
   private _setTheme: Setter<PawTheme>;
 
-  // ── Scrollback ──
+  // ── 滚动日志 ──
   private scrollback: PawScrollbackStream;
 
-  // ── History ──
+  // ── 输入历史 ──
   private history: string[] = [];
   private historyIndex = -1;
   private readonly MAX_HISTORY = 1000;
 
-  // ── Textarea ref ──
+  // ── 文本框引用 ──
   private textareaRef: TextareaRenderable | undefined;
 
-  // ── Timer state ──
+  // ── 计时器状态 ──
   private elapsedTimer: ReturnType<typeof setInterval> | null = null;
   private spinnerTimer: ReturnType<typeof setInterval> | null = null;
   private spinnerFrame = 0;
   private startTime = 0;
   private THINKING_FRAMES = ["◌", "◉", "◎", "●", "◎", "◉"];
 
-  // ── Queued scrollback commits ──
+  // ── 滚动日志提交队列 ──
   private queue: StreamCommit[] = [];
   private pending = false;
   private flushing: Promise<void> = Promise.resolve();
 
-  // ── Rows ──
+  // ── 文本框行数 ──
   private rows = TEXTAREA_MIN_ROWS;
 
   constructor(renderer: CliRenderer, options: PawFooterOptions) {
     this.renderer = renderer;
     this.options = options;
 
+    // 初始化 SolidJS 状态信号
     const [state, setState] = createSignal<FooterState>({
       modelLabel: null,
       turn: null,
@@ -156,8 +171,10 @@ export class PawFooter {
 
     this.scrollback = new PawScrollbackStream(renderer, theme);
 
+    // 渲染器销毁时同步清理 footer
     this.renderer.on(CliRenderEvents.DESTROY, this.handleDestroy);
 
+    // 渲染 SolidJS footer 视图
     void render(
       () =>
         createComponent(PawFooterView, {
@@ -181,22 +198,25 @@ export class PawFooter {
       });
   }
 
-  // ── Public API ──
+  // ── 公共 API ──
 
+  /** footer 是否已关闭或销毁。 */
   get isClosed(): boolean {
     return this.closed || this.isGone;
   }
 
+  /** 获取当前主题。 */
   get theme(): PawTheme {
     return this._theme();
   }
 
+  /** 设置新主题并同步更新渲染器背景色。 */
   setTheme(next: PawTheme): void {
     this._setTheme(() => next);
     this.renderer.setBackgroundColor(next.background);
   }
 
-  /** Patch footer state (incremental update). */
+  /** 增量更新 footer 状态。 */
   patch(next: FooterPatch): void {
     if (this.isGone) return;
     const prev = this.state();
@@ -219,7 +239,7 @@ export class PawFooter {
     this.applyHeight();
   }
 
-  /** Switch footer view (prompt / approval / ask). */
+  /** 切换 footer 视图（prompt / approval / ask）。 */
   present(view: FooterView): void {
     if (this.isGone) return;
     this.setView(view);
@@ -227,7 +247,7 @@ export class PawFooter {
     this.refocusTextarea();
   }
 
-  /** Append a scrollback commit (batched). */
+  /** 追加滚动日志提交项（批量处理）。 */
   append(commit: StreamCommit): void {
     if (this.isGone) return;
     this.queue.push(commit);
@@ -239,7 +259,7 @@ export class PawFooter {
     });
   }
 
-  /** Flush scrollback + wait for renderer idle. */
+  /** 刷新滚动日志并等待渲染器空闲。 */
   async idle(): Promise<void> {
     this.flush();
     await this.flushing;
@@ -257,7 +277,7 @@ export class PawFooter {
     this.handleDestroy();
   }
 
-  // ── Internal ──
+  // ── 内部方法 ──
 
   private get isGone(): boolean {
     return this.destroyed || this.renderer.isDestroyed;
@@ -283,8 +303,9 @@ export class PawFooter {
     }
   }
 
-  // ── Height management ──
+  // ── 高度管理 ──
 
+  /** 根据文本框实际行数同步 rows，并触发高度重算。 */
   private syncRows = (value: number): void => {
     const rows = Math.max(TEXTAREA_MIN_ROWS, Math.min(TEXTAREA_MAX_ROWS, value));
     if (rows === this.rows) return;
@@ -292,6 +313,7 @@ export class PawFooter {
     this.applyHeight();
   };
 
+  /** 根据当前视图与状态计算 footer 应有的高度。 */
   private applyHeight(): void {
     const v = this.view();
     const s = this.state();
@@ -313,8 +335,9 @@ export class PawFooter {
     }
   }
 
-  // ── Scrollback flush ──
+  // ── 滚动日志刷新 ──
 
+  /** 将队列中的提交项顺序写入滚动日志。 */
   private flush(): void {
     if (this.isGone || this.queue.length === 0) {
       this.queue.length = 0;
@@ -330,12 +353,12 @@ export class PawFooter {
       .catch(() => {});
   }
 
-  // ── Keyboard & input ──
+  // ── 键盘与输入 ──
 
   handleKeyDown = (e: KeyEvent): void => {
     const v = this.view();
 
-    // Ctrl+C
+    // Ctrl+C：取消/中断/退出
     if (e.name === "c" && e.ctrl) {
       e.preventDefault();
       if (v.type === "approval") {
@@ -358,7 +381,7 @@ export class PawFooter {
       return;
     }
 
-    // Approval dialog keys
+    // 审批对话框按键
     if (v.type === "approval") {
       const action = resolveApprovalKey(e);
       if (action) {
@@ -382,7 +405,7 @@ export class PawFooter {
       return;
     }
 
-    // Ask dialog — only Escape to cancel
+    // 提问对话框：仅 Escape 可取消
     if (v.type === "ask") {
       if (e.name === "escape") {
         e.preventDefault();
@@ -392,7 +415,7 @@ export class PawFooter {
       return;
     }
 
-    // History navigation (only when cursor at edges)
+    // 历史记录导航（仅在光标位于文本框两端时触发）
     if (e.name === "up" && !e.ctrl && !e.shift) {
       if (this.textareaRef && this.textareaRef.cursorOffset === 0) {
         this.navHistory(-1);
@@ -409,6 +432,7 @@ export class PawFooter {
     }
   };
 
+  /** 在历史记录中上下移动。 */
   private navHistory(dir: -1 | 1): void {
     if (!this.textareaRef || this.textareaRef.isDestroyed) return;
     const hist = this.history;
@@ -433,6 +457,7 @@ export class PawFooter {
     }
   }
 
+  /** 提交当前输入框内容。 */
   private handleSubmit = (): void => {
     if (!this.textareaRef || this.textareaRef.isDestroyed) return;
     const v = this.view();
@@ -441,7 +466,7 @@ export class PawFooter {
     const text = this.textareaRef.editBuffer.getText().trim();
     if (!text) return;
 
-    // In ask mode, submit as answer
+    // 提问模式下直接作为答案提交
     if (v.type === "ask") {
       this.textareaRef.editBuffer.setText("");
       this.options.onAskReply(text);
@@ -449,7 +474,7 @@ export class PawFooter {
       return;
     }
 
-    // Normal submit
+    // 正常提交：清空输入、记录历史、回调上层
     this.textareaRef.editBuffer.setText("");
     this.historyIndex = -1;
     this.history.push(text);
@@ -459,6 +484,7 @@ export class PawFooter {
     this.options.onSubmit(text);
   };
 
+  /** 重新聚焦输入框（prompt 视图下）。 */
   private refocusTextarea(): void {
     queueMicrotask(() => {
       if (this.textareaRef && !this.textareaRef.isDestroyed && this.view().type === "prompt") {
@@ -467,8 +493,13 @@ export class PawFooter {
     });
   }
 
-  // ── Run-event helpers (called by main.tsx) ──
+  // ── 运行事件处理（由 main.tsx 调用）──
 
+  /**
+   * 处理 orchestrator 运行事件，更新 footer 状态并将部分事件写入滚动日志。
+   *
+   * @param envelope 运行事件信封
+   */
   handleRunEvent(envelope: RunEventEnvelope): void {
     const ev = envelope.event;
 
@@ -477,6 +508,7 @@ export class PawFooter {
       if (this.elapsedTimer) clearInterval(this.elapsedTimer);
       if (this.spinnerTimer) clearInterval(this.spinnerTimer);
       this.spinnerTimer = null;
+      // 每秒更新已运行时长
       this.elapsedTimer = setInterval(() => {
         this.patch({ elapsedMs: Date.now() - this.startTime });
       }, 1000);
@@ -521,6 +553,7 @@ export class PawFooter {
 
     if (ev.type === "phase") {
       this.patch({ phase: ev.name });
+      // 模型阶段启动转圈动画
       if (ev.name === "model") {
         if (!this.spinnerTimer) {
           this.spinnerTimer = setInterval(() => {
@@ -557,18 +590,21 @@ export class PawFooter {
       this.patch({ spinnerChar: "", streaming: false, liveThinking: "", liveAssistant: "", phase: "idle" });
     }
 
-    // Forward to scrollback as a commit
+    // 将事件转发给滚动日志
     this.scrollback.appendEvent(envelope);
   }
 
+  /** 标记滚动日志已清空。 */
   markCleared(): void {
     this.scrollback.markCleared();
   }
 
+  /** 追加 Markdown 文本到滚动日志。 */
   appendMarkdown(text: string, defaultFg?: import("@opentui/core").ColorInput): void {
     this.scrollback.appendMarkdown(text, defaultFg);
   }
 
+  /** 追加纯文本到滚动日志。 */
   appendPlain(text: string, fg?: import("@opentui/core").ColorInput): void {
     this.scrollback.appendPlain(text, fg);
   }

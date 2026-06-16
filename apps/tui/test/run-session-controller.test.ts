@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createRunSessionController } from "../src/run-session-controller.js";
 
 describe("createRunSessionController", () => {
-  test("serializes submissions", () => {
+  test("串行化用户提交，避免并发执行", () => {
     const c = createRunSessionController();
     expect(c.tryBeginSubmission()).toBe(true);
     expect(c.isSubmissionBusy()).toBe(true);
@@ -14,7 +14,7 @@ describe("createRunSessionController", () => {
     c.endSubmission();
   });
 
-  test("abortIfRunning clears controller until next stub-run begin", () => {
+  test("abortIfRunning 仅在存在活跃 AbortController 时返回 true", () => {
     const c = createRunSessionController();
     expect(c.abortIfRunning()).toBe(false);
     c.runSession.begin();

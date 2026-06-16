@@ -1,15 +1,22 @@
 {
+  // 继承根目录通用 TypeScript 配置
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // 使用 ES2022 标准库
     "lib": ["ES2022"],
+    // 保留 JSX 语法，由 @opentui/solid 在运行时转换
     "jsx": "preserve",
+    // JSX 工厂来源：使用 OpenTUI 封装的 SolidJS 运行时
     "jsxImportSource": "@opentui/solid",
+    // 编译根目录为当前目录，输出到 dist（仅类型检查，不实际输出）
     "rootDir": ".",
     "outDir": "dist",
     "noEmit": true,
     "declaration": false,
     "declarationMap": false,
+    // 引入 Bun 与 Node 的类型声明
     "types": ["bun-types", "node"]
   },
+  // 包含源码与测试文件
   "include": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
 }

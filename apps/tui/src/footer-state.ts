@@ -1,14 +1,16 @@
 import type { RunEventEnvelope } from "@paw/core";
 
+/** 上下文预算 HUD 数据结构。 */
 export interface ContextBudgetHud {
-  readonly historyUsed: number;
-  readonly historyBudget: number;
-  readonly systemUsed: number;
-  readonly systemBudget: number;
+  readonly historyUsed: number;      // 历史消息已用 tokens
+  readonly historyBudget: number;    // 历史消息预算
+  readonly systemUsed: number;       // 系统提示已用 tokens
+  readonly systemBudget: number;     // 系统提示预算
   readonly historyOverBudget: boolean;
   readonly systemOverBudget: boolean;
 }
 
+/** 底部状态栏聚合所需的核心 HUD 数据。 */
 export interface HudState {
   readonly modelLabel: string | null;
   readonly turn: number | null;
@@ -20,28 +22,37 @@ export interface HudState {
   readonly elapsedMs: number | null;
 }
 
+/** Token 消耗与成本明细。 */
 export interface CostDetail {
   readonly promptTokens: number;
   readonly completionTokens: number;
   readonly totalTokens: number;
   readonly estimatedCostUsd: number;
   readonly costCurrency?: "CNY" | "USD";
-  readonly cachedPromptTokens?: number;
-  readonly turnPromptTokens?: number;
-  readonly turnCompletionTokens?: number;
+  readonly cachedPromptTokens?: number;       // 本轮缓存命中数
+  readonly turnPromptTokens?: number;         // 本轮 prompt tokens
+  readonly turnCompletionTokens?: number;     // 本轮 completion tokens
 }
 
+/**
+ * 按货币格式化金额。
+ *
+ * @param amount 金额数值
+ * @param currency 货币类型，默认 USD
+ */
 function formatMoney(amount: number, currency: "CNY" | "USD" = "USD"): string {
   const sym = currency === "CNY" ? "¥" : "$";
   return `${sym}${amount.toFixed(4)}`;
 }
 
+/** 旧版 footer 交互状态（现主要用 PawFooter 中的 FooterState，保留用于布局兼容）。 */
 export interface FooterState {
   readonly askOpen: boolean;
   readonly approvalOpen: boolean;
   readonly streaming?: boolean;
 }
 
+/** Footer 各区域布局信息。 */
 export interface FooterLayout {
   readonly showApprovalPicker: boolean;
   readonly showAskPrompt: boolean;
@@ -52,6 +63,7 @@ export interface FooterLayout {
   readonly textareaHeight: number;
 }
 
+/** 审批对话框的键盘动作。 */
 export type ApprovalKeyAction =
   | "approve"
   | "confirm"
@@ -59,6 +71,7 @@ export type ApprovalKeyAction =
   | "select-allow"
   | "select-deny";
 
+/** 简化的按键描述。 */
 export interface KeyLike {
   readonly name: string;
   readonly ctrl?: boolean;
@@ -69,6 +82,11 @@ const STREAM_PREVIEW_ROWS = 4;
 export const FOOTER_HEIGHT = 10;
 const ASK_PROMPT_ROWS = 2;
 
+/**
+ * 根据 footer 状态计算各区域是否显示及其高度。
+ *
+ * @param state footer 交互状态
+ */
 export function getFooterLayout(state: FooterState): FooterLayout {
   if (state.approvalOpen) {
     return {
@@ -105,13 +123,25 @@ export function getFooterLayout(state: FooterState): FooterLayout {
   };
 }
 
+/**
+ * 将 token 数格式化为人类可读字符串（K/M）。
+ *
+ * @param n token 数量
+ */
 export function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
 
-/** Per-turn prefix cache stats (not session-cumulative). */
+/**
+ * 计算本轮缓存命中率。
+ *
+ * 注意：分母使用 turnPromptTokens（本轮 prompt），而非累计值。
+ *
+ * @param cd 成本明细
+ * @returns 命中信息；数据不足时返回 null
+ */
 export function computeTurnCacheStats(cd: {
   readonly cachedPromptTokens?: number;
   readonly turnPromptTokens?: number;
@@ -127,12 +157,25 @@ export function computeTurnCacheStats(cd: {
   return { hitPct, hit, miss };
 }
 
+/**
+ * 格式化本轮缓存命中片段，用于底部状态栏展示。
+ *
+ * @param cd 成本明细
+ * @returns 中文描述或 null
+ */
 export function formatTurnCachePart(cd: CostDetail): string | null {
   const stats = computeTurnCacheStats(cd);
   if (!stats) return null;
   return `缓存命中 ${stats.hitPct}% (${formatTokens(stats.hit)}/${formatTokens(stats.miss > 0 ? stats.miss : 0)})`;
 }
 
+/**
+ * 格式化顶部 HUD 文本。
+ *
+ * 输出格式：paw │ modelLabel │ 轮 turn/maxSteps │ phase
+ *
+ * @param hud HUD 数据
+ */
 export function formatHudText(hud: HudState): string {
   const phaseLabels: Record<string, string> = {
     model: "生成中…",
@@ -152,6 +195,14 @@ export function formatHudText(hud: HudState): string {
   ].join(" │ ");
 }
 
+/**
+ * 格式化上下文使用量进度条。
+ *
+ * 使用 20 个方块字符表示比例，并附加百分比。
+ *
+ * @param tokens 当前已用 tokens
+ * @param maxTokens 最大上下文窗口
+ */
 export function formatContextBar(
   tokens: number | null,
   maxTokens: number,
@@ -163,12 +214,19 @@ export function formatContextBar(
   return `${"█".repeat(filled)}${"░".repeat(20 - filled)} ${pct}%`;
 }
 
+/**
+ * 格式化底部状态栏为纯文本（用于测试与文本渲染）。
+ *
+ * @param hud HUD 数据
+ * @param contextWindow 可选上下文窗口大小
+ */
 export function formatBottomBar(hud: HudState, contextWindow?: number): string {
   return buildBottomBarChips(hud, contextWindow)
     .map((c) => c.text)
     .join(" │ ");
 }
 
+/** 底部状态栏芯片颜色。 */
 export type BottomBarChipColor =
   | "success"
   | "info"
@@ -177,12 +235,21 @@ export type BottomBarChipColor =
   | "highlight"
   | "muted";
 
+/** 底部状态栏芯片。 */
 export interface BottomBarChip {
   readonly text: string;
   readonly color: BottomBarChipColor;
 }
 
-/** Shared bottom-bar chip list for plain text and OpenTUI colored rendering. */
+/**
+ * 构建底部状态栏芯片列表。
+ *
+ * 包含：成本、上下文估计、上下文预算、本轮 tokens、累计 tokens、
+ * 缓存命中率、运行时长。
+ *
+ * @param hud HUD 数据
+ * @param contextWindow 可选上下文窗口大小
+ */
 export function buildBottomBarChips(
   hud: HudState,
   contextWindow?: number,
@@ -190,12 +257,14 @@ export function buildBottomBarChips(
   const cd = hud.costDetail;
   const chips: BottomBarChip[] = [];
 
+  // 成本
   const currency = cd?.costCurrency ?? "USD";
   chips.push({
     text: cd ? formatMoney(cd.estimatedCostUsd, currency) : "-",
     color: "success",
   });
 
+  // 上下文使用量
   if (hud.tokens != null) {
     chips.push({
       text:
@@ -206,6 +275,7 @@ export function buildBottomBarChips(
     });
   }
 
+  // 上下文预算
   const poolPart = formatPoolBudget(hud.contextBudget);
   if (poolPart) {
     const poolOver =
@@ -214,6 +284,7 @@ export function buildBottomBarChips(
     chips.push({ text: poolPart, color: poolOver ? "warning" : "muted" });
   }
 
+  // 本轮 tokens
   if (cd?.turnPromptTokens != null || cd?.turnCompletionTokens != null) {
     chips.push({
       text: `本轮 ${formatTokens((cd.turnPromptTokens ?? 0) + (cd.turnCompletionTokens ?? 0))}`,
@@ -221,11 +292,13 @@ export function buildBottomBarChips(
     });
   }
 
+  // 累计 tokens
   chips.push({
     text: cd ? `累计 ${formatTokens(cd.totalTokens)}` : "累计 -",
     color: "muted",
   });
 
+  // 缓存命中率
   const cachePart = cd ? formatTurnCachePart(cd) : null;
   if (cachePart && cd) {
     const stats = computeTurnCacheStats(cd);
@@ -235,10 +308,16 @@ export function buildBottomBarChips(
     chips.push({ text: cachePart, color: cacheColor });
   }
 
+  // 运行时长
   chips.push({ text: formatElapsed(hud.elapsedMs), color: "muted" });
   return chips;
 }
 
+/**
+ * 格式化上下文预算为字符串。
+ *
+ * @param budget 上下文预算数据
+ */
 function formatPoolBudget(budget: ContextBudgetHud | null): string | null {
   if (!budget) return null;
   const histWarn = budget.historyOverBudget ? "!" : "";
@@ -248,6 +327,15 @@ function formatPoolBudget(budget: ContextBudgetHud | null): string | null {
 
 export { formatPoolBudget };
 
+/**
+ * 清理工具结果摘要，去除重复的工具名前缀。
+ *
+ * 例如 `workspace.memory.list: workspace.memory.list: 20 entries`
+ * 会被处理为 `20 entries`。
+ *
+ * @param tool 工具名
+ * @param summary 原始摘要
+ */
 export function formatToolResultSummary(tool: string, summary: string): string {
   let text = summary.trim();
   const dupPrefix = `${tool}: ${tool}:`;
@@ -261,12 +349,23 @@ export function formatToolResultSummary(tool: string, summary: string): string {
   return text;
 }
 
+/**
+ * 格式化已运行时长为 `⏱ MM:SS`。
+ *
+ * @param ms 毫秒数
+ */
 function formatElapsed(ms: number | null): string {
   if (ms === null || ms < 0) return "⏱ --:--";
   const totalSec = Math.floor(ms / 1000);
   return `⏱ ${String(Math.floor(totalSec / 60)).padStart(2, "0")}:${String(totalSec % 60).padStart(2, "0")}`;
 }
 
+/**
+ * 将键盘事件映射为审批对话框动作。
+ *
+ * @param key 按键描述
+ * @returns 审批动作；无法识别返回 null
+ */
 export function resolveApprovalKey(key: KeyLike): ApprovalKeyAction | null {
   if (key.ctrl) return null;
   switch (key.name) {
@@ -286,6 +385,15 @@ export function resolveApprovalKey(key: KeyLike): ApprovalKeyAction | null {
   }
 }
 
+/**
+ * 将运行事件转换为滚动日志中的单行文本。
+ *
+ * 对不影响交互的事件（如 loop.tick、cost.update）返回 null，
+ * 避免日志刷屏。
+ *
+ * @param e 运行事件信封
+ * @returns 中文展示文本或 null
+ */
 export function formatEventForScrollback(e: RunEventEnvelope): string | null {
   const ev = e.event;
   switch (ev.type) {
@@ -349,6 +457,11 @@ export function formatEventForScrollback(e: RunEventEnvelope): string | null {
   }
 }
 
+/**
+ * 根据工具名返回对应的展示图标。
+ *
+ * @param tool 工具名
+ */
 function toolIcon(tool: string): string {
   if (tool.includes("read_file") || tool.includes("list_dir")) return "📖";
   if (

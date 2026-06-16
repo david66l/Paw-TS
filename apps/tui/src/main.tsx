@@ -19,7 +19,14 @@ import { createPersistentSession, createRunSessionController } from "./run-sessi
 import { approvalPolicyWhenStrict } from "./approval-policy.js";
 import { tuiStrictToolApprovalFromEnv } from "./env.js";
 
-/** Walk up from cwd to find the nearest .paw/ with settings or skills. */
+/**
+ * 从当前工作目录向上查找最近的 .paw/ 目录（包含设置或 skill）。
+ *
+ * 用于在 TUI 启动时确定应显示哪个工作区的模型信息。
+ *
+ * @param cwd 起始目录
+ * @returns 找到的工作区根目录
+ */
 function resolvePawRootForDisplay(cwd: string): string {
   let dir = path.resolve(cwd);
   for (let i = 0; i < 64; i++) {
@@ -37,6 +44,13 @@ function resolvePawRootForDisplay(cwd: string): string {
   return findPawRoot(cwd) ?? cwd;
 }
 
+/**
+ * 根据当前工作区设置解析模型标签，用于欢迎消息展示。
+ *
+ * 支持 anthropic / openai / qwen / deepseek / ollama，并处理一些兼容逻辑。
+ *
+ * @returns 模型标签字符串
+ */
 function resolveModelLabel(): string {
   try {
     const pawRoot = resolvePawRootForDisplay(process.cwd());
@@ -66,7 +80,7 @@ function resolveModelLabel(): string {
     if (provider === "deepseek" || hasApiKey(s, "deepseek")) {
       return `deepseek:${model || "deepseek-chat"}`;
     }
-    // Backward compatibility: OpenAI key pointing at DeepSeek base URL.
+    // 兼容：OpenAI key 指向 DeepSeek base URL
     const openaiBaseUrl = resolveBaseUrl(s, "openai");
     if (openaiBaseUrl?.includes("deepseek")) {
       return `deepseek:${model || "deepseek-chat"}`;
@@ -84,6 +98,7 @@ function resolveModelLabel(): string {
 }
 
 async function main() {
+  // 创建 OpenTUI 渲染器：分屏 footer 模式
   const renderer = await createCliRenderer({
     screenMode: "split-footer",
     footerHeight: 7,
@@ -96,11 +111,11 @@ async function main() {
     autoFocus: true,
   });
 
-  // Resolve theme from terminal palette
+  // 从终端调色板解析主题
   const theme = await resolveTheme(renderer).catch(() => fallbackTheme);
   renderer.setBackgroundColor(theme.background);
 
-  // Show model info in welcome message
+  // 在欢迎消息中展示模型信息
   const modelLabel = resolveModelLabel();
 
   writeSolidToScrollback(renderer, () => (
@@ -114,10 +129,10 @@ async function main() {
   ));
   renderer.requestRender();
 
-  // Wait for scrollback to settle before attaching footer
+  // 等待滚动日志稳定后再挂载 footer
   await renderer.idle().catch(() => {});
 
-  // ── Session setup ──
+  // ── 会话初始化 ──
   const workspaceRoot = resolvePawRootForDisplay(process.cwd());
   const skillsDir = path.join(workspaceRoot, ".paw", "skills");
   const skillRegistry = new SkillRegistry();
@@ -128,7 +143,7 @@ async function main() {
   const sessionCtrl = createRunSessionController();
   let currentRunId = "";
 
-  // Approval / ask resolvers (captured by reference)
+  // 审批 / 提问的 resolver（通过引用捕获）
   let resolveApproval: ((approved: boolean) => void) | null = null;
   let resolveAsk: ((answer: string) => void) | null = null;
 
@@ -200,6 +215,11 @@ async function main() {
     },
   });
 
+  /**
+   * 将用户输入提交给 orchestrator 执行。
+   *
+   * @param text 用户输入文本
+   */
   async function handleRun(text: string) {
     try {
       await submitUserLine(text, {
@@ -236,7 +256,7 @@ async function main() {
     }
   }
 
-  // SIGINT handling
+  // SIGINT 处理：先尝试中断当前运行，否则退出
   const sigint = () => {
     if (renderer.isDestroyed) {
       process.exit(0);
@@ -245,7 +265,7 @@ async function main() {
   };
   process.on("SIGINT", sigint);
 
-  // Wait until footer closes (user exits)
+  // 等待 footer 关闭（用户主动退出）
   await footer.idle().catch(() => {});
 
   process.off("SIGINT", sigint);

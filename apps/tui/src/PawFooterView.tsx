@@ -1,9 +1,8 @@
 /**
- * PawFooterView — pure SolidJS rendering component for the footer region.
+ * PawFooterView —— footer 区域的纯 SolidJS 渲染组件。
  *
- * Stateless except for local UI state (none). All data comes from props
- * (SolidJS accessors) so PawFooter can patch state without re-creating
- * the whole component tree.
+ * 除本地 UI 状态外无其他状态。所有数据通过 props（SolidJS accessor）传入，
+ * 使 PawFooter 可以增量 patch 状态而不重建整个组件树。
  */
 
 /** @jsxImportSource @opentui/solid */
@@ -21,6 +20,7 @@ import {
 } from "./footer-state.js";
 import type { ColorInput } from "@opentui/core";
 
+/** PawFooterView 组件 props。 */
 interface PawFooterViewProps {
   readonly theme: Accessor<PawTheme>;
   readonly state: Accessor<FooterState>;
@@ -36,29 +36,39 @@ export function PawFooterView(props: PawFooterViewProps) {
   const state = props.state;
   const view = props.view;
 
+  // 当前视图类型派生 memo
   const isPrompt = createMemo(() => view().type === "prompt");
   const isApproval = createMemo(() => view().type === "approval");
   const isAsk = createMemo(() => view().type === "ask");
 
+  // HUD 与上下文条文本
   const hudText = createMemo(() => formatHudText(state()));
   const contextBarText = createMemo(() =>
     state().tokens != null ? formatContextBar(state().tokens, 128_000) : "",
   );
   const hasContextBar = createMemo(() => (state().tokens ?? 0) > 0);
 
+  // 底部分隔线宽度（占位，保持视觉稳定）
   const footerRuleWidth = createMemo(() => Math.max(24, 100 - 2));
 
   const busy = createMemo(() => state().inputBusy);
   const askOpen = createMemo(() => view().type === "ask");
 
+  // 注册全局键盘监听
   useKeyboard((e) => props.onKeyDown(e));
 
+  // 根据状态动态调整 placeholder
   const placeholder = createMemo(() => {
     if (busy()) return "Running… (Ctrl+C to abort)";
     if (askOpen()) return "Type your reply...";
     return "Type your goal and press Enter...";
   });
 
+  /**
+   * 将 BottomBarChipColor 映射到主题色。
+   *
+   * @param color 芯片颜色标识
+   */
   function chipColor(color: BottomBarChipColor): ColorInput {
     const t = theme();
     switch (color) {
@@ -77,6 +87,7 @@ export function PawFooterView(props: PawFooterViewProps) {
     }
   }
 
+  // 底部状态栏芯片列表
   const bottomChips = createMemo(() => {
     const h = state();
     const chips = buildBottomBarChips(
@@ -106,14 +117,14 @@ export function PawFooterView(props: PawFooterViewProps) {
       gap={0}
       padding={0}
     >
-      {/* HUD bar */}
+      {/* HUD 状态栏 */}
       <box id="paw-footer-hud" height={1} width="100%" flexShrink={0}>
         <text fg={theme().muted} wrapMode="none">
           {hudText() + (state().spinnerChar ? ` ${state().spinnerChar}` : "")}
         </text>
       </box>
 
-      {/* Context usage bar */}
+      {/* 上下文使用量条 */}
       <Show when={hasContextBar()}>
         <box id="paw-footer-ctx" height={1} width="100%" flexShrink={0}>
           <text fg={theme().success} wrapMode="none">
@@ -122,7 +133,7 @@ export function PawFooterView(props: PawFooterViewProps) {
         </box>
       </Show>
 
-      {/* Stream preview */}
+      {/* 流式预览区 */}
       <Show when={state().streaming}>
         <box
           id="paw-footer-stream"
@@ -147,7 +158,7 @@ export function PawFooterView(props: PawFooterViewProps) {
         </box>
       </Show>
 
-      {/* Approval picker */}
+      {/* 工具审批选择器 */}
       <Show when={isApproval()}>
         <box
           id="paw-footer-approval"
@@ -192,7 +203,7 @@ export function PawFooterView(props: PawFooterViewProps) {
         </box>
       </Show>
 
-      {/* Ask prompt */}
+      {/* 用户提问提示 */}
       <Show when={isAsk()}>
         <box
           id="paw-footer-ask"
@@ -211,7 +222,7 @@ export function PawFooterView(props: PawFooterViewProps) {
         </box>
       </Show>
 
-      {/* Textarea */}
+      {/* 多行文本输入框 */}
       <Show when={isPrompt() || isAsk()}>
         <box
           id="paw-footer-textarea-box"
@@ -228,9 +239,11 @@ export function PawFooterView(props: PawFooterViewProps) {
               el.focusedTextColor = theme().text;
               el.backgroundColor = theme().surface;
               el.focusedBackgroundColor = theme().surface;
+              // 内容变化时通知父组件更新行数
               el.onContentChange = () => {
                 props.onRows(el.lineCount);
               };
+              // Enter 提交，Shift+Enter 换行
               el.keyBindings = [
                 { name: "return", action: "submit" },
                 { name: "linefeed", action: "submit" },
@@ -250,7 +263,7 @@ export function PawFooterView(props: PawFooterViewProps) {
         </box>
       </Show>
 
-      {/* Bottom status bar */}
+      {/* 底部状态栏 */}
       <Show when={isPrompt() || isApproval()}>
         <box height={1} width="100%" flexShrink={0}>
           <text fg={theme().border} wrapMode="none">

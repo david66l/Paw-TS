@@ -1,1 +1,3 @@
+# Bun 运行时配置：TUI 应用
+# 预加载 @opentui/solid 的 JSX 转换，使 SolidJS 组件能在终端中正确渲染。
 preload = ["@opentui/solid/preload"]

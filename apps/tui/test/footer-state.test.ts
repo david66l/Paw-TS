@@ -11,7 +11,7 @@ import {
 } from "../src/footer-state.js";
 
 describe("getFooterLayout", () => {
-  test("keeps the textarea visible while waiting for ask-user input", () => {
+  test("等待用户回答时保持文本框可见", () => {
     expect(getFooterLayout({ askOpen: true, approvalOpen: false })).toEqual({
       showApprovalPicker: false,
       showAskPrompt: true,
@@ -23,7 +23,7 @@ describe("getFooterLayout", () => {
     });
   });
 
-  test("shows approval picker instead of text input while approval is pending", () => {
+  test("等待工具审批时显示审批选择器并隐藏输入框", () => {
     expect(getFooterLayout({ askOpen: false, approvalOpen: true })).toEqual({
       showApprovalPicker: true,
       showAskPrompt: false,
@@ -37,7 +37,7 @@ describe("getFooterLayout", () => {
 });
 
 describe("formatHudText", () => {
-  test("renders stable single-line placeholders", () => {
+  test("无数据时使用稳定的占位符渲染", () => {
     expect(
       formatHudText({
         modelLabel: null,
@@ -54,24 +54,24 @@ describe("formatHudText", () => {
 });
 
 describe("formatContextBar", () => {
-  test("returns empty string when tokens unknown", () => {
+  test("tokens 未知时返回空字符串", () => {
     expect(formatContextBar(null, 128_000)).toBe("");
   });
 
-  test("caps ratio at 100%", () => {
+  test("比例上限为 100%", () => {
     expect(formatContextBar(200_000, 128_000)).toBe(
       `${"█".repeat(20)} 100%`,
     );
   });
 
-  test("shows proportional fill", () => {
+  test("按比例填充进度条", () => {
     const bar = formatContextBar(12_800, 128_000);
     expect(bar).toBe(`${"█".repeat(2)}${"░".repeat(18)} 10%`);
   });
 });
 
 describe("formatBottomBar", () => {
-  test("formats cost, context estimate, and session api tokens", () => {
+  test("格式化成本、上下文估计与会话 API tokens", () => {
     const line = formatBottomBar(
       {
         modelLabel: "deepseek:x",
@@ -111,7 +111,7 @@ describe("formatBottomBar", () => {
     expect(line).toContain("⏱ 00:09");
   });
 
-  test("shows over-budget warning markers", () => {
+  test("超预算时显示警告标记", () => {
     const line = formatBottomBar(
       {
         modelLabel: null,
@@ -138,7 +138,7 @@ describe("formatBottomBar", () => {
 });
 
 describe("computeTurnCacheStats", () => {
-  test("uses turn prompt as denominator, not session cumulative", () => {
+  test("分母使用本轮 prompt，而非累计 prompt", () => {
     const stats = computeTurnCacheStats({
       turnPromptTokens: 8_600,
       cachedPromptTokens: 8_200,
@@ -148,7 +148,7 @@ describe("computeTurnCacheStats", () => {
     expect(stats?.miss).toBe(400);
   });
 
-  test("returns null without turn prompt tokens", () => {
+  test("缺少本轮 prompt tokens 时返回 null", () => {
     expect(
       computeTurnCacheStats({ cachedPromptTokens: 8_200 }),
     ).toBeNull();
@@ -156,7 +156,7 @@ describe("computeTurnCacheStats", () => {
 });
 
 describe("formatEventForScrollback memory", () => {
-  test("hides empty memory retrieval", () => {
+  test("空记忆召回不显示", () => {
     expect(
       formatEventForScrollback({
         runId: "r",
@@ -177,7 +177,7 @@ describe("formatEventForScrollback memory", () => {
 });
 
 describe("resolveApprovalKey", () => {
-  test("maps approval picker keys without swallowing ctrl-c", () => {
+  test("正确映射审批选择器按键，且不拦截 ctrl-c", () => {
     expect(resolveApprovalKey({ name: "down" })).toBe("select-deny");
     expect(resolveApprovalKey({ name: "up" })).toBe("select-allow");
     expect(resolveApprovalKey({ name: "y" })).toBe("approve");
@@ -189,7 +189,7 @@ describe("resolveApprovalKey", () => {
 });
 
 describe("formatEventForScrollback", () => {
-  test("prints chunk and approval resolution events that affect interaction", () => {
+  test("输出影响交互的审批结果与记忆事件", () => {
     expect(
       formatEventForScrollback({
         runId: "r",
