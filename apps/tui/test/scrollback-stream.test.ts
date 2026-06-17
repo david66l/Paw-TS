@@ -5,7 +5,7 @@ import { stripAssistantTextForScrollback } from "../src/scrollback-text.js";
 describe("stripAssistantTextForScrollback", () => {
   test("优先使用 final_answer 的 summary 而不是原始 JSON", () => {
     const raw =
-      '{"action":"final_answer","summary":"## Hello\n\nWorld with **bold**."}';
+      '{"action":"final_answer","summary":"## Hello\\n\\nWorld with **bold**."}';
     expect(stripAssistantTextForScrollback(raw)).toBe(
       "## Hello\n\nWorld with **bold**.",
     );
