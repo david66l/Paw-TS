@@ -19,7 +19,17 @@ import { createComponent, createSignal, type Accessor, type Setter } from "solid
 import type { PawTheme } from "./theme.js";
 import { PawScrollbackStream, type StreamCommit } from "./PawScrollbackStream.js";
 import { PawFooterView } from "./PawFooterView.js";
-import { resolveApprovalKey } from "./footer-state.js";
+import {
+  APPROVAL_ROWS,
+  ASK_ROWS,
+  BOTTOM_BAR_ROWS,
+  CONTEXT_BAR_ROWS,
+  HUD_ROWS,
+  STREAM_PREVIEW_ROWS,
+  TEXTAREA_MAX_ROWS,
+  TEXTAREA_MIN_ROWS,
+  resolveApprovalKey,
+} from "./footer-state.js";
 import type { RunEventEnvelope } from "@paw/core";
 
 /** Footer 完整状态。 */
@@ -79,15 +89,6 @@ export interface PawFooterOptions {
   readonly onExit: () => void;
 }
 
-// Footer 各区域占用的行数常量
-const TEXTAREA_MIN_ROWS = 1;
-const TEXTAREA_MAX_ROWS = 6;
-const STREAM_PREVIEW_ROWS = 4;
-const APPROVAL_ROWS = 5;
-const ASK_ROWS = 3;
-const BOTTOM_BAR_ROWS = 2;
-const HUD_ROWS = 1;
-const CONTEXT_BAR_ROWS = 1;
 
 /**
  * PawFooter 主类。

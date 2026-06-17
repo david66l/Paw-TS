@@ -45,24 +45,6 @@ function formatMoney(amount: number, currency: "CNY" | "USD" = "USD"): string {
   return `${sym}${amount.toFixed(4)}`;
 }
 
-/** 旧版 footer 交互状态（现主要用 PawFooter 中的 FooterState，保留用于布局兼容）。 */
-export interface FooterState {
-  readonly askOpen: boolean;
-  readonly approvalOpen: boolean;
-  readonly streaming?: boolean;
-}
-
-/** Footer 各区域布局信息。 */
-export interface FooterLayout {
-  readonly showApprovalPicker: boolean;
-  readonly showAskPrompt: boolean;
-  readonly showTextarea: boolean;
-  readonly showBottomBar: boolean;
-  readonly showStreamPreview: boolean;
-  readonly streamPreviewHeight: number;
-  readonly textareaHeight: number;
-}
-
 /** 审批对话框的键盘动作。 */
 export type ApprovalKeyAction =
   | "approve"
@@ -77,51 +59,26 @@ export interface KeyLike {
   readonly ctrl?: boolean;
 }
 
-const BOTTOM_BAR_HEIGHT = 2;
-const STREAM_PREVIEW_ROWS = 4;
-export const FOOTER_HEIGHT = 10;
-const ASK_PROMPT_ROWS = 2;
+// ── Footer 布局常量 ──
+// 这些常量被 PawFooter（高度计算）和 PawFooterView（渲染高度）共用，
+// 避免两边硬编码不一致。
 
-/**
- * 根据 footer 状态计算各区域是否显示及其高度。
- *
- * @param state footer 交互状态
- */
-export function getFooterLayout(state: FooterState): FooterLayout {
-  if (state.approvalOpen) {
-    return {
-      showApprovalPicker: true,
-      showAskPrompt: false,
-      showTextarea: false,
-      showBottomBar: true,
-      showStreamPreview: false,
-      streamPreviewHeight: 0,
-      textareaHeight: 0,
-    };
-  }
-  const streamRows = state.streaming ? STREAM_PREVIEW_ROWS : 0;
-  if (state.askOpen) {
-    return {
-      showApprovalPicker: false,
-      showAskPrompt: true,
-      showTextarea: true,
-      showBottomBar: true,
-      showStreamPreview: state.streaming === true,
-      streamPreviewHeight: streamRows,
-      textareaHeight:
-        FOOTER_HEIGHT - BOTTOM_BAR_HEIGHT - ASK_PROMPT_ROWS - streamRows,
-    };
-  }
-  return {
-    showApprovalPicker: false,
-    showAskPrompt: false,
-    showTextarea: true,
-    showBottomBar: true,
-    showStreamPreview: state.streaming === true,
-    streamPreviewHeight: streamRows,
-    textareaHeight: FOOTER_HEIGHT - BOTTOM_BAR_HEIGHT - streamRows,
-  };
-}
+/** 顶部 HUD 占用的行数。 */
+export const HUD_ROWS = 1;
+/** 上下文使用量条占用的行数。 */
+export const CONTEXT_BAR_ROWS = 1;
+/** 底部状态栏占用的行数。 */
+export const BOTTOM_BAR_ROWS = 2;
+/** 流式输出预览区占用的行数。 */
+export const STREAM_PREVIEW_ROWS = 4;
+/** 工具审批选择器占用的行数。 */
+export const APPROVAL_ROWS = 5;
+/** 用户提问提示区占用的行数。 */
+export const ASK_ROWS = 3;
+/** 文本框最小行数。 */
+export const TEXTAREA_MIN_ROWS = 1;
+/** 文本框最大行数。 */
+export const TEXTAREA_MAX_ROWS = 6;
 
 /**
  * 将 token 数格式化为人类可读字符串（K/M）。

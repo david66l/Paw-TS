@@ -13,6 +13,9 @@ import type { Accessor } from "solid-js";
 import type { PawTheme } from "./theme.js";
 import type { FooterState, FooterView } from "./PawFooter.js";
 import {
+  APPROVAL_ROWS,
+  ASK_ROWS,
+  STREAM_PREVIEW_ROWS,
   type BottomBarChipColor,
   buildBottomBarChips,
   formatContextBar,
@@ -137,7 +140,7 @@ export function PawFooterView(props: PawFooterViewProps) {
       <Show when={state().streaming}>
         <box
           id="paw-footer-stream"
-          height={4}
+          height={STREAM_PREVIEW_ROWS}
           width="100%"
           flexDirection="column"
           flexShrink={0}
@@ -162,7 +165,7 @@ export function PawFooterView(props: PawFooterViewProps) {
       <Show when={isApproval()}>
         <box
           id="paw-footer-approval"
-          height={5}
+          height={APPROVAL_ROWS}
           width="100%"
           backgroundColor={theme().pane}
           flexDirection="column"
@@ -207,7 +210,7 @@ export function PawFooterView(props: PawFooterViewProps) {
       <Show when={isAsk()}>
         <box
           id="paw-footer-ask"
-          height={3}
+          height={ASK_ROWS}
           width="100%"
           backgroundColor={theme().pane}
           flexDirection="column"

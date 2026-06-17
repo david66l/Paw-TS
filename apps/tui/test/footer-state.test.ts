@@ -6,35 +6,8 @@ import {
   formatContextBar,
   formatEventForScrollback,
   formatHudText,
-  getFooterLayout,
   resolveApprovalKey,
 } from "../src/footer-state.js";
-
-describe("getFooterLayout", () => {
-  test("等待用户回答时保持文本框可见", () => {
-    expect(getFooterLayout({ askOpen: true, approvalOpen: false })).toEqual({
-      showApprovalPicker: false,
-      showAskPrompt: true,
-      showTextarea: true,
-      showBottomBar: true,
-      showStreamPreview: false,
-      streamPreviewHeight: 0,
-      textareaHeight: 6,
-    });
-  });
-
-  test("等待工具审批时显示审批选择器并隐藏输入框", () => {
-    expect(getFooterLayout({ askOpen: false, approvalOpen: true })).toEqual({
-      showApprovalPicker: true,
-      showAskPrompt: false,
-      showTextarea: false,
-      showBottomBar: true,
-      showStreamPreview: false,
-      streamPreviewHeight: 0,
-      textareaHeight: 0,
-    });
-  });
-});
 
 describe("formatHudText", () => {
   test("无数据时使用稳定的占位符渲染", () => {
