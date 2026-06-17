@@ -17,3 +17,19 @@ export {
   findGitRoot,
 } from "./worktree.js";
 export type { TemporaryWorktree } from "./worktree.js";
+export {
+  createPersistentSession,
+  createRunSessionController,
+} from "./session.js";
+export type {
+  PersistentSession,
+  PersistentSessionOptions,
+  RunSessionController,
+} from "./session.js";
+export {
+  createRunOrchestrator,
+} from "./orchestrator-factory.js";
+export type {
+  RunOrchestrator,
+  RunOrchestratorOptions,
+} from "./orchestrator-factory.js";

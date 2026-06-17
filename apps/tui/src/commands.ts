@@ -1,12 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  type StubRunOptions,
   type StubRunSession,
   formatDoctorOutput,
   formatFsListOutput,
   formatFsReadOutput,
-  runStubRun,
 } from "@paw/cli-core";
 import {
   FileSystemSessionStore,
@@ -21,12 +19,12 @@ import {
   defaultSettingsPath,
   savePawSettingsLocal,
 } from "@paw/settings";
-import type { PersistentSession } from "./run-session-controller.js";
+import type { PersistentSession } from "@paw/cli-core";
 
 /**
  * slash 命令执行上下文。
  *
- * 由 TUI 主入口传入，包含渲染回调、运行会话、持久会话等依赖。
+ * 由 TUI 主入口传入，包含渲染回调、持久会话、运行会话控制等依赖。
  */
 export interface SlashContext {
   readonly cwd: string;
@@ -34,23 +32,19 @@ export interface SlashContext {
   readonly onRunEvent: (envelope: RunEventEnvelope) => void;
   readonly exit: () => void;
   readonly clear: () => void;
-  readonly runSession?: StubRunSession;
+  /** 运行会话控制器，用于包装单次提交的中止信号。 */
+  readonly runSession: StubRunSession;
   /** 当前 runId，用于 checkpoint / session 相关命令。 */
   readonly currentRunId?: string;
-  /** 可选的 orchestrator 桥接（询问用户、工具审批）。 */
-  readonly orchestratorHooks?: Pick<
-    StubRunOptions,
-    "resolveAskUser" | "resolveToolApproval" | "approvalPolicy"
-  >;
   /** Skill 注册表，用于 `/skill-name` 用户调用。 */
   readonly skillRegistry?: SkillRegistry;
   /** skill 加载目录，传给 orchestrator 用于模型侧 run_skill。 */
   readonly skillsDir?: string;
   /**
-   * 持久化 orchestrator 会话。设置后，输入会注入到已有对话中，
-   * 而不是开启一次全新的运行。
+   * 持久化 orchestrator 会话。
+   * TUI 主流程始终提供此会话，所有用户输入最终都通过它提交。
    */
-  readonly session?: PersistentSession;
+  readonly session: PersistentSession;
   /** 运行时切换浅色/深色主题。 */
   readonly toggleTheme?: () => void;
 }
@@ -92,10 +86,9 @@ function isSlashCommand(text: string, skillRegistry?: SkillRegistry): boolean {
 }
 
 /**
- * 处理用户输入的一行文本。
+ * 提交用户输入的一行文本。
  *
- * 如果是自然语言或已注册 skill，则交给 orchestrator 执行；
- * 如果是 slash 命令，则分发到 {@link runSlashCommand}。
+ * 自然语言或已注册 skill 交给持久会话执行；slash 命令分发到 {@link runSlashCommand}。
  *
  * @param raw 原始输入
  * @param ctx 执行上下文
@@ -109,46 +102,30 @@ export async function submitUserLine(
     return;
   }
   if (!isSlashCommand(v, ctx.skillRegistry)) {
-    // TUI 已经自行渲染用户行与运行事件，这里避免重复回显
-    if (!ctx.onRunEvent) {
-      ctx.pushText(`> ${v}`);
-    }
-    try {
-      if (ctx.session) {
-        // 持久会话模式
-        const signal = ctx.runSession?.begin();
-        try {
-          const result = await ctx.session.submit(v, signal);
-          if (
-            result.status === "completed" &&
-            result.message &&
-            !ctx.onRunEvent
-          ) {
-            ctx.pushText(result.message);
-          }
-        } finally {
-          ctx.runSession?.end();
-        }
-      } else {
-        // 一次性 stub-run 模式
-        const r = await runStubRun(v, {
-          workspaceRoot: ctx.cwd,
-          onEvent: ctx.onRunEvent,
-          runSession: ctx.runSession,
-          resultTextFormat: "minimal",
-          skillsDir: ctx.skillsDir,
-          ...ctx.orchestratorHooks,
-        });
-        if (r.text.trim()) {
-          ctx.pushText(r.text);
-        }
-      }
-    } catch (e: unknown) {
-      ctx.pushText(e instanceof Error ? e.message : String(e));
-    }
+    await submitToSession(v, ctx);
     return;
   }
   await runSlashCommand(v, ctx);
+}
+
+/**
+ * 通过持久会话提交输入。
+ *
+ * @param goal 用户输入或展开后的目标
+ * @param ctx 执行上下文
+ */
+async function submitToSession(goal: string, ctx: SlashContext): Promise<void> {
+  const signal = ctx.runSession.begin();
+  try {
+    const result = await ctx.session.submit(goal, signal);
+    if (result.status === "completed" && result.message) {
+      ctx.pushText(result.message);
+    }
+  } catch (e: unknown) {
+    ctx.pushText(e instanceof Error ? e.message : String(e));
+  } finally {
+    ctx.runSession.end();
+  }
 }
 
 /**
@@ -183,8 +160,8 @@ export async function runSlashCommand(
         "/clear",
         "/fs-list [dir] [--recursive]",
         "/fs-read <relative-path>",
-        "/stub [goal…] | /run [goal…] — stub-run (default goal: stub)",
-        "/worktree [goal…] — run in a temporary git worktree (isolated)",
+        "/stub [goal…] | /run [goal…] — submit to persistent session",
+        "/worktree [goal…] — not supported in TUI persistent session",
         "/undo — restore files from the last checkpoint of the current/most recent run",
         "/checkpoints — list checkpoints for the current run",
         "/sessions — list past runs",
@@ -239,64 +216,13 @@ export async function runSlashCommand(
 
   if (head === "/stub" || head === "/run") {
     const goal = parts.slice(1).join(" ") || "stub";
-    pushText(`stub-run: ${goal}`);
-    try {
-      if (ctx.session) {
-        const signal = ctx.runSession?.begin();
-        try {
-          const result = await ctx.session.submit(goal, signal);
-          if (
-            result.status === "completed" &&
-            result.message &&
-            !ctx.onRunEvent
-          ) {
-            pushText(result.message);
-          }
-        } finally {
-          ctx.runSession?.end();
-        }
-      } else {
-        const r = await runStubRun(goal, {
-          workspaceRoot: cwd,
-          onEvent: ctx.onRunEvent,
-          runSession: ctx.runSession,
-          resultTextFormat: "minimal",
-          skillsDir: ctx.skillsDir,
-          ...ctx.orchestratorHooks,
-        });
-        if (r.text.trim()) {
-          pushText(r.text);
-        }
-      }
-    } catch (e: unknown) {
-      pushText(e instanceof Error ? e.message : String(e));
-    }
+    pushText(`submit: ${goal}`);
+    await submitToSession(goal, ctx);
     return;
   }
 
   if (head === "/worktree") {
-    const goal = parts.slice(1).join(" ") || "stub";
-    if (ctx.session) {
-      pushText("worktree: not supported in persistent session mode");
-      return;
-    }
-    pushText(`worktree-run: ${goal}`);
-    try {
-      const r = await runStubRun(goal, {
-        workspaceRoot: cwd,
-        onEvent: ctx.onRunEvent,
-        runSession: ctx.runSession,
-        resultTextFormat: "minimal",
-        useWorktree: true,
-        skillsDir: ctx.skillsDir,
-        ...ctx.orchestratorHooks,
-      });
-      if (r.text.trim()) {
-        pushText(r.text);
-      }
-    } catch (e: unknown) {
-      pushText(e instanceof Error ? e.message : String(e));
-    }
+    pushText("worktree: not supported in TUI persistent session mode");
     return;
   }
 
@@ -444,37 +370,7 @@ export async function runSlashCommand(
         rendered = `${rendered}\n\nUser request: ${userArgs}`;
       }
       pushText(`skill: ${skillId}`);
-      try {
-        if (ctx.session) {
-          const signal = ctx.runSession?.begin();
-          try {
-            const result = await ctx.session.submit(rendered, signal);
-            if (
-              result.status === "completed" &&
-              result.message &&
-              !ctx.onRunEvent
-            ) {
-              pushText(result.message);
-            }
-          } finally {
-            ctx.runSession?.end();
-          }
-        } else {
-          const r = await runStubRun(rendered, {
-            workspaceRoot: cwd,
-            onEvent: ctx.onRunEvent,
-            runSession: ctx.runSession,
-            resultTextFormat: "minimal",
-            skillsDir: ctx.skillsDir,
-            ...ctx.orchestratorHooks,
-          });
-          if (r.text.trim()) {
-            pushText(r.text);
-          }
-        }
-      } catch (e: unknown) {
-        pushText(e instanceof Error ? e.message : String(e));
-      }
+      await submitToSession(rendered, ctx);
       return;
     }
   }

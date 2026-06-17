@@ -1,9 +1,8 @@
 #!/usr/bin/env bun
-import fs from "node:fs";
 import path from "node:path";
 import { createCliRenderer, type KeyEvent } from "@opentui/core";
 import { writeSolidToScrollback } from "@opentui/solid";
-import { findPawRoot } from "@paw/cli-core";
+import { findPawRoot, createPersistentSession, createRunSessionController } from "@paw/cli-core";
 import {
   defaultSettingsPath,
   hasApiKey,
@@ -15,34 +14,9 @@ import { SkillRegistry, loadSkillsFromDirectory } from "@paw/core";
 import { PawFooter } from "./PawFooter.js";
 import { fallbackTheme, resolveTheme } from "./theme.js";
 import { submitUserLine } from "./commands.js";
-import { createPersistentSession, createRunSessionController } from "./run-session-controller.js";
+
 import { approvalPolicyWhenStrict } from "./approval-policy.js";
 import { tuiStrictToolApprovalFromEnv } from "./env.js";
-
-/**
- * 从当前工作目录向上查找最近的 .paw/ 目录（包含设置或 skill）。
- *
- * 用于在 TUI 启动时确定应显示哪个工作区的模型信息。
- *
- * @param cwd 起始目录
- * @returns 找到的工作区根目录
- */
-function resolvePawRootForDisplay(cwd: string): string {
-  let dir = path.resolve(cwd);
-  for (let i = 0; i < 64; i++) {
-    const pawDir = path.join(dir, ".paw");
-    if (
-      fs.existsSync(path.join(pawDir, "settings.local.json")) ||
-      fs.existsSync(path.join(pawDir, "skills"))
-    ) {
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return findPawRoot(cwd) ?? cwd;
-}
 
 /**
  * 根据当前工作区设置解析模型标签，用于欢迎消息展示。
@@ -53,7 +27,7 @@ function resolvePawRootForDisplay(cwd: string): string {
  */
 function resolveModelLabel(): string {
   try {
-    const pawRoot = resolvePawRootForDisplay(process.cwd());
+    const pawRoot = findPawRoot(process.cwd()) ?? process.cwd();
     const p = defaultSettingsPath(pawRoot);
     const s = loadPawSettingsLocal(p);
     const provider = s.provider?.trim().toLowerCase();
@@ -133,7 +107,7 @@ async function main() {
   await renderer.idle().catch(() => {});
 
   // ── 会话初始化 ──
-  const workspaceRoot = resolvePawRootForDisplay(process.cwd());
+  const workspaceRoot = findPawRoot(process.cwd()) ?? process.cwd();
   const skillsDir = path.join(workspaceRoot, ".paw", "skills");
   const skillRegistry = new SkillRegistry();
   for (const skill of loadSkillsFromDirectory(skillsDir)) {
@@ -141,7 +115,6 @@ async function main() {
   }
 
   const sessionCtrl = createRunSessionController();
-  let currentRunId = "";
 
   // 审批 / 提问的 resolver（通过引用捕获）
   let resolveApproval: ((approved: boolean) => void) | null = null;
@@ -164,10 +137,6 @@ async function main() {
     },
     approvalPolicy: approvalPolicyWhenStrict(tuiStrictToolApprovalFromEnv()),
     onEvent: (envelope) => {
-      const ev = envelope.event;
-      if (ev.type === "run.started") {
-        currentRunId = envelope.runId;
-      }
       footer.handleRunEvent(envelope);
     },
   });
@@ -242,7 +211,7 @@ async function main() {
           footer.setTheme(theme);
         },
         runSession: sessionCtrl.runSession,
-        currentRunId,
+        currentRunId: persistentSession.runId,
         skillRegistry,
         skillsDir,
         session: persistentSession,

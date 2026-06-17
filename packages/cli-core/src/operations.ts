@@ -3,32 +3,23 @@ import path from "node:path";
 import {
   AgentOrchestrator,
   type AskUserResolveInput,
-  DefaultSubAgentLauncher,
   type ToolApprovalInput,
-  resolvePlanSnapshotMaxItems,
 } from "@paw/agent";
 import {
-  CostTracker,
   FileSystemAppStateStore,
-  FileSystemSessionStore,
-  InMemoryTodoStore,
   SessionMemoryStore,
   findPawRoot,
   isAppStateFinished,
 } from "@paw/core";
 import type { RunEventEnvelope, RunResult } from "@paw/core";
 import type { McpServerConfig } from "@paw/harness";
-import { createDeepSeekFlashModel, createDefaultLanguageModel } from "@paw/models";
 import {
   defaultSettingsPath,
   loadPawSettingsLocal,
   redactSettingsForDisplay,
 } from "@paw/settings";
-import {
-  WorkspaceWatcher,
-  listWorkspaceFiles,
-  readWorkspaceFile,
-} from "@paw/workspace";
+import { listWorkspaceFiles, readWorkspaceFile } from "@paw/workspace";
+import { createRunOrchestrator } from "./orchestrator-factory.js";
 import { createTemporaryWorktree } from "./worktree.js";
 
 export function formatDoctorOutput(root: string): {
@@ -249,42 +240,15 @@ async function doRun(
   workspaceRoot: string,
   options: StubRunOptions | undefined,
 ): Promise<{ ok: boolean; text: string; exitCode: number }> {
-  const planSnapshotMaxItems =
-    options?.planSnapshotMaxItems !== undefined
-      ? options.planSnapshotMaxItems
-      : resolvePlanSnapshotMaxItems(workspaceRoot);
-  let mcpServers = options?.mcpServers;
-  if (!mcpServers) {
-    try {
-      const settings = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
-      if (settings.mcp_servers && settings.mcp_servers.length > 0) {
-        mcpServers = settings.mcp_servers as McpServerConfig[];
-      }
-    } catch {
-      // settings file may not exist; ignore
-    }
-  }
-
-  const costTracker = new CostTracker();
-  const todoStore = new InMemoryTodoStore();
-  const watcher = new WorkspaceWatcher(workspaceRoot);
-  watcher.start();
-
-  // Create models: main = pro, sub-agent = flash (for deepseek)
-  const mainModel = createDefaultLanguageModel(workspaceRoot);
-  const subAgentModel =
-    createDeepSeekFlashModel(workspaceRoot) ?? mainModel;
-
-  // Wire up persistence stores so conversation state survives across runs
-  const sessionStore = new FileSystemSessionStore({ workspaceRoot });
-  const appStateStore = new FileSystemAppStateStore({
-    statesDir: path.join(workspaceRoot, ".paw", "states"),
-  });
-  const subAgentLauncher = new DefaultSubAgentLauncher({
+  const { orch, watcher } = createRunOrchestrator({
     workspaceRoot,
-    model: mainModel,
-    subAgentModel,
-    maxSteps: 5,
+    skillsDir: options?.skillsDir,
+    resolveAskUser: options?.resolveAskUser,
+    resolveToolApproval: options?.resolveToolApproval,
+    approvalPolicy: options?.approvalPolicy,
+    mcpServers: options?.mcpServers,
+    planSnapshotMaxItems: options?.planSnapshotMaxItems,
+    onEvent: options?.onEvent,
   });
 
   // Inject previous session context into the goal if resume is enabled
@@ -298,23 +262,6 @@ async function doRun(
     }
   }
 
-  const orch = new AgentOrchestrator({
-    model: mainModel,
-    auxiliaryModel: subAgentModel ?? mainModel,
-    onEvent: options?.onEvent,
-    planSnapshotMaxItems,
-    resolveAskUser: options?.resolveAskUser,
-    resolveToolApproval: options?.resolveToolApproval,
-    approvalPolicy: options?.approvalPolicy,
-    mcpServers,
-    costTracker,
-    todoStore,
-    watcher,
-    sessionStore,
-    appStateStore,
-    subAgentLauncher,
-    skillsDir: options?.skillsDir,
-  });
   const runId = options?.runId ?? `stub-${Date.now()}`;
   const base = {
     runId,

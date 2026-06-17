@@ -12,6 +12,10 @@ import fs from "node:fs";
 import path from "node:path";
 import type { RunEventEnvelope } from "@paw/core";
 import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
+import {
+  createPersistentSession,
+  createRunSessionController,
+} from "@paw/cli-core";
 import { submitUserLine } from "../src/commands.js";
 import {
   formatBottomBar,
@@ -19,10 +23,6 @@ import {
   formatEventForScrollback,
   formatHudText,
 } from "../src/footer-state.js";
-import {
-  createPersistentSession,
-  createRunSessionController,
-} from "../src/run-session-controller.js";
 
 // 工作区根目录（paw-ts 项目根）
 const WORKSPACE = path.resolve(import.meta.dir, "../../..");

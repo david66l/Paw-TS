@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createRunSessionController } from "../src/run-session-controller.js";
+import { createRunSessionController } from "../src/session.js";
 
 describe("createRunSessionController", () => {
   test("串行化用户提交，避免并发执行", () => {
