@@ -8,7 +8,7 @@ import type { AgentToolCallAction } from "@paw/core";
 import type { SubAgentLauncher } from "@paw/harness";
 import type { WorkspaceWatcher } from "@paw/workspace";
 import { MULTI_AGENT_LIMITS, PARENT_FORWARD_EVENTS } from "./constants.js";
-import { parseRunAgentMaxSteps } from "./context-summarizer.js";
+import { parseRunAgentMaxSteps } from "./agent-args.js";
 import type {
   AgentRunState,
   ChildAgentState,

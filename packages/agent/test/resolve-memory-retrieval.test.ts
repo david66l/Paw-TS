@@ -5,7 +5,6 @@ import path from "node:path";
 
 import { FakeLanguageModel } from "@paw/models";
 
-import { parseLlmMemorySelection } from "../src/llm-memory-selector.js";
 import {
   resolveMemoryRetrievalSettings,
   toRetrieveMemoriesOptions,
@@ -76,16 +75,4 @@ describe("resolveMemoryRetrievalSettings", () => {
   });
 });
 
-describe("parseLlmMemorySelection", () => {
-  test("parses selected_ids from JSON", () => {
-    expect(
-      parseLlmMemorySelection(
-        'Here you go:\n{"selected_ids":["a","b"]}',
-      ),
-    ).toEqual(["a", "b"]);
-  });
 
-  test("returns empty array on invalid JSON", () => {
-    expect(parseLlmMemorySelection("no json here")).toEqual([]);
-  });
-});

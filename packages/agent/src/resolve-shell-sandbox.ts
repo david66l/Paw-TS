@@ -5,7 +5,8 @@ import {
   type ShellSandboxMode,
   type ShellSandboxNetwork,
 } from "@paw/harness";
-import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
+
+import { readSetting } from "./settings.js";
 
 const DEFAULT_MODE: ShellSandboxMode = "off";
 const DEFAULT_NETWORK: ShellSandboxNetwork = "deny";
@@ -28,6 +29,44 @@ function parseSandboxNetwork(value: unknown): ShellSandboxNetwork {
   return DEFAULT_NETWORK;
 }
 
+function parseSandboxConfig(value: unknown): ShellSandboxConfig | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const mode = parseSandboxMode(raw.mode ?? DEFAULT_MODE);
+  if (mode === "off") {
+    return OFF_SHELL_SANDBOX;
+  }
+
+  const runtime =
+    raw.runtime === "docker" || raw.runtime === "podman"
+      ? raw.runtime
+      : undefined;
+  const image =
+    typeof raw.image === "string" && raw.image.trim()
+      ? raw.image.trim()
+      : DEFAULT_SANDBOX_IMAGE;
+  const memoryMb =
+    typeof raw.memory_mb === "number" && Number.isFinite(raw.memory_mb)
+      ? Math.max(256, Math.floor(raw.memory_mb))
+      : undefined;
+  const cpus =
+    typeof raw.cpus === "number" && Number.isFinite(raw.cpus)
+      ? Math.max(0.25, raw.cpus)
+      : undefined;
+
+  return {
+    mode,
+    network: parseSandboxNetwork(raw.network ?? DEFAULT_NETWORK),
+    image,
+    ...(runtime ? { runtime } : {}),
+    ...(memoryMb !== undefined ? { memoryMb } : {}),
+    ...(cpus !== undefined ? { cpus } : {}),
+  };
+}
+
 /**
  * Reads shell sandbox settings from `.paw/settings.local.json`.
  *
@@ -44,45 +83,10 @@ function parseSandboxNetwork(value: unknown): ShellSandboxNetwork {
 export function resolveShellSandboxConfig(
   workspaceRoot: string,
 ): ShellSandboxConfig {
-  try {
-    const settings = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
-    const sandbox = settings.sandbox;
-    if (!sandbox || typeof sandbox !== "object") {
-      return OFF_SHELL_SANDBOX;
-    }
-
-    const raw = sandbox as Record<string, unknown>;
-    const mode = parseSandboxMode(raw.mode ?? DEFAULT_MODE);
-    if (mode === "off") {
-      return OFF_SHELL_SANDBOX;
-    }
-
-    const runtime =
-      raw.runtime === "docker" || raw.runtime === "podman"
-        ? raw.runtime
-        : undefined;
-    const image =
-      typeof raw.image === "string" && raw.image.trim()
-        ? raw.image.trim()
-        : DEFAULT_SANDBOX_IMAGE;
-    const memoryMb =
-      typeof raw.memory_mb === "number" && Number.isFinite(raw.memory_mb)
-        ? Math.max(256, Math.floor(raw.memory_mb))
-        : undefined;
-    const cpus =
-      typeof raw.cpus === "number" && Number.isFinite(raw.cpus)
-        ? Math.max(0.25, raw.cpus)
-        : undefined;
-
-    return {
-      mode,
-      network: parseSandboxNetwork(raw.network ?? DEFAULT_NETWORK),
-      image,
-      ...(runtime ? { runtime } : {}),
-      ...(memoryMb !== undefined ? { memoryMb } : {}),
-      ...(cpus !== undefined ? { cpus } : {}),
-    };
-  } catch {
-    return OFF_SHELL_SANDBOX;
-  }
+  return readSetting(
+    workspaceRoot,
+    (s) => s.sandbox,
+    OFF_SHELL_SANDBOX,
+    parseSandboxConfig,
+  );
 }

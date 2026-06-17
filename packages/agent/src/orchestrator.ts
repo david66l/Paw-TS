@@ -105,6 +105,7 @@ import type {
 import {
   parseAgentActionFromModelText,
   parseAgentActionsFromModelText,
+  toolCallDedupKey,
 } from "./parse-agent-action.js";
 import { resolveMaxSteps } from "./resolve-max-steps.js";
 import {
@@ -789,10 +790,10 @@ export class AgentOrchestrator {
           };
         })
         .filter((tc): tc is AgentToolCallAction => knownTools.has(tc.tool));
-      // Deduplicate by tool+args (same logic as text parser)
+      // Deduplicate by tool+args
       const seen = new Set<string>();
       toolCalls = toolCalls.filter((tc) => {
-        const key = `${tc.tool}:${JSON.stringify(tc.args)}`;
+        const key = toolCallDedupKey(tc.tool, tc.args);
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -1540,9 +1541,19 @@ export class AgentOrchestrator {
     const autoMemoryStore = new AutoMemoryStore({ workspaceRoot });
     const memoryIndex = (autoMemoryStore.loadAllIndexShards() ?? autoMemoryStore.loadIndex(200)) ?? undefined;
 
+    // Read session pool size from settings (default 10)
+    let sessionPoolSize = 10;
+    try {
+      const poolSettings = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot)) as Record<string, unknown>;
+      if (typeof poolSettings.session_pool_size === "number" && poolSettings.session_pool_size > 0) {
+        sessionPoolSize = poolSettings.session_pool_size;
+      }
+    } catch { /* use default */ }
+
     const unifiedStore = new UnifiedMemoryStore({
       workspaceRoot,
       sessionId: runId,
+      sessionPoolSize,
     });
     const memoryRetrievalSettings = resolveMemoryRetrievalSettings(workspaceRoot);
     const shellSandbox = resolveShellSandboxConfig(workspaceRoot);

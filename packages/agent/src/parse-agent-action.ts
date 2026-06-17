@@ -118,6 +118,21 @@ export function parseAgentActionFromModelText(
 }
 
 /**
+ * 为一次工具调用生成去重 key。
+ *
+ * 同一工具 + 相同参数被视为重复调用，避免模型在同一轮里重复输出。
+ *
+ * @param tool 工具名
+ * @param args 工具参数
+ */
+export function toolCallDedupKey(
+  tool: string,
+  args: Record<string, unknown>,
+): string {
+  return `${tool}:${JSON.stringify(args)}`;
+}
+
+/**
  * Scan ALL text and collect every valid `tool_call` JSON object.
  * Returns the collected tool calls plus the remaining prose text.
  *
@@ -141,7 +156,7 @@ export function parseAgentActionsFromModelText(
   for (const { obj, start, end } of objects) {
     const action = parseActionFromJsonObject(obj, opts?.knownTools);
     if (action?.type === "tool_call") {
-      const key = `${action.tool}:${JSON.stringify(action.args)}`;
+      const key = toolCallDedupKey(action.tool, action.args);
       if (!seen.has(key)) {
         seen.add(key);
         actions.push(action);

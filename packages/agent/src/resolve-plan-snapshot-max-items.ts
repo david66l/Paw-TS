@@ -1,4 +1,16 @@
-import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
+import { readSetting } from "./settings.js";
+
+function parsePlanSnapshotMaxItems(value: unknown): number | undefined {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0
+  ) {
+    return value;
+  }
+  return undefined;
+}
 
 /**
  * Reads optional `plan_snapshot_max_items` from `.paw/settings.local.json`.
@@ -8,19 +20,10 @@ import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
 export function resolvePlanSnapshotMaxItems(
   workspaceRoot: string,
 ): number | undefined {
-  try {
-    const s = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
-    const v = s.plan_snapshot_max_items;
-    if (
-      typeof v === "number" &&
-      Number.isFinite(v) &&
-      Number.isInteger(v) &&
-      v >= 0
-    ) {
-      return v;
-    }
-  } catch {
-    /* missing or invalid file handled elsewhere when loading full settings */
-  }
-  return undefined;
+  return readSetting(
+    workspaceRoot,
+    (s) => s.plan_snapshot_max_items,
+    undefined,
+    parsePlanSnapshotMaxItems,
+  );
 }

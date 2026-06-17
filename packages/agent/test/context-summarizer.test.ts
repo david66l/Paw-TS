@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { ContextManager } from "@paw/core";
 import { CONTEXT_SUMMARY_PREFIX } from "@paw/core";
+import { DefaultContextSummarizer } from "../src/orchestrator/context-summarizer.js";
 import {
-  DefaultContextSummarizer,
   buildMinimalSharedContext,
   parseAgentType,
   parseChildPolicy,
   parseRunAgentMaxSteps,
-} from "../src/orchestrator/context-summarizer.js";
+} from "../src/orchestrator/agent-args.js";
 
 describe("parseRunAgentMaxSteps", () => {
   it("reads max_steps from args", () => {

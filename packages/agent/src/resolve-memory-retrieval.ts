@@ -1,11 +1,18 @@
 import type { RetrieveMemoriesOptions } from "@paw/core";
 import { createDeepSeekFlashModel, type LanguageModel } from "@paw/models";
-import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
 
 import { createLlmMemorySelectFn } from "./llm-memory-selector.js";
+import { readSetting } from "./settings.js";
 
 export interface MemoryRetrievalSettings {
   readonly mode: "keyword" | "cascade";
+}
+
+function parseMemoryRetrievalMode(value: unknown): "keyword" | "cascade" | undefined {
+  if (value === "keyword" || value === "cascade") {
+    return value;
+  }
+  return undefined;
 }
 
 /**
@@ -15,16 +22,13 @@ export interface MemoryRetrievalSettings {
 export function resolveMemoryRetrievalSettings(
   workspaceRoot: string,
 ): MemoryRetrievalSettings {
-  try {
-    const settings = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
-    const mode = settings.memory_retrieval ?? "cascade";
-    if (mode === "keyword") {
-      return { mode: "keyword" };
-    }
-    return { mode: "cascade" };
-  } catch {
-    return { mode: "cascade" };
-  }
+  const mode = readSetting(
+    workspaceRoot,
+    (s) => s.memory_retrieval,
+    "cascade" as const,
+    parseMemoryRetrievalMode,
+  );
+  return { mode };
 }
 
 export interface RetrieveMemoriesRuntime {

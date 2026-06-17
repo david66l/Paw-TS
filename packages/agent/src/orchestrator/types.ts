@@ -187,16 +187,4 @@ export interface AgentRunState {
   readonly children?: readonly AgentRunState[];
 }
 
-// ─────────────────────────────────────────────────────────────
-// Action handler interface
-// ─────────────────────────────────────────────────────────────
 
-export interface ActionHandler {
-  handle(
-    action: AgentAction,
-    ctx: PhaseContext,
-    flags: TurnFlags,
-    text: string,
-    thinking: string | undefined,
-  ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }>;
-}

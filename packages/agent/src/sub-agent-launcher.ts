@@ -11,7 +11,7 @@ import type {
 } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
 
-import { buildMinimalSharedContext } from "./orchestrator/context-summarizer.js";
+import { buildMinimalSharedContext } from "./orchestrator/agent-args.js";
 import { AgentOrchestrator } from "./orchestrator.js";
 import type { SharedContext } from "./orchestrator/types.js";
 

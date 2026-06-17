@@ -65,7 +65,4 @@ export function createLlmMemorySelectFn(
   };
 }
 
-/** @internal */
-export function parseLlmMemorySelection(text: string): string[] {
-  return parseSelectedIds(text);
-}
+

@@ -6,6 +6,13 @@
 import type { AgentToolCallAction, ChatMessage, ContextManager } from "@paw/core";
 import { CONTEXT_SUMMARY_PREFIX } from "@paw/core";
 import { SHARED_CONTEXT_BUDGET } from "./constants.js";
+import {
+  type AgentType,
+  buildOutputFormat,
+  buildRole,
+  parseAgentType,
+  parseChildPolicy,
+} from "./agent-args.js";
 import type { ContextArtifact, SharedContext } from "./types.js";
 
 export interface ContextSummarizer {
@@ -19,16 +26,6 @@ export interface ContextSummarizer {
     call: AgentToolCallAction,
   ): SharedContext;
 }
-
-export type AgentType = "simple" | "research" | "coding" | "planning" | "relay";
-
-const AGENT_TYPES = new Set<AgentType>([
-  "simple",
-  "research",
-  "coding",
-  "planning",
-  "relay",
-]);
 
 const FILE_BLOCK_RE = /<file path="([^"]+)">\s*([\s\S]*?)<\/file>/g;
 
@@ -211,40 +208,6 @@ function extractParentConclusions(
   return conclusions.slice(-8);
 }
 
-function buildRole(agentType: AgentType): string {
-  switch (agentType) {
-    case "simple":
-      return "You are a focused sub-agent. Complete the single task given to you.";
-    case "research":
-      return "You are a research sub-agent. Gather information and return structured findings.";
-    case "coding":
-      return "You are a coding sub-agent. Write, edit, or debug code. Return the changed files and a summary.";
-    case "planning":
-      return "You are a planning sub-agent. Break down the task into steps and report the plan.";
-    case "relay":
-      return "You are a relay sub-agent. Continue the parent task from where it left off.";
-    default:
-      return "You are a specialized sub-agent.";
-  }
-}
-
-function buildOutputFormat(agentType: AgentType): string {
-  switch (agentType) {
-    case "simple":
-      return "Return a concise summary of what you did.";
-    case "research":
-      return "Return a structured report with findings, sources, and confidence levels.";
-    case "coding":
-      return "Return the list of changed files, any errors encountered, and a brief summary.";
-    case "planning":
-      return "Return a step-by-step plan with dependencies and estimated effort.";
-    case "relay":
-      return "Return your progress, what remains, and any blockers.";
-    default:
-      return "Return a clear summary of your work.";
-  }
-}
-
 /** Truncate artifacts by relevance, then by size. */
 function truncateArtifacts(artifacts: ContextArtifact[]): ContextArtifact[] {
   const order = { critical: 0, relevant: 1, reference: 2 } as const;
@@ -306,60 +269,6 @@ function truncateToBudget(
   }
 
   return working;
-}
-
-export function parseAgentType(args: Record<string, unknown> | undefined): AgentType {
-  const raw =
-    args?.agent_type ?? args?.agentType ?? args?.type ?? args?.kind;
-  if (typeof raw === "string" && AGENT_TYPES.has(raw as AgentType)) {
-    return raw as AgentType;
-  }
-  return "simple";
-}
-
-export function parseChildPolicy(
-  args: Record<string, unknown> | undefined,
-): SharedContext["childPolicy"] | undefined {
-  const raw = args?.child_policy ?? args?.childPolicy ?? args?.policy;
-  if (raw === "read_only" || raw === "read_write") {
-    return raw;
-  }
-  return undefined;
-}
-
-/** Fallback shared context when no parent ContextManager is available. */
-export function buildMinimalSharedContext(
-  goal: string,
-  args?: Record<string, unknown>,
-): SharedContext {
-  const agentType = parseAgentType(args);
-  const childPolicy = parseChildPolicy(args) ?? "read_only";
-  return {
-    role: buildRole(agentType),
-    task: goal,
-    facts: [],
-    constraints: [
-      "Do not modify files outside the workspace.",
-      "Do not execute destructive shell commands.",
-    ],
-    artifacts: [],
-    state: { completed: [], pending: [goal] },
-    outputFormat: buildOutputFormat(agentType),
-    childPolicy,
-  };
-}
-
-export function parseRunAgentMaxSteps(
-  args: Record<string, unknown> | undefined,
-): number | undefined {
-  const raw = args?.max_steps ?? args?.maxSteps;
-  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
-    return Math.floor(raw);
-  }
-  if (typeof raw === "string" && /^\d+$/.test(raw.trim())) {
-    return Number.parseInt(raw.trim(), 10);
-  }
-  return undefined;
 }
 
 export class DefaultContextSummarizer implements ContextSummarizer {
