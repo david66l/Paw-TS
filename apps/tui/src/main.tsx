@@ -1,8 +1,13 @@
 #!/usr/bin/env bun
 import path from "node:path";
-import { createCliRenderer, type KeyEvent } from "@opentui/core";
+import { type KeyEvent, createCliRenderer } from "@opentui/core";
 import { writeSolidToScrollback } from "@opentui/solid";
-import { findPawRoot, createPersistentSession, createRunSessionController } from "@paw/cli-core";
+import {
+  createPersistentSession,
+  createRunSessionController,
+} from "@paw/agent";
+import { findPawRoot } from "@paw/core";
+import { SkillRegistry, loadSkillsFromDirectory } from "@paw/core";
 import {
   defaultSettingsPath,
   hasApiKey,
@@ -10,10 +15,9 @@ import {
   resolveBaseUrl,
   resolveModel,
 } from "@paw/settings";
-import { SkillRegistry, loadSkillsFromDirectory } from "@paw/core";
 import { PawFooter } from "./PawFooter.js";
-import { fallbackTheme, resolveTheme } from "./theme.js";
 import { submitUserLine } from "./commands.js";
+import { fallbackTheme, resolveTheme } from "./theme.js";
 
 import { approvalPolicyWhenStrict } from "./approval-policy.js";
 import { tuiStrictToolApprovalFromEnv } from "./env.js";
@@ -146,7 +150,10 @@ async function main() {
     contextWindow: 128_000,
     onSubmit: (text) => {
       if (!sessionCtrl.tryBeginSubmission()) {
-        footer.appendPlain("Waiting for previous run to finish.", theme.warning);
+        footer.appendPlain(
+          "Waiting for previous run to finish.",
+          theme.warning,
+        );
         return;
       }
       footer.patch({ inputBusy: true });

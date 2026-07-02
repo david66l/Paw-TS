@@ -8,12 +8,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { AgentOrchestrator } from "@paw/agent";
@@ -30,18 +27,11 @@ import {
 import { FakeLanguageModel } from "@paw/models";
 import { runCompressionAgent } from "../src/compression-agent.js";
 import { extractMemories } from "../src/memory-extraction-agent.js";
+import { cleanup, tmpDir } from "./fixtures.js";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
-
-function tmpDir(prefix: string): string {
-  return mkdtempSync(path.join(tmpdir(), prefix));
-}
-
-function cleanup(dir: string): void {
-  if (existsSync(dir)) rmSync(dir, { recursive: true });
-}
 
 /** Build a deterministic mock model that cycles through responses. */
 function cycleModel(responses: string[]) {
@@ -461,10 +451,12 @@ describe("Memory System", () => {
 
     const index = store.buildIndex();
     expect(index).toContain("# Memory Index");
-    expect(index).toContain("prefers_typescript");
-    expect(index).toContain("use_bun_runtime");
-    expect(index).toContain("user");
-    expect(index).toContain("project");
+
+    const shard1 = readFileSync(path.join(memDir, "MEMORY-1.md"), "utf-8");
+    expect(shard1).toContain("prefers_typescript");
+    expect(shard1).toContain("use_bun_runtime");
+    expect(shard1).toContain("user");
+    expect(shard1).toContain("project");
 
     // Verify files on disk
     expect(existsSync(path.join(memDir, "prefers_typescript.md"))).toBe(true);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ContextManager } from "../src/context-manager.js";
+import { ContextManager } from "../src/context/manager.js";
 
 describe("ContextManager Head/Tail Protection", () => {
   it("protects system message from truncation", () => {

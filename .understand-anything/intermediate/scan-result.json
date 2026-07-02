@@ -1,0 +1,4005 @@
+{
+  "name": "paw",
+  "description": "基于 Bun 的本地优先编码 Agent Monorepo（TypeScript），提供 CLI 与 TUI 双入口、工具编排（MCP 协议）、上下文压缩及统一记忆检索能力。 Note: this project has over 100 source files; consider scoping analysis to a subdirectory for faster results.",
+  "languages": [
+    "dockerfile",
+    "javascript",
+    "json",
+    "jsonl",
+    "markdown",
+    "mmd",
+    "python",
+    "shell",
+    "toml",
+    "txt",
+    "typescript",
+    "unknown",
+    "yaml"
+  ],
+  "frameworks": [
+    "Biome",
+    "Bun",
+    "Docker",
+    "GitHub Actions",
+    "MCP",
+    "TypeScript"
+  ],
+  "files": [
+    {
+      "path": ".claude/plans/dynamic-toasting-quilt.md",
+      "language": "markdown",
+      "sizeLines": 109,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "language": "yaml",
+      "sizeLines": 22,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".memory/remember_number.md",
+      "language": "markdown",
+      "sizeLines": 4,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/assembled-graph.json",
+      "language": "json",
+      "sizeLines": 25369,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-1-part-1.json",
+      "language": "json",
+      "sizeLines": 1210,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-1-part-2.json",
+      "language": "json",
+      "sizeLines": 1657,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-10.json",
+      "language": "json",
+      "sizeLines": 902,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-11.json",
+      "language": "json",
+      "sizeLines": 501,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-12.json",
+      "language": "json",
+      "sizeLines": 392,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-13.json",
+      "language": "json",
+      "sizeLines": 526,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-14.json",
+      "language": "json",
+      "sizeLines": 268,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-15.json",
+      "language": "json",
+      "sizeLines": 517,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-16.json",
+      "language": "json",
+      "sizeLines": 274,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-17.json",
+      "language": "json",
+      "sizeLines": 164,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-18.json",
+      "language": "json",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-19.json",
+      "language": "json",
+      "sizeLines": 79,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-2.json",
+      "language": "json",
+      "sizeLines": 1290,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-20.json",
+      "language": "json",
+      "sizeLines": 108,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-21.json",
+      "language": "json",
+      "sizeLines": 117,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-22.json",
+      "language": "json",
+      "sizeLines": 47,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-23.json",
+      "language": "json",
+      "sizeLines": 100,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-24.json",
+      "language": "json",
+      "sizeLines": 302,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-25.json",
+      "language": "json",
+      "sizeLines": 54,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-26.json",
+      "language": "json",
+      "sizeLines": 110,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-27.json",
+      "language": "json",
+      "sizeLines": 528,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-28.json",
+      "language": "json",
+      "sizeLines": 561,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-29.json",
+      "language": "json",
+      "sizeLines": 613,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-3-part-1.json",
+      "language": "json",
+      "sizeLines": 1043,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-3-part-2.json",
+      "language": "json",
+      "sizeLines": 813,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-30.json",
+      "language": "json",
+      "sizeLines": 346,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-4-part-1.json",
+      "language": "json",
+      "sizeLines": 608,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-4-part-2.json",
+      "language": "json",
+      "sizeLines": 500,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-5.json",
+      "language": "json",
+      "sizeLines": 875,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-6.json",
+      "language": "json",
+      "sizeLines": 551,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-7-part-1.json",
+      "language": "json",
+      "sizeLines": 1491,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-7-part-2.json",
+      "language": "json",
+      "sizeLines": 362,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-8.json",
+      "language": "json",
+      "sizeLines": 1123,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-9-part-1.json",
+      "language": "json",
+      "sizeLines": 1001,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batch-9-part-2.json",
+      "language": "json",
+      "sizeLines": 880,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/batches.json",
+      "language": "json",
+      "sizeLines": 5674,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/fingerprint-input.json",
+      "language": "json",
+      "sizeLines": 384,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/layers.json",
+      "language": "json",
+      "sizeLines": 402,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/review.json",
+      "language": "json",
+      "sizeLines": 53,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-1.json",
+      "language": "json",
+      "sizeLines": 441,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-10.json",
+      "language": "json",
+      "sizeLines": 163,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-11.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-12.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-13.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-14.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-15.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-16.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-17.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-18.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-19.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-2.json",
+      "language": "json",
+      "sizeLines": 254,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-20.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-21.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-22.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-23.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-24.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-25.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-26.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-27.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-28.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-29.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-3.json",
+      "language": "json",
+      "sizeLines": 299,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-30.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-4.json",
+      "language": "json",
+      "sizeLines": 451,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-5.json",
+      "language": "json",
+      "sizeLines": 477,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-6.json",
+      "language": "json",
+      "sizeLines": 294,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-7.json",
+      "language": "json",
+      "sizeLines": 192,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-8.json",
+      "language": "json",
+      "sizeLines": 161,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-9.json",
+      "language": "json",
+      "sizeLines": 157,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/batch1-combined.json",
+      "language": "json",
+      "sizeLines": 2862,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/generate-batch1.py",
+      "language": "python",
+      "sizeLines": 644,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/split-batch1.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-arch-analyze.cjs",
+      "language": "javascript",
+      "sizeLines": 484,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-arch-input.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-arch-results.json",
+      "language": "json",
+      "sizeLines": 1317,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-1.json",
+      "language": "json",
+      "sizeLines": 36,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-10.json",
+      "language": "json",
+      "sizeLines": 39,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-11.json",
+      "language": "json",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-12.json",
+      "language": "json",
+      "sizeLines": 26,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-13.json",
+      "language": "json",
+      "sizeLines": 23,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-14.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-15.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-16.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-17.json",
+      "language": "json",
+      "sizeLines": 13,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-18.json",
+      "language": "json",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-19.json",
+      "language": "json",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-2.json",
+      "language": "json",
+      "sizeLines": 59,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-20.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-21.json",
+      "language": "json",
+      "sizeLines": 13,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-22.json",
+      "language": "json",
+      "sizeLines": 13,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-23.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-24.json",
+      "language": "json",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-25.json",
+      "language": "json",
+      "sizeLines": 13,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-26.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-27.json",
+      "language": "json",
+      "sizeLines": 57,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-28.json",
+      "language": "json",
+      "sizeLines": 58,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-29.json",
+      "language": "json",
+      "sizeLines": 57,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-3.json",
+      "language": "json",
+      "sizeLines": 28,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-30.json",
+      "language": "json",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-5.json",
+      "language": "json",
+      "sizeLines": 28,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-6.json",
+      "language": "json",
+      "sizeLines": 51,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-7.json",
+      "language": "json",
+      "sizeLines": 49,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-8.json",
+      "language": "json",
+      "sizeLines": 41,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-9.json",
+      "language": "json",
+      "sizeLines": 41,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-1.json",
+      "language": "json",
+      "sizeLines": 6150,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-10.json",
+      "language": "json",
+      "sizeLines": 1915,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-11.json",
+      "language": "json",
+      "sizeLines": 1699,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-12.json",
+      "language": "json",
+      "sizeLines": 418,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-13.json",
+      "language": "json",
+      "sizeLines": 765,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-14.json",
+      "language": "json",
+      "sizeLines": 466,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-15.json",
+      "language": "json",
+      "sizeLines": 745,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-16.json",
+      "language": "json",
+      "sizeLines": 376,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-17.json",
+      "language": "json",
+      "sizeLines": 205,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-18.json",
+      "language": "json",
+      "sizeLines": 47,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-19.json",
+      "language": "json",
+      "sizeLines": 37,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-2.json",
+      "language": "json",
+      "sizeLines": 2146,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-20.json",
+      "language": "json",
+      "sizeLines": 251,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-21.json",
+      "language": "json",
+      "sizeLines": 112,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-22.json",
+      "language": "json",
+      "sizeLines": 30,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-23.json",
+      "language": "json",
+      "sizeLines": 280,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-24.json",
+      "language": "json",
+      "sizeLines": 1105,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-25.json",
+      "language": "json",
+      "sizeLines": 719,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-26.json",
+      "language": "json",
+      "sizeLines": 754,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-27.json",
+      "language": "json",
+      "sizeLines": 2604,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-28.json",
+      "language": "json",
+      "sizeLines": 1302,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-29.json",
+      "language": "json",
+      "sizeLines": 2886,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-3.json",
+      "language": "json",
+      "sizeLines": 3507,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-30.json",
+      "language": "json",
+      "sizeLines": 938,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-5.json",
+      "language": "json",
+      "sizeLines": 998,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-6.json",
+      "language": "json",
+      "sizeLines": 1318,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-7.json",
+      "language": "json",
+      "sizeLines": 4894,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-8.json",
+      "language": "json",
+      "sizeLines": 4333,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-9.json",
+      "language": "json",
+      "sizeLines": 3844,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-import-map-input.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-import-map-output.json",
+      "language": "json",
+      "sizeLines": 1020,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-inline-validate.cjs",
+      "language": "javascript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-scan-files.json",
+      "language": "json",
+      "sizeLines": 2319,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-tour-analyze.cjs",
+      "language": "javascript",
+      "sizeLines": 401,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-tour-input.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tmp/ua-tour-results.json",
+      "language": "json",
+      "sizeLines": 5142,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.trash-1782875262/tour.json",
+      "language": "json",
+      "sizeLines": 85,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/.understandignore",
+      "language": "unknown",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/config.json",
+      "language": "json",
+      "sizeLines": 1,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/fingerprints.json",
+      "language": "json",
+      "sizeLines": 17943,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/intermediate/scan-result.json",
+      "language": "json",
+      "sizeLines": 3328,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/knowledge-graph.json",
+      "language": "json",
+      "sizeLines": 25369,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/meta.json",
+      "language": "json",
+      "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": "文档/工程/上下文压缩三层体系.md",
+      "language": "markdown",
+      "sizeLines": 249,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/工程/BENCHMARK_RESULTS.md",
+      "language": "markdown",
+      "sizeLines": 34,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/工程/deepseek-v4-flash-eval-report.md",
+      "language": "markdown",
+      "sizeLines": 44,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/工程/ENGINEERING_EXCELLENCE_PLAN.md",
+      "language": "markdown",
+      "sizeLines": 626,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/工程/EVAL_ARCHITECTURE_PLAN.md",
+      "language": "markdown",
+      "sizeLines": 387,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/工程/INTERVIEW_READINESS_PLAN.md",
+      "language": "markdown",
+      "sizeLines": 57,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/工程/Paw-TS从0到1完整解析.md",
+      "language": "markdown",
+      "sizeLines": 373,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/工程/TEST_REPORT.md",
+      "language": "markdown",
+      "sizeLines": 171,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/工程/UPGRADE_PLAN.md",
+      "language": "markdown",
+      "sizeLines": 370,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/架构/ARCHITECTURE_AND_FEATURES_PLAN.md",
+      "language": "markdown",
+      "sizeLines": 1275,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/架构/multi-agent-architecture-analysis.md",
+      "language": "markdown",
+      "sizeLines": 568,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/架构/multi-agent-state-data-flow-analysis.md",
+      "language": "markdown",
+      "sizeLines": 709,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/架构决策/001-context-compression.md",
+      "language": "markdown",
+      "sizeLines": 52,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/阶段计划/phase1-agent-orchestration/orchestration-mode-analysis.md",
+      "language": "markdown",
+      "sizeLines": 350,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/阶段计划/phase1-agent-orchestration/plan.md",
+      "language": "markdown",
+      "sizeLines": 624,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/阶段计划/phase2-context-management/plan.md",
+      "language": "markdown",
+      "sizeLines": 215,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/阶段计划/phase3-memory-retrieval/plan.md",
+      "language": "markdown",
+      "sizeLines": 895,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/阶段计划/phase3.5-memory-hygiene/plan.md",
+      "language": "markdown",
+      "sizeLines": 120,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/研究/对比.md",
+      "language": "markdown",
+      "sizeLines": 170,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/研究/记忆机制解析.md",
+      "language": "markdown",
+      "sizeLines": 463,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/研究/目前缺失的核心功能.md",
+      "language": "markdown",
+      "sizeLines": 58,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/研究/上下文压缩分析.md",
+      "language": "markdown",
+      "sizeLines": 433,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/研究/paw-ts上下文压缩与记忆机制.md",
+      "language": "markdown",
+      "sizeLines": 704,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/演示/GOLDEN_PATH.md",
+      "language": "markdown",
+      "sizeLines": 58,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "文档/README.md",
+      "language": "markdown",
+      "sizeLines": 25,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/cli/package.json",
+      "language": "json",
+      "sizeLines": 20,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/cli/src/main.ts",
+      "language": "typescript",
+      "sizeLines": 228,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/cli/test/cli-smoke.test.ts",
+      "language": "typescript",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/cli/tsconfig.json",
+      "language": "json",
+      "sizeLines": 12,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/tui/bunfig.toml",
+      "language": "toml",
+      "sizeLines": 3,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/tui/package.json",
+      "language": "json",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/tui/scripts/e2e-live.ts",
+      "language": "typescript",
+      "sizeLines": 646,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/approval-policy.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/commands.ts",
+      "language": "typescript",
+      "sizeLines": 391,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/env.ts",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/footer-chips.ts",
+      "language": "typescript",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/footer-types.ts",
+      "language": "typescript",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/jsx-runtime.ts",
+      "language": "typescript",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/keyboard-bindings.ts",
+      "language": "typescript",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/main.tsx",
+      "language": "typescript",
+      "sizeLines": 250,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/markdown-parse.ts",
+      "language": "typescript",
+      "sizeLines": 244,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/PawFooter.ts",
+      "language": "typescript",
+      "sizeLines": 612,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/PawFooterView.tsx",
+      "language": "typescript",
+      "sizeLines": 315,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/PawScrollbackStream.tsx",
+      "language": "typescript",
+      "sizeLines": 229,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/scrollback-format.ts",
+      "language": "typescript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/scrollback-text.ts",
+      "language": "typescript",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/src/theme.ts",
+      "language": "typescript",
+      "sizeLines": 145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/test/approval-policy.test.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/test/env.test.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/test/footer-state.test.ts",
+      "language": "typescript",
+      "sizeLines": 251,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/test/markdown-scrollback.test.ts",
+      "language": "typescript",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/test/scrollback-stream.test.ts",
+      "language": "typescript",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/tui/tsconfig.json",
+      "language": "json",
+      "sizeLines": 22,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/tui/Untitled",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "language": "markdown",
+      "sizeLines": 64,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "benchmarks/download-data.py",
+      "language": "python",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/judge/benchmark.test.ts",
+      "language": "typescript",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/judge/judge.ts",
+      "language": "typescript",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/judge/prompts.ts",
+      "language": "typescript",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/judge/README.md",
+      "language": "markdown",
+      "sizeLines": 68,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "benchmarks/judge/types.ts",
+      "language": "typescript",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/longbench/adapter.ts",
+      "language": "typescript",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/longbench/benchmark.test.ts",
+      "language": "typescript",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/repobench/adapter.ts",
+      "language": "typescript",
+      "sizeLines": 200,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/repobench/benchmark.test.ts",
+      "language": "typescript",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "benchmarks/swe-bench/README.md",
+      "language": "markdown",
+      "sizeLines": 69,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "benchmarks/swe-bench/run.py",
+      "language": "python",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "biome.json",
+      "language": "json",
+      "sizeLines": 27,
+      "fileCategory": "config"
+    },
+    {
+      "path": "docker/paw-sandbox/Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 14,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "docs/升级/第1轮-工具调用协议升级.md",
+      "language": "markdown",
+      "sizeLines": 99,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/升级/面试反馈与升级建议.md",
+      "language": "markdown",
+      "sizeLines": 143,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/微调/数据集构建计划.md",
+      "language": "markdown",
+      "sizeLines": 239,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/微调/微调与推理优化计划.md",
+      "language": "markdown",
+      "sizeLines": 451,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/应用架构图.mmd",
+      "language": "mmd",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "fine_tune/dataset_info.json",
+      "language": "json",
+      "sizeLines": 24,
+      "fileCategory": "config"
+    },
+    {
+      "path": "fine_tune/eval_comparison.sh",
+      "language": "shell",
+      "sizeLines": 22,
+      "fileCategory": "script"
+    },
+    {
+      "path": "fine_tune/lora_config.yaml",
+      "language": "yaml",
+      "sizeLines": 41,
+      "fileCategory": "config"
+    },
+    {
+      "path": "fine_tune/README.md",
+      "language": "markdown",
+      "sizeLines": 61,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "fine_tune/run_validation.sh",
+      "language": "shell",
+      "sizeLines": 27,
+      "fileCategory": "script"
+    },
+    {
+      "path": "package.json",
+      "language": "json",
+      "sizeLines": 43,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/agent/package.json",
+      "language": "json",
+      "sizeLines": 21,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/agent/src/auxiliary-complete.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/child-system-prompt.ts",
+      "language": "typescript",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/compression-agent.ts",
+      "language": "typescript",
+      "sizeLines": 112,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/format-conversation-for-memory.ts",
+      "language": "typescript",
+      "sizeLines": 49,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/llm-memory-selector.ts",
+      "language": "typescript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/memory-extraction-agent.ts",
+      "language": "typescript",
+      "sizeLines": 266,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator-factory.ts",
+      "language": "typescript",
+      "sizeLines": 206,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator.ts",
+      "language": "typescript",
+      "sizeLines": 2461,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/action-handlers.ts",
+      "language": "typescript",
+      "sizeLines": 656,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/agent-args.ts",
+      "language": "typescript",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/agent-group.ts",
+      "language": "typescript",
+      "sizeLines": 346,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/constants.ts",
+      "language": "typescript",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "language": "typescript",
+      "sizeLines": 409,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/memory-extraction.ts",
+      "language": "typescript",
+      "sizeLines": 161,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/session-summarizer.ts",
+      "language": "typescript",
+      "sizeLines": 295,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/tool-runner.ts",
+      "language": "typescript",
+      "sizeLines": 338,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/orchestrator/types.ts",
+      "language": "typescript",
+      "sizeLines": 279,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/parse-agent-action.ts",
+      "language": "typescript",
+      "sizeLines": 397,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/resilience/circuit-breaker.ts",
+      "language": "typescript",
+      "sizeLines": 202,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/resolve-max-steps.ts",
+      "language": "typescript",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/resolve-memory-retrieval.ts",
+      "language": "typescript",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/resolve-plan-snapshot-max-items.ts",
+      "language": "typescript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/resolve-shell-sandbox.ts",
+      "language": "typescript",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/session.ts",
+      "language": "typescript",
+      "sizeLines": 194,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/settings.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/stub-run.ts",
+      "language": "typescript",
+      "sizeLines": 244,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/sub-agent-launcher.ts",
+      "language": "typescript",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/src/tool-result-detail.ts",
+      "language": "typescript",
+      "sizeLines": 117,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/capabilities-integration.test.ts",
+      "language": "typescript",
+      "sizeLines": 859,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/circuit-breaker.test.ts",
+      "language": "typescript",
+      "sizeLines": 188,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/compression-agent.test.ts",
+      "language": "typescript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/context-summarizer.test.ts",
+      "language": "typescript",
+      "sizeLines": 147,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/e2e-ollama.test.ts",
+      "language": "typescript",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/fixtures.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/format-conversation-for-memory.test.ts",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/memory-extraction-agent.test.ts",
+      "language": "typescript",
+      "sizeLines": 156,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/model-retry.test.ts",
+      "language": "typescript",
+      "sizeLines": 260,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/model-truncation.test.ts",
+      "language": "typescript",
+      "sizeLines": 203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/operations-run-session.test.ts",
+      "language": "typescript",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/orchestrator-compression.test.ts",
+      "language": "typescript",
+      "sizeLines": 166,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/orchestrator.test.ts",
+      "language": "typescript",
+      "sizeLines": 927,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/parse-agent-action.test.ts",
+      "language": "typescript",
+      "sizeLines": 289,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/phase1-integration.test.ts",
+      "language": "typescript",
+      "sizeLines": 283,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/phase2-e2e.test.ts",
+      "language": "typescript",
+      "sizeLines": 244,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/resolve-memory-retrieval.test.ts",
+      "language": "typescript",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/resolve-plan-snapshot-max-items.test.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/resolve-shell-sandbox.test.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/run-session-controller.test.ts",
+      "language": "typescript",
+      "sizeLines": 25,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/session-summarizer.test.ts",
+      "language": "typescript",
+      "sizeLines": 164,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/tool-result-detail.test.ts",
+      "language": "typescript",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/test/worktree.test.ts",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/agent/tsconfig.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/core/package.json",
+      "language": "json",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/core/src/actions.ts",
+      "language": "typescript",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/app-state.ts",
+      "language": "typescript",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/checkpoint.ts",
+      "language": "typescript",
+      "sizeLines": 377,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/context/budget.ts",
+      "language": "typescript",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/context/compactor.ts",
+      "language": "typescript",
+      "sizeLines": 235,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/context/manager.ts",
+      "language": "typescript",
+      "sizeLines": 269,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/context/policy.ts",
+      "language": "typescript",
+      "sizeLines": 398,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/context/pruner.ts",
+      "language": "typescript",
+      "sizeLines": 266,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/context/summary.ts",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/cost-tracker.ts",
+      "language": "typescript",
+      "sizeLines": 335,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/errors.ts",
+      "language": "typescript",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/eval-hooks.ts",
+      "language": "typescript",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/find-root.ts",
+      "language": "typescript",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 374,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/input-sanitizer.ts",
+      "language": "typescript",
+      "sizeLines": 184,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/markdown.ts",
+      "language": "typescript",
+      "sizeLines": 152,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/prompt/deepseek.txt",
+      "language": "txt",
+      "sizeLines": 97,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "packages/core/src/prompt/default.txt",
+      "language": "txt",
+      "sizeLines": 93,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "packages/core/src/prompt/loader.ts",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/run-evaluator.ts",
+      "language": "typescript",
+      "sizeLines": 189,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/run-events.ts",
+      "language": "typescript",
+      "sizeLines": 463,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/run-metrics.ts",
+      "language": "typescript",
+      "sizeLines": 139,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/run.ts",
+      "language": "typescript",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/session-store.ts",
+      "language": "typescript",
+      "sizeLines": 508,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/skills.ts",
+      "language": "typescript",
+      "sizeLines": 561,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt.ts",
+      "language": "typescript",
+      "sizeLines": 132,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/assembler.ts",
+      "language": "typescript",
+      "sizeLines": 114,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/format.ts",
+      "language": "typescript",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/actions.ts",
+      "language": "typescript",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/doing-tasks.ts",
+      "language": "typescript",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/environment.ts",
+      "language": "typescript",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/identity.ts",
+      "language": "typescript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/memory.ts",
+      "language": "typescript",
+      "sizeLines": 199,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/output-efficiency.ts",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/security.ts",
+      "language": "typescript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/system.ts",
+      "language": "typescript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/tone-and-style.ts",
+      "language": "typescript",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/using-tools.ts",
+      "language": "typescript",
+      "sizeLines": 132,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/verification.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/trim.ts",
+      "language": "typescript",
+      "sizeLines": 237,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/system-prompt/types.ts",
+      "language": "typescript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/todo.ts",
+      "language": "typescript",
+      "sizeLines": 136,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/token-estimate.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/token-estimator.ts",
+      "language": "typescript",
+      "sizeLines": 222,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/token-usage.ts",
+      "language": "typescript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/tool-result/format.ts",
+      "language": "typescript",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/tool-result/storage.ts",
+      "language": "typescript",
+      "sizeLines": 188,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/src/workspace-paths.ts",
+      "language": "typescript",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/app-state.test.ts",
+      "language": "typescript",
+      "sizeLines": 126,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/checkpoint.test.ts",
+      "language": "typescript",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/compression-summary.test.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/context-budget.test.ts",
+      "language": "typescript",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/context-compactor.test.ts",
+      "language": "typescript",
+      "sizeLines": 190,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/context-manager.test.ts",
+      "language": "typescript",
+      "sizeLines": 210,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/context-protection.test.ts",
+      "language": "typescript",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/context-pruner.test.ts",
+      "language": "typescript",
+      "sizeLines": 207,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/cost-tracker.test.ts",
+      "language": "typescript",
+      "sizeLines": 177,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/errors.test.ts",
+      "language": "typescript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/fixtures.ts",
+      "language": "typescript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/run-evaluator.test.ts",
+      "language": "typescript",
+      "sizeLines": 190,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/session-store.test.ts",
+      "language": "typescript",
+      "sizeLines": 243,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/skills.test.ts",
+      "language": "typescript",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/system-prompt-budget.test.ts",
+      "language": "typescript",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/todo.test.ts",
+      "language": "typescript",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/token-estimate.test.ts",
+      "language": "typescript",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/test/token-estimator.test.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/core/tsconfig.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/eval/package.json",
+      "language": "json",
+      "sizeLines": 23,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/eval/src/cli/eval-command.ts",
+      "language": "typescript",
+      "sizeLines": 249,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/data-collector.ts",
+      "language": "typescript",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/eval-record.ts",
+      "language": "typescript",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/eval-settings.ts",
+      "language": "typescript",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 82,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/runner.ts",
+      "language": "typescript",
+      "sizeLines": 415,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/scorer/aggregator.ts",
+      "language": "typescript",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/scorer/llm-scorer.ts",
+      "language": "typescript",
+      "sizeLines": 269,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/scorer/reporter.ts",
+      "language": "typescript",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/scorer/rule-scorer.ts",
+      "language": "typescript",
+      "sizeLines": 653,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/scorer/types.ts",
+      "language": "typescript",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/adversarial.ts",
+      "language": "typescript",
+      "sizeLines": 293,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/code-gen.ts",
+      "language": "typescript",
+      "sizeLines": 292,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/context-mgmt.ts",
+      "language": "typescript",
+      "sizeLines": 256,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/core-tools.ts",
+      "language": "typescript",
+      "sizeLines": 370,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/high-frequency.ts",
+      "language": "typescript",
+      "sizeLines": 315,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/index.ts",
+      "language": "typescript",
+      "sizeLines": 8,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/memory-retrieval.ts",
+      "language": "typescript",
+      "sizeLines": 173,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/multi-step.ts",
+      "language": "typescript",
+      "sizeLines": 182,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/builtin/shell-safety.ts",
+      "language": "typescript",
+      "sizeLines": 297,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/loader.ts",
+      "language": "typescript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/test-suite/types.ts",
+      "language": "typescript",
+      "sizeLines": 156,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/src/training-data-exporter.ts",
+      "language": "typescript",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/test/data-collector.test.ts",
+      "language": "typescript",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/test/e2e-runner.test.ts",
+      "language": "typescript",
+      "sizeLines": 263,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/test/rule-scorer.test.ts",
+      "language": "typescript",
+      "sizeLines": 282,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/test/smoke-real-model.test.ts",
+      "language": "typescript",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/eval/tsconfig.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/harness/package.json",
+      "language": "json",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/harness/src/context.ts",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/mcp-client.ts",
+      "language": "typescript",
+      "sizeLines": 211,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/registry/definitions.ts",
+      "language": "typescript",
+      "sizeLines": 408,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/registry/execution.ts",
+      "language": "typescript",
+      "sizeLines": 957,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/registry/index.ts",
+      "language": "typescript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/sandbox/detect-runtime.ts",
+      "language": "typescript",
+      "sizeLines": 65,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/sandbox/docker-runner.ts",
+      "language": "typescript",
+      "sizeLines": 190,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/sandbox/index.ts",
+      "language": "typescript",
+      "sizeLines": 51,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/sandbox/types.ts",
+      "language": "typescript",
+      "sizeLines": 51,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/shell-ast.ts",
+      "language": "typescript",
+      "sizeLines": 374,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/shell-audit.ts",
+      "language": "typescript",
+      "sizeLines": 248,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/shell-guard.ts",
+      "language": "typescript",
+      "sizeLines": 137,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/shell-policy-config.ts",
+      "language": "typescript",
+      "sizeLines": 435,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/shell-policy.ts",
+      "language": "typescript",
+      "sizeLines": 339,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/shell/analysis.ts",
+      "language": "typescript",
+      "sizeLines": 287,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/shell/execute.ts",
+      "language": "typescript",
+      "sizeLines": 288,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/src/shell/index.ts",
+      "language": "typescript",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/test/mcp-client.test.ts",
+      "language": "typescript",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/test/registry.test.ts",
+      "language": "typescript",
+      "sizeLines": 291,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/test/run-shell.test.ts",
+      "language": "typescript",
+      "sizeLines": 352,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/test/sandbox-docker.test.ts",
+      "language": "typescript",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/test/shell-guard.test.ts",
+      "language": "typescript",
+      "sizeLines": 227,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/test/sub-agent.test.ts",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/harness/tsconfig.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/models/package.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/models/src/anthropic-compatible.ts",
+      "language": "typescript",
+      "sizeLines": 450,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/auxiliary-model.ts",
+      "language": "typescript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/default-model.ts",
+      "language": "typescript",
+      "sizeLines": 268,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/fake-model.ts",
+      "language": "typescript",
+      "sizeLines": 295,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 51,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/language-model.ts",
+      "language": "typescript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/message-content.ts",
+      "language": "typescript",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/model-options.ts",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/openai-compatible.ts",
+      "language": "typescript",
+      "sizeLines": 406,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/openai-stream-parse.ts",
+      "language": "typescript",
+      "sizeLines": 253,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/think-extraction.ts",
+      "language": "typescript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/src/types.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/test/auxiliary-model.test.ts",
+      "language": "typescript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/test/deepseek-model.test.ts",
+      "language": "typescript",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/test/message-content.test.ts",
+      "language": "typescript",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/test/ollama-model.test.ts",
+      "language": "typescript",
+      "sizeLines": 215,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/test/qwen-model.test.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/test/think-extraction.test.ts",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/models/tsconfig.json",
+      "language": "json",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/settings/package.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/settings/src/credentials.ts",
+      "language": "typescript",
+      "sizeLines": 210,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/settings/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/settings/src/load.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/settings/src/schema.ts",
+      "language": "typescript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/settings/test/credentials.test.ts",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/settings/test/load.test.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/settings/tsconfig.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/store/package.json",
+      "language": "json",
+      "sizeLines": 13,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/store/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/src/plan-item.ts",
+      "language": "typescript",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/src/plan-items-json.ts",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/src/plan-snapshot.ts",
+      "language": "typescript",
+      "sizeLines": 139,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/src/plan.ts",
+      "language": "typescript",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/src/task-planner.ts",
+      "language": "typescript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/test/plan-items-json.test.ts",
+      "language": "typescript",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/test/plan-snapshot.test.ts",
+      "language": "typescript",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/test/plan.test.ts",
+      "language": "typescript",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/test/task-planner.test.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/store/tsconfig.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/workspace/package.json",
+      "language": "json",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/workspace/src/files/read.ts",
+      "language": "typescript",
+      "sizeLines": 704,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/files/write.ts",
+      "language": "typescript",
+      "sizeLines": 288,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/git-tools.ts",
+      "language": "typescript",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/lsp-client.ts",
+      "language": "typescript",
+      "sizeLines": 510,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/mention-resolver.ts",
+      "language": "typescript",
+      "sizeLines": 144,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/network-tools.ts",
+      "language": "typescript",
+      "sizeLines": 261,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/notebook-tools.ts",
+      "language": "typescript",
+      "sizeLines": 221,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/patch-tools.ts",
+      "language": "typescript",
+      "sizeLines": 253,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/path-guard.ts",
+      "language": "typescript",
+      "sizeLines": 139,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/paw-md.ts",
+      "language": "typescript",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/project-context.ts",
+      "language": "typescript",
+      "sizeLines": 714,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/root.ts",
+      "language": "typescript",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/symbol-search.ts",
+      "language": "typescript",
+      "sizeLines": 462,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/watch.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/src/worktree.ts",
+      "language": "typescript",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/auto-context.test.ts",
+      "language": "typescript",
+      "sizeLines": 131,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/brief-tools.test.ts",
+      "language": "typescript",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/edit-file.test.ts",
+      "language": "typescript",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/git-tools.test.ts",
+      "language": "typescript",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/glob.test.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/grep.test.ts",
+      "language": "typescript",
+      "sizeLines": 131,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/local-fs.test.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/mention-resolver.test.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/network-tools.test.ts",
+      "language": "typescript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/notebook-tools.test.ts",
+      "language": "typescript",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/patch-tools.test.ts",
+      "language": "typescript",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/path-guard.test.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/paw-md.test.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/search.test.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/symbol-search.test.ts",
+      "language": "typescript",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/watch.test.ts",
+      "language": "typescript",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/test/write-file.test.ts",
+      "language": "typescript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/workspace/tsconfig.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "plans/memory-optimization-plan.md",
+      "language": "markdown",
+      "sizeLines": 211,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 92,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/import-skill.ts",
+      "language": "typescript",
+      "sizeLines": 97,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/integration/sub-agent-prompts.md",
+      "language": "markdown",
+      "sizeLines": 140,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "training_data/generate_stage_a_claude.py",
+      "language": "python",
+      "sizeLines": 477,
+      "fileCategory": "code"
+    },
+    {
+      "path": "training_data/stage_b_paw.jsonl",
+      "language": "jsonl",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "training_data/stage_b_workflows.jsonl",
+      "language": "jsonl",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "language": "json",
+      "sizeLines": 22,
+      "fileCategory": "config"
+    }
+  ],
+  "totalFiles": 491,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "large",
+  "importMap": {
+    ".claude/plans/dynamic-toasting-quilt.md": [],
+    ".github/workflows/ci.yml": [],
+    ".memory/remember_number.md": [],
+    ".understand-anything/.trash-1782875262/assembled-graph.json": [],
+    ".understand-anything/.trash-1782875262/batch-1-part-1.json": [],
+    ".understand-anything/.trash-1782875262/batch-1-part-2.json": [],
+    ".understand-anything/.trash-1782875262/batch-10.json": [],
+    ".understand-anything/.trash-1782875262/batch-11.json": [],
+    ".understand-anything/.trash-1782875262/batch-12.json": [],
+    ".understand-anything/.trash-1782875262/batch-13.json": [],
+    ".understand-anything/.trash-1782875262/batch-14.json": [],
+    ".understand-anything/.trash-1782875262/batch-15.json": [],
+    ".understand-anything/.trash-1782875262/batch-16.json": [],
+    ".understand-anything/.trash-1782875262/batch-17.json": [],
+    ".understand-anything/.trash-1782875262/batch-18.json": [],
+    ".understand-anything/.trash-1782875262/batch-19.json": [],
+    ".understand-anything/.trash-1782875262/batch-2.json": [],
+    ".understand-anything/.trash-1782875262/batch-20.json": [],
+    ".understand-anything/.trash-1782875262/batch-21.json": [],
+    ".understand-anything/.trash-1782875262/batch-22.json": [],
+    ".understand-anything/.trash-1782875262/batch-23.json": [],
+    ".understand-anything/.trash-1782875262/batch-24.json": [],
+    ".understand-anything/.trash-1782875262/batch-25.json": [],
+    ".understand-anything/.trash-1782875262/batch-26.json": [],
+    ".understand-anything/.trash-1782875262/batch-27.json": [],
+    ".understand-anything/.trash-1782875262/batch-28.json": [],
+    ".understand-anything/.trash-1782875262/batch-29.json": [],
+    ".understand-anything/.trash-1782875262/batch-3-part-1.json": [],
+    ".understand-anything/.trash-1782875262/batch-3-part-2.json": [],
+    ".understand-anything/.trash-1782875262/batch-30.json": [],
+    ".understand-anything/.trash-1782875262/batch-4-part-1.json": [],
+    ".understand-anything/.trash-1782875262/batch-4-part-2.json": [],
+    ".understand-anything/.trash-1782875262/batch-5.json": [],
+    ".understand-anything/.trash-1782875262/batch-6.json": [],
+    ".understand-anything/.trash-1782875262/batch-7-part-1.json": [],
+    ".understand-anything/.trash-1782875262/batch-7-part-2.json": [],
+    ".understand-anything/.trash-1782875262/batch-8.json": [],
+    ".understand-anything/.trash-1782875262/batch-9-part-1.json": [],
+    ".understand-anything/.trash-1782875262/batch-9-part-2.json": [],
+    ".understand-anything/.trash-1782875262/batches.json": [],
+    ".understand-anything/.trash-1782875262/fingerprint-input.json": [],
+    ".understand-anything/.trash-1782875262/layers.json": [],
+    ".understand-anything/.trash-1782875262/review.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-1.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-10.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-11.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-12.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-13.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-14.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-15.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-16.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-17.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-18.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-19.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-2.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-20.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-21.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-22.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-23.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-24.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-25.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-26.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-27.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-28.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-29.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-3.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-30.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-4.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-5.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-6.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-7.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-8.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch-ctx-9.json": [],
+    ".understand-anything/.trash-1782875262/tmp/batch1-combined.json": [],
+    ".understand-anything/.trash-1782875262/tmp/generate-batch1.py": [],
+    ".understand-anything/.trash-1782875262/tmp/split-batch1.py": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-arch-analyze.cjs": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-arch-input.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-arch-results.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-1.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-10.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-11.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-12.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-13.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-14.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-15.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-16.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-17.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-18.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-19.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-2.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-20.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-21.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-22.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-23.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-24.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-25.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-26.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-27.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-28.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-29.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-3.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-30.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-5.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-6.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-7.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-8.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-9.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-1.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-10.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-11.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-12.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-13.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-14.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-15.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-16.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-17.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-18.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-19.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-2.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-20.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-21.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-22.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-23.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-24.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-25.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-26.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-27.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-28.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-29.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-3.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-30.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-5.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-6.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-7.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-8.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-9.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-import-map-input.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-import-map-output.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-inline-validate.cjs": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-scan-files.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-tour-analyze.cjs": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-tour-input.json": [],
+    ".understand-anything/.trash-1782875262/tmp/ua-tour-results.json": [],
+    ".understand-anything/.trash-1782875262/tour.json": [],
+    ".understand-anything/.understandignore": [],
+    ".understand-anything/config.json": [],
+    ".understand-anything/fingerprints.json": [],
+    ".understand-anything/intermediate/scan-result.json": [],
+    ".understand-anything/knowledge-graph.json": [],
+    ".understand-anything/meta.json": [],
+    "文档/工程/上下文压缩三层体系.md": [],
+    "文档/工程/BENCHMARK_RESULTS.md": [],
+    "文档/工程/deepseek-v4-flash-eval-report.md": [],
+    "文档/工程/ENGINEERING_EXCELLENCE_PLAN.md": [],
+    "文档/工程/EVAL_ARCHITECTURE_PLAN.md": [],
+    "文档/工程/INTERVIEW_READINESS_PLAN.md": [],
+    "文档/工程/Paw-TS从0到1完整解析.md": [],
+    "文档/工程/TEST_REPORT.md": [],
+    "文档/工程/UPGRADE_PLAN.md": [],
+    "文档/架构/ARCHITECTURE_AND_FEATURES_PLAN.md": [],
+    "文档/架构/multi-agent-architecture-analysis.md": [],
+    "文档/架构/multi-agent-state-data-flow-analysis.md": [],
+    "文档/架构决策/001-context-compression.md": [],
+    "文档/阶段计划/phase1-agent-orchestration/orchestration-mode-analysis.md": [],
+    "文档/阶段计划/phase1-agent-orchestration/plan.md": [],
+    "文档/阶段计划/phase2-context-management/plan.md": [],
+    "文档/阶段计划/phase3-memory-retrieval/plan.md": [],
+    "文档/阶段计划/phase3.5-memory-hygiene/plan.md": [],
+    "文档/研究/对比.md": [],
+    "文档/研究/记忆机制解析.md": [],
+    "文档/研究/目前缺失的核心功能.md": [],
+    "文档/研究/上下文压缩分析.md": [],
+    "文档/研究/paw-ts上下文压缩与记忆机制.md": [],
+    "文档/演示/GOLDEN_PATH.md": [],
+    "文档/README.md": [],
+    "apps/cli/package.json": [],
+    "apps/cli/src/main.ts": [],
+    "apps/cli/test/cli-smoke.test.ts": [],
+    "apps/cli/tsconfig.json": [],
+    "apps/tui/bunfig.toml": [],
+    "apps/tui/package.json": [],
+    "apps/tui/scripts/e2e-live.ts": [
+      "apps/tui/src/commands.ts",
+      "apps/tui/src/footer-chips.ts",
+      "apps/tui/src/scrollback-format.ts"
+    ],
+    "apps/tui/src/approval-policy.ts": [],
+    "apps/tui/src/commands.ts": [],
+    "apps/tui/src/env.ts": [],
+    "apps/tui/src/footer-chips.ts": [
+      "apps/tui/src/footer-types.ts"
+    ],
+    "apps/tui/src/footer-types.ts": [],
+    "apps/tui/src/jsx-runtime.ts": [],
+    "apps/tui/src/keyboard-bindings.ts": [
+      "apps/tui/src/footer-types.ts"
+    ],
+    "apps/tui/src/main.tsx": [
+      "apps/tui/src/approval-policy.ts",
+      "apps/tui/src/commands.ts",
+      "apps/tui/src/env.ts",
+      "apps/tui/src/PawFooter.ts",
+      "apps/tui/src/theme.ts"
+    ],
+    "apps/tui/src/markdown-parse.ts": [],
+    "apps/tui/src/PawFooter.ts": [
+      "apps/tui/src/footer-types.ts",
+      "apps/tui/src/keyboard-bindings.ts",
+      "apps/tui/src/PawFooterView.tsx",
+      "apps/tui/src/PawScrollbackStream.tsx",
+      "apps/tui/src/theme.ts"
+    ],
+    "apps/tui/src/PawFooterView.tsx": [
+      "apps/tui/src/footer-chips.ts",
+      "apps/tui/src/footer-types.ts",
+      "apps/tui/src/PawFooter.ts",
+      "apps/tui/src/theme.ts"
+    ],
+    "apps/tui/src/PawScrollbackStream.tsx": [
+      "apps/tui/src/markdown-parse.ts",
+      "apps/tui/src/scrollback-format.ts",
+      "apps/tui/src/scrollback-text.ts",
+      "apps/tui/src/theme.ts"
+    ],
+    "apps/tui/src/scrollback-format.ts": [
+      "apps/tui/src/footer-chips.ts"
+    ],
+    "apps/tui/src/scrollback-text.ts": [],
+    "apps/tui/src/theme.ts": [
+      "apps/tui/src/env.ts"
+    ],
+    "apps/tui/test/approval-policy.test.ts": [
+      "apps/tui/src/approval-policy.ts"
+    ],
+    "apps/tui/test/env.test.ts": [
+      "apps/tui/src/env.ts"
+    ],
+    "apps/tui/test/footer-state.test.ts": [
+      "apps/tui/src/footer-chips.ts",
+      "apps/tui/src/keyboard-bindings.ts",
+      "apps/tui/src/scrollback-format.ts"
+    ],
+    "apps/tui/test/markdown-scrollback.test.ts": [
+      "apps/tui/src/markdown-parse.ts",
+      "apps/tui/src/scrollback-format.ts"
+    ],
+    "apps/tui/test/scrollback-stream.test.ts": [
+      "apps/tui/src/scrollback-text.ts"
+    ],
+    "apps/tui/tsconfig.json": [],
+    "apps/tui/Untitled": [],
+    "ARCHITECTURE.md": [],
+    "benchmarks/download-data.py": [],
+    "benchmarks/judge/benchmark.test.ts": [
+      "benchmarks/judge/judge.ts",
+      "benchmarks/judge/types.ts",
+      "packages/models/src/index.ts"
+    ],
+    "benchmarks/judge/judge.ts": [
+      "benchmarks/judge/prompts.ts",
+      "benchmarks/judge/types.ts",
+      "packages/models/src/index.ts"
+    ],
+    "benchmarks/judge/prompts.ts": [
+      "benchmarks/judge/types.ts"
+    ],
+    "benchmarks/judge/README.md": [],
+    "benchmarks/judge/types.ts": [],
+    "benchmarks/longbench/adapter.ts": [],
+    "benchmarks/longbench/benchmark.test.ts": [
+      "benchmarks/longbench/adapter.ts",
+      "packages/core/src/token-estimate.ts"
+    ],
+    "benchmarks/repobench/adapter.ts": [],
+    "benchmarks/repobench/benchmark.test.ts": [
+      "benchmarks/repobench/adapter.ts"
+    ],
+    "benchmarks/swe-bench/README.md": [],
+    "benchmarks/swe-bench/run.py": [],
+    "biome.json": [],
+    "docker/paw-sandbox/Dockerfile": [],
+    "docs/升级/第1轮-工具调用协议升级.md": [],
+    "docs/升级/面试反馈与升级建议.md": [],
+    "docs/微调/数据集构建计划.md": [],
+    "docs/微调/微调与推理优化计划.md": [],
+    "docs/应用架构图.mmd": [],
+    "fine_tune/dataset_info.json": [],
+    "fine_tune/eval_comparison.sh": [],
+    "fine_tune/lora_config.yaml": [],
+    "fine_tune/README.md": [],
+    "fine_tune/run_validation.sh": [],
+    "package.json": [],
+    "packages/agent/package.json": [],
+    "packages/agent/src/auxiliary-complete.ts": [],
+    "packages/agent/src/child-system-prompt.ts": [
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/compression-agent.ts": [
+      "packages/agent/src/auxiliary-complete.ts"
+    ],
+    "packages/agent/src/format-conversation-for-memory.ts": [],
+    "packages/agent/src/index.ts": [],
+    "packages/agent/src/llm-memory-selector.ts": [
+      "packages/agent/src/auxiliary-complete.ts"
+    ],
+    "packages/agent/src/memory-extraction-agent.ts": [
+      "packages/agent/src/auxiliary-complete.ts"
+    ],
+    "packages/agent/src/orchestrator-factory.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/src/resolve-plan-snapshot-max-items.ts",
+      "packages/agent/src/sub-agent-launcher.ts"
+    ],
+    "packages/agent/src/orchestrator.ts": [
+      "packages/agent/src/child-system-prompt.ts",
+      "packages/agent/src/compression-agent.ts",
+      "packages/agent/src/orchestrator/action-handlers.ts",
+      "packages/agent/src/orchestrator/agent-group.ts",
+      "packages/agent/src/orchestrator/memory-extraction.ts",
+      "packages/agent/src/orchestrator/session-summarizer.ts",
+      "packages/agent/src/orchestrator/types.ts",
+      "packages/agent/src/parse-agent-action.ts",
+      "packages/agent/src/resilience/circuit-breaker.ts",
+      "packages/agent/src/resolve-max-steps.ts",
+      "packages/agent/src/resolve-memory-retrieval.ts",
+      "packages/agent/src/resolve-shell-sandbox.ts",
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/orchestrator/action-handlers.ts": [
+      "packages/agent/src/orchestrator/agent-group.ts",
+      "packages/agent/src/orchestrator/constants.ts",
+      "packages/agent/src/orchestrator/context-summarizer.ts",
+      "packages/agent/src/orchestrator/tool-runner.ts",
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/orchestrator/agent-args.ts": [
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/orchestrator/agent-group.ts": [
+      "packages/agent/src/orchestrator/agent-args.ts",
+      "packages/agent/src/orchestrator/constants.ts",
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/orchestrator/constants.ts": [],
+    "packages/agent/src/orchestrator/context-summarizer.ts": [
+      "packages/agent/src/orchestrator/agent-args.ts",
+      "packages/agent/src/orchestrator/constants.ts",
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/orchestrator/memory-extraction.ts": [
+      "packages/agent/src/format-conversation-for-memory.ts",
+      "packages/agent/src/memory-extraction-agent.ts",
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/orchestrator/session-summarizer.ts": [
+      "packages/agent/src/auxiliary-complete.ts",
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/orchestrator/tool-runner.ts": [
+      "packages/agent/src/orchestrator/constants.ts",
+      "packages/agent/src/orchestrator/context-summarizer.ts",
+      "packages/agent/src/tool-result-detail.ts"
+    ],
+    "packages/agent/src/orchestrator/types.ts": [],
+    "packages/agent/src/parse-agent-action.ts": [],
+    "packages/agent/src/resilience/circuit-breaker.ts": [],
+    "packages/agent/src/resolve-max-steps.ts": [
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/resolve-memory-retrieval.ts": [
+      "packages/agent/src/llm-memory-selector.ts",
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/resolve-plan-snapshot-max-items.ts": [
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/resolve-shell-sandbox.ts": [
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/session.ts": [
+      "packages/agent/src/orchestrator-factory.ts",
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/src/stub-run.ts"
+    ],
+    "packages/agent/src/settings.ts": [],
+    "packages/agent/src/stub-run.ts": [
+      "packages/agent/src/orchestrator-factory.ts",
+      "packages/agent/src/orchestrator.ts"
+    ],
+    "packages/agent/src/sub-agent-launcher.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/src/orchestrator/agent-args.ts",
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/tool-result-detail.ts": [],
+    "packages/agent/test/capabilities-integration.test.ts": [
+      "packages/agent/src/compression-agent.ts",
+      "packages/agent/src/memory-extraction-agent.ts",
+      "packages/agent/test/fixtures.ts"
+    ],
+    "packages/agent/test/circuit-breaker.test.ts": [
+      "packages/agent/src/resilience/circuit-breaker.ts"
+    ],
+    "packages/agent/test/compression-agent.test.ts": [
+      "packages/agent/src/compression-agent.ts"
+    ],
+    "packages/agent/test/context-summarizer.test.ts": [
+      "packages/agent/src/orchestrator/agent-args.ts",
+      "packages/agent/src/orchestrator/context-summarizer.ts"
+    ],
+    "packages/agent/test/e2e-ollama.test.ts": [
+      "packages/agent/src/stub-run.ts"
+    ],
+    "packages/agent/test/fixtures.ts": [],
+    "packages/agent/test/format-conversation-for-memory.test.ts": [
+      "packages/agent/src/format-conversation-for-memory.ts"
+    ],
+    "packages/agent/test/memory-extraction-agent.test.ts": [
+      "packages/agent/src/memory-extraction-agent.ts"
+    ],
+    "packages/agent/test/model-retry.test.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/test/fixtures.ts"
+    ],
+    "packages/agent/test/model-truncation.test.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/test/fixtures.ts"
+    ],
+    "packages/agent/test/operations-run-session.test.ts": [
+      "packages/agent/src/stub-run.ts"
+    ],
+    "packages/agent/test/orchestrator-compression.test.ts": [
+      "packages/agent/src/orchestrator.ts"
+    ],
+    "packages/agent/test/orchestrator.test.ts": [
+      "packages/agent/src/orchestrator.ts"
+    ],
+    "packages/agent/test/parse-agent-action.test.ts": [
+      "packages/agent/src/parse-agent-action.ts"
+    ],
+    "packages/agent/test/phase1-integration.test.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/src/sub-agent-launcher.ts"
+    ],
+    "packages/agent/test/phase2-e2e.test.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/test/fixtures.ts"
+    ],
+    "packages/agent/test/resolve-memory-retrieval.test.ts": [
+      "packages/agent/src/resolve-memory-retrieval.ts"
+    ],
+    "packages/agent/test/resolve-plan-snapshot-max-items.test.ts": [
+      "packages/agent/src/resolve-plan-snapshot-max-items.ts"
+    ],
+    "packages/agent/test/resolve-shell-sandbox.test.ts": [
+      "packages/agent/src/resolve-shell-sandbox.ts"
+    ],
+    "packages/agent/test/run-session-controller.test.ts": [
+      "packages/agent/src/session.ts"
+    ],
+    "packages/agent/test/session-summarizer.test.ts": [
+      "packages/agent/src/orchestrator/session-summarizer.ts"
+    ],
+    "packages/agent/test/tool-result-detail.test.ts": [
+      "packages/agent/src/tool-result-detail.ts"
+    ],
+    "packages/agent/test/worktree.test.ts": [
+      "packages/agent/src/stub-run.ts"
+    ],
+    "packages/agent/tsconfig.json": [],
+    "packages/core/package.json": [],
+    "packages/core/src/actions.ts": [],
+    "packages/core/src/app-state.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/todo.ts"
+    ],
+    "packages/core/src/checkpoint.ts": [
+      "packages/core/src/workspace-paths.ts"
+    ],
+    "packages/core/src/context/budget.ts": [],
+    "packages/core/src/context/compactor.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimator.ts"
+    ],
+    "packages/core/src/context/manager.ts": [
+      "packages/core/src/context/policy.ts",
+      "packages/core/src/context/pruner.ts",
+      "packages/core/src/input-sanitizer.ts",
+      "packages/core/src/token-estimator.ts",
+      "packages/core/src/tool-result/format.ts"
+    ],
+    "packages/core/src/context/policy.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimator.ts",
+      "packages/core/src/tool-result/format.ts"
+    ],
+    "packages/core/src/context/pruner.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimate.ts",
+      "packages/core/src/tool-result/format.ts",
+      "packages/core/src/tool-result/storage.ts"
+    ],
+    "packages/core/src/context/summary.ts": [
+      "packages/core/src/markdown.ts"
+    ],
+    "packages/core/src/cost-tracker.ts": [],
+    "packages/core/src/errors.ts": [],
+    "packages/core/src/eval-hooks.ts": [
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/src/find-root.ts": [],
+    "packages/core/src/index.ts": [],
+    "packages/core/src/input-sanitizer.ts": [],
+    "packages/core/src/markdown.ts": [],
+    "packages/core/src/prompt/deepseek.txt": [],
+    "packages/core/src/prompt/default.txt": [],
+    "packages/core/src/prompt/loader.ts": [],
+    "packages/core/src/run-evaluator.ts": [
+      "packages/core/src/run-events.ts",
+      "packages/core/src/run-metrics.ts"
+    ],
+    "packages/core/src/run-events.ts": [
+      "packages/core/src/actions.ts",
+      "packages/core/src/run.ts",
+      "packages/core/src/token-usage.ts"
+    ],
+    "packages/core/src/run-metrics.ts": [],
+    "packages/core/src/run.ts": [],
+    "packages/core/src/session-store.ts": [
+      "packages/core/src/run-events.ts",
+      "packages/core/src/workspace-paths.ts"
+    ],
+    "packages/core/src/skills.ts": [
+      "packages/core/src/markdown.ts"
+    ],
+    "packages/core/src/system-prompt.ts": [
+      "packages/core/src/context/budget.ts",
+      "packages/core/src/system-prompt/assembler.ts",
+      "packages/core/src/system-prompt/trim.ts",
+      "packages/core/src/system-prompt/types.ts",
+      "packages/core/src/token-estimate.ts"
+    ],
+    "packages/core/src/system-prompt/assembler.ts": [
+      "packages/core/src/prompt/loader.ts",
+      "packages/core/src/system-prompt/format.ts",
+      "packages/core/src/system-prompt/sections/actions.ts",
+      "packages/core/src/system-prompt/sections/doing-tasks.ts",
+      "packages/core/src/system-prompt/sections/environment.ts",
+      "packages/core/src/system-prompt/sections/identity.ts",
+      "packages/core/src/system-prompt/sections/memory.ts",
+      "packages/core/src/system-prompt/sections/output-efficiency.ts",
+      "packages/core/src/system-prompt/sections/security.ts",
+      "packages/core/src/system-prompt/sections/system.ts",
+      "packages/core/src/system-prompt/sections/tone-and-style.ts",
+      "packages/core/src/system-prompt/sections/using-tools.ts",
+      "packages/core/src/system-prompt/sections/verification.ts",
+      "packages/core/src/system-prompt/types.ts"
+    ],
+    "packages/core/src/system-prompt/format.ts": [],
+    "packages/core/src/system-prompt/sections/actions.ts": [],
+    "packages/core/src/system-prompt/sections/doing-tasks.ts": [
+      "packages/core/src/system-prompt/format.ts"
+    ],
+    "packages/core/src/system-prompt/sections/environment.ts": [
+      "packages/core/src/context/budget.ts",
+      "packages/core/src/system-prompt/format.ts"
+    ],
+    "packages/core/src/system-prompt/sections/identity.ts": [],
+    "packages/core/src/system-prompt/sections/memory.ts": [],
+    "packages/core/src/system-prompt/sections/output-efficiency.ts": [],
+    "packages/core/src/system-prompt/sections/security.ts": [],
+    "packages/core/src/system-prompt/sections/system.ts": [
+      "packages/core/src/system-prompt/format.ts"
+    ],
+    "packages/core/src/system-prompt/sections/tone-and-style.ts": [
+      "packages/core/src/system-prompt/format.ts"
+    ],
+    "packages/core/src/system-prompt/sections/using-tools.ts": [],
+    "packages/core/src/system-prompt/sections/verification.ts": [],
+    "packages/core/src/system-prompt/trim.ts": [
+      "packages/core/src/system-prompt/types.ts"
+    ],
+    "packages/core/src/system-prompt/types.ts": [],
+    "packages/core/src/todo.ts": [],
+    "packages/core/src/token-estimate.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimator.ts"
+    ],
+    "packages/core/src/token-estimator.ts": [
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/src/token-usage.ts": [],
+    "packages/core/src/tool-result/format.ts": [],
+    "packages/core/src/tool-result/storage.ts": [
+      "packages/core/src/tool-result/format.ts",
+      "packages/core/src/workspace-paths.ts"
+    ],
+    "packages/core/src/workspace-paths.ts": [],
+    "packages/core/test/app-state.test.ts": [
+      "packages/core/src/app-state.ts"
+    ],
+    "packages/core/test/checkpoint.test.ts": [
+      "packages/core/src/checkpoint.ts"
+    ],
+    "packages/core/test/compression-summary.test.ts": [
+      "packages/core/src/context/summary.ts",
+      "packages/core/src/markdown.ts"
+    ],
+    "packages/core/test/context-budget.test.ts": [
+      "packages/core/src/context/budget.ts"
+    ],
+    "packages/core/test/context-compactor.test.ts": [
+      "packages/core/src/context/compactor.ts",
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/test/context-manager.test.ts": [
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/test/context-protection.test.ts": [
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/test/context-pruner.test.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/context/pruner.ts",
+      "packages/core/src/tool-result/storage.ts"
+    ],
+    "packages/core/test/cost-tracker.test.ts": [
+      "packages/core/src/cost-tracker.ts"
+    ],
+    "packages/core/test/errors.test.ts": [
+      "packages/core/src/errors.ts"
+    ],
+    "packages/core/test/fixtures.ts": [],
+    "packages/core/test/run-evaluator.test.ts": [
+      "packages/core/src/run-evaluator.ts",
+      "packages/core/src/run-events.ts"
+    ],
+    "packages/core/test/session-store.test.ts": [
+      "packages/core/src/run-events.ts",
+      "packages/core/src/session-store.ts"
+    ],
+    "packages/core/test/skills.test.ts": [
+      "packages/core/src/skills.ts"
+    ],
+    "packages/core/test/system-prompt-budget.test.ts": [
+      "packages/core/src/system-prompt.ts"
+    ],
+    "packages/core/test/todo.test.ts": [
+      "packages/core/src/todo.ts"
+    ],
+    "packages/core/test/token-estimate.test.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimate.ts"
+    ],
+    "packages/core/test/token-estimator.test.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimator.ts"
+    ],
+    "packages/core/tsconfig.json": [],
+    "packages/eval/package.json": [],
+    "packages/eval/src/cli/eval-command.ts": [
+      "packages/eval/src/runner.ts",
+      "packages/eval/src/scorer/reporter.ts",
+      "packages/eval/src/test-suite/loader.ts",
+      "packages/eval/src/training-data-exporter.ts"
+    ],
+    "packages/eval/src/data-collector.ts": [
+      "packages/eval/src/eval-record.ts"
+    ],
+    "packages/eval/src/eval-record.ts": [],
+    "packages/eval/src/eval-settings.ts": [],
+    "packages/eval/src/index.ts": [],
+    "packages/eval/src/runner.ts": [
+      "packages/eval/src/data-collector.ts",
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/eval-settings.ts",
+      "packages/eval/src/scorer/aggregator.ts",
+      "packages/eval/src/scorer/llm-scorer.ts",
+      "packages/eval/src/scorer/reporter.ts",
+      "packages/eval/src/scorer/rule-scorer.ts",
+      "packages/eval/src/scorer/types.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/scorer/aggregator.ts": [
+      "packages/eval/src/scorer/types.ts"
+    ],
+    "packages/eval/src/scorer/llm-scorer.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/types.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/scorer/reporter.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/types.ts"
+    ],
+    "packages/eval/src/scorer/rule-scorer.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/types.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/scorer/types.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/adversarial.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/code-gen.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/context-mgmt.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/core-tools.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/high-frequency.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/index.ts": [],
+    "packages/eval/src/test-suite/builtin/memory-retrieval.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/multi-step.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/shell-safety.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/loader.ts": [
+      "packages/eval/src/test-suite/builtin/index.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/types.ts": [],
+    "packages/eval/src/training-data-exporter.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/types.ts"
+    ],
+    "packages/eval/test/data-collector.test.ts": [
+      "packages/eval/src/data-collector.ts"
+    ],
+    "packages/eval/test/e2e-runner.test.ts": [
+      "packages/eval/src/runner.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/test/rule-scorer.test.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/rule-scorer.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/test/smoke-real-model.test.ts": [
+      "packages/eval/src/runner.ts",
+      "packages/eval/src/test-suite/builtin/core-tools.ts"
+    ],
+    "packages/eval/tsconfig.json": [],
+    "packages/harness/package.json": [],
+    "packages/harness/src/context.ts": [
+      "packages/harness/src/mcp-client.ts",
+      "packages/harness/src/sandbox/index.ts"
+    ],
+    "packages/harness/src/index.ts": [],
+    "packages/harness/src/mcp-client.ts": [],
+    "packages/harness/src/registry/definitions.ts": [
+      "packages/harness/src/mcp-client.ts",
+      "packages/harness/src/shell/index.ts"
+    ],
+    "packages/harness/src/registry/execution.ts": [
+      "packages/harness/src/context.ts",
+      "packages/harness/src/registry/definitions.ts",
+      "packages/harness/src/shell/index.ts"
+    ],
+    "packages/harness/src/registry/index.ts": [],
+    "packages/harness/src/sandbox/detect-runtime.ts": [],
+    "packages/harness/src/sandbox/docker-runner.ts": [
+      "packages/harness/src/sandbox/detect-runtime.ts",
+      "packages/harness/src/sandbox/types.ts"
+    ],
+    "packages/harness/src/sandbox/index.ts": [],
+    "packages/harness/src/sandbox/types.ts": [],
+    "packages/harness/src/shell-ast.ts": [],
+    "packages/harness/src/shell-audit.ts": [],
+    "packages/harness/src/shell-guard.ts": [
+      "packages/harness/src/shell-ast.ts",
+      "packages/harness/src/shell-audit.ts",
+      "packages/harness/src/shell-policy.ts"
+    ],
+    "packages/harness/src/shell-policy-config.ts": [],
+    "packages/harness/src/shell-policy.ts": [
+      "packages/harness/src/shell-ast.ts",
+      "packages/harness/src/shell-policy-config.ts"
+    ],
+    "packages/harness/src/shell/analysis.ts": [],
+    "packages/harness/src/shell/execute.ts": [
+      "packages/harness/src/sandbox/index.ts",
+      "packages/harness/src/shell-guard.ts",
+      "packages/harness/src/shell/analysis.ts"
+    ],
+    "packages/harness/src/shell/index.ts": [],
+    "packages/harness/test/mcp-client.test.ts": [
+      "packages/harness/src/mcp-client.ts"
+    ],
+    "packages/harness/test/registry.test.ts": [
+      "packages/harness/src/registry/index.ts"
+    ],
+    "packages/harness/test/run-shell.test.ts": [
+      "packages/harness/src/shell/index.ts"
+    ],
+    "packages/harness/test/sandbox-docker.test.ts": [
+      "packages/harness/src/sandbox/index.ts"
+    ],
+    "packages/harness/test/shell-guard.test.ts": [
+      "packages/harness/src/shell-guard.ts"
+    ],
+    "packages/harness/test/sub-agent.test.ts": [
+      "packages/harness/src/registry/index.ts"
+    ],
+    "packages/harness/tsconfig.json": [],
+    "packages/models/package.json": [],
+    "packages/models/src/anthropic-compatible.ts": [
+      "packages/models/src/language-model.ts",
+      "packages/models/src/message-content.ts",
+      "packages/models/src/model-options.ts",
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/auxiliary-model.ts": [
+      "packages/models/src/language-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/src/default-model.ts": [
+      "packages/models/src/anthropic-compatible.ts",
+      "packages/models/src/fake-model.ts",
+      "packages/models/src/language-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/src/fake-model.ts": [
+      "packages/models/src/language-model.ts",
+      "packages/models/src/model-options.ts",
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/index.ts": [],
+    "packages/models/src/language-model.ts": [
+      "packages/models/src/model-options.ts",
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/message-content.ts": [
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/model-options.ts": [],
+    "packages/models/src/openai-compatible.ts": [
+      "packages/models/src/language-model.ts",
+      "packages/models/src/message-content.ts",
+      "packages/models/src/model-options.ts",
+      "packages/models/src/openai-stream-parse.ts",
+      "packages/models/src/think-extraction.ts",
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/openai-stream-parse.ts": [
+      "packages/models/src/think-extraction.ts"
+    ],
+    "packages/models/src/think-extraction.ts": [],
+    "packages/models/src/types.ts": [],
+    "packages/models/test/auxiliary-model.test.ts": [],
+    "packages/models/test/deepseek-model.test.ts": [
+      "packages/models/src/default-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/test/message-content.test.ts": [
+      "packages/models/src/message-content.ts"
+    ],
+    "packages/models/test/ollama-model.test.ts": [
+      "packages/models/src/default-model.ts",
+      "packages/models/src/fake-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/test/qwen-model.test.ts": [
+      "packages/models/src/default-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/test/think-extraction.test.ts": [
+      "packages/models/src/think-extraction.ts"
+    ],
+    "packages/models/tsconfig.json": [],
+    "packages/settings/package.json": [],
+    "packages/settings/src/credentials.ts": [
+      "packages/settings/src/schema.ts"
+    ],
+    "packages/settings/src/index.ts": [],
+    "packages/settings/src/load.ts": [
+      "packages/settings/src/credentials.ts",
+      "packages/settings/src/schema.ts"
+    ],
+    "packages/settings/src/schema.ts": [],
+    "packages/settings/test/credentials.test.ts": [
+      "packages/settings/src/credentials.ts",
+      "packages/settings/src/schema.ts"
+    ],
+    "packages/settings/test/load.test.ts": [
+      "packages/settings/src/load.ts"
+    ],
+    "packages/settings/tsconfig.json": [],
+    "packages/store/package.json": [],
+    "packages/store/src/index.ts": [],
+    "packages/store/src/plan-item.ts": [],
+    "packages/store/src/plan-items-json.ts": [
+      "packages/store/src/plan-item.ts"
+    ],
+    "packages/store/src/plan-snapshot.ts": [
+      "packages/store/src/plan.ts"
+    ],
+    "packages/store/src/plan.ts": [
+      "packages/store/src/plan-item.ts"
+    ],
+    "packages/store/src/task-planner.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/plan.ts"
+    ],
+    "packages/store/test/plan-items-json.test.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/plan-items-json.ts"
+    ],
+    "packages/store/test/plan-snapshot.test.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/plan-snapshot.ts",
+      "packages/store/src/plan.ts"
+    ],
+    "packages/store/test/plan.test.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/plan.ts"
+    ],
+    "packages/store/test/task-planner.test.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/task-planner.ts"
+    ],
+    "packages/store/tsconfig.json": [],
+    "packages/workspace/package.json": [],
+    "packages/workspace/src/files/read.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/files/write.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/git-tools.ts": [],
+    "packages/workspace/src/index.ts": [],
+    "packages/workspace/src/lsp-client.ts": [],
+    "packages/workspace/src/mention-resolver.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/src/network-tools.ts": [],
+    "packages/workspace/src/notebook-tools.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/patch-tools.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/path-guard.ts": [],
+    "packages/workspace/src/paw-md.ts": [],
+    "packages/workspace/src/project-context.ts": [
+      "packages/workspace/src/files/read.ts",
+      "packages/workspace/src/git-tools.ts",
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/root.ts": [],
+    "packages/workspace/src/symbol-search.ts": [],
+    "packages/workspace/src/watch.ts": [],
+    "packages/workspace/src/worktree.ts": [],
+    "packages/workspace/test/auto-context.test.ts": [
+      "packages/workspace/src/project-context.ts"
+    ],
+    "packages/workspace/test/brief-tools.test.ts": [
+      "packages/workspace/src/project-context.ts"
+    ],
+    "packages/workspace/test/edit-file.test.ts": [
+      "packages/workspace/src/files/write.ts"
+    ],
+    "packages/workspace/test/git-tools.test.ts": [
+      "packages/workspace/src/git-tools.ts"
+    ],
+    "packages/workspace/test/glob.test.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/test/grep.test.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/test/local-fs.test.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/test/mention-resolver.test.ts": [
+      "packages/workspace/src/mention-resolver.ts"
+    ],
+    "packages/workspace/test/network-tools.test.ts": [
+      "packages/workspace/src/network-tools.ts"
+    ],
+    "packages/workspace/test/notebook-tools.test.ts": [
+      "packages/workspace/src/notebook-tools.ts"
+    ],
+    "packages/workspace/test/patch-tools.test.ts": [
+      "packages/workspace/src/patch-tools.ts"
+    ],
+    "packages/workspace/test/path-guard.test.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/test/paw-md.test.ts": [
+      "packages/workspace/src/paw-md.ts"
+    ],
+    "packages/workspace/test/search.test.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/test/symbol-search.test.ts": [
+      "packages/workspace/src/symbol-search.ts"
+    ],
+    "packages/workspace/test/watch.test.ts": [
+      "packages/workspace/src/watch.ts"
+    ],
+    "packages/workspace/test/write-file.test.ts": [
+      "packages/workspace/src/files/write.ts"
+    ],
+    "packages/workspace/tsconfig.json": [],
+    "plans/memory-optimization-plan.md": [],
+    "README.md": [],
+    "scripts/import-skill.ts": [],
+    "tests/integration/sub-agent-prompts.md": [],
+    "training_data/generate_stage_a_claude.py": [],
+    "training_data/stage_b_paw.jsonl": [],
+    "training_data/stage_b_workflows.jsonl": [],
+    "tsconfig.base.json": []
+  }
+}

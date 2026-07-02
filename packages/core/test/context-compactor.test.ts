@@ -4,8 +4,8 @@ import {
   ContextCompactor,
   DEFAULT_COMPACTOR_CONFIG,
   stripContextSummaryMessages,
-} from "../src/context-compactor.js";
-import type { ChatMessage } from "../src/context-manager.js";
+} from "../src/context/compactor.js";
+import type { ChatMessage } from "../src/context/manager.js";
 
 function makeMessages(count: number, contentLength = 100): ChatMessage[] {
   return Array.from({ length: count }, (_, i) => ({

@@ -1,0 +1,64 @@
+```mermaid
+flowchart TB
+    subgraph 外部参与者
+        U[开发者/用户]
+        LLM[LLM 服务<br/>OpenAI / Anthropic / DeepSeek / Ollama]
+        MCP[MCP Servers<br/>外部工具服务]
+        GIT[Git 仓库]
+        FS[本地文件系统]
+    end
+
+    subgraph 应用入口层
+        CLI[apps/cli<br/>命令行入口]
+        TUI[apps/tui<br/>交互式终端 UI]
+        WEB[apps/web<br/>Web UI 占位]
+    end
+
+    subgraph 编排与业务逻辑层
+        CLICORE[@paw/cli-core<br/>运行封装 / runStubRun]
+        AGENT[@paw/agent<br/>AgentOrchestrator / ReAct 循环]
+        EVAL[@paw/eval<br/>评测框架]
+    end
+
+    subgraph 平台服务层
+        CORE[@paw/core<br/>会话 / 上下文 / 记忆 / 事件]
+        HARNESS[@paw/harness<br/>工具注册表 / MCP 客户端 / Shell Guard]
+        WORKSPACE[@paw/workspace<br/>文件 / Git / LSP / 网络 / @mention]
+        MODELS[@paw/models<br/>LLM 适配器]
+        SETTINGS[@paw/settings<br/>本地配置 / 凭据]
+        STORE[@paw/store<br/>任务计划 / TaskPlanner]
+    end
+
+    subgraph 持久化层
+        PAW[.paw/ 目录]
+        MEM[memory/ 记忆]
+        SES[sessions/ 会话]
+        STA[states/ 状态]
+        CFG[settings.local.json]
+    end
+
+    U --> CLI
+    U --> TUI
+    CLI --> CLICORE
+    TUI --> CLICORE
+    TUI --> AGENT
+    CLICORE --> AGENT
+    AGENT --> EVAL
+
+    AGENT --> CORE
+    AGENT --> HARNESS
+    AGENT --> MODELS
+    AGENT --> STORE
+    HARNESS --> WORKSPACE
+    HARNESS --> MCP
+    MODELS --> SETTINGS
+    WORKSPACE --> FS
+    WORKSPACE --> GIT
+    MODELS --> LLM
+
+    CORE --> PAW
+    CORE --> MEM
+    CORE --> SES
+    CORE --> STA
+    SETTINGS --> CFG
+```

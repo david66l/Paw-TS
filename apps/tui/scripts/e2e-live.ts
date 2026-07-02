@@ -10,19 +10,19 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { RunEventEnvelope } from "@paw/core";
-import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
 import {
   createPersistentSession,
   createRunSessionController,
-} from "@paw/cli-core";
+} from "@paw/agent";
+import type { RunEventEnvelope } from "@paw/core";
+import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
 import { submitUserLine } from "../src/commands.js";
 import {
   formatBottomBar,
   formatContextBar,
-  formatEventForScrollback,
   formatHudText,
-} from "../src/footer-state.js";
+} from "../src/footer-chips.js";
+import { formatEventForScrollback } from "../src/scrollback-format.js";
 
 // 工作区根目录（paw-ts 项目根）
 const WORKSPACE = path.resolve(import.meta.dir, "../../..");
@@ -222,7 +222,10 @@ function assertUiFormatting(
       const expectedPct = Math.round(
         Math.min(ev.estimatedTokens / ctxWindow, 1) * 100,
       );
-      const actualPct = Number.parseInt(bar.split(" ").pop()?.replace("%", "") ?? "", 10);
+      const actualPct = Number.parseInt(
+        bar.split(" ").pop()?.replace("%", "") ?? "",
+        10,
+      );
       if (actualPct !== expectedPct) {
         issues.push(
           `context bar pct mismatch: ${actualPct}% vs expected ${expectedPct}%`,
@@ -254,7 +257,8 @@ function assertUiFormatting(
         ctxWindow,
       );
       if (!bottom.includes("api")) issues.push("bottom bar missing api tokens");
-      if (!bottom.includes("ctx")) issues.push("bottom bar missing ctx estimate");
+      if (!bottom.includes("ctx"))
+        issues.push("bottom bar missing ctx estimate");
       if (ev.estimatedCostUsd > 0) {
         const sym = ev.costCurrency === "CNY" ? "¥" : "$";
         if (!bottom.includes(sym)) {
@@ -270,7 +274,11 @@ function assertUiFormatting(
     ) {
       issues.push(`run.completed scroll text wrong: ${scroll}`);
     }
-    if (ev.type === "tool.call" && scroll && !scroll.match(/[📖✏️🔍⚙️🔧🤖🛠️🌐📋🔀💡📓📊]/)) {
+    if (
+      ev.type === "tool.call" &&
+      scroll &&
+      !scroll.match(/[📖✏️🔍⚙️🔧🤖🛠️🌐📋🔀💡📓📊]/u)
+    ) {
       issues.push(`tool.call missing icon: ${scroll}`);
     }
   }
@@ -363,12 +371,15 @@ async function main() {
 
   // 场景 1：空输入边界
   results.push(
-    await runScenario("boundary: empty input", async ({ sessionCtrl, session }) => {
-      const pushLog: string[] = [];
-      const { handler } = collectEvents(() => {});
-      await submitLine("   ", session, sessionCtrl, handler, pushLog);
-      if (pushLog.length > 0) throw new Error("empty input should be no-op");
-    }),
+    await runScenario(
+      "boundary: empty input",
+      async ({ sessionCtrl, session }) => {
+        const pushLog: string[] = [];
+        const { handler } = collectEvents(() => {});
+        await submitLine("   ", session, sessionCtrl, handler, pushLog);
+        if (pushLog.length > 0) throw new Error("empty input should be no-op");
+      },
+    ),
   );
 
   // 场景 2：/doctor 命令
@@ -400,7 +411,13 @@ async function main() {
     await runScenario("UI: /fs-read", async ({ sessionCtrl, session }) => {
       const pushLog: string[] = [];
       const { handler } = collectEvents(() => {});
-      await submitLine("/fs-read package.json", session, sessionCtrl, handler, pushLog);
+      await submitLine(
+        "/fs-read package.json",
+        session,
+        sessionCtrl,
+        handler,
+        pushLog,
+      );
       if (!pushLog.join("\n").includes("package.json")) {
         throw new Error("fs-read missing content");
       }
@@ -412,7 +429,13 @@ async function main() {
     await runScenario("UI: /fs-list", async ({ sessionCtrl, session }) => {
       const pushLog: string[] = [];
       const { handler } = collectEvents(() => {});
-      await submitLine("/fs-list packages", session, sessionCtrl, handler, pushLog);
+      await submitLine(
+        "/fs-list packages",
+        session,
+        sessionCtrl,
+        handler,
+        pushLog,
+      );
       if (!pushLog.join("\n").includes("packages")) {
         throw new Error("fs-list missing packages dir");
       }
@@ -421,66 +444,75 @@ async function main() {
 
   // 场景 6：自然语言对话 + 流式检查
   results.push(
-    await runScenario("agent: chat + stream", async ({ sessionCtrl, session, events, logs }) => {
-      const pushLog: string[] = [];
-      const { handler } = collectEvents(() => {});
-      await submitLine(
-        "用一句话介绍 Paw-TS，不要调用任何工具",
-        session,
-        sessionCtrl,
-        handler,
-        pushLog,
-      );
-      if (!events.some((e) => e.event.type === "model.done")) {
-        throw new Error("no model.done");
-      }
-      const streamIssues = assertStreamingMonotonic(events);
-      const uiIssues = assertUiFormatting(events, ctxWindow);
-      const all = [...streamIssues, ...uiIssues];
-      if (all.length) {
-        logs.push(...all.map((i) => `  UI: ${i}`));
-        throw new Error(all.join("; "));
-      }
-    }),
+    await runScenario(
+      "agent: chat + stream",
+      async ({ sessionCtrl, session, events, logs }) => {
+        const pushLog: string[] = [];
+        const { handler } = collectEvents(() => {});
+        await submitLine(
+          "用一句话介绍 Paw-TS，不要调用任何工具",
+          session,
+          sessionCtrl,
+          handler,
+          pushLog,
+        );
+        if (!events.some((e) => e.event.type === "model.done")) {
+          throw new Error("no model.done");
+        }
+        const streamIssues = assertStreamingMonotonic(events);
+        const uiIssues = assertUiFormatting(events, ctxWindow);
+        const all = [...streamIssues, ...uiIssues];
+        if (all.length) {
+          logs.push(...all.map((i) => `  UI: ${i}`));
+          throw new Error(all.join("; "));
+        }
+      },
+    ),
   );
 
   // 场景 7：list_dir 工具调用
   results.push(
-    await runScenario("agent: list_dir", async ({ sessionCtrl, session, events }) => {
-      const pushLog: string[] = [];
-      const { handler } = collectEvents(() => {});
-      await submitLine(
-        "Use list_dir on packages/ (non-recursive). Reply with file count only.",
-        session,
-        sessionCtrl,
-        handler,
-        pushLog,
-      );
-      if (!events.some((e) => e.event.type === "tool.call")) {
-        throw new Error("expected tool.call");
-      }
-      if (!events.some((e) => e.event.type === "run.completed")) {
-        throw new Error("run did not complete");
-      }
-    }),
+    await runScenario(
+      "agent: list_dir",
+      async ({ sessionCtrl, session, events }) => {
+        const pushLog: string[] = [];
+        const { handler } = collectEvents(() => {});
+        await submitLine(
+          "Use list_dir on packages/ (non-recursive). Reply with file count only.",
+          session,
+          sessionCtrl,
+          handler,
+          pushLog,
+        );
+        if (!events.some((e) => e.event.type === "tool.call")) {
+          throw new Error("expected tool.call");
+        }
+        if (!events.some((e) => e.event.type === "run.completed")) {
+          throw new Error("run did not complete");
+        }
+      },
+    ),
   );
 
   // 场景 8：read_file 工具调用
   results.push(
-    await runScenario("agent: read_file", async ({ sessionCtrl, session, events }) => {
-      const pushLog: string[] = [];
-      const { handler } = collectEvents(() => {});
-      await submitLine(
-        'Use read_file on package.json and reply with the "name" field only.',
-        session,
-        sessionCtrl,
-        handler,
-        pushLog,
-      );
-      if (!events.some((e) => e.event.type === "run.completed")) {
-        throw new Error("run did not complete");
-      }
-    }),
+    await runScenario(
+      "agent: read_file",
+      async ({ sessionCtrl, session, events }) => {
+        const pushLog: string[] = [];
+        const { handler } = collectEvents(() => {});
+        await submitLine(
+          'Use read_file on package.json and reply with the "name" field only.',
+          session,
+          sessionCtrl,
+          handler,
+          pushLog,
+        );
+        if (!events.some((e) => e.event.type === "run.completed")) {
+          throw new Error("run did not complete");
+        }
+      },
+    ),
   );
 
   // 场景 9：写入 + 读取文件
@@ -489,90 +521,101 @@ async function main() {
   const marker = `e2e-marker-${Date.now()}`;
 
   results.push(
-    await runScenario("agent: write + read", async ({ sessionCtrl, session, events, logs }) => {
-      const pushLog: string[] = [];
-      const { handler } = collectEvents(() => {});
-      await submitLine(
-        `Use write_file to create ${writeRel} with exactly this one line: ${marker}. Then use read_file on the same path and reply OK if content matches.`,
-        session,
-        sessionCtrl,
-        handler,
-        pushLog,
-      );
-      const wrote = events.some(
-        (e) =>
-          e.event.type === "tool.call" &&
-          (e.event.tool.includes("write") || e.event.tool.includes("edit")),
-      );
-      if (!wrote) logs.push("  warn: no write tool.call");
-      if (!fs.existsSync(writeAbs)) {
-        throw new Error(`file not created: ${writeRel}`);
-      }
-      const content = fs.readFileSync(writeAbs, "utf8");
-      if (!content.includes(marker)) {
-        throw new Error(`file content missing marker: ${content.slice(0, 80)}`);
-      }
-      if (!events.some((e) => e.event.type === "run.completed")) {
-        throw new Error("run did not complete");
-      }
-    }),
+    await runScenario(
+      "agent: write + read",
+      async ({ sessionCtrl, session, events, logs }) => {
+        const pushLog: string[] = [];
+        const { handler } = collectEvents(() => {});
+        await submitLine(
+          `Use write_file to create ${writeRel} with exactly this one line: ${marker}. Then use read_file on the same path and reply OK if content matches.`,
+          session,
+          sessionCtrl,
+          handler,
+          pushLog,
+        );
+        const wrote = events.some(
+          (e) =>
+            e.event.type === "tool.call" &&
+            (e.event.tool.includes("write") || e.event.tool.includes("edit")),
+        );
+        if (!wrote) logs.push("  warn: no write tool.call");
+        if (!fs.existsSync(writeAbs)) {
+          throw new Error(`file not created: ${writeRel}`);
+        }
+        const content = fs.readFileSync(writeAbs, "utf8");
+        if (!content.includes(marker)) {
+          throw new Error(
+            `file content missing marker: ${content.slice(0, 80)}`,
+          );
+        }
+        if (!events.some((e) => e.event.type === "run.completed")) {
+          throw new Error("run did not complete");
+        }
+      },
+    ),
   );
 
   // 场景 10：读取不存在的文件边界
   results.push(
-    await runScenario("agent: read failure boundary", async ({ sessionCtrl, session, events }) => {
-      const pushLog: string[] = [];
-      const { handler } = collectEvents(() => {});
-      await submitLine(
-        "Use read_file on .paw/e2e-tmp/does-not-exist-xyz.txt. Reply FAIL if tool errors.",
-        session,
-        sessionCtrl,
-        handler,
-        pushLog,
-      );
-      const failedTool = events.some(
-        (e) => e.event.type === "tool.result" && !e.event.ok,
-      );
-      if (!failedTool) {
-        throw new Error("expected failed tool.result for missing file");
-      }
-    }),
+    await runScenario(
+      "agent: read failure boundary",
+      async ({ sessionCtrl, session, events }) => {
+        const pushLog: string[] = [];
+        const { handler } = collectEvents(() => {});
+        await submitLine(
+          "Use read_file on .paw/e2e-tmp/does-not-exist-xyz.txt. Reply FAIL if tool errors.",
+          session,
+          sessionCtrl,
+          handler,
+          pushLog,
+        );
+        const failedTool = events.some(
+          (e) => e.event.type === "tool.result" && !e.event.ok,
+        );
+        if (!failedTool) {
+          throw new Error("expected failed tool.result for missing file");
+        }
+      },
+    ),
   );
 
   // 场景 11：多轮上下文 + 成本检查
   results.push(
-    await runScenario("agent: multi-turn context + cost", async ({ sessionCtrl, session, events, logs }) => {
-      const pushLog: string[] = [];
-      const { handler } = collectEvents(() => {});
-      await submitLine(
-        "Remember the number 42. Do not use tools. Reply: OK",
-        session,
-        sessionCtrl,
-        handler,
-        pushLog,
-      );
-      await submitLine(
-        "What number did I ask you to remember? One digit or number only, no tools.",
-        session,
-        sessionCtrl,
-        handler,
-        pushLog,
-      );
-      const growthIssues = assertContextGrowth(events);
-      const costIssues = assertCostMonotonic(events);
-      const uiIssues = assertUiFormatting(events, ctxWindow);
-      const all = [...growthIssues, ...costIssues, ...uiIssues];
-      if (all.length) {
-        logs.push(...all.map((i) => `  check: ${i}`));
-        throw new Error(all.join("; "));
-      }
-      if (!events.some((e) => e.event.type === "cost.update")) {
-        throw new Error("expected cost.update events");
-      }
-      if (!events.some((e) => e.event.type === "loop.tick")) {
-        throw new Error("expected loop.tick events");
-      }
-    }),
+    await runScenario(
+      "agent: multi-turn context + cost",
+      async ({ sessionCtrl, session, events, logs }) => {
+        const pushLog: string[] = [];
+        const { handler } = collectEvents(() => {});
+        await submitLine(
+          "Remember the number 42. Do not use tools. Reply: OK",
+          session,
+          sessionCtrl,
+          handler,
+          pushLog,
+        );
+        await submitLine(
+          "What number did I ask you to remember? One digit or number only, no tools.",
+          session,
+          sessionCtrl,
+          handler,
+          pushLog,
+        );
+        const growthIssues = assertContextGrowth(events);
+        const costIssues = assertCostMonotonic(events);
+        const uiIssues = assertUiFormatting(events, ctxWindow);
+        const all = [...growthIssues, ...costIssues, ...uiIssues];
+        if (all.length) {
+          logs.push(...all.map((i) => `  check: ${i}`));
+          throw new Error(all.join("; "));
+        }
+        if (!events.some((e) => e.event.type === "cost.update")) {
+          throw new Error("expected cost.update events");
+        }
+        if (!events.some((e) => e.event.type === "loop.tick")) {
+          throw new Error("expected loop.tick events");
+        }
+      },
+    ),
   );
 
   // 汇总结果
@@ -580,7 +623,9 @@ async function main() {
   let pass = 0;
   let fail = 0;
   for (const r of results) {
-    console.log(`${r.ok ? "PASS" : "FAIL"}  ${r.name}  (${(r.ms / 1000).toFixed(1)}s)`);
+    console.log(
+      `${r.ok ? "PASS" : "FAIL"}  ${r.name}  (${(r.ms / 1000).toFixed(1)}s)`,
+    );
     if (r.ok) pass++;
     else fail++;
     for (const err of r.errors) console.log(`       error: ${err}`);

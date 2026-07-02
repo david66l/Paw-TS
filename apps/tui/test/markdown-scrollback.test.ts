@@ -4,7 +4,7 @@ import {
   createMdParserState,
   parseMarkdownLine,
 } from "../src/markdown-parse.js";
-import { formatToolResultSummary } from "../src/footer-state.js";
+import { formatToolResultSummary } from "../src/scrollback-format.js";
 
 describe("parseMarkdownLine", () => {
   const colors = {

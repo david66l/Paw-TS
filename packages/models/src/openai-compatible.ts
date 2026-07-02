@@ -1,3 +1,22 @@
+/**
+ * OpenAI Chat Completions 兼容客户端（HTTPS fetch）。
+ * ===================================================
+ *
+ * 实现 LanguageModel 接口，封装 OpenAI 兼容的 Chat Completions API。
+ * 通过 openai_base_url 可适配任何兼容 OpenAI 接口的 provider（Qwen/DeepSeek/...）。
+ *
+ * 支持：
+ * - 非流式调用（complete）：提取 tool_calls + thinking + 文本
+ * - 流式调用（completeStream）：SSE delta 解析 + tool_use 增量拼接
+ * - 推理模型 think 标签提取（extractThinkBlocks）
+ * - stream_options.include_usage → 400 回退（某些 provider 不支持此参数）
+ *
+ * 面试要点：
+ * - label 自动识别：根据 baseUrl 判断 provider 并设置合适的 label
+ * - tool_use 增量拼接：流式模式下 tool_use 的 arguments 是分多次 delta 传来的，
+ *   需要在客户端拼接完整 JSON 后才 yield
+ */
+
 import type { ModelTokenUsage } from "@paw/core";
 
 import type { LanguageModel, ModelCapabilities } from "./language-model.js";

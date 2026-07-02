@@ -28,8 +28,8 @@ import {
   STREAM_PREVIEW_ROWS,
   TEXTAREA_MAX_ROWS,
   TEXTAREA_MIN_ROWS,
-  resolveApprovalKey,
-} from "./footer-state.js";
+} from "./footer-types.js";
+import { resolveApprovalKey } from "./keyboard-bindings.js";
 import type { RunEventEnvelope } from "@paw/core";
 
 /** Footer 完整状态。 */

@@ -1,5 +1,24 @@
+/**
+ * 配置文件 Schema 定义 —— 使用 Zod 描述 `.paw/settings.local.json` 的数据结构。
+ *
+ * ## 为什么需要这个模块
+ * Paw 的配置文件通过 JSON 承载用户偏好和提供商凭据。手写类型守卫容易出错且冗长，
+ * Zod 提供了声明式的 schema 描述，同时自动推导 TypeScript 类型。
+ * 运行时校验确保用户误配的 JSON 字段能被尽早发现。
+ *
+ * ## 核心设计决策
+ * 1. **`.passthrough()`**：schema 显式只列出已知字段，但允许额外的未知 key 透传。
+ *    这样新增配置项时不会破坏已有的 settings 文件，做到向前兼容。
+ * 2. **旧版扁平字段保留**：`openai_api_key`、`anthropic_api_key` 等仍出现在 schema 中，
+ *    确保从旧版本升级的用户无需立即迁移配置格式。
+ * 3. **models 嵌套结构**：新的推荐配置方式，支持按 provider 键名动态扩展。
+ * 4. **独立的子 schema 导出**：`modelConfigSchema` 和 `mcpServerConfigSchema` 作为独立 schema 导出，
+ *    方便其他模块复用校验逻辑。
+ */
+
 import { z } from "zod";
 
+/** MCP 服务器配置的 schema。 */
 const mcpServerConfigSchema = z.object({
   name: z.string(),
   command: z.string(),
@@ -7,26 +26,38 @@ const mcpServerConfigSchema = z.object({
   env: z.record(z.string()).optional(),
 });
 
-/** Per-model configuration: self-contained for one provider. */
+/**
+ * 单模型配置 schema —— 每个 AI 提供商的自包含配置。
+ *
+ * 所有字段可选：未设置时回退到旧版扁平字段或环境变量。
+ */
 export const modelConfigSchema = z.object({
   model: z.string().optional(),
   apiKey: z.string().optional(),
   baseUrl: z.string().optional(),
 });
 
-/** `.paw/settings.local.json` — shared settings shape; unknown keys ignored. */
+/**
+ * `.paw/settings.local.json` 的完整 schema。
+ *
+ * 描述 Paw 本地配置文件的形状，未知键会被透传。
+ * 包含新推荐的 nested models 结构和旧版扁平字段，保证向后兼容。
+ */
 export const pawSettingsLocalSchema = z
   .object({
     provider: z.string().optional(),
     model: z.string().optional(),
-    /** Self-contained configs per provider. Key is provider name (anthropic, openai, qwen, deepseek, ...). */
+    /** 按 provider 分组的自包含配置，key 为 provider 名称（anthropic, openai, qwen, deepseek 等）。 */
     models: z.record(z.string(), modelConfigSchema).optional(),
     approval: z.string().optional(),
     max_steps: z.number().int().positive().optional(),
-    /** Cap on plan rows in orchestrator snapshots after `plan_update`; `0` = unlimited. Omit for default (64). */
+    /**
+     * orchestrator 在 `plan_update` 后对计划快照的行数上限。
+     * `0` 表示无限制。省略时使用默认值（64）。
+     */
     plan_snapshot_max_items: z.number().int().min(0).optional(),
     environment: z.string().optional(),
-    // Legacy flat fields (kept for backward compatibility)
+    // 以下为旧版扁平字段，保留以保证向后兼容
     openai_api_key: z.string().optional(),
     openai_base_url: z.string().optional(),
     anthropic_api_key: z.string().optional(),
@@ -36,9 +67,23 @@ export const pawSettingsLocalSchema = z
     deepseek_api_key: z.string().optional(),
     deepseek_base_url: z.string().optional(),
     ollama_host: z.string().optional(),
-    /** Memory retrieval: keyword-only or cascade (keyword + DeepSeek Flash LLM fallback). Default cascade. */
+    /**
+     * 记忆检索策略：
+     * - `keyword`：仅关键词匹配
+     * - `cascade`：关键词 + DeepSeek Flash LLM 回退（默认）
+     */
     memory_retrieval: z.enum(["keyword", "cascade"]).optional(),
-    /** Docker/Podman sandbox for workspace.run_shell. Default mode off. */
+    /**
+     * Ollama embedding 模型名，用于语义记忆增强。
+     * 例如 "nomic-embed-text"、"bge-m3"。未设置 = 无语义增强。
+     */
+    memory_embedding_model: z.string().optional(),
+    /** 记忆检索池中最多包含的历史回合数，默认 10。 */
+    session_pool_size: z.number().int().positive().max(50).optional(),
+    /**
+     * Docker/Podman 沙箱配置，用于 `workspace.run_shell`。
+     * 默认关闭沙箱。
+     */
     sandbox: z
       .object({
         mode: z.enum(["off", "workspace", "strict"]).optional(),
@@ -50,8 +95,11 @@ export const pawSettingsLocalSchema = z
       })
       .optional(),
   })
-  .passthrough();
+  .passthrough(); // 允许未列出的字段透传，保证向前兼容
 
+/** 从 schema 推导出的 TypeScript 类型。 */
 export type PawSettingsLocal = z.infer<typeof pawSettingsLocalSchema>;
+/** 单模型配置的 TypeScript 类型。 */
 export type ModelConfig = z.infer<typeof modelConfigSchema>;
+/** MCP 服务器配置的 TypeScript 类型。 */
 export type McpServerConfigSettings = z.infer<typeof mcpServerConfigSchema>;

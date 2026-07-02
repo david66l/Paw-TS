@@ -3,16 +3,15 @@ import {
   formatDoctorOutput,
   formatFsListOutput,
   formatFsReadOutput,
-  parseRootFromArgv,
   runStubRun,
-  tailPositionalArgs,
-} from "@paw/cli-core";
+} from "@paw/agent";
 import {
   defaultSettingsPath,
   loadPawSettingsLocal,
   redactSettingsForDisplay,
   savePawSettingsLocal,
 } from "@paw/settings";
+import { parseRootFromArgv, tailPositionalArgs } from "@paw/workspace";
 import { gitCommit, gitStatus } from "@paw/workspace";
 
 const argv = process.argv.slice(2);

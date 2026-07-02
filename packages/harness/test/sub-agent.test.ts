@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { executeTool } from "../src/registry.js";
+import { executeTool } from "../src/registry/index.js";
 
 describe("run_agent tool", () => {
   test("returns error when launcher not configured", async () => {

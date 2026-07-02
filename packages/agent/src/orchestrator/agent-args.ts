@@ -1,6 +1,24 @@
+/**
+ * 子 Agent 工具调用参数的解析和 SharedContext 构建。
+ * =================================================
+ *
+ * 处理 workspace.run_agent 工具的参数解析：
+ * - agent_type：子 Agent 类型（simple/research/coding/planning/relay）
+ * - child_policy：子 Agent 文件权限（read_only/read_write）
+ * - max_steps：子 Agent 最大步数
+ *
+ * 以及在没有父 ContextManager 时的最小 SharedContext 构建。
+ */
+
 import type { SharedContext } from "./types.js";
 
-/** 子 Agent 类型。 */
+/** 子 Agent 类型。
+ *  - simple：通用单任务 Agent
+ *  - research：研究型，收集信息并返回结构化发现
+ *  - coding：编码型，编写/编辑/调试代码
+ *  - planning：规划型，拆解任务为步骤
+ *  - relay：接力型，从父 Agent 中断处继续
+ */
 export type AgentType = "simple" | "research" | "coding" | "planning" | "relay";
 
 const AGENT_TYPES = new Set<AgentType>([

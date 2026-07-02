@@ -1,9 +1,14 @@
 /**
- * Lightweight filesystem watcher for external file modifications.
+ * 轻量级文件系统监听器 — 检测外部文件修改。
+ * ===========================================
  *
- * Uses `fs.watch` (recursive where supported) to detect changes made
- * outside the agent. Files written by the agent itself are filtered out
- * so only truly external edits are reported.
+ * 使用 `fs.watch`（递归模式）检测 Agent 外部的文件变更。
+ * Agent 自己写入的文件通过 markAgentWritten() 标记后会被过滤，
+ * 只报告真正来自外部的修改（如用户在 IDE 中编辑了文件）。
+ *
+ * 面试要点：
+ * - 为什么需要区分内部/外部变更？Agent 每轮都可能写文件，
+ *   如果不区分，每轮都会看到"文件变更"提示，形成噪音
  */
 
 import fs from "node:fs";

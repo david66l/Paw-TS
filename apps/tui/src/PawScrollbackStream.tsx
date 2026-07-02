@@ -14,7 +14,7 @@ import {
 } from "@opentui/core";
 import type { RunEventEnvelope } from "@paw/core";
 import { markdownToSegmentBlock } from "./markdown-parse.js";
-import { formatEventForScrollback } from "./footer-state.js";
+import { formatEventForScrollback } from "./scrollback-format.js";
 import { stripAssistantTextForScrollback } from "./scrollback-text.js";
 import type { PawTheme } from "./theme.js";
 

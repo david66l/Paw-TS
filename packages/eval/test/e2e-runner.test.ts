@@ -5,11 +5,10 @@
  * executing test cases, then verifies the full scoring pipeline.
  */
 
-import { describe, expect, test, beforeAll } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { FakeLanguageModel, type FakeModelResponse } from "@paw/models";
 import { EvalRunner } from "../src/runner.js";
 import type { TestCase } from "../src/test-suite/types.js";
-import type { ScoreReport } from "../src/scorer/types.js";
 
 // ── Test cases tailored for the fake model ──
 
@@ -82,16 +81,6 @@ const SHELL_SAFETY_RESPONSES: FakeModelResponse[] = [
 // ── Tests ──
 
 describe("E2E: EvalRunner with FakeLanguageModel", () => {
-  let runner: EvalRunner;
-
-  beforeAll(() => {
-    runner = new EvalRunner({
-      workspaceRoot: process.cwd(),
-      settings: { default_repetitions: 1 },
-      reportFormat: "console",
-    });
-  });
-
   test("read-file: all rules pass when agent calls correct tool", async () => {
     const model = new FakeLanguageModel({
       responses: READ_FILE_RESPONSES,

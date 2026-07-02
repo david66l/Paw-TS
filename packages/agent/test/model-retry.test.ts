@@ -1,21 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
+import { tmpDir } from "./fixtures.js";
 
 /** Retryable network-like error. */
 const RETRYABLE_ERR = new Error("fetch failed: ECONNREFUSED");
 /** Non-retryable client error. */
 const NON_RETRYABLE_ERR = new Error("Invalid API key");
-
-function tmpDir(prefix: string): string {
-  return mkdtempSync(path.join(tmpdir(), prefix));
-}
 
 describe("Model Retry", () => {
   test("transient error retries and eventually succeeds", async () => {

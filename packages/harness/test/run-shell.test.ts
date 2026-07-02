@@ -9,7 +9,7 @@ import {
   interpretShellExitCode,
   runShellInWorkspace,
   runShellInWorkspaceStreaming,
-} from "../src/run-shell.js";
+} from "../src/shell/index.js";
 
 describe("classifyShellCommand", () => {
   test("read-only commands", () => {

@@ -4,10 +4,10 @@ import {
   computeTurnCacheStats,
   formatBottomBar,
   formatContextBar,
-  formatEventForScrollback,
   formatHudText,
-  resolveApprovalKey,
-} from "../src/footer-state.js";
+} from "../src/footer-chips.js";
+import { formatEventForScrollback } from "../src/scrollback-format.js";
+import { resolveApprovalKey } from "../src/keyboard-bindings.js";
 
 describe("formatHudText", () => {
   test("无数据时使用稳定的占位符渲染", () => {

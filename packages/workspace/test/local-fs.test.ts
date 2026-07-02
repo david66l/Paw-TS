@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { listWorkspaceFiles, readWorkspaceFile } from "../src/local-fs.js";
+import { listWorkspaceFiles, readWorkspaceFile } from "../src/files/read.js";
 
 describe("readWorkspaceFile", () => {
   test("reads utf8 file with offset/limit", () => {

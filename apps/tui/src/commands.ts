@@ -5,7 +5,8 @@ import {
   formatDoctorOutput,
   formatFsListOutput,
   formatFsReadOutput,
-} from "@paw/cli-core";
+} from "@paw/agent";
+import type { PersistentSession } from "@paw/agent";
 import {
   FileSystemSessionStore,
   type SkillRegistry,
@@ -19,7 +20,6 @@ import {
   defaultSettingsPath,
   savePawSettingsLocal,
 } from "@paw/settings";
-import type { PersistentSession } from "@paw/cli-core";
 
 /**
  * slash 命令执行上下文。

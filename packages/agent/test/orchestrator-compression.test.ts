@@ -96,7 +96,12 @@ describe("AgentOrchestrator compression & budget", () => {
       workspaceRoot: dir,
       maxSteps: 2,
       resumeFromState: {
+        runId: "quality1",
+        goal: "continue work",
+        workspaceRoot: dir,
         turn: 1,
+        maxSteps: 2,
+        savedAt: Date.now(),
         messages: buildHugeHistory(),
       },
     });
@@ -139,7 +144,12 @@ describe("AgentOrchestrator compression & budget", () => {
       workspaceRoot: dir,
       maxSteps: 2,
       resumeFromState: {
+        runId: "savings1",
+        goal: "continue work",
+        workspaceRoot: dir,
         turn: 1,
+        maxSteps: 2,
+        savedAt: Date.now(),
         messages: buildHugeHistory(),
       },
     });

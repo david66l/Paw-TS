@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { ChatMessage } from "../src/context-manager.js";
+import type { ChatMessage } from "../src/context/manager.js";
 import {
   ApproximateEstimator,
   TiktokenEstimator,

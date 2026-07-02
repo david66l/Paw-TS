@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { discoverContext } from "../src/auto-context.js";
+import { discoverContext } from "../src/project-context.js";
 
 describe("discoverContext", () => {
   test("returns empty when no meaningful keywords", () => {

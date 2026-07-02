@@ -1,5 +1,14 @@
 /**
- * Git tools for the Paw workspace harness.
+ * Git 工具集 — 通过 spawnSync 调用 git CLI。
+ * ===========================================
+ *
+ * 所有 git 操作通过子进程调用原生 git 命令，解析输出后返回结构化结果。
+ * - gitStatus()：解析 --porcelain -b 输出
+ * - gitLog()：自定义 pretty 格式
+ * - gitDiff()：标准 diff 输出
+ * - gitCommit()：带 message 的 commit
+ *
+ * 安全措施：10s 超时 + 1MB 输出缓冲
  */
 
 import { spawnSync } from "node:child_process";

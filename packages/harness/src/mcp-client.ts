@@ -1,14 +1,31 @@
+/**
+ * MCP（Model Context Protocol）客户端管理器。
+ * ===========================================
+ *
+ * 管理基于 stdio 的 MCP 服务器连接，并通过 Paw harness 注册表暴露其工具。
+ *
+ * MCP 是 Anthropic 提出的开放协议，允许 LLM 通过标准化接口访问外部工具和数据源。
+ * 每个 MCP 服务器是一个独立的进程（通过 stdio 通信），提供一组工具。
+ *
+ * 工具命名空间：mcp:<server-name>/<tool-name>
+ * 例如：mcp:filesystem/read_file
+ *
+ * 面试要点：
+ * - MCP 的价值：统一的工具接口标准，任何实现了 MCP 的服务器都可以被 Paw 使用
+ * - stdio transport：子进程通信，比 HTTP 更安全（不需要网络监听）
+ */
+
 import { Client as McpSdkClient } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 export interface McpServerConfig {
-  /** Display name for this server (used in tool IDs). Must be unique. */
+  /** 服务器显示名（用于工具 ID）。必须唯一。 */
   readonly name: string;
-  /** Command to spawn the MCP server (e.g. "npx", "bunx", "uvx"). */
+  /** 启动 MCP 服务器的命令（如 "npx", "bunx", "uvx"）。 */
   readonly command: string;
-  /** Arguments passed to the command (e.g. ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]). */
+  /** 传递给命令的参数 */
   readonly args: readonly string[];
-  /** Optional extra env vars merged into the server process env. */
+  /** 可选的额外环境变量，合并到服务器进程环境中 */
   readonly env?: Record<string, string>;
 }
 
@@ -25,7 +42,6 @@ export interface McpCallResult {
   readonly summary: string;
 }
 
-/** Minimal tool shape from MCP SDK listTools(). */
 interface McpTool {
   readonly name: string;
   readonly description?: string;
@@ -40,12 +56,12 @@ interface ServerConnection {
 }
 
 /**
- * Manages stdio-based MCP server connections and exposes their tools
- * through the Paw harness registry.
+ * 管理基于 stdio 的 MCP 服务器连接。
  */
 export class McpClientManager {
   private servers: Map<string, ServerConnection> = new Map();
 
+  /** 连接一个 MCP 服务器。如果同名服务器已存在，先断开。 */
   async connect(config: McpServerConfig): Promise<void> {
     if (this.servers.has(config.name)) {
       await this.disconnect(config.name);
@@ -75,6 +91,7 @@ export class McpClientManager {
     });
   }
 
+  /** 断开指定 MCP 服务器 */
   async disconnect(serverName: string): Promise<void> {
     const conn = this.servers.get(serverName);
     if (!conn) return;
@@ -86,12 +103,14 @@ export class McpClientManager {
     this.servers.delete(serverName);
   }
 
+  /** 断开所有 MCP 服务器（在 Run 结束时调用） */
   async disconnectAll(): Promise<void> {
     for (const name of this.servers.keys()) {
       await this.disconnect(name);
     }
   }
 
+  /** 列出所有 MCP 服务器的工具 */
   listTools(): readonly McpToolRef[] {
     const out: McpToolRef[] = [];
     for (const conn of this.servers.values()) {
@@ -107,6 +126,7 @@ export class McpClientManager {
     return out;
   }
 
+  /** 调用 MCP 工具 */
   async callTool(
     serverName: string,
     toolName: string,
@@ -136,16 +156,13 @@ export class McpClientManager {
         arguments: args as Record<string, unknown>,
       });
 
-      // Extract text from result.content
+      // 从 result.content 中提取文本
       let text = "";
       if (Array.isArray(result.content)) {
         for (const item of result.content) {
           if (
-            item &&
-            typeof item === "object" &&
-            "type" in item &&
-            item.type === "text" &&
-            "text" in item &&
+            item && typeof item === "object" && "type" in item &&
+            item.type === "text" && "text" in item &&
             typeof item.text === "string"
           ) {
             text += item.text;
@@ -154,7 +171,6 @@ export class McpClientManager {
       }
 
       const payload = text || (result.content as unknown) || { result: "done" };
-
       return {
         ok: true,
         payload,
@@ -170,8 +186,8 @@ export class McpClientManager {
     }
   }
 
+  /** 解析 MCP 工具 ID：格式为 "mcp:<server-name>/<tool-name>" */
   parseToolId(toolId: string): { serverName: string; toolName: string } | null {
-    // Format: "mcp:<server-name>/<tool-name>"
     const prefix = "mcp:";
     if (!toolId.startsWith(prefix)) return null;
     const rest = toolId.slice(prefix.length);
@@ -183,10 +199,12 @@ export class McpClientManager {
     };
   }
 
+  /** 判断是否为 MCP 工具 ID */
   isMcpTool(toolId: string): boolean {
     return toolId.startsWith("mcp:");
   }
 
+  /** 列出所有连接的 MCP 服务器名 */
   serverNames(): readonly string[] {
     return Array.from(this.servers.keys());
   }

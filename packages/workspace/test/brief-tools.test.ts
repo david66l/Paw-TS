@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { generateBrief } from "../src/brief-tools.js";
+import { generateBrief } from "../src/project-context.js";
 
 describe("generateBrief", () => {
   test("handles empty directory", () => {

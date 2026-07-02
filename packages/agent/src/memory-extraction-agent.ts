@@ -1,5 +1,24 @@
 /**
- * Memory extraction — single model call to analyze conversation and extract entries.
+ * 记忆提取：单次模型调用分析对话并提取记忆条目。
+ * ==============================================
+ *
+ * 这是"事后记忆提取"的核心。Run 完成后，用辅助模型分析整个对话，
+ * 提取值得在将来会话中记住的事实。
+ *
+ * 提取内容重点：
+ * - 用户偏好（编码风格、习惯、偏好的工具）
+ * - 项目特定知识（架构决策、技术栈）
+ * - 用户给出的反馈或纠正
+ * - 当前任务的重要上下文
+ *
+ * 安全扫描（Sensitive-Info Scanner）：
+ * 所有提取的记忆条目在返回前都会经过敏感信息扫描。
+ * 检测 API key、token、密码、私钥等模式，匹配到的条目被拒绝（但保留在 rejected 列表）。
+ *
+ * 优先级指南：
+ * - high：核心架构知识、硬性用户约束、关键 bug 修复
+ * - mid（默认）：有用的项目事实、一般偏好
+ * - low：临时调试笔记、一次性测试命令、已废弃的方案
  */
 
 import type { AutoMemoryEntry } from "@paw/core";
@@ -9,7 +28,7 @@ import { completeAuxiliaryTask } from "./auxiliary-complete.js";
 
 export interface MemoryExtractionResult {
   readonly entries: readonly AutoMemoryEntry[];
-  /** Entries rejected by the sensitive-info scanner (available for audit). */
+  /** 被敏感信息扫描器拒绝的条目（可用于审计） */
   readonly rejected: readonly RejectedEntry[];
 }
 
@@ -18,13 +37,13 @@ export interface RejectedEntry {
   readonly reason: string;
 }
 
-// ── Sensitive-info scanner ──────────────────────────────────────
+// ═══ 敏感信息扫描器 ═══
 
+/** 敏感信息检测模式列表。按特异性排序（sk-ant 在 sk 之前）。 */
 const SENSITIVE_PATTERNS: ReadonlyArray<{
   readonly pattern: RegExp;
   readonly label: string;
 }> = [
-  // More-specific patterns first (sk-ant-… before generic sk-…)
   { pattern: /sk-ant-[A-Za-z0-9_\-]{20,}/, label: "Anthropic API key (sk-ant-…)" },
   { pattern: /sk-[A-Za-z0-9_\-]{20,}/, label: "OpenAI API key (sk-…)" },
   { pattern: /Bearer\s+[A-Za-z0-9_\-\.]{20,}/, label: "Bearer token" },
@@ -40,7 +59,10 @@ const SENSITIVE_PATTERNS: ReadonlyArray<{
   { pattern: /access_key\s*[:=]\s*["']?\S{8,}["']?/i, label: "access_key assignment" },
 ];
 
-/** Scan memory content for sensitive patterns.  Returns the first rejection reason or null. */
+/**
+ * 扫描记忆内容中的敏感信息。
+ * 返回第一个匹配的拒绝原因，或 null（通过扫描）。
+ */
 export function scanForSensitiveInfo(entry: AutoMemoryEntry): string | null {
   const haystack = [entry.name, entry.description, entry.content].join("\n");
   for (const { pattern, label } of SENSITIVE_PATTERNS) {
@@ -48,12 +70,11 @@ export function scanForSensitiveInfo(entry: AutoMemoryEntry): string | null {
       return `matched sensitive pattern: ${label}`;
     }
   }
-  // Also block plain-text credential keywords in content (but not in name/description).
+  // 额外检查：内容中出现凭据关键字 + 赋值模式
   const contentLower = entry.content.toLowerCase();
   const credKeywords = ["password", "secret", "credential", "private key"];
   for (const kw of credKeywords) {
     if (contentLower.includes(kw)) {
-      // Only flag if it looks like an assignment, not mere discussion
       if (/\w+\s*[:=]\s*["']?\S{8,}["']?/.test(entry.content)) {
         return `possible credential in content: keyword "${kw}" near assignment`;
       }
@@ -62,6 +83,7 @@ export function scanForSensitiveInfo(entry: AutoMemoryEntry): string | null {
   return null;
 }
 
+/** 对记忆条目列表执行敏感信息扫描，分为安全/拒绝两组 */
 function sanitizeMemoryEntries(
   entries: readonly AutoMemoryEntry[],
 ): { safe: AutoMemoryEntry[]; rejected: RejectedEntry[] } {
@@ -78,10 +100,11 @@ function sanitizeMemoryEntries(
   return { safe, rejected };
 }
 
-// ── Extraction ──────────────────────────────────────────────────
+// ═══ 提取 ═══
 
 const EXTRACTION_SYSTEM = `You analyze coding-agent conversations and extract facts worth remembering across future sessions. Output markdown entry blocks only.`;
 
+/** 构建记忆提取的用户提示词 */
 function buildExtractionUser(conversationText: string): string {
   return `Analyze the following conversation and extract any facts that should be remembered for future sessions.
 
@@ -94,11 +117,14 @@ Focus on:
 Respond with ONLY a markdown document containing memory entries in this format:
 
 ## Entry 1
-- **Name**: short_id_without_spaces
+- **Name**: short_kebab_case_id
 - **Type**: user | feedback | project | reference
 - **Priority**: high | mid | low
 - **Description**: One-line description
 - **Content**: Detailed content to remember
+- **RelatedFiles**: packages/core/src/foo.ts, packages/agent/src/bar.ts (comma-separated file paths mentioned or modified; omit if none)
+- **ErrorSignatures**: TS2307, Cannot find module (comma-separated error codes, exception names, or key error phrases; omit if none)
+- **ToolsUsed**: workspace.read_file, bash_run (comma-separated MCP tool names or harness functions used; omit if none)
 
 ## Entry 2
 ...
@@ -116,9 +142,10 @@ ${conversationText}`;
 }
 
 /**
- * Extract persistent memories via one cheap completion (no sub-agent orchestrator).
- * All extracted entries are scanned for sensitive information before returning;
- * rejected entries are available in the result for audit/logging.
+ * 通过一次便宜的辅助模型调用提取持久记忆（不需要子 Agent 循环）。
+ *
+ * 所有提取的条目在返回前都会经过敏感信息扫描；
+ * 被拒绝的条目保留在 result.rejected 中供审计/日志使用。
  */
 export async function extractMemories(
   model: LanguageModel,
@@ -137,6 +164,12 @@ export async function extractMemories(
   return { entries: safe, rejected };
 }
 
+/**
+ * 解析 LLM 输出的 markdown 记忆条目。
+ *
+ * 格式：每个 ## Entry N 段落包含 Name/Type/Priority/Description/Content 等字段。
+ * 解析策略：按行匹配 `- **Field**: value` 格式，Content 之后的行全部作为内容。
+ */
 function parseMemoryEntries(text: string): AutoMemoryEntry[] {
   if (text.trim().toLowerCase().includes("no memories to extract")) {
     return [];
@@ -154,18 +187,24 @@ function parseMemoryEntries(text: string): AutoMemoryEntry[] {
     let type: AutoMemoryEntry["type"] = "reference";
     let priority: AutoMemoryEntry["priority"] = "mid";
     let description = "";
+    const relatedFiles: string[] = [];
+    const errorSignatures: string[] = [];
+    const toolsUsed: string[] = [];
     const contentLines: string[] = [];
     let inContent = false;
 
     for (const line of lines.slice(1)) {
-      const nameMatch = line.match(/^-\s*\*\*Name\*\*:\s*([^\s:]+)/i);
+      const nameMatch = line.match(/^-\s*\*\*Name\*\*:\s*([^\s:，,]+)/i);
       const typeMatch = line.match(/^-\s*\*\*Type\*\*:\s*(.+)$/i);
       const priorityMatch = line.match(/^-\s*\*\*Priority\*\*:\s*(.+)$/i);
       const descMatch = line.match(/^-\s*\*\*Description\*\*:\s*(.+)$/i);
+      const relatedMatch = line.match(/^-\s*\*\*RelatedFiles\*\*:\s*(.+)$/i);
+      const errorsMatch = line.match(/^-\s*\*\*ErrorSignatures\*\*:\s*(.+)$/i);
+      const toolsMatch = line.match(/^-\s*\*\*ToolsUsed\*\*:\s*(.+)$/i);
       const contentStart = line.match(/^-\s*\*\*Content\*\*:\s*(.*)$/i);
 
       if (nameMatch) {
-        name = nameMatch[1]!.trim().replace(/\s+/g, "_").toLowerCase();
+        name = nameMatch[1]!.trim().replace(/\s+/g, "_").replace(/[^\w._-]/g, "").toLowerCase();
       } else if (typeMatch) {
         const t = typeMatch[1]?.trim().toLowerCase();
         if (
@@ -183,6 +222,24 @@ function parseMemoryEntries(text: string): AutoMemoryEntry[] {
         }
       } else if (descMatch) {
         description = descMatch[1]!.trim();
+      } else if (relatedMatch) {
+        relatedMatch[1]!
+          .split(/[,，]/)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 0)
+          .forEach((s: string) => relatedFiles.push(s));
+      } else if (errorsMatch) {
+        errorsMatch[1]!
+          .split(/[,，]/)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 0)
+          .forEach((s: string) => errorSignatures.push(s));
+      } else if (toolsMatch) {
+        toolsMatch[1]!
+          .split(/[,，]/)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 0)
+          .forEach((s: string) => toolsUsed.push(s));
       } else if (contentStart) {
         inContent = true;
         if (contentStart[1]) contentLines.push(contentStart[1]);
@@ -198,6 +255,9 @@ function parseMemoryEntries(text: string): AutoMemoryEntry[] {
         priority,
         description,
         content: contentLines.join("\n").trim(),
+        ...(relatedFiles.length > 0 ? { relatedFiles } : {}),
+        ...(errorSignatures.length > 0 ? { error_signatures: errorSignatures } : {}),
+        ...(toolsUsed.length > 0 ? { tools_used: toolsUsed } : {}),
       });
     }
   }

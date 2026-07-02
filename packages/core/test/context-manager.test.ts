@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { ContextManager } from "../src/context-manager.js";
+import { ContextManager } from "../src/context/manager.js";
 
 describe("ContextManager", () => {
   test("builds messages with system and user", () => {

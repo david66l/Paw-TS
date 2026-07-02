@@ -1,12 +1,25 @@
 /**
- * @mention resolution — parse `@path` from user input and read files as attachments.
- * Supports: `@file.txt`, `@"file with spaces.txt"`, `@../config.json`
+ * @mention 解析 — 从用户输入中解析 @path 引用并读取文件作为附件。
+ * ==============================================================
+ *
+ * 支持格式：@file.txt、@"file with spaces.txt"、@'file name.txt'
+ *
+ * 解析流程：
+ * 1. 提取所有 @ 引用（双引号 > 单引号 > 无引号）
+ * 2. 解析路径（展开 ~，检查工作区边界）
+ * 3. 图片文件 → base64 编码为 image 附件
+ * 4. 文本文件 → 读取内容为 file 附件
+ * 5. 从原文中移除 @ 引用语法 → 返回 strippedText
+ *
+ * 面试要点：
+ * - 为什么图片用 base64？LLM vision API 需要 base64 编码的图片数据
+ * - 工作区边界检查：防止 @/etc/passwd 读取系统文件
  */
 
 import fs from "node:fs";
 import path from "node:path";
 
-import { readWorkspaceFile } from "./local-fs.js";
+import { readWorkspaceFile } from "./files/read.js";
 
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
   ".png": "image/png",

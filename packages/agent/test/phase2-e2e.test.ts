@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 
 import type { RunEventEnvelope } from "@paw/core";
@@ -8,10 +7,7 @@ import { FileSystemAppStateStore } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
-
-function tmpDir(prefix: string): string {
-  return mkdtempSync(path.join(tmpdir(), prefix));
-}
+import { tmpDir } from "./fixtures.js";
 
 describe("Phase 2 E2E — Retry", () => {
   test("429 with Retry-After header waits correct duration", async () => {

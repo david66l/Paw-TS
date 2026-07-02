@@ -1,3 +1,11 @@
+/**
+ * Settings 文件加载器 — 读取/验证/保存 .paw/settings.local.json。
+ * ================================================================
+ *
+ * 使用 Zod schema 验证配置结构，加载失败时抛出类型化的 PawError。
+ * redactSettingsForDisplay() 确保 API key 等敏感信息永远不会完整打印到终端。
+ */
+
 import fs from "node:fs";
 import path from "node:path";
 

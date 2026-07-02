@@ -1,17 +1,24 @@
+/**
+ * 任务计划器 — 创建/更新执行计划（与 Python 版本等价 V2 §8.4）。
+ * ==============================================================
+ *
+ * 模型可以通过 plan_update action 动态管理计划：
+ * - createPlan()：初始化计划（含依赖关系）
+ * - applyUpdate()：添加新项 + 废弃旧项
+ *
+ * 安全约束：不能废弃状态为 FAILED 的项（必须先解决失败原因）。
+ */
+
 import { type PlanItem, PlanItemStatus, createPlanItem } from "./plan-item.js";
 import { Plan } from "./plan.js";
 
-/**
- * Input shape for `createPlan` — mirrors Python `tasks: list[dict]` (`id`, `depends_on`).
- */
+/** createPlan 的输入形状 — 与 Python 的 tasks: list[dict] 一致 */
 export type PlanTaskInput = {
   readonly id?: string;
   readonly depends_on?: readonly string[];
 };
 
-/**
- * Plan creation / updates (V2 §8.4). Parity: `paw.agent.planner.TaskPlanner`.
- */
+/** 计划创建/更新（与 Python paw.agent.planner.TaskPlanner 等价） */
 export class TaskPlanner {
   private _plan: Plan | null = null;
 

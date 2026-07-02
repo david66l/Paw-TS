@@ -3,12 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import type { ChatMessage } from "../src/context-manager.js";
-import { pruneToolResults } from "../src/context-pruner.js";
+import type { ChatMessage } from "../src/context/manager.js";
+import { pruneToolResults } from "../src/context/pruner.js";
 import {
   DEFAULT_KEEP_RECENT_TOOLS,
   PERSISTED_OUTPUT_OPEN,
-} from "../src/tool-result-storage.js";
+} from "../src/tool-result/storage.js";
 
 function tempToolResultsDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "paw-tool-results-"));

@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { editWorkspaceFile } from "../src/local-fs.js";
+import { editWorkspaceFile } from "../src/files/write.js";
 
 describe("editWorkspaceFile — string mode", () => {
   test("replaces unique match", () => {

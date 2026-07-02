@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { grepWorkspaceText } from "../src/local-fs.js";
+import { grepWorkspaceText } from "../src/files/read.js";
 
 describe("grepWorkspaceText", () => {
   test("files_with_matches mode", () => {

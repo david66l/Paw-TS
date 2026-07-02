@@ -1,3 +1,20 @@
+/**
+ * Anthropic Messages API 兼容客户端（HTTPS fetch）。
+ * ===================================================
+ *
+ * 实现 LanguageModel 接口，封装 Anthropic Messages API。
+ *
+ * 支持：
+ * - 非流式调用（complete）
+ * - 流式调用（completeStream）— SSE 事件解析
+ * - thinking 块提取
+ * - 原生 tool_use 块（content_block_start/delta/stop）
+ *
+ * 面试要点：
+ * - SSE 协议解析：按行读取 "\ndata: " 前缀的分块
+ * - system 消息处理：Anthropic 有顶层 system 参数（非 messages 数组中的 role:system）
+ */
+
 import type { ModelTokenUsage } from "@paw/core";
 
 import type { LanguageModel, ModelCapabilities } from "./language-model.js";

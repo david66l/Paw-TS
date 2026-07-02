@@ -59,6 +59,7 @@ describe("DefaultContextSummarizer", () => {
 
     const summarizer = new DefaultContextSummarizer();
     const shared = summarizer.summarizeForCall(ctx, {
+      type: "tool_call",
       tool: "workspace.run_agent",
       args: {
         goal: "Write unit tests for login.ts",
@@ -129,10 +130,12 @@ describe("DefaultContextSummarizer", () => {
 
     const summarizer = new DefaultContextSummarizer();
     const a = summarizer.summarizeForCall(ctx, {
+      type: "tool_call",
       tool: "workspace.run_agent",
       args: { goal: "Task A", agent_type: "research" },
     });
     const b = summarizer.summarizeForCall(ctx, {
+      type: "tool_call",
       tool: "workspace.run_agent",
       args: { goal: "Task B", agent_type: "coding" },
     });

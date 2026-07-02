@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { MemoryRecord } from "../src/memory-record.js";
+import type { MemoryRecord } from "@paw/memory";
 import { buildSystemPromptWithBudget } from "../src/system-prompt.js";
 
 function makeMemory(id: string, content: string): MemoryRecord {
@@ -16,6 +16,9 @@ function makeMemory(id: string, content: string): MemoryRecord {
     relatedFiles: [],
     relatedErrors: [],
     priority: "mid",
+    toolsUsed: [],
+    validUntil: 0,
+    linkedMemories: [],
   };
 }
 

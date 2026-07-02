@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { globWorkspaceFiles } from "../src/local-fs.js";
+import { globWorkspaceFiles } from "../src/files/read.js";
 
 describe("globWorkspaceFiles", () => {
   test("matches files in current directory", () => {

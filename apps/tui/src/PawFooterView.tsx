@@ -16,11 +16,13 @@ import {
   APPROVAL_ROWS,
   ASK_ROWS,
   STREAM_PREVIEW_ROWS,
+} from "./footer-types.js";
+import {
   type BottomBarChipColor,
   buildBottomBarChips,
   formatContextBar,
   formatHudText,
-} from "./footer-state.js";
+} from "./footer-chips.js";
 import type { ColorInput } from "@opentui/core";
 
 /** PawFooterView 组件 props。 */

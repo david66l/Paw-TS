@@ -1,16 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
-
-function tmpDir(prefix: string): string {
-  return mkdtempSync(path.join(tmpdir(), prefix));
-}
+import { tmpDir } from "./fixtures.js";
 
 describe("Model Truncation", () => {
   test("truncated finishReason triggers continuation", async () => {

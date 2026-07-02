@@ -7,7 +7,7 @@ import {
   resolveBudgetRatios,
   shouldCompactHistory,
   truncateTextToTokenBudget,
-} from "../src/context-budget.js";
+} from "../src/context/budget.js";
 
 describe("context-budget", () => {
   it("uses default ratios for 128k window", () => {

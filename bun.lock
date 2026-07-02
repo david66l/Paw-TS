@@ -22,8 +22,10 @@
         "paw-ts": "./src/main.ts",
       },
       "dependencies": {
-        "@paw/cli-core": "workspace:*",
+        "@paw/agent": "workspace:*",
         "@paw/eval": "workspace:*",
+        "@paw/settings": "workspace:*",
+        "@paw/workspace": "workspace:*",
       },
     },
     "apps/tui": {
@@ -37,7 +39,6 @@
         "@opentui/keymap": "^0.2.7",
         "@opentui/solid": "^0.2.7",
         "@paw/agent": "workspace:*",
-        "@paw/cli-core": "workspace:*",
         "@paw/core": "workspace:*",
         "@paw/harness": "workspace:*",
         "@paw/models": "workspace:*",
@@ -61,21 +62,12 @@
         "@paw/workspace": "workspace:*",
       },
     },
-    "packages/cli-core": {
-      "name": "@paw/cli-core",
-      "version": "0.0.1",
-      "dependencies": {
-        "@paw/agent": "workspace:*",
-        "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
-        "@paw/models": "workspace:*",
-        "@paw/settings": "workspace:*",
-        "@paw/workspace": "workspace:*",
-      },
-    },
     "packages/core": {
       "name": "@paw/core",
       "version": "0.0.1",
+      "dependencies": {
+        "@paw/memory": "workspace:*",
+      },
     },
     "packages/eval": {
       "name": "@paw/eval",
@@ -99,6 +91,13 @@
         "@paw/models": "workspace:*",
         "@paw/workspace": "workspace:*",
         "unbash": "^3.0.0",
+      },
+    },
+    "packages/memory": {
+      "name": "@paw/memory",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/core": "workspace:*",
       },
     },
     "packages/models": {
@@ -243,13 +242,13 @@
 
     "@paw/cli": ["@paw/cli@workspace:apps/cli"],
 
-    "@paw/cli-core": ["@paw/cli-core@workspace:packages/cli-core"],
-
     "@paw/core": ["@paw/core@workspace:packages/core"],
 
     "@paw/eval": ["@paw/eval@workspace:packages/eval"],
 
     "@paw/harness": ["@paw/harness@workspace:packages/harness"],
+
+    "@paw/memory": ["@paw/memory@workspace:packages/memory"],
 
     "@paw/models": ["@paw/models@workspace:packages/models"],
 

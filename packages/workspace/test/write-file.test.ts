@@ -3,7 +3,7 @@ import fs, { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { writeWorkspaceFile } from "../src/local-fs.js";
+import { writeWorkspaceFile } from "../src/files/write.js";
 
 describe("writeWorkspaceFile", () => {
   test("writes utf8 and creates parent dirs", () => {

@@ -12,7 +12,6 @@
     "@opentui/keymap": "^0.2.7",
     "@opentui/solid": "^0.2.7",
     "@paw/agent": "workspace:*",
-    "@paw/cli-core": "workspace:*",
     "@paw/core": "workspace:*",
     "@paw/harness": "workspace:*",
     "@paw/models": "workspace:*",

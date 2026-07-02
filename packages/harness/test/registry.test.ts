@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { AutoMemoryStore } from "@paw/core";
-import { executeTool, toolRequiresApproval } from "../src/registry.js";
+import { executeTool, toolRequiresApproval } from "../src/registry/index.js";
 
 describe("executeTool", () => {
   test("workspace.read_file reads a relative file", async () => {

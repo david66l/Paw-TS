@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import {
   compressionSavingsRatio,
   meetsCompressionSavingsThreshold,
-  parseMarkdownSections,
   validateCompressionSummary,
-} from "../src/compression-summary.js";
+} from "../src/context/summary.js";
+import { parseMarkdownSections } from "../src/markdown.js";
 
 describe("compression-summary", () => {
   it("parses markdown sections", () => {

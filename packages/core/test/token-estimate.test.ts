@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatMessage } from "../src/context-manager.js";
+import type { ChatMessage } from "../src/context/manager.js";
 import {
   estimateMessageTokens,
   estimateMessagesTokens,

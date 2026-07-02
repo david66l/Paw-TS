@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { searchWorkspaceText } from "../src/local-fs.js";
+import { searchWorkspaceText } from "../src/files/read.js";
 
 describe("searchWorkspaceText", () => {
   test("finds literal substring", () => {

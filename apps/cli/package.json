@@ -7,8 +7,10 @@
     "paw-ts": "./src/main.ts"
   },
   "dependencies": {
-    "@paw/cli-core": "workspace:*",
-    "@paw/eval": "workspace:*"
+    "@paw/agent": "workspace:*",
+    "@paw/eval": "workspace:*",
+    "@paw/settings": "workspace:*",
+    "@paw/workspace": "workspace:*"
   },
   "scripts": {
     "test": "bun test test",
