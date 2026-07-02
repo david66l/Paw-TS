@@ -38,7 +38,7 @@ personal-site/
 temp-site/
 测试project/
 web-project/
-memory/
+/memory/
 index.html
 training_data/stage_c_deepseek_teacher.jsonl
 training_data/*.jsonl
