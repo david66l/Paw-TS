@@ -29,6 +29,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { atomicWrite } from "../utils/fs.js";
 import { formatToolResult } from "./format.js";
 import { sanitizeRunId, toolResultsDir } from "../workspace-paths.js";
 
@@ -119,7 +120,7 @@ export function persistToolResultToDisk(
   // 清理 ID 中的危险字符
   const safeId = sanitizeRunId(id);
   const filepath = path.join(toolResultsDir, `${safeId}.txt`);
-  fs.writeFileSync(filepath, content, "utf8");
+  atomicWrite(filepath, content);
   return filepath;
 }
 

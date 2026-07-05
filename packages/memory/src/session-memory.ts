@@ -36,12 +36,14 @@ import {
   readFileSync,
   readdirSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import {
+  atomicWrite,
+  lockFile,
   parseYamlFrontmatter,
   parseMarkdownSections,
+  scanForThreats,
   splitFrontmatter,
   stringifyYamlFrontmatter,
 } from "@paw/core";
@@ -103,6 +105,10 @@ export class SessionMemoryStore {
     const file = path.join(this.sessionsDir, `${sessionId}.md`);
     if (!existsSync(file)) return null;
     const text = readFileSync(file, "utf-8");
+    // 威胁扫描：加载时拦截恶意注入片段
+    if (scanForThreats(text, "context").length > 0) {
+      return null;
+    }
     return this.fromMarkdown(text);
   }
 
@@ -115,9 +121,24 @@ export class SessionMemoryStore {
    * @param memory - 会话记忆数据
    */
   save(sessionId: string, memory: SessionMemory): void {
+    // 威胁扫描：阻断注入/外泄内容写入会话记忆
+    const content = this.toMarkdown(memory);
+    const threat = scanForThreats(content, "strict");
+    if (threat.length > 0) {
+      throw new Error(
+        `Session memory blocked: content matches threat pattern '${threat[0]}'. ` +
+        `Refusing to persist potentially malicious content.`,
+      );
+    }
+
     const file = path.join(this.sessionsDir, `${sessionId}.md`);
     mkdirSync(this.sessionsDir, { recursive: true });
-    writeFileSync(file, this.toMarkdown(memory), "utf-8");
+    const unlock = lockFile(file);
+    try {
+      atomicWrite(file, content);
+    } finally {
+      unlock();
+    }
   }
 
   /**

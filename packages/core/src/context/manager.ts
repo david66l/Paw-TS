@@ -147,7 +147,7 @@ export class ContextManager {
     this.maybeTruncate();
   }
 
-  /** 替换整个历史（用于恢复/回放）。 */
+  /** 替换整个历史（用于恢复/回放）。会立即截断到上限。 */
   replaceHistory(messages: readonly ChatMessage[]): void {
     const sys = messages.find((m) => m.role === "system");
     if (sys) {
@@ -156,6 +156,23 @@ export class ContextManager {
     this.history = messages
       .filter((m) => m.role !== "system")
       .map((m) => ({ ...m }));
+    this.maybeTruncate();
+  }
+
+  /**
+   * 设置历史但不即时截断——留给调用方先做智能压缩（L1 prune + L2 compact），
+   * 再手动调 maybeTruncate 或 setHistoryTokenBudget 作为最后的安全网。
+   *
+   * ponytail: 只在恢复路径用，避免硬截断在压缩前就丢掉工具输出。
+   */
+  setHistoryRaw(messages: readonly ChatMessage[]): void {
+    this.history = messages
+      .filter((m) => m.role !== "system")
+      .map((m) => ({ ...m }));
+  }
+
+  /** 公开 maybeTruncate，供外部在手动压缩后调用。 */
+  truncateNow(): void {
     this.maybeTruncate();
   }
 

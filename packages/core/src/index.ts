@@ -372,3 +372,24 @@ export {
   memoryDir,
   sessionMemoryDir,
 } from "./workspace-paths.js";
+
+// ============================================================
+// 文件系统工具（原子写入、文件锁、漂移检测）
+// ============================================================
+export {
+  atomicWrite,
+  lockFile,
+  readLockPid,
+  readWithHash,
+  checkDrift,
+  safeWrite,
+  type DriftCheckResult,
+} from "./utils/fs.js";
+
+// ============================================================
+// 威胁扫描器（prompt 注入 / C2 / 外泄检测）
+// ============================================================
+export {
+  scanForThreats,
+  firstThreatMessage,
+} from "./threat-scanner.js";

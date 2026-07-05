@@ -34,6 +34,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { checkpointsDir, sanitizeFileName } from "./workspace-paths.js";
+import { atomicWrite } from "./utils/fs.js";
 
 /** 单个检查点条目：记录一次工具调用的快照信息 */
 export interface CheckpointEntry {
@@ -136,10 +137,9 @@ export function saveCheckpoint(
         args,
         savedAt: Date.now(),
       };
-      fs.writeFileSync(
+      atomicWrite(
         path.join(checkpointDir, ".shell-meta.json"),
         JSON.stringify(shellMeta, null, 2),
-        "utf8",
       );
       savedTargets.push(rel);
       continue;
@@ -158,7 +158,7 @@ export function saveCheckpoint(
         checkpointDir,
         `${hash}-${sanitizeFileName(rel)}`,
       );
-      fs.writeFileSync(snapshotFile, content);
+      atomicWrite(snapshotFile, content.toString());
       savedTargets.push(rel);
     } else {
       // 文件尚不存在 —— 记录为"将被创建"，撤销时需要删除它
@@ -166,7 +166,7 @@ export function saveCheckpoint(
         checkpointDir,
         `.create-${sanitizeFileName(rel)}`,
       );
-      fs.writeFileSync(marker, "", "utf8");
+      atomicWrite(marker, "");
       savedTargets.push(rel);
     }
   }
@@ -177,10 +177,9 @@ export function saveCheckpoint(
     targets: savedTargets,
     savedAt: Date.now(),
   };
-  fs.writeFileSync(
+  atomicWrite(
     path.join(checkpointDir, "_meta.json"),
     JSON.stringify(meta, null, 2),
-    "utf8",
   );
   return meta;
 }

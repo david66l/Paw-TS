@@ -29,7 +29,8 @@
  *   合并的结果能正确累积
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { atomicWrite } from "@paw/core";
 import path from "node:path";
 import type { AutoMemoryStore } from "./auto-memory.js";
 import { archiveEntryByName } from "./memory-archive.js";
@@ -65,10 +66,9 @@ function loadReflectionState(memoryDir: string): ReflectionState {
 /** 将反射状态持久化到 `.reflection_state.json` 文件中 */
 function saveReflectionState(memoryDir: string, state: ReflectionState): void {
   mkdirSync(memoryDir, { recursive: true });
-  writeFileSync(
+  atomicWrite(
     path.join(memoryDir, ".reflection_state.json"),
     JSON.stringify(state, null, 2),
-    "utf-8",
   );
 }
 

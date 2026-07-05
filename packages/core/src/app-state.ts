@@ -32,9 +32,9 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { atomicWrite } from "./utils/fs.js";
 
 import type { ChatMessage } from "./context/manager.js";
 import type { TodoItem } from "./todo.js";
@@ -109,7 +109,7 @@ export class FileSystemAppStateStore implements AppStateStore {
   /** 将状态序列化为 JSON 并写入文件 */
   save(state: AppState): void {
     const file = path.join(this.statesDir, `${state.runId}.json`);
-    writeFileSync(file, JSON.stringify(state, null, 2));
+    atomicWrite(file, JSON.stringify(state, null, 2));
   }
 
   /** 从 JSON 文件加载状态，文件不存在时返回 null */

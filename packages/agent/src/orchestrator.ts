@@ -40,6 +40,8 @@
  * - 双通道工具调用：兼容不支持原生 function calling 的模型
  */
 
+import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 
 // ─────────────────────────────────────────────────────────────
@@ -304,6 +306,8 @@ export class AgentOrchestrator {
   private readonly auxiliaryModel?: LanguageModel;
   /** 压缩冷却剩余轮数：每轮递减，>0 时禁止压缩 */
   private compactCooldownTurns = 0;
+  /** 流式恢复文件路径：模型输出时实时写盘，崩了可用于恢复 */
+  private _streamRecoveryPath?: string;
   private readonly retrySleep: (ms: number) => Promise<void>;
   private readonly memoryExtraction: "background" | "await" | "off";
   /** 熔断器映射：key = model.label，每个模型独立熔断 */
@@ -396,6 +400,22 @@ export class AgentOrchestrator {
       opts.workspaceRoot?.trim()
         ? path.resolve(opts.workspaceRoot)
         : loaded.workspaceRoot;
+
+    // 清理上一次崩溃遗留的流式恢复文件
+    const streamsDir = path.join(workspaceRoot, ".paw", "streams", opts.runId);
+    try {
+      const leftover = await fsp.readdir(streamsDir);
+      if (leftover.length > 0) {
+        // ponytail: 只清不读，恢复文件的存在本身就是"上次崩了"的信号
+        await Promise.all(
+          leftover.map((f) =>
+            fsp.unlink(path.join(streamsDir, f)).catch(() => {}),
+          ),
+        );
+      }
+    } catch {
+      // 目录不存在 → 正常，没有崩溃遗留
+    }
 
     // 如果指定了 fromTurn，恢复文件系统的 checkpoints（代码快照）
     let resumeState = loaded;
@@ -996,6 +1016,121 @@ export class AgentOrchestrator {
     }
   }
 
+  /**
+   * 恢复时专用 L2 压缩：与 maybeCompactHistory 共享核心逻辑，
+   * 但去掉冷却期和 thrashing 检查——恢复是一次性的，不需要这些保护。
+   *
+   * 流程：确定三段边界 → 剥离已有摘要 → 辅助模型生成摘要 →
+   * 验证质量 → 检查收益 → 替换历史 + 提取亮点到永久记忆。
+   */
+  private async compactHistoryOnResume(
+    ctxMgr: ContextManager,
+    compactor: ContextCompactor,
+    sessionMemoryStore: SessionMemoryStore,
+    _autoMemoryStore: AutoMemoryStore,
+    workspaceRoot: string,
+    runId: string,
+    signal: AbortSignal | undefined,
+    emit: (event: RunEvent) => void,
+  ): Promise<void> {
+    const beforeTokens = ctxMgr.historyEstimatedTokens;
+
+    emit({
+      type: "compression.auto_compact.started",
+      beforeTokens,
+    });
+
+    try {
+      const messages = ctxMgr.buildMessages();
+      const boundaries = compactor.determineBoundaries(messages);
+      const headMessages = stripContextSummaryMessages(
+        messages.slice(0, boundaries.headEnd + 1),
+      );
+      const middleMessages = stripContextSummaryMessages(
+        messages.slice(boundaries.headEnd + 1, boundaries.tailStart),
+      );
+      const tailMessages = stripContextSummaryMessages(
+        messages.slice(boundaries.tailStart),
+      );
+
+      if (middleMessages.length === 0) {
+        emit({
+          type: "compression.skipped",
+          reason: "no middle segment to compact after prune",
+        });
+        return;
+      }
+
+      const auxModel = this.auxiliaryModel!;
+      const existing = sessionMemoryStore.load(runId);
+      const prompt = compactor.buildSummaryPrompt(
+        middleMessages,
+        existing ? sessionMemoryStore.toMarkdown(existing) : null,
+      );
+
+      const { summary, sessionMemory } = await runCompressionAgent(
+        auxModel,
+        prompt,
+        runId,
+        signal,
+      );
+
+      const quality = validateCompressionSummary(summary);
+      if (!quality.ok) {
+        emit({
+          type: "compression.skipped",
+          reason: `summary quality: ${quality.reason}`,
+        });
+        return;
+      }
+
+      const summaryMsg: ChatMessage = {
+        role: "user",
+        content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}`,
+      };
+      const newMessages = [...headMessages, summaryMsg, ...tailMessages];
+      const afterTokens = ctxMgr.estimator.countMessages(
+        newMessages.filter((m) => m.role !== "system"),
+      );
+
+      if (!meetsCompressionSavingsThreshold(beforeTokens, afterTokens)) {
+        compactor.recordResult(beforeTokens, beforeTokens, false);
+        emit({
+          type: "compression.skipped",
+          reason: "insufficient savings (<15%)",
+        });
+        return;
+      }
+
+      ctxMgr.replaceHistory(newMessages);
+      sessionMemoryStore.save(runId, {
+        ...sessionMemory,
+        project: path.basename(workspaceRoot),
+      });
+
+      emit({
+        type: "compression.auto_compact.done",
+        afterTokens: ctxMgr.historyEstimatedTokens,
+        summaryTokens: Math.ceil(summary.length / 4),
+      });
+      compactor.recordResult(beforeTokens, afterTokens, true);
+
+      extractSessionHighlightsToAutoMemory({
+        sessionMemory,
+        autoMemoryStore: _autoMemoryStore,
+        workspaceRoot,
+      }).catch(() => {
+        /* best-effort */
+      });
+    } catch (err) {
+      compactor.recordResult(beforeTokens, beforeTokens, false);
+      emit({
+        type: "compression.skipped",
+        reason: `compact failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+
   // ─────────────────────────────────────────────────────────
   // executeTurn：单轮执行（状态机驱动）
   // ─────────────────────────────────────────────────────────
@@ -1108,13 +1243,27 @@ export class AgentOrchestrator {
     }
 
     // 步骤 5：调用模型 + 解析返回的工具调用/动作
+    // 设置流式恢复路径——模型输出时实时写盘，崩了不丢
+    this._streamRecoveryPath = path.join(
+      workspaceRoot,
+      ".paw",
+      "streams",
+      runId,
+      `turn-${ctx.turn}.tmp`,
+    );
+    let modelResult: Awaited<ReturnType<typeof this.callModelAndParseActions>>;
+    try {
+      modelResult = await this.callModelAndParseActions(ctx, toolDefs, toolNameMap);
+    } finally {
+      this._streamRecoveryPath = undefined;
+    }
     const {
       text,
       thinking,
       toolCalls,
       singleAction,
       reasoningText,
-    } = await this.callModelAndParseActions(ctx, toolDefs, toolNameMap);
+    } = modelResult;
 
     // 步骤 6：通过 action 处理器分发执行
     // handleAction 在 orchestrator/action-handlers.ts 中实现，
@@ -1403,12 +1552,23 @@ export class AgentOrchestrator {
       let finishReason: string | undefined;
       const nativeToolCalls: NativeToolCall[] = [];
 
+      // 流式恢复：边收 chunk 边写盘，崩了不丢输出
+      let recoveryStream: fs.WriteStream | undefined;
+      if (this._streamRecoveryPath) {
+        await fsp.mkdir(path.dirname(this._streamRecoveryPath), {
+          recursive: true,
+        });
+        recoveryStream = fs.createWriteStream(this._streamRecoveryPath);
+      }
+
       for await (const chunk of streamFn.call(model, messages, modelOpts)) {
         if (chunk.type === "text") {
           acc += chunk.delta;
+          recoveryStream?.write(chunk.delta);
           emit({ type: "model.chunk", text: acc });
         } else if (chunk.type === "thinking") {
           thinkingAcc += chunk.delta;
+          recoveryStream?.write(`\n[thinking] ${chunk.delta}\n`);
           emit({ type: "model.thinking", text: thinkingAcc });
         } else if (chunk.type === "tool_use") {
           // 原生 tool_use：收集为结构化对象，同时转为文本用于 TUI 显示
@@ -1429,11 +1589,18 @@ export class AgentOrchestrator {
           });
           const display = JSON.stringify({ tool: chunk.name, args: parsedArgs });
           acc += (acc ? "\n" : "") + display;
+          recoveryStream?.write((acc ? "\n" : "") + display);
           emit({ type: "model.chunk", text: acc });
         } else if (chunk.type === "done") {
           usage = chunk.usage;
           finishReason = chunk.finishReason;
         }
+      }
+
+      // 流正常结束：关流、删恢复文件（acc 里有全文，不需要它了）
+      if (recoveryStream) {
+        recoveryStream.end();
+        fsp.unlink(this._streamRecoveryPath!).catch(() => {});
       }
 
       // 记录 token 用量和成本
@@ -2161,7 +2328,48 @@ export class AgentOrchestrator {
       startTurn = s.turn;
       ctxMgr.setSystem(systemContent);
       const history = s.messages.filter((m) => m.role !== "system");
-      if (history.length > 0) ctxMgr.replaceHistory(history);
+
+      if (history.length > 0) {
+        // Step 1: 先不做硬截断——把完整历史放进去
+        ctxMgr.setHistoryRaw(history);
+
+        // Step 2: L1 prune — 把超大的工具输出落盘，上下文中只留指针
+        const toolResultsDir = getToolResultsDir(workspaceRoot, runId);
+        const pruneResult = ctxMgr.prune({
+          toolResultsDir,
+          keepRecentTools: DEFAULT_KEEP_RECENT_TOOLS,
+        });
+        if (pruneResult.pruned) {
+          emit({
+            type: "compression.prune.done",
+            freedTokens: pruneResult.freedTokens,
+            remainingTokens: ctxMgr.estimatedTokens,
+          });
+        }
+
+        // Step 3: L2 compact — 如果历史依然太大，用辅助模型把中间段压成摘要
+        const historyTokensAfterPrune = ctxMgr.historyEstimatedTokens;
+        const resumeCompactThreshold = Math.floor(contextWindow * 0.4);
+        if (
+          this.auxiliaryModel &&
+          historyTokensAfterPrune > resumeCompactThreshold
+        ) {
+          await this.compactHistoryOnResume(
+            ctxMgr,
+            compactor,
+            sessionMemoryStore,
+            autoMemoryStore,
+            workspaceRoot,
+            runId,
+            spec.abortSignal ?? undefined,
+            emit,
+          );
+        }
+
+        // Step 4: 最后的安全网——硬截断兜底
+        ctxMgr.truncateNow();
+      }
+
       if (s.plan) {
         planner.createPlan(runId, []);
         try {

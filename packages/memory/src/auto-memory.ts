@@ -33,9 +33,9 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { atomicWrite, checkDrift, lockFile, readWithHash, scanForThreats } from "@paw/core";
 import {
   parseYamlFrontmatter,
   splitFrontmatter,
@@ -141,6 +141,10 @@ export class AutoMemoryStore {
       if (!split) return null;
       const fm = parseYamlFrontmatter(split.frontmatter);
       const content = split.body.trim();
+      // 威胁扫描：加载时拦截恶意注入片段，阻止其进入 system prompt
+      if (scanForThreats(content, "context").length > 0) {
+        return null;
+      }
       const type = fm.type as AutoMemoryEntry["type"];
       // 必需字段校验：name、description、type 缺一不可
       if (!fm.name || !fm.description || !isValidType(type)) return null;
@@ -188,6 +192,15 @@ export class AutoMemoryStore {
    * 会自动创建所需目录。
    */
   save(entry: AutoMemoryEntry): void {
+    // 威胁扫描：阻断注入/外泄内容写入记忆
+    const threat = scanForThreats(entry.content, "strict");
+    if (threat.length > 0) {
+      throw new Error(
+        `Memory entry blocked: content matches threat pattern '${threat[0]}'. ` +
+        `Refusing to persist potentially malicious content to AutoMemory.`,
+      );
+    }
+
     const file = path.join(this.memoryDir, `${entry.name}.md`);
     mkdirSync(this.memoryDir, { recursive: true });
     // 构建 frontmatter 键值对
@@ -209,8 +222,14 @@ export class AutoMemoryStore {
     if (entry.valid_until !== undefined) fm.valid_until = String(entry.valid_until);
     if (entry.linked_memories && entry.linked_memories.length > 0) fm.linked_memories = entry.linked_memories.join(", ");
     const fmStr = stringifyYamlFrontmatter(fm);
-    // 格式：frontmatter + 空行 + 正文
-    writeFileSync(file, `${fmStr}\n\n${entry.content}\n`, "utf-8");
+    // 格式：frontmatter + 空行 + 正文；加锁防并发覆写
+    const content = `${fmStr}\n\n${entry.content}\n`;
+    const unlock = lockFile(file);
+    try {
+      atomicWrite(file, content);
+    } finally {
+      unlock();
+    }
   }
 
   /**
@@ -357,44 +376,69 @@ export class AutoMemoryStore {
       rebuildArchiveIndex(this.memoryDir);
     }
 
-    const entries = this.list();
-    const shardCount = Math.ceil(entries.length / AutoMemoryStore.MAX_SHARD_SIZE);
+    const indexPath = path.join(this.memoryDir, "MEMORY.md");
 
-    // 第二步：写入每个分片文件
-    for (let i = 0; i < shardCount; i++) {
-      const slice = entries.slice(i * AutoMemoryStore.MAX_SHARD_SIZE, (i + 1) * AutoMemoryStore.MAX_SHARD_SIZE);
-      const shardLines = [
-        `# Memory Index — Shard ${i + 1}`,
+    // 锁主索引文件：整个 buildIndex 是临界区，防止并发 buildIndex 互相覆盖
+    const unlock = lockFile(indexPath);
+    try {
+      const entries = this.list();
+      const shardCount = Math.ceil(entries.length / AutoMemoryStore.MAX_SHARD_SIZE);
+
+      // 第二步：写入每个分片文件（无锁——分片只在 buildIndex 内写入）
+      for (let i = 0; i < shardCount; i++) {
+        const slice = entries.slice(i * AutoMemoryStore.MAX_SHARD_SIZE, (i + 1) * AutoMemoryStore.MAX_SHARD_SIZE);
+        const shardLines = [
+          `# Memory Index — Shard ${i + 1}`,
+          "",
+          "| Name | Type | Priority | Description |",
+          "|------|------|----------|-------------|",
+          ...slice.map((e) =>
+            `| ${e.name} | ${e.type} | ${e.priority ?? "mid"} | ${e.description} |`
+          ),
+          "",
+        ];
+        atomicWrite(
+          path.join(this.memoryDir, `MEMORY-${i + 1}.md`),
+          shardLines.join("\n"),
+        );
+      }
+
+      // 第三步：清理多余分片
+      this.cleanStaleShards(shardCount);
+
+      // 第四步：写入主索引文件（漂移检测：锁挡住并发 buildIndex，但外部手动编辑仍需保护）
+      const masterLines = [
+        "# Memory Index",
         "",
-        "| Name | Type | Priority | Description |",
-        "|------|------|----------|-------------|",
-        ...slice.map((e) =>
-          `| ${e.name} | ${e.type} | ${e.priority ?? "mid"} | ${e.description} |`
-        ),
+        `${entries.length} entries across ${shardCount} shard(s)`,
+        "",
+        ...Array.from({ length: shardCount }, (_, i) => `- [Shard ${i + 1}](MEMORY-${i + 1}.md)`),
         "",
       ];
-      writeFileSync(
-        path.join(this.memoryDir, `MEMORY-${i + 1}.md`),
-        shardLines.join("\n"),
-        "utf-8",
-      );
+      const newContent = masterLines.join("\n");
+      // 读取当前索引 hash 做漂移检测（锁已持有，不会被其他 buildIndex 改，但用户可能手动编辑）
+      const current = readWithHash(indexPath);
+      if (current) {
+        const drift = checkDrift(indexPath, current.hash);
+        if (drift.drifted) {
+          // 已创建 .bak，重新加载后重试一次
+          const retry = readWithHash(indexPath);
+          if (retry) {
+            const retryDrift = checkDrift(indexPath, retry.hash);
+            if (!retryDrift.drifted) {
+              atomicWrite(indexPath, newContent);
+            }
+          }
+        } else {
+          atomicWrite(indexPath, newContent);
+        }
+      } else {
+        atomicWrite(indexPath, newContent);
+      }
+      return newContent;
+    } finally {
+      unlock();
     }
-
-    // 第三步：清理多余分片（条目减少时，之前创建的分片索引号可能超出当前分片数）
-    this.cleanStaleShards(shardCount);
-
-    // 第四步：写入主索引文件
-    const masterLines = [
-      "# Memory Index",
-      "",
-      `${entries.length} entries across ${shardCount} shard(s)`,
-      "",
-      ...Array.from({ length: shardCount }, (_, i) => `- [Shard ${i + 1}](MEMORY-${i + 1}.md)`),
-      "",
-    ];
-    const indexPath = path.join(this.memoryDir, "MEMORY.md");
-    writeFileSync(indexPath, masterLines.join("\n"), "utf-8");
-    return masterLines.join("\n");
   }
 
   /**

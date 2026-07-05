@@ -32,10 +32,11 @@
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   renameSync,
-  writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { atomicWrite } from "@paw/core";
 import type { AutoMemoryEntry } from "./auto-memory.js";
 
 /**
@@ -194,10 +195,9 @@ export function rebuildArchiveIndex(memoryDir: string): void {
       .length;
 
     // 写入简化的索引文件
-    writeFileSync(
+    atomicWrite(
       path.join(archiveDir, "MEMORY.md"),
       `# Archive Index\n\nArchived entries: ${archiveEntries}\n\n`,
-      "utf-8",
     );
   } catch {
     // best-effort：索引写入失败不应影响主流程
