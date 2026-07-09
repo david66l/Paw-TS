@@ -38,6 +38,8 @@ export function getEnvironmentSection(opts: {
   projectMemory?: ProjectMemory;
   /** 与当前上下文相关的历史记忆记录 */
   relevantMemories?: readonly MemoryRecord[];
+  /** 新记忆 Runtime 预渲染段（优先于 relevantMemories） */
+  memoryContextSection?: string;
   /** 待办事项文本 */
   todos?: string;
   /** 输出语言（如 "Chinese"） */
@@ -107,28 +109,30 @@ export function getEnvironmentSection(opts: {
     );
   }
 
-  // 对相关记忆做截断：如果设置了最大条数，只取前 N 条
-  const memories = opts.relevantMemories
-    ? opts.maxRelevantMemories !== undefined
-      ? opts.relevantMemories.slice(0, opts.maxRelevantMemories)
-      : opts.relevantMemories
-    : undefined;
+  // 新记忆 Runtime ContextBuilder 输出优先
+  if (opts.memoryContextSection?.trim()) {
+    lines.push("", opts.memoryContextSection.trim());
+  } else {
+    // 旧路径：对相关记忆做截断
+    const memories = opts.relevantMemories
+      ? opts.maxRelevantMemories !== undefined
+        ? opts.relevantMemories.slice(0, opts.maxRelevantMemories)
+        : opts.relevantMemories
+      : undefined;
 
-  // 如果有相关记忆，逐条渲染，第一条可附带截断后的详细内容
-  if (memories && memories.length > 0) {
-    lines.push("", "Relevant past experiences:");
-    for (let i = 0; i < memories.length; i++) {
-      const m = memories[i]!;
-      lines.push(`- ${m.title}: ${m.summary}`);
-      // 仅对第一条记忆展开详细内容（受 token 预算限制）
-      if (i === 0 && m.content.trim() && opts.includeMemoryDetail !== false) {
-        lines.push(
-          `  Detail:\n${truncateTextToTokenBudget(m.content, 300)}`,
-        );
-      }
-      // 列出关联文件，帮助 AI 定位上下文
-      if (m.relatedFiles.length > 0) {
-        lines.push(`  Related files: ${m.relatedFiles.join(", ")}`);
+    if (memories && memories.length > 0) {
+      lines.push("", "Relevant past experiences:");
+      for (let i = 0; i < memories.length; i++) {
+        const m = memories[i]!;
+        lines.push(`- ${m.title}: ${m.summary}`);
+        if (i === 0 && m.content.trim() && opts.includeMemoryDetail !== false) {
+          lines.push(
+            `  Detail:\n${truncateTextToTokenBudget(m.content, 300)}`,
+          );
+        }
+        if (m.relatedFiles.length > 0) {
+          lines.push(`  Related files: ${m.relatedFiles.join(", ")}`);
+        }
       }
     }
   }

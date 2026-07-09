@@ -23,6 +23,9 @@
  *    配置，默认指向 localhost:11434。
  */
 
+import fs from "node:fs";
+import path from "node:path";
+
 import {
   type CredentialProvider,
   defaultSettingsPath,
@@ -31,12 +34,47 @@ import {
   resolveApiKey,
   resolveBaseUrl,
   resolveModel,
+  type PawSettingsLocal,
 } from "@paw/settings";
 
 import { AnthropicCompatibleModel } from "./anthropic-compatible.js";
 import { FakeLanguageModel } from "./fake-model.js";
 import type { LanguageModel, ModelCapabilities } from "./language-model.js";
 import { OpenAICompatibleModel } from "./openai-compatible.js";
+
+/**
+ * Resolve settings for a workspace, with fallback to process.cwd().
+ *
+ * CLI often runs with `--root /tmp/...` (no settings there) while real
+ * credentials live in the project / current working directory.
+ */
+function loadSettingsForWorkspace(workspaceRoot: string): {
+  settings: PawSettingsLocal;
+  path: string;
+} {
+  const candidates = [
+    defaultSettingsPath(workspaceRoot),
+    defaultSettingsPath(process.cwd()),
+  ];
+  // de-dupe when workspaceRoot === cwd
+  const seen = new Set<string>();
+  const errors: string[] = [];
+  for (const settingsPath of candidates) {
+    const abs = path.resolve(settingsPath);
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    if (!fs.existsSync(abs)) {
+      errors.push(`not found: ${abs}`);
+      continue;
+    }
+    try {
+      return { settings: loadPawSettingsLocal(abs), path: abs };
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  throw new Error(errors.join("; ") || "no settings path candidates");
+}
 
 /**
  * 已知模型的上下文窗口和能力配置表。
@@ -203,8 +241,13 @@ export function createDefaultLanguageModel(
   workspaceRoot: string,
 ): LanguageModel {
   try {
-    const settingsPath = defaultSettingsPath(workspaceRoot);
-    const s = loadPawSettingsLocal(settingsPath);
+    const { settings: s, path: loadedFrom } =
+      loadSettingsForWorkspace(workspaceRoot);
+    if (path.resolve(loadedFrom) !== path.resolve(defaultSettingsPath(workspaceRoot))) {
+      console.warn(
+        `[paw] Settings not in workspace; using ${loadedFrom}`,
+      );
+    }
 
     // 单入口：显式 provider 优先，否则回退到 API key 自动检测
     const provider = s.provider?.trim().toLowerCase();

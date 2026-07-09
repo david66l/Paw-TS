@@ -66,3 +66,6 @@ export const SUB_AGENT_TOOL_NAME = "workspace.run_agent" as const;
 export function isSubAgentCall(call: AgentToolCallAction): boolean {
   return call.tool === SUB_AGENT_TOOL_NAME;
 }
+
+/** Context package user-message prefix (upsert key). */
+export const CONTEXT_PACKAGE_PREFIX = "[Context Package]";

@@ -1,7 +1,6 @@
 import path from "node:path";
 
 import {
-  AutoMemoryStore,
   type ToolErrorCode,
   makeToolError,
   renderSkillPrompt,
@@ -41,7 +40,7 @@ import {
   READ, LIST, SEARCH, GLOB, GREP, WRITE, EDIT, SHELL, APPLY_PATCH,
   WEBFETCH, WEBSEARCH, RUN_AGENT, RUN_SKILL,
   GIT_STATUS, GIT_DIFF, GIT_LOG, LSP, NOTEBOOK_EDIT, SYMBOL_SEARCH,
-  BRIEF, TODO_WRITE, MEMORY_LIST, MEMORY_READ,
+  BRIEF, TODO_WRITE, MEMORY_LIST, MEMORY_READ, MEMORY_SAVE,
 } from "./definitions.js";
 
 
@@ -913,17 +912,39 @@ export async function executeTool(
     };
   }
   if (tool === MEMORY_LIST) {
-    const store = new AutoMemoryStore({ workspaceRoot: ctx.workspaceRoot });
-    const entries = store.list().map((e) => ({
-      name: e.name,
-      type: e.type,
-      description: e.description,
-    }));
-    return {
-      ok: true,
-      payload: { entries, memory_dir: store.memoryDir },
-      summary: `memory.list: ${entries.length} entr${entries.length === 1 ? "y" : "ies"}`,
-    };
+    if (!ctx.memoryRuntime) {
+      return {
+        ok: false,
+        payload: {
+          error:
+            "memory Runtime unavailable (Postgres down or not initialized)",
+        },
+        summary: "memory.list: runtime unavailable",
+      };
+    }
+    try {
+      const records = await ctx.memoryRuntime.listMemories({ limit: 50 });
+      const entries = records.map((r) => ({
+        name: r.id,
+        type: r.type,
+        description: r.summary,
+        title: r.title,
+        confidence: r.confidence,
+      }));
+      return {
+        ok: true,
+        payload: { entries },
+        summary: `memory.list: ${entries.length} entr${entries.length === 1 ? "y" : "ies"}`,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        payload: {
+          error: err instanceof Error ? err.message : String(err),
+        },
+        summary: "memory.list: failed",
+      };
+    }
   }
   if (tool === MEMORY_READ) {
     const name = typeof rec.name === "string" ? rec.name.trim() : "";
@@ -934,20 +955,100 @@ export async function executeTool(
         summary: "memory.read: missing name",
       };
     }
-    const store = new AutoMemoryStore({ workspaceRoot: ctx.workspaceRoot });
-    const entry = store.load(name);
-    if (!entry) {
+    if (!ctx.memoryRuntime) {
       return {
         ok: false,
-        payload: { error: `memory not found: ${name}` },
-        summary: `memory.read: not found (${name})`,
+        payload: { error: "memory Runtime unavailable" },
+        summary: "memory.read: runtime unavailable",
       };
     }
-    return {
-      ok: true,
-      payload: entry,
-      summary: `memory.read: ${name}`,
-    };
+    try {
+      const record = await ctx.memoryRuntime.readMemory(name);
+      if (!record) {
+        return {
+          ok: false,
+          payload: { error: `memory not found: ${name}` },
+          summary: `memory.read: not found (${name})`,
+        };
+      }
+      return {
+        ok: true,
+        payload: record,
+        summary: `memory.read: ${record.title || name}`,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        payload: {
+          error: err instanceof Error ? err.message : String(err),
+        },
+        summary: "memory.read: failed",
+      };
+    }
+  }
+  if (tool === MEMORY_SAVE) {
+    const name = typeof rec.name === "string" ? rec.name.trim() : "";
+    const content = typeof rec.content === "string" ? rec.content : "";
+    const memType =
+      typeof rec.type === "string" &&
+      ["user", "feedback", "project", "reference"].includes(rec.type)
+        ? (rec.type as "user" | "feedback" | "project" | "reference")
+        : "project";
+    if (!name) {
+      return {
+        ok: false,
+        payload: { error: "missing name" },
+        summary: "memory.save: missing name",
+      };
+    }
+    if (!content) {
+      return {
+        ok: false,
+        payload: { error: "missing content" },
+        summary: "memory.save: missing content",
+      };
+    }
+    if (!ctx.memoryRuntime) {
+      return {
+        ok: false,
+        payload: { error: "memory Runtime unavailable" },
+        summary: "memory.save: runtime unavailable",
+      };
+    }
+    const description = content.replace(/\n/g, " ").slice(0, 120).trim();
+    try {
+      const typeMap: Record<string, string> = {
+        user: "user_preference",
+        feedback: "user_preference",
+        project: "project_knowledge",
+        reference: "project_knowledge",
+      };
+      const saved = await ctx.memoryRuntime.saveMemory({
+        title: name,
+        summary: description,
+        content,
+        type: typeMap[memType] ?? "project_knowledge",
+        taskId: ctx.memoryTaskId,
+      });
+      return {
+        ok: true,
+        payload: {
+          name,
+          candidateId: saved.candidateId,
+          decision: saved.decision,
+          memoryId: saved.memoryId,
+        },
+        summary: `memory.save: ${saved.decisionStatus} "${name}"`,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        payload: {
+          error: err instanceof Error ? err.message : String(err),
+        },
+        summary: "memory.save: failed",
+      };
+    }
   }
   return {
     ok: false,

@@ -51,13 +51,11 @@ import {
   type AppState,
   type AppStateStore,
   type AgentToolCallAction,
-  AutoMemoryStore,
   ContextCompactor,
   CONTEXT_SUMMARY_PREFIX,
   ContextManager,
   type CostTracker,
   MAX_STEPS_WARNING,
-  retrieveMemories,
   type ModelTokenUsage,
   type RunEvent,
   type RunEventEnvelope,
@@ -68,13 +66,10 @@ import {
   SkillRegistry,
   type SkillRegistry as SkillRegistryType,
   type TodoStore,
-  UnifiedMemoryStore,
   stripContextSummaryMessages,
   buildSystemPromptWithBudget,
   allocateContextBudget,
-  buildRetrievalSignalsFromMessages,
   extractCleanMemoryQuery,
-  extractFilePaths,
   findPawRoot,
   formatTodosForPrompt,
   loadProjectMemory,
@@ -123,29 +118,23 @@ import { type PlanItem, TaskPlanner } from "@paw/store";
 // ─────────────────────────────────────────────────────────────
 // orchestrator 内部模块 — 从单体拆分出的职责单元
 // ─────────────────────────────────────────────────────────────
-import {
-  computeQueryEmbedding,
-  readPawSettingsLocal,
-} from "./settings.js";
 
 import {
+  type CodeContextBlock,
   type WorkspaceWatcher,
   discoverContext,
   extractAtMentions,
   gitStatus,
   loadPawMd,
   resolveMentions,
+  selectCodeContext,
 } from "@paw/workspace";
 
 import { runCompressionAgent } from "./compression-agent.js";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
+import { CONTEXT_PACKAGE_PREFIX } from "./orchestrator/constants.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
-import { runMemoryExtractionAfterRun } from "./orchestrator/memory-extraction.js";
-import {
-  extractSessionHighlightsToAutoMemory,
-  maybeGenerateShortSessionMemory,
-} from "./orchestrator/session-summarizer.js";
 import type {
   PhaseContext,
   SharedContext,
@@ -158,15 +147,16 @@ import {
   toolCallDedupKey,
 } from "./parse-agent-action.js";
 import { resolveMaxSteps } from "./resolve-max-steps.js";
-import {
-  resolveMemoryRetrievalSettings,
-  toRetrieveMemoriesOptions,
-} from "./resolve-memory-retrieval.js";
 import { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";
 import {
   CircuitBreaker,
   CircuitBreakerOpenError,
 } from "./resilience/circuit-breaker.js";
+import { TaskStateManager } from "./task-state.js";
+import {
+  createMemoryRuntime,
+  type MemoryRuntime,
+} from "@paw/memory";
 
 // ═════════════════════════════════════════════════════════════
 // 公开接口
@@ -306,9 +296,17 @@ export class AgentOrchestrator {
   private readonly auxiliaryModel?: LanguageModel;
   /** 压缩冷却剩余轮数：每轮递减，>0 时禁止压缩 */
   private compactCooldownTurns = 0;
+
+  // 记忆 Runtime（Postgres）
+  private _memoryRuntime: MemoryRuntime | null = null;
+  private _memoryTaskId: string | null = null;
+  private _memoryContextSection = "";
+  private _lastDynamicMemoryGoal = "";
+  private _contextPackageCode: readonly CodeContextBlock[] = [];
   /** 流式恢复文件路径：模型输出时实时写盘，崩了可用于恢复 */
   private _streamRecoveryPath?: string;
   private readonly retrySleep: (ms: number) => Promise<void>;
+  /** @deprecated 长期记忆写入已由 MemoryRuntime.completeTask 接管 */
   private readonly memoryExtraction: "background" | "await" | "off";
   /** 熔断器映射：key = model.label，每个模型独立熔断 */
   private readonly circuitBreakers = new Map<string, CircuitBreaker>();
@@ -339,6 +337,7 @@ export class AgentOrchestrator {
     this.retrySleep =
       opts?.retrySleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.memoryExtraction = opts?.memoryExtraction ?? "background";
+    void this.memoryExtraction; // kept for API compat; writes go through Runtime
     this.evalHooks = opts?.evalHooks;
     // 如果传入了 skillsDir，从目录批量加载 skill 并注册
     if (opts?.skillsDir) {
@@ -478,13 +477,13 @@ export class AgentOrchestrator {
         toolNameMap,
         ctxMgr,
         planner,
-        autoMemoryStore,
         sessionMemoryStore,
         compactor,
         emit,
         emitRunMetrics: _emitRunMetrics,
         checkpointSeq,
         shellSandbox,
+        taskState,
       } = init;
       emitRunMetrics = _emitRunMetrics;
       const signal = spec.abortSignal;
@@ -517,7 +516,6 @@ export class AgentOrchestrator {
       // 捕获到闭包中，供 executeTurn 使用
       const turnCompactor = compactor;
       const turnSessionMemoryStore = sessionMemoryStore;
-      const turnAutoMemoryStore = autoMemoryStore;
 
       // 初始化空计划
       planner.createPlan(runId, []);
@@ -535,11 +533,12 @@ export class AgentOrchestrator {
             workspaceRoot,
             turn,
             maxSteps,
-            ctxMgr,
-            planner,
-            {
-              status: "failed",
-              message,
+              ctxMgr,
+              planner,
+              taskState,
+              {
+                status: "failed",
+                message,
             },
           );
           emit({ type: "run.completed", status: "failed", message });
@@ -561,10 +560,17 @@ export class AgentOrchestrator {
           toolNameMap,
           ctxMgr,
           planner,
+          taskState,
           emit,
           checkpointSeq,
           specGoal: spec.goal,
           shellSandbox,
+          ...(this._memoryRuntime
+            ? { memoryRuntime: this._memoryRuntime }
+            : {}),
+          ...(this._memoryTaskId
+            ? { memoryTaskId: this._memoryTaskId }
+            : {}),
         };
 
         // 执行一轮
@@ -574,7 +580,6 @@ export class AgentOrchestrator {
           agentGroup,
           turnCompactor,
           turnSessionMemoryStore,
-          turnAutoMemoryStore,
         );
 
         // 状态机判断：
@@ -596,6 +601,7 @@ export class AgentOrchestrator {
             maxSteps,
             ctxMgr,
             planner,
+            taskState,
             {
               status: state.type,
               message: state.message,
@@ -608,47 +614,25 @@ export class AgentOrchestrator {
           });
           emitRunMetrics(state.type);
 
-          if (state.type === "completed") {
-            // 运行完成后提取记忆（根据 memoryExtraction 配置决定后台还是同步）
-            await this.maybeExtractMemoriesAfterRun(
-              runId,
-              ctxMgr,
-              turnAutoMemoryStore,
-              emit,
-              workspaceRoot,
-            );
-
-            // 对短小高价值的 Run，生成轻量级会话记忆
-            // 提取文件路径和错误信息作为记忆的补充上下文
-            if (this.auxiliaryModel) {
-              const allMsgs = ctxMgr.buildMessages();
-              const filePaths = new Set<string>();
-              const errors: string[] = [];
-              for (const msg of allMsgs) {
-                for (const fp of extractFilePaths(msg.content)) {
-                  filePaths.add(fp);
-                }
-                if (
-                  msg.role === "user" &&
-                  msg.content.startsWith("[Tool ") &&
-                  msg.content.includes("failed")
-                ) {
-                  errors.push(msg.content.slice(0, 200));
-                }
+          if (state.type === "completed" || state.type === "failed") {
+            // 唯一长期记忆写入：MemoryRuntime.completeTask
+            if (this._memoryRuntime && this._memoryTaskId) {
+              try {
+                const writeResult = await this._memoryRuntime.completeTask({
+                  taskId: this._memoryTaskId,
+                  status: state.type === "completed" ? "completed" : "failed",
+                  finalMessage: state.message,
+                });
+                emit({
+                  type: "memory.extracted",
+                  runId,
+                  entries: writeResult.writtenMemoryIds.length,
+                  rejected:
+                    writeResult.rejected + writeResult.pendingReview,
+                });
+              } catch {
+                /* best-effort */
               }
-              // best-effort: 失败了不影响主流程
-              maybeGenerateShortSessionMemory({
-                runId,
-                goal: spec.goal,
-                turn: turn + 1,
-                finalText: state.message,
-                filePaths: [...filePaths],
-                errors,
-                model: this.auxiliaryModel,
-                workspaceRoot,
-              }).catch(() => {
-                /* best-effort：会话记忆生成失败不应影响 Run 结果 */
-              });
             }
           }
           return { runId, status: state.type, message: state.message };
@@ -656,6 +640,46 @@ export class AgentOrchestrator {
       }
 
       // 循环耗尽：maxSteps 轮后仍未得到 final 动作
+      // 若已用过工具且有 assistant 文本，降级为 completed（避免最后一轮 nudge 浪费后整 run 变 failed）
+      const lastAssistant = [...ctxMgr.buildMessages()]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.content.trim().length > 0);
+      const softMessage = lastAssistant?.content.trim();
+      if (flags.hasEverUsedTools && softMessage) {
+        const message = softMessage;
+        this.saveState(
+          runId,
+          spec.goal,
+          workspaceRoot,
+          maxSteps,
+          maxSteps,
+          ctxMgr,
+          planner,
+          taskState,
+          { status: "completed", message },
+        );
+        emit({ type: "run.completed", status: "completed", message });
+        emitRunMetrics?.("completed");
+        if (this._memoryRuntime && this._memoryTaskId) {
+          try {
+            const writeResult = await this._memoryRuntime.completeTask({
+              taskId: this._memoryTaskId,
+              status: "completed",
+              finalMessage: message,
+            });
+            emit({
+              type: "memory.extracted",
+              runId,
+              entries: writeResult.writtenMemoryIds.length,
+              rejected: writeResult.rejected + writeResult.pendingReview,
+            });
+          } catch {
+            /* best-effort */
+          }
+        }
+        return { runId, status: "completed", message };
+      }
+
       const exhaustedMessage = "internal: model loop exhausted without return";
       this.saveState(
         runId,
@@ -665,6 +689,7 @@ export class AgentOrchestrator {
         maxSteps,
         ctxMgr,
         planner,
+        taskState,
         {
           status: "failed",
           message: exhaustedMessage,
@@ -681,7 +706,7 @@ export class AgentOrchestrator {
             : e.message
           : String(e);
       if (init) {
-        const { runId, workspaceRoot, maxSteps, ctxMgr, planner, emit } = init;
+        const { runId, workspaceRoot, maxSteps, ctxMgr, planner, taskState, emit } = init;
         this.saveState(
           runId,
           spec.goal,
@@ -690,6 +715,7 @@ export class AgentOrchestrator {
           maxSteps,
           ctxMgr,
           planner,
+          taskState,
           {
             status: "failed",
             message,
@@ -869,7 +895,6 @@ export class AgentOrchestrator {
     ctx: PhaseContext,
     compactor: ContextCompactor,
     sessionMemoryStore: SessionMemoryStore,
-    _autoMemoryStore: AutoMemoryStore,
     budgetSnapshot: ContextBudgetSnapshot,
   ): Promise<void> {
     const { runId, workspaceRoot, signal, model, ctxMgr, emit } = ctx;
@@ -995,14 +1020,6 @@ export class AgentOrchestrator {
       // 设置冷却期：避免连续压缩
       this.compactCooldownTurns = AgentOrchestrator.COMPACT_COOLDOWN_TURNS;
 
-      // 从会话记忆中提取决策和错误信息到永久记忆（best-effort）
-      extractSessionHighlightsToAutoMemory({
-        sessionMemory: memoryToSave,
-        autoMemoryStore: _autoMemoryStore,
-        workspaceRoot,
-      }).catch(() => {
-        /* best-effort：记忆提取失败不阻塞主流程 */
-      });
     } catch (err) {
       compactor.recordResult(
         historyTokensBeforeCompact,
@@ -1027,7 +1044,6 @@ export class AgentOrchestrator {
     ctxMgr: ContextManager,
     compactor: ContextCompactor,
     sessionMemoryStore: SessionMemoryStore,
-    _autoMemoryStore: AutoMemoryStore,
     workspaceRoot: string,
     runId: string,
     signal: AbortSignal | undefined,
@@ -1097,7 +1113,7 @@ export class AgentOrchestrator {
         compactor.recordResult(beforeTokens, beforeTokens, false);
         emit({
           type: "compression.skipped",
-          reason: "insufficient savings (<15%)",
+          reason: "insufficient compression savings (<15%)",
         });
         return;
       }
@@ -1114,14 +1130,6 @@ export class AgentOrchestrator {
         summaryTokens: Math.ceil(summary.length / 4),
       });
       compactor.recordResult(beforeTokens, afterTokens, true);
-
-      extractSessionHighlightsToAutoMemory({
-        sessionMemory,
-        autoMemoryStore: _autoMemoryStore,
-        workspaceRoot,
-      }).catch(() => {
-        /* best-effort */
-      });
     } catch (err) {
       compactor.recordResult(beforeTokens, beforeTokens, false);
       emit({
@@ -1157,7 +1165,6 @@ export class AgentOrchestrator {
     agentGroup: AgentGroup | undefined,
     compactor: ContextCompactor,
     sessionMemoryStore: SessionMemoryStore,
-    _autoMemoryStore: AutoMemoryStore,
   ): Promise<TurnState> {
     const {
       runId,
@@ -1176,6 +1183,8 @@ export class AgentOrchestrator {
     if (this.compactCooldownTurns > 0) {
       this.compactCooldownTurns--;
     }
+
+    this.refreshContextPackage(ctx);
 
     // 发出轮次 tick 事件（TUI 用此更新进度条和 token 计数）
     emit({
@@ -1225,9 +1234,38 @@ export class AgentOrchestrator {
       ctx,
       compactor,
       sessionMemoryStore,
-      _autoMemoryStore,
       budgetSnapshot,
     );
+
+    // ── goal 变化时刷新记忆上下文 ──
+    if (this._memoryRuntime && this._memoryTaskId) {
+      const goalChanged = specGoal !== this._lastDynamicMemoryGoal;
+      if (goalChanged && ctx.turn > 0) {
+        this._lastDynamicMemoryGoal = specGoal;
+        try {
+          const section = await this._memoryRuntime.buildContextSection({
+            taskId: this._memoryTaskId,
+            query: extractCleanMemoryQuery(specGoal),
+            tokenBudget: 1500,
+            currentUserRequest: specGoal,
+            limit: 5,
+          });
+          this._memoryContextSection = section.promptSection;
+          if (section.promptSection) {
+            ctxMgr.addUser(
+              `[Memory refresh]\n${section.promptSection.slice(0, 2000)}`,
+            );
+            emit({
+              type: "memory.turn.inject",
+              recordCount: section.items.length,
+              tokens: section.tokens,
+            });
+          }
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
 
     // 步骤 4：注入 max-steps 警告
     // 当剩余轮数 ≤ 3 且已至少跑了 5 轮时，提示模型加快进度
@@ -1291,6 +1329,7 @@ export class AgentOrchestrator {
             maxSteps,
             ctxMgr,
             planner,
+            ctx.taskState,
           ),
         agentGroup,
         childPolicy: this.childPolicy,
@@ -1298,9 +1337,56 @@ export class AgentOrchestrator {
         skillRegistry: this.skillRegistry,
         watcher: this.watcher,
         evalHooks: this.evalHooks,
+        memoryRuntime: this._memoryRuntime ?? undefined,
+        memoryTaskId: this._memoryTaskId ?? undefined,
       },
     );
+    // 子 Agent 摘要 → WorkingMemory
+    if (
+      actionResult.subResults &&
+      actionResult.subResults.length > 0 &&
+      this._memoryRuntime &&
+      this._memoryTaskId
+    ) {
+      for (const sr of actionResult.subResults) {
+        if (!sr.summary || sr.summary.length < 20) continue;
+        await this._memoryRuntime
+          .patchWorkingMemory({
+            taskId: this._memoryTaskId,
+            patch: {
+              nextStep: `Sub-agent result: ${sr.summary.slice(0, 200)}`,
+            },
+          })
+          .catch(() => {});
+      }
+    }
     return actionResult.state;
+  }
+
+  private refreshContextPackage(ctx: PhaseContext): void {
+    const codeLines =
+      this._contextPackageCode.length > 0
+        ? [
+            "",
+            "[Relevant Code]",
+            ...this._contextPackageCode.slice(0, 5).map((b) => {
+              const parts = [`- ${b.path}: ${b.reason}`];
+              if (b.symbols?.length)
+                parts.push(`  symbols=${b.symbols.slice(0, 8).join(", ")}`);
+              return parts.join("\n");
+            }),
+          ]
+        : [];
+    const taskSnap = ctx.taskState.snapshot();
+    const text = [
+      CONTEXT_PACKAGE_PREFIX,
+      `[Task] ${taskSnap.goal}`,
+      this._memoryContextSection || "",
+      ...codeLines,
+    ]
+      .filter((line) => line !== undefined)
+      .join("\n");
+    ctx.ctxMgr.upsertUserByPrefix(CONTEXT_PACKAGE_PREFIX, text);
   }
 
   // ─────────────────────────────────────────────────────────
@@ -1366,6 +1452,7 @@ export class AgentOrchestrator {
     maxSteps: number,
     ctxMgr: ContextManager,
     planner: TaskPlanner,
+    taskState: TaskStateManager,
     outcome?: { status: "completed" | "failed"; message: string },
   ): void {
     if (!this.appStateStore) return;
@@ -1393,6 +1480,7 @@ export class AgentOrchestrator {
         ? { plan: { revision: plan.revision, items: plan.items as unknown[] } }
         : {}),
       ...(this.todoStore ? { todos: this.todoStore.items } : {}),
+      taskState: taskState.snapshot(),
       ...(outcome ? { outcome } : {}),
       savedAt: Date.now(),
     };
@@ -1559,6 +1647,9 @@ export class AgentOrchestrator {
           recursive: true,
         });
         recoveryStream = fs.createWriteStream(this._streamRecoveryPath);
+        recoveryStream.on("error", () => {
+          // best-effort crash recovery; stream failures must not fail the run.
+        });
       }
 
       for await (const chunk of streamFn.call(model, messages, modelOpts)) {
@@ -1599,7 +1690,11 @@ export class AgentOrchestrator {
 
       // 流正常结束：关流、删恢复文件（acc 里有全文，不需要它了）
       if (recoveryStream) {
+        const closePromise = new Promise<void>((resolve) => {
+          recoveryStream!.once("close", resolve);
+        });
         recoveryStream.end();
+        await closePromise;
         fsp.unlink(this._streamRecoveryPath!).catch(() => {});
       }
 
@@ -1943,7 +2038,7 @@ export class AgentOrchestrator {
     toolNameMap: Map<string, string>;
     ctxMgr: ContextManager;
     planner: TaskPlanner;
-    autoMemoryStore: AutoMemoryStore;
+    taskState: TaskStateManager;
     sessionMemoryStore: SessionMemoryStore;
     compactor: ContextCompactor;
     emit: (event: RunEvent) => void;
@@ -2056,6 +2151,11 @@ export class AgentOrchestrator {
       this.overrideModel ?? createDefaultLanguageModel(workspaceRoot);
     const ctxMgr = this.contextManager ?? new ContextManager();
     const planner = new TaskPlanner();
+    const taskState = new TaskStateManager(
+      spec.goal,
+      spec.resumeFromState?.taskState,
+    );
+    this._contextPackageCode = [];
     let startTurn = 0;
     const sessionMemoryStore = new SessionMemoryStore({ workspaceRoot });
     const compactor = new ContextCompactor({}, ctxMgr.estimator);
@@ -2109,7 +2209,6 @@ export class AgentOrchestrator {
         ctxMgr.addUser(spec.goal);
       }
 
-      const childAutoMemoryStore = new AutoMemoryStore({ workspaceRoot });
       const initBudget = AgentOrchestrator.measureBudget(
         ctxMgr,
         toolDefs,
@@ -2129,7 +2228,7 @@ export class AgentOrchestrator {
         toolNameMap,
         ctxMgr,
         planner,
-        autoMemoryStore: childAutoMemoryStore,
+        taskState,
         sessionMemoryStore,
         compactor,
         emit,
@@ -2167,92 +2266,84 @@ export class AgentOrchestrator {
       }
     }
 
-    // ── 记忆检索 ──
-    // 从 spec.goal 中提取干净的查询文本（去除恢复会话带来的历史上下文噪音）
+    // ── 记忆 Runtime（唯一在线路径）──
     const cleanMemoryQuery = extractCleanMemoryQuery(spec.goal);
+    let memoryContextSection: string | undefined;
+    let selectedForEvent: {
+      id: string;
+      title: string;
+      source: string;
+      summary: string;
+      relatedFiles: readonly string[];
+    }[] = [];
 
-    const autoMemoryStore = new AutoMemoryStore({ workspaceRoot });
-    const memoryIndex = (autoMemoryStore.loadAllIndexShards() ?? autoMemoryStore.loadIndex(200)) ?? undefined;
+    this._memoryRuntime = null;
+    this._memoryTaskId = null;
+    this._memoryContextSection = "";
+    this._lastDynamicMemoryGoal = "";
 
-    // 读取会话池大小配置（默认 10 个历史会话参与检索）
-    const poolSettings = readPawSettingsLocal(workspaceRoot) as
-      | Record<string, unknown>
-      | undefined;
-    const sessionPoolSize =
-      typeof poolSettings?.session_pool_size === "number" &&
-      poolSettings.session_pool_size > 0
-        ? poolSettings.session_pool_size
-        : 10;
+    try {
+      const runtime = await createMemoryRuntime({ workspaceRoot });
+      const ok = await runtime.ping();
+      if (!ok) {
+        emit({
+          type: "memory.retrieve.done",
+          query: cleanMemoryQuery,
+          totalCandidates: 0,
+          selectedCount: 0,
+          scores: [],
+          injectedTokens: 0,
+          selectedMemories: [],
+          retrievalMode: "keyword",
+        });
+      } else {
+        const begun = await runtime.beginTask({
+          runId,
+          goal: cleanMemoryQuery || spec.goal,
+          title: (cleanMemoryQuery || spec.goal).slice(0, 120),
+        });
+        this._memoryRuntime = runtime;
+        this._memoryTaskId = begun.taskId;
+        this._lastDynamicMemoryGoal = spec.goal;
 
-    // UnifiedMemoryStore：统一了项目记忆和会话记忆的查询接口
-    const unifiedStore = new UnifiedMemoryStore({
-      workspaceRoot,
-      sessionId: runId,
-      sessionPoolSize,
-    });
-    const memoryRetrievalSettings = resolveMemoryRetrievalSettings(workspaceRoot);
-
-    // 从历史消息中提取检索信号（最近使用的文件、工具名、错误信息等）
-    const historyForSignals = spec.resumeFromState?.messages ?? [];
-    const retrievalSignals = buildRetrievalSignalsFromMessages(historyForSignals);
-    const queryFiles = [
-      ...new Set([
-        ...extractFilePaths(cleanMemoryQuery),
-        ...retrievalSignals.recentFiles,
-      ]),
-    ];
-
-    // 计算查询 embedding（用于语义相似度增强，best-effort）
-    const queryEmbedding = await computeQueryEmbedding(
-      workspaceRoot,
-      cleanMemoryQuery,
-    );
-
-    // 构造检索查询
-    const retrievalQuery = {
-      goal: cleanMemoryQuery,
-      currentFile: queryFiles[0],
-      recentFiles: queryFiles,
-      recentToolNames: retrievalSignals.recentToolNames,
-      errorMessage: retrievalSignals.errorMessage,
-      workspaceRoot,
-      limit: 5,
-      maxTokens: 1500,
-      ...(queryEmbedding ? { queryEmbedding } : {}),
-    };
-
-    // 执行记忆检索（关键词 + 可选的语义检索）
-    const memoryResult = await retrieveMemories(
-      unifiedStore,
-      retrievalQuery,
-      toRetrieveMemoriesOptions(memoryRetrievalSettings, {
-        workspaceRoot,
-        auxiliaryModel: this.auxiliaryModel,
-        signal: spec.abortSignal,
-      }),
-    );
-
-    emit({
-      type: "memory.retrieve.done",
-      query: cleanMemoryQuery,
-      totalCandidates: memoryResult.totalCandidates,
-      selectedCount: memoryResult.records.length,
-      scores: memoryResult.scores,
-      injectedTokens: memoryResult.injectedTokens,
-      retrievalMode: memoryResult.retrievalMode ?? memoryRetrievalSettings.mode,
-      usedLlmFallback: memoryResult.usedLlmFallback,
-      embeddingCacheHits: memoryResult.embeddingCacheHits,
-      embeddingCacheMisses: memoryResult.embeddingCacheMisses,
-      selectedMemories: memoryResult.records.map((record) => ({
-        id: record.id,
-        title: record.title,
-        source: record.source,
-        summary: record.summary,
-        relatedFiles: record.relatedFiles,
-      })),
-    });
-
-    const autoMemoryStoreForRun = autoMemoryStore;
+        const section = await runtime.buildContextSection({
+          taskId: begun.taskId,
+          query: cleanMemoryQuery || spec.goal,
+          tokenBudget: 1500,
+          currentUserRequest: cleanMemoryQuery || spec.goal,
+          limit: 8,
+        });
+        this._memoryContextSection = section.promptSection;
+        memoryContextSection = section.promptSection;
+        selectedForEvent = section.items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          source: "auto",
+          summary: item.title,
+          relatedFiles: [],
+        }));
+        emit({
+          type: "memory.retrieve.done",
+          query: cleanMemoryQuery,
+          totalCandidates: section.items.length,
+          selectedCount: section.items.length,
+          scores: section.items.map((i) => i.score),
+          injectedTokens: section.tokens,
+          retrievalMode: "keyword",
+          selectedMemories: selectedForEvent,
+        });
+      }
+    } catch {
+      emit({
+        type: "memory.retrieve.done",
+        query: cleanMemoryQuery,
+        totalCandidates: 0,
+        selectedCount: 0,
+        scores: [],
+        injectedTokens: 0,
+        selectedMemories: [],
+      });
+    }
 
     // ── Git 状态 ──
     // 获取当前分支、ahead/behind、暂存/修改/未跟踪文件数
@@ -2295,13 +2386,12 @@ export class AgentOrchestrator {
         gitStatus: gitStatusLine,
         pawMd: pawMdContent,
         projectMemory,
-        relevantMemories:
-          memoryResult.records.length > 0 ? memoryResult.records : undefined,
-        memoryIndex,
+        memoryContextSection,
         todos: todosText,
         modelLabel: model.label,
         modelId: model.label,
-        memoryDir: autoMemoryStoreForRun.memoryDir,
+        // Runtime 记忆：不再注入旧 file 目录路径 / MEMORY.md 长说明
+        memoryDir: "",
         hasAutoMemory: true,
       },
       systemBudget,
@@ -2322,6 +2412,8 @@ export class AgentOrchestrator {
     }
 
     // ── 断点恢复 or 全新启动 ──
+    const mentionedPaths = extractAtMentions(spec.goal);
+    this._contextPackageCode = selectCodeContext(workspaceRoot, spec.goal, mentionedPaths);
     if (spec.resumeFromState) {
       // 断点恢复：重建 system prompt，恢复历史消息和计划
       const s = spec.resumeFromState;
@@ -2358,7 +2450,6 @@ export class AgentOrchestrator {
             ctxMgr,
             compactor,
             sessionMemoryStore,
-            autoMemoryStore,
             workspaceRoot,
             runId,
             spec.abortSignal ?? undefined,
@@ -2378,6 +2469,7 @@ export class AgentOrchestrator {
             [],
             "resume",
           );
+          taskState.setPlan(s.plan.items);
         } catch {
           /* ignore plan restore errors */
         }
@@ -2400,7 +2492,6 @@ export class AgentOrchestrator {
         workspaceRoot,
         spec.goal,
       );
-      const mentionedPaths = extractAtMentions(spec.goal);
       // 自动上下文发现：根据 goal 中的关键词和文件路径搜索相关代码上下文
       const autoCtx = discoverContext(workspaceRoot, spec.goal, mentionedPaths);
       let userContent = goalMentions.content;
@@ -2429,7 +2520,7 @@ export class AgentOrchestrator {
       toolNameMap,
       ctxMgr,
       planner,
-      autoMemoryStore: autoMemoryStoreForRun,
+      taskState,
       sessionMemoryStore,
       compactor,
       emit,
@@ -2440,59 +2531,6 @@ export class AgentOrchestrator {
     };
   }
 
-  // ─────────────────────────────────────────────────────────
-  // 运行后记忆提取
-  // ─────────────────────────────────────────────────────────
-
-  /**
-   * Run 完成后提取记忆。
-   *
-   * 根据 memoryExtraction 配置：
-   * - "off"：不提取
-   * - "background"：后台异步提取（默认），不阻塞响应
-   * - "await"：同步等待提取完成
-   *
-   * 记忆提取使用辅助模型分析对话内容，提取关键决策、错误和经验教训，
-   * 存储到 AutoMemory 中供未来检索。
-   */
-  private async maybeExtractMemoriesAfterRun(
-    runId: string,
-    ctxMgr: ContextManager,
-    autoMemoryStore: AutoMemoryStore,
-    emit: (event: RunEvent) => void,
-    workspaceRoot: string,
-  ): Promise<void> {
-    if (this.memoryExtraction === "off" || !this.auxiliaryModel) {
-      return;
-    }
-
-    const work = runMemoryExtractionAfterRun({
-      runId,
-      ctxMgr,
-      autoMemoryStore,
-      model: this.auxiliaryModel,
-      auxiliaryModel: this.auxiliaryModel,
-      emit,
-      workspaceRoot,
-    }).catch(() => {
-      /* 后台记忆提取失败不能影响 Run 结果 */
-    });
-
-    if (this.memoryExtraction === "await") {
-      await work;
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────
-  // 上下文预算工具
-  // ─────────────────────────────────────────────────────────
-
-  /**
-   * 估算工具的 JSON Schema 定义占用的 token 数。
-   *
-   * 大多数 LLM provider 对工具定义（tools 参数）单独计费，
-   * 不纳入 chat messages 的 token 统计。这里单独计算以便预算管理。
-   */
   private static estimateToolTokens(
     tools: readonly import("@paw/models").ToolDefinition[],
     estimator: TokenEstimator,

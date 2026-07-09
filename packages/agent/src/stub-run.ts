@@ -206,21 +206,73 @@ export async function runStubRun(
   return doRun(goal, workspaceRoot, options);
 }
 
-export function formatDoctorOutput(root: string): {
+/**
+ * 诊断工作区：settings + 记忆后端健康。
+ *
+ * 记忆部分：
+ * - db（默认）：Postgres ping + migration 状态（pending/失败时 ok=false）
+ * - file：提示已使用旧路径
+ */
+export async function formatDoctorOutput(root: string): Promise<{
   ok: boolean;
   text: string;
-} {
+}> {
   const settingsPath = defaultSettingsPath(root);
+  const lines: string[] = [
+    `workspace: ${root}`,
+    `settings:  ${settingsPath}`,
+  ];
+
+  let settingsOk = true;
+  let settingsObj: Record<string, unknown> | undefined;
+
   try {
     const s = loadPawSettingsLocal(settingsPath);
-    const text = [
-      `workspace: ${root}`,
-      `settings:  ${settingsPath}`,
-      JSON.stringify(redactSettingsForDisplay(s), null, 2),
-    ].join("\n");
-    return { ok: true, text };
+    settingsObj = s as Record<string, unknown>;
+    lines.push(JSON.stringify(redactSettingsForDisplay(s), null, 2));
   } catch (e) {
-    return { ok: false, text: e instanceof Error ? e.message : String(e) };
+    settingsOk = false;
+    lines.push(
+      `settings error: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  // 记忆健康检查
+  try {
+    const {
+      checkMemoryHealth,
+      resolveMemoryBackendFromSettings,
+    } = await import("@paw/memory");
+    const backend = resolveMemoryBackendFromSettings(settingsObj);
+    const health = await checkMemoryHealth({
+      backend,
+      closeConnection: true,
+    });
+    lines.push("");
+    lines.push("── memory ──");
+    lines.push(`backend: ${health.backend}`);
+    if (health.backend === "db") {
+      lines.push(
+        `DATABASE_URL: ${health.databaseUrlConfigured ? health.databaseUrlDisplay : "(default) " + health.databaseUrlDisplay}`,
+      );
+      lines.push(`postgres ping: ${health.pingOk ? "ok" : "FAILED"}`);
+      lines.push(
+        `migrations: ${health.migrationsApplied} applied, ${health.migrationsPending} pending / ${health.totalMigrations} total`,
+      );
+    }
+    for (const m of health.messages) {
+      lines.push(m);
+    }
+
+    const ok = settingsOk && health.ok;
+    return { ok, text: lines.join("\n") };
+  } catch (e) {
+    lines.push("");
+    lines.push("── memory ──");
+    lines.push(
+      `health check error: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return { ok: false, text: lines.join("\n") };
   }
 }
 

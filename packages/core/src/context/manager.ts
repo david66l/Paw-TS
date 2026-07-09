@@ -108,6 +108,21 @@ export class ContextManager {
     this.maybeTruncate();
   }
 
+  upsertUserByPrefix(prefix: string, content: string): void {
+    const sanitized = isSystemInjectedMessage(content)
+      ? content
+      : sanitizeUserInput(content).text;
+    const idx = this.history.findIndex(
+      (m) => m.role === "user" && m.content.startsWith(prefix),
+    );
+    if (idx >= 0) {
+      this.history[idx] = { role: "user", content: sanitized };
+    } else {
+      this.history.push({ role: "user", content: sanitized });
+    }
+    this.maybeTruncate();
+  }
+
   /** 追加 assistant 消息（可选 thinking 内容）。 */
   addAssistant(content: string, thinking?: string): void {
     const msg: ChatMessage = thinking

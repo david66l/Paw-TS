@@ -27,6 +27,7 @@ import { toolRequiresApproval } from "@paw/harness";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
 import { SUB_AGENT_TOOL_NAME } from "./constants.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
+import type { TaskStateManager } from "../task-state.js";
 
 /** 工具执行的环境上下文 */
 interface ToolExecutionContext {
@@ -47,6 +48,9 @@ interface ToolExecutionContext {
   readonly childPolicy?: "read_only" | "read_write";
   /** Shell 沙箱配置 */
   readonly shellSandbox?: ShellSandboxConfig;
+  /** 可插拔记忆后端（注入到 HarnessContext 供 memory.save 使用） */
+  readonly memoryRuntime?: HarnessContext["memoryRuntime"];
+  readonly memoryTaskId?: string;
 }
 
 /** 审批上下文 */
@@ -243,6 +247,12 @@ export async function executeToolCalls(
           ...(toolCtx.shellSandbox
             ? { shellSandbox: toolCtx.shellSandbox }
             : {}),
+          ...(toolCtx.memoryRuntime
+            ? { memoryRuntime: toolCtx.memoryRuntime }
+            : {}),
+          ...(toolCtx.memoryTaskId
+            ? { memoryTaskId: toolCtx.memoryTaskId }
+            : {}),
         },
         call.tool,
         call.args,
@@ -280,6 +290,7 @@ export function finalizeToolExecution(
     readonly specGoal: string;
     readonly text: string;
     readonly thinking?: string;
+    readonly taskState?: TaskStateManager;
     readonly saveStateFn: () => void;
   },
 ): {
@@ -290,6 +301,7 @@ export function finalizeToolExecution(
   for (let i = 0; i < calls.length; i++) {
     const call = calls[i]!;
     const tr = results[i]!;
+    ctx.taskState?.recordToolResult(call, tr);
     ctx.emit({
       type: "tool.result",
       tool: call.tool,

@@ -56,6 +56,7 @@
       "dependencies": {
         "@paw/core": "workspace:*",
         "@paw/harness": "workspace:*",
+        "@paw/memory": "workspace:*",
         "@paw/models": "workspace:*",
         "@paw/settings": "workspace:*",
         "@paw/store": "workspace:*",
@@ -98,6 +99,10 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/core": "workspace:*",
+        "postgres": "^3.4.5",
+      },
+      "devDependencies": {
+        "@types/node": "^22.10.0",
       },
     },
     "packages/models": {
@@ -481,6 +486,8 @@
     "pkce-challenge": ["pkce-challenge@5.0.1", "", {}, "sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ=="],
 
     "pkg-up": ["pkg-up@3.1.0", "", { "dependencies": { "find-up": "^3.0.0" } }, "sha512-nDywThFk1i4BQK4twPQ6TA4RT8bDY96yeuCVBWL3ePARCiEKDRSrNGbFIgUJpLp+XeIR65v8ra7WuJOFUBtkMA=="],
+
+    "postgres": ["postgres@3.4.9", "", {}, "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="],
 
     "proxy-addr": ["proxy-addr@2.0.7", "", { "dependencies": { "forwarded": "0.2.0", "ipaddr.js": "1.9.1" } }, "sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg=="],
 

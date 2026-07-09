@@ -67,6 +67,8 @@ interface ActionHandlerContext {
   readonly skillRegistry?: SkillRegistry;
   readonly watcher?: import("@paw/workspace").WorkspaceWatcher;
   readonly evalHooks?: EvalHooks;
+  readonly memoryRuntime?: import("@paw/memory").MemoryRuntime;
+  readonly memoryTaskId?: string;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -90,7 +92,7 @@ export async function handleAction(
   text: string,
   thinking: string | undefined,
   opts: ActionHandlerContext,
-): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
+): Promise<{ readonly state: TurnState; readonly flags: TurnFlags; readonly subResults?: Array<{ runId: string; summary: string }> }> {
   // 按工具类型分流：子 Agent vs 普通工具
   const subAgentCalls = toolCalls.filter(isSubAgentCall);
   const normalToolCalls = toolCalls.filter((c) => !isSubAgentCall(c));
@@ -149,8 +151,21 @@ function handleNoAction(
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn">,
 ): { readonly state: TurnState; readonly flags: TurnFlags } {
-  // 用过工具但没给 final_answer → auto-nudge
-  if (flags.hasEverUsedTools && flags.autoContinueNudges < 2) {
+  const displayText =
+    text.trim() ||
+    (thinking?.trim()
+      ? `[model produced only reasoning]\n${thinking.trim()}`
+      : "(empty model output)");
+
+  // 已是最后一轮：不能再 nudge，否则会耗尽 maxSteps 变成 failed
+  const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
+
+  // 用过工具但没给 final_answer → auto-nudge（且还有后续轮次预算）
+  if (
+    flags.hasEverUsedTools &&
+    flags.autoContinueNudges < 2 &&
+    !noRoomForAnotherTurn
+  ) {
     const nextFlags: TurnFlags = {
       ...flags,
       autoContinueNudges: flags.autoContinueNudges + 1,
@@ -166,12 +181,7 @@ function handleNoAction(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  // 真正完成：纯对话式回复，不需要工具
-  const displayText =
-    text.trim() ||
-    (thinking?.trim()
-      ? `[model produced only reasoning]\n${thinking.trim()}`
-      : "(empty model output)");
+  // 真正完成：纯对话式回复，或最后一轮/nudge 用尽后的降级完成
   ctx.ctxMgr.addAssistant(displayText, thinking);
   ctx.emit({ type: "model.done", text: displayText });
   return {
@@ -215,10 +225,13 @@ function handleFinalAnswer(
   );
 
   // 有未完成的计划或 Todo，且上一轮刚执行了工具 → 推动继续
+  // 最后一轮没有预算再 nudge：直接接受 final_answer，避免 loop exhausted
+  const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
   if (
     (hasPendingPlan || hasPendingTodos) &&
     flags.autoContinueNudges < 3 &&
-    flags.lastTurnHadToolCall
+    flags.lastTurnHadToolCall &&
+    !noRoomForAnotherTurn
   ) {
     const nextFlags: TurnFlags = {
       ...flags,
@@ -369,7 +382,11 @@ async function handlePlanUpdate(
   thinking: string | undefined,
   opts: Pick<
     ActionHandlerContext,
-    "planner" | "planSnapshotMaxItems" | "saveStateFn"
+    | "planner"
+    | "planSnapshotMaxItems"
+    | "saveStateFn"
+    | "memoryRuntime"
+    | "memoryTaskId"
   >,
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const nextFlags: TurnFlags = {
@@ -396,6 +413,26 @@ async function handlePlanUpdate(
 
   const p = opts.planner.plan;
   if (p) {
+    ctx.taskState.setPlan(p.items);
+    const planLines = p.items.map((item) =>
+      typeof item === "string"
+        ? item
+        : typeof item === "object" && item && "text" in item
+          ? String((item as { text: unknown }).text)
+          : JSON.stringify(item),
+    );
+    const runtime = opts.memoryRuntime ?? ctx.memoryRuntime;
+    const memTaskId = opts.memoryTaskId ?? ctx.memoryTaskId;
+    if (runtime && memTaskId) {
+      await runtime
+        .patchWorkingMemory({
+          taskId: memTaskId,
+          patch: { plan: planLines },
+        })
+        .catch(() => {
+          /* best-effort */
+        });
+    }
     ctx.emit({
       type: "plan.updated",
       revision: p.revision,
@@ -488,6 +525,8 @@ async function handleToolCalls(
       parentContextManager: ctx.ctxMgr,
       abortSignal: ctx.signal,
       shellSandbox: ctx.shellSandbox,
+      memoryRuntime: opts.memoryRuntime,
+      memoryTaskId: opts.memoryTaskId ?? ctx.memoryTaskId,
     },
     {
       resolveToolApproval: opts.resolveToolApproval,
@@ -509,6 +548,29 @@ async function handleToolCalls(
     });
   }
 
+  // 新记忆：工具结果写入 WorkingMemory（best-effort）
+  const runtime = opts.memoryRuntime ?? ctx.memoryRuntime;
+  const memTaskId = opts.memoryTaskId ?? ctx.memoryTaskId;
+  if (runtime && memTaskId) {
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[i]!;
+      const tr = results[i]!;
+      await runtime
+        .onToolResult({
+          taskId: memTaskId,
+          toolName: call.tool,
+          args: call.args,
+          ok: tr.ok,
+          summary: tr.summary,
+          rawPayload: tr.payload,
+          idempotencyKey: `${ctx.runId}-t${ctx.turn}-${i}-${call.tool}`,
+        })
+        .catch(() => {
+          /* best-effort */
+        });
+    }
+  }
+
   // 将工具结果注入上下文（assistant 消息 + tool results）
   const final = finalizeToolExecution(calls, results, {
     ctxMgr: ctx.ctxMgr,
@@ -520,6 +582,7 @@ async function handleToolCalls(
     specGoal: ctx.specGoal,
     text,
     thinking,
+    taskState: ctx.taskState,
     saveStateFn: opts.saveStateFn,
   });
 
@@ -559,7 +622,7 @@ async function handleRunAgent(
   text: string,
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn" | "agentGroup" | "evalHooks">,
-): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
+): Promise<{ readonly state: TurnState; readonly flags: TurnFlags; readonly subResults?: Array<{ runId: string; summary: string }> }> {
   const nextFlags: TurnFlags = {
     ...flags,
     lastTurnHadToolCall: true,
@@ -569,10 +632,7 @@ async function handleRunAgent(
   // 没有子 Agent 启动器就无法执行
   if (!opts.agentGroup) {
     return {
-      state: {
-        type: "failed",
-        message: "Sub-agent launcher not configured",
-      },
+      state: { type: "failed", message: "Sub-agent launcher not configured" },
       flags: nextFlags,
     };
   }
@@ -640,17 +700,20 @@ async function handleRunAgent(
     })),
   );
 
-  // Max steps 检查
+  // P4: 提取子 Agent 摘要供父 Agent 收割
+  const subResults = results.map((r) => ({
+    runId: `sub-${Date.now()}`,
+    summary: r.summary,
+  }));
+
   if (ctx.turn + 1 >= ctx.maxSteps) {
     return {
-      state: {
-        type: "completed",
-        message: `Max steps (${ctx.maxSteps}) reached after sub-agents`,
-      },
+      state: { type: "completed", message: `Max steps (${ctx.maxSteps}) reached after sub-agents` },
       flags: nextFlags,
+      subResults,
     };
   }
 
   opts.saveStateFn();
-  return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  return { state: { type: "continue", nextFlags }, flags: nextFlags, subResults };
 }

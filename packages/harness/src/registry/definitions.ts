@@ -40,6 +40,7 @@ export const APPLY_PATCH = "workspace.apply_patch" as const;
 export const SYMBOL_SEARCH = "workspace.symbol_search" as const;
 export const MEMORY_LIST = "memory.list" as const;
 export const MEMORY_READ = "memory.read" as const;
+export const MEMORY_SAVE = "memory.save" as const;
 
 const BUILTIN_TOOLS = [
   READ,
@@ -65,6 +66,7 @@ const BUILTIN_TOOLS = [
   SYMBOL_SEARCH,
   MEMORY_LIST,
   MEMORY_READ,
+  MEMORY_SAVE,
 ] as const;
 
 export type BuiltinToolName = (typeof BUILTIN_TOOLS)[number];
@@ -330,19 +332,49 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
     ),
     fn(
       MEMORY_LIST,
-      "List persistent auto-memory entries for this project (stored outside the workspace).",
+      "List persistent project memories (MemoryRuntime / Postgres). Returns short titles — use memory.read for full content.",
       {},
     ),
     fn(
       MEMORY_READ,
-      "Read a persistent auto-memory entry by name (stored outside the workspace).",
+      "Read a persistent memory entry by name or id (MemoryRuntime). Prefer this over dumping long memory into the chat yourself.",
       {
         name: {
           type: "string",
-          description: "Memory entry name (filename without .md)",
+          description: "Memory entry name or id",
         },
       },
       ["name"],
+    ),
+    fn(
+      MEMORY_SAVE,
+      "Save a durable memory (preferences, decisions, pointers). Goes through governance — not a local markdown file write.",
+      {
+        name: {
+          type: "string",
+          description: "Unique name for this memory entry (e.g. 'api-auth-pattern')",
+        },
+        content: {
+          type: "string",
+          description: "Memory content (markdown ok; keep focused, not a dump)",
+        },
+        type: {
+          type: "string",
+          enum: ["user", "feedback", "project", "reference"],
+          description: "Memory type: user (preference), feedback, project (conventions/decisions), reference (external info)",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional tags for categorization and retrieval",
+        },
+        priority: {
+          type: "string",
+          enum: ["high", "mid", "low"],
+          description: "Priority level (default: mid)",
+        },
+      },
+      ["name", "content", "type"],
     ),
   ];
   if (mcp) {
@@ -385,8 +417,9 @@ export function toolCatalogText(mcp?: McpClientManager): string {
     `{"tool":"${LSP}","args":{"file":"<relative-path>","method":"hover|definition|references|completion","line":0,"character":0}}`,
     `{"tool":"${APPLY_PATCH}","args":{"patch":"<unified diff string>"}}`,
     `{"tool":"${SYMBOL_SEARCH}","args":{"query":"<symbol-name-or-pattern>","max_results":20}} — AST-based: find function/class/interface/type definitions by name (use instead of grep when you need precise symbol lookup)`,
-    `{"tool":"${MEMORY_LIST}","args":{}} — list persistent project memories (outside workspace)`,
-    `{"tool":"${MEMORY_READ}","args":{"name":"<memory-name>"}} — read full memory entry by name`,
+    `{"tool":"${MEMORY_LIST}","args":{}} — list MemoryRuntime entries (short titles)`,
+    `{"tool":"${MEMORY_READ}","args":{"name":"<name-or-id>"}} — read full memory body by name/id`,
+    `{"tool":"${MEMORY_SAVE}","args":{"name":"<unique-name>","content":"<focused markdown>","type":"project|user|feedback|reference","tags":["tag1"],"priority":"mid"}} — save via governance (not a local md file)`,
   ];
 
   if (mcp) {

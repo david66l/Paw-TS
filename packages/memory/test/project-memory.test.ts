@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadProjectMemory } from "../src/project-memory.js";
+import { loadProjectMemory } from "../src/project/project-memory.js";
 
 describe("loadProjectMemory", () => {
   let tmpDir: string;

@@ -4,7 +4,7 @@ import {
   isArchitectureQuery,
   isMemoryMetaQuery,
   isReferenceMemory,
-} from "../src/memory-record.js";
+} from "../src/shared/memory-record.js";
 import { makeRecord } from "./fixtures.js";
 
 describe("isMemoryMetaQuery", () => {

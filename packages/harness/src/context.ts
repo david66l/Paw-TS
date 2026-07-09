@@ -88,4 +88,46 @@ export interface HarnessContext {
   readonly buildSubAgentSharedContext?: (input: { readonly goal: string; readonly args: Record<string, unknown> }) => unknown;
   /** Docker/Podman 沙箱策略配置 */
   readonly shellSandbox?: ShellSandboxConfig;
+  /**
+   * 记忆 Runtime 门面（duck-typed，避免 harness→memory 硬依赖）。
+   * memory.list/read/save 唯一在线入口。
+   */
+  readonly memoryRuntime?: {
+    listMemories(query?: {
+      limit?: number;
+      type?: string;
+    }): Promise<
+      readonly {
+        id: string;
+        title: string;
+        summary: string;
+        type: string;
+        status: string;
+        confidence: number;
+      }[]
+    >;
+    readMemory(idOrSubject: string): Promise<{
+      id: string;
+      title: string;
+      summary: string;
+      type: string;
+      status: string;
+      confidence: number;
+      relatedFiles?: readonly string[];
+    } | null>;
+    saveMemory(input: {
+      title: string;
+      summary: string;
+      type?: string;
+      content?: string;
+      taskId?: string;
+    }): Promise<{
+      candidateId: string;
+      decision: string;
+      decisionStatus: string;
+      memoryId?: string;
+    }>;
+  };
+  /** 当前 TaskSession id（与 memoryRuntime 配套） */
+  readonly memoryTaskId?: string;
 }

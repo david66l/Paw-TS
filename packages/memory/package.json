@@ -4,9 +4,25 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./db": "./src/db/index.ts",
+    "./runtime": "./src/runtime/index.ts"
+  },
+  "scripts": {
+    "migrate": "bun run src/db/migrate.ts",
+    "migrate-legacy": "bun run src/runtime/migrate-legacy.ts",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "test": "bun test test",
+    "test:runtime": "bun test test/runtime.e2e.test.ts",
+    "test:db": "bun test test/db-e2e.test.ts",
+    "test:health": "bun test test/health.test.ts",
+    "test:migrate-legacy": "bun test test/migrate-legacy.test.ts"
   },
   "dependencies": {
-    "@paw/core": "workspace:*"
+    "@paw/core": "workspace:*",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0"
   }
 }

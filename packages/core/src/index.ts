@@ -279,73 +279,31 @@ export {
 } from "./checkpoint.js";
 
 // ============================================================
-// 记忆系统 — 已迁移至 @paw/memory（向后兼容 re-export）
+// 记忆相关 — 薄 re-export（实现在 @paw/memory）
+// 在线 Runtime 请直接 import from "@paw/memory"
 // ============================================================
 export {
-  // 项目记忆
   loadProjectMemory,
   type ProjectMemory,
-  // 自动记忆
-  AutoMemoryStore,
-  type AutoMemoryEntry,
-  type MemoryPriority as AutoMemoryPriority,
-  // 嵌入缓存
-  EmbeddingCache,
-  resolveEmbeddingConfig,
-  type EmbeddingCacheEntry,
-  type EmbeddingConfig,
-  // 检索级联
-  DEFAULT_CASCADE_CONFIG,
-  formatMemoryManifest,
-  LLM_FALLBACK_SCORE,
-  shouldEscalateToLlmFallback,
-  type CascadeFallbackConfig,
-  type LlmMemorySelectFn,
-  type LlmMemorySelectInput,
-  // 检索入口
-  retrieveMemories,
-  type RetrieveMemoriesOptions,
-  // 统一存储
-  UnifiedMemoryStore,
-  type UnifiedMemoryStoreOptions,
-  // 关键词检索
-  KeywordMemoryRetriever,
-  DEFAULT_RETRIEVAL_CONFIG,
-  type RetrievalConfig,
-  type RetrievalQuery,
-  type MemoryRetrievalResult,
-  // 记录与信号
-  sessionMemoryToRecord,
-  autoMemoryToRecord,
   extractCleanMemoryQuery,
   extractFilePaths,
-  extractErrorSignatures,
-  inferTags,
-  buildRetrievalSignalsFromMessages,
-  isMemoryMetaQuery,
-  isArchitectureQuery,
-  isReferenceMemory,
-  classifyTask,
-  PRIORITY_COEFFICIENTS,
-  type MemoryRetrievalSignals,
   type MemoryRecord,
   type MemorySource,
   type MemoryScope,
   type MemoryPriority,
+  type MemoryKind,
+  type MemoryMetadata,
+  type MemoryStatus,
   type TaskProfile,
-  // 反思
-  runReflection,
-  shouldRunReflection,
-  resetReflectionCounter,
-  type ReflectionPlan,
-  type ReflectionMergeAction,
-  type ReflectionArchiveAction,
-  type ReflectionConflictAction,
-  type ReflectorOptions,
-  type ReflectionState,
-  // 会话记忆
+  kindFromLegacyType,
+  isMemoryKind,
+  isMemoryStatus,
   SessionMemoryStore,
   type SessionMemory,
+  // 仅迁移/遗留脚本可能用到
+  AutoMemoryStore,
+  type AutoMemoryEntry,
+  type MemoryPriority as AutoMemoryPriority,
 } from "@paw/memory";
 
 // ============================================================

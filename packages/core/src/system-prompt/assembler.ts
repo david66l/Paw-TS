@@ -95,6 +95,7 @@ export function assembleSystemPrompt(opts: SystemPromptOptions): string {
       pawMd: opts.pawMd,
       projectMemory: opts.projectMemory,
       relevantMemories: opts.relevantMemories,
+      memoryContextSection: opts.memoryContextSection,
       todos: opts.todos,
       language: opts.language,
       modelLabel: opts.modelLabel,

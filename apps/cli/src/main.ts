@@ -45,7 +45,7 @@ async function main(): Promise<void> {
 
   if (argv[0] === "doctor") {
     const root = parseRootFromArgv(process.cwd(), argv);
-    const r = formatDoctorOutput(root);
+    const r = await formatDoctorOutput(root);
     if (r.ok) {
       console.log(r.text);
       process.exit(0);

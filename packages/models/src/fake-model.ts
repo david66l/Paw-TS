@@ -198,7 +198,16 @@ export class FakeLanguageModel implements LanguageModel {
     if (wantsSearch(text)) {
       const quotes = [...text.matchAll(/["']([^"']*)["']/g)].map((m) => m[1]);
       const pattern = quotes[0] ?? "needle";
-      const inPath = quotes[1] ?? ".";
+      // 第二段引号仅当像路径时才作为 path，避免 "search for 'needle'" 把 needle 误当 path
+      const maybePath = quotes[1];
+      const inPath =
+        maybePath &&
+        (maybePath === "." ||
+          maybePath.includes("/") ||
+          maybePath.includes("\\") ||
+          /\.\w+$/.test(maybePath))
+          ? maybePath
+          : ".";
       const args = { pattern, path: inPath };
       return `Searching the workspace.\n{"tool":"workspace.search","args":${JSON.stringify(args)}}`;
     }

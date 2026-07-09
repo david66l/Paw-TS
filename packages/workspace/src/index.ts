@@ -77,6 +77,11 @@ export {
   type BriefResult,
   type AutoContextResult,
 } from "./project-context.js";
+export {
+  buildCodeIndex,
+  selectCodeContext,
+  type CodeContextBlock,
+} from "./code-index.js";
 
 // ---- Git 操作 ----
 export {

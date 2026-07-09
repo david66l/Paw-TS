@@ -360,6 +360,14 @@ export type RunEvent =
         readonly relatedFiles: readonly string[];
       }[];
     }
+  /** 每轮动态记忆注入（追加到 user 消息，不影响 system prompt cache） */
+  | {
+      readonly type: "memory.turn.inject";
+      /** 注入的记忆条数 */
+      readonly recordCount: number;
+      /** 注入文本的估算 token 数 */
+      readonly tokens: number;
+    }
   /** 模型输出被截断（finish_reason = "length" 或 "max_tokens"） */
   /** Model output was truncated (finish_reason = length/max_tokens). */
   | {

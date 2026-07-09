@@ -24,6 +24,8 @@ import type {
 import type { McpClientManager } from "@paw/harness";
 import type { LanguageModel, ToolDefinition } from "@paw/models";
 import type { TaskPlanner } from "@paw/store";
+import type { MemoryRuntime } from "@paw/memory";
+import type { TaskStateManager } from "../task-state.js";
 
 // ═════════════════════════════════════════════════════════════
 // TurnState：单轮状态机
@@ -144,6 +146,7 @@ export interface PhaseContext {
   readonly toolNameMap: Map<string, string>;
   readonly ctxMgr: ContextManager;
   readonly planner: TaskPlanner;
+  readonly taskState: TaskStateManager;
   /** 事件发射器 */
   readonly emit: (event: RunEvent) => void;
   /** Checkpoint 序列号（可变引用，用于工具执行前后保存快照） */
@@ -152,6 +155,10 @@ export interface PhaseContext {
   readonly specGoal: string;
   /** Shell 沙箱配置 */
   readonly shellSandbox?: import("@paw/harness").ShellSandboxConfig;
+  /** 新记忆 Runtime（db 后端）；file 模式为 undefined */
+  readonly memoryRuntime?: MemoryRuntime;
+  /** 当前 TaskSession id */
+  readonly memoryTaskId?: string;
 }
 
 // ═════════════════════════════════════════════════════════════

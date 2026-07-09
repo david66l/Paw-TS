@@ -31,6 +31,18 @@ describe("ContextManager", () => {
     expect(msgs[3]?.content).toContain("read_file");
   });
 
+  test("upserts user message by prefix", () => {
+    const cm = new ContextManager();
+    cm.addUser("[Context Package]\none");
+    cm.addAssistant("ok");
+    cm.upsertUserByPrefix("[Context Package]", "[Context Package]\ntwo");
+    const packages = cm
+      .buildMessages()
+      .filter((m) => m.content.startsWith("[Context Package]"));
+    expect(packages).toHaveLength(1);
+    expect(packages[0]?.content).toContain("two");
+  });
+
   test("truncates by maxMessages", () => {
     const cm = new ContextManager({ maxMessages: 3 });
     cm.setSystem("Sys");

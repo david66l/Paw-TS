@@ -33,6 +33,9 @@ node_modules/
 简历*.md
 大厂筛选*.md
 
+# Local design / research docs (not product source)
+文档/
+
 # Local sandboxes and scratch projects
 personal-site/
 temp-site/

@@ -28,7 +28,13 @@
     "benchmark:judge": "bun test benchmarks/judge/",
     "benchmark:swe": "cd benchmarks/swe-bench && python run.py",
     "benchmark:repo": "bun test benchmarks/repobench/",
-    "benchmark:long": "bun test benchmarks/longbench/"
+    "benchmark:long": "bun test benchmarks/longbench/",
+    "memory:migrate": "cd packages/memory && bun run migrate",
+    "memory:migrate-legacy": "bun run packages/memory/src/runtime/migrate-legacy.ts",
+    "memory:test:runtime": "cd packages/memory && bun run test:runtime",
+    "memory:test:db": "cd packages/memory && bun run test:db",
+    "memory:test:health": "bun test packages/memory/test/health.test.ts",
+    "memory:check-cutover": "bash scripts/check-memory-cutover.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

@@ -192,7 +192,7 @@ export async function runSlashCommand(
   }
 
   if (head === "/doctor") {
-    const r = formatDoctorOutput(cwd);
+    const r = await formatDoctorOutput(cwd);
     pushText(r.text);
     return;
   }

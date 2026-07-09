@@ -67,6 +67,8 @@ export interface AppState {
   };
   /** 保存时的待办事项列表 */
   readonly todos?: readonly TodoItem[];
+  /** 短期任务状态。由 agent 层维护；core 只负责持久化。 */
+  readonly taskState?: unknown;
   /** 运行已完成时的最终结果 */
   readonly outcome?: {
     /** 完成状态：成功或失败 */

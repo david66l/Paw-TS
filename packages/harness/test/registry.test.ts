@@ -3,7 +3,7 @@ import fs, { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { AutoMemoryStore } from "@paw/core";
+
 import { executeTool, toolRequiresApproval } from "../src/registry/index.js";
 
 describe("executeTool", () => {
@@ -253,18 +253,47 @@ describe("executeTool streaming", () => {
     expect(JSON.stringify(r.payload)).toContain("no-chunk");
   });
 
-  test("memory.list and memory.read access project memory store", async () => {
+  test("memory.list and memory.read use MemoryRuntime", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-mem-"));
-    const store = new AutoMemoryStore({ workspaceRoot: root });
-    store.save({
-      name: "test_pref",
-      description: "User prefers concise replies",
-      type: "user",
-      content: "Keep answers short.",
-    });
+    const memoryRuntime = {
+      async listMemories() {
+        return [
+          {
+            id: "mem_test_pref",
+            title: "test_pref",
+            summary: "User prefers concise replies",
+            type: "user_preference",
+            status: "active",
+            confidence: 0.9,
+          },
+        ];
+      },
+      async readMemory(id: string) {
+        if (id === "mem_test_pref" || id === "test_pref") {
+          return {
+            id: "mem_test_pref",
+            title: "test_pref",
+            summary: "User prefers concise replies",
+            type: "user_preference",
+            status: "active",
+            confidence: 0.9,
+            relatedFiles: [],
+          };
+        }
+        return null;
+      },
+      async saveMemory() {
+        return {
+          candidateId: "cand_x",
+          decision: "APPROVE_CREATE",
+          decisionStatus: "EXECUTED",
+          memoryId: "mem_x",
+        };
+      },
+    };
 
     const listed = await executeTool(
-      { workspaceRoot: root },
+      { workspaceRoot: root, memoryRuntime },
       "memory.list",
       {},
     );
@@ -272,16 +301,27 @@ describe("executeTool streaming", () => {
     expect(listed.summary).toContain("1 entr");
     expect(JSON.stringify(listed.payload)).toContain("test_pref");
 
-    const read = await executeTool({ workspaceRoot: root }, "memory.read", {
-      name: "test_pref",
-    });
+    const read = await executeTool(
+      { workspaceRoot: root, memoryRuntime },
+      "memory.read",
+      { name: "test_pref" },
+    );
     expect(read.ok).toBe(true);
-    expect(JSON.stringify(read.payload)).toContain("Keep answers short");
+    expect(JSON.stringify(read.payload)).toContain("concise");
 
-    const missing = await executeTool({ workspaceRoot: root }, "memory.read", {
-      name: "nope",
-    });
+    const missing = await executeTool(
+      { workspaceRoot: root, memoryRuntime },
+      "memory.read",
+      { name: "nope" },
+    );
     expect(missing.ok).toBe(false);
+
+    const noRuntime = await executeTool(
+      { workspaceRoot: root },
+      "memory.list",
+      {},
+    );
+    expect(noRuntime.ok).toBe(false);
   });
 
   test("memory tools skip approval", () => {

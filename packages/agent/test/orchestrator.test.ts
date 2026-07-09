@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { RunEventEnvelope } from "@paw/core";
-import { AutoMemoryStore, SessionMemoryStore } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
@@ -107,6 +106,37 @@ describe("AgentOrchestrator", () => {
     );
   });
 
+  test("last-turn plain text after tools completes (no wasted nudge)", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-last-turn-"));
+    writeFileSync(path.join(dir, "a.txt"), "hi");
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "last-turn",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"tool":"workspace.read_file","args":{"path":"a.txt"}}',
+            };
+          }
+          // plain answer without final_answer on the last budgeted turn
+          return { text: "File says hi." };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    const r = await o.run({
+      runId: "lt1",
+      goal: "read a.txt",
+      workspaceRoot: dir,
+      maxSteps: 2, // tool + one reply = no room to nudge
+    });
+    expect(r.status).toBe("completed");
+    expect(r.message).toContain("hi");
+    expect(calls).toBe(2);
+  });
+
   test("run completes with final_answer JSON action", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
@@ -161,93 +191,9 @@ describe("AgentOrchestrator", () => {
     expect(events.some((e) => e.event.type === "agent.action")).toBe(false);
   });
 
-  test("memory retrieve event includes selected memory identities", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-memory-event-"));
-    const store = new AutoMemoryStore({ workspaceRoot: dir });
-    store.save({
-      name: "memory-retriever-path-scoring",
-      description: "Memory retriever scores related files by path",
-      type: "project",
-      content:
-        "packages/core/src/memory-retriever.ts uses path scoring for related files.",
-      relatedFiles: ["packages/core/src/memory-retriever.ts"],
-      tags: ["memory", "retrieval"],
-    });
+;
 
-    const events: RunEventEnvelope[] = [];
-    const o = new AgentOrchestrator({
-      model: {
-        label: "final-json",
-        async complete() {
-          return {
-            text: '{"action":"final_answer","summary":"Done."}',
-          };
-        },
-      },
-      onEvent: (e) => events.push(e),
-    });
-
-    await o.run({
-      runId: "memory-event",
-      goal: "Check packages/core/src/memory-retriever.ts path scoring",
-      workspaceRoot: dir,
-    });
-
-    const event = events.find((e) => e.event.type === "memory.retrieve.done");
-    expect(event?.event.type).toBe("memory.retrieve.done");
-    if (event?.event.type === "memory.retrieve.done") {
-      expect(event.event.selectedMemories).toEqual([
-        {
-          id: "memory-retriever-path-scoring",
-          title: "memory-retriever-path-scoring",
-          source: "auto",
-          summary: "Memory retriever scores related files by path",
-          relatedFiles: ["packages/core/src/memory-retriever.ts"],
-        },
-      ]);
-    }
-  });
-
-  test("memory retrieval uses file paths mentioned in the goal", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-memory-path-"));
-    const store = new SessionMemoryStore({ workspaceRoot: dir });
-    store.save("previous-session", {
-      session: "previous-session",
-      project: "test-project",
-      updatedAt: Date.now(),
-      task: "Historical implementation note",
-      currentState: "Previous work touched the target file.",
-      filesAndFunctions: ["packages/core/src/memory-retriever.ts"],
-      keyDecisions: ["Keep the old scoring behavior stable."],
-    });
-
-    const events: RunEventEnvelope[] = [];
-    const o = new AgentOrchestrator({
-      model: {
-        label: "final-json",
-        async complete() {
-          return {
-            text: '{"action":"final_answer","summary":"Done."}',
-          };
-        },
-      },
-      onEvent: (e) => events.push(e),
-    });
-
-    await o.run({
-      runId: "memory-path-event",
-      goal: "Review packages/core/src/memory-retriever.ts",
-      workspaceRoot: dir,
-    });
-
-    const event = events.find((e) => e.event.type === "memory.retrieve.done");
-    expect(event?.event.type).toBe("memory.retrieve.done");
-    if (event?.event.type === "memory.retrieve.done") {
-      expect(event.event.selectedMemories.map((m) => m.id)).toContain(
-        "previous-session",
-      );
-    }
-  });
+;
 
   test("multi-turn: fake model lists then answers without a second tool", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-mt-"));
@@ -777,83 +723,9 @@ describe("AgentOrchestrator streaming shell", () => {
     }
   });
 
-  test("run emits memory.extracted and persists auto memory when auxiliary model is configured", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-memext-"));
-    const events: RunEventEnvelope[] = [];
-    const auxiliaryModel = {
-      label: "aux-mem",
-      async complete() {
-        return {
-          text: `## Entry 1
-- **Name**: prefers_typescript
-- **Type**: user
-- **Description**: User prefers TypeScript for new code
-- **Content**: Default to strict TypeScript in this workspace.
-`,
-        };
-      },
-      async *completeStream() {
-        yield { type: "done" as const };
-      },
-    };
-    const o = new AgentOrchestrator({
-      model: new FakeLanguageModel(),
-      auxiliaryModel,
-      memoryExtraction: "await",
-      onEvent: (e) => events.push(e),
-    });
-    const r = await o.run({
-      runId: "memext1",
-      goal: "list the directory",
-      workspaceRoot: dir,
-    });
-    expect(r.status).toBe("completed");
-    const extracted = events.find((e) => e.event.type === "memory.extracted");
-    expect(extracted?.event.type).toBe("memory.extracted");
-    if (extracted?.event.type === "memory.extracted") {
-      expect(extracted.event.entries).toBe(1);
-      expect(extracted.event.runId).toBe("memext1");
-    }
-    const store = new AutoMemoryStore({ workspaceRoot: dir });
-    const saved = store.load("prefers_typescript");
-    expect(saved?.description).toBe("User prefers TypeScript for new code");
-    expect(existsSync(path.join(store.memoryDir, "MEMORY.md"))).toBe(true);
-  });
+;
 
-  test("memory extraction is skipped when memoryExtraction is off", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-memext-off-"));
-    const events: RunEventEnvelope[] = [];
-    const auxiliaryModel = {
-      label: "aux-mem",
-      async complete() {
-        return {
-          text: `## Entry 1
-- **Name**: should_not_save
-- **Type**: user
-- **Description**: Should not appear
-- **Content**: N/A
-`,
-        };
-      },
-      async *completeStream() {
-        yield { type: "done" as const };
-      },
-    };
-    const o = new AgentOrchestrator({
-      model: new FakeLanguageModel(),
-      auxiliaryModel,
-      memoryExtraction: "off",
-      onEvent: (e) => events.push(e),
-    });
-    await o.run({
-      runId: "memext-off",
-      goal: "list the directory",
-      workspaceRoot: dir,
-    });
-    expect(events.some((e) => e.event.type === "memory.extracted")).toBe(false);
-    const store = new AutoMemoryStore({ workspaceRoot: dir });
-    expect(store.load("should_not_save")).toBeNull();
-  });
+;
 
   test("end-to-end: run.metrics matches offline evaluator", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-metrics-"));

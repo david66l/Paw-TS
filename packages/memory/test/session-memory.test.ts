@@ -5,7 +5,7 @@ import path from "node:path";
 import {
   type SessionMemory,
   SessionMemoryStore,
-} from "../src/session-memory.js";
+} from "../src/session/session-memory.js";
 
 describe("SessionMemoryStore", () => {
   let tmpDir: string;

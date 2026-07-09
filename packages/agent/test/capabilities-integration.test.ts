@@ -1,7 +1,7 @@
 /**
  * Integration test suite for paw-ts core capabilities:
  * 1. Agent workflow (multi-turn, parallel tools, plan system, approval)
- * 2. Memory system (session memory, auto memory, extraction)
+ * 2. Memory system (session memory for L2 compact)
  * 3. Context compression (compactor, pruner, anti-thrashing)
  */
 
@@ -16,7 +16,6 @@ import path from "node:path";
 import { AgentOrchestrator } from "@paw/agent";
 import type { ChatMessage, RunEventEnvelope } from "@paw/core";
 import {
-  AutoMemoryStore,
   ContextCompactor,
   SessionMemoryStore,
   estimateMessagesTokens,
@@ -26,7 +25,6 @@ import {
 } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 import { runCompressionAgent } from "../src/compression-agent.js";
-import { extractMemories } from "../src/memory-extraction-agent.js";
 import { cleanup, tmpDir } from "./fixtures.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -320,13 +318,11 @@ describe("Agent Workflow", () => {
 // ═════════════════════════════════════════════════════════════
 
 describe("Memory System", () => {
-  let memDir: string;
   let sessionDir: string;
   let workspaceRoot: string;
 
   beforeEach(() => {
     workspaceRoot = tmpDir("paw-cap-mem-ws-");
-    memDir = path.join(workspaceRoot, "mem-test");
     sessionDir = path.join(workspaceRoot, "session-test");
   });
 
@@ -405,135 +401,6 @@ describe("Memory System", () => {
     store.save("run-002", mem);
     const loaded = store.load("run-002");
     expect(loaded).toEqual(mem);
-  });
-
-  test("AutoMemoryStore: save, load, list, buildIndex", () => {
-    const store = new AutoMemoryStore({ workspaceRoot, memoryDir: memDir });
-
-    const entry1: {
-      name: string;
-      description: string;
-      type: "user" | "feedback" | "project" | "reference";
-      content: string;
-    } = {
-      name: "prefers_typescript",
-      description: "User prefers TypeScript over JavaScript",
-      type: "user",
-      content:
-        "The user consistently asks for TypeScript implementations and avoids any `any` types.",
-    };
-
-    const entry2: {
-      name: string;
-      description: string;
-      type: "user" | "feedback" | "project" | "reference";
-      content: string;
-    } = {
-      name: "use_bun_runtime",
-      description: "Project uses Bun as the runtime",
-      type: "project",
-      content:
-        "All packages in the monorepo use Bun. Do not suggest npm or pnpm.",
-    };
-
-    store.save(entry1);
-    store.save(entry2);
-
-    const loaded1 = store.load("prefers_typescript");
-    expect(loaded1).toEqual(entry1);
-
-    const list = store.list();
-    expect(list.length).toBe(2);
-    expect(list.map((e) => e.name).sort()).toEqual([
-      "prefers_typescript",
-      "use_bun_runtime",
-    ]);
-
-    const index = store.buildIndex();
-    expect(index).toContain("# Memory Index");
-
-    const shard1 = readFileSync(path.join(memDir, "MEMORY-1.md"), "utf-8");
-    expect(shard1).toContain("prefers_typescript");
-    expect(shard1).toContain("use_bun_runtime");
-    expect(shard1).toContain("user");
-    expect(shard1).toContain("project");
-
-    // Verify files on disk
-    expect(existsSync(path.join(memDir, "prefers_typescript.md"))).toBe(true);
-    expect(existsSync(path.join(memDir, "MEMORY.md"))).toBe(true);
-  });
-
-  test("AutoMemoryStore: delete removes entry", () => {
-    const store = new AutoMemoryStore({ workspaceRoot, memoryDir: memDir });
-    const entry = {
-      name: "temp_entry",
-      description: "Temporary",
-      type: "reference" as const,
-      content: "Will be deleted",
-    };
-    store.save(entry);
-    expect(store.load("temp_entry")).not.toBeNull();
-
-    store.delete("temp_entry");
-    expect(store.load("temp_entry")).toBeNull();
-    expect(store.list().length).toBe(0);
-  });
-
-  test("extractMemories: extracts structured entries via model completion", async () => {
-    const mockModel = {
-      label: "mock-mem",
-      async complete() {
-        return {
-          text: `## Entry 1
-- **Name**: user_prefers_dark_mode
-- **Type**: user
-- **Description**: User prefers dark mode UI
-- **Content**: All interfaces should use dark themes.
-
-## Entry 2
-- **Name**: avoid_console_log
-- **Type**: feedback
-- **Description**: Do not use console.log in production
-- **Content**: The user corrected previous code. Use structured logging instead.
-`,
-        };
-      },
-      async *completeStream() {
-        throw new Error("Not implemented");
-      },
-    };
-
-    const result = await extractMemories(
-      mockModel,
-      "User said they prefer dark mode.",
-    );
-    expect(result.entries.length).toBe(2);
-    expect(result.entries[0]).toMatchObject({
-      name: "user_prefers_dark_mode",
-      type: "user",
-      description: "User prefers dark mode UI",
-    });
-    expect(result.entries[0]?.content).toContain("dark themes");
-    expect(result.entries[1]).toMatchObject({
-      name: "avoid_console_log",
-      type: "feedback",
-      description: "Do not use console.log in production",
-    });
-  });
-
-  test("extractMemories: returns empty for no-memories marker", async () => {
-    const mockModel = {
-      label: "mock-mem",
-      async complete() {
-        return { text: "No memories to extract." };
-      },
-      async *completeStream() {
-        throw new Error("Not implemented");
-      },
-    };
-
-    const result = await extractMemories(mockModel, "Generic conversation.");
-    expect(result.entries.length).toBe(0);
   });
 
   test("runCompressionAgent: converts summary to structured session memory", async () => {

@@ -43,8 +43,13 @@ export interface SystemPromptOptions {
   readonly pawMd?: string;
   /** 项目记忆（分层的本地记忆数据），可选 */
   readonly projectMemory?: ProjectMemory;
-  /** 当前上下文最相关的记忆记录列表，可选 */
+  /** 当前上下文最相关的记忆记录列表，可选（旧 file 路径） */
   readonly relevantMemories?: readonly MemoryRecord[];
+  /**
+   * 新记忆 Runtime 预渲染的上下文段（ContextBuilder 输出）。
+   * 若提供，优先于 relevantMemories 注入 system prompt。
+   */
+  readonly memoryContextSection?: string;
   /** TODO 列表文本，可选 */
   readonly todos?: string;
   /** 当前会话使用的语言，可选 */

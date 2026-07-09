@@ -94,6 +94,50 @@ export const pawSettingsLocalSchema = z
         cpus: z.number().positive().optional(),
       })
       .optional(),
+    /**
+     * 付费 LLM 记忆提取总开关。false 时关闭所有付费通道（end-of-run 提取、
+     * 短 Run 摘要、BackgroundReview），零成本通道不受影响。
+     * 默认 true（开启）。
+     */
+    paid_memory_extraction: z.boolean().optional(),
+    /**
+     * BackgroundReview 间隔（轮）。每 N 轮用辅助模型做一次轻量会话摘要。
+     * 0 = 关闭（默认）。建议值 15-20。与 compact 互斥：compact 触发后冷却期内跳过。
+     */
+    background_review_interval: z.number().int().min(0).optional(),
+    /**
+     * 单 Run 最大 LLM 提取次数（包括 end-of-run 提取、短 Run 摘要、BackgroundReview）。
+     * 防止循环反复调用 LLM。默认 3。
+     */
+    max_extractions_per_run: z.number().int().min(1).optional(),
+    /**
+     * 禁用从 compact 产物中自动提取记忆亮点（决策/错误修复）。
+     * 默认 false（启用）。compact 和 BackgroundReview 都会检查此开关。
+     */
+    disable_session_highlight_extraction: z.boolean().optional(),
+    /**
+     * memoryExtraction 为 "background" 时，对话低于此 token 数则跳过提取。
+     * 避免对极短对话浪费 auxiliary model 调用。默认 1000。
+     */
+    memory_extraction_min_tokens: z.number().int().min(0).optional(),
+    /**
+     * 记忆后端提供者名称。默认 "file"（本地 MD 文件）。
+     * 可选 "sqlite"、"mem0" 等外部后端（需对应 provider 实现）。
+     * @deprecated 请改用 memory_backend；cutover 完成后将移除 file 写入路径。
+     */
+    memory_provider: z.string().optional(),
+    /**
+     * 记忆后端（历史字段）。在线路径 **仅 db**（MemoryRuntime）。
+     * `file` 已从 Agent 在线路径移除；旧 MD 请用 `bun run memory:migrate-legacy`。
+     * 需要 DATABASE_URL + `bun run memory:migrate`。DB 不可达时 degrade。
+     */
+    memory_backend: z.enum(["db", "file"]).optional(),
+    /** 记忆 scope：用户 id，默认 local / PAW_USER_ID */
+    user_id: z.string().optional(),
+    /** 记忆 scope：仓库 id，默认 git remote hash 或 workspace hash */
+    repository_id: z.string().optional(),
+    /** 记忆 scope：工作区 id，默认同 repository_id */
+    workspace_id: z.string().optional(),
   })
   .passthrough(); // 允许未列出的字段透传，保证向前兼容
 

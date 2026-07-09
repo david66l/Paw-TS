@@ -111,9 +111,22 @@ export function readWorkspaceFile(
 export interface ListFilesResult {
   readonly directory?: string;
   readonly file_count?: number;
+  /**
+   * Entry names relative to `directory`.
+   * Directories end with `/` so agents can tell them from files.
+   */
   readonly files?: string[];
   readonly truncated?: boolean;
   readonly error?: string;
+}
+
+/** Normalize a relative path to posix and mark directories with trailing `/`. */
+function formatListEntry(relPath: string, isDirectory: boolean): string {
+  const posix = relPath.split(path.sep).join("/");
+  if (!isDirectory) {
+    return posix;
+  }
+  return posix.endsWith("/") ? posix : `${posix}/`;
 }
 
 export function listWorkspaceFiles(
@@ -135,17 +148,18 @@ export function listWorkspaceFiles(
 
   if (!recursive) {
     for (const ent of fs.readdirSync(dirpath, { withFileTypes: true })) {
-      if (!ent.isFile()) {
+      const isDir = ent.isDirectory();
+      const isFile = ent.isFile();
+      if (!isDir && !isFile) {
         continue;
       }
       if (!fnmatchLite(ent.name, pattern)) {
         continue;
       }
-      const rel = path.relative(dirpath, path.join(dirpath, ent.name));
-      if (isIgnoredUnderDir(rel.split(path.sep))) {
+      if (isIgnoredUnderDir([ent.name])) {
         continue;
       }
-      collected.push(ent.name);
+      collected.push(formatListEntry(ent.name, isDir));
     }
   } else {
     const walk = (current: string) => {
@@ -168,19 +182,31 @@ export function listWorkspaceFiles(
           if (depthFromDir(dirpath, full) > maxDepth) {
             continue;
           }
+          // Include the directory itself so agents can see structure.
+          if (fnmatchLite(ent.name, pattern)) {
+            collected.push(formatListEntry(relToListRoot, true));
+          }
           walk(full);
         } else if (ent.isFile()) {
           if (!fnmatchLite(ent.name, pattern)) {
             continue;
           }
-          collected.push(relToListRoot);
+          collected.push(formatListEntry(relToListRoot, false));
         }
       }
     };
     walk(dirpath);
   }
 
-  const sorted = [...collected].sort((a, b) => a.localeCompare(b));
+  // Directories first (trailing `/`), then files; stable locale sort within each.
+  const sorted = [...collected].sort((a, b) => {
+    const aDir = a.endsWith("/");
+    const bDir = b.endsWith("/");
+    if (aDir !== bDir) {
+      return aDir ? -1 : 1;
+    }
+    return a.localeCompare(b);
+  });
   const truncated = sorted.length > MAX_LIST_FILES;
   const files = sorted.slice(0, MAX_LIST_FILES);
   return {

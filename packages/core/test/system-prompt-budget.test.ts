@@ -38,6 +38,12 @@ describe("buildSystemPromptWithBudget", () => {
     );
     expect(result.trimmed).toEqual([]);
     expect(result.content).toContain("You are Paw");
+    // Runtime 记忆章节（不再注入 file-based auto-memory 长文 / 四类型 XML）
+    expect(result.content).toContain("# Memory");
+    expect(result.content).toContain("MemoryRuntime");
+    expect(result.content).not.toContain("file-based memory system");
+    expect(result.content).not.toContain("<types>");
+    expect(result.content).not.toContain("## Types of memory");
   });
 
   it("trims memory detail when over system budget", () => {

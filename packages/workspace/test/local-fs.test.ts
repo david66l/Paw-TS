@@ -26,13 +26,30 @@ describe("readWorkspaceFile", () => {
 });
 
 describe("listWorkspaceFiles", () => {
-  test("non-recursive lists names", () => {
+  test("non-recursive lists files and directories", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-ws-"));
     fs.writeFileSync(path.join(root, "x.ts"), "", "utf8");
     fs.writeFileSync(path.join(root, "y.ts"), "", "utf8");
+    fs.mkdirSync(path.join(root, "packages"));
+    fs.mkdirSync(path.join(root, "apps"));
+    fs.mkdirSync(path.join(root, "node_modules")); // ignored
+    fs.writeFileSync(path.join(root, "packages", "a.ts"), "", "utf8");
     const r = listWorkspaceFiles(root, ".", { recursive: false });
     expect(r.error).toBeUndefined();
-    expect(r.files?.sort()).toEqual(["x.ts", "y.ts"]);
+    expect(r.files).toEqual(["apps/", "packages/", "x.ts", "y.ts"]);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test("recursive includes directory markers and nested files", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-ws-rec-"));
+    fs.mkdirSync(path.join(root, "src"));
+    fs.writeFileSync(path.join(root, "src", "main.ts"), "", "utf8");
+    fs.writeFileSync(path.join(root, "readme.md"), "", "utf8");
+    const r = listWorkspaceFiles(root, ".", { recursive: true, maxDepth: 3 });
+    expect(r.error).toBeUndefined();
+    expect(r.files).toContain("src/");
+    expect(r.files).toContain("src/main.ts");
+    expect(r.files).toContain("readme.md");
     fs.rmSync(root, { recursive: true, force: true });
   });
 });
