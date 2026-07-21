@@ -127,11 +127,10 @@ export interface PersistentSession {
 export function createPersistentSession(
   opts: PersistentSessionOptions,
 ): PersistentSession {
-  const maxSteps = opts.maxSteps ?? 40;
   const runId = `session-${Date.now()}`;
   const workspaceRoot = opts.workspaceRoot;
 
-  const { orch, mainModel, watcher } = createRunOrchestrator({
+  const { orch, mainModel, watcher, rootMaxSteps } = createRunOrchestrator({
     workspaceRoot,
     skillsDir: opts.skillsDir,
     resolveAskUser: opts.resolveAskUser,
@@ -142,6 +141,9 @@ export function createPersistentSession(
     memoryExtraction: "background",
     onEvent: opts.onEvent,
   });
+
+  // 显式传参 > root Agent Spec 的 maxSteps > 默认 40
+  const maxSteps = opts.maxSteps ?? rootMaxSteps ?? 40;
 
   const appStateStore = new FileSystemAppStateStore({
     statesDir: path.join(workspaceRoot, ".paw", "states"),

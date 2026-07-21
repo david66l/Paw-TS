@@ -251,3 +251,17 @@ export {
   buildRetrievalSignalsFromMessages,
   type MemoryRetrievalSignals,
 } from "./memory-query.js";
+
+export {
+  buildConversationAwareQuery,
+  cleanMemoryTitle,
+  extractExplicitRememberText,
+  hasDurableMemorySignal,
+  isDecisionStep,
+  isLowValueChitchat,
+  isSystemFinalizeMessage,
+  isWorthWritingLongTermMemory,
+  shouldWriteTaskSummary,
+  tokenizeForMemoryScore,
+  type MemoryWriteSignalInput,
+} from "./memory-quality.js";

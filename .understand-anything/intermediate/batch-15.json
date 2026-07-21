@@ -1,0 +1,363 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/settings/src/credentials.ts",
+      "type": "file",
+      "name": "credentials.ts",
+      "filePath": "packages/settings/src/credentials.ts",
+      "summary": "凭证解析与脱敏模块，统一管理 Anthropic、OpenAI、Qwen、DeepSeek 等多个 AI 提供商的 API Key、Base URL 和 Model 配置，实现三级优先级解析链（嵌套 models 字段 → 旧版扁平字段 → 环境变量）和安全的密钥脱敏。",
+      "tags": ["credentials", "api-key", "multi-provider", "security"],
+      "complexity": "moderate",
+      "languageNotes": "使用 CredentialProvider 联合类型和 Record 映射自动派生字段名和环境变量名，避免硬编码散落——这是 TypeScript 类型系统实现 DRY 配置管理的优秀实践。"
+    },
+    {
+      "id": "file:packages/settings/src/load.ts",
+      "type": "file",
+      "name": "load.ts",
+      "filePath": "packages/settings/src/load.ts",
+      "summary": "Settings 文件加载器，负责读取、Zod 验证和保存 .paw/settings.local.json 配置文件，并提供单行的密钥脱敏显示函数。",
+      "tags": ["settings", "loader", "validation", "security"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/settings/src/schema.ts",
+      "type": "file",
+      "name": "schema.ts",
+      "filePath": "packages/settings/src/schema.ts",
+      "summary": "使用 Zod 定义 .paw/settings.local.json 的完整数据结构 schema，包括模型配置、MCP 服务器配置和各类 API 密钥字段，提供运行时类型校验和 TypeScript 类型自动推导。",
+      "tags": ["schema", "zod", "type-definition", "validation"],
+      "complexity": "moderate",
+      "languageNotes": "使用 Zod 的 .passthrough() 实现向前兼容——显式列出已知字段但允许未知 key 透传，新增配置项时不会破坏已有 settings 文件。"
+    },
+    {
+      "id": "file:packages/settings/test/credentials.test.ts",
+      "type": "file",
+      "name": "credentials.test.ts",
+      "filePath": "packages/settings/test/credentials.test.ts",
+      "summary": "凭证解析逻辑的单元测试，验证 API Key 的三级优先级解析（嵌套 → 扁平 → 环境变量）、Base URL 解析、密钥脱敏和 hasApiKey 检测。",
+      "tags": ["test", "credentials", "security"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/settings/test/load.test.ts",
+      "type": "file",
+      "name": "load.test.ts",
+      "filePath": "packages/settings/test/load.test.ts",
+      "summary": "Settings 文件加载器的单元测试，覆盖合法 JSON 解析、密钥脱敏显示和文件不存在时的错误处理。",
+      "tags": ["test", "settings", "loader"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/settings/src/credentials.ts:resolveModel",
+      "type": "function",
+      "name": "resolveModel",
+      "filePath": "packages/settings/src/credentials.ts",
+      "lineRange": [66, 83],
+      "summary": "按三级优先级解析模型名称：models.<provider>.model → 旧版扁平 model 字段 → fallback 默认值。",
+      "tags": ["credentials", "resolution", "multi-provider"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/settings/src/credentials.ts:resolveApiKey",
+      "type": "function",
+      "name": "resolveApiKey",
+      "filePath": "packages/settings/src/credentials.ts",
+      "lineRange": [97, 113],
+      "summary": "按三级优先级解析 API Key：models.<provider>.apiKey → 旧版扁平字段 → 环境变量，优先使用嵌套结构。",
+      "tags": ["credentials", "api-key", "resolution"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/settings/src/credentials.ts:resolveBaseUrl",
+      "type": "function",
+      "name": "resolveBaseUrl",
+      "filePath": "packages/settings/src/credentials.ts",
+      "lineRange": [127, 140],
+      "summary": "按三级优先级解析 Base URL：models.<provider>.baseUrl → 旧版扁平字段 → 环境变量。",
+      "tags": ["credentials", "base-url", "resolution"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/settings/src/credentials.ts:hasApiKey",
+      "type": "function",
+      "name": "hasApiKey",
+      "filePath": "packages/settings/src/credentials.ts",
+      "lineRange": [149, 154],
+      "summary": "检查指定提供商是否配置了非空 API Key（通过 resolveApiKey 解析）。",
+      "tags": ["credentials", "api-key", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/settings/src/credentials.ts:redactSecrets",
+      "type": "function",
+      "name": "redactSecrets",
+      "filePath": "packages/settings/src/credentials.ts",
+      "lineRange": [165, 195],
+      "summary": "递归处理 settings 对象中所有嵌套和扁平密钥字段，将其替换为脱敏后的掩码形式，确保日志输出不泄露敏感信息。",
+      "tags": ["credentials", "security", "redaction", "privacy"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/settings/src/credentials.ts:maskKey",
+      "type": "function",
+      "name": "maskKey",
+      "filePath": "packages/settings/src/credentials.ts",
+      "lineRange": [205, 210],
+      "summary": "对单个密钥值进行掩码处理，仅保留前后各 4 个字符，中间用省略号替代。",
+      "tags": ["security", "redaction", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/settings/src/load.ts:defaultSettingsPath",
+      "type": "function",
+      "name": "defaultSettingsPath",
+      "filePath": "packages/settings/src/load.ts",
+      "lineRange": [16, 18],
+      "summary": "返回默认的 settings 文件路径：工作区根目录下的 .paw/settings.local.json。",
+      "tags": ["settings", "path", "configuration"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/settings/src/load.ts:loadPawSettingsLocal",
+      "type": "function",
+      "name": "loadPawSettingsLocal",
+      "filePath": "packages/settings/src/load.ts",
+      "lineRange": [20, 50],
+      "summary": "读取并解析 settings.local.json 文件，通过 Zod schema 验证结构，失败时抛出类型化 PawError。",
+      "tags": ["settings", "loader", "validation", "zod"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/settings/src/load.ts:redactSettingsForDisplay",
+      "type": "function",
+      "name": "redactSettingsForDisplay",
+      "filePath": "packages/settings/src/load.ts",
+      "lineRange": [55, 59],
+      "summary": "对 settings 对象执行脱敏处理，确保 API Key 等敏感信息不会以明文形式打印到终端。",
+      "tags": ["settings", "security", "redaction"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/settings/src/load.ts:savePawSettingsLocal",
+      "type": "function",
+      "name": "savePawSettingsLocal",
+      "filePath": "packages/settings/src/load.ts",
+      "lineRange": [62, 69],
+      "summary": "将 PawSettingsLocal 对象序列化为 JSON 并保存到指定路径，自动创建不存在的父目录。",
+      "tags": ["settings", "persistence", "filesystem"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "file:packages/settings/src/schema.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "file:packages/settings/src/credentials.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "file:packages/settings/src/schema.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/settings/test/credentials.test.ts",
+      "target": "file:packages/settings/src/credentials.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/settings/test/credentials.test.ts",
+      "target": "file:packages/settings/src/schema.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/settings/test/load.test.ts",
+      "target": "file:packages/settings/src/load.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:resolveModel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:resolveApiKey",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:resolveBaseUrl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:hasApiKey",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:redactSecrets",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:maskKey",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "function:packages/settings/src/load.ts:defaultSettingsPath",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "function:packages/settings/src/load.ts:loadPawSettingsLocal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "function:packages/settings/src/load.ts:redactSettingsForDisplay",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "function:packages/settings/src/load.ts:savePawSettingsLocal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:resolveModel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:resolveApiKey",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:resolveBaseUrl",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:hasApiKey",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/src/credentials.ts",
+      "target": "function:packages/settings/src/credentials.ts:redactSecrets",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "function:packages/settings/src/load.ts:defaultSettingsPath",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "function:packages/settings/src/load.ts:loadPawSettingsLocal",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "function:packages/settings/src/load.ts:redactSettingsForDisplay",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/src/load.ts",
+      "target": "function:packages/settings/src/load.ts:savePawSettingsLocal",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/settings/src/credentials.ts:hasApiKey",
+      "target": "function:packages/settings/src/credentials.ts:resolveApiKey",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/settings/src/credentials.ts:redactSecrets",
+      "target": "function:packages/settings/src/credentials.ts:maskKey",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/settings/src/load.ts:redactSettingsForDisplay",
+      "target": "function:packages/settings/src/credentials.ts:redactSecrets",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/settings/test/credentials.test.ts",
+      "target": "file:packages/settings/src/credentials.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/settings/test/load.test.ts",
+      "target": "file:packages/settings/src/load.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

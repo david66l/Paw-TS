@@ -1,0 +1,746 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 5,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/core/src/context/summary.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 94,
+      "nonEmptyLines": 87,
+      "functions": [
+        {
+          "name": "validateCompressionSummary",
+          "startLine": 47,
+          "endLine": 64,
+          "params": [
+            "summary"
+          ]
+        },
+        {
+          "name": "compressionSavingsRatio",
+          "startLine": 73,
+          "endLine": 79,
+          "params": [
+            "beforeTokens",
+            "afterTokens"
+          ]
+        },
+        {
+          "name": "meetsCompressionSavingsThreshold",
+          "startLine": 88,
+          "endLine": 94,
+          "params": [
+            "beforeTokens",
+            "afterTokens",
+            "minRatio"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "REQUIRED_SUMMARY_SECTIONS",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "MIN_COMPRESSION_SAVINGS_RATIO",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "validateCompressionSummary",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "compressionSavingsRatio",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "meetsCompressionSavingsThreshold",
+          "line": 88,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "validateCompressionSummary",
+          "callee": "summary.trim",
+          "lineNumber": 51
+        },
+        {
+          "caller": "validateCompressionSummary",
+          "callee": "parseMarkdownSections",
+          "lineNumber": 57
+        },
+        {
+          "caller": "validateCompressionSummary",
+          "callee": "sections[sec]?.trim",
+          "lineNumber": 59
+        },
+        {
+          "caller": "meetsCompressionSavingsThreshold",
+          "callee": "compressionSavingsRatio",
+          "lineNumber": 93
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 5,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/markdown.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 152,
+      "nonEmptyLines": 143,
+      "functions": [
+        {
+          "name": "splitFrontmatter",
+          "startLine": 60,
+          "endLine": 64,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "parseYamlFrontmatter",
+          "startLine": 80,
+          "endLine": 92,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "stringifyYamlFrontmatter",
+          "startLine": 102,
+          "endLine": 107,
+          "params": [
+            "data"
+          ]
+        },
+        {
+          "name": "parseMarkdownSections",
+          "startLine": 120,
+          "endLine": 152,
+          "params": [
+            "text"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "splitFrontmatter",
+          "line": 60,
+          "isDefault": false
+        },
+        {
+          "name": "parseYamlFrontmatter",
+          "line": 80,
+          "isDefault": false
+        },
+        {
+          "name": "stringifyYamlFrontmatter",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "parseMarkdownSections",
+          "line": 120,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "splitFrontmatter",
+          "callee": "text.match",
+          "lineNumber": 61
+        },
+        {
+          "caller": "parseYamlFrontmatter",
+          "callee": "text.split",
+          "lineNumber": 82
+        },
+        {
+          "caller": "parseYamlFrontmatter",
+          "callee": "line.match",
+          "lineNumber": 85
+        },
+        {
+          "caller": "parseYamlFrontmatter",
+          "callee": "m[1].trim",
+          "lineNumber": 88
+        },
+        {
+          "caller": "parseYamlFrontmatter",
+          "callee": "m[2].trim",
+          "lineNumber": 88
+        },
+        {
+          "caller": "stringifyYamlFrontmatter",
+          "callee": "Object.entries(data).map",
+          "lineNumber": 105
+        },
+        {
+          "caller": "stringifyYamlFrontmatter",
+          "callee": "Object.entries",
+          "lineNumber": 105
+        },
+        {
+          "caller": "stringifyYamlFrontmatter",
+          "callee": "[\"---\", ...lines, \"---\"].join",
+          "lineNumber": 106
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "text.split",
+          "lineNumber": 122
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "line.match",
+          "lineNumber": 129
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "currentHeading.toLowerCase",
+          "lineNumber": 133
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "currentLines\n          .join(\"\\n\")\n          .trim",
+          "lineNumber": 133
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "currentLines\n          .join",
+          "lineNumber": 133
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "currentLines.push",
+          "lineNumber": 142
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "currentHeading.toLowerCase",
+          "lineNumber": 148
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "currentLines.join(\"\\n\").trim",
+          "lineNumber": 148
+        },
+        {
+          "caller": "parseMarkdownSections",
+          "callee": "currentLines.join",
+          "lineNumber": 148
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/skills.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 561,
+      "nonEmptyLines": 534,
+      "functions": [
+        {
+          "name": "loadSkillsFromDirectory",
+          "startLine": 215,
+          "endLine": 261,
+          "params": [
+            "dir"
+          ]
+        },
+        {
+          "name": "findSkillMd",
+          "startLine": 272,
+          "endLine": 283,
+          "params": [
+            "dir"
+          ]
+        },
+        {
+          "name": "parseMarkdownSkill",
+          "startLine": 305,
+          "endLine": 377,
+          "params": [
+            "raw",
+            "skillId"
+          ]
+        },
+        {
+          "name": "parseSkillDefinition",
+          "startLine": 385,
+          "endLine": 428,
+          "params": [
+            "raw"
+          ]
+        },
+        {
+          "name": "parseSkillParameters",
+          "startLine": 437,
+          "endLine": 469,
+          "params": [
+            "raw"
+          ]
+        },
+        {
+          "name": "parseStringArray",
+          "startLine": 476,
+          "endLine": 481,
+          "params": [
+            "raw"
+          ]
+        },
+        {
+          "name": "skillsFromProjectMemory",
+          "startLine": 498,
+          "endLine": 523,
+          "params": [
+            "committedContent",
+            "localContent"
+          ]
+        },
+        {
+          "name": "renderSkillPrompt",
+          "startLine": 539,
+          "endLine": 561,
+          "params": [
+            "skill",
+            "args"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "SkillRegistry",
+          "startLine": 133,
+          "endLine": 197,
+          "methods": [
+            "register",
+            "unregister",
+            "get",
+            "has",
+            "list",
+            "listUserInvocable",
+            "catalogText"
+          ],
+          "properties": [
+            "map"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "SkillRegistry",
+          "line": 133,
+          "isDefault": false
+        },
+        {
+          "name": "loadSkillsFromDirectory",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "skillsFromProjectMemory",
+          "line": 498,
+          "isDefault": false
+        },
+        {
+          "name": "renderSkillPrompt",
+          "line": 539,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "register",
+          "callee": "this.map.set",
+          "lineNumber": 138
+        },
+        {
+          "caller": "unregister",
+          "callee": "this.map.delete",
+          "lineNumber": 143
+        },
+        {
+          "caller": "get",
+          "callee": "this.map.get",
+          "lineNumber": 148
+        },
+        {
+          "caller": "has",
+          "callee": "this.map.has",
+          "lineNumber": 153
+        },
+        {
+          "caller": "list",
+          "callee": "this.map.values",
+          "lineNumber": 158
+        },
+        {
+          "caller": "listUserInvocable",
+          "callee": "this.list",
+          "lineNumber": 163
+        },
+        {
+          "caller": "catalogText",
+          "callee": "this.list",
+          "lineNumber": 178
+        },
+        {
+          "caller": "catalogText",
+          "callee": "skills.map",
+          "lineNumber": 182
+        },
+        {
+          "caller": "catalogText",
+          "callee": "s.parameters\n        ?.map((p) => {\n          const req = p.required ? \"required\" : \"optional\";\n          const def =\n            p.default !== undefined\n              ? ` default=${JSON.stringify(p.default)}`\n              : \"\";\n          return `${p.name}: ${p.type} (${req})${def} — ${p.description}`;\n        })\n        .join",
+          "lineNumber": 183
+        },
+        {
+          "caller": "catalogText",
+          "callee": "s.parameters\n        ?.map",
+          "lineNumber": 183
+        },
+        {
+          "caller": "catalogText",
+          "callee": "JSON.stringify",
+          "lineNumber": 188
+        },
+        {
+          "caller": "catalogText",
+          "callee": "lines.join",
+          "lineNumber": 195
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "readdirSync",
+          "lineNumber": 219
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "path.join",
+          "lineNumber": 224
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "statSync",
+          "lineNumber": 226
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "st.isDirectory",
+          "lineNumber": 227
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "findSkillMd",
+          "lineNumber": 229
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "readFileSync",
+          "lineNumber": 231
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "parseMarkdownSkill",
+          "lineNumber": 232
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "skills.push",
+          "lineNumber": 235
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "skills.push",
+          "lineNumber": 239
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "loadSkillsFromDirectory",
+          "lineNumber": 239
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "entry.endsWith",
+          "lineNumber": 241
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "readFileSync",
+          "lineNumber": 242
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "JSON.parse",
+          "lineNumber": 243
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "parseSkillDefinition",
+          "lineNumber": 244
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "skills.push",
+          "lineNumber": 246
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "entry.endsWith",
+          "lineNumber": 248
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "readFileSync",
+          "lineNumber": 249
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "parseMarkdownSkill",
+          "lineNumber": 251
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "path.basename",
+          "lineNumber": 251
+        },
+        {
+          "caller": "loadSkillsFromDirectory",
+          "callee": "skills.push",
+          "lineNumber": 253
+        },
+        {
+          "caller": "findSkillMd",
+          "callee": "path.join",
+          "lineNumber": 274
+        },
+        {
+          "caller": "findSkillMd",
+          "callee": "statSync",
+          "lineNumber": 276
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "splitFrontmatter",
+          "lineNumber": 309
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "raw.trim",
+          "lineNumber": 312
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "rawPrompt.includes",
+          "lineNumber": 314
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "rawPrompt.includes",
+          "lineNumber": 314
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "parseYamlFrontmatter",
+          "lineNumber": 338
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "fmMatch.body.trim",
+          "lineNumber": 340
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "fm.tools\n        .split(\",\")\n        .map((s) => s.trim())\n        .filter",
+          "lineNumber": 345
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "fm.tools\n        .split(\",\")\n        .map",
+          "lineNumber": 345
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "fm.tools\n        .split",
+          "lineNumber": 345
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "s.trim",
+          "lineNumber": 347
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "prompt.includes",
+          "lineNumber": 355
+        },
+        {
+          "caller": "parseMarkdownSkill",
+          "callee": "prompt.includes",
+          "lineNumber": 355
+        },
+        {
+          "caller": "parseSkillDefinition",
+          "callee": "parseSkillParameters",
+          "lineNumber": 400
+        },
+        {
+          "caller": "parseSkillDefinition",
+          "callee": "parseStringArray",
+          "lineNumber": 401
+        },
+        {
+          "caller": "parseSkillDefinition",
+          "callee": "parseStringArray",
+          "lineNumber": 402
+        },
+        {
+          "caller": "parseSkillParameters",
+          "callee": "Array.isArray",
+          "lineNumber": 438
+        },
+        {
+          "caller": "parseSkillParameters",
+          "callee": "out.push",
+          "lineNumber": 460
+        },
+        {
+          "caller": "parseStringArray",
+          "callee": "Array.isArray",
+          "lineNumber": 477
+        },
+        {
+          "caller": "parseStringArray",
+          "callee": "raw.filter",
+          "lineNumber": 480
+        },
+        {
+          "caller": "skillsFromProjectMemory",
+          "callee": "committedContent?.trim",
+          "lineNumber": 503
+        },
+        {
+          "caller": "skillsFromProjectMemory",
+          "callee": "skills.push",
+          "lineNumber": 504
+        },
+        {
+          "caller": "skillsFromProjectMemory",
+          "callee": "committedContent.trim",
+          "lineNumber": 510
+        },
+        {
+          "caller": "skillsFromProjectMemory",
+          "callee": "localContent?.trim",
+          "lineNumber": 513
+        },
+        {
+          "caller": "skillsFromProjectMemory",
+          "callee": "skills.push",
+          "lineNumber": 514
+        },
+        {
+          "caller": "skillsFromProjectMemory",
+          "callee": "localContent.trim",
+          "lineNumber": 519
+        },
+        {
+          "caller": "renderSkillPrompt",
+          "callee": "String",
+          "lineNumber": 549
+        },
+        {
+          "caller": "renderSkillPrompt",
+          "callee": "prompt.split(placeholder).join",
+          "lineNumber": 554
+        },
+        {
+          "caller": "renderSkillPrompt",
+          "callee": "prompt.split",
+          "lineNumber": 554
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 4,
+        "functionCount": 8,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/core/test/compression-summary.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 43,
+      "nonEmptyLines": 39,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/test/skills.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 179,
+      "nonEmptyLines": 162,
+      "functions": [
+        {
+          "name": "makeSkill",
+          "startLine": 13,
+          "endLine": 22,
+          "params": [
+            "overrides"
+          ]
+        },
+        {
+          "name": "mkdirSync",
+          "startLine": 176,
+          "endLine": 179,
+          "params": [
+            "p",
+            "opts"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "mkdirSync",
+          "callee": "require",
+          "lineNumber": 177
+        },
+        {
+          "caller": "mkdirSync",
+          "callee": "fsMkdir",
+          "lineNumber": 178
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    }
+  ]
+}

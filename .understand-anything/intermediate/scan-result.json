@@ -1,9 +1,8 @@
 {
   "name": "paw",
-  "description": "基于 Bun 的本地优先编码 Agent Monorepo（TypeScript），提供 CLI 与 TUI 双入口、工具编排（MCP 协议）、上下文压缩及统一记忆检索能力。 Note: this project has over 100 source files; consider scoping analysis to a subdirectory for faster results.",
+  "description": "Paw TypeScript 技术栈——基于 Bun 的本地优先编程智能体 monorepo，提供 CLI/TUI 双界面、工具执行框架、上下文压缩与统一记忆检索。规范：架构设计v2。注意：该项目包含超过 100 个源文件，建议限定分析范围至子目录以加快处理速度。",
   "languages": [
     "dockerfile",
-    "javascript",
     "json",
     "jsonl",
     "markdown",
@@ -17,12 +16,8 @@
     "yaml"
   ],
   "frameworks": [
-    "Biome",
-    "Bun",
     "Docker",
-    "GitHub Actions",
-    "MCP",
-    "TypeScript"
+    "GitHub Actions"
   ],
   "files": [
     {
@@ -42,858 +37,6 @@
       "language": "markdown",
       "sizeLines": 4,
       "fileCategory": "docs"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/assembled-graph.json",
-      "language": "json",
-      "sizeLines": 25369,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-1-part-1.json",
-      "language": "json",
-      "sizeLines": 1210,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-1-part-2.json",
-      "language": "json",
-      "sizeLines": 1657,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-10.json",
-      "language": "json",
-      "sizeLines": 902,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-11.json",
-      "language": "json",
-      "sizeLines": 501,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-12.json",
-      "language": "json",
-      "sizeLines": 392,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-13.json",
-      "language": "json",
-      "sizeLines": 526,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-14.json",
-      "language": "json",
-      "sizeLines": 268,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-15.json",
-      "language": "json",
-      "sizeLines": 517,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-16.json",
-      "language": "json",
-      "sizeLines": 274,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-17.json",
-      "language": "json",
-      "sizeLines": 164,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-18.json",
-      "language": "json",
-      "sizeLines": 15,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-19.json",
-      "language": "json",
-      "sizeLines": 79,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-2.json",
-      "language": "json",
-      "sizeLines": 1290,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-20.json",
-      "language": "json",
-      "sizeLines": 108,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-21.json",
-      "language": "json",
-      "sizeLines": 117,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-22.json",
-      "language": "json",
-      "sizeLines": 47,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-23.json",
-      "language": "json",
-      "sizeLines": 100,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-24.json",
-      "language": "json",
-      "sizeLines": 302,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-25.json",
-      "language": "json",
-      "sizeLines": 54,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-26.json",
-      "language": "json",
-      "sizeLines": 110,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-27.json",
-      "language": "json",
-      "sizeLines": 528,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-28.json",
-      "language": "json",
-      "sizeLines": 561,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-29.json",
-      "language": "json",
-      "sizeLines": 613,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-3-part-1.json",
-      "language": "json",
-      "sizeLines": 1043,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-3-part-2.json",
-      "language": "json",
-      "sizeLines": 813,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-30.json",
-      "language": "json",
-      "sizeLines": 346,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-4-part-1.json",
-      "language": "json",
-      "sizeLines": 608,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-4-part-2.json",
-      "language": "json",
-      "sizeLines": 500,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-5.json",
-      "language": "json",
-      "sizeLines": 875,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-6.json",
-      "language": "json",
-      "sizeLines": 551,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-7-part-1.json",
-      "language": "json",
-      "sizeLines": 1491,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-7-part-2.json",
-      "language": "json",
-      "sizeLines": 362,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-8.json",
-      "language": "json",
-      "sizeLines": 1123,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-9-part-1.json",
-      "language": "json",
-      "sizeLines": 1001,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batch-9-part-2.json",
-      "language": "json",
-      "sizeLines": 880,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/batches.json",
-      "language": "json",
-      "sizeLines": 5674,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/fingerprint-input.json",
-      "language": "json",
-      "sizeLines": 384,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/layers.json",
-      "language": "json",
-      "sizeLines": 402,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/review.json",
-      "language": "json",
-      "sizeLines": 53,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-1.json",
-      "language": "json",
-      "sizeLines": 441,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-10.json",
-      "language": "json",
-      "sizeLines": 163,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-11.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-12.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-13.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-14.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-15.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-16.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-17.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-18.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-19.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-2.json",
-      "language": "json",
-      "sizeLines": 254,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-20.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-21.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-22.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-23.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-24.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-25.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-26.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-27.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-28.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-29.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-3.json",
-      "language": "json",
-      "sizeLines": 299,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-30.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-4.json",
-      "language": "json",
-      "sizeLines": 451,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-5.json",
-      "language": "json",
-      "sizeLines": 477,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-6.json",
-      "language": "json",
-      "sizeLines": 294,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-7.json",
-      "language": "json",
-      "sizeLines": 192,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-8.json",
-      "language": "json",
-      "sizeLines": 161,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch-ctx-9.json",
-      "language": "json",
-      "sizeLines": 157,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/batch1-combined.json",
-      "language": "json",
-      "sizeLines": 2862,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/generate-batch1.py",
-      "language": "python",
-      "sizeLines": 644,
-      "fileCategory": "code"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/split-batch1.py",
-      "language": "python",
-      "sizeLines": 53,
-      "fileCategory": "code"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-arch-analyze.cjs",
-      "language": "javascript",
-      "sizeLines": 484,
-      "fileCategory": "code"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-arch-input.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-arch-results.json",
-      "language": "json",
-      "sizeLines": 1317,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-1.json",
-      "language": "json",
-      "sizeLines": 36,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-10.json",
-      "language": "json",
-      "sizeLines": 39,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-11.json",
-      "language": "json",
-      "sizeLines": 31,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-12.json",
-      "language": "json",
-      "sizeLines": 26,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-13.json",
-      "language": "json",
-      "sizeLines": 23,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-14.json",
-      "language": "json",
-      "sizeLines": 17,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-15.json",
-      "language": "json",
-      "sizeLines": 17,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-16.json",
-      "language": "json",
-      "sizeLines": 17,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-17.json",
-      "language": "json",
-      "sizeLines": 13,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-18.json",
-      "language": "json",
-      "sizeLines": 7,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-19.json",
-      "language": "json",
-      "sizeLines": 7,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-2.json",
-      "language": "json",
-      "sizeLines": 59,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-20.json",
-      "language": "json",
-      "sizeLines": 17,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-21.json",
-      "language": "json",
-      "sizeLines": 13,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-22.json",
-      "language": "json",
-      "sizeLines": 13,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-23.json",
-      "language": "json",
-      "sizeLines": 17,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-24.json",
-      "language": "json",
-      "sizeLines": 25,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-25.json",
-      "language": "json",
-      "sizeLines": 13,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-26.json",
-      "language": "json",
-      "sizeLines": 17,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-27.json",
-      "language": "json",
-      "sizeLines": 57,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-28.json",
-      "language": "json",
-      "sizeLines": 58,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-29.json",
-      "language": "json",
-      "sizeLines": 57,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-3.json",
-      "language": "json",
-      "sizeLines": 28,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-30.json",
-      "language": "json",
-      "sizeLines": 25,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-5.json",
-      "language": "json",
-      "sizeLines": 28,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-6.json",
-      "language": "json",
-      "sizeLines": 51,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-7.json",
-      "language": "json",
-      "sizeLines": 49,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-8.json",
-      "language": "json",
-      "sizeLines": 41,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-9.json",
-      "language": "json",
-      "sizeLines": 41,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-1.json",
-      "language": "json",
-      "sizeLines": 6150,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-10.json",
-      "language": "json",
-      "sizeLines": 1915,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-11.json",
-      "language": "json",
-      "sizeLines": 1699,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-12.json",
-      "language": "json",
-      "sizeLines": 418,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-13.json",
-      "language": "json",
-      "sizeLines": 765,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-14.json",
-      "language": "json",
-      "sizeLines": 466,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-15.json",
-      "language": "json",
-      "sizeLines": 745,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-16.json",
-      "language": "json",
-      "sizeLines": 376,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-17.json",
-      "language": "json",
-      "sizeLines": 205,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-18.json",
-      "language": "json",
-      "sizeLines": 47,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-19.json",
-      "language": "json",
-      "sizeLines": 37,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-2.json",
-      "language": "json",
-      "sizeLines": 2146,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-20.json",
-      "language": "json",
-      "sizeLines": 251,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-21.json",
-      "language": "json",
-      "sizeLines": 112,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-22.json",
-      "language": "json",
-      "sizeLines": 30,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-23.json",
-      "language": "json",
-      "sizeLines": 280,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-24.json",
-      "language": "json",
-      "sizeLines": 1105,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-25.json",
-      "language": "json",
-      "sizeLines": 719,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-26.json",
-      "language": "json",
-      "sizeLines": 754,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-27.json",
-      "language": "json",
-      "sizeLines": 2604,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-28.json",
-      "language": "json",
-      "sizeLines": 1302,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-29.json",
-      "language": "json",
-      "sizeLines": 2886,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-3.json",
-      "language": "json",
-      "sizeLines": 3507,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-30.json",
-      "language": "json",
-      "sizeLines": 938,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-5.json",
-      "language": "json",
-      "sizeLines": 998,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-6.json",
-      "language": "json",
-      "sizeLines": 1318,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-7.json",
-      "language": "json",
-      "sizeLines": 4894,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-8.json",
-      "language": "json",
-      "sizeLines": 4333,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-9.json",
-      "language": "json",
-      "sizeLines": 3844,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-import-map-input.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-import-map-output.json",
-      "language": "json",
-      "sizeLines": 1020,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-inline-validate.cjs",
-      "language": "javascript",
-      "sizeLines": 63,
-      "fileCategory": "code"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-scan-files.json",
-      "language": "json",
-      "sizeLines": 2319,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-tour-analyze.cjs",
-      "language": "javascript",
-      "sizeLines": 401,
-      "fileCategory": "code"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-tour-input.json",
-      "language": "json",
-      "sizeLines": 0,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tmp/ua-tour-results.json",
-      "language": "json",
-      "sizeLines": 5142,
-      "fileCategory": "config"
-    },
-    {
-      "path": ".understand-anything/.trash-1782875262/tour.json",
-      "language": "json",
-      "sizeLines": 85,
-      "fileCategory": "config"
     },
     {
       "path": ".understand-anything/.understandignore",
@@ -916,19 +59,37 @@
     {
       "path": ".understand-anything/intermediate/scan-result.json",
       "language": "json",
-      "sizeLines": 3328,
+      "sizeLines": 3008,
       "fileCategory": "config"
     },
     {
       "path": ".understand-anything/knowledge-graph.json",
       "language": "json",
-      "sizeLines": 25369,
+      "sizeLines": 18488,
       "fileCategory": "config"
     },
     {
       "path": ".understand-anything/meta.json",
       "language": "json",
       "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/tmp/ua-import-map-input.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/tmp/ua-import-map-output.json",
+      "language": "json",
+      "sizeLines": 892,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/tmp/ua-scan-files.json",
+      "language": "json",
+      "sizeLines": 2125,
       "fileCategory": "config"
     },
     {
@@ -2474,6 +1635,198 @@
       "fileCategory": "config"
     },
     {
+      "path": "packages/memory/package.json",
+      "language": "json",
+      "sizeLines": 12,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/memory/src/auto-memory.ts",
+      "language": "typescript",
+      "sizeLines": 505,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/embedding-cache.ts",
+      "language": "typescript",
+      "sizeLines": 337,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-archive.ts",
+      "language": "typescript",
+      "sizeLines": 206,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-profiles.ts",
+      "language": "typescript",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-query.ts",
+      "language": "typescript",
+      "sizeLines": 445,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-record.ts",
+      "language": "typescript",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-reflector.ts",
+      "language": "typescript",
+      "sizeLines": 350,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-retrieval-cascade.ts",
+      "language": "typescript",
+      "sizeLines": 175,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-retrieve.ts",
+      "language": "typescript",
+      "sizeLines": 250,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-retriever.ts",
+      "language": "typescript",
+      "sizeLines": 294,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-scorer.ts",
+      "language": "typescript",
+      "sizeLines": 391,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-selector.ts",
+      "language": "typescript",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/memory-tokenizer.ts",
+      "language": "typescript",
+      "sizeLines": 152,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/project-memory.ts",
+      "language": "typescript",
+      "sizeLines": 82,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/session-memory.ts",
+      "language": "typescript",
+      "sizeLines": 263,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/src/unified-memory-store.ts",
+      "language": "typescript",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/embedding-cache.test.ts",
+      "language": "typescript",
+      "sizeLines": 180,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/fixtures.ts",
+      "language": "typescript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/memory-annotations.test.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/memory-e2e.test.ts",
+      "language": "typescript",
+      "sizeLines": 446,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/memory-recall-semantic.test.ts",
+      "language": "typescript",
+      "sizeLines": 145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/memory-record.test.ts",
+      "language": "typescript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/memory-retrieval-cascade.test.ts",
+      "language": "typescript",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/memory-retriever.test.ts",
+      "language": "typescript",
+      "sizeLines": 633,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/memory-v11-benchmark.test.ts",
+      "language": "typescript",
+      "sizeLines": 154,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/memory-v12-features.test.ts",
+      "language": "typescript",
+      "sizeLines": 519,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/project-memory.test.ts",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/session-memory.test.ts",
+      "language": "typescript",
+      "sizeLines": 154,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/test/unified-memory-store.test.ts",
+      "language": "typescript",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/memory/tsconfig.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
       "path": "packages/models/package.json",
       "language": "json",
       "sizeLines": 17,
@@ -2972,161 +2325,22 @@
       "fileCategory": "config"
     }
   ],
-  "totalFiles": 491,
+  "totalFiles": 384,
   "filteredByIgnore": 0,
   "estimatedComplexity": "large",
   "importMap": {
     ".claude/plans/dynamic-toasting-quilt.md": [],
     ".github/workflows/ci.yml": [],
     ".memory/remember_number.md": [],
-    ".understand-anything/.trash-1782875262/assembled-graph.json": [],
-    ".understand-anything/.trash-1782875262/batch-1-part-1.json": [],
-    ".understand-anything/.trash-1782875262/batch-1-part-2.json": [],
-    ".understand-anything/.trash-1782875262/batch-10.json": [],
-    ".understand-anything/.trash-1782875262/batch-11.json": [],
-    ".understand-anything/.trash-1782875262/batch-12.json": [],
-    ".understand-anything/.trash-1782875262/batch-13.json": [],
-    ".understand-anything/.trash-1782875262/batch-14.json": [],
-    ".understand-anything/.trash-1782875262/batch-15.json": [],
-    ".understand-anything/.trash-1782875262/batch-16.json": [],
-    ".understand-anything/.trash-1782875262/batch-17.json": [],
-    ".understand-anything/.trash-1782875262/batch-18.json": [],
-    ".understand-anything/.trash-1782875262/batch-19.json": [],
-    ".understand-anything/.trash-1782875262/batch-2.json": [],
-    ".understand-anything/.trash-1782875262/batch-20.json": [],
-    ".understand-anything/.trash-1782875262/batch-21.json": [],
-    ".understand-anything/.trash-1782875262/batch-22.json": [],
-    ".understand-anything/.trash-1782875262/batch-23.json": [],
-    ".understand-anything/.trash-1782875262/batch-24.json": [],
-    ".understand-anything/.trash-1782875262/batch-25.json": [],
-    ".understand-anything/.trash-1782875262/batch-26.json": [],
-    ".understand-anything/.trash-1782875262/batch-27.json": [],
-    ".understand-anything/.trash-1782875262/batch-28.json": [],
-    ".understand-anything/.trash-1782875262/batch-29.json": [],
-    ".understand-anything/.trash-1782875262/batch-3-part-1.json": [],
-    ".understand-anything/.trash-1782875262/batch-3-part-2.json": [],
-    ".understand-anything/.trash-1782875262/batch-30.json": [],
-    ".understand-anything/.trash-1782875262/batch-4-part-1.json": [],
-    ".understand-anything/.trash-1782875262/batch-4-part-2.json": [],
-    ".understand-anything/.trash-1782875262/batch-5.json": [],
-    ".understand-anything/.trash-1782875262/batch-6.json": [],
-    ".understand-anything/.trash-1782875262/batch-7-part-1.json": [],
-    ".understand-anything/.trash-1782875262/batch-7-part-2.json": [],
-    ".understand-anything/.trash-1782875262/batch-8.json": [],
-    ".understand-anything/.trash-1782875262/batch-9-part-1.json": [],
-    ".understand-anything/.trash-1782875262/batch-9-part-2.json": [],
-    ".understand-anything/.trash-1782875262/batches.json": [],
-    ".understand-anything/.trash-1782875262/fingerprint-input.json": [],
-    ".understand-anything/.trash-1782875262/layers.json": [],
-    ".understand-anything/.trash-1782875262/review.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-1.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-10.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-11.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-12.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-13.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-14.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-15.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-16.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-17.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-18.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-19.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-2.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-20.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-21.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-22.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-23.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-24.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-25.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-26.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-27.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-28.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-29.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-3.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-30.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-4.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-5.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-6.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-7.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-8.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch-ctx-9.json": [],
-    ".understand-anything/.trash-1782875262/tmp/batch1-combined.json": [],
-    ".understand-anything/.trash-1782875262/tmp/generate-batch1.py": [],
-    ".understand-anything/.trash-1782875262/tmp/split-batch1.py": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-arch-analyze.cjs": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-arch-input.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-arch-results.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-1.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-10.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-11.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-12.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-13.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-14.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-15.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-16.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-17.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-18.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-19.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-2.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-20.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-21.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-22.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-23.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-24.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-25.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-26.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-27.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-28.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-29.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-3.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-30.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-5.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-6.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-7.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-8.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-analyzer-input-9.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-1.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-10.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-11.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-12.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-13.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-14.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-15.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-16.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-17.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-18.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-19.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-2.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-20.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-21.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-22.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-23.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-24.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-25.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-26.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-27.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-28.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-29.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-3.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-30.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-5.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-6.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-7.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-8.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-file-extract-results-9.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-import-map-input.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-import-map-output.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-inline-validate.cjs": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-scan-files.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-tour-analyze.cjs": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-tour-input.json": [],
-    ".understand-anything/.trash-1782875262/tmp/ua-tour-results.json": [],
-    ".understand-anything/.trash-1782875262/tour.json": [],
     ".understand-anything/.understandignore": [],
     ".understand-anything/config.json": [],
     ".understand-anything/fingerprints.json": [],
     ".understand-anything/intermediate/scan-result.json": [],
     ".understand-anything/knowledge-graph.json": [],
     ".understand-anything/meta.json": [],
+    ".understand-anything/tmp/ua-import-map-input.json": [],
+    ".understand-anything/tmp/ua-import-map-output.json": [],
+    ".understand-anything/tmp/ua-scan-files.json": [],
     "文档/工程/上下文压缩三层体系.md": [],
     "文档/工程/BENCHMARK_RESULTS.md": [],
     "文档/工程/deepseek-v4-flash-eval-report.md": [],
@@ -3793,6 +3007,125 @@
       "packages/harness/src/registry/index.ts"
     ],
     "packages/harness/tsconfig.json": [],
+    "packages/memory/package.json": [],
+    "packages/memory/src/auto-memory.ts": [
+      "packages/memory/src/memory-archive.ts"
+    ],
+    "packages/memory/src/embedding-cache.ts": [],
+    "packages/memory/src/index.ts": [],
+    "packages/memory/src/memory-archive.ts": [
+      "packages/memory/src/auto-memory.ts"
+    ],
+    "packages/memory/src/memory-profiles.ts": [
+      "packages/memory/src/memory-query.ts"
+    ],
+    "packages/memory/src/memory-query.ts": [
+      "packages/memory/src/memory-record.ts"
+    ],
+    "packages/memory/src/memory-record.ts": [
+      "packages/memory/src/auto-memory.ts",
+      "packages/memory/src/embedding-cache.ts",
+      "packages/memory/src/memory-query.ts",
+      "packages/memory/src/session-memory.ts"
+    ],
+    "packages/memory/src/memory-reflector.ts": [
+      "packages/memory/src/auto-memory.ts",
+      "packages/memory/src/memory-archive.ts"
+    ],
+    "packages/memory/src/memory-retrieval-cascade.ts": [
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts"
+    ],
+    "packages/memory/src/memory-retrieve.ts": [
+      "packages/memory/src/embedding-cache.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retrieval-cascade.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/src/unified-memory-store.ts"
+    ],
+    "packages/memory/src/memory-retriever.ts": [
+      "packages/memory/src/memory-profiles.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-scorer.ts",
+      "packages/memory/src/memory-selector.ts",
+      "packages/memory/src/memory-tokenizer.ts",
+      "packages/memory/src/unified-memory-store.ts"
+    ],
+    "packages/memory/src/memory-scorer.ts": [
+      "packages/memory/src/embedding-cache.ts",
+      "packages/memory/src/memory-profiles.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/src/memory-tokenizer.ts"
+    ],
+    "packages/memory/src/memory-selector.ts": [
+      "packages/memory/src/memory-profiles.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts"
+    ],
+    "packages/memory/src/memory-tokenizer.ts": [],
+    "packages/memory/src/project-memory.ts": [],
+    "packages/memory/src/session-memory.ts": [],
+    "packages/memory/src/unified-memory-store.ts": [
+      "packages/memory/src/auto-memory.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/session-memory.ts"
+    ],
+    "packages/memory/test/embedding-cache.test.ts": [
+      "packages/memory/src/embedding-cache.ts"
+    ],
+    "packages/memory/test/fixtures.ts": [],
+    "packages/memory/test/memory-annotations.test.ts": [],
+    "packages/memory/test/memory-e2e.test.ts": [
+      "packages/memory/src/index.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-reflector.ts",
+      "packages/memory/src/memory-retrieve.ts",
+      "packages/memory/src/session-memory.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-recall-semantic.test.ts": [
+      "packages/memory/src/index.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-record.test.ts": [
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-retrieval-cascade.test.ts": [
+      "packages/memory/src/memory-retrieval-cascade.ts",
+      "packages/memory/src/memory-retrieve.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-retriever.test.ts": [
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-v11-benchmark.test.ts": [
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-v12-features.test.ts": [
+      "packages/memory/src/auto-memory.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-reflector.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/project-memory.test.ts": [
+      "packages/memory/src/project-memory.ts"
+    ],
+    "packages/memory/test/session-memory.test.ts": [
+      "packages/memory/src/session-memory.ts"
+    ],
+    "packages/memory/test/unified-memory-store.test.ts": [
+      "packages/memory/src/session-memory.ts",
+      "packages/memory/src/unified-memory-store.ts"
+    ],
+    "packages/memory/tsconfig.json": [],
     "packages/models/package.json": [],
     "packages/models/src/anthropic-compatible.ts": [
       "packages/models/src/language-model.ts",

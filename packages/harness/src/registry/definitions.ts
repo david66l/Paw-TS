@@ -34,6 +34,7 @@ export const GIT_STATUS = "workspace.git_status" as const;
 export const GIT_LOG = "workspace.git_log" as const;
 export const GIT_DIFF = "workspace.git_diff" as const;
 export const RUN_AGENT = "workspace.run_agent" as const;
+export const CREATE_AGENT = "workspace.create_agent" as const;
 export const RUN_SKILL = "workspace.run_skill" as const;
 export const LSP = "workspace.lsp" as const;
 export const APPLY_PATCH = "workspace.apply_patch" as const;
@@ -60,6 +61,7 @@ const BUILTIN_TOOLS = [
   GIT_LOG,
   GIT_DIFF,
   RUN_AGENT,
+  CREATE_AGENT,
   RUN_SKILL,
   LSP,
   APPLY_PATCH,
@@ -292,9 +294,14 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
     }),
     fn(
       RUN_AGENT,
-      "Launch a sub-agent to handle a complex task.",
+      "Launch a registered sub-agent (prefer agent_id from the agent roster). Falls back to agent_type if no id.",
       {
         goal: { type: "string", description: "Goal for the sub-agent" },
+        agent_id: {
+          type: "string",
+          description:
+            "Registered agent id from .paw/agents (e.g. bianmu, keji). Preferred over agent_type.",
+        },
         max_steps: {
           type: "integer",
           description: "Max steps for the sub-agent",
@@ -302,15 +309,60 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
         agent_type: {
           type: "string",
           enum: ["simple", "research", "coding", "planning", "relay"],
-          description: "Sub-agent specialization",
+          description: "Legacy specialization when agent_id is omitted",
         },
         child_policy: {
           type: "string",
           enum: ["read_only", "read_write"],
-          description: "Tool write policy for the sub-agent",
+          description: "Tool write policy override for the sub-agent",
         },
       },
       ["goal"],
+    ),
+    fn(
+      CREATE_AGENT,
+      "Create a new worker Agent definition under .paw/agents/<id>.md (validated, reusable). Use when no existing agent fits; then run_agent with that agent_id.",
+      {
+        id: {
+          type: "string",
+          description: "Agent id (lowercase letters, digits, _-)",
+        },
+        name: { type: "string", description: "Display name" },
+        role: { type: "string", description: "Short role label" },
+        prompt: {
+          type: "string",
+          description: "System prompt body for the agent",
+        },
+        tools: {
+          type: "string",
+          description:
+            'Tool allowlist: "inherit" or comma-separated names (e.g. read_file, write_file, run_shell)',
+        },
+        child_policy: {
+          type: "string",
+          enum: ["read_only", "read_write"],
+          description: "Default read_only",
+        },
+        model: {
+          type: "string",
+          enum: ["flash", "pro", "inherit"],
+          description: "Model preference",
+        },
+        output_format: {
+          type: "string",
+          description: "Expected output format",
+        },
+        emoji: { type: "string", description: "Optional emoji for roster" },
+        description: {
+          type: "string",
+          description: "One-line description for the roster",
+        },
+        overwrite: {
+          type: "boolean",
+          description: "Overwrite existing agent file if true",
+        },
+      },
+      ["id", "name", "prompt"],
     ),
     fn(
       RUN_SKILL,

@@ -1,22 +1,12 @@
 /**
  * 默认的 SubAgentLauncher 实现，使用 AgentOrchestrator 作为子 Agent 引擎。
- * ======================================================================
  *
- * 子 Agent 启动器是连接父 Agent 和子 Agent 的桥梁。
- *
- * 关键设计决策：
- * - **复用 AgentOrchestrator**：子 Agent 也是一个完整的 AgentOrchestrator 实例，
- *   只是 runMode 设为 "child"，使用精简的 child system prompt。
- * - **子 Agent 模型可选独立配置**：subAgentModel 默认复用父 Agent 的模型，
- *   但可以指定更便宜的模型来降低子 Agent 的成本。
- * - **只读默认**：子 Agent 默认 childPolicy = "read_only"，
- *   避免多个 Agent 并发修改同一文件导致的竞态问题。
- * - **记忆提取关闭**：子 Agent 不产生记忆（memoryExtraction = "off"），
- *   只有父 Agent 产生记忆。
- * - **SharedContext 解析**：支持传入结构化 SharedContext 或从 goal+args 构建最小上下文。
+ * 优先按 agent_id 从 AgentRegistry 物化 Spec（工具硬裁、childPolicy、prompt）；
+ * 否则回退到旧 agent_type 文案 + SharedContext。
  */
 
 import type { RunEventEnvelope } from "@paw/core";
+import { ContextManager } from "@paw/core";
 import type {
   McpServerConfig,
   SubAgentLaunchOptions,
@@ -25,8 +15,11 @@ import type {
 } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
 
+import type { FileLockLike } from "@paw/harness";
+import { materializeAgent } from "./agents/factory.js";
+import type { AgentRegistry } from "./agents/registry.js";
+import { AgentOrchestrator, type ToolApprovalInput } from "./orchestrator.js";
 import { buildMinimalSharedContext } from "./orchestrator/agent-args.js";
-import { AgentOrchestrator } from "./orchestrator.js";
 import type { SharedContext } from "./orchestrator/types.js";
 
 export interface DefaultSubAgentLauncherOptions {
@@ -39,9 +32,17 @@ export interface DefaultSubAgentLauncherOptions {
   readonly mcpServers?: readonly McpServerConfig[];
   /** 子 Agent 默认 maxSteps */
   readonly maxSteps?: number;
+  /** Agent 注册表：按 agent_id 装配 */
+  readonly agentRegistry?: AgentRegistry;
+  /**
+   * 工具审批回调（透传给子 Agent）。
+   * 不传则子 Agent 保持旧行为：修改性工具无交互环境下默认放行。
+   */
+  readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
+  /** 工具审批策略（与根 Orchestrator 同一语义） */
+  readonly approvalPolicy?: (tool: string) => boolean | undefined;
 }
 
-/** 类型守卫：判断值是否为 SharedContext 结构 */
 function isSharedContext(value: unknown): value is SharedContext {
   return (
     value !== null &&
@@ -51,11 +52,6 @@ function isSharedContext(value: unknown): value is SharedContext {
   );
 }
 
-/**
- * 解析 SharedContext。
- * 如果已经传入了结构化的 SharedContext → 直接使用；
- * 否则从 goal + args 构建最小上下文。
- */
 function resolveSharedContext(
   goal: string,
   sharedContext: unknown | undefined,
@@ -67,6 +63,14 @@ function resolveSharedContext(
   return buildMinimalSharedContext(goal, args);
 }
 
+function parseAgentId(
+  args: Record<string, unknown> | undefined,
+): string | undefined {
+  const raw = args?.agent_id ?? args?.agentId ?? args?.spec_id ?? args?.specId;
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+  return undefined;
+}
+
 export class DefaultSubAgentLauncher implements SubAgentLauncher {
   private readonly workspaceRoot: string;
   private readonly model?: LanguageModel;
@@ -74,6 +78,9 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
   private readonly skillsDir?: string;
   private readonly mcpServers?: readonly McpServerConfig[];
   private readonly defaultMaxSteps: number;
+  private readonly agentRegistry?: AgentRegistry;
+  private readonly resolveToolApproval?: DefaultSubAgentLauncherOptions["resolveToolApproval"];
+  private readonly approvalPolicy?: DefaultSubAgentLauncherOptions["approvalPolicy"];
 
   constructor(opts: DefaultSubAgentLauncherOptions) {
     this.workspaceRoot = opts.workspaceRoot;
@@ -82,21 +89,23 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
     this.skillsDir = opts.skillsDir;
     this.mcpServers = opts.mcpServers;
     this.defaultMaxSteps = opts.maxSteps ?? 10;
+    this.agentRegistry = opts.agentRegistry;
+    this.resolveToolApproval = opts.resolveToolApproval;
+    this.approvalPolicy = opts.approvalPolicy;
   }
 
-  /**
-   * 创建一个子 Agent 的 AgentOrchestrator 实例。
-   *
-   * 关键配置：
-   * - runMode: "child" → 使用精简的 child system prompt
-   * - childPolicy: sharedContext 中指定的策略 → 默认 read_only
-   * - memoryExtraction: "off" → 子 Agent 不产生记忆
-   */
   private createChildOrchestrator(
     sharedContext: SharedContext,
     onEvent: (envelope: RunEventEnvelope) => void,
+    extras?: {
+      allowedTools?: readonly string[] | null;
+      model?: LanguageModel;
+      memoryExtraction?: "off" | "background" | "await";
+      fileLock?: FileLockLike;
+      contextManager?: ContextManager;
+    },
   ): AgentOrchestrator {
-    const childModel = this.subAgentModel ?? this.model;
+    const childModel = extras?.model ?? this.subAgentModel ?? this.model;
     return new AgentOrchestrator({
       model: childModel,
       auxiliaryModel: childModel,
@@ -105,15 +114,16 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
       childPolicy: sharedContext.childPolicy ?? "read_only",
       skillsDir: this.skillsDir,
       mcpServers: this.mcpServers,
-      memoryExtraction: "off",
+      memoryExtraction: extras?.memoryExtraction ?? "off",
+      allowedTools: extras?.allowedTools,
+      resolveToolApproval: this.resolveToolApproval,
+      approvalPolicy: this.approvalPolicy,
+      fileLock: extras?.fileLock,
+      contextManager: extras?.contextManager,
       onEvent,
     });
   }
 
-  /**
-   * 非流式启动子 Agent（兼容旧接口）。
-   * 内部委托给 launchStreaming。
-   */
   async launch(
     goal: string,
     maxSteps?: number,
@@ -136,16 +146,6 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
     });
   }
 
-  /**
-   * 流式启动子 Agent。
-   *
-   * 流程：
-   * 1. 解析 SharedContext
-   * 2. 创建 child AgentOrchestrator
-   * 3. 调用 orch.run() 执行子 Agent
-   * 4. 收集事件流和步数统计
-   * 5. 返回 SubAgentResult（摘要 + trace）
-   */
   async launchStreaming(options: {
     goal: string;
     maxSteps?: number;
@@ -155,31 +155,115 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
     onEvent: (envelope: RunEventEnvelope) => void;
     sharedContext?: unknown;
     args?: Record<string, unknown>;
+    fileLock?: FileLockLike;
   }): Promise<SubAgentResult> {
     const runId = options.agentId;
     let stepsTaken = 0;
     const events: RunEventEnvelope[] = [];
-    const sharedContext = resolveSharedContext(
-      options.goal,
-      options.sharedContext,
-      options.args,
+
+    // 热加载：每次 spawn 前 reload，吃到 create_agent 新文件
+    if (this.agentRegistry) {
+      this.agentRegistry.reload();
+    }
+
+    const specId = parseAgentId(options.args);
+    const spec = specId ? this.agentRegistry?.get(specId) : undefined;
+
+    let sharedContext: SharedContext;
+    let allowedTools: readonly string[] | null | undefined;
+    let childModel: LanguageModel | undefined;
+    let memoryExtraction: "off" | "background" | "await" = "off";
+    let maxSteps = options.maxSteps ?? this.defaultMaxSteps;
+
+    if (spec) {
+      const mat = materializeAgent(spec, options.goal, {
+        workspaceRoot: this.workspaceRoot,
+        inheritModel: this.subAgentModel ?? this.model,
+        forceChild: true,
+      });
+      // 合并父级摘要 facts（若有）
+      const parentCtx = isSharedContext(options.sharedContext)
+        ? options.sharedContext
+        : undefined;
+      sharedContext = {
+        ...mat.sharedContext,
+        facts: [
+          ...mat.sharedContext.facts,
+          ...(parentCtx?.facts ?? []).slice(0, 10),
+        ],
+        // 合并父级约束（用户 must/never 指令），去重且 Spec 约束在前
+        constraints: [
+          ...new Set([
+            ...mat.sharedContext.constraints,
+            ...(parentCtx?.constraints ?? []),
+          ]),
+        ],
+        artifacts: parentCtx?.artifacts?.length
+          ? parentCtx.artifacts
+          : mat.sharedContext.artifacts,
+        // 合并父级进度状态：父级已完成/待办在前，Spec 物化的在后
+        state: {
+          completed: [
+            ...(parentCtx?.state?.completed ?? []),
+            ...mat.sharedContext.state.completed,
+          ],
+          pending: [
+            ...(parentCtx?.state?.pending ?? []),
+            ...mat.sharedContext.state.pending,
+          ],
+          risks:
+            mat.sharedContext.state.risks ?? parentCtx?.state?.risks,
+        },
+        parentConclusions: parentCtx?.parentConclusions,
+      };
+      // 调用方可覆盖 child_policy
+      const policyOverride =
+        options.args?.child_policy ?? options.args?.childPolicy;
+      if (policyOverride === "read_only" || policyOverride === "read_write") {
+        sharedContext = {
+          ...sharedContext,
+          childPolicy: policyOverride,
+        };
+      }
+      allowedTools = mat.allowedTools;
+      childModel = mat.model;
+      memoryExtraction = mat.memoryExtraction;
+      if (options.maxSteps === undefined) {
+        maxSteps = mat.maxSteps;
+      }
+    } else {
+      sharedContext = resolveSharedContext(
+        options.goal,
+        options.sharedContext,
+        options.args,
+      );
+    }
+
+    // 注入独立 ContextManager：run 结束后可读出完整对话填充 trace.messages
+    const ctxMgr = new ContextManager();
+    const orch = this.createChildOrchestrator(
+      sharedContext,
+      (envelope) => {
+        events.push(envelope);
+        options.onEvent(envelope);
+        if (envelope.event.type === "loop.tick") {
+          stepsTaken = envelope.event.turn;
+        }
+      },
+      {
+        allowedTools,
+        model: childModel,
+        memoryExtraction,
+        fileLock: options.fileLock,
+        contextManager: ctxMgr,
+      },
     );
 
-    // 创建子 Agent orchestrator，收集事件和步数
-    const orch = this.createChildOrchestrator(sharedContext, (envelope) => {
-      events.push(envelope);
-      options.onEvent(envelope);
-      if (envelope.event.type === "loop.tick") {
-        stepsTaken = envelope.event.turn;
-      }
-    });
-
-    // 执行
     const result = await orch.run({
       runId,
       goal: options.goal,
       workspaceRoot: this.workspaceRoot,
-      maxSteps: options.maxSteps ?? this.defaultMaxSteps,
+      maxSteps,
       abortSignal: options.signal,
     });
 
@@ -187,7 +271,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
       status: result.status === "completed" ? "completed" : "failed",
       summary: result.message,
       trace: {
-        messages: [],
+        messages: ctxMgr.buildMessages(),
         events,
         stepsTaken,
       },

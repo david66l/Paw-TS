@@ -1,0 +1,1339 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/memory/src/auto-memory.ts",
+      "type": "file",
+      "name": "auto-memory.ts",
+      "filePath": "packages/memory/src/auto-memory.ts",
+      "summary": "TypeScript 源文件，3 个函数，1 个类，473 行。",
+      "tags": [
+        "memory",
+        "auto-memory",
+        "data-model"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/memory/src/auto-memory.ts:AutoMemoryStore",
+      "type": "class",
+      "name": "AutoMemoryStore",
+      "filePath": "packages/memory/src/auto-memory.ts",
+      "lineRange": [
+        97,
+        478
+      ],
+      "summary": "类 AutoMemoryStore，12 个方法、2 个属性，381 行。",
+      "tags": [
+        "state-management",
+        "core",
+        "memory"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/memory/src/embedding-cache.ts",
+      "type": "file",
+      "name": "embedding-cache.ts",
+      "filePath": "packages/memory/src/embedding-cache.ts",
+      "summary": "TypeScript 源文件，1 个函数，1 个类，312 行。",
+      "tags": [
+        "memory",
+        "embeddings",
+        "data-model"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/memory/src/embedding-cache.ts:EmbeddingCache",
+      "type": "class",
+      "name": "EmbeddingCache",
+      "filePath": "packages/memory/src/embedding-cache.ts",
+      "lineRange": [
+        76,
+        321
+      ],
+      "summary": "类 EmbeddingCache，11 个方法、5 个属性，245 行。",
+      "tags": [
+        "caching",
+        "core",
+        "memory"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/memory/src/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/memory/src/index.ts",
+      "summary": "模块 barrel 入口文件，重新导出 64 个公共符号。",
+      "tags": [
+        "barrel",
+        "entry-point",
+        "memory"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/memory/src/memory-archive.ts",
+      "type": "file",
+      "name": "memory-archive.ts",
+      "filePath": "packages/memory/src/memory-archive.ts",
+      "summary": "TypeScript 源文件，5 个函数，189 行。",
+      "tags": [
+        "memory",
+        "archiving",
+        "data-model"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/memory/src/memory-archive.ts:archiveEntryByName",
+      "type": "function",
+      "name": "archiveEntryByName",
+      "filePath": "packages/memory/src/memory-archive.ts",
+      "lineRange": [
+        73,
+        86
+      ],
+      "summary": "归档函数 archiveEntryByName(name, memoryDir)，13 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-archive.ts:shouldArchiveEntry",
+      "type": "function",
+      "name": "shouldArchiveEntry",
+      "filePath": "packages/memory/src/memory-archive.ts",
+      "lineRange": [
+        106,
+        135
+      ],
+      "summary": "归档函数 shouldArchiveEntry(entry, now, maxAgeDays)，29 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-archive.ts:archiveExpiredEntries",
+      "type": "function",
+      "name": "archiveExpiredEntries",
+      "filePath": "packages/memory/src/memory-archive.ts",
+      "lineRange": [
+        149,
+        168
+      ],
+      "summary": "归档函数 archiveExpiredEntries(entries, memoryDir, maxAgeDays)，19 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-archive.ts:rebuildArchiveIndex",
+      "type": "function",
+      "name": "rebuildArchiveIndex",
+      "filePath": "packages/memory/src/memory-archive.ts",
+      "lineRange": [
+        184,
+        206
+      ],
+      "summary": "构建函数 rebuildArchiveIndex(memoryDir)，22 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "memory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/memory/src/memory-profiles.ts",
+      "type": "file",
+      "name": "memory-profiles.ts",
+      "filePath": "packages/memory/src/memory-profiles.ts",
+      "summary": "TypeScript 源文件，0 个函数，99 行。",
+      "tags": [
+        "memory",
+        "data-model",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/memory/src/memory-query.ts",
+      "type": "file",
+      "name": "memory-query.ts",
+      "filePath": "packages/memory/src/memory-query.ts",
+      "summary": "TypeScript 源文件，11 个函数，414 行。",
+      "tags": [
+        "memory",
+        "query-building",
+        "data-model"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/memory/src/memory-query.ts:buildRetrievalSignalsFromMessages",
+      "type": "function",
+      "name": "buildRetrievalSignalsFromMessages",
+      "filePath": "packages/memory/src/memory-query.ts",
+      "lineRange": [
+        78,
+        113
+      ],
+      "summary": "构建函数 buildRetrievalSignalsFromMessages(messages, lookback)，35 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "memory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-query.ts:isMemoryMetaQuery",
+      "type": "function",
+      "name": "isMemoryMetaQuery",
+      "filePath": "packages/memory/src/memory-query.ts",
+      "lineRange": [
+        123,
+        152
+      ],
+      "summary": "函数 isMemoryMetaQuery(goal)，29 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-query.ts:classifyTask",
+      "type": "function",
+      "name": "classifyTask",
+      "filePath": "packages/memory/src/memory-query.ts",
+      "lineRange": [
+        286,
+        307
+      ],
+      "summary": "函数 classifyTask(goal, errorMessage)，21 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-query.ts:extractFilePaths",
+      "type": "function",
+      "name": "extractFilePaths",
+      "filePath": "packages/memory/src/memory-query.ts",
+      "lineRange": [
+        349,
+        360
+      ],
+      "summary": "提取函数 extractFilePaths(text)，11 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "memory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-query.ts:extractErrorSignatures",
+      "type": "function",
+      "name": "extractErrorSignatures",
+      "filePath": "packages/memory/src/memory-query.ts",
+      "lineRange": [
+        372,
+        403
+      ],
+      "summary": "提取函数 extractErrorSignatures(errorsAndFixes)，31 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "memory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-query.ts:inferTags",
+      "type": "function",
+      "name": "inferTags",
+      "filePath": "packages/memory/src/memory-query.ts",
+      "lineRange": [
+        413,
+        445
+      ],
+      "summary": "函数 inferTags(sm)，32 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/memory/src/memory-record.ts",
+      "type": "file",
+      "name": "memory-record.ts",
+      "filePath": "packages/memory/src/memory-record.ts",
+      "summary": "TypeScript 源文件，2 个函数，212 行。",
+      "tags": [
+        "memory",
+        "data-model",
+        "utilities"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/memory/src/memory-record.ts:sessionMemoryToRecord",
+      "type": "function",
+      "name": "sessionMemoryToRecord",
+      "filePath": "packages/memory/src/memory-record.ts",
+      "lineRange": [
+        135,
+        163
+      ],
+      "summary": "函数 sessionMemoryToRecord(sm)，28 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-record.ts:autoMemoryToRecord",
+      "type": "function",
+      "name": "autoMemoryToRecord",
+      "filePath": "packages/memory/src/memory-record.ts",
+      "lineRange": [
+        175,
+        209
+      ],
+      "summary": "函数 autoMemoryToRecord(entry, mtime)，34 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/memory/src/memory-reflector.ts",
+      "type": "file",
+      "name": "memory-reflector.ts",
+      "filePath": "packages/memory/src/memory-reflector.ts",
+      "summary": "TypeScript 源文件，9 个函数，306 行。",
+      "tags": [
+        "memory",
+        "reflection",
+        "data-model"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/memory/src/memory-reflector.ts:shouldRunReflection",
+      "type": "function",
+      "name": "shouldRunReflection",
+      "filePath": "packages/memory/src/memory-reflector.ts",
+      "lineRange": [
+        81,
+        91
+      ],
+      "summary": "执行函数 shouldRunReflection(memoryDir)，10 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-reflector.ts:buildReflectionPrompt",
+      "type": "function",
+      "name": "buildReflectionPrompt",
+      "filePath": "packages/memory/src/memory-reflector.ts",
+      "lineRange": [
+        138,
+        181
+      ],
+      "summary": "构建函数 buildReflectionPrompt(entries)，43 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "memory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-reflector.ts:runReflection",
+      "type": "function",
+      "name": "runReflection",
+      "filePath": "packages/memory/src/memory-reflector.ts",
+      "lineRange": [
+        206,
+        281
+      ],
+      "summary": "执行函数 runReflection(opts)，75 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/memory/src/memory-reflector.ts:parseReflectionPlan",
+      "type": "function",
+      "name": "parseReflectionPlan",
+      "filePath": "packages/memory/src/memory-reflector.ts",
+      "lineRange": [
+        291,
+        328
+      ],
+      "summary": "解析函数 parseReflectionPlan(text)，37 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "memory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/memory/src/memory-retrieval-cascade.ts",
+      "type": "file",
+      "name": "memory-retrieval-cascade.ts",
+      "filePath": "packages/memory/src/memory-retrieval-cascade.ts",
+      "summary": "TypeScript 源文件，2 个函数，160 行。",
+      "tags": [
+        "memory",
+        "retrieval",
+        "retrieval-strategy",
+        "evaluation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/memory/src/memory-retrieval-cascade.ts:shouldEscalateToLlmFallback",
+      "type": "function",
+      "name": "shouldEscalateToLlmFallback",
+      "filePath": "packages/memory/src/memory-retrieval-cascade.ts",
+      "lineRange": [
+        139,
+        175
+      ],
+      "summary": "函数 shouldEscalateToLlmFallback(keywordResult, ranked, poolSize, config)，36 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/memory/src/memory-retrieve.ts",
+      "type": "file",
+      "name": "memory-retrieve.ts",
+      "filePath": "packages/memory/src/memory-retrieve.ts",
+      "summary": "TypeScript 源文件，3 个函数，227 行。",
+      "tags": [
+        "memory",
+        "retrieval",
+        "data-model"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/memory/src/memory-retrieve.ts:semanticRerank",
+      "type": "function",
+      "name": "semanticRerank",
+      "filePath": "packages/memory/src/memory-retrieve.ts",
+      "lineRange": [
+        62,
+        79
+      ],
+      "summary": "函数 semanticRerank(ranked, queryEmbedding)，17 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-retrieve.ts:retrieveCascadeMemories",
+      "type": "function",
+      "name": "retrieveCascadeMemories",
+      "filePath": "packages/memory/src/memory-retrieve.ts",
+      "lineRange": [
+        84,
+        221
+      ],
+      "summary": "检索函数 retrieveCascadeMemories(store, query, options)，137 行。",
+      "tags": [
+        "retrieval",
+        "utility",
+        "memory"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/memory/src/memory-retrieve.ts:retrieveMemories",
+      "type": "function",
+      "name": "retrieveMemories",
+      "filePath": "packages/memory/src/memory-retrieve.ts",
+      "lineRange": [
+        230,
+        250
+      ],
+      "summary": "检索函数 retrieveMemories(store, query, options)，20 行。",
+      "tags": [
+        "retrieval",
+        "utility",
+        "memory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/memory/src/memory-retriever.ts",
+      "type": "file",
+      "name": "memory-retriever.ts",
+      "filePath": "packages/memory/src/memory-retriever.ts",
+      "summary": "模块 barrel 入口文件，重新导出 4 个公共符号。",
+      "tags": [
+        "barrel",
+        "memory",
+        "retrieval"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/memory/src/memory-retriever.ts:KeywordMemoryRetriever",
+      "type": "class",
+      "name": "KeywordMemoryRetriever",
+      "filePath": "packages/memory/src/memory-retriever.ts",
+      "lineRange": [
+        138,
+        294
+      ],
+      "summary": "类 KeywordMemoryRetriever，5 个方法、2 个属性，156 行。",
+      "tags": [
+        "core",
+        "memory",
+        "component"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/memory/src/memory-scorer.ts",
+      "type": "file",
+      "name": "memory-scorer.ts",
+      "filePath": "packages/memory/src/memory-scorer.ts",
+      "summary": "TypeScript 源文件，1 个函数，358 行。",
+      "tags": [
+        "memory",
+        "scoring",
+        "core"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/memory/src/memory-scorer.ts:scoreMemoryRecord",
+      "type": "function",
+      "name": "scoreMemoryRecord",
+      "filePath": "packages/memory/src/memory-scorer.ts",
+      "lineRange": [
+        135,
+        391
+      ],
+      "summary": "计算/评分函数 scoreMemoryRecord(m, query, queryWords, queryFiles, errWords)，256 行。",
+      "tags": [
+        "scoring",
+        "utility",
+        "memory"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/memory/src/memory-selector.ts",
+      "type": "file",
+      "name": "memory-selector.ts",
+      "filePath": "packages/memory/src/memory-selector.ts",
+      "summary": "TypeScript 源文件，3 个函数，197 行。",
+      "tags": [
+        "memory",
+        "selection",
+        "data-model"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/memory/src/memory-selector.ts:selectRecords",
+      "type": "function",
+      "name": "selectRecords",
+      "filePath": "packages/memory/src/memory-selector.ts",
+      "lineRange": [
+        82,
+        126
+      ],
+      "summary": "选择/过滤函数 selectRecords(sorted, limit, maxTokens, cfg)，44 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/memory/src/memory-selector.ts:selectMetaFallback",
+      "type": "function",
+      "name": "selectMetaFallback",
+      "filePath": "packages/memory/src/memory-selector.ts",
+      "lineRange": [
+        146,
+        186
+      ],
+      "summary": "选择/过滤函数 selectMetaFallback(all, limit, maxTokens, cfg)，40 行。",
+      "tags": [
+        "utility",
+        "memory",
+        "utility2"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/memory/src/auto-memory.ts",
+      "target": "class:packages/memory/src/auto-memory.ts:AutoMemoryStore",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/auto-memory.ts",
+      "target": "class:packages/memory/src/auto-memory.ts:AutoMemoryStore",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/auto-memory.ts",
+      "target": "file:packages/memory/src/memory-archive.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/embedding-cache.ts",
+      "target": "class:packages/memory/src/embedding-cache.ts:EmbeddingCache",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/embedding-cache.ts",
+      "target": "class:packages/memory/src/embedding-cache.ts:EmbeddingCache",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "function:packages/memory/src/memory-archive.ts:archiveEntryByName",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "function:packages/memory/src/memory-archive.ts:shouldArchiveEntry",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "function:packages/memory/src/memory-archive.ts:archiveExpiredEntries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "function:packages/memory/src/memory-archive.ts:rebuildArchiveIndex",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "function:packages/memory/src/memory-archive.ts:archiveEntryByName",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "function:packages/memory/src/memory-archive.ts:shouldArchiveEntry",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "function:packages/memory/src/memory-archive.ts:archiveExpiredEntries",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "function:packages/memory/src/memory-archive.ts:rebuildArchiveIndex",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-archive.ts",
+      "target": "file:packages/memory/src/auto-memory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/memory/src/memory-archive.ts:archiveExpiredEntries",
+      "target": "function:packages/memory/src/memory-archive.ts:shouldArchiveEntry",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/memory/src/memory-archive.ts:archiveExpiredEntries",
+      "target": "function:packages/memory/src/memory-archive.ts:archiveEntryByName",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-profiles.ts",
+      "target": "file:packages/memory/src/memory-query.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:buildRetrievalSignalsFromMessages",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:isMemoryMetaQuery",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:classifyTask",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:extractFilePaths",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:extractErrorSignatures",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:inferTags",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:buildRetrievalSignalsFromMessages",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:isMemoryMetaQuery",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:classifyTask",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:extractFilePaths",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:extractErrorSignatures",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "function:packages/memory/src/memory-query.ts:inferTags",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-query.ts",
+      "target": "file:packages/memory/src/memory-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/memory/src/memory-query.ts:buildRetrievalSignalsFromMessages",
+      "target": "function:packages/memory/src/memory-query.ts:extractFilePaths",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "function:packages/memory/src/memory-record.ts:sessionMemoryToRecord",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "function:packages/memory/src/memory-record.ts:autoMemoryToRecord",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "function:packages/memory/src/memory-record.ts:sessionMemoryToRecord",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "function:packages/memory/src/memory-record.ts:autoMemoryToRecord",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "file:packages/memory/src/auto-memory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "file:packages/memory/src/embedding-cache.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "file:packages/memory/src/memory-query.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "file:packages/memory/src/session-memory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "function:packages/memory/src/memory-reflector.ts:shouldRunReflection",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "function:packages/memory/src/memory-reflector.ts:buildReflectionPrompt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "function:packages/memory/src/memory-reflector.ts:runReflection",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "function:packages/memory/src/memory-reflector.ts:parseReflectionPlan",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "function:packages/memory/src/memory-reflector.ts:shouldRunReflection",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "function:packages/memory/src/memory-reflector.ts:runReflection",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "file:packages/memory/src/auto-memory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "file:packages/memory/src/memory-archive.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/memory/src/memory-reflector.ts:runReflection",
+      "target": "function:packages/memory/src/memory-reflector.ts:buildReflectionPrompt",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/memory/src/memory-reflector.ts:runReflection",
+      "target": "function:packages/memory/src/memory-reflector.ts:parseReflectionPlan",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieval-cascade.ts",
+      "target": "function:packages/memory/src/memory-retrieval-cascade.ts:shouldEscalateToLlmFallback",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieval-cascade.ts",
+      "target": "function:packages/memory/src/memory-retrieval-cascade.ts:shouldEscalateToLlmFallback",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieval-cascade.ts",
+      "target": "file:packages/memory/src/memory-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieval-cascade.ts",
+      "target": "file:packages/memory/src/memory-retriever.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "function:packages/memory/src/memory-retrieve.ts:semanticRerank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "function:packages/memory/src/memory-retrieve.ts:retrieveCascadeMemories",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "function:packages/memory/src/memory-retrieve.ts:retrieveMemories",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "function:packages/memory/src/memory-retrieve.ts:retrieveMemories",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "file:packages/memory/src/embedding-cache.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "file:packages/memory/src/memory-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "file:packages/memory/src/memory-retrieval-cascade.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "file:packages/memory/src/memory-retriever.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "file:packages/memory/src/unified-memory-store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/memory/src/memory-retrieve.ts:retrieveCascadeMemories",
+      "target": "function:packages/memory/src/memory-retrieve.ts:semanticRerank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/memory/src/memory-retrieve.ts:retrieveMemories",
+      "target": "function:packages/memory/src/memory-retrieve.ts:retrieveCascadeMemories",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "class:packages/memory/src/memory-retriever.ts:KeywordMemoryRetriever",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "class:packages/memory/src/memory-retriever.ts:KeywordMemoryRetriever",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/src/memory-profiles.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/src/memory-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/src/memory-scorer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/src/memory-selector.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/src/memory-tokenizer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/src/unified-memory-store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-scorer.ts",
+      "target": "function:packages/memory/src/memory-scorer.ts:scoreMemoryRecord",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-scorer.ts",
+      "target": "function:packages/memory/src/memory-scorer.ts:scoreMemoryRecord",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-scorer.ts",
+      "target": "file:packages/memory/src/embedding-cache.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-scorer.ts",
+      "target": "file:packages/memory/src/memory-profiles.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-scorer.ts",
+      "target": "file:packages/memory/src/memory-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-scorer.ts",
+      "target": "file:packages/memory/src/memory-retriever.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-scorer.ts",
+      "target": "file:packages/memory/src/memory-tokenizer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-selector.ts",
+      "target": "function:packages/memory/src/memory-selector.ts:selectRecords",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-selector.ts",
+      "target": "function:packages/memory/src/memory-selector.ts:selectMetaFallback",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/memory/src/memory-selector.ts",
+      "target": "function:packages/memory/src/memory-selector.ts:selectRecords",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-selector.ts",
+      "target": "function:packages/memory/src/memory-selector.ts:selectMetaFallback",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/memory-selector.ts",
+      "target": "file:packages/memory/src/memory-profiles.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-selector.ts",
+      "target": "file:packages/memory/src/memory-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/memory-selector.ts",
+      "target": "file:packages/memory/src/memory-retriever.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/memory/src/memory-selector.ts:selectMetaFallback",
+      "target": "function:packages/memory/src/memory-selector.ts:selectRecords",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/src/embedding-cache.ts",
+      "target": "file:packages/memory/test/embedding-cache.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/index.ts",
+      "target": "file:packages/memory/test/memory-e2e.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "file:packages/memory/test/memory-e2e.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "file:packages/memory/test/memory-e2e.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "file:packages/memory/test/memory-e2e.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/index.ts",
+      "target": "file:packages/memory/test/memory-recall-semantic.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "file:packages/memory/test/memory-record.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieval-cascade.ts",
+      "target": "file:packages/memory/test/memory-retrieval-cascade.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-retrieve.ts",
+      "target": "file:packages/memory/test/memory-retrieval-cascade.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/test/memory-retrieval-cascade.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "file:packages/memory/test/memory-retriever.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/test/memory-retriever.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/auto-memory.ts",
+      "target": "file:packages/memory/test/memory-v12-features.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-record.ts",
+      "target": "file:packages/memory/test/memory-v12-features.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-reflector.ts",
+      "target": "file:packages/memory/test/memory-v12-features.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/memory/src/memory-retriever.ts",
+      "target": "file:packages/memory/test/memory-v12-features.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

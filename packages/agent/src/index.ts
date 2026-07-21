@@ -46,3 +46,40 @@ export {
   type StubRunOptions,
   type StubRunSession,
 } from "./stub-run.js";
+export {
+  bindConversationMemoryTask,
+  getConversationMemoryTask,
+  takeConversationMemoryTask,
+  clearConversationMemoryBindings,
+  finalizeConversationMemory,
+  listWorkspaceMemories,
+} from "./conversation-memory-bind.js";
+export {
+  extractPlanStepsFromGoal,
+  planItemsFromStepTexts,
+  planItemsToEventSnapshot,
+  markPlanItemsCompleted,
+} from "./plan-bootstrap.js";
+
+// Agent 规范 / 注册表 / 工厂
+export {
+  type AgentSpec,
+  type AgentSummary,
+  type CreateAgentInput,
+  type AgentValidationResult,
+  AgentRegistry,
+  loadAgentRegistry,
+  loadAgentRegistryReadonly,
+  createAgentInRegistry,
+  agentsDir,
+  loadAgentsFromDirectory,
+  parseAgentMarkdown,
+  createInputToMarkdown,
+  writeAgentFile,
+  validateAgentSpec,
+  validateCreateInput,
+  materializeAgent,
+  allowedToolsForSpec,
+  DEFAULT_AGENT_SEEDS,
+  AGENT_ROSTER_ORDER,
+} from "./agents/index.js";

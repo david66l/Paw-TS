@@ -1,0 +1,1015 @@
+{
+  "scriptCompleted": true,
+  "stats": {
+    "filesScanned": 384,
+    "filesWithImports": 206,
+    "totalEdges": 415
+  },
+  "importMap": {
+    ".claude/plans/dynamic-toasting-quilt.md": [],
+    ".github/workflows/ci.yml": [],
+    ".memory/remember_number.md": [],
+    ".understand-anything/.understandignore": [],
+    ".understand-anything/config.json": [],
+    ".understand-anything/fingerprints.json": [],
+    ".understand-anything/intermediate/scan-result.json": [],
+    ".understand-anything/knowledge-graph.json": [],
+    ".understand-anything/meta.json": [],
+    ".understand-anything/tmp/ua-import-map-input.json": [],
+    ".understand-anything/tmp/ua-import-map-output.json": [],
+    ".understand-anything/tmp/ua-scan-files.json": [],
+    "文档/工程/上下文压缩三层体系.md": [],
+    "文档/工程/BENCHMARK_RESULTS.md": [],
+    "文档/工程/deepseek-v4-flash-eval-report.md": [],
+    "文档/工程/ENGINEERING_EXCELLENCE_PLAN.md": [],
+    "文档/工程/EVAL_ARCHITECTURE_PLAN.md": [],
+    "文档/工程/INTERVIEW_READINESS_PLAN.md": [],
+    "文档/工程/Paw-TS从0到1完整解析.md": [],
+    "文档/工程/TEST_REPORT.md": [],
+    "文档/工程/UPGRADE_PLAN.md": [],
+    "文档/架构/ARCHITECTURE_AND_FEATURES_PLAN.md": [],
+    "文档/架构/multi-agent-architecture-analysis.md": [],
+    "文档/架构/multi-agent-state-data-flow-analysis.md": [],
+    "文档/架构决策/001-context-compression.md": [],
+    "文档/阶段计划/phase1-agent-orchestration/orchestration-mode-analysis.md": [],
+    "文档/阶段计划/phase1-agent-orchestration/plan.md": [],
+    "文档/阶段计划/phase2-context-management/plan.md": [],
+    "文档/阶段计划/phase3-memory-retrieval/plan.md": [],
+    "文档/阶段计划/phase3.5-memory-hygiene/plan.md": [],
+    "文档/研究/对比.md": [],
+    "文档/研究/记忆机制解析.md": [],
+    "文档/研究/目前缺失的核心功能.md": [],
+    "文档/研究/上下文压缩分析.md": [],
+    "文档/研究/paw-ts上下文压缩与记忆机制.md": [],
+    "文档/演示/GOLDEN_PATH.md": [],
+    "文档/README.md": [],
+    "apps/cli/package.json": [],
+    "apps/cli/src/main.ts": [],
+    "apps/cli/test/cli-smoke.test.ts": [],
+    "apps/cli/tsconfig.json": [],
+    "apps/tui/bunfig.toml": [],
+    "apps/tui/package.json": [],
+    "apps/tui/scripts/e2e-live.ts": [
+      "apps/tui/src/commands.ts",
+      "apps/tui/src/footer-chips.ts",
+      "apps/tui/src/scrollback-format.ts"
+    ],
+    "apps/tui/src/approval-policy.ts": [],
+    "apps/tui/src/commands.ts": [],
+    "apps/tui/src/env.ts": [],
+    "apps/tui/src/footer-chips.ts": [
+      "apps/tui/src/footer-types.ts"
+    ],
+    "apps/tui/src/footer-types.ts": [],
+    "apps/tui/src/jsx-runtime.ts": [],
+    "apps/tui/src/keyboard-bindings.ts": [
+      "apps/tui/src/footer-types.ts"
+    ],
+    "apps/tui/src/main.tsx": [
+      "apps/tui/src/approval-policy.ts",
+      "apps/tui/src/commands.ts",
+      "apps/tui/src/env.ts",
+      "apps/tui/src/PawFooter.ts",
+      "apps/tui/src/theme.ts"
+    ],
+    "apps/tui/src/markdown-parse.ts": [],
+    "apps/tui/src/PawFooter.ts": [
+      "apps/tui/src/footer-types.ts",
+      "apps/tui/src/keyboard-bindings.ts",
+      "apps/tui/src/PawFooterView.tsx",
+      "apps/tui/src/PawScrollbackStream.tsx",
+      "apps/tui/src/theme.ts"
+    ],
+    "apps/tui/src/PawFooterView.tsx": [
+      "apps/tui/src/footer-chips.ts",
+      "apps/tui/src/footer-types.ts",
+      "apps/tui/src/PawFooter.ts",
+      "apps/tui/src/theme.ts"
+    ],
+    "apps/tui/src/PawScrollbackStream.tsx": [
+      "apps/tui/src/markdown-parse.ts",
+      "apps/tui/src/scrollback-format.ts",
+      "apps/tui/src/scrollback-text.ts",
+      "apps/tui/src/theme.ts"
+    ],
+    "apps/tui/src/scrollback-format.ts": [
+      "apps/tui/src/footer-chips.ts"
+    ],
+    "apps/tui/src/scrollback-text.ts": [],
+    "apps/tui/src/theme.ts": [
+      "apps/tui/src/env.ts"
+    ],
+    "apps/tui/test/approval-policy.test.ts": [
+      "apps/tui/src/approval-policy.ts"
+    ],
+    "apps/tui/test/env.test.ts": [
+      "apps/tui/src/env.ts"
+    ],
+    "apps/tui/test/footer-state.test.ts": [
+      "apps/tui/src/footer-chips.ts",
+      "apps/tui/src/keyboard-bindings.ts",
+      "apps/tui/src/scrollback-format.ts"
+    ],
+    "apps/tui/test/markdown-scrollback.test.ts": [
+      "apps/tui/src/markdown-parse.ts",
+      "apps/tui/src/scrollback-format.ts"
+    ],
+    "apps/tui/test/scrollback-stream.test.ts": [
+      "apps/tui/src/scrollback-text.ts"
+    ],
+    "apps/tui/tsconfig.json": [],
+    "apps/tui/Untitled": [],
+    "ARCHITECTURE.md": [],
+    "benchmarks/download-data.py": [],
+    "benchmarks/judge/benchmark.test.ts": [
+      "benchmarks/judge/judge.ts",
+      "benchmarks/judge/types.ts",
+      "packages/models/src/index.ts"
+    ],
+    "benchmarks/judge/judge.ts": [
+      "benchmarks/judge/prompts.ts",
+      "benchmarks/judge/types.ts",
+      "packages/models/src/index.ts"
+    ],
+    "benchmarks/judge/prompts.ts": [
+      "benchmarks/judge/types.ts"
+    ],
+    "benchmarks/judge/README.md": [],
+    "benchmarks/judge/types.ts": [],
+    "benchmarks/longbench/adapter.ts": [],
+    "benchmarks/longbench/benchmark.test.ts": [
+      "benchmarks/longbench/adapter.ts",
+      "packages/core/src/token-estimate.ts"
+    ],
+    "benchmarks/repobench/adapter.ts": [],
+    "benchmarks/repobench/benchmark.test.ts": [
+      "benchmarks/repobench/adapter.ts"
+    ],
+    "benchmarks/swe-bench/README.md": [],
+    "benchmarks/swe-bench/run.py": [],
+    "biome.json": [],
+    "docker/paw-sandbox/Dockerfile": [],
+    "docs/升级/第1轮-工具调用协议升级.md": [],
+    "docs/升级/面试反馈与升级建议.md": [],
+    "docs/微调/数据集构建计划.md": [],
+    "docs/微调/微调与推理优化计划.md": [],
+    "docs/应用架构图.mmd": [],
+    "fine_tune/dataset_info.json": [],
+    "fine_tune/eval_comparison.sh": [],
+    "fine_tune/lora_config.yaml": [],
+    "fine_tune/README.md": [],
+    "fine_tune/run_validation.sh": [],
+    "package.json": [],
+    "packages/agent/package.json": [],
+    "packages/agent/src/auxiliary-complete.ts": [],
+    "packages/agent/src/child-system-prompt.ts": [
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/compression-agent.ts": [
+      "packages/agent/src/auxiliary-complete.ts"
+    ],
+    "packages/agent/src/format-conversation-for-memory.ts": [],
+    "packages/agent/src/index.ts": [],
+    "packages/agent/src/llm-memory-selector.ts": [
+      "packages/agent/src/auxiliary-complete.ts"
+    ],
+    "packages/agent/src/memory-extraction-agent.ts": [
+      "packages/agent/src/auxiliary-complete.ts"
+    ],
+    "packages/agent/src/orchestrator-factory.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/src/resolve-plan-snapshot-max-items.ts",
+      "packages/agent/src/sub-agent-launcher.ts"
+    ],
+    "packages/agent/src/orchestrator.ts": [
+      "packages/agent/src/child-system-prompt.ts",
+      "packages/agent/src/compression-agent.ts",
+      "packages/agent/src/orchestrator/action-handlers.ts",
+      "packages/agent/src/orchestrator/agent-group.ts",
+      "packages/agent/src/orchestrator/memory-extraction.ts",
+      "packages/agent/src/orchestrator/session-summarizer.ts",
+      "packages/agent/src/orchestrator/types.ts",
+      "packages/agent/src/parse-agent-action.ts",
+      "packages/agent/src/resilience/circuit-breaker.ts",
+      "packages/agent/src/resolve-max-steps.ts",
+      "packages/agent/src/resolve-memory-retrieval.ts",
+      "packages/agent/src/resolve-shell-sandbox.ts",
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/orchestrator/action-handlers.ts": [
+      "packages/agent/src/orchestrator/agent-group.ts",
+      "packages/agent/src/orchestrator/constants.ts",
+      "packages/agent/src/orchestrator/context-summarizer.ts",
+      "packages/agent/src/orchestrator/tool-runner.ts",
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/orchestrator/agent-args.ts": [
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/orchestrator/agent-group.ts": [
+      "packages/agent/src/orchestrator/agent-args.ts",
+      "packages/agent/src/orchestrator/constants.ts",
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/orchestrator/constants.ts": [],
+    "packages/agent/src/orchestrator/context-summarizer.ts": [
+      "packages/agent/src/orchestrator/agent-args.ts",
+      "packages/agent/src/orchestrator/constants.ts",
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/orchestrator/memory-extraction.ts": [
+      "packages/agent/src/format-conversation-for-memory.ts",
+      "packages/agent/src/memory-extraction-agent.ts",
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/orchestrator/session-summarizer.ts": [
+      "packages/agent/src/auxiliary-complete.ts",
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/orchestrator/tool-runner.ts": [
+      "packages/agent/src/orchestrator/constants.ts",
+      "packages/agent/src/orchestrator/context-summarizer.ts",
+      "packages/agent/src/tool-result-detail.ts"
+    ],
+    "packages/agent/src/orchestrator/types.ts": [],
+    "packages/agent/src/parse-agent-action.ts": [],
+    "packages/agent/src/resilience/circuit-breaker.ts": [],
+    "packages/agent/src/resolve-max-steps.ts": [
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/resolve-memory-retrieval.ts": [
+      "packages/agent/src/llm-memory-selector.ts",
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/resolve-plan-snapshot-max-items.ts": [
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/resolve-shell-sandbox.ts": [
+      "packages/agent/src/settings.ts"
+    ],
+    "packages/agent/src/session.ts": [
+      "packages/agent/src/orchestrator-factory.ts",
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/src/stub-run.ts"
+    ],
+    "packages/agent/src/settings.ts": [],
+    "packages/agent/src/stub-run.ts": [
+      "packages/agent/src/orchestrator-factory.ts",
+      "packages/agent/src/orchestrator.ts"
+    ],
+    "packages/agent/src/sub-agent-launcher.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/src/orchestrator/agent-args.ts",
+      "packages/agent/src/orchestrator/types.ts"
+    ],
+    "packages/agent/src/tool-result-detail.ts": [],
+    "packages/agent/test/capabilities-integration.test.ts": [
+      "packages/agent/src/compression-agent.ts",
+      "packages/agent/src/memory-extraction-agent.ts",
+      "packages/agent/test/fixtures.ts"
+    ],
+    "packages/agent/test/circuit-breaker.test.ts": [
+      "packages/agent/src/resilience/circuit-breaker.ts"
+    ],
+    "packages/agent/test/compression-agent.test.ts": [
+      "packages/agent/src/compression-agent.ts"
+    ],
+    "packages/agent/test/context-summarizer.test.ts": [
+      "packages/agent/src/orchestrator/agent-args.ts",
+      "packages/agent/src/orchestrator/context-summarizer.ts"
+    ],
+    "packages/agent/test/e2e-ollama.test.ts": [
+      "packages/agent/src/stub-run.ts"
+    ],
+    "packages/agent/test/fixtures.ts": [],
+    "packages/agent/test/format-conversation-for-memory.test.ts": [
+      "packages/agent/src/format-conversation-for-memory.ts"
+    ],
+    "packages/agent/test/memory-extraction-agent.test.ts": [
+      "packages/agent/src/memory-extraction-agent.ts"
+    ],
+    "packages/agent/test/model-retry.test.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/test/fixtures.ts"
+    ],
+    "packages/agent/test/model-truncation.test.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/test/fixtures.ts"
+    ],
+    "packages/agent/test/operations-run-session.test.ts": [
+      "packages/agent/src/stub-run.ts"
+    ],
+    "packages/agent/test/orchestrator-compression.test.ts": [
+      "packages/agent/src/orchestrator.ts"
+    ],
+    "packages/agent/test/orchestrator.test.ts": [
+      "packages/agent/src/orchestrator.ts"
+    ],
+    "packages/agent/test/parse-agent-action.test.ts": [
+      "packages/agent/src/parse-agent-action.ts"
+    ],
+    "packages/agent/test/phase1-integration.test.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/src/sub-agent-launcher.ts"
+    ],
+    "packages/agent/test/phase2-e2e.test.ts": [
+      "packages/agent/src/orchestrator.ts",
+      "packages/agent/test/fixtures.ts"
+    ],
+    "packages/agent/test/resolve-memory-retrieval.test.ts": [
+      "packages/agent/src/resolve-memory-retrieval.ts"
+    ],
+    "packages/agent/test/resolve-plan-snapshot-max-items.test.ts": [
+      "packages/agent/src/resolve-plan-snapshot-max-items.ts"
+    ],
+    "packages/agent/test/resolve-shell-sandbox.test.ts": [
+      "packages/agent/src/resolve-shell-sandbox.ts"
+    ],
+    "packages/agent/test/run-session-controller.test.ts": [
+      "packages/agent/src/session.ts"
+    ],
+    "packages/agent/test/session-summarizer.test.ts": [
+      "packages/agent/src/orchestrator/session-summarizer.ts"
+    ],
+    "packages/agent/test/tool-result-detail.test.ts": [
+      "packages/agent/src/tool-result-detail.ts"
+    ],
+    "packages/agent/test/worktree.test.ts": [
+      "packages/agent/src/stub-run.ts"
+    ],
+    "packages/agent/tsconfig.json": [],
+    "packages/core/package.json": [],
+    "packages/core/src/actions.ts": [],
+    "packages/core/src/app-state.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/todo.ts"
+    ],
+    "packages/core/src/checkpoint.ts": [
+      "packages/core/src/workspace-paths.ts"
+    ],
+    "packages/core/src/context/budget.ts": [],
+    "packages/core/src/context/compactor.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimator.ts"
+    ],
+    "packages/core/src/context/manager.ts": [
+      "packages/core/src/context/policy.ts",
+      "packages/core/src/context/pruner.ts",
+      "packages/core/src/input-sanitizer.ts",
+      "packages/core/src/token-estimator.ts",
+      "packages/core/src/tool-result/format.ts"
+    ],
+    "packages/core/src/context/policy.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimator.ts",
+      "packages/core/src/tool-result/format.ts"
+    ],
+    "packages/core/src/context/pruner.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimate.ts",
+      "packages/core/src/tool-result/format.ts",
+      "packages/core/src/tool-result/storage.ts"
+    ],
+    "packages/core/src/context/summary.ts": [
+      "packages/core/src/markdown.ts"
+    ],
+    "packages/core/src/cost-tracker.ts": [],
+    "packages/core/src/errors.ts": [],
+    "packages/core/src/eval-hooks.ts": [
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/src/find-root.ts": [],
+    "packages/core/src/index.ts": [],
+    "packages/core/src/input-sanitizer.ts": [],
+    "packages/core/src/markdown.ts": [],
+    "packages/core/src/prompt/deepseek.txt": [],
+    "packages/core/src/prompt/default.txt": [],
+    "packages/core/src/prompt/loader.ts": [],
+    "packages/core/src/run-evaluator.ts": [
+      "packages/core/src/run-events.ts",
+      "packages/core/src/run-metrics.ts"
+    ],
+    "packages/core/src/run-events.ts": [
+      "packages/core/src/actions.ts",
+      "packages/core/src/run.ts",
+      "packages/core/src/token-usage.ts"
+    ],
+    "packages/core/src/run-metrics.ts": [],
+    "packages/core/src/run.ts": [],
+    "packages/core/src/session-store.ts": [
+      "packages/core/src/run-events.ts",
+      "packages/core/src/workspace-paths.ts"
+    ],
+    "packages/core/src/skills.ts": [
+      "packages/core/src/markdown.ts"
+    ],
+    "packages/core/src/system-prompt.ts": [
+      "packages/core/src/context/budget.ts",
+      "packages/core/src/system-prompt/assembler.ts",
+      "packages/core/src/system-prompt/trim.ts",
+      "packages/core/src/system-prompt/types.ts",
+      "packages/core/src/token-estimate.ts"
+    ],
+    "packages/core/src/system-prompt/assembler.ts": [
+      "packages/core/src/prompt/loader.ts",
+      "packages/core/src/system-prompt/format.ts",
+      "packages/core/src/system-prompt/sections/actions.ts",
+      "packages/core/src/system-prompt/sections/doing-tasks.ts",
+      "packages/core/src/system-prompt/sections/environment.ts",
+      "packages/core/src/system-prompt/sections/identity.ts",
+      "packages/core/src/system-prompt/sections/memory.ts",
+      "packages/core/src/system-prompt/sections/output-efficiency.ts",
+      "packages/core/src/system-prompt/sections/security.ts",
+      "packages/core/src/system-prompt/sections/system.ts",
+      "packages/core/src/system-prompt/sections/tone-and-style.ts",
+      "packages/core/src/system-prompt/sections/using-tools.ts",
+      "packages/core/src/system-prompt/sections/verification.ts",
+      "packages/core/src/system-prompt/types.ts"
+    ],
+    "packages/core/src/system-prompt/format.ts": [],
+    "packages/core/src/system-prompt/sections/actions.ts": [],
+    "packages/core/src/system-prompt/sections/doing-tasks.ts": [
+      "packages/core/src/system-prompt/format.ts"
+    ],
+    "packages/core/src/system-prompt/sections/environment.ts": [
+      "packages/core/src/context/budget.ts",
+      "packages/core/src/system-prompt/format.ts"
+    ],
+    "packages/core/src/system-prompt/sections/identity.ts": [],
+    "packages/core/src/system-prompt/sections/memory.ts": [],
+    "packages/core/src/system-prompt/sections/output-efficiency.ts": [],
+    "packages/core/src/system-prompt/sections/security.ts": [],
+    "packages/core/src/system-prompt/sections/system.ts": [
+      "packages/core/src/system-prompt/format.ts"
+    ],
+    "packages/core/src/system-prompt/sections/tone-and-style.ts": [
+      "packages/core/src/system-prompt/format.ts"
+    ],
+    "packages/core/src/system-prompt/sections/using-tools.ts": [],
+    "packages/core/src/system-prompt/sections/verification.ts": [],
+    "packages/core/src/system-prompt/trim.ts": [
+      "packages/core/src/system-prompt/types.ts"
+    ],
+    "packages/core/src/system-prompt/types.ts": [],
+    "packages/core/src/todo.ts": [],
+    "packages/core/src/token-estimate.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimator.ts"
+    ],
+    "packages/core/src/token-estimator.ts": [
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/src/token-usage.ts": [],
+    "packages/core/src/tool-result/format.ts": [],
+    "packages/core/src/tool-result/storage.ts": [
+      "packages/core/src/tool-result/format.ts",
+      "packages/core/src/workspace-paths.ts"
+    ],
+    "packages/core/src/workspace-paths.ts": [],
+    "packages/core/test/app-state.test.ts": [
+      "packages/core/src/app-state.ts"
+    ],
+    "packages/core/test/checkpoint.test.ts": [
+      "packages/core/src/checkpoint.ts"
+    ],
+    "packages/core/test/compression-summary.test.ts": [
+      "packages/core/src/context/summary.ts",
+      "packages/core/src/markdown.ts"
+    ],
+    "packages/core/test/context-budget.test.ts": [
+      "packages/core/src/context/budget.ts"
+    ],
+    "packages/core/test/context-compactor.test.ts": [
+      "packages/core/src/context/compactor.ts",
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/test/context-manager.test.ts": [
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/test/context-protection.test.ts": [
+      "packages/core/src/context/manager.ts"
+    ],
+    "packages/core/test/context-pruner.test.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/context/pruner.ts",
+      "packages/core/src/tool-result/storage.ts"
+    ],
+    "packages/core/test/cost-tracker.test.ts": [
+      "packages/core/src/cost-tracker.ts"
+    ],
+    "packages/core/test/errors.test.ts": [
+      "packages/core/src/errors.ts"
+    ],
+    "packages/core/test/fixtures.ts": [],
+    "packages/core/test/run-evaluator.test.ts": [
+      "packages/core/src/run-evaluator.ts",
+      "packages/core/src/run-events.ts"
+    ],
+    "packages/core/test/session-store.test.ts": [
+      "packages/core/src/run-events.ts",
+      "packages/core/src/session-store.ts"
+    ],
+    "packages/core/test/skills.test.ts": [
+      "packages/core/src/skills.ts"
+    ],
+    "packages/core/test/system-prompt-budget.test.ts": [
+      "packages/core/src/system-prompt.ts"
+    ],
+    "packages/core/test/todo.test.ts": [
+      "packages/core/src/todo.ts"
+    ],
+    "packages/core/test/token-estimate.test.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimate.ts"
+    ],
+    "packages/core/test/token-estimator.test.ts": [
+      "packages/core/src/context/manager.ts",
+      "packages/core/src/token-estimator.ts"
+    ],
+    "packages/core/tsconfig.json": [],
+    "packages/eval/package.json": [],
+    "packages/eval/src/cli/eval-command.ts": [
+      "packages/eval/src/runner.ts",
+      "packages/eval/src/scorer/reporter.ts",
+      "packages/eval/src/test-suite/loader.ts",
+      "packages/eval/src/training-data-exporter.ts"
+    ],
+    "packages/eval/src/data-collector.ts": [
+      "packages/eval/src/eval-record.ts"
+    ],
+    "packages/eval/src/eval-record.ts": [],
+    "packages/eval/src/eval-settings.ts": [],
+    "packages/eval/src/index.ts": [],
+    "packages/eval/src/runner.ts": [
+      "packages/eval/src/data-collector.ts",
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/eval-settings.ts",
+      "packages/eval/src/scorer/aggregator.ts",
+      "packages/eval/src/scorer/llm-scorer.ts",
+      "packages/eval/src/scorer/reporter.ts",
+      "packages/eval/src/scorer/rule-scorer.ts",
+      "packages/eval/src/scorer/types.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/scorer/aggregator.ts": [
+      "packages/eval/src/scorer/types.ts"
+    ],
+    "packages/eval/src/scorer/llm-scorer.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/types.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/scorer/reporter.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/types.ts"
+    ],
+    "packages/eval/src/scorer/rule-scorer.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/types.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/scorer/types.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/adversarial.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/code-gen.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/context-mgmt.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/core-tools.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/high-frequency.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/index.ts": [],
+    "packages/eval/src/test-suite/builtin/memory-retrieval.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/multi-step.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/builtin/shell-safety.ts": [
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/loader.ts": [
+      "packages/eval/src/test-suite/builtin/index.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/src/test-suite/types.ts": [],
+    "packages/eval/src/training-data-exporter.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/types.ts"
+    ],
+    "packages/eval/test/data-collector.test.ts": [
+      "packages/eval/src/data-collector.ts"
+    ],
+    "packages/eval/test/e2e-runner.test.ts": [
+      "packages/eval/src/runner.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/test/rule-scorer.test.ts": [
+      "packages/eval/src/eval-record.ts",
+      "packages/eval/src/scorer/rule-scorer.ts",
+      "packages/eval/src/test-suite/types.ts"
+    ],
+    "packages/eval/test/smoke-real-model.test.ts": [
+      "packages/eval/src/runner.ts",
+      "packages/eval/src/test-suite/builtin/core-tools.ts"
+    ],
+    "packages/eval/tsconfig.json": [],
+    "packages/harness/package.json": [],
+    "packages/harness/src/context.ts": [
+      "packages/harness/src/mcp-client.ts",
+      "packages/harness/src/sandbox/index.ts"
+    ],
+    "packages/harness/src/index.ts": [],
+    "packages/harness/src/mcp-client.ts": [],
+    "packages/harness/src/registry/definitions.ts": [
+      "packages/harness/src/mcp-client.ts",
+      "packages/harness/src/shell/index.ts"
+    ],
+    "packages/harness/src/registry/execution.ts": [
+      "packages/harness/src/context.ts",
+      "packages/harness/src/registry/definitions.ts",
+      "packages/harness/src/shell/index.ts"
+    ],
+    "packages/harness/src/registry/index.ts": [],
+    "packages/harness/src/sandbox/detect-runtime.ts": [],
+    "packages/harness/src/sandbox/docker-runner.ts": [
+      "packages/harness/src/sandbox/detect-runtime.ts",
+      "packages/harness/src/sandbox/types.ts"
+    ],
+    "packages/harness/src/sandbox/index.ts": [],
+    "packages/harness/src/sandbox/types.ts": [],
+    "packages/harness/src/shell-ast.ts": [],
+    "packages/harness/src/shell-audit.ts": [],
+    "packages/harness/src/shell-guard.ts": [
+      "packages/harness/src/shell-ast.ts",
+      "packages/harness/src/shell-audit.ts",
+      "packages/harness/src/shell-policy.ts"
+    ],
+    "packages/harness/src/shell-policy-config.ts": [],
+    "packages/harness/src/shell-policy.ts": [
+      "packages/harness/src/shell-ast.ts",
+      "packages/harness/src/shell-policy-config.ts"
+    ],
+    "packages/harness/src/shell/analysis.ts": [],
+    "packages/harness/src/shell/execute.ts": [
+      "packages/harness/src/sandbox/index.ts",
+      "packages/harness/src/shell-guard.ts",
+      "packages/harness/src/shell/analysis.ts"
+    ],
+    "packages/harness/src/shell/index.ts": [],
+    "packages/harness/test/mcp-client.test.ts": [
+      "packages/harness/src/mcp-client.ts"
+    ],
+    "packages/harness/test/registry.test.ts": [
+      "packages/harness/src/registry/index.ts"
+    ],
+    "packages/harness/test/run-shell.test.ts": [
+      "packages/harness/src/shell/index.ts"
+    ],
+    "packages/harness/test/sandbox-docker.test.ts": [
+      "packages/harness/src/sandbox/index.ts"
+    ],
+    "packages/harness/test/shell-guard.test.ts": [
+      "packages/harness/src/shell-guard.ts"
+    ],
+    "packages/harness/test/sub-agent.test.ts": [
+      "packages/harness/src/registry/index.ts"
+    ],
+    "packages/harness/tsconfig.json": [],
+    "packages/memory/package.json": [],
+    "packages/memory/src/auto-memory.ts": [
+      "packages/memory/src/memory-archive.ts"
+    ],
+    "packages/memory/src/embedding-cache.ts": [],
+    "packages/memory/src/index.ts": [],
+    "packages/memory/src/memory-archive.ts": [
+      "packages/memory/src/auto-memory.ts"
+    ],
+    "packages/memory/src/memory-profiles.ts": [
+      "packages/memory/src/memory-query.ts"
+    ],
+    "packages/memory/src/memory-query.ts": [
+      "packages/memory/src/memory-record.ts"
+    ],
+    "packages/memory/src/memory-record.ts": [
+      "packages/memory/src/auto-memory.ts",
+      "packages/memory/src/embedding-cache.ts",
+      "packages/memory/src/memory-query.ts",
+      "packages/memory/src/session-memory.ts"
+    ],
+    "packages/memory/src/memory-reflector.ts": [
+      "packages/memory/src/auto-memory.ts",
+      "packages/memory/src/memory-archive.ts"
+    ],
+    "packages/memory/src/memory-retrieval-cascade.ts": [
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts"
+    ],
+    "packages/memory/src/memory-retrieve.ts": [
+      "packages/memory/src/embedding-cache.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retrieval-cascade.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/src/unified-memory-store.ts"
+    ],
+    "packages/memory/src/memory-retriever.ts": [
+      "packages/memory/src/memory-profiles.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-scorer.ts",
+      "packages/memory/src/memory-selector.ts",
+      "packages/memory/src/memory-tokenizer.ts",
+      "packages/memory/src/unified-memory-store.ts"
+    ],
+    "packages/memory/src/memory-scorer.ts": [
+      "packages/memory/src/embedding-cache.ts",
+      "packages/memory/src/memory-profiles.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/src/memory-tokenizer.ts"
+    ],
+    "packages/memory/src/memory-selector.ts": [
+      "packages/memory/src/memory-profiles.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts"
+    ],
+    "packages/memory/src/memory-tokenizer.ts": [],
+    "packages/memory/src/project-memory.ts": [],
+    "packages/memory/src/session-memory.ts": [],
+    "packages/memory/src/unified-memory-store.ts": [
+      "packages/memory/src/auto-memory.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/session-memory.ts"
+    ],
+    "packages/memory/test/embedding-cache.test.ts": [
+      "packages/memory/src/embedding-cache.ts"
+    ],
+    "packages/memory/test/fixtures.ts": [],
+    "packages/memory/test/memory-annotations.test.ts": [],
+    "packages/memory/test/memory-e2e.test.ts": [
+      "packages/memory/src/index.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-reflector.ts",
+      "packages/memory/src/memory-retrieve.ts",
+      "packages/memory/src/session-memory.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-recall-semantic.test.ts": [
+      "packages/memory/src/index.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-record.test.ts": [
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-retrieval-cascade.test.ts": [
+      "packages/memory/src/memory-retrieval-cascade.ts",
+      "packages/memory/src/memory-retrieve.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-retriever.test.ts": [
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-v11-benchmark.test.ts": [
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/memory-v12-features.test.ts": [
+      "packages/memory/src/auto-memory.ts",
+      "packages/memory/src/memory-record.ts",
+      "packages/memory/src/memory-reflector.ts",
+      "packages/memory/src/memory-retriever.ts",
+      "packages/memory/test/fixtures.ts"
+    ],
+    "packages/memory/test/project-memory.test.ts": [
+      "packages/memory/src/project-memory.ts"
+    ],
+    "packages/memory/test/session-memory.test.ts": [
+      "packages/memory/src/session-memory.ts"
+    ],
+    "packages/memory/test/unified-memory-store.test.ts": [
+      "packages/memory/src/session-memory.ts",
+      "packages/memory/src/unified-memory-store.ts"
+    ],
+    "packages/memory/tsconfig.json": [],
+    "packages/models/package.json": [],
+    "packages/models/src/anthropic-compatible.ts": [
+      "packages/models/src/language-model.ts",
+      "packages/models/src/message-content.ts",
+      "packages/models/src/model-options.ts",
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/auxiliary-model.ts": [
+      "packages/models/src/language-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/src/default-model.ts": [
+      "packages/models/src/anthropic-compatible.ts",
+      "packages/models/src/fake-model.ts",
+      "packages/models/src/language-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/src/fake-model.ts": [
+      "packages/models/src/language-model.ts",
+      "packages/models/src/model-options.ts",
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/index.ts": [],
+    "packages/models/src/language-model.ts": [
+      "packages/models/src/model-options.ts",
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/message-content.ts": [
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/model-options.ts": [],
+    "packages/models/src/openai-compatible.ts": [
+      "packages/models/src/language-model.ts",
+      "packages/models/src/message-content.ts",
+      "packages/models/src/model-options.ts",
+      "packages/models/src/openai-stream-parse.ts",
+      "packages/models/src/think-extraction.ts",
+      "packages/models/src/types.ts"
+    ],
+    "packages/models/src/openai-stream-parse.ts": [
+      "packages/models/src/think-extraction.ts"
+    ],
+    "packages/models/src/think-extraction.ts": [],
+    "packages/models/src/types.ts": [],
+    "packages/models/test/auxiliary-model.test.ts": [],
+    "packages/models/test/deepseek-model.test.ts": [
+      "packages/models/src/default-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/test/message-content.test.ts": [
+      "packages/models/src/message-content.ts"
+    ],
+    "packages/models/test/ollama-model.test.ts": [
+      "packages/models/src/default-model.ts",
+      "packages/models/src/fake-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/test/qwen-model.test.ts": [
+      "packages/models/src/default-model.ts",
+      "packages/models/src/openai-compatible.ts"
+    ],
+    "packages/models/test/think-extraction.test.ts": [
+      "packages/models/src/think-extraction.ts"
+    ],
+    "packages/models/tsconfig.json": [],
+    "packages/settings/package.json": [],
+    "packages/settings/src/credentials.ts": [
+      "packages/settings/src/schema.ts"
+    ],
+    "packages/settings/src/index.ts": [],
+    "packages/settings/src/load.ts": [
+      "packages/settings/src/credentials.ts",
+      "packages/settings/src/schema.ts"
+    ],
+    "packages/settings/src/schema.ts": [],
+    "packages/settings/test/credentials.test.ts": [
+      "packages/settings/src/credentials.ts",
+      "packages/settings/src/schema.ts"
+    ],
+    "packages/settings/test/load.test.ts": [
+      "packages/settings/src/load.ts"
+    ],
+    "packages/settings/tsconfig.json": [],
+    "packages/store/package.json": [],
+    "packages/store/src/index.ts": [],
+    "packages/store/src/plan-item.ts": [],
+    "packages/store/src/plan-items-json.ts": [
+      "packages/store/src/plan-item.ts"
+    ],
+    "packages/store/src/plan-snapshot.ts": [
+      "packages/store/src/plan.ts"
+    ],
+    "packages/store/src/plan.ts": [
+      "packages/store/src/plan-item.ts"
+    ],
+    "packages/store/src/task-planner.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/plan.ts"
+    ],
+    "packages/store/test/plan-items-json.test.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/plan-items-json.ts"
+    ],
+    "packages/store/test/plan-snapshot.test.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/plan-snapshot.ts",
+      "packages/store/src/plan.ts"
+    ],
+    "packages/store/test/plan.test.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/plan.ts"
+    ],
+    "packages/store/test/task-planner.test.ts": [
+      "packages/store/src/plan-item.ts",
+      "packages/store/src/task-planner.ts"
+    ],
+    "packages/store/tsconfig.json": [],
+    "packages/workspace/package.json": [],
+    "packages/workspace/src/files/read.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/files/write.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/git-tools.ts": [],
+    "packages/workspace/src/index.ts": [],
+    "packages/workspace/src/lsp-client.ts": [],
+    "packages/workspace/src/mention-resolver.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/src/network-tools.ts": [],
+    "packages/workspace/src/notebook-tools.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/patch-tools.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/path-guard.ts": [],
+    "packages/workspace/src/paw-md.ts": [],
+    "packages/workspace/src/project-context.ts": [
+      "packages/workspace/src/files/read.ts",
+      "packages/workspace/src/git-tools.ts",
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/src/root.ts": [],
+    "packages/workspace/src/symbol-search.ts": [],
+    "packages/workspace/src/watch.ts": [],
+    "packages/workspace/src/worktree.ts": [],
+    "packages/workspace/test/auto-context.test.ts": [
+      "packages/workspace/src/project-context.ts"
+    ],
+    "packages/workspace/test/brief-tools.test.ts": [
+      "packages/workspace/src/project-context.ts"
+    ],
+    "packages/workspace/test/edit-file.test.ts": [
+      "packages/workspace/src/files/write.ts"
+    ],
+    "packages/workspace/test/git-tools.test.ts": [
+      "packages/workspace/src/git-tools.ts"
+    ],
+    "packages/workspace/test/glob.test.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/test/grep.test.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/test/local-fs.test.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/test/mention-resolver.test.ts": [
+      "packages/workspace/src/mention-resolver.ts"
+    ],
+    "packages/workspace/test/network-tools.test.ts": [
+      "packages/workspace/src/network-tools.ts"
+    ],
+    "packages/workspace/test/notebook-tools.test.ts": [
+      "packages/workspace/src/notebook-tools.ts"
+    ],
+    "packages/workspace/test/patch-tools.test.ts": [
+      "packages/workspace/src/patch-tools.ts"
+    ],
+    "packages/workspace/test/path-guard.test.ts": [
+      "packages/workspace/src/path-guard.ts"
+    ],
+    "packages/workspace/test/paw-md.test.ts": [
+      "packages/workspace/src/paw-md.ts"
+    ],
+    "packages/workspace/test/search.test.ts": [
+      "packages/workspace/src/files/read.ts"
+    ],
+    "packages/workspace/test/symbol-search.test.ts": [
+      "packages/workspace/src/symbol-search.ts"
+    ],
+    "packages/workspace/test/watch.test.ts": [
+      "packages/workspace/src/watch.ts"
+    ],
+    "packages/workspace/test/write-file.test.ts": [
+      "packages/workspace/src/files/write.ts"
+    ],
+    "packages/workspace/tsconfig.json": [],
+    "plans/memory-optimization-plan.md": [],
+    "README.md": [],
+    "scripts/import-skill.ts": [],
+    "tests/integration/sub-agent-prompts.md": [],
+    "training_data/generate_stage_a_claude.py": [],
+    "training_data/stage_b_paw.jsonl": [],
+    "training_data/stage_b_workflows.jsonl": [],
+    "tsconfig.base.json": []
+  }
+}

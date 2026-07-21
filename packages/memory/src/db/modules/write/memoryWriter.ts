@@ -12,6 +12,15 @@ import { executionRecorder } from "../task/executionRecorder.js";
 import type { MemoryCandidate, WorkingMemory, MemoryType, ActorRef, ScopeDescriptor } from "../../types.js";
 import { generateId } from "../platform/idGen.js";
 import { PolicyEngine, type WritePolicy } from "../platform/policyEngine.js";
+import {
+  cleanMemoryTitle,
+  extractExplicitRememberText,
+  hasDurableMemorySignal,
+  isSystemFinalizeMessage,
+  isWorthWritingLongTermMemory,
+  shouldWriteTaskSummary,
+} from "../../../shared/memory-quality.js";
+import { extractCleanMemoryQuery } from "../../../shared/memory-query.js";
 
 export interface WriteInput {
   taskId: string;
@@ -32,6 +41,14 @@ export class MemoryWriter {
    * 返回生成的候选列表（可能为空）。
    */
   async writeFromFinalSnapshot(input: WriteInput): Promise<MemoryCandidate[]> {
+    // 策略过滤：禁用自动生成 → 直接返回空
+    if (!this.policy.autoGenerationEnabled) return [];
+
+    // 闲聊 / 空壳会话：不产生任何候选，避免污染长期记忆
+    if (!isWorthWritingLongTermMemory(input.workingMemory)) {
+      return [];
+    }
+
     const candidates: MemoryCandidate[] = [];
     const now = new Date().toISOString();
     const scope = this.buildScope(input);
@@ -48,16 +65,16 @@ export class MemoryWriter {
     const failures = await this.buildFailureCandidates(input, scope, now);
     candidates.push(...failures);
 
-    // 4. Project Knowledge Candidates（从 diff/文件变更提取项目事实）
-    const knowledge = this.buildProjectKnowledgeCandidates(input, scope, now);
-    candidates.push(...knowledge);
-
+    // 4. Project Knowledge：弱「Modified N files」已关闭（Phase 2.1）
     // 5. User Preference Candidates（从 workingMemory 中明确的用户反馈提取）
     const prefs = this.buildPreferenceCandidates(input, scope, now);
     candidates.push(...prefs);
 
-    // 策略过滤：禁用自动生成 → 直接返回空
-    if (!this.policy.autoGenerationEnabled) return [];
+    // 6. 目标本身含「记住/prefer」等 durable 信号，且尚无偏好候选 → 从 goal 生成一条
+    if (prefs.length === 0) {
+      const fromGoal = this.buildPreferenceFromGoal(input, scope, now);
+      if (fromGoal) candidates.push(fromGoal);
+    }
 
     const filtered = candidates
       .filter((c) => c.proposedConfidence >= this.policy.minConfidence)
@@ -75,18 +92,30 @@ export class MemoryWriter {
 
   private buildTaskSummary(input: WriteInput): MemoryCandidate | null {
     const { taskId, workingMemory: wm, actor } = input;
+    // 纯只读 / 无决策 / 无改动 → 不写 task_summary（preference 另路径）
+    if (!shouldWriteTaskSummary(wm)) return null;
+
     const now = new Date().toISOString();
     const summaryLines: string[] = [];
+    const title = cleanMemoryTitle(wm.goal || `Task ${taskId}`);
 
-    if (wm.goal) summaryLines.push(`Goal: ${wm.goal}`);
-    summaryLines.push(`Steps completed: ${wm.completedSteps.length}`);
-    for (const step of wm.completedSteps) {
+    if (title) summaryLines.push(`Goal: ${title}`);
+    const realSteps = wm.completedSteps.filter(
+      (s) => !isSystemFinalizeMessage(s.summary),
+    );
+    summaryLines.push(`Steps completed: ${realSteps.length}`);
+    for (const step of realSteps) {
       summaryLines.push(`- ${step.summary}`);
     }
     if (wm.diffSummary) {
       summaryLines.push(`Files changed: ${wm.diffSummary.filesChanged}, +${wm.diffSummary.insertions} -${wm.diffSummary.deletions}`);
     }
 
+    // 只有 goal 且无步骤/改动时不生成空洞 summary
+    if (realSteps.length === 0 && !wm.diffSummary && wm.executedTools.length === 0) {
+      // 仍可能因 durable signal（如「记住 prefer vitest」）值得写偏好；task_summary 跳过
+      return null;
+    }
     if (summaryLines.length === 0) return null;
 
     return {
@@ -96,11 +125,11 @@ export class MemoryWriter {
       proposedType: "task_summary",
       proposedSubjectKey: `task_summary:${input.repositoryId ?? "unknown"}:${taskId}`,
       subjectKeyVersion: 1,
-      proposedTitle: wm.goal || `Task ${taskId}`,
+      proposedTitle: title,
       proposedSummary: summaryLines.join("\n"),
       proposedPayload: {
         taskId,
-        goal: wm.goal,
+        goal: title,
         outcome: "success",
         summary: summaryLines.join("\n"),
         modifiedFiles: wm.modifiedFiles.map((f) => f.filePath),
@@ -108,7 +137,7 @@ export class MemoryWriter {
         deletedFiles: [],
         toolCallIds: wm.executedTools.map((t) => t.toolCallId),
         testRunIds: wm.testRunIds,
-        keyActions: wm.completedSteps.map((s) => s.summary),
+        keyActions: realSteps.map((s) => s.summary),
         decisionMemoryIds: [],
         unresolvedQuestions: wm.openQuestions.map((q) => q.question),
         unresolvedRisks: [],
@@ -132,12 +161,17 @@ export class MemoryWriter {
 
   private buildDecisionCandidates(input: WriteInput, scope: ScopeDescriptor, now: string): MemoryCandidate[] {
     const decisions: MemoryCandidate[] = [];
-    // 从 completedSteps 提取带有明显决策标记的步骤
-    const decisionSteps = input.workingMemory.completedSteps.filter((s) =>
-      s.summary.toLowerCase().includes("decided") ||
-      s.summary.toLowerCase().includes("chose") ||
-      s.summary.toLowerCase().includes("opted")
-    );
+    // 从 completedSteps 提取带有明显决策标记的步骤（忽略系统 finalize）
+    const decisionSteps = input.workingMemory.completedSteps.filter((s) => {
+      if (isSystemFinalizeMessage(s.summary)) return false;
+      const lower = s.summary.toLowerCase();
+      return (
+        lower.includes("decided") ||
+        lower.includes("chose") ||
+        lower.includes("opted") ||
+        /决定|选用|采用/.test(s.summary)
+      );
+    });
 
     for (const step of decisionSteps) {
       decisions.push({
@@ -226,54 +260,13 @@ export class MemoryWriter {
     return candidates;
   }
 
-  private buildProjectKnowledgeCandidates(input: WriteInput, scope: ScopeDescriptor, now: string): MemoryCandidate[] {
-    const { workingMemory: wm } = input;
-    if (!wm.diffSummary || wm.diffSummary.filesChanged === 0) return [];
-
-    // 从文件变更中提取项目知识
-    const files = [...new Set(wm.modifiedFiles.map((f) => f.filePath))];
-    if (files.length === 0) return [];
-
-    return [{
-      id: generateId("cand"),
-      schemaVersion: 1,
-      status: "draft",
-      proposedType: "project_knowledge",
-      proposedSubjectKey: `project_knowledge:${input.repositoryId ?? "unknown"}:files_modified_${Date.now()}`,
-      subjectKeyVersion: 1,
-      proposedTitle: `Modified files in ${input.repositoryId ?? "unknown"}`,
-      proposedSummary: `Modified ${files.length} files: ${files.slice(0, 5).join(", ")}${files.length > 5 ? "..." : ""}`,
-      proposedPayload: {
-        assertion: `Task ${input.taskId} modified ${files.length} files`,
-        knowledgeKind: "repository_structure",
-        stability: "inferred",
-      },
-      proposedScope: scope,
-      proposedConfidence: 0.5,
-      sourceTaskIds: [input.taskId],
-      sourceRefs: [{ sourceType: "task_trace", taskId: input.taskId, capturedAt: now }],
-      evidenceRefs: files.slice(0, 3).map((fp) => ({
-        evidenceType: "file",
-        filePath: fp,
-        capturedAt: now,
-        strength: "weak",
-      })),
-      possibleDuplicateIds: [],
-      possibleConflictIds: [],
-      riskLevel: "low",
-      reviewRequired: false,
-      generatedBy: input.actor ?? { actorType: "system", actorId: "memory-writer" },
-      generationReason: "knowledge_extraction",
-      sensitivity: "internal",
-      createdAt: now,
-      updatedAt: now,
-    }];
-  }
-
   private buildPreferenceCandidates(input: WriteInput, scope: ScopeDescriptor, now: string): MemoryCandidate[] {
     // 从 WorkingMemory 的 user_feedback 约束中提取偏好
     const feedbackConstraints = input.workingMemory.constraints.filter(
-      (c) => c.source === "user_followup" && !c.temporary
+      (c) =>
+        (c.source === "user_followup" || c.source === "current_user_request") &&
+        !c.temporary &&
+        c.text.trim().length > 4,
     );
 
     return feedbackConstraints.map((c) => ({
@@ -317,6 +310,62 @@ export class MemoryWriter {
     }));
   }
 
+  /** 从显式记住 / durable goal 抽一条 user_preference */
+  private buildPreferenceFromGoal(
+    input: WriteInput,
+    scope: ScopeDescriptor,
+    now: string,
+  ): MemoryCandidate | null {
+    const goal = input.workingMemory.goal ?? "";
+    const explicit = extractExplicitRememberText(goal);
+    const fallback = extractCleanMemoryQuery(goal).trim();
+    const raw =
+      explicit ??
+      (fallback && hasDurableMemorySignal(fallback) ? fallback : null);
+    if (!raw || raw.length < 4 || raw.length > 500) return null;
+
+    const key = `goal_${hashShort(raw)}`;
+    return {
+      id: generateId("cand"),
+      schemaVersion: 1,
+      status: "draft",
+      proposedType: "user_preference" as MemoryType,
+      proposedSubjectKey: `preference:user:${input.userId ?? "unknown"}:${key}`,
+      subjectKeyVersion: 1,
+      proposedTitle: `User preference: ${raw.slice(0, 80)}`,
+      proposedSummary: raw,
+      proposedPayload: {
+        preferenceKey: key,
+        value: raw,
+        origin: "explicit" as const,
+        strength: "default" as const,
+        appliesTo: "coding_style" as const,
+        observationCount: 1,
+        firstObservedAt: now,
+        lastObservedAt: now,
+        overridePolicy: "ask_on_conflict" as const,
+      },
+      proposedScope: { ...scope, userId: input.userId },
+      proposedConfidence: 0.75,
+      sourceTaskIds: [input.taskId],
+      sourceRefs: [{ sourceType: "user_explicit", taskId: input.taskId, capturedAt: now }],
+      evidenceRefs: [{
+        evidenceType: "user_message",
+        capturedAt: now,
+        strength: "strong",
+      }],
+      possibleDuplicateIds: [],
+      possibleConflictIds: [],
+      riskLevel: "low",
+      reviewRequired: false,
+      generatedBy: input.actor ?? { actorType: "system", actorId: "memory-writer" },
+      generationReason: "preference_from_goal",
+      sensitivity: "confidential",
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
   private buildScope(input: WriteInput): ScopeDescriptor {
     return {
       lifecycleScope: "persistent",
@@ -324,4 +373,12 @@ export class MemoryWriter {
       userId: input.userId,
     };
   }
+}
+
+function hashShort(text: string): string {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
 }

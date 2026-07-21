@@ -24,6 +24,8 @@ export type {
   CompleteTaskInput,
   CompleteTaskResult,
   ContextSectionItem,
+  MemoryCandidateEnricher,
+  MemoryCandidateEnrichmentDraft,
   MemoryListItem,
   MemoryRuntime,
   MemoryRuntimeOptions,

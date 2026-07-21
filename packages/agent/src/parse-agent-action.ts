@@ -273,6 +273,20 @@ function parseArguments(v: unknown): Record<string, unknown> | null {
   return null;
 }
 
+/** 判断 tool 信封里装的是不是结构化动作名（而非真实工具） */
+function isStructuredActionKind(toolId: string): boolean {
+  const kind = toolId.toLowerCase().replace(/-/g, "_");
+  return (
+    kind === "ask_user" ||
+    kind === "askuser" ||
+    kind === "final_answer" ||
+    kind === "finalanswer" ||
+    kind === "plan_update" ||
+    kind === "planupdate" ||
+    kind === "abort"
+  );
+}
+
 /**
  * 从单个 JSON 对象中识别并解析 action。
  *
@@ -297,6 +311,13 @@ function parseActionFromJsonObject(
       : typeof obj.name === "string" && obj.name
         ? obj.name
         : null;
+  // 模型常把结构化动作装进 tool 信封发出（{"tool":"ask_user","args":{...}}），
+  // 若按未知工具拒绝，ask_user 等动作会静默退化成普通文本回答。
+  // 这里还原成 action 形式，继续走下方结构化解析。
+  if (toolId && isStructuredActionKind(toolId)) {
+    const inner = asRecord(obj.args) ?? parseArguments(obj.arguments) ?? {};
+    return parseActionFromJsonObject({ ...inner, action: toolId }, knownTools);
+  }
   if (toolId) {
     // 已知工具名过滤：不在注册表中的工具名直接拒绝
     // 这消除了代码块和文件内容中的大量误匹配

@@ -34,6 +34,8 @@ export {
   type MigrateLegacyResult,
   type MemoryListItem,
   type MemoryRuntime,
+  type MemoryCandidateEnricher,
+  type MemoryCandidateEnrichmentDraft,
   type MemoryRuntimeOptions,
   type OnToolResultInput,
   type PatchWorkingMemoryInput,
@@ -46,11 +48,22 @@ export {
 export {
   extractCleanMemoryQuery,
   extractFilePaths,
+  buildConversationAwareQuery,
+  cleanMemoryTitle,
+  extractExplicitRememberText,
+  hasDurableMemorySignal,
+  isDecisionStep,
+  isLowValueChitchat,
+  isSystemFinalizeMessage,
+  isWorthWritingLongTermMemory,
+  shouldWriteTaskSummary,
+  tokenizeForMemoryScore,
   type MemoryRecord,
   type MemorySource,
   type MemoryScope,
   type MemoryPriority,
   type TaskProfile,
+  type MemoryWriteSignalInput,
 } from "./shared/memory-record.js";
 
 export {

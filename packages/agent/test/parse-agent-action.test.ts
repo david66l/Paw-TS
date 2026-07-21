@@ -118,6 +118,29 @@ describe("parseAgentActionFromModelText", () => {
     }
   });
 
+  test("parses structured actions wrapped in tool envelope", () => {
+    // 模型常把结构化动作装进 tool 信封（真实回归：ask_user 曾因此静默变成普通文本）
+    const ask = parseAgentActionFromModelText(
+      '{"tool":"ask_user","args":{"question":"你最喜欢的编程语言是什么？"}}',
+    );
+    expect(ask?.type).toBe("ask_user");
+    if (ask?.type === "ask_user") {
+      expect(ask.question).toBe("你最喜欢的编程语言是什么？");
+      expect(ask.timeoutSec).toBeNull();
+    }
+
+    const fin = parseAgentActionFromModelText(
+      '{"tool":"final_answer","args":{"summary":"done"}}',
+    );
+    expect(fin).toEqual({ type: "final_answer", summary: "done" });
+
+    // 真实工具不受归一化影响
+    const tool = parseAgentActionFromModelText(
+      '{"tool":"workspace.write_file","args":{"path":"a.ts"}}',
+    );
+    expect(tool?.type).toBe("tool_call");
+  });
+
   test("parses plan_update", () => {
     const a = parseAgentActionFromModelText(
       '{"action":"plan_update","reason":"replan","new_items":[1],"deprecated_items":["a"]}',

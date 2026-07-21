@@ -36,6 +36,7 @@ import type {
   WorkingConstraint,
   WorkingMemory,
 } from "../db/types.js";
+import { isSystemFinalizeMessage } from "../shared/memory-quality.js";
 import { resolveScope, type ResolvedScope } from "./scope.js";
 import type {
   BeginTaskInput,
@@ -107,12 +108,14 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
   private readonly retriever = new MemoryRetriever();
   private readonly ctxBuilder = new ContextBuilder();
   private readonly toolProcessor = new ToolResultProcessor();
+  private readonly candidateEnricher?: MemoryRuntimeOptions["candidateEnricher"];
 
   /** runId → taskId（同进程多 run） */
   private readonly runTaskMap = new Map<string, string>();
 
   constructor(opts: MemoryRuntimeOptions) {
     this.scope = resolveScope(opts);
+    this.candidateEnricher = opts.candidateEnricher;
   }
 
   async ping(): Promise<boolean> {
@@ -189,6 +192,8 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       title: r.memory.title,
       score: r.score,
       type: r.memory.type,
+      summary: (r.memory.summary || r.memory.title).slice(0, 400),
+      relatedFiles: r.memory.relatedFiles ?? [],
     }));
 
     return {
@@ -453,12 +458,13 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     const task = await this.taskMgr.getTask(input.taskId);
     if (!task) throw new Error(`TaskSession not found: ${input.taskId}`);
 
-    // 可选最终消息 → completedSteps
-    if (input.finalMessage?.trim()) {
+    // 可选最终消息 → completedSteps（过滤宿主占位文案，避免污染记忆）
+    const finalMsg = input.finalMessage?.trim() ?? "";
+    if (finalMsg && !isSystemFinalizeMessage(finalMsg)) {
       await this.withWmRetry(input.taskId, async (wm) => {
         const step = {
           id: generateId("done"),
-          summary: input.finalMessage!.slice(0, 500),
+          summary: finalMsg.slice(0, 500),
           toolCallIds: [] as string[],
           completedAt: new Date().toISOString(),
         };
@@ -503,13 +509,33 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     }
 
     const wm = await this.requireWm(input.taskId);
-    const candidates = await this.writer.writeFromFinalSnapshot({
+    let candidates = await this.writer.writeFromFinalSnapshot({
       taskId: input.taskId,
       workingMemory: wm,
       repositoryId: this.scope.repositoryId,
       userId: this.scope.userId,
       actor: { actorType: "system", actorId: "memory-runtime" },
     });
+
+    // 可选 enricher：追加候选（失败忽略）
+    if (this.candidateEnricher) {
+      try {
+        const drafts = await this.candidateEnricher({
+          taskId: input.taskId,
+          goal: wm.goal,
+          workingMemoryGoal: wm.goal,
+        });
+        const extra = await this.materializeEnrichmentDrafts(
+          input.taskId,
+          drafts ?? [],
+        );
+        if (extra.length > 0) {
+          candidates = [...candidates, ...extra];
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
 
     return this.promoteCandidates(candidates);
   }
@@ -674,6 +700,61 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       : new Error(`WorkingMemory update failed after ${MAX_WM_RETRIES} retries`);
   }
 
+  /** enricher 草稿 → memory_candidates 行 */
+  private async materializeEnrichmentDrafts(
+    taskId: string,
+    drafts: readonly {
+      title: string;
+      summary: string;
+      type: string;
+      confidence?: number;
+    }[],
+  ): Promise<MemoryCandidate[]> {
+    const now = new Date().toISOString();
+    const out: MemoryCandidate[] = [];
+    for (const d of drafts) {
+      if (!d.title?.trim() || !d.summary?.trim()) continue;
+      const type = normalizeMemoryType(d.type);
+      const conf =
+        typeof d.confidence === "number"
+          ? Math.min(1, Math.max(0.3, d.confidence))
+          : 0.7;
+      const cand: MemoryCandidate = {
+        id: generateId("cand"),
+        schemaVersion: 1,
+        status: "draft",
+        proposedType: type,
+        proposedSubjectKey: `enrich:${type}:${this.scope.repositoryId}:${hashShort(d.title + d.summary)}`,
+        subjectKeyVersion: 1,
+        proposedTitle: d.title.slice(0, 200),
+        proposedSummary: d.summary.slice(0, 2000),
+        proposedPayload: { assertion: d.summary.slice(0, 2000) },
+        proposedScope: {
+          lifecycleScope: "persistent",
+          repositoryId: this.scope.repositoryId,
+          userId: this.scope.userId,
+        },
+        proposedConfidence: conf,
+        sourceTaskIds: [taskId],
+        sourceRefs: [
+          { sourceType: "task_trace", taskId, capturedAt: now },
+        ],
+        evidenceRefs: [],
+        possibleDuplicateIds: [],
+        possibleConflictIds: [],
+        riskLevel: "low",
+        reviewRequired: false,
+        generatedBy: { actorType: "system", actorId: "candidate-enricher" },
+        generationReason: "candidate_enricher",
+        sensitivity: "internal",
+        createdAt: now,
+        updatedAt: now,
+      };
+      out.push(await memoryCandidateDao.create(cand));
+    }
+    return out;
+  }
+
   /**
    * 对候选批量：evaluate → persist decision → execute APPROVED。
    * APPROVE_MERGE 时补全 targetMemoryId。
@@ -758,6 +839,14 @@ function upsertFile(
   const next = [...list];
   next[idx] = activity;
   return next;
+}
+
+function hashShort(text: string): string {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
 }
 
 function normalizeMemoryType(raw?: string): MemoryType {

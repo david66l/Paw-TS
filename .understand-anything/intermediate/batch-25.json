@@ -1,0 +1,116 @@
+{
+  "nodes": [
+    {
+      "id": "document:文档/工程/BENCHMARK_RESULTS.md",
+      "type": "document",
+      "name": "BENCHMARK_RESULTS.md",
+      "filePath": "文档/工程/BENCHMARK_RESULTS.md",
+      "summary": "包含 3 个章节的文档，主题为「Benchmark results (sample)」。",
+      "tags": [
+        "benchmark",
+        "documentation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:文档/工程/ENGINEERING_EXCELLENCE_PLAN.md",
+      "type": "document",
+      "name": "ENGINEERING_EXCELLENCE_PLAN.md",
+      "filePath": "文档/工程/ENGINEERING_EXCELLENCE_PLAN.md",
+      "summary": "包含 46 个章节的文档，主题为「Paw-TS 工程卓越改进方案」。",
+      "tags": [
+        "planning",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/工程/EVAL_ARCHITECTURE_PLAN.md",
+      "type": "document",
+      "name": "EVAL_ARCHITECTURE_PLAN.md",
+      "filePath": "文档/工程/EVAL_ARCHITECTURE_PLAN.md",
+      "summary": "包含 33 个章节的文档，主题为「Paw-TS Agent 自动化评估体系 — 详细架构方案」。",
+      "tags": [
+        "planning",
+        "architecture",
+        "evaluation",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/工程/INTERVIEW_READINESS_PLAN.md",
+      "type": "document",
+      "name": "INTERVIEW_READINESS_PLAN.md",
+      "filePath": "文档/工程/INTERVIEW_READINESS_PLAN.md",
+      "summary": "包含 7 个章节的文档，主题为「Paw-TS 大厂面试就绪计划」。",
+      "tags": [
+        "planning",
+        "interview-prep",
+        "documentation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:文档/工程/Paw-TS从0到1完整解析.md",
+      "type": "document",
+      "name": "Paw-TS从0到1完整解析.md",
+      "filePath": "文档/工程/Paw-TS从0到1完整解析.md",
+      "summary": "包含 18 个章节的文档，主题为「Paw-TS：从 0 到 1 完整解析」。",
+      "tags": [
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/工程/TEST_REPORT.md",
+      "type": "document",
+      "name": "TEST_REPORT.md",
+      "filePath": "文档/工程/TEST_REPORT.md",
+      "summary": "包含 21 个章节的文档，主题为「Paw-TS 核心能力测试报告」。",
+      "tags": [
+        "testing",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:文档/工程/UPGRADE_PLAN.md",
+      "type": "document",
+      "name": "UPGRADE_PLAN.md",
+      "filePath": "文档/工程/UPGRADE_PLAN.md",
+      "summary": "包含 38 个章节的文档，主题为「Paw-TS 架构设计升级计划：通过大厂 AI Agent 面试」。",
+      "tags": [
+        "planning",
+        "upgrade",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/工程/deepseek-v4-flash-eval-report.md",
+      "type": "document",
+      "name": "deepseek-v4-flash-eval-report.md",
+      "filePath": "文档/工程/deepseek-v4-flash-eval-report.md",
+      "summary": "包含 5 个章节的文档，主题为「deepseek-v4-flash 评估报告」。",
+      "tags": [
+        "evaluation",
+        "documentation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:文档/工程/上下文压缩三层体系.md",
+      "type": "document",
+      "name": "上下文压缩三层体系.md",
+      "filePath": "文档/工程/上下文压缩三层体系.md",
+      "summary": "包含 20 个章节的文档，主题为「Paw-TS 上下文压缩三层体系」。",
+      "tags": [
+        "context-compression",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": []
+}

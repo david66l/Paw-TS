@@ -61,6 +61,7 @@
  *     所有命令评估和决策被记录到审计日志中，支持事后追溯和合规审查。
  */
 export type {
+  FileLockLike,
   HarnessContext,
   SubAgentLaunchOptions,
   SubAgentLauncher,

@@ -1,0 +1,93 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 3,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/harness/src/registry/index.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 12,
+      "nonEmptyLines": 11,
+      "exports": [
+        {
+          "name": "toolRequiresApproval",
+          "line": 1,
+          "isDefault": false
+        },
+        {
+          "name": "listToolNames",
+          "line": 1,
+          "isDefault": false
+        },
+        {
+          "name": "toolNameReverseMap",
+          "line": 1,
+          "isDefault": false
+        },
+        {
+          "name": "toolDefinitions",
+          "line": 1,
+          "isDefault": false
+        },
+        {
+          "name": "toolCatalogText",
+          "line": 1,
+          "isDefault": false
+        },
+        {
+          "name": "ToolRunResult",
+          "line": 1,
+          "isDefault": false
+        },
+        {
+          "name": "ToolName",
+          "line": 1,
+          "isDefault": false
+        },
+        {
+          "name": "BuiltinToolName",
+          "line": 1,
+          "isDefault": false
+        },
+        {
+          "name": "executeTool",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 9,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/harness/test/registry.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 291,
+      "nonEmptyLines": 270,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/harness/test/sub-agent.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 62,
+      "nonEmptyLines": 58,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

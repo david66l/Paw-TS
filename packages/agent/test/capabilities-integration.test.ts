@@ -6,11 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  existsSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { AgentOrchestrator } from "@paw/agent";
@@ -306,7 +302,7 @@ describe("Agent Workflow", () => {
       abortSignal: ac.signal,
     });
 
-    expect(r.status).toBe("failed");
+    expect(r.status).toBe("aborted");
     expect(r.message).toBe("Run aborted.");
 
     cleanup(dir);

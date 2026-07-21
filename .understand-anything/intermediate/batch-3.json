@@ -1,0 +1,1145 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/eval/src/cli/eval-command.ts",
+      "type": "file",
+      "name": "eval-command.ts",
+      "filePath": "packages/eval/src/cli/eval-command.ts",
+      "summary": "TypeScript 源文件，4 个函数，229 行。",
+      "tags": [
+        "evaluation",
+        "cli",
+        "utilities"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/eval/src/cli/eval-command.ts:runEvalCommand",
+      "type": "function",
+      "name": "runEvalCommand",
+      "filePath": "packages/eval/src/cli/eval-command.ts",
+      "lineRange": [
+        75,
+        89
+      ],
+      "summary": "执行函数 runEvalCommand(args)，14 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/eval/src/cli/eval-command.ts:runEval",
+      "type": "function",
+      "name": "runEval",
+      "filePath": "packages/eval/src/cli/eval-command.ts",
+      "lineRange": [
+        100,
+        176
+      ],
+      "summary": "执行函数 runEval(args)，76 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/eval/src/cli/eval-command.ts:listSuites",
+      "type": "function",
+      "name": "listSuites",
+      "filePath": "packages/eval/src/cli/eval-command.ts",
+      "lineRange": [
+        182,
+        197
+      ],
+      "summary": "函数 listSuites(no params)，15 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/eval/src/cli/eval-command.ts:resolveEvalModel",
+      "type": "function",
+      "name": "resolveEvalModel",
+      "filePath": "packages/eval/src/cli/eval-command.ts",
+      "lineRange": [
+        210,
+        249
+      ],
+      "summary": "解析配置函数 resolveEvalModel(workspaceRoot, providerName)，39 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/eval/src/data-collector.ts",
+      "type": "file",
+      "name": "data-collector.ts",
+      "filePath": "packages/eval/src/data-collector.ts",
+      "summary": "TypeScript 源文件，0 个函数，1 个类，208 行。",
+      "tags": [
+        "evaluation",
+        "data-collection",
+        "utilities"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/eval/src/data-collector.ts:EvalDataCollector",
+      "type": "class",
+      "name": "EvalDataCollector",
+      "filePath": "packages/eval/src/data-collector.ts",
+      "lineRange": [
+        58,
+        226
+      ],
+      "summary": "类 EvalDataCollector，6 个方法、3 个属性，168 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/eval-record.ts",
+      "type": "file",
+      "name": "eval-record.ts",
+      "filePath": "packages/eval/src/eval-record.ts",
+      "summary": "TypeScript 源文件，0 个函数，109 行。",
+      "tags": [
+        "evaluation",
+        "data-model",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/eval-settings.ts",
+      "type": "file",
+      "name": "eval-settings.ts",
+      "filePath": "packages/eval/src/eval-settings.ts",
+      "summary": "TypeScript 源文件，1 个函数，61 行。",
+      "tags": [
+        "evaluation",
+        "configuration",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/runner.ts",
+      "type": "file",
+      "name": "runner.ts",
+      "filePath": "packages/eval/src/runner.ts",
+      "summary": "TypeScript 源文件，2 个函数，1 个类，376 行。",
+      "tags": [
+        "evaluation",
+        "orchestration",
+        "utilities"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/eval/src/runner.ts:EvalRunner",
+      "type": "class",
+      "name": "EvalRunner",
+      "filePath": "packages/eval/src/runner.ts",
+      "lineRange": [
+        95,
+        371
+      ],
+      "summary": "类 EvalRunner，5 个方法、4 个属性，276 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility3"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/src/scorer/aggregator.ts",
+      "type": "file",
+      "name": "aggregator.ts",
+      "filePath": "packages/eval/src/scorer/aggregator.ts",
+      "summary": "TypeScript 源文件，0 个函数，1 个类，84 行。",
+      "tags": [
+        "evaluation",
+        "scoring",
+        "aggregation",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:packages/eval/src/scorer/aggregator.ts:Aggregator",
+      "type": "class",
+      "name": "Aggregator",
+      "filePath": "packages/eval/src/scorer/aggregator.ts",
+      "lineRange": [
+        29,
+        90
+      ],
+      "summary": "类 Aggregator，1 个方法、0 个属性，61 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/scorer/llm-scorer.ts",
+      "type": "file",
+      "name": "llm-scorer.ts",
+      "filePath": "packages/eval/src/scorer/llm-scorer.ts",
+      "summary": "TypeScript 源文件，4 个函数，236 行。",
+      "tags": [
+        "evaluation",
+        "scoring",
+        "llm-judge",
+        "core"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/eval/src/scorer/llm-scorer.ts:buildLlmJudgePrompt",
+      "type": "function",
+      "name": "buildLlmJudgePrompt",
+      "filePath": "packages/eval/src/scorer/llm-scorer.ts",
+      "lineRange": [
+        69,
+        130
+      ],
+      "summary": "构建函数 buildLlmJudgePrompt(goal, finalAnswer, toolTrace, judgment, dimensions)，61 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/eval/src/scorer/llm-scorer.ts:llmScore",
+      "type": "function",
+      "name": "llmScore",
+      "filePath": "packages/eval/src/scorer/llm-scorer.ts",
+      "lineRange": [
+        213,
+        269
+      ],
+      "summary": "计算/评分函数 llmScore(model, record, judgment, dimensions)，56 行。",
+      "tags": [
+        "scoring",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/scorer/reporter.ts",
+      "type": "file",
+      "name": "reporter.ts",
+      "filePath": "packages/eval/src/scorer/reporter.ts",
+      "summary": "TypeScript 源文件，0 个函数，1 个类，163 行。",
+      "tags": [
+        "evaluation",
+        "scoring",
+        "reporting",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:packages/eval/src/scorer/reporter.ts:Reporter",
+      "type": "class",
+      "name": "Reporter",
+      "filePath": "packages/eval/src/scorer/reporter.ts",
+      "lineRange": [
+        38,
+        183
+      ],
+      "summary": "类 Reporter，8 个方法、0 个属性，145 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "type": "file",
+      "name": "rule-scorer.ts",
+      "filePath": "packages/eval/src/scorer/rule-scorer.ts",
+      "summary": "TypeScript 源文件，0 个函数，1 个类，600 行。",
+      "tags": [
+        "evaluation",
+        "scoring",
+        "rule-based",
+        "core"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/eval/src/scorer/rule-scorer.ts:RuleScorer",
+      "type": "class",
+      "name": "RuleScorer",
+      "filePath": "packages/eval/src/scorer/rule-scorer.ts",
+      "lineRange": [
+        45,
+        653
+      ],
+      "summary": "类 RuleScorer，14 个方法、0 个属性，608 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility3"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/src/scorer/types.ts",
+      "type": "file",
+      "name": "types.ts",
+      "filePath": "packages/eval/src/scorer/types.ts",
+      "summary": "TypeScript 源文件，0 个函数，95 行。",
+      "tags": [
+        "evaluation",
+        "scoring",
+        "type-definition",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/adversarial.ts",
+      "type": "file",
+      "name": "adversarial.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/adversarial.ts",
+      "summary": "TypeScript 源文件，0 个函数，286 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "adversarial",
+        "security"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/code-gen.ts",
+      "type": "file",
+      "name": "code-gen.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/code-gen.ts",
+      "summary": "TypeScript 源文件，0 个函数，287 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "code-generation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/context-mgmt.ts",
+      "type": "file",
+      "name": "context-mgmt.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/context-mgmt.ts",
+      "summary": "TypeScript 源文件，0 个函数，251 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "context"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/core-tools.ts",
+      "type": "file",
+      "name": "core-tools.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/core-tools.ts",
+      "summary": "TypeScript 源文件，0 个函数，358 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "tools",
+        "core"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/high-frequency.ts",
+      "type": "file",
+      "name": "high-frequency.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/high-frequency.ts",
+      "summary": "TypeScript 源文件，0 个函数，307 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "high-frequency"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/index.ts",
+      "summary": "模块 barrel 入口文件，重新导出 8 个公共符号。",
+      "tags": [
+        "barrel",
+        "entry-point",
+        "evaluation",
+        "test-suite"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/memory-retrieval.ts",
+      "type": "file",
+      "name": "memory-retrieval.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/memory-retrieval.ts",
+      "summary": "TypeScript 源文件，0 个函数，168 行。",
+      "tags": [
+        "memory",
+        "retrieval",
+        "evaluation",
+        "test-suite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/multi-step.ts",
+      "type": "file",
+      "name": "multi-step.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/multi-step.ts",
+      "summary": "TypeScript 源文件，0 个函数，177 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "multi-step"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/builtin/shell-safety.ts",
+      "type": "file",
+      "name": "shell-safety.ts",
+      "filePath": "packages/eval/src/test-suite/builtin/shell-safety.ts",
+      "summary": "TypeScript 源文件，0 个函数，292 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "shell",
+        "security"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/loader.ts",
+      "type": "file",
+      "name": "loader.ts",
+      "filePath": "packages/eval/src/test-suite/loader.ts",
+      "summary": "TypeScript 源文件，5 个函数，80 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "loading"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/test-suite/types.ts",
+      "type": "file",
+      "name": "types.ts",
+      "filePath": "packages/eval/src/test-suite/types.ts",
+      "summary": "TypeScript 源文件，0 个函数，141 行。",
+      "tags": [
+        "evaluation",
+        "test-suite",
+        "type-definition"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/src/training-data-exporter.ts",
+      "type": "file",
+      "name": "training-data-exporter.ts",
+      "filePath": "packages/eval/src/training-data-exporter.ts",
+      "summary": "TypeScript 源文件，3 个函数，147 行。",
+      "tags": [
+        "evaluation",
+        "data-export",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/eval/src/training-data-exporter.ts:runToChatML",
+      "type": "function",
+      "name": "runToChatML",
+      "filePath": "packages/eval/src/training-data-exporter.ts",
+      "lineRange": [
+        57,
+        122
+      ],
+      "summary": "执行函数 runToChatML(record)，65 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/eval/src/training-data-exporter.ts:exportSuccessfulRuns",
+      "type": "function",
+      "name": "exportSuccessfulRuns",
+      "filePath": "packages/eval/src/training-data-exporter.ts",
+      "lineRange": [
+        135,
+        148
+      ],
+      "summary": "执行函数 exportSuccessfulRuns(records, reports, passThreshold)，13 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/eval/test/data-collector.test.ts",
+      "type": "file",
+      "name": "data-collector.test.ts",
+      "filePath": "packages/eval/test/data-collector.test.ts",
+      "summary": "单元测试文件，0 个测试函数，132 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "evaluation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/eval/test/e2e-runner.test.ts",
+      "type": "file",
+      "name": "e2e-runner.test.ts",
+      "filePath": "packages/eval/test/e2e-runner.test.ts",
+      "summary": "端到端测试文件，0 个测试函数，221 行有效代码。",
+      "tags": [
+        "test",
+        "integration-test",
+        "evaluation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/eval/test/rule-scorer.test.ts",
+      "type": "file",
+      "name": "rule-scorer.test.ts",
+      "filePath": "packages/eval/test/rule-scorer.test.ts",
+      "summary": "单元测试文件，2 个测试函数，260 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "evaluation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/eval/test/rule-scorer.test.ts:addToolCall",
+      "type": "function",
+      "name": "addToolCall",
+      "filePath": "packages/eval/test/rule-scorer.test.ts",
+      "lineRange": [
+        26,
+        64
+      ],
+      "summary": "测试用例：addToolCall(run, tool, args, ok, result)，38 行。",
+      "tags": [
+        "test",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/eval/test/smoke-real-model.test.ts",
+      "type": "file",
+      "name": "smoke-real-model.test.ts",
+      "filePath": "packages/eval/test/smoke-real-model.test.ts",
+      "summary": "单元测试文件，0 个测试函数，38 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "evaluation"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "function:packages/eval/src/cli/eval-command.ts:runEvalCommand",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "function:packages/eval/src/cli/eval-command.ts:runEval",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "function:packages/eval/src/cli/eval-command.ts:listSuites",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "function:packages/eval/src/cli/eval-command.ts:resolveEvalModel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "function:packages/eval/src/cli/eval-command.ts:runEvalCommand",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "file:packages/eval/src/runner.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "file:packages/eval/src/scorer/reporter.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "file:packages/eval/src/test-suite/loader.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/cli/eval-command.ts",
+      "target": "file:packages/eval/src/training-data-exporter.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/eval/src/cli/eval-command.ts:runEvalCommand",
+      "target": "function:packages/eval/src/cli/eval-command.ts:runEval",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/eval/src/cli/eval-command.ts:runEvalCommand",
+      "target": "function:packages/eval/src/cli/eval-command.ts:listSuites",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/eval/src/cli/eval-command.ts:runEval",
+      "target": "function:packages/eval/src/cli/eval-command.ts:resolveEvalModel",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/data-collector.ts",
+      "target": "class:packages/eval/src/data-collector.ts:EvalDataCollector",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/data-collector.ts",
+      "target": "class:packages/eval/src/data-collector.ts:EvalDataCollector",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/data-collector.ts",
+      "target": "file:packages/eval/src/eval-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "class:packages/eval/src/runner.ts:EvalRunner",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "class:packages/eval/src/runner.ts:EvalRunner",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/data-collector.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/eval-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/eval-settings.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/scorer/aggregator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/scorer/llm-scorer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/scorer/reporter.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/scorer/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/aggregator.ts",
+      "target": "class:packages/eval/src/scorer/aggregator.ts:Aggregator",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/scorer/aggregator.ts",
+      "target": "class:packages/eval/src/scorer/aggregator.ts:Aggregator",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/scorer/aggregator.ts",
+      "target": "file:packages/eval/src/scorer/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/llm-scorer.ts",
+      "target": "function:packages/eval/src/scorer/llm-scorer.ts:buildLlmJudgePrompt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/scorer/llm-scorer.ts",
+      "target": "function:packages/eval/src/scorer/llm-scorer.ts:llmScore",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/scorer/llm-scorer.ts",
+      "target": "function:packages/eval/src/scorer/llm-scorer.ts:llmScore",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/scorer/llm-scorer.ts",
+      "target": "file:packages/eval/src/eval-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/llm-scorer.ts",
+      "target": "file:packages/eval/src/scorer/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/llm-scorer.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/eval/src/scorer/llm-scorer.ts:llmScore",
+      "target": "function:packages/eval/src/scorer/llm-scorer.ts:buildLlmJudgePrompt",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/scorer/reporter.ts",
+      "target": "class:packages/eval/src/scorer/reporter.ts:Reporter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/scorer/reporter.ts",
+      "target": "class:packages/eval/src/scorer/reporter.ts:Reporter",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/scorer/reporter.ts",
+      "target": "file:packages/eval/src/eval-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/reporter.ts",
+      "target": "file:packages/eval/src/scorer/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "target": "class:packages/eval/src/scorer/rule-scorer.ts:RuleScorer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "target": "class:packages/eval/src/scorer/rule-scorer.ts:RuleScorer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "target": "file:packages/eval/src/eval-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "target": "file:packages/eval/src/scorer/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/scorer/types.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/adversarial.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/code-gen.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/context-mgmt.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/core-tools.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/high-frequency.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/memory-retrieval.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/multi-step.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/shell-safety.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/loader.ts",
+      "target": "file:packages/eval/src/test-suite/builtin/index.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/loader.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/training-data-exporter.ts",
+      "target": "function:packages/eval/src/training-data-exporter.ts:runToChatML",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/training-data-exporter.ts",
+      "target": "function:packages/eval/src/training-data-exporter.ts:exportSuccessfulRuns",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/src/training-data-exporter.ts",
+      "target": "function:packages/eval/src/training-data-exporter.ts:runToChatML",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/training-data-exporter.ts",
+      "target": "function:packages/eval/src/training-data-exporter.ts:exportSuccessfulRuns",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/eval/src/training-data-exporter.ts",
+      "target": "file:packages/eval/src/eval-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/training-data-exporter.ts",
+      "target": "file:packages/eval/src/scorer/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/test/data-collector.test.ts",
+      "target": "file:packages/eval/src/data-collector.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/data-collector.ts",
+      "target": "file:packages/eval/test/data-collector.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/eval/test/e2e-runner.test.ts",
+      "target": "file:packages/eval/src/runner.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/test/e2e-runner.test.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/test/e2e-runner.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/types.ts",
+      "target": "file:packages/eval/test/e2e-runner.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/eval/test/rule-scorer.test.ts",
+      "target": "function:packages/eval/test/rule-scorer.test.ts:addToolCall",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/eval/test/rule-scorer.test.ts",
+      "target": "file:packages/eval/src/eval-record.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/test/rule-scorer.test.ts",
+      "target": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/test/rule-scorer.test.ts",
+      "target": "file:packages/eval/src/test-suite/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/eval-record.ts",
+      "target": "file:packages/eval/test/rule-scorer.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/eval/src/scorer/rule-scorer.ts",
+      "target": "file:packages/eval/test/rule-scorer.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/types.ts",
+      "target": "file:packages/eval/test/rule-scorer.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/eval/test/smoke-real-model.test.ts",
+      "target": "file:packages/eval/src/runner.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/test/smoke-real-model.test.ts",
+      "target": "file:packages/eval/src/test-suite/builtin/core-tools.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/eval/src/runner.ts",
+      "target": "file:packages/eval/test/smoke-real-model.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/eval/src/test-suite/builtin/core-tools.ts",
+      "target": "file:packages/eval/test/smoke-real-model.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

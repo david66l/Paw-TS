@@ -30,6 +30,10 @@ import type {
   TodoStore,
 } from "@paw/core";
 import type { TaskPlanner } from "@paw/store";
+import {
+  markPlanItemsCompleted,
+  planItemsToEventSnapshot,
+} from "../plan-bootstrap.js";
 import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
@@ -69,6 +73,10 @@ interface ActionHandlerContext {
   readonly evalHooks?: EvalHooks;
   readonly memoryRuntime?: import("@paw/memory").MemoryRuntime;
   readonly memoryTaskId?: string;
+  readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
+  readonly allowedTools?: readonly string[] | null;
+  /** 并行子 Agent 的文件锁（仅子 Agent 注入） */
+  readonly fileLock?: import("@paw/harness").FileLockLike;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -92,7 +100,11 @@ export async function handleAction(
   text: string,
   thinking: string | undefined,
   opts: ActionHandlerContext,
-): Promise<{ readonly state: TurnState; readonly flags: TurnFlags; readonly subResults?: Array<{ runId: string; summary: string }> }> {
+): Promise<{
+  readonly state: TurnState;
+  readonly flags: TurnFlags;
+  readonly subResults?: Array<{ runId: string; summary: string }>;
+}> {
   // 按工具类型分流：子 Agent vs 普通工具
   const subAgentCalls = toolCalls.filter(isSubAgentCall);
   const normalToolCalls = toolCalls.filter((c) => !isSubAgentCall(c));
@@ -213,13 +225,13 @@ function handleFinalAnswer(
   flags: TurnFlags,
   text: string,
   thinking: string | undefined,
-  opts: Pick<
-    ActionHandlerContext,
-    "todoStore" | "planner" | "saveStateFn"
-  >,
+  opts: Pick<ActionHandlerContext, "todoStore" | "planner" | "saveStateFn">,
 ): { readonly state: TurnState; readonly flags: TurnFlags } {
   const plan = opts.planner.plan;
-  const hasPendingPlan = plan && !plan.allComplete && plan.items.length > 0;
+  // 仅当计划被模型/applyUpdate 推进过（revision>0）才因 pending plan 而 nudge。
+  // goal bootstrap 的 plan  revision 仍为 0，避免「右栏兜底计划」卡住 final_answer。
+  const hasPendingPlan =
+    !!plan && !plan.allComplete && plan.items.length > 0 && plan.revision > 0;
   const hasPendingTodos = opts.todoStore?.items.some(
     (t) => t.status !== "done",
   );
@@ -267,7 +279,21 @@ function handleFinalAnswer(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  // 无 pending 工作 → 真正完成
+  // 无 pending 工作 / 不再 nudge → 真正完成；把 plan 项标 done 供右栏展示
+  if (plan && plan.items.length > 0) {
+    const completed = markPlanItemsCompleted(plan.items);
+    plan.items.splice(0, plan.items.length, ...completed);
+    plan.revision += 1;
+    ctx.taskState.setPlan(plan.items);
+    ctx.emit({
+      type: "plan.updated",
+      revision: plan.revision,
+      itemCount: plan.items.length,
+      reason: "task_completed",
+      items: planItemsToEventSnapshot(plan.items),
+    });
+  }
+
   return {
     state: {
       type: "completed",
@@ -433,11 +459,17 @@ async function handlePlanUpdate(
           /* best-effort */
         });
     }
+    const snapshotItems = p.items.map((item) => ({
+      id: item.id,
+      text: (item.note?.trim() || item.task_id || item.id).slice(0, 500),
+      status: item.status,
+    }));
     ctx.emit({
       type: "plan.updated",
       revision: p.revision,
       itemCount: p.items.length,
       reason: action.reason,
+      items: snapshotItems,
     });
   }
 
@@ -527,6 +559,9 @@ async function handleToolCalls(
       shellSandbox: ctx.shellSandbox,
       memoryRuntime: opts.memoryRuntime,
       memoryTaskId: opts.memoryTaskId ?? ctx.memoryTaskId,
+      createAgent: opts.createAgent,
+      allowedTools: opts.allowedTools,
+      fileLock: opts.fileLock,
     },
     {
       resolveToolApproval: opts.resolveToolApproval,
@@ -622,7 +657,11 @@ async function handleRunAgent(
   text: string,
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn" | "agentGroup" | "evalHooks">,
-): Promise<{ readonly state: TurnState; readonly flags: TurnFlags; readonly subResults?: Array<{ runId: string; summary: string }> }> {
+): Promise<{
+  readonly state: TurnState;
+  readonly flags: TurnFlags;
+  readonly subResults?: Array<{ runId: string; summary: string }>;
+}> {
   const nextFlags: TurnFlags = {
     ...flags,
     lastTurnHadToolCall: true,
@@ -637,10 +676,15 @@ async function handleRunAgent(
     };
   }
 
-  // 为每个子 Agent 调用发出 tool.call 事件
-  for (const call of calls) {
-    ctx.emit({ type: "tool.call", tool: call.tool, args: call.args });
-  }
+  // 为每个子 Agent 调用发出 tool.call 事件（callId 与 AgentGroup 分配的 agentId 一致）
+  calls.forEach((call, i) => {
+    ctx.emit({
+      type: "tool.call",
+      tool: call.tool,
+      args: call.args,
+      callId: `child-${ctx.runId}-${i}`,
+    });
+  });
 
   const summarizer = new DefaultContextSummarizer();
 
@@ -700,20 +744,27 @@ async function handleRunAgent(
     })),
   );
 
-  // P4: 提取子 Agent 摘要供父 Agent 收割
-  const subResults = results.map((r) => ({
-    runId: `sub-${Date.now()}`,
+  // P4: 提取子 Agent 摘要供父 Agent 收割（runId 与 AgentGroup 的 child id 一致）
+  const subResults = results.map((r, i) => ({
+    runId: `child-${ctx.runId}-${i}`,
     summary: r.summary,
   }));
 
   if (ctx.turn + 1 >= ctx.maxSteps) {
     return {
-      state: { type: "completed", message: `Max steps (${ctx.maxSteps}) reached after sub-agents` },
+      state: {
+        type: "completed",
+        message: `Max steps (${ctx.maxSteps}) reached after sub-agents`,
+      },
       flags: nextFlags,
       subResults,
     };
   }
 
   opts.saveStateFn();
-  return { state: { type: "continue", nextFlags }, flags: nextFlags, subResults };
+  return {
+    state: { type: "continue", nextFlags },
+    flags: nextFlags,
+    subResults,
+  };
 }

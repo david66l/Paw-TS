@@ -1,0 +1,1070 @@
+.right {
+  width: var(--right-panel-width);
+  min-width: var(--right-panel-width);
+  height: 100%;
+  padding: 0 var(--space-3) var(--space-3) 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dragPad {
+  height: var(--titlebar-height);
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+
+.panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+}
+
+.tab,
+.tabActive {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 4px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.28);
+  color: var(--text-primary);
+}
+
+.tabActive {
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--text-accent);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 10px
+    rgba(40, 60, 110, 0.06);
+  position: relative;
+}
+
+.tabActive::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-4);
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared content wrapper                                              */
+/* ------------------------------------------------------------------ */
+
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty state                                                         */
+/* ------------------------------------------------------------------ */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 100%;
+}
+
+.emptyIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  color: var(--text-accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  margin-bottom: 4px;
+}
+
+.emptyTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Plan tab                                                            */
+/* ------------------------------------------------------------------ */
+
+.planList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.planDot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+
+.planDotPending {
+  background: var(--text-muted);
+  box-shadow: 0 0 0 2px rgba(135, 150, 178, 0.18);
+}
+
+.planDotDone {
+  background: var(--success);
+  box-shadow: 0 0 0 2px var(--success-soft);
+}
+
+.planText {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.planMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-top: var(--space-1);
+  border-top: 1px solid rgba(120, 140, 180, 0.12);
+}
+
+.badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-accent);
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.planReason {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Changes tab                                                         */
+/* ------------------------------------------------------------------ */
+
+.changeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.changeItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.changeDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+
+.changeDotOk {
+  background: var(--success);
+}
+
+.changeDotFail {
+  background: var(--danger);
+}
+
+.changePath {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changeSummary {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.changeStats {
+  display: flex;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  flex-shrink: 0;
+}
+
+.changeAdd {
+  color: var(--success);
+}
+
+.changeDel {
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sub-agents (child.* 事件驱动)                                        */
+/* ------------------------------------------------------------------ */
+.agentHead {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-secondary);
+  padding: 0 2px 2px;
+}
+
+.agentList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.agentItem {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+
+.agentRowBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agentRowBtn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.agentDot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.agentDotRunning {
+  background: var(--running);
+  box-shadow: 0 0 0 3px rgba(26, 107, 255, 0.18);
+  animation: agentPulse 1.4s ease-in-out infinite;
+}
+
+.agentDotDone {
+  background: var(--success);
+}
+
+.agentDotFail {
+  background: var(--danger);
+}
+
+.agentLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentCount {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agentStatus {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.agentCaret {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-accent);
+}
+
+.agentExpand {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(120, 140, 180, 0.14);
+}
+
+.agentField {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agentFieldLabel {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.agentFieldBody {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.agentFiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agentFile {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* 团队花名册（常驻角色）                                               */
+/* ------------------------------------------------------------------ */
+.roleList {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.roleItem,
+.roleItemOff {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.roleItemOff {
+  opacity: 0.55;
+}
+
+.roleAvatar {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.roleBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.rolePet {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.roleName {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.roleDot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(120, 140, 180, 0.45);
+}
+
+.roleDotRunning {
+  /* 运行中：小绿点 + 脉冲 */
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+  animation: agentPulse 1.4s ease-in-out infinite;
+}
+
+.roleDotDone {
+  background: var(--success);
+}
+
+.roleDotFail {
+  background: var(--danger);
+}
+
+.roleDotIdle,
+.roleDotOff {
+  background: rgba(120, 140, 180, 0.45);
+}
+
+.roleStatusText {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 34px;
+  text-align: right;
+}
+
+@keyframes agentPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.tabCount {
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-accent);
+  background: rgba(26, 107, 255, 0.12);
+  border-radius: 999px;
+  padding: 0 5px;
+  line-height: 15px;
+  display: inline-block;
+}
+
+/* ------------------------------------------------------------------ */
+/* Context / Memory shared stats                                       */
+/* ------------------------------------------------------------------ */
+
+.statGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.stat {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.statMuted {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Budget bars                                                         */
+/* ------------------------------------------------------------------ */
+
+.budgetGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.budgetBar {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.budgetBarLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.budgetTrack {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(120, 140, 180, 0.16);
+  overflow: hidden;
+}
+
+.budgetFill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+/* ------------------------------------------------------------------ */
+/* Memory                                                              */
+/* ------------------------------------------------------------------ */
+
+.memoryQuery {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.4);
+  word-break: break-word;
+}
+
+.memoryLibraryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.refreshBtn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  color: var(--text-accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  cursor: pointer;
+}
+
+.refreshBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.memoryList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memoryItem {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(120, 140, 180, 0.12);
+}
+
+.memoryItemTitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.memoryItemSummary {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.memoryType {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-accent);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.fileList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fileItem {
+  font-size: 11.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opsActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.opsError {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--danger);
+  line-height: 1.4;
+}
+
+.opsPre {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  max-height: 160px;
+  overflow: auto;
+  font-size: 10.5px;
+  line-height: 1.4;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 10px;
+  background: rgba(20, 30, 50, 0.06);
+  border: 1px solid rgba(120, 140, 180, 0.16);
+  color: var(--text-secondary);
+}
+
+.opsList {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.opsItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.opsSeq {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-accent);
+}
+
+.opsTool {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.opsRunBtn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+.opsRunBtn:hover:not(:disabled) {
+  color: var(--text-accent);
+}
+
+.opsRunBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.opsRunStatus {
+  font-weight: 700;
+  width: 14px;
+}
+
+.opsRunGoal {
+  flex: 1;
+  min-width: 0;
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opsReplay {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.22);
+  word-break: break-word;
+}
+
+/* ------------------------------------------------------------------ */
+/* 花名册展开详情 + 子 Agent 实时工具流                                  */
+/* ------------------------------------------------------------------ */
+
+.roleCaret {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.roleDetail {
+  margin: 2px 4px 8px 34px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--glass-bg-chip);
+  border: 1px solid var(--glass-border-soft);
+}
+
+.roleDesc {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.roleConfig {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.roleCfg {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--glass-border-soft);
+  border-radius: var(--radius-pill);
+  padding: 1px 7px;
+}
+
+.roleTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.roleToolChip {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid var(--glass-border-soft);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+.roleToolsMuted {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* 子 Agent 实时工具流 */
+.toolStream {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.toolStreamItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.toolStreamDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.toolStreamDotRun {
+  background: var(--running);
+  animation: rpPulse 1.1s ease-in-out infinite;
+}
+
+.toolStreamDotOk {
+  background: var(--success);
+}
+
+.toolStreamDotFail {
+  background: var(--danger);
+}
+
+@keyframes rpPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.toolStreamTool {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.toolStreamSummary {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Plan 进度可视化（进度条 + 当前步骤高亮 + 六态图标）                     */
+/* ------------------------------------------------------------------ */
+
+.planHeadRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.planHeadCount {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.planHeadPct {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-accent);
+}
+
+.planTrack {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(120, 150, 200, 0.18);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.planFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4d8fff, var(--accent));
+  transition: width 0.3s ease;
+}
+
+.planIcon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.planIconDone {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.planIconSkipped {
+  color: var(--text-muted);
+  background: var(--glass-bg-chip);
+}
+
+.planIconRunning {
+  background: var(--running);
+  animation: rpPulse 1.1s ease-in-out infinite;
+}
+
+.planIconFailed {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.planIconBlocked {
+  color: #d98a00;
+  background: rgba(217, 138, 0, 0.12);
+}
+
+.planIconPending {
+  background: transparent;
+  border: 1.5px solid var(--text-muted);
+  opacity: 0.55;
+}
+
+.planIndex {
+  flex-shrink: 0;
+  width: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  text-align: right;
+}
+
+.planTextCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.planTextDone {
+  color: var(--text-muted);
+}
+
+.planTextCurrent {
+  font-weight: 600;
+}
+
+.planItemCurrent {
+  margin: 0 -6px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+}
+
+.planElapsed {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-accent);
+}
+
+/* 锁冲突徽标（子 Agent 行内） */
+.agentLockChip {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #d98a00;
+  background: rgba(217, 138, 0, 0.12);
+  border: 1px solid rgba(217, 138, 0, 0.25);
+  border-radius: var(--radius-pill);
+  padding: 1px 7px;
+}

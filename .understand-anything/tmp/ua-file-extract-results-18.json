@@ -1,0 +1,48 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 1,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "docker/paw-sandbox/Dockerfile",
+      "language": "dockerfile",
+      "fileCategory": "infra",
+      "totalLines": 14,
+      "nonEmptyLines": 12,
+      "services": [
+        {
+          "name": "debian",
+          "image": "debian:bookworm-slim",
+          "ports": [],
+          "startLine": 1,
+          "endLine": 15
+        }
+      ],
+      "steps": [
+        {
+          "name": "FROM debian:bookworm-slim",
+          "startLine": 1,
+          "endLine": 1
+        },
+        {
+          "name": "RUN apt-get update \\",
+          "startLine": 3,
+          "endLine": 3
+        },
+        {
+          "name": "WORKDIR /workspace",
+          "startLine": 14,
+          "endLine": 14
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "serviceCount": 1,
+        "stepCount": 3
+      }
+    }
+  ]
+}

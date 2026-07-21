@@ -30,8 +30,22 @@ import {
 import type { LanguageModel } from "./language-model.js";
 import { OpenAICompatibleModel } from "./openai-compatible.js";
 
-/** 辅助模型固定使用 DeepSeek V4 Flash 型号 */
+/** 辅助模型固定使用 DeepSeek V4 Flash 型号（仅在无命名预设时的兜底型号名） */
 const DEEPSEEK_FLASH_MODEL = "deepseek-v4-flash";
+
+/**
+ * 从 models 命名预设里挑「flash / 便宜」条目：名字或 model 含 "flash" 即命中。
+ * 支撑别名写法（provider 指向 deepseekv4pro，另有 deepseekv4flash 作辅助模型）。
+ */
+function findFlashModelConfig(
+  models: ReturnType<typeof loadPawSettingsLocal>["models"],
+) {
+  if (!models) return undefined;
+  const hit = Object.entries(models).find(
+    ([name, cfg]) => /flash/i.test(name) || /flash/i.test(cfg?.model ?? ""),
+  );
+  return hit?.[1];
+}
 
 /**
  * 创建一个便宜的辅助模型，用于记忆选择、压缩、提取和子 Agent 任务。
@@ -45,7 +59,18 @@ export function createDeepSeekFlashModel(
   try {
     const settings = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
 
-    // 优先使用显式的 DeepSeek 凭证，否则回退到 OpenAI 兼容的 DeepSeek 配置
+    // 1) 命名预设：直接用 flash 别名条目的 key/baseUrl/model（别名写法首选）
+    const flash = findFlashModelConfig(settings.models);
+    if (flash?.apiKey?.trim() && flash.model?.trim()) {
+      return new OpenAICompatibleModel({
+        apiKey: flash.apiKey.trim(),
+        baseUrl: flash.baseUrl?.trim() || "https://api.deepseek.com",
+        model: flash.model.trim(),
+        capabilities: { contextWindow: 1_000_000, maxOutputTokens: 384_000 },
+      });
+    }
+
+    // 2) 兜底：显式 deepseek 凭证 → openai 兼容凭证 + 固定 flash 型号名
     let apiKey: string | undefined;
     let baseUrl: string | undefined;
     if (hasApiKey(settings, "deepseek")) {

@@ -1,0 +1,281 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 5,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "fine_tune/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 61,
+      "nonEmptyLines": 45,
+      "sections": [
+        {
+          "heading": "Qwen3-14B Fine-tuning for paw-ts",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "文件",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "验证流程",
+          "level": 2,
+          "line": 12
+        },
+        {
+          "heading": "1. 准备数据",
+          "level": 3,
+          "line": 14
+        },
+        {
+          "heading": "2. 在 autodl 服务器上运行",
+          "level": 3,
+          "line": 21
+        },
+        {
+          "heading": "3. 重启 vLLM 加载微调模型",
+          "level": 3,
+          "line": 28
+        },
+        {
+          "heading": "4. 评估对比",
+          "level": 3,
+          "line": 36
+        },
+        {
+          "heading": "5. 判断标准",
+          "level": 3,
+          "line": 43
+        },
+        {
+          "heading": "全量微调 (验证通过后)",
+          "level": 2,
+          "line": 51
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 9
+      }
+    },
+    {
+      "path": "fine_tune/dataset_info.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 24,
+      "nonEmptyLines": 24,
+      "sections": [
+        {
+          "heading": "paw_validation",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "paw_full",
+          "level": 1,
+          "line": 13
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 2
+      }
+    },
+    {
+      "path": "fine_tune/eval_comparison.sh",
+      "language": "shell",
+      "fileCategory": "script",
+      "totalLines": 22,
+      "nonEmptyLines": 18,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "fine_tune/lora_config.yaml",
+      "language": "yaml",
+      "fileCategory": "config",
+      "totalLines": 41,
+      "nonEmptyLines": 35,
+      "sections": [
+        {
+          "heading": "model_name_or_path",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "template",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "dataset",
+          "level": 1,
+          "line": 9
+        },
+        {
+          "heading": "dataset_dir",
+          "level": 1,
+          "line": 10
+        },
+        {
+          "heading": "cutoff_len",
+          "level": 1,
+          "line": 11
+        },
+        {
+          "heading": "overwrite_cache",
+          "level": 1,
+          "line": 12
+        },
+        {
+          "heading": "preprocessing_num_workers",
+          "level": 1,
+          "line": 13
+        },
+        {
+          "heading": "output_dir",
+          "level": 1,
+          "line": 16
+        },
+        {
+          "heading": "do_train",
+          "level": 1,
+          "line": 17
+        },
+        {
+          "heading": "finetuning_type",
+          "level": 1,
+          "line": 18
+        },
+        {
+          "heading": "lora_rank",
+          "level": 1,
+          "line": 19
+        },
+        {
+          "heading": "lora_alpha",
+          "level": 1,
+          "line": 20
+        },
+        {
+          "heading": "lora_target",
+          "level": 1,
+          "line": 21
+        },
+        {
+          "heading": "lora_dropout",
+          "level": 1,
+          "line": 22
+        },
+        {
+          "heading": "per_device_train_batch_size",
+          "level": 1,
+          "line": 24
+        },
+        {
+          "heading": "gradient_accumulation_steps",
+          "level": 1,
+          "line": 25
+        },
+        {
+          "heading": "learning_rate",
+          "level": 1,
+          "line": 26
+        },
+        {
+          "heading": "num_train_epochs",
+          "level": 1,
+          "line": 27
+        },
+        {
+          "heading": "lr_scheduler_type",
+          "level": 1,
+          "line": 28
+        },
+        {
+          "heading": "warmup_ratio",
+          "level": 1,
+          "line": 29
+        },
+        {
+          "heading": "logging_steps",
+          "level": 1,
+          "line": 30
+        },
+        {
+          "heading": "save_steps",
+          "level": 1,
+          "line": 31
+        },
+        {
+          "heading": "plot_loss",
+          "level": 1,
+          "line": 32
+        },
+        {
+          "heading": "bf16",
+          "level": 1,
+          "line": 34
+        },
+        {
+          "heading": "gradient_checkpointing",
+          "level": 1,
+          "line": 35
+        },
+        {
+          "heading": "max_grad_norm",
+          "level": 1,
+          "line": 36
+        },
+        {
+          "heading": "max_new_tokens",
+          "level": 1,
+          "line": 39
+        },
+        {
+          "heading": "temperature",
+          "level": 1,
+          "line": 40
+        },
+        {
+          "heading": "do_sample",
+          "level": 1,
+          "line": 41
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 29
+      }
+    },
+    {
+      "path": "fine_tune/run_validation.sh",
+      "language": "shell",
+      "fileCategory": "script",
+      "totalLines": 27,
+      "nonEmptyLines": 23,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

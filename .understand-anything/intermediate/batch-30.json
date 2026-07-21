@@ -1,0 +1,883 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/memory/src/project-memory.ts",
+      "type": "file",
+      "name": "project-memory.ts",
+      "filePath": "packages/memory/src/project-memory.ts",
+      "summary": "项目记忆加载，共 82 行。",
+      "tags": [
+        "source-code"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/memory/src/project-memory.ts:loadProjectMemory",
+      "type": "function",
+      "name": "loadProjectMemory",
+      "filePath": "packages/memory/src/project-memory.ts",
+      "lineRange": [
+        56,
+        64
+      ],
+      "summary": "函数（导出），第 56-64 行，参数: workspaceRoot。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/memory/test/memory-annotations.test.ts",
+      "type": "file",
+      "name": "memory-annotations.test.ts",
+      "filePath": "packages/memory/test/memory-annotations.test.ts",
+      "summary": "测试文件。源码文件，共 30 行。",
+      "tags": [
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/memory/test/project-memory.test.ts",
+      "type": "file",
+      "name": "project-memory.test.ts",
+      "filePath": "packages/memory/test/project-memory.test.ts",
+      "summary": "测试文件。源码文件，共 62 行。",
+      "tags": [
+        "test"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:packages/memory/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/memory/tsconfig.json",
+      "summary": "TypeScript 编译器配置，继承基础 tsconfig 并指定编译输入路径。",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/models/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "packages/models/package.json",
+      "summary": "包配置文件，定义 package.json 对应包的依赖、脚本与模块导出。",
+      "tags": [
+        "configuration",
+        "package-manager",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/models/test/auxiliary-model.test.ts",
+      "type": "file",
+      "name": "auxiliary-model.test.ts",
+      "filePath": "packages/models/test/auxiliary-model.test.ts",
+      "summary": "测试文件。源码文件，共 42 行。",
+      "tags": [
+        "test"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/models/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/models/tsconfig.json",
+      "summary": "TypeScript 编译器配置，继承基础 tsconfig 并指定编译输入路径。",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/settings/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "packages/settings/package.json",
+      "summary": "包配置文件，定义 package.json 对应包的依赖、脚本与模块导出。",
+      "tags": [
+        "configuration",
+        "package-manager",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/settings/src/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/settings/src/index.ts",
+      "summary": "配置管理模块出口，共 41 行。",
+      "tags": [
+        "exports"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/settings/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/settings/tsconfig.json",
+      "summary": "TypeScript 编译器配置，继承基础 tsconfig 并指定编译输入路径。",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/store/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "packages/store/package.json",
+      "summary": "包配置文件，定义 package.json 对应包的依赖、脚本与模块导出。",
+      "tags": [
+        "configuration",
+        "package-manager",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/store/src/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/store/src/index.ts",
+      "summary": "存储模块出口，共 34 行。",
+      "tags": [
+        "source-code"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/store/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/store/tsconfig.json",
+      "summary": "TypeScript 编译器配置，继承基础 tsconfig 并指定编译输入路径。",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/workspace/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "packages/workspace/package.json",
+      "summary": "包配置文件，定义 package.json 对应包的依赖、脚本与模块导出。",
+      "tags": [
+        "configuration",
+        "package-manager",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/src/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/workspace/src/index.ts",
+      "summary": "工作区模块出口，共 145 行。",
+      "tags": [
+        "barrel",
+        "entry-point"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/src/lsp-client.ts",
+      "type": "file",
+      "name": "lsp-client.ts",
+      "filePath": "packages/workspace/src/lsp-client.ts",
+      "summary": "包含1 个函数、1 个类的源码文件，共 510 行。",
+      "tags": [
+        "cli",
+        "lsp"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/workspace/src/lsp-client.ts:detectLspCommand",
+      "type": "function",
+      "name": "detectLspCommand",
+      "filePath": "packages/workspace/src/lsp-client.ts",
+      "lineRange": [
+        486,
+        510
+      ],
+      "summary": "函数（导出），第 486-510 行，参数: filePath。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:packages/workspace/src/lsp-client.ts:LspClient",
+      "type": "class",
+      "name": "LspClient",
+      "filePath": "packages/workspace/src/lsp-client.ts",
+      "lineRange": [
+        79,
+        471
+      ],
+      "summary": "类（导出），第 79-471 行，16 个方法，7 个属性。",
+      "tags": [
+        "class",
+        "exported",
+        "client"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/workspace/src/network-tools.ts",
+      "type": "file",
+      "name": "network-tools.ts",
+      "filePath": "packages/workspace/src/network-tools.ts",
+      "summary": "包含5 个函数的源码文件，共 261 行。",
+      "tags": [
+        "network-tools"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/workspace/src/network-tools.ts:stripHtml",
+      "type": "function",
+      "name": "stripHtml",
+      "filePath": "packages/workspace/src/network-tools.ts",
+      "lineRange": [
+        73,
+        101
+      ],
+      "summary": "函数，第 73-101 行，参数: html。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/network-tools.ts:fetchWebPage",
+      "type": "function",
+      "name": "fetchWebPage",
+      "filePath": "packages/workspace/src/network-tools.ts",
+      "lineRange": [
+        126,
+        168
+      ],
+      "summary": "函数（导出），第 126-168 行，参数: opts。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/network-tools.ts:searchWeb",
+      "type": "function",
+      "name": "searchWeb",
+      "filePath": "packages/workspace/src/network-tools.ts",
+      "lineRange": [
+        180,
+        210
+      ],
+      "summary": "函数（导出），第 180-210 行，参数: opts。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/network-tools.ts:parseDuckDuckGoResults",
+      "type": "function",
+      "name": "parseDuckDuckGoResults",
+      "filePath": "packages/workspace/src/network-tools.ts",
+      "lineRange": [
+        227,
+        261
+      ],
+      "summary": "函数，第 227-261 行，参数: html、maxResults。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/src/paw-md.ts",
+      "type": "file",
+      "name": "paw-md.ts",
+      "filePath": "packages/workspace/src/paw-md.ts",
+      "summary": "包含1 个函数的源码文件，共 57 行。",
+      "tags": [
+        "markdown-parser"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/paw-md.ts:loadPawMd",
+      "type": "function",
+      "name": "loadPawMd",
+      "filePath": "packages/workspace/src/paw-md.ts",
+      "lineRange": [
+        40,
+        57
+      ],
+      "summary": "函数（导出），第 40-57 行，参数: workspaceRoot。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/src/root.ts",
+      "type": "file",
+      "name": "root.ts",
+      "filePath": "packages/workspace/src/root.ts",
+      "summary": "包含2 个函数的源码文件，共 86 行。",
+      "tags": [
+        "cli-utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/root.ts:parseRootFromArgv",
+      "type": "function",
+      "name": "parseRootFromArgv",
+      "filePath": "packages/workspace/src/root.ts",
+      "lineRange": [
+        31,
+        40
+      ],
+      "summary": "函数（导出），第 31-40 行，参数: cwd、argv。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/root.ts:tailPositionalArgs",
+      "type": "function",
+      "name": "tailPositionalArgs",
+      "filePath": "packages/workspace/src/root.ts",
+      "lineRange": [
+        59,
+        86
+      ],
+      "summary": "函数（导出），第 59-86 行，参数: argv、subcommand。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/src/symbol-search.ts",
+      "type": "file",
+      "name": "symbol-search.ts",
+      "filePath": "packages/workspace/src/symbol-search.ts",
+      "summary": "包含6 个函数的源码文件，共 462 行。",
+      "tags": [
+        "symbol-search"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/workspace/src/symbol-search.ts:invalidateSymbolCache",
+      "type": "function",
+      "name": "invalidateSymbolCache",
+      "filePath": "packages/workspace/src/symbol-search.ts",
+      "lineRange": [
+        115,
+        117
+      ],
+      "summary": "函数（导出），第 115-117 行，参数: 无。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/symbol-search.ts:walkAstForSymbols",
+      "type": "function",
+      "name": "walkAstForSymbols",
+      "filePath": "packages/workspace/src/symbol-search.ts",
+      "lineRange": [
+        141,
+        261
+      ],
+      "summary": "函数，第 141-261 行，参数: node、sourceFile、symbols、depth。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/symbol-search.ts:extractSymbolsFromFile",
+      "type": "function",
+      "name": "extractSymbolsFromFile",
+      "filePath": "packages/workspace/src/symbol-search.ts",
+      "lineRange": [
+        274,
+        333
+      ],
+      "summary": "函数，第 274-333 行，参数: filePath。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/symbol-search.ts:findJsTsFiles",
+      "type": "function",
+      "name": "findJsTsFiles",
+      "filePath": "packages/workspace/src/symbol-search.ts",
+      "lineRange": [
+        347,
+        388
+      ],
+      "summary": "函数，第 347-388 行，参数: dir、maxFiles。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/symbol-search.ts:searchWorkspaceSymbols",
+      "type": "function",
+      "name": "searchWorkspaceSymbols",
+      "filePath": "packages/workspace/src/symbol-search.ts",
+      "lineRange": [
+        403,
+        462
+      ],
+      "summary": "函数（导出），第 403-462 行，参数: workspaceRoot、query、options。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/src/watch.ts",
+      "type": "file",
+      "name": "watch.ts",
+      "filePath": "packages/workspace/src/watch.ts",
+      "summary": "包含1 个类的源码文件，共 116 行。",
+      "tags": [
+        "file-watcher"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:packages/workspace/src/watch.ts:WorkspaceWatcher",
+      "type": "class",
+      "name": "WorkspaceWatcher",
+      "filePath": "packages/workspace/src/watch.ts",
+      "lineRange": [
+        17,
+        116
+      ],
+      "summary": "类（导出），第 17-116 行，5 个方法，5 个属性。",
+      "tags": [
+        "class",
+        "exported",
+        "watcher"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/src/worktree.ts",
+      "type": "file",
+      "name": "worktree.ts",
+      "filePath": "packages/workspace/src/worktree.ts",
+      "summary": "包含3 个函数的源码文件，共 163 行。",
+      "tags": [
+        "git-worktree"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/worktree.ts:runGit",
+      "type": "function",
+      "name": "runGit",
+      "filePath": "packages/workspace/src/worktree.ts",
+      "lineRange": [
+        49,
+        74
+      ],
+      "summary": "函数，第 49-74 行，参数: cwd、args。",
+      "tags": [
+        "function",
+        "runner"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/worktree.ts:findGitRoot",
+      "type": "function",
+      "name": "findGitRoot",
+      "filePath": "packages/workspace/src/worktree.ts",
+      "lineRange": [
+        82,
+        88
+      ],
+      "summary": "函数（导出），第 82-88 行，参数: dir。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/worktree.ts:createTemporaryWorktree",
+      "type": "function",
+      "name": "createTemporaryWorktree",
+      "filePath": "packages/workspace/src/worktree.ts",
+      "lineRange": [
+        108,
+        163
+      ],
+      "summary": "函数（导出），第 108-163 行，参数: originalRoot。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/network-tools.test.ts",
+      "type": "file",
+      "name": "network-tools.test.ts",
+      "filePath": "packages/workspace/test/network-tools.test.ts",
+      "summary": "测试文件。源码文件，共 23 行。",
+      "tags": [
+        "test",
+        "network-tools"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/test/paw-md.test.ts",
+      "type": "file",
+      "name": "paw-md.test.ts",
+      "filePath": "packages/workspace/test/paw-md.test.ts",
+      "summary": "测试文件。源码文件，共 55 行。",
+      "tags": [
+        "test",
+        "markdown-parser"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/test/symbol-search.test.ts",
+      "type": "file",
+      "name": "symbol-search.test.ts",
+      "filePath": "packages/workspace/test/symbol-search.test.ts",
+      "summary": "测试文件。源码文件，共 95 行。",
+      "tags": [
+        "test",
+        "symbol-search"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/memory/src/project-memory.ts",
+      "target": "function:packages/memory/src/project-memory.ts:loadProjectMemory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/memory/src/project-memory.ts",
+      "target": "function:packages/memory/src/project-memory.ts:loadProjectMemory",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/memory/test/project-memory.test.ts",
+      "target": "file:packages/memory/src/project-memory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/lsp-client.ts",
+      "target": "function:packages/workspace/src/lsp-client.ts:detectLspCommand",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/lsp-client.ts",
+      "target": "function:packages/workspace/src/lsp-client.ts:detectLspCommand",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/lsp-client.ts",
+      "target": "class:packages/workspace/src/lsp-client.ts:LspClient",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/lsp-client.ts",
+      "target": "class:packages/workspace/src/lsp-client.ts:LspClient",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/network-tools.ts",
+      "target": "function:packages/workspace/src/network-tools.ts:stripHtml",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/network-tools.ts",
+      "target": "function:packages/workspace/src/network-tools.ts:fetchWebPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/network-tools.ts",
+      "target": "function:packages/workspace/src/network-tools.ts:fetchWebPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/network-tools.ts",
+      "target": "function:packages/workspace/src/network-tools.ts:searchWeb",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/network-tools.ts",
+      "target": "function:packages/workspace/src/network-tools.ts:searchWeb",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/network-tools.ts",
+      "target": "function:packages/workspace/src/network-tools.ts:parseDuckDuckGoResults",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/paw-md.ts",
+      "target": "function:packages/workspace/src/paw-md.ts:loadPawMd",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/paw-md.ts",
+      "target": "function:packages/workspace/src/paw-md.ts:loadPawMd",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/root.ts",
+      "target": "function:packages/workspace/src/root.ts:parseRootFromArgv",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/root.ts",
+      "target": "function:packages/workspace/src/root.ts:parseRootFromArgv",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/root.ts",
+      "target": "function:packages/workspace/src/root.ts:tailPositionalArgs",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/root.ts",
+      "target": "function:packages/workspace/src/root.ts:tailPositionalArgs",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/symbol-search.ts",
+      "target": "function:packages/workspace/src/symbol-search.ts:invalidateSymbolCache",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/symbol-search.ts",
+      "target": "function:packages/workspace/src/symbol-search.ts:invalidateSymbolCache",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/symbol-search.ts",
+      "target": "function:packages/workspace/src/symbol-search.ts:walkAstForSymbols",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/symbol-search.ts",
+      "target": "function:packages/workspace/src/symbol-search.ts:extractSymbolsFromFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/symbol-search.ts",
+      "target": "function:packages/workspace/src/symbol-search.ts:findJsTsFiles",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/symbol-search.ts",
+      "target": "function:packages/workspace/src/symbol-search.ts:searchWorkspaceSymbols",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/symbol-search.ts",
+      "target": "function:packages/workspace/src/symbol-search.ts:searchWorkspaceSymbols",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/watch.ts",
+      "target": "class:packages/workspace/src/watch.ts:WorkspaceWatcher",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/watch.ts",
+      "target": "class:packages/workspace/src/watch.ts:WorkspaceWatcher",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/worktree.ts",
+      "target": "function:packages/workspace/src/worktree.ts:runGit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/worktree.ts",
+      "target": "function:packages/workspace/src/worktree.ts:findGitRoot",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/worktree.ts",
+      "target": "function:packages/workspace/src/worktree.ts:findGitRoot",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/worktree.ts",
+      "target": "function:packages/workspace/src/worktree.ts:createTemporaryWorktree",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/src/worktree.ts",
+      "target": "function:packages/workspace/src/worktree.ts:createTemporaryWorktree",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/test/network-tools.test.ts",
+      "target": "file:packages/workspace/src/network-tools.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/test/paw-md.test.ts",
+      "target": "file:packages/workspace/src/paw-md.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/test/symbol-search.test.ts",
+      "target": "file:packages/workspace/src/symbol-search.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/memory/src/project-memory.ts",
+      "target": "file:packages/memory/test/project-memory.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/src/network-tools.ts",
+      "target": "file:packages/workspace/test/network-tools.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/src/paw-md.ts",
+      "target": "file:packages/workspace/test/paw-md.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/src/symbol-search.ts",
+      "target": "file:packages/workspace/test/symbol-search.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

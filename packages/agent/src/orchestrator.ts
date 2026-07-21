@@ -48,13 +48,16 @@ import path from "node:path";
 // @paw/core：平台基础层 — 上下文管理、记忆系统、事件、token 估算
 // ─────────────────────────────────────────────────────────────
 import {
+  type AgentToolCallAction,
   type AppState,
   type AppStateStore,
-  type AgentToolCallAction,
-  ContextCompactor,
   CONTEXT_SUMMARY_PREFIX,
+  type ContextBudgetSnapshot,
+  ContextCompactor,
   ContextManager,
   type CostTracker,
+  DEFAULT_KEEP_RECENT_TOOLS,
+  type EvalHooks,
   MAX_STEPS_WARNING,
   type ModelTokenUsage,
   type RunEvent,
@@ -66,25 +69,23 @@ import {
   SkillRegistry,
   type SkillRegistry as SkillRegistryType,
   type TodoStore,
-  stripContextSummaryMessages,
-  buildSystemPromptWithBudget,
+  type TokenEstimator,
   allocateContextBudget,
+  buildConversationAwareQuery,
+  buildSystemPromptWithBudget,
   extractCleanMemoryQuery,
   findPawRoot,
   formatTodosForPrompt,
+  getToolResultsDir,
   loadProjectMemory,
   loadSkillsFromDirectory,
-  skillsFromProjectMemory,
   measureContextBudget,
   meetsCompressionSavingsThreshold,
-  shouldCompactHistory,
-  validateCompressionSummary,
-  getToolResultsDir,
-  DEFAULT_KEEP_RECENT_TOOLS,
   restoreCheckpoint,
-  type ContextBudgetSnapshot,
-  type EvalHooks,
-  type TokenEstimator,
+  shouldCompactHistory,
+  skillsFromProjectMemory,
+  stripContextSummaryMessages,
+  validateCompressionSummary,
 } from "@paw/core";
 
 // ─────────────────────────────────────────────────────────────
@@ -130,11 +131,12 @@ import {
   selectCodeContext,
 } from "@paw/workspace";
 
-import { runCompressionAgent } from "./compression-agent.js";
+import { type MemoryRuntime, createMemoryRuntime } from "@paw/memory";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
-import { CONTEXT_PACKAGE_PREFIX } from "./orchestrator/constants.js";
+import { runCompressionAgent } from "./compression-agent.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
+import { CONTEXT_PACKAGE_PREFIX } from "./orchestrator/constants.js";
 import type {
   PhaseContext,
   SharedContext,
@@ -146,17 +148,13 @@ import {
   parseAgentActionsFromModelText,
   toolCallDedupKey,
 } from "./parse-agent-action.js";
-import { resolveMaxSteps } from "./resolve-max-steps.js";
-import { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";
 import {
   CircuitBreaker,
   CircuitBreakerOpenError,
 } from "./resilience/circuit-breaker.js";
+import { resolveMaxSteps } from "./resolve-max-steps.js";
+import { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";
 import { TaskStateManager } from "./task-state.js";
-import {
-  createMemoryRuntime,
-  type MemoryRuntime,
-} from "@paw/memory";
 
 // ═════════════════════════════════════════════════════════════
 // 公开接口
@@ -204,6 +202,8 @@ export interface AgentOrchestratorOptions {
   readonly contextManager?: ContextManager;
   /** 子 Agent 启动器：用于探索、压缩、记忆提取等子任务 */
   readonly subAgentLauncher?: SubAgentLauncher;
+  /** 并行子 Agent 的文件锁（仅子 Agent orchestrator 注入；root 不传） */
+  readonly fileLock?: import("@paw/harness").FileLockLike;
   /** 应用状态存储：用于断点续跑（resume） */
   readonly appStateStore?: AppStateStore;
   /** Skill 注册表 */
@@ -241,6 +241,17 @@ export interface AgentOrchestratorOptions {
   readonly memoryExtraction?: "background" | "await" | "off";
   /** 评估钩子：非侵入式收集 trace 数据，不影响正常流程 */
   readonly evalHooks?: EvalHooks;
+  /**
+   * 工具白名单（完整名，如 workspace.read_file）。
+   * null/undefined = 不裁剪；有值则只暴露这些工具（硬拦截）。
+   */
+  readonly allowedTools?: readonly string[] | null;
+  /** 注入 system prompt 的 Agent 花名册文本（狸花调度用） */
+  readonly agentCatalogText?: string;
+  /** 身份/人设附加段（如狸花 body） */
+  readonly agentIdentityText?: string;
+  /** create_agent 工具实现（写盘 + registry） */
+  readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -281,6 +292,7 @@ export class AgentOrchestrator {
   private readonly resolveAskUser?: AgentOrchestratorOptions["resolveAskUser"];
   private readonly resolveToolApproval?: AgentOrchestratorOptions["resolveToolApproval"];
   private readonly approvalPolicy?: AgentOrchestratorOptions["approvalPolicy"];
+  private readonly fileLock?: AgentOrchestratorOptions["fileLock"];
   private readonly mcpServers?: readonly McpServerConfig[];
   private readonly sessionStore?: SessionStore;
   private readonly todoStore?: TodoStore;
@@ -302,6 +314,9 @@ export class AgentOrchestrator {
   private _memoryTaskId: string | null = null;
   private _memoryContextSection = "";
   private _lastDynamicMemoryGoal = "";
+  /** 多轮会话：本 run 结束时跳过 completeTask */
+  private _deferMemoryComplete = false;
+  private _conversationId: string | null = null;
   private _contextPackageCode: readonly CodeContextBlock[] = [];
   /** 流式恢复文件路径：模型输出时实时写盘，崩了可用于恢复 */
   private _streamRecoveryPath?: string;
@@ -311,6 +326,10 @@ export class AgentOrchestrator {
   /** 熔断器映射：key = model.label，每个模型独立熔断 */
   private readonly circuitBreakers = new Map<string, CircuitBreaker>();
   private readonly evalHooks?: EvalHooks;
+  private readonly allowedTools?: readonly string[] | null;
+  private readonly agentCatalogText?: string;
+  private readonly agentIdentityText?: string;
+  private readonly createAgent?: AgentOrchestratorOptions["createAgent"];
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -319,6 +338,7 @@ export class AgentOrchestrator {
     this.resolveAskUser = opts?.resolveAskUser;
     this.resolveToolApproval = opts?.resolveToolApproval;
     this.approvalPolicy = opts?.approvalPolicy;
+    this.fileLock = opts?.fileLock;
     this.mcpServers = opts?.mcpServers;
     this.sessionStore = opts?.sessionStore;
     this.todoStore = opts?.todoStore;
@@ -339,6 +359,10 @@ export class AgentOrchestrator {
     this.memoryExtraction = opts?.memoryExtraction ?? "background";
     void this.memoryExtraction; // kept for API compat; writes go through Runtime
     this.evalHooks = opts?.evalHooks;
+    this.allowedTools = opts?.allowedTools;
+    this.agentCatalogText = opts?.agentCatalogText;
+    this.agentIdentityText = opts?.agentIdentityText;
+    this.createAgent = opts?.createAgent;
     // 如果传入了 skillsDir，从目录批量加载 skill 并注册
     if (opts?.skillsDir) {
       const skills = loadSkillsFromDirectory(opts.skillsDir);
@@ -346,6 +370,23 @@ export class AgentOrchestrator {
         this.skillRegistry.register(skill);
       }
     }
+  }
+
+  /** 按 allowedTools 过滤 toolDefs（硬裁） */
+  private filterToolDefs(
+    toolDefs: readonly import("@paw/models").ToolDefinition[],
+    toolNameMap: Map<string, string>,
+  ): readonly import("@paw/models").ToolDefinition[] {
+    if (!this.allowedTools || this.allowedTools.length === 0) {
+      // null = inherit 全量；空数组不合法，当全量
+      if (this.allowedTools === null) return toolDefs;
+      if (this.allowedTools === undefined) return toolDefs;
+    }
+    const allow = new Set(this.allowedTools);
+    return toolDefs.filter((d) => {
+      const orig = toolNameMap.get(d.function.name) ?? d.function.name;
+      return allow.has(orig);
+    });
   }
 
   /** 描述信息：用于日志和调试 */
@@ -384,9 +425,7 @@ export class AgentOrchestrator {
       };
     }
 
-    const loaded = await Promise.resolve(
-      this.appStateStore.load(opts.runId),
-    );
+    const loaded = await Promise.resolve(this.appStateStore.load(opts.runId));
     if (!loaded) {
       return {
         runId: opts.runId,
@@ -395,10 +434,9 @@ export class AgentOrchestrator {
       };
     }
 
-    const workspaceRoot =
-      opts.workspaceRoot?.trim()
-        ? path.resolve(opts.workspaceRoot)
-        : loaded.workspaceRoot;
+    const workspaceRoot = opts.workspaceRoot?.trim()
+      ? path.resolve(opts.workspaceRoot)
+      : loaded.workspaceRoot;
 
     // 清理上一次崩溃遗留的流式恢复文件
     const streamsDir = path.join(workspaceRoot, ".paw", "streams", opts.runId);
@@ -460,7 +498,7 @@ export class AgentOrchestrator {
     let init: Awaited<ReturnType<typeof this.initializeRun>> | undefined;
     let agentGroup: AgentGroup | undefined;
     let emitRunMetrics:
-      | ((status: "completed" | "failed") => void)
+      | ((status: "completed" | "failed" | "aborted") => void)
       | undefined;
 
     try {
@@ -517,8 +555,32 @@ export class AgentOrchestrator {
       const turnCompactor = compactor;
       const turnSessionMemoryStore = sessionMemoryStore;
 
-      // 初始化空计划
-      planner.createPlan(runId, []);
+      // 初始化计划：能从 goal 抽出 ≥2 步则直接建可见 plan（桌面右栏兜底）
+      {
+        const { extractPlanStepsFromGoal, planItemsToEventSnapshot } =
+          await import("./plan-bootstrap.js");
+        const goalForPlan = extractCleanMemoryQuery(spec.goal) || spec.goal;
+        const stepTexts = extractPlanStepsFromGoal(goalForPlan);
+        if (stepTexts.length >= 2) {
+          planner.createPlan(
+            runId,
+            stepTexts.map((s) => ({ id: s.slice(0, 200) })),
+          );
+          const p = planner.plan;
+          if (p) {
+            taskState.setPlan(p.items);
+            emit({
+              type: "plan.updated",
+              revision: p.revision,
+              itemCount: p.items.length,
+              reason: "bootstrap_from_goal",
+              items: planItemsToEventSnapshot(p.items),
+            });
+          }
+        } else {
+          planner.createPlan(runId, []);
+        }
+      }
 
       // ═══ 主循环：ReAct 循环的核心 ═══
       // 每轮 = 一次完整的 model → parse → action → feedback 周期
@@ -533,17 +595,17 @@ export class AgentOrchestrator {
             workspaceRoot,
             turn,
             maxSteps,
-              ctxMgr,
-              planner,
-              taskState,
-              {
-                status: "failed",
-                message,
+            ctxMgr,
+            planner,
+            taskState,
+            {
+              status: "aborted",
+              message,
             },
           );
-          emit({ type: "run.completed", status: "failed", message });
-          emitRunMetrics("failed");
-          return { runId, status: "failed", message };
+          emit({ type: "run.completed", status: "aborted", message });
+          emitRunMetrics("aborted");
+          return { runId, status: "aborted", message };
         }
 
         // 构造当前轮次的上下文对象（PhaseContext）
@@ -568,9 +630,7 @@ export class AgentOrchestrator {
           ...(this._memoryRuntime
             ? { memoryRuntime: this._memoryRuntime }
             : {}),
-          ...(this._memoryTaskId
-            ? { memoryTaskId: this._memoryTaskId }
-            : {}),
+          ...(this._memoryTaskId ? { memoryTaskId: this._memoryTaskId } : {}),
         };
 
         // 执行一轮
@@ -616,7 +676,12 @@ export class AgentOrchestrator {
 
           if (state.type === "completed" || state.type === "failed") {
             // 唯一长期记忆写入：MemoryRuntime.completeTask
-            if (this._memoryRuntime && this._memoryTaskId) {
+            // 桌面多轮：deferMemoryComplete 时跳过，由宿主在结束会话时 complete
+            if (
+              this._memoryRuntime &&
+              this._memoryTaskId &&
+              !this._deferMemoryComplete
+            ) {
               try {
                 const writeResult = await this._memoryRuntime.completeTask({
                   taskId: this._memoryTaskId,
@@ -627,8 +692,7 @@ export class AgentOrchestrator {
                   type: "memory.extracted",
                   runId,
                   entries: writeResult.writtenMemoryIds.length,
-                  rejected:
-                    writeResult.rejected + writeResult.pendingReview,
+                  rejected: writeResult.rejected + writeResult.pendingReview,
                 });
               } catch {
                 /* best-effort */
@@ -660,7 +724,11 @@ export class AgentOrchestrator {
         );
         emit({ type: "run.completed", status: "completed", message });
         emitRunMetrics?.("completed");
-        if (this._memoryRuntime && this._memoryTaskId) {
+        if (
+          this._memoryRuntime &&
+          this._memoryTaskId &&
+          !this._deferMemoryComplete
+        ) {
           try {
             const writeResult = await this._memoryRuntime.completeTask({
               taskId: this._memoryTaskId,
@@ -699,14 +767,20 @@ export class AgentOrchestrator {
       return { runId, status: "failed", message: exhaustedMessage };
     } catch (e) {
       // 异常安全：即使初始化未完成（init 为 undefined），也返回合理的错误
+      const aborted = e instanceof Error && e.name === "AbortError";
       const message =
-        e instanceof Error
-          ? e.name === "AbortError"
-            ? "Run aborted."
-            : e.message
-          : String(e);
+        e instanceof Error ? (aborted ? "Run aborted." : e.message) : String(e);
+      const status = aborted ? "aborted" : "failed";
       if (init) {
-        const { runId, workspaceRoot, maxSteps, ctxMgr, planner, taskState, emit } = init;
+        const {
+          runId,
+          workspaceRoot,
+          maxSteps,
+          ctxMgr,
+          planner,
+          taskState,
+          emit,
+        } = init;
         this.saveState(
           runId,
           spec.goal,
@@ -717,16 +791,18 @@ export class AgentOrchestrator {
           planner,
           taskState,
           {
-            status: "failed",
+            status,
             message,
           },
         );
-        emit({ type: "run.failed", message });
-        emit({ type: "run.completed", status: "failed", message });
-        emitRunMetrics?.("failed");
-        return { runId, status: "failed", message };
+        if (!aborted) {
+          emit({ type: "run.failed", message });
+        }
+        emit({ type: "run.completed", status, message });
+        emitRunMetrics?.(status);
+        return { runId, status, message };
       }
-      return { runId: spec.runId, status: "failed", message };
+      return { runId: spec.runId, status, message };
     } finally {
       // 无论如何都要断开 MCP 连接（避免资源泄漏）
       await init?.mcp?.disconnectAll();
@@ -862,9 +938,10 @@ export class AgentOrchestrator {
       turnIndex: ctx.turn,
       responseText: text,
       thinking,
-      toolCalls: toolCalls.length > 0
-        ? toolCalls.map((tc) => ({ tool: tc.tool, args: tc.args }))
-        : undefined,
+      toolCalls:
+        toolCalls.length > 0
+          ? toolCalls.map((tc) => ({ tool: tc.tool, args: tc.args }))
+          : undefined,
       usage: undefined,
       latencyMs: Date.now() - modelCallStart,
     });
@@ -1019,7 +1096,6 @@ export class AgentOrchestrator {
 
       // 设置冷却期：避免连续压缩
       this.compactCooldownTurns = AgentOrchestrator.COMPACT_COOLDOWN_TURNS;
-
     } catch (err) {
       compactor.recordResult(
         historyTokensBeforeCompact,
@@ -1245,9 +1321,12 @@ export class AgentOrchestrator {
         try {
           const section = await this._memoryRuntime.buildContextSection({
             taskId: this._memoryTaskId,
-            query: extractCleanMemoryQuery(specGoal),
+            query:
+              buildConversationAwareQuery(specGoal) ||
+              extractCleanMemoryQuery(specGoal) ||
+              specGoal,
             tokenBudget: 1500,
-            currentUserRequest: specGoal,
+            currentUserRequest: extractCleanMemoryQuery(specGoal) || specGoal,
             limit: 5,
           });
           this._memoryContextSection = section.promptSection;
@@ -1291,17 +1370,16 @@ export class AgentOrchestrator {
     );
     let modelResult: Awaited<ReturnType<typeof this.callModelAndParseActions>>;
     try {
-      modelResult = await this.callModelAndParseActions(ctx, toolDefs, toolNameMap);
+      modelResult = await this.callModelAndParseActions(
+        ctx,
+        toolDefs,
+        toolNameMap,
+      );
     } finally {
       this._streamRecoveryPath = undefined;
     }
-    const {
-      text,
-      thinking,
-      toolCalls,
-      singleAction,
-      reasoningText,
-    } = modelResult;
+    const { text, thinking, toolCalls, singleAction, reasoningText } =
+      modelResult;
 
     // 步骤 6：通过 action 处理器分发执行
     // handleAction 在 orchestrator/action-handlers.ts 中实现，
@@ -1317,6 +1395,7 @@ export class AgentOrchestrator {
         resolveAskUser: this.resolveAskUser,
         resolveToolApproval: this.resolveToolApproval,
         approvalPolicy: this.approvalPolicy,
+        fileLock: this.fileLock,
         todoStore: this.todoStore,
         planner,
         planSnapshotMaxItems: this.planSnapshotMaxItems,
@@ -1339,6 +1418,8 @@ export class AgentOrchestrator {
         evalHooks: this.evalHooks,
         memoryRuntime: this._memoryRuntime ?? undefined,
         memoryTaskId: this._memoryTaskId ?? undefined,
+        createAgent: this.createAgent,
+        allowedTools: this.allowedTools,
       },
     );
     // 子 Agent 摘要 → WorkingMemory
@@ -1453,7 +1534,7 @@ export class AgentOrchestrator {
     ctxMgr: ContextManager,
     planner: TaskPlanner,
     taskState: TaskStateManager,
-    outcome?: { status: "completed" | "failed"; message: string },
+    outcome?: { status: "completed" | "failed" | "aborted"; message: string },
   ): void {
     if (!this.appStateStore) return;
     // 清理 goal 中的历史会话前缀，只保留当前请求文本
@@ -1678,7 +1759,10 @@ export class AgentOrchestrator {
             name: chunk.name,
             arguments: parsedArgs,
           });
-          const display = JSON.stringify({ tool: chunk.name, args: parsedArgs });
+          const display = JSON.stringify({
+            tool: chunk.name,
+            args: parsedArgs,
+          });
           acc += (acc ? "\n" : "") + display;
           recoveryStream?.write((acc ? "\n" : "") + display);
           emit({ type: "model.chunk", text: acc });
@@ -2042,7 +2126,7 @@ export class AgentOrchestrator {
     sessionMemoryStore: SessionMemoryStore;
     compactor: ContextCompactor;
     emit: (event: RunEvent) => void;
-    emitRunMetrics: (status: "completed" | "failed") => void;
+    emitRunMetrics: (status: "completed" | "failed" | "aborted") => void;
     seq: { n: number };
     checkpointSeq: { n: number };
     shellSandbox: import("@paw/harness").ShellSandboxConfig;
@@ -2127,7 +2211,7 @@ export class AgentOrchestrator {
     };
 
     /** 运行结束时发出汇总指标事件 */
-    const emitRunMetrics = (_status: "completed" | "failed") => {
+    const emitRunMetrics = (_status: "completed" | "failed" | "aborted") => {
       emit({
         type: "run.metrics",
         durationMs: Date.now() - runStartTime,
@@ -2180,9 +2264,8 @@ export class AgentOrchestrator {
     }
 
     // 获取完整的工具定义列表（内置工具 + MCP 工具）
-    const toolDefs = toolDefinitions(mcp);
-    // 工具名映射表：sanitized（字母数字）→ original（含特殊字符如 "Bash(git *)"）
     const toolNameMap = toolNameReverseMap(mcp);
+    const toolDefs = this.filterToolDefs(toolDefinitions(mcp), toolNameMap);
 
     const contextWindow = model.capabilities?.contextWindow ?? 128_000;
     const shellSandbox = resolveShellSandboxConfig(workspaceRoot);
@@ -2190,9 +2273,16 @@ export class AgentOrchestrator {
     // ═══ 子 Agent 模式（child）═══
     // 子 Agent 使用精简的 system prompt，不加载记忆/skills/git状态
     if (this.runMode === "child" && this.sharedContext) {
+      // 子 Agent 工具目录只列允许的工具
+      const childCatalog = toolDefs
+        .map((d) => {
+          const orig = toolNameMap.get(d.function.name) ?? d.function.name;
+          return `- ${orig}: ${d.function.description ?? ""}`;
+        })
+        .join("\n");
       const systemContent = buildChildSystemPrompt({
         sharedContext: this.sharedContext,
-        toolCatalog: toolCatalogText(mcp),
+        toolCatalog: childCatalog || toolCatalogText(mcp),
         workspaceRoot,
       });
 
@@ -2267,7 +2357,10 @@ export class AgentOrchestrator {
     }
 
     // ── 记忆 Runtime（唯一在线路径）──
+    // clean：当前用户请求；aware：当前请求 + 多轮 history 中的路径/偏好信号
     const cleanMemoryQuery = extractCleanMemoryQuery(spec.goal);
+    const retrievalQuery =
+      buildConversationAwareQuery(spec.goal) || cleanMemoryQuery || spec.goal;
     let memoryContextSection: string | undefined;
     let selectedForEvent: {
       id: string;
@@ -2275,12 +2368,19 @@ export class AgentOrchestrator {
       source: string;
       summary: string;
       relatedFiles: readonly string[];
+      type?: string;
+      score?: number;
     }[] = [];
 
     this._memoryRuntime = null;
     this._memoryTaskId = null;
     this._memoryContextSection = "";
     this._lastDynamicMemoryGoal = "";
+    this._deferMemoryComplete = spec.deferMemoryComplete === true;
+    this._conversationId =
+      typeof spec.conversationId === "string" && spec.conversationId.trim()
+        ? spec.conversationId.trim()
+        : null;
 
     try {
       const runtime = await createMemoryRuntime({ workspaceRoot });
@@ -2288,7 +2388,7 @@ export class AgentOrchestrator {
       if (!ok) {
         emit({
           type: "memory.retrieve.done",
-          query: cleanMemoryQuery,
+          query: retrievalQuery,
           totalCandidates: 0,
           selectedCount: 0,
           scores: [],
@@ -2301,14 +2401,34 @@ export class AgentOrchestrator {
           runId,
           goal: cleanMemoryQuery || spec.goal,
           title: (cleanMemoryQuery || spec.goal).slice(0, 120),
+          ...(spec.resumeMemoryTaskId
+            ? { resumeTaskId: spec.resumeMemoryTaskId }
+            : {}),
         });
         this._memoryRuntime = runtime;
         this._memoryTaskId = begun.taskId;
         this._lastDynamicMemoryGoal = spec.goal;
+        if (this._conversationId && begun.taskId) {
+          const { bindConversationMemoryTask } = await import(
+            "./conversation-memory-bind.js"
+          );
+          bindConversationMemoryTask(this._conversationId, begun.taskId);
+        }
+        // 续任务时刷新 WM goal 为当前请求摘要（不含整段 history）
+        if (begun.resumed && cleanMemoryQuery) {
+          await runtime
+            .patchWorkingMemory({
+              taskId: begun.taskId,
+              patch: { goal: cleanMemoryQuery.slice(0, 500) },
+            })
+            .catch(() => {
+              /* best-effort */
+            });
+        }
 
         const section = await runtime.buildContextSection({
           taskId: begun.taskId,
-          query: cleanMemoryQuery || spec.goal,
+          query: retrievalQuery,
           tokenBudget: 1500,
           currentUserRequest: cleanMemoryQuery || spec.goal,
           limit: 8,
@@ -2319,12 +2439,14 @@ export class AgentOrchestrator {
           id: item.id,
           title: item.title,
           source: "auto",
-          summary: item.title,
-          relatedFiles: [],
+          summary: item.summary?.trim() || item.title,
+          relatedFiles: item.relatedFiles ? [...item.relatedFiles] : [],
+          ...(item.type ? { type: item.type } : {}),
+          score: item.score,
         }));
         emit({
           type: "memory.retrieve.done",
-          query: cleanMemoryQuery,
+          query: retrievalQuery,
           totalCandidates: section.items.length,
           selectedCount: section.items.length,
           scores: section.items.map((i) => i.score),
@@ -2336,7 +2458,7 @@ export class AgentOrchestrator {
     } catch {
       emit({
         type: "memory.retrieve.done",
-        query: cleanMemoryQuery,
+        query: retrievalQuery,
         totalCandidates: 0,
         selectedCount: 0,
         scores: [],
@@ -2378,10 +2500,16 @@ export class AgentOrchestrator {
     // allocateContextBudget：按比例分配 system / tools / history 的 token 预算
     // buildSystemPromptWithBudget：根据预算裁剪 system prompt 各部分
     const systemBudget = allocateContextBudget(contextWindow).systemBudget;
+    const rootToolCatalog = toolDefs
+      .map((d) => {
+        const orig = toolNameMap.get(d.function.name) ?? d.function.name;
+        return `- ${orig}: ${d.function.description ?? ""}`;
+      })
+      .join("\n");
     const promptBuild = buildSystemPromptWithBudget(
       {
         workspaceRoot,
-        toolCatalog: toolCatalogText(mcp),
+        toolCatalog: rootToolCatalog || toolCatalogText(mcp),
         skills: skillsText,
         gitStatus: gitStatusLine,
         pawMd: pawMdContent,
@@ -2397,7 +2525,18 @@ export class AgentOrchestrator {
       systemBudget,
       (text) => ctxMgr.estimator.count(text),
     );
-    const systemContent = promptBuild.content;
+    // 狸花身份 + Agent 花名册挂在 system 尾部（预算后追加，保持调度可见）
+    const agentExtras = [
+      this.agentIdentityText
+        ? `\n\n# Agent identity\n${this.agentIdentityText.trim()}`
+        : "",
+      this.agentCatalogText
+        ? `\n\n# Agent roster\n${this.agentCatalogText.trim()}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("");
+    const systemContent = promptBuild.content + agentExtras;
 
     // 报告被裁剪的 system prompt 章节
     if (promptBuild.trimmed.length > 0) {
@@ -2413,7 +2552,11 @@ export class AgentOrchestrator {
 
     // ── 断点恢复 or 全新启动 ──
     const mentionedPaths = extractAtMentions(spec.goal);
-    this._contextPackageCode = selectCodeContext(workspaceRoot, spec.goal, mentionedPaths);
+    this._contextPackageCode = selectCodeContext(
+      workspaceRoot,
+      spec.goal,
+      mentionedPaths,
+    );
     if (spec.resumeFromState) {
       // 断点恢复：重建 system prompt，恢复历史消息和计划
       const s = spec.resumeFromState;
@@ -2640,7 +2783,7 @@ function classifyError(err: unknown): ErrorClassification {
   if (/\b429\b/.test(msg)) {
     const retryAfterMatch = msg.match(/retry[_-]?after[\s:]*(\d+)/i);
     if (retryAfterMatch) {
-      const seconds = parseInt(retryAfterMatch[1]!, 10);
+      const seconds = Number.parseInt(retryAfterMatch[1]!, 10);
       if (Number.isFinite(seconds) && seconds > 0) {
         return { type: "rate_limit", retryAfterMs: seconds * 1000 };
       }

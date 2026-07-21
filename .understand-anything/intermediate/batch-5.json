@@ -1,0 +1,1431 @@
+{
+  "nodes": [
+    {
+      "id": "file:benchmarks/longbench/adapter.ts",
+      "type": "file",
+      "name": "adapter.ts",
+      "filePath": "benchmarks/longbench/adapter.ts",
+      "summary": "基准测试适配器，2 个函数，99 行。",
+      "tags": [
+        "benchmark",
+        "adapter",
+        "long-context"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:benchmarks/longbench/adapter.ts:findLongFiles",
+      "type": "function",
+      "name": "findLongFiles",
+      "filePath": "benchmarks/longbench/adapter.ts",
+      "lineRange": [
+        30,
+        59
+      ],
+      "summary": "函数 findLongFiles(minLines)，29 行。",
+      "tags": [
+        "benchmark",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:benchmarks/longbench/adapter.ts:loadLocalLongBench",
+      "type": "function",
+      "name": "loadLocalLongBench",
+      "filePath": "benchmarks/longbench/adapter.ts",
+      "lineRange": [
+        88,
+        109
+      ],
+      "summary": "加载函数 loadLocalLongBench(no params)，21 行。",
+      "tags": [
+        "benchmark",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:benchmarks/longbench/benchmark.test.ts",
+      "type": "file",
+      "name": "benchmark.test.ts",
+      "filePath": "benchmarks/longbench/benchmark.test.ts",
+      "summary": "基准测试文件，1 个测试案例，108 行。",
+      "tags": [
+        "benchmark",
+        "long-context",
+        "performance"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/src/app-state.ts",
+      "type": "file",
+      "name": "app-state.ts",
+      "filePath": "packages/core/src/app-state.ts",
+      "summary": "TypeScript 源文件，2 个函数，2 个类，195 行。",
+      "tags": [
+        "core",
+        "state-management",
+        "infrastructure"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/core/src/app-state.ts:appStateSummary",
+      "type": "function",
+      "name": "appStateSummary",
+      "filePath": "packages/core/src/app-state.ts",
+      "lineRange": [
+        200,
+        213
+      ],
+      "summary": "摘要/压缩函数 appStateSummary(state)，13 行。",
+      "tags": [
+        "summarization",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:packages/core/src/app-state.ts:FileSystemAppStateStore",
+      "type": "class",
+      "name": "FileSystemAppStateStore",
+      "filePath": "packages/core/src/app-state.ts",
+      "lineRange": [
+        100,
+        159
+      ],
+      "summary": "类 FileSystemAppStateStore，5 个方法、1 个属性，59 行。",
+      "tags": [
+        "test",
+        "state-management",
+        "component"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:packages/core/src/app-state.ts:InMemoryAppStateStore",
+      "type": "class",
+      "name": "InMemoryAppStateStore",
+      "filePath": "packages/core/src/app-state.ts",
+      "lineRange": [
+        167,
+        185
+      ],
+      "summary": "类 InMemoryAppStateStore，4 个方法、1 个属性，18 行。",
+      "tags": [
+        "test",
+        "state-management",
+        "component"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/core/src/context/compactor.ts",
+      "type": "file",
+      "name": "compactor.ts",
+      "filePath": "packages/core/src/context/compactor.ts",
+      "summary": "TypeScript 源文件，2 个函数，1 个类，205 行。",
+      "tags": [
+        "core",
+        "context",
+        "compression"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/core/src/context/compactor.ts:ContextCompactor",
+      "type": "class",
+      "name": "ContextCompactor",
+      "filePath": "packages/core/src/context/compactor.ts",
+      "lineRange": [
+        58,
+        218
+      ],
+      "summary": "类 ContextCompactor，8 个方法、5 个属性，160 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/src/context/manager.ts",
+      "type": "file",
+      "name": "manager.ts",
+      "filePath": "packages/core/src/context/manager.ts",
+      "summary": "TypeScript 源文件，1 个函数，1 个类，241 行。",
+      "tags": [
+        "core",
+        "context",
+        "context-management"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/core/src/context/manager.ts:ContextManager",
+      "type": "class",
+      "name": "ContextManager",
+      "filePath": "packages/core/src/context/manager.ts",
+      "lineRange": [
+        70,
+        259
+      ],
+      "summary": "类 ContextManager，19 个方法、8 个属性，189 行。",
+      "tags": [
+        "state-management",
+        "core",
+        "component"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/src/context/policy.ts",
+      "type": "file",
+      "name": "policy.ts",
+      "filePath": "packages/core/src/context/policy.ts",
+      "summary": "TypeScript 源文件，7 个函数，367 行。",
+      "tags": [
+        "core",
+        "context",
+        "policy"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/core/src/context/policy.ts:truncateHistory",
+      "type": "function",
+      "name": "truncateHistory",
+      "filePath": "packages/core/src/context/policy.ts",
+      "lineRange": [
+        67,
+        84
+      ],
+      "summary": "执行函数 truncateHistory(history, options)，17 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/core/src/context/policy.ts:truncateByMessageCount",
+      "type": "function",
+      "name": "truncateByMessageCount",
+      "filePath": "packages/core/src/context/policy.ts",
+      "lineRange": [
+        94,
+        114
+      ],
+      "summary": "执行函数 truncateByMessageCount(history, maxMessages, protectedIndices)，20 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/core/src/context/policy.ts:truncateByBudget",
+      "type": "function",
+      "name": "truncateByBudget",
+      "filePath": "packages/core/src/context/policy.ts",
+      "lineRange": [
+        125,
+        211
+      ],
+      "summary": "检索函数 truncateByBudget(history, opts)，86 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/core/src/context/policy.ts:getProtectedIndices",
+      "type": "function",
+      "name": "getProtectedIndices",
+      "filePath": "packages/core/src/context/policy.ts",
+      "lineRange": [
+        221,
+        263
+      ],
+      "summary": "检索函数 getProtectedIndices(history, tailTurnCount)，42 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/core/src/context/policy.ts:messagePriorityScore",
+      "type": "function",
+      "name": "messagePriorityScore",
+      "filePath": "packages/core/src/context/policy.ts",
+      "lineRange": [
+        324,
+        352
+      ],
+      "summary": "计算/评分函数 messagePriorityScore(msg, index, total)，28 行。",
+      "tags": [
+        "scoring",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/core/src/context/pruner.ts",
+      "type": "file",
+      "name": "pruner.ts",
+      "filePath": "packages/core/src/context/pruner.ts",
+      "summary": "TypeScript 源文件，6 个函数，239 行。",
+      "tags": [
+        "core",
+        "context",
+        "pruning"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/core/src/context/pruner.ts:persistBlock",
+      "type": "function",
+      "name": "persistBlock",
+      "filePath": "packages/core/src/context/pruner.ts",
+      "lineRange": [
+        73,
+        91
+      ],
+      "summary": "存储函数 persistBlock(toolResultsDir, id, parsed)，18 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/core/src/context/pruner.ts:processMessageToolBlocks",
+      "type": "function",
+      "name": "processMessageToolBlocks",
+      "filePath": "packages/core/src/context/pruner.ts",
+      "lineRange": [
+        97,
+        159
+      ],
+      "summary": "检索函数 processMessageToolBlocks(msgIndex, content, opts)，62 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/core/src/context/pruner.ts:collectToolSlots",
+      "type": "function",
+      "name": "collectToolSlots",
+      "filePath": "packages/core/src/context/pruner.ts",
+      "lineRange": [
+        169,
+        192
+      ],
+      "summary": "函数 collectToolSlots(messages, protectedTools)，23 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/core/src/context/pruner.ts:pruneToolResults",
+      "type": "function",
+      "name": "pruneToolResults",
+      "filePath": "packages/core/src/context/pruner.ts",
+      "lineRange": [
+        210,
+        266
+      ],
+      "summary": "执行函数 pruneToolResults(messages, config)，56 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/src/eval-hooks.ts",
+      "type": "file",
+      "name": "eval-hooks.ts",
+      "filePath": "packages/core/src/eval-hooks.ts",
+      "summary": "TypeScript 源文件，0 个函数，95 行。",
+      "tags": [
+        "evaluation",
+        "core",
+        "hooks"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/src/input-sanitizer.ts",
+      "type": "file",
+      "name": "input-sanitizer.ts",
+      "filePath": "packages/core/src/input-sanitizer.ts",
+      "summary": "TypeScript 源文件，1 个函数，171 行。",
+      "tags": [
+        "core",
+        "security",
+        "infrastructure"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/core/src/input-sanitizer.ts:sanitizeUserInput",
+      "type": "function",
+      "name": "sanitizeUserInput",
+      "filePath": "packages/core/src/input-sanitizer.ts",
+      "lineRange": [
+        117,
+        184
+      ],
+      "summary": "安全清洗函数 sanitizeUserInput(raw)，67 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/src/todo.ts",
+      "type": "file",
+      "name": "todo.ts",
+      "filePath": "packages/core/src/todo.ts",
+      "summary": "TypeScript 源文件，1 个函数，1 个类，126 行。",
+      "tags": [
+        "core",
+        "task-management",
+        "infrastructure"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:packages/core/src/todo.ts:InMemoryTodoStore",
+      "type": "class",
+      "name": "InMemoryTodoStore",
+      "filePath": "packages/core/src/todo.ts",
+      "lineRange": [
+        65,
+        112
+      ],
+      "summary": "类 InMemoryTodoStore，6 个方法、1 个属性，47 行。",
+      "tags": [
+        "state-management",
+        "core",
+        "component"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/core/src/token-estimate.ts",
+      "type": "file",
+      "name": "token-estimate.ts",
+      "filePath": "packages/core/src/token-estimate.ts",
+      "summary": "TypeScript 源文件，3 个函数，54 行。",
+      "tags": [
+        "core",
+        "tokenization",
+        "infrastructure"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/src/token-estimator.ts",
+      "type": "file",
+      "name": "token-estimator.ts",
+      "filePath": "packages/core/src/token-estimator.ts",
+      "summary": "TypeScript 源文件，2 个函数，3 个类，209 行。",
+      "tags": [
+        "core",
+        "tokenization",
+        "infrastructure"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:packages/core/src/token-estimator.ts:TiktokenEstimator",
+      "type": "class",
+      "name": "TiktokenEstimator",
+      "filePath": "packages/core/src/token-estimator.ts",
+      "lineRange": [
+        87,
+        143
+      ],
+      "summary": "类 TiktokenEstimator，2 个方法、1 个属性，56 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:packages/core/src/token-estimator.ts:FastEstimator",
+      "type": "class",
+      "name": "FastEstimator",
+      "filePath": "packages/core/src/token-estimator.ts",
+      "lineRange": [
+        180,
+        205
+      ],
+      "summary": "类 FastEstimator，2 个方法、0 个属性，25 行。",
+      "tags": [
+        "test",
+        "core",
+        "component"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/core/src/tool-result/format.ts",
+      "type": "file",
+      "name": "format.ts",
+      "filePath": "packages/core/src/tool-result/format.ts",
+      "summary": "TypeScript 源文件，5 个函数，144 行。",
+      "tags": [
+        "core",
+        "tool-results",
+        "formatting"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/core/src/tool-result/format.ts:formatToolResult",
+      "type": "function",
+      "name": "formatToolResult",
+      "filePath": "packages/core/src/tool-result/format.ts",
+      "lineRange": [
+        85,
+        96
+      ],
+      "summary": "格式化函数 formatToolResult(line)，11 行。",
+      "tags": [
+        "formatting",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/core/src/tool-result/format.ts:parseToolResult",
+      "type": "function",
+      "name": "parseToolResult",
+      "filePath": "packages/core/src/tool-result/format.ts",
+      "lineRange": [
+        119,
+        130
+      ],
+      "summary": "解析函数 parseToolResult(content)，11 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/core/src/tool-result/storage.ts",
+      "type": "file",
+      "name": "storage.ts",
+      "filePath": "packages/core/src/tool-result/storage.ts",
+      "summary": "TypeScript 源文件，6 个函数，177 行。",
+      "tags": [
+        "core",
+        "tool-results",
+        "persistence"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/core/src/tool-result/storage.ts:generatePreview",
+      "type": "function",
+      "name": "generatePreview",
+      "filePath": "packages/core/src/tool-result/storage.ts",
+      "lineRange": [
+        84,
+        100
+      ],
+      "summary": "函数 generatePreview(content, maxBytes)，16 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/core/src/tool-result/storage.ts:persistToolResultToDisk",
+      "type": "function",
+      "name": "persistToolResultToDisk",
+      "filePath": "packages/core/src/tool-result/storage.ts",
+      "lineRange": [
+        112,
+        124
+      ],
+      "summary": "存储函数 persistToolResultToDisk(toolResultsDir, id, content)，12 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/core/src/tool-result/storage.ts:buildPersistedToolResultContent",
+      "type": "function",
+      "name": "buildPersistedToolResultContent",
+      "filePath": "packages/core/src/tool-result/storage.ts",
+      "lineRange": [
+        145,
+        170
+      ],
+      "summary": "构建函数 buildPersistedToolResultContent(opts)，25 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/core/test/app-state.test.ts",
+      "type": "file",
+      "name": "app-state.test.ts",
+      "filePath": "packages/core/test/app-state.test.ts",
+      "summary": "单元测试文件，1 个测试函数，109 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/test/context-compactor.test.ts",
+      "type": "file",
+      "name": "context-compactor.test.ts",
+      "filePath": "packages/core/test/context-compactor.test.ts",
+      "summary": "单元测试文件，1 个测试函数，172 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/test/context-manager.test.ts",
+      "type": "file",
+      "name": "context-manager.test.ts",
+      "filePath": "packages/core/test/context-manager.test.ts",
+      "summary": "单元测试文件，0 个测试函数，193 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/test/context-protection.test.ts",
+      "type": "file",
+      "name": "context-protection.test.ts",
+      "filePath": "packages/core/test/context-protection.test.ts",
+      "summary": "单元测试文件，0 个测试函数，106 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/test/context-pruner.test.ts",
+      "type": "file",
+      "name": "context-pruner.test.ts",
+      "filePath": "packages/core/test/context-pruner.test.ts",
+      "summary": "单元测试文件，2 个测试函数，188 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/test/todo.test.ts",
+      "type": "file",
+      "name": "todo.test.ts",
+      "filePath": "packages/core/test/todo.test.ts",
+      "summary": "单元测试文件，0 个测试函数，87 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/test/token-estimate.test.ts",
+      "type": "file",
+      "name": "token-estimate.test.ts",
+      "filePath": "packages/core/test/token-estimate.test.ts",
+      "summary": "单元测试文件，0 个测试函数，69 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "core"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/core/test/token-estimator.test.ts",
+      "type": "file",
+      "name": "token-estimator.test.ts",
+      "filePath": "packages/core/test/token-estimator.test.ts",
+      "summary": "单元测试文件，0 个测试函数，58 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "core"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:benchmarks/longbench/adapter.ts",
+      "target": "function:benchmarks/longbench/adapter.ts:findLongFiles",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:benchmarks/longbench/adapter.ts",
+      "target": "function:benchmarks/longbench/adapter.ts:loadLocalLongBench",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:benchmarks/longbench/adapter.ts",
+      "target": "function:benchmarks/longbench/adapter.ts:loadLocalLongBench",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:benchmarks/longbench/adapter.ts:loadLocalLongBench",
+      "target": "function:benchmarks/longbench/adapter.ts:findLongFiles",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/longbench/benchmark.test.ts",
+      "target": "file:benchmarks/longbench/adapter.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:benchmarks/longbench/benchmark.test.ts",
+      "target": "file:packages/core/src/token-estimate.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "function:packages/core/src/app-state.ts:appStateSummary",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "class:packages/core/src/app-state.ts:FileSystemAppStateStore",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "class:packages/core/src/app-state.ts:InMemoryAppStateStore",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "class:packages/core/src/app-state.ts:FileSystemAppStateStore",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "class:packages/core/src/app-state.ts:InMemoryAppStateStore",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "function:packages/core/src/app-state.ts:appStateSummary",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "file:packages/core/src/todo.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/compactor.ts",
+      "target": "class:packages/core/src/context/compactor.ts:ContextCompactor",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/compactor.ts",
+      "target": "class:packages/core/src/context/compactor.ts:ContextCompactor",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/context/compactor.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/compactor.ts",
+      "target": "file:packages/core/src/token-estimator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "class:packages/core/src/context/manager.ts:ContextManager",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "class:packages/core/src/context/manager.ts:ContextManager",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/src/context/policy.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/src/context/pruner.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/src/input-sanitizer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/src/token-estimator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/src/tool-result/format.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "function:packages/core/src/context/policy.ts:truncateHistory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "function:packages/core/src/context/policy.ts:truncateByMessageCount",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "function:packages/core/src/context/policy.ts:truncateByBudget",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "function:packages/core/src/context/policy.ts:getProtectedIndices",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "function:packages/core/src/context/policy.ts:messagePriorityScore",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "function:packages/core/src/context/policy.ts:truncateHistory",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "file:packages/core/src/token-estimator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/policy.ts",
+      "target": "file:packages/core/src/tool-result/format.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/core/src/context/policy.ts:truncateHistory",
+      "target": "function:packages/core/src/context/policy.ts:truncateByMessageCount",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/core/src/context/policy.ts:truncateHistory",
+      "target": "function:packages/core/src/context/policy.ts:truncateByBudget",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/core/src/context/policy.ts:truncateByBudget",
+      "target": "function:packages/core/src/context/policy.ts:getProtectedIndices",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/core/src/context/policy.ts:truncateByBudget",
+      "target": "function:packages/core/src/context/policy.ts:messagePriorityScore",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/core/src/context/policy.ts:truncateByBudget",
+      "target": "function:packages/core/src/context/policy.ts:messagePriorityScore",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "function:packages/core/src/context/pruner.ts:persistBlock",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "function:packages/core/src/context/pruner.ts:processMessageToolBlocks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "function:packages/core/src/context/pruner.ts:collectToolSlots",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "function:packages/core/src/context/pruner.ts:pruneToolResults",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "function:packages/core/src/context/pruner.ts:pruneToolResults",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "file:packages/core/src/token-estimate.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "file:packages/core/src/tool-result/format.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "file:packages/core/src/tool-result/storage.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/core/src/context/pruner.ts:processMessageToolBlocks",
+      "target": "function:packages/core/src/context/pruner.ts:persistBlock",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/core/src/context/pruner.ts:pruneToolResults",
+      "target": "function:packages/core/src/context/pruner.ts:collectToolSlots",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/core/src/context/pruner.ts:pruneToolResults",
+      "target": "function:packages/core/src/context/pruner.ts:processMessageToolBlocks",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/eval-hooks.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/input-sanitizer.ts",
+      "target": "function:packages/core/src/input-sanitizer.ts:sanitizeUserInput",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/input-sanitizer.ts",
+      "target": "function:packages/core/src/input-sanitizer.ts:sanitizeUserInput",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/todo.ts",
+      "target": "class:packages/core/src/todo.ts:InMemoryTodoStore",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/todo.ts",
+      "target": "class:packages/core/src/todo.ts:InMemoryTodoStore",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/token-estimate.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/token-estimate.ts",
+      "target": "file:packages/core/src/token-estimator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/token-estimator.ts",
+      "target": "class:packages/core/src/token-estimator.ts:TiktokenEstimator",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/token-estimator.ts",
+      "target": "class:packages/core/src/token-estimator.ts:FastEstimator",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/token-estimator.ts",
+      "target": "class:packages/core/src/token-estimator.ts:TiktokenEstimator",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/token-estimator.ts",
+      "target": "class:packages/core/src/token-estimator.ts:FastEstimator",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/token-estimator.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/tool-result/format.ts",
+      "target": "function:packages/core/src/tool-result/format.ts:formatToolResult",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/tool-result/format.ts",
+      "target": "function:packages/core/src/tool-result/format.ts:parseToolResult",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/tool-result/format.ts",
+      "target": "function:packages/core/src/tool-result/format.ts:formatToolResult",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/tool-result/format.ts",
+      "target": "function:packages/core/src/tool-result/format.ts:parseToolResult",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "function:packages/core/src/tool-result/storage.ts:generatePreview",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "function:packages/core/src/tool-result/storage.ts:persistToolResultToDisk",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "function:packages/core/src/tool-result/storage.ts:buildPersistedToolResultContent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "function:packages/core/src/tool-result/storage.ts:generatePreview",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "function:packages/core/src/tool-result/storage.ts:persistToolResultToDisk",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "function:packages/core/src/tool-result/storage.ts:buildPersistedToolResultContent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "file:packages/core/src/tool-result/format.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "file:packages/core/src/workspace-paths.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/core/src/tool-result/storage.ts:buildPersistedToolResultContent",
+      "target": "function:packages/core/src/tool-result/storage.ts:generatePreview",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/core/test/app-state.test.ts",
+      "target": "file:packages/core/src/app-state.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/app-state.ts",
+      "target": "file:packages/core/test/app-state.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/test/context-compactor.test.ts",
+      "target": "file:packages/core/src/context/compactor.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/test/context-compactor.test.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/compactor.ts",
+      "target": "file:packages/core/test/context-compactor.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/test/context-compactor.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/test/context-manager.test.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/test/context-manager.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/test/context-protection.test.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/test/context-protection.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/test/context-pruner.test.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/test/context-pruner.test.ts",
+      "target": "file:packages/core/src/context/pruner.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/test/context-pruner.test.ts",
+      "target": "file:packages/core/src/tool-result/storage.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/test/context-pruner.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/src/context/pruner.ts",
+      "target": "file:packages/core/test/context-pruner.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/src/tool-result/storage.ts",
+      "target": "file:packages/core/test/context-pruner.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/test/todo.test.ts",
+      "target": "file:packages/core/src/todo.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/todo.ts",
+      "target": "file:packages/core/test/todo.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/test/token-estimate.test.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/test/token-estimate.test.ts",
+      "target": "file:packages/core/src/token-estimate.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/test/token-estimate.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/src/token-estimate.ts",
+      "target": "file:packages/core/test/token-estimate.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/test/token-estimator.test.ts",
+      "target": "file:packages/core/src/context/manager.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/test/token-estimator.test.ts",
+      "target": "file:packages/core/src/token-estimator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/core/src/context/manager.ts",
+      "target": "file:packages/core/test/token-estimator.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/core/src/token-estimator.ts",
+      "target": "file:packages/core/test/token-estimator.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

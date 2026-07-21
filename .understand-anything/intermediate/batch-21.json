@@ -1,0 +1,47 @@
+{
+  "nodes": [
+    {
+      "id": "config:.understand-anything/tmp/ua-import-map-input.json",
+      "type": "config",
+      "name": "ua-import-map-input.json",
+      "filePath": ".understand-anything/tmp/ua-import-map-input.json",
+      "summary": "Understand-Anything 导入映射构建阶段的输入数据，指定项目根目录和待分析文件列表，作为 import-map 脚本的入参。",
+      "tags": ["input-data", "import-resolution", "understand-anything", "temporary"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:.understand-anything/tmp/ua-import-map-output.json",
+      "type": "config",
+      "name": "ua-import-map-output.json",
+      "filePath": ".understand-anything/tmp/ua-import-map-output.json",
+      "summary": "Understand-Anything 导入映射构建阶段的输出结果，包含所有项目内文件的导入关系映射表（importMap），用于后续批次分析和边生成。",
+      "tags": ["output-data", "import-resolution", "understand-anything", "temporary"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:.understand-anything/tmp/ua-scan-files.json",
+      "type": "config",
+      "name": "ua-scan-files.json",
+      "filePath": ".understand-anything/tmp/ua-scan-files.json",
+      "summary": "Understand-Anything 项目扫描阶段的完整文件清单，包含每个文件的路径、语言、行数和复杂度估算，是后续批次划分和结构提取的基础输入。",
+      "tags": ["file-inventory", "project-scan", "understand-anything", "temporary"],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:.understand-anything/tmp/ua-import-map-output.json",
+      "target": "config:.understand-anything/tmp/ua-import-map-input.json",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:.understand-anything/tmp/ua-import-map-input.json",
+      "target": "config:.understand-anything/tmp/ua-scan-files.json",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

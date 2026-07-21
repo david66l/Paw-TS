@@ -1,0 +1,206 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 3,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/harness/src/sandbox/detect-runtime.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 65,
+      "nonEmptyLines": 62,
+      "functions": [
+        {
+          "name": "detectContainerRuntime",
+          "startLine": 42,
+          "endLine": 65,
+          "params": [
+            "preferred"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "detectContainerRuntime",
+          "line": 42,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "detectContainerRuntime",
+          "callee": "spawnSync",
+          "lineNumber": 54
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/harness/src/sandbox/docker-runner.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 190,
+      "nonEmptyLines": 176,
+      "functions": [
+        {
+          "name": "hostPathToContainerPath",
+          "startLine": 88,
+          "endLine": 108,
+          "params": [
+            "workspaceRoot",
+            "hostPath"
+          ]
+        },
+        {
+          "name": "buildDockerShellExecSpec",
+          "startLine": 126,
+          "endLine": 190,
+          "params": [
+            "config",
+            "input"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "hostPathToContainerPath",
+          "line": 88,
+          "isDefault": false
+        },
+        {
+          "name": "buildDockerShellExecSpec",
+          "line": 126,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "hostPathToContainerPath",
+          "callee": "path.resolve",
+          "lineNumber": 92
+        },
+        {
+          "caller": "hostPathToContainerPath",
+          "callee": "path.resolve",
+          "lineNumber": 93
+        },
+        {
+          "caller": "hostPathToContainerPath",
+          "callee": "path.relative",
+          "lineNumber": 94
+        },
+        {
+          "caller": "hostPathToContainerPath",
+          "callee": "rel.startsWith",
+          "lineNumber": 102
+        },
+        {
+          "caller": "hostPathToContainerPath",
+          "callee": "path.isAbsolute",
+          "lineNumber": 102
+        },
+        {
+          "caller": "hostPathToContainerPath",
+          "callee": "rel.split(path.sep).join",
+          "lineNumber": 107
+        },
+        {
+          "caller": "hostPathToContainerPath",
+          "callee": "rel.split",
+          "lineNumber": 107
+        },
+        {
+          "caller": "buildDockerShellExecSpec",
+          "callee": "detectContainerRuntime",
+          "lineNumber": 135
+        },
+        {
+          "caller": "buildDockerShellExecSpec",
+          "callee": "path.resolve",
+          "lineNumber": 144
+        },
+        {
+          "caller": "buildDockerShellExecSpec",
+          "callee": "hostPathToContainerPath",
+          "lineNumber": 145
+        },
+        {
+          "caller": "buildDockerShellExecSpec",
+          "callee": "config.image.trim",
+          "lineNumber": 146
+        },
+        {
+          "caller": "buildDockerShellExecSpec",
+          "callee": "String",
+          "lineNumber": 161
+        },
+        {
+          "caller": "buildDockerShellExecSpec",
+          "callee": "args.push",
+          "lineNumber": 166
+        },
+        {
+          "caller": "buildDockerShellExecSpec",
+          "callee": "args.push",
+          "lineNumber": 172
+        },
+        {
+          "caller": "buildDockerShellExecSpec",
+          "callee": "args.push",
+          "lineNumber": 180
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/harness/src/sandbox/types.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 51,
+      "nonEmptyLines": 45,
+      "functions": [
+        {
+          "name": "isShellSandboxEnabled",
+          "startLine": 47,
+          "endLine": 51,
+          "params": [
+            "config"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "DEFAULT_SANDBOX_IMAGE",
+          "line": 37,
+          "isDefault": false
+        },
+        {
+          "name": "OFF_SHELL_SANDBOX",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "isShellSandboxEnabled",
+          "line": 47,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,6336 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 26,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/agent/src/auxiliary-complete.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 43,
+      "nonEmptyLines": 41,
+      "functions": [
+        {
+          "name": "completeAuxiliaryTask",
+          "startLine": 29,
+          "endLine": 43,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "completeAuxiliaryTask",
+          "line": 29,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "completeAuxiliaryTask",
+          "callee": "opts.model.complete",
+          "lineNumber": 39
+        },
+        {
+          "caller": "completeAuxiliaryTask",
+          "callee": "result.text.trim",
+          "lineNumber": 42
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/child-system-prompt.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 101,
+      "nonEmptyLines": 93,
+      "functions": [
+        {
+          "name": "bulletLines",
+          "startLine": 25,
+          "endLine": 27,
+          "params": [
+            "items"
+          ]
+        },
+        {
+          "name": "buildChildSystemPrompt",
+          "startLine": 43,
+          "endLine": 101,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "buildChildSystemPrompt",
+          "line": 43,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "bulletLines",
+          "callee": "items.map((s) => `- ${s}`).join",
+          "lineNumber": 26
+        },
+        {
+          "caller": "bulletLines",
+          "callee": "items.map",
+          "lineNumber": 26
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 53
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "bulletLines",
+          "lineNumber": 53
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 57
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "bulletLines",
+          "lineNumber": 57
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 61
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 64
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "a.content.slice",
+          "lineNumber": 64
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 69
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 71
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "bulletLines",
+          "lineNumber": 71
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 74
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "bulletLines",
+          "lineNumber": 74
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 79
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 81
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 86
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.push",
+          "lineNumber": 89
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "opts.toolCatalog.slice",
+          "lineNumber": 94
+        },
+        {
+          "caller": "buildChildSystemPrompt",
+          "callee": "parts.join",
+          "lineNumber": 100
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/compression-agent.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 112,
+      "nonEmptyLines": 102,
+      "functions": [
+        {
+          "name": "runCompressionAgent",
+          "startLine": 60,
+          "endLine": 76,
+          "params": [
+            "model",
+            "prompt",
+            "runId",
+            "signal"
+          ]
+        },
+        {
+          "name": "parseSummaryToSessionMemory",
+          "startLine": 83,
+          "endLine": 112,
+          "params": [
+            "summary",
+            "runId"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "runCompressionAgent",
+          "line": 60,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "runCompressionAgent",
+          "callee": "completeAuxiliaryTask",
+          "lineNumber": 66
+        },
+        {
+          "caller": "runCompressionAgent",
+          "callee": "parseSummaryToSessionMemory",
+          "lineNumber": 73
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "parseMarkdownSections",
+          "lineNumber": 87
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "Date.now",
+          "lineNumber": 92
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"relevant files\"]\n      ?.split(\"\\n\")\n      .filter((l) => l.trim().startsWith(\"- \") || l.trim().startsWith(\"`\"))\n      .map",
+          "lineNumber": 95
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"relevant files\"]\n      ?.split(\"\\n\")\n      .filter",
+          "lineNumber": 95
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"relevant files\"]\n      ?.split",
+          "lineNumber": 95
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim().startsWith",
+          "lineNumber": 97
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim",
+          "lineNumber": 97
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim().startsWith",
+          "lineNumber": 97
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim",
+          "lineNumber": 97
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim",
+          "lineNumber": 98
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"key decisions\"]\n      ?.split(\"\\n\")\n      .filter((l) => l.trim().startsWith(\"- \"))\n      .map",
+          "lineNumber": 99
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"key decisions\"]\n      ?.split(\"\\n\")\n      .filter",
+          "lineNumber": 99
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"key decisions\"]\n      ?.split",
+          "lineNumber": 99
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim().startsWith",
+          "lineNumber": 101
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim",
+          "lineNumber": 101
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim().slice",
+          "lineNumber": 102
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim",
+          "lineNumber": 102
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"errors & fixes\"]\n      ?.split(\"\\n\")\n      .filter((l) => l.trim().startsWith(\"- \"))\n      .map",
+          "lineNumber": 103
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"errors & fixes\"]\n      ?.split(\"\\n\")\n      .filter",
+          "lineNumber": 103
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "sections[\"errors & fixes\"]\n      ?.split",
+          "lineNumber": 103
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim().startsWith",
+          "lineNumber": 105
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim",
+          "lineNumber": 105
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim().slice",
+          "lineNumber": 106
+        },
+        {
+          "caller": "parseSummaryToSessionMemory",
+          "callee": "l.trim",
+          "lineNumber": 106
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/format-conversation-for-memory.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 49,
+      "nonEmptyLines": 46,
+      "functions": [
+        {
+          "name": "formatConversationForMemoryExtraction",
+          "startLine": 22,
+          "endLine": 34,
+          "params": [
+            "messages"
+          ]
+        },
+        {
+          "name": "shouldAttemptMemoryExtraction",
+          "startLine": 42,
+          "endLine": 49,
+          "params": [
+            "messages"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "formatConversationForMemoryExtraction",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "shouldAttemptMemoryExtraction",
+          "line": 42,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "formatConversationForMemoryExtraction",
+          "callee": "msg.content.trim",
+          "lineNumber": 28
+        },
+        {
+          "caller": "formatConversationForMemoryExtraction",
+          "callee": "blocks.push",
+          "lineNumber": 31
+        },
+        {
+          "caller": "formatConversationForMemoryExtraction",
+          "callee": "blocks.join",
+          "lineNumber": 33
+        },
+        {
+          "caller": "shouldAttemptMemoryExtraction",
+          "callee": "messages.filter",
+          "lineNumber": 45
+        },
+        {
+          "caller": "shouldAttemptMemoryExtraction",
+          "callee": "m.content.trim",
+          "lineNumber": 46
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/llm-memory-selector.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 87,
+      "nonEmptyLines": 78,
+      "functions": [
+        {
+          "name": "buildSelectorUser",
+          "startLine": 26,
+          "endLine": 50,
+          "params": [
+            "input"
+          ]
+        },
+        {
+          "name": "parseSelectedIds",
+          "startLine": 53,
+          "endLine": 66,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "createLlmMemorySelectFn",
+          "startLine": 74,
+          "endLine": 87,
+          "params": [
+            "model",
+            "signal"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "createLlmMemorySelectFn",
+          "line": 74,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "buildSelectorUser",
+          "callee": "lines.push",
+          "lineNumber": 35
+        },
+        {
+          "caller": "buildSelectorUser",
+          "callee": "lines.push",
+          "lineNumber": 39
+        },
+        {
+          "caller": "buildSelectorUser",
+          "callee": "input.query.recentToolNames.join",
+          "lineNumber": 39
+        },
+        {
+          "caller": "buildSelectorUser",
+          "callee": "lines.push",
+          "lineNumber": 42
+        },
+        {
+          "caller": "buildSelectorUser",
+          "callee": "lines.join",
+          "lineNumber": 49
+        },
+        {
+          "caller": "parseSelectedIds",
+          "callee": "text.match",
+          "lineNumber": 54
+        },
+        {
+          "caller": "parseSelectedIds",
+          "callee": "JSON.parse",
+          "lineNumber": 58
+        },
+        {
+          "caller": "parseSelectedIds",
+          "callee": "Array.isArray",
+          "lineNumber": 59
+        },
+        {
+          "caller": "parseSelectedIds",
+          "callee": "parsed.selected_ids.filter",
+          "lineNumber": 60
+        },
+        {
+          "caller": "createLlmMemorySelectFn",
+          "callee": "completeAuxiliaryTask",
+          "lineNumber": 79
+        },
+        {
+          "caller": "createLlmMemorySelectFn",
+          "callee": "buildSelectorUser",
+          "lineNumber": 82
+        },
+        {
+          "caller": "createLlmMemorySelectFn",
+          "callee": "parseSelectedIds",
+          "lineNumber": 85
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/memory-extraction-agent.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 266,
+      "nonEmptyLines": 237,
+      "functions": [
+        {
+          "name": "scanForSensitiveInfo",
+          "startLine": 66,
+          "endLine": 84,
+          "params": [
+            "entry"
+          ]
+        },
+        {
+          "name": "sanitizeMemoryEntries",
+          "startLine": 87,
+          "endLine": 101,
+          "params": [
+            "entries"
+          ]
+        },
+        {
+          "name": "buildExtractionUser",
+          "startLine": 108,
+          "endLine": 142,
+          "params": [
+            "conversationText"
+          ]
+        },
+        {
+          "name": "extractMemories",
+          "startLine": 150,
+          "endLine": 165,
+          "params": [
+            "model",
+            "conversationText",
+            "signal"
+          ]
+        },
+        {
+          "name": "parseMemoryEntries",
+          "startLine": 173,
+          "endLine": 266,
+          "params": [
+            "text"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "scanForSensitiveInfo",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "extractMemories",
+          "line": 150,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "scanForSensitiveInfo",
+          "callee": "[entry.name, entry.description, entry.content].join",
+          "lineNumber": 67
+        },
+        {
+          "caller": "scanForSensitiveInfo",
+          "callee": "pattern.test",
+          "lineNumber": 69
+        },
+        {
+          "caller": "scanForSensitiveInfo",
+          "callee": "entry.content.toLowerCase",
+          "lineNumber": 74
+        },
+        {
+          "caller": "scanForSensitiveInfo",
+          "callee": "contentLower.includes",
+          "lineNumber": 77
+        },
+        {
+          "caller": "scanForSensitiveInfo",
+          "callee": "/\\w+\\s*[:=]\\s*[\"']?\\S{8,}[\"']?/.test",
+          "lineNumber": 78
+        },
+        {
+          "caller": "sanitizeMemoryEntries",
+          "callee": "scanForSensitiveInfo",
+          "lineNumber": 93
+        },
+        {
+          "caller": "sanitizeMemoryEntries",
+          "callee": "rejected.push",
+          "lineNumber": 95
+        },
+        {
+          "caller": "sanitizeMemoryEntries",
+          "callee": "safe.push",
+          "lineNumber": 97
+        },
+        {
+          "caller": "extractMemories",
+          "callee": "completeAuxiliaryTask",
+          "lineNumber": 155
+        },
+        {
+          "caller": "extractMemories",
+          "callee": "buildExtractionUser",
+          "lineNumber": 158
+        },
+        {
+          "caller": "extractMemories",
+          "callee": "parseMemoryEntries",
+          "lineNumber": 162
+        },
+        {
+          "caller": "extractMemories",
+          "callee": "sanitizeMemoryEntries",
+          "lineNumber": 163
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "text.trim().toLowerCase().includes",
+          "lineNumber": 174
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "text.trim().toLowerCase",
+          "lineNumber": 174
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "text.trim",
+          "lineNumber": 174
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "text.split(/^##\\s+/m).slice",
+          "lineNumber": 179
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "text.split",
+          "lineNumber": 179
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "section.split",
+          "lineNumber": 182
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "lines[0]?.trim",
+          "lineNumber": 183
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "heading.toLowerCase().startsWith",
+          "lineNumber": 184
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "heading.toLowerCase",
+          "lineNumber": 184
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "lines.slice",
+          "lineNumber": 196
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.match",
+          "lineNumber": 197
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.match",
+          "lineNumber": 198
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.match",
+          "lineNumber": 199
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.match",
+          "lineNumber": 200
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.match",
+          "lineNumber": 201
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.match",
+          "lineNumber": 202
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.match",
+          "lineNumber": 203
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.match",
+          "lineNumber": 204
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "nameMatch[1]!.trim().replace(/\\s+/g, \"_\").replace(/[^\\w._-]/g, \"\").toLowerCase",
+          "lineNumber": 207
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "nameMatch[1]!.trim().replace(/\\s+/g, \"_\").replace",
+          "lineNumber": 207
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "nameMatch[1]!.trim().replace",
+          "lineNumber": 207
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "nameMatch[1]!.trim",
+          "lineNumber": 207
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "typeMatch[1]?.trim().toLowerCase",
+          "lineNumber": 209
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "typeMatch[1]?.trim",
+          "lineNumber": 209
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "priorityMatch[1]?.trim().toLowerCase",
+          "lineNumber": 219
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "priorityMatch[1]?.trim",
+          "lineNumber": 219
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "descMatch[1]!.trim",
+          "lineNumber": 224
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "relatedMatch[1]!\n          .split(/[,，]/)\n          .map((s: string) => s.trim())\n          .filter((s: string) => s.length > 0)\n          .forEach",
+          "lineNumber": 226
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "relatedMatch[1]!\n          .split(/[,，]/)\n          .map((s: string) => s.trim())\n          .filter",
+          "lineNumber": 226
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "relatedMatch[1]!\n          .split(/[,，]/)\n          .map",
+          "lineNumber": 226
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "relatedMatch[1]!\n          .split",
+          "lineNumber": 226
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "s.trim",
+          "lineNumber": 228
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "relatedFiles.push",
+          "lineNumber": 230
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "errorsMatch[1]!\n          .split(/[,，]/)\n          .map((s: string) => s.trim())\n          .filter((s: string) => s.length > 0)\n          .forEach",
+          "lineNumber": 232
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "errorsMatch[1]!\n          .split(/[,，]/)\n          .map((s: string) => s.trim())\n          .filter",
+          "lineNumber": 232
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "errorsMatch[1]!\n          .split(/[,，]/)\n          .map",
+          "lineNumber": 232
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "errorsMatch[1]!\n          .split",
+          "lineNumber": 232
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "s.trim",
+          "lineNumber": 234
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "errorSignatures.push",
+          "lineNumber": 236
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "toolsMatch[1]!\n          .split(/[,，]/)\n          .map((s: string) => s.trim())\n          .filter((s: string) => s.length > 0)\n          .forEach",
+          "lineNumber": 238
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "toolsMatch[1]!\n          .split(/[,，]/)\n          .map((s: string) => s.trim())\n          .filter",
+          "lineNumber": 238
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "toolsMatch[1]!\n          .split(/[,，]/)\n          .map",
+          "lineNumber": 238
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "toolsMatch[1]!\n          .split",
+          "lineNumber": 238
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "s.trim",
+          "lineNumber": 240
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "toolsUsed.push",
+          "lineNumber": 242
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "contentLines.push",
+          "lineNumber": 245
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "line.trim",
+          "lineNumber": 246
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "contentLines.push",
+          "lineNumber": 247
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "entries.push",
+          "lineNumber": 252
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "contentLines.join(\"\\n\").trim",
+          "lineNumber": 257
+        },
+        {
+          "caller": "parseMemoryEntries",
+          "callee": "contentLines.join",
+          "lineNumber": 257
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator-factory.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 206,
+      "nonEmptyLines": 193,
+      "functions": [
+        {
+          "name": "loadMcpServers",
+          "startLine": 100,
+          "endLine": 115,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "createRunOrchestrator",
+          "startLine": 135,
+          "endLine": 206,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "createRunOrchestrator",
+          "line": 135,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "loadMcpServers",
+          "callee": "loadPawSettingsLocal",
+          "lineNumber": 104
+        },
+        {
+          "caller": "loadMcpServers",
+          "callee": "defaultSettingsPath",
+          "lineNumber": 105
+        },
+        {
+          "caller": "createRunOrchestrator",
+          "callee": "resolvePlanSnapshotMaxItems",
+          "lineNumber": 144
+        },
+        {
+          "caller": "createRunOrchestrator",
+          "callee": "loadMcpServers",
+          "lineNumber": 147
+        },
+        {
+          "caller": "createRunOrchestrator",
+          "callee": "watcher.start",
+          "lineNumber": 153
+        },
+        {
+          "caller": "createRunOrchestrator",
+          "callee": "createDefaultLanguageModel",
+          "lineNumber": 156
+        },
+        {
+          "caller": "createRunOrchestrator",
+          "callee": "createDeepSeekFlashModel",
+          "lineNumber": 157
+        },
+        {
+          "caller": "createRunOrchestrator",
+          "callee": "path.join",
+          "lineNumber": 162
+        },
+        {
+          "caller": "createRunOrchestrator",
+          "callee": "Date.now",
+          "lineNumber": 204
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 2461,
+      "nonEmptyLines": 2287,
+      "functions": [
+        {
+          "name": "classifyError",
+          "startLine": 2386,
+          "endLine": 2421,
+          "params": [
+            "err"
+          ]
+        },
+        {
+          "name": "isRetryable",
+          "startLine": 2424,
+          "endLine": 2426,
+          "params": [
+            "classification"
+          ]
+        },
+        {
+          "name": "computeRetryDelay",
+          "startLine": 2443,
+          "endLine": 2461,
+          "params": [
+            "attempt",
+            "classification"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "AgentOrchestrator",
+          "startLine": 258,
+          "endLine": 2351,
+          "methods": [
+            "constructor",
+            "describe",
+            "resumeRun",
+            "run",
+            "maybeReportStaleFiles",
+            "callModelAndParseActions",
+            "maybeCompactHistory",
+            "executeTurn",
+            "resolveUserMentions",
+            "saveState",
+            "mergeUsage",
+            "normalizeToolCalls",
+            "invokeModelOnce",
+            "invokeModel",
+            "getOrCreateBreaker",
+            "emitCircuitBreakerEvent",
+            "callModelWithRetry",
+            "initializeRun",
+            "maybeExtractMemoriesAfterRun",
+            "estimateToolTokens",
+            "measureBudget",
+            "emitContextBudget"
+          ],
+          "properties": [
+            "COMPACT_COOLDOWN_TURNS",
+            "STALE_IGNORE_DIRS",
+            "MAX_STALE_FILES",
+            "MODEL_TIMEOUT_MS",
+            "_lastBudgetKey",
+            "overrideModel",
+            "onEvent",
+            "planSnapshotMaxItems",
+            "resolveAskUser",
+            "resolveToolApproval",
+            "approvalPolicy",
+            "mcpServers",
+            "sessionStore",
+            "todoStore",
+            "contextManager",
+            "subAgentLauncher",
+            "appStateStore",
+            "skillRegistry",
+            "costTracker",
+            "watcher",
+            "childPolicy",
+            "runMode",
+            "sharedContext",
+            "auxiliaryModel",
+            "compactCooldownTurns",
+            "retrySleep",
+            "memoryExtraction",
+            "circuitBreakers",
+            "evalHooks"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "AgentOrchestrator",
+          "line": 258,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "constructor",
+          "callee": "setTimeout",
+          "lineNumber": 336
+        },
+        {
+          "caller": "constructor",
+          "callee": "loadSkillsFromDirectory",
+          "lineNumber": 341
+        },
+        {
+          "caller": "constructor",
+          "callee": "this.skillRegistry.register",
+          "lineNumber": 343
+        },
+        {
+          "caller": "resumeRun",
+          "callee": "Promise.resolve",
+          "lineNumber": 384
+        },
+        {
+          "caller": "resumeRun",
+          "callee": "this.appStateStore.load",
+          "lineNumber": 385
+        },
+        {
+          "caller": "resumeRun",
+          "callee": "opts.workspaceRoot?.trim",
+          "lineNumber": 396
+        },
+        {
+          "caller": "resumeRun",
+          "callee": "path.resolve",
+          "lineNumber": 397
+        },
+        {
+          "caller": "resumeRun",
+          "callee": "restoreCheckpoint",
+          "lineNumber": 403
+        },
+        {
+          "caller": "resumeRun",
+          "callee": "this.run",
+          "lineNumber": 409
+        },
+        {
+          "caller": "run",
+          "callee": "this.initializeRun",
+          "lineNumber": 449
+        },
+        {
+          "caller": "run",
+          "callee": "this.onEvent",
+          "lineNumber": 478
+        },
+        {
+          "caller": "run",
+          "callee": "this.sessionStore?.saveEvent",
+          "lineNumber": 479
+        },
+        {
+          "caller": "run",
+          "callee": "planner.createPlan",
+          "lineNumber": 503
+        },
+        {
+          "caller": "run",
+          "callee": "agentGroup?.cancelAll",
+          "lineNumber": 510
+        },
+        {
+          "caller": "run",
+          "callee": "this.saveState",
+          "lineNumber": 512
+        },
+        {
+          "caller": "run",
+          "callee": "emit",
+          "lineNumber": 525
+        },
+        {
+          "caller": "run",
+          "callee": "emitRunMetrics",
+          "lineNumber": 526
+        },
+        {
+          "caller": "run",
+          "callee": "this.executeTurn",
+          "lineNumber": 551
+        },
+        {
+          "caller": "run",
+          "callee": "this.saveState",
+          "lineNumber": 571
+        },
+        {
+          "caller": "run",
+          "callee": "emit",
+          "lineNumber": 584
+        },
+        {
+          "caller": "run",
+          "callee": "emitRunMetrics",
+          "lineNumber": 589
+        },
+        {
+          "caller": "run",
+          "callee": "this.maybeExtractMemoriesAfterRun",
+          "lineNumber": 593
+        },
+        {
+          "caller": "run",
+          "callee": "ctxMgr.buildMessages",
+          "lineNumber": 604
+        },
+        {
+          "caller": "run",
+          "callee": "extractFilePaths",
+          "lineNumber": 608
+        },
+        {
+          "caller": "run",
+          "callee": "filePaths.add",
+          "lineNumber": 609
+        },
+        {
+          "caller": "run",
+          "callee": "msg.content.startsWith",
+          "lineNumber": 613
+        },
+        {
+          "caller": "run",
+          "callee": "msg.content.includes",
+          "lineNumber": 614
+        },
+        {
+          "caller": "run",
+          "callee": "errors.push",
+          "lineNumber": 616
+        },
+        {
+          "caller": "run",
+          "callee": "msg.content.slice",
+          "lineNumber": 616
+        },
+        {
+          "caller": "run",
+          "callee": "maybeGenerateShortSessionMemory({\n                runId,\n                goal: spec.goal,\n                turn: turn + 1,\n                finalText: state.message,\n                filePaths: [...filePaths],\n                errors,\n                model: this.auxiliaryModel,\n                workspaceRoot,\n              }).catch",
+          "lineNumber": 620
+        },
+        {
+          "caller": "run",
+          "callee": "maybeGenerateShortSessionMemory",
+          "lineNumber": 620
+        },
+        {
+          "caller": "run",
+          "callee": "this.saveState",
+          "lineNumber": 640
+        },
+        {
+          "caller": "run",
+          "callee": "emitRunMetrics",
+          "lineNumber": 653
+        },
+        {
+          "caller": "run",
+          "callee": "String",
+          "lineNumber": 662
+        },
+        {
+          "caller": "run",
+          "callee": "this.saveState",
+          "lineNumber": 665
+        },
+        {
+          "caller": "run",
+          "callee": "emit",
+          "lineNumber": 678
+        },
+        {
+          "caller": "run",
+          "callee": "emit",
+          "lineNumber": 679
+        },
+        {
+          "caller": "run",
+          "callee": "emitRunMetrics",
+          "lineNumber": 680
+        },
+        {
+          "caller": "run",
+          "callee": "init?.mcp?.disconnectAll",
+          "lineNumber": 686
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "(this.watcher?.takeExternallyModified() ?? []).filter",
+          "lineNumber": 705
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "this.watcher?.takeExternallyModified",
+          "lineNumber": 705
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "[...AgentOrchestrator.STALE_IGNORE_DIRS].some",
+          "lineNumber": 707
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "f.includes",
+          "lineNumber": 709
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "f.startsWith",
+          "lineNumber": 709
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "staleFiles.slice",
+          "lineNumber": 714
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "ctxMgr.addUser",
+          "lineNumber": 720
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "shown.map((f) => `- ${f}`).join",
+          "lineNumber": 721
+        },
+        {
+          "caller": "maybeReportStaleFiles",
+          "callee": "shown.map",
+          "lineNumber": 721
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "import",
+          "lineNumber": 740
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "import",
+          "lineNumber": 746
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "this.evalHooks?.beforeModelCall",
+          "lineNumber": 752
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "ctxMgr.buildMessages",
+          "lineNumber": 753
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "Date.now",
+          "lineNumber": 756
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "this.invokeModel",
+          "lineNumber": 759
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "ctxMgr.buildMessages",
+          "lineNumber": 761
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "emit",
+          "lineNumber": 768
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "toolNameMap.values",
+          "lineNumber": 772
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "toolNameMap.keys",
+          "lineNumber": 773
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "nativeToolCalls\n        .map((tc) => {\n          // 将 sanitized 工具名还原为原始名（如 \"Bash\" → \"Bash(git *)\"）\n          const originalName = toolNameMap.get(tc.name) ?? tc.name;\n          return {\n            type: \"tool_call\" as const,\n            tool: originalName,\n            args: tc.arguments,\n          };\n        })\n        .filter",
+          "lineNumber": 781
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "nativeToolCalls\n        .map",
+          "lineNumber": 781
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "toolNameMap.get",
+          "lineNumber": 784
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "knownTools.has",
+          "lineNumber": 791
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "toolCalls.filter",
+          "lineNumber": 794
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "toolCallDedupKey",
+          "lineNumber": 795
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "seen.has",
+          "lineNumber": 796
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "seen.add",
+          "lineNumber": 797
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "parseAgentActionsFromModelText",
+          "lineNumber": 803
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "parseAgentActionFromModelText",
+          "lineNumber": 811
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "this.evalHooks?.afterModelCall",
+          "lineNumber": 815
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "toolCalls.map",
+          "lineNumber": 820
+        },
+        {
+          "caller": "callModelAndParseActions",
+          "callee": "Date.now",
+          "lineNumber": 823
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "shouldCompactHistory",
+          "lineNumber": 861
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "compactor.shouldSkipDueToThrashing",
+          "lineNumber": 864
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "emit",
+          "lineNumber": 869
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "ctxMgr.buildMessages",
+          "lineNumber": 875
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "compactor.determineBoundaries",
+          "lineNumber": 877
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "stripContextSummaryMessages",
+          "lineNumber": 880
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "messages.slice",
+          "lineNumber": 881
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "stripContextSummaryMessages",
+          "lineNumber": 883
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "messages.slice",
+          "lineNumber": 884
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "stripContextSummaryMessages",
+          "lineNumber": 886
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "messages.slice",
+          "lineNumber": 887
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "emit",
+          "lineNumber": 892
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "sessionMemoryStore.load",
+          "lineNumber": 900
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "compactor.buildSummaryPrompt",
+          "lineNumber": 901
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "sessionMemoryStore.toMarkdown",
+          "lineNumber": 903
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "runCompressionAgent",
+          "lineNumber": 907
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "validateCompressionSummary",
+          "lineNumber": 915
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "compactor.recordResult",
+          "lineNumber": 917
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "emit",
+          "lineNumber": 922
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "newMessages.filter",
+          "lineNumber": 935
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "ctxMgr.estimator.countMessages",
+          "lineNumber": 936
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "meetsCompressionSavingsThreshold",
+          "lineNumber": 940
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "compactor.recordResult",
+          "lineNumber": 945
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "emit",
+          "lineNumber": 950
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "ctxMgr.replaceHistory",
+          "lineNumber": 958
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "path.basename",
+          "lineNumber": 961
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "sessionMemoryStore.save",
+          "lineNumber": 963
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "emit",
+          "lineNumber": 964
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "Math.ceil",
+          "lineNumber": 967
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "compactor.recordResult",
+          "lineNumber": 969
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "extractSessionHighlightsToAutoMemory({\n        sessionMemory: memoryToSave,\n        autoMemoryStore: _autoMemoryStore,\n        workspaceRoot,\n      }).catch",
+          "lineNumber": 979
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "extractSessionHighlightsToAutoMemory",
+          "lineNumber": 979
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "compactor.recordResult",
+          "lineNumber": 987
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "emit",
+          "lineNumber": 992
+        },
+        {
+          "caller": "maybeCompactHistory",
+          "callee": "String",
+          "lineNumber": 994
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "emit",
+          "lineNumber": 1046
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "AgentOrchestrator.estimateToolTokens",
+          "lineNumber": 1052
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "emit",
+          "lineNumber": 1054
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "emit",
+          "lineNumber": 1055
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "this.maybeReportStaleFiles",
+          "lineNumber": 1062
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "ctxMgr.prune",
+          "lineNumber": 1067
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "getToolResultsDir",
+          "lineNumber": 1068
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "emit",
+          "lineNumber": 1072
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "AgentOrchestrator.measureBudget",
+          "lineNumber": 1080
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "ctxMgr.setHistoryTokenBudget",
+          "lineNumber": 1085
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "AgentOrchestrator.emitContextBudget",
+          "lineNumber": 1086
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "this.maybeCompactHistory",
+          "lineNumber": 1089
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "ctxMgr.addUser",
+          "lineNumber": 1106
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "this.callModelAndParseActions",
+          "lineNumber": 1117
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "handleAction",
+          "lineNumber": 1122
+        },
+        {
+          "caller": "executeTurn",
+          "callee": "this.saveState",
+          "lineNumber": 1137
+        },
+        {
+          "caller": "resolveUserMentions",
+          "callee": "resolveMentions",
+          "lineNumber": 1183
+        },
+        {
+          "caller": "resolveUserMentions",
+          "callee": "attachments.filter",
+          "lineNumber": 1188
+        },
+        {
+          "caller": "resolveUserMentions",
+          "callee": "attachments.filter",
+          "lineNumber": 1189
+        },
+        {
+          "caller": "resolveUserMentions",
+          "callee": "fileAttachments\n      .map((a) => `<file path=\"${a.name}\">\\n${a.content}\\n</file>`)\n      .join",
+          "lineNumber": 1190
+        },
+        {
+          "caller": "resolveUserMentions",
+          "callee": "fileAttachments\n      .map",
+          "lineNumber": 1190
+        },
+        {
+          "caller": "saveState",
+          "callee": "goal\n        .replace(\n          /^\\[Context from previous session\\][\\s\\S]*?\\[Current user request\\]\\n/s,\n          \"\",\n        )\n        .replace(\n          /^\\[Previous work session\\][\\s\\S]*?\\[Current user request\\]\\n/s,\n          \"\",\n        )\n        .trim",
+          "lineNumber": 1225
+        },
+        {
+          "caller": "saveState",
+          "callee": "goal\n        .replace(\n          /^\\[Context from previous session\\][\\s\\S]*?\\[Current user request\\]\\n/s,\n          \"\",\n        )\n        .replace",
+          "lineNumber": 1225
+        },
+        {
+          "caller": "saveState",
+          "callee": "goal\n        .replace",
+          "lineNumber": 1225
+        },
+        {
+          "caller": "saveState",
+          "callee": "goal.trim",
+          "lineNumber": 1234
+        },
+        {
+          "caller": "saveState",
+          "callee": "ctxMgr.buildMessages",
+          "lineNumber": 1242
+        },
+        {
+          "caller": "saveState",
+          "callee": "Date.now",
+          "lineNumber": 1248
+        },
+        {
+          "caller": "saveState",
+          "callee": "this.appStateStore.save",
+          "lineNumber": 1250
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "text\n      // 移除 <overview> 标签（部分模型的元输出）\n      .replace(/<overview>[\\s\\S]*?<\\/overview>/gi, \"\")\n      // 移除 thinking 标签（推理模型的思考过程）\n      .replace(/<thinking>[\\s\\S]*?<\\/thinking>/gi, \"\")\n      .replace",
+          "lineNumber": 1310
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "text\n      // 移除 <overview> 标签（部分模型的元输出）\n      .replace(/<overview>[\\s\\S]*?<\\/overview>/gi, \"\")\n      // 移除 thinking 标签（推理模型的思考过程）\n      .replace",
+          "lineNumber": 1310
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "text\n      // 移除 <overview> 标签（部分模型的元输出）\n      .replace",
+          "lineNumber": 1310
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "out.split(`\"${sanitized}\"`).join",
+          "lineNumber": 1319
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "out.split",
+          "lineNumber": 1319
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "out.replace",
+          "lineNumber": 1323
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "json.trim",
+          "lineNumber": 1325
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "out.replace",
+          "lineNumber": 1330
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "JSON.parse",
+          "lineNumber": 1334
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "JSON.stringify",
+          "lineNumber": 1339
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "name.trim",
+          "lineNumber": 1339
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "out.replace",
+          "lineNumber": 1342
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "json.trim",
+          "lineNumber": 1344
+        },
+        {
+          "caller": "normalizeToolCalls",
+          "callee": "out.trim",
+          "lineNumber": 1346
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "import",
+          "lineNumber": 1370
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "AbortSignal.timeout",
+          "lineNumber": 1382
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "AbortSignal.any",
+          "lineNumber": 1384
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "model.label.toLowerCase().includes",
+          "lineNumber": 1394
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "model.label.toLowerCase",
+          "lineNumber": 1394
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "model.label.toLowerCase().includes",
+          "lineNumber": 1395
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "model.label.toLowerCase",
+          "lineNumber": 1395
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "streamFn.call",
+          "lineNumber": 1406
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "emit",
+          "lineNumber": 1409
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "emit",
+          "lineNumber": 1412
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "JSON.parse",
+          "lineNumber": 1417
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "Array.isArray",
+          "lineNumber": 1419
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "nativeToolCalls.push",
+          "lineNumber": 1425
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "JSON.stringify",
+          "lineNumber": 1430
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "emit",
+          "lineNumber": 1432
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "this.costTracker?.record",
+          "lineNumber": 1441
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "this.costTracker?.snapshot",
+          "lineNumber": 1442
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "emit",
+          "lineNumber": 1444
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "extractThinkBlocks",
+          "lineNumber": 1457
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "[thinkingAcc, finalExtracted.thinking].filter(Boolean).join",
+          "lineNumber": 1460
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "[thinkingAcc, finalExtracted.thinking].filter",
+          "lineNumber": 1460
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "AgentOrchestrator.normalizeToolCalls",
+          "lineNumber": 1464
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "model.complete",
+          "lineNumber": 1479
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "AgentOrchestrator.normalizeToolCalls",
+          "lineNumber": 1480
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "emit",
+          "lineNumber": 1484
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "this.costTracker?.record",
+          "lineNumber": 1487
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "this.costTracker?.snapshot",
+          "lineNumber": 1488
+        },
+        {
+          "caller": "invokeModelOnce",
+          "callee": "emit",
+          "lineNumber": 1490
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "import",
+          "lineNumber": 1526
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "this.callModelWithRetry",
+          "lineNumber": 1535
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "emit",
+          "lineNumber": 1549
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "this.callModelWithRetry",
+          "lineNumber": 1563
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "AgentOrchestrator.normalizeToolCalls",
+          "lineNumber": 1574
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "this.mergeUsage",
+          "lineNumber": 1578
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "[result.thinking, continued.thinking].filter(Boolean).join",
+          "lineNumber": 1580
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "[result.thinking, continued.thinking].filter",
+          "lineNumber": 1580
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "emit",
+          "lineNumber": 1583
+        },
+        {
+          "caller": "invokeModel",
+          "callee": "emit",
+          "lineNumber": 1602
+        },
+        {
+          "caller": "getOrCreateBreaker",
+          "callee": "this.circuitBreakers.get",
+          "lineNumber": 1622
+        },
+        {
+          "caller": "getOrCreateBreaker",
+          "callee": "this.circuitBreakers.set",
+          "lineNumber": 1625
+        },
+        {
+          "caller": "emitCircuitBreakerEvent",
+          "callee": "breaker.snapshot",
+          "lineNumber": 1635
+        },
+        {
+          "caller": "emitCircuitBreakerEvent",
+          "callee": "emit",
+          "lineNumber": 1637
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "import",
+          "lineNumber": 1668
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "this.getOrCreateBreaker",
+          "lineNumber": 1680
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "breaker.guard",
+          "lineNumber": 1682
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "this.invokeModelOnce",
+          "lineNumber": 1685
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "breaker.snapshot",
+          "lineNumber": 1694
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "breaker.recordSuccess",
+          "lineNumber": 1695
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "breaker.snapshot",
+          "lineNumber": 1696
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "emit",
+          "lineNumber": 1698
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "breaker.snapshot",
+          "lineNumber": 1706
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "breaker.recordFailure",
+          "lineNumber": 1707
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "breaker.snapshot",
+          "lineNumber": 1708
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "this.emitCircuitBreakerEvent",
+          "lineNumber": 1710
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "classifyError",
+          "lineNumber": 1717
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "isRetryable",
+          "lineNumber": 1718
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "computeRetryDelay",
+          "lineNumber": 1720
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "String",
+          "lineNumber": 1721
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "emit",
+          "lineNumber": 1722
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "Math.round",
+          "lineNumber": 1725
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "this.retrySleep",
+          "lineNumber": 1729
+        },
+        {
+          "caller": "callModelWithRetry",
+          "callee": "this.callModelWithRetry",
+          "lineNumber": 1732
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "import",
+          "lineNumber": 1775
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "import",
+          "lineNumber": 1786
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "(() => {\n      const given = spec.workspaceRoot?.trim()\n        ? path.resolve(spec.workspaceRoot)\n        : path.resolve(\".\");\n      // findPawRoot：向上查找 .paw 目录，确定项目根\n      return findPawRoot(given) ?? given;\n    })",
+          "lineNumber": 1789
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "spec.workspaceRoot?.trim",
+          "lineNumber": 1790
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "path.resolve",
+          "lineNumber": 1791
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "path.resolve",
+          "lineNumber": 1792
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "findPawRoot",
+          "lineNumber": 1794
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "resolveMaxSteps",
+          "lineNumber": 1796
+        },
+        {
+          "caller": "emit",
+          "callee": "Date.now",
+          "lineNumber": 1831
+        },
+        {
+          "caller": "emit",
+          "callee": "Date.now",
+          "lineNumber": 1834
+        },
+        {
+          "caller": "emit",
+          "callee": "Math.max",
+          "lineNumber": 1849
+        },
+        {
+          "caller": "emit",
+          "callee": "Date.now",
+          "lineNumber": 1860
+        },
+        {
+          "caller": "emit",
+          "callee": "this.onEvent",
+          "lineNumber": 1863
+        },
+        {
+          "caller": "emit",
+          "callee": "this.sessionStore?.saveEvent",
+          "lineNumber": 1864
+        },
+        {
+          "caller": "emitRunMetrics",
+          "callee": "emit",
+          "lineNumber": 1869
+        },
+        {
+          "caller": "emitRunMetrics",
+          "callee": "Date.now",
+          "lineNumber": 1871
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "Date.now",
+          "lineNumber": 1884
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "emit",
+          "lineNumber": 1885
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "createDefaultLanguageModel",
+          "lineNumber": 1889
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "mcp.connect",
+          "lineNumber": 1906
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "String",
+          "lineNumber": 1909
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "emit",
+          "lineNumber": 1910
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "toolDefinitions",
+          "lineNumber": 1916
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "toolNameReverseMap",
+          "lineNumber": 1918
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "resolveShellSandboxConfig",
+          "lineNumber": 1921
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "buildChildSystemPrompt",
+          "lineNumber": 1926
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "toolCatalogText",
+          "lineNumber": 1928
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.setSystem",
+          "lineNumber": 1936
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "s.messages.filter",
+          "lineNumber": 1937
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.replaceHistory",
+          "lineNumber": 1938
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "this.todoStore.set",
+          "lineNumber": 1939
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.setSystem",
+          "lineNumber": 1941
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.addUser",
+          "lineNumber": 1942
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "AgentOrchestrator.measureBudget",
+          "lineNumber": 1946
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.setHistoryTokenBudget",
+          "lineNumber": 1951
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "AgentOrchestrator.emitContextBudget",
+          "lineNumber": 1952
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "this.skillRegistry.list",
+          "lineNumber": 1981
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "this.skillRegistry.catalogText",
+          "lineNumber": 1982
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "formatTodosForPrompt",
+          "lineNumber": 1987
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "loadProjectMemory",
+          "lineNumber": 1991
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "skillsFromProjectMemory",
+          "lineNumber": 1994
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "this.skillRegistry.has",
+          "lineNumber": 1998
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "this.skillRegistry.register",
+          "lineNumber": 1999
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "extractCleanMemoryQuery",
+          "lineNumber": 2005
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "autoMemoryStore.loadAllIndexShards",
+          "lineNumber": 2008
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "autoMemoryStore.loadIndex",
+          "lineNumber": 2008
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "readPawSettingsLocal",
+          "lineNumber": 2011
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "resolveMemoryRetrievalSettings",
+          "lineNumber": 2026
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "buildRetrievalSignalsFromMessages",
+          "lineNumber": 2030
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "extractFilePaths",
+          "lineNumber": 2033
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "computeQueryEmbedding",
+          "lineNumber": 2039
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "retrieveMemories",
+          "lineNumber": 2058
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "toRetrieveMemoriesOptions",
+          "lineNumber": 2061
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "emit",
+          "lineNumber": 2068
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "memoryResult.records.map",
+          "lineNumber": 2079
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "gitStatus",
+          "lineNumber": 2094
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "parts.push",
+          "lineNumber": 2097
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "parts.push",
+          "lineNumber": 2098
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "parts.push",
+          "lineNumber": 2099
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "parts.push",
+          "lineNumber": 2100
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "parts.push",
+          "lineNumber": 2102
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "parts.join",
+          "lineNumber": 2103
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "loadPawMd",
+          "lineNumber": 2113
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "allocateContextBudget",
+          "lineNumber": 2122
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "buildSystemPromptWithBudget",
+          "lineNumber": 2123
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "toolCatalogText",
+          "lineNumber": 2126
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.estimator.count",
+          "lineNumber": 2141
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "emit",
+          "lineNumber": 2147
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "promptBuild.trimmed.map",
+          "lineNumber": 2149
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "promptBuild.trimmed.reduce",
+          "lineNumber": 2150
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.setSystem",
+          "lineNumber": 2162
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "s.messages.filter",
+          "lineNumber": 2163
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.replaceHistory",
+          "lineNumber": 2164
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "planner.createPlan",
+          "lineNumber": 2166
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "planner.applyUpdate",
+          "lineNumber": 2168
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "this.todoStore.set",
+          "lineNumber": 2177
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "sessionMemoryStore.load",
+          "lineNumber": 2180
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.addUser",
+          "lineNumber": 2182
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "emit",
+          "lineNumber": 2186
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.setSystem",
+          "lineNumber": 2189
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "AgentOrchestrator.resolveUserMentions",
+          "lineNumber": 2191
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "extractAtMentions",
+          "lineNumber": 2195
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "discoverContext",
+          "lineNumber": 2197
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.addUser",
+          "lineNumber": 2201
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "AgentOrchestrator.measureBudget",
+          "lineNumber": 2205
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "ctxMgr.setHistoryTokenBudget",
+          "lineNumber": 2210
+        },
+        {
+          "caller": "initializeRun",
+          "callee": "AgentOrchestrator.emitContextBudget",
+          "lineNumber": 2211
+        },
+        {
+          "caller": "maybeExtractMemoriesAfterRun",
+          "callee": "runMemoryExtractionAfterRun({\n      runId,\n      ctxMgr,\n      autoMemoryStore,\n      model: this.auxiliaryModel,\n      auxiliaryModel: this.auxiliaryModel,\n      emit,\n      workspaceRoot,\n    }).catch",
+          "lineNumber": 2261
+        },
+        {
+          "caller": "maybeExtractMemoriesAfterRun",
+          "callee": "runMemoryExtractionAfterRun",
+          "lineNumber": 2261
+        },
+        {
+          "caller": "estimateToolTokens",
+          "callee": "import",
+          "lineNumber": 2289
+        },
+        {
+          "caller": "estimateToolTokens",
+          "callee": "estimator.count",
+          "lineNumber": 2293
+        },
+        {
+          "caller": "estimateToolTokens",
+          "callee": "JSON.stringify",
+          "lineNumber": 2293
+        },
+        {
+          "caller": "measureBudget",
+          "callee": "import",
+          "lineNumber": 2307
+        },
+        {
+          "caller": "measureBudget",
+          "callee": "measureContextBudget",
+          "lineNumber": 2310
+        },
+        {
+          "caller": "measureBudget",
+          "callee": "AgentOrchestrator.estimateToolTokens",
+          "lineNumber": 2313
+        },
+        {
+          "caller": "emitContextBudget",
+          "callee": "emit",
+          "lineNumber": 2337
+        },
+        {
+          "caller": "classifyError",
+          "callee": "/\\b429\\b/.test",
+          "lineNumber": 2394
+        },
+        {
+          "caller": "classifyError",
+          "callee": "msg.match",
+          "lineNumber": 2395
+        },
+        {
+          "caller": "classifyError",
+          "callee": "parseInt",
+          "lineNumber": 2397
+        },
+        {
+          "caller": "classifyError",
+          "callee": "Number.isFinite",
+          "lineNumber": 2398
+        },
+        {
+          "caller": "classifyError",
+          "callee": "/\\b5\\d\\d\\b/.test",
+          "lineNumber": 2406
+        },
+        {
+          "caller": "classifyError",
+          "callee": "/\\b4\\d\\d\\b/.test",
+          "lineNumber": 2409
+        },
+        {
+          "caller": "classifyError",
+          "callee": "/\\btimeout\\b|ETIMEDOUT/i.test",
+          "lineNumber": 2412
+        },
+        {
+          "caller": "classifyError",
+          "callee": "/fetch|network|ECONN|ENOTFOUND|DNS|ECONNRESET/i.test",
+          "lineNumber": 2415
+        },
+        {
+          "caller": "computeRetryDelay",
+          "callee": "Math.random",
+          "lineNumber": 2447
+        },
+        {
+          "caller": "computeRetryDelay",
+          "callee": "Math.min",
+          "lineNumber": 2460
+        }
+      ],
+      "metrics": {
+        "importCount": 13,
+        "exportCount": 1,
+        "functionCount": 3,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/action-handlers.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 656,
+      "nonEmptyLines": 601,
+      "functions": [
+        {
+          "name": "handleAction",
+          "startLine": 85,
+          "endLine": 129,
+          "params": [
+            "actions",
+            "toolCalls",
+            "ctx",
+            "flags",
+            "text",
+            "thinking",
+            "opts"
+          ]
+        },
+        {
+          "name": "handleNoAction",
+          "startLine": 145,
+          "endLine": 184,
+          "params": [
+            "ctx",
+            "flags",
+            "text",
+            "thinking",
+            "opts"
+          ]
+        },
+        {
+          "name": "handleFinalAnswer",
+          "startLine": 200,
+          "endLine": 265,
+          "params": [
+            "action",
+            "ctx",
+            "flags",
+            "text",
+            "thinking",
+            "opts"
+          ]
+        },
+        {
+          "name": "handleAbort",
+          "startLine": 275,
+          "endLine": 287,
+          "params": [
+            "action"
+          ]
+        },
+        {
+          "name": "handleAskUser",
+          "startLine": 301,
+          "endLine": 350,
+          "params": [
+            "action",
+            "ctx",
+            "flags",
+            "text",
+            "thinking",
+            "opts"
+          ]
+        },
+        {
+          "name": "handlePlanUpdate",
+          "startLine": 364,
+          "endLine": 432,
+          "params": [
+            "action",
+            "ctx",
+            "flags",
+            "text",
+            "thinking",
+            "opts"
+          ]
+        },
+        {
+          "name": "handleToolCalls",
+          "startLine": 449,
+          "endLine": 536,
+          "params": [
+            "calls",
+            "ctx",
+            "flags",
+            "text",
+            "thinking",
+            "opts"
+          ]
+        },
+        {
+          "name": "handleRunAgent",
+          "startLine": 555,
+          "endLine": 656,
+          "params": [
+            "calls",
+            "ctx",
+            "flags",
+            "text",
+            "thinking",
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "handleAction",
+          "line": 85,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "handleAction",
+          "callee": "toolCalls.filter",
+          "lineNumber": 95
+        },
+        {
+          "caller": "handleAction",
+          "callee": "toolCalls.filter",
+          "lineNumber": 96
+        },
+        {
+          "caller": "handleAction",
+          "callee": "isSubAgentCall",
+          "lineNumber": 96
+        },
+        {
+          "caller": "handleAction",
+          "callee": "handleRunAgent",
+          "lineNumber": 100
+        },
+        {
+          "caller": "handleAction",
+          "callee": "handleToolCalls",
+          "lineNumber": 105
+        },
+        {
+          "caller": "handleAction",
+          "callee": "handleNoAction",
+          "lineNumber": 111
+        },
+        {
+          "caller": "handleAction",
+          "callee": "ctx.emit",
+          "lineNumber": 114
+        },
+        {
+          "caller": "handleAction",
+          "callee": "handleFinalAnswer",
+          "lineNumber": 118
+        },
+        {
+          "caller": "handleAction",
+          "callee": "handleAbort",
+          "lineNumber": 120
+        },
+        {
+          "caller": "handleAction",
+          "callee": "handleAskUser",
+          "lineNumber": 122
+        },
+        {
+          "caller": "handleAction",
+          "callee": "handlePlanUpdate",
+          "lineNumber": 124
+        },
+        {
+          "caller": "handleAction",
+          "callee": "handleNoAction",
+          "lineNumber": 127
+        },
+        {
+          "caller": "handleNoAction",
+          "callee": "ctx.ctxMgr.addAssistant",
+          "lineNumber": 160
+        },
+        {
+          "caller": "handleNoAction",
+          "callee": "ctx.ctxMgr.addUser",
+          "lineNumber": 162
+        },
+        {
+          "caller": "handleNoAction",
+          "callee": "opts.saveStateFn",
+          "lineNumber": 165
+        },
+        {
+          "caller": "handleNoAction",
+          "callee": "text.trim",
+          "lineNumber": 171
+        },
+        {
+          "caller": "handleNoAction",
+          "callee": "thinking?.trim",
+          "lineNumber": 172
+        },
+        {
+          "caller": "handleNoAction",
+          "callee": "thinking.trim",
+          "lineNumber": 173
+        },
+        {
+          "caller": "handleNoAction",
+          "callee": "ctx.ctxMgr.addAssistant",
+          "lineNumber": 175
+        },
+        {
+          "caller": "handleNoAction",
+          "callee": "ctx.emit",
+          "lineNumber": 176
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "opts.todoStore?.items.some",
+          "lineNumber": 213
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "ctx.ctxMgr.addAssistant",
+          "lineNumber": 228
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "plan?.items.filter",
+          "lineNumber": 232
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "opts.todoStore?.items.filter",
+          "lineNumber": 241
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "[\n      pendingPlanCount > 0 ? `${pendingPlanCount} plan item(s)` : null,\n      pendingTodoCount > 0 ? `${pendingTodoCount} todo(s)` : null,\n    ]\n      .filter(Boolean)\n      .join",
+          "lineNumber": 242
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "[\n      pendingPlanCount > 0 ? `${pendingPlanCount} plan item(s)` : null,\n      pendingTodoCount > 0 ? `${pendingTodoCount} todo(s)` : null,\n    ]\n      .filter",
+          "lineNumber": 242
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "ctx.ctxMgr.addUser",
+          "lineNumber": 250
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "opts.saveStateFn",
+          "lineNumber": 253
+        },
+        {
+          "caller": "handleFinalAnswer",
+          "callee": "action.summary.trim",
+          "lineNumber": 261
+        },
+        {
+          "caller": "handleAbort",
+          "callee": "action.reason.trim",
+          "lineNumber": 280
+        },
+        {
+          "caller": "handleAskUser",
+          "callee": "ctx.emit",
+          "lineNumber": 316
+        },
+        {
+          "caller": "handleAskUser",
+          "callee": "opts.resolveAskUser",
+          "lineNumber": 322
+        },
+        {
+          "caller": "handleAskUser",
+          "callee": "ctx.ctxMgr.addAssistant",
+          "lineNumber": 327
+        },
+        {
+          "caller": "handleAskUser",
+          "callee": "ctx.ctxMgr.addUser",
+          "lineNumber": 328
+        },
+        {
+          "caller": "handleAskUser",
+          "callee": "opts.saveStateFn",
+          "lineNumber": 341
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "import",
+          "lineNumber": 381
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "planItemsFromUnknown",
+          "lineNumber": 384
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "opts.planner.applyUpdate",
+          "lineNumber": 387
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "String",
+          "lineNumber": 393
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "ctx.emit",
+          "lineNumber": 399
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "ctx.ctxMgr.addAssistant",
+          "lineNumber": 407
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "planToSnapshotPayload",
+          "lineNumber": 414
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "JSON.stringify",
+          "lineNumber": 416
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "ctx.ctxMgr.addUser",
+          "lineNumber": 418
+        },
+        {
+          "caller": "handlePlanUpdate",
+          "callee": "opts.saveStateFn",
+          "lineNumber": 430
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "ctx.emit",
+          "lineNumber": 465
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "ctx.emit",
+          "lineNumber": 467
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "ctx.emit",
+          "lineNumber": 469
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "Date.now",
+          "lineNumber": 472
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "executeToolCalls",
+          "lineNumber": 475
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "Date.now",
+          "lineNumber": 497
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "opts.evalHooks?.afterToolCall",
+          "lineNumber": 503
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "Math.round",
+          "lineNumber": 508
+        },
+        {
+          "caller": "handleToolCalls",
+          "callee": "finalizeToolExecution",
+          "lineNumber": 513
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "ctx.emit",
+          "lineNumber": 582
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "ctx.emit",
+          "lineNumber": 588
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "Date.now",
+          "lineNumber": 595
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "opts.agentGroup.launchAll",
+          "lineNumber": 596
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "summarizer.summarizeForCall",
+          "lineNumber": 598
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "Date.now",
+          "lineNumber": 601
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "ctx.emit",
+          "lineNumber": 604
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "ctx.ctxMgr.addAssistant",
+          "lineNumber": 610
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "ctx.emit",
+          "lineNumber": 614
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "r.errors?.join",
+          "lineNumber": 619
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "opts.evalHooks?.afterToolCall",
+          "lineNumber": 621
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "Math.round",
+          "lineNumber": 626
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "ctx.ctxMgr.addToolResults",
+          "lineNumber": 630
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "results.map",
+          "lineNumber": 631
+        },
+        {
+          "caller": "handleRunAgent",
+          "callee": "opts.saveStateFn",
+          "lineNumber": 654
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 1,
+        "functionCount": 8,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/agent-args.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 142,
+      "nonEmptyLines": 133,
+      "functions": [
+        {
+          "name": "buildRole",
+          "startLine": 33,
+          "endLine": 48,
+          "params": [
+            "agentType"
+          ]
+        },
+        {
+          "name": "buildOutputFormat",
+          "startLine": 51,
+          "endLine": 66,
+          "params": [
+            "agentType"
+          ]
+        },
+        {
+          "name": "parseAgentType",
+          "startLine": 73,
+          "endLine": 82,
+          "params": [
+            "args"
+          ]
+        },
+        {
+          "name": "parseChildPolicy",
+          "startLine": 89,
+          "endLine": 97,
+          "params": [
+            "args"
+          ]
+        },
+        {
+          "name": "parseRunAgentMaxSteps",
+          "startLine": 104,
+          "endLine": 115,
+          "params": [
+            "args"
+          ]
+        },
+        {
+          "name": "buildMinimalSharedContext",
+          "startLine": 123,
+          "endLine": 142,
+          "params": [
+            "goal",
+            "args"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "buildRole",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "buildOutputFormat",
+          "line": 51,
+          "isDefault": false
+        },
+        {
+          "name": "parseAgentType",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "parseChildPolicy",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "parseRunAgentMaxSteps",
+          "line": 104,
+          "isDefault": false
+        },
+        {
+          "name": "buildMinimalSharedContext",
+          "line": 123,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "parseAgentType",
+          "callee": "AGENT_TYPES.has",
+          "lineNumber": 78
+        },
+        {
+          "caller": "parseRunAgentMaxSteps",
+          "callee": "Number.isFinite",
+          "lineNumber": 108
+        },
+        {
+          "caller": "parseRunAgentMaxSteps",
+          "callee": "Math.floor",
+          "lineNumber": 109
+        },
+        {
+          "caller": "parseRunAgentMaxSteps",
+          "callee": "/^\\d+$/.test",
+          "lineNumber": 111
+        },
+        {
+          "caller": "parseRunAgentMaxSteps",
+          "callee": "raw.trim",
+          "lineNumber": 111
+        },
+        {
+          "caller": "parseRunAgentMaxSteps",
+          "callee": "Number.parseInt",
+          "lineNumber": 112
+        },
+        {
+          "caller": "parseRunAgentMaxSteps",
+          "callee": "raw.trim",
+          "lineNumber": 112
+        },
+        {
+          "caller": "buildMinimalSharedContext",
+          "callee": "parseAgentType",
+          "lineNumber": 127
+        },
+        {
+          "caller": "buildMinimalSharedContext",
+          "callee": "parseChildPolicy",
+          "lineNumber": 128
+        },
+        {
+          "caller": "buildMinimalSharedContext",
+          "callee": "buildRole",
+          "lineNumber": 130
+        },
+        {
+          "caller": "buildMinimalSharedContext",
+          "callee": "buildOutputFormat",
+          "lineNumber": 139
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 6,
+        "functionCount": 6,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/agent-group.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 346,
+      "nonEmptyLines": 321,
+      "functions": [
+        {
+          "name": "mapToChildEventType",
+          "startLine": 331,
+          "endLine": 346,
+          "params": [
+            "eventType"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "AgentGroup",
+          "startLine": 52,
+          "endLine": 328,
+          "methods": [
+            "constructor",
+            "launchAll",
+            "cancelAll",
+            "onChildEvent",
+            "getStateTree",
+            "updateChildState",
+            "computeOverallProgress"
+          ],
+          "properties": [
+            "parentRunId",
+            "parentOnEvent",
+            "parentWatcher",
+            "launcher",
+            "depth",
+            "localController",
+            "children"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "AgentGroup",
+          "line": 52,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "launchAll",
+          "callee": "AbortSignal.any",
+          "lineNumber": 106
+        },
+        {
+          "caller": "launchAll",
+          "callee": "calls.map",
+          "lineNumber": 110
+        },
+        {
+          "caller": "launchAll",
+          "callee": "String",
+          "lineNumber": 115
+        },
+        {
+          "caller": "launchAll",
+          "callee": "sharedCtxForCall",
+          "lineNumber": 116
+        },
+        {
+          "caller": "launchAll",
+          "callee": "parseRunAgentMaxSteps",
+          "lineNumber": 122
+        },
+        {
+          "caller": "launchAll",
+          "callee": "this.launcher\n        .launchStreaming({\n          goal,\n          maxSteps,\n          signal: childSignal,\n          parentRunId: this.parentRunId,\n          agentId,\n          onEvent: (envelope) => this.onChildEvent(agentId, envelope),\n          sharedContext,\n        })\n        .then((result) => {\n          this.updateChildState(agentId, \"completed\", 100, result);\n          return result;\n        })\n        .catch",
+          "lineNumber": 132
+        },
+        {
+          "caller": "launchAll",
+          "callee": "this.launcher\n        .launchStreaming({\n          goal,\n          maxSteps,\n          signal: childSignal,\n          parentRunId: this.parentRunId,\n          agentId,\n          onEvent: (envelope) => this.onChildEvent(agentId, envelope),\n          sharedContext,\n        })\n        .then",
+          "lineNumber": 132
+        },
+        {
+          "caller": "launchAll",
+          "callee": "this.launcher\n        .launchStreaming",
+          "lineNumber": 132
+        },
+        {
+          "caller": "launchAll",
+          "callee": "this.onChildEvent",
+          "lineNumber": 139
+        },
+        {
+          "caller": "launchAll",
+          "callee": "this.updateChildState",
+          "lineNumber": 143
+        },
+        {
+          "caller": "launchAll",
+          "callee": "String",
+          "lineNumber": 147
+        },
+        {
+          "caller": "launchAll",
+          "callee": "this.updateChildState",
+          "lineNumber": 148
+        },
+        {
+          "caller": "launchAll",
+          "callee": "this.children.set",
+          "lineNumber": 163
+        },
+        {
+          "caller": "launchAll",
+          "callee": "Promise.allSettled",
+          "lineNumber": 168
+        },
+        {
+          "caller": "launchAll",
+          "callee": "controllers.map",
+          "lineNumber": 168
+        },
+        {
+          "caller": "launchAll",
+          "callee": "this.children.delete",
+          "lineNumber": 172
+        },
+        {
+          "caller": "launchAll",
+          "callee": "results.map",
+          "lineNumber": 176
+        },
+        {
+          "caller": "launchAll",
+          "callee": "String",
+          "lineNumber": 183
+        },
+        {
+          "caller": "launchAll",
+          "callee": "String",
+          "lineNumber": 184
+        },
+        {
+          "caller": "cancelAll",
+          "callee": "this.localController.abort",
+          "lineNumber": 191
+        },
+        {
+          "caller": "cancelAll",
+          "callee": "Promise.allSettled",
+          "lineNumber": 193
+        },
+        {
+          "caller": "cancelAll",
+          "callee": "[...this.children.values()].map",
+          "lineNumber": 194
+        },
+        {
+          "caller": "cancelAll",
+          "callee": "this.children.values",
+          "lineNumber": 194
+        },
+        {
+          "caller": "cancelAll",
+          "callee": "c.promise.catch",
+          "lineNumber": 195
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.children.get",
+          "lineNumber": 217
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.updateChildState",
+          "lineNumber": 225
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "Math.min",
+          "lineNumber": 231
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.updateChildState",
+          "lineNumber": 233
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.updateChildState",
+          "lineNumber": 238
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.updateChildState",
+          "lineNumber": 242
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.updateChildState",
+          "lineNumber": 245
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.updateChildState",
+          "lineNumber": 248
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "mapToChildEventType",
+          "lineNumber": 254
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "PARENT_FORWARD_EVENTS.has",
+          "lineNumber": 255
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.parentOnEvent",
+          "lineNumber": 256
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "String",
+          "lineNumber": 278
+        },
+        {
+          "caller": "onChildEvent",
+          "callee": "this.parentWatcher.takeExternallyModified",
+          "lineNumber": 281
+        },
+        {
+          "caller": "getStateTree",
+          "callee": "this.computeOverallProgress",
+          "lineNumber": 291
+        },
+        {
+          "caller": "getStateTree",
+          "callee": "[...this.children.values()].map",
+          "lineNumber": 292
+        },
+        {
+          "caller": "getStateTree",
+          "callee": "this.children.values",
+          "lineNumber": 292
+        },
+        {
+          "caller": "updateChildState",
+          "callee": "this.children.get",
+          "lineNumber": 308
+        },
+        {
+          "caller": "computeOverallProgress",
+          "callee": "this.children.values",
+          "lineNumber": 323
+        },
+        {
+          "caller": "computeOverallProgress",
+          "callee": "Math.round",
+          "lineNumber": 326
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/constants.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 68,
+      "nonEmptyLines": 61,
+      "functions": [
+        {
+          "name": "isSubAgentCall",
+          "startLine": 66,
+          "endLine": 68,
+          "params": [
+            "call"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "MULTI_AGENT_LIMITS",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "CHILD_AGENT_POLICIES",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "SHARED_CONTEXT_BUDGET",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "PARENT_FORWARD_EVENTS",
+          "line": 52,
+          "isDefault": false
+        },
+        {
+          "name": "SUB_AGENT_TOOL_NAME",
+          "line": 63,
+          "isDefault": false
+        },
+        {
+          "name": "isSubAgentCall",
+          "line": 66,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 6,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 409,
+      "nonEmptyLines": 369,
+      "functions": [
+        {
+          "name": "estimateTokens",
+          "startLine": 60,
+          "endLine": 62,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "estimateSharedContextTokens",
+          "startLine": 65,
+          "endLine": 78,
+          "params": [
+            "ctx"
+          ]
+        },
+        {
+          "name": "messageContent",
+          "startLine": 80,
+          "endLine": 82,
+          "params": [
+            "m"
+          ]
+        },
+        {
+          "name": "isNoiseContent",
+          "startLine": 85,
+          "endLine": 90,
+          "params": [
+            "content"
+          ]
+        },
+        {
+          "name": "extractParentGoal",
+          "startLine": 96,
+          "endLine": 111,
+          "params": [
+            "messages"
+          ]
+        },
+        {
+          "name": "extractFacts",
+          "startLine": 118,
+          "endLine": 143,
+          "params": [
+            "messages"
+          ]
+        },
+        {
+          "name": "extractUserConstraints",
+          "startLine": 150,
+          "endLine": 176,
+          "params": [
+            "messages"
+          ]
+        },
+        {
+          "name": "extractArtifacts",
+          "startLine": 179,
+          "endLine": 215,
+          "params": [
+            "messages"
+          ]
+        },
+        {
+          "name": "extractParentConclusions",
+          "startLine": 221,
+          "endLine": 258,
+          "params": [
+            "messages"
+          ]
+        },
+        {
+          "name": "truncateArtifacts",
+          "startLine": 261,
+          "endLine": 270,
+          "params": [
+            "artifacts"
+          ]
+        },
+        {
+          "name": "truncateToBudget",
+          "startLine": 281,
+          "endLine": 333,
+          "params": [
+            "ctx",
+            "maxTokens"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "DefaultContextSummarizer",
+          "startLine": 336,
+          "endLine": 409,
+          "methods": [
+            "summarize",
+            "summarizeForCall"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "DefaultContextSummarizer",
+          "line": 336,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "estimateTokens",
+          "callee": "Math.ceil",
+          "lineNumber": 61
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "estimateTokens",
+          "lineNumber": 67
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "estimateTokens",
+          "lineNumber": 68
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "estimateTokens",
+          "lineNumber": 69
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "estimateTokens",
+          "lineNumber": 70
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "estimateTokens",
+          "lineNumber": 71
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "estimateTokens",
+          "lineNumber": 72
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "JSON.stringify",
+          "lineNumber": 72
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "estimateTokens",
+          "lineNumber": 73
+        },
+        {
+          "caller": "estimateSharedContextTokens",
+          "callee": "estimateTokens",
+          "lineNumber": 75
+        },
+        {
+          "caller": "messageContent",
+          "callee": "JSON.stringify",
+          "lineNumber": 81
+        },
+        {
+          "caller": "isNoiseContent",
+          "callee": "content.trim",
+          "lineNumber": 86
+        },
+        {
+          "caller": "isNoiseContent",
+          "callee": "NOISE_PREFIXES.some",
+          "lineNumber": 87
+        },
+        {
+          "caller": "isNoiseContent",
+          "callee": "content.startsWith",
+          "lineNumber": 87
+        },
+        {
+          "caller": "isNoiseContent",
+          "callee": "content.startsWith",
+          "lineNumber": 88
+        },
+        {
+          "caller": "isNoiseContent",
+          "callee": "content.includes",
+          "lineNumber": 88
+        },
+        {
+          "caller": "extractParentGoal",
+          "callee": "messageContent",
+          "lineNumber": 99
+        },
+        {
+          "caller": "extractParentGoal",
+          "callee": "isNoiseContent",
+          "lineNumber": 100
+        },
+        {
+          "caller": "extractParentGoal",
+          "callee": "content.startsWith",
+          "lineNumber": 101
+        },
+        {
+          "caller": "extractParentGoal",
+          "callee": "content\n      .replace(\n        /^\\[Context from previous session\\][\\s\\S]*?\\[Current user request\\]\\n/s,\n        \"\",\n      )\n      .trim",
+          "lineNumber": 102
+        },
+        {
+          "caller": "extractParentGoal",
+          "callee": "content\n      .replace",
+          "lineNumber": 102
+        },
+        {
+          "caller": "extractParentGoal",
+          "callee": "cleaned.slice",
+          "lineNumber": 108
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "extractParentGoal",
+          "lineNumber": 120
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "facts.push",
+          "lineNumber": 122
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "messageContent",
+          "lineNumber": 126
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "content.startsWith",
+          "lineNumber": 129
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "facts.push",
+          "lineNumber": 130
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "content.slice",
+          "lineNumber": 131
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "isNoiseContent",
+          "lineNumber": 135
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "facts.push",
+          "lineNumber": 139
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "content.slice",
+          "lineNumber": 139
+        },
+        {
+          "caller": "extractFacts",
+          "callee": "facts.slice",
+          "lineNumber": 142
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "messageContent",
+          "lineNumber": 160
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "content.split",
+          "lineNumber": 161
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "line.trim",
+          "lineNumber": 163
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "/(must|never|always|don't|do not|avoid|禁止|必须|不要|不能)/i.test",
+          "lineNumber": 165
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "trimmed.toLowerCase",
+          "lineNumber": 168
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "seen.has",
+          "lineNumber": 169
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "seen.add",
+          "lineNumber": 170
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "extra.push",
+          "lineNumber": 171
+        },
+        {
+          "caller": "extractUserConstraints",
+          "callee": "[...base, ...extra].slice",
+          "lineNumber": 175
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "messageContent",
+          "lineNumber": 184
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "content.matchAll",
+          "lineNumber": 186
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "match[2]?.trim",
+          "lineNumber": 188
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "seen.has",
+          "lineNumber": 189
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "seen.add",
+          "lineNumber": 190
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "artifacts.push",
+          "lineNumber": 191
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "body.slice",
+          "lineNumber": 194
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "seen.has",
+          "lineNumber": 202
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "seen.add",
+          "lineNumber": 203
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "artifacts.push",
+          "lineNumber": 204
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "att.content.slice",
+          "lineNumber": 207
+        },
+        {
+          "caller": "extractArtifacts",
+          "callee": "artifacts.slice",
+          "lineNumber": 214
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "messageContent",
+          "lineNumber": 231
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "content.match",
+          "lineNumber": 234
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "keyDecisions[1].split",
+          "lineNumber": 236
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "line.replace(/^-\\s*/, \"\").trim",
+          "lineNumber": 237
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "line.replace",
+          "lineNumber": 237
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "conclusions.push",
+          "lineNumber": 239
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "content.match",
+          "lineNumber": 245
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "progress[1].split",
+          "lineNumber": 247
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "line.replace(/^-\\s*/, \"\").trim",
+          "lineNumber": 248
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "line.replace",
+          "lineNumber": 248
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "conclusions.push",
+          "lineNumber": 250
+        },
+        {
+          "caller": "extractParentConclusions",
+          "callee": "conclusions.slice",
+          "lineNumber": 257
+        },
+        {
+          "caller": "truncateArtifacts",
+          "callee": "[...artifacts].sort",
+          "lineNumber": 263
+        },
+        {
+          "caller": "truncateArtifacts",
+          "callee": "sorted.slice(0, SHARED_CONTEXT_BUDGET.maxArtifacts).map",
+          "lineNumber": 266
+        },
+        {
+          "caller": "truncateArtifacts",
+          "callee": "sorted.slice",
+          "lineNumber": 266
+        },
+        {
+          "caller": "truncateArtifacts",
+          "callee": "a.content.slice",
+          "lineNumber": 268
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "estimateSharedContextTokens",
+          "lineNumber": 285
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "working.artifacts.slice",
+          "lineNumber": 290
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "estimateSharedContextTokens",
+          "lineNumber": 292
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "working.facts.slice",
+          "lineNumber": 300
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "estimateSharedContextTokens",
+          "lineNumber": 301
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "working.parentConclusions.filter",
+          "lineNumber": 309
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "estimateSharedContextTokens",
+          "lineNumber": 313
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "working.constraints.slice",
+          "lineNumber": 324
+        },
+        {
+          "caller": "truncateToBudget",
+          "callee": "estimateSharedContextTokens",
+          "lineNumber": 326
+        },
+        {
+          "caller": "summarize",
+          "callee": "ctx.buildMessages",
+          "lineNumber": 353
+        },
+        {
+          "caller": "summarize",
+          "callee": "extractFacts(messages).slice",
+          "lineNumber": 355
+        },
+        {
+          "caller": "summarize",
+          "callee": "extractFacts",
+          "lineNumber": 355
+        },
+        {
+          "caller": "summarize",
+          "callee": "extractUserConstraints",
+          "lineNumber": 356
+        },
+        {
+          "caller": "summarize",
+          "callee": "truncateArtifacts",
+          "lineNumber": 357
+        },
+        {
+          "caller": "summarize",
+          "callee": "extractArtifacts",
+          "lineNumber": 357
+        },
+        {
+          "caller": "summarize",
+          "callee": "extractParentConclusions",
+          "lineNumber": 359
+        },
+        {
+          "caller": "summarize",
+          "callee": "buildRole",
+          "lineNumber": 367
+        },
+        {
+          "caller": "summarize",
+          "callee": "buildOutputFormat",
+          "lineNumber": 373
+        },
+        {
+          "caller": "summarize",
+          "callee": "estimateSharedContextTokens",
+          "lineNumber": 379
+        },
+        {
+          "caller": "summarize",
+          "callee": "truncateToBudget",
+          "lineNumber": 381
+        },
+        {
+          "caller": "summarizeForCall",
+          "callee": "String(args?.goal ?? \"\").trim",
+          "lineNumber": 402
+        },
+        {
+          "caller": "summarizeForCall",
+          "callee": "String",
+          "lineNumber": 402
+        },
+        {
+          "caller": "summarizeForCall",
+          "callee": "parseAgentType",
+          "lineNumber": 403
+        },
+        {
+          "caller": "summarizeForCall",
+          "callee": "parseChildPolicy",
+          "lineNumber": 404
+        },
+        {
+          "caller": "summarizeForCall",
+          "callee": "this.summarize",
+          "lineNumber": 405
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 1,
+        "functionCount": 11,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/memory-extraction.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 161,
+      "nonEmptyLines": 150,
+      "functions": [
+        {
+          "name": "runMemoryExtractionAfterRun",
+          "startLine": 45,
+          "endLine": 161,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "runMemoryExtractionAfterRun",
+          "line": 45,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "opts.ctxMgr.buildMessages",
+          "lineNumber": 54
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "shouldAttemptMemoryExtraction",
+          "lineNumber": 57
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "formatConversationForMemoryExtraction",
+          "lineNumber": 62
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "extractMemories",
+          "lineNumber": 65
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "Date.now",
+          "lineNumber": 71
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "opts.autoMemoryStore.upsert",
+          "lineNumber": 75
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "opts.autoMemoryStore.buildIndex",
+          "lineNumber": 83
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "computeMemoryEmbedding",
+          "lineNumber": 89
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "opts.autoMemoryStore.load",
+          "lineNumber": 96
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "opts.autoMemoryStore.save",
+          "lineNumber": 98
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "EmbeddingCache.encodeEmbedding",
+          "lineNumber": 100
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "opts.emit",
+          "lineNumber": 110
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "opts.emit",
+          "lineNumber": 117
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "shouldRunReflection",
+          "lineNumber": 127
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "runReflection",
+          "lineNumber": 130
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "import(\"../auxiliary-complete.js\").then",
+          "lineNumber": 134
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "import",
+          "lineNumber": 134
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "m.completeAuxiliaryTask",
+          "lineNumber": 135
+        },
+        {
+          "caller": "runMemoryExtractionAfterRun",
+          "callee": "opts.emit",
+          "lineNumber": 146
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/session-summarizer.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 295,
+      "nonEmptyLines": 267,
+      "functions": [
+        {
+          "name": "extractSessionHighlightsToAutoMemory",
+          "startLine": 44,
+          "endLine": 150,
+          "params": [
+            "opts"
+          ]
+        },
+        {
+          "name": "buildShortSessionUser",
+          "startLine": 165,
+          "endLine": 196,
+          "params": [
+            "goal",
+            "finalAnswer",
+            "filePaths",
+            "errors"
+          ]
+        },
+        {
+          "name": "parseShortSessionSummary",
+          "startLine": 199,
+          "endLine": 232,
+          "params": [
+            "text",
+            "sessionId",
+            "project",
+            "goal"
+          ]
+        },
+        {
+          "name": "maybeGenerateShortSessionMemory",
+          "startLine": 244,
+          "endLine": 295,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "extractSessionHighlightsToAutoMemory",
+          "line": 44,
+          "isDefault": false
+        },
+        {
+          "name": "maybeGenerateShortSessionMemory",
+          "line": 244,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "Date.now",
+          "lineNumber": 50
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\")\n    .update(sessionMemory.session)\n    .digest(\"hex\")\n    .slice",
+          "lineNumber": 67
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\")\n    .update(sessionMemory.session)\n    .digest",
+          "lineNumber": 67
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\")\n    .update",
+          "lineNumber": 67
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash",
+          "lineNumber": 67
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "decision.trim",
+          "lineNumber": 75
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update(trimmed).digest(\"hex\").slice",
+          "lineNumber": 78
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update(trimmed).digest",
+          "lineNumber": 78
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update",
+          "lineNumber": 78
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash",
+          "lineNumber": 78
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "entries.push",
+          "lineNumber": 80
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "trimmed.slice",
+          "lineNumber": 82
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "(sessionMemory.filesAndFunctions ?? []).join",
+          "lineNumber": 83
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "err.trim",
+          "lineNumber": 95
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update(trimmed).digest(\"hex\").slice",
+          "lineNumber": 97
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update(trimmed).digest",
+          "lineNumber": 97
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update",
+          "lineNumber": 97
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash",
+          "lineNumber": 97
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "extractErrorSignatures",
+          "lineNumber": 99
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "entries.push",
+          "lineNumber": 101
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "trimmed.slice",
+          "lineNumber": 103
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "relatedFiles.join",
+          "lineNumber": 104
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "computeMemoryEmbedding",
+          "lineNumber": 119
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "EmbeddingCache.encodeEmbedding",
+          "lineNumber": 124
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "autoMemoryStore.upsert",
+          "lineNumber": 126
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "autoMemoryStore.buildIndex",
+          "lineNumber": 146
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "finalAnswer.trim",
+          "lineNumber": 176
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "parts.push",
+          "lineNumber": 177
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "finalAnswer.slice",
+          "lineNumber": 177
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "parts.push",
+          "lineNumber": 180
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "filePaths.slice(0, 10).join",
+          "lineNumber": 181
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "filePaths.slice",
+          "lineNumber": 181
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "parts.push",
+          "lineNumber": 185
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "errors.slice(0, 3).join",
+          "lineNumber": 185
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "errors.slice",
+          "lineNumber": 185
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "parts.push",
+          "lineNumber": 187
+        },
+        {
+          "caller": "buildShortSessionUser",
+          "callee": "parts.join",
+          "lineNumber": 195
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "text.match",
+          "lineNumber": 206
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "text.match",
+          "lineNumber": 207
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "stateMatch?.[1]?.trim",
+          "lineNumber": 211
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "errMatch?.[1]?.trim",
+          "lineNumber": 212
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "/skip|none/i.test",
+          "lineNumber": 215
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "errorsBlock.split",
+          "lineNumber": 216
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "line.replace(/^[-*]\\s*/, \"\").trim",
+          "lineNumber": 217
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "line.replace",
+          "lineNumber": 217
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "errorsAndFixes.push",
+          "lineNumber": 218
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "Date.now",
+          "lineNumber": 227
+        },
+        {
+          "caller": "parseShortSessionSummary",
+          "callee": "goal.slice",
+          "lineNumber": 228
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "HIGH_VALUE_GOAL_PATTERN.test",
+          "lineNumber": 258
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "sessionStore.load",
+          "lineNumber": 264
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "buildShortSessionUser",
+          "lineNumber": 268
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "completeAuxiliaryTask",
+          "lineNumber": 274
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "AbortSignal.timeout",
+          "lineNumber": 278
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "opts.workspaceRoot.split(\"/\").pop",
+          "lineNumber": 281
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "opts.workspaceRoot.split",
+          "lineNumber": 281
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "parseShortSessionSummary",
+          "lineNumber": 282
+        },
+        {
+          "caller": "maybeGenerateShortSessionMemory",
+          "callee": "sessionStore.save",
+          "lineNumber": 289
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/tool-runner.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 338,
+      "nonEmptyLines": 320,
+      "functions": [
+        {
+          "name": "toolNeedsApprovalGate",
+          "startLine": 71,
+          "endLine": 87,
+          "params": [
+            "tool",
+            "args",
+            "approvalPolicy",
+            "hasApprovalResolver"
+          ]
+        },
+        {
+          "name": "executeToolCalls",
+          "startLine": 102,
+          "endLine": 254,
+          "params": [
+            "calls",
+            "toolCtx",
+            "approvalCtx"
+          ]
+        },
+        {
+          "name": "finalizeToolExecution",
+          "startLine": 270,
+          "endLine": 338,
+          "params": [
+            "calls",
+            "results",
+            "ctx"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "executeToolCalls",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "finalizeToolExecution",
+          "line": 270,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "toolNeedsApprovalGate",
+          "callee": "approvalPolicy",
+          "lineNumber": 77
+        },
+        {
+          "caller": "toolNeedsApprovalGate",
+          "callee": "toolRequiresApproval",
+          "lineNumber": 86
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "calls.map",
+          "lineNumber": 109
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "isMutatingTool",
+          "lineNumber": 111
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "approvals.push",
+          "lineNumber": 120
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "toolNeedsApprovalGate",
+          "lineNumber": 123
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "toolCtx.emit",
+          "lineNumber": 133
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "approvalCtx.resolveToolApproval",
+          "lineNumber": 138
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "toolCtx.emit",
+          "lineNumber": 142
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "approvals.push",
+          "lineNumber": 147
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "toolCtx.emit",
+          "lineNumber": 150
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "toolCtx.emit",
+          "lineNumber": 155
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "approvals.push",
+          "lineNumber": 160
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "approvals.push",
+          "lineNumber": 164
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "calls.map",
+          "lineNumber": 170
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "isMutatingTool",
+          "lineNumber": 171
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "import",
+          "lineNumber": 178
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "Promise.all",
+          "lineNumber": 179
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "calls.map",
+          "lineNumber": 180
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "saveCheckpoint",
+          "lineNumber": 201
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "executeTool",
+          "lineNumber": 211
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "summarizer.summarizeForCall",
+          "lineNumber": 225
+        },
+        {
+          "caller": "executeToolCalls",
+          "callee": "toolCtx.emit",
+          "lineNumber": 237
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "ctx.emit",
+          "lineNumber": 293
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "formatToolResultEventDetail",
+          "lineNumber": 298
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "ctx.ctxMgr.addAssistant",
+          "lineNumber": 303
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "ctx.ctxMgr.addToolResults",
+          "lineNumber": 306
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "results.map",
+          "lineNumber": 307
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "ctx.ctxMgr.addUser",
+          "lineNumber": 320
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "ctx.ctxMgr.addAssistant",
+          "lineNumber": 321
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "calls.map((c) => c.tool).join",
+          "lineNumber": 328
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "calls.map",
+          "lineNumber": 328
+        },
+        {
+          "caller": "finalizeToolExecution",
+          "callee": "ctx.saveStateFn",
+          "lineNumber": 336
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 2,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/orchestrator/types.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 279,
+      "nonEmptyLines": 262,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/parse-agent-action.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 397,
+      "nonEmptyLines": 369,
+      "functions": [
+        {
+          "name": "extractJsonObjects",
+          "startLine": 88,
+          "endLine": 135,
+          "params": [
+            "text",
+            "scanWindow"
+          ]
+        },
+        {
+          "name": "findFencedCodeBlockRanges",
+          "startLine": 138,
+          "endLine": 150,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "scanAgentActions",
+          "startLine": 156,
+          "endLine": 170,
+          "params": [
+            "text",
+            "scanWindow",
+            "knownTools"
+          ]
+        },
+        {
+          "name": "toolCallDedupKey",
+          "startLine": 180,
+          "endLine": 185,
+          "params": [
+            "tool",
+            "args"
+          ]
+        },
+        {
+          "name": "parseAgentActionFromModelText",
+          "startLine": 195,
+          "endLine": 205,
+          "params": [
+            "text",
+            "opts"
+          ]
+        },
+        {
+          "name": "parseAgentActionsFromModelText",
+          "startLine": 219,
+          "endLine": 252,
+          "params": [
+            "text",
+            "opts"
+          ]
+        },
+        {
+          "name": "parseArguments",
+          "startLine": 259,
+          "endLine": 274,
+          "params": [
+            "v"
+          ]
+        },
+        {
+          "name": "parseActionFromJsonObject",
+          "startLine": 288,
+          "endLine": 390,
+          "params": [
+            "obj",
+            "knownTools"
+          ]
+        },
+        {
+          "name": "asRecord",
+          "startLine": 392,
+          "endLine": 397,
+          "params": [
+            "v"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "toolCallDedupKey",
+          "line": 180,
+          "isDefault": false
+        },
+        {
+          "name": "parseAgentActionFromModelText",
+          "line": 195,
+          "isDefault": false
+        },
+        {
+          "name": "parseAgentActionsFromModelText",
+          "line": 219,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "extractJsonObjects",
+          "callee": "findFencedCodeBlockRanges",
+          "lineNumber": 95
+        },
+        {
+          "caller": "extractJsonObjects",
+          "callee": "Math.max",
+          "lineNumber": 97
+        },
+        {
+          "caller": "extractJsonObjects",
+          "callee": "text.indexOf",
+          "lineNumber": 101
+        },
+        {
+          "caller": "extractJsonObjects",
+          "callee": "text.slice",
+          "lineNumber": 107
+        },
+        {
+          "caller": "extractJsonObjects",
+          "callee": "JSON.parse",
+          "lineNumber": 109
+        },
+        {
+          "caller": "extractJsonObjects",
+          "callee": "Array.isArray",
+          "lineNumber": 111
+        },
+        {
+          "caller": "extractJsonObjects",
+          "callee": "fencedRanges.some",
+          "lineNumber": 112
+        },
+        {
+          "caller": "extractJsonObjects",
+          "callee": "results.push",
+          "lineNumber": 115
+        },
+        {
+          "caller": "findFencedCodeBlockRanges",
+          "callee": "re.exec",
+          "lineNumber": 144
+        },
+        {
+          "caller": "findFencedCodeBlockRanges",
+          "callee": "m[0].indexOf",
+          "lineNumber": 145
+        },
+        {
+          "caller": "findFencedCodeBlockRanges",
+          "callee": "ranges.push",
+          "lineNumber": 147
+        },
+        {
+          "caller": "scanAgentActions",
+          "callee": "extractJsonObjects",
+          "lineNumber": 161
+        },
+        {
+          "caller": "scanAgentActions",
+          "callee": "parseActionFromJsonObject",
+          "lineNumber": 164
+        },
+        {
+          "caller": "scanAgentActions",
+          "callee": "actions.push",
+          "lineNumber": 166
+        },
+        {
+          "caller": "toolCallDedupKey",
+          "callee": "JSON.stringify",
+          "lineNumber": 184
+        },
+        {
+          "caller": "parseAgentActionFromModelText",
+          "callee": "scanAgentActions",
+          "lineNumber": 200
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "scanAgentActions",
+          "lineNumber": 227
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "toolCallDedupKey",
+          "lineNumber": 234
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "seen.has",
+          "lineNumber": 235
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "seen.add",
+          "lineNumber": 236
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "toolCalls.push",
+          "lineNumber": 237
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "toolRanges.push",
+          "lineNumber": 239
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "text.slice",
+          "lineNumber": 246
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "text.slice",
+          "lineNumber": 249
+        },
+        {
+          "caller": "parseAgentActionsFromModelText",
+          "callee": "prose.trim",
+          "lineNumber": 251
+        },
+        {
+          "caller": "parseArguments",
+          "callee": "Array.isArray",
+          "lineNumber": 260
+        },
+        {
+          "caller": "parseArguments",
+          "callee": "JSON.parse",
+          "lineNumber": 265
+        },
+        {
+          "caller": "parseArguments",
+          "callee": "Array.isArray",
+          "lineNumber": 266
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "knownTools.has",
+          "lineNumber": 303
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "asRecord",
+          "lineNumber": 306
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "parseArguments",
+          "lineNumber": 306
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "rawKind.toLowerCase().replace",
+          "lineNumber": 320
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "rawKind.toLowerCase",
+          "lineNumber": 320
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "asRecord",
+          "lineNumber": 335
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "Array.isArray",
+          "lineNumber": 353
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "Array.isArray",
+          "lineNumber": 355
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "Array.isArray",
+          "lineNumber": 359
+        },
+        {
+          "caller": "parseActionFromJsonObject",
+          "callee": "deprecatedRaw.filter",
+          "lineNumber": 360
+        },
+        {
+          "caller": "asRecord",
+          "callee": "Array.isArray",
+          "lineNumber": 393
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 9,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/resilience/circuit-breaker.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 202,
+      "nonEmptyLines": 181,
+      "classes": [
+        {
+          "name": "CircuitBreakerOpenError",
+          "startLine": 40,
+          "endLine": 56,
+          "methods": [
+            "constructor"
+          ],
+          "properties": [
+            "label",
+            "state",
+            "lastFailureAt",
+            "failures"
+          ]
+        },
+        {
+          "name": "CircuitBreaker",
+          "startLine": 76,
+          "endLine": 202,
+          "methods": [
+            "constructor",
+            "state",
+            "guard",
+            "recordSuccess",
+            "recordFailure",
+            "snapshot",
+            "reset",
+            "tryTransitionToHalfOpen",
+            "transitionToOpen",
+            "transitionToClosed"
+          ],
+          "properties": [
+            "label",
+            "_state",
+            "failures",
+            "successes",
+            "lastFailureAt",
+            "lastSuccessAt",
+            "halfOpenCalls",
+            "openedAt",
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "CircuitBreakerOpenError",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "CircuitBreaker",
+          "line": 76,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 47
+        },
+        {
+          "caller": "state",
+          "callee": "this.tryTransitionToHalfOpen",
+          "lineNumber": 98
+        },
+        {
+          "caller": "guard",
+          "callee": "this.snapshot",
+          "lineNumber": 113
+        },
+        {
+          "caller": "guard",
+          "callee": "this.snapshot",
+          "lineNumber": 120
+        },
+        {
+          "caller": "recordSuccess",
+          "callee": "Date.now",
+          "lineNumber": 130
+        },
+        {
+          "caller": "recordSuccess",
+          "callee": "this.transitionToClosed",
+          "lineNumber": 134
+        },
+        {
+          "caller": "recordFailure",
+          "callee": "Date.now",
+          "lineNumber": 144
+        },
+        {
+          "caller": "recordFailure",
+          "callee": "this.transitionToOpen",
+          "lineNumber": 148
+        },
+        {
+          "caller": "recordFailure",
+          "callee": "this.transitionToOpen",
+          "lineNumber": 154
+        },
+        {
+          "caller": "tryTransitionToHalfOpen",
+          "callee": "Date.now",
+          "lineNumber": 184
+        },
+        {
+          "caller": "transitionToOpen",
+          "callee": "Date.now",
+          "lineNumber": 192
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 2
+      }
+    },
+    {
+      "path": "packages/agent/src/resolve-max-steps.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 57,
+      "nonEmptyLines": 53,
+      "functions": [
+        {
+          "name": "parseMaxSteps",
+          "startLine": 22,
+          "endLine": 31,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "resolveMaxSteps",
+          "startLine": 41,
+          "endLine": 57,
+          "params": [
+            "workspaceRoot",
+            "override"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolveMaxSteps",
+          "line": 41,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "parseMaxSteps",
+          "callee": "Number.isFinite",
+          "lineNumber": 25
+        },
+        {
+          "caller": "parseMaxSteps",
+          "callee": "Math.min",
+          "lineNumber": 28
+        },
+        {
+          "caller": "parseMaxSteps",
+          "callee": "Math.floor",
+          "lineNumber": 28
+        },
+        {
+          "caller": "resolveMaxSteps",
+          "callee": "Number.isFinite",
+          "lineNumber": 46
+        },
+        {
+          "caller": "resolveMaxSteps",
+          "callee": "Math.min",
+          "lineNumber": 49
+        },
+        {
+          "caller": "resolveMaxSteps",
+          "callee": "Math.floor",
+          "lineNumber": 49
+        },
+        {
+          "caller": "resolveMaxSteps",
+          "callee": "readSetting",
+          "lineNumber": 51
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/resolve-memory-retrieval.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 76,
+      "nonEmptyLines": 67,
+      "functions": [
+        {
+          "name": "parseMemoryRetrievalMode",
+          "startLine": 21,
+          "endLine": 26,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "resolveMemoryRetrievalSettings",
+          "startLine": 32,
+          "endLine": 42,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "toRetrieveMemoriesOptions",
+          "startLine": 58,
+          "endLine": 76,
+          "params": [
+            "settings",
+            "runtime"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolveMemoryRetrievalSettings",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "toRetrieveMemoriesOptions",
+          "line": 58,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "resolveMemoryRetrievalSettings",
+          "callee": "readSetting",
+          "lineNumber": 35
+        },
+        {
+          "caller": "toRetrieveMemoriesOptions",
+          "callee": "createDeepSeekFlashModel",
+          "lineNumber": 67
+        },
+        {
+          "caller": "toRetrieveMemoriesOptions",
+          "callee": "createLlmMemorySelectFn",
+          "lineNumber": 74
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/resolve-plan-snapshot-max-items.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 37,
+      "nonEmptyLines": 34,
+      "functions": [
+        {
+          "name": "parsePlanSnapshotMaxItems",
+          "startLine": 11,
+          "endLine": 21,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "resolvePlanSnapshotMaxItems",
+          "startLine": 28,
+          "endLine": 37,
+          "params": [
+            "workspaceRoot"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolvePlanSnapshotMaxItems",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "parsePlanSnapshotMaxItems",
+          "callee": "Number.isFinite",
+          "lineNumber": 14
+        },
+        {
+          "caller": "parsePlanSnapshotMaxItems",
+          "callee": "Number.isInteger",
+          "lineNumber": 15
+        },
+        {
+          "caller": "resolvePlanSnapshotMaxItems",
+          "callee": "readSetting",
+          "lineNumber": 31
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/resolve-shell-sandbox.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 113,
+      "nonEmptyLines": 103,
+      "functions": [
+        {
+          "name": "parseSandboxMode",
+          "startLine": 41,
+          "endLine": 50,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "parseSandboxNetwork",
+          "startLine": 52,
+          "endLine": 57,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "parseSandboxConfig",
+          "startLine": 59,
+          "endLine": 97,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "resolveShellSandboxConfig",
+          "startLine": 104,
+          "endLine": 113,
+          "params": [
+            "workspaceRoot"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolveShellSandboxConfig",
+          "line": 104,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "Array.isArray",
+          "lineNumber": 60
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "parseSandboxMode",
+          "lineNumber": 65
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "raw.image.trim",
+          "lineNumber": 77
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "raw.image.trim",
+          "lineNumber": 78
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "Number.isFinite",
+          "lineNumber": 81
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "Math.max",
+          "lineNumber": 82
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "Math.floor",
+          "lineNumber": 82
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "Number.isFinite",
+          "lineNumber": 85
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "Math.max",
+          "lineNumber": 86
+        },
+        {
+          "caller": "parseSandboxConfig",
+          "callee": "parseSandboxNetwork",
+          "lineNumber": 91
+        },
+        {
+          "caller": "resolveShellSandboxConfig",
+          "callee": "readSetting",
+          "lineNumber": 107
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/session.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 194,
+      "nonEmptyLines": 175,
+      "functions": [
+        {
+          "name": "createRunSessionController",
+          "startLine": 53,
+          "endLine": 93,
+          "params": []
+        },
+        {
+          "name": "createPersistentSession",
+          "startLine": 127,
+          "endLine": 194,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "createRunSessionController",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "createPersistentSession",
+          "line": 127,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "abortIfRunning",
+          "callee": "ac.abort",
+          "lineNumber": 89
+        },
+        {
+          "caller": "createPersistentSession",
+          "callee": "Date.now",
+          "lineNumber": 131
+        },
+        {
+          "caller": "createPersistentSession",
+          "callee": "createRunOrchestrator",
+          "lineNumber": 134
+        },
+        {
+          "caller": "createPersistentSession",
+          "callee": "path.join",
+          "lineNumber": 147
+        },
+        {
+          "caller": "submit",
+          "callee": "appStateStore.load",
+          "lineNumber": 154
+        },
+        {
+          "caller": "submit",
+          "callee": "orch.run",
+          "lineNumber": 160
+        },
+        {
+          "caller": "submit",
+          "callee": "orch.run",
+          "lineNumber": 174
+        },
+        {
+          "caller": "dispose",
+          "callee": "watcher.stop",
+          "lineNumber": 184
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/settings.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 116,
+      "nonEmptyLines": 110,
+      "functions": [
+        {
+          "name": "readSetting",
+          "startLine": 34,
+          "endLine": 50,
+          "params": [
+            "workspaceRoot",
+            "selector",
+            "defaultValue",
+            "parse"
+          ]
+        },
+        {
+          "name": "readPawSettingsLocal",
+          "startLine": 53,
+          "endLine": 61,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "readEmbeddingConfig",
+          "startLine": 64,
+          "endLine": 77,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "computeMemoryEmbedding",
+          "startLine": 85,
+          "endLine": 97,
+          "params": [
+            "workspaceRoot",
+            "input"
+          ]
+        },
+        {
+          "name": "computeQueryEmbedding",
+          "startLine": 104,
+          "endLine": 116,
+          "params": [
+            "workspaceRoot",
+            "query"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "readSetting",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "readPawSettingsLocal",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "readEmbeddingConfig",
+          "line": 64,
+          "isDefault": false
+        },
+        {
+          "name": "computeMemoryEmbedding",
+          "line": 85,
+          "isDefault": false
+        },
+        {
+          "name": "computeQueryEmbedding",
+          "line": 104,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "readSetting",
+          "callee": "loadPawSettingsLocal",
+          "lineNumber": 41
+        },
+        {
+          "caller": "readSetting",
+          "callee": "defaultSettingsPath",
+          "lineNumber": 41
+        },
+        {
+          "caller": "readSetting",
+          "callee": "parse",
+          "lineNumber": 42
+        },
+        {
+          "caller": "readSetting",
+          "callee": "selector",
+          "lineNumber": 42
+        },
+        {
+          "caller": "readPawSettingsLocal",
+          "callee": "loadPawSettingsLocal",
+          "lineNumber": 57
+        },
+        {
+          "caller": "readPawSettingsLocal",
+          "callee": "defaultSettingsPath",
+          "lineNumber": 57
+        },
+        {
+          "caller": "readEmbeddingConfig",
+          "callee": "readPawSettingsLocal",
+          "lineNumber": 67
+        },
+        {
+          "caller": "readEmbeddingConfig",
+          "callee": "resolveEmbeddingConfig",
+          "lineNumber": 70
+        },
+        {
+          "caller": "computeMemoryEmbedding",
+          "callee": "readEmbeddingConfig",
+          "lineNumber": 89
+        },
+        {
+          "caller": "computeMemoryEmbedding",
+          "callee": "cache.computeMemoryEmbedding",
+          "lineNumber": 93
+        },
+        {
+          "caller": "computeQueryEmbedding",
+          "callee": "readEmbeddingConfig",
+          "lineNumber": 108
+        },
+        {
+          "caller": "computeQueryEmbedding",
+          "callee": "cache.computeEmbedding",
+          "lineNumber": 112
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 5,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/src/stub-run.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 244,
+      "nonEmptyLines": 227,
+      "functions": [
+        {
+          "name": "formatStubRunResult",
+          "startLine": 45,
+          "endLine": 60,
+          "params": [
+            "result",
+            "format"
+          ]
+        },
+        {
+          "name": "buildSessionContext",
+          "startLine": 62,
+          "endLine": 88,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "buildAppStateContext",
+          "startLine": 90,
+          "endLine": 127,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "doRun",
+          "startLine": 129,
+          "endLine": 184,
+          "params": [
+            "goal",
+            "workspaceRoot",
+            "options"
+          ]
+        },
+        {
+          "name": "runStubRun",
+          "startLine": 186,
+          "endLine": 207,
+          "params": [
+            "goal",
+            "options"
+          ]
+        },
+        {
+          "name": "formatDoctorOutput",
+          "startLine": 209,
+          "endLine": 225,
+          "params": [
+            "root"
+          ]
+        },
+        {
+          "name": "formatFsReadOutput",
+          "startLine": 227,
+          "endLine": 234,
+          "params": [
+            "root",
+            "rel"
+          ]
+        },
+        {
+          "name": "formatFsListOutput",
+          "startLine": 236,
+          "endLine": 244,
+          "params": [
+            "root",
+            "dir",
+            "recursive"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "AskUserResolveInput",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "ToolApprovalInput",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "runStubRun",
+          "line": 186,
+          "isDefault": false
+        },
+        {
+          "name": "formatDoctorOutput",
+          "line": 209,
+          "isDefault": false
+        },
+        {
+          "name": "formatFsReadOutput",
+          "line": 227,
+          "isDefault": false
+        },
+        {
+          "name": "formatFsListOutput",
+          "line": 236,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "formatStubRunResult",
+          "callee": "JSON.stringify",
+          "lineNumber": 58
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "sessionStore.loadLatest",
+          "lineNumber": 65
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "task.includes",
+          "lineNumber": 69
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "task.includes",
+          "lineNumber": 70
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "parts.push",
+          "lineNumber": 76
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "parts.push",
+          "lineNumber": 78
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "parts.push",
+          "lineNumber": 80
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "latest.keyDecisions.join",
+          "lineNumber": 80
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "parts.push",
+          "lineNumber": 82
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "latest.filesAndFunctions.join",
+          "lineNumber": 82
+        },
+        {
+          "caller": "buildSessionContext",
+          "callee": "parts.join",
+          "lineNumber": 84
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "path.join",
+          "lineNumber": 92
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "stateStore.list",
+          "lineNumber": 94
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "list.find",
+          "lineNumber": 96
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "isAppStateFinished",
+          "lineNumber": 96
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "parts.push",
+          "lineNumber": 102
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "parts.push",
+          "lineNumber": 103
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "(\n        latest.plan?.items as Array<{\n          id?: string;\n          content?: string;\n          status?: string;\n        }>\n      ).map",
+          "lineNumber": 105
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "parts.push",
+          "lineNumber": 115
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "planItems.join",
+          "lineNumber": 115
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "latest.outcome.message?.slice",
+          "lineNumber": 118
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "parts.push",
+          "lineNumber": 120
+        },
+        {
+          "caller": "buildAppStateContext",
+          "callee": "parts.join",
+          "lineNumber": 123
+        },
+        {
+          "caller": "doRun",
+          "callee": "createRunOrchestrator",
+          "lineNumber": 134
+        },
+        {
+          "caller": "doRun",
+          "callee": "buildSessionContext",
+          "lineNumber": 147
+        },
+        {
+          "caller": "doRun",
+          "callee": "buildAppStateContext",
+          "lineNumber": 148
+        },
+        {
+          "caller": "doRun",
+          "callee": "[sessionCtx, stateCtx].filter",
+          "lineNumber": 149
+        },
+        {
+          "caller": "doRun",
+          "callee": "contextParts.join",
+          "lineNumber": 151
+        },
+        {
+          "caller": "doRun",
+          "callee": "Date.now",
+          "lineNumber": 155
+        },
+        {
+          "caller": "doRun",
+          "callee": "rs.begin",
+          "lineNumber": 168
+        },
+        {
+          "caller": "doRun",
+          "callee": "orch.run",
+          "lineNumber": 170
+        },
+        {
+          "caller": "doRun",
+          "callee": "formatStubRunResult",
+          "lineNumber": 171
+        },
+        {
+          "caller": "doRun",
+          "callee": "rs.end",
+          "lineNumber": 173
+        },
+        {
+          "caller": "doRun",
+          "callee": "orch.run",
+          "lineNumber": 176
+        },
+        {
+          "caller": "doRun",
+          "callee": "formatStubRunResult",
+          "lineNumber": 180
+        },
+        {
+          "caller": "doRun",
+          "callee": "watcher.stop",
+          "lineNumber": 182
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "(() => {\n    const given = options?.workspaceRoot?.trim()\n      ? path.resolve(options.workspaceRoot)\n      : path.resolve(\".\");\n    return findPawRoot(given) ?? given;\n  })",
+          "lineNumber": 190
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "options?.workspaceRoot?.trim",
+          "lineNumber": 191
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "path.resolve",
+          "lineNumber": 192
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "path.resolve",
+          "lineNumber": 193
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "findPawRoot",
+          "lineNumber": 194
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "createTemporaryWorktree",
+          "lineNumber": 198
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "doRun",
+          "lineNumber": 200
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "wt.cleanup",
+          "lineNumber": 202
+        },
+        {
+          "caller": "runStubRun",
+          "callee": "doRun",
+          "lineNumber": 206
+        },
+        {
+          "caller": "formatDoctorOutput",
+          "callee": "defaultSettingsPath",
+          "lineNumber": 213
+        },
+        {
+          "caller": "formatDoctorOutput",
+          "callee": "loadPawSettingsLocal",
+          "lineNumber": 215
+        },
+        {
+          "caller": "formatDoctorOutput",
+          "callee": "[\n      `workspace: ${root}`,\n      `settings:  ${settingsPath}`,\n      JSON.stringify(redactSettingsForDisplay(s), null, 2),\n    ].join",
+          "lineNumber": 216
+        },
+        {
+          "caller": "formatDoctorOutput",
+          "callee": "JSON.stringify",
+          "lineNumber": 219
+        },
+        {
+          "caller": "formatDoctorOutput",
+          "callee": "redactSettingsForDisplay",
+          "lineNumber": 219
+        },
+        {
+          "caller": "formatDoctorOutput",
+          "callee": "String",
+          "lineNumber": 223
+        },
+        {
+          "caller": "formatFsReadOutput",
+          "callee": "readWorkspaceFile",
+          "lineNumber": 231
+        },
+        {
+          "caller": "formatFsReadOutput",
+          "callee": "JSON.stringify",
+          "lineNumber": 232
+        },
+        {
+          "caller": "formatFsListOutput",
+          "callee": "listWorkspaceFiles",
+          "lineNumber": 241
+        },
+        {
+          "caller": "formatFsListOutput",
+          "callee": "JSON.stringify",
+          "lineNumber": 242
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 6,
+        "functionCount": 8,
+        "classCount": 0
+      }
+    }
+  ]
+}

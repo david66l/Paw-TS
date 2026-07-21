@@ -1,0 +1,377 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 5,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/settings/src/credentials.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 210,
+      "nonEmptyLines": 195,
+      "functions": [
+        {
+          "name": "resolveModel",
+          "startLine": 66,
+          "endLine": 83,
+          "params": [
+            "settings",
+            "provider",
+            "fallback"
+          ]
+        },
+        {
+          "name": "resolveApiKey",
+          "startLine": 97,
+          "endLine": 113,
+          "params": [
+            "settings",
+            "provider"
+          ]
+        },
+        {
+          "name": "resolveBaseUrl",
+          "startLine": 127,
+          "endLine": 140,
+          "params": [
+            "settings",
+            "provider"
+          ]
+        },
+        {
+          "name": "hasApiKey",
+          "startLine": 149,
+          "endLine": 154,
+          "params": [
+            "settings",
+            "provider"
+          ]
+        },
+        {
+          "name": "redactSecrets",
+          "startLine": 165,
+          "endLine": 195,
+          "params": [
+            "settings"
+          ]
+        },
+        {
+          "name": "maskKey",
+          "startLine": 205,
+          "endLine": 210,
+          "params": [
+            "v"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolveModel",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "resolveApiKey",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "resolveBaseUrl",
+          "line": 127,
+          "isDefault": false
+        },
+        {
+          "name": "hasApiKey",
+          "line": 149,
+          "isDefault": false
+        },
+        {
+          "name": "redactSecrets",
+          "line": 165,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "resolveModel",
+          "callee": "fromModels.trim",
+          "lineNumber": 73
+        },
+        {
+          "caller": "resolveModel",
+          "callee": "fromModels.trim",
+          "lineNumber": 74
+        },
+        {
+          "caller": "resolveModel",
+          "callee": "topLevel.trim",
+          "lineNumber": 78
+        },
+        {
+          "caller": "resolveModel",
+          "callee": "topLevel.trim",
+          "lineNumber": 79
+        },
+        {
+          "caller": "resolveApiKey",
+          "callee": "fromModels.trim",
+          "lineNumber": 103
+        },
+        {
+          "caller": "resolveApiKey",
+          "callee": "fromModels.trim",
+          "lineNumber": 104
+        },
+        {
+          "caller": "resolveApiKey",
+          "callee": "legacy.trim",
+          "lineNumber": 108
+        },
+        {
+          "caller": "resolveApiKey",
+          "callee": "legacy.trim",
+          "lineNumber": 109
+        },
+        {
+          "caller": "resolveApiKey",
+          "callee": "process.env[API_KEY_ENVS[provider]]?.trim",
+          "lineNumber": 112
+        },
+        {
+          "caller": "resolveBaseUrl",
+          "callee": "fromModels.trim",
+          "lineNumber": 132
+        },
+        {
+          "caller": "resolveBaseUrl",
+          "callee": "fromModels.trim",
+          "lineNumber": 133
+        },
+        {
+          "caller": "resolveBaseUrl",
+          "callee": "legacy.trim",
+          "lineNumber": 136
+        },
+        {
+          "caller": "resolveBaseUrl",
+          "callee": "legacy.trim",
+          "lineNumber": 137
+        },
+        {
+          "caller": "resolveBaseUrl",
+          "callee": "process.env[BASE_URL_ENVS[provider]]?.trim",
+          "lineNumber": 139
+        },
+        {
+          "caller": "hasApiKey",
+          "callee": "resolveApiKey",
+          "lineNumber": 153
+        },
+        {
+          "caller": "redactSecrets",
+          "callee": "Object.entries",
+          "lineNumber": 171
+        },
+        {
+          "caller": "redactSecrets",
+          "callee": "maskKey",
+          "lineNumber": 175
+        },
+        {
+          "caller": "redactSecrets",
+          "callee": "Object.keys",
+          "lineNumber": 186
+        },
+        {
+          "caller": "redactSecrets",
+          "callee": "maskKey",
+          "lineNumber": 190
+        },
+        {
+          "caller": "maskKey",
+          "callee": "v.slice",
+          "lineNumber": 209
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 5,
+        "functionCount": 6,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/settings/src/load.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 69,
+      "nonEmptyLines": 61,
+      "functions": [
+        {
+          "name": "defaultSettingsPath",
+          "startLine": 16,
+          "endLine": 18,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "loadPawSettingsLocal",
+          "startLine": 20,
+          "endLine": 50,
+          "params": [
+            "filePath"
+          ]
+        },
+        {
+          "name": "redactSettingsForDisplay",
+          "startLine": 55,
+          "endLine": 59,
+          "params": [
+            "s"
+          ]
+        },
+        {
+          "name": "savePawSettingsLocal",
+          "startLine": 62,
+          "endLine": 69,
+          "params": [
+            "filePath",
+            "settings"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "defaultSettingsPath",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "loadPawSettingsLocal",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "redactSettingsForDisplay",
+          "line": 55,
+          "isDefault": false
+        },
+        {
+          "name": "savePawSettingsLocal",
+          "line": 62,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "defaultSettingsPath",
+          "callee": "path.join",
+          "lineNumber": 17
+        },
+        {
+          "caller": "loadPawSettingsLocal",
+          "callee": "fs.readFileSync",
+          "lineNumber": 23
+        },
+        {
+          "caller": "loadPawSettingsLocal",
+          "callee": "JSON.parse",
+          "lineNumber": 33
+        },
+        {
+          "caller": "loadPawSettingsLocal",
+          "callee": "pawSettingsLocalSchema.safeParse",
+          "lineNumber": 41
+        },
+        {
+          "caller": "loadPawSettingsLocal",
+          "callee": "parsed.error.flatten",
+          "lineNumber": 46
+        },
+        {
+          "caller": "redactSettingsForDisplay",
+          "callee": "redactSecrets",
+          "lineNumber": 58
+        },
+        {
+          "caller": "savePawSettingsLocal",
+          "callee": "path.dirname",
+          "lineNumber": 66
+        },
+        {
+          "caller": "savePawSettingsLocal",
+          "callee": "fs.mkdirSync",
+          "lineNumber": 67
+        },
+        {
+          "caller": "savePawSettingsLocal",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 68
+        },
+        {
+          "caller": "savePawSettingsLocal",
+          "callee": "JSON.stringify",
+          "lineNumber": 68
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/settings/src/schema.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 105,
+      "nonEmptyLines": 100,
+      "exports": [
+        {
+          "name": "modelConfigSchema",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "pawSettingsLocalSchema",
+          "line": 46,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/settings/test/credentials.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 120,
+      "nonEmptyLines": 107,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/settings/test/load.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 38,
+      "nonEmptyLines": 34,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

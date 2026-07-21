@@ -1,0 +1,61 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/harness/src/registry/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/harness/src/registry/index.ts",
+      "summary": "工具注册表的公共导出入口，集中 re-export 工具定义常量（toolDefinitions、toolNameReverseMap 等）、工具执行函数 executeTool 及相关类型。",
+      "tags": ["barrel", "entry-point", "tool-registry", "re-export"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/harness/test/registry.test.ts",
+      "type": "file",
+      "name": "registry.test.ts",
+      "filePath": "packages/harness/test/registry.test.ts",
+      "summary": "工具执行系统的综合测试套件，覆盖 workspace.read_file、workspace.run_shell_command 等核心工具的端到端测试，包括权限检查、沙箱执行和错误处理。",
+      "tags": ["test", "tool-execution", "sandbox", "registry"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/harness/test/sub-agent.test.ts",
+      "type": "file",
+      "name": "sub-agent.test.ts",
+      "filePath": "packages/harness/test/sub-agent.test.ts",
+      "summary": "子 Agent 启动（run_agent）工具的功能测试，验证启动器未配置时的错误返回、缺少 goal 参数的错误处理以及正常启动流程。",
+      "tags": ["test", "sub-agent", "tool-execution"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/harness/test/registry.test.ts",
+      "target": "file:packages/harness/src/registry/index.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/harness/test/sub-agent.test.ts",
+      "target": "file:packages/harness/src/registry/index.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/harness/test/registry.test.ts",
+      "target": "file:packages/harness/src/registry/index.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/harness/test/sub-agent.test.ts",
+      "target": "file:packages/harness/src/registry/index.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

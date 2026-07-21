@@ -19,9 +19,12 @@
  * artifacts → facts → parentConclusions(保留 high 置信度) → constraints
  */
 
-import type { AgentToolCallAction, ChatMessage, ContextManager } from "@paw/core";
+import type {
+  AgentToolCallAction,
+  ChatMessage,
+  ContextManager,
+} from "@paw/core";
 import { CONTEXT_SUMMARY_PREFIX } from "@paw/core";
-import { SHARED_CONTEXT_BUDGET } from "./constants.js";
 import {
   type AgentType,
   buildOutputFormat,
@@ -29,6 +32,7 @@ import {
   parseAgentType,
   parseChildPolicy,
 } from "./agent-args.js";
+import { SHARED_CONTEXT_BUDGET } from "./constants.js";
 import type { ContextArtifact, SharedContext } from "./types.js";
 
 /** ContextSummarizer 接口：支持两种调用方式 */
@@ -51,9 +55,9 @@ const FILE_BLOCK_RE = /<file path="([^"]+)">\s*([\s\S]*?)<\/file>/g;
 
 /** 噪音消息前缀：这些消息不包含有价值的上下文信息 */
 const NOISE_PREFIXES = [
-  "[Tool ",                    // 工具结果
-  "[Context from previous session]",  // 断点恢复的上下文前缀
-  "[Previous session context]",       // 上一会话的上下文
+  "[Tool ", // 工具结果
+  "[Context from previous session]", // 断点恢复的上下文前缀
+  "[Previous session context]", // 上一会话的上下文
 ];
 
 /** 粗糙的 token 估算：英文约 4 字符/token */
@@ -72,7 +76,8 @@ function estimateSharedContextTokens(ctx: SharedContext): number {
   tokens += estimateTokens(JSON.stringify(ctx.state));
   tokens += estimateTokens(ctx.outputFormat);
   if (ctx.parentConclusions) {
-    for (const c of ctx.parentConclusions) tokens += estimateTokens(c.conclusion);
+    for (const c of ctx.parentConclusions)
+      tokens += estimateTokens(c.conclusion);
   }
   return tokens;
 }
@@ -85,7 +90,8 @@ function messageContent(m: ChatMessage): string {
 function isNoiseContent(content: string): boolean {
   if (content.trim().length === 0) return true;
   if (NOISE_PREFIXES.some((p) => content.startsWith(p))) return true;
-  if (content.startsWith("[Tool ") && content.includes(" completed]")) return true;
+  if (content.startsWith("[Tool ") && content.includes(" completed]"))
+    return true;
   return false;
 }
 
@@ -93,7 +99,9 @@ function isNoiseContent(content: string): boolean {
  * 从消息列表中提取父 Agent 的原始目标。
  * 跳过噪音消息和 <files> 块，返回第一条有意义的 user 消息的前 300 字符。
  */
-function extractParentGoal(messages: readonly ChatMessage[]): string | undefined {
+function extractParentGoal(
+  messages: readonly ChatMessage[],
+): string | undefined {
   for (const m of messages) {
     if (m.role !== "user") continue;
     const content = messageContent(m);
@@ -162,7 +170,11 @@ function extractUserConstraints(messages: readonly ChatMessage[]): string[] {
     for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.length < 8 || trimmed.length > 120) continue;
-      if (!/(must|never|always|don't|do not|avoid|禁止|必须|不要|不能)/i.test(trimmed)) {
+      if (
+        !/(must|never|always|don't|do not|avoid|禁止|必须|不要|不能)/i.test(
+          trimmed,
+        )
+      ) {
         continue;
       }
       const key = trimmed.toLowerCase();
@@ -231,7 +243,9 @@ function extractParentConclusions(
     const content = messageContent(m);
 
     // 匹配 ## Key Decisions 段落
-    const keyDecisions = content.match(/## Key Decisions\s*\n([\s\S]*?)(?:\n##|$)/);
+    const keyDecisions = content.match(
+      /## Key Decisions\s*\n([\s\S]*?)(?:\n##|$)/,
+    );
     if (keyDecisions?.[1]) {
       for (const line of keyDecisions[1].split("\n")) {
         const text = line.replace(/^-\s*/, "").trim();
@@ -352,7 +366,10 @@ export class DefaultContextSummarizer implements ContextSummarizer {
   ): SharedContext {
     const messages = ctx.buildMessages();
 
-    const facts = extractFacts(messages).slice(0, SHARED_CONTEXT_BUDGET.maxFacts);
+    const facts = extractFacts(messages).slice(
+      0,
+      SHARED_CONTEXT_BUDGET.maxFacts,
+    );
     const constraints = extractUserConstraints(messages);
     const artifacts = truncateArtifacts(extractArtifacts(messages));
     const parentConclusions =
@@ -391,7 +408,10 @@ export class DefaultContextSummarizer implements ContextSummarizer {
    * 从 AgentToolCallAction 中提取参数后调用 summarize。
    * 这是 action-handlers 中 handleRunAgent 的主要调用方式。
    */
-  summarizeForCall(ctx: ContextManager, call: AgentToolCallAction): SharedContext {
+  summarizeForCall(
+    ctx: ContextManager,
+    call: AgentToolCallAction,
+  ): SharedContext {
     const args =
       call.args && typeof call.args === "object"
         ? (call.args as Record<string, unknown>)
@@ -402,8 +422,19 @@ export class DefaultContextSummarizer implements ContextSummarizer {
         : String(args?.goal ?? "").trim();
     const agentType = parseAgentType(args);
     const childPolicy = parseChildPolicy(args);
-    return this.summarize(ctx, goal, agentType, {
+    const shared = this.summarize(ctx, goal, agentType, {
       ...(childPolicy ? { childPolicy } : {}),
     });
+    // agent_id 命中注册表 Spec 时，launcher 会用 Spec prompt 重建 role/outputFormat，
+    // 这里按 agent_type 生成的英文模板只会被丢弃 —— 直接清空，避免误导下游。
+    const hasSpecId =
+      typeof args?.agent_id === "string" ||
+      typeof args?.agentId === "string" ||
+      typeof args?.spec_id === "string" ||
+      typeof args?.specId === "string";
+    if (hasSpecId) {
+      return { ...shared, role: "", outputFormat: "" };
+    }
+    return shared;
   }
 }

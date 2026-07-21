@@ -126,7 +126,11 @@ export type { EvalHooks } from "./eval-hooks.js";
 // ============================================================
 // 运行事件
 // ============================================================
-export type { RunEvent, RunEventEnvelope } from "./run-events.js";
+export type {
+  RunEvent,
+  RunEventEnvelope,
+  ToolFileChange,
+} from "./run-events.js";
 
 // ============================================================
 // 运行指标
@@ -149,7 +153,10 @@ export {
   estimateMessageTokens,
   estimateMessagesTokens,
 } from "./token-estimate.js";
-export { ApproximateEstimator, type TokenEstimator } from "./token-estimator.js";
+export {
+  ApproximateEstimator,
+  type TokenEstimator,
+} from "./token-estimator.js";
 
 // ============================================================
 // 上下文裁剪
@@ -163,7 +170,11 @@ export {
 // ============================================================
 // 工具结果格式与存储
 // ============================================================
-export { isToolResultMessage, parseToolResult, splitToolBlocks } from "./tool-result/format.js";
+export {
+  isToolResultMessage,
+  parseToolResult,
+  splitToolBlocks,
+} from "./tool-result/format.js";
 export {
   DEFAULT_KEEP_RECENT_TOOLS,
   DEFAULT_MAX_TOOL_OUTPUT_BYTES,
@@ -270,6 +281,7 @@ export {
 // 检查点（文件状态快照与回滚）
 // ============================================================
 export {
+  extractCheckpointTargets,
   isMutatingTool,
   listCheckpoints,
   restoreCheckpoint,
@@ -287,6 +299,9 @@ export {
   type ProjectMemory,
   extractCleanMemoryQuery,
   extractFilePaths,
+  buildConversationAwareQuery,
+  isLowValueChitchat,
+  isWorthWritingLongTermMemory,
   type MemoryRecord,
   type MemorySource,
   type MemoryScope,

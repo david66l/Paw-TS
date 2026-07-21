@@ -1,0 +1,11 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "fine_tune/README.md", "language": "markdown", "sizeLines": 61, "fileCategory": "docs"},
+    {"path": "fine_tune/dataset_info.json", "language": "json", "sizeLines": 24, "fileCategory": "config"},
+    {"path": "fine_tune/eval_comparison.sh", "language": "shell", "sizeLines": 22, "fileCategory": "script"},
+    {"path": "fine_tune/lora_config.yaml", "language": "yaml", "sizeLines": 41, "fileCategory": "config"},
+    {"path": "fine_tune/run_validation.sh", "language": "shell", "sizeLines": 27, "fileCategory": "script"}
+  ],
+  "batchImportData": {"fine_tune/README.md": [], "fine_tune/dataset_info.json": [], "fine_tune/eval_comparison.sh": [], "fine_tune/lora_config.yaml": [], "fine_tune/run_validation.sh": []}
+}

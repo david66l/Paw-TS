@@ -10,6 +10,7 @@ import { memoryItemDao } from "../../dao/memoryItem.js";
 import type { MemoryItem, MemoryType, MemoryStatus } from "../../types.js";
 import { PolicyEngine, type RetrievalPolicy } from "../platform/policyEngine.js";
 import { NGramEmbeddingService, cosineSimilarity } from "../platform/embeddingService.js";
+import { tokenizeForMemoryScore } from "../../../shared/memory-quality.js";
 
 export interface RetrievalRequest {
   taskId: string;
@@ -27,6 +28,46 @@ export interface RetrievalResult {
   retrievalMode: "memory_only" | "hybrid";
 }
 
+export type ScoredMemory = {
+  memory: MemoryItem;
+  score: number;
+  matchReasons: string[];
+};
+
+/** 类型配额：偏好优先，限制 task_summary 噪声 */
+const TYPE_QUOTA: Record<string, number> = {
+  user_preference: 3,
+  decision: 2,
+  failure: 2,
+  project_knowledge: 2,
+  rule: 2,
+  skill: 1,
+  task_summary: 1,
+};
+
+/**
+ * 按类型配额截断已排序（高分在前）的列表。
+ * 导出供单测。
+ */
+export function applyTypeQuotas(
+  scored: readonly ScoredMemory[],
+  limit: number,
+): ScoredMemory[] {
+  const used: Record<string, number> = {};
+  const out: ScoredMemory[] = [];
+  for (const s of scored) {
+    if (out.length >= limit) break;
+    const t = s.memory.type || "unknown";
+    const cap = TYPE_QUOTA[t] ?? 2;
+    const n = used[t] ?? 0;
+    if (n >= cap) continue;
+    used[t] = n + 1;
+    // task_summary 降权展示：已在 keywordScore 侧可选处理；此处只配额
+    out.push(s);
+  }
+  return out;
+}
+
 export class MemoryRetriever {
   private policy: RetrievalPolicy;
   private embedder = new NGramEmbeddingService();
@@ -38,6 +79,12 @@ export class MemoryRetriever {
   async retrieve(req: RetrievalRequest): Promise<RetrievalResult> {
     const limit = req.limit ?? this.policy.topK;
     const minConfidence = req.minConfidence ?? this.policy.minScore;
+    const query = (req.query ?? "").trim();
+
+    // 空查询：不 dump 全库（旧逻辑用 confidence 打分会把 topK 全塞进 prompt）
+    if (!query) {
+      return { items: [], degraded: false, retrievalMode: "memory_only" };
+    }
 
     // 结构化过滤
     const items = await memoryItemDao.query({
@@ -51,8 +98,8 @@ export class MemoryRetriever {
     // 关键词评分
     const keywordScored = items.map((item) => ({
       memory: item,
-      kwScore: this.keywordScore(item, req.query),
-      matchReasons: this.matchReasons(item, req.query),
+      kwScore: this.keywordScore(item, query),
+      matchReasons: this.matchReasons(item, query),
     }));
 
     // 尝试向量检索：对已过滤结果按 embedding 相似度重排
@@ -71,18 +118,32 @@ export class MemoryRetriever {
         }
 
         // 融合：有 embedding 则 0.7kw + 0.3vec，无 embedding 直接用 kwScore
+        // 关键词分为 0 时，纯向量分数需达到更高阈值，避免无关项混入
         const fused = keywordScored.map((ks) => {
           const storedVec = vecMap.get(ks.memory.id);
-          if (!storedVec) return { memory: ks.memory, score: ks.kwScore, matchReasons: ks.matchReasons };
+          if (!storedVec) {
+            return {
+              memory: ks.memory,
+              score: ks.kwScore,
+              matchReasons: ks.matchReasons,
+            };
+          }
           const vecSim = cosineSimilarity(queryVec, storedVec);
+          const score =
+            ks.kwScore > 0
+              ? ks.kwScore * 0.7 + vecSim * 0.3
+              : vecSim * 0.45;
           return {
             memory: ks.memory,
-            score: ks.kwScore * 0.7 + vecSim * 0.3,
+            score,
             matchReasons: ks.matchReasons,
           };
         });
+        const ranked = fused
+          .filter((s) => s.score >= minConfidence)
+          .sort((a, b) => b.score - a.score);
         return {
-          items: fused.filter((s) => s.score >= minConfidence).sort((a, b) => b.score - a.score).slice(0, limit),
+          items: applyTypeQuotas(ranked, limit),
           degraded: false,
           retrievalMode: "hybrid",
         };
@@ -93,35 +154,62 @@ export class MemoryRetriever {
 
     // 纯关键词降级
     const scored = keywordScored
-      .map((ks) => ({ memory: ks.memory, score: ks.kwScore, matchReasons: ks.matchReasons }))
+      .map((ks) => ({
+        memory: ks.memory,
+        score: ks.kwScore,
+        matchReasons: ks.matchReasons,
+      }))
       .filter((s) => s.score >= minConfidence)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+      .sort((a, b) => b.score - a.score);
 
-    return { items: scored, degraded: false, retrievalMode: "memory_only" };
+    return {
+      items: applyTypeQuotas(scored, limit),
+      degraded: false,
+      retrievalMode: "memory_only",
+    };
   }
 
   private keywordScore(item: MemoryItem, query: string): number {
-    if (!query) return item.confidence;
-    const qTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    if (qTerms.length === 0) return item.confidence;
+    const qTerms = tokenizeForMemoryScore(query);
+    if (qTerms.length === 0) return 0;
     let score = 0;
+    let hits = 0;
     const title = item.title.toLowerCase();
     const summary = item.summary.toLowerCase();
     const subjectKey = item.subjectKey.toLowerCase();
-    const tags = item.tags.join(" ").toLowerCase();
+    const tags = (item.tags ?? []).join(" ").toLowerCase();
     for (const term of qTerms) {
-      if (title.includes(term)) score += 0.4;
-      if (summary.includes(term)) score += 0.3;
-      if (subjectKey.includes(term)) score += 0.2;
-      if (tags.includes(term)) score += 0.1;
+      let termHit = false;
+      if (title.includes(term)) {
+        score += 0.4;
+        termHit = true;
+      }
+      if (summary.includes(term)) {
+        score += 0.3;
+        termHit = true;
+      }
+      if (subjectKey.includes(term)) {
+        score += 0.2;
+        termHit = true;
+      }
+      if (tags.includes(term)) {
+        score += 0.1;
+        termHit = true;
+      }
+      if (termHit) hits += 1;
     }
-    return Math.min(1.0, score * item.confidence);
+    if (hits === 0) return 0;
+    // 命中比例加权：避免长查询里偶然一词拉高无关记忆
+    const coverage = hits / qTerms.length;
+    let final = score * item.confidence * (0.5 + 0.5 * coverage);
+    // task_summary 略降权，给 preference/decision 让位
+    if (item.type === "task_summary") final *= 0.85;
+    return Math.min(1.0, final);
   }
 
   private matchReasons(item: MemoryItem, query: string): string[] {
     const reasons: string[] = [];
-    const qTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const qTerms = tokenizeForMemoryScore(query);
     for (const term of qTerms) {
       if (item.title.toLowerCase().includes(term)) reasons.push(`title:${term}`);
       if (item.summary.toLowerCase().includes(term)) reasons.push(`summary:${term}`);

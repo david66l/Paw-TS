@@ -46,6 +46,16 @@ import type { AgentAction } from "./actions.js";
 import type { RunStatus } from "./run.js";
 import type { ModelTokenUsage } from "./token-usage.js";
 
+/** 单个被修改文件的变更统计（挂在 tool.result 事件上） */
+export interface ToolFileChange {
+  /** 相对工作区的路径（edit 返回绝对路径时会归一化） */
+  readonly path: string;
+  readonly added: number;
+  readonly removed: number;
+  /** unified diff 文本（已截断），可选 */
+  readonly diff?: string;
+}
+
 /**
  * 运行生命周期事件联合类型
  *
@@ -138,6 +148,8 @@ export type RunEvent =
       readonly tool: string;
       /** 工具调用参数 */
       readonly args: unknown;
+      /** 可选：子 Agent 调用（run_agent）的稳定 id，= child-{runId}-{idx}，与 agentId 一致 */
+      readonly callId?: string;
     }
   /** 工具执行完成（成功或失败） */
   | {
@@ -150,6 +162,11 @@ export type RunEvent =
       readonly summary: string;
       /** 详细结果，可选 */
       readonly detail?: string;
+      /**
+       * 修改性工具的文件变更统计（write_file / edit_file / apply_patch）：
+       * 每个被改文件一条，供 UI 展示「Changed N files +A −B」与 diff 预览
+       */
+      readonly fileChanges?: readonly ToolFileChange[];
     }
   /** 工具输出流式块（例如长时间运行的命令的 stdout/stderr） */
   | {
@@ -160,6 +177,16 @@ export type RunEvent =
       readonly chunk: string;
       /** 是否为 stderr（错误输出流） */
       readonly isStderr: boolean;
+    }
+  /** 并行子 Agent 的文件锁等待/冲突（供 UI 展示锁竞争） */
+  | {
+      readonly type: "agent.file_lock";
+      /** wait = 开始等待他人持有的锁；denied = 等待超时仍未获得 */
+      readonly status: "wait" | "denied";
+      /** 被争用的文件路径 */
+      readonly path: string;
+      /** 当前持有者（子 Agent runId） */
+      readonly holder?: string;
     }
   /** 工具调用需要用户审批（审批模式开启时） */
   | {
@@ -210,9 +237,17 @@ export type RunEvent =
       readonly itemCount: number;
       /** 修改原因（如添加了新任务、标记某任务完成等） */
       readonly reason: string;
+      /**
+       * 当前完整计划快照（可选，桌面右栏优先用此渲染）。
+       * 缺省时 UI 可回退到 agent.action plan_update 增量合并。
+       */
+      readonly items?: readonly {
+        readonly id: string;
+        readonly text: string;
+        readonly status?: string;
+      }[];
     }
-  /** 第一层压缩：工具结果裁剪完成 */
-  /** Layer 1: tool-result pruning completed. */
+  /** 第一层压缩：工具结果裁剪完成 */ /** Layer 1: tool-result pruning completed. */
   | {
       readonly type: "compression.prune.done";
       /** 裁剪释放的 token 数 */
@@ -358,6 +393,10 @@ export type RunEvent =
         readonly summary: string;
         /** 关联的文件列表 */
         readonly relatedFiles: readonly string[];
+        /** 记忆类型（preference / decision / …） */
+        readonly type?: string;
+        /** 相关性得分 */
+        readonly score?: number;
       }[];
     }
   /** 每轮动态记忆注入（追加到 user 消息，不影响 system prompt cache） */

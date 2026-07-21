@@ -38,10 +38,11 @@ import {
   type ToolRunResult,
   toolDefinitions,
   READ, LIST, SEARCH, GLOB, GREP, WRITE, EDIT, SHELL, APPLY_PATCH,
-  WEBFETCH, WEBSEARCH, RUN_AGENT, RUN_SKILL,
+  WEBFETCH, WEBSEARCH, RUN_AGENT, CREATE_AGENT, RUN_SKILL,
   GIT_STATUS, GIT_DIFF, GIT_LOG, LSP, NOTEBOOK_EDIT, SYMBOL_SEARCH,
   BRIEF, TODO_WRITE, MEMORY_LIST, MEMORY_READ, MEMORY_SAVE,
 } from "./definitions.js";
+import fs from "node:fs";
 
 
 
@@ -761,11 +762,139 @@ export async function executeTool(
       signal: ctx.abortSignal,
       parentRunId: ctx.parentRunId,
     });
+    const agentId =
+      typeof rec.agent_id === "string"
+        ? rec.agent_id
+        : typeof rec.agentId === "string"
+          ? rec.agentId
+          : "";
     return {
       ok: r.status === "completed",
       payload: r,
-      summary: `run_agent: ${r.status} (${r.trace?.stepsTaken ?? 0} steps)`,
+      summary: `run_agent: ${r.status}${agentId ? ` [${agentId}]` : ""} (${r.trace?.stepsTaken ?? 0} steps)`,
     };
+  }
+  if (tool === CREATE_AGENT) {
+    // 落盘 .paw/agents/<id>.md（合规校验由调用方 @paw/agent writeAgentFile 更严；
+    // harness 做基础校验 + 写文件，避免 harness→agent 循环依赖）
+    const id = typeof rec.id === "string" ? rec.id.trim() : "";
+    const name = typeof rec.name === "string" ? rec.name.trim() : "";
+    const prompt = typeof rec.prompt === "string" ? rec.prompt.trim() : "";
+    if (!id || !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(id)) {
+      return {
+        ok: false,
+        payload: { error: "invalid id" },
+        summary: "create_agent: invalid id",
+      };
+    }
+    if (!name || !prompt) {
+      return {
+        ok: false,
+        payload: { error: "name and prompt required" },
+        summary: "create_agent: name and prompt required",
+      };
+    }
+    const role =
+      typeof rec.role === "string" && rec.role.trim()
+        ? rec.role.trim()
+        : name;
+    const tools =
+      typeof rec.tools === "string" && rec.tools.trim()
+        ? rec.tools.trim()
+        : "inherit";
+    const childPolicy =
+      rec.child_policy === "read_write" || rec.childPolicy === "read_write"
+        ? "read_write"
+        : "read_only";
+    const modelRaw =
+      typeof rec.model === "string" ? rec.model.trim() : "inherit";
+    const model =
+      modelRaw === "flash" || modelRaw === "pro" ? modelRaw : "inherit";
+    const outputFormat =
+      typeof rec.output_format === "string" && rec.output_format.trim()
+        ? rec.output_format.trim().replace(/\n/g, " ")
+        : typeof rec.outputFormat === "string" && rec.outputFormat.trim()
+          ? rec.outputFormat.trim().replace(/\n/g, " ")
+          : "Return a clear summary of what you did.";
+    const emoji =
+      typeof rec.emoji === "string" && rec.emoji.trim()
+        ? rec.emoji.trim()
+        : "";
+    const description =
+      typeof rec.description === "string" && rec.description.trim()
+        ? rec.description.trim()
+        : "";
+    const overwrite = rec.overwrite === true;
+
+    // Prefer injected writer when available (full validate + registry reload)
+    if (ctx.createAgent) {
+      const r = await ctx.createAgent({
+        id,
+        name,
+        role,
+        prompt,
+        tools,
+        childPolicy,
+        model,
+        outputFormat,
+        emoji: emoji || undefined,
+        description: description || undefined,
+        overwrite,
+      });
+      return {
+        ok: r.ok,
+        payload: r,
+        summary: r.ok
+          ? `create_agent: wrote ${r.id} → ${r.path ?? ".paw/agents"}`
+          : `create_agent: ${r.error ?? "failed"}`,
+      };
+    }
+
+    const agentsDir = path.join(ctx.workspaceRoot, ".paw", "agents");
+    const filePath = path.join(agentsDir, `${id}.md`);
+    try {
+      fs.mkdirSync(agentsDir, { recursive: true });
+      if (!overwrite && fs.existsSync(filePath)) {
+        return {
+          ok: false,
+          payload: { error: `exists: ${id}` },
+          summary: `create_agent: Agent 已存在 ${id}`,
+        };
+      }
+      const lines = [
+        "---",
+        `id: ${id}`,
+        `name: ${name}`,
+        `role: ${role}`,
+        ...(emoji ? [`emoji: ${emoji}`] : []),
+        ...(description ? [`description: ${description}`] : []),
+        `tools: ${tools}`,
+        `childPolicy: ${childPolicy}`,
+        `model: ${model}`,
+        `outputFormat: ${outputFormat}`,
+        "canSpawn: false",
+        "maxSteps: 12",
+        "kind: worker",
+        "memoryExtraction: off",
+        "---",
+        "",
+        prompt,
+        "",
+      ];
+      fs.writeFileSync(filePath, lines.join("\n"), "utf-8");
+      return {
+        ok: true,
+        payload: { id, path: filePath },
+        summary: `create_agent: wrote ${id}`,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        payload: { error: msg },
+        summary: `create_agent: ${msg}`,
+      };
+    }
   }
   if (tool === RUN_SKILL) {
     const skillId = typeof rec.skill_id === "string" ? rec.skill_id : "";

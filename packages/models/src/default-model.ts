@@ -225,6 +225,15 @@ function detectProvider(
   return undefined;
 }
 
+/** 按 key 大小写不敏感查 models 预设条目（provider 已 toLowerCase）。 */
+function findModelsEntry(models: PawSettingsLocal["models"], name: string) {
+  if (!models) return undefined;
+  return (
+    models[name] ??
+    Object.entries(models).find(([k]) => k.toLowerCase() === name)?.[1]
+  );
+}
+
 /**
  * 根据本地配置创建默认语言模型实例。
  *
@@ -271,6 +280,35 @@ export function createDefaultLanguageModel(
         model: ollamaModel,
         capabilities: resolveCapabilities(ollamaModel),
       });
+    }
+
+    // ── 命名预设（别名）分支 ──
+    // provider 指向 models 里的自定义条目名（非固定 provider 协议名），
+    // 支撑「多个同厂商变体 + 下拉切换」。协议按 baseUrl 推断。
+    // ponytail: baseUrl 缺省按 OpenAI 兼容；要 anthropic 就让 baseUrl 含 "anthropic"。
+    if (provider && provider !== "ollama" && !(provider in PROVIDERS)) {
+      const entry = findModelsEntry(s.models, provider);
+      const modelName = entry?.model?.trim();
+      if (entry && modelName) {
+        const baseUrl = entry.baseUrl?.trim();
+        const anthropic = !!baseUrl && /anthropic/i.test(baseUrl);
+        const opts = {
+          apiKey: entry.apiKey?.trim() || "",
+          baseUrl:
+            baseUrl ||
+            (anthropic
+              ? "https://api.anthropic.com/v1"
+              : "https://api.openai.com/v1"),
+          model: modelName,
+          capabilities: resolveCapabilities(modelName),
+        };
+        return anthropic
+          ? new AnthropicCompatibleModel(opts)
+          : new OpenAICompatibleModel(opts);
+      }
+      console.warn(
+        `[paw] provider="${provider}" 非内置 provider 且无匹配 models 预设，回退自动检测。`,
+      );
     }
 
     // ── 云服务提供商分支 ──

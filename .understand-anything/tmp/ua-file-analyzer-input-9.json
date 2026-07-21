@@ -1,0 +1,23 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "packages/harness/src/context.ts", "language": "typescript", "sizeLines": 91, "fileCategory": "code"},
+    {"path": "packages/harness/src/mcp-client.ts", "language": "typescript", "sizeLines": 211, "fileCategory": "code"},
+    {"path": "packages/harness/src/registry/definitions.ts", "language": "typescript", "sizeLines": 408, "fileCategory": "code"},
+    {"path": "packages/harness/src/registry/execution.ts", "language": "typescript", "sizeLines": 957, "fileCategory": "code"},
+    {"path": "packages/harness/src/sandbox/index.ts", "language": "typescript", "sizeLines": 51, "fileCategory": "code"},
+    {"path": "packages/harness/src/shell-ast.ts", "language": "typescript", "sizeLines": 374, "fileCategory": "code"},
+    {"path": "packages/harness/src/shell-audit.ts", "language": "typescript", "sizeLines": 248, "fileCategory": "code"},
+    {"path": "packages/harness/src/shell-guard.ts", "language": "typescript", "sizeLines": 137, "fileCategory": "code"},
+    {"path": "packages/harness/src/shell-policy-config.ts", "language": "typescript", "sizeLines": 435, "fileCategory": "code"},
+    {"path": "packages/harness/src/shell-policy.ts", "language": "typescript", "sizeLines": 339, "fileCategory": "code"},
+    {"path": "packages/harness/src/shell/analysis.ts", "language": "typescript", "sizeLines": 287, "fileCategory": "code"},
+    {"path": "packages/harness/src/shell/execute.ts", "language": "typescript", "sizeLines": 288, "fileCategory": "code"},
+    {"path": "packages/harness/src/shell/index.ts", "language": "typescript", "sizeLines": 15, "fileCategory": "code"},
+    {"path": "packages/harness/test/mcp-client.test.ts", "language": "typescript", "sizeLines": 83, "fileCategory": "code"},
+    {"path": "packages/harness/test/run-shell.test.ts", "language": "typescript", "sizeLines": 352, "fileCategory": "code"},
+    {"path": "packages/harness/test/sandbox-docker.test.ts", "language": "typescript", "sizeLines": 68, "fileCategory": "code"},
+    {"path": "packages/harness/test/shell-guard.test.ts", "language": "typescript", "sizeLines": 227, "fileCategory": "code"}
+  ],
+  "batchImportData": {"packages/harness/src/context.ts": ["packages/harness/src/mcp-client.ts", "packages/harness/src/sandbox/index.ts"], "packages/harness/src/mcp-client.ts": [], "packages/harness/src/registry/definitions.ts": ["packages/harness/src/mcp-client.ts", "packages/harness/src/shell/index.ts"], "packages/harness/src/registry/execution.ts": ["packages/harness/src/context.ts", "packages/harness/src/registry/definitions.ts", "packages/harness/src/shell/index.ts"], "packages/harness/src/sandbox/index.ts": [], "packages/harness/src/shell-ast.ts": [], "packages/harness/src/shell-audit.ts": [], "packages/harness/src/shell-guard.ts": ["packages/harness/src/shell-ast.ts", "packages/harness/src/shell-audit.ts", "packages/harness/src/shell-policy.ts"], "packages/harness/src/shell-policy-config.ts": [], "packages/harness/src/shell-policy.ts": ["packages/harness/src/shell-ast.ts", "packages/harness/src/shell-policy-config.ts"], "packages/harness/src/shell/analysis.ts": [], "packages/harness/src/shell/execute.ts": ["packages/harness/src/sandbox/index.ts", "packages/harness/src/shell-guard.ts", "packages/harness/src/shell/analysis.ts"], "packages/harness/src/shell/index.ts": [], "packages/harness/test/mcp-client.test.ts": ["packages/harness/src/mcp-client.ts"], "packages/harness/test/run-shell.test.ts": ["packages/harness/src/shell/index.ts"], "packages/harness/test/sandbox-docker.test.ts": ["packages/harness/src/sandbox/index.ts"], "packages/harness/test/shell-guard.test.ts": ["packages/harness/src/shell-guard.ts"]}
+}

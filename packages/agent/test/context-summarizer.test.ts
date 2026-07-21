@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { ContextManager } from "@paw/core";
 import { CONTEXT_SUMMARY_PREFIX } from "@paw/core";
-import { DefaultContextSummarizer } from "../src/orchestrator/context-summarizer.js";
 import {
   buildMinimalSharedContext,
   parseAgentType,
   parseChildPolicy,
   parseRunAgentMaxSteps,
 } from "../src/orchestrator/agent-args.js";
+import { DefaultContextSummarizer } from "../src/orchestrator/context-summarizer.js";
 
 describe("parseRunAgentMaxSteps", () => {
   it("reads max_steps from args", () => {
@@ -75,6 +75,21 @@ describe("DefaultContextSummarizer", () => {
     expect(
       shared.parentConclusions?.some((c) => c.conclusion.includes("JWT")),
     ).toBe(true);
+  });
+
+  it("blanks role/outputFormat when agent_id targets a registry Spec", () => {
+    const ctx = new ContextManager();
+    ctx.addUser("Refactor auth middleware");
+    const shared = new DefaultContextSummarizer().summarizeForCall(ctx, {
+      type: "tool_call",
+      tool: "workspace.run_agent",
+      args: { goal: "改 packages/core", agent_id: "bianmu" },
+    });
+    // Spec 会重建 role/outputFormat，summarizer 不再产出误导性英文模板
+    expect(shared.role).toBe("");
+    expect(shared.outputFormat).toBe("");
+    // facts 仍然保留（launcher 会合并进 Spec 上下文）
+    expect(shared.facts.some((f) => f.includes("Parent goal"))).toBe(true);
   });
 
   it("extracts file artifacts from inline XML", () => {

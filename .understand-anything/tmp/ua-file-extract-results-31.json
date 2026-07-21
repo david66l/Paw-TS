@@ -1,0 +1,974 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 8,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/workspace/test/watch.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 93,
+      "nonEmptyLines": 78,
+      "functions": [
+        {
+          "name": "waitForExternalChanges",
+          "startLine": 8,
+          "endLine": 22,
+          "params": [
+            "watcher",
+            "predicate"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "waitForExternalChanges",
+          "callee": "Date.now",
+          "lineNumber": 12
+        },
+        {
+          "caller": "waitForExternalChanges",
+          "callee": "Date.now",
+          "lineNumber": 14
+        },
+        {
+          "caller": "waitForExternalChanges",
+          "callee": "watcher.takeExternallyModified",
+          "lineNumber": 15
+        },
+        {
+          "caller": "waitForExternalChanges",
+          "callee": "predicate",
+          "lineNumber": 16
+        },
+        {
+          "caller": "waitForExternalChanges",
+          "callee": "setTimeout",
+          "lineNumber": 19
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/tsconfig.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 9,
+      "nonEmptyLines": 9,
+      "sections": [
+        {
+          "heading": "extends",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "compilerOptions",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "include",
+          "level": 1,
+          "line": 8
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "plans/memory-optimization-plan.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 211,
+      "nonEmptyLines": 146,
+      "sections": [
+        {
+          "heading": "Paw-TS 记忆系统 6 项优化实现方案",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Context",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "总体架构",
+          "level": 2,
+          "line": 12
+        },
+        {
+          "heading": "一、A.3 — 优先级 + 自动遗忘",
+          "level": 2,
+          "line": 24
+        },
+        {
+          "heading": "方案",
+          "level": 3,
+          "line": 26
+        },
+        {
+          "heading": "修改文件",
+          "level": 3,
+          "line": 34
+        },
+        {
+          "heading": "二、A.4 — 分片索引",
+          "level": 2,
+          "line": 46
+        },
+        {
+          "heading": "方案",
+          "level": 3,
+          "line": 48
+        },
+        {
+          "heading": "修改文件",
+          "level": 3,
+          "line": 56
+        },
+        {
+          "heading": "三、B.1 — 结构化强约束抽取",
+          "level": 2,
+          "line": 67
+        },
+        {
+          "heading": "方案",
+          "level": 3,
+          "line": 69
+        },
+        {
+          "heading": "修改文件",
+          "level": 3,
+          "line": 84
+        },
+        {
+          "heading": "四、B.2 — 记忆反思子模块",
+          "level": 2,
+          "line": 95
+        },
+        {
+          "heading": "方案",
+          "level": 3,
+          "line": 97
+        },
+        {
+          "heading": "修改文件",
+          "level": 3,
+          "line": 106
+        },
+        {
+          "heading": "五、B.3 — 三级召回架构",
+          "level": 2,
+          "line": 117
+        },
+        {
+          "heading": "方案",
+          "level": 3,
+          "line": 119
+        },
+        {
+          "heading": "修改文件",
+          "level": 3,
+          "line": 139
+        },
+        {
+          "heading": "六、B.4 — 动态 Token 分配",
+          "level": 2,
+          "line": 149
+        },
+        {
+          "heading": "方案",
+          "level": 3,
+          "line": 151
+        },
+        {
+          "heading": "修改文件",
+          "level": 3,
+          "line": 170
+        },
+        {
+          "heading": "实施顺序",
+          "level": 2,
+          "line": 181
+        },
+        {
+          "heading": "关键设计原则",
+          "level": 2,
+          "line": 196
+        },
+        {
+          "heading": "验证",
+          "level": 2,
+          "line": 205
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 24
+      }
+    },
+    {
+      "path": "scripts/import-skill.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 97,
+      "nonEmptyLines": 85,
+      "functions": [
+        {
+          "name": "parseFrontmatter",
+          "startLine": 29,
+          "endLine": 49,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "mdToJson",
+          "startLine": 51,
+          "endLine": 71,
+          "params": [
+            "markdown",
+            "skillId"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "parseFrontmatter",
+          "callee": "text.match",
+          "lineNumber": 30
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "match[1]!.split",
+          "lineNumber": 34
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "line.match",
+          "lineNumber": 35
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "m[1]!.trim",
+          "lineNumber": 37
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "m[2]!.trim",
+          "lineNumber": 38
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "val.split(\",\").map((s) => s.trim()).filter",
+          "lineNumber": 40
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "val.split(\",\").map",
+          "lineNumber": 40
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "val.split",
+          "lineNumber": 40
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "s.trim",
+          "lineNumber": 40
+        },
+        {
+          "caller": "parseFrontmatter",
+          "callee": "match[2]!.trim",
+          "lineNumber": 48
+        },
+        {
+          "caller": "mdToJson",
+          "callee": "parseFrontmatter",
+          "lineNumber": 52
+        },
+        {
+          "caller": "mdToJson",
+          "callee": "JSON.stringify",
+          "lineNumber": 70
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "tests/integration/sub-agent-prompts.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 140,
+      "nonEmptyLines": 100,
+      "sections": [
+        {
+          "heading": "强制触发 Sub-Agent 的 Prompt 设计",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "核心原则",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "Prompt 1: 协调者模式（最强）",
+          "level": 2,
+          "line": 14
+        },
+        {
+          "heading": "Prompt 2: 隔离需求模式",
+          "level": 2,
+          "line": 39
+        },
+        {
+          "heading": "Prompt 3: 批量并行模式",
+          "level": 2,
+          "line": 64
+        },
+        {
+          "heading": "Prompt 4: 沙箱安全模式",
+          "level": 2,
+          "line": 85
+        },
+        {
+          "heading": "推荐执行顺序",
+          "level": 2,
+          "line": 108
+        },
+        {
+          "heading": "如果仍然不触发",
+          "level": 2,
+          "line": 129
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 8
+      }
+    },
+    {
+      "path": "training_data/generate_stage_a_claude.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 477,
+      "nonEmptyLines": 424,
+      "functions": [
+        {
+          "name": "build_tool_catalog",
+          "startLine": 261,
+          "endLine": 286,
+          "params": []
+        },
+        {
+          "name": "validate_tool_call",
+          "startLine": 289,
+          "endLine": 302,
+          "params": [
+            "tool_name",
+            "args"
+          ]
+        },
+        {
+          "name": "validate_response",
+          "startLine": 305,
+          "endLine": 326,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "call_claude",
+          "startLine": 331,
+          "endLine": 352,
+          "params": [
+            "system",
+            "user",
+            "max_tokens"
+          ]
+        },
+        {
+          "name": "parse_generated",
+          "startLine": 355,
+          "endLine": 370,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "generate_for_tool",
+          "startLine": 373,
+          "endLine": 436,
+          "params": [
+            "tool_name",
+            "count",
+            "output_path",
+            "stats",
+            "catalog"
+          ]
+        },
+        {
+          "name": "main",
+          "startLine": 439,
+          "endLine": 473,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "build_tool_catalog",
+          "line": 261,
+          "isDefault": false
+        },
+        {
+          "name": "validate_tool_call",
+          "line": 289,
+          "isDefault": false
+        },
+        {
+          "name": "validate_response",
+          "line": 305,
+          "isDefault": false
+        },
+        {
+          "name": "call_claude",
+          "line": 331,
+          "isDefault": false
+        },
+        {
+          "name": "parse_generated",
+          "line": 355,
+          "isDefault": false
+        },
+        {
+          "name": "generate_for_tool",
+          "line": 373,
+          "isDefault": false
+        },
+        {
+          "name": "main",
+          "line": 439,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 264
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 265
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 266
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 267
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 268
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 269
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 270
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 271
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 272
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 273
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 274
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 275
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 276
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 277
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 278
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 279
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 280
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 281
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 282
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 283
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "lines.append",
+          "lineNumber": 284
+        },
+        {
+          "caller": "build_tool_catalog",
+          "callee": "\"\\n\".join",
+          "lineNumber": 286
+        },
+        {
+          "caller": "validate_tool_call",
+          "callee": "isinstance",
+          "lineNumber": 295
+        },
+        {
+          "caller": "validate_tool_call",
+          "callee": "type",
+          "lineNumber": 296
+        },
+        {
+          "caller": "validate_tool_call",
+          "callee": "schema.items",
+          "lineNumber": 298
+        },
+        {
+          "caller": "validate_response",
+          "callee": "text.strip().split",
+          "lineNumber": 307
+        },
+        {
+          "caller": "validate_response",
+          "callee": "text.strip",
+          "lineNumber": 307
+        },
+        {
+          "caller": "validate_response",
+          "callee": "line.strip",
+          "lineNumber": 310
+        },
+        {
+          "caller": "validate_response",
+          "callee": "line.startswith",
+          "lineNumber": 311
+        },
+        {
+          "caller": "validate_response",
+          "callee": "json.loads",
+          "lineNumber": 314
+        },
+        {
+          "caller": "validate_response",
+          "callee": "validate_tool_call",
+          "lineNumber": 316
+        },
+        {
+          "caller": "validate_response",
+          "callee": "obj.get",
+          "lineNumber": 316
+        },
+        {
+          "caller": "call_claude",
+          "callee": "os.environ.get",
+          "lineNumber": 333
+        },
+        {
+          "caller": "call_claude",
+          "callee": "os.path.join",
+          "lineNumber": 335
+        },
+        {
+          "caller": "call_claude",
+          "callee": "os.path.dirname",
+          "lineNumber": 335
+        },
+        {
+          "caller": "call_claude",
+          "callee": "os.path.exists",
+          "lineNumber": 336
+        },
+        {
+          "caller": "call_claude",
+          "callee": "open",
+          "lineNumber": 337
+        },
+        {
+          "caller": "call_claude",
+          "callee": "line.startswith",
+          "lineNumber": 339
+        },
+        {
+          "caller": "call_claude",
+          "callee": "line.strip().split(\"=\", 1)[1].strip('\"').strip",
+          "lineNumber": 340
+        },
+        {
+          "caller": "call_claude",
+          "callee": "line.strip().split(\"=\", 1)[1].strip",
+          "lineNumber": 340
+        },
+        {
+          "caller": "call_claude",
+          "callee": "line.strip().split",
+          "lineNumber": 340
+        },
+        {
+          "caller": "call_claude",
+          "callee": "line.strip",
+          "lineNumber": 340
+        },
+        {
+          "caller": "call_claude",
+          "callee": "RuntimeError",
+          "lineNumber": 343
+        },
+        {
+          "caller": "call_claude",
+          "callee": "anthropic.Anthropic",
+          "lineNumber": 345
+        },
+        {
+          "caller": "call_claude",
+          "callee": "client.messages.create",
+          "lineNumber": 346
+        },
+        {
+          "caller": "parse_generated",
+          "callee": "text.strip().split",
+          "lineNumber": 360
+        },
+        {
+          "caller": "parse_generated",
+          "callee": "text.strip",
+          "lineNumber": 360
+        },
+        {
+          "caller": "parse_generated",
+          "callee": "line.strip",
+          "lineNumber": 361
+        },
+        {
+          "caller": "parse_generated",
+          "callee": "line.startswith",
+          "lineNumber": 362
+        },
+        {
+          "caller": "parse_generated",
+          "callee": "json.loads",
+          "lineNumber": 365
+        },
+        {
+          "caller": "parse_generated",
+          "callee": "results.append",
+          "lineNumber": 367
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "info[\"args\"].items",
+          "lineNumber": 376
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "info.get",
+          "lineNumber": 377
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "chr(10).join",
+          "lineNumber": 384
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "chr",
+          "lineNumber": 384
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "chr(10).join",
+          "lineNumber": 387
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "chr",
+          "lineNumber": 387
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "range",
+          "lineNumber": 407
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "call_claude",
+          "lineNumber": 409
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "parse_generated",
+          "lineNumber": 410
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "validate_response",
+          "lineNumber": 412
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "valid_samples.append",
+          "lineNumber": 424
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "print",
+          "lineNumber": 425
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "len",
+          "lineNumber": 425
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "len",
+          "lineNumber": 426
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "print",
+          "lineNumber": 429
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "time.sleep",
+          "lineNumber": 430
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "open",
+          "lineNumber": 433
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "f.write",
+          "lineNumber": 435
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "json.dumps",
+          "lineNumber": 435
+        },
+        {
+          "caller": "generate_for_tool",
+          "callee": "len",
+          "lineNumber": 436
+        },
+        {
+          "caller": "main",
+          "callee": "argparse.ArgumentParser",
+          "lineNumber": 441
+        },
+        {
+          "caller": "main",
+          "callee": "parser.add_argument",
+          "lineNumber": 442
+        },
+        {
+          "caller": "main",
+          "callee": "parser.add_argument",
+          "lineNumber": 443
+        },
+        {
+          "caller": "main",
+          "callee": "parser.add_argument",
+          "lineNumber": 444
+        },
+        {
+          "caller": "main",
+          "callee": "parser.parse_args",
+          "lineNumber": 445
+        },
+        {
+          "caller": "main",
+          "callee": "os.makedirs",
+          "lineNumber": 447
+        },
+        {
+          "caller": "main",
+          "callee": "os.path.dirname",
+          "lineNumber": 447
+        },
+        {
+          "caller": "main",
+          "callee": "open",
+          "lineNumber": 448
+        },
+        {
+          "caller": "main",
+          "callee": "build_tool_catalog",
+          "lineNumber": 451
+        },
+        {
+          "caller": "main",
+          "callee": "Counter",
+          "lineNumber": 453
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 455
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 456
+        },
+        {
+          "caller": "main",
+          "callee": "len",
+          "lineNumber": 456
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 459
+        },
+        {
+          "caller": "main",
+          "callee": "sorted",
+          "lineNumber": 462
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 463
+        },
+        {
+          "caller": "main",
+          "callee": "generate_for_tool",
+          "lineNumber": 464
+        },
+        {
+          "caller": "main",
+          "callee": "time.sleep",
+          "lineNumber": 467
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 469
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 470
+        },
+        {
+          "caller": "main",
+          "callee": "tool_counts.most_common",
+          "lineNumber": 471
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 472
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 473
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 7,
+        "functionCount": 7,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "training_data/stage_b_paw.jsonl",
+      "language": "jsonl",
+      "fileCategory": "code",
+      "totalLines": 44,
+      "nonEmptyLines": 44,
+      "metrics": {}
+    },
+    {
+      "path": "training_data/stage_b_workflows.jsonl",
+      "language": "jsonl",
+      "fileCategory": "code",
+      "totalLines": 71,
+      "nonEmptyLines": 71,
+      "metrics": {}
+    }
+  ]
+}

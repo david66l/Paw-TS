@@ -3,11 +3,37 @@
  * Agent / harness 只依赖这些类型，不直接依赖 db 内部实体。
  */
 
+/** completeTask 可选 enricher 产出的候选草稿（仍须经 Governance） */
+export type MemoryCandidateEnrichmentDraft = {
+  readonly title: string;
+  readonly summary: string;
+  readonly type:
+    | "user_preference"
+    | "decision"
+    | "failure"
+    | "project_knowledge"
+    | "rule"
+    | "skill"
+    | "task_summary";
+  readonly confidence?: number;
+};
+
+export type MemoryCandidateEnricher = (input: {
+  readonly taskId: string;
+  readonly goal: string;
+  readonly workingMemoryGoal: string;
+}) => Promise<readonly MemoryCandidateEnrichmentDraft[]>;
+
 export interface MemoryRuntimeOptions {
   readonly workspaceRoot: string;
   readonly userId?: string;
   readonly repositoryId?: string;
   readonly workspaceId?: string;
+  /**
+   * 可选：completeTask 时追加候选（默认不传 = noop）。
+   * 抛错不影响主 complete 路径。
+   */
+  readonly candidateEnricher?: MemoryCandidateEnricher;
 }
 
 export interface BeginTaskInput {
@@ -38,6 +64,9 @@ export interface ContextSectionItem {
   readonly title: string;
   readonly score: number;
   readonly type?: string;
+  /** 摘要（供 UI / 事件，可截断） */
+  readonly summary?: string;
+  readonly relatedFiles?: readonly string[];
 }
 
 export interface BuildContextResult {

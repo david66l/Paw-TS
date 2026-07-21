@@ -1,0 +1,1480 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/agent/src/auxiliary-complete.ts",
+      "type": "file",
+      "name": "auxiliary-complete.ts",
+      "filePath": "packages/agent/src/auxiliary-complete.ts",
+      "summary": "TypeScript 源文件，1 个函数，41 行。",
+      "tags": [
+        "agent",
+        "llm-utility",
+        "utilities"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/auxiliary-complete.ts:completeAuxiliaryTask",
+      "type": "function",
+      "name": "completeAuxiliaryTask",
+      "filePath": "packages/agent/src/auxiliary-complete.ts",
+      "lineRange": [
+        29,
+        43
+      ],
+      "summary": "函数 completeAuxiliaryTask(opts)，14 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/child-system-prompt.ts",
+      "type": "file",
+      "name": "child-system-prompt.ts",
+      "filePath": "packages/agent/src/child-system-prompt.ts",
+      "summary": "TypeScript 源文件，2 个函数，93 行。",
+      "tags": [
+        "agent",
+        "prompt-engineering",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/child-system-prompt.ts:buildChildSystemPrompt",
+      "type": "function",
+      "name": "buildChildSystemPrompt",
+      "filePath": "packages/agent/src/child-system-prompt.ts",
+      "lineRange": [
+        43,
+        101
+      ],
+      "summary": "构建函数 buildChildSystemPrompt(opts)，58 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/compression-agent.ts",
+      "type": "file",
+      "name": "compression-agent.ts",
+      "filePath": "packages/agent/src/compression-agent.ts",
+      "summary": "TypeScript 源文件，2 个函数，102 行。",
+      "tags": [
+        "agent",
+        "compression",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/compression-agent.ts:runCompressionAgent",
+      "type": "function",
+      "name": "runCompressionAgent",
+      "filePath": "packages/agent/src/compression-agent.ts",
+      "lineRange": [
+        60,
+        76
+      ],
+      "summary": "执行函数 runCompressionAgent(model, prompt, runId, signal)，16 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/compression-agent.ts:parseSummaryToSessionMemory",
+      "type": "function",
+      "name": "parseSummaryToSessionMemory",
+      "filePath": "packages/agent/src/compression-agent.ts",
+      "lineRange": [
+        83,
+        112
+      ],
+      "summary": "解析函数 parseSummaryToSessionMemory(summary, runId)，29 行。",
+      "tags": [
+        "parsing",
+        "summarization",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/format-conversation-for-memory.ts",
+      "type": "file",
+      "name": "format-conversation-for-memory.ts",
+      "filePath": "packages/agent/src/format-conversation-for-memory.ts",
+      "summary": "TypeScript 源文件，2 个函数，46 行。",
+      "tags": [
+        "memory",
+        "agent",
+        "data-transformation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/format-conversation-for-memory.ts:formatConversationForMemoryExtraction",
+      "type": "function",
+      "name": "formatConversationForMemoryExtraction",
+      "filePath": "packages/agent/src/format-conversation-for-memory.ts",
+      "lineRange": [
+        22,
+        34
+      ],
+      "summary": "格式化函数 formatConversationForMemoryExtraction(messages)，12 行。",
+      "tags": [
+        "formatting",
+        "extraction",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/llm-memory-selector.ts",
+      "type": "file",
+      "name": "llm-memory-selector.ts",
+      "filePath": "packages/agent/src/llm-memory-selector.ts",
+      "summary": "TypeScript 源文件，3 个函数，78 行。",
+      "tags": [
+        "memory",
+        "selection",
+        "agent"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/llm-memory-selector.ts:buildSelectorUser",
+      "type": "function",
+      "name": "buildSelectorUser",
+      "filePath": "packages/agent/src/llm-memory-selector.ts",
+      "lineRange": [
+        26,
+        50
+      ],
+      "summary": "构建函数 buildSelectorUser(input)，24 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/llm-memory-selector.ts:createLlmMemorySelectFn",
+      "type": "function",
+      "name": "createLlmMemorySelectFn",
+      "filePath": "packages/agent/src/llm-memory-selector.ts",
+      "lineRange": [
+        74,
+        87
+      ],
+      "summary": "构建函数 createLlmMemorySelectFn(model, signal)，13 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/memory-extraction-agent.ts",
+      "type": "file",
+      "name": "memory-extraction-agent.ts",
+      "filePath": "packages/agent/src/memory-extraction-agent.ts",
+      "summary": "TypeScript 源文件，5 个函数，237 行。",
+      "tags": [
+        "memory",
+        "agent",
+        "extraction"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/memory-extraction-agent.ts:scanForSensitiveInfo",
+      "type": "function",
+      "name": "scanForSensitiveInfo",
+      "filePath": "packages/agent/src/memory-extraction-agent.ts",
+      "lineRange": [
+        66,
+        84
+      ],
+      "summary": "函数 scanForSensitiveInfo(entry)，18 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/memory-extraction-agent.ts:buildExtractionUser",
+      "type": "function",
+      "name": "buildExtractionUser",
+      "filePath": "packages/agent/src/memory-extraction-agent.ts",
+      "lineRange": [
+        108,
+        142
+      ],
+      "summary": "构建函数 buildExtractionUser(conversationText)，34 行。",
+      "tags": [
+        "extraction",
+        "factory",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/memory-extraction-agent.ts:extractMemories",
+      "type": "function",
+      "name": "extractMemories",
+      "filePath": "packages/agent/src/memory-extraction-agent.ts",
+      "lineRange": [
+        150,
+        165
+      ],
+      "summary": "提取函数 extractMemories(model, conversationText, signal)，15 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/memory-extraction-agent.ts:parseMemoryEntries",
+      "type": "function",
+      "name": "parseMemoryEntries",
+      "filePath": "packages/agent/src/memory-extraction-agent.ts",
+      "lineRange": [
+        173,
+        266
+      ],
+      "summary": "解析函数 parseMemoryEntries(text)，93 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator-factory.ts",
+      "type": "file",
+      "name": "orchestrator-factory.ts",
+      "filePath": "packages/agent/src/orchestrator-factory.ts",
+      "summary": "TypeScript 源文件，2 个函数，193 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "factory"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator-factory.ts:loadMcpServers",
+      "type": "function",
+      "name": "loadMcpServers",
+      "filePath": "packages/agent/src/orchestrator-factory.ts",
+      "lineRange": [
+        100,
+        115
+      ],
+      "summary": "加载函数 loadMcpServers(workspaceRoot)，15 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator-factory.ts:createRunOrchestrator",
+      "type": "function",
+      "name": "createRunOrchestrator",
+      "filePath": "packages/agent/src/orchestrator-factory.ts",
+      "lineRange": [
+        135,
+        206
+      ],
+      "summary": "构建函数 createRunOrchestrator(opts)，71 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator.ts",
+      "type": "file",
+      "name": "orchestrator.ts",
+      "filePath": "packages/agent/src/orchestrator.ts",
+      "summary": "TypeScript 源文件，3 个函数，1 个类，2287 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "core-engine"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator.ts:classifyError",
+      "type": "function",
+      "name": "classifyError",
+      "filePath": "packages/agent/src/orchestrator.ts",
+      "lineRange": [
+        2386,
+        2421
+      ],
+      "summary": "函数 classifyError(err)，35 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator.ts:computeRetryDelay",
+      "type": "function",
+      "name": "computeRetryDelay",
+      "filePath": "packages/agent/src/orchestrator.ts",
+      "lineRange": [
+        2443,
+        2461
+      ],
+      "summary": "计算/评分函数 computeRetryDelay(attempt, classification)，18 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:packages/agent/src/orchestrator.ts:AgentOrchestrator",
+      "type": "class",
+      "name": "AgentOrchestrator",
+      "filePath": "packages/agent/src/orchestrator.ts",
+      "lineRange": [
+        258,
+        2351
+      ],
+      "summary": "类 AgentOrchestrator，22 个方法、29 个属性，2093 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility2"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "type": "file",
+      "name": "action-handlers.ts",
+      "filePath": "packages/agent/src/orchestrator/action-handlers.ts",
+      "summary": "TypeScript 源文件，8 个函数，601 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "action-handling"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "type": "function",
+      "name": "handleAction",
+      "filePath": "packages/agent/src/orchestrator/action-handlers.ts",
+      "lineRange": [
+        85,
+        129
+      ],
+      "summary": "函数 handleAction(actions, toolCalls, ctx, flags, text, thinking, opts)，44 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/action-handlers.ts:handleNoAction",
+      "type": "function",
+      "name": "handleNoAction",
+      "filePath": "packages/agent/src/orchestrator/action-handlers.ts",
+      "lineRange": [
+        145,
+        184
+      ],
+      "summary": "函数 handleNoAction(ctx, flags, text, thinking, opts)，39 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/action-handlers.ts:handleFinalAnswer",
+      "type": "function",
+      "name": "handleFinalAnswer",
+      "filePath": "packages/agent/src/orchestrator/action-handlers.ts",
+      "lineRange": [
+        200,
+        265
+      ],
+      "summary": "函数 handleFinalAnswer(action, ctx, flags, text, thinking, opts)，65 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAskUser",
+      "type": "function",
+      "name": "handleAskUser",
+      "filePath": "packages/agent/src/orchestrator/action-handlers.ts",
+      "lineRange": [
+        301,
+        350
+      ],
+      "summary": "函数 handleAskUser(action, ctx, flags, text, thinking, opts)，49 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/action-handlers.ts:handlePlanUpdate",
+      "type": "function",
+      "name": "handlePlanUpdate",
+      "filePath": "packages/agent/src/orchestrator/action-handlers.ts",
+      "lineRange": [
+        364,
+        432
+      ],
+      "summary": "函数 handlePlanUpdate(action, ctx, flags, text, thinking, opts)，68 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/action-handlers.ts:handleToolCalls",
+      "type": "function",
+      "name": "handleToolCalls",
+      "filePath": "packages/agent/src/orchestrator/action-handlers.ts",
+      "lineRange": [
+        449,
+        536
+      ],
+      "summary": "函数 handleToolCalls(calls, ctx, flags, text, thinking, opts)，87 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/action-handlers.ts:handleRunAgent",
+      "type": "function",
+      "name": "handleRunAgent",
+      "filePath": "packages/agent/src/orchestrator/action-handlers.ts",
+      "lineRange": [
+        555,
+        656
+      ],
+      "summary": "执行函数 handleRunAgent(calls, ctx, flags, text, thinking, opts)，101 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "type": "file",
+      "name": "agent-args.ts",
+      "filePath": "packages/agent/src/orchestrator/agent-args.ts",
+      "summary": "TypeScript 源文件，6 个函数，133 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "parameter-building"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/agent-args.ts:buildRole",
+      "type": "function",
+      "name": "buildRole",
+      "filePath": "packages/agent/src/orchestrator/agent-args.ts",
+      "lineRange": [
+        33,
+        48
+      ],
+      "summary": "构建函数 buildRole(agentType)，15 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/agent-args.ts:buildOutputFormat",
+      "type": "function",
+      "name": "buildOutputFormat",
+      "filePath": "packages/agent/src/orchestrator/agent-args.ts",
+      "lineRange": [
+        51,
+        66
+      ],
+      "summary": "格式化函数 buildOutputFormat(agentType)，15 行。",
+      "tags": [
+        "formatting",
+        "factory",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/agent-args.ts:parseRunAgentMaxSteps",
+      "type": "function",
+      "name": "parseRunAgentMaxSteps",
+      "filePath": "packages/agent/src/orchestrator/agent-args.ts",
+      "lineRange": [
+        104,
+        115
+      ],
+      "summary": "解析函数 parseRunAgentMaxSteps(args)，11 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/agent-args.ts:buildMinimalSharedContext",
+      "type": "function",
+      "name": "buildMinimalSharedContext",
+      "filePath": "packages/agent/src/orchestrator/agent-args.ts",
+      "lineRange": [
+        123,
+        142
+      ],
+      "summary": "构建函数 buildMinimalSharedContext(goal, args)，19 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "type": "file",
+      "name": "agent-group.ts",
+      "filePath": "packages/agent/src/orchestrator/agent-group.ts",
+      "summary": "TypeScript 源文件，1 个函数，1 个类，321 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "group-management"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/agent-group.ts:mapToChildEventType",
+      "type": "function",
+      "name": "mapToChildEventType",
+      "filePath": "packages/agent/src/orchestrator/agent-group.ts",
+      "lineRange": [
+        331,
+        346
+      ],
+      "summary": "函数 mapToChildEventType(eventType)，15 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:packages/agent/src/orchestrator/agent-group.ts:AgentGroup",
+      "type": "class",
+      "name": "AgentGroup",
+      "filePath": "packages/agent/src/orchestrator/agent-group.ts",
+      "lineRange": [
+        52,
+        328
+      ],
+      "summary": "类 AgentGroup，7 个方法、7 个属性，276 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility2"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator/constants.ts",
+      "type": "file",
+      "name": "constants.ts",
+      "filePath": "packages/agent/src/orchestrator/constants.ts",
+      "summary": "模块 barrel 入口文件，重新导出 6 个公共符号。",
+      "tags": [
+        "barrel",
+        "agent",
+        "orchestration"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "type": "file",
+      "name": "context-summarizer.ts",
+      "filePath": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "summary": "TypeScript 源文件，11 个函数，1 个类，369 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "summarization"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractParentGoal",
+      "type": "function",
+      "name": "extractParentGoal",
+      "filePath": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "lineRange": [
+        96,
+        111
+      ],
+      "summary": "提取函数 extractParentGoal(messages)，15 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractFacts",
+      "type": "function",
+      "name": "extractFacts",
+      "filePath": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "lineRange": [
+        118,
+        143
+      ],
+      "summary": "提取函数 extractFacts(messages)，25 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractUserConstraints",
+      "type": "function",
+      "name": "extractUserConstraints",
+      "filePath": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "lineRange": [
+        150,
+        176
+      ],
+      "summary": "提取函数 extractUserConstraints(messages)，26 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractArtifacts",
+      "type": "function",
+      "name": "extractArtifacts",
+      "filePath": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "lineRange": [
+        179,
+        215
+      ],
+      "summary": "提取函数 extractArtifacts(messages)，36 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractParentConclusions",
+      "type": "function",
+      "name": "extractParentConclusions",
+      "filePath": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "lineRange": [
+        221,
+        258
+      ],
+      "summary": "提取函数 extractParentConclusions(messages)，37 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/context-summarizer.ts:truncateToBudget",
+      "type": "function",
+      "name": "truncateToBudget",
+      "filePath": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "lineRange": [
+        281,
+        333
+      ],
+      "summary": "检索函数 truncateToBudget(ctx, maxTokens)，52 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:packages/agent/src/orchestrator/context-summarizer.ts:DefaultContextSummarizer",
+      "type": "class",
+      "name": "DefaultContextSummarizer",
+      "filePath": "packages/agent/src/orchestrator/context-summarizer.ts",
+      "lineRange": [
+        336,
+        409
+      ],
+      "summary": "类 DefaultContextSummarizer，2 个方法、0 个属性，73 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/agent/src/auxiliary-complete.ts",
+      "target": "function:packages/agent/src/auxiliary-complete.ts:completeAuxiliaryTask",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/auxiliary-complete.ts",
+      "target": "function:packages/agent/src/auxiliary-complete.ts:completeAuxiliaryTask",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/child-system-prompt.ts",
+      "target": "function:packages/agent/src/child-system-prompt.ts:buildChildSystemPrompt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/child-system-prompt.ts",
+      "target": "function:packages/agent/src/child-system-prompt.ts:buildChildSystemPrompt",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/child-system-prompt.ts",
+      "target": "file:packages/agent/src/orchestrator/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/compression-agent.ts",
+      "target": "function:packages/agent/src/compression-agent.ts:runCompressionAgent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/compression-agent.ts",
+      "target": "function:packages/agent/src/compression-agent.ts:parseSummaryToSessionMemory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/compression-agent.ts",
+      "target": "function:packages/agent/src/compression-agent.ts:runCompressionAgent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/compression-agent.ts",
+      "target": "file:packages/agent/src/auxiliary-complete.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/compression-agent.ts:runCompressionAgent",
+      "target": "function:packages/agent/src/compression-agent.ts:parseSummaryToSessionMemory",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/format-conversation-for-memory.ts",
+      "target": "function:packages/agent/src/format-conversation-for-memory.ts:formatConversationForMemoryExtraction",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/format-conversation-for-memory.ts",
+      "target": "function:packages/agent/src/format-conversation-for-memory.ts:formatConversationForMemoryExtraction",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/llm-memory-selector.ts",
+      "target": "function:packages/agent/src/llm-memory-selector.ts:buildSelectorUser",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/llm-memory-selector.ts",
+      "target": "function:packages/agent/src/llm-memory-selector.ts:createLlmMemorySelectFn",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/llm-memory-selector.ts",
+      "target": "function:packages/agent/src/llm-memory-selector.ts:createLlmMemorySelectFn",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/llm-memory-selector.ts",
+      "target": "file:packages/agent/src/auxiliary-complete.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/llm-memory-selector.ts:createLlmMemorySelectFn",
+      "target": "function:packages/agent/src/llm-memory-selector.ts:buildSelectorUser",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/memory-extraction-agent.ts",
+      "target": "function:packages/agent/src/memory-extraction-agent.ts:scanForSensitiveInfo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/memory-extraction-agent.ts",
+      "target": "function:packages/agent/src/memory-extraction-agent.ts:buildExtractionUser",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/memory-extraction-agent.ts",
+      "target": "function:packages/agent/src/memory-extraction-agent.ts:extractMemories",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/memory-extraction-agent.ts",
+      "target": "function:packages/agent/src/memory-extraction-agent.ts:parseMemoryEntries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/memory-extraction-agent.ts",
+      "target": "function:packages/agent/src/memory-extraction-agent.ts:scanForSensitiveInfo",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/memory-extraction-agent.ts",
+      "target": "function:packages/agent/src/memory-extraction-agent.ts:extractMemories",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/memory-extraction-agent.ts",
+      "target": "file:packages/agent/src/auxiliary-complete.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/memory-extraction-agent.ts:extractMemories",
+      "target": "function:packages/agent/src/memory-extraction-agent.ts:buildExtractionUser",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/memory-extraction-agent.ts:extractMemories",
+      "target": "function:packages/agent/src/memory-extraction-agent.ts:parseMemoryEntries",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator-factory.ts",
+      "target": "function:packages/agent/src/orchestrator-factory.ts:loadMcpServers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator-factory.ts",
+      "target": "function:packages/agent/src/orchestrator-factory.ts:createRunOrchestrator",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator-factory.ts",
+      "target": "function:packages/agent/src/orchestrator-factory.ts:createRunOrchestrator",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator-factory.ts",
+      "target": "file:packages/agent/src/orchestrator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator-factory.ts",
+      "target": "file:packages/agent/src/resolve-plan-snapshot-max-items.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator-factory.ts",
+      "target": "file:packages/agent/src/sub-agent-launcher.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator-factory.ts:createRunOrchestrator",
+      "target": "function:packages/agent/src/orchestrator-factory.ts:loadMcpServers",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "function:packages/agent/src/orchestrator.ts:classifyError",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "function:packages/agent/src/orchestrator.ts:computeRetryDelay",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "class:packages/agent/src/orchestrator.ts:AgentOrchestrator",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "class:packages/agent/src/orchestrator.ts:AgentOrchestrator",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/child-system-prompt.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/compression-agent.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/orchestrator/memory-extraction.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/orchestrator/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/parse-agent-action.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/resilience/circuit-breaker.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/resolve-max-steps.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/resolve-memory-retrieval.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/resolve-shell-sandbox.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator.ts",
+      "target": "file:packages/agent/src/settings.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleNoAction",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleFinalAnswer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAskUser",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handlePlanUpdate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleToolCalls",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleRunAgent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "file:packages/agent/src/orchestrator/constants.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/action-handlers.ts",
+      "target": "file:packages/agent/src/orchestrator/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleRunAgent",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleToolCalls",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleNoAction",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleFinalAnswer",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAskUser",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handlePlanUpdate",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/action-handlers.ts:handleAction",
+      "target": "function:packages/agent/src/orchestrator/action-handlers.ts:handleNoAction",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:buildRole",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:buildOutputFormat",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:parseRunAgentMaxSteps",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:buildMinimalSharedContext",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:buildRole",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:buildOutputFormat",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:parseRunAgentMaxSteps",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:buildMinimalSharedContext",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "target": "file:packages/agent/src/orchestrator/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/agent-args.ts:buildMinimalSharedContext",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:buildRole",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/agent-args.ts:buildMinimalSharedContext",
+      "target": "function:packages/agent/src/orchestrator/agent-args.ts:buildOutputFormat",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "target": "function:packages/agent/src/orchestrator/agent-group.ts:mapToChildEventType",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "target": "class:packages/agent/src/orchestrator/agent-group.ts:AgentGroup",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "target": "class:packages/agent/src/orchestrator/agent-group.ts:AgentGroup",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "target": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "target": "file:packages/agent/src/orchestrator/constants.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/agent-group.ts",
+      "target": "file:packages/agent/src/orchestrator/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractParentGoal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractFacts",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractUserConstraints",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractArtifacts",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractParentConclusions",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/context-summarizer.ts:truncateToBudget",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "class:packages/agent/src/orchestrator/context-summarizer.ts:DefaultContextSummarizer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "class:packages/agent/src/orchestrator/context-summarizer.ts:DefaultContextSummarizer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "file:packages/agent/src/orchestrator/agent-args.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "file:packages/agent/src/orchestrator/constants.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "target": "file:packages/agent/src/orchestrator/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractFacts",
+      "target": "function:packages/agent/src/orchestrator/context-summarizer.ts:extractParentGoal",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

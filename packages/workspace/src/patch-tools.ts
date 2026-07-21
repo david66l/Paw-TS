@@ -32,6 +32,7 @@
  */
 
 import fs from "node:fs";
+import path from "node:path";
 
 import { applyPatch, parsePatch } from "diff";
 
@@ -211,8 +212,9 @@ export function applyWorkspacePatch(
       };
     }
 
-    // patch 应用成功 → 写入新内容
+    // patch 应用成功 → 写入新内容（新文件时补建父目录）
     try {
+      fs.mkdirSync(path.dirname(t.resolvedPath), { recursive: true });
       fs.writeFileSync(t.resolvedPath, patched, "utf8");
       const counts = countLinesChanged(t.patch);
       results.push({

@@ -20,11 +20,6 @@ import { formatPatch, structuredPatch } from "diff";
 
 import { checkWorkspacePath } from "../path-guard.js";
 
-
-
-
-
-
 const MAX_WRITE_BYTES = 512 * 1024;
 const MAX_EDIT_BYTES = 512 * 1024;
 
@@ -258,6 +253,11 @@ export function editWorkspaceFile(
 export interface WriteFileResult {
   readonly path?: string;
   readonly bytes_written?: number;
+  /** 与 edit_file 对齐：结构化 diff 统计，供事件层/UI 展示 */
+  readonly linesAdded?: number;
+  readonly linesRemoved?: number;
+  /** Unified diff 文本（截断 ~2k 字符） */
+  readonly diff?: string;
   readonly error?: string;
 }
 
@@ -276,12 +276,32 @@ export function writeWorkspaceFile(
     return { error: `content exceeds ${MAX_WRITE_BYTES} bytes` };
   }
   try {
+    // 写入前读旧内容算 diff 统计；读失败（二进制/权限）不阻断写入
+    let oldContent = "";
+    try {
+      oldContent = fs.existsSync(d.resolvedPath)
+        ? fs.readFileSync(d.resolvedPath, "utf8")
+        : "";
+    } catch {
+      /* best effort */
+    }
     if (options.createDirectories) {
       const dir = path.dirname(d.resolvedPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(d.resolvedPath, content, "utf8");
-    return { bytes_written: Buffer.byteLength(content, "utf8") };
+    const { linesAdded, linesRemoved, diffText } = computeDiffStats(
+      d.resolvedPath,
+      oldContent,
+      content,
+    );
+    return {
+      path: relPath,
+      bytes_written: Buffer.byteLength(content, "utf8"),
+      linesAdded,
+      linesRemoved,
+      diff: diffText,
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }

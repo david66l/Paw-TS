@@ -1,0 +1,252 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 5,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "ARCHITECTURE.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 64,
+      "nonEmptyLines": 46,
+      "sections": [
+        {
+          "heading": "Paw-TS Architecture (summary)",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Stack",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "Turn loop",
+          "level": 2,
+          "line": 12
+        },
+        {
+          "heading": "Context compression (three layers)",
+          "level": 2,
+          "line": 25
+        },
+        {
+          "heading": "Memory",
+          "level": 2,
+          "line": 35
+        },
+        {
+          "heading": "Multi-agent",
+          "level": 2,
+          "line": 41
+        },
+        {
+          "heading": "Security / harness",
+          "level": 2,
+          "line": 46
+        },
+        {
+          "heading": "Verification",
+          "level": 2,
+          "line": 52
+        },
+        {
+          "heading": "Related docs",
+          "level": 2,
+          "line": 60
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 9
+      }
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 92,
+      "nonEmptyLines": 67,
+      "sections": [
+        {
+          "heading": "Paw (TypeScript)",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Monorepo layout",
+          "level": 2,
+          "line": 14
+        },
+        {
+          "heading": "Development",
+          "level": 2,
+          "line": 28
+        },
+        {
+          "heading": "Optional: Ollama E2E",
+          "level": 3,
+          "line": 39
+        },
+        {
+          "heading": "Agent tools (harness)",
+          "level": 2,
+          "line": 49
+        },
+        {
+          "heading": "Feature status (honest)",
+          "level": 2,
+          "line": 69
+        },
+        {
+          "heading": "Docs",
+          "level": 2,
+          "line": 79
+        },
+        {
+          "heading": "Benchmarks",
+          "level": 2,
+          "line": 86
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 8
+      }
+    },
+    {
+      "path": "biome.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 27,
+      "nonEmptyLines": 27,
+      "sections": [
+        {
+          "heading": "$schema",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "vcs",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "files",
+          "level": 1,
+          "line": 8
+        },
+        {
+          "heading": "organizeImports",
+          "level": 1,
+          "line": 11
+        },
+        {
+          "heading": "linter",
+          "level": 1,
+          "line": 12
+        },
+        {
+          "heading": "formatter",
+          "level": 1,
+          "line": 22
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 6
+      }
+    },
+    {
+      "path": "package.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 43,
+      "nonEmptyLines": 43,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "private",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "type",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "description",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "workspaces",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "scripts",
+          "level": 1,
+          "line": 7
+        },
+        {
+          "heading": "devDependencies",
+          "level": 1,
+          "line": 33
+        },
+        {
+          "heading": "dependencies",
+          "level": 1,
+          "line": 39
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 8
+      }
+    },
+    {
+      "path": "tsconfig.base.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 22,
+      "nonEmptyLines": 22,
+      "sections": [
+        {
+          "heading": "$schema",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "compilerOptions",
+          "level": 1,
+          "line": 3
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 2
+      }
+    }
+  ]
+}

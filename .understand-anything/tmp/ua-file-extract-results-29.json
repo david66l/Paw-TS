@@ -1,0 +1,2633 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 25,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "docs/升级/面试反馈与升级建议.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 143,
+      "nonEmptyLines": 94,
+      "sections": [
+        {
+          "heading": "Paw Code 面试反馈汇总与升级建议",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、已修复项（基于之前优化计划）",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "二、面试中指出的未修复项",
+          "level": 2,
+          "line": 23
+        },
+        {
+          "heading": "P0 — 安全边界仍需加固",
+          "level": 3,
+          "line": 25
+        },
+        {
+          "heading": "1. Shell guard：黑名单 → AST 解析（未做）",
+          "level": 4,
+          "line": 27
+        },
+        {
+          "heading": "2. 面试中描述的分层安全模型未实现",
+          "level": 4,
+          "line": 44
+        },
+        {
+          "heading": "3. Docker 沙箱仍是可选，不是默认",
+          "level": 4,
+          "line": 58
+        },
+        {
+          "heading": "P1 — Agent Loop 可靠性",
+          "level": 3,
+          "line": 69
+        },
+        {
+          "heading": "4. auto_nudge 重试无指数退避",
+          "level": 4,
+          "line": 71
+        },
+        {
+          "heading": "5. 工具调用协议未升级为原生 function calling 优先",
+          "level": 4,
+          "line": 82
+        },
+        {
+          "heading": "P2 — 微调/模型能力",
+          "level": 3,
+          "line": 96
+        },
+        {
+          "heading": "6. 目前使用通用模型，对 Paw Code 工具格式无专门优化",
+          "level": 4,
+          "line": 98
+        },
+        {
+          "heading": "三、面试回答层面的改进建议",
+          "level": 2,
+          "line": 106
+        },
+        {
+          "heading": "口径问题",
+          "level": 3,
+          "line": 108
+        },
+        {
+          "heading": "项目定位话术",
+          "level": 3,
+          "line": 127
+        },
+        {
+          "heading": "四、优先级排序",
+          "level": 2,
+          "line": 134
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 16
+      }
+    },
+    {
+      "path": "docs/微调/数据集构建计划.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 239,
+      "nonEmptyLines": 186,
+      "sections": [
+        {
+          "heading": "微调数据集构建计划",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "0. 现状摸底",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "1. 数据集 A：Tool Calling 单步格式（目标 ≥1000 条）",
+          "level": 2,
+          "line": 22
+        },
+        {
+          "heading": "1.1 从日志提取（预估 500-700 条）",
+          "level": 3,
+          "line": 24
+        },
+        {
+          "heading": "1.2 模板合成补充（预估 500+ 条）",
+          "level": 3,
+          "line": 55
+        },
+        {
+          "heading": "1.3 格式修正样本（30 条）",
+          "level": 3,
+          "line": 80
+        },
+        {
+          "heading": "2. 数据集 B：工程行为工作流（目标 50-100 条）",
+          "level": 2,
+          "line": 94
+        },
+        {
+          "heading": "2.1 从日志筛选完整轨迹（预估 15-30 条）",
+          "level": 3,
+          "line": 96
+        },
+        {
+          "heading": "2.2 高质量模型生成种子轨迹（预估 30-50 条）",
+          "level": 3,
+          "line": 132
+        },
+        {
+          "heading": "2.3 关键技术细节",
+          "level": 3,
+          "line": 157
+        },
+        {
+          "heading": "3. 执行脚本",
+          "level": 2,
+          "line": 178
+        },
+        {
+          "heading": "3.1 日志提取脚本",
+          "level": 3,
+          "line": 180
+        },
+        {
+          "heading": "3.2 模板合成脚本",
+          "level": 3,
+          "line": 201
+        },
+        {
+          "heading": "3.3 质量检查",
+          "level": 3,
+          "line": 210
+        },
+        {
+          "heading": "4. 执行步骤",
+          "level": 2,
+          "line": 228
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 15
+      }
+    },
+    {
+      "path": "docs/微调/微调与推理优化计划.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 451,
+      "nonEmptyLines": 357,
+      "sections": [
+        {
+          "heading": "Paw Code 微调与推理优化计划",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "1. 硬件与框架选型",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "2. 微调方案",
+          "level": 2,
+          "line": 18
+        },
+        {
+          "heading": "2.1 训练环境",
+          "level": 3,
+          "line": 20
+        },
+        {
+          "heading": "2.2 QLoRA 配置",
+          "level": 3,
+          "line": 28
+        },
+        {
+          "heading": "2.3 训练参数",
+          "level": 3,
+          "line": 63
+        },
+        {
+          "heading": "2.4 显存预算（加 MLP 层后）",
+          "level": 3,
+          "line": 85
+        },
+        {
+          "heading": "3. 训练数据构造",
+          "level": 2,
+          "line": 100
+        },
+        {
+          "heading": "3.1 方向 A：Tool Calling 格式微调（≥1000 条）",
+          "level": 3,
+          "line": 102
+        },
+        {
+          "heading": "3.2 方向 B：工程行为偏好（50-100 条完整轨迹）",
+          "level": 3,
+          "line": 139
+        },
+        {
+          "heading": "4. 训练流程",
+          "level": 2,
+          "line": 167
+        },
+        {
+          "heading": "4.1 预处理",
+          "level": 3,
+          "line": 169
+        },
+        {
+          "heading": "4.2 Sequential SFT（不做 LoRA 合并）",
+          "level": 3,
+          "line": 178
+        },
+        {
+          "heading": "4.3 合并 LoRA 到基座模型（vLLM 部署前）",
+          "level": 3,
+          "line": 201
+        },
+        {
+          "heading": "5. 评估",
+          "level": 2,
+          "line": 224
+        },
+        {
+          "heading": "5.1 方向 A 指标",
+          "level": 3,
+          "line": 226
+        },
+        {
+          "heading": "5.2 方向 B 指标",
+          "level": 3,
+          "line": 235
+        },
+        {
+          "heading": "6. vLLM 推理部署",
+          "level": 2,
+          "line": 245
+        },
+        {
+          "heading": "6.1 启动配置",
+          "level": 3,
+          "line": 247
+        },
+        {
+          "heading": "6.2 参数解释",
+          "level": 3,
+          "line": 260
+        },
+        {
+          "heading": "6.3 结构化输出（Structured Outputs）",
+          "level": 3,
+          "line": 269
+        },
+        {
+          "heading": "6.4 验证",
+          "level": 3,
+          "line": 331
+        },
+        {
+          "heading": "7. Paw Code 集成",
+          "level": 2,
+          "line": 373
+        },
+        {
+          "heading": "7.1 Provider Adapter",
+          "level": 3,
+          "line": 375
+        },
+        {
+          "heading": "7.2 Tool Call 协议升级",
+          "level": 3,
+          "line": 387
+        },
+        {
+          "heading": "8. 延迟预估",
+          "level": 2,
+          "line": 412
+        },
+        {
+          "heading": "9. 面试话术",
+          "level": 2,
+          "line": 424
+        },
+        {
+          "heading": "10. 执行步骤",
+          "level": 2,
+          "line": 440
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 28
+      }
+    },
+    {
+      "path": "docs/应用架构图.mmd",
+      "language": "mmd",
+      "fileCategory": "code",
+      "totalLines": 64,
+      "nonEmptyLines": 57,
+      "metrics": {}
+    },
+    {
+      "path": "packages/agent/package.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 21,
+      "nonEmptyLines": 21,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "version",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "private",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "type",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "exports",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "dependencies",
+          "level": 1,
+          "line": 9
+        },
+        {
+          "heading": "scripts",
+          "level": 1,
+          "line": 17
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    },
+    {
+      "path": "packages/agent/src/index.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 53,
+      "nonEmptyLines": 51,
+      "exports": [
+        {
+          "name": "AgentOrchestratorOptions",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "AskUserResolveInput",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "ToolApprovalInput",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "AgentOrchestrator",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "resolvePlanSnapshotMaxItems",
+          "line": 14,
+          "isDefault": false
+        },
+        {
+          "name": "parseAgentActionFromModelText",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "parseAgentActionsFromModelText",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "McpServerConfig",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "McpToolRef",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "McpCallResult",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "DefaultSubAgentLauncher",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "DefaultSubAgentLauncherOptions",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "runCompressionAgent",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "CompressionAgentResult",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "extractMemories",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryExtractionResult",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "createPersistentSession",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "PersistentSession",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "PersistentSessionOptions",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "createRunSessionController",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "RunSessionController",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "createRunOrchestrator",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "RunOrchestrator",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "RunOrchestratorOptions",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "runStubRun",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "formatDoctorOutput",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "formatFsListOutput",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "formatFsReadOutput",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "StubRunOptions",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "StubRunSession",
+          "line": 46,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 30,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/tsconfig.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 9,
+      "nonEmptyLines": 9,
+      "sections": [
+        {
+          "heading": "extends",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "compilerOptions",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "include",
+          "level": 1,
+          "line": 8
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "packages/core/package.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 16,
+      "nonEmptyLines": 16,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "version",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "private",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "type",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "dependencies",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "exports",
+          "level": 1,
+          "line": 9
+        },
+        {
+          "heading": "scripts",
+          "level": 1,
+          "line": 12
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    },
+    {
+      "path": "packages/core/src/cost-tracker.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 335,
+      "nonEmptyLines": 306,
+      "functions": [
+        {
+          "name": "normalizeModelKey",
+          "startLine": 144,
+          "endLine": 148,
+          "params": [
+            "modelLabel"
+          ]
+        },
+        {
+          "name": "resolveRates",
+          "startLine": 157,
+          "endLine": 173,
+          "params": [
+            "pricing"
+          ]
+        },
+        {
+          "name": "resolveModelPricing",
+          "startLine": 188,
+          "endLine": 224,
+          "params": [
+            "modelLabel",
+            "custom"
+          ]
+        },
+        {
+          "name": "estimateUsageCost",
+          "startLine": 239,
+          "endLine": 263,
+          "params": [
+            "modelLabel",
+            "usage",
+            "custom"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "CostTracker",
+          "startLine": 277,
+          "endLine": 335,
+          "methods": [
+            "constructor",
+            "record",
+            "snapshot",
+            "reset",
+            "summary"
+          ],
+          "properties": [
+            "pricing",
+            "promptTokens",
+            "completionTokens",
+            "totalCost",
+            "costCurrency"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolveModelPricing",
+          "line": 188,
+          "isDefault": false
+        },
+        {
+          "name": "estimateUsageCost",
+          "line": 239,
+          "isDefault": false
+        },
+        {
+          "name": "CostTracker",
+          "line": 277,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "normalizeModelKey",
+          "callee": "modelLabel.trim().toLowerCase",
+          "lineNumber": 145
+        },
+        {
+          "caller": "normalizeModelKey",
+          "callee": "modelLabel.trim",
+          "lineNumber": 145
+        },
+        {
+          "caller": "normalizeModelKey",
+          "callee": "trimmed.lastIndexOf",
+          "lineNumber": 146
+        },
+        {
+          "caller": "normalizeModelKey",
+          "callee": "trimmed.slice",
+          "lineNumber": 147
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "normalizeModelKey",
+          "lineNumber": 192
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "key.includes",
+          "lineNumber": 198
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "key.includes",
+          "lineNumber": 199
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "key.includes",
+          "lineNumber": 200
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Object.entries",
+          "lineNumber": 208
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "key.includes",
+          "lineNumber": 209
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "name.includes",
+          "lineNumber": 209
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Object.values(custom).reduce",
+          "lineNumber": 216
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Object.values",
+          "lineNumber": 216
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Math.max",
+          "lineNumber": 219
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Object.values",
+          "lineNumber": 219
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Object.values(custom).reduce",
+          "lineNumber": 221
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Object.values",
+          "lineNumber": 221
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Math.max",
+          "lineNumber": 222
+        },
+        {
+          "caller": "resolveModelPricing",
+          "callee": "Object.values",
+          "lineNumber": 222
+        },
+        {
+          "caller": "estimateUsageCost",
+          "callee": "resolveModelPricing",
+          "lineNumber": 244
+        },
+        {
+          "caller": "estimateUsageCost",
+          "callee": "resolveRates",
+          "lineNumber": 245
+        },
+        {
+          "caller": "estimateUsageCost",
+          "callee": "Math.min",
+          "lineNumber": 249
+        },
+        {
+          "caller": "estimateUsageCost",
+          "callee": "Math.max",
+          "lineNumber": 249
+        },
+        {
+          "caller": "estimateUsageCost",
+          "callee": "Math.round",
+          "lineNumber": 260
+        },
+        {
+          "caller": "record",
+          "callee": "estimateUsageCost",
+          "lineNumber": 291
+        },
+        {
+          "caller": "snapshot",
+          "callee": "Math.round",
+          "lineNumber": 310
+        },
+        {
+          "caller": "summary",
+          "callee": "this.snapshot",
+          "lineNumber": 331
+        },
+        {
+          "caller": "summary",
+          "callee": "s.totalTokens.toLocaleString",
+          "lineNumber": 333
+        },
+        {
+          "caller": "summary",
+          "callee": "s.estimatedCost.toFixed",
+          "lineNumber": 333
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 4,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/core/src/errors.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 142,
+      "nonEmptyLines": 134,
+      "functions": [
+        {
+          "name": "isPawError",
+          "startLine": 117,
+          "endLine": 119,
+          "params": [
+            "e"
+          ]
+        },
+        {
+          "name": "makeToolError",
+          "startLine": 129,
+          "endLine": 142,
+          "params": [
+            "code",
+            "message",
+            "detail"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "PawError",
+          "startLine": 97,
+          "endLine": 109,
+          "methods": [
+            "constructor"
+          ],
+          "properties": [
+            "code",
+            "causeDetail"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PawError",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "isPawError",
+          "line": 117,
+          "isDefault": false
+        },
+        {
+          "name": "makeToolError",
+          "line": 129,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 104
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/core/src/find-root.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 54,
+      "nonEmptyLines": 47,
+      "functions": [
+        {
+          "name": "findPawRoot",
+          "startLine": 32,
+          "endLine": 54,
+          "params": [
+            "startDir"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "findPawRoot",
+          "line": 32,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "findPawRoot",
+          "callee": "path.resolve",
+          "lineNumber": 34
+        },
+        {
+          "caller": "findPawRoot",
+          "callee": "fs.existsSync",
+          "lineNumber": 39
+        },
+        {
+          "caller": "findPawRoot",
+          "callee": "path.join",
+          "lineNumber": 39
+        },
+        {
+          "caller": "findPawRoot",
+          "callee": "path.dirname",
+          "lineNumber": 44
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 374,
+      "nonEmptyLines": 348,
+      "exports": [
+        {
+          "name": "AgentAbortAction",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "AgentAction",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "AgentAskUserAction",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "AgentFinalAnswerAction",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "AgentPlanUpdateAction",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "AgentToolCallAction",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "ContextManager",
+          "line": 71,
+          "isDefault": false
+        },
+        {
+          "name": "Attachment",
+          "line": 71,
+          "isDefault": false
+        },
+        {
+          "name": "ChatMessage",
+          "line": 71,
+          "isDefault": false
+        },
+        {
+          "name": "ContextManagerOptions",
+          "line": 71,
+          "isDefault": false
+        },
+        {
+          "name": "appStateSummary",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "FileSystemAppStateStore",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "InMemoryAppStateStore",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "isAppStateFinished",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "AppState",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "AppStateStore",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "CostTracker",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "estimateUsageCost",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "resolveModelPricing",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "CostCurrency",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "CostSnapshot",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "ModelPricing",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "UsageRecord",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "isPawError",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "makeToolError",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "PawError",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "PawErrorCode",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "ToolErrorCode",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "ToolErrorPayload",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "sanitizeUserInput",
+          "line": 118,
+          "isDefault": false
+        },
+        {
+          "name": "SanitizeResult",
+          "line": 119,
+          "isDefault": false
+        },
+        {
+          "name": "EvalHooks",
+          "line": 124,
+          "isDefault": false
+        },
+        {
+          "name": "RunEvent",
+          "line": 129,
+          "isDefault": false
+        },
+        {
+          "name": "RunEventEnvelope",
+          "line": 129,
+          "isDefault": false
+        },
+        {
+          "name": "formatRunMetricsSummary",
+          "line": 134,
+          "isDefault": false
+        },
+        {
+          "name": "RunMetrics",
+          "line": 134,
+          "isDefault": false
+        },
+        {
+          "name": "RunMetricsAccumulator",
+          "line": 134,
+          "isDefault": false
+        },
+        {
+          "name": "evaluateRunFromEnvelopes",
+          "line": 139,
+          "isDefault": false
+        },
+        {
+          "name": "evaluateRunFromJsonl",
+          "line": 139,
+          "isDefault": false
+        },
+        {
+          "name": "estimateTokens",
+          "line": 147,
+          "isDefault": false
+        },
+        {
+          "name": "estimateMessageTokens",
+          "line": 147,
+          "isDefault": false
+        },
+        {
+          "name": "estimateMessagesTokens",
+          "line": 147,
+          "isDefault": false
+        },
+        {
+          "name": "ApproximateEstimator",
+          "line": 152,
+          "isDefault": false
+        },
+        {
+          "name": "TokenEstimator",
+          "line": 152,
+          "isDefault": false
+        },
+        {
+          "name": "pruneToolResults",
+          "line": 157,
+          "isDefault": false
+        },
+        {
+          "name": "PruneConfig",
+          "line": 157,
+          "isDefault": false
+        },
+        {
+          "name": "PruneResult",
+          "line": 157,
+          "isDefault": false
+        },
+        {
+          "name": "isToolResultMessage",
+          "line": 166,
+          "isDefault": false
+        },
+        {
+          "name": "parseToolResult",
+          "line": 166,
+          "isDefault": false
+        },
+        {
+          "name": "splitToolBlocks",
+          "line": 166,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_KEEP_RECENT_TOOLS",
+          "line": 167,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_MAX_TOOL_OUTPUT_BYTES",
+          "line": 167,
+          "isDefault": false
+        },
+        {
+          "name": "getToolResultsDir",
+          "line": 167,
+          "isDefault": false
+        },
+        {
+          "name": "isPersistedToolResult",
+          "line": 167,
+          "isDefault": false
+        },
+        {
+          "name": "ContextCompactor",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "CONTEXT_SUMMARY_PREFIX",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_COMPACTOR_CONFIG",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "stripContextSummaryMessages",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "isContextSummaryMessage",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "CompactorConfig",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "CompactBoundaries",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "CompactCheck",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "allocateContextBudget",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_BUDGET_RATIOS",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "LARGE_WINDOW_BUDGET_RATIOS",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "measureContextBudget",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "resolveBudgetRatios",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "shouldCompactHistory",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "truncateTextToTokenBudget",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "MEMORY_INJECTION_DETAIL_TOKENS",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "ContextBudgetAllocation",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "ContextBudgetRatios",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "ContextBudgetSnapshot",
+          "line": 191,
+          "isDefault": false
+        },
+        {
+          "name": "compressionSavingsRatio",
+          "line": 208,
+          "isDefault": false
+        },
+        {
+          "name": "meetsCompressionSavingsThreshold",
+          "line": 208,
+          "isDefault": false
+        },
+        {
+          "name": "MIN_COMPRESSION_SAVINGS_RATIO",
+          "line": 208,
+          "isDefault": false
+        },
+        {
+          "name": "REQUIRED_SUMMARY_SECTIONS",
+          "line": 208,
+          "isDefault": false
+        },
+        {
+          "name": "validateCompressionSummary",
+          "line": 208,
+          "isDefault": false
+        },
+        {
+          "name": "parseMarkdownSections",
+          "line": 219,
+          "isDefault": false
+        },
+        {
+          "name": "parseYamlFrontmatter",
+          "line": 219,
+          "isDefault": false
+        },
+        {
+          "name": "splitFrontmatter",
+          "line": 219,
+          "isDefault": false
+        },
+        {
+          "name": "stringifyYamlFrontmatter",
+          "line": 219,
+          "isDefault": false
+        },
+        {
+          "name": "ModelTokenUsage",
+          "line": 229,
+          "isDefault": false
+        },
+        {
+          "name": "RunResult",
+          "line": 234,
+          "isDefault": false
+        },
+        {
+          "name": "RunSpec",
+          "line": 234,
+          "isDefault": false
+        },
+        {
+          "name": "RunStatus",
+          "line": 234,
+          "isDefault": false
+        },
+        {
+          "name": "FileSystemSessionStore",
+          "line": 239,
+          "isDefault": false
+        },
+        {
+          "name": "FileSystemSessionStoreOptions",
+          "line": 239,
+          "isDefault": false
+        },
+        {
+          "name": "RunSummary",
+          "line": 239,
+          "isDefault": false
+        },
+        {
+          "name": "SessionStore",
+          "line": 239,
+          "isDefault": false
+        },
+        {
+          "name": "formatTodosForPrompt",
+          "line": 249,
+          "isDefault": false
+        },
+        {
+          "name": "InMemoryTodoStore",
+          "line": 249,
+          "isDefault": false
+        },
+        {
+          "name": "TodoItem",
+          "line": 249,
+          "isDefault": false
+        },
+        {
+          "name": "TodoStore",
+          "line": 249,
+          "isDefault": false
+        },
+        {
+          "name": "loadSkillsFromDirectory",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "renderSkillPrompt",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "skillsFromProjectMemory",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "SkillRegistry",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "SkillDefinition",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "SkillInvocation",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "SkillParameter",
+          "line": 259,
+          "isDefault": false
+        },
+        {
+          "name": "isMutatingTool",
+          "line": 272,
+          "isDefault": false
+        },
+        {
+          "name": "listCheckpoints",
+          "line": 272,
+          "isDefault": false
+        },
+        {
+          "name": "restoreCheckpoint",
+          "line": 272,
+          "isDefault": false
+        },
+        {
+          "name": "saveCheckpoint",
+          "line": 272,
+          "isDefault": false
+        },
+        {
+          "name": "undoLastCheckpoint",
+          "line": 272,
+          "isDefault": false
+        },
+        {
+          "name": "CheckpointEntry",
+          "line": 272,
+          "isDefault": false
+        },
+        {
+          "name": "loadProjectMemory",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "ProjectMemory",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "AutoMemoryStore",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "AutoMemoryEntry",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "AutoMemoryPriority",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "EmbeddingCache",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "resolveEmbeddingConfig",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "EmbeddingCacheEntry",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "EmbeddingConfig",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_CASCADE_CONFIG",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "formatMemoryManifest",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "LLM_FALLBACK_SCORE",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "shouldEscalateToLlmFallback",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "CascadeFallbackConfig",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "LlmMemorySelectFn",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "LlmMemorySelectInput",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "retrieveMemories",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "RetrieveMemoriesOptions",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "UnifiedMemoryStore",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "UnifiedMemoryStoreOptions",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "KeywordMemoryRetriever",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_RETRIEVAL_CONFIG",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "RetrievalConfig",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "RetrievalQuery",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryRetrievalResult",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "sessionMemoryToRecord",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "autoMemoryToRecord",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "extractCleanMemoryQuery",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "extractFilePaths",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "extractErrorSignatures",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "inferTags",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "buildRetrievalSignalsFromMessages",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "isMemoryMetaQuery",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "isArchitectureQuery",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "isReferenceMemory",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "classifyTask",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "PRIORITY_COEFFICIENTS",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryRetrievalSignals",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryRecord",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "MemorySource",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryScope",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryPriority",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "TaskProfile",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "runReflection",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "shouldRunReflection",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "resetReflectionCounter",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionPlan",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionMergeAction",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionArchiveAction",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionConflictAction",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectorOptions",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionState",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "SessionMemoryStore",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "SessionMemory",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "findPawRoot",
+          "line": 354,
+          "isDefault": false
+        },
+        {
+          "name": "buildSystemPrompt",
+          "line": 359,
+          "isDefault": false
+        },
+        {
+          "name": "buildSystemPromptWithBudget",
+          "line": 359,
+          "isDefault": false
+        },
+        {
+          "name": "MAX_STEPS_WARNING",
+          "line": 359,
+          "isDefault": false
+        },
+        {
+          "name": "SystemPromptOptions",
+          "line": 359,
+          "isDefault": false
+        },
+        {
+          "name": "SystemPromptBuildResult",
+          "line": 359,
+          "isDefault": false
+        },
+        {
+          "name": "SystemPromptTrimEntry",
+          "line": 359,
+          "isDefault": false
+        },
+        {
+          "name": "memoryDir",
+          "line": 371,
+          "isDefault": false
+        },
+        {
+          "name": "sessionMemoryDir",
+          "line": 371,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 170,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/prompt/deepseek.txt",
+      "language": "txt",
+      "fileCategory": "docs",
+      "totalLines": 97,
+      "nonEmptyLines": 72,
+      "metrics": {}
+    },
+    {
+      "path": "packages/core/src/prompt/default.txt",
+      "language": "txt",
+      "fileCategory": "docs",
+      "totalLines": 93,
+      "nonEmptyLines": 69,
+      "metrics": {}
+    },
+    {
+      "path": "packages/core/test/cost-tracker.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 177,
+      "nonEmptyLines": 162,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/test/errors.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 20,
+      "nonEmptyLines": 18,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/test/fixtures.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 34,
+      "nonEmptyLines": 31,
+      "functions": [
+        {
+          "name": "makeRecord",
+          "startLine": 7,
+          "endLine": 26,
+          "params": [
+            "overrides"
+          ]
+        },
+        {
+          "name": "fakeEmbedding",
+          "startLine": 28,
+          "endLine": 34,
+          "params": [
+            "seed",
+            "dims"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "makeRecord",
+          "line": 7,
+          "isDefault": false
+        },
+        {
+          "name": "fakeEmbedding",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "makeRecord",
+          "callee": "Date.now",
+          "lineNumber": 12
+        },
+        {
+          "caller": "makeRecord",
+          "callee": "Date.now",
+          "lineNumber": 13
+        },
+        {
+          "caller": "rng",
+          "callee": "Math.sin",
+          "lineNumber": 30
+        },
+        {
+          "caller": "rng",
+          "callee": "Math.floor",
+          "lineNumber": 31
+        },
+        {
+          "caller": "fakeEmbedding",
+          "callee": "Array.from",
+          "lineNumber": 33
+        },
+        {
+          "caller": "fakeEmbedding",
+          "callee": "rng",
+          "lineNumber": 33
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/tsconfig.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 9,
+      "nonEmptyLines": 9,
+      "sections": [
+        {
+          "heading": "extends",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "compilerOptions",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "include",
+          "level": 1,
+          "line": 8
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "packages/eval/package.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 23,
+      "nonEmptyLines": 23,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "version",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "private",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "type",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "exports",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "scripts",
+          "level": 1,
+          "line": 9
+        },
+        {
+          "heading": "dependencies",
+          "level": 1,
+          "line": 13
+        },
+        {
+          "heading": "devDependencies",
+          "level": 1,
+          "line": 20
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 8
+      }
+    },
+    {
+      "path": "packages/eval/src/index.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 82,
+      "nonEmptyLines": 76,
+      "exports": [
+        {
+          "name": "EvalDataCollector",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "EvalRunRecord",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "EvalTurnRecord",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "EvalToolExecution",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "EvalModelInput",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "EvalModelOutput",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "EvalContextSnapshot",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "resolveEvalSettings",
+          "line": 36,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_EVAL_SETTINGS",
+          "line": 36,
+          "isDefault": false
+        },
+        {
+          "name": "EvalSettings",
+          "line": 36,
+          "isDefault": false
+        },
+        {
+          "name": "TestCase",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "TestSuite",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "TestCategory",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "AgentCapability",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "RuleSpec",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "RuleType",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "EvalDimension",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "LlmJudgment",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "listBuiltinSuites",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "resolveSuite",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "CORE_TOOLS_SUITE",
+          "line": 55,
+          "isDefault": false
+        },
+        {
+          "name": "SHELL_SAFETY_SUITE",
+          "line": 56,
+          "isDefault": false
+        },
+        {
+          "name": "CONTEXT_MGMT_SUITE",
+          "line": 57,
+          "isDefault": false
+        },
+        {
+          "name": "MEMORY_RETRIEVAL_SUITE",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "CODE_GEN_SUITE",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "MULTI_STEP_SUITE",
+          "line": 60,
+          "isDefault": false
+        },
+        {
+          "name": "ADVERSARIAL_SUITE",
+          "line": 61,
+          "isDefault": false
+        },
+        {
+          "name": "HIGH_FREQ_SUITE",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "RuleScorer",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "llmScore",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "LlmScoreResult",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "Aggregator",
+          "line": 67,
+          "isDefault": false
+        },
+        {
+          "name": "Reporter",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "ScoreReport",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "AggregateScoreReport",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "RuleResult",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "DimensionScore",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "EvalRunner",
+          "line": 77,
+          "isDefault": false
+        },
+        {
+          "name": "EvalRunnerOptions",
+          "line": 78,
+          "isDefault": false
+        },
+        {
+          "name": "EvalRunnerResult",
+          "line": 78,
+          "isDefault": false
+        },
+        {
+          "name": "runEvalCommand",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "EvalCommandArgs",
+          "line": 82,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 42,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/eval/tsconfig.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 9,
+      "nonEmptyLines": 9,
+      "sections": [
+        {
+          "heading": "extends",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "compilerOptions",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "include",
+          "level": 1,
+          "line": 8
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "packages/harness/package.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 19,
+      "nonEmptyLines": 19,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "version",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "private",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "type",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "exports",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "dependencies",
+          "level": 1,
+          "line": 9
+        },
+        {
+          "heading": "scripts",
+          "level": 1,
+          "line": 15
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    },
+    {
+      "path": "packages/harness/src/index.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 102,
+      "nonEmptyLines": 102,
+      "exports": [
+        {
+          "name": "HarnessContext",
+          "line": 63,
+          "isDefault": false
+        },
+        {
+          "name": "SubAgentLaunchOptions",
+          "line": 63,
+          "isDefault": false
+        },
+        {
+          "name": "SubAgentLauncher",
+          "line": 63,
+          "isDefault": false
+        },
+        {
+          "name": "SubAgentResult",
+          "line": 63,
+          "isDefault": false
+        },
+        {
+          "name": "executeTool",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "listToolNames",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "toolCatalogText",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "toolDefinitions",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "toolNameReverseMap",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "toolRequiresApproval",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "ToolName",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "ToolRunResult",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "runShellInWorkspace",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "runShellInWorkspaceStreaming",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "RunShellOptions",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "RunShellResult",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "RunShellStreamingOptions",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "buildDockerShellExecSpec",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "detectContainerRuntime",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_SANDBOX_IMAGE",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "OFF_SHELL_SANDBOX",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "isShellSandboxEnabled",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "DockerShellExecSpec",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "ShellSandboxConfig",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "ShellSandboxMode",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "ShellSandboxNetwork",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "McpClientManager",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "McpCallResult",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "McpServerConfig",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "McpToolRef",
+          "line": 97,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 30,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/harness/tsconfig.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 9,
+      "nonEmptyLines": 9,
+      "sections": [
+        {
+          "heading": "extends",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "compilerOptions",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "include",
+          "level": 1,
+          "line": 8
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "packages/memory/package.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 12,
+      "nonEmptyLines": 12,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "version",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "private",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "type",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "exports",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "dependencies",
+          "level": 1,
+          "line": 9
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 6
+      }
+    }
+  ]
+}

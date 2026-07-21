@@ -1,0 +1,17 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "packages/core/src/context/summary.ts", "language": "typescript", "sizeLines": 94, "fileCategory": "code"},
+    {"path": "packages/core/src/markdown.ts", "language": "typescript", "sizeLines": 152, "fileCategory": "code"},
+    {"path": "packages/core/src/skills.ts", "language": "typescript", "sizeLines": 561, "fileCategory": "code"},
+    {"path": "packages/core/test/compression-summary.test.ts", "language": "typescript", "sizeLines": 43, "fileCategory": "code"},
+    {"path": "packages/core/test/skills.test.ts", "language": "typescript", "sizeLines": 179, "fileCategory": "code"}
+  ],
+  "batchImportData": {
+    "packages/core/src/context/summary.ts": ["packages/core/src/markdown.ts"],
+    "packages/core/src/markdown.ts": [],
+    "packages/core/src/skills.ts": ["packages/core/src/markdown.ts"],
+    "packages/core/test/compression-summary.test.ts": ["packages/core/src/context/summary.ts", "packages/core/src/markdown.ts"],
+    "packages/core/test/skills.test.ts": ["packages/core/src/skills.ts"]
+  }
+}

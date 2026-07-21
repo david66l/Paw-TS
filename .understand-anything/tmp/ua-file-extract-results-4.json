@@ -1,0 +1,902 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 25,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/agent/src/sub-agent-launcher.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 196,
+      "nonEmptyLines": 183,
+      "functions": [
+        {
+          "name": "isSharedContext",
+          "startLine": 45,
+          "endLine": 52,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "resolveSharedContext",
+          "startLine": 59,
+          "endLine": 68,
+          "params": [
+            "goal",
+            "sharedContext",
+            "args"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "DefaultSubAgentLauncher",
+          "startLine": 70,
+          "endLine": 196,
+          "methods": [
+            "constructor",
+            "createChildOrchestrator",
+            "launch",
+            "launchStreaming"
+          ],
+          "properties": [
+            "workspaceRoot",
+            "model",
+            "subAgentModel",
+            "skillsDir",
+            "mcpServers",
+            "defaultMaxSteps"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "DefaultSubAgentLauncher",
+          "line": 70,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "resolveSharedContext",
+          "callee": "isSharedContext",
+          "lineNumber": 64
+        },
+        {
+          "caller": "resolveSharedContext",
+          "callee": "buildMinimalSharedContext",
+          "lineNumber": 67
+        },
+        {
+          "caller": "launch",
+          "callee": "Date.now().toString",
+          "lineNumber": 123
+        },
+        {
+          "caller": "launch",
+          "callee": "Date.now",
+          "lineNumber": 123
+        },
+        {
+          "caller": "launch",
+          "callee": "Date.now",
+          "lineNumber": 126
+        },
+        {
+          "caller": "launch",
+          "callee": "Math.random().toString(36).slice",
+          "lineNumber": 126
+        },
+        {
+          "caller": "launch",
+          "callee": "Math.random().toString",
+          "lineNumber": 126
+        },
+        {
+          "caller": "launch",
+          "callee": "Math.random",
+          "lineNumber": 126
+        },
+        {
+          "caller": "launch",
+          "callee": "this.launchStreaming",
+          "lineNumber": 127
+        },
+        {
+          "caller": "launchStreaming",
+          "callee": "resolveSharedContext",
+          "lineNumber": 162
+        },
+        {
+          "caller": "launchStreaming",
+          "callee": "this.createChildOrchestrator",
+          "lineNumber": 169
+        },
+        {
+          "caller": "launchStreaming",
+          "callee": "events.push",
+          "lineNumber": 170
+        },
+        {
+          "caller": "launchStreaming",
+          "callee": "options.onEvent",
+          "lineNumber": 171
+        },
+        {
+          "caller": "launchStreaming",
+          "callee": "orch.run",
+          "lineNumber": 178
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/agent/src/tool-result-detail.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 117,
+      "nonEmptyLines": 107,
+      "functions": [
+        {
+          "name": "formatToolResultEventDetail",
+          "startLine": 31,
+          "endLine": 117,
+          "params": [
+            "tr"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "formatToolResultEventDetail",
+          "line": 31,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "String((p as { error: unknown }).error).slice",
+          "lineNumber": 42
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "String",
+          "lineNumber": 42
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "c\n      .split(\"\\n\")\n      .slice(0, MAX_FILE_LINES)\n      .join(\"\\n\")\n      .slice",
+          "lineNumber": 53
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "c\n      .split(\"\\n\")\n      .slice(0, MAX_FILE_LINES)\n      .join",
+          "lineNumber": 53
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "c\n      .split(\"\\n\")\n      .slice",
+          "lineNumber": 53
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "c\n      .split",
+          "lineNumber": 53
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "Array.isArray",
+          "lineNumber": 61
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "files.slice(0, MAX_LIST_FILES).join(\"\\n\").slice",
+          "lineNumber": 63
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "files.slice(0, MAX_LIST_FILES).join",
+          "lineNumber": 63
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "files.slice",
+          "lineNumber": 63
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "parts.push",
+          "lineNumber": 79
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "parts.push",
+          "lineNumber": 82
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "parts.join(\"\\n\").slice",
+          "lineNumber": 84
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "parts.join",
+          "lineNumber": 84
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "Array.isArray",
+          "lineNumber": 88
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "mm.slice(0, 40).map",
+          "lineNumber": 94
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "mm.slice",
+          "lineNumber": 94
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "String(m.text ?? \"\").slice",
+          "lineNumber": 96
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "String",
+          "lineNumber": 96
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "lines.join(\"\\n\").slice",
+          "lineNumber": 99
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "lines.join",
+          "lineNumber": 99
+        },
+        {
+          "caller": "formatToolResultEventDetail",
+          "callee": "line.slice",
+          "lineNumber": 113
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/capabilities-integration.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 859,
+      "nonEmptyLines": 743,
+      "functions": [
+        {
+          "name": "cycleModel",
+          "startLine": 37,
+          "endLine": 57,
+          "params": [
+            "responses"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "complete",
+          "callee": "messages.filter",
+          "lineNumber": 167
+        },
+        {
+          "caller": "complete",
+          "callee": "JSON.stringify",
+          "lineNumber": 170
+        },
+        {
+          "caller": "complete",
+          "callee": "[...messages].reverse().find",
+          "lineNumber": 192
+        },
+        {
+          "caller": "complete",
+          "callee": "[...messages].reverse",
+          "lineNumber": 192
+        },
+        {
+          "caller": "complete",
+          "callee": "lastUser?.content.includes",
+          "lineNumber": 193
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/circuit-breaker.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 188,
+      "nonEmptyLines": 167,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/compression-agent.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 63,
+      "nonEmptyLines": 58,
+      "functions": [
+        {
+          "name": "fakeModel",
+          "startLine": 8,
+          "endLine": 18,
+          "params": [
+            "text"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "complete",
+          "callee": "messages.find((m) => m.role === \"user\")?.content?.toString",
+          "lineNumber": 52
+        },
+        {
+          "caller": "complete",
+          "callee": "messages.find",
+          "lineNumber": 52
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/context-summarizer.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 147,
+      "nonEmptyLines": 127,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/e2e-ollama.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 77,
+      "nonEmptyLines": 70,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/fixtures.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 16,
+      "nonEmptyLines": 13,
+      "functions": [
+        {
+          "name": "tmpDir",
+          "startLine": 10,
+          "endLine": 12,
+          "params": [
+            "prefix"
+          ]
+        },
+        {
+          "name": "cleanup",
+          "startLine": 14,
+          "endLine": 16,
+          "params": [
+            "dir"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "tmpDir",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "cleanup",
+          "line": 14,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "tmpDir",
+          "callee": "mkdtempSync",
+          "lineNumber": 11
+        },
+        {
+          "caller": "tmpDir",
+          "callee": "path.join",
+          "lineNumber": 11
+        },
+        {
+          "caller": "tmpDir",
+          "callee": "tmpdir",
+          "lineNumber": 11
+        },
+        {
+          "caller": "cleanup",
+          "callee": "existsSync",
+          "lineNumber": 15
+        },
+        {
+          "caller": "cleanup",
+          "callee": "rmSync",
+          "lineNumber": 15
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/format-conversation-for-memory.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 36,
+      "nonEmptyLines": 33,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/memory-extraction-agent.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 156,
+      "nonEmptyLines": 139,
+      "functions": [
+        {
+          "name": "fakeModel",
+          "startLine": 26,
+          "endLine": 36,
+          "params": [
+            "text"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "complete",
+          "callee": "messages.find((m) => m.role === \"user\")?.content?.toString",
+          "lineNumber": 57
+        },
+        {
+          "caller": "complete",
+          "callee": "messages.find",
+          "lineNumber": 57
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/model-retry.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 260,
+      "nonEmptyLines": 248,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/model-truncation.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 203,
+      "nonEmptyLines": 195,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/operations-run-session.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 27,
+      "nonEmptyLines": 25,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/orchestrator-compression.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 166,
+      "nonEmptyLines": 157,
+      "functions": [
+        {
+          "name": "buildHugeHistory",
+          "startLine": 12,
+          "endLine": 20,
+          "params": []
+        },
+        {
+          "name": "largeHistoryContextManager",
+          "startLine": 22,
+          "endLine": 24,
+          "params": []
+        },
+        {
+          "name": "auxiliaryModel",
+          "startLine": 37,
+          "endLine": 50,
+          "params": [
+            "responder"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "buildHugeHistory",
+          "callee": "\"word \".repeat",
+          "lineNumber": 13
+        },
+        {
+          "caller": "buildHugeHistory",
+          "callee": "messages.push",
+          "lineNumber": 16
+        },
+        {
+          "caller": "buildHugeHistory",
+          "callee": "messages.push",
+          "lineNumber": 17
+        },
+        {
+          "caller": "complete",
+          "callee": "messages.find((m) => m.role === \"user\")?.content?.toString",
+          "lineNumber": 43
+        },
+        {
+          "caller": "complete",
+          "callee": "messages.find",
+          "lineNumber": 43
+        },
+        {
+          "caller": "complete",
+          "callee": "responder",
+          "lineNumber": 44
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/orchestrator.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 927,
+      "nonEmptyLines": 882,
+      "callGraph": [
+        {
+          "caller": "complete",
+          "callee": "messages.filter",
+          "lineNumber": 360
+        },
+        {
+          "caller": "complete",
+          "callee": "expect(lastUser?.content).toContain",
+          "lineNumber": 362
+        },
+        {
+          "caller": "complete",
+          "callee": "expect",
+          "lineNumber": 362
+        },
+        {
+          "caller": "complete",
+          "callee": "expect(lastUser?.content).toContain",
+          "lineNumber": 363
+        },
+        {
+          "caller": "complete",
+          "callee": "expect",
+          "lineNumber": 363
+        },
+        {
+          "caller": "complete",
+          "callee": "expect(lastUser?.content).toContain",
+          "lineNumber": 364
+        },
+        {
+          "caller": "complete",
+          "callee": "expect",
+          "lineNumber": 364
+        },
+        {
+          "caller": "complete",
+          "callee": "messages.filter",
+          "lineNumber": 401
+        },
+        {
+          "caller": "complete",
+          "callee": "lastUser.indexOf",
+          "lineNumber": 403
+        },
+        {
+          "caller": "complete",
+          "callee": "expect(brace).toBeGreaterThan",
+          "lineNumber": 404
+        },
+        {
+          "caller": "complete",
+          "callee": "expect",
+          "lineNumber": 404
+        },
+        {
+          "caller": "complete",
+          "callee": "JSON.parse",
+          "lineNumber": 405
+        },
+        {
+          "caller": "complete",
+          "callee": "lastUser.slice",
+          "lineNumber": 405
+        },
+        {
+          "caller": "complete",
+          "callee": "expect(parsed.items.length).toBe",
+          "lineNumber": 410
+        },
+        {
+          "caller": "complete",
+          "callee": "expect",
+          "lineNumber": 410
+        },
+        {
+          "caller": "complete",
+          "callee": "expect(parsed.items_total).toBe",
+          "lineNumber": 411
+        },
+        {
+          "caller": "complete",
+          "callee": "expect",
+          "lineNumber": 411
+        },
+        {
+          "caller": "complete",
+          "callee": "expect(parsed.truncated).toBe",
+          "lineNumber": 412
+        },
+        {
+          "caller": "complete",
+          "callee": "expect",
+          "lineNumber": 412
+        },
+        {
+          "caller": "complete",
+          "callee": "JSON.stringify",
+          "lineNumber": 416
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/parse-agent-action.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 289,
+      "nonEmptyLines": 262,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/phase1-integration.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 283,
+      "nonEmptyLines": 240,
+      "functions": [
+        {
+          "name": "makeFakeModel",
+          "startLine": 25,
+          "endLine": 37,
+          "params": [
+            "sequence"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "complete",
+          "callee": "ac.abort",
+          "lineNumber": 197
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/phase2-e2e.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 244,
+      "nonEmptyLines": 217,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/resolve-memory-retrieval.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 78,
+      "nonEmptyLines": 66,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/resolve-plan-snapshot-max-items.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 43,
+      "nonEmptyLines": 39,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/resolve-shell-sandbox.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 30,
+      "nonEmptyLines": 26,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/run-session-controller.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 25,
+      "nonEmptyLines": 22,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/session-summarizer.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 164,
+      "nonEmptyLines": 142,
+      "functions": [
+        {
+          "name": "stubModel",
+          "startLine": 15,
+          "endLine": 25,
+          "params": [
+            "response"
+          ]
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/tool-result-detail.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 57,
+      "nonEmptyLines": 51,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/agent/test/worktree.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 72,
+      "nonEmptyLines": 61,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

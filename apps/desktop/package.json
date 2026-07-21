@@ -1,0 +1,36 @@
+{
+  "name": "@paw/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Paw Mac 桌面端（Electron + React）。Agent 核心仍用 @paw/*，本包只做 UI 壳。",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k -n vite,electron -c cyan,magenta \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "start": "electron .",
+    "rebuild-electron": "node -e \"require('child_process').execSync('node '+require('path').join(require.resolve('electron/package.json'),'..','install.js'),{stdio:'inherit'})\""
+  },
+  "dependencies": {
+    "@paw/agent": "workspace:*",
+    "@paw/core": "workspace:*",
+    "@paw/settings": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "electron": "^34.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0",
+    "wait-on": "^8.0.1"
+  }
+}

@@ -1,0 +1,2839 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 25,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": ".claude/plans/dynamic-toasting-quilt.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 109,
+      "nonEmptyLines": 89,
+      "sections": [
+        {
+          "heading": "A.2 Session ↔ Auto Memory 双向联动 + 跨会话 Boost",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "整体数据流",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "子任务边界",
+          "level": 2,
+          "line": 37
+        },
+        {
+          "heading": "A.2.1: Session → Auto 决策/错误提取",
+          "level": 3,
+          "line": 39
+        },
+        {
+          "heading": "A.2.2: 跨会话 Boost",
+          "level": 3,
+          "line": 57
+        },
+        {
+          "heading": "A.2.3: 短对话强制 Session Memory",
+          "level": 3,
+          "line": 76
+        },
+        {
+          "heading": "文件改动",
+          "level": 2,
+          "line": 93
+        },
+        {
+          "heading": "验证",
+          "level": 2,
+          "line": 103
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 8
+      }
+    },
+    {
+      "path": ".memory/remember_number.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 5,
+      "nonEmptyLines": 5,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 0
+      }
+    },
+    {
+      "path": ".understand-anything/.understandignore",
+      "language": "unknown",
+      "fileCategory": "code",
+      "totalLines": 54,
+      "nonEmptyLines": 48,
+      "metrics": {}
+    },
+    {
+      "path": ".understand-anything/intermediate/scan-result.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 3338,
+      "nonEmptyLines": 3338,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "description",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "languages",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "frameworks",
+          "level": 1,
+          "line": 18
+        },
+        {
+          "heading": "files",
+          "level": 1,
+          "line": 22
+        },
+        {
+          "heading": "totalFiles",
+          "level": 1,
+          "line": 2328
+        },
+        {
+          "heading": "filteredByIgnore",
+          "level": 1,
+          "line": 2329
+        },
+        {
+          "heading": "estimatedComplexity",
+          "level": 1,
+          "line": 2330
+        },
+        {
+          "heading": "importMap",
+          "level": 1,
+          "line": 2331
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 9
+      }
+    },
+    {
+      "path": "文档/架构决策/001-context-compression.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 52,
+      "nonEmptyLines": 36,
+      "sections": [
+        {
+          "heading": "ADR 001: Three-layer context compression",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Decision",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "Alternatives considered",
+          "level": 2,
+          "line": 25
+        },
+        {
+          "heading": "Consequences",
+          "level": 2,
+          "line": 34
+        },
+        {
+          "heading": "Verification",
+          "level": 2,
+          "line": 48
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 5
+      }
+    },
+    {
+      "path": "文档/阶段计划/phase1-agent-orchestration/orchestration-mode-analysis.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 350,
+      "nonEmptyLines": 274,
+      "sections": [
+        {
+          "heading": "Phase 1 编排模式分析：三种架构对比与推荐",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、Paw-TS 当前编排模式诊断",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "1.1 从代码分析当前模式",
+          "level": 3,
+          "line": 9
+        },
+        {
+          "heading": "1.2 当前模式 = Claude Code 的简化版",
+          "level": 3,
+          "line": 36
+        },
+        {
+          "heading": "二、三种编排模式深度对比",
+          "level": 2,
+          "line": 50
+        },
+        {
+          "heading": "2.1 模式一：Claude Code — ReAct + 隐式 Plan + 嵌套 Sub-agents",
+          "level": 3,
+          "line": 52
+        },
+        {
+          "heading": "2.2 模式二：OpenCode (Assistants API) — 显式 Run/Step/Thread 状态机",
+          "level": 3,
+          "line": 94
+        },
+        {
+          "heading": "2.3 模式三：Devin — Multi-Agent 协作 + 任务调度器",
+          "level": 3,
+          "line": 134
+        },
+        {
+          "heading": "三、推荐决策",
+          "level": 2,
+          "line": 174
+        },
+        {
+          "heading": "3.1 决策矩阵",
+          "level": 3,
+          "line": 176
+        },
+        {
+          "heading": "3.2 核心推荐",
+          "level": 3,
+          "line": 187
+        },
+        {
+          "heading": "四、对 PHASE1_PLAN 的调整",
+          "level": 2,
+          "line": 214
+        },
+        {
+          "heading": "4.1 原计划回顾",
+          "level": 3,
+          "line": 216
+        },
+        {
+          "heading": "4.2 需要调整的地方",
+          "level": 3,
+          "line": 231
+        },
+        {
+          "heading": "4.3 调整后的架构图",
+          "level": 3,
+          "line": 253
+        },
+        {
+          "heading": "4.4 具体调整项",
+          "level": 3,
+          "line": 289
+        },
+        {
+          "heading": "五、面试话术（为什么选 ReAct + 状态机）",
+          "level": 2,
+          "line": 304
+        },
+        {
+          "heading": "开场（30 秒）",
+          "level": 3,
+          "line": 306
+        },
+        {
+          "heading": "为什么不用 Multi-Agent（Devin 模式）",
+          "level": 3,
+          "line": 310
+        },
+        {
+          "heading": "为什么引入状态机（OpenCode 借鉴）",
+          "level": 3,
+          "line": 314
+        },
+        {
+          "heading": "为什么 Plan 是隐式的",
+          "level": 3,
+          "line": 318
+        },
+        {
+          "heading": "六、结论",
+          "level": 2,
+          "line": 324
+        },
+        {
+          "heading": "推荐组合",
+          "level": 3,
+          "line": 326
+        },
+        {
+          "heading": "PHASE1_PLAN 是否需要更新",
+          "level": 3,
+          "line": 332
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 24
+      }
+    },
+    {
+      "path": "文档/阶段计划/phase1-agent-orchestration/plan.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 624,
+      "nonEmptyLines": 508,
+      "sections": [
+        {
+          "heading": "Phase 1 计划：Agent Orchestrator 架构重构（最终确认版 v2）",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、用户反馈与调整（完整版）",
+          "level": 2,
+          "line": 10
+        },
+        {
+          "heading": "反馈 1：Parent 状态显式化 ✅ 已采纳",
+          "level": 3,
+          "line": 12
+        },
+        {
+          "heading": "反馈 2：事件过滤白名单 ✅ 已采纳",
+          "level": 3,
+          "line": 16
+        },
+        {
+          "heading": "反馈 3：只做 batch merge ✅ 已采纳",
+          "level": 3,
+          "line": 20
+        },
+        {
+          "heading": "反馈 4：SubAgentResult 克制合并 ✅ 已采纳",
+          "level": 3,
+          "line": 24
+        },
+        {
+          "heading": "反馈 5：并发上限 ✅ 已采纳",
+          "level": 3,
+          "line": 28
+        },
+        {
+          "heading": "反馈 6：run_agent 路由规则集中化 ✅ 已采纳（新增）",
+          "level": 3,
+          "line": 32
+        },
+        {
+          "heading": "反馈 7：AbortSignal 级联取消 ✅ 已采纳（新增）",
+          "level": 3,
+          "line": 55
+        },
+        {
+          "heading": "反馈 8：子 Agent 写文件限制 ✅ 已采纳（新增）",
+          "level": 3,
+          "line": 95
+        },
+        {
+          "heading": "反馈 9：SharedContext 硬预算 ✅ 已采纳（新增）",
+          "level": 3,
+          "line": 138
+        },
+        {
+          "heading": "二、现状诊断",
+          "level": 2,
+          "line": 197
+        },
+        {
+          "heading": "2.1 `orchestrator.ts` 结构分析",
+          "level": 3,
+          "line": 199
+        },
+        {
+          "heading": "2.2 核心问题",
+          "level": 3,
+          "line": 213
+        },
+        {
+          "heading": "三、目标架构",
+          "level": 2,
+          "line": 222
+        },
+        {
+          "heading": "3.1 编排模式",
+          "level": 3,
+          "line": 224
+        },
+        {
+          "heading": "3.2 状态机（10 种状态）",
+          "level": 3,
+          "line": 230
+        },
+        {
+          "heading": "3.3 文件拆分",
+          "level": 3,
+          "line": 257
+        },
+        {
+          "heading": "3.4 目标文件大小",
+          "level": 3,
+          "line": 270
+        },
+        {
+          "heading": "四、核心接口设计",
+          "level": 2,
+          "line": 284
+        },
+        {
+          "heading": "4.1 TurnState",
+          "level": 3,
+          "line": 286
+        },
+        {
+          "heading": "4.2 TurnFlags",
+          "level": 3,
+          "line": 302
+        },
+        {
+          "heading": "4.3 PhaseContext",
+          "level": 3,
+          "line": 312
+        },
+        {
+          "heading": "4.4 常量定义（集中配置）",
+          "level": 3,
+          "line": 333
+        },
+        {
+          "heading": "4.5 AgentGroup",
+          "level": 3,
+          "line": 380
+        },
+        {
+          "heading": "4.6 SharedContext（结构化摘要）",
+          "level": 3,
+          "line": 409
+        },
+        {
+          "heading": "4.7 SubAgentResult（克制版）",
+          "level": 3,
+          "line": 429
+        },
+        {
+          "heading": "4.8 扩展的 SubAgentLauncher",
+          "level": 3,
+          "line": 448
+        },
+        {
+          "heading": "五、迁移步骤",
+          "level": 2,
+          "line": 468
+        },
+        {
+          "heading": "Step 1: 创建 `orchestrator/constants.ts`",
+          "level": 3,
+          "line": 470
+        },
+        {
+          "heading": "Step 2: 创建 `orchestrator/types.ts`",
+          "level": 3,
+          "line": 478
+        },
+        {
+          "heading": "Step 3: 创建 `orchestrator/context-summarizer.ts`",
+          "level": 3,
+          "line": 484
+        },
+        {
+          "heading": "Step 4: 创建 `orchestrator/agent-group.ts`",
+          "level": 3,
+          "line": 490
+        },
+        {
+          "heading": "Step 5: 创建 `orchestrator/tool-runner.ts`",
+          "level": 3,
+          "line": 500
+        },
+        {
+          "heading": "Step 6: 创建 `orchestrator/action-handlers.ts`",
+          "level": 3,
+          "line": 505
+        },
+        {
+          "heading": "Step 7: 重构 `orchestrator.ts`",
+          "level": 3,
+          "line": 516
+        },
+        {
+          "heading": "Step 8: 更新 `SubAgentLauncher`",
+          "level": 3,
+          "line": 523
+        },
+        {
+          "heading": "Step 9: 更新导出",
+          "level": 3,
+          "line": 527
+        },
+        {
+          "heading": "六、验证计划",
+          "level": 2,
+          "line": 533
+        },
+        {
+          "heading": "6.1 测试覆盖",
+          "level": 3,
+          "line": 535
+        },
+        {
+          "heading": "6.2 新增测试场景",
+          "level": 3,
+          "line": 542
+        },
+        {
+          "heading": "6.3 验证清单",
+          "level": 3,
+          "line": 553
+        },
+        {
+          "heading": "七、风险与回退",
+          "level": 2,
+          "line": 570
+        },
+        {
+          "heading": "八、执行检查清单",
+          "level": 2,
+          "line": 583
+        },
+        {
+          "heading": "执行前",
+          "level": 3,
+          "line": 585
+        },
+        {
+          "heading": "执行中",
+          "level": 3,
+          "line": 590
+        },
+        {
+          "heading": "执行后",
+          "level": 3,
+          "line": 601
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 47
+      }
+    },
+    {
+      "path": "文档/阶段计划/phase2-context-management/plan.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 215,
+      "nonEmptyLines": 154,
+      "sections": [
+        {
+          "heading": "Phase 2 规划分析 — 上下文管理架构优化",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、Phase 1 回顾",
+          "level": 2,
+          "line": 10
+        },
+        {
+          "heading": "二、当前上下文管理现状（实施前）",
+          "level": 2,
+          "line": 22
+        },
+        {
+          "heading": "2.1 三层渐进式压缩（已有，保留）",
+          "level": 3,
+          "line": 24
+        },
+        {
+          "heading": "2.2 实施前的问题",
+          "level": 3,
+          "line": 32
+        },
+        {
+          "heading": "三、Phase 2 实施结果",
+          "level": 2,
+          "line": 40
+        },
+        {
+          "heading": "范围（实际执行）",
+          "level": 3,
+          "line": 42
+        },
+        {
+          "heading": "四、分项实施详情",
+          "level": 2,
+          "line": 54
+        },
+        {
+          "heading": "P2.1 TokenEstimator（已完成）",
+          "level": 3,
+          "line": 56
+        },
+        {
+          "heading": "P2.2 Compactor / Orchestrator 改用 Estimator（已完成）",
+          "level": 3,
+          "line": 86
+        },
+        {
+          "heading": "P2.3 Head/Tail Protection（已完成）",
+          "level": 3,
+          "line": 102
+        },
+        {
+          "heading": "P2.4 Tool Result 截断策略（已完成）",
+          "level": 3,
+          "line": 126
+        },
+        {
+          "heading": "五、文件变更清单（实际）",
+          "level": 2,
+          "line": 145
+        },
+        {
+          "heading": "六、测试结果",
+          "level": 2,
+          "line": 163
+        },
+        {
+          "heading": "七、风险与实际发生的问题",
+          "level": 2,
+          "line": 172
+        },
+        {
+          "heading": "八、关键决策记录",
+          "level": 2,
+          "line": 183
+        },
+        {
+          "heading": "ADR-P2-001: TokenEstimator 命名",
+          "level": 3,
+          "line": 185
+        },
+        {
+          "heading": "ADR-P2-002: tiktoken vs js-tiktoken",
+          "level": 3,
+          "line": 189
+        },
+        {
+          "heading": "ADR-P2-003: buildMessages() 不重写",
+          "level": 3,
+          "line": 193
+        },
+        {
+          "heading": "ADR-P2-004: Head Protection 语义化",
+          "level": 3,
+          "line": 197
+        },
+        {
+          "heading": "九、遗留与下一步",
+          "level": 2,
+          "line": 203
+        },
+        {
+          "heading": "P2.5 状态",
+          "level": 3,
+          "line": 205
+        },
+        {
+          "heading": "Phase 3 预备",
+          "level": 3,
+          "line": 209
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 23
+      }
+    },
+    {
+      "path": "文档/阶段计划/phase3-memory-retrieval/plan.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 895,
+      "nonEmptyLines": 709,
+      "sections": [
+        {
+          "heading": "Phase 3 规划分析 — 轻量记忆检索化",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、Phase 2 回顾",
+          "level": 2,
+          "line": 10
+        },
+        {
+          "heading": "二、当前记忆系统现状",
+          "level": 2,
+          "line": 21
+        },
+        {
+          "heading": "2.1 三层记忆（已有）",
+          "level": 3,
+          "line": 23
+        },
+        {
+          "heading": "2.2 当前数据接口",
+          "level": 3,
+          "line": 31
+        },
+        {
+          "heading": "2.3 当前注入方式（system-prompt.ts）",
+          "level": 3,
+          "line": 56
+        },
+        {
+          "heading": "三、Phase 3 目标与范围",
+          "level": 2,
+          "line": 76
+        },
+        {
+          "heading": "四、分项技术方案",
+          "level": 2,
+          "line": 95
+        },
+        {
+          "heading": "P3.1 统一 Memory 数据结构",
+          "level": 3,
+          "line": 97
+        },
+        {
+          "heading": "P3.2 给记忆加元数据",
+          "level": 3,
+          "line": 199
+        },
+        {
+          "heading": "P3.3 关键词 + 路径相关性检索",
+          "level": 3,
+          "line": 272
+        },
+        {
+          "heading": "P3.4 注入 top-k 相关记忆到 system prompt",
+          "level": 3,
+          "line": 451
+        },
+        {
+          "heading": "P3.5 sqlite-vec 向量检索（远期）",
+          "level": 3,
+          "line": 507
+        },
+        {
+          "heading": "五、实施顺序",
+          "level": 2,
+          "line": 543
+        },
+        {
+          "heading": "六、文件变更清单（预估）",
+          "level": 2,
+          "line": 576
+        },
+        {
+          "heading": "七、与现有代码的关系",
+          "level": 2,
+          "line": 592
+        },
+        {
+          "heading": "八、关键决策记录",
+          "level": 2,
+          "line": 614
+        },
+        {
+          "heading": "ADR-P3-001: 先关键词，后向量",
+          "level": 3,
+          "line": 616
+        },
+        {
+          "heading": "ADR-P3-002: 统一 MemoryRecord",
+          "level": 3,
+          "line": 620
+        },
+        {
+          "heading": "ADR-P3-003: 标签推断规则化",
+          "level": 3,
+          "line": 624
+        },
+        {
+          "heading": "ADR-P3-004: Token budget 双限制",
+          "level": 3,
+          "line": 628
+        },
+        {
+          "heading": "ADR-P3-005: 路径匹配分级",
+          "level": 3,
+          "line": 632
+        },
+        {
+          "heading": "ADR-P3-006: 命中日志必须记录",
+          "level": 3,
+          "line": 636
+        },
+        {
+          "heading": "九、验收标准",
+          "level": 2,
+          "line": 642
+        },
+        {
+          "heading": "十、实施结果",
+          "level": 2,
+          "line": 654
+        },
+        {
+          "heading": "测试数据",
+          "level": 3,
+          "line": 656
+        },
+        {
+          "heading": "实际文件变更",
+          "level": 3,
+          "line": 663
+        },
+        {
+          "heading": "运行时行为",
+          "level": 3,
+          "line": 677
+        },
+        {
+          "heading": "十一、下一步（观察期，不上向量检索）",
+          "level": 2,
+          "line": 694
+        },
+        {
+          "heading": "观察任务清单",
+          "level": 3,
+          "line": 698
+        },
+        {
+          "heading": "决策标准",
+          "level": 3,
+          "line": 724
+        },
+        {
+          "heading": "如果决定引入向量检索",
+          "level": 3,
+          "line": 736
+        },
+        {
+          "heading": "十二、Phase 4 预备（暂不启动）",
+          "level": 2,
+          "line": 750
+        },
+        {
+          "heading": "十三、Phase 3 关闭总结",
+          "level": 2,
+          "line": 761
+        },
+        {
+          "heading": "13.1 观察期执行记录",
+          "level": 3,
+          "line": 766
+        },
+        {
+          "heading": "13.2 clean query 修复",
+          "level": 3,
+          "line": 775
+        },
+        {
+          "heading": "13.3 路径噪声压制效果",
+          "level": 3,
+          "line": 809
+        },
+        {
+          "heading": "13.4 v9 最终观察数据",
+          "level": 3,
+          "line": 829
+        },
+        {
+          "heading": "13.5 剩余缺口分析",
+          "level": 3,
+          "line": 854
+        },
+        {
+          "heading": "13.6 最终判断",
+          "level": 3,
+          "line": 869
+        },
+        {
+          "heading": "13.7 改动文件清单（Phase 3 关闭补丁）",
+          "level": 3,
+          "line": 883
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 41
+      }
+    },
+    {
+      "path": "文档/阶段计划/phase3.5-memory-hygiene/plan.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 120,
+      "nonEmptyLines": 91,
+      "sections": [
+        {
+          "heading": "Phase 3.5: Memory Hygiene / Index / Coverage",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Problem Statement",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "新增记忆清单",
+          "level": 2,
+          "line": 19
+        },
+        {
+          "heading": "MEMORY.md 索引",
+          "level": 2,
+          "line": 31
+        },
+        {
+          "heading": "类型规范化审查",
+          "level": 2,
+          "line": 35
+        },
+        {
+          "heading": "v10 观察结果",
+          "level": 2,
+          "line": 57
+        },
+        {
+          "heading": "关键发现",
+          "level": 3,
+          "line": 74
+        },
+        {
+          "heading": "对比结论",
+          "level": 3,
+          "line": 81
+        },
+        {
+          "heading": "Phase 4 决策",
+          "level": 2,
+          "line": 90
+        },
+        {
+          "heading": "结论：No-Go（暂缓向量检索）",
+          "level": 3,
+          "line": 92
+        },
+        {
+          "heading": "后续建议",
+          "level": 3,
+          "line": 100
+        },
+        {
+          "heading": "Done Checklist",
+          "level": 2,
+          "line": 106
+        },
+        {
+          "heading": "Rejection Criteria（执行中遵守）",
+          "level": 2,
+          "line": 114
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 13
+      }
+    },
+    {
+      "path": "文档/演示/GOLDEN_PATH.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 58,
+      "nonEmptyLines": 38,
+      "sections": [
+        {
+          "heading": "Golden Path Demo",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "1. Install and verify",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "2. CLI smoke test (fake model, no API key)",
+          "level": 2,
+          "line": 15
+        },
+        {
+          "heading": "3. TUI (optional)",
+          "level": 2,
+          "line": 23
+        },
+        {
+          "heading": "4. Benchmarks (quantitative talking points)",
+          "level": 2,
+          "line": 31
+        },
+        {
+          "heading": "5. Architecture narrative",
+          "level": 2,
+          "line": 40
+        },
+        {
+          "heading": "6. Optional: live model (Ollama)",
+          "level": 2,
+          "line": 46
+        },
+        {
+          "heading": "7. Memory extraction (post-run)",
+          "level": 2,
+          "line": 56
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 8
+      }
+    },
+    {
+      "path": "文档/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 25,
+      "nonEmptyLines": 20,
+      "sections": [
+        {
+          "heading": "Paw-TS 文档索引",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "目录结构",
+          "level": 2,
+          "line": 6
+        },
+        {
+          "heading": "快速入口",
+          "level": 2,
+          "line": 19
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "apps/cli/package.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 20,
+      "nonEmptyLines": 20,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "version",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "private",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "type",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "bin",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "dependencies",
+          "level": 1,
+          "line": 9
+        },
+        {
+          "heading": "scripts",
+          "level": 1,
+          "line": 15
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    },
+    {
+      "path": "apps/cli/src/main.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 228,
+      "nonEmptyLines": 210,
+      "functions": [
+        {
+          "name": "usage",
+          "startLine": 19,
+          "endLine": 34,
+          "params": []
+        },
+        {
+          "name": "main",
+          "startLine": 36,
+          "endLine": 226,
+          "params": []
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "usage",
+          "callee": "console.error",
+          "lineNumber": 20
+        },
+        {
+          "caller": "usage",
+          "callee": "process.exit",
+          "lineNumber": 33
+        },
+        {
+          "caller": "main",
+          "callee": "usage",
+          "lineNumber": 38
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 42
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 43
+        },
+        {
+          "caller": "main",
+          "callee": "parseRootFromArgv",
+          "lineNumber": 47
+        },
+        {
+          "caller": "main",
+          "callee": "process.cwd",
+          "lineNumber": 47
+        },
+        {
+          "caller": "main",
+          "callee": "formatDoctorOutput",
+          "lineNumber": 48
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 50
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 51
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 53
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 54
+        },
+        {
+          "caller": "main",
+          "callee": "parseRootFromArgv",
+          "lineNumber": 58
+        },
+        {
+          "caller": "main",
+          "callee": "process.cwd",
+          "lineNumber": 58
+        },
+        {
+          "caller": "main",
+          "callee": "tailPositionalArgs",
+          "lineNumber": 59
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 61
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 62
+        },
+        {
+          "caller": "main",
+          "callee": "formatFsReadOutput",
+          "lineNumber": 64
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 65
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 66
+        },
+        {
+          "caller": "main",
+          "callee": "parseRootFromArgv",
+          "lineNumber": 70
+        },
+        {
+          "caller": "main",
+          "callee": "process.cwd",
+          "lineNumber": 70
+        },
+        {
+          "caller": "main",
+          "callee": "argv.includes",
+          "lineNumber": 71
+        },
+        {
+          "caller": "main",
+          "callee": "tailPositionalArgs",
+          "lineNumber": 72
+        },
+        {
+          "caller": "main",
+          "callee": "formatFsListOutput",
+          "lineNumber": 73
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 74
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 75
+        },
+        {
+          "caller": "main",
+          "callee": "parseRootFromArgv",
+          "lineNumber": 79
+        },
+        {
+          "caller": "main",
+          "callee": "process.cwd",
+          "lineNumber": 79
+        },
+        {
+          "caller": "main",
+          "callee": "defaultSettingsPath",
+          "lineNumber": 80
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 81
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 82
+        },
+        {
+          "caller": "main",
+          "callee": "loadPawSettingsLocal",
+          "lineNumber": 87
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 89
+        },
+        {
+          "caller": "main",
+          "callee": "JSON.stringify",
+          "lineNumber": 89
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 90
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 92
+        },
+        {
+          "caller": "main",
+          "callee": "String",
+          "lineNumber": 92
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 93
+        },
+        {
+          "caller": "main",
+          "callee": "JSON.parse",
+          "lineNumber": 103
+        },
+        {
+          "caller": "main",
+          "callee": "loadPawSettingsLocal",
+          "lineNumber": 110
+        },
+        {
+          "caller": "main",
+          "callee": "savePawSettingsLocal",
+          "lineNumber": 115
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 119
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 120
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 122
+        },
+        {
+          "caller": "main",
+          "callee": "String",
+          "lineNumber": 122
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 123
+        },
+        {
+          "caller": "main",
+          "callee": "loadPawSettingsLocal",
+          "lineNumber": 129
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 130
+        },
+        {
+          "caller": "main",
+          "callee": "JSON.stringify",
+          "lineNumber": 130
+        },
+        {
+          "caller": "main",
+          "callee": "redactSettingsForDisplay",
+          "lineNumber": 130
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 131
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 133
+        },
+        {
+          "caller": "main",
+          "callee": "String",
+          "lineNumber": 133
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 134
+        },
+        {
+          "caller": "main",
+          "callee": "parseRootFromArgv",
+          "lineNumber": 139
+        },
+        {
+          "caller": "main",
+          "callee": "process.cwd",
+          "lineNumber": 139
+        },
+        {
+          "caller": "main",
+          "callee": "gitStatus",
+          "lineNumber": 140
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 142
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 143
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 147
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 148
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 150
+        },
+        {
+          "caller": "main",
+          "callee": "gitCommit",
+          "lineNumber": 153
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 155
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 156
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 158
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 159
+        },
+        {
+          "caller": "main",
+          "callee": "import",
+          "lineNumber": 163
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 165
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 167
+        },
+        {
+          "caller": "main",
+          "callee": "Number",
+          "lineNumber": 168
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 169
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 171
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 173
+        },
+        {
+          "caller": "main",
+          "callee": "Number",
+          "lineNumber": 174
+        },
+        {
+          "caller": "main",
+          "callee": "argv.includes",
+          "lineNumber": 175
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 176
+        },
+        {
+          "caller": "main",
+          "callee": "parseRootFromArgv",
+          "lineNumber": 179
+        },
+        {
+          "caller": "main",
+          "callee": "process.cwd",
+          "lineNumber": 179
+        },
+        {
+          "caller": "main",
+          "callee": "runEvalCommand",
+          "lineNumber": 181
+        },
+        {
+          "caller": "main",
+          "callee": "Number.isFinite",
+          "lineNumber": 184
+        },
+        {
+          "caller": "main",
+          "callee": "Number.isFinite",
+          "lineNumber": 187
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 193
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 194
+        },
+        {
+          "caller": "main",
+          "callee": "console.error",
+          "lineNumber": 196
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 197
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 202
+        },
+        {
+          "caller": "main",
+          "callee": "argv.indexOf",
+          "lineNumber": 207
+        },
+        {
+          "caller": "main",
+          "callee": "Number",
+          "lineNumber": 209
+        },
+        {
+          "caller": "main",
+          "callee": "Number.isFinite",
+          "lineNumber": 210
+        },
+        {
+          "caller": "main",
+          "callee": "argv.includes",
+          "lineNumber": 214
+        },
+        {
+          "caller": "main",
+          "callee": "parseRootFromArgv",
+          "lineNumber": 215
+        },
+        {
+          "caller": "main",
+          "callee": "process.cwd",
+          "lineNumber": 215
+        },
+        {
+          "caller": "main",
+          "callee": "runStubRun",
+          "lineNumber": 216
+        },
+        {
+          "caller": "main",
+          "callee": "console.log",
+          "lineNumber": 221
+        },
+        {
+          "caller": "main",
+          "callee": "process.exit",
+          "lineNumber": 222
+        },
+        {
+          "caller": "main",
+          "callee": "usage",
+          "lineNumber": 225
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "apps/cli/test/cli-smoke.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 27,
+      "nonEmptyLines": 24,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "apps/cli/tsconfig.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 12,
+      "nonEmptyLines": 12,
+      "sections": [
+        {
+          "heading": "extends",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "compilerOptions",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "include",
+          "level": 1,
+          "line": 11
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "apps/tui/src/jsx-runtime.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 35,
+      "nonEmptyLines": 32,
+      "functions": [
+        {
+          "name": "jsxDEV",
+          "startLine": 21,
+          "endLine": 33,
+          "params": [
+            "type",
+            "props",
+            "key",
+            "_isStatic",
+            "_source",
+            "_self"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "jsx",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "jsxs",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "jsxDEV",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "Fragment",
+          "line": 35,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "jsxDEV",
+          "callee": "jsx",
+          "lineNumber": 30
+        },
+        {
+          "caller": "jsxDEV",
+          "callee": "jsx",
+          "lineNumber": 32
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "apps/tui/Untitled",
+      "language": "unknown",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {}
+    },
+    {
+      "path": "benchmarks/download-data.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 89,
+      "nonEmptyLines": 72,
+      "functions": [
+        {
+          "name": "save_jsonl",
+          "startLine": 22,
+          "endLine": 25,
+          "params": [
+            "path",
+            "records"
+          ]
+        },
+        {
+          "name": "download_repobench",
+          "startLine": 28,
+          "endLine": 58,
+          "params": [
+            "max_samples"
+          ]
+        },
+        {
+          "name": "download_longbench_code",
+          "startLine": 61,
+          "endLine": 83,
+          "params": [
+            "max_samples"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "save_jsonl",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "download_repobench",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "download_longbench_code",
+          "line": 61,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "save_jsonl",
+          "callee": "open",
+          "lineNumber": 23
+        },
+        {
+          "caller": "save_jsonl",
+          "callee": "f.write",
+          "lineNumber": 25
+        },
+        {
+          "caller": "save_jsonl",
+          "callee": "json.dumps",
+          "lineNumber": 25
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "print",
+          "lineNumber": 30
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "load_dataset",
+          "lineNumber": 32
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "print",
+          "lineNumber": 34
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "print",
+          "lineNumber": 35
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "load_dataset",
+          "lineNumber": 37
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "print",
+          "lineNumber": 39
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "enumerate",
+          "lineNumber": 43
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "samples.append",
+          "lineNumber": 46
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "row.get",
+          "lineNumber": 48
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "row.get",
+          "lineNumber": 49
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "row.get",
+          "lineNumber": 50
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "row.get",
+          "lineNumber": 51
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "row.items",
+          "lineNumber": 52
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "save_jsonl",
+          "lineNumber": 57
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "print",
+          "lineNumber": 58
+        },
+        {
+          "caller": "download_repobench",
+          "callee": "len",
+          "lineNumber": 58
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "print",
+          "lineNumber": 63
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "load_dataset",
+          "lineNumber": 65
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "print",
+          "lineNumber": 67
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "enumerate",
+          "lineNumber": 71
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "samples.append",
+          "lineNumber": 74
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "row.get",
+          "lineNumber": 76
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "row.get",
+          "lineNumber": 77
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "row.get",
+          "lineNumber": 78
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "len",
+          "lineNumber": 79
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "row.get",
+          "lineNumber": 79
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "save_jsonl",
+          "lineNumber": 82
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "print",
+          "lineNumber": 83
+        },
+        {
+          "caller": "download_longbench_code",
+          "callee": "len",
+          "lineNumber": 83
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "benchmarks/judge/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 68,
+      "nonEmptyLines": 47,
+      "sections": [
+        {
+          "heading": "LLM-as-a-Judge for paw-ts",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Recommended Models",
+          "level": 2,
+          "line": 6
+        },
+        {
+          "heading": "Dimensions",
+          "level": 2,
+          "line": 19
+        },
+        {
+          "heading": "Usage",
+          "level": 2,
+          "line": 28
+        },
+        {
+          "heading": "Benchmark Tests",
+          "level": 2,
+          "line": 47
+        },
+        {
+          "heading": "Workflow Recommendation",
+          "level": 2,
+          "line": 55
+        },
+        {
+          "heading": "Cost Estimate",
+          "level": 2,
+          "line": 64
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    },
+    {
+      "path": "benchmarks/repobench/adapter.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 200,
+      "nonEmptyLines": 183,
+      "functions": [
+        {
+          "name": "splitCamelCase",
+          "startLine": 41,
+          "endLine": 46,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "extractSnippets",
+          "startLine": 49,
+          "endLine": 102,
+          "params": [
+            "filePath",
+            "content"
+          ]
+        },
+        {
+          "name": "loadLocalCorpus",
+          "startLine": 105,
+          "endLine": 156,
+          "params": []
+        },
+        {
+          "name": "loadLocalQueries",
+          "startLine": 163,
+          "endLine": 200,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "loadLocalCorpus",
+          "line": 105,
+          "isDefault": false
+        },
+        {
+          "name": "loadLocalQueries",
+          "line": 163,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "splitCamelCase",
+          "callee": "text\n    .replace(/([a-z0-9])([A-Z])/g, \"$1 $2\")\n    .replace(/([A-Z]+)([A-Z][a-z])/g, \"$1 $2\")\n    .toLowerCase",
+          "lineNumber": 42
+        },
+        {
+          "caller": "splitCamelCase",
+          "callee": "text\n    .replace(/([a-z0-9])([A-Z])/g, \"$1 $2\")\n    .replace",
+          "lineNumber": 42
+        },
+        {
+          "caller": "splitCamelCase",
+          "callee": "text\n    .replace",
+          "lineNumber": 42
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "content.split",
+          "lineNumber": 50
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "line.trim().startsWith",
+          "lineNumber": 59
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "line.trim",
+          "lineNumber": 59
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "line.trim().startsWith",
+          "lineNumber": 59
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "line.trim",
+          "lineNumber": 59
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "docBuffer.push",
+          "lineNumber": 60
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "line.trim().replace(/^\\/\\*\\*\\s*/, \"\").replace",
+          "lineNumber": 60
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "line.trim().replace",
+          "lineNumber": 60
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "line.trim",
+          "lineNumber": 60
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "line.match",
+          "lineNumber": 66
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "l.includes",
+          "lineNumber": 76
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "l.match",
+          "lineNumber": 76
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "l.includes",
+          "lineNumber": 77
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "l.match",
+          "lineNumber": 77
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "lines.slice(start, i).join",
+          "lineNumber": 85
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "lines.slice",
+          "lineNumber": 85
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "records.push",
+          "lineNumber": 86
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "path.relative",
+          "lineNumber": 87
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "path.relative",
+          "lineNumber": 88
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "docBuffer.join(\" \").slice",
+          "lineNumber": 90
+        },
+        {
+          "caller": "extractSnippets",
+          "callee": "docBuffer.join",
+          "lineNumber": 90
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "path.join",
+          "lineNumber": 110
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "fs.existsSync",
+          "lineNumber": 111
+        },
+        {
+          "caller": "walk",
+          "callee": "fs.readdirSync",
+          "lineNumber": 113
+        },
+        {
+          "caller": "walk",
+          "callee": "path.join",
+          "lineNumber": 114
+        },
+        {
+          "caller": "walk",
+          "callee": "entry.isDirectory",
+          "lineNumber": 115
+        },
+        {
+          "caller": "walk",
+          "callee": "walk",
+          "lineNumber": 117
+        },
+        {
+          "caller": "walk",
+          "callee": "entry.name.endsWith",
+          "lineNumber": 118
+        },
+        {
+          "caller": "walk",
+          "callee": "entry.name.endsWith",
+          "lineNumber": 118
+        },
+        {
+          "caller": "walk",
+          "callee": "fs.readFileSync",
+          "lineNumber": 119
+        },
+        {
+          "caller": "walk",
+          "callee": "records.push",
+          "lineNumber": 120
+        },
+        {
+          "caller": "walk",
+          "callee": "extractSnippets",
+          "lineNumber": 120
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "walk",
+          "lineNumber": 124
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "fileToRecords.get",
+          "lineNumber": 130
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "arr.push",
+          "lineNumber": 131
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "fileToRecords.set",
+          "lineNumber": 132
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "r.code.match",
+          "lineNumber": 137
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "imp.match",
+          "lineNumber": 140
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "spec.startsWith",
+          "lineNumber": 143
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "related.add",
+          "lineNumber": 144
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "spec.startsWith",
+          "lineNumber": 145
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "spec.replace",
+          "lineNumber": 147
+        },
+        {
+          "caller": "loadLocalCorpus",
+          "callee": "related.add",
+          "lineNumber": 148
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "benchmarks/repobench/benchmark.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 128,
+      "nonEmptyLines": 109,
+      "functions": [
+        {
+          "name": "splitCamelCase",
+          "startLine": 21,
+          "endLine": 26,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "recallAtK",
+          "startLine": 28,
+          "endLine": 36,
+          "params": [
+            "retrievedIds",
+            "expected",
+            "k"
+          ]
+        },
+        {
+          "name": "mrr",
+          "startLine": 38,
+          "endLine": 49,
+          "params": [
+            "retrievedIds",
+            "expected"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "CorpusStore",
+          "startLine": 8,
+          "endLine": 18,
+          "methods": [
+            "constructor",
+            "listExcludingCurrent"
+          ],
+          "properties": [
+            "records"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "splitCamelCase",
+          "callee": "text\n    .replace(/([a-z0-9])([A-Z])/g, \"$1 $2\")\n    .replace(/([A-Z]+)([A-Z][a-z])/g, \"$1 $2\")\n    .toLowerCase",
+          "lineNumber": 22
+        },
+        {
+          "caller": "splitCamelCase",
+          "callee": "text\n    .replace(/([a-z0-9])([A-Z])/g, \"$1 $2\")\n    .replace",
+          "lineNumber": 22
+        },
+        {
+          "caller": "splitCamelCase",
+          "callee": "text\n    .replace",
+          "lineNumber": 22
+        },
+        {
+          "caller": "recallAtK",
+          "callee": "expected.some",
+          "lineNumber": 34
+        },
+        {
+          "caller": "recallAtK",
+          "callee": "retrievedIds.slice(0, k).includes",
+          "lineNumber": 34
+        },
+        {
+          "caller": "recallAtK",
+          "callee": "retrievedIds.slice",
+          "lineNumber": 34
+        },
+        {
+          "caller": "mrr",
+          "callee": "expected.includes",
+          "lineNumber": 44
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 3,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "benchmarks/swe-bench/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 69,
+      "nonEmptyLines": 50,
+      "sections": [
+        {
+          "heading": "SWE-bench Lite Adapter for paw-ts",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Prerequisites",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "Usage",
+          "level": 2,
+          "line": 19
+        },
+        {
+          "heading": "1. Download the dataset",
+          "level": 3,
+          "line": 21
+        },
+        {
+          "heading": "2. Run the adapter",
+          "level": 3,
+          "line": 32
+        },
+        {
+          "heading": "3. Evaluate with official harness",
+          "level": 3,
+          "line": 42
+        },
+        {
+          "heading": "Expected Results",
+          "level": 2,
+          "line": 51
+        },
+        {
+          "heading": "Cost Estimate",
+          "level": 2,
+          "line": 62
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 8
+      }
+    },
+    {
+      "path": "benchmarks/swe-bench/run.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 128,
+      "nonEmptyLines": 107,
+      "functions": [
+        {
+          "name": "clone_repo",
+          "startLine": 23,
+          "endLine": 36,
+          "params": [
+            "repo",
+            "commit",
+            "dest"
+          ]
+        },
+        {
+          "name": "run_paw_ts",
+          "startLine": 39,
+          "endLine": 55,
+          "params": [
+            "workspace",
+            "goal",
+            "run_id"
+          ]
+        },
+        {
+          "name": "extract_patch",
+          "startLine": 58,
+          "endLine": 65,
+          "params": [
+            "workspace"
+          ]
+        },
+        {
+          "name": "main",
+          "startLine": 68,
+          "endLine": 124,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "clone_repo",
+          "line": 23,
+          "isDefault": false
+        },
+        {
+          "name": "run_paw_ts",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "extract_patch",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "main",
+          "line": 68,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "clone_repo",
+          "callee": "dest.exists",
+          "lineNumber": 25
+        },
+        {
+          "caller": "clone_repo",
+          "callee": "subprocess.run",
+          "lineNumber": 26
+        },
+        {
+          "caller": "clone_repo",
+          "callee": "str",
+          "lineNumber": 26
+        },
+        {
+          "caller": "clone_repo",
+          "callee": "subprocess.run",
+          "lineNumber": 27
+        },
+        {
+          "caller": "clone_repo",
+          "callee": "str",
+          "lineNumber": 28
+        },
+        {
+          "caller": "clone_repo",
+          "callee": "subprocess.run",
+          "lineNumber": 32
+        },
+        {
+          "caller": "clone_repo",
+          "callee": "str",
+          "lineNumber": 33
+        },
+        {
+          "caller": "run_paw_ts",
+          "callee": "str",
+          "lineNumber": 45
+        },
+        {
+          "caller": "run_paw_ts",
+          "callee": "subprocess.run",
+          "lineNumber": 50
+        },
+        {
+          "caller": "extract_patch",
+          "callee": "subprocess.run",
+          "lineNumber": 60
+        },
+        {
+          "caller": "extract_patch",
+          "callee": "str",
+          "lineNumber": 61
+        },
+        {
+          "caller": "main",
+          "callee": "argparse.ArgumentParser",
+          "lineNumber": 69
+        },
+        {
+          "caller": "main",
+          "callee": "parser.add_argument",
+          "lineNumber": 70
+        },
+        {
+          "caller": "main",
+          "callee": "parser.add_argument",
+          "lineNumber": 71
+        },
+        {
+          "caller": "main",
+          "callee": "parser.add_argument",
+          "lineNumber": 72
+        },
+        {
+          "caller": "main",
+          "callee": "parser.add_argument",
+          "lineNumber": 73
+        },
+        {
+          "caller": "main",
+          "callee": "parser.parse_args",
+          "lineNumber": 74
+        },
+        {
+          "caller": "main",
+          "callee": "open",
+          "lineNumber": 77
+        },
+        {
+          "caller": "main",
+          "callee": "enumerate",
+          "lineNumber": 78
+        },
+        {
+          "caller": "main",
+          "callee": "json.loads",
+          "lineNumber": 81
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 87
+        },
+        {
+          "caller": "main",
+          "callee": "tempfile.TemporaryDirectory",
+          "lineNumber": 89
+        },
+        {
+          "caller": "main",
+          "callee": "Path",
+          "lineNumber": 90
+        },
+        {
+          "caller": "main",
+          "callee": "clone_repo",
+          "lineNumber": 92
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 94
+        },
+        {
+          "caller": "main",
+          "callee": "predictions.append",
+          "lineNumber": 95
+        },
+        {
+          "caller": "main",
+          "callee": "run_paw_ts",
+          "lineNumber": 102
+        },
+        {
+          "caller": "main",
+          "callee": "extract_patch",
+          "lineNumber": 103
+        },
+        {
+          "caller": "main",
+          "callee": "patch.strip",
+          "lineNumber": 105
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 106
+        },
+        {
+          "caller": "main",
+          "callee": "len",
+          "lineNumber": 106
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 108
+        },
+        {
+          "caller": "main",
+          "callee": "predictions.append",
+          "lineNumber": 110
+        },
+        {
+          "caller": "main",
+          "callee": "open",
+          "lineNumber": 116
+        },
+        {
+          "caller": "main",
+          "callee": "f.write",
+          "lineNumber": 118
+        },
+        {
+          "caller": "main",
+          "callee": "json.dumps",
+          "lineNumber": 118
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 120
+        },
+        {
+          "caller": "main",
+          "callee": "len",
+          "lineNumber": 120
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 121
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 122
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 123
+        },
+        {
+          "caller": "main",
+          "callee": "print",
+          "lineNumber": 124
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "docs/升级/第1轮-工具调用协议升级.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 99,
+      "nonEmptyLines": 74,
+      "sections": [
+        {
+          "heading": "第1轮升级：工具调用协议 — 原生 function calling 优先",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "目标",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "当前状态",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "改动文件",
+          "level": 2,
+          "line": 25
+        },
+        {
+          "heading": "改动细节",
+          "level": 2,
+          "line": 34
+        },
+        {
+          "heading": "1. types.ts — 加 toolCalls 字段",
+          "level": 3,
+          "line": 36
+        },
+        {
+          "heading": "2. invokeModelOnce — 收集原生 tool_use",
+          "level": 3,
+          "line": 55
+        },
+        {
+          "heading": "3. executeTurn — 优先原生，fallback 扫描",
+          "level": 3,
+          "line": 63
+        },
+        {
+          "heading": "4. normalizeToolCalls 保留",
+          "level": 3,
+          "line": 84
+        },
+        {
+          "heading": "不涉及",
+          "level": 2,
+          "line": 88
+        },
+        {
+          "heading": "验收",
+          "level": 2,
+          "line": 94
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 11
+      }
+    }
+  ]
+}

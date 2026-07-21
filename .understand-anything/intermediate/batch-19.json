@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    {
+      "id": "pipeline:.github/workflows/ci.yml",
+      "type": "pipeline",
+      "name": "ci.yml",
+      "filePath": ".github/workflows/ci.yml",
+      "summary": "GitHub Actions CI 工作流，在 push 到 main/master 或发起 PR 时自动运行 lint、typecheck 和测试（bun run check:ts），确保代码质量门禁。",
+      "tags": ["ci-cd", "continuous-integration", "automation", "github-actions"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "pipeline:.github/workflows/ci.yml",
+      "target": "config:package.json",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "packages/harness/src/sandbox/detect-runtime.ts", "language": "typescript", "sizeLines": 65, "fileCategory": "code"},
+    {"path": "packages/harness/src/sandbox/docker-runner.ts", "language": "typescript", "sizeLines": 190, "fileCategory": "code"},
+    {"path": "packages/harness/src/sandbox/types.ts", "language": "typescript", "sizeLines": 51, "fileCategory": "code"}
+  ],
+  "batchImportData": {
+    "packages/harness/src/sandbox/detect-runtime.ts": [],
+    "packages/harness/src/sandbox/docker-runner.ts": ["packages/harness/src/sandbox/detect-runtime.ts", "packages/harness/src/sandbox/types.ts"],
+    "packages/harness/src/sandbox/types.ts": []
+  }
+}
