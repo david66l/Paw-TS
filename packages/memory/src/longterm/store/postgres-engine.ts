@@ -183,6 +183,8 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       conds.push("t_invalid IS NULL");
       // 降级条目过滤（spec §6.3）：verification_status='invalidated' 不进检索池
       conds.push("verification_status != 'invalidated'");
+      // 蒸馏降级条目（§5.7 append-only）：仅 memory list 可见，不参与自动注入
+      conds.push("COALESCE(payload->>'degraded', 'false') != 'true'");
     }
     if (filter.kind) {
       params.push(filter.kind);
@@ -221,6 +223,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       FROM memory_items
       WHERE t_invalid IS NULL
         AND verification_status != 'invalidated'
+        AND COALESCE(payload->>'degraded', 'false') != 'true'
         AND (
           search_tsv @@ plainto_tsquery('english', ${queryText})
           OR when_to_use_tsv @@ plainto_tsquery('simple', ${queryText})
@@ -247,6 +250,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         JOIN memory_items m ON m.id = e.memory_id
         WHERE m.t_invalid IS NULL
           AND m.verification_status != 'invalidated'
+          AND COALESCE(m.payload->>'degraded', 'false') != 'true'
         ORDER BY e.embedding <=> ${formatted}::vector ASC
         LIMIT ${k}
       `;
@@ -262,6 +266,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         JOIN memory_items m ON m.id = e.memory_id
         WHERE m.t_invalid IS NULL
           AND m.verification_status != 'invalidated'
+          AND COALESCE(m.payload->>'degraded', 'false') != 'true'
       `;
       return (rows as unknown as { memory_id: string; embedding: unknown }[])
         .map((r) => ({
