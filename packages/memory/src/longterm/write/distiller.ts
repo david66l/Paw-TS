@@ -41,6 +41,8 @@ export interface DistillCandidate {
   issueType?: string;
   /** ≥1 个证据指针："runs/<runId>/trajectory#step-N" */
   evidence: string[];
+  /** 可选：事实生效时间（迟到的旧事实）；缺省 = 写入时间。供时序倒挂判定（§7.4） */
+  tValid?: string;
 }
 
 export type DistillResult =
@@ -145,6 +147,11 @@ export function validateCandidate(raw: unknown): { ok: true; value: DistillCandi
         errors.push("failureFixPair 必须含 failed/feedback/fixed 三个字符串字段（纪律 3）");
       }
     }
+  }
+
+  // 可选 tValid（时序倒挂判定用）
+  if (c.tValid !== undefined && (typeof c.tValid !== "string" || Number.isNaN(Date.parse(c.tValid)))) {
+    errors.push("tValid 必须是可解析的时间字符串");
   }
 
   // 纪律 1：去具体化

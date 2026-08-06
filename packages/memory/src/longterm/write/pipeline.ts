@@ -21,6 +21,7 @@ import { deriveEntryId } from "../store/id.js";
 import { appendOpLog } from "../observability/op-log.js";
 import { scanForSecrets } from "./secrets.js";
 import { MemoryDistiller, type DistillInput } from "./distiller.js";
+import { LongtermGovernor, type GovernorLlm } from "./governor.js";
 import { addTrialLesson } from "./trial.js";
 
 // ── 事件与门控类型（spec §9.1 + §5.3）──
@@ -45,19 +46,28 @@ export type ProcessResult =
   | { status: "degraded"; memoryId: string }
   | { status: "noop"; reason: string };
 
-/** Governor 接口点（M5 实现注入；缺省时直接 ADD） */
+/** Governor 接口点（M5 实现为 LongtermGovernor；缺省时直接 ADD） */
 export interface GovernorHook {
   adjudicate(
     candidate: SemanticFact,
     similar: MemoryEntry[],
   ): Promise<{ op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP"; targetId?: string; reason?: string }>;
+  /** 批量裁决（spec §5.6，默认路径）；实现后管线一次调用裁决整批 */
+  adjudicateBatch?(
+    items: { candidate: SemanticFact; similar: MemoryEntry[] }[],
+  ): Promise<{ op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP"; targetId?: string; reason?: string }[]>;
 }
 
 export interface WritePipelineOptions {
   engine?: MemoryStoreEngine;
   /** 缺省时固化通道直接降级为原文摘要 */
   distiller?: MemoryDistiller;
+  /** 显式注入 Governor（测试 mock 优先）；与 governorLlm 二选一 */
   governor?: GovernorHook;
+  /** 提供 LLM 时自动构造 LongtermGovernor（M5 默认接线） */
+  governorLlm?: GovernorLlm;
+  /** 批量裁决开关（spec §9.4 write.batchAdjudication），默认 true */
+  batchAdjudication?: boolean;
   /** worker 任务间隔，默认 2000ms */
   intervalMs?: number;
   /** 当日蒸馏 LLM 调用预算，默认 50（spec §5.2） */
@@ -79,6 +89,7 @@ export class MemoryWritePipeline {
   private readonly engine: MemoryStoreEngine;
   private readonly distiller?: MemoryDistiller;
   private readonly governor?: GovernorHook;
+  private readonly batchAdjudication: boolean;
   private readonly intervalMs: number;
   private readonly dailyBudget: number;
   private readonly emit?: (event: RunEvent) => void;
@@ -89,7 +100,9 @@ export class MemoryWritePipeline {
   constructor(opts: WritePipelineOptions = {}) {
     this.engine = opts.engine ?? new PostgresMemoryStoreEngine();
     this.distiller = opts.distiller;
-    this.governor = opts.governor;
+    this.governor = opts.governor
+      ?? (opts.governorLlm ? new LongtermGovernor({ llm: opts.governorLlm, now: opts.now }) : undefined);
+    this.batchAdjudication = opts.batchAdjudication ?? true;
     this.intervalMs = opts.intervalMs ?? 2000;
     this.dailyBudget = opts.dailyBudget ?? 50;
     this.emit = opts.emit;
@@ -287,7 +300,9 @@ export class MemoryWritePipeline {
     }
     if (result.candidates.length === 0) return { status: "noop", reason: "no_candidates" };
 
-    const memoryIds: string[] = [];
+    // ── 阶段一：密钥二道 + 构造草稿 + 相似召回 ──
+    const nowIso = this.now().toISOString();
+    const drafts: { draft: SemanticFact; similar: MemoryEntry[] }[] = [];
     for (const candidate of result.candidates) {
       // 当前 MVP 固化通道只落 semantic（episodic 蒸馏契约属 v2；episodic 候选暂跳过）
       if (candidate.kind !== "semantic" || !candidate.fact) continue;
@@ -304,13 +319,13 @@ export class MemoryWritePipeline {
         await appendOpLog("write.redacted", { runId: opts.runId, detail: { count: pre.count } });
       }
 
-      const nowIso = this.now().toISOString();
       const draft: SemanticFact = {
         id: "",
         kind: "semantic",
         repo: opts.repo,
         created: nowIso,
-        tValid: nowIso,
+        // 候选可携带 tValid（迟到的旧事实）；缺省 = 写入时间。时序倒挂由 Governor 规则层判定（§7.4）
+        tValid: candidate.tValid ?? nowIso,
         tInvalid: null,
         source: "agent_verified",
         confidence: Math.min(0.8, opts.confidenceCap ?? 1),
@@ -321,15 +336,30 @@ export class MemoryWritePipeline {
         keywords: candidate.keywords ?? [],
         embeddingKey: `${fact} ${(candidate.keywords ?? []).join(" ")}`,
       };
-
-      // ── Governor 裁决（M5 接口点；缺省直接 ADD）──
       const similar = await this.engine.searchVector(draft.embeddingKey, 10)
         .then((hits) => Promise.all(hits.map((h) => this.engine.get(h.id))))
         .then((es) => es.filter((e): e is MemoryEntry => e !== null))
         .catch(() => [] as MemoryEntry[]);
-      const decision = this.governor
-        ? await this.governor.adjudicate(draft, similar)
-        : { op: "ADD" as const };
+      drafts.push({ draft, similar });
+    }
+
+    // ── 阶段二：Governor 裁决（§5.6 批量为默认路径）──
+    type Decision = { op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP"; targetId?: string; reason?: string };
+    let decisions: Decision[];
+    if (!this.governor) {
+      decisions = drafts.map(() => ({ op: "ADD" as const }));
+    } else if (this.batchAdjudication && this.governor.adjudicateBatch) {
+      decisions = await this.governor.adjudicateBatch(drafts.map((d) => ({ candidate: d.draft, similar: d.similar })));
+    } else {
+      decisions = [];
+      for (const d of drafts) decisions.push(await this.governor.adjudicate(d.draft, d.similar));
+    }
+
+    // ── 阶段三：应用裁决 ──
+    const memoryIds: string[] = [];
+    for (let i = 0; i < drafts.length; i++) {
+      const { draft } = drafts[i]!;
+      const decision = decisions[i] ?? { op: "NOOP" as const, reason: "missing_decision" };
 
       if (decision.op === "NOOP") {
         await appendOpLog("governed", { runId: opts.runId, detail: { op: "NOOP", reason: decision.reason ?? "" } });
@@ -337,13 +367,24 @@ export class MemoryWritePipeline {
         continue;
       }
       if (decision.op === "INVALIDATE" && decision.targetId) {
+        // 矛盾（§5.6 裁决表 / §5.8-4）：旧条目软失效（不物理删除），候选作为新条目 ADD
         await this.engine.invalidate(decision.targetId, nowIso);
         await appendOpLog("governed", { runId: opts.runId, entryIds: [decision.targetId], detail: { op: "INVALIDATE" } });
         this.emit?.({ type: "memory.governed", op: "INVALIDATE", entryId: decision.targetId });
+        await this.engine.put(draft);
+        const newId = deriveEntryId(draft);
+        memoryIds.push(newId);
+        await appendOpLog("governed", { runId: opts.runId, entryIds: [newId], detail: { op: "ADD", replaces: decision.targetId } });
+        this.emit?.({ type: "memory.governed", op: "ADD", entryId: newId });
         continue;
       }
       if (decision.op === "UPDATE" && decision.targetId) {
-        draft.id = decision.targetId; // upsert 覆盖，账本保留（引擎 ON CONFLICT 不触碰 freq/utility）
+        // UPDATE 版本链（§5.6）：旧值追加进 history[]；freq/utility/t_valid/created_at 由引擎 upsert 保留
+        const old = await this.engine.get(decision.targetId);
+        if (old?.kind === "semantic") {
+          draft.history = [...(old.history ?? []), { fact: old.fact, tInvalid: nowIso }];
+        }
+        draft.id = decision.targetId;
       }
       await this.engine.put(draft);
       const id = draft.id || deriveEntryId(draft);
