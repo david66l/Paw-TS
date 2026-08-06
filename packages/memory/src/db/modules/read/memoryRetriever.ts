@@ -9,7 +9,7 @@ import { getSql } from "../../connection.js";
 import { memoryItemDao } from "../../dao/memoryItem.js";
 import type { MemoryItem, MemoryType, MemoryStatus } from "../../types.js";
 import { PolicyEngine, type RetrievalPolicy } from "../platform/policyEngine.js";
-import { NGramEmbeddingService, cosineSimilarity } from "../platform/embeddingService.js";
+import { NGramEmbeddingService, cosineSimilarity, MEMORY_EMBEDDING_DIMENSIONS } from "../platform/embeddingService.js";
 import { tokenizeForMemoryScore } from "../../../shared/memory-quality.js";
 
 export interface RetrievalRequest {
@@ -70,7 +70,7 @@ export function applyTypeQuotas(
 
 export class MemoryRetriever {
   private policy: RetrievalPolicy;
-  private embedder = new NGramEmbeddingService();
+  private embedder = new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS);
 
   constructor(policyEngine?: PolicyEngine) {
     this.policy = policyEngine?.getDefaults().retrieval ?? new PolicyEngine().getDefaults().retrieval;
@@ -117,7 +117,9 @@ export class MemoryRetriever {
           vecMap.set(r.memory_id, parseVector(r.embedding));
         }
 
-        // 融合：有 embedding 则 0.7kw + 0.3vec，无 embedding 直接用 kwScore
+        // 融合：有 embedding 则 0.7kw + 0.3vec，无 embedding 直接用 kwScore。
+        // 向量分只增不减（max）：ngram 向量的 vecSim 系统性低于词面分，
+        // 裸加权会把过阈值的关键词命中稀释到 minScore 以下（embedding 维度修复后暴露的回归）。
         // 关键词分为 0 时，纯向量分数需达到更高阈值，避免无关项混入
         const fused = keywordScored.map((ks) => {
           const storedVec = vecMap.get(ks.memory.id);
@@ -131,7 +133,7 @@ export class MemoryRetriever {
           const vecSim = cosineSimilarity(queryVec, storedVec);
           const score =
             ks.kwScore > 0
-              ? ks.kwScore * 0.7 + vecSim * 0.3
+              ? Math.max(ks.kwScore, ks.kwScore * 0.7 + vecSim * 0.3)
               : vecSim * 0.45;
           return {
             memory: ks.memory,

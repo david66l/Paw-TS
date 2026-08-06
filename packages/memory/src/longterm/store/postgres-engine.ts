@@ -14,6 +14,7 @@ import {
   NGramEmbeddingService,
   storeEmbedding,
   cosineSimilarity,
+  MEMORY_EMBEDDING_DIMENSIONS,
 } from "../../db/modules/platform/embeddingService.js";
 import { deriveEntryId } from "./id.js";
 import type {
@@ -25,8 +26,8 @@ import type {
   ScoredId,
 } from "./engine.js";
 
-/** memory_embeddings.embedding 列为 vector(1536)（V008），embedding 服务须对齐该维度 */
-const EMBEDDING_DIMENSIONS = 1536;
+/** memory_embeddings.embedding 列为 vector(1536)（V008），embedding 服务统一使用该维度 */
+const EMBEDDING_DIMENSIONS = MEMORY_EMBEDDING_DIMENSIONS;
 
 type Row = Record<string, unknown>;
 
@@ -178,7 +179,11 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const conds: string[] = ["1=1"];
     const params: unknown[] = [];
 
-    if (!filter.includeInvalidated) conds.push("t_invalid IS NULL");
+    if (!filter.includeInvalidated) {
+      conds.push("t_invalid IS NULL");
+      // 降级条目过滤（spec §6.3）：verification_status='invalidated' 不进检索池
+      conds.push("verification_status != 'invalidated'");
+    }
     if (filter.kind) {
       params.push(filter.kind);
       conds.push(`type = $${params.length}`);
@@ -205,12 +210,21 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
 
   async searchText(queryText: string, k: number): Promise<ScoredId[]> {
     const sql = getSql();
-    // 复用 V013 的 tsvector/GIN；只检索活跃条目
+    // 两路全文：V013 search_tsv（'english'，title/summary/subject/tags）
+    // + V027 when_to_use_tsv（'simple'，episodic 检索键，中文友好），取较大 rank。
+    // 只检索活跃且未降级的条目（spec §6.3 硬默认）。
     const rows = await sql`
-      SELECT id, ts_rank(search_tsv, plainto_tsquery('english', ${queryText})) AS score
+      SELECT id, GREATEST(
+               ts_rank(search_tsv, plainto_tsquery('english', ${queryText})),
+               ts_rank(when_to_use_tsv, plainto_tsquery('simple', ${queryText}))
+             ) AS score
       FROM memory_items
       WHERE t_invalid IS NULL
-        AND search_tsv @@ plainto_tsquery('english', ${queryText})
+        AND verification_status != 'invalidated'
+        AND (
+          search_tsv @@ plainto_tsquery('english', ${queryText})
+          OR when_to_use_tsv @@ plainto_tsquery('simple', ${queryText})
+        )
       ORDER BY score DESC
       LIMIT ${k}
     `;
@@ -232,6 +246,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         FROM memory_embeddings e
         JOIN memory_items m ON m.id = e.memory_id
         WHERE m.t_invalid IS NULL
+          AND m.verification_status != 'invalidated'
         ORDER BY e.embedding <=> ${formatted}::vector ASC
         LIMIT ${k}
       `;
@@ -246,6 +261,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         FROM memory_embeddings e
         JOIN memory_items m ON m.id = e.memory_id
         WHERE m.t_invalid IS NULL
+          AND m.verification_status != 'invalidated'
       `;
       return (rows as unknown as { memory_id: string; embedding: unknown }[])
         .map((r) => ({
@@ -282,9 +298,11 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     `;
     let indexed = 0;
     let failed = 0;
+    const entries: MemoryEntry[] = [];
     for (const raw of rows as unknown as Row[]) {
       try {
         const entry = rowToEntry(raw);
+        entries.push(entry);
         const vec = await this.embedder.embed(embeddingInput(entry));
         await storeEmbedding(entry.id, "1", vec, `ngram-${EMBEDDING_DIMENSIONS}`);
         indexed += 1;
@@ -292,6 +310,30 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         failed += 1;
       }
     }
-    return { scanned: rows.length, indexed, failed };
+
+    // 冒烟回归（spec §4.3）：抽最多 10 条刚重建索引的条目，
+    // 用各自检索键文本做向量查询，验证能被召回
+    const smokeSample = entries.slice(0, 10);
+    const smokeFailedIds: string[] = [];
+    let smokePassed = 0;
+    for (const entry of smokeSample) {
+      try {
+        const hits = await this.searchVector(embeddingInput(entry), 5);
+        if (hits.some((h) => h.id === entry.id)) {
+          smokePassed += 1;
+        } else {
+          smokeFailedIds.push(entry.id);
+        }
+      } catch {
+        smokeFailedIds.push(entry.id);
+      }
+    }
+
+    return {
+      scanned: rows.length,
+      indexed,
+      failed,
+      smoke: { total: smokeSample.length, passed: smokePassed, failedIds: smokeFailedIds },
+    };
   }
 }

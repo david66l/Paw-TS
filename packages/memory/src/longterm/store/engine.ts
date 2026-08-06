@@ -142,6 +142,16 @@ export interface ReindexReport {
   indexed: number;
   /** 重建失败的条目数 */
   failed: number;
+  /**
+   * 重建后冒烟回归（spec §4.3）：抽样活跃条目，用其检索键文本做向量查询，
+   * 验证条目能被召回。total=0 表示空库跳过。
+   */
+  smoke: {
+    total: number;
+    passed: number;
+    /** 未被召回的条目 id */
+    failedIds: string[];
+  };
 }
 
 export interface MemoryStoreEngine {
