@@ -9,7 +9,7 @@
  *   + 现有 NGramEmbeddingService（维度 1536 对齐 embedding 列）
  */
 
-import { getSql, parseJson } from "../../db/connection.js";
+import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
 import {
   NGramEmbeddingService,
   storeEmbedding,
@@ -129,7 +129,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       ) VALUES (
         ${id}, 2, ${entry.kind}, ${id}, 1,
         ${title}, ${summary}, 'active', ${sql.json({ repositoryId: entry.repo })}, ${entry.confidence},
-        ${sql.json(payload as any)}, ${sql.array(tags)},
+        ${sql.json(payload as any)}, ${textArrayLiteral(tags)}::text[],
         1, ${created}, ${now},
         ${tValid}, ${entry.tInvalid ?? null}, ${whenToUseCol}, ${entry.freq ?? 0}, ${entry.utility ?? 0}, ${sql.json(history as any)}
       )

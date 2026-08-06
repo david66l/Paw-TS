@@ -9,6 +9,7 @@
   "dependencies": {
     "@paw/agent": "workspace:*",
     "@paw/eval": "workspace:*",
+    "@paw/memory": "workspace:*",
     "@paw/settings": "workspace:*",
     "@paw/workspace": "workspace:*"
   },

@@ -27,6 +27,7 @@ Usage:
   paw-ts config [--root <dir>] [--get <key>] [--set <key> <value>]
   paw-ts commit [--root <dir>] [--message <text>]
   paw-ts stub-run [--goal <text>] [--max-steps <n>] [--worktree]
+  paw-ts memory list|why|forget|stats|diff [--kind <k>] [--all] [--since <iso>] [--repo <id>]
   paw-ts eval run [--suite <name>] [--sandbox] [--repetitions <n>] [--output console|markdown|json]
   paw-ts eval list
 `);
@@ -189,6 +190,17 @@ async function main(): Promise<void> {
       sandbox,
       saveTraces,
     });
+    if (r.ok) {
+      console.log(r.text);
+      process.exit(0);
+    }
+    console.error(r.text);
+    process.exit(1);
+  }
+
+  if (argv[0] === "memory") {
+    const { runMemoryCommand } = await import("@paw/memory/longterm");
+    const r = await runMemoryCommand(argv.slice(1));
     if (r.ok) {
       console.log(r.text);
       process.exit(0);
