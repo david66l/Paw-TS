@@ -75,6 +75,12 @@ export interface WritePipelineOptions {
   dailyBudget?: number;
   /** RunEvent 发射钩子（memory.write.* / memory.governed，§9.5） */
   emit?: (event: RunEvent) => void;
+  /**
+   * readonly 模式（§6.7/§9.4，M9）：true 时 enqueue 直接丢弃写入事件
+   * （记 op-log write.dropped {reason:"readonly"}），检索只读不受影响。
+   * 可传函数动态求值（如读 memory-config.json）。
+   */
+  readonly?: boolean | (() => boolean);
   now?: () => Date;
 }
 
@@ -94,6 +100,7 @@ export class MemoryWritePipeline {
   private readonly intervalMs: number;
   private readonly dailyBudget: number;
   private readonly emit?: (event: RunEvent) => void;
+  private readonly isReadonly: () => boolean;
   private readonly now: () => Date;
   private timer: ReturnType<typeof setInterval> | null = null;
   private processing = false;
@@ -107,11 +114,20 @@ export class MemoryWritePipeline {
     this.intervalMs = opts.intervalMs ?? 2000;
     this.dailyBudget = opts.dailyBudget ?? 50;
     this.emit = opts.emit;
+    this.isReadonly = typeof opts.readonly === "function" ? opts.readonly : () => opts.readonly === true;
     this.now = opts.now ?? (() => new Date());
   }
 
   /** 入队：落 db outbox（崩溃不丢）+ op-log + RunEvent，worker 被唤醒 */
   async enqueue(event: MemoryWriteEvent): Promise<void> {
+    // readonly 模式（§6.7）：写入事件全部丢弃，记 op-log 供审计
+    if (this.isReadonly()) {
+      await appendOpLog("write.dropped", {
+        runId: "runId" in event ? event.runId : undefined,
+        detail: { reason: "readonly", eventType: event.type },
+      });
+      return;
+    }
     const sql = getSql();
     const estimated = estimateTokens("goal" in event ? `${event.goal ?? ""}\n${event.trajectory ?? ""}` : "text" in event ? event.text : "");
     await sql`

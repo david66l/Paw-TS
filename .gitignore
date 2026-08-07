@@ -6,7 +6,15 @@
 #   .paw/sessions/*.jsonl      — run traces (may contain prompts / tool I/O)
 #   .paw/checkpoints/          — file snapshots for undo
 #   .paw/states/               — persisted run / app state
-.paw/
+#
+# 注意：用 `.paw/*`（而非 `.paw/`）忽略目录内容，以便下方可以
+# 重新包含个别子目录（git 不允许重新包含被排除目录下的文件）。
+.paw/*
+# 记忆机制 v2（文档/记忆机制spec-v2 04 §4.1）：
+#   .paw/memory/         — 远期 file 后端的个人记忆库，永不进 git（默认项先行）
+#   .paw/shared-memory/  — `paw-ts memory export` 的显式导出目录，可提交（已过密钥扫描）
+.paw/memory/
+!.paw/shared-memory/
 
 # Optional dev env at monorepo subfolder
 .env

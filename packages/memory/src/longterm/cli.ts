@@ -21,9 +21,11 @@ import {
 } from "./lifecycle/janitor.js";
 import { collectGarbage } from "./lifecycle/gc.js";
 import { parseReplayJsonl, runReplay, renderReplayReport } from "./eval/replay.js";
+import { exportMemories } from "./export.js";
+import { loadMemoryConfig, saveMemoryConfig } from "./config.js";
 
 export interface MemoryCliArgs {
-  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay";
+  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay" | "export" | "readonly";
   id?: string;
   kind?: MemoryKind;
   all?: boolean;
@@ -42,6 +44,8 @@ export interface MemoryCliArgs {
   sweep?: boolean;
   /** replay：输出 JSON 而非表格 */
   json?: boolean;
+  /** export --dir <path>：导出目录（默认 .paw/shared-memory） */
+  dir?: string;
 }
 
 export interface MemoryCliResult {
@@ -64,6 +68,8 @@ Usage:
   paw-ts memory gc --review       列出删除候选人工复核队列
   paw-ts memory gc --approve <entryId> | --reject <entryId>   复核决议（approve 即软失效）
   paw-ts memory replay <input.jsonl> [--json]   轨迹回放 Δ 代理评测（shadow 检索 + 判定汇总）
+  paw-ts memory export [--dir <path>] [--all]   导出到 .paw/shared-memory/（导出前全量密钥扫描）
+  paw-ts memory readonly [on|off]   只读模式切换（CI 场景；不带参数显示当前状态）
 
 需要 DATABASE_URL 指向记忆库（V026+ 迁移）。`;
 
@@ -73,7 +79,7 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
   if (sub === undefined || sub === "help" || sub === "--help" || sub === "-h") {
     return { error: USAGE };
   }
-  if (!["list", "why", "forget", "stats", "diff", "gc", "replay"].includes(sub)) {
+  if (!["list", "why", "forget", "stats", "diff", "gc", "replay", "export", "readonly"].includes(sub)) {
     return { error: `未知子命令: ${sub}\n\n${USAGE}` };
   }
 
@@ -102,6 +108,10 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
       const v = args[++i];
       if (!v) return { error: "--export 缺目录" };
       out.exportDir = v;
+    } else if (a === "--dir") {
+      const v = args[++i];
+      if (!v) return { error: "--dir 缺路径" };
+      out.dir = v;
     } else if (a === "--kind") {
       const v = args[++i];
       if (!v || !KINDS.includes(v as MemoryKind)) return { error: `--kind 需为 ${KINDS.join("|")}` };
@@ -255,6 +265,40 @@ export async function runMemoryCommand(args: readonly string[]): Promise<MemoryC
         return {
           ok: true,
           text: parsed.json ? JSON.stringify(report, null, 2) : renderReplayReport(report),
+        };
+      }
+
+      case "export": {
+        const report = await exportMemories({
+          engine,
+          dir: parsed.dir,
+          repo: parsed.repo,
+          includeInvalidated: parsed.all,
+        });
+        const lines = [
+          `导出完成: ${report.dir}`,
+          `  扫描: ${report.total}    导出: ${report.exported}    打码: ${report.redacted}    跳过（疑似密钥）: ${report.skippedSecret.length}`,
+        ];
+        for (const s of report.skippedSecret) lines.push(`  跳过: ${s.id}（${s.pattern}）`);
+        for (const f of report.files) lines.push(`  文件: ${f}`);
+        return { ok: true, text: lines.join("\n") };
+      }
+
+      case "readonly": {
+        // 配置落在 .paw/memory-config.json（见 config.ts 的落点说明）
+        if (!parsed.id) {
+          const cfg = await loadMemoryConfig();
+          return { ok: true, text: `readonly: ${cfg.readonly ? "on" : "off"}    shadow: ${cfg.shadow ? "on" : "off"}` };
+        }
+        if (parsed.id !== "on" && parsed.id !== "off") {
+          return { ok: false, text: `memory readonly 需要 on|off，收到: ${parsed.id}` };
+        }
+        const cfg = await saveMemoryConfig({ readonly: parsed.id === "on" });
+        return {
+          ok: true,
+          text: cfg.readonly
+            ? "readonly 已开启：写入事件将全部丢弃（记 op-log write.dropped），检索只读正常"
+            : "readonly 已关闭：写入管线恢复",
         };
       }
     }

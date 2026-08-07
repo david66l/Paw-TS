@@ -4,4 +4,6 @@ export * from "./observability/index.js";
 export * from "./write/index.js";
 export * from "./lifecycle/index.js";
 export * from "./eval/index.js";
+export * from "./config.js";
+export * from "./export.js";
 export * from "./cli.js";
