@@ -125,7 +125,11 @@ async function loadActiveRows(repo?: string): Promise<ActiveRow[]> {
 }
 
 /** 条目级采纳率：op-log read.adopted / read.inject 聚合（§10.3 口径） */
-async function loadAdoptionRates(): Promise<Map<string, { injected: number; adopted: number }>> {
+async function loadAdoptionRates(): Promise<{
+  rates: Map<string, { injected: number; adopted: number }>;
+  /** 全库 read.adopted 记录数（0 = 采纳埋点未接线的环境） */
+  globalAdopted: number;
+}> {
   const sql = getSql();
   const rows = await sql`
     SELECT entry_id,
@@ -135,15 +139,20 @@ async function loadAdoptionRates(): Promise<Map<string, { injected: number; adop
     WHERE op IN ('read.inject', 'read.adopted')
     GROUP BY entry_id
   `;
-  const map = new Map<string, { injected: number; adopted: number }>();
+  const rates = new Map<string, { injected: number; adopted: number }>();
+  let globalAdopted = 0;
   for (const r of rows as unknown as { entry_id: string; injected: number; adopted: number }[]) {
-    map.set(r.entry_id, { injected: r.injected, adopted: r.adopted });
+    rates.set(r.entry_id, { injected: r.injected, adopted: r.adopted });
+    globalAdopted += r.adopted;
   }
-  return map;
+  return { rates, globalAdopted };
 }
 
 /**
  * 删除候选判定（§7.2）。stats 与 janitor 共用此函数（单一判定点）。
+ *
+ * 防误删保险（修复批次 A #1c）：全库无 read.adopted 记录 = 采纳埋点未接线，
+ * 采纳率判据视为"信号不足"不定罪——只有存在采纳数据且比率 <0.2 才算低采纳。
  */
 export async function scanDeletionCandidates(
   config: Partial<LifecycleConfig> = {},
@@ -158,9 +167,10 @@ export async function scanDeletionCandidates(
     if (r.source === "user_statement") continue;                    // 用户陈述永不自动删
     if (r.type === "profile" && (r.supportCount ?? 0) >= 3) continue; // profile 需巩固复核
 
-    const a = adoption.get(r.id);
+    // 主判据：采纳率。全库无采纳埋点数据 → 信号不足，不定罪（防误删保险）
+    if (adoption.globalAdopted === 0) continue;
+    const a = adoption.rates.get(r.id);
     const adoptionRate = a && a.injected > 0 ? a.adopted / a.injected : null;
-    // 主判据：采纳率（无数据 = 信号不足，不定罪）
     if (adoptionRate === null || adoptionRate >= cfg.deleteMaxAdoptionRate) continue;
     // 辅助判据：utility/freq ≤ 阈值，或无足够 outcome 信号（utility=0 无法区分全败/无信号）
     const utilityRatio = r.freq > 0 ? r.utility / r.freq : 0;

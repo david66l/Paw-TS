@@ -302,6 +302,10 @@ describe("写入管线 db 集成", () => {
     expect(entry!.source).toBe("agent_verified");
     expect(entry!.confidence).toBe(0.8);
     expect(entry!.evidence.length).toBeGreaterThanOrEqual(1);
+    // #2：固化通道写入 verified（不再一律 unverified）
+    const sql = getSql();
+    const rows = await sql`SELECT verification_status FROM memory_items WHERE id = ${r.memoryIds[0]!}`;
+    expect((rows[0] as { verification_status: string }).verification_status).toBe("verified");
   });
 
   it("测试失败 outcome 转试用通道（不固化）", async () => {
@@ -362,9 +366,16 @@ describe("写入管线 db 集成", () => {
     const rows = await sql`SELECT verification_status FROM memory_items WHERE id = ${r.memoryId}`;
     expect((rows[0] as { verification_status: string }).verification_status).toBe("unverified");
 
-    // 不参与自动注入：query/searchText/searchVector/hybridRecall 全部排除
+    // #4 双向断言：query/list 可见降级条目（仅 memory list 可见，§5.7），检索路径不可见
     const q = await engine.query({ repo: REPO });
-    expect(q.map((e) => e.id)).not.toContain(r.memoryId);
+    expect(q.map((e) => e.id)).toContain(r.memoryId);
+    expect((q.find((e) => e.id === r.memoryId) as unknown as { degraded?: boolean }).degraded).toBe(true);
+    // 显式排除仍可用
+    const qNoDegraded = await engine.query({ repo: REPO, includeDegraded: false });
+    expect(qNoDegraded.map((e) => e.id)).not.toContain(r.memoryId);
+    // 自动注入路径排除：searchText / hybridRecall
+    const textHits = await engine.searchText("xyzzy", 10);
+    expect(textHits.map((h) => h.id)).not.toContain(r.memoryId);
     const recalled = await hybridRecall(engine, "xyzzy weak model", { candidates: 10 });
     expect(recalled.items.map((i) => i.entry.id)).not.toContain(r.memoryId);
   });

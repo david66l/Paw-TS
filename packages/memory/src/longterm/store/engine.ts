@@ -121,6 +121,12 @@ export interface MemoryFilter {
   source?: MemorySource;
   /** true = 含已软失效条目（memory list --all）；默认 false 只返回活跃条目 */
   includeInvalidated?: boolean;
+  /**
+   * false = 排除蒸馏降级条目（payload.degraded）。默认 true：
+   * query/list 是给人看的（§5.7 "仅 memory list 可见"）；
+   * 自动注入的过滤在 searchText/searchVector 检索路径，不在 query。
+   */
+  includeDegraded?: boolean;
   limit?: number;
   offset?: number;
 }

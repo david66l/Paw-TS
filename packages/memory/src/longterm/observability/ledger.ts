@@ -47,7 +47,7 @@ export async function recordTaskSuccess(
 
 /**
  * 记一条采纳事件：runId 任务实际引用/遵循了 entryIds 中的经验。
- * 判定逻辑在调用方（M6 检索管线/M8 评测），此处只落 op-log。
+ * 判定逻辑：detectAdoption（规则初筛）/ M8 评测 LLM-judge 校准，此处只落 op-log。
  */
 export async function recordAdoption(
   runId: string,
@@ -55,4 +55,58 @@ export async function recordAdoption(
   detail: Record<string, unknown> = {},
 ): Promise<void> {
   await appendOpLog("read.adopted", { runId, entryIds: [...entryIds], detail });
+}
+
+// ── 采纳判定（spec §10.3，规则匹配为主的纯函数初筛）──
+
+/** detectAdoption 的输入条目特征（从注入条目中提取） */
+export interface AdoptionProbe {
+  id: string;
+  /** semantic 的 keywords */
+  keywords?: string[];
+  /** episodic 的 modification（操作建议序列） */
+  modifications?: string[];
+}
+
+function normalizeText(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * 判定注入条目是否在轨迹中被实际引用/遵循（§10.3 口径的规则近似）：
+ * - 条目任一 keyword（≥4 字符）出现在轨迹文本中；或
+ * - 任一 modification 的内容词（>3 字符）≥60% 出现在轨迹文本中
+ * 返回被采纳的条目 id。规则为主，抽样 LLM-judge 校准（§10.3）。
+ */
+export function detectAdoption(
+  injected: readonly AdoptionProbe[],
+  trajectoryText: string,
+): string[] {
+  const text = normalizeText(trajectoryText);
+  if (!text) return [];
+  const out: string[] = [];
+  for (const probe of injected) {
+    const kwHit = (probe.keywords ?? []).some((k) => {
+      const nk = normalizeText(k);
+      return nk.length >= 4 && text.includes(nk);
+    });
+    const modHit = (probe.modifications ?? []).some((m) => {
+      const words = normalizeText(m).split(" ").filter((w) => w.length > 3);
+      if (words.length === 0) return false;
+      const hits = words.filter((w) => text.includes(w)).length;
+      return hits / words.length >= 0.6;
+    });
+    if (kwHit || modHit) out.push(probe.id);
+  }
+  return out;
+}
+
+/** 从 MemoryEntry 提取采纳探针（keywords/modification 按 kind 映射） */
+export function probeFromEntry(entry: {
+  id: string;
+  kind: string;
+  keywords?: string[];
+  modification?: string[];
+}): AdoptionProbe {
+  return { id: entry.id, keywords: entry.keywords, modifications: entry.modification };
 }

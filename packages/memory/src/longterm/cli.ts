@@ -176,8 +176,9 @@ export async function runMemoryCommand(args: readonly string[]): Promise<MemoryC
         if (entries.length === 0) return { ok: true, text: "(无条目)" };
         const lines = entries.map((e) => {
           const dead = e.tInvalid ? "  [已失效]" : "";
+          const degraded = (e as { degraded?: boolean }).degraded === true ? "  [降级]" : "";
           const s = summarize(e);
-          return `${e.id}  [${e.kind}]  freq=${e.freq} util=${e.utility}  ${s.length > 70 ? `${s.slice(0, 69)}…` : s}${dead}`;
+          return `${e.id}  [${e.kind}]  freq=${e.freq} util=${e.utility}  ${s.length > 70 ? `${s.slice(0, 69)}…` : s}${dead}${degraded}`;
         });
         return { ok: true, text: lines.join("\n") };
       }

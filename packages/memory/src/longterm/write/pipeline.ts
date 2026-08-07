@@ -18,7 +18,8 @@ import { generateId } from "../../db/modules/platform/idGen.js";
 import type { MemoryEntry, MemoryStoreEngine, SemanticFact } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import { deriveEntryId } from "../store/id.js";
-import { appendOpLog } from "../observability/op-log.js";
+import { appendOpLog, queryOpLog } from "../observability/op-log.js";
+import { recordTaskSuccess, recordAdoption, detectAdoption } from "../observability/ledger.js";
 import { hybridRecall } from "../retrieval/hybrid.js";
 import { scanForSecrets } from "./secrets.js";
 import { MemoryDistiller, type DistillInput } from "./distiller.js";
@@ -130,6 +131,8 @@ export class MemoryWritePipeline {
     }
     const sql = getSql();
     const estimated = estimateTokens("goal" in event ? `${event.goal ?? ""}\n${event.trajectory ?? ""}` : "text" in event ? event.text : "");
+    // sequence 用 V007 的 outbox_sequence_gen 发号：并发安全（nextval 不会冲突），
+    // 配合 (aggregate_id, sequence) 唯一约束（V007）双保险
     await sql`
       INSERT INTO outbox_events (
         id, event_type, aggregate_type, aggregate_id, payload,
@@ -137,7 +140,7 @@ export class MemoryWritePipeline {
       ) VALUES (
         ${generateId("outbox")}, ${event.type}, ${OUTBOX_TYPE}, ${OUTBOX_AGGREGATE},
         ${sql.json(event as any)},
-        (SELECT COALESCE(MAX(sequence), 0) + 1 FROM outbox_events WHERE aggregate_id = ${OUTBOX_AGGREGATE}),
+        (SELECT nextval('outbox_sequence_gen')),
         ${generateId("tx")}, 'pending', now()
       )
     `;
@@ -175,18 +178,30 @@ export class MemoryWritePipeline {
   /** 处理一条待处理事件（测试可直接调用）；无待处理返回 false */
   async processNext(): Promise<boolean> {
     const sql = getSql();
+    // 回收崩溃遗留的 processing 行（超 5 分钟，V030）
+    await sql`
+      UPDATE outbox_events SET status = 'pending', processing_at = NULL
+      WHERE aggregate_type = ${OUTBOX_TYPE} AND status = 'processing'
+        AND processing_at < now() - interval '5 minutes'
+    `;
+    // 原子领取：SKIP LOCKED 保证多 worker 并发同一事件只被领取一次
     const rows = await sql`
-      SELECT id, payload FROM outbox_events
-      WHERE aggregate_type = ${OUTBOX_TYPE} AND status = 'pending'
-        AND (next_retry_at IS NULL OR next_retry_at <= now())
-      ORDER BY sequence ASC LIMIT 1
+      UPDATE outbox_events SET status = 'processing', processing_at = now()
+      WHERE id = (
+        SELECT id FROM outbox_events
+        WHERE aggregate_type = ${OUTBOX_TYPE} AND status = 'pending'
+          AND (next_retry_at IS NULL OR next_retry_at <= now())
+        ORDER BY sequence ASC LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id, payload
     `;
     const row = rows[0] as { id: string; payload: unknown } | undefined;
     if (!row) return false;
 
     try {
       await this.processEvent(parseJson(row.payload) as MemoryWriteEvent);
-      await sql`UPDATE outbox_events SET status = 'published', published_at = now() WHERE id = ${row.id}`;
+      await sql`UPDATE outbox_events SET status = 'published', published_at = now(), processing_at = NULL WHERE id = ${row.id}`;
     } catch (e) {
       // 失败重试 3 次进死信（retry_count>=max_retries → dead_letter）
       const msg = e instanceof Error ? e.message : String(e);
@@ -195,7 +210,8 @@ export class MemoryWritePipeline {
           status = CASE WHEN retry_count >= max_retries THEN 'dead_letter' ELSE 'pending' END,
           retry_count = retry_count + 1,
           last_error = ${msg},
-          next_retry_at = CASE WHEN retry_count >= max_retries THEN NULL ELSE now() + interval '5 seconds' END
+          next_retry_at = CASE WHEN retry_count >= max_retries THEN NULL ELSE now() + interval '5 seconds' END,
+          processing_at = NULL
         WHERE id = ${row.id}
       `;
       await appendOpLog("error", { detail: { stage: "write.process", error: msg } });
@@ -240,10 +256,15 @@ export class MemoryWritePipeline {
             const trial = await addTrialLesson(lesson, event.runId);
             return { status: "trialed", trialId: trial.id };
           }
-          return this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
+          const r = await this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
+          // 效用结算（§7.1）：该 run 注入过的条目 utility+1 + 采纳判定（§10.3）
+          await this.settleRunOutcome(event.runId, event.trajectory ?? "");
+          return r;
         }
         if (verdict.kind === "user_accepted") {
-          return this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
+          const r = await this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
+          await this.settleRunOutcome(event.runId, event.trajectory ?? "");
+          return r;
         }
         // 禁止盲改条款（§5.3）：无任何反馈信号不得固化
         await appendOpLog("write.rejected", { runId, detail: { reason: "unverified", eventType: event.type } });
@@ -444,8 +465,34 @@ export class MemoryWritePipeline {
     return { status: "degraded", memoryId: id };
   }
 
-  /** 当日蒸馏 LLM 调用计数（op-log 持久化口径，跨进程一致） */
-  private async countDistillCallsToday(): Promise<number> {
+  /**
+   * 任务成功结算（§7.1 / §10.3）：按 runId 查 op-log read.inject 的注入条目，
+   * utility+1（同 run 归因，不跨 run）；轨迹文本中实际引用/遵循的条目记 read.adopted。
+   * 结算失败不阻塞主流程（§9.6）。
+   */
+  private async settleRunOutcome(runId: string, trajectoryText: string): Promise<void> {
+    try {
+      const injects = await queryOpLog({ runId, op: "read.inject", limit: 100 });
+      const ids = [...new Set(injects.flatMap((l) => l.entryIds))];
+      if (ids.length === 0) return;
+      await recordTaskSuccess(this.engine, ids);
+
+      const entries = (
+        await Promise.all(ids.map((id) => this.engine.get(id).catch(() => null)))
+      ).filter((e): e is MemoryEntry => e !== null);
+      const adopted = detectAdoption(
+        entries.map((e) => ({
+          id: e.id,
+          keywords: e.kind === "semantic" ? e.keywords : [],
+          modifications: e.kind === "episodic" ? e.modification : [],
+        })),
+        trajectoryText,
+      );
+      if (adopted.length > 0) await recordAdoption(runId, adopted, { by: "detectAdoption" });
+    } catch { /* 账本允许近似 */ }
+  }
+
+  /** 当日蒸馏 LLM 调用计数（op-log 持久化口径，跨进程一致） */private async countDistillCallsToday(): Promise<number> {
     const sql = getSql();
     const [row] = await sql`
       SELECT count(*)::int AS n FROM memory_op_log

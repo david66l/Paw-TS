@@ -66,6 +66,8 @@ export interface InjectedMemory {
   tInvalid?: string;
   /** profile 画像的支持证据数（预算内按 supportCount 降序的排序键） */
   supportCount?: number;
+  /** 单条超预算被条目内截断（正文尾部标注"已截断"） */
+  truncated?: boolean;
 }
 
 export interface InjectionPackage {
@@ -394,21 +396,26 @@ export class TriggeredRetriever {
     }
   }
 
-  /** 预算组装：超限截断（截尾巴不截头）并记 op-log read.truncated（§6.6） */
+  /** 预算组装：超限截断（截尾巴不截头）并记 op-log read.truncated（§6.6）。
+   *  单条即超预算时按字符截断正文到预算内——总量硬顶 maxInjectTokens 无例外（修复批次 A #5） */
   private async pack(items: InjectedMemory[], degraded: boolean, runId?: string): Promise<InjectionPackage> {
     const kept: InjectedMemory[] = [];
     let truncated = false;
     for (const item of items) {
       const candidate = [...kept, item];
       const tokens = this.countTokens(renderXml(candidate));
-      if (tokens > this.maxInjectTokens && kept.length > 0) {
+      if (tokens > this.maxInjectTokens) {
+        if (kept.length === 0) {
+          // 单条即超预算：条目内截断到预算内（截尾巴），硬顶无例外
+          kept.push(this.truncateToFit(item));
+        }
         truncated = true;
         break;
       }
       kept.push(item);
     }
     if (truncated) {
-      await appendOpLog("read.truncated", { runId, detail: { kept: kept.length, dropped: items.length - kept.length } });
+      await appendOpLog("read.truncated", { runId, detail: { kept: kept.length, dropped: items.length - kept.length, singleItem: items.length > 0 && kept[0]!.truncated === true } });
     }
 
     const pkg: InjectionPackage = {
@@ -441,6 +448,20 @@ export class TriggeredRetriever {
       }
     }
     return pkg;
+  }
+
+  /** 单条超预算的条目内截断：按比例缩到预算内，标注"已截断"（截尾巴） */
+  private truncateToFit(item: InjectedMemory): InjectedMemory {
+    let body = item.text;
+    for (let i = 0; i < 12; i++) {
+      const candidate: InjectedMemory = { ...item, text: `${body}…[已截断]`, truncated: true };
+      const tokens = this.countTokens(renderXml([candidate]));
+      if (tokens <= this.maxInjectTokens) return candidate;
+      const ratio = this.maxInjectTokens / tokens;
+      body = body.slice(0, Math.max(16, Math.floor(body.length * ratio * 0.9)));
+    }
+    // 兜底：极端情况下按最小长度硬截（预算硬顶优先于内容完整）
+    return { ...item, text: `${body.slice(0, 16)}…[已截断]`, truncated: true };
   }
 
   private emptyPackage(): InjectionPackage {

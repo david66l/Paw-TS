@@ -118,17 +118,25 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const history = entry.kind === "semantic" ? (entry.history ?? []) : [];
     // payload 存完整条目（kind 特有字段 + source/evidence 等），基础列字段在读出时以列为准
     const payload = { ...entry, id };
+    // verification_status 按条目推导（修复批次 A #2）：固化通道（可信 source）→ verified；
+    // 降级条目（payload.degraded）与纯推断（agent_inferred）→ unverified
+    const degraded = (entry as { degraded?: boolean }).degraded === true;
+    const verificationStatus = degraded
+      ? "unverified"
+      : ["agent_verified", "user_statement", "repo_docs", "trial_graduated"].includes(entry.source)
+        ? "verified"
+        : "unverified";
 
     await sql`
       INSERT INTO memory_items (
         id, schema_version, type, subject_key, subject_key_version,
-        title, summary, status, scope, confidence,
+        title, summary, status, scope, confidence, verification_status,
         payload, tags,
         version, created_at, updated_at,
         t_valid, t_invalid, when_to_use, freq, utility, history
       ) VALUES (
         ${id}, 2, ${entry.kind}, ${id}, 1,
-        ${title}, ${summary}, 'active', ${sql.json({ repositoryId: entry.repo })}, ${entry.confidence},
+        ${title}, ${summary}, 'active', ${sql.json({ repositoryId: entry.repo })}, ${entry.confidence}, ${verificationStatus},
         ${sql.json(payload as any)}, ${textArrayLiteral(tags)}::text[],
         1, ${created}, ${now},
         ${tValid}, ${entry.tInvalid ?? null}, ${whenToUseCol}, ${entry.freq ?? 0}, ${entry.utility ?? 0}, ${sql.json(history as any)}
@@ -137,6 +145,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         title = EXCLUDED.title,
         summary = EXCLUDED.summary,
         confidence = EXCLUDED.confidence,
+        verification_status = EXCLUDED.verification_status,
         payload = EXCLUDED.payload,
         tags = EXCLUDED.tags,
         when_to_use = EXCLUDED.when_to_use,
@@ -183,7 +192,10 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       conds.push("t_invalid IS NULL");
       // 降级条目过滤（spec §6.3）：verification_status='invalidated' 不进检索池
       conds.push("verification_status != 'invalidated'");
-      // 蒸馏降级条目（§5.7 append-only）：仅 memory list 可见，不参与自动注入
+    }
+    // 蒸馏降级条目（§5.7 append-only）默认在 query/list 可见（修复批次 A #4）；
+    // 自动注入的排除在 searchText/searchVector 检索路径
+    if (filter.includeDegraded === false) {
       conds.push("COALESCE(payload->>'degraded', 'false') != 'true'");
     }
     if (filter.kind) {
