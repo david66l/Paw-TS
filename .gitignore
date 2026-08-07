@@ -16,6 +16,9 @@
 .paw/memory/
 !.paw/shared-memory/
 
+# 嵌套 .paw（如 apps/tui/.paw/）同理为本地运行态，永不进 git
+**/.paw/
+
 # Optional dev env at monorepo subfolder
 .env
 .env.*
