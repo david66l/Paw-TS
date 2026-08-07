@@ -174,7 +174,10 @@ export class MemoryWritePipeline {
     if (this.processing) return;
     this.processing = true;
     try {
-      while (await this.processNext()) { /* 串行排空 */ }
+      // 串行排空，任务间隔 intervalMs（spec §5.2 默认 2s，修复批次 C #19）
+      while (await this.processNext()) {
+        await new Promise((r) => setTimeout(r, this.intervalMs));
+      }
     } finally {
       this.processing = false;
     }

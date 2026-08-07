@@ -53,9 +53,16 @@ export type DistillResult =
 
 // ── prompt ──
 
+/**
+ * 失败→成功转折探测（§5.4 纪律 3）：outcome=success 但轨迹含失败信号。
+ * buildDistillPrompt 的提示与 validateCandidate 的必填校验共用此函数（修复批次 C #17）。
+ */
+export function hasFailureToSuccessTurn(input: Pick<DistillInput, "outcome" | "trajectory">): boolean {
+  return input.outcome === "success" && /(?:error|failed|failure|报错|失败)/i.test(input.trajectory);
+}
+
 export function buildDistillPrompt(input: DistillInput): string {
-  const failureFixRequired =
-    input.outcome === "success" && /(?:error|failed|failure|报错|失败)/i.test(input.trajectory);
+  const failureFixRequired = hasFailureToSuccessTurn(input);
   return `你是记忆蒸馏器。从任务轨迹中提炼可复用的长期记忆候选，输出 JSON。
 
 硬性纪律（违反将被 schema 校验拒绝）：
@@ -96,7 +103,10 @@ function countSentences(s: string): number {
 /** 单条目体量上限 300 tokens ≈ 1200 字符（粗估 chars/4） */
 const MAX_FIELD_CHARS = 1200;
 
-export function validateCandidate(raw: unknown): { ok: true; value: DistillCandidate } | { ok: false; errors: string[] } {
+export function validateCandidate(
+  raw: unknown,
+  opts: { requireFailureFixPair?: boolean } = {},
+): { ok: true; value: DistillCandidate } | { ok: false; errors: string[] } {
   const errors: string[] = [];
   if (typeof raw !== "object" || raw === null) return { ok: false, errors: ["候选不是对象"] };
   const c = raw as Record<string, unknown>;
@@ -148,6 +158,9 @@ export function validateCandidate(raw: unknown): { ok: true; value: DistillCandi
         || typeof p.failed !== "string" || typeof p.feedback !== "string" || typeof p.fixed !== "string") {
         errors.push("failureFixPair 必须含 failed/feedback/fixed 三个字符串字段（纪律 3）");
       }
+    } else if (opts.requireFailureFixPair) {
+      // 轨迹含失败→成功转折时 failureFixPair 必填（纪律 3，修复批次 C #17）
+      errors.push("轨迹含失败→成功转折，episodic 候选必须产出 failureFixPair（纪律 3）");
     }
   }
 
@@ -204,8 +217,9 @@ export class MemoryDistiller {
 
       const candidates: DistillCandidate[] = [];
       let attemptErrors: string[] = [];
+      const requireFix = hasFailureToSuccessTurn(input);
       for (const rc of rawCandidates) {
-        const v = validateCandidate(rc);
+        const v = validateCandidate(rc, { requireFailureFixPair: requireFix });
         if (v.ok) candidates.push(v.value);
         else attemptErrors = attemptErrors.concat(v.errors);
       }

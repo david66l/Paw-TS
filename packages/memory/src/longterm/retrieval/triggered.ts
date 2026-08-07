@@ -12,6 +12,13 @@
 
 import { TiktokenEstimator } from "@paw/core";
 import type { RunEvent } from "@paw/core";
+
+/** 默认 token 估算：模块级惰性单例（修复批次 C #18：避免 pack 循环里每次 new） */
+let _estimator: TiktokenEstimator | null = null;
+function sharedTokenCount(text: string): number {
+  _estimator ??= new TiktokenEstimator();
+  return _estimator.count(text);
+}
 import type { MemoryEntry, MemoryKind, MemoryStoreEngine } from "../store/engine.js";
 import { hybridRecall, RECALL_ALPHA, type ScoredEntry } from "./hybrid.js";
 import { appendOpLog } from "../observability/op-log.js";
@@ -242,7 +249,7 @@ export class TriggeredRetriever {
     this.topK = { ...DEFAULT_TOPK, ...opts.topK };
     this.maxInjectTokens = opts.maxInjectTokens ?? 500;
     this.emit = opts.emit;
-    this.countTokens = opts.countTokens ?? ((t) => new TiktokenEstimator().count(t));
+    this.countTokens = opts.countTokens ?? sharedTokenCount;
     this.shadow = opts.shadow ?? false;
   }
 
@@ -424,11 +431,10 @@ export class TriggeredRetriever {
     }
   }
 
-  /** trial 池匹配（embedding 索引属 v2；宁缺毋滥：长特征词命中 whenToUse/keywords/lesson） */
+  /** trial 池匹配（embedding 索引属 v2；宁缺毋滥：长特征词/中文词命中 whenToUse/keywords/lesson） */
   private async matchTrialLesson(query: string): Promise<InjectedMemory | null> {
     try {
-      // 长特征词（>6 字符，如 ModuleResolutionError 这类错误类型名）才有区分度
-      const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 6);
+      const terms = extractMatchTerms(query);
       if (terms.length === 0) return null;
       const lessons = await listTrialLessons();
       let best: { lesson: (typeof lessons)[number]; hits: number } | null = null;
@@ -527,6 +533,23 @@ export class TriggeredRetriever {
 }
 
 // ── XML 渲染（§6.6）──
+
+/**
+ * trial 匹配的分词（修复批次 C #21）：拉丁长词（>6 字符，如错误类型名）
+ * + CJK 连续段（≥2 字）。JS 的 \w 不含 CJK，旧实现中文 query 分不出词、恒不匹配。
+ */
+export function extractMatchTerms(query: string): string[] {
+  const terms: string[] = [];
+  const re = /[a-z0-9]+|[一-鿿㐀-䶿]+/g;
+  const lower = query.toLowerCase();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(lower))) {
+    const t = m[0];
+    const isCjk = /[一-鿿㐀-䶿]/.test(t[0]!);
+    if (isCjk ? t.length >= 2 : t.length > 6) terms.push(t);
+  }
+  return terms;
+}
 
 const STATUS_PREFIX: Record<InjectStatus, string> = {
   verified: "历史经验",

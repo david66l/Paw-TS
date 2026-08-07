@@ -10,6 +10,7 @@
  */
 
 import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
+import { appendOpLog } from "../observability/op-log.js";
 import {
   NGramEmbeddingService,
   storeEmbedding,
@@ -313,8 +314,11 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
 
   async reindex(): Promise<ReindexReport> {
     const sql = getSql();
+    // 扫描与冒烟同一过滤口径：活跃 + 非降级（修复批次 C #14）
     const rows = await sql`
-      SELECT * FROM memory_items WHERE t_invalid IS NULL
+      SELECT * FROM memory_items
+      WHERE t_invalid IS NULL
+        AND COALESCE(payload->>'degraded', 'false') != 'true'
     `;
     let indexed = 0;
     let failed = 0;
@@ -331,15 +335,20 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       }
     }
 
-    // 冒烟回归（spec §4.3）：抽最多 10 条刚重建索引的条目，
-    // 用各自检索键文本做向量查询，验证能被召回
-    const smokeSample = entries.slice(0, 10);
+    // 冒烟回归（spec §4.3，修复批次 C #14）：随机抽 ≤10 条，用**关键词子集**
+    // （keywords 前 2 个 / 文本前 40 字符截断变体）查询，断言出现在 top-10——
+    // 不再用"条目自己的完整文本查自己"（那是永真冒烟）。
+    const smokeSample = shuffle(entries).slice(0, 10);
     const smokeFailedIds: string[] = [];
     let smokePassed = 0;
     for (const entry of smokeSample) {
       try {
-        const hits = await this.searchVector(embeddingInput(entry), 5);
-        if (hits.some((h) => h.id === entry.id)) {
+        const probe = smokeProbe(entry);
+        const [textHits, vecHits] = await Promise.all([
+          this.searchText(probe, 10).catch(() => [] as ScoredId[]),
+          this.searchVector(probe, 10).catch(() => [] as ScoredId[]),
+        ]);
+        if (textHits.some((h) => h.id === entry.id) || vecHits.some((h) => h.id === entry.id)) {
           smokePassed += 1;
         } else {
           smokeFailedIds.push(entry.id);
@@ -349,11 +358,39 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       }
     }
 
-    return {
+    const report = {
       scanned: rows.length,
       indexed,
       failed,
       smoke: { total: smokeSample.length, passed: smokePassed, failedIds: smokeFailedIds },
     };
+    // reindex 留痕（修复批次 C #14）
+    try {
+      await appendOpLog("reindex", {
+        detail: {
+          scanned: report.scanned, indexed, failed,
+          smokeTotal: report.smoke.total, smokePassed, smokeFailedIds,
+        },
+      });
+    } catch { /* op-log 失败不影响 reindex 结果 */ }
+    return report;
   }
+}
+
+function shuffle<T>(xs: T[]): T[] {
+  const out = [...xs];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
+/** 冒烟探针：条目文本的关键词子集（非全文），模拟真实查询形态 */
+export function smokeProbe(entry: MemoryEntry): string {
+  if (entry.kind === "semantic" && entry.keywords.length > 0) {
+    return entry.keywords.slice(0, 2).join(" ");
+  }
+  const text = embeddingInput(entry);
+  return text.slice(0, 40);
 }

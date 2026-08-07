@@ -88,6 +88,8 @@ function makeStats(overrides: Partial<MemoryStats>): MemoryStats {
     adoptionRate30d: null,
     injected30d: 0,
     adopted30d: 0,
+    todayDistillCalls: 0,
+    todayEstimatedTokens: 0,
     ...overrides,
   };
 }

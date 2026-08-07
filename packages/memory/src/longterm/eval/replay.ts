@@ -148,10 +148,11 @@ export async function runReplay(
 ): Promise<ReplayReport> {
   const engine = opts.engine ?? new PostgresMemoryStoreEngine();
   // shadow：回放只记录假设注入包，绝不影响真实账本与注入（§11.2）
+  // 修复批次 C #20：shadow 放在展开之后强制为 true，调用方无法覆盖
   const retriever = new TriggeredRetriever({
     engine,
-    shadow: true,
     ...opts.retrieverOptions,
+    shadow: true,
   });
   const now = opts.now ?? (() => new Date());
 

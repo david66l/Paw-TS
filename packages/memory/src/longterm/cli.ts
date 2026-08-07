@@ -25,7 +25,7 @@ import { exportMemories } from "./export.js";
 import { loadMemoryConfig, saveMemoryConfig } from "./config.js";
 
 export interface MemoryCliArgs {
-  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay" | "export" | "readonly";
+  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay" | "export" | "readonly" | "reindex";
   id?: string;
   kind?: MemoryKind;
   all?: boolean;
@@ -70,6 +70,7 @@ Usage:
   paw-ts memory replay <input.jsonl> [--json]   轨迹回放 Δ 代理评测（shadow 检索 + 判定汇总）
   paw-ts memory export [--dir <path>] [--all]   导出到 .paw/shared-memory/（导出前全量密钥扫描）
   paw-ts memory readonly [on|off]   只读模式切换（CI 场景；不带参数显示当前状态）
+  paw-ts memory reindex             重建派生索引（embedding）+ 冒烟回归（结果记 op-log）
 
 需要 DATABASE_URL 指向记忆库（V026+ 迁移）。`;
 
@@ -79,7 +80,7 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
   if (sub === undefined || sub === "help" || sub === "--help" || sub === "-h") {
     return { error: USAGE };
   }
-  if (!["list", "why", "forget", "stats", "diff", "gc", "replay", "export", "readonly"].includes(sub)) {
+  if (!["list", "why", "forget", "stats", "diff", "gc", "replay", "export", "readonly", "reindex"].includes(sub)) {
     return { error: `未知子命令: ${sub}\n\n${USAGE}` };
   }
 
@@ -285,8 +286,16 @@ export async function runMemoryCommand(args: readonly string[]): Promise<MemoryC
         return { ok: true, text: lines.join("\n") };
       }
 
-      case "readonly": {
-        // 配置落在 .paw/memory-config.json（见 config.ts 的落点说明）
+      case "reindex": {
+        const report = await engine.reindex();
+        return { ok: true, text: [
+          "reindex 完成",
+          `  扫描: ${report.scanned}    重建: ${report.indexed}    失败: ${report.failed}`,
+          `  冒烟: ${report.smoke.passed}/${report.smoke.total} 通过${report.smoke.failedIds.length > 0 ? `    未召回: ${report.smoke.failedIds.join(", ")}` : ""}`,
+        ].join("\n") };
+      }
+
+      case "readonly": {        // 配置落在 .paw/memory-config.json（见 config.ts 的落点说明）
         if (!parsed.id) {
           const cfg = await loadMemoryConfig();
           return { ok: true, text: `readonly: ${cfg.readonly ? "on" : "off"}    shadow: ${cfg.shadow ? "on" : "off"}` };

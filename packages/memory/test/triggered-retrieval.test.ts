@@ -167,15 +167,18 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
   });
 
   it("§6.8-1 20 条记忆 + 1 条高相关经验 → T1 恰好注入 1 条且是目标", async () => {
-    // 20 条语义噪声（词汇与查询不相交）
+    // 20 条同池噪声（episodic，修复批次 C #16：与目标同池才算真实竞争；词汇与查询不相交）
     const topics = ["database pooling", "cache headers", "retry backoff", "log rotation", "queue depth",
       "tls handshake", "clock skew", "disk quota", "thread affinity", "heap sizing",
       "shard routing", "lease renewal", "rate limiting", "circuit breaking", "bulkhead isolation",
       "graceful shutdown", "config reload", "health probes", "metric cardinality", "trace sampling"];
     for (const [i, t] of topics.entries()) {
-      const s = makeSemantic(`Operational note ${i + 1} about ${t} tuning parameters`);
-      await engine.put(s);
-      createdIds.push(deriveEntryId(s));
+      const noise = makeEpisodic(
+        `When tuning ${t} parameters under load`,
+        `Operational note ${i + 1} about ${t} tuning under sustained load`,
+      );
+      await engine.put(noise);
+      createdIds.push(deriveEntryId(noise));
     }
     // 1 条高相关经验
     const target = makeEpisodic(
