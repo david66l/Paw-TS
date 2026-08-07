@@ -16,7 +16,7 @@ import type { MemoryEntry, MemoryKind, MemoryStoreEngine } from "../store/engine
 import { hybridRecall, RECALL_ALPHA, type ScoredEntry } from "./hybrid.js";
 import { appendOpLog } from "../observability/op-log.js";
 import { recordRetrievalHits } from "../observability/ledger.js";
-import { listTrialLessons } from "../write/trial.js";
+import { listTrialLessons, decrementTrialAttempts } from "../write/trial.js";
 
 // ── 触发与配置（§9.1 / §9.4）──
 
@@ -30,6 +30,11 @@ export interface RetrieverOptions {
   engine: MemoryStoreEngine;
   /** 精排 LLM（缺省 → 召回分数直取 top-k） */
   reranker?: RerankerLlm;
+  /**
+   * T1 query 改写 LLM（§6.2，修复批次 B #9）：提炼核心概念检索词，
+   * 与原始描述两路召回合并；缺省/失败 → 降级原文单路 + degraded 标记
+   */
+  queryRewriter?: RerankerLlm;
   /** 各触发点注入上限（§6.1 表） */
   topK?: Partial<{ taskStart: number; actionFailed: number; postCompact: number; explicitQuery: number }>;
   /** 注入预算，默认 500 tokens（§6.6） */
@@ -146,9 +151,26 @@ ${query}
 ${blocks.join("\n\n")}`;
 }
 
+// ── T1 query 改写（§6.2，#9）──
+
+export function buildQueryRewritePrompt(taskDescription: string): string {
+  return `从任务描述中提炼 3–6 个核心概念作为记忆库检索词（技术名词/错误类型/组件名，空格分隔，单行输出，不要解释）。
+
+任务描述：
+${taskDescription}`;
+}
+
+/** 校验改写输出：单行、≤300 字符、不含引号包裹；非法 → null（降级原文单路） */
+export function parseQueryRewrite(raw: string): string | null {
+  const firstLine = raw.trim().split("\n")[0]?.trim() ?? "";
+  const cleaned = firstLine.replace(/^["'`]+|["'`]+$/g, "");
+  if (cleaned.length === 0 || cleaned.length > 300) return null;
+  if (/[{}\[\]]/.test(cleaned)) return null; // 拒绝 JSON 残骸
+  return cleaned;
+}
+
 /** 手写校验精排输出；非法 → null（调用方降级召回直取） */
-export function parseRerankOutput(raw: string, numCandidates: number): RerankItem[] | null {
-  let parsed: unknown;
+export function parseRerankOutput(raw: string, numCandidates: number): RerankItem[] | null {  let parsed: unknown;
   try {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
@@ -206,6 +228,7 @@ const DEFAULT_TOPK = { taskStart: 1, actionFailed: 3, postCompact: 2, explicitQu
 export class TriggeredRetriever {
   private readonly engine: MemoryStoreEngine;
   private readonly reranker?: RerankerLlm;
+  private readonly queryRewriter?: RerankerLlm;
   private readonly topK: Required<NonNullable<RetrieverOptions["topK"]>>;
   private readonly maxInjectTokens: number;
   private readonly emit?: (event: RunEvent) => void;
@@ -215,6 +238,7 @@ export class TriggeredRetriever {
   constructor(opts: RetrieverOptions) {
     this.engine = opts.engine;
     this.reranker = opts.reranker;
+    this.queryRewriter = opts.queryRewriter;
     this.topK = { ...DEFAULT_TOPK, ...opts.topK };
     this.maxInjectTokens = opts.maxInjectTokens ?? 500;
     this.emit = opts.emit;
@@ -232,7 +256,24 @@ export class TriggeredRetriever {
     }
 
     const query = this.buildQuery(trigger);
-    await appendOpLog("read.trigger", { runId, detail: { triggerType: trigger.type, querySummary: query.slice(0, 200) } });
+
+    // T1 query 改写（§6.2，#9）：LLM 提炼检索词 + 保留原始描述，两路召回合并
+    let degraded = false;
+    const queries = [query];
+    if (trigger.type === "task_start" && this.queryRewriter) {
+      const refined = await this.queryRewriter
+        .complete(buildQueryRewritePrompt(trigger.taskDescription))
+        .then(parseQueryRewrite)
+        .catch(() => null);
+      if (refined && refined !== query) {
+        queries.unshift(refined);
+      } else {
+        degraded = true;
+        await appendOpLog("read.degraded", { runId, detail: { stage: "query_rewrite" } });
+      }
+    }
+
+    await appendOpLog("read.trigger", { runId, detail: { triggerType: trigger.type, querySummary: query.slice(0, 200), queries } });
     this.emit?.({ type: "memory.trigger", triggerType: trigger.type, querySummary: query.slice(0, 200) });
 
     // 空库零开销（§6.7 / §6.8-6）：不做任何检索调用
@@ -242,27 +283,32 @@ export class TriggeredRetriever {
       return this.emptyPackage();
     }
 
-    // ── 召回（M2 hybrid；α 按触发点）──
+    // ── 召回（M2 hybrid；α 按触发点；T1 可能双路）──
     const kinds = TRIGGER_KINDS[trigger.type];
     const alpha = trigger.type === "action_failed" ? RECALL_ALPHA.actionFailed : RECALL_ALPHA.taskStart;
     const candidates: ScoredEntry[] = [];
-    let degraded = false;
     for (const kind of kinds ?? [undefined]) {
-      const r = await hybridRecall(this.engine, query, {
-        alpha,
-        candidates: 10,
-        kind,
-        context: { branch: "branch" in trigger ? trigger.branch : undefined },
-      });
-      candidates.push(...r.items);
-      degraded = degraded || r.degraded;
+      for (const q of queries) {
+        const r = await hybridRecall(this.engine, q, {
+          alpha,
+          candidates: 10,
+          kind,
+          context: { branch: "branch" in trigger ? trigger.branch : undefined },
+        });
+        candidates.push(...r.items);
+        degraded = degraded || r.degraded;
+      }
     }
     if (degraded) {
       await appendOpLog("read.degraded", { runId, detail: { triggerType: trigger.type } });
     }
-    // 去重（同一条目可能被多个 kind 通道召回——目前 kind 互斥，防御性保留）
-    const seen = new Set<string>();
-    const pool = candidates.filter((c) => !seen.has(c.entry.id) && seen.add(c.entry.id));
+    // 去重（同一条目可能被多个 kind/多路 query 召回，保留高分）
+    const byBest = new Map<string, ScoredEntry>();
+    for (const c of candidates) {
+      const prev = byBest.get(c.entry.id);
+      if (!prev || c.score > prev.score) byBest.set(c.entry.id, c);
+    }
+    const pool = [...byBest.values()].sort((a, b) => b.score - a.score);
 
     if (pool.length === 0 && trigger.type !== "explicit_query") {
       return this.emptyPackage();
@@ -319,7 +365,7 @@ export class TriggeredRetriever {
 
     // ── trial 池随行（T1/T2，不占正式条额，§6.1/§4.3）──
     if (trigger.type === "task_start" || trigger.type === "action_failed") {
-      const trial = await this.matchTrialLesson(query);
+      const trial = await this.matchTrialLesson(queries.join("\n"));
       if (trial) items.push(trial);
     }
 
@@ -345,7 +391,15 @@ export class TriggeredRetriever {
       }
     }
 
-    return this.pack(items, degraded, runId);
+    const pkg = await this.pack(items, degraded, runId);
+    // #8：trial 教训被实际随行注入（进入最终注入包）→ attemptsLeft 递减；耗尽由 janitor 丢弃
+    const injectedTrial = pkg.items.find((i) => i.kind === "trial");
+    if (injectedTrial) {
+      try {
+        await decrementTrialAttempts(injectedTrial.id);
+      } catch { /* 计数失败不影响注入 */ }
+    }
+    return pkg;
   }
 
   private buildQuery(trigger: MemoryTrigger): string {
@@ -370,7 +424,7 @@ export class TriggeredRetriever {
     }
   }
 
-  /** trial 池简单词面匹配（embedding 索引属 v2；命中率要求低，宁缺毋滥：要求长特征词命中） */
+  /** trial 池匹配（embedding 索引属 v2；宁缺毋滥：长特征词命中 whenToUse/keywords/lesson） */
   private async matchTrialLesson(query: string): Promise<InjectedMemory | null> {
     try {
       // 长特征词（>6 字符，如 ModuleResolutionError 这类错误类型名）才有区分度
@@ -379,7 +433,9 @@ export class TriggeredRetriever {
       const lessons = await listTrialLessons();
       let best: { lesson: (typeof lessons)[number]; hits: number } | null = null;
       for (const lesson of lessons) {
-        const text = lesson.lesson.toLowerCase();
+        // 蒸馏产物有检索键（whenToUse/keywords，V032）；原文切片只有 lesson 文本
+        const text = [lesson.whenToUse ?? "", ...(lesson.keywords ?? []), lesson.lesson]
+          .join(" ").toLowerCase();
         const hits = terms.filter((t) => text.includes(t)).length;
         if (hits >= 1 && (!best || hits > best.hits)) best = { lesson, hits };
       }
@@ -388,6 +444,7 @@ export class TriggeredRetriever {
         id: best.lesson.id,
         kind: "trial",
         text: best.lesson.lesson,
+        whenToUse: best.lesson.whenToUse,
         status: "trial",
         score: 0,
       };

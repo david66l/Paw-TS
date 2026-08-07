@@ -123,6 +123,7 @@ describe("renderMemoryDiff", () => {
       until: "2026-08-02T00:00:00Z",
       opCounts: { "read.inject": 3, governed: 1 },
       added: [{ id: "semantic-x", kind: "semantic", title: "t", tValid: "2026-08-01T01:00:00Z" }],
+      updated: [],
       invalidated: [],
       purgedIds: [],
     });

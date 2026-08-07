@@ -15,6 +15,8 @@
  * 手写校验（不引入 zod 依赖）。
  */
 
+import { distillTrialLesson, type TrialLessonDraft } from "./trial.js";
+
 export interface DistillerLlm {
   complete(prompt: string): Promise<string>;
 }
@@ -181,8 +183,7 @@ export class MemoryDistiller {
    * 蒸馏轨迹为候选条目。校验失败自动重试 1 次（§5.7）；
    * 再失败返回 degraded（调用方降级 append-only）。
    */
-  async distill(input: DistillInput): Promise<DistillResult> {
-    const prompt = buildDistillPrompt(input);
+  async distill(input: DistillInput): Promise<DistillResult> {    const prompt = buildDistillPrompt(input);
     const allErrors: string[] = [];
 
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -218,5 +219,10 @@ export class MemoryDistiller {
       summary: input.trajectory.slice(0, 500),
       errors: allErrors,
     };
+  }
+
+  /** 蒸馏试用教训（修复批次 B #7）：Reflexion 式第一人称，失败返回 null（调用方降级原文切片） */
+  async distillTrial(input: DistillInput): Promise<TrialLessonDraft | null> {
+    return distillTrialLesson(this.llm, input);
   }
 }

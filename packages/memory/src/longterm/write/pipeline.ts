@@ -15,7 +15,7 @@
 import type { RunEvent } from "@paw/core";
 import { getSql, parseJson } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
-import type { MemoryEntry, MemoryStoreEngine, SemanticFact } from "../store/engine.js";
+import type { MemoryEntry, MemoryStoreEngine, SemanticFact, EpisodicExperience } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import { deriveEntryId } from "../store/id.js";
 import { appendOpLog, queryOpLog } from "../observability/op-log.js";
@@ -23,8 +23,9 @@ import { recordTaskSuccess, recordAdoption, detectAdoption } from "../observabil
 import { hybridRecall } from "../retrieval/hybrid.js";
 import { scanForSecrets } from "./secrets.js";
 import { MemoryDistiller, type DistillInput } from "./distiller.js";
-import { LongtermGovernor, type GovernorLlm } from "./governor.js";
+import { LongtermGovernor, type GovernorLlm, type GovernorCandidate } from "./governor.js";
 import { addTrialLesson } from "./trial.js";
+import type { CorrectionConfirmer } from "./correction.js";
 
 // ── 事件与门控类型（spec §9.1 + §5.3）──
 
@@ -51,12 +52,12 @@ export type ProcessResult =
 /** Governor 接口点（M5 实现为 LongtermGovernor；缺省时直接 ADD） */
 export interface GovernorHook {
   adjudicate(
-    candidate: SemanticFact,
+    candidate: GovernorCandidate,
     similar: MemoryEntry[],
   ): Promise<{ op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP"; targetId?: string; reason?: string }>;
   /** 批量裁决（spec §5.6，默认路径）；实现后管线一次调用裁决整批 */
   adjudicateBatch?(
-    items: { candidate: SemanticFact; similar: MemoryEntry[] }[],
+    items: { candidate: GovernorCandidate; similar: MemoryEntry[] }[],
   ): Promise<{ op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP"; targetId?: string; reason?: string }[]>;
 }
 
@@ -74,6 +75,8 @@ export interface WritePipelineOptions {
   intervalMs?: number;
   /** 当日蒸馏 LLM 调用预算，默认 50（spec §5.2） */
   dailyBudget?: number;
+  /** 用户纠正的 LLM 确认器（§5.1，#10）；缺省时纠正事件保守走蒸馏通道而非直写 */
+  correctionConfirmer?: CorrectionConfirmer;
   /** RunEvent 发射钩子（memory.write.* / memory.governed，§9.5） */
   emit?: (event: RunEvent) => void;
   /**
@@ -101,6 +104,7 @@ export class MemoryWritePipeline {
   private readonly intervalMs: number;
   private readonly dailyBudget: number;
   private readonly emit?: (event: RunEvent) => void;
+  private readonly correctionConfirmer?: CorrectionConfirmer;
   private readonly isReadonly: () => boolean;
   private readonly now: () => Date;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -115,6 +119,7 @@ export class MemoryWritePipeline {
     this.intervalMs = opts.intervalMs ?? 2000;
     this.dailyBudget = opts.dailyBudget ?? 50;
     this.emit = opts.emit;
+    this.correctionConfirmer = opts.correctionConfirmer;
     this.isReadonly = typeof opts.readonly === "function" ? opts.readonly : () => opts.readonly === true;
     this.now = opts.now ?? (() => new Date());
   }
@@ -234,15 +239,23 @@ export class MemoryWritePipeline {
     }
 
     switch (event.type) {
-      case "user_correction":
-        return this.handleUserCorrection(event.text, { repo, runId, redactedText: scan.action === "redact" ? scan.text : undefined });
+      case "user_correction": {
+        // #10：规则命中后交 LLM 确认；确认器不可用/否认 → 保守走蒸馏通道（confidence ≤0.6）
+        const confirmed = this.correctionConfirmer
+          ? await this.correctionConfirmer.confirm(event.text).catch(() => false)
+          : false;
+        if (confirmed) {
+          return this.handleUserCorrection(event.text, { repo, runId, redactedText: scan.action === "redact" ? scan.text : undefined });
+        }
+        return this.consolidate(
+          { runId: runId ?? "correction", goal: "", trajectory: event.text, outcome: "unknown" },
+          { repo, runId, confidenceCap: 0.6 },
+        );
+      }
 
       case "task_failed": {
-        // 失败轨迹 → 试用通道（不直接入库，§5.3）
-        const lesson = (event.trajectory ?? event.goal ?? "").slice(0, 500);
-        if (!lesson.trim()) return { status: "noop", reason: "empty_trajectory" };
-        const trial = await addTrialLesson(lesson, event.runId);
-        return { status: "trialed", trialId: trial.id };
+        // 失败轨迹 → 试用通道（不直接入库，§5.3）；#7：LLM 蒸馏教训，超预算降级原文切片
+        return this.createTrial(event.runId, event.goal ?? "", event.trajectory ?? "", runId);
       }
 
       case "task_succeeded": {
@@ -251,10 +264,7 @@ export class MemoryWritePipeline {
         if (verdict.kind === "test" || verdict.kind === "compile") {
           if (!verdict.passed) {
             // outcome=fail 转试用通道
-            const lesson = (event.trajectory ?? event.goal ?? "").slice(0, 500);
-            if (!lesson.trim()) return { status: "noop", reason: "empty_trajectory" };
-            const trial = await addTrialLesson(lesson, event.runId);
-            return { status: "trialed", trialId: trial.id };
+            return this.createTrial(event.runId, event.goal ?? "", event.trajectory ?? "", runId);
           }
           const r = await this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
           // 效用结算（§7.1）：该 run 注入过的条目 utility+1 + 采纳判定（§10.3）
@@ -279,6 +289,33 @@ export class MemoryWritePipeline {
           { repo, runId, confidenceCap: 0.6 },
         );
     }
+  }
+
+  /**
+   * 试用通道入口（#7）：优先 LLM 蒸馏 Reflexion 式教训（受成本熔断），
+   * 蒸馏不可用/失败/超预算 → 降级原文切片（distilled=false 标注）。
+   */
+  private async createTrial(originTaskId: string, goal: string, trajectory: string, runId?: string): Promise<ProcessResult> {
+    const slice = (trajectory || goal).slice(0, 500);
+    if (!slice.trim()) return { status: "noop", reason: "empty_trajectory" };
+
+    if (this.distiller) {
+      const usedToday = await this.countDistillCallsToday();
+      if (usedToday < this.dailyBudget) {
+        await appendOpLog("write.distill", { runId, detail: { kind: "trial", estimatedTokens: estimateTokens(goal + trajectory) } });
+        const draft = await this.distiller.distillTrial({ runId: originTaskId, goal, trajectory, outcome: "failed" });
+        if (draft) {
+          const trial = await addTrialLesson(draft.lesson, originTaskId, {
+            whenToUse: draft.whenToUse,
+            keywords: draft.keywords,
+            distilled: true,
+          });
+          return { status: "trialed", trialId: trial.id };
+        }
+      }
+    }
+    const trial = await addTrialLesson(slice, originTaskId, { distilled: false });
+    return { status: "trialed", trialId: trial.id };
   }
 
   /**
@@ -340,44 +377,60 @@ export class MemoryWritePipeline {
 
     // ── 阶段一：密钥二道 + 构造草稿 + 相似召回 ──
     const nowIso = this.now().toISOString();
-    const drafts: { draft: SemanticFact; similar: MemoryEntry[] }[] = [];
+    const drafts: { draft: GovernorCandidate; recallKey: string; similar: MemoryEntry[] }[] = [];
     for (const candidate of result.candidates) {
-      // 当前 MVP 固化通道只落 semantic（episodic 蒸馏契约属 v2；episodic 候选暂跳过）
-      if (candidate.kind !== "semantic" || !candidate.fact) continue;
+      // 修复批次 B #6：semantic + episodic 同通道落库；其余 kind 丢弃必须记 op-log
+      if (candidate.kind !== "semantic" && candidate.kind !== "episodic") {
+        await appendOpLog("write.rejected", { runId: opts.runId, detail: { reason: "unsupported_kind", kind: candidate.kind } });
+        this.emit?.({ type: "memory.write.rejected", reason: "schema", detail: `unsupported_kind:${candidate.kind}` });
+        continue;
+      }
 
-      // ── 密钥拦截二道：入库前 ──
-      const pre = scanForSecrets(candidate.fact);
+      // ── 密钥拦截二道：入库前（对候选的全部文本字段扫描）──
+      const candidateText = candidate.kind === "semantic"
+        ? (candidate.fact ?? "")
+        : [candidate.whenToUse, candidate.perspective, ...(candidate.modification ?? [])].filter(Boolean).join("\n");
+      const pre = scanForSecrets(candidateText);
       if (pre.action === "reject") {
         await appendOpLog("write.rejected", { runId: opts.runId, detail: { reason: "secret", pattern: pre.pattern, stage: "pre-store" } });
         this.emit?.({ type: "memory.write.rejected", reason: "secret", detail: pre.pattern });
         continue;
       }
-      const fact = pre.action === "redact" ? pre.text : candidate.fact;
+      const text = pre.action === "redact" ? pre.text : candidateText;
       if (pre.action === "redact") {
         await appendOpLog("write.redacted", { runId: opts.runId, detail: { count: pre.count } });
       }
 
-      const draft: SemanticFact = {
-        id: "",
-        kind: "semantic",
-        repo: opts.repo,
-        created: nowIso,
-        // 候选可携带 tValid（迟到的旧事实）；缺省 = 写入时间。时序倒挂由 Governor 规则层判定（§7.4）
-        tValid: candidate.tValid ?? nowIso,
-        tInvalid: null,
-        source: "agent_verified",
-        confidence: Math.min(0.8, opts.confidenceCap ?? 1),
-        evidence: candidate.evidence,
-        freq: 0,
-        utility: 0,
-        fact,
-        keywords: candidate.keywords ?? [],
-        embeddingKey: `${fact} ${(candidate.keywords ?? []).join(" ")}`,
-      };
-      const similar = await hybridRecall(this.engine, draft.embeddingKey, { candidates: 10 })
+      // 候选可携带 tValid（迟到的旧事实）；缺省 = 写入时间。时序倒挂由 Governor 规则层判定（§7.4）
+      const tValid = candidate.tValid ?? nowIso;
+      const confidence = Math.min(0.8, opts.confidenceCap ?? 1);
+      let draft: GovernorCandidate;
+      let recallKey: string;
+      if (candidate.kind === "semantic") {
+        draft = {
+          id: "", kind: "semantic", repo: opts.repo, created: nowIso, tValid, tInvalid: null,
+          source: "agent_verified", confidence, evidence: candidate.evidence, freq: 0, utility: 0,
+          fact: text, keywords: candidate.keywords ?? [], embeddingKey: `${text} ${(candidate.keywords ?? []).join(" ")}`,
+        };
+        recallKey = (draft as SemanticFact).embeddingKey;
+      } else {
+        // episodic：whenToUse 为检索主键（§4.2）；redact 后的文本回退到 perspective
+        draft = {
+          id: "", kind: "episodic", repo: opts.repo, created: nowIso, tValid, tInvalid: null,
+          source: "agent_verified", confidence, evidence: candidate.evidence, freq: 0, utility: 0,
+          whenToUse: candidate.whenToUse ?? text,
+          perspective: candidate.perspective ?? text,
+          modification: candidate.modification ?? [],
+          failureFixPair: candidate.failureFixPair,
+          issueType: candidate.issueType ?? "unknown",
+          taskId: input.runId,
+        };
+        recallKey = (draft as EpisodicExperience).whenToUse;
+      }
+      const similar = await hybridRecall(this.engine, recallKey, { candidates: 10 })
         .then((r) => r.items.map((i) => i.entry))
         .catch(() => [] as MemoryEntry[]);
-      drafts.push({ draft, similar });
+      drafts.push({ draft, recallKey, similar });
     }
 
     // ── 阶段二：Governor 裁决（§5.6 批量为默认路径）──
@@ -416,9 +469,9 @@ export class MemoryWritePipeline {
         continue;
       }
       if (decision.op === "UPDATE" && decision.targetId) {
-        // UPDATE 版本链（§5.6）：旧值追加进 history[]；freq/utility/t_valid/created_at 由引擎 upsert 保留
+        // UPDATE 版本链（§5.6）：旧值追加进 history[]（semantic）；freq/utility/t_valid/created_at 由引擎 upsert 保留
         const old = await this.engine.get(decision.targetId);
-        if (old?.kind === "semantic") {
+        if (old?.kind === "semantic" && draft.kind === "semantic") {
           draft.history = [...(old.history ?? []), { fact: old.fact, tInvalid: nowIso }];
         }
         draft.id = decision.targetId;

@@ -19,7 +19,7 @@
 
 import { getSql } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
-import type { MemoryEntry, SemanticFact } from "../store/engine.js";
+import type { EpisodicExperience, MemoryEntry, SemanticFact } from "../store/engine.js";
 import { deriveEntryId } from "../store/id.js";
 import { appendOpLog } from "../observability/op-log.js";
 import { extractJson } from "./distiller.js";
@@ -36,8 +36,20 @@ export interface GovernorDecision {
   reason?: string;
 }
 
+/** 进入裁决的候选（修复批次 B #6：semantic + episodic 同通道） */
+export type GovernorCandidate = SemanticFact | EpisodicExperience;
+
+/** 候选正文（prompt 展示用） */
+function candidateText(c: GovernorCandidate): string {
+  return c.kind === "semantic" ? c.fact : `${c.whenToUse}\n${c.perspective}`;
+}
+
+function candidateKeywords(c: GovernorCandidate): string[] {
+  return c.kind === "semantic" ? c.keywords : [c.issueType];
+}
+
 export interface AdjudicateItem {
-  candidate: SemanticFact;
+  candidate: GovernorCandidate;
   similar: MemoryEntry[];
 }
 
@@ -49,7 +61,7 @@ export interface GovernorOptions {
 const OPS: readonly GovernorOp[] = ["ADD", "UPDATE", "INVALIDATE", "NOOP"];
 
 /** 时序倒挂判定（§7.4，规则层）：候选描述的状态早于任一活跃相似条目 */
-export function isTemporalInversion(candidate: SemanticFact, similar: readonly MemoryEntry[]): boolean {
+export function isTemporalInversion(candidate: GovernorCandidate, similar: readonly MemoryEntry[]): boolean {
   const cValid = Date.parse(candidate.tValid);
   if (Number.isNaN(cValid)) return false;
   return similar.some((s) => {
@@ -79,9 +91,9 @@ export function buildAdjudicationPrompt(items: readonly AdjudicateItem[]): strin
     const c = item.candidate;
     const sims = item.similar.map((s) => `E${entrySeq.get(s.id)}`).join(", ") || "(无相似条目)";
     return [
-      `候选 C${i + 1}（相似既有条目: ${sims}）:`,
-      `  fact: ${c.fact}`,
-      `  keywords: [${c.keywords.join(", ")}]`,
+      `候选 C${i + 1}（kind: ${c.kind}，相似既有条目: ${sims}）:`,
+      `  content: ${candidateText(c)}`,
+      `  keywords: [${candidateKeywords(c).join(", ")}]`,
       `  tValid: ${c.tValid}    source: ${c.source}`,
     ].join("\n");
   });
@@ -183,7 +195,7 @@ export class LongtermGovernor {
   }
 
   /** 逐条裁决（spec §9.1）；batch 关闭时由管线调用 */
-  async adjudicate(candidate: SemanticFact, similar: MemoryEntry[]): Promise<GovernorDecision> {
+  async adjudicate(candidate: GovernorCandidate, similar: MemoryEntry[]): Promise<GovernorDecision> {
     const [d] = await this.adjudicateBatch([{ candidate, similar }]);
     return d!;
   }
@@ -237,13 +249,10 @@ export class LongtermGovernor {
     }
 
     if (parsed === null) {
-      // 裁决器不可用：整批降级 NOOP（不绕过治理直接 ADD），记 op-log
-      for (const { index, item } of needsLlm) {
-        results[index] = { op: "NOOP", reason: `governor_unavailable: ${errors.join("；")}` };
-        await this.record(item.candidate, results[index]!, undefined);
-      }
+      // 裁决器持续不可用（重试 1 次后仍败）：抛错交给 outbox worker 重试（3 次进死信），
+      // 不伪装 NOOP 静默消费候选（修复批次 B #11）
       await appendOpLog("error", { detail: { stage: "governor", errors: errors.slice(0, 5) } });
-      return results.map((r) => r!);
+      throw new Error(`governor_unavailable: ${errors.join("；")}`);
     }
 
     for (const err of parsed.errors) {
@@ -268,7 +277,7 @@ export class LongtermGovernor {
   }
 
   /** 裁决记录落 governance_decisions（V005） */
-  private async record(candidate: SemanticFact, decision: GovernorDecision, targetId?: string): Promise<void> {
+  private async record(candidate: GovernorCandidate, decision: GovernorDecision, targetId?: string): Promise<void> {
     try {
       const sql = getSql();
       const candidateId = deriveEntryId(candidate);

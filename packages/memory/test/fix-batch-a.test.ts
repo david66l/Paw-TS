@@ -69,6 +69,8 @@ function makeSemantic(fact: string, keywords: string[] = []): SemanticFact {
 }
 
 const EMPTY_LLM: DistillerLlm = { complete: async () => JSON.stringify({ candidates: [] }) };
+/** #10：直写需确认器；这些用例测确认通过路径 */
+const CONFIRM = { confirm: async () => true };
 
 describe("修复批次 A db 集成", () => {
   afterAll(async () => {
@@ -160,8 +162,8 @@ describe("修复批次 A db 集成", () => {
 
   it("#3 并发 worker：同一事件只被处理一次（SKIP LOCKED）", async () => {
     const runId = `${RUN}_conc`;
-    const p1 = new MemoryWritePipeline();
-    const p2 = new MemoryWritePipeline();
+    const p1 = new MemoryWritePipeline({ correctionConfirmer: CONFIRM });
+    const p2 = new MemoryWritePipeline({ correctionConfirmer: CONFIRM });
     await p1.enqueue({
       type: "user_correction", text: "记住：并发处理一次性探针", messageRef: "m-conc", runId, repo: REPO,
     });
@@ -190,7 +192,7 @@ describe("修复批次 A db 集成", () => {
 
   it("#3 崩溃遗留 processing 行超 5 分钟被回收处理", async () => {
     const runId = `${RUN}_stale`;
-    const p = new MemoryWritePipeline();
+    const p = new MemoryWritePipeline({ correctionConfirmer: CONFIRM });
     await p.enqueue({
       type: "user_correction", text: "记住：崩溃回收探针", messageRef: "m-stale", runId, repo: REPO,
     });

@@ -33,3 +33,12 @@ export function detectUserCorrection(text: string): CorrectionMatch {
   }
   return { isCorrection: false };
 }
+
+/**
+ * 用户纠正的 LLM 确认器（spec §5.1，修复批次 B #10）：规则命中后交其确认。
+ * 确认 → 直写；否认 → 降级为普通候选走蒸馏通道（confidence 降档）；
+ * 确认器不可用 → 保守走蒸馏通道而非直写。
+ */
+export interface CorrectionConfirmer {
+  confirm(text: string): Promise<boolean>;
+}

@@ -224,13 +224,15 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
 
   async searchText(queryText: string, k: number): Promise<ScoredId[]> {
     const sql = getSql();
-    // 两路全文：V013 search_tsv（'english'，title/summary/subject/tags）
-    // + V027 when_to_use_tsv（'simple'，episodic 检索键，中文友好），取较大 rank。
+    // 三路全文取最大 rank：V013 search_tsv（'english'）+ V027 when_to_use_tsv（'simple'）
+    // + V032 search_tsv_simple（'simple'，含 title/summary/when_to_use——中文场景句兜底，
+    // 'english' 配置对 CJK token 区分度差，修复批次 B #12）。
     // 只检索活跃且未降级的条目（spec §6.3 硬默认）。
     const rows = await sql`
       SELECT id, GREATEST(
                ts_rank(search_tsv, plainto_tsquery('english', ${queryText})),
-               ts_rank(when_to_use_tsv, plainto_tsquery('simple', ${queryText}))
+               ts_rank(when_to_use_tsv, plainto_tsquery('simple', ${queryText})),
+               ts_rank(search_tsv_simple, plainto_tsquery('simple', ${queryText}))
              ) AS score
       FROM memory_items
       WHERE t_invalid IS NULL
@@ -239,6 +241,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         AND (
           search_tsv @@ plainto_tsquery('english', ${queryText})
           OR when_to_use_tsv @@ plainto_tsquery('simple', ${queryText})
+          OR search_tsv_simple @@ plainto_tsquery('simple', ${queryText})
         )
       ORDER BY score DESC
       LIMIT ${k}

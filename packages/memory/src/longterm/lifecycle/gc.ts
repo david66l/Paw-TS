@@ -13,6 +13,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { getSql } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
+import { appendOpLog } from "../observability/op-log.js";
 
 export interface GcOptions {
   dryRun?: boolean;
@@ -97,6 +98,12 @@ export async function collectGarbage(opts: GcOptions = {}): Promise<GcReport> {
     await sql`DELETE FROM memory_items WHERE id = ${d.id}`;
     report.deleted += 1;
   }
+
+  // 4. op-log（修复批次 B #13）：物理删除留痕，diff 的 purged 口径读此
+  await appendOpLog("lifecycle.gc", {
+    entryIds: report.archivedIds,
+    detail: { archived: report.archived, archive: "memory_gc_archive", exportPath: report.exportPath },
+  });
 
   return report;
 }

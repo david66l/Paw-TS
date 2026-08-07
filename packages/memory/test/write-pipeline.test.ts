@@ -176,6 +176,8 @@ const GARBAGE_LLM: DistillerLlm = { complete: async () => "这不是 JSON，格�
 function makePipeline(opts: Partial<ConstructorParameters<typeof MemoryWritePipeline>[0]> = {}) {
   return new MemoryWritePipeline({
     distiller: new MemoryDistiller(VALID_LLM),
+    // #10：规则命中后需 LLM 确认才直写；既有用例测的是确认通过路径
+    correctionConfirmer: { confirm: async () => true },
     emit: (e) => emitted.push(e),
     ...opts,
   });
