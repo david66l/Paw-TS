@@ -37,6 +37,12 @@ export interface RetrieverOptions {
   emit?: (event: RunEvent) => void;
   /** token 估算器（默认 TiktokenEstimator cl100k） */
   countTokens?: (text: string) => number;
+  /**
+   * shadow 模式（spec §11.2）：检索全流程照常，但假设注入包只记录不注入——
+   * 不涨 freq 账本、不发射 memory.inject，op-log 记 read.shadow 含完整假设包，
+   * 供事后回放"如果开了记忆会注入什么"。
+   */
+  shadow?: boolean;
 }
 
 export interface RerankerLlm {
@@ -202,6 +208,7 @@ export class TriggeredRetriever {
   private readonly maxInjectTokens: number;
   private readonly emit?: (event: RunEvent) => void;
   private readonly countTokens: (text: string) => number;
+  private readonly shadow: boolean;
 
   constructor(opts: RetrieverOptions) {
     this.engine = opts.engine;
@@ -210,6 +217,7 @@ export class TriggeredRetriever {
     this.maxInjectTokens = opts.maxInjectTokens ?? 500;
     this.emit = opts.emit;
     this.countTokens = opts.countTokens ?? ((t) => new TiktokenEstimator().count(t));
+    this.shadow = opts.shadow ?? false;
   }
 
   async retrieve(trigger: MemoryTrigger): Promise<InjectionPackage> {
@@ -411,13 +419,26 @@ export class TriggeredRetriever {
     };
 
     if (kept.length > 0) {
-      // 账本：注入即 freq+1（trial 不进正式账本）；op-log read.inject 由 recordRetrievalHits 落
-      const formalIds = kept.filter((i) => i.kind !== "trial").map((i) => i.id);
-      await recordRetrievalHits(this.engine, formalIds, {
-        runId,
-        detail: { totalTokens: pkg.totalTokens, degraded },
-      });
-      this.emit?.({ type: "memory.inject", itemIds: kept.map((i) => i.id), totalTokens: pkg.totalTokens, degraded });
+      if (this.shadow) {
+        // shadow 模式（§11.2）：只记录假设注入包——不涨 freq、不发射 memory.inject
+        await appendOpLog("read.shadow", {
+          runId,
+          detail: {
+            itemIds: kept.map((i) => i.id),
+            totalTokens: pkg.totalTokens,
+            degraded,
+            rendered: renderXml(kept),
+          },
+        });
+      } else {
+        // 账本：注入即 freq+1（trial 不进正式账本）；op-log read.inject 由 recordRetrievalHits 落
+        const formalIds = kept.filter((i) => i.kind !== "trial").map((i) => i.id);
+        await recordRetrievalHits(this.engine, formalIds, {
+          runId,
+          detail: { totalTokens: pkg.totalTokens, degraded },
+        });
+        this.emit?.({ type: "memory.inject", itemIds: kept.map((i) => i.id), totalTokens: pkg.totalTokens, degraded });
+      }
     }
     return pkg;
   }

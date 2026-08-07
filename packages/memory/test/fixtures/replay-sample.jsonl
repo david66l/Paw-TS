@@ -1,0 +1,3 @@
+{"taskId":"sample-t1","description":"fix zephyr deployment token mismatch after rotation","events":[{"type":"action_failed","errorOutput":"DeployError: zephyr token mismatch\n    at deploy (zephyr.ts:10:2)","lastActionSummary":"run deploy (exit 1)"}],"outcome":"failed"}
+{"taskId":"sample-t2","description":"add caching headers to static assets","events":[],"outcome":"success"}
+{"taskId":"sample-t3","description":"migrate quartz scheduler lease renewal to automatic mode","events":[{"type":"action_failed","errorOutput":"SchedulerError: lease expired during renewal\n    at renew (sched.ts:4:4)","lastActionSummary":"run scheduler (exit 1)"}],"outcome":"failed"}

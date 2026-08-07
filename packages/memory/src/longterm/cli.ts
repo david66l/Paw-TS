@@ -20,9 +20,10 @@ import {
   rejectReview,
 } from "./lifecycle/janitor.js";
 import { collectGarbage } from "./lifecycle/gc.js";
+import { parseReplayJsonl, runReplay, renderReplayReport } from "./eval/replay.js";
 
 export interface MemoryCliArgs {
-  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc";
+  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay";
   id?: string;
   kind?: MemoryKind;
   all?: boolean;
@@ -39,6 +40,8 @@ export interface MemoryCliArgs {
   exportDir?: string;
   /** gc --sweep：手动触发一次生命周期批处理（效用删除扫描 + 容量检查） */
   sweep?: boolean;
+  /** replay：输出 JSON 而非表格 */
+  json?: boolean;
 }
 
 export interface MemoryCliResult {
@@ -60,6 +63,7 @@ Usage:
   paw-ts memory gc --sweep        手动跑一轮生命周期批处理（效用删除扫描 + 容量检查）
   paw-ts memory gc --review       列出删除候选人工复核队列
   paw-ts memory gc --approve <entryId> | --reject <entryId>   复核决议（approve 即软失效）
+  paw-ts memory replay <input.jsonl> [--json]   轨迹回放 Δ 代理评测（shadow 检索 + 判定汇总）
 
 需要 DATABASE_URL 指向记忆库（V026+ 迁移）。`;
 
@@ -69,7 +73,7 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
   if (sub === undefined || sub === "help" || sub === "--help" || sub === "-h") {
     return { error: USAGE };
   }
-  if (!["list", "why", "forget", "stats", "diff", "gc"].includes(sub)) {
+  if (!["list", "why", "forget", "stats", "diff", "gc", "replay"].includes(sub)) {
     return { error: `未知子命令: ${sub}\n\n${USAGE}` };
   }
 
@@ -80,6 +84,8 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
       out.all = true;
     } else if (a === "--dry-run") {
       out.dryRun = true;
+    } else if (a === "--json") {
+      out.json = true;
     } else if (a === "--review") {
       out.review = true;
     } else if (a === "--sweep") {
@@ -122,6 +128,9 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
 
   if ((sub === "why" || sub === "forget") && !out.id) {
     return { error: `memory ${sub} 需要 <id>` };
+  }
+  if (sub === "replay" && !out.id) {
+    return { error: "memory replay 需要 <input.jsonl> 文件路径" };
   }
   return out;
 }
@@ -232,6 +241,21 @@ export async function runMemoryCommand(args: readonly string[]): Promise<MemoryC
           if (report.exportPath) lines.push(`  导出: ${report.exportPath}`);
         }
         return { ok: true, text: lines.join("\n") };
+      }
+
+      case "replay": {
+        const { readFile } = await import("node:fs/promises");
+        let trajectories;
+        try {
+          trajectories = parseReplayJsonl(await readFile(parsed.id!, "utf-8"));
+        } catch (e) {
+          return { ok: false, text: `读取回放输入失败: ${e instanceof Error ? e.message : String(e)}` };
+        }
+        const report = await runReplay(trajectories, { engine, repo: parsed.repo });
+        return {
+          ok: true,
+          text: parsed.json ? JSON.stringify(report, null, 2) : renderReplayReport(report),
+        };
       }
     }
   } catch (e) {
