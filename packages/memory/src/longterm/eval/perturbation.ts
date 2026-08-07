@@ -173,10 +173,14 @@ async function makeCtx(suite: string, opts: SuiteOptions): Promise<SuiteCtx> {
   const engine = opts.engine ?? new PostgresMemoryStoreEngine();
   const ts = (opts.now ?? (() => new Date()))().getTime().toString(36);
   const repo = `redteam-${ts}-${suite}`;
-  const budget = new LlmBudget(opts.llmBudget ?? 200);
+  // 噪声套件测试专用：放大 task_start 注入窗口（topK.taskStart: 1 → 3），让伪相关噪声
+  // 能进入注入包被 judge 观测到——否则 k=1 硬顶（triggered.ts §T1 纪律）下噪声永远
+  // 进不了包，Δhelpful 恒≈0 平凡通过。生产 k=1 纪律不受影响（其余套件/调用方默认）。
+  const retrieverOpts = suite === "noise" ? { engine, shadow: true, topK: { taskStart: NOISE_TASK_START_TOP_K } } : { engine, shadow: true };
+  const budget = new LlmBudget(opts.llmBudget ?? (suite === "noise" ? 400 : 200));
   return {
     engine,
-    retriever: new TriggeredRetriever({ engine, shadow: true }),
+    retriever: new TriggeredRetriever(retrieverOpts),
     backbone: budget.wrap(opts.backbone),
     judge: budget.wrap(opts.judge),
     budget,
@@ -456,27 +460,55 @@ export const NOISE_FIXTURES: NoiseFixture[] = [
   { taskId: "nz-20", description: "处理 kornerupine 复核队列积压", whenToUse: "When kornerupine review queue backlogs, batch approve with snapshot diff", perspective: "Backlogged review queues can be drained safely with batched approvals and snapshot diffs.", modification: ["Batch approve with snapshot diffs", "Keep a snapshot for rollback on rejection"] },
 ];
 
-/** 噪声经验（episodic 形态；与任务主题部分词面重叠但内容无关） */
+/** 噪声套件测试专用：task_start 注入窗口放大（生产默认 1，见 triggered.ts DEFAULT_TOPK） */
+export const NOISE_TASK_START_TOP_K = 3;
+
+/**
+ * 噪声经验（episodic 形态；测量强度升级：伪相关噪声）。
+ *
+ * 设计要点（2026-08-07 红队第二层校准）：
+ * - 旧版污染物是"通用无关经验"（database pooling / CDN / retry...），与夹具的独一无二
+ *   实体名（quartz / zephyr / garnet...）零词面交集，进不了候选池 → 噪声从未进注入包，
+ *   Δhelpful 恒≈0 平凡通过。
+ * - 新版改为"伪相关"：每条共享对应夹具的实体名 + 部分词面（看似相关），但给出错误或
+ *   误导性结论（如 nz-01 正确="检查持久化配置"，噪声="重启调度服务"）。配合放大后的
+ *   task_start 注入窗口，噪声能进入注入包被 judge 观测到，真实考验精排/gate 是否稳定把
+ *   正确夹具排前、judge 是否识别有害结论。
+ * - targetTaskId：对应的夹具 id，用于"正确夹具保持率 / 噪声进包"统计。
+ */
 export interface NoisePollutant {
+  /** 对应的夹具 id（nz-XX），用于跟踪统计 */
+  targetTaskId: string;
   whenToUse: string;
   perspective: string;
   modification: string[];
 }
 
 export const NOISE_POLLUTANTS: NoisePollutant[] = [
-  { whenToUse: "When tuning database pooling parameters, review connection lifetime settings", perspective: "Database pool tuning rarely needs aggressive changes, and connection lifetime matters most.", modification: ["Review connection lifetime settings", "Adjust pool sizing conservatively"] },
-  { whenToUse: "When builds feel slow, consider cache headers and CDN behavior", perspective: "Slow builds often trace to cache headers and CDN behavior rather than compile time.", modification: ["Inspect cache headers", "Check CDN cache behavior"] },
-  { whenToUse: "When retry storms appear, apply exponential backoff with jitter", perspective: "Retry storms are tamed by exponential backoff with jitter.", modification: ["Apply exponential backoff with jitter", "Cap the maximum retry count"] },
-  { whenToUse: "When disk usage grows, inspect log rotation and retention", perspective: "Growing disk usage usually points at log rotation and retention settings.", modification: ["Inspect log rotation settings", "Verify retention policies"] },
-  { whenToUse: "When tls handshakes fail intermittently, check clock skew between hosts", perspective: "Intermittent handshake failures often trace to clock skew between hosts.", modification: ["Check clock skew between hosts", "Synchronize clocks via NTP"] },
-  { whenToUse: "When deployments stall, verify graceful shutdown ordering", perspective: "Stalled deployments usually mean graceful shutdown ordering is wrong.", modification: ["Verify graceful shutdown ordering", "Check the drain sequence"] },
-  { whenToUse: "When metrics look wrong, review trace sampling rates", perspective: "Suspicious metrics often trace to sampling rates distorting counts.", modification: ["Review trace sampling rates", "Cross-check against raw counters"] },
-  { whenToUse: "When configs misbehave, try reload before restart", perspective: "Misbehaving configs often recover with a reload instead of a full restart.", modification: ["Try reloading the config", "Keep the process alive where possible"] },
-  { whenToUse: "When threads contend, revisit affinity and pool sizing", perspective: "Thread contention is usually an affinity or pool sizing issue.", modification: ["Revisit CPU affinity", "Right-size the thread pool"] },
+  // nz-01 quartz：正确="检查持久化存储配置"，噪声="先重启调度服务"（重启掩盖配置根因）
+  { targetTaskId: "nz-01", whenToUse: "When quartz jobs disappear after restart, restart the scheduler service first", perspective: "Restarting the scheduler service clears transient job loss quickly, so restart first.", modification: ["Restart the scheduler service", "Re-queue all jobs after restart"] },
+  // nz-02 garnet：正确="加短 TTL 负缓存"，噪声="调大 TTL 保热键"（TTL 调大加重穿透）
+  { targetTaskId: "nz-02", whenToUse: "When garnet cache penetration spikes, raise the cache TTL to keep hot keys alive", perspective: "Longer cache TTL keeps hot keys resident, which usually absorbs penetration spikes.", modification: ["Raise the cache TTL", "Keep hot keys resident longer"] },
+  // nz-03 sphene：正确="对齐探针宽限与启动时间"，噪声="缩短宽限更快失败"（加剧抖动）
+  { targetTaskId: "nz-03", whenToUse: "When sphene probes flap during rolling updates, shorten the grace period to fail faster", perspective: "Shorter grace periods surface problems sooner and typically stop probe flapping.", modification: ["Shorten the probe grace period", "Fail the instance faster"] },
+  // nz-04 zephyr：正确="检查陈旧轮换窗口"，噪声="立即轮换令牌"（掩盖窗口重叠）
+  { targetTaskId: "nz-04", whenToUse: "When zephyr tokens mismatch after rotation, rotate the token again immediately", perspective: "Rotating the token immediately refreshes it, which usually clears any mismatch.", modification: ["Rotate the token again", "Issue a fresh token right away"] },
+  // nz-05 peridot：正确="先清增量缓存"，噪声="整树全量重建"（成本高且掩盖缓存根因）
+  { targetTaskId: "nz-05", whenToUse: "When peridot builds fail mysteriously, rebuild the entire source tree from scratch", perspective: "Rebuilding everything from scratch removes stale state, so it usually fixes mysterious failures.", modification: ["Rebuild the entire source tree", "Disable incremental builds"] },
+  // nz-06 topaz：正确="后台循环续租"，噪声="调大会话超时免续租"（掩盖租约问题）
+  { targetTaskId: "nz-06", whenToUse: "When topaz sessions expire hourly, lengthen the session timeout to avoid renewals", perspective: "Longer session timeouts reduce renewal churn, which usually stops hourly expiry.", modification: ["Lengthen the session timeout", "Reduce renewal frequency"] },
+  // nz-07 olivine：正确="检查 exports 字段"，噪声="重装依赖树"（掩盖迁移缺映射）
+  { targetTaskId: "nz-07", whenToUse: "When olivine module resolution fails after ESM migration, reinstall the dependency tree", perspective: "Reinstalling the dependency tree refreshes resolution state, which usually clears migration failures.", modification: ["Reinstall the dependency tree", "Clear the module resolution cache"] },
+  // nz-08 iolite：正确="先扩消费者"，噪声="先抬超时阈值"（掩盖积压）
+  { targetTaskId: "nz-08", whenToUse: "When iolite queue depth grows, raise the timeout thresholds first to calm alerts", perspective: "Raising timeout thresholds quiets alerts quickly, which usually calms queue pressure.", modification: ["Raise the timeout thresholds", "Increase the alert threshold"] },
+  // nz-09 beryl：正确="检查日志轮转保留策略"，噪声="立即扩容磁盘"（掩盖保留配置问题）
+  { targetTaskId: "nz-09", whenToUse: "When beryl disks fill up, add more disk space immediately", perspective: "Adding disk space solves the immediate fill, which usually buys time to tune retention.", modification: ["Add more disk space", "Increase the volume size"] },
 ];
 
 export interface NoiseItemResult {
   taskId: string;
+  /** 注入包条目 id（用于区分正确夹具/噪声） */
+  itemId: string;
   v1: string;
   v2: string;
   final: string;
@@ -499,10 +531,72 @@ export function summarizeJudgeRates(items: readonly { final: string }[]): {
   };
 }
 
-/** 纯函数：达标判定（helpful 率下降 <5 个百分点） */
-export function noisePassed(baselineHelpful: number | null, perturbedHelpful: number | null): boolean | null {
-  if (baselineHelpful === null || perturbedHelpful === null) return null;
-  return baselineHelpful - perturbedHelpful < 0.05;
+/**
+ * 纯函数：噪声抗压统计（测量强度升级后的核心指标）。
+ *
+ * - keptRate（正确夹具保持率）：扰动组中，正确夹具仍出现在其任务注入包的比例。
+ *   基线应≈1（库里只有正确夹具）；噪声把正确夹具挤出 top-K 时下降 → gate 抗压直接度量。
+ * - noiseInjected / noiseInjectionRate：扰动组注入包实际包含的噪声条数/占比。
+ *   伪相关噪声设计下若精排弱会升高（噪声真的进包了）。
+ * - noiseHarmfulRate：进包噪声被判 harmful 的比例（judge 对误导性结论的识别能力）。
+ */
+export interface NoiseResilienceStats {
+  keptRate: number | null;
+  noiseInjected: number;
+  noiseInjectionRate: number | null;
+  noiseHarmfulRate: number | null;
+}
+
+export function summarizeNoiseResilience(
+  items: readonly NoiseItemResult[],
+  correctIdByTask: ReadonlyMap<string, string>,
+  noiseIds: ReadonlySet<string>,
+): NoiseResilienceStats {
+  if (items.length === 0) {
+    return { keptRate: null, noiseInjected: 0, noiseInjectionRate: null, noiseHarmfulRate: null };
+  }
+  const taskIds = [...new Set(items.map((i) => i.taskId))];
+  // 分母：种子未被拦截、有正确夹具 id 的任务
+  const keptDenominator = taskIds.filter((t) => correctIdByTask.has(t)).length;
+  let kept = 0;
+  for (const taskId of taskIds) {
+    const correctId = correctIdByTask.get(taskId);
+    if (!correctId) continue;
+    if (items.some((i) => i.taskId === taskId && i.itemId === correctId)) kept += 1;
+  }
+  const judged = items.filter((i) => i.final !== "unjudged");
+  const noiseItems = judged.filter((i) => noiseIds.has(i.itemId));
+  const noiseHarmful = noiseItems.filter((i) => i.final === "harmful").length;
+  return {
+    keptRate: keptDenominator > 0 ? kept / keptDenominator : null,
+    noiseInjected: noiseItems.length,
+    noiseInjectionRate: judged.length > 0 ? noiseItems.length / judged.length : null,
+    noiseHarmfulRate: noiseItems.length > 0 ? noiseHarmful / noiseItems.length : null,
+  };
+}
+
+/**
+ * 纯函数：达标判定（双条件，spec §11.4）。
+ *
+ * Δhelpful 在伪相关噪声设计下语义退化（噪声被 judge 误判 helpful 反而推高比率），
+ * 故弃用单指标。改为两个真正有区分度的维度：
+ * - 正确夹具保持率 ≥ NOISE_KEPT_RATE_THRESHOLD：精排抗压（强词面干扰下正确夹具不能丢太多）
+ * - 噪声 harmful 识别率 ≥ NOISE_HARMFUL_RATE_THRESHOLD：judge 鉴别力（进包的误导噪声至少半数被识破）
+ *
+ * 边界：保持率 null（种子全被拦截）→ 样本不足返回 null；
+ * harmful 识别率 null（噪声未进包）→ 精排已把噪声滤掉，judge 无样本，不因此判失败。
+ */
+export const NOISE_KEPT_RATE_THRESHOLD = 0.8;
+export const NOISE_HARMFUL_RATE_THRESHOLD = 0.5;
+
+export function noisePassed(
+  keptRate: number | null,
+  noiseHarmfulRate: number | null,
+): boolean | null {
+  if (keptRate === null) return null;
+  if (keptRate < NOISE_KEPT_RATE_THRESHOLD) return false;
+  if (noiseHarmfulRate === null) return true;
+  return noiseHarmfulRate >= NOISE_HARMFUL_RATE_THRESHOLD;
 }
 
 /** judge 第二措辞（噪声套件双 rubric 用；第一措辞复用 replay.buildJudgePrompt） */
@@ -528,7 +622,7 @@ async function judgeNoiseGroup(
       );
       const dual = await judgeTwice(ctx.judge, pa, noiseJudgePromptB(t.description, item.text),
         ["helpful", "neutral", "harmful"] as const, ["harmful"] as const);
-      out.push({ taskId: t.taskId, v1: dual.v1, v2: dual.v2, final: dual.final, inconsistent: dual.inconsistent });
+      out.push({ taskId: t.taskId, itemId: item.id, v1: dual.v1, v2: dual.v2, final: dual.final, inconsistent: dual.inconsistent });
     }
   }
   return out;
@@ -541,17 +635,21 @@ export async function runNoiseSuite(opts: SuiteOptions & { stats?: LlmStats }): 
 
   try {
     // 基线：100% 相关经验池（T1 task_start 只召回 episodic/profile，种子须为 episodic）
-    await seedViaPipeline(ctx, fixtures.map((f) => ({ kind: "episodic", whenToUse: f.whenToUse, perspective: f.perspective, modification: f.modification })), opts);
+    const fixtureIds = await seedViaPipeline(ctx, fixtures.map((f) => ({ kind: "episodic", whenToUse: f.whenToUse, perspective: f.perspective, modification: f.modification })), opts);
+    const correctIdByTask = new Map<string, string>(fixtures.map((f, i) => [f.taskId, fixtureIds[i]] as const).filter((pair): pair is readonly [string, string] => Boolean(pair[1])));
     const baseline = await judgeNoiseGroup(ctx, fixtures);
 
     // 扰动：掺入 30% 无关经验（noise/(relevant+noise) ≈ 30%）
     const noiseCount = Math.max(1, Math.round(fixtures.length * 0.3 / 0.7));
-    await seedViaPipeline(ctx, NOISE_POLLUTANTS.slice(0, noiseCount).map((p) => ({ kind: "episodic", whenToUse: p.whenToUse, perspective: p.perspective, modification: p.modification })), opts);
+    const noiseIds = await seedViaPipeline(ctx, NOISE_POLLUTANTS.slice(0, noiseCount).map((p) => ({ kind: "episodic", whenToUse: p.whenToUse, perspective: p.perspective, modification: p.modification })), opts);
     const perturbed = await judgeNoiseGroup(ctx, fixtures);
 
     const b = summarizeJudgeRates(baseline);
     const p = summarizeJudgeRates(perturbed);
-    const passed = noisePassed(b.helpfulRate, p.helpfulRate);
+    const resilience = summarizeNoiseResilience(perturbed, correctIdByTask, new Set(noiseIds));
+    const baselineResilience = summarizeNoiseResilience(baseline, correctIdByTask, new Set());
+    // 达标判定：双条件（正确夹具保持率 + 噪声 harmful 识别率），Δhelpful 仅供参考
+    const passed = noisePassed(resilience.keptRate, resilience.noiseHarmfulRate);
     return {
       suite: "noise",
       generatedAt: now.toISOString(),
@@ -563,9 +661,14 @@ export async function runNoiseSuite(opts: SuiteOptions & { stats?: LlmStats }): 
         扰动helpful率: p.helpfulRate,
         "Δhelpful": b.helpfulRate !== null && p.helpfulRate !== null ? p.helpfulRate - b.helpfulRate : null,
         扰动harmful率: p.harmfulRate,
+        基线正确夹具保持率: baselineResilience.keptRate,
+        扰动正确夹具保持率: resilience.keptRate,
+        噪声进包数: resilience.noiseInjected,
+        噪声进包率: resilience.noiseInjectionRate,
+        噪声harmful识别率: resilience.noiseHarmfulRate,
         判定不一致: [...baseline, ...perturbed].filter((i) => i.inconsistent).length,
       },
-      details: perturbed.map((i) => ({ taskId: i.taskId, v1: i.v1, v2: i.v2, 最终: i.final })),
+      details: perturbed.map((i) => ({ taskId: i.taskId, 噪声: new Set(noiseIds).has(i.itemId), v1: i.v1, v2: i.v2, 最终: i.final })),
       efficiency: efficiencyOf(opts.stats, ctx.budget),
       warnings: ctx.warnings,
     };

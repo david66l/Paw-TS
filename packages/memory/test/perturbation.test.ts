@@ -19,12 +19,15 @@ import {
   summarizeJudgeRates,
   noisePassed,
   summarizeNegation,
+  summarizeNoiseResilience,
+  NOISE_TASK_START_TOP_K,
   COUNTERFACTUAL_FIXTURES,
   NOISE_FIXTURES,
   NOISE_POLLUTANTS,
   NEGATION_FIXTURES,
   type CfItemResult,
   type NegationItemResult,
+  type NoiseItemResult,
   type RedteamReport,
 } from "../src/longterm/eval/perturbation.js";
 import { resolveLlmConfig, findSettingsFile } from "../src/longterm/eval/llm-client.js";
@@ -117,10 +120,60 @@ describe("summarizeJudgeRates / noisePassed", () => {
     expect(r.harmfulRate).toBe(0.25);
     expect(summarizeJudgeRates([{ final: "unjudged" }]).helpfulRate).toBeNull();
 
-    expect(noisePassed(0.9, 0.87)).toBe(true);  // 降幅 0.03 < 0.05
-    expect(noisePassed(0.9, 0.84)).toBe(false); // 降幅 0.06 ≥ 0.05
-    expect(noisePassed(null, 0.8)).toBeNull();
-    expect(noisePassed(0.8, null)).toBeNull();
+    // 双条件判定：保持率 + harmful 识别率（阈值 0.8 / 0.5）
+    expect(noisePassed(1, 1)).toBe(true);
+    expect(noisePassed(1, 0.5)).toBe(true);    // harmful 识别率达标
+    expect(noisePassed(1, 0.4)).toBe(false);   // judge 识别不足
+    expect(noisePassed(0.79, 1)).toBe(false);  // 保持率不足
+    expect(noisePassed(1, null)).toBe(true);   // 噪声未进包 → judge 无样本，不判失败
+    expect(noisePassed(null, 1)).toBeNull();   // 种子全被拦截 → 样本不足
+  });
+});
+
+describe("summarizeNoiseResilience", () => {
+  test("噪声套件注入窗口放大到 3（测量强度前提）", () => {
+    expect(NOISE_TASK_START_TOP_K).toBeGreaterThan(1);
+  });
+
+  const mk = (taskId: string, itemId: string, final: string): NoiseItemResult =>
+    ({ taskId, itemId, v1: final, v2: final, final, inconsistent: false });
+
+  test("正确夹具保持率 / 噪声进包 / 噪声 harmful 识别", () => {
+    const correct = new Map([["nz-01", "id-01"], ["nz-02", "id-02"], ["nz-03", "id-03"]]);
+    const noiseIds = new Set(["noise-a", "noise-b"]);
+
+    // 基线：每条任务注入包都含正确夹具，无噪声
+    const baseline = [
+      mk("nz-01", "id-01", "helpful"),
+      mk("nz-02", "id-02", "helpful"),
+      mk("nz-03", "id-03", "helpful"),
+    ];
+    const b = summarizeNoiseResilience(baseline, correct, new Set());
+    expect(b.keptRate).toBe(1);
+    expect(b.noiseInjected).toBe(0);
+    expect(b.noiseInjectionRate).toBe(0);
+
+    // 扰动：nz-01 被噪声挤出（注入包只剩 noise-a），nz-02 仍含正确夹具 + 一条噪声
+    const perturbed = [
+      mk("nz-01", "noise-a", "harmful"),       // 正确夹具被挤出
+      mk("nz-02", "id-02", "helpful"),
+      mk("nz-02", "noise-b", "neutral"),       // 噪声进包但未判 harmful
+      mk("nz-03", "id-03", "helpful"),
+    ];
+    const p = summarizeNoiseResilience(perturbed, correct, noiseIds);
+    expect(p.keptRate).toBeCloseTo(2 / 3);        // nz-02/nz-03 保持，nz-01 失去
+    expect(p.noiseInjected).toBe(2);
+    expect(p.noiseInjectionRate).toBeCloseTo(2 / 4);
+    expect(p.noiseHarmfulRate).toBeCloseTo(0.5);  // noise-a harmful, noise-b neutral
+  });
+
+  test("空集 / 种子被拦截（无正确 id）边界", () => {
+    expect(summarizeNoiseResilience([], new Map(), new Set()).keptRate).toBeNull();
+    // 有任务但正确 id 缺失 → 该任务不计入分母
+    const correct = new Map([["nz-01", "id-01"]]);
+    const r = summarizeNoiseResilience([mk("nz-02", "id-x", "helpful")], correct, new Set());
+    expect(r.keptRate).toBeNull();
+    expect(r.noiseInjected).toBe(0);
   });
 });
 
