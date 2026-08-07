@@ -26,6 +26,8 @@ import {
   ChatClient,
   runRedteamSuite,
   renderRedteamReport,
+  runBackboneSmoke,
+  renderBackboneSmokeReport,
   type LlmStats,
   type RedteamSuiteName,
 } from "./eval/index.js";
@@ -33,7 +35,7 @@ import { exportMemories } from "./export.js";
 import { loadMemoryConfig, saveMemoryConfig } from "./config.js";
 
 export interface MemoryCliArgs {
-  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay" | "export" | "readonly" | "reindex" | "redteam";
+  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay" | "export" | "readonly" | "reindex" | "redteam" | "smoke";
   id?: string;
   kind?: MemoryKind;
   all?: boolean;
@@ -62,6 +64,10 @@ export interface MemoryCliArgs {
   keep?: boolean;
   /** redteam --max-samples N：每套件最多跑 N 条 fixture */
   maxSamples?: number;
+  /** smoke --auto-readonly：未达标时自动写入降级只读（默认仅提示） */
+  autoReadonly?: boolean;
+  /** smoke --no-governed：注入真实 Governor（默认 true，走完整五道关） */
+  noGoverned?: boolean;
 }
 
 export interface MemoryCliResult {
@@ -89,6 +95,8 @@ Usage:
   paw-ts memory reindex             重建派生索引（embedding）+ 冒烟回归（结果记 op-log）
   paw-ts memory redteam <all|counterfactual|noise|negation> [--provider <name>] [--judge-provider <name>] [--json] [--keep] [--max-samples N]
                                   §11.4 扰动评测（反事实纠正/噪声抗压/否定句保持，真实 LLM）
+  paw-ts memory smoke [--provider <name>] [--json] [--keep] [--no-governed] [--auto-readonly]
+                                  §11.5 backbone 冒烟（10 条写入/检索：schema 合格率、检索命中率、弱模型专项）
 
 需要 DATABASE_URL 指向记忆库（V026+ 迁移）。`;
 
@@ -98,7 +106,7 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
   if (sub === undefined || sub === "help" || sub === "--help" || sub === "-h") {
     return { error: USAGE };
   }
-  if (!["list", "why", "forget", "stats", "diff", "gc", "replay", "export", "readonly", "reindex", "redteam"].includes(sub)) {
+  if (!["list", "why", "forget", "stats", "diff", "gc", "replay", "export", "readonly", "reindex", "redteam", "smoke"].includes(sub)) {
     return { error: `未知子命令: ${sub}\n\n${USAGE}` };
   }
 
@@ -133,6 +141,10 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
       out.dir = v;
     } else if (a === "--keep") {
       out.keep = true;
+    } else if (a === "--auto-readonly") {
+      out.autoReadonly = true;
+    } else if (a === "--no-governed") {
+      out.noGoverned = true;
     } else if (a === "--provider") {
       const v = args[++i];
       if (!v) return { error: "--provider 缺名称" };
@@ -351,6 +363,31 @@ export async function runMemoryCommand(args: readonly string[]): Promise<MemoryC
         const text = parsed.json
           ? JSON.stringify(reports, null, 2)
           : reports.map((r) => renderRedteamReport(r)).join("\n\n");
+        return { ok: true, text };
+      }
+
+      case "smoke": {
+        const stats: LlmStats = { calls: 0, retries: 0, failures: 0, totalMs: 0, estimatedTokens: 0 };
+        const backboneCfg = resolveLlmConfig({ provider: parsed.provider });
+        if ("error" in backboneCfg) return { ok: false, text: backboneCfg.error };
+        const report = await runBackboneSmoke({
+          engine,
+          backbone: new ChatClient(backboneCfg, 60_000, stats),
+          stats,
+          provider: backboneCfg.providerName,
+          keep: parsed.keep,
+          maxSamples: parsed.maxSamples,
+          governed: !parsed.noGoverned,
+        });
+        const text = parsed.json ? JSON.stringify(report, null, 2) : renderBackboneSmokeReport(report);
+        // 未达标：fail-closed（ok:false，CI 可 gate）+ 只读提示（防静默腐蚀，spec §11.5）
+        if (report.passed === false || report.passed === null) {
+          if (parsed.autoReadonly && report.passed === false) {
+            await saveMemoryConfig({ readonly: true });
+            return { ok: false, text: `${text}\n⚠ 已自动开启 readonly：写入事件将全部丢弃（如需恢复：memory readonly off）` };
+          }
+          return { ok: false, text };
+        }
         return { ok: true, text };
       }
 
