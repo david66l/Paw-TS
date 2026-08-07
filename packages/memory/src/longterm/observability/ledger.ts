@@ -19,7 +19,7 @@ import { appendOpLog } from "./op-log.js";
 export async function recordRetrievalHits(
   engine: MemoryStoreEngine,
   entryIds: readonly string[],
-  opts: { runId?: string } = {},
+  opts: { runId?: string; detail?: Record<string, unknown> } = {},
 ): Promise<void> {
   for (const id of entryIds) {
     try {
@@ -29,6 +29,7 @@ export async function recordRetrievalHits(
   await appendOpLog("read.inject", {
     runId: opts.runId,
     entryIds: [...entryIds],
+    detail: opts.detail ?? {},
   });
 }
 

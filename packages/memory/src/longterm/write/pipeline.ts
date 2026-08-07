@@ -19,6 +19,7 @@ import type { MemoryEntry, MemoryStoreEngine, SemanticFact } from "../store/engi
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import { deriveEntryId } from "../store/id.js";
 import { appendOpLog } from "../observability/op-log.js";
+import { hybridRecall } from "../retrieval/hybrid.js";
 import { scanForSecrets } from "./secrets.js";
 import { MemoryDistiller, type DistillInput } from "./distiller.js";
 import { LongtermGovernor, type GovernorLlm } from "./governor.js";
@@ -336,9 +337,8 @@ export class MemoryWritePipeline {
         keywords: candidate.keywords ?? [],
         embeddingKey: `${fact} ${(candidate.keywords ?? []).join(" ")}`,
       };
-      const similar = await this.engine.searchVector(draft.embeddingKey, 10)
-        .then((hits) => Promise.all(hits.map((h) => this.engine.get(h.id))))
-        .then((es) => es.filter((e): e is MemoryEntry => e !== null))
+      const similar = await hybridRecall(this.engine, draft.embeddingKey, { candidates: 10 })
+        .then((r) => r.items.map((i) => i.entry))
         .catch(() => [] as MemoryEntry[]);
       drafts.push({ draft, similar });
     }
