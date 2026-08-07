@@ -6,10 +6,11 @@
  */
 
 import { getSql } from "../../db/connection.js";
+import { scanDeletionCandidates, DEFAULT_LIFECYCLE_CONFIG } from "../lifecycle/janitor.js";
 
-/** spec §9.4 默认值：效用删除判据（主判据采纳率待 M7，此处用 utility/freq 作代理） */
-export const DELETE_MIN_FREQ = 8;
-export const DELETE_MAX_UTILITY_RATIO = 0.3;
+/** spec §9.4 默认值（展示文案用；判定逻辑在 lifecycle/janitor.scanDeletionCandidates） */
+export const DELETE_MIN_FREQ = DEFAULT_LIFECYCLE_CONFIG.deleteMinFreq;
+export const DELETE_MAX_UTILITY_RATIO = DEFAULT_LIFECYCLE_CONFIG.deleteMaxUtilityRatio;
 /** spec §10.4-3：unverified 占比告警阈值 */
 export const UNVERIFIED_WARN_RATIO = 0.1;
 
@@ -41,15 +42,13 @@ export async function collectMemoryStats(): Promise<MemoryStats> {
     SELECT
       count(*) FILTER (WHERE t_invalid IS NULL)::int AS active,
       count(*) FILTER (WHERE t_invalid IS NOT NULL)::int AS invalidated,
-      count(*) FILTER (WHERE t_invalid IS NULL AND verification_status = 'unverified')::int AS unverified,
-      count(*) FILTER (
-        WHERE t_invalid IS NULL
-          AND freq >= ${DELETE_MIN_FREQ}
-          AND utility < freq * ${DELETE_MAX_UTILITY_RATIO}::numeric
-      )::int AS delete_candidates
+      count(*) FILTER (WHERE t_invalid IS NULL AND verification_status = 'unverified')::int AS unverified
     FROM memory_items
   `;
-  const t = totals as { active: number; invalidated: number; unverified: number; delete_candidates: number };
+  const t = totals as { active: number; invalidated: number; unverified: number };
+
+  // 删除候选：与生命周期批处理同一判定函数（freq≥8 且采纳率<0.2 且 utility 比低，§7.2）
+  const deleteCandidates = (await scanDeletionCandidates()).length;
 
   const kindRows = await sql`
     SELECT type, count(*)::int AS n FROM memory_items
@@ -80,7 +79,7 @@ export async function collectMemoryStats(): Promise<MemoryStats> {
     byKind,
     unverified: t.unverified,
     unverifiedRatio: t.active > 0 ? t.unverified / t.active : 0,
-    deleteCandidates: t.delete_candidates,
+    deleteCandidates,
     writeOpsThisMonth: (writeOps as { n: number }).n,
     adoptionRate30d: a.injected > 0 ? a.adopted / a.injected : null,
     injected30d: a.injected,

@@ -13,15 +13,32 @@ import { appendOpLog } from "./observability/op-log.js";
 import { collectMemoryStats, renderMemoryStats } from "./observability/stats.js";
 import { collectMemoryDiff, renderMemoryDiff } from "./observability/diff.js";
 import { collectWhy, renderWhy } from "./observability/why.js";
+import {
+  runLifecycleOnce,
+  listReviewQueue,
+  approveReview,
+  rejectReview,
+} from "./lifecycle/janitor.js";
+import { collectGarbage } from "./lifecycle/gc.js";
 
 export interface MemoryCliArgs {
-  subcommand: "list" | "why" | "forget" | "stats" | "diff";
+  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc";
   id?: string;
   kind?: MemoryKind;
   all?: boolean;
   since?: string;
   repo?: string;
   limit?: number;
+  dryRun?: boolean;
+  /** gc --review：列出人工复核队列 */
+  review?: boolean;
+  /** gc --approve/--reject <entryId>：复核决议 */
+  approve?: string;
+  reject?: string;
+  /** gc --export <dir>：归档额外导出 JSONL */
+  exportDir?: string;
+  /** gc --sweep：手动触发一次生命周期批处理（效用删除扫描 + 容量检查） */
+  sweep?: boolean;
 }
 
 export interface MemoryCliResult {
@@ -39,6 +56,10 @@ Usage:
   paw-ts memory forget <id>     立即软失效（用户最高优先级）
   paw-ts memory stats           库规模 / 删除候选 / unverified 占比 / 采纳率
   paw-ts memory diff [--since <ISO时间>]   两时点间变更（默认近 24 小时）
+  paw-ts memory gc [--dry-run] [--export <dir>]   物理清理已软失效条目（先归档）
+  paw-ts memory gc --sweep        手动跑一轮生命周期批处理（效用删除扫描 + 容量检查）
+  paw-ts memory gc --review       列出删除候选人工复核队列
+  paw-ts memory gc --approve <entryId> | --reject <entryId>   复核决议（approve 即软失效）
 
 需要 DATABASE_URL 指向记忆库（V026+ 迁移）。`;
 
@@ -48,7 +69,7 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
   if (sub === undefined || sub === "help" || sub === "--help" || sub === "-h") {
     return { error: USAGE };
   }
-  if (!["list", "why", "forget", "stats", "diff"].includes(sub)) {
+  if (!["list", "why", "forget", "stats", "diff", "gc"].includes(sub)) {
     return { error: `未知子命令: ${sub}\n\n${USAGE}` };
   }
 
@@ -57,6 +78,24 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
     const a = args[i]!;
     if (a === "--all") {
       out.all = true;
+    } else if (a === "--dry-run") {
+      out.dryRun = true;
+    } else if (a === "--review") {
+      out.review = true;
+    } else if (a === "--sweep") {
+      out.sweep = true;
+    } else if (a === "--approve") {
+      const v = args[++i];
+      if (!v) return { error: "--approve 缺 entryId" };
+      out.approve = v;
+    } else if (a === "--reject") {
+      const v = args[++i];
+      if (!v) return { error: "--reject 缺 entryId" };
+      out.reject = v;
+    } else if (a === "--export") {
+      const v = args[++i];
+      if (!v) return { error: "--export 缺目录" };
+      out.exportDir = v;
     } else if (a === "--kind") {
       const v = args[++i];
       if (!v || !KINDS.includes(v as MemoryKind)) return { error: `--kind 需为 ${KINDS.join("|")}` };
@@ -152,6 +191,47 @@ export async function runMemoryCommand(args: readonly string[]): Promise<MemoryC
         const since = parsed.since ?? new Date(Date.now() - 24 * 3600 * 1000).toISOString();
         const diff = await collectMemoryDiff(since);
         return { ok: true, text: renderMemoryDiff(diff) };
+      }
+
+      case "gc": {
+        if (parsed.review) {
+          const rows = await listReviewQueue();
+          if (rows.length === 0) return { ok: true, text: "复核队列为空" };
+          const lines = rows.map((r) =>
+            `${r.entryId}\n    ${r.reason}\n    入队: ${r.createdAt}    决议: gc --approve ${r.entryId} | gc --reject ${r.entryId}`);
+          return { ok: true, text: [`删除候选复核队列（${rows.length} 条）:`, ...lines].join("\n") };
+        }
+        if (parsed.approve) {
+          const done = await approveReview(parsed.approve, { engine });
+          return done
+            ? { ok: true, text: `已批准并软失效: ${parsed.approve}` }
+            : { ok: false, text: `复核队列中无 pending 条目: ${parsed.approve}` };
+        }
+        if (parsed.reject) {
+          const done = await rejectReview(parsed.reject);
+          return done
+            ? { ok: true, text: `已拒绝删除: ${parsed.reject}（不再进入复核队列）` }
+            : { ok: false, text: `复核队列中无 pending 条目: ${parsed.reject}` };
+        }
+        if (parsed.sweep) {
+          const report = await runLifecycleOnce({ config: { repo: parsed.repo } });
+          return { ok: true, text: [
+            "生命周期批处理完成",
+            `  删除候选: ${report.candidates.length}（进复核队列 ${report.enqueuedForReview.length}，自动软失效 ${report.autoInvalidated.length}，已在队列 ${report.alreadyInQueue.length}）`,
+            `  模式: ${report.autoMode ? "全自动" : "灰度人工复核"}`,
+            `  容量: episodic 软失效 ${report.capacity.episodicInvalidated.length}，semantic 软失效 ${report.capacity.semanticInvalidated.length}，trial 丢弃 ${report.capacity.trialDropped.length}，profile 超限 ${report.capacity.profileOverCap}`,
+          ].join("\n") };
+        }
+        const report = await collectGarbage({ dryRun: parsed.dryRun, exportDir: parsed.exportDir, repo: parsed.repo });
+        const lines = [
+          report.dryRun ? "gc（dry-run，未动数据）" : "gc 完成",
+          `  待清理（已软失效）: ${report.eligible}`,
+        ];
+        if (!report.dryRun) {
+          lines.push(`  已归档: ${report.archived}    已物理删除: ${report.deleted}`);
+          if (report.exportPath) lines.push(`  导出: ${report.exportPath}`);
+        }
+        return { ok: true, text: lines.join("\n") };
       }
     }
   } catch (e) {
