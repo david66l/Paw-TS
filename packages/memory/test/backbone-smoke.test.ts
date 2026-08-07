@@ -10,7 +10,6 @@ import { describe, test, expect } from "bun:test";
 import {
   summarizeSmoke,
   smokePassed,
-  isUnverified,
   smokeProbe,
   renderBackboneSmokeReport,
   SMOKE_FIXTURES,
@@ -39,11 +38,11 @@ function item(partial: Partial<SmokeItemResult> & { fixtureId: string }): SmokeI
   };
 }
 
-/** 计算字符串的 3-gram 集合（对齐 NGram 字符口径：字母数字 + CJK） */
+/** 计算字符串的 3-gram 集合（对齐 NGramEmbeddingService 真实口径：lowercase + 非字母数字→空格保留进 gram） */
 function trigrams(s: string): Set<string> {
-  const chars = s.replace(/[^a-zA-Z0-9一-鿿]/g, "");
+  const normalized = s.toLowerCase().replace(/[^a-z0-9一-鿿]/g, " ");
   const out = new Set<string>();
-  for (let i = 0; i <= chars.length - 3; i++) out.add(chars.slice(i, i + 3));
+  for (let i = 0; i <= normalized.length - 3; i++) out.add(normalized.slice(i, i + 3));
   return out;
 }
 
@@ -150,22 +149,6 @@ describe("smokePassed 边界", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// isUnverified（镜像 postgres-engine.put 推导）
-// ═══════════════════════════════════════════════════════════════
-
-describe("isUnverified", () => {
-  test("degraded/agent_inferred → true；可信 source → false", () => {
-    expect(isUnverified({ source: "agent_inferred", degraded: true })).toBe(true);
-    expect(isUnverified({ source: "agent_inferred" })).toBe(true);
-    expect(isUnverified({ source: "agent_verified" })).toBe(false);
-    expect(isUnverified({ source: "user_statement" })).toBe(false);
-    expect(isUnverified({ source: "repo_docs" })).toBe(false);
-    expect(isUnverified({ source: "trial_graduated" })).toBe(false);
-    expect(isUnverified({ source: "user_statement", degraded: true })).toBe(true); // 降级强制 unverified，即使来源可信
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
 // smokeProbe
 // ═══════════════════════════════════════════════════════════════
 
@@ -206,9 +189,10 @@ describe("renderBackboneSmokeReport", () => {
     expect(text).toContain("memory readonly on");
   });
 
-  test("无写入 → 无法判定", () => {
+  test("无写入 → 无法判定 + 只读提示（passed!==true 一律 fail-closed）", () => {
     const text = renderBackboneSmokeReport({ ...base, passed: null, metrics: { 条目数: 0 } });
     expect(text).toContain("无法判定");
+    expect(text).toContain("memory readonly on");
   });
 });
 
@@ -264,10 +248,13 @@ describe("SMOKE_FIXTURES 合法性", () => {
     }
   });
 
-  test("trigram 三向重叠：keyword 探针（joined）与 query 各自与 trajectory 共享 ≥1 个 3-gram（NGram 召回前提）", () => {
-    // 对齐真实机制：stored entry 的 embeddingKey 由 distiller 从 trajectory 蒸馏生成
-    // （fixture keywords 是探针而非入库内容）——所以约束是"探针 ↔ trajectory"词面重叠，
-    // 保证蒸馏产物保留探针词汇、检索可命中。
+  test("trigram 启发式：keyword 探针（joined）与 query 各自与 trajectory 共享 ≥1 个 3-gram（真实 embedding 口径）", () => {
+    // 对齐真实机制（NGramEmbeddingService：lowercase + 非字母数字→空格保留进 gram）：
+    // stored entry 的 embeddingKey 由 distiller 从 trajectory 蒸馏生成（fixture keywords 是
+    // 探针而非入库内容）——所以约束是"探针 ↔ trajectory"在真实 gram 口径下词面重叠。
+    // 这是启发式而非召回保证（蒸馏产物由 LLM 生成、可改写），但保证探针的独特技术名词
+    // 逐字出现在轨迹里，蒸馏才可能保留并命中；smoke-03/09 的 keywords 为此用轨迹逐字
+    // 出现的复合词（bun / 日志轮转）。
     for (const f of SMOKE_FIXTURES) {
       const kwProbe = f.keywords.join(" ");
       expect(sharesTrigram(kwProbe, f.trajectory), `${f.id} keyword 探针与 trajectory 无共享 trigram`).toBe(true);

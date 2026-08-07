@@ -379,16 +379,17 @@ export async function runMemoryCommand(args: readonly string[]): Promise<MemoryC
           maxSamples: parsed.maxSamples,
           governed: !parsed.noGoverned,
         });
-        const text = parsed.json ? JSON.stringify(report, null, 2) : renderBackboneSmokeReport(report);
-        // 未达标：fail-closed（ok:false，CI 可 gate）+ 只读提示（防静默腐蚀，spec §11.5）
-        if (report.passed === false || report.passed === null) {
+        // 未达标/无法判定：fail-closed（ok:false，CI 可 gate）+ 只读提示（防静默腐蚀，spec §11.5）
+        if (report.passed !== true) {
+          // --auto-readonly 仅在确实写入过未达标数据时触发（passed=false；null=无写入，无腐蚀风险）
           if (parsed.autoReadonly && report.passed === false) {
             await saveMemoryConfig({ readonly: true });
-            return { ok: false, text: `${text}\n⚠ 已自动开启 readonly：写入事件将全部丢弃（如需恢复：memory readonly off）` };
+            // 通知进 warnings 字段：--json 下仍是合法 JSON，不与人话拼接破坏 JSON.parse
+            report.warnings.push("已自动开启 readonly：写入事件将全部丢弃（如需恢复：memory readonly off）");
           }
-          return { ok: false, text };
         }
-        return { ok: true, text };
+        const text = parsed.json ? JSON.stringify(report, null, 2) : renderBackboneSmokeReport(report);
+        return report.passed === true ? { ok: true, text } : { ok: false, text };
       }
 
       case "readonly": {        // 配置落在 .paw/memory-config.json（见 config.ts 的落点说明）

@@ -20,7 +20,7 @@
  * - processEvent 直接调用（不经 outbox worker），与 perturbation.seedViaPipeline 同模式
  */
 
-import type { MemoryEntry, MemoryStoreEngine } from "../store/engine.js";
+import type { MemoryStoreEngine } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import { MemoryWritePipeline, type ProcessResult } from "../write/pipeline.js";
 import { MemoryDistiller } from "../write/distiller.js";
@@ -45,7 +45,8 @@ export interface SmokeFixture {
   trajectory: string;
   /** 自然语言检索探针 */
   query: string;
-  /** 检索词探针；须与 query 和 trajectory 共享 ≥1 个 3 字 trigram（NGram 召回前提） */
+  /** 检索词探针；与 query 一样须在 NGram 口径下（非字母数字→空格保留进 gram）与 trajectory 共享 ≥1 个 3-gram。
+   *  启发式：探针的独特技术名词须逐字出现在轨迹里，蒸馏才可能保留并命中（非召回保证）。 */
   keywords: string[];
 }
 
@@ -66,7 +67,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-01",
     description: "项目构建命令",
     goal: "配置并验证本项目的构建命令",
-    trajectory: "在 package.json 中添加 build 脚本，脚本内容为 bun run build，执行 bun run build 构建命令执行成功并生成 dist 目录",
+    trajectory: "在构建配置中声明构建脚本，脚本内容为 bun run build，执行 bun run build 构建命令执行成功并生成构建产物目录",
     query: "本项目的构建命令是什么？",
     keywords: ["构建", "命令", "build"],
   },
@@ -84,7 +85,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     goal: "确定本仓库的依赖安装方式",
     trajectory: "发现仓库根目录存在 bun.lock 文件，用 bun install 安装依赖成功，并把安装命令记录到 README",
     query: "安装依赖应该用哪个包管理器？",
-    keywords: ["安装", "依赖", "包管理器"],
+    keywords: ["bun", "安装", "依赖"],
   },
   {
     id: "smoke-04",
@@ -132,7 +133,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     goal: "处理日志轮转占满磁盘的问题",
     trajectory: "日志轮转保留过期日志导致磁盘被打满，调整保留窗口后磁盘占用恢复稳定",
     query: "日志轮转保留过期日志打满磁盘怎么处理？",
-    keywords: ["日志", "轮转", "磁盘"],
+    keywords: ["日志轮转", "磁盘"],
   },
   {
     id: "smoke-10",
@@ -157,12 +158,6 @@ export const SMOKE_UNVERIFIED_MAX = 0.3;
 // ═══════════════════════════════════════════════════════════════
 // 纯函数：unverified 推导 / 探针 / 汇总 / 达标
 // ═══════════════════════════════════════════════════════════════
-
-/** 镜像 postgres-engine.put 的 verification_status 推导（修复批次 A #2） */
-export function isUnverified(entry: Pick<MemoryEntry, "source"> & { degraded?: boolean }): boolean {
-  if (entry.degraded === true) return true;
-  return !["agent_verified", "user_statement", "repo_docs", "trial_graduated"].includes(entry.source);
-}
 
 export type SmokeProbeMode = "keyword" | "query";
 
@@ -280,7 +275,8 @@ export function renderBackboneSmokeReport(r: BackboneSmokeReport): string {
     `耗时 ${(r.efficiency.totalMs / 1000).toFixed(1)}s，估算 ~${r.efficiency.estimatedTokens} tokens` +
     (r.efficiency.truncated ? "，⚠ 预算截断" : ""),
   );
-  if (r.passed === false) lines.push(`  ⚠ ${READONLY_HINT}`);
+  // passed !== true（未达标或无法判定）都给只读提示：全拒/无写入也是弱模型信号（fail-closed）
+  if (r.passed !== true) lines.push(`  ⚠ ${READONLY_HINT}`);
   for (const w of r.warnings) lines.push(`  ⚠ ${w}`);
   if (r.details.length > 0) {
     lines.push("  ── 明细 ──");
@@ -308,6 +304,8 @@ export interface BackboneSmokeOptions {
   maxSamples?: number;
   /** LLM 调用硬上限，默认 100 */
   llmBudget?: number;
+  /** 整体墙钟上限（毫秒），默认 15 分钟；超时 → 中断 + passed=null fail-closed */
+  timeoutMs?: number;
   now?: () => Date;
   /** 注入真实 LongtermGovernor（走完整五道关）；默认 true，--no-governed 逃生口 */
   governed?: boolean;
@@ -348,6 +346,33 @@ function detailOf(r: ProcessResult): string {
   }
 }
 
+/**
+ * 冒烟整体墙钟上限（毫秒）：endpoint 挂起时防无限阻塞（每次 complete 最坏 60s×重试）。
+ * 取 20 分钟以容纳 API 慢响应（实跑曾见单次蒸馏 110s）；超时 → 冒烟中断 + passed=null fail-closed。
+ * LlmBudget 限调用次数、不限墙钟，故需此护栏。
+ */
+const SMOKE_DEFAULT_TIMEOUT_MS = 20 * 60_000;
+
+/**
+ * 同 repo 密封检索（红队第三层 S 修复）。
+ * 共享库上 hybridRecall 的 searchText/searchVector 不按 repo 过滤，跨 repo 旧条目会挤掉
+ * 自身写入的候选 → 检索命中率被库污染误判。这里放大原始候选池，再过滤到 smoke repo 内
+ * 按融合分取前 10 判命中，隔离库内容对"backbone 蒸馏→检索协同"测量的干扰。
+ * 注意：governor 的相似召回（pipeline.ts 内）仍跨 repo——生产行为，接受（实跑 0 NOOP 验证）。
+ */
+const SMOKE_RECALL_POOL = 50;
+
+async function recallInRepo(
+  engine: MemoryStoreEngine,
+  probe: string,
+  repo: string,
+  memoryIds: string[],
+): Promise<boolean> {
+  const r = await hybridRecall(engine, probe, { candidates: SMOKE_RECALL_POOL });
+  const inRepo = r.items.filter((i) => i.entry.repo === repo).slice(0, 10);
+  return inRepo.some((i) => memoryIds.includes(i.entry.id));
+}
+
 export async function runBackboneSmoke(
   opts: BackboneSmokeOptions & { stats?: LlmStats },
 ): Promise<BackboneSmokeReport> {
@@ -370,9 +395,20 @@ export async function runBackboneSmoke(
   const warnings: string[] = [];
   const items: SmokeItemResult[] = [];
 
+  // 整体墙钟护栏（红队第三层 M3）：endpoint 挂起时防 CI 无限阻塞（每次调用最坏 60s×重试）。
+  // LlmBudget 限调用次数、不限墙钟；超时置位后循环中断 → passed=null fail-closed。
+  const timeoutMs = opts.timeoutMs ?? SMOKE_DEFAULT_TIMEOUT_MS;
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; }, timeoutMs);
+  timer.unref?.();
+
   try {
     // ── 写入阶段：真实蒸馏，每条 fixture 独立跑 processEvent ──
     for (const f of fixtures) {
+      if (timedOut) {
+        warnings.push(`整体超时（>${Math.round(timeoutMs / 60_000)} 分钟）：冒烟中断，结果不完整，fail-closed`);
+        break;
+      }
       let r: ProcessResult;
       try {
         r = await pipeline.processEvent({
@@ -390,16 +426,18 @@ export async function runBackboneSmoke(
         continue;
       }
       const memoryIds = memoryIdsOf(r);
-      // ── 检索阶段：对 written/degraded 带 id 的条目用 keyword/query 探针 ──
+      // ── 检索阶段：对 written/degraded 带 id 的条目用 keyword/query 探针（同 repo 密封）──
       let recalledByKeyword = false;
       let recalledByQuery = false;
       if (memoryIds.length > 0) {
-        const [kwR, qR] = await Promise.all([
-          hybridRecall(engine, smokeProbe(f, "keyword"), { candidates: 10 }),
-          hybridRecall(engine, smokeProbe(f, "query"), { candidates: 10 }),
-        ]);
-        recalledByKeyword = kwR.items.some((i) => memoryIds.includes(i.entry.id));
-        recalledByQuery = qR.items.some((i) => memoryIds.includes(i.entry.id));
+        try {
+          [recalledByKeyword, recalledByQuery] = await Promise.all([
+            recallInRepo(engine, smokeProbe(f, "keyword"), repo, memoryIds),
+            recallInRepo(engine, smokeProbe(f, "query"), repo, memoryIds),
+          ]);
+        } catch (e) {
+          warnings.push(`${f.id}: 检索抛错 ${e instanceof Error ? e.message : String(e)}（该项计 miss）`);
+        }
       }
       items.push({
         fixtureId: f.id,
@@ -412,11 +450,13 @@ export async function runBackboneSmoke(
     }
 
     const summary = summarizeSmoke(items);
-    // 审计留痕（spec §9.6 best-effort）：冒烟未达标记 op-log，供后续回看弱模型污染窗口
-    if (summary.passed === false) {
+    // 审计留痕（spec §9.6 best-effort）：passed !== true（未达标或无法判定）都留痕——
+    // 全拒/无写入/超时同样是弱模型或环境失效信号，须回溯 provider 归因（provider 恒为 opts.provider，勿依赖 stats）
+    const passed = timedOut ? null : summary.passed;
+    if (passed !== true) {
       await appendOpLog("write.smoke_failed", {
         detail: {
-          provider: opts.stats ? undefined : opts.provider,
+          provider: opts.provider,
           schemaRate: summary.schemaRate,
           recallRate: summary.keywordRecall,
           unverifiedRatio: summary.unverifiedRatio,
@@ -428,7 +468,7 @@ export async function runBackboneSmoke(
       suite: "backbone-smoke",
       generatedAt: now.toISOString(),
       provider: opts.provider,
-      passed: summary.passed,
+      passed,
       metrics: {
         条目数: items.length,
         "schema合格率": summary.schemaRate,
@@ -443,7 +483,15 @@ export async function runBackboneSmoke(
       warnings,
     };
   } finally {
-    if (!opts.keep) await cleanupCtx(repo);
+    clearTimeout(timer);
+    if (!opts.keep) {
+      // 清理失败不吞报告（红队第三层 M5）：只记 warning；残留需人工清理
+      try {
+        await cleanupCtx(repo);
+      } catch (e) {
+        warnings.push(`清理 smoke repo 失败: ${e instanceof Error ? e.message : String(e)}（可能残留 smoke-* 数据，需人工清理）`);
+      }
+    }
   }
 }
 
