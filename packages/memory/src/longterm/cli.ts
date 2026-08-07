@@ -21,11 +21,19 @@ import {
 } from "./lifecycle/janitor.js";
 import { collectGarbage } from "./lifecycle/gc.js";
 import { parseReplayJsonl, runReplay, renderReplayReport } from "./eval/replay.js";
+import {
+  resolveLlmConfig,
+  ChatClient,
+  runRedteamSuite,
+  renderRedteamReport,
+  type LlmStats,
+  type RedteamSuiteName,
+} from "./eval/index.js";
 import { exportMemories } from "./export.js";
 import { loadMemoryConfig, saveMemoryConfig } from "./config.js";
 
 export interface MemoryCliArgs {
-  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay" | "export" | "readonly" | "reindex";
+  subcommand: "list" | "why" | "forget" | "stats" | "diff" | "gc" | "replay" | "export" | "readonly" | "reindex" | "redteam";
   id?: string;
   kind?: MemoryKind;
   all?: boolean;
@@ -46,6 +54,14 @@ export interface MemoryCliArgs {
   json?: boolean;
   /** export --dir <path>：导出目录（默认 .paw/shared-memory） */
   dir?: string;
+  /** redteam：LLM provider 名（settings.local.json 的 models.<name>） */
+  provider?: string;
+  /** redteam：judge 专用 provider（缺省与 backbone 同） */
+  judgeProvider?: string;
+  /** redteam --keep：保留种子数据不清理 */
+  keep?: boolean;
+  /** redteam --max-samples N：每套件最多跑 N 条 fixture */
+  maxSamples?: number;
 }
 
 export interface MemoryCliResult {
@@ -71,6 +87,8 @@ Usage:
   paw-ts memory export [--dir <path>] [--all]   导出到 .paw/shared-memory/（导出前全量密钥扫描）
   paw-ts memory readonly [on|off]   只读模式切换（CI 场景；不带参数显示当前状态）
   paw-ts memory reindex             重建派生索引（embedding）+ 冒烟回归（结果记 op-log）
+  paw-ts memory redteam <all|counterfactual|noise|negation> [--provider <name>] [--judge-provider <name>] [--json] [--keep] [--max-samples N]
+                                  §11.4 扰动评测（反事实纠正/噪声抗压/否定句保持，真实 LLM）
 
 需要 DATABASE_URL 指向记忆库（V026+ 迁移）。`;
 
@@ -80,7 +98,7 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
   if (sub === undefined || sub === "help" || sub === "--help" || sub === "-h") {
     return { error: USAGE };
   }
-  if (!["list", "why", "forget", "stats", "diff", "gc", "replay", "export", "readonly", "reindex"].includes(sub)) {
+  if (!["list", "why", "forget", "stats", "diff", "gc", "replay", "export", "readonly", "reindex", "redteam"].includes(sub)) {
     return { error: `未知子命令: ${sub}\n\n${USAGE}` };
   }
 
@@ -113,6 +131,20 @@ export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { erro
       const v = args[++i];
       if (!v) return { error: "--dir 缺路径" };
       out.dir = v;
+    } else if (a === "--keep") {
+      out.keep = true;
+    } else if (a === "--provider") {
+      const v = args[++i];
+      if (!v) return { error: "--provider 缺名称" };
+      out.provider = v;
+    } else if (a === "--judge-provider") {
+      const v = args[++i];
+      if (!v) return { error: "--judge-provider 缺名称" };
+      out.judgeProvider = v;
+    } else if (a === "--max-samples") {
+      const v = Number(args[++i]);
+      if (!Number.isFinite(v) || v <= 0) return { error: "--max-samples 需为正整数" };
+      out.maxSamples = v;
     } else if (a === "--kind") {
       const v = args[++i];
       if (!v || !KINDS.includes(v as MemoryKind)) return { error: `--kind 需为 ${KINDS.join("|")}` };
@@ -293,6 +325,33 @@ export async function runMemoryCommand(args: readonly string[]): Promise<MemoryC
           `  扫描: ${report.scanned}    重建: ${report.indexed}    失败: ${report.failed}`,
           `  冒烟: ${report.smoke.passed}/${report.smoke.total} 通过${report.smoke.failedIds.length > 0 ? `    未召回: ${report.smoke.failedIds.join(", ")}` : ""}`,
         ].join("\n") };
+      }
+
+      case "redteam": {
+        const suite = parsed.id;
+        if (!suite || !["all", "counterfactual", "noise", "negation"].includes(suite)) {
+          return { ok: false, text: `memory redteam 需要 <all|counterfactual|noise|negation>${suite ? `，收到: ${suite}` : ""}` };
+        }
+        const stats: LlmStats = { calls: 0, retries: 0, failures: 0, totalMs: 0, estimatedTokens: 0 };
+        const backboneCfg = resolveLlmConfig({ provider: parsed.provider });
+        if ("error" in backboneCfg) return { ok: false, text: backboneCfg.error };
+        const judgeCfg =
+          parsed.judgeProvider && parsed.judgeProvider !== parsed.provider
+            ? resolveLlmConfig({ provider: parsed.judgeProvider })
+            : backboneCfg;
+        if ("error" in judgeCfg) return { ok: false, text: judgeCfg.error };
+        const reports = await runRedteamSuite(suite as RedteamSuiteName | "all", {
+          engine,
+          backbone: new ChatClient(backboneCfg, 60_000, stats),
+          judge: new ChatClient(judgeCfg, 60_000, stats),
+          stats,
+          keep: parsed.keep,
+          maxSamples: parsed.maxSamples,
+        });
+        const text = parsed.json
+          ? JSON.stringify(reports, null, 2)
+          : reports.map((r) => renderRedteamReport(r)).join("\n\n");
+        return { ok: true, text };
       }
 
       case "readonly": {        // 配置落在 .paw/memory-config.json（见 config.ts 的落点说明）
