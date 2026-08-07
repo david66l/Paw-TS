@@ -21,6 +21,7 @@
 
 import type {
   AgentToolCallAction,
+  ArtifactRegistry,
   ContextManager,
   RunEvent,
   ToolFileChange,
@@ -38,6 +39,7 @@ import type { TaskStateManager } from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
 import { SUB_AGENT_TOOL_NAME } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
+import { truncatePayloadWithOutcome } from "./truncate-payload.js";
 
 /** 文件锁等待超时（毫秒）：超时后该工具调用按冲突失败返回 */
 const FILE_LOCK_TIMEOUT_MS = 20_000;
@@ -170,6 +172,8 @@ interface ToolExecutionContext {
   readonly createAgent?: HarnessContext["createAgent"];
   /** 工具白名单硬裁（与 Orchestrator.allowedTools 一致） */
   readonly allowedTools?: readonly string[] | null;
+  /** P3 冷库：会话级可寻址归档（context.recall 执行 + 截断全文归档） */
+  readonly artifactRegistry?: ArtifactRegistry;
 }
 
 /** 审批上下文 */
@@ -436,6 +440,9 @@ export async function executeToolCalls(
             ? { memoryTaskId: toolCtx.memoryTaskId }
             : {}),
           ...(toolCtx.createAgent ? { createAgent: toolCtx.createAgent } : {}),
+          ...(toolCtx.artifactRegistry
+            ? { artifactRegistry: toolCtx.artifactRegistry }
+            : {}),
         },
         call.tool,
         call.args,
@@ -475,6 +482,10 @@ export function finalizeToolExecution(
     readonly thinking?: string;
     readonly taskState?: TaskStateManager;
     readonly saveStateFn: () => void;
+    /** 会话级工具输出去重器（P1 入口闸） */
+    readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
+    /** P3 冷库：截断的全文按内容哈希归档，注入 [archived id] 引用桩 */
+    readonly artifactRegistry?: ArtifactRegistry;
   },
 ): {
   readonly type: "continue" | "completed";
@@ -511,13 +522,44 @@ export function finalizeToolExecution(
   ctx.ctxMgr.addAssistant(ctx.text, ctx.thinking);
 
   // 步骤 3：将工具执行结果作为 user 消息加入（模型在下一轮看到这些）
+  // v3 P1 入口闸：注入前做「内容哈希去重 + 分档截断」，
+  // 单条结果在进入上下文前就被控制到预算内（TokenPilot ingestion gate）
+  // v3 P3 冷库：截断的全文按内容哈希归档（ARC 存储与呈现分离），
+  // 上下文中只留头尾预览 + [archived id=N] 引用桩，可经 context.recall 取回。
+  const archive = ctx.artifactRegistry;
   ctx.ctxMgr.addToolResults(
-    results.map((tr, i) => ({
-      tool: calls[i]!.tool,
-      ok: tr.ok,
-      summary: tr.summary,
-      payload: tr.payload,
-    })),
+    results.map((tr, i) => {
+      const tool = calls[i]!.tool;
+      const callerText = ctx.text;
+      let payload: unknown = tr.payload;
+      // 去重：同一内容重复出现 → 预览引用（重复读文件/重复跑命令的浪费源）
+      const dup = ctx.payloadDeduper?.check(payload);
+      if (dup) {
+        const archived = archive?.getByHash(dup.hash);
+        payload = archived
+          ? `[repeat of #${dup.hash}, same content as turn ${dup.turn}] ${archive!.toStub(archived.id)}`
+          : `[repeat of #${dup.hash}, same content as turn ${dup.turn}]`;
+      } else {
+        ctx.payloadDeduper?.record(payload, ctx.turn);
+      }
+      // 分档截断（read 类不截断；run_shell 等头尾保留 + 错误行智能保留）
+      const outcome = truncatePayloadWithOutcome(payload, tool);
+      payload = outcome.payload;
+      // 截断发生 → 全文归档 + 引用桩（可寻址恢复的前提）
+      if (outcome.truncated && outcome.fullText && archive) {
+        const id = archive.store(outcome.fullText, {
+          tool,
+          ok: tr.ok,
+          turn: ctx.turn,
+          callerText,
+        });
+        if (id) {
+          const stub = archive.toStub(id);
+          payload = `${String(payload)}\n${stub}`;
+        }
+      }
+      return { tool, ok: tr.ok, summary: tr.summary, payload };
+    }),
   );
 
   // 步骤 4：处理工具产生的新消息

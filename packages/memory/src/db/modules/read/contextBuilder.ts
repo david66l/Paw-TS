@@ -10,6 +10,7 @@
 import type { WorkingMemory, ContextPlacement } from "../../types.js";
 import type { RetrievalResult } from "./memoryRetriever.js";
 import { PolicyEngine, type ContextPolicy } from "../platform/policyEngine.js";
+import { TiktokenEstimator, type TokenEstimator } from "@paw/core";
 
 export interface ContextItem {
   id: string;
@@ -36,21 +37,15 @@ export interface ContextBuildResult {
   warnings: string[];
 }
 
-/**
- * 估算 token 数：简化为 1 token ≈ 4 字符（英文）或 1.5 字符（中文）
- * ponytail: tiktoken 精确但依赖模型，这里用字符比例足够 MVP
- */
-function estimateTokens(text: string): number {
-  const asciiCount = (text.match(/[\x00-\x7F]/g) ?? []).length;
-  const nonAsciiCount = text.length - asciiCount;
-  return Math.ceil(asciiCount / 4 + nonAsciiCount / 1.5);
-}
-
 export class ContextBuilder {
   private policy: ContextPolicy;
+  private readonly estimator: TokenEstimator;
 
-  constructor(policyEngine?: PolicyEngine) {
+  constructor(policyEngine?: PolicyEngine, estimator?: TokenEstimator) {
     this.policy = policyEngine?.getDefaults().context ?? new PolicyEngine().getDefaults().context;
+    // AC-P1-9 口径统一：预算决策与 memory-runtime 上报共用同一估算器
+    // （原 ascii/4 + nonAscii/1.5 启发式已移除，注入主路径估算器）
+    this.estimator = estimator ?? new TiktokenEstimator();
   }
 
   build(input: ContextBuildInput): ContextBuildResult {
@@ -65,7 +60,7 @@ export class ContextBuilder {
     if (input.workingMemory.goal) {
       const content = `[CURRENT GOAL]\n${input.workingMemory.goal}`;
       items.push(this.makeItem("working_memory", "goal", "hot", content, ++order, { authority: 1.0, relevance: 1.0, freshness: 1.0, confidence: 1.0 }));
-      hotTokens += estimateTokens(content);
+      hotTokens += this.estimate(content);
     }
 
     // Plan (top 5 steps)
@@ -74,7 +69,7 @@ export class ContextBuilder {
       const planLines = activeSteps.slice(0, 5).map((s) => `- [${s.status}] ${s.description}`);
       const content = `[CURRENT PLAN]\n${planLines.join("\n")}`;
       items.push(this.makeItem("working_memory", "plan", "hot", content, ++order, { authority: 0.9, relevance: 0.9, freshness: 0.9, confidence: 0.9 }));
-      hotTokens += estimateTokens(content);
+      hotTokens += this.estimate(content);
     }
 
     // Diff summary
@@ -82,7 +77,7 @@ export class ContextBuilder {
       const ds = input.workingMemory.diffSummary;
       const content = `[DIFF STATUS]\nFiles: ${ds.filesChanged}, +${ds.insertions} -${ds.deletions}`;
       items.push(this.makeItem("working_memory", "diff", "hot", content, ++order, { authority: 1.0, relevance: 0.9, freshness: 1.0, confidence: 1.0 }));
-      hotTokens += estimateTokens(content);
+      hotTokens += this.estimate(content);
     }
 
     // Failed tests
@@ -90,14 +85,14 @@ export class ContextBuilder {
     if (failedTests && failedTests.length > 0) {
       const content = `[FAILED TESTS]\n${failedTests.map((f) => `- ${f.testName}: ${f.message}`).join("\n")}`;
       items.push(this.makeItem("working_memory", "test_failures", "hot", content, ++order, { authority: 1.0, relevance: 1.0, freshness: 1.0, confidence: 1.0 }));
-      hotTokens += estimateTokens(content);
+      hotTokens += this.estimate(content);
     }
 
     // Next action
     if (input.workingMemory.nextAction) {
       const content = `[NEXT ACTION]\n${input.workingMemory.nextAction.description}`;
       items.push(this.makeItem("working_memory", "next_action", "hot", content, ++order, { authority: 0.8, relevance: 0.9, freshness: 1.0, confidence: 0.8 }));
-      hotTokens += estimateTokens(content);
+      hotTokens += this.estimate(content);
     }
 
     // ═══ Warm: 检索到的长期记忆摘要 ═══
@@ -120,7 +115,7 @@ export class ContextBuilder {
     }
 
     // ═══ Token Budget 控制 ═══
-    const userTokens = estimateTokens(input.currentUserRequest);
+    const userTokens = this.estimate(input.currentUserRequest);
     const systemReserve = this.policy.tokenBudget.reservedForSystem;
     const available = input.tokenBudget - userTokens - systemReserve;
     const hotBudget = Math.floor(available * 0.5);
@@ -163,7 +158,7 @@ export class ContextBuilder {
       renderedPrompt,
       tokenUsage: {
         totalBudget: input.tokenBudget,
-        estimatedUsed: estimateTokens(renderedPrompt) + userTokens,
+        estimatedUsed: this.estimate(renderedPrompt) + userTokens,
         byPlacement,
       },
       warnings,
@@ -171,6 +166,11 @@ export class ContextBuilder {
   }
 
   // ── Private ──
+
+  /** 统一估算口径：与主路径共享同一 TokenEstimator（tiktoken） */
+  private estimate(text: string): number {
+    return this.estimator.count(text);
+  }
 
   private makeItem(
     sourceKind: string, sourceId: string, placement: ContextPlacement,
@@ -183,7 +183,7 @@ export class ContextBuilder {
       sourceId,
       placement,
       renderedContent,
-      estimatedTokens: estimateTokens(renderedContent),
+      estimatedTokens: this.estimate(renderedContent),
       order,
       scores: { ...scores, total: (scores.authority + scores.relevance + scores.freshness + scores.confidence) / 4 },
     };

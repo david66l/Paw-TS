@@ -14,6 +14,8 @@
 
 import type { ChatMessage } from "./manager.js";
 import { estimateTokens } from "../token-estimate.js";
+import type { TokenEstimator } from "../token-estimator.js";
+import { ArtifactRegistry } from "./archive.js";
 import {
   isToolResultMessage,
   parseToolResult,
@@ -46,6 +48,10 @@ export interface PruneConfig {
   readonly maxToolOutputBytes?: number;
   /** 在阶段 B 中永不持久化或驱逐的工具。 */
   readonly protectedTools?: readonly string[];
+  /** P3 冷库：引用桩目录有界化（超出上限的最旧非 Cited 桩移出上下文） */
+  readonly artifactRegistry?: ArtifactRegistry;
+  /** P1.4 估算统一：释放量 token 估算器（默认 chars/4 外观层） */
+  readonly estimator?: TokenEstimator;
 }
 
 export interface PruneResult {
@@ -103,6 +109,8 @@ function processMessageToolBlocks(
     readonly protectedTools: ReadonlySet<string>;
     readonly shouldEvict: (tool: string, globalIndex: number) => boolean;
     readonly toolCounter: { n: number };
+    /** P1.4：释放量估算器（默认 chars/4 外观层） */
+    readonly estimator: TokenEstimator;
   },
 ): { content: string; changed: boolean; freed: number } {
   const blocks = splitToolBlocks(content);
@@ -149,7 +157,10 @@ function processMessageToolBlocks(
     // 持久化：写入磁盘，上下文中保留预览
     const id = `${msgIndex}-${blockIdx}-${parsed.tool}`;
     const persisted = persistBlock(opts.toolResultsDir, id, parsed);
-    freed += Math.max(0, estimateTokens(block) - estimateTokens(persisted));
+    freed += Math.max(
+      0,
+      opts.estimator.count(block) - opts.estimator.count(persisted),
+    );
     changed = true;
     nextBlocks.push(persisted);
   }
@@ -224,6 +235,11 @@ export function pruneToolResults(
   const protectedTools = new Set(
     config?.protectedTools ?? DEFAULT_PROTECTED_TOOLS,
   );
+  // P1.4 估算统一：释放量按调用方注入的估算器（默认 chars/4 外观层兼容旧行为）
+  const estimator = config?.estimator ?? {
+    count: (text: string) => estimateTokens(text),
+    countMessages: () => 0,
+  };
 
   const slots = collectToolSlots(messages, protectedTools);
   const keepGlobalIndices = buildKeepSet(slots, keepRecentTools);
@@ -231,7 +247,7 @@ export function pruneToolResults(
   let pruned = false;
   let freedTokens = 0;
   const toolCounter = { n: 0 };
-  const out: ChatMessage[] = [];
+  let out: ChatMessage[] = [];
 
   for (let msgIndex = 0; msgIndex < messages.length; msgIndex++) {
     const msg = messages[msgIndex]!;
@@ -250,6 +266,7 @@ export function pruneToolResults(
         shouldEvict: (_tool, globalIndex) =>
           !keepGlobalIndices.has(globalIndex),
         toolCounter,
+        estimator,
       },
     );
 
@@ -259,6 +276,16 @@ export function pruneToolResults(
       out.push({ ...msg, content });
     } else {
       out.push(msg);
+    }
+  }
+
+  // P3.5 目录有界化：引用桩数量超上限 → 最旧非 Cited 桩移出上下文
+  // （Cited 桩地址永久有效，任务生命周期内不可驱逐）
+  if (config?.artifactRegistry) {
+    const trimmed = config.artifactRegistry.trimStubsInMessages(out);
+    if (trimmed.removed > 0) {
+      pruned = true;
+      out = [...trimmed.messages] as ChatMessage[];
     }
   }
 

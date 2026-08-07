@@ -27,6 +27,9 @@ import {
   WorkingMemoryManager,
   executionRecorder,
 } from "../db/modules/index.js";
+// P1.4 估算统一：主路径同一估算器（cl100k，与上下文预算同源）；
+// 替换旧的 ascii/4 + nonAscii/1.5 启发式（日志 02 四套口径残留之一）
+import { TiktokenEstimator } from "@paw/core";
 import type {
   FileActivity,
   MemoryCandidate,
@@ -91,10 +94,11 @@ function toListItem(item: {
   };
 }
 
+/** P1.4 共享估算器实例（tiktoken WASM 按 encoding 全局单例，无重复加载） */
+const sharedMemoryEstimator = new TiktokenEstimator();
+
 function estimateTokens(text: string): number {
-  const ascii = (text.match(/[\x00-\x7F]/g) ?? []).length;
-  const nonAscii = text.length - ascii;
-  return Math.ceil(ascii / 4 + nonAscii / 1.5);
+  return sharedMemoryEstimator.count(text);
 }
 
 export class MemoryRuntimeImpl implements MemoryRuntime {
@@ -106,7 +110,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
   private readonly governance = new MemoryGovernance();
   private readonly executor = new GovernanceExecutor();
   private readonly retriever = new MemoryRetriever();
-  private readonly ctxBuilder = new ContextBuilder();
+  private readonly ctxBuilder = new ContextBuilder(undefined, sharedMemoryEstimator);
   private readonly toolProcessor = new ToolResultProcessor();
   private readonly candidateEnricher?: MemoryRuntimeOptions["candidateEnricher"];
 

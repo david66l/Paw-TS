@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  diagnoseParseFailure,
   parseAgentActionFromModelText,
   parseAgentActionsFromModelText,
+  toolCallDedupKey,
 } from "../src/parse-agent-action.js";
 
 describe("parseAgentActionFromModelText", () => {
@@ -308,5 +310,106 @@ Now let me actually call the real tool.
     const text = '{"tool":"any.random.tool","args":{}}';
     const { actions } = parseAgentActionsFromModelText(text);
     expect(actions.length).toBe(1);
+  });
+});
+
+describe("diagnoseParseFailure", () => {
+  const knownTools = new Set(["workspace.read_file", "workspace.list_dir"]);
+
+  test("returns ok for pure conversation text", () => {
+    expect(diagnoseParseFailure("Just saying hi, no tools needed.")).toEqual({
+      kind: "ok",
+    });
+  });
+
+  test("returns malformed for broken tool JSON", () => {
+    const d = diagnoseParseFailure(
+      'Let me read.\n{"tool":"workspace.read_file","args":{"path": "a.txt"',
+      { knownTools },
+    );
+    expect(d.kind).toBe("malformed");
+    if (d.kind === "malformed") {
+      expect(d.reason).toContain("invalid JSON");
+    }
+  });
+
+  test("returns malformed for non-JSON tool trace", () => {
+    const d = diagnoseParseFailure(
+      '{"tool": workspace.read_file, "args": {path: "a.txt"}}',
+      { knownTools },
+    );
+    expect(d.kind).toBe("malformed");
+  });
+
+  test("returns invalid for unknown tool name", () => {
+    const d = diagnoseParseFailure(
+      '{"tool":"workspace.unknown_tool","args":{"x":1}}',
+      { knownTools },
+    );
+    expect(d.kind).toBe("invalid");
+    if (d.kind === "invalid") {
+      expect(d.reason).toContain("unknown tool");
+      expect(d.reason).toContain("workspace.read_file");
+    }
+  });
+
+  test("returns invalid for final_answer missing summary", () => {
+    const d = diagnoseParseFailure('{"action":"final_answer"}', {
+      knownTools,
+    });
+    expect(d.kind).toBe("invalid");
+    if (d.kind === "invalid") {
+      expect(d.reason).toContain("summary");
+    }
+  });
+
+  test("returns invalid for ask_user missing question", () => {
+    const d = diagnoseParseFailure('{"action":"ask_user"}', { knownTools });
+    expect(d.kind).toBe("invalid");
+    if (d.kind === "invalid") {
+      expect(d.reason).toContain("question");
+    }
+  });
+
+  test("returns ok when a valid action exists elsewhere", () => {
+    const d = diagnoseParseFailure(
+      '{"tool":"workspace.read_file","args":{"path":"a.txt"}}',
+      { knownTools },
+    );
+    expect(d.kind).toBe("ok");
+  });
+
+  test("does not treat code-block JSON as a tool trace without known key", () => {
+    const d = diagnoseParseFailure(
+      'Here is the payload:\n{"count": 3, "items": []}',
+      { knownTools },
+    );
+    expect(d.kind).toBe("ok");
+  });
+});
+
+describe("toolCallDedupKey", () => {
+  test("is stable regardless of argument key order", () => {
+    const a = toolCallDedupKey("workspace.read_file", {
+      path: "x",
+      offset: 10,
+    });
+    const b = toolCallDedupKey("workspace.read_file", {
+      offset: 10,
+      path: "x",
+    });
+    expect(a).toBe(b);
+  });
+
+  test("distinguishes different arguments", () => {
+    const a = toolCallDedupKey("workspace.read_file", { path: "x" });
+    const b = toolCallDedupKey("workspace.read_file", { path: "y" });
+    expect(a).not.toBe(b);
+  });
+
+  test("is stable for nested objects and arrays", () => {
+    const a = toolCallDedupKey("t", { list: [1, 2], inner: { b: 1, a: 2 } });
+    const b = toolCallDedupKey("t", { inner: { a: 2, b: 1 }, list: [1, 2] });
+    expect(a).toBe(b);
   });
 });

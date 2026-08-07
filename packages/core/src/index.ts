@@ -155,8 +155,16 @@ export {
 } from "./token-estimate.js";
 export {
   ApproximateEstimator,
+  FastEstimator,
+  TiktokenEstimator,
+  prewarmEncoding,
   type TokenEstimator,
 } from "./token-estimator.js";
+export {
+  CalibratedEstimator,
+  CONSERVATIVE_BIAS,
+  resolveEstimatorForModel,
+} from "./tokenizer-registry.js";
 
 // ============================================================
 // 上下文裁剪
@@ -166,6 +174,7 @@ export {
   type PruneConfig,
   type PruneResult,
 } from "./context/pruner.js";
+export { isProtectedUserConstraint } from "./context/policy.js";
 
 // ============================================================
 // 工具结果格式与存储
@@ -191,6 +200,7 @@ export {
   DEFAULT_COMPACTOR_CONFIG,
   stripContextSummaryMessages,
   isContextSummaryMessage,
+  type CompactionFailureReason,
   type CompactorConfig,
   type CompactBoundaries,
   type CompactCheck,
@@ -201,8 +211,13 @@ export {
 // ============================================================
 export {
   allocateContextBudget,
+  COMPACT_THRESHOLD_RATIO,
+  COST_PRICING,
   DEFAULT_BUDGET_RATIOS,
   LARGE_WINDOW_BUDGET_RATIOS,
+  computeCompactThreshold,
+  costAdjustedCompactThreshold,
+  estimateContextCost,
   measureContextBudget,
   resolveBudgetRatios,
   shouldCompactHistory,
@@ -211,6 +226,7 @@ export {
   type ContextBudgetAllocation,
   type ContextBudgetRatios,
   type ContextBudgetSnapshot,
+  type ContextCostEstimate,
 } from "./context/budget.js";
 
 // ============================================================
@@ -218,11 +234,78 @@ export {
 // ============================================================
 export {
   compressionSavingsRatio,
+  MAX_COMPRESSION_SAVINGS_RATIO,
   meetsCompressionSavingsThreshold,
   MIN_COMPRESSION_SAVINGS_RATIO,
   REQUIRED_SUMMARY_SECTIONS,
   validateCompressionSummary,
 } from "./context/summary.js";
+
+// ============================================================
+// P3 冷库：可寻址归档（ARC）
+// ============================================================
+export {
+  ArtifactRegistry,
+  ARCHIVE_STUB_PATTERN,
+  ARCHIVE_BARE_STUB_PATTERN,
+  parseArchiveStub,
+  parseBareArchiveStub,
+  DEFAULT_ARCHIVE_OPTIONS,
+  type ArchiveEntry,
+  type ArchiveMeta,
+  type ArchiveSearchResult,
+  type ArtifactRegistryOptions,
+  type RecallOutcome,
+  type RecallWindow,
+} from "./context/archive.js";
+
+// ============================================================
+// P4.2 生命周期驱逐（上下文段状态机 + 残差效用门控）
+// ============================================================
+export {
+  computeSegments,
+  extractRecentToolCallPaths,
+  type SegmentInfo,
+  type SegmentState,
+} from "./context/policy.js";
+
+// ============================================================
+// P4.4 压缩版本化（每次压缩 = commit 快照）
+// ============================================================
+export {
+  compactionCommitsDir,
+  listCompactionCommits,
+  loadCompactionSnapshot,
+  loadLatestCompactionSnapshot,
+  saveCompactionCommit,
+  type CompactionCommit,
+} from "./context/versioning.js";
+
+// ============================================================
+// P5.1 侧信道触发（压缩主动化调度 + 规则引擎）
+// ============================================================
+export {
+  ContextMonitor,
+  DEFAULT_MONITOR_OPTIONS,
+  evaluateTrigger,
+  type ContextMonitorOptions,
+  type MonitorDecision,
+  type TriggerReason,
+} from "./context/monitor.js";
+
+// ============================================================
+// P2.7 行为闭环（压缩后重复获取检测）
+// ============================================================
+export {
+  detectDuplicateAccess,
+  type CompactionQualityResult,
+  type DuplicateAccess,
+} from "./context/compression-quality.js";
+
+// ============================================================
+// 轻量工具：内容哈希（P1 去重 / P3 归档去重键同源）
+// ============================================================
+export { simpleHash } from "./utils/hash.js";
 
 // ============================================================
 // Markdown 解析
