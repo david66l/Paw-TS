@@ -141,6 +141,14 @@ export interface LedgerEntry {
   utility: number;
 }
 
+/**
+ * utility 计数上限（红队修复：utility farming 防御）。
+ * 单条记忆的成功归因计数到此封顶——防止同 run 反复成功把 utility/freq 比率
+ * 刷过删除阈值（§7.2 的 utility/freq≤0.3 判据会被无限 utility 免疫）。
+ * freq 不封顶：freq 是注入次数，刷高只会更快越过 deleteMinFreq 加速删除评审，无增益。
+ */
+export const LEDGER_UTILITY_MAX = 50;
+
 export interface ReindexReport {
   /** 扫描到的活跃条目数 */
   scanned: number;
@@ -176,7 +184,7 @@ export interface MemoryStoreEngine {
   searchVector(query: string, k: number): Promise<ScoredId[]>;
   /** 读效用账本；条目不存在返回 null */
   ledger(id: string): Promise<LedgerEntry | null>;
-  /** 账本计数 +1 */
+  /** 账本计数 +1（utility 封顶 LEDGER_UTILITY_MAX；freq 不封顶） */
   bumpLedger(id: string, field: "freq" | "utility"): Promise<void>;
   /** 重建派生索引（embedding 等） */
   reindex(): Promise<ReindexReport>;

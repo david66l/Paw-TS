@@ -18,13 +18,14 @@ import {
   MEMORY_EMBEDDING_DIMENSIONS,
 } from "../../db/modules/platform/embeddingService.js";
 import { deriveEntryId } from "./id.js";
-import type {
-  LedgerEntry,
-  MemoryEntry,
-  MemoryFilter,
-  MemoryStoreEngine,
-  ReindexReport,
-  ScoredId,
+import {
+  LEDGER_UTILITY_MAX,
+  type LedgerEntry,
+  type MemoryEntry,
+  type MemoryFilter,
+  type MemoryStoreEngine,
+  type ReindexReport,
+  type ScoredId,
 } from "./engine.js";
 
 /** memory_embeddings.embedding 列为 vector(1536)（V008），embedding 服务统一使用该维度 */
@@ -308,7 +309,9 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     if (field === "freq") {
       await sql`UPDATE memory_items SET freq = freq + 1 WHERE id = ${id}`;
     } else {
-      await sql`UPDATE memory_items SET utility = utility + 1 WHERE id = ${id}`;
+      // utility 封顶（红队修复：utility farming 防御）——所有递增路径（含 settleRunOutcome/
+      // recordTaskSuccess 聚合结算与 bumpLedger 直调）都汇聚到这一个 SQL，统一 clamp
+      await sql`UPDATE memory_items SET utility = LEAST(utility + 1, ${LEDGER_UTILITY_MAX}) WHERE id = ${id}`;
     }
   }
 
