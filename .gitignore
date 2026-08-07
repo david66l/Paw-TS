@@ -14,10 +14,14 @@
 #   .paw/memory/         — 远期 file 后端的个人记忆库，永不进 git（默认项先行）
 #   .paw/shared-memory/  — `paw-ts memory export` 的显式导出目录，可提交（已过密钥扫描）
 .paw/memory/
-!.paw/shared-memory/
 
-# 嵌套 .paw（如 apps/tui/.paw/）同理为本地运行态，永不进 git
-**/.paw/
+# 嵌套 .paw（如 apps/tui/.paw/）同理为本地运行态，永不进 git。
+# 用 `**/.paw/*`（忽略内容而非目录本身），下方例外才能重新包含。
+**/.paw/*
+
+# shared-memory 例外放行（必须在所有忽略规则之后才能生效）
+!.paw/shared-memory/
+!**/.paw/shared-memory/
 
 # Optional dev env at monorepo subfolder
 .env
