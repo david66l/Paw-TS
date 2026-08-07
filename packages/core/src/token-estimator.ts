@@ -67,26 +67,54 @@ export interface TokenEstimator {
  *
  * tiktoken 的 get_encoding("cl100k_base") 会加载 WASM 模块（~5MB），
  * 多次调用会造成严重的内存浪费。用单例模式保证整个进程只有一个实例。
+ *
+ * e2e 实测修复：o200k_base 的 merges 表大，首次 get_encoding 加载 ~20s——
+ * 构造时不加载（懒加载），并提供 prewarm 供启动阶段后台预热。
  */
-// 全局共享 encoding，避免每个实例重复加载 WASM（~5MB 内存）
-let sharedEncoding: ReturnType<typeof get_encoding> | null = null;
-function getSharedEncoding(): ReturnType<typeof get_encoding> {
-  if (!sharedEncoding) {
-    sharedEncoding = get_encoding("cl100k_base");
+// 全局共享 encoding，避免每个实例重复加载 WASM（~5MB）；按 encoding 名缓存
+const sharedEncodings = new Map<string, ReturnType<typeof get_encoding>>();
+function getSharedEncoding(
+  name: "cl100k_base" | "o200k_base" = "cl100k_base",
+): ReturnType<typeof get_encoding> {
+  let enc = sharedEncodings.get(name);
+  if (!enc) {
+    enc = get_encoding(name);
+    sharedEncodings.set(name, enc);
   }
-  return sharedEncoding;
+  return enc;
+}
+
+/** 后台预热指定 encoding（fire-and-forget，避免首次调用卡 ~20s） */
+export function prewarmEncoding(
+  name: "cl100k_base" | "o200k_base",
+): void {
+  if (sharedEncodings.has(name)) return;
+  // 后台触发加载；加载期间的同步调用会等待同一过程完成
+  void Promise.resolve().then(() => {
+    getSharedEncoding(name);
+  });
 }
 
 /**
- * 基于 tiktoken (Rust WASM) cl100k_base 的精确估算器
+ * 基于 tiktoken (Rust WASM) 的精确估算器。
  *
- * 对 OpenAI 模型提供最接近真实值的 token 计数。
- * 对大文本做了分块处理以避免 WASM 的超线性性能退化。
+ * 默认 cl100k_base（OpenAI/DeepSeek 事实标准）；
+ * P1.4 注册表：Qwen/GLM 等用 o200k_base（tokenizer 更接近）。
+ * 懒加载：构造不加载 WASM（首次 count 才加载），配合 prewarmEncoding。
  */
-/** 基于 tiktoken (Rust WASM) cl100k_base 的估算器。 */
 export class TiktokenEstimator implements TokenEstimator {
-  // 使用全局共享的 encoding 实例，避免重复加载 WASM
-  private enc = getSharedEncoding();
+  // 懒加载：首次 count 时初始化（避免构造即触发 ~20s 的 o200k 加载）
+  private enc: ReturnType<typeof get_encoding> | null = null;
+  private readonly encodingName: "cl100k_base" | "o200k_base";
+
+  constructor(encodingName: "cl100k_base" | "o200k_base" = "cl100k_base") {
+    this.encodingName = encodingName;
+  }
+
+  private ensure(): ReturnType<typeof get_encoding> {
+    this.enc ??= getSharedEncoding(this.encodingName);
+    return this.enc;
+  }
 
   count(text: string): number {
     /**
@@ -95,15 +123,16 @@ export class TiktokenEstimator implements TokenEstimator {
      * 可能导致测试超时。按 4096 字符分块编码，误差 < 1%。
      * 8192 字节以下直接编码，避免不必要的切片开销。
      */
+    const enc = this.ensure();
     // tiktoken WASM has super-linear slowdown on large strings (>50K).
     // Chunking keeps it well under test timeouts while keeping error < 1%.
     if (text.length <= 8192) {
-      return this.enc.encode(text).length;
+      return enc.encode(text).length;
     }
     let total = 0;
     const chunkSize = 4096;
     for (let i = 0; i < text.length; i += chunkSize) {
-      total += this.enc.encode(text.slice(i, i + chunkSize)).length;
+      total += enc.encode(text.slice(i, i + chunkSize)).length;
     }
     return total;
   }

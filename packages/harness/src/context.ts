@@ -19,10 +19,20 @@
  */
 
 import type { SkillRegistry, TodoStore } from "@paw/core";
+import type { ArtifactRegistry as CoreArtifactRegistry } from "@paw/core";
 import type { WorkspaceWatcher } from "@paw/workspace";
 
 import type { McpClientManager } from "./mcp-client.js";
 import type { ShellSandboxConfig } from "./sandbox/index.js";
+
+/**
+ * P3 冷库：可寻址归档注册表的最小接口（context.recall 工具依赖）。
+ * 由 @paw/agent 注入真实 ArtifactRegistry（类型 Pick 保证鸭子类型解耦）。
+ */
+export type ArtifactRegistryLike = Pick<
+  CoreArtifactRegistry,
+  "tryRecall" | "toStub" | "markCited" | "search" | "get"
+>;
 
 export interface SubAgentArtifact {
   readonly type: "file" | "code" | "test_result" | "search_result";
@@ -195,4 +205,6 @@ export interface HarnessContext {
   };
   /** 当前 TaskSession id（与 memoryRuntime 配套） */
   readonly memoryTaskId?: string;
+  /** P3 冷库：可寻址归档注册表（context.recall 工具的执行后端） */
+  readonly artifactRegistry?: ArtifactRegistryLike;
 }

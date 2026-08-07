@@ -23,7 +23,12 @@ describe("TaskStateManager", () => {
     );
 
     const snapshot = state.snapshot();
-    expect(snapshot.constraints).toContain("must keep changes minimal");
+    expect(
+      snapshot.constraints.some((c) => c.text === "must keep changes minimal"),
+    ).toBe(true);
+    expect(state.activeConstraints()[0]?.text).toBe(
+      "must keep changes minimal",
+    );
     expect(snapshot.filesRead).toContain("src/a.ts");
     expect(snapshot.filesChanged).toContain("src/a.ts");
     expect(snapshot.commandsRun).toHaveLength(2);

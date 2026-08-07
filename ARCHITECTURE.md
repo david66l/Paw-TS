@@ -35,7 +35,7 @@ User goal
 |-------|--------|------|------|
 | L1 Prune | `context/pruner.ts` | No | Cap/compact old tool outputs |
 | L2 Compact | `context/compactor.ts` + `compression-agent.ts` | Yes | Summarize middle history |
-| L3 Protect | `context/manager.ts` | No | System prompt, recent turns, memory |
+| L3 Protect | `context/policy.ts` · `context/compactor.ts` · `agent/orchestrator.ts` · `system-prompt/trim.ts` | No | Priority + lifecycle eviction; head/tail/pinned bounds; constraint re-injection; system-prompt trim ladder |
 
 ## Memory
 

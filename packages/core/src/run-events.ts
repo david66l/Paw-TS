@@ -277,6 +277,28 @@ export type RunEvent =
       readonly type: "compression.skipped";
       /** 跳过的原因（如 "below_threshold"、"anti_thrashing"） */
       readonly reason: string;
+      /** 压缩前 token（诊断用） */
+      readonly beforeTokens?: number;
+      /** 压缩后估算 token（诊断用） */
+      readonly afterTokens?: number;
+    }
+  /** P5.1 侧信道触发：monitor 判定该压缩（子任务完成/低密度/关键问题） */
+  /** Side-channel monitor decided compaction is due. */
+  | {
+      readonly type: "compression.monitor.trigger";
+      /** 触发原因：subtask_end / low_density / critical_issue / budget_critical */
+      readonly reason: string;
+      /** 是否强制压缩（跳过预算阈值检查） */
+      readonly force: boolean;
+    }
+  /** P2.7 行为闭环：压缩后模型重复获取已保留的信息（摘要质量低信号） */
+  /** Post-compaction duplicate access detected (low summary quality signal). */
+  | {
+      readonly type: "compression.quality.low";
+      /** 重复获取的项（file:/cmd: 前缀） */
+      readonly repeated: readonly string[];
+      /** 相关压缩发生的轮次 */
+      readonly compactTurn: number;
     }
   /**
    * 上下文预算快照（按池划分：system / tools / history）
@@ -316,6 +338,59 @@ export type RunEvent =
       readonly sections: readonly string[];
       /** 裁剪释放的 token 总数 */
       readonly freedTokens: number;
+    }
+  /** P4.3 逐块账本：上下文按块粒度的用量/状态快照（VISTA dashboard） */
+  /** Per-block context ledger (VISTA-style dashboard). */
+  | {
+      readonly type: "context.blocks";
+      /** 各块的账本行：id / 类型 / token / 轮龄 / 状态 */
+      readonly blocks: readonly {
+        readonly id: string;
+        readonly type:
+          | "system"
+          | "summary"
+          | "pinned"
+          | "tool"
+          | "conversation"
+          | "recall";
+        readonly tokens: number;
+        readonly ageTurns: number;
+        readonly status: "pinned" | "visible" | "archived";
+      }[];
+    }
+  /** P4.4 压缩版本化：一次压缩 = 一次 commit（快照已落盘） */
+  /** Compaction committed with a restorable snapshot. */
+  | {
+      readonly type: "compression.commit";
+      /** 压缩提交序号（1-based） */
+      readonly commit: number;
+      /** 快照文件路径 */
+      readonly snapshotPath: string;
+      /** 压缩前 token 数 */
+      readonly beforeTokens: number;
+      /** 压缩后 token 数 */
+      readonly afterTokens: number;
+    }
+  /** P4.3 硬守卫：上下文预算已满，拒绝继续注入并提示模型 */
+  /** Hard guard: history budget exhausted, further injection refused. */
+  | {
+      readonly type: "context.guard";
+      /** 当前历史 token 用量 */
+      readonly historyUsed: number;
+      /** 历史池预算 */
+      readonly historyBudget: number;
+      readonly reason: "budget_exhausted";
+    }
+  /** 约束生命周期：LLM 调和后约束集合变化（覆盖/撤销/过期/新增） */
+  /** Constraint lifecycle: reconciled by LLM (superseded/revoked/expired/added). */
+  | {
+      readonly type: "task.constraints.updated";
+      /** 当前有效（active）约束 */
+      readonly active: readonly string[];
+      /** 被覆盖/撤销/过期的约束 */
+      readonly superseded: readonly string[];
+      /** 调和是否成功（false = 降级路径，保守保留全部） */
+      readonly ok: boolean;
     }
   /** 记忆提取代理保存了新的记忆条目 */
   /** Memory extraction agent saved new entries. */
@@ -406,6 +481,54 @@ export type RunEvent =
       readonly recordCount: number;
       /** 注入文本的估算 token 数 */
       readonly tokens: number;
+    }
+  /**
+   * 记忆检索触发（spec v2 §9.5，M6 检索管线接线发射点）
+   *
+   * 事件触发式检索的起点：任务开始/命令失败/压缩后/显式查询。
+   */
+  /** Memory retrieval trigger fired (spec v2 §9.5). */
+  | {
+      readonly type: "memory.trigger";
+      /** 触发点：task_start / action_failed / post_compact / explicit_query */
+      readonly triggerType: string;
+      /** 查询摘要（截断，非全文） */
+      readonly querySummary: string;
+    }
+  /** 记忆注入完成（spec v2 §9.5；TUI 实时展示"本次注入了哪条记忆"） */
+  | {
+      readonly type: "memory.inject";
+      /** 注入的条目 id 列表 */
+      readonly itemIds: readonly string[];
+      /** 注入总 token 数（预算 ≤500） */
+      readonly totalTokens: number;
+      /** 是否降级（embedding/精排不可用，召回直取） */
+      readonly degraded?: boolean;
+    }
+  /** 记忆写入事件入队（spec v2 §9.5；异步写管线，M4 接线） */
+  | {
+      readonly type: "memory.write.enqueued";
+      /** 写入事件类型：task_succeeded / task_failed / user_correction / session_finalize */
+      readonly eventType: string;
+      readonly runId?: string;
+    }
+  /** 记忆写入被拒绝（spec v2 §9.5：密钥/schema/未验证门控，M4 接线） */
+  | {
+      readonly type: "memory.write.rejected";
+      readonly reason: "secret" | "schema" | "unverified";
+      readonly detail: string;
+    }
+  /** Governor 裁决完成（spec v2 §9.5，M5 接线） */
+  | {
+      readonly type: "memory.governed";
+      readonly op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP";
+      readonly entryId: string;
+    }
+  /** 生命周期清理（spec v2 §9.5：效用删除/容量清理，M7 接线） */
+  | {
+      readonly type: "memory.lifecycle.purge";
+      readonly entryIds: readonly string[];
+      readonly reason: string;
     }
   /** 模型输出被截断（finish_reason = "length" 或 "max_tokens"） */
   /** Model output was truncated (finish_reason = length/max_tokens). */

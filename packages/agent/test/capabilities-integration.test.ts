@@ -6,7 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { AgentOrchestrator } from "@paw/agent";
@@ -109,6 +109,36 @@ describe("Agent Workflow", () => {
     expect(ticks.length).toBe(4);
 
     cleanup(dir);
+  });
+
+  test("explicit workspaceRoot is trusted, not re-anchored to ancestor .paw", async () => {
+    // Regression: orchestrator used to run findPawRoot on an explicit
+    // workspaceRoot, silently redirecting writes to an ancestor that has .paw
+    // (e.g. home dir with global ~/.paw) while tools reported ok:true.
+    const parent = tmpDir("paw-cap-anchor-");
+    mkdirSync(path.join(parent, ".paw"), { recursive: true });
+    const child = path.join(parent, "child");
+    mkdirSync(child, { recursive: true });
+
+    const responses = [
+      '{"tool":"workspace.write_file","args":{"path":"out.txt","content":"hello"}}',
+      '{"action":"final_answer","summary":"Wrote out.txt."}',
+    ];
+
+    const o = new AgentOrchestrator({ model: cycleModel(responses) });
+    const r = await o.run({
+      runId: "cap-anchor1",
+      goal: "write out.txt",
+      workspaceRoot: child,
+      maxSteps: 5,
+    });
+
+    expect(r.status).toBe("completed");
+    // File must land in the explicitly given child dir, not the .paw ancestor
+    expect(readFileSync(path.join(child, "out.txt"), "utf8")).toBe("hello");
+    expect(existsSync(path.join(parent, "out.txt"))).toBe(false);
+
+    cleanup(parent);
   });
 
   test("parallel tool calls: read two files in one turn", async () => {
@@ -467,10 +497,11 @@ Migrate to OAuth2 with PKCE.
 // ═════════════════════════════════════════════════════════════
 
 describe("Context Compression", () => {
-  test("ContextCompactor: triggers at 70% threshold", () => {
+  test("ContextCompactor: triggers at 80% threshold (v3 P5.2)", () => {
     const compactor = new ContextCompactor();
     const contextWindow = 128_000;
-    const threshold = Math.floor(contextWindow * 0.7 - 10_000); // ~79,600
+    // v3 P5.2 单口径：0.8 × 0.68 × window − 10K（纯百分比，无绝对封顶）
+    const threshold = Math.floor(contextWindow * 0.68 * 0.8) - 10_000;
 
     // Just under threshold
     const smallMessages: ChatMessage[] = [
@@ -508,11 +539,13 @@ describe("Context Compression", () => {
     ];
 
     const boundaries = compactor.determineBoundaries(messages);
-    // Head protects first 2 messages
-    expect(boundaries.headEnd).toBe(1);
+    // v3 P2.1: Head protects first 3 messages (protectFirstN=3)
+    expect(boundaries.headEnd).toBe(2);
     // Tail should include some of the recent messages
     expect(boundaries.tailStart).toBeGreaterThan(boundaries.headEnd);
     expect(boundaries.tailStart).toBeLessThan(messages.length);
+    // v3 P2.2: pinned 区存在（内容驱动保护索引）
+    expect(boundaries.pinned).toBeDefined();
   });
 
   test("ContextCompactor: builds anchored summary prompt", () => {
@@ -539,36 +572,41 @@ describe("Context Compression", () => {
     expect(prompt2).toContain(
       "Update the summary with the new conversation below",
     );
-    expect(prompt2).toContain("Preserve information from the previous summary");
+    // v3 P2.4: chapter-level revision rule
+    expect(prompt2).toContain("REVISION RULE");
+    expect(prompt2).toContain("Keep all unaffected sections verbatim");
   });
 
-  test("ContextCompactor: anti-thrashing skips low-savings compaction", () => {
+  test("ContextCompactor: low-savings rejections back off without tripping breaker", () => {
     const compactor = new ContextCompactor();
 
-    // Simulate one compaction that saved only 5% (< 15% threshold)
-    compactor.recordResult(100_000, 95_000, true);
-    // Single low-savings run should NOT trigger thrashing skip (needs 2 consecutive)
-    expect(compactor.shouldSkipDueToThrashing()).toBe(false);
+    // 单次低收益拒绝：不退避、不熔断
+    compactor.recordLowSavings(100_000);
+    expect(compactor.shouldBackoffForLowSavings(100_000)).toBe(false);
+    expect(compactor.isDisabled).toBe(false);
 
-    // Second consecutive low-savings compaction
-    compactor.recordResult(100_000, 95_000, true);
-    expect(compactor.shouldSkipDueToThrashing()).toBe(true);
+    // 连续第二次低收益且历史未实质增长 → 退避（良性，仍不熔断）
+    compactor.recordLowSavings(105_000);
+    expect(compactor.shouldBackoffForLowSavings(110_000)).toBe(true);
+    expect(compactor.isDisabled).toBe(false);
 
-    // Another compactor with high savings — streak resets
-    const compactor2 = new ContextCompactor();
-    compactor2.recordResult(100_000, 80_000, true);
-    expect(compactor2.shouldSkipDueToThrashing()).toBe(false);
+    // 历史增长 ≥20% 后退避自动解除
+    expect(compactor.shouldBackoffForLowSavings(126_001)).toBe(false);
+
+    // 成功压缩后复位
+    compactor.recordSuccess();
+    expect(compactor.shouldBackoffForLowSavings(100_000)).toBe(false);
   });
 
   test("ContextCompactor: circuit breaker disables after 3 failures", () => {
     const compactor = new ContextCompactor();
     expect(compactor.isDisabled).toBe(false);
 
-    compactor.recordResult(100_000, 90_000, false);
+    compactor.recordFailure("error");
     expect(compactor.isDisabled).toBe(false);
-    compactor.recordResult(100_000, 90_000, false);
+    compactor.recordFailure("quality");
     expect(compactor.isDisabled).toBe(false);
-    compactor.recordResult(100_000, 90_000, false);
+    compactor.recordFailure("over_compression");
     expect(compactor.isDisabled).toBe(true);
 
     // Reset should clear
@@ -701,7 +739,7 @@ describe("Context Compression", () => {
       historyTokens,
     });
     expect(budgetSnapshot.compactThreshold).toBe(
-      Math.floor(budgetSnapshot.allocation.historyBudget * 0.7 - 10_000),
+      Math.floor(budgetSnapshot.allocation.historyBudget * 0.8) - 10_000,
     );
     expect(shouldCompactHistory(budgetSnapshot)).toBe(true);
 

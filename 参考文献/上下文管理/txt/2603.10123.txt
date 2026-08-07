@@ -1,0 +1,1751 @@
+Lost in the Middle at Birth: An Exact Theory of Transformer
+Position Bias
+Borun D Chowdhury
+
+arXiv:2603.10123v1 [cs.LG] 10 Mar 2026
+
+Meta, London, W1T 1FB, UK
+borundev@gmail.com
+
+Abstract
+The “Lost in the Middle” phenomenon—a U-shaped performance curve where LLMs retrieve
+well from the beginning and end of a context but fail in the middle—is widely attributed to
+learned Softmax artifacts or the distance-decay of positional encodings like RoPE. This paper
+makes a single, precise claim: the U-shape is already present at initialization, before any training
+or positional encoding takes effect. It is an inherent geometric property of the causal decoder
+with residual connections.
+We model multi-layer causal attention as iterated powers of the Cesàro matrix and derive the
+exact closed-form influence density in the continuous limit. Causal masking forces a logarithmic
+divergence of gradient influence at the start of the prompt (the Primacy Tail), while residual
+connections create an isolated O(1) anchor at the final token (the Recency Delta). Between
+these extremes lies a factorial dead zone of order O(1/(H−1)!), where H is the network depth,
+making middle-context retrieval and training structurally hostile. We validate empirically that
+untrained Qwen2 and GPT-2 architectures exhibit this U-shape at Step 0, and that it is identical
+with or without RoPE. Comparing initialized and pretrained networks, we show that standard
+training does not overcome the topological valley, confirming that the U-shape persists as an
+architectural baseline under standard pretraining objectives.
+We do not claim that this bias is insurmountable, nor that interventions such as RoPE
+modifications are useless. We establish what the baseline is and where it comes from, so that
+future efforts to overcome it can be precisely targeted.
+
+1
+
+Introduction
+
+As the context windows of Large Language Models (LLMs) have scaled from thousands to millions
+of tokens, a critical structural weakness has become apparent: models struggle to utilize information
+located in the middle of their input. This phenomenon manifests as a characteristic “U-shaped”
+accuracy curve, where retrieval and reasoning performance are high for tokens near the absolute
+beginning (primacy) and the absolute end (recency) of the prompt, but degrade severely in the
+middle [1, 2].
+While heavily studied empirically, the mechanistic cause of this phenomenon remains debated.
+Current literature frequently attributes the Primacy effect (“Attention Sinks”) to a learned strategy
+where models dump excess Softmax probability mass on the first token [3]. Simultaneously, the
+middle-context degradation and recency bias are frequently blamed on the distance-decay properties
+of relative positional encodings like RoPE, sparking massive engineering efforts to flatten this decay
+[4, 5].
+1
+
+Concurrently, Herasimchyk et al. [6] developed a residual-aware theory using cumulative attention rollout to predict a U-shaped position bias. While their work is the closest to ours (see
+Section 2), their analysis relies on residual mixing coefficients measured from fully pretrained networks. Consequently, their claim of an “architectural prior” remains partially circular: by utilizing
+parameters derived from training, they cannot definitively decouple the structural topology from
+emergent, learned dynamics.
+In this paper, we demonstrate the stronger, purely causal result: the U-shape exists at initialization, prior to any training whatsoever. We provide the first exact, closed-form mathematical proof
+that the U-shape is a fundamental topological constraint of the decoder-only architecture itself.
+By computing exact powers of the discrete Cesàro matrix and deriving a closed-form continuous
+density in the large-L limit, we obtain the exact equations governing gradient routing for random
+weights at Step 0, establishing the U-shape as a true geometric birthright rather than an artifact
+of trained parameters or positional encodings.
+We prove that causal masking algebraically guarantees a geometric Primacy bias, while residual
+connections guarantee a Recency bias. We empirically validate these equations by demonstrating
+that untrained, deep LLMs (such as a 24-layer Qwen2 architecture) exhibit a massive U-shaped
+gradient topology at Step 0, prior to any training, and that this topology is mathematically identical
+regardless of the presence or absence of RoPE.
+Crucially, our continuous derivations reveal the precise physical mechanism that starves the
+middle context. While the final token can teleport its gradient directly via pure residual connections,
+and early tokens benefit from immense combinatorial compounding, intermediate tokens are forced
+to rely on hybrid paths—trajectories that skip some layers via residuals but are subjected to the
+fractional dilution of the causal mixing matrices in others. This convolutional smearing creates a
+literal O(1/(H − 1)!) dead zone in the middle of the context window.
+We emphasize that this structural dead zone is an architectural prior, not an insurmountable
+mathematical limit. During training, the optimizer attempts to overcome this structural bias by
+learning data-dependent, non-linear attention weights to route around the topological baseline.
+However, by deriving the exact closed-form calculus of the underlying linear geometry, we reveal
+the immense geometric headwinds the optimizer faces. Because standard pretraining objectives lack
+aggressive, targeted penalties to bridge this combinatorially suppressed valley, the model largely
+defaults to the path of least resistance: relying heavily on the geometric extremes.
+Scope. We prove that the U-shape exists at initialization with random weights, arises from
+causal masking and residual connections rather than positional encodings, and persists under
+standard pretraining. We do not claim that it is insurmountable, that RoPE modifications are
+useless, or that the Jacobian norm directly measures retrieval accuracy. This paper derives the
+architectural baseline; evaluating interventions to overcome it is future work.
+
+2
+
+Literature Review: The U-Shaped Attention Phenomenon
+
+The empirical foundation for this work spans recent discoveries in LLM evaluation, attention analysis, and architectural inductive biases.
+Empirical Discovery of the U-Shape. Liu et al. (2023) [1] first formalized the “Lost in the
+Middle” phenomenon. By conducting multi-document QA tasks, they demonstrated that changing
+the absolute position of the relevant document within a long context drastically altered accuracy.
+2
+
+Performance reliably followed a U-shaped curve, with GPT-3.5 and Claude exhibiting severe middlecontext degradation. Subsequent studies confirmed this across various tasks, including legal analysis
+and code completion [2].
+Positional Attention Bias. Hsieh et al. (2024) [5] traced the performance drop directly to
+the attention matrices. In “Found in the Middle,” they demonstrated that LLMs exhibit an intrinsic U-shaped positional attention bias independent of content relevance. By calibrating the
+attention mechanism to subtract this purely positional component, they significantly improved
+middle-context utilization.
+Graph-Theoretic and Causal Bias. The massive accumulation of attention on early tokens
+was first empirically formalized by Xiao et al. (2023) [3] as “Attention Sinks,” demonstrating that
+early tokens inevitably absorb massive probability mass simply due to their position at the root of
+the autoregressive chain. Seeking a structural explanation for this phenomenon, Wu et al. (2025)
+[7] approached position bias from a graph-theoretic perspective. They proved that causal masking
+creates an asymmetric directed acyclic graph where early tokens lie on exponentially more computational paths than late tokens, driving a primacy bias that strengthens with depth. However, in
+their attention-only setting (no residual connections), their model predicts that cumulative attention collapses entirely onto the first token—predicting pure primacy rather than the empirically
+observed U-shape. This discrepancy was explicitly identified by the authors as an open problem. Both Herasimchyk et al. [6] and the present work independently resolve this contradiction
+by incorporating residual connections, which rescue the recency anchor and generate the complete
+topological U-shape.
+Positional Encodings (RoPE) and Decay. The role of Rotary Position Embeddings (RoPE)
+[4] in context degradation has been widely studied. RoPE naturally enforces a long-term decay,
+heavily weighting local (recent) tokens. Work on scaling context windows (e.g., Ms-PoE) explicitly
+attempts to alter this distance-decay penalty to flatten the attention distribution and combat the
+recency bias [4, 5].
+Residual-Aware Rollout. Herasimchyk et al. (2026) [6] developed a residual-aware theory of
+cumulative attention rollout, incorporating residual connections into cross-token information propagation. They prove that causal masking induces primacy while residual connections induce recency,
+and validate their predicted influence profiles against pretrained models, achieving Spearman correlations of 0.88–0.98. Their work is the most directly related to ours; the key distinction is that we
+derive a closed-form density at initialization with random weights, requiring no parameters from
+trained models.
+
+3
+
+The Exact Calculus of Position Bias
+
+To isolate the topological causes of the U-shape, we strip the transformer down to its routing
+components: causal attention and residual connections. Because position-wise feed-forward (MLP)
+networks apply identical feature transformations independently at each token position, their Jacobians are block-diagonal. They scale the magnitude of the signal but do not alter the macroscopic
+topology of the horizontal routing; thus, they are omitted from the topological model (see Appendix D for the full single-layer equation and a precise account of which terms are retained,
+following the linearisation approach of Elhage et al. [8]). We seek to compute the Jacobian matrix
+3
+
+of the final hidden state with respect to the input sequence, representing how much the input at
+position j influences the final token L.
+By demonstrating that the Score Pathway vanishes at initialization (see Appendix E), we can
+isolate the Value Pathway to calculate the network’s inherent structural topology. While a fully
+trained network will inevitably utilize the non-linear Score Pathway to attempt to route around
+this baseline, isolating the Value Pathway provides the exact mathematical shape of the geometric
+headwind the optimizer must continuously fight against.
+
+3.1
+
+The Discrete Causal Model (Cesàro Matrices)
+
+At initialization, before the network has learned to correlate queries and keys, the expected dot
+product qi · kj ≈ 0. When passed through a causal Softmax, this yields a uniform distribution over
+all past tokens. We denote this base discrete causal attention matrix as M , where Mi,j = 1/i for
+j ≤ i, and 0 otherwise.
+This matrix is known in mathematics as the Cesàro matrix. For a purely causal transformer
+without residuals, the gradient routed from the final token L to an earlier token j after H layers
+is given by the bottom row of the exponential Cesàro Matrix M H . Using combinatorial identities,
+the exact discrete influence of token j on token L after H causal layers is:
+
+ L
+
+  H
+L−1 X
+L−j
+1
+(−1)m−j
+j−1
+m−j
+m
+
+(M H )L,j =
+
+(1)
+
+m=j
+
+When we introduce residual connections with a mixing weight α ∈ [0, 1], the layer update
+becomes the discrete residual matrix N = (1 − α)I + αM . Expanding N H via the binomial
+theorem, the exact discrete influence equation becomes:
+
+(N H )L,j = (1 − α)H δL,j +
+
+
+
+
+
+X
+
+  r
+L
+H r
+L
+−
+1
+L
+−
+j
+1
+ (2)
+α (1 − α)H−r 
+(−1)m−j
+r
+j−1
+m−j
+m
+
+H
+X
+r=1
+
+m=j
+
+See Appendix A for detailed proofs of the claims above.
+
+3.2
+
+The Continuous Limit (Spherical-Cow Operator)
+
+To understand the macroscopic behavior of these exact discrete equations as sequence length L →
+∞, we map discrete positions j ∈ {1, . . . , L} to a continuous coordinate x = j/L ∈ (0, 1]. We track
+the Influence Density ρ(x), defined as the input-output Jacobian norm representing how much the
+input at position x influences the final hidden state at x = 1.
+The discrete Cesàro matrix M converges to the linear continuous causal integral operator M:
+Z y
+1
+h(x) dx
+(3)
+(Mh)(y) =
+y
+0
+And the discrete residual matrix N converges to the continuous residual operator N :
+(N h)(y) = (1 − α) h(y) + α(Mh)(y)
+
+(4)
+
+By recursively evaluating the continuous kernel, we can decompose the position bias into its
+isolated structural ingredients.
+
+4
+
+4
+
+The Two Architectural Ingredients of the U-Shape
+
+We now unpack our exact topological solution into two distinct architectural properties that force
+the U-shape into existence at initialization, debunking the need for positional encodings (RoPE)
+to explain the right arm.
+
+4.1
+
+Ingredient 1: Causal Masking (The Primacy Tail)
+
+If we temporarily disable residual connections (α = 1), the operator becomes pure causal averaging,
+(M)
+MH . For a single layer (H = 1), the continuous influence is exactly flat: ρ1 (x) = 1. There is no
+“lost in the middle.”
+However, for H ≥ 2, early tokens become causally upstream of an exponentially growing number
+of integration paths. By recursively evaluating the uniform causal integral (see Appendix C for full
+proofs), we find the closed-form macroscopic continuous density:
+(M)
+ρH (x)
+
+1
+=
+(H − 1)!
+
+
+
+1
+ln
+x
+
+H−1
+(5)
+
+As x → 0, this function diverges. This logarithmic asymptote mathematically proves the
+Primacy effect (and the true origin of “Attention Sinks,” proving they are forced by geometry before
+they are utilized by the optimizer). Depth alone, combined with causal masking, forces influence to
+concentrate geometrically at the start of the prompt. This effect is a structural certainty of causal
+compounding.
+
+4.2
+
+Ingredient 2: Residual Connections (The Recency Anchor)
+
+If we restore residual connections (α ∈ (0, 1)), we evaluate the influence of the full operator N H at
+x = 1 (see Appendix C for details) yielding:
+(N )
+ρH (x)
+
+
+
+H  
+X
+H
+1
+1 r−1
+H−r r
+= (1 − α) δ(1 − x) +
+(1 − α)
+α
+ln
+r
+(r − 1)!
+x
+H
+
+(6)
+
+r=1
+
+This establishes an isolated Dirac delta spike at exactly x = 1. The pure residual stream allows
+the final token to teleport its gradient directly to the output, establishing the necessary isolated
+anchor for the Recency effect without suffering the fractional dilution of passing through the causal
+mixing matrices.
+Crucially, in deep networks (large H), the exponential factor (r−1)! in the denominator severely
+squashes the magnitude of the continuous primacy tail relative to the O(1) residual highway of
+the final token. The characteristic U-shape emerges geometrically due to the interplay of these
+paths. Intermediate tokens lack the immense combinatorial compounding that rescues the earliest
+tokens. Instead, their primary signal arrives via hybrid paths—mathematically represented by the
+convolutions of the residual stream’s Dirac deltas with the continuous causal mixing kernels. While
+these convolved hybrid paths smear the teleportation power across the context window (lifting the
+middle-context floor and preventing the gradient from collapsing to true zero), they still suffer from
+the fractional dilution of the integrations they do undergo. Thus, exact retrieval from the middle
+context remains structurally hostile under standard pretraining objectives.
+The architectural extremes—the massive residual Recency Anchor on the right and the combinatorially compounded Primacy tail on the left—mathematically dwarf the diluted hybrid paths
+in the middle purely by virtue of the network’s topology.
+
+5
+
+We note that multi-head attention does not alter this result; at initialization it tightens the
+concentration around the theoretical prediction (Appendix E.5).
+
+4.3
+
+Why RoPE Is Irrelevant at Initialization
+
+Rotary Position Embeddings (RoPE) apply a position-dependent rotation R(θ, j) ∈ O(2) to the
+query and key vectors before computing the attention score:
+Sij =
+
+(Ri qi )⊤ (Rj kj )
+q ⊤ R(θ, i − j) kj
+√
+√
+= i
+.
+dk
+dk
+
+(7)
+
+At initialization, qi and kj are drawn independently from an isotropic Gaussian. Because the
+distribution of an isotropic Gaussian vector is invariant under orthogonal transformations, the
+rotated inner product qi⊤ R(θ, i−j) kj has the same distribution as qi⊤ kj for any relative position
+(i−j). Therefore RoPE cannot break the uniformity of the expected attention distribution at
+Step 0: the causal Softmax remains Aij ≈ 1/i regardless of whether RoPE is active.
+This is not an approximation—it is an exact consequence of rotational symmetry. The empirical
+confirmation (Spearman ρ = 0.99 between RoPE and No-RoPE configurations at initialization;
+Figure 1) validates that finite-dimensional deviations from perfect isotropy are negligible.
+For absolute positional encodings (as in GPT-2), the analogous result holds empirically: GPT-2
+Small and Medium exhibit the same U-shape at initialization (Appendix H), though the theoretical argument differs since absolute encodings break input isotropy by additive shifts rather than
+rotations.
+
+5
+
+Experimental Validation on Deep Architectures
+
+The exact topological proof detailed above asserts that the U-shape is an architectural certainty of
+causal residuals, present at initialization (Step 0), independent of RoPE. Furthermore, our theory
+predicts that the shape is inherently asymmetric: the Primacy tail decays logarithmically, while
+the Recency anchor is an isolated O(1) Dirac delta spike.
+To empirically validate our continuous differential calculus against real, untrained decoder-only
+networks, we initialize a standard deep architecture (Qwen2-0.5B: H = 24 layers, 896-dimension,
+SwiGLU, RMSNorm) with random Gaussian weights. We calculate the exact empirical InputOutput Jacobian norm across the sequence length L = 2048, isolating the architectural biases prior
+to any data-dependent learning.
+Combining the scalar surrogate from Appendix F with the reduction in Appendix E, the quantity
+plotted on a logarithmic scale is
+log10 ρ(j) = H log10 γ + log10 (N H )L,j ,
+
+(8)
+
+where γ = ∥WV WO ∥ is a position-invariant per-layer gain. Since the first term is constant across
+positions, the shape of the plotted curve is governed exclusively by the Cesàro kernel (N H )L,j .
+As shown in Figure 1, our exact continuous theory tightly predicts the massive asymmetric
+U-shape. To rigorously evaluate the goodness-of-fit between our closed-form analytical theory (Eq.
+5 and Eq. 6) and the empirical Step 0 Jacobian, we calculate the Spearman rank correlation and
+the Wasserstein distance. Our continuous equations achieve a Spearman correlation of ρ = 0.99
+and a Wasserstein distance of W = 0.02, confirming that our idealized Cesàro operator accurately
+captures the discrete network topology. We further validate the universality of this topology by
+demonstrating identical U-shaped behavior in GPT-2 architectures (see Appendix H).
+6
+
+Figure 1: Empirical Validation of Position Bias on Qwen2-0.5B at Initialization (Step
+0). Top Row (Theory): The exact topological solutions for pure Causal Primacy (Eq. 5), Hybrid Residual Recency (Eq. 6) (plotted on a logarithmic scale), and the theoretical irrelevance
+of positional encodings at initialization. Bottom Row (Empirical): The measured Input-Output
+Jacobian norm ρ(x) for the 24-layer Qwen2 architecture prior to training. The empirical network
+tightly recovers the mathematically derived asymmetric U-shape. Crucially, Exp 3 demonstrates
+that Rotary Positional Embeddings (RoPE) have no structural effect on the topological U-shape at
+initialization, confirming our hypothesis that middle-context degradation is an inherent property
+of causal residuals.
+
+7
+
+Crucially, empirical measurement of the Qwen2 Jacobian identically confirms this theory. Removing RoPE entirely from the 24-layer Qwen2 network at initialization produces an exact topological match to the fully-functional RoPE network (Spearman ρ = 0.99 between RoPE and No-RoPE
+configurations): massive causal compounding at x = 0, a dead zone in the middle, and a massive
+O(1) gradient teleportation spike via the residual connections at exactly x = 1.
+The widespread engineering effort in the literature to flatten relative positional encodings (e.g.,
+LongRoPE, YaRN, ALiBi) fundamentally misunderstands the geometry of the network. The middle context falls into the mathematical gap between geometric path expansion (left) and residual
+teleportation (right), governed exclusively by matrix depth H and fractional Softmax dilution.
+
+6
+
+Initialization vs. Pretraining: The Rigid Topological Baseline
+
+To demonstrate that this mathematically derived U-shape serves as the architectural baseline of
+the Transformer, we compare the exact empirical Input-Output Jacobian of a 24-layer Qwen2-0.5B
+architecture at initialization (random weights) against the exact same architecture fully pretrained
+on billions of tokens. We average the Jacobian norm across 200 distinct sequences from the NaturalQuestions (NQ) multi-document QA dataset [9], each formatted to a context window of L = 2048
+tokens.
+To test whether the pretrained model’s Jacobian spikes reflect learned detection of content
+discontinuities, we additionally evaluate on chunked sequences: 300-token excerpts from distinct
+NQ documents concatenated with no separator tokens, with chunk boundaries aligned at fixed
+positions (0, 300, 600, . . . ) across all 200 sequences (full details in Appendix G). If the spikes
+are learned boundary detectors, they should appear at regular 300-token intervals in the chunked
+condition for the pretrained model but not at initialization.
+As shown in Figure 2, the initialized network closely obeys the pure mathematical architecture
+in both conditions: a smooth, asymmetric topological geometry—the continuous causal Primacy
+tail and the discrete O(1) residual Recency spike—with no learned routing and no sensitivity to
+chunk boundaries. The pretrained model (right column) preserves the macroscopic U-shape but
+introduces sharp localised spikes. In the chunked condition (bottom row), these spikes align with
+the 300-token document boundaries, confirming that they represent learned structural routing to
+content discontinuities rather than fixed positional artifacts.
+Note that the U-shape is not confined to the global context window. Any sub-interval bounded
+by attention anchors—chunk boundaries, formatting delimiters, or segment markers—exhibits its
+own local U-shape governed by the same Cesàro kernel (Figures 2). The architectural prior is scalefree: it re-instantiates at every level of the sequence hierarchy wherever causal masking operates
+between boundary tokens.
+During training on highly structured data, the model attempts to overcome this baseline. The
+right panel demonstrates how the model’s learned routing (the “flesh”) is forced to conform to the
+underlying architectural geometry (the “bone structure”). The model learns to “smear” the recency
+anchor backward across the final 10-15% of tokens to capture the immediate question context, and
+it learns to create localized spikes for important syntactic markers (e.g., document boundaries or
+prompt formatting).
+However, despite this learned task-specific routing, the model does not flatten the macroscopic
+O(1/(H − 1)!) geometric dead zone in the middle of the context window. The topological baseline
+drops so severely due to the fractional dilution of the causal mask that overcoming it would require
+an aggressive, targeted loss penalty that standard next-token prediction lacks. Thus, the model
+defaults to the path of least resistance: relying heavily on the geometric extremes.
+
+8
+
+Figure 2: Jacobian Norm: Initialization vs. Pretrained Qwen2-0.5B (H = 24, L = 2048),
+Vanilla vs. Chunked Context. Averaged over 200 NQ sequences with p16–p84 percentile bands.
+Top row (Vanilla): Each sequence is a single NQ document truncated to 2048 tokens. Bottom row
+(Chunked): Each sequence concatenates 300-token excerpts from distinct NQ documents with no
+separator tokens, boundaries aligned at positions 0, 300, 600, . . . Left column (Initialization): Both
+conditions exhibit the smooth Cesàro U-shape with no sensitivity to content or chunk boundaries.
+Right column (Pretrained): The macroscopic U-shape persists. In the chunked condition, sharp
+spikes emerge at the 300-token document boundaries, confirming that these are learned contentdiscontinuity detectors rather than positional artifacts.
+
+9
+
+This analysis demonstrates that the “Lost in the Middle” phenomenon is fundamentally constrained by an architectural baseline that standard pretraining does not overcome. Training attempts to mitigate this baseline by creating localized attention spikes to grab useful information,
+but the sheer geometric depth of the causal-residual valley makes exact retrieval from the middle
+context structurally hostile under standard objectives. On a logarithmic scale, the peak-to-trough
+ratio is approximately 102 at initialization and 103 after pretraining, confirming that standard
+training does not compress the topological valley. This persistence reflects a fundamental asymmetry in the backward pass: the gradient used to learn to attend to middle-context positions is
+attenuated by the same positional factor as the forward signal. The optimizer receives an effective
+per-position learning rate η(x) ∝ ρH (x): positions in the dead zone update factorially more slowly
+than the extremes, regardless of the global learning rate.
+To visualise how the Score Pathway activates during early training while the Value Pathway
+baseline holds rigid, we train a freshly initialised Qwen2-0.5B for 100 gradient steps on NQ data
+and measure the Jacobian on 10 held-out vanilla sequences at each step (full methodology in
+Appendix G). As shown in Figure 3, the Step 0 curve (dark blue) exhibits the smooth Cesàro
+shape predicted by our theory. Within approximately 50 steps, sharp spikes emerge as the Score
+Pathway activates, but the macroscopic U-shaped envelope persists underneath. Crucially, the
+middle-context floor never rises—on the normalised (right) panel, the relative depth of the valley
+actually increases during training, confirming that the optimizer defaults to the geometric path of
+least resistance rather than bridging the combinatorially suppressed dead zone.
+
+Figure 3: Evolution of the Jacobian Topology During Early Pretraining (Steps 0–100).
+Measured on Qwen2-0.5B with a sequence length of L = 2048. Left (Raw Magnitude): The global
+gradient norm decreases as the model stabilizes, but the macroscopic U-shaped topology persists
+rigidly. Right (Anchored): By normalizing the Recency Anchor (x = 1) to 1.0, we observe that the
+relative depth of the “Lost-in-the-Middle” valley actually increases during training. The optimizer
+does not flatten the combinatorially suppressed middle section, instead relying increasingly on the
+geometric path of least resistance: the residual Recency Anchor and the logarithmic Primacy Tail.
+
+7
+
+Conclusion and Future Work
+
+We have presented an exact analytical model proving that the “Lost in the Middle” phenomenon is
+a structural inevitability of deep autoregressive transformers. Causal masking guarantees primacy;
+10
+
+residuals guarantee a recency anchor.
+Our findings suggest a paradigm shift in how the community addresses context degradation.
+Because the U-shape is a topological birthright rather than a positional encoding artifact, architectural tweaks like flattening RoPE merely treat the symptom. To cure the disease, training
+paradigms must be explicitly designed to overcome the O(1/(H − 1)!) initialization bias.
+A critical direction for future work is to evaluate whether specialized training paradigms—such
+as explicit middle-context curriculum learning, targeted loss weighting, or over-sampling “needlein-a-haystack” data—can force the non-linear Score Pathway to completely bridge this topological
+gap. By providing the exact closed-form calculus of the causal-residual baseline, this paper equips
+future researchers with the precise physical headwinds their optimization strategies must overcome.
+Future empirical work should focus on directly measuring the Input-Output Jacobian norm
+across long context windows in open-source models (e.g., Llama 3) to verify the precise logarithmic
+scaling of the primacy tail and the exponential scaling of the recency smear derived in this paper.
+
+Limitations
+Our theoretical derivations cleanly isolate the linear Value Pathway by demonstrating the Score
+Pathway vanishes at initialization. However, our analysis of fully trained networks relies on empirical observation of the Jacobian rather than closed-form mathematical bounds on the trained
+Softmax. Furthermore, our empirical validation focuses exclusively on standard pretraining distributions. Determining the upper bound of the Score Pathway’s ability to override the topological
+baseline under aggressive, position-targeted fine-tuning remains an open empirical question.
+
+Disclaimer
+BC worked on this project in a personal capacity. The views and conclusions expressed are solely
+those of the authors and do not reflect those of Meta. This work is independent of BC’s professional
+duties and is neither affiliated with nor endorsed by Meta.
+
+Acknowledgments and AI Disclosure
+The author acknowledges the use of Anthropic Claude (via Claude Code) and Perplexity AI as
+coding and writing assistants during the preparation of this manuscript. These tools were utilized to
+assist with LATEX typesetting, grammatical proofreading, and writing Python scripts for statistical
+analysis, model inference, and the 100-step micro-training experiment. All theoretical frameworks,
+mathematical proofs, experimental designs, and data interpretations are the original contributions
+of the author.
+
+A
+
+Proof of the Exact Cesàro Matrix Power Entry
+
+Theorem. Let M ∈ RL×L be the lower–triangular Cesàro matrix
+
+ 1 , 1 ≤ j ≤ i ≤ L,
+i
+Mi,j =
+0, 1 ≤ i < j ≤ L.
+
+11
+
+Then for any H ≥ 1,
+(M H )i,j =
+
+
+
+
+i−1 Pi
+m−j i−j
+ j−1
+m=j (−1)
+m−j
+
+
+1 H
+,
+m
+
+1 ≤ j ≤ i ≤ L,
+(9)
+1 ≤ i < j ≤ L.
+
+
+0,
+
+In particular, taking i = L yields (1) in the main text.
+Proof. The upper-triangular case (i < j) is immediate: since M is strictly lower-triangular,
+M H is strictly lower-triangular for all H ≥ 1.
+For the lower-triangular case (j ≤ i), we proceed by induction on H.
+Base case (H = 1).
+
+For H = 1 and j ≤ i, the right-hand side becomes
+ i
+
+
+i−1 X
+1
+m−j i − j
+(−1)
+.
+j−1
+m−j m
+
+
+
+m=j
+
+With the change of variables k = m − j this is
+
+
+ i−j
+1
+i−1 X
+k i−j
+.
+(−1)
+k+j
+k
+j−1
+
+
+
+k=0
+
+1
+Writing k+j
+=
+
+R1
+
+0 x
+
+k+j−1 dx, the inner sum is the integral representation of the Beta function
+i−j
+X
+k=0
+
+Multiplying by
+
+
+i−1
+j−1
+
+
+
+
+i−j
+1
+1
+(−1)
+= B j, i − j + 1 = i−1  .
+k
+k+j
+i j−1
+k
+
+gives
+
+ 1 , 1 ≤ j ≤ i ≤ L,
+1
+,
+(M )i,j = i
+0, 1 ≤ i < j ≤ L.
+
+which is exactly Mi,j by definition. The base case holds.
+Inductive step.
+
+Assume (9) holds for some H ≥ 1. Then for H + 1 and j ≤ i,
+(M
+
+H+1
+
+)i,j =
+
+i
+X
+k=j
+
+i
+
+1X H
+Mi,k (M )k,j =
+(M )k,j ,
+i
+H
+
+k=j
+
+since Mi,k = 1/i for all j ≤ k ≤ i.
+Substituting the inductive hypothesis for (M H )k,j ,
+
+
+
+X
+
+  H
+i
+k
+X
+1
+k−j
+1
+ k−1
+.
+(M H+1 )i,j =
+(−1) m−j
+i
+j−1
+m−j
+m
+k=j
+
+m=j
+
+We now swap the order of summation over the region j ≤ m ≤ k ≤ i:
+#
+ H " i
+i
+X
+X k − 1 k − j 
+1
+1
+(M H+1 )i,j =
+(−1) m−j
+.
+i
+m
+j−1
+m−j
+m=j
+
+k=m
+
+12
+
+The inner sum simplifies via the binomial identity
+
+
+ 
+
+
+k−1
+k−j
+m−1
+k−1
+=
+,
+j−1
+m−j
+j−1
+m−1
+so that
+
+
+
+i 
+X
+k−1
+k−j
+
+
+ i 
+
+m−1 X k−1
+=
+.
+j−1
+m−j
+j−1
+m−1
+k=m
+k=m
+
+
+P
+k−1
+= mi , we obtain
+Applying the Hockey-Stick identity ik=m m−1
+
+
+i 
+X
+k−1
+k−j
+k=m
+
+j−1
+
+m−j
+
+=
+
+
+ 
+m−1
+i
+.
+j−1
+m
+
+Substituting back,
+i
+
+(M
+
+H+1
+
+1X
+)i,j =
+(−1) m−j
+i
+m=j
+
+
+
+1
+m
+
+H 
+ 
+m−1
+i
+.
+j−1
+m
+
+A straightforward factorial simplification yields
+ 
+
+
+
+
+m−1
+1 i−1
+i−j
+1 i
+=
+.
+i m
+j−1
+m j−1 m−j
+Thus,
+(M H+1 )i,j =
+
+
+
+ i−1 Pi
+j−1
+
+m−j i−j
+m=j (−1)
+m−j
+
+
+
+
+1 H+1
+,
+m
+
+1 ≤ j ≤ i ≤ L,
+1 ≤ i < j ≤ L.
+
+0,
+
+which is exactly (9) with H replaced by H + 1. By induction on H, the formula holds for all H ≥ 1
+and 1 ≤ j ≤ i ≤ L.
+
+B
+
+Integral Representation of (M H )i,j
+
+To simplify (M H )i,j we use the identity for the power function via the Gamma function:
+Z ∞
+1
+1
+=
+tH−1 e−mt dt
+mH
+(H − 1)! 0
+
+(10)
+
+Substituting this into the summation and invoking the Fubini-Tonelli theorem to interchange the
+order of summation and integration, we obtain:
+
+
+
+Z ∞
+
+
+i
+X
+1
+i−1
+i−j
+tH−1 
+(−1)m−j
+e−mt  dt
+(11)
+(M H )i,j =
+(H − 1)! j − 1 0
+m−j
+m=j
+
+Letting k = m − j, the inner sum simplifies via the Binomial Theorem:
+
+i−j 
+X
+i−j
+(−e−t )k = e−jt (1 − e−t )i−j
+e−jt
+k
+
+(12)
+
+k=0
+
+Applying the change of variables u = e−t (where dt = −du/u), the integral transforms to:
+
+Z 1
+1
+i−1
+H
+(M )i,j =
+(− ln u)H−1 uj−1 (1 − u)i−j du
+(H − 1)! j − 1 0
+13
+
+(13)
+
+C
+
+Detailed Derivations of Density Operators in the Continuum
+Limit
+
+In the continuous limit L → ∞, vectors become continuous functions h(x), and matrix multiplication becomes an integral operator:
+Z 1
+G1 (y, x) h(x) dx
+(14)
+(Oh)(y) =
+0
+
+where G1 (y, x) is the integral kernel. For the linear operator applied n times, one obtains:
+(On h)(y) =
+
+Z 1
+Gn (y, x) h(x) dx
+
+(15)
+
+0
+
+where mathematical consistency demands the convolution relation:
+Z 1
+Gm+n (y, x) =
+Gm (y, z) Gn (z, x) dz
+
+(16)
+
+0
+
+In the context of autoregressive language modeling, we are specifically concerned with predicting
+the next token, which depends entirely on the hidden state of the final token of the prompt. We
+define the influence density ρn (x) as the kernel evaluated at this final token (y = 1):
+ρn (x) ≡ Gn (1, x)
+
+(17)
+
+We now derive the exact closed-form influence density for both the pure causal kernel and the
+causal kernel with residual connections.
+
+C.1
+
+Influence Density for the Pure Causal Kernel
+
+Let Kn (y, x) denote the n-layer kernel for the pure causal attention operator M. If there are no
+layers (n = 0), the output is identical to the input, yielding the identity kernel:
+K0 (y, x) = δ(y − x)
+The first non-trivial operator applies a uniform average over all past tokens:
+Z y
+1
+(Mh)(y) =
+h(x) dx
+y
+0
+
+(18)
+
+(19)
+
+By factoring in the causal mask using the Heaviside step function Θ(y − x), we can extract the
+layer-1 kernel directly:
+1
+K1 (y, x) = Θ(y − x)
+(20)
+y
+We will prove by mathematical induction that the general n-layer causal kernel takes the closed
+form:
+ y n−1
+1
+1
+Kn (y, x) =
+ln
+Θ(y − x)
+(21)
+y (n − 1)!
+x
+
+14
+
+Proof. For the base case n = 1, the formula yields y1 0!1 (ln xy )0 Θ(y −x) = y1 Θ(y −x), which trivially
+holds.
+Assume the formula holds for layer n. To find the kernel for layer n+1, we apply the consistency
+convolution between K1 and Kn :
+Z 1
+Kn+1 (y, x) =
+K1 (y, z) Kn (z, x) dz
+(22)
+0
+
+Substituting our known expressions:
+
+
+Z 1
+ z n−1
+1
+1
+1
+Kn+1 (y, x) =
+Θ(z − x) dz
+Θ(y − z)
+ln
+y
+z (n − 1)!
+x
+0
+
+(23)
+
+The product of the Heaviside functions Θ(y − z)Θ(z − x) restricts the region of non-zero integration
+strictly to x ≤ z ≤ y. If x > y, the integral vanishes, preserving the global causal mask Θ(y − x).
+For x ≤ y, we extract the constants with respect to z:
+Z y 
+1
+1
+1
+z n−1
+Kn+1 (y, x) =
+ln
+dz
+(24)
+y (n − 1)! x z
+x
+We evaluate this integral using integration by substitution. Let u = ln(z/x), which implies du =
+1
+z dz. The integration bounds transform from z ∈ [x, y] to u ∈ [0, ln(y/x)]:
+1
+1
+Kn+1 (y, x) =
+y (n − 1)!
+
+Z ln(y/x)
+
+un−1 du
+
+(25)
+
+0
+
+ n ln(y/x)
+u
+1 1  y n
+1
+1
+=
+ln
+Kn+1 (y, x) =
+y (n − 1)! n 0
+y n!
+x
+
+(26)
+
+Re-attaching the global causal mask Θ(y − x) completes the inductive step.
+Finally, we evaluate this kernel at the final token y = 1 to recover the macroscopic influence
+density of the pure causal architecture. Because the normalized sequence coordinate x ∈ (0, 1], the
+condition x ≤ 1 is universally satisfied, meaning Θ(1 − x) = 1. Thus, the primacy tail density after
+n layers is exactly:
+
+
+1
+1 n−1
+(M )
+ρn (x) = Kn (1, x) =
+ln
+(27)
+(n − 1)!
+x
+This rigorously establishes the logarithmic divergence at the start of the prompt caused by pure
+causal compounding.
+
+C.2
+
+Influence Density for the Causal Residual Kernel
+
+Let K̃n (y, x) denote the n-layer kernel for the network with both causal attention and residual
+connections. For a zero-layer architecture, the causal residual kernel is trivially identical to the
+pure causal identity kernel:
+K̃0 (y, x) = K0 (y, x) = δ(y − x)
+(28)
+The single-layer operator applies a weighted average of a residual connection and the uniform causal
+average over all past tokens:
+Z y
+1
+h(x) dx
+(29)
+(N h)(y) = (1 − α)h(y) + α
+y
+0
+15
+
+This gives us the single-layer kernel:
+1
+K̃1 (y, x) = (1 − α)δ(y − x) + α Θ(y − x)
+y
+= (1 − α)K0 (y, x) + αK1 (y, x)
+
+(30)
+(31)
+
+We will prove by mathematical induction that the general n-layer residual kernel is a binomial
+expansion of the pure causal kernels:
+n  
+X
+n k
+K̃n (y, x) =
+α (1 − α)n−k Kk (y, x)
+k
+
+(32)
+
+k=0
+
+
+
+Proof. The base case n = 1 yields 10 α0 (1 − α)1 K0 + 11 α1 (1 − α)0 K1 = (1 − α)K0 + αK1 , which
+trivially holds.
+Assume the formula holds
+R 1 for layer n. To find the kernel for layer n+1, we apply the consistency
+convolution K̃n+1 (y, x) = 0 K̃1 (y, z)K̃n (z, x) dz:
+" n  
+#
+Z 1h
+i X
+n k
+K̃n+1 =
+(1 − α)K0 (y, z) + αK1 (y, z)
+α (1 − α)n−k Kk (z, x) dz
+(33)
+k
+0
+k=0
+
+Because K0 (y, z) = δ(y − z), its convolution simply extracts Rthe n-layer kernel. For K1 , we rely
+1
+on the consistency relation proved in the previous section: 0 K1 (y, z)Kk (z, x)dz = Kk+1 (y, x).
+Distributing the integral gives:
+K̃n+1 = (1 − α)
+
+n  
+X
+n
+
+k
+
+k=0
+
+k
+
+α (1 − α)
+
+n−k
+
+n  
+X
+n k
+Kk + α
+α (1 − α)n−k Kk+1
+k
+
+(34)
+
+k=0
+
+To combine these sums, we re-index the second sum by letting j = k + 1, and we substitute j = k
+in the first sum:
+K̃n+1 =
+
+n  
+X
+n
+j=0
+
+j
+
+j
+
+α (1 − α)
+
+n+1−j
+
+
+n+1 
+X
+n
+Kj +
+αj (1 − α)n+1−j Kj
+j−1
+
+(35)
+
+j=1
+
+We group the terms by Kj . For j = 0 and j = n + 1, the boundary terms map perfectly to
+
+and n+1
+n+1 . For 1 ≤ j ≤ n, we factor out the common coefficients:
+
+n+1
+0
+
+
+
+  
+
+n
+n
++
+αj (1 − α)n+1−j Kj
+(36)
+j
+j−1
+
+
+
+n
+By Pascal’s Rule, nj + j−1
+= n+1
+j . Substituting this identity confirms that the combined sum
+is exactly:
+n+1
+X n + 1 
+K̃n+1 (y, x) =
+αj (1 − α)n+1−j Kj (y, x)
+(37)
+j
+j=0
+
+This completes the inductive step.
+To find the final influence density for the residual network, we evaluate this full kernel at y = 1.
+Separating the purely residual k = 0 term from the causal paths k ≥ 1, and substituting our
+16
+
+closed-form Kk (1, x) expressions, we obtain the exact architectural baseline:
+)
+n
+ρ(N
+n (x) = (1 − α) δ(1 − x) +
+|
+{z
+}
+Recency Anchor
+
+
+
+n  
+X
+1 k−1
+n k
+1
+ln
+α (1 − α)n−k
+(k − 1)!
+x
+k
+|k=1
+{z
+}
+
+(38)
+
+Continuous Causal & Hybrid Paths
+
+This derivation proves that causal mixing inherently creates the logarithmic primacy tail, but the
+residual stream bypasses the mixing matrix entirely (k = 0), resulting in an infinite Dirac density
+spike exactly at x = 1.
+
+D
+
+From Full Transformer Layer to the Cesàro Toy Model
+
+This appendix makes precise which components of a full transformer layer are retained in the
+positional routing model of Section 3, following the linearisation philosophy of Elhage et al. [8].
+
+Full Layer
+(0)
+
+(1)
+
+A single pre-norm transformer block maps hi
+
+to hi via:
+
+
+(1)
+(0)
+(0)
+hi = hi + α̃ (M g(h(0) ))i + f g hi + α̃ (M g(h(0) ))i
+
+(39)
+
+where Mij = 1i Θ(i−j) is the causal averaging (Cesàro) matrix, g = RMSNorm, f (x) = GELU(x W1 ) W2
+is the feed-forward network, and α̃ = ∥WV WO ∥ is the gain of the value-output pathway (denoted
+γ in Appendix E). Only M mixes information across token positions; f and g act per-token.
+
+Simplifications
+We make two simplifications to isolate the positional routing:
+
+
+(1)
+(0)
+(0)
+hi = hi + α̃ ( M g(h(0) ) )i + f g hi + α̃(M g(h(0) ))i
+|{z} |{z} |{z} | {z } |
+{z
+}
+keep
+
+keep keep
+
+drop g:
+g→Id
+
+(40)
+
+drop entirely
+
+1. Drop g (RMSNorm). At initialisation, RMSNorm rescales all tokens to the same RMS,
+contributing a position-independent per-token gain. Removing it preserves the positional
+routing structure.
+2. Drop f (FFN). The feed-forward network acts per-token and does not directly introduce
+(0.5)
+(0)
+cross-position mixing. However, its input hi
+= hi + α̃(M g(h(0) ))i already contains the
+attention output, so the nonlinearity in f couples to the positional mixing from M . Section 3
+notes that the FFN Jacobian is block-diagonal and does not alter the topology of horizontal
+routing; dropping f removes the nonlinear coupling while preserving this property.
+The resulting toy model is:
+h(1) = (I + α̃ M ) h(0)
+
+(41)
+
+h(H) = (I + α̃ M )H h(0)
+
+(42)
+
+After H layers:
+
+17
+
+Normalised Form
+The rows of (I + α̃ M )H sum to (1 + α̃)H , reflecting the fact that the residual connection adds
+signal rather than redistributing it. For the purpose of studying the shape of the influence profile,
+we normalise by defining
+α̃
+α=
+,
+(43)
+1 + α̃
+so that
+N = (1 − α) I + α M
+(44)
+is a stochastic matrix whose rows sum to one, and (N H )L,j is a probability distribution over source
+positions. This is the form used throughout the paper. The physical gain α̃ = γ = ∥WV WO ∥
+relates to the fitted parameter via α̃ = α/(1 − α). Note that γ H factors out as a position-uniform
+constant (Appendix E), so the shape of the U-curve depends only on α, not on γ separately.
+
+E
+
+Full Single-Head Jacobian and Reduction to the Cesàro Kernel
+
+This appendix derives the complete back-propagation Jacobian of a single causal attention layer,
+identifies precisely the roles of WQ , WK , WV , and WO , and shows the exact approximation step
+that reduces the position-routing component to the scalar Cesàro kernel used throughout the paper.
+
+E.1
+
+Setup
+
+Consider a single attention head with input sequence H(l) ∈ RL×d . The standard attention mechanism computes:
+Q = H(l) WQ , K = H(l) WK , V = H(l) WV ,
+qi · k j
+Sij = √
++ mij ,
+mij = −∞ for j > i,
+dk
+Ai,· = softmax(Si,· ) ∈ Ri ,
+X
+zi =
+Aij vj ,
+oi = zi WO .
+
+(45)
+(46)
+(47)
+(48)
+
+j≤i
+(l+1)
+
+With a residual connection, the layer update is hi
+
+E.2
+
+(l)
+
+= hi + oi .
+
+Full Per-Layer Jacobian
+
+The Jacobian of the output at position i with respect to the input at position j ≤ i is:
+
+
+(l+1)
+X
+∂hi
+∂Aik 
+= δij Id + Aij WV WO + 
+v
+WO .
+(l)
+(l) k
+|
+{z
+}
+∂hj
+∂h
+k≤i
+j
+Value Pathway
+|
+{z
+}
+Score Pathway
+(l)
+
+(l)
+
+(49)
+
+Value Pathway. Perturbing hj changes vj = hj WV directly. This perturbation is mixed into
+zi with weight Aij , then projected by WO . This pathway is active for all j ≤ i and is the direct,
+“vertical” route through WV .
+
+18
+
+(l)
+
+Score Pathway. Perturbing hj also changes qj and kj , modifying the attention scores Sij , and
+hence the routing weights Aij . Using the chain rule through the causal Softmax:
+∂Aik
+(l)
+
+∂hj
+
+
+⊤
+⊤
+WQ km
+qi W K
+Aik δkm − Aim δij √
+=
+.
++ δmj √
+dk
+dk
+m≤i
+X
+
+
+
+(50)
+
+The two Kronecker deltas correspond to two distinct mechanisms:
+• δij : the query qi changes (only when j = i, i.e. a token attending to itself).
+• δmj : the key kj changes, modifying how much every later token attends to position j.
+
+E.3
+
+Why the Score Pathway Vanishes at initialization
+−1/2
+
+At random Gaussian initialization, WQ and WK are zero-mean with entries O(dk
+Kaiming or Xavier scaling). Consequently:
+
+) (standard
+
+√
+dk →∞
+1. The pre-softmax scores satisfy Sij = qi · kj / dk −−
+−−→ 0, and so the causal Softmax is
+approximately uniform: Aij ≈ 1/i for all j ≤ i.
+2. The Softmax Jacobian at a uniform distribution evaluates to Aik (δkm − Aim ) = (1/i)(δkm −
+1/i), which is O(1/i).
+⊤ or q W ⊤ , both
+3. Each term in the Score Pathway (Eq. 50) carries an additional factor of WQ km
+i K
+−1/2
+−1/2
+O(dk ), which suppresses the Score Pathway by O(dk ) relative to the Value Pathway.
+
+In the standard wide-network regime (dk → ∞), the Score Pathway contribution vanishes at
+initialization [10, 11]. This is the formal justification for the Softmax linearisation used in the main
+text.
+
+E.4
+
+Reduction to the Scalar Cesàro Kernel
+
+Retaining only the Value Pathway, Eq. 49 simplifies to:
+(l+1)
+
+∂hi
+
+(l)
+
+∂hj
+
+≈ δij Id + Aij WV WO .
+
+(51)
+
+The positional structure is governed entirely by the scalar Aij , while WV WO ∈ Rd×d is a positioninvariant feature mixing matrix, identical for all token pairs (i, j).
+The end-to-end Jacobian after H layers is obtained by chaining these terms. Taking norms and
+factoring out the position-independent “vertical” gain γ = ∥WV WO ∥ per layer:
+(H)
+
+ρ(j) =
+
+∂hL
+
+(0)
+
+∂hj
+
+≈ γ H · (N H )L,j ,
+
+(52)
+
+where N = (1 − α)I + αM is the residual Cesàro matrix and (N H )L,j is its (L, j) entry. Since γ H
+is a constant that shifts all positions uniformly on the log scale, it has no effect on the shape of the
+U-curve.
+
+19
+
+Conclusion. WV does not generate the kernel: it provides a uniform scalar gain that is identical
+at every position. The asymmetric U-shape is an exclusive property of the scalar routing matrix
+M H (or N H ), determined solely by the causal mask and the residual mixing parameter α.
+
+E.5
+
+Multi-Head Attention at Initialization
+
+At initialization, all heads share the same uniform attention distribution Aij = 1/i, so the expected
+positional structure is identical to the single-head Cesàro kernel. However, each head contributes an
+independent random gain WVh WOh , so the total Jacobian is a sum of Hheads independent terms with
+identical positional structure. By concentration
+of measure, the empirical Jacobian norm converges
+√
+to the theoretical prediction as O(1/ Hheads ). Increasing the number of heads therefore tightens
+the architectural prior: the U-shape becomes less variable across random initializations, not more.
+
+F
+
+What is Plotted: The Scalar Surrogate for the Jacobian Norm
+
+We measure how strongly each input position j influences the model’s final prediction at the last
+position L. Let the input embedding matrix be E ∈ RL×d , with ej ∈ Rd representing the embedding
+(H)
+vector at position j. Let the final-layer hidden state at the last position be hL ∈ Rd . We define
+the logit vector (pre-softmax) at the last position as:
+(H)
+
+ℓ = WU hL
+
+∈ R|V |
+
+(53)
+
+where WU ∈ R|V |×d is the unembedding matrix.
+The full input-output Jacobian of the last-position logits with respect to the input embeddings
+is the tensor:
+∂ℓ
+J =
+∈ R|V |×L×d
+(54)
+∂E
+∂ℓ
+∈ R|V |×d .
+We define the per-position slice of this Jacobian as Jj ≡ ∂e
+j
+A mathematically natural scalar “influence score” per position would be the true Frobenius
+norm of this slice:
+v
+u |V | d 
+uX X ∂ℓ 2
+v
+ρF (j) = ∥Jj ∥F = t
+(55)
+∂ej,k
+v=1 k=1
+
+However, computing ∥Jj ∥F exactly is computationally expensive, as it requires aggregating gradient
+information from all |V | independent logits (effectively requiring |V | separate backward passes).
+Instead, our experimental code utilizes a highly efficient one-pass scalar-probe surrogate. We
+choose a fixed probe vector u ∈ R|V | (in our implementation, the all-ones vector u = 1), and define
+the scalar surrogate:
+|V |
+X
+s = u⊤ ℓ =
+ℓv
+(56)
+v=1
+
+A single backward pass from this scalar s yields the d-dimensional gradient vector:
+
+
+∂ℓ ⊤
+∂s
+gj ≡
+=
+u = Jj⊤ u ∈ Rd
+∂ej
+∂ej
+The quantity we plot is the standard L2 (Euclidean) norm of this vector:
+v
+u d
+uX
+ρ(j) ≡ ∥gj ∥2 = t (gj,k )2
+k=1
+
+20
+
+(57)
+
+(58)
+
+Importantly, ρ(j) = ∥Jj⊤ u∥2 is not identically equal to the Frobenius norm ∥Jj ∥F . Taking the
+Euclidean norm of a sum of vectors is not equivalent to the square root of the sum of their squared
+norms.
+However, in the structural regime studied in this paper, this surrogate perfectly preserves the
+macroscopic topology. The position-dependent structure of the network is dominated exclusively by
+the scalar routing kernel (N H )L,j , while the remaining feature mixing (including the accumulated
+products of WV WO and WU ) behaves as a position-invariant matrix C ∈ R|V |×d . Because we can
+factor Jj ≈ (N H )L,j · C, both the Frobenius norm and our scalar surrogate scale linearly with the
+structural kernel:
+ρF (j) ∝ |(N H )L,j | · ∥C∥F
+
+(59)
+
+ρ(j) ∝ |(N H )L,j | · ∥C ⊤ u∥2
+
+(60)
+
+Because the L2 norm behaves dimensionally identical to the square root of a sum of squares
+(analogous to RMSE, not MSE), taking the logarithm separates the structural kernel from the
+position-invariant constants cleanly. Concretely, the quantity displayed in our figures is plotted on
+a logarithmic scale as:
+(61)
+log10 ρ(j) = H log10 γ + log10 (N H )L,j
+where γ collects the position-invariant constants from the feature-mixing matrices. Thus, the
+positional shape of the empirical U-curve is governed exclusively by (N H )L,j , confirming that our
+scalar surrogate rigorously captures the exact geometric topology of the network.
+
+G
+
+Training Evolution Experiment: Setup and Methodology
+
+To observe how the architectural prior evolves during early training, we conduct a controlled microtraining experiment on a freshly initialised Qwen2-0.5B architecture (494M parameters, 24 layers,
+14Q/2KV GQA, d = 896, SwiGLU, RMSNorm, θrope = 106 , sequence length L = 2048). No
+pretrained weights are loaded.
+Data. We stream the NaturalQuestions (NQ) validation set and buffer the first 60 examples.
+Examples 0–49 form the training pool; examples 50–59 are held out for evaluation and are never
+seen during training.
+Training. The model is trained for 100 steps using AdamW (lr = 5×10−4 decayed to 5×10−5 via
+cosine schedule, weight decay 0.1, gradient clipping at 1.0, batch size 1). At each step, a random
+contiguous window of 2048 tokens is drawn from a randomly selected training-pool sequence and a
+standard next-token cross-entropy loss is computed.
+Eval sequences.
+
+We construct two parallel evaluation sets from the 10 held-out examples:
+
+• Vanilla. Each held-out NQ example is tokenised as a single document (question concatenated
+with document tokens), truncated to 2048 tokens.
+• Chunked. Each eval sequence is constructed by concatenating 300-token excerpts drawn
+from different training-pool documents. A per-sequence offset cycles through the pool so that
+content varies across sequences, but chunk boundaries are aligned at fixed token positions (0,
+300, 600, . . . ) across all 10 sequences. No separator or delimiter tokens are inserted between
+chunks. This alignment ensures that any boundary effects are preserved—rather than washed
+out—when averaging Jacobians across sequences.
+21
+
+Jacobian measurement. Before each gradient update (and once after the final step), we compute the ℓ2 norm of the input-embedding Jacobian (as defined in Appendix F) for all 10 vanilla
+and 10 chunked eval sequences independently. This produces two arrays of shape (10, 101, 2048),
+recording the full evolution of the Jacobian norm profile from Step 0 through Step 100.
+
+H
+
+Generality of the Phenomenon Across Architectures
+
+To demonstrate that the asymmetric U-shape is a universal geometric property invariant to depth
+or specific architectural choices (e.g., RoPE, SwiGLU, RMSNorm), we provide the corresponding
+initialization and pretraining Jacobian comparisons for the classic GPT-2 series (GPT-2 Small,
+H = 12; GPT-2 Medium, H = 24).
+As shown in Figures 4, 5, 6 and 7, models utilizing standard LayerNorm, absolute positional
+encodings, and Gelu activations exhibit identical baseline topologies to the modern Qwen2 architecture shown in Figures 1 and 2. In all cases, the topological U-shape dominates at initialization,
+and its macroscopic constraints persist rigidly through pretraining.
+
+Figure 4: Init: GPT-2 Small (H = 12)
+
+Figure 5: Init: GPT-2 Medium (H = 24)
+
+Figure 6: Pretrained vs. Init: GPT-2 Small
+
+Figure 7: Pretrained vs. Init: GPT-2 Medium
+
+22
+
+References
+[1] Nelson F. Liu, Kevin Lin, John Hewitt, Ashwin Paranjape, Michele Bevilacqua, Fabio Petroni,
+and Percy Liang. Lost in the middle: How language models use long contexts. Transactions
+of the Association for Computational Linguistics, 2023. URL https://arxiv.org/abs/2307.
+03172.
+[2] Amirhossein Kazemnejad et al. The impact of positional encoding on length generalization in
+transformers. In Advances in Neural Information Processing Systems (NeurIPS), 2024. URL
+https://arxiv.org/abs/2305.19466.
+[3] Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han, and Mike Lewis. Efficient streaming
+language models with attention sinks. In International Conference on Learning Representations
+(ICLR), 2023. URL https://arxiv.org/abs/2309.17453.
+[4] Jianlin Su, Yu Lu, Shengfeng Pan, Ahmed Murtadha, Wen Bo, and Yunfeng Liu. RoFormer:
+Enhanced transformer with rotary position embedding. Neurocomputing, 2024. URL https:
+//arxiv.org/abs/2104.09864.
+[5] Cheng-Yu Hsieh et al. Found in the middle: Calibrating positional attention bias improves
+long context utilization. In Findings of the Association for Computational Linguistics (ACL),
+2024. URL https://arxiv.org/abs/2406.16008.
+[6] Hleb Herasimchyk, Roman Labryga, Tamerlan Prusina, and Sören Laue. A residual-aware
+theory of position bias in transformers. arXiv preprint arXiv:2602.16837, 2026. URL https:
+//arxiv.org/abs/2602.16837.
+[7] Xinyi Wu, Yifei Wang, Stefanie Jegelka, and Ali Jadbabaie. On the emergence of position
+bias in transformers. In International Conference on Machine Learning (ICML), 2025. URL
+https://arxiv.org/abs/2502.01951.
+[8] Nelson Elhage, Neel Nanda, Catherine Olsson, Tom Henighan, Nicholas Joseph, Ben Mann,
+Amanda Askell, Yuntao Bai, Anna Chen, Tom Conerly, Nova DasSarma, Dawn Drain, Deep
+Ganguli, Tom Goldstein, Arushi Gupta, Zac Hatfield-Dodds, Danny Hernandez, Scott Johnston, Jackson Kernion, Liane Lovitt, Kamal Ndousse, Dario Amodei, Tom Brown, Jack Clark,
+Jared Kaplan, Sam McCandlish, and Chris Olah. A mathematical framework for transformer
+circuits. Transformer Circuits Thread, 2021. URL https://transformer-circuits.pub/
+2021/framework/index.html.
+[9] Tom Kwiatkowski, Jennimaria Palomaki, Olivia Redfield, Michael Collins, Ankur Parikh, Chris
+Alberti, Danielle Epstein, Illia Polosukhin, Jacob Devlin, Kenton Lee, Kristina Toutanova,
+Llion Jones, Matthew Kelcey, Ming-Wei Chang, Andrew M. Dai, Jakob Uszkoreit, Quoc Le,
+and Slav Petrov. Natural questions: A benchmark for question answering research. Transactions of the Association for Computational Linguistics, 7:452–466, 2019. URL https:
+//arxiv.org/abs/1901.08634.
+[10] Ben Poole, Subhaneil Lahiri, Maithra Raghu, Jascha Sohl-Dickstein, and Surya Ganguli. Exponential expressivity in deep neural networks through transient chaos. In Advances in Neural Information Processing Systems (NeurIPS), 2016. URL https://arxiv.org/abs/1606.05340.
+[11] Greg Yang. Scaling limits of wide neural networks with weights evolving by stochastic gradient
+descent. arXiv preprint arXiv:1902.04760, 2019. URL https://arxiv.org/abs/1902.04760.
+23
+
+

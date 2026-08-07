@@ -51,14 +51,19 @@ import {
   type AgentToolCallAction,
   type AppState,
   type AppStateStore,
+  ArtifactRegistry,
   CONTEXT_SUMMARY_PREFIX,
+  CalibratedEstimator,
   type ContextBudgetSnapshot,
   ContextCompactor,
   ContextManager,
+  ContextMonitor,
   type CostTracker,
   DEFAULT_KEEP_RECENT_TOOLS,
   type EvalHooks,
+  MAX_COMPRESSION_SAVINGS_RATIO,
   MAX_STEPS_WARNING,
+  MIN_COMPRESSION_SAVINGS_RATIO,
   type ModelTokenUsage,
   type RunEvent,
   type RunEventEnvelope,
@@ -73,15 +78,25 @@ import {
   allocateContextBudget,
   buildConversationAwareQuery,
   buildSystemPromptWithBudget,
+  compressionSavingsRatio,
+  computeCompactThreshold,
+  costAdjustedCompactThreshold,
+  detectDuplicateAccess,
+  evaluateTrigger,
   extractCleanMemoryQuery,
   findPawRoot,
   formatTodosForPrompt,
   getToolResultsDir,
+  isContextSummaryMessage,
+  isProtectedUserConstraint,
+  isToolResultMessage,
   loadProjectMemory,
   loadSkillsFromDirectory,
   measureContextBudget,
-  meetsCompressionSavingsThreshold,
+  prewarmEncoding,
+  resolveEstimatorForModel,
   restoreCheckpoint,
+  saveCompactionCommit,
   shouldCompactHistory,
   skillsFromProjectMemory,
   stripContextSummaryMessages,
@@ -134,9 +149,41 @@ import {
 import { type MemoryRuntime, createMemoryRuntime } from "@paw/memory";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
+import { runConstraintReconcile } from "./constraint-reconcile.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
+import type { NativeToolError } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
 import { CONTEXT_PACKAGE_PREFIX } from "./orchestrator/constants.js";
+import { fixMalformedToolArguments } from "./orchestrator/fix-malformed-args.js";
+import {
+  type PayloadDeduper,
+  createPayloadDeduper,
+} from "./orchestrator/truncate-payload.js";
+
+/**
+ * 约束生命周期：任务转向触发信号（仅决定"该问 LLM 调和了"，
+ * 不做语义判定——判定全部由 constraint-reconcile 的 LLM 负责）。
+ */
+const CONSTRAINT_TASK_PIVOT_PATTERN =
+  /^(?:new task|next task|now (?:do|work on|handle|fix)|新任务|接下来(?:做|处理|修复)|下一步(?:做|处理|修复)|换个任务)/i;
+
+/** 系统注入的 user 消息（约束调和候选必须排除——不是用户意图） */
+const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
+  "[Context Package]",
+  "[Context Summary]",
+  "[Previous session context]",
+  "[You stopped",
+  "[Max steps",
+  "[MAX_STEPS",
+  "[model produced only reasoning]",
+  "[Task]",
+  "[Memory refresh]",
+  "[Context guard]",
+  "[Continue from where you were cut off",
+  "Plan updated:",
+  "Current plan:",
+  "Note:",
+];
 import type {
   PhaseContext,
   SharedContext,
@@ -144,6 +191,8 @@ import type {
   TurnState,
 } from "./orchestrator/types.js";
 import {
+  type ParseDiagnosis,
+  diagnoseParseFailure,
   parseAgentActionFromModelText,
   parseAgentActionsFromModelText,
   toolCallDedupKey,
@@ -252,6 +301,8 @@ export interface AgentOrchestratorOptions {
   readonly agentIdentityText?: string;
   /** create_agent 工具实现（写盘 + registry） */
   readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
+  /** P5.1 侧信道 monitor 配置（采样率/冷却/预算软启动，测试可注入） */
+  readonly monitorOptions?: import("@paw/core").ContextMonitorOptions;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -281,9 +332,6 @@ export class AgentOrchestrator {
   /** 模型调用超时（毫秒）：2 分钟，防止单次调用无限等待 */
   private static readonly MODEL_TIMEOUT_MS = 120_000;
 
-  /** 上下文预算去重键：避免连续两轮发出完全相同的 budget 事件 */
-  private static _lastBudgetKey: string | null = null;
-
   // ── 实例属性 ──
 
   private readonly overrideModel?: LanguageModel;
@@ -293,6 +341,8 @@ export class AgentOrchestrator {
   private readonly resolveToolApproval?: AgentOrchestratorOptions["resolveToolApproval"];
   private readonly approvalPolicy?: AgentOrchestratorOptions["approvalPolicy"];
   private readonly fileLock?: AgentOrchestratorOptions["fileLock"];
+  /** 会话级工具输出去重器（P1 入口闸） */
+  private readonly _payloadDeduper?: PayloadDeduper;
   private readonly mcpServers?: readonly McpServerConfig[];
   private readonly sessionStore?: SessionStore;
   private readonly todoStore?: TodoStore;
@@ -308,6 +358,36 @@ export class AgentOrchestrator {
   private readonly auxiliaryModel?: LanguageModel;
   /** 压缩冷却剩余轮数：每轮递减，>0 时禁止压缩 */
   private compactCooldownTurns = 0;
+  /** P4.4 压缩版本化：提交序号（orchestrator 生命周期内单调递增） */
+  private _compactionCommitSeq = 0;
+  /** P4.3 硬守卫：预算已满提示是否已发出（避免每轮重复注入） */
+  private _budgetGuardWarned = false;
+  /** P4.3 逐块账本去重键：块账本无变化时不重复发事件 */
+  private _lastBlocksKey: string | null = null;
+  /** 上下文预算去重键：避免连续两轮发出完全相同的 budget 事件（实例级，跨 run 不共享） */
+  private _lastBudgetKey: string | null = null;
+  /** P1.4 估算统一：usage 回填校准器（每 run 一个，跟随模型） */
+  private _calibratedEstimator: CalibratedEstimator | null = null;
+  /** P5.1 侧信道 monitor：压缩主动化调度（采样 + 冷却 + 预算软启动） */
+  private readonly monitor: ContextMonitor;
+  /** P5.2 成本记账：累计 prompt/cached（cache 命中率 → 阈值微调） */
+  private _promptTokensAcc = 0;
+  private _cachedPromptTokensAcc = 0;
+  /** P2.7 行为闭环：压缩后重复获取监控（快照 + 窗口 + 报告去重） */
+  private _qualityWindowTurn = -1;
+  private _qualityCompactTurn = -1;
+  private _qualityFiles = new Set<string>();
+  private _qualityCommands = new Set<string>();
+  private _qualityReported = false;
+
+  /** 压缩后重复获取监控窗口（轮数） */
+  private static readonly COMPACTION_QUALITY_WINDOW_TURNS = 5;
+  /** 约束生命周期：上次扫描的用户消息数（检测新增） */
+  private _lastConstraintScanCount = 0;
+  /** 约束生命周期：上次调和轮次（15 轮强制） */
+  private _lastConstraintReconcileTurn = -100;
+  /** 约束生命周期：调和冷却剩余轮数（调和后 3 轮内不重复） */
+  private _constraintReconcileCooldown = 0;
 
   // 记忆 Runtime（Postgres）
   private _memoryRuntime: MemoryRuntime | null = null;
@@ -339,6 +419,8 @@ export class AgentOrchestrator {
     this.resolveToolApproval = opts?.resolveToolApproval;
     this.approvalPolicy = opts?.approvalPolicy;
     this.fileLock = opts?.fileLock;
+    // P1 入口闸：会话级去重器（仅 root orchestrator；子 Agent 不重复去重）
+    this._payloadDeduper = opts?.fileLock ? undefined : createPayloadDeduper();
     this.mcpServers = opts?.mcpServers;
     this.sessionStore = opts?.sessionStore;
     this.todoStore = opts?.todoStore;
@@ -363,6 +445,7 @@ export class AgentOrchestrator {
     this.agentCatalogText = opts?.agentCatalogText;
     this.agentIdentityText = opts?.agentIdentityText;
     this.createAgent = opts?.createAgent;
+    this.monitor = new ContextMonitor(opts?.monitorOptions);
     // 如果传入了 skillsDir，从目录批量加载 skill 并注册
     if (opts?.skillsDir) {
       const skills = loadSkillsFromDirectory(opts.skillsDir);
@@ -627,6 +710,12 @@ export class AgentOrchestrator {
           checkpointSeq,
           specGoal: spec.goal,
           shellSandbox,
+          ...(this._payloadDeduper
+            ? { payloadDeduper: this._payloadDeduper }
+            : {}),
+          ...(init.artifactRegistry
+            ? { artifactRegistry: init.artifactRegistry }
+            : {}),
           ...(this._memoryRuntime
             ? { memoryRuntime: this._memoryRuntime }
             : {}),
@@ -867,6 +956,10 @@ export class AgentOrchestrator {
     toolCalls: AgentToolCallAction[];
     singleAction: import("@paw/core").AgentAction | null;
     reasoningText: string;
+    /** 解析诊断：无 action 时描述「为什么无法解析」（供格式反馈回灌） */
+    diagnosis: ParseDiagnosis;
+    /** 原生通道解析失败的调用（拒绝执行，需回灌给模型） */
+    nativeToolErrors?: readonly NativeToolError[];
   }> {
     const { model, ctxMgr, signal, emit } = ctx;
 
@@ -897,33 +990,50 @@ export class AgentOrchestrator {
 
     let toolCalls: AgentToolCallAction[];
     let reasoningText: string;
+    let nativeErrors: NativeToolError[] | undefined;
 
     // 通道 1：原生 tool_use → 直接映射为 AgentToolCallAction
     if (nativeToolCalls && nativeToolCalls.length > 0) {
-      toolCalls = nativeToolCalls
-        .map((tc) => {
-          // 将 sanitized 工具名还原为原始名（如 "Bash" → "Bash(git *)"）
-          const originalName = toolNameMap.get(tc.name) ?? tc.name;
-          return {
-            type: "tool_call" as const,
-            tool: originalName,
-            args: tc.arguments,
-          };
-        })
-        .filter((tc): tc is AgentToolCallAction => knownTools.has(tc.tool));
-      // 去重：相同工具+相同参数的调用只保留一个
+      const mapped: AgentToolCallAction[] = [];
+      const errors: NativeToolError[] = [];
+      for (const tc of nativeToolCalls) {
+        // 将 sanitized 工具名还原为原始名（如 "Bash" → "Bash(git *)"）
+        const originalName = toolNameMap.get(tc.name) ?? tc.name;
+        if (!knownTools.has(originalName)) {
+          // 未知工具名：原生调用不是文本误匹配，静默丢弃会让模型重复犯错
+          // → 拒绝执行并回灌「工具不存在 + 可用列表」（参考 OpenHands 做法）
+          errors.push({
+            id: tc.id,
+            name: originalName,
+            raw: JSON.stringify(tc.arguments),
+          });
+          continue;
+        }
+        mapped.push({
+          type: "tool_call" as const,
+          tool: originalName,
+          // 字段级畸形修复：JSON 字符串编码的数组/对象按 schema 解码（GLM 等）
+          args: fixMalformedToolArguments(tc.arguments, originalName, toolDefs),
+        });
+      }
+      // 去重：相同工具+相同参数的调用只保留一个（键序无关）
       const seen = new Set<string>();
-      toolCalls = toolCalls.filter((tc) => {
+      toolCalls = mapped.filter((tc) => {
         const key = toolCallDedupKey(tc.tool, tc.args);
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
       });
+      nativeErrors = errors.length > 0 ? errors : undefined;
       reasoningText = text;
     } else {
       // 通道 2：文本解析 → 从模型输出中提取工具调用
       const parsed = parseAgentActionsFromModelText(text, { knownTools });
-      toolCalls = parsed.actions;
+      // 文本通道的 args 同样可能携带 GLM 式畸形（数组被编码成字符串）
+      toolCalls = parsed.actions.map((c) => ({
+        ...c,
+        args: fixMalformedToolArguments(c.args, c.tool, toolDefs),
+      }));
       reasoningText = parsed.text;
     }
 
@@ -932,6 +1042,12 @@ export class AgentOrchestrator {
       toolCalls.length === 0
         ? parseAgentActionFromModelText(text, { knownTools })
         : null;
+
+    // 解析诊断：无任何 action 时，描述「为什么解析失败」供格式反馈使用
+    const diagnosis: ParseDiagnosis =
+      toolCalls.length === 0 && !singleAction
+        ? diagnoseParseFailure(text, { knownTools })
+        : { kind: "ok" };
 
     // 评估钩子：模型调用后记录响应（延迟、工具调用等）
     this.evalHooks?.afterModelCall?.({
@@ -946,7 +1062,15 @@ export class AgentOrchestrator {
       latencyMs: Date.now() - modelCallStart,
     });
 
-    return { text, thinking, toolCalls, singleAction, reasoningText };
+    return {
+      text,
+      thinking,
+      toolCalls,
+      singleAction,
+      reasoningText,
+      diagnosis,
+      ...(nativeErrors ? { nativeToolErrors: nativeErrors } : {}),
+    };
   }
 
   /**
@@ -962,7 +1086,7 @@ export class AgentOrchestrator {
    * 1. determineBoundaries()：确定 head（保留）/ middle（压缩）/ tail（保留）
    * 2. 用辅助模型对 middle 段生成摘要
    * 3. validateCompressionSummary()：验证摘要质量
-   * 4. meetsCompressionSavingsThreshold()：确保节省 ≥ 15%
+   * 4. 收益检查：节省需在 20-80% 区间（<20% 历史已紧凑→退避；>80% 摘要丢失过多→熔断计数）
    * 5. 替换历史消息：head + summary + tail
    *
    * 面试要点：这是解决 LLM 长对话上下文爆炸的核心机制。
@@ -973,17 +1097,24 @@ export class AgentOrchestrator {
     compactor: ContextCompactor,
     sessionMemoryStore: SessionMemoryStore,
     budgetSnapshot: ContextBudgetSnapshot,
+    force = false,
   ): Promise<void> {
     const { runId, workspaceRoot, signal, model, ctxMgr, emit } = ctx;
     const historyTokensBeforeCompact = budgetSnapshot.historyUsed;
     const auxModel = this.auxiliaryModel ?? model;
 
-    // 检查是否应该跳过压缩
+    // 低收益退避对 force（P5.1 侧信道）同样生效：退避意味着"刚试过、
+    // 历史已紧凑没啥可压"，强制触发只会再烧一次辅助模型调用
+    if (compactor.shouldBackoffForLowSavings(budgetSnapshot.historyUsed)) {
+      return;
+    }
+
+    // 检查是否应该跳过压缩（force = P5.1 侧信道触发，跳过预算阈值）
     if (
-      !shouldCompactHistory(budgetSnapshot) ||
-      this.compactCooldownTurns > 0 ||
-      compactor.isDisabled ||
-      compactor.shouldSkipDueToThrashing()
+      !force &&
+      (!shouldCompactHistory(budgetSnapshot) ||
+        this.compactCooldownTurns > 0 ||
+        compactor.isDisabled)
     ) {
       return;
     }
@@ -1002,8 +1133,15 @@ export class AgentOrchestrator {
       const headMessages = stripContextSummaryMessages(
         messages.slice(0, boundaries.headEnd + 1),
       );
+      // v3 P2.2：pinned 消息按原文保留在摘要前（内容驱动保护，
+      // 约束/需求变更/关键决策绝不进 middle 摘要）
+      const pinnedMessages = boundaries.pinned
+        .map((i) => messages[i])
+        .filter((m): m is NonNullable<typeof m> => m !== undefined);
       const middleMessages = stripContextSummaryMessages(
         messages.slice(boundaries.headEnd + 1, boundaries.tailStart),
+      ).filter(
+        (_m, i) => !boundaries.pinned.includes(boundaries.headEnd + 1 + i),
       );
       const tailMessages = stripContextSummaryMessages(
         messages.slice(boundaries.tailStart),
@@ -1014,6 +1152,8 @@ export class AgentOrchestrator {
         emit({
           type: "compression.skipped",
           reason: "no middle segment to compact",
+          beforeTokens: historyTokensBeforeCompact,
+          afterTokens: historyTokensBeforeCompact,
         });
         return;
       }
@@ -1033,14 +1173,22 @@ export class AgentOrchestrator {
         signal,
       );
 
-      // 验证摘要质量：长度合理、包含关键信息、不是胡言乱语
-      const quality = validateCompressionSummary(summary);
+      // 验证摘要质量（v3 三层门控：规则层 + 实体层）
+      // 约束生命周期：只要求「当前有效（active）且位于 middle」的约束逐字存活——
+      // head/tail 里的约束原文保留，不依赖摘要承载（e2e 实测修复：
+      // 之前要求全部 active 约束进摘要，goal 顶部的格式指令会卡死压缩）；
+      // 被反转/撤销/过期的约束不参与校验
+      const middleText = middleMessages.map((m) => m.content).join("\n");
+      const requiredConstraints = ctx.taskState
+        .activeConstraints()
+        .filter((c) => c.text.length > 0 && middleText.includes(c.text))
+        .map((c) => c.text);
+      const quality = validateCompressionSummary(summary, {
+        originalMessages: middleMessages,
+        ...(requiredConstraints.length > 0 ? { requiredConstraints } : {}),
+      });
       if (!quality.ok) {
-        compactor.recordResult(
-          historyTokensBeforeCompact,
-          historyTokensBeforeCompact,
-          false,
-        );
+        compactor.recordFailure("quality");
         emit({
           type: "compression.skipped",
           reason: `summary quality: ${quality.reason}`,
@@ -1053,26 +1201,44 @@ export class AgentOrchestrator {
         role: "user",
         content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}`,
       };
-      const newMessages = [...headMessages, summaryMsg, ...tailMessages];
+      const newMessages = [
+        ...headMessages,
+        ...pinnedMessages,
+        summaryMsg,
+        ...tailMessages,
+      ];
       const newHistory = newMessages.filter((m) => m.role !== "system");
       const afterHistoryTokens = ctxMgr.estimator.countMessages(newHistory);
 
-      // 检查压缩收益：至少节省 15% 的 token 才算值得
+      // 检查压缩收益：节省需在 20-80% 区间
+      // <20%：历史已紧凑（良性）→ 低收益退避，不累计熔断
+      // >80%：摘要丢失过多（质量故障）→ 累计熔断
+      const savingsRatio = compressionSavingsRatio(
+        historyTokensBeforeCompact,
+        afterHistoryTokens,
+      );
       if (
-        !meetsCompressionSavingsThreshold(
-          historyTokensBeforeCompact,
-          afterHistoryTokens,
-        )
+        savingsRatio < MIN_COMPRESSION_SAVINGS_RATIO ||
+        savingsRatio > MAX_COMPRESSION_SAVINGS_RATIO
       ) {
-        compactor.recordResult(
-          historyTokensBeforeCompact,
-          historyTokensBeforeCompact,
-          false,
-        );
-        emit({
-          type: "compression.skipped",
-          reason: "insufficient compression savings (<15%)",
-        });
+        const pct = (savingsRatio * 100).toFixed(1);
+        if (savingsRatio < MIN_COMPRESSION_SAVINGS_RATIO) {
+          compactor.recordLowSavings(historyTokensBeforeCompact);
+          emit({
+            type: "compression.skipped",
+            reason: `savings too low (${pct}%, min 20%) — history already compact`,
+            beforeTokens: historyTokensBeforeCompact,
+            afterTokens: afterHistoryTokens,
+          });
+        } else {
+          compactor.recordFailure("over_compression");
+          emit({
+            type: "compression.skipped",
+            reason: `savings too high (${pct}%, max 80%) — summary dropped too much`,
+            beforeTokens: historyTokensBeforeCompact,
+            afterTokens: afterHistoryTokens,
+          });
+        }
         return;
       }
 
@@ -1083,25 +1249,54 @@ export class AgentOrchestrator {
         project: path.basename(workspaceRoot),
       };
       sessionMemoryStore.save(runId, memoryToSave);
+      // P4.4 压缩版本化：每次压缩 = 一次 commit（快照落盘，可回滚）
+      try {
+        this._compactionCommitSeq += 1;
+        const snapshotPath = saveCompactionCommit({
+          workspaceRoot,
+          runId,
+          commit: {
+            n: this._compactionCommitSeq,
+            ts: Date.now(),
+            reason: "auto_compact",
+            beforeMessages: messages.filter((m) => m.role !== "system"),
+            afterMessages: newHistory,
+            summary,
+            beforeTokens: historyTokensBeforeCompact,
+            afterTokens: afterHistoryTokens,
+          },
+        });
+        emit({
+          type: "compression.commit",
+          commit: this._compactionCommitSeq,
+          snapshotPath,
+          beforeTokens: historyTokensBeforeCompact,
+          afterTokens: afterHistoryTokens,
+        });
+      } catch {
+        /* best-effort：快照失败不影响压缩本身 */
+      }
       emit({
         type: "compression.auto_compact.done",
         afterTokens: ctxMgr.historyEstimatedTokens,
         summaryTokens: Math.ceil(summary.length / 4),
       });
-      compactor.recordResult(
-        historyTokensBeforeCompact,
-        afterHistoryTokens,
-        true,
-      );
+      compactor.recordSuccess();
+
+      // P2.7 行为闭环：记录压缩时已读文件/已跑命令快照，
+      // 之后 5 轮内重复获取 → 摘要质量低信号
+      const snap = ctx.taskState.snapshot();
+      this._qualityWindowTurn =
+        ctx.turn + AgentOrchestrator.COMPACTION_QUALITY_WINDOW_TURNS;
+      this._qualityCompactTurn = ctx.turn;
+      this._qualityFiles = new Set(snap.filesRead);
+      this._qualityCommands = new Set(snap.commandsRun.map((c) => c.command));
+      this._qualityReported = false;
 
       // 设置冷却期：避免连续压缩
       this.compactCooldownTurns = AgentOrchestrator.COMPACT_COOLDOWN_TURNS;
     } catch (err) {
-      compactor.recordResult(
-        historyTokensBeforeCompact,
-        historyTokensBeforeCompact,
-        false,
-      );
+      compactor.recordFailure("error");
       emit({
         type: "compression.skipped",
         reason: `compaction failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -1138,8 +1333,14 @@ export class AgentOrchestrator {
       const headMessages = stripContextSummaryMessages(
         messages.slice(0, boundaries.headEnd + 1),
       );
+      // v3 P2.2：pinned 消息按原文保留（恢复路径同样适用）
+      const pinnedMessages = boundaries.pinned
+        .map((i) => messages[i])
+        .filter((m): m is NonNullable<typeof m> => m !== undefined);
       const middleMessages = stripContextSummaryMessages(
         messages.slice(boundaries.headEnd + 1, boundaries.tailStart),
+      ).filter(
+        (_m, i) => !boundaries.pinned.includes(boundaries.headEnd + 1 + i),
       );
       const tailMessages = stripContextSummaryMessages(
         messages.slice(boundaries.tailStart),
@@ -1176,21 +1377,43 @@ export class AgentOrchestrator {
         return;
       }
 
+      const remainingWork = sessionMemory.relevantContext
+        ? `\n\n[Remaining Work]\n${sessionMemory.relevantContext}`
+        : "";
       const summaryMsg: ChatMessage = {
         role: "user",
-        content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}`,
+        content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}${remainingWork}`,
       };
-      const newMessages = [...headMessages, summaryMsg, ...tailMessages];
+      const newMessages = [
+        ...headMessages,
+        ...pinnedMessages,
+        summaryMsg,
+        ...tailMessages,
+      ];
       const afterTokens = ctxMgr.estimator.countMessages(
         newMessages.filter((m) => m.role !== "system"),
       );
 
-      if (!meetsCompressionSavingsThreshold(beforeTokens, afterTokens)) {
-        compactor.recordResult(beforeTokens, beforeTokens, false);
-        emit({
-          type: "compression.skipped",
-          reason: "insufficient compression savings (<15%)",
-        });
+      // 收益检查：与主路径同一口径（20-80% 区间，低收益退避 / 过度压缩熔断）
+      const savingsRatio = compressionSavingsRatio(beforeTokens, afterTokens);
+      if (
+        savingsRatio < MIN_COMPRESSION_SAVINGS_RATIO ||
+        savingsRatio > MAX_COMPRESSION_SAVINGS_RATIO
+      ) {
+        const pct = (savingsRatio * 100).toFixed(1);
+        if (savingsRatio < MIN_COMPRESSION_SAVINGS_RATIO) {
+          compactor.recordLowSavings(beforeTokens);
+          emit({
+            type: "compression.skipped",
+            reason: `savings too low (${pct}%, min 20%) — history already compact`,
+          });
+        } else {
+          compactor.recordFailure("over_compression");
+          emit({
+            type: "compression.skipped",
+            reason: `savings too high (${pct}%, max 80%) — summary dropped too much`,
+          });
+        }
         return;
       }
 
@@ -1200,14 +1423,42 @@ export class AgentOrchestrator {
         project: path.basename(workspaceRoot),
       });
 
+      // P4.4 压缩版本化：恢复路径同样产生 commit
+      try {
+        this._compactionCommitSeq += 1;
+        const snapshotPath = saveCompactionCommit({
+          workspaceRoot,
+          runId,
+          commit: {
+            n: this._compactionCommitSeq,
+            ts: Date.now(),
+            reason: "resume",
+            beforeMessages: messages.filter((m) => m.role !== "system"),
+            afterMessages: newMessages.filter((m) => m.role !== "system"),
+            summary,
+            beforeTokens,
+            afterTokens,
+          },
+        });
+        emit({
+          type: "compression.commit",
+          commit: this._compactionCommitSeq,
+          snapshotPath,
+          beforeTokens,
+          afterTokens,
+        });
+      } catch {
+        /* best-effort */
+      }
+
       emit({
         type: "compression.auto_compact.done",
         afterTokens: ctxMgr.historyEstimatedTokens,
         summaryTokens: Math.ceil(summary.length / 4),
       });
-      compactor.recordResult(beforeTokens, afterTokens, true);
+      compactor.recordSuccess();
     } catch (err) {
-      compactor.recordResult(beforeTokens, beforeTokens, false);
+      compactor.recordFailure("error");
       emit({
         type: "compression.skipped",
         reason: `compact failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -1260,6 +1511,9 @@ export class AgentOrchestrator {
       this.compactCooldownTurns--;
     }
 
+    // P3：每轮重置 context.recall 取回预算（每步 ≤2 次、每轮 ≤16K 字符）
+    ctx.artifactRegistry?.startTurn(ctx.turn);
+
     this.refreshContextPackage(ctx);
 
     // 发出轮次 tick 事件（TUI 用此更新进度条和 token 计数）
@@ -1283,10 +1537,14 @@ export class AgentOrchestrator {
 
     // 步骤 2：L1 裁剪（prune）
     // 将超大的工具输出持久化到磁盘，只保留最近 N 个工具结果在内存中
+    // P3：顺带执行引用桩目录有界化（最旧非 Cited 桩移出上下文）
     const contextWindow = model.capabilities?.contextWindow ?? 128_000;
     const pruneResult = ctxMgr.prune({
       toolResultsDir: getToolResultsDir(workspaceRoot, runId),
       keepRecentTools: DEFAULT_KEEP_RECENT_TOOLS,
+      ...(ctx.artifactRegistry
+        ? { artifactRegistry: ctx.artifactRegistry }
+        : {}),
     });
     if (pruneResult.pruned) {
       emit({
@@ -1297,13 +1555,21 @@ export class AgentOrchestrator {
     }
 
     // 计算上下文预算快照（system / tools / history 各用了多少 token）
+    // P5.2 成本记账：用累计 cache 命中率微调压缩阈值（保护宝贵前缀）
+    const cacheHitRate =
+      this._promptTokensAcc > 0
+        ? this._cachedPromptTokensAcc / this._promptTokensAcc
+        : 0;
     const budgetSnapshot = AgentOrchestrator.measureBudget(
       ctxMgr,
       toolDefs,
       contextWindow,
+      cacheHitRate,
     );
     ctxMgr.setHistoryTokenBudget(budgetSnapshot.allocation.historyBudget);
-    AgentOrchestrator.emitContextBudget(emit, contextWindow, budgetSnapshot);
+    this.emitContextBudget(emit, contextWindow, budgetSnapshot);
+    // P4.3 逐块账本 dashboard（VISTA）：块粒度 id/token/轮龄/状态
+    this.emitContextBlocks(ctx, budgetSnapshot);
 
     // 步骤 3：L2 自动压缩（history pool 超过阈值时触发）
     await this.maybeCompactHistory(
@@ -1312,6 +1578,52 @@ export class AgentOrchestrator {
       sessionMemoryStore,
       budgetSnapshot,
     );
+
+    // P5.1 侧信道触发：monitor 采样（10% + 5 步冷却 + 预算软启动），
+    // 命中 subtask_end / low_density / critical_issue → 强制压缩（跳过阈值）
+    const historyBudget = budgetSnapshot.allocation.historyBudget;
+    const remainingRatio =
+      historyBudget > 0 ? 1 - budgetSnapshot.historyUsed / historyBudget : 1;
+    if (this.monitor.shouldEvaluate(ctx.turn, remainingRatio)) {
+      const decision = evaluateTrigger(ctx.ctxMgr.buildMessages());
+      this.monitor.noteEvaluated(decision.triggered);
+      if (decision.triggered && !compactor.isDisabled) {
+        emit({
+          type: "compression.monitor.trigger",
+          reason: decision.reason ?? "subtask_end",
+          force: true,
+        });
+        await this.maybeCompactHistory(
+          ctx,
+          compactor,
+          sessionMemoryStore,
+          budgetSnapshot,
+          true,
+        );
+      }
+    }
+
+    // 约束生命周期：检测意图变化 → LLM 调和约束集合
+    // （覆盖/反转/撤销/过期判定归 LLM；这里只决定"该不该问"）
+    await this.maybeReconcileConstraints(ctx);
+
+    // P4.3 硬守卫：历史预算已满 → 拒绝继续注入并提示模型
+    // （"放不下的新内容拒绝并提示"，不静默截断；提示每 run 只注入一次）
+    if (
+      budgetSnapshot.historyUsed > budgetSnapshot.allocation.historyBudget &&
+      !this._budgetGuardWarned
+    ) {
+      this._budgetGuardWarned = true;
+      emit({
+        type: "context.guard",
+        historyUsed: budgetSnapshot.historyUsed,
+        historyBudget: budgetSnapshot.allocation.historyBudget,
+        reason: "budget_exhausted",
+      });
+      ctxMgr.addUser(
+        `[Context guard] History budget exhausted (${budgetSnapshot.historyUsed} / ${budgetSnapshot.allocation.historyBudget} tokens). New tool outputs will be truncated and archived as [archived id=N] references — use context.recall to restore the full text when needed. Prefer short commands and targeted reads.`,
+      );
+    }
 
     // ── goal 变化时刷新记忆上下文 ──
     if (this._memoryRuntime && this._memoryTaskId) {
@@ -1378,8 +1690,15 @@ export class AgentOrchestrator {
     } finally {
       this._streamRecoveryPath = undefined;
     }
-    const { text, thinking, toolCalls, singleAction, reasoningText } =
-      modelResult;
+    const {
+      text,
+      thinking,
+      toolCalls,
+      singleAction,
+      reasoningText,
+      diagnosis,
+      nativeToolErrors,
+    } = modelResult;
 
     // 步骤 6：通过 action 处理器分发执行
     // handleAction 在 orchestrator/action-handlers.ts 中实现，
@@ -1421,6 +1740,10 @@ export class AgentOrchestrator {
         createAgent: this.createAgent,
         allowedTools: this.allowedTools,
       },
+      {
+        diagnosis,
+        ...(nativeToolErrors ? { nativeToolErrors } : {}),
+      },
     );
     // 子 Agent 摘要 → WorkingMemory
     if (
@@ -1441,7 +1764,109 @@ export class AgentOrchestrator {
           .catch(() => {});
       }
     }
+
+    // P2.7 行为闭环：压缩后 5 轮内检测重复获取（摘要质量低信号）
+    if (
+      !this._qualityReported &&
+      ctx.turn <= this._qualityWindowTurn &&
+      this._qualityFiles.size > 0
+    ) {
+      const snap = ctx.taskState.snapshot();
+      const newFiles = snap.filesRead.filter((f) => !this._qualityFiles.has(f));
+      const newCommands = snap.commandsRun
+        .map((c) => c.command)
+        .filter((c) => !this._qualityCommands.has(c));
+      const { duplicates, quality } = detectDuplicateAccess({
+        filesReadAtCompact: [...this._qualityFiles],
+        commandsAtCompact: [...this._qualityCommands],
+        newFilesRead: newFiles,
+        newCommands,
+      });
+      if (quality === "low") {
+        this._qualityReported = true;
+        emit({
+          type: "compression.quality.low",
+          repeated: duplicates.map((d) => `${d.kind}:${d.value}`),
+          compactTurn: this._qualityCompactTurn,
+        });
+      }
+    }
     return actionResult.state;
+  }
+
+  /**
+   * 约束生命周期调和：检测用户意图变化 → LLM 维护"当前有效约束集合"。
+   *
+   * 触发（harness 规则，仅决定何时问；语义判定全部由 LLM 负责）：
+   * 1. 有新增用户消息（非工具结果/系统注入，且非最小回复）→ 冷却到期则调和
+   * 2. 距上次调和 > 15 轮 → 强制调和（处理过期约束）
+   * 3. 最近用户消息命中任务转向信号（next task / 新任务…）→ 调和
+   *
+   * 降级安全：LLM 失败时 keep 全部 + 规则追加，绝不丢约束。
+   */
+  private async maybeReconcileConstraints(ctx: PhaseContext): Promise<void> {
+    // 子 Agent 不调和：约束来自父级 sharedContext，不维护自己的生命周期
+    if (this.runMode === "child") return;
+    const auxModel = this.auxiliaryModel ?? ctx.model;
+    const existing = ctx.taskState.activeConstraints();
+    // 扫描全部用户消息（排除工具结果与系统注入——系统注入不是用户意图）
+    const userMessages = ctx.ctxMgr
+      .buildMessages()
+      .filter((m) => m.role === "user")
+      .map((m) => m.content)
+      .filter(
+        (c) =>
+          !isToolResultMessage(c) &&
+          !CONSTRAINT_SYSTEM_INJECTED_PREFIXES.some((p) => c.startsWith(p)),
+      );
+    if (userMessages.length === 0) return;
+
+    const newMessages = userMessages.slice(this._lastConstraintScanCount);
+    // 多轮会话：goal 变更（用户新请求）也是意图变化候选
+    const goalChanged = ctx.specGoal !== ctx.taskState.snapshot().goal;
+    const candidates =
+      newMessages.length > 0 ? newMessages : goalChanged ? [ctx.specGoal] : [];
+    const taskPivot = candidates.some((m) =>
+      CONSTRAINT_TASK_PIVOT_PATTERN.test(m.trim()),
+    );
+    // 15 轮强制：仅当已有约束需要过期判定，且不在初始轮（init 刚提取，无过期可言）
+    const forced =
+      existing.length > 0 &&
+      ctx.turn > 0 &&
+      ctx.turn - this._lastConstraintReconcileTurn > 15;
+    // 最小回复过滤（纯长度/结构规则，无词表）："继续"“ok”这类不值得调和
+    const meaningfulNew = candidates.filter(
+      (m) => m.length >= 10 || /[,.。:：/\\]/.test(m),
+    );
+    const shouldReconcile =
+      taskPivot ||
+      forced ||
+      (meaningfulNew.length > 0 && this._constraintReconcileCooldown <= 0);
+
+    this._lastConstraintScanCount = userMessages.length;
+    if (!shouldReconcile) return;
+
+    const result = await runConstraintReconcile({
+      model: auxModel,
+      existing,
+      newUserMessages: candidates.slice(-5),
+      currentTurn: ctx.turn,
+      signal: ctx.signal,
+    });
+    ctx.taskState.updateConstraints(result, ctx.turn);
+    if (goalChanged) ctx.taskState.updateGoal(ctx.specGoal);
+    this._lastConstraintReconcileTurn = ctx.turn;
+    this._constraintReconcileCooldown = 3;
+    ctx.emit({
+      type: "task.constraints.updated",
+      active: ctx.taskState.activeConstraints().map((c) => c.text),
+      superseded: ctx.taskState
+        .snapshot()
+        .constraints.filter((c) => c.status !== "active")
+        .map((c) => c.text),
+      ok: result.ok,
+    });
+    // refreshContextPackage 在下一轮自动用新约束集重注入 [Constraints]
   }
 
   private refreshContextPackage(ctx: PhaseContext): void {
@@ -1459,14 +1884,36 @@ export class AgentOrchestrator {
           ]
         : [];
     const taskSnap = ctx.taskState.snapshot();
+    // v3 P0.3：用户约束提升为每轮重注入的状态段（[Constraints] 行）
+    // 约束从此不依赖它在历史中的位置——历史被压缩也不影响它存活
+    // 约束生命周期：只注入 active 约束（被 LLM 调和判定撤销/反转/过期的
+    // superseded/expired 约束不再注入，避免模型继续遵守旧指令）
+    const activeConstraints = ctx.taskState.activeConstraints();
+    const constraintLines =
+      activeConstraints.length > 0
+        ? [
+            "",
+            "[Constraints]",
+            ...activeConstraints.map(
+              (c) => `- ${c.text} (stated at turn ${c.sourceTurn})`,
+            ),
+          ]
+        : [];
     const text = [
       CONTEXT_PACKAGE_PREFIX,
       `[Task] ${taskSnap.goal}`,
+      ...constraintLines,
       this._memoryContextSection || "",
       ...codeLines,
     ]
       .filter((line) => line !== undefined)
       .join("\n");
+    // P5.2 前缀稳定：内容无变化时不 upsert（避免无意义的 system 后前缀重写，
+    // 破坏 prompt cache；TokenPilot 前缀稳定 = cache 命中率）
+    const existing = ctx.ctxMgr
+      .buildMessages()
+      .find((m) => m.content.startsWith(CONTEXT_PACKAGE_PREFIX));
+    if (existing && existing.content === text) return;
     ctx.ctxMgr.upsertUserByPrefix(CONTEXT_PACKAGE_PREFIX, text);
   }
 
@@ -1695,6 +2142,8 @@ export class AgentOrchestrator {
     finishReason?: string;
     /** 原生结构化工具调用（当 provider 支持 function calling 时） */
     nativeToolCalls?: readonly NativeToolCall[];
+    /** 原生通道参数解析失败的调用（拒绝执行，需回灌给模型） */
+    nativeToolErrors?: readonly NativeToolError[];
   }> {
     // 创建超时信号：2 分钟
     const timeout = AbortSignal.timeout(AgentOrchestrator.MODEL_TIMEOUT_MS);
@@ -1720,6 +2169,7 @@ export class AgentOrchestrator {
       let usage: ModelTokenUsage | undefined;
       let finishReason: string | undefined;
       const nativeToolCalls: NativeToolCall[] = [];
+      const malformedToolErrors: NativeToolError[] = [];
 
       // 流式恢复：边收 chunk 边写盘，崩了不丢输出
       let recoveryStream: fs.WriteStream | undefined;
@@ -1744,15 +2194,32 @@ export class AgentOrchestrator {
           emit({ type: "model.thinking", text: thinkingAcc });
         } else if (chunk.type === "tool_use") {
           // 原生 tool_use：收集为结构化对象，同时转为文本用于 TUI 显示
-          let parsedArgs: Record<string, unknown>;
+          // 参数 JSON 解析失败 → 拒绝执行（绝不带空参数执行），
+          // 记录原始输入供下一轮回灌给模型自纠
+          let parsedArgs: Record<string, unknown> | null = null;
           try {
             const raw = JSON.parse(chunk.input);
             parsedArgs =
               raw !== null && typeof raw === "object" && !Array.isArray(raw)
                 ? (raw as Record<string, unknown>)
-                : {};
+                : null;
           } catch {
-            parsedArgs = {};
+            parsedArgs = null;
+          }
+          if (parsedArgs === null) {
+            malformedToolErrors.push({
+              id: chunk.id,
+              name: chunk.name,
+              raw: chunk.input,
+            });
+            const display = JSON.stringify({
+              tool: chunk.name,
+              args: "[unparseable]",
+            });
+            acc += (acc ? "\n" : "") + display;
+            recoveryStream?.write((acc ? "\n" : "") + display);
+            emit({ type: "model.chunk", text: acc });
+            continue;
           }
           nativeToolCalls.push({
             id: chunk.id,
@@ -1785,6 +2252,16 @@ export class AgentOrchestrator {
       // 记录 token 用量和成本
       if (usage) {
         this.costTracker?.record(model.label, usage);
+        // P1.4 usage 回填校准：真实 prompt_tokens vs 估算（收敛 <10%，基线偏差 37%）
+        if (usage.promptTokens !== undefined) {
+          this._calibratedEstimator?.recordActual(
+            usage.promptTokens,
+            this._calibratedEstimator.estimateRawMessages(messages),
+          );
+          // P5.2 成本记账：累计命中率（阈值微调输入）
+          this._promptTokensAcc += usage.promptTokens;
+          this._cachedPromptTokensAcc += usage.cachedPromptTokens ?? 0;
+        }
         const snap = this.costTracker?.snapshot();
         if (snap)
           emit({
@@ -1818,6 +2295,9 @@ export class AgentOrchestrator {
         usage,
         finishReason,
         ...(nativeToolCalls.length > 0 ? { nativeToolCalls } : {}),
+        ...(malformedToolErrors.length > 0
+          ? { nativeToolErrors: malformedToolErrors }
+          : {}),
       };
     }
 
@@ -1831,6 +2311,16 @@ export class AgentOrchestrator {
 
     if (result.usage) {
       this.costTracker?.record(model.label, result.usage);
+      // P1.4 usage 回填校准（非流式路径）
+      if (result.usage.promptTokens !== undefined) {
+        this._calibratedEstimator?.recordActual(
+          result.usage.promptTokens,
+          this._calibratedEstimator.estimateRawMessages(messages),
+        );
+        // P5.2 成本记账：累计命中率
+        this._promptTokensAcc += result.usage.promptTokens;
+        this._cachedPromptTokensAcc += result.usage.cachedPromptTokens ?? 0;
+      }
       const snap = this.costTracker?.snapshot();
       if (snap)
         emit({
@@ -1876,6 +2366,7 @@ export class AgentOrchestrator {
     usage?: ModelTokenUsage;
     thinking?: string;
     nativeToolCalls?: readonly NativeToolCall[];
+    nativeToolErrors?: readonly NativeToolError[];
   }> {
     // 第一次调用（带熔断和重试）
     const result = await this.callModelWithRetry(
@@ -1940,6 +2431,11 @@ export class AgentOrchestrator {
         nativeToolCalls: [
           ...(result.nativeToolCalls ?? []),
           ...(continued.nativeToolCalls ?? []),
+        ],
+        // 合并解析失败调用：两次调用的错误都要回灌
+        nativeToolErrors: [
+          ...(result.nativeToolErrors ?? []),
+          ...(continued.nativeToolErrors ?? []),
         ],
       };
     }
@@ -2022,6 +2518,7 @@ export class AgentOrchestrator {
     thinking?: string;
     finishReason?: string;
     nativeToolCalls?: readonly NativeToolCall[];
+    nativeToolErrors?: readonly NativeToolError[];
   }> {
     const breaker = breakerArg ?? this.getOrCreateBreaker(model.label);
     // 熔断器守卫：如果已经熔断，直接抛异常（不可重试）
@@ -2125,6 +2622,7 @@ export class AgentOrchestrator {
     taskState: TaskStateManager;
     sessionMemoryStore: SessionMemoryStore;
     compactor: ContextCompactor;
+    artifactRegistry: ArtifactRegistry;
     emit: (event: RunEvent) => void;
     emitRunMetrics: (status: "completed" | "failed" | "aborted") => void;
     seq: { n: number };
@@ -2132,12 +2630,20 @@ export class AgentOrchestrator {
     shellSandbox: import("@paw/harness").ShellSandboxConfig;
   }> {
     const runId = spec.runId;
+    // P4.3/P4.4 每 run 重置：硬守卫提示、块账本/预算事件去重、压缩提交序号
+    this._budgetGuardWarned = false;
+    this._lastBlocksKey = null;
+    this._lastBudgetKey = null;
+    this._compactionCommitSeq = 0;
     const workspaceRoot = (() => {
-      const given = spec.workspaceRoot?.trim()
-        ? path.resolve(spec.workspaceRoot)
-        : path.resolve(".");
-      // findPawRoot：向上查找 .paw 目录，确定项目根
-      return findPawRoot(given) ?? given;
+      // 显式传入 workspaceRoot → 原样信任（调用方说了算）；
+      // 只有未传参（CLI 当前目录模式）才向上找 .paw 锚定项目根——
+      // 否则 home 下无 .paw 的新目录会被静默重定向到 home（home 有全局 .paw）
+      if (spec.workspaceRoot?.trim()) {
+        return path.resolve(spec.workspaceRoot);
+      }
+      const cwd = path.resolve(".");
+      return findPawRoot(cwd) ?? cwd;
     })();
     const maxSteps = resolveMaxSteps(workspaceRoot, spec.maxSteps);
 
@@ -2233,7 +2739,22 @@ export class AgentOrchestrator {
     // ── 模型选择 ──
     const model =
       this.overrideModel ?? createDefaultLanguageModel(workspaceRoot);
-    const ctxMgr = this.contextManager ?? new ContextManager();
+    // P1.4 估算统一：按模型 label 选 tokenizer，包一层 usage 回填校准
+    this._calibratedEstimator = new CalibratedEstimator(
+      resolveEstimatorForModel(model.label),
+    );
+    // o200k 编码首次加载 ~20s：后台预热，避免首次估算卡住
+    const modelLabel = model.label.toLowerCase();
+    if (
+      /\b(qwen|glm|minimax|yi|kimi|moonshot|ernie|baichuan)(?![a-z])/.test(
+        modelLabel,
+      )
+    ) {
+      prewarmEncoding("o200k_base");
+    }
+    const ctxMgr =
+      this.contextManager ??
+      new ContextManager({ estimator: this._calibratedEstimator });
     const planner = new TaskPlanner();
     const taskState = new TaskStateManager(
       spec.goal,
@@ -2243,6 +2764,8 @@ export class AgentOrchestrator {
     let startTurn = 0;
     const sessionMemoryStore = new SessionMemoryStore({ workspaceRoot });
     const compactor = new ContextCompactor({}, ctxMgr.estimator);
+    // P3 冷库：会话级可寻址归档（截断/驱逐的工具输出全文 + context.recall）
+    const artifactRegistry = new ArtifactRegistry();
 
     // ── MCP 连接 ──
     // MCP（Model Context Protocol）允许模型通过标准协议访问外部工具和数据源
@@ -2305,7 +2828,7 @@ export class AgentOrchestrator {
         contextWindow,
       );
       ctxMgr.setHistoryTokenBudget(initBudget.allocation.historyBudget);
-      AgentOrchestrator.emitContextBudget(emit, contextWindow, initBudget);
+      this.emitContextBudget(emit, contextWindow, initBudget);
 
       return {
         runId,
@@ -2321,6 +2844,7 @@ export class AgentOrchestrator {
         taskState,
         sessionMemoryStore,
         compactor,
+        artifactRegistry,
         emit,
         emitRunMetrics,
         seq,
@@ -2573,6 +3097,7 @@ export class AgentOrchestrator {
         const pruneResult = ctxMgr.prune({
           toolResultsDir,
           keepRecentTools: DEFAULT_KEEP_RECENT_TOOLS,
+          artifactRegistry,
         });
         if (pruneResult.pruned) {
           emit({
@@ -2583,8 +3108,15 @@ export class AgentOrchestrator {
         }
 
         // Step 3: L2 compact — 如果历史依然太大，用辅助模型把中间段压成摘要
+        // 阈值与主路径同一口径（budget.ts 唯一事实来源：0.8 × historyBudget
+        // − 10K buffer，纯百分比无封顶）；恢复场景不再用更激进的 0.4 × 窗口
         const historyTokensAfterPrune = ctxMgr.historyEstimatedTokens;
-        const resumeCompactThreshold = Math.floor(contextWindow * 0.4);
+        const resumeCompactThreshold = Math.max(
+          0,
+          computeCompactThreshold(
+            allocateContextBudget(contextWindow).historyBudget,
+          ) - 10_000,
+        );
         if (
           this.auxiliaryModel &&
           historyTokensAfterPrune > resumeCompactThreshold
@@ -2643,6 +3175,14 @@ export class AgentOrchestrator {
       ctxMgr.addUser(userContent, goalMentions.imageAttachments);
     }
 
+    // 约束生命周期：初始用户消息不算"新增"（init 已提取约束），
+    // 只有 init 之后追加的用户消息才触发 LLM 调和
+    this._lastConstraintScanCount = ctxMgr
+      .buildMessages()
+      .filter(
+        (m) => m.role === "user" && !isToolResultMessage(m.content),
+      ).length;
+
     // 计算初始上下文预算
     const initBudget = AgentOrchestrator.measureBudget(
       ctxMgr,
@@ -2650,7 +3190,7 @@ export class AgentOrchestrator {
       contextWindow,
     );
     ctxMgr.setHistoryTokenBudget(initBudget.allocation.historyBudget);
-    AgentOrchestrator.emitContextBudget(emit, contextWindow, initBudget);
+    this.emitContextBudget(emit, contextWindow, initBudget);
 
     return {
       runId,
@@ -2666,6 +3206,7 @@ export class AgentOrchestrator {
       taskState,
       sessionMemoryStore,
       compactor,
+      artifactRegistry,
       emit,
       emitRunMetrics,
       seq,
@@ -2695,8 +3236,9 @@ export class AgentOrchestrator {
     ctxMgr: ContextManager,
     toolDefs: readonly import("@paw/models").ToolDefinition[],
     contextWindow: number,
+    cacheHitRate = 0,
   ): ContextBudgetSnapshot {
-    return measureContextBudget({
+    const snapshot = measureContextBudget({
       contextWindow,
       systemTokens: ctxMgr.systemEstimatedTokens,
       toolsTokens: AgentOrchestrator.estimateToolTokens(
@@ -2705,6 +3247,85 @@ export class AgentOrchestrator {
       ),
       historyTokens: ctxMgr.historyEstimatedTokens,
     });
+    // P5.2 成本记账软指导：缓存命中率高 → 前缀宝贵 → 放宽压缩阈值
+    // （少破坏缓存 = 省钱；TokenPilot 定价 output 60× cache-hit）
+    if (cacheHitRate > 0) {
+      return {
+        ...snapshot,
+        compactThreshold: costAdjustedCompactThreshold(
+          snapshot.compactThreshold,
+          cacheHitRate,
+        ),
+      };
+    }
+    return snapshot;
+  }
+
+  /**
+   * P4.3 逐块账本（VISTA dashboard）：按块粒度输出 context.blocks 事件。
+   * 块 = system / 摘要 / pinned / 工具结果 / 对话回合，附 token、轮龄、状态。
+   * 与 context.budget 同源（同一 ctxMgr），保证 dashboard 数字 = 记账数字。
+   */
+  private emitContextBlocks(
+    ctx: PhaseContext,
+    _snapshot: ContextBudgetSnapshot,
+  ): void {
+    const messages = ctx.ctxMgr.buildMessages();
+    const blocks: {
+      readonly id: string;
+      readonly type:
+        | "system"
+        | "summary"
+        | "pinned"
+        | "tool"
+        | "conversation"
+        | "recall";
+      readonly tokens: number;
+      readonly ageTurns: number;
+      readonly status: "pinned" | "visible" | "archived";
+    }[] = [];
+    const counter = { pinned: 0, tool: 0, conv: 0 };
+    const turn = ctx.turn;
+    // 每回合约 2 条消息，用索引近似消息轮龄
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]!;
+      const tokens = ctx.ctxMgr.estimator.countMessages([msg]);
+      const ageTurns = Math.max(0, turn - Math.floor(i / 2));
+      let type: (typeof blocks)[number]["type"] = "conversation";
+      let status: (typeof blocks)[number]["status"] = "visible";
+      let id = `C${++counter.conv}`;
+      if (msg.role === "system") {
+        type = "system";
+        status = "pinned";
+        id = "S1";
+      } else if (isContextSummaryMessage(msg)) {
+        type = "summary";
+        id = "SUM";
+      } else if (
+        msg.content.includes("persisted-output") ||
+        msg.content.includes("[archived id=")
+      ) {
+        type = "tool";
+        status = "archived";
+        id = `T${++counter.tool}`;
+      } else if (
+        isProtectedUserConstraint(msg) ||
+        msg.content.startsWith(CONTEXT_PACKAGE_PREFIX)
+      ) {
+        type = "pinned";
+        status = "pinned";
+        id = `P${++counter.pinned}`;
+      } else if (msg.content.startsWith("[Tool ")) {
+        type = "tool";
+        id = `T${++counter.tool}`;
+      }
+      blocks.push({ id, type, tokens, ageTurns, status });
+    }
+    // 去重：块账本无变化时不重复发
+    const key = JSON.stringify(blocks);
+    if (key === this._lastBlocksKey) return;
+    this._lastBlocksKey = key;
+    ctx.emit({ type: "context.blocks", blocks });
   }
 
   /**
@@ -2713,15 +3334,15 @@ export class AgentOrchestrator {
    * 包含去重逻辑：如果连续两轮的预算值完全相同，跳过发射，
    * 避免在 TUI 中刷屏相同的信息。
    */
-  private static emitContextBudget(
+  private emitContextBudget(
     emit: (event: RunEvent) => void,
     contextWindow: number,
     snapshot: ContextBudgetSnapshot,
   ): void {
     // 去重：值没变就不发
     const key = `${snapshot.systemUsed}/${snapshot.allocation.systemBudget}/${snapshot.historyUsed}/${snapshot.allocation.historyBudget}`;
-    if (key === AgentOrchestrator._lastBudgetKey) return;
-    AgentOrchestrator._lastBudgetKey = key;
+    if (key === this._lastBudgetKey) return;
+    this._lastBudgetKey = key;
 
     emit({
       type: "context.budget",

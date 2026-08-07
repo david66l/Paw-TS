@@ -36,7 +36,13 @@ export interface CompressionAgentResult {
 }
 
 /** 压缩 Agent 的系统提示词 */
-const COMPRESSION_SYSTEM = `You are a context compression assistant. Distill conversation history into structured markdown so the AI can continue without re-reading the full thread. Be concise but preserve actionable information.`;
+const COMPRESSION_SYSTEM = `You are a context compression assistant. Distill conversation history into structured markdown so the AI can continue without re-reading the full thread. Be concise but preserve actionable information.
+
+CRITICAL RULES:
+1. User constraints and prohibitions (e.g. "不要修改 X", "必须使用 Y", "Never run Z") MUST be preserved VERBATIM — copy the exact original sentence into the "## Constraints" section. Never paraphrase, never reword, never omit. A paraphrased constraint is considered a lost constraint.
+2. User requirement changes / clarifications (e.g. "改为 X", "其实我要的是 X", "重点是 X") MUST be preserved VERBATIM in the "## Active Task" section, alongside the current task.
+3. Preserve exact file paths, function names, error codes, and commands verbatim — do not summarize identifiers.
+4. Never invent facts that are not in the conversation.`;
 
 /** 输出格式指令：要求模型按固定章节输出 markdown */
 const COMPRESSION_SECTIONS = `Respond with ONLY a markdown document containing these sections:
@@ -46,6 +52,7 @@ const COMPRESSION_SECTIONS = `Respond with ONLY a markdown document containing t
 ## Key Decisions
 ## Relevant Files
 ## Errors & Fixes
+## Constraints
 ## Next Steps
 ## Pending Questions`;
 
@@ -101,6 +108,10 @@ function parseSummaryToSessionMemory(
       .filter((l) => l.trim().startsWith("- "))
       .map((l) => l.trim().slice(2)),
     errorsAndFixes: sections["errors & fixes"]
+      ?.split("\n")
+      .filter((l) => l.trim().startsWith("- "))
+      .map((l) => l.trim().slice(2)),
+    constraints: sections.constraints
       ?.split("\n")
       .filter((l) => l.trim().startsWith("- "))
       .map((l) => l.trim().slice(2)),

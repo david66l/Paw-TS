@@ -42,6 +42,7 @@ export const SYMBOL_SEARCH = "workspace.symbol_search" as const;
 export const MEMORY_LIST = "memory.list" as const;
 export const MEMORY_READ = "memory.read" as const;
 export const MEMORY_SAVE = "memory.save" as const;
+export const CONTEXT_RECALL = "context.recall" as const;
 
 const BUILTIN_TOOLS = [
   READ,
@@ -69,6 +70,7 @@ const BUILTIN_TOOLS = [
   MEMORY_LIST,
   MEMORY_READ,
   MEMORY_SAVE,
+  CONTEXT_RECALL,
 ] as const;
 
 export type BuiltinToolName = (typeof BUILTIN_TOOLS)[number];
@@ -97,7 +99,8 @@ export function toolRequiresApproval(
     tool === SYMBOL_SEARCH ||
     tool === LSP ||
     tool === MEMORY_LIST ||
-    tool === MEMORY_READ
+    tool === MEMORY_READ ||
+    tool === CONTEXT_RECALL
   )
     return false;
   if (tool === SHELL && args) {
@@ -428,7 +431,36 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
       },
       ["name", "content", "type"],
     ),
+    fn(
+      CONTEXT_RECALL,
+      "Restore the full content of an archived (previously truncated) tool output by its archive id. Use when an [archived id=N, ...] marker appears in a tool result and you need the full text. For outputs larger than 8000 chars, use part=head (start) / part=tail (end) / part=chunk with offset to page through. After recall, that id stays permanently addressable for this task.",
+      {
+        id: {
+          type: "string",
+          description:
+            "Archive id from an [archived id=N ...] marker, or a content hash. Unknown ids fall back to keyword search.",
+        },
+        part: {
+          type: "string",
+          enum: ["head", "tail", "chunk"],
+          description:
+            "Which window to return: head (start), tail (end), or chunk (cursor via offset)",
+        },
+        offset: {
+          type: "integer",
+          description: "Chunk cursor: character offset from start (part=chunk)",
+        },
+        limit: {
+          type: "integer",
+          description: "Max chars to return (default 8000, hard cap 8000)",
+        },
+      },
+      ["id"],
+    ),
   ];
+  // P5.2 前缀稳定完整版：内置工具按名称固定排序（确定性 schema 顺序，
+  // 避免迭代顺序抖动导致 system prompt 逐字节变化破坏 prompt cache）
+  defs.sort((a, b) => a.function.name.localeCompare(b.function.name));
   if (mcp) {
     for (const t of mcp.listTools()) {
       defs.push({
@@ -472,6 +504,7 @@ export function toolCatalogText(mcp?: McpClientManager): string {
     `{"tool":"${MEMORY_LIST}","args":{}} — list MemoryRuntime entries (short titles)`,
     `{"tool":"${MEMORY_READ}","args":{"name":"<name-or-id>"}} — read full memory body by name/id`,
     `{"tool":"${MEMORY_SAVE}","args":{"name":"<unique-name>","content":"<focused markdown>","type":"project|user|feedback|reference","tags":["tag1"],"priority":"mid"}} — save via governance (not a local md file)`,
+    `{"tool":"${CONTEXT_RECALL}","args":{"id":"<archive-id-from-[archived-marker]>","part":"head|tail|chunk","offset":0,"limit":8000}} — restore a truncated/evicted tool output by id (fallback: keyword search on unknown ids)`,
   ];
 
   if (mcp) {

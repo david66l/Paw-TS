@@ -74,6 +74,7 @@ export {
   toolDefinitions,
   toolNameReverseMap,
   toolRequiresApproval,
+  CONTEXT_RECALL,
   type ToolName,
   type ToolRunResult,
 } from "./registry/index.js";

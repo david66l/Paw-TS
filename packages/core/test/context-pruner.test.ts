@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import type { ChatMessage } from "../src/context/manager.js";
+import { ArtifactRegistry } from "../src/context/archive.js";
 import { pruneToolResults } from "../src/context/pruner.js";
 import {
   DEFAULT_KEEP_RECENT_TOOLS,
@@ -203,5 +204,37 @@ describe("pruneToolResults", () => {
     const second = pruneToolResults(first.messages, { toolResultsDir: dir });
     expect(second.pruned).toBe(false);
     expect(fs.readdirSync(dir).length).toBe(1);
+  });
+
+  test("AC-P3-8 目录有界化：引用桩超上限时最旧非 Cited 桩降级为裸 ID", () => {
+    const dir = tempToolResultsDir();
+    const registry = new ArtifactRegistry({ maxStubsInContext: 2 });
+    registry.startTurn(0);
+    const a = registry.store("A".repeat(100), { tool: "read_file", ok: true, turn: 1 })!;
+    const b = registry.store("B".repeat(100), { tool: "read_file", ok: true, turn: 2 })!;
+    const c = registry.store("C".repeat(100), { tool: "read_file", ok: true, turn: 3 })!;
+    // 中间桩 b 被 recall 过 → Cited，不可驱逐
+    registry.markCited(b);
+
+    const messages: ChatMessage[] = [
+      { role: "system", content: "sys" },
+      { role: "user", content: toolResult("read_file", true, "old", `[${registry.toStub(a)}]`) },
+      { role: "assistant", content: "step1" },
+      { role: "user", content: toolResult("read_file", true, "mid", `[${registry.toStub(b)}]`) },
+      { role: "assistant", content: "step2" },
+      { role: "user", content: toolResult("read_file", true, "new", `[${registry.toStub(c)}]`) },
+    ];
+
+    const result = pruneToolResults(messages, {
+      toolResultsDir: dir,
+      artifactRegistry: registry,
+    });
+    expect(result.pruned).toBe(true);
+    const text = result.messages.map((m) => m.content).join("\n");
+    // 最旧非 Cited 桩降级为裸 ID（id 仍可寻址）
+    expect(text).toContain(`[archived id=${a}]`);
+    expect(text).not.toContain(`id=${a}, tool=`);
+    expect(text).toContain(`id=${b}, tool=`); // Cited 桩完整保留
+    expect(text).toContain(`id=${c}, tool=`); // 最新完整保留
   });
 });

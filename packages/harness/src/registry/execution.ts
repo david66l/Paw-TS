@@ -41,6 +41,7 @@ import {
   WEBFETCH, WEBSEARCH, RUN_AGENT, CREATE_AGENT, RUN_SKILL,
   GIT_STATUS, GIT_DIFF, GIT_LOG, LSP, NOTEBOOK_EDIT, SYMBOL_SEARCH,
   BRIEF, TODO_WRITE, MEMORY_LIST, MEMORY_READ, MEMORY_SAVE,
+  CONTEXT_RECALL,
 } from "./definitions.js";
 import fs from "node:fs";
 
@@ -1178,6 +1179,57 @@ export async function executeTool(
         summary: "memory.save: failed",
       };
     }
+  }
+  if (tool === CONTEXT_RECALL) {
+    const id = typeof rec.id === "string" ? rec.id.trim() : "";
+    if (!id) {
+      return {
+        ok: false,
+        payload: { error: "missing id" },
+        summary: "context.recall: missing id",
+      };
+    }
+    const registry = ctx.artifactRegistry;
+    if (!registry) {
+      return {
+        ok: false,
+        payload: { error: "artifact registry not configured" },
+        summary: "context.recall: artifact registry not configured",
+      };
+    }
+    const part =
+      rec.part === "tail" || rec.part === "chunk" ? rec.part : "head";
+    const offset = num(rec.offset, undefined) ?? 0;
+    const limit = num(rec.limit, undefined) ?? 8000;
+    const outcome = registry.tryRecall(id, { part, offset, limit });
+    if (!outcome.ok) {
+      // 预算拒绝 / 无效 ID：返回候选列表（不静默失败）
+      return {
+        ok: false,
+        payload: {
+          error: outcome.reason ?? "recall failed",
+          ...(outcome.candidates && outcome.candidates.length > 0
+            ? { candidates: outcome.candidates }
+            : {}),
+        },
+        summary: `context.recall: ${outcome.reason ?? "failed"}`,
+      };
+    }
+    const entry = outcome.entry;
+    const window = outcome.window;
+    const head = [
+      `[recalled archive id=${entry?.id}, tool=${entry?.tool}, ok=${entry?.ok}, created at turn ${entry?.turn}]`,
+      `[window ${window?.part ?? "head"} offset=${window?.offset ?? 0} len=${window?.length ?? 0} total=${window?.total ?? 0}]`,
+      ...(entry?.callerText
+        ? [`[producing action] ${entry.callerText.slice(0, 400)}`]
+        : []),
+      "--- content ---",
+    ].join("\n");
+    return {
+      ok: true,
+      payload: `${head}\n${outcome.content ?? ""}`,
+      summary: `context.recall: ${entry?.tool ?? id} (${window?.length ?? 0}/${window?.total ?? "?"} chars)`,
+    };
   }
   return {
     ok: false,

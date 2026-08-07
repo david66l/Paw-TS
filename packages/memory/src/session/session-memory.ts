@@ -71,6 +71,8 @@ export interface SessionMemory {
   readonly keyDecisions?: readonly string[];
   /** 错误及其修复方案列表 */
   readonly errorsAndFixes?: readonly string[];
+  /** 用户约束原文列表（逐字保留，压缩后必须存活） */
+  readonly constraints?: readonly string[];
   /** 其他相关上下文信息（自由文本） */
   readonly relevantContext?: string;
 }

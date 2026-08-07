@@ -4,6 +4,7 @@ export {
   toolNameReverseMap,
   toolDefinitions,
   toolCatalogText,
+  CONTEXT_RECALL,
   type ToolRunResult,
   type ToolName,
   type BuiltinToolName,

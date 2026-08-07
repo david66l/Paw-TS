@@ -29,9 +29,9 @@
  * - 所有函数都是纯函数（无副作用），输入 history 数组不会被修改。
  */
 
-import type { ChatMessage } from "./manager.js";
-import { isToolResultMessage } from "../tool-result/format.js";
 import type { TokenEstimator } from "../token-estimator.js";
+import { isToolResultMessage } from "../tool-result/format.js";
+import type { ChatMessage } from "./manager.js";
 
 /** Token/字符预算截断的选项 */
 export interface TruncateBudgetOptions {
@@ -74,7 +74,7 @@ export function truncateHistory(
     next = truncateByMessageCount(
       next,
       options.maxMessages,
-      getProtectedConstraintIndices(next),  // 受保护的用户约束消息不会被截掉
+      getProtectedConstraintIndices(next), // 受保护的用户约束消息不会被截掉
     );
   }
 
@@ -103,11 +103,7 @@ function truncateByMessageCount(
 
   // 有保护索引时，优先保留受保护的消息，再从尾部向前补充到 maxMessages 条
   const keep = new Set<number>(protectedIndices);
-  for (
-    let i = history.length - 1;
-    i >= 0 && keep.size < maxMessages;
-    i--
-  ) {
+  for (let i = history.length - 1; i >= 0 && keep.size < maxMessages; i--) {
     keep.add(i);
   }
   return history.filter((_, i) => keep.has(i));
@@ -159,6 +155,20 @@ function truncateByBudget(
   const protectedSet = new Set(protectedIndices);
   protectedSet.add(history.length - 1); // 最后一条消息始终受保护
 
+  // P4.2 生命周期驱逐：段状态（active/completed/evictable）+ 残差效用门控。
+  // completed ≠ 可删：文件路径仍被最近 tool call 引用 → 保留（残差效用）。
+  const segments = computeSegments(history, { tailTurnCount: opts.tailTurnCount });
+  const residualPaths = extractRecentToolCallPaths(history);
+  const stateFor = (i: number): SegmentState =>
+    segments.find((s) => i >= s.start && i <= s.end)?.state ?? "active";
+  const residualHitFor = (i: number): boolean => {
+    const c = history[i]?.content ?? "";
+    for (const p of residualPaths) {
+      if (p.length > 0 && c.includes(p)) return true;
+    }
+    return false;
+  };
+
   // 对可驱逐消息（排除受保护的和最后一条）按优先级评分
   const scored: Array<{ idx: number; cost: number; score: number }> = [];
   for (let i = 0; i < history.length - 1; i++) {
@@ -168,7 +178,10 @@ function truncateByBudget(
     scored.push({
       idx: i,
       cost: msgCost(msg),
-      score: messagePriorityScore(msg, i, history.length),
+      score: messagePriorityScore(msg, i, history.length, {
+        lifecycle: stateFor(i),
+        residualHit: residualHitFor(i),
+      }),
     });
   }
 
@@ -193,7 +206,10 @@ function truncateByBudget(
           {
             idx: i,
             cost: msgCost(msg),
-            score: messagePriorityScore(msg, i, history.length),
+            score: messagePriorityScore(msg, i, history.length, {
+              lifecycle: stateFor(i),
+              residualHit: residualHitFor(i),
+            }),
           },
         ];
       })
@@ -319,12 +335,18 @@ const TOOL_RESULT_AGE_FLOOR = 45;
  * @param msg    消息对象
  * @param index  消息在历史中的索引（用于计算年龄）
  * @param total  历史总长度（用于计算年龄）
+ * @param lifecycleOpts  P4.2 生命周期修正：completed −10、evictable −25；
+ *                       残差效用命中（文件仍被最近 tool call 引用）+25
  * @returns 优先级评分
  */
 function messagePriorityScore(
   msg: ChatMessage,
   index?: number,
   total?: number,
+  lifecycleOpts?: {
+    readonly lifecycle: SegmentState;
+    readonly residualHit: boolean;
+  },
 ): number {
   // 用户约束消息获得最高优先级
   if (isProtectedUserConstraint(msg)) {
@@ -334,22 +356,44 @@ function messagePriorityScore(
   if (msg.role === "user" && isToolResultMessage(msg.content)) {
     const age =
       index !== undefined && total !== undefined ? total - 1 - index : 0;
-    return Math.max(
+    let score = Math.max(
       TOOL_RESULT_AGE_FLOOR,
       MSG_PRIORITY.TOOL_RESULT - age * TOOL_RESULT_AGE_PENALTY,
     );
+    return applyLifecycle(score, lifecycleOpts);
   }
   if (msg.role === "user") {
-    return MSG_PRIORITY.USER;
+    return applyLifecycle(MSG_PRIORITY.USER, lifecycleOpts);
   }
   if (msg.role === "assistant" && msg.thinking) {
-    return MSG_PRIORITY.ASSISTANT_WITH_THINKING;
+    return applyLifecycle(MSG_PRIORITY.ASSISTANT_WITH_THINKING, lifecycleOpts);
   }
   if (msg.role === "assistant") {
-    return MSG_PRIORITY.ASSISTANT;
+    return applyLifecycle(MSG_PRIORITY.ASSISTANT, lifecycleOpts);
   }
   return MSG_PRIORITY.SYSTEM;
 }
+
+/**
+ * P4.2 生命周期 + 残差效用修正：completed ≠ 可删。
+ * 残差效用命中（文件仍被最近 tool call 引用）→ 完全取消生命周期扣分
+ * （效用门控优先于段状态，与 TokenPilot 的 completed≠可删 语义一致）。
+ */
+function applyLifecycle(
+  base: number,
+  opts?: { readonly lifecycle: SegmentState; readonly residualHit: boolean },
+): number {
+  if (!opts) return base;
+  if (opts.residualHit) return base;
+  if (opts.lifecycle === "evictable") return base - LIFECYCLE_EVICTABLE_PENALTY;
+  if (opts.lifecycle === "completed") return base - LIFECYCLE_COMPLETED_PENALTY;
+  return base;
+}
+
+/** evictable 段消息的优先级扣分（低于普通 assistant，优先被驱逐） */
+const LIFECYCLE_EVICTABLE_PENALTY = 25;
+/** completed 段消息的优先级扣分（有完成证据，稍低但仍高于 evictable） */
+const LIFECYCLE_COMPLETED_PENALTY = 10;
 
 /**
  * 用户约束检测的匹配模式。
@@ -389,10 +433,148 @@ const USER_CONSTRAINT_PATTERNS = [
  * 只有 role==="user" 且非工具结果的消息才会被检测。
  * 工具结果消息虽然 role 也可能是 "user"（取决于序列化方式），
  * 但它们的内容是工具输出而非用户约束，应被排除。
+ *
+ * 系统注入的 user 消息（context package / 摘要 / nudge / 警告等，
+ * 以 [ 前缀开头）同样排除——它们的内容来自系统而非用户，
+ * 若被误判为约束，压缩门控会要求摘要逐字包含系统注入文本导致永远拒绝。
  */
+const SYSTEM_INJECTED_PREFIXES = [
+  "[Context Package]",
+  "[Context Summary]",
+  "[Previous session context]",
+  "[You stopped",
+  "[Max steps",
+  "[MAX_STEPS",
+  "[model produced only reasoning]",
+  "[Task]",
+];
+
 export function isProtectedUserConstraint(msg: ChatMessage): boolean {
   if (msg.role !== "user" || isToolResultMessage(msg.content)) {
     return false;
   }
+  if (SYSTEM_INJECTED_PREFIXES.some((p) => msg.content.startsWith(p))) {
+    return false;
+  }
   return USER_CONSTRAINT_PATTERNS.some((p) => p.test(msg.content));
+}
+
+// ═════════════════════════════════════════════════════════════
+// P4.2 生命周期驱逐（TokenPilot active/completed/evictable 状态机）
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * 上下文段生命周期状态：
+ * - active：最近回合 + 首条目标（当前工作上下文，不可驱逐）
+ * - completed：已完成子任务段（有完成证据），可驱逐但需残差效用门控
+ * - evictable：无完成证据的陈旧段 / 已转向新任务后的旧段
+ */
+export type SegmentState = "active" | "completed" | "evictable";
+
+/** 完成证据信号：段内出现任务完成类内容 → completed */
+const COMPLETION_EVIDENCE =
+  /final_answer|final answer|all tests? (?:pass|passed)|测试(?:全部|都)?通过|✅ done|completed|sub-?agent.*(?:completed|done|返回)/i;
+
+/** 新任务转向信号：段首为新任务指令 → 其前已完成段升格 evictable */
+const TASK_PIVOT =
+  /^(?:new task|next task|now (?:do|work on|handle|fix)|新任务|接下来(?:做|处理|修复)|下一步(?:做|处理|修复))/i;
+
+export interface SegmentInfo {
+  /** 段起始消息索引（含） */
+  readonly start: number;
+  /** 段结束消息索引（含） */
+  readonly end: number;
+  readonly state: SegmentState;
+}
+/**
+ * 按 assistant 回合边界切分消息为段，并标注生命周期状态。
+ *
+ * 规则：
+ * 1. 首条非工具结果 user 消息（初始目标）单独一段 → active
+ * 2. 尾部最近 tailTurnCount 个回合 → active
+ * 3. 中间段：含完成证据 → completed；否则 evictable
+ * 4. 新任务转向段（TASK_PIVOT）之后，其前面的 completed 段升格 evictable
+ *    （会话已转向，残差效用门控另行保护仍被引用的文件）
+ */
+export function computeSegments(
+  messages: readonly ChatMessage[],
+  opts?: { readonly tailTurnCount?: number },
+): SegmentInfo[] {
+  const tail = opts?.tailTurnCount ?? 3;
+  if (messages.length === 0) return [];
+
+  // 回合边界：assistant 消息
+  const turnStarts: number[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i]?.role === "assistant") turnStarts.push(i);
+  }
+
+  // 段 = [turnStart .. 下一个 turnStart-1]
+  const segments: SegmentInfo[] = [];
+  const firstUserIdx = messages.findIndex(
+    (m) => m.role === "user" && !isToolResultMessage(m.content),
+  );
+
+  // 首条目标段（到第一个 assistant 之前）
+  const goalEnd =
+    turnStarts.length > 0
+      ? Math.min(firstUserIdx >= 0 ? firstUserIdx : 0, turnStarts[0]!)
+      : messages.length - 1;
+  segments.push({ start: 0, end: goalEnd, state: "active" });
+
+  for (let t = 0; t < turnStarts.length; t++) {
+    const start = turnStarts[t]!;
+    const end =
+      t + 1 < turnStarts.length ? turnStarts[t + 1]! - 1 : messages.length - 1;
+    // 尾部最近 tail 个回合 → active
+    const isTail = t >= turnStarts.length - tail;
+    segments.push({ start, end, state: isTail ? "active" : "evictable" });
+  }
+
+  // 完成证据 → completed；TASK_PIVOT 之后的旧 completed → evictable
+  let pivoted = false;
+  const finalized: SegmentInfo[] = segments.map((seg) => {
+    if (seg.state !== "evictable") return seg;
+    const hasEvidence = (() => {
+      for (let i = seg.start; i <= seg.end; i++) {
+        const c = messages[i]?.content ?? "";
+        if (COMPLETION_EVIDENCE.test(c)) return true;
+      }
+      return false;
+    })();
+    let state: SegmentState = hasEvidence ? "completed" : "evictable";
+    // 段首是 TASK_PIVOT → 前面的 completed 段全部升格 evictable
+    const segHead = messages[seg.start]?.content ?? "";
+    if (TASK_PIVOT.test(segHead.trim())) pivoted = true;
+    if (pivoted && state === "completed") state = "evictable";
+    return { ...seg, state };
+  });
+  return finalized;
+}
+
+/** 工具结果消息中的路径引用模式（残差效用门控用） */
+const PATH_REF_PATTERN = /"(?:path|file|file_path)"\s*:\s*"([^"]+)"/g;
+
+/**
+ * 残差效用门控：从最近 window 条 assistant 消息（工具调用）中提取被引用的
+ * 文件路径。completed ≠ 可删——仍被最近 tool call 引用的文件所在消息保留。
+ */
+export function extractRecentToolCallPaths(
+  messages: readonly ChatMessage[],
+  window = 6,
+): Set<string> {
+  const paths = new Set<string>();
+  let scanned = 0;
+  for (let i = messages.length - 1; i >= 0 && scanned < window; i--) {
+    const msg = messages[i];
+    if (!msg || msg.role !== "assistant") continue;
+    scanned++;
+    let m: RegExpExecArray | null;
+    PATH_REF_PATTERN.lastIndex = 0;
+    while ((m = PATH_REF_PATTERN.exec(msg.content)) !== null) {
+      const p = m[1]!.replace(/^\/+/, "").trim();
+      if (p && !p.includes("\\") && p.length < 300) paths.add(p);
+    }
+  }
+  return paths;
 }

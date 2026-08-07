@@ -16,15 +16,16 @@
 import type {
   AgentAction,
   AgentToolCallAction,
+  ArtifactRegistry,
   ChatMessage,
   ContextManager,
   RunEvent,
   RunEventEnvelope,
 } from "@paw/core";
 import type { McpClientManager } from "@paw/harness";
+import type { MemoryRuntime } from "@paw/memory";
 import type { LanguageModel, ToolDefinition } from "@paw/models";
 import type { TaskPlanner } from "@paw/store";
-import type { MemoryRuntime } from "@paw/memory";
 import type { TaskStateManager } from "../task-state.js";
 
 // ═════════════════════════════════════════════════════════════
@@ -112,6 +113,8 @@ export type TurnState =
 export interface TurnFlags {
   /** 自动推动次数（防止死循环） */
   readonly autoContinueNudges: number;
+  /** 格式错误反馈次数（输出无法解析时回灌给模型，防止死循环） */
+  readonly formatErrorNudges?: number;
   /** 上一轮是否执行了工具调用 */
   readonly lastTurnHadToolCall: boolean;
   /** 本轮 Run 中是否使用过工具 */
@@ -155,6 +158,10 @@ export interface PhaseContext {
   readonly specGoal: string;
   /** Shell 沙箱配置 */
   readonly shellSandbox?: import("@paw/harness").ShellSandboxConfig;
+  /** 会话级工具输出去重器（P1 入口闸，orchestrator 每 run 一个） */
+  readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
+  /** P3 冷库：会话级可寻址归档注册表（context.recall 工具 + 截断全文归档） */
+  readonly artifactRegistry?: ArtifactRegistry;
   /** 新记忆 Runtime（db 后端）；file 模式为 undefined */
   readonly memoryRuntime?: MemoryRuntime;
   /** 当前 TaskSession id */
