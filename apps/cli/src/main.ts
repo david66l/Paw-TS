@@ -170,13 +170,31 @@ async function main(): Promise<void> {
     const outIdx = argv.indexOf("--output");
     const output = outIdx !== -1 ? argv[outIdx + 1] : undefined;
     const modelIdx = argv.indexOf("--model");
-    const model = modelIdx !== -1 ? argv[modelIdx + 1] : undefined;
+    const providerIdx = argv.indexOf("--provider");
+    const model =
+      modelIdx !== -1
+        ? argv[modelIdx + 1]
+        : providerIdx !== -1
+          ? argv[providerIdx + 1]
+          : undefined;
     const parIdx = argv.indexOf("--parallel");
     const parallel = parIdx !== -1 ? Number(argv[parIdx + 1]) : undefined;
     const sandbox = argv.includes("--sandbox");
     const saveTracesIdx = argv.indexOf("--save-traces");
     const saveTraces =
       saveTracesIdx !== -1 ? argv[saveTracesIdx + 1] : undefined;
+    // M10 memory-adversarial flags
+    const judgeProviderIdx = argv.indexOf("--judge-provider");
+    const judgeProvider =
+      judgeProviderIdx !== -1 ? argv[judgeProviderIdx + 1] : undefined;
+    const json = argv.includes("--json");
+    const keep = argv.includes("--keep");
+    const maxSamplesIdx = argv.indexOf("--max-samples");
+    const maxSamples =
+      maxSamplesIdx !== -1 ? Number(argv[maxSamplesIdx + 1]) : undefined;
+    const timeoutMsIdx = argv.indexOf("--timeout-ms");
+    const timeoutMs =
+      timeoutMsIdx !== -1 ? Number(argv[timeoutMsIdx + 1]) : undefined;
     const root = parseRootFromArgv(process.cwd(), argv);
 
     const r = await runEvalCommand({
@@ -189,6 +207,11 @@ async function main(): Promise<void> {
       workspaceRoot: root,
       sandbox,
       saveTraces,
+      judgeProvider,
+      json,
+      keep,
+      maxSamples: Number.isFinite(maxSamples) ? maxSamples : undefined,
+      timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : undefined,
     });
     if (r.ok) {
       console.log(r.text);

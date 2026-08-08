@@ -77,6 +77,20 @@ export type {
 export { EvalRunner } from "./runner.js";
 export type { EvalRunnerOptions, EvalRunnerResult } from "./runner.js";
 
+// ── M10 记忆对抗（先答→纠错 端到端） ──
+export {
+  runMemoryAdversarial,
+  M10_FIXTURES,
+  fixtureRecallOverlap,
+  summarizeAdversarial,
+  renderMemoryAdversarialReport,
+  ADV_CORRECTION_RATE_MIN,
+  type MemoryAdversarialOptions,
+  type MemoryAdversarialReport,
+  type AdvItemResult,
+  type M10Fixture,
+} from "./memory-adversarial/index.js";
+
 // ── CLI ──
 export { runEvalCommand } from "./cli/eval-command.js";
 export type { EvalCommandArgs } from "./cli/eval-command.js";
