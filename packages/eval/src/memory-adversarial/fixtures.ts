@@ -86,7 +86,8 @@ export const M10_FIXTURES: readonly M10Fixture[] = [
     id: "cf-m10-test",
     goal: "看一下 README，这个仓库跑测试用什么命令？",
     falseMemory: {
-      title: "仓库测试命令是 jest",
+      // v2 召回口径：标题需与 goal 共享 ≥1 个 3-gram（仓库跑/跑测试/测试用）
+      title: "仓库跑测试用 jest",
       summary: "本仓库跑测试用 jest，执行 npm test",
       content: "仓库测试使用 jest，命令是 npm test。",
       type: "project_knowledge",

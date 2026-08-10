@@ -70,6 +70,10 @@ describe("AgentOrchestrator memory_backend=db", () => {
       return;
     }
 
+    // v1 回滚路径验收：v2 已成默认（v2 路径见 memory-v2-cutover.test.ts）
+    const prevRuntime = process.env.PAW_MEMORY_RUNTIME;
+    process.env.PAW_MEMORY_RUNTIME = "v1";
+
     const dir = mkdtempSync(path.join(tmpdir(), "paw-mem-db-"));
     mkdirSync(path.join(dir, ".paw"), { recursive: true });
     writeFileSync(
@@ -143,5 +147,9 @@ describe("AgentOrchestrator memory_backend=db", () => {
       (e) => e.event.type === "memory.retrieve.done",
     );
     expect(retrieve2?.event.type).toBe("memory.retrieve.done");
+
+    // 恢复环境
+    if (prevRuntime === undefined) delete process.env.PAW_MEMORY_RUNTIME;
+    else process.env.PAW_MEMORY_RUNTIME = prevRuntime;
   });
 });

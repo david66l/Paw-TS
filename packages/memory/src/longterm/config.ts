@@ -6,35 +6,63 @@
  * （apps/agent 在线路径依赖），为两个 MVP 灰度开关动它有扩散风险；
  * memory CLI 需要脱离 apps 独立可用。`.paw/` 已被 gitignore（本文件不进 git）。
  *
- * 注意（apps 侧接线任务，不在本里程碑）：`memory.enable=false` 的零调用语义
- * 由 orchestrator 在构造管线/检索器前检查——enable=false 时干脆不构造；
- * 本模块只保证 CLI 与管线层面的 honor 逻辑。
+ * 字段：
+ * - `enable`：orchestrator 构造管线/检索器前检查——enable=false 时干脆不构造
+ *   （零调用语义，spec §9.4 接线任务）
+ * - `readonly`：CI/只读场景——写入事件全部丢弃（检索只读正常），§6.7
+ * - `shadow`：shadow 灰度——读取管线只记录假设注入包（§11.2，M8）
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface MemoryLocalConfig {
+  /** false：orchestrator 不构造记忆运行时（零调用）；默认 true */
+  enable: boolean;
   /** CI/只读场景：写入事件全部丢弃（检索只读正常），§6.7 */
   readonly: boolean;
   /** shadow 灰度：读取管线只记录假设注入包（§11.2，M8） */
   shadow: boolean;
 }
 
-export const DEFAULT_MEMORY_CONFIG: MemoryLocalConfig = { readonly: false, shadow: false };
+export const DEFAULT_MEMORY_CONFIG: MemoryLocalConfig = {
+  enable: true,
+  readonly: false,
+  shadow: false,
+};
 
 function configPath(root: string): string {
   return join(root, ".paw", "memory-config.json");
 }
 
+function parseConfig(raw: unknown): MemoryLocalConfig {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  return {
+    enable: obj.enable !== false,
+    readonly: obj.readonly === true,
+    shadow: obj.shadow === true,
+  };
+}
+
 /** 读取配置；文件不存在/损坏 → 默认配置（零记忆基线不阻塞，场景 H） */
-export async function loadMemoryConfig(root: string = process.cwd()): Promise<MemoryLocalConfig> {
+export async function loadMemoryConfig(
+  root: string = process.cwd(),
+): Promise<MemoryLocalConfig> {
   try {
-    const raw = JSON.parse(await readFile(configPath(root), "utf-8")) as Record<string, unknown>;
-    return {
-      readonly: raw.readonly === true,
-      shadow: raw.shadow === true,
-    };
+    return parseConfig(JSON.parse(await readFile(configPath(root), "utf-8")));
+  } catch {
+    return { ...DEFAULT_MEMORY_CONFIG };
+  }
+}
+
+/**
+ * 同步读取配置（orchestrator 构造运行时前的零调用检查、pipeline readonly 回调用）。
+ * 文件极小、变化低频，同步读无压力。
+ */
+export function loadMemoryConfigSync(root: string): MemoryLocalConfig {
+  try {
+    return parseConfig(JSON.parse(readFileSync(configPath(root), "utf-8")));
   } catch {
     return { ...DEFAULT_MEMORY_CONFIG };
   }
@@ -47,6 +75,10 @@ export async function saveMemoryConfig(
   const current = await loadMemoryConfig(root);
   const next = { ...current, ...patch };
   await mkdir(join(root, ".paw"), { recursive: true });
-  await writeFile(configPath(root), JSON.stringify(next, null, 2) + "\n", "utf-8");
+  await writeFile(
+    configPath(root),
+    `${JSON.stringify(next, null, 2)}\n`,
+    "utf-8",
+  );
   return next;
 }

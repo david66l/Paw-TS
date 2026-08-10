@@ -10,14 +10,13 @@
  */
 
 import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
-import { appendOpLog } from "../observability/op-log.js";
 import {
-  NGramEmbeddingService,
-  storeEmbedding,
-  cosineSimilarity,
   MEMORY_EMBEDDING_DIMENSIONS,
+  NGramEmbeddingService,
+  cosineSimilarity,
+  storeEmbedding,
 } from "../../db/modules/platform/embeddingService.js";
-import { deriveEntryId } from "./id.js";
+import { appendOpLog } from "../observability/op-log.js";
 import {
   LEDGER_UTILITY_MAX,
   type LedgerEntry,
@@ -27,6 +26,7 @@ import {
   type ReindexReport,
   type ScoredId,
 } from "./engine.js";
+import { deriveEntryId } from "./id.js";
 
 /** memory_embeddings.embedding 列为 vector(1536)（V008），embedding 服务统一使用该维度 */
 const EMBEDDING_DIMENSIONS = MEMORY_EMBEDDING_DIMENSIONS;
@@ -43,7 +43,11 @@ function toIsoOrNull(v: unknown): string | null {
 }
 
 /** 各 kind 的可检索文本镜像（喂给 V013 tsvector 触发器与 embedding） */
-function renderSearchText(entry: MemoryEntry): { title: string; summary: string; tags: string[] } {
+function renderSearchText(entry: MemoryEntry): {
+  title: string;
+  summary: string;
+  tags: string[];
+} {
   switch (entry.kind) {
     case "semantic":
       return { title: entry.fact, summary: entry.fact, tags: entry.keywords };
@@ -54,13 +58,19 @@ function renderSearchText(entry: MemoryEntry): { title: string; summary: string;
           entry.whenToUse,
           ...entry.modification,
           entry.failureFixPair?.feedback ?? "",
-        ].filter(Boolean).join("\n"),
+        ]
+          .filter(Boolean)
+          .join("\n"),
         tags: [entry.issueType, ...(entry.branch ? [entry.branch] : [])],
       };
     case "profile":
       return { title: entry.insight, summary: entry.insight, tags: [] };
     case "vault_ref":
-      return { title: entry.refDescription, summary: entry.refDescription, tags: [] };
+      return {
+        title: entry.refDescription,
+        summary: entry.refDescription,
+        tags: [],
+      };
   }
 }
 
@@ -100,7 +110,11 @@ function rowToEntry(row: Row): MemoryEntry {
 function parseVector(raw: unknown): number[] {
   if (Array.isArray(raw)) return raw as number[];
   if (typeof raw === "string") {
-    try { return JSON.parse(raw) as number[]; } catch { return []; }
+    try {
+      return JSON.parse(raw) as number[];
+    } catch {
+      return [];
+    }
   }
   return [];
 }
@@ -125,7 +139,12 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const degraded = (entry as { degraded?: boolean }).degraded === true;
     const verificationStatus = degraded
       ? "unverified"
-      : ["agent_verified", "user_statement", "repo_docs", "trial_graduated"].includes(entry.source)
+      : [
+            "agent_verified",
+            "user_statement",
+            "repo_docs",
+            "trial_graduated",
+          ].includes(entry.source)
         ? "verified"
         : "unverified";
 
@@ -144,6 +163,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         ${tValid}, ${entry.tInvalid ?? null}, ${whenToUseCol}, ${entry.freq ?? 0}, ${entry.utility ?? 0}, ${sql.json(history as any)}
       )
       ON CONFLICT (id) DO UPDATE SET
+        type = EXCLUDED.type,
         title = EXCLUDED.title,
         summary = EXCLUDED.summary,
         confidence = EXCLUDED.confidence,
@@ -162,7 +182,9 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     try {
       const vec = await this.embedder.embed(embeddingInput(entry));
       await storeEmbedding(id, "1", vec, `ngram-${EMBEDDING_DIMENSIONS}`);
-    } catch { /* embedding 失败不影响条目写入 */ }
+    } catch {
+      /* embedding 失败不影响条目写入 */
+    }
   }
 
   async get(id: string): Promise<MemoryEntry | null> {
@@ -224,12 +246,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     return rows.map((r) => rowToEntry(r as Row));
   }
 
-  async searchText(queryText: string, k: number): Promise<ScoredId[]> {
+  async searchText(queryText: string, k: number, repo?: string): Promise<ScoredId[]> {
     const sql = getSql();
     // 三路全文取最大 rank：V013 search_tsv（'english'）+ V027 when_to_use_tsv（'simple'）
     // + V032 search_tsv_simple（'simple'，含 title/summary/when_to_use——中文场景句兜底，
     // 'english' 配置对 CJK token 区分度差，修复批次 B #12）。
     // 只检索活跃且未降级的条目（spec §6.3 硬默认）。
+    // repo 可选：注入路径 repo 密封（A 仓库任务不注入 B 仓库记忆）。
+    const repoCond = repo ? sql`AND scope->>'repositoryId' = ${repo}` : sql``;
     const rows = await sql`
       SELECT id, GREATEST(
                ts_rank(search_tsv, plainto_tsquery('english', ${queryText})),
@@ -240,6 +264,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       WHERE t_invalid IS NULL
         AND verification_status != 'invalidated'
         AND COALESCE(payload->>'degraded', 'false') != 'true'
+        ${repoCond}
         AND (
           search_tsv @@ plainto_tsquery('english', ${queryText})
           OR when_to_use_tsv @@ plainto_tsquery('simple', ${queryText})
@@ -254,10 +279,12 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     }));
   }
 
-  async searchVector(queryText: string, k: number): Promise<ScoredId[]> {
+  async searchVector(queryText: string, k: number, repo?: string): Promise<ScoredId[]> {
     const sql = getSql();
     const queryVec = await this.embedder.embed(queryText);
     const formatted = `[${queryVec.join(",")}]`;
+    // repo 可选：注入路径 repo 密封（否则共享库中同内容异仓库条目竞争 top-k）
+    const repoCond = repo ? sql`AND m.scope->>'repositoryId' = ${repo}` : sql``;
 
     // 主路：pgvector 余弦距离（V008）
     try {
@@ -268,6 +295,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         WHERE m.t_invalid IS NULL
           AND m.verification_status != 'invalidated'
           AND COALESCE(m.payload->>'degraded', 'false') != 'true'
+          ${repoCond}
         ORDER BY e.embedding <=> ${formatted}::vector ASC
         LIMIT ${k}
       `;
@@ -284,6 +312,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         WHERE m.t_invalid IS NULL
           AND m.verification_status != 'invalidated'
           AND COALESCE(m.payload->>'degraded', 'false') != 'true'
+          ${repoCond}
       `;
       return (rows as unknown as { memory_id: string; embedding: unknown }[])
         .map((r) => ({
@@ -298,7 +327,8 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
 
   async ledger(id: string): Promise<LedgerEntry | null> {
     const sql = getSql();
-    const rows = await sql`SELECT freq, utility FROM memory_items WHERE id = ${id}`;
+    const rows =
+      await sql`SELECT freq, utility FROM memory_items WHERE id = ${id}`;
     if (rows.length === 0) return null;
     const row = rows[0] as { freq: number; utility: number };
     return { freq: row.freq, utility: row.utility };
@@ -331,7 +361,12 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         const entry = rowToEntry(raw);
         entries.push(entry);
         const vec = await this.embedder.embed(embeddingInput(entry));
-        await storeEmbedding(entry.id, "1", vec, `ngram-${EMBEDDING_DIMENSIONS}`);
+        await storeEmbedding(
+          entry.id,
+          "1",
+          vec,
+          `ngram-${EMBEDDING_DIMENSIONS}`,
+        );
         indexed += 1;
       } catch {
         failed += 1;
@@ -351,7 +386,10 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
           this.searchText(probe, 10).catch(() => [] as ScoredId[]),
           this.searchVector(probe, 10).catch(() => [] as ScoredId[]),
         ]);
-        if (textHits.some((h) => h.id === entry.id) || vecHits.some((h) => h.id === entry.id)) {
+        if (
+          textHits.some((h) => h.id === entry.id) ||
+          vecHits.some((h) => h.id === entry.id)
+        ) {
           smokePassed += 1;
         } else {
           smokeFailedIds.push(entry.id);
@@ -365,17 +403,27 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       scanned: rows.length,
       indexed,
       failed,
-      smoke: { total: smokeSample.length, passed: smokePassed, failedIds: smokeFailedIds },
+      smoke: {
+        total: smokeSample.length,
+        passed: smokePassed,
+        failedIds: smokeFailedIds,
+      },
     };
     // reindex 留痕（修复批次 C #14）
     try {
       await appendOpLog("reindex", {
         detail: {
-          scanned: report.scanned, indexed, failed,
-          smokeTotal: report.smoke.total, smokePassed, smokeFailedIds,
+          scanned: report.scanned,
+          indexed,
+          failed,
+          smokeTotal: report.smoke.total,
+          smokePassed,
+          smokeFailedIds,
         },
       });
-    } catch { /* op-log 失败不影响 reindex 结果 */ }
+    } catch {
+      /* op-log 失败不影响 reindex 结果 */
+    }
     return report;
   }
 }

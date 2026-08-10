@@ -264,6 +264,15 @@ export class TriggeredRetriever {
 
     const query = this.buildQuery(trigger);
 
+    // 空库零开销（§6.7 / §6.8-6）：先 probe——空库不做任何检索/改写调用
+    // （T1 query 改写是 LLM 调用，移到 probe 之后：空库短路时零 LLM 成本）
+    // probe 排除 degraded 条目：append-only 降级行不进检索池，也不能让库显得"非空"
+    const probe = await this.engine.query({ repo, limit: 1, includeDegraded: false });
+    if (probe.length === 0 && trigger.type !== "explicit_query") {
+      await appendOpLog("read.trigger", { runId, detail: { triggerType: trigger.type, skipped: "empty_store" } });
+      return this.emptyPackage();
+    }
+
     // T1 query 改写（§6.2，#9）：LLM 提炼检索词 + 保留原始描述，两路召回合并
     let degraded = false;
     const queries = [query];
@@ -283,14 +292,8 @@ export class TriggeredRetriever {
     await appendOpLog("read.trigger", { runId, detail: { triggerType: trigger.type, querySummary: query.slice(0, 200), queries } });
     this.emit?.({ type: "memory.trigger", triggerType: trigger.type, querySummary: query.slice(0, 200) });
 
-    // 空库零开销（§6.7 / §6.8-6）：不做任何检索调用
-    const probe = await this.engine.query({ repo, limit: 1 });
-    if (probe.length === 0 && trigger.type !== "explicit_query") {
-      await appendOpLog("read.trigger", { runId, detail: { triggerType: trigger.type, skipped: "empty_store" } });
-      return this.emptyPackage();
-    }
-
     // ── 召回（M2 hybrid；α 按触发点；T1 可能双路）──
+    // repo 密封：注入路径只召回本仓库条目（A 仓库任务不注入 B 仓库记忆）
     const kinds = TRIGGER_KINDS[trigger.type];
     const alpha = trigger.type === "action_failed" ? RECALL_ALPHA.actionFailed : RECALL_ALPHA.taskStart;
     const candidates: ScoredEntry[] = [];
@@ -300,6 +303,7 @@ export class TriggeredRetriever {
           alpha,
           candidates: 10,
           kind,
+          repo,
           context: { branch: "branch" in trigger ? trigger.branch : undefined },
         });
         candidates.push(...r.items);

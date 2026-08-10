@@ -7,3 +7,4 @@ export * from "./eval/index.js";
 export * from "./config.js";
 export * from "./export.js";
 export * from "./cli.js";
+export * from "./migrate-v1-to-v2.js";

@@ -65,10 +65,10 @@ describe("memory-config.json", () => {
     try {
       expect(await loadMemoryConfig(root)).toEqual(DEFAULT_MEMORY_CONFIG);
       await saveMemoryConfig({ readonly: true }, root);
-      expect(await loadMemoryConfig(root)).toEqual({ readonly: true, shadow: false });
+      expect(await loadMemoryConfig(root)).toEqual({ enable: true, readonly: true, shadow: false });
       await saveMemoryConfig({ shadow: true }, root);
       const cfg = await loadMemoryConfig(root);
-      expect(cfg).toEqual({ readonly: true, shadow: true });
+      expect(cfg).toEqual({ enable: true, readonly: true, shadow: true });
       // 文件在 .paw/ 下（gitignore 覆盖，不进 git）
       const raw = await readFile(join(root, ".paw", "memory-config.json"), "utf-8");
       expect(JSON.parse(raw).readonly).toBe(true);

@@ -308,6 +308,56 @@ describe("hybridRecall db 集成", () => {
     expect(result.items.map((i) => i.entry.id)).not.toContain(id);
   });
 
+  it("repo 密封：注入路径只召回本仓库条目（同内容异仓库不串库）", async () => {
+    const now = new Date().toISOString();
+    const otherRepo = `${REPO}-other`;
+    const make = (repo: string, fact: string): SemanticFact => ({
+      id: "",
+      kind: "semantic",
+      repo,
+      created: now,
+      tValid: now,
+      tInvalid: null,
+      source: "agent_verified",
+      confidence: 0.9,
+      evidence: [],
+      freq: 0,
+      utility: 0,
+      fact,
+      keywords: ["sealed", "probe"],
+      embeddingKey: `${fact} sealed probe`,
+    });
+    const mine = make(REPO, "Sealed repo probe entry for isolated retrieval");
+    const other = make(otherRepo, "Sealed repo probe entry for isolated retrieval"); // 同内容
+    const mineId = deriveEntryId(mine);
+    const otherId = deriveEntryId(other);
+    createdIds.push(mineId, otherId);
+    await engine.put(mine);
+    await engine.put(other);
+
+    // 两路都只返回本仓库
+    const textHits = await engine.searchText("sealed probe", 10, REPO);
+    expect(textHits.map((h) => h.id)).toContain(mineId);
+    expect(textHits.map((h) => h.id)).not.toContain(otherId);
+
+    const vecHits = await engine.searchVector("sealed probe", 10, REPO);
+    expect(vecHits.map((h) => h.id)).toContain(mineId);
+    expect(vecHits.map((h) => h.id)).not.toContain(otherId);
+
+    // hybridRecall 透传 repo
+    const result = await hybridRecall(engine, "sealed probe", {
+      candidates: 10,
+      repo: REPO,
+    });
+    const ids = result.items.map((i) => i.entry.id);
+    expect(ids).toContain(mineId);
+    expect(ids).not.toContain(otherId);
+
+    // 缺省 repo = 跨仓库（Governor 去重语义保留）
+    const cross = await hybridRecall(engine, "sealed probe", { candidates: 10 });
+    expect(cross.items.map((i) => i.entry.id)).toContain(mineId);
+  });
+
   it("reindex 冒烟回归全部通过", async () => {
     const fact = makeFact("Smoke queries verify rebuilt indexes recall their entries", ["smoke"]);
     const id = deriveEntryId(fact);

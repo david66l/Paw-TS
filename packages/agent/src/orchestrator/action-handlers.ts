@@ -709,14 +709,15 @@ async function handleToolCalls(
     });
   }
 
-  // 新记忆：工具结果写入 WorkingMemory（best-effort）
+  // 新记忆：工具结果写入（best-effort）；v2 失败触发 T2 action_failed 检索注入 [Memory hint]
   const runtime = opts.memoryRuntime ?? ctx.memoryRuntime;
   const memTaskId = opts.memoryTaskId ?? ctx.memoryTaskId;
   if (runtime && memTaskId) {
+    const injections: string[] = [];
     for (let i = 0; i < calls.length; i++) {
       const call = calls[i]!;
       const tr = results[i]!;
-      await runtime
+      const injected = await runtime
         .onToolResult({
           taskId: memTaskId,
           toolName: call.tool,
@@ -726,9 +727,13 @@ async function handleToolCalls(
           rawPayload: tr.payload,
           idempotencyKey: `${ctx.runId}-t${ctx.turn}-${i}-${call.tool}`,
         })
-        .catch(() => {
-          /* best-effort */
-        });
+        .catch(() => undefined);
+      if (injected?.injected) injections.push(injected.injected);
+    }
+    if (injections.length > 0) {
+      ctx.ctxMgr.addUser(
+        `[Memory hint]\n${injections.join("\n\n").slice(0, 2000)}`,
+      );
     }
   }
 

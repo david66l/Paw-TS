@@ -52,6 +52,8 @@ export interface RecallOptions {
   candidates?: number;
   /** 限定 kind */
   kind?: MemoryKind;
+  /** repo 密封：提供时两路检索都只在该仓库内（注入路径必须）；缺省=跨 repo（Governor 去重保留） */
+  repo?: string;
   context?: RecallContext;
 }
 
@@ -158,12 +160,12 @@ export async function hybridRecall(
   let degraded = false;
 
   try {
-    textHits = await engine.searchText(queryText, k);
+    textHits = await engine.searchText(queryText, k, opts.repo);
   } catch {
     degraded = true;
   }
   try {
-    vectorHits = await engine.searchVector(queryText, k);
+    vectorHits = await engine.searchVector(queryText, k, opts.repo);
   } catch {
     degraded = true;
   }

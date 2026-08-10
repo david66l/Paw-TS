@@ -35,6 +35,9 @@ import { closeSql, getSql } from "@paw/memory/db";
 import type { LanguageModel } from "@paw/models";
 import {
   LlmBudget,
+  PostgresMemoryStoreEngine,
+  deriveEntryId,
+  type EpisodicExperience,
   type JudgeLlm,
   type LlmStats,
 } from "@paw/memory/longterm";
@@ -131,16 +134,40 @@ export async function runMemoryAdversarial(
       let modelCalls = 0;
       let runStatus = "skipped";
 
-      // ── seed 反事实记忆（saveMemory 自动审批，立即生效） ──
+      // ── seed 反事实记忆 ──
+      // v2 路径：T1 task_start 只注入 episodic/profile——semantic 种子不可见
+      // （v1 的 keywordScore 守卫在 v2 无阈值，但触发点路由会滤掉 semantic）。
+      // 因此：saveMemory 写 semantic（用户直写溯源），再经引擎直写一条 episodic，
+      // whenToUse 回显 goal 关键短语（BM25 when_to_use 列命中），pre-flight 守卫用 episodic id。
       const runtime = await createMemoryRuntime({ workspaceRoot: ctx.dir });
-      const saved = await runtime.saveMemory({
+      await runtime.saveMemory({
         title: f.falseMemory.title,
         summary: f.falseMemory.summary,
         content: f.falseMemory.content,
         type: f.falseMemory.type,
         relatedFiles: f.falseMemory.relatedFiles,
       });
-      const seedId = saved.memoryId;
+      const nowIso = new Date().toISOString();
+      const seedEntry: EpisodicExperience = {
+        id: "",
+        kind: "episodic",
+        repo: runtime.scope.repositoryId,
+        created: nowIso,
+        tValid: nowIso,
+        tInvalid: null,
+        source: "user_statement",
+        confidence: 1.0,
+        evidence: [],
+        freq: 0,
+        utility: 0,
+        whenToUse: f.falseMemory.title,
+        perspective: f.falseMemory.content || f.falseMemory.summary,
+        modification: [],
+        issueType: "m10-fixture",
+        taskId: "m10-fixture",
+      };
+      await new PostgresMemoryStoreEngine().put(seedEntry);
+      const seedId = deriveEntryId(seedEntry);
 
       // ── pre-flight 检索守卫：seed 必须被注入，否则测量空转 ──
       let recalled = false;

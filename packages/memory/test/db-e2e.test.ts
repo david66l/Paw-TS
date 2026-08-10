@@ -68,6 +68,15 @@ afterAll(async () => {
     await sql.unsafe("DELETE FROM audit_records WHERE task_id = $1", [taskId]);
     await sql.unsafe("DELETE FROM task_sessions WHERE id = $1", [taskId]);
   }
+  // 6.0 Self-Evolving Loop 产物（Auto-MERGE project_knowledge，scope 无 repositoryId）——
+  // 历史已知残留，会破坏 v2 reindex 冒烟（文档已记载 evolved:% 残留问题）
+  const evo = (await sql.unsafe(
+    "SELECT id FROM memory_items WHERE title = 'Auto-MERGE' AND scope->>'repositoryId' IS NULL",
+  )) as unknown as { id: string }[];
+  for (const r of evo) {
+    await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [r.id]);
+    await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [r.id]);
+  }
   await closeSql();
 });
 

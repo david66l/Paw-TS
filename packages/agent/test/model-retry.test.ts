@@ -25,6 +25,7 @@ describe("Model Retry", () => {
       ],
     });
     const o = new AgentOrchestrator({
+      memoryLlm: "off", // 计时测试：记忆初始化延迟会推超 500ms 断言
       model,
       onEvent: (e) => events.push(e),
       retrySleep: async () => {},
@@ -46,6 +47,7 @@ describe("Model Retry", () => {
       responses: [{ error: NON_RETRYABLE_ERR }],
     });
     const o = new AgentOrchestrator({
+      memoryLlm: "off",
       model,
       onEvent: (e) => events.push(e),
       retrySleep: async () => {},
@@ -72,6 +74,7 @@ describe("Model Retry", () => {
       ],
     });
     const o = new AgentOrchestrator({
+      memoryLlm: "off",
       model,
       onEvent: (e) => events.push(e),
       retrySleep: async () => {},
@@ -97,6 +100,7 @@ describe("Model Retry", () => {
       ],
     });
     const o = new AgentOrchestrator({
+      memoryLlm: "off",
       model,
       onEvent: (e) => events.push(e),
       retrySleep: async () => {},
@@ -132,6 +136,7 @@ describe("Model Retry", () => {
       ],
     });
     const o = new AgentOrchestrator({
+      memoryLlm: "off",
       model,
       retrySleep: async () => {},
     });
@@ -155,6 +160,7 @@ describe("Model Retry", () => {
       ],
     });
     const o = new AgentOrchestrator({
+      memoryLlm: "off",
       model,
       onEvent: (e) => events.push(e),
       retrySleep: async () => {},
@@ -181,6 +187,7 @@ describe("Model Retry", () => {
       responses: [{ error: new Error("HTTP 401: Unauthorized") }],
     });
     const o = new AgentOrchestrator({
+      memoryLlm: "off",
       model,
       retrySleep: async () => {},
     });
@@ -201,6 +208,7 @@ describe("Model Retry", () => {
     for (let i = 0; i < 5; i++) {
       const events: RunEventEnvelope[] = [];
       const o = new AgentOrchestrator({
+      memoryLlm: "off",
         model: new FakeLanguageModel({
           responses: [
             { error: RETRYABLE_ERR },
@@ -241,6 +249,7 @@ describe("Model Retry", () => {
       ],
     });
     const o = new AgentOrchestrator({
+      memoryLlm: "off",
       model,
       onEvent: (e) => events.push(e),
       retrySleep: async () => {},

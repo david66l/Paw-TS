@@ -119,9 +119,11 @@ import {
 // @paw/models：LLM 适配层 — 模型抽象、消息类型、流式解析
 // ─────────────────────────────────────────────────────────────
 import {
+  AnthropicCompatibleModel,
   type ChatMessage,
   type LanguageModel,
   type NativeToolCall,
+  OpenAICompatibleModel,
   createDefaultLanguageModel,
   extractThinkBlocks,
 } from "@paw/models";
@@ -147,6 +149,7 @@ import {
 } from "@paw/workspace";
 
 import { type MemoryRuntime, createMemoryRuntime } from "@paw/memory";
+import { loadMemoryConfigSync } from "@paw/memory/longterm";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
@@ -288,6 +291,13 @@ export interface AgentOrchestratorOptions {
    * - "off"：关闭记忆提取
    */
   readonly memoryExtraction?: "background" | "await" | "off";
+  /**
+   * v2 记忆 LLM 接线策略：
+   * - "agent"：蒸馏/精排用主模型（fake 模型自动跳过，避免污染预设响应），裁决用 settings 强模型（默认）
+   * - "settings"：全部由 v2 runtime 按 settings.local.json 解析（无配置则降级）
+   * - "off"：不接任何 LLM（蒸馏降级 append-only / 裁决直 ADD）
+   */
+  readonly memoryLlm?: "agent" | "settings" | "off";
   /** 评估钩子：非侵入式收集 trace 数据，不影响正常流程 */
   readonly evalHooks?: EvalHooks;
   /**
@@ -403,6 +413,8 @@ export class AgentOrchestrator {
   private readonly retrySleep: (ms: number) => Promise<void>;
   /** @deprecated 长期记忆写入已由 MemoryRuntime.completeTask 接管 */
   private readonly memoryExtraction: "background" | "await" | "off";
+  /** v2 记忆 LLM 接线策略（"agent" | "settings" | "off"） */
+  private readonly memoryLlm: "agent" | "settings" | "off";
   /** 熔断器映射：key = model.label，每个模型独立熔断 */
   private readonly circuitBreakers = new Map<string, CircuitBreaker>();
   private readonly evalHooks?: EvalHooks;
@@ -440,6 +452,7 @@ export class AgentOrchestrator {
       opts?.retrySleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.memoryExtraction = opts?.memoryExtraction ?? "background";
     void this.memoryExtraction; // kept for API compat; writes go through Runtime
+    this.memoryLlm = opts?.memoryLlm ?? "agent";
     this.evalHooks = opts?.evalHooks;
     this.allowedTools = opts?.allowedTools;
     this.agentCatalogText = opts?.agentCatalogText;
@@ -780,7 +793,8 @@ export class AgentOrchestrator {
                 emit({
                   type: "memory.extracted",
                   runId,
-                  entries: writeResult.writtenMemoryIds.length,
+                  // v2 语义：entries = 已入队写入事件数（异步管线在后台固化）
+                  entries: writeResult.candidates,
                   rejected: writeResult.rejected + writeResult.pendingReview,
                 });
               } catch {
@@ -827,7 +841,8 @@ export class AgentOrchestrator {
             emit({
               type: "memory.extracted",
               runId,
-              entries: writeResult.writtenMemoryIds.length,
+              // v2 语义：entries = 已入队写入事件数（异步管线在后台固化）
+              entries: writeResult.candidates,
               rejected: writeResult.rejected + writeResult.pendingReview,
             });
           } catch {
@@ -1283,6 +1298,29 @@ export class AgentOrchestrator {
       });
       compactor.recordSuccess();
 
+      // T3 post_compact（v2）：压缩后触发语义检索注入（spec §6.1）
+      // 复用 SessionMemory 的 Key Decisions/constraints 做去重提示
+      if (this._memoryRuntime && this._memoryTaskId) {
+        try {
+          const injected = await this._memoryRuntime.retrievePostCompact?.({
+            taskId: this._memoryTaskId,
+            summaryHead: summary.split("\n")[0] ?? "",
+            goal: ctx.specGoal,
+            existingContextHints: [
+              ...(sessionMemory.keyDecisions ?? []),
+              ...(sessionMemory.constraints ?? []),
+            ],
+          });
+          if (injected?.injected) {
+            ctx.ctxMgr.addUser(
+              `[Memory hint]\n${injected.injected.slice(0, 2000)}`,
+            );
+          }
+        } catch {
+          /* best-effort：T3 检索失败不影响压缩结果 */
+        }
+      }
+
       // P2.7 行为闭环：记录压缩时已读文件/已跑命令快照，
       // 之后 5 轮内重复获取 → 摘要质量低信号
       const snap = ctx.taskState.snapshot();
@@ -1457,6 +1495,28 @@ export class AgentOrchestrator {
         summaryTokens: Math.ceil(summary.length / 4),
       });
       compactor.recordSuccess();
+
+      // T3 post_compact（v2）：恢复路径同样触发语义检索注入
+      if (this._memoryRuntime && this._memoryTaskId) {
+        try {
+          const injected = await this._memoryRuntime.retrievePostCompact?.({
+            taskId: this._memoryTaskId,
+            summaryHead: summary.split("\n")[0] ?? "",
+            goal: this._lastDynamicMemoryGoal || "",
+            existingContextHints: [
+              ...(sessionMemory.keyDecisions ?? []),
+              ...(sessionMemory.constraints ?? []),
+            ],
+          });
+          if (injected?.injected) {
+            ctxMgr.addUser(
+              `[Memory hint]\n${injected.injected.slice(0, 2000)}`,
+            );
+          }
+        } catch {
+          /* best-effort：T3 检索失败不影响压缩结果 */
+        }
+      }
     } catch (err) {
       compactor.recordFailure("error");
       emit({
@@ -2907,12 +2967,29 @@ export class AgentOrchestrator {
         : null;
 
     try {
-      const runtime = await createMemoryRuntime({ workspaceRoot });
-      const ok = await runtime.ping();
-      if (!ok) {
+      // memory.enable=false（.paw/memory-config.json）：零调用语义——不构造运行时
+      if (!loadMemoryConfigSync(workspaceRoot).enable) {
         emit({
           type: "memory.retrieve.done",
           query: retrievalQuery,
+          totalCandidates: 0,
+          selectedCount: 0,
+          scores: [],
+          injectedTokens: 0,
+          selectedMemories: [],
+          retrievalMode: "keyword",
+        });
+      } else {
+        const runtime = await createMemoryRuntime({
+          workspaceRoot,
+          emit,
+          ...buildMemoryLlmOptions(this.memoryLlm, model),
+        });
+        const ok = await runtime.ping();
+        if (!ok) {
+          emit({
+            type: "memory.retrieve.done",
+            query: retrievalQuery,
           totalCandidates: 0,
           selectedCount: 0,
           scores: [],
@@ -2978,6 +3055,7 @@ export class AgentOrchestrator {
           retrievalMode: "keyword",
           selectedMemories: selectedForEvent,
         });
+        }
       }
     } catch {
       emit({
@@ -3468,4 +3546,46 @@ function computeRetryDelay(
   // 指数退避：base = 1000 * 2^(attempt-1)，上限 30s
   const base = 1_000 * 2 ** (attempt - 1);
   return Math.min(base * jitter, 30_000);
+}
+
+// ── 记忆 LLM 接线辅助（v2）──
+
+/**
+ * v2 记忆 LLM 接线：
+ * - "agent"：蒸馏/精排用主模型（label === "fake" 时跳过——FakeLanguageModel 按序消费预设
+ *   响应，背景蒸馏会污染测试的预设序列）；裁决由 v2 runtime 按 settings 解析强模型
+ * - "settings"：不传 llm（v2 runtime 内部解析 settings；无配置则降级）
+ * - "off"：llm: null 禁用全部 LLM（含 settings 解析，蒸馏降级 append-only / 裁决直 ADD）
+ */
+function buildMemoryLlmOptions(
+  mode: "agent" | "settings" | "off",
+  model: LanguageModel,
+): {
+  llm?: {
+    distill: (p: string) => Promise<string>;
+    rerank: (p: string) => Promise<string>;
+  } | null;
+} {
+  if (mode === "off") return { llm: null };
+  if (mode === "agent" && isRealAdapterModel(model)) {
+    const complete = (prompt: string) =>
+      model
+        .complete([{ role: "user", content: prompt }] satisfies ChatMessage[])
+        .then((r) => r.text);
+    return { llm: { distill: complete, rerank: complete } };
+  }
+  // settings / 测试替身模型：由 v2 runtime 自行解析 settings 强模型；解析不到则降级
+  return {};
+}
+
+/**
+ * 是否真实适配器模型（OpenAI/Anthropic 兼容类）。
+ * 测试替身（FakeLanguageModel / 内联 stub）不是实例——跳过接线：
+ * 背景蒸馏/改写会吞掉测试模型的预设响应序列，且跨进程残留事件会污染后续测试。
+ */
+function isRealAdapterModel(model: LanguageModel): boolean {
+  return (
+    model instanceof OpenAICompatibleModel ||
+    model instanceof AnthropicCompatibleModel
+  );
 }

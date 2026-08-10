@@ -178,6 +178,9 @@ export class MemoryWritePipeline {
       while (await this.processNext()) {
         await new Promise((r) => setTimeout(r, this.intervalMs));
       }
+    } catch {
+      // DB 不可用时 processNext 的 catch 分支（状态回写）也会失败并抛错——
+      // worker 绝不能产生未处理拒绝（否则进程级测试/长驻进程会随机炸）
     } finally {
       this.processing = false;
     }

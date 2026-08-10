@@ -3,6 +3,8 @@
  * Agent / harness 只依赖这些类型，不直接依赖 db 内部实体。
  */
 
+import type { RunEvent } from "@paw/core";
+
 /** completeTask 可选 enricher 产出的候选草稿（仍须经 Governance） */
 export type MemoryCandidateEnrichmentDraft = {
   readonly title: string;
@@ -24,6 +26,18 @@ export type MemoryCandidateEnricher = (input: {
   readonly workingMemoryGoal: string;
 }) => Promise<readonly MemoryCandidateEnrichmentDraft[]>;
 
+/** v2 LLM 适配器（可选）。缺失时优雅降级：无蒸馏 → append-only；无裁决 → 直 ADD；无精排 → 召回直取 */
+export interface MemoryRuntimeLlm {
+  /** 蒸馏（DistillerLlm.complete）——通常用 agent 模型 */
+  readonly distill?: (prompt: string) => Promise<string>;
+  /** 裁决（GovernorLlm.complete）——spec A10：裁决用强模型 */
+  readonly govern?: (prompt: string) => Promise<string>;
+  /** 精排 / T1 query 改写（RerankerLlm.complete）——通常用快模型 */
+  readonly rerank?: (prompt: string) => Promise<string>;
+  /** 用户纠正确认器（CorrectionConfirmer.confirm） */
+  readonly confirm?: (text: string) => Promise<boolean>;
+}
+
 export interface MemoryRuntimeOptions {
   readonly workspaceRoot: string;
   readonly userId?: string;
@@ -34,6 +48,20 @@ export interface MemoryRuntimeOptions {
    * 抛错不影响主 complete 路径。
    */
   readonly candidateEnricher?: MemoryCandidateEnricher;
+  /**
+   * v2 运行时 LLM 适配器（可选；缺失走降级路径）。
+   * null = off 模式：禁用全部 LLM（含 settings 解析）。
+   */
+  readonly llm?: MemoryRuntimeLlm | null;
+  /**
+   * v2 每日蒸馏 LLM 调用预算（默认 50，spec §5.2 成本熔断）。
+   * 注意：计数按全库当日 op-log（跨 repo 共享），共享测试库需抬高避免误熔断。
+   */
+  readonly dailyBudget?: number;
+  /** v2 写入/检索 RunEvent 发射（memory.write.* / memory.governed / memory.trigger / memory.inject） */
+  readonly emit?: (event: RunEvent) => void;
+  /** 运行时选择：v2（默认）/ v1（回滚）。亦可用 PAW_MEMORY_RUNTIME 环境变量 */
+  readonly runtime?: "v1" | "v2";
 }
 
 export interface BeginTaskInput {
@@ -148,11 +176,32 @@ export interface SaveMemoryResult {
   readonly memoryId?: string;
 }
 
+/**
+ * 记忆运行时门面（Agent 唯一推荐入口）。
+ * v1（memory-runtime.ts）与 v2（memory-runtime-v2.ts）共享此接口。
+ */
 export interface MemoryRuntime {
   ping(): Promise<boolean>;
   beginTask(input: BeginTaskInput): Promise<BeginTaskResult>;
   buildContextSection(input: BuildContextInput): Promise<BuildContextResult>;
-  onToolResult(input: OnToolResultInput): Promise<void>;
+  /**
+   * 工具结果处理。
+   * v2 在工具失败且检索命中时返回 { injected }（T2 action_failed 注入段，
+   * 调用方追加为用户消息）；v1 恒返回 undefined。
+   */
+  onToolResult(
+    input: OnToolResultInput,
+  ): Promise<{ injected?: string } | undefined>;
+  /**
+   * v2：T3 post_compact 检索（上下文压缩后触发）。
+   * 命中时返回注入段（调用方追加为用户消息）；v1 无此方法。
+   */
+  retrievePostCompact?(input: {
+    readonly taskId: string;
+    readonly summaryHead: string;
+    readonly goal: string;
+    readonly existingContextHints?: readonly string[];
+  }): Promise<{ injected?: string } | undefined>;
   patchWorkingMemory(input: PatchWorkingMemoryInput): Promise<void>;
   completeTask(input: CompleteTaskInput): Promise<CompleteTaskResult>;
   listMemories(query?: {

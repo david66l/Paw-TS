@@ -10,11 +10,13 @@
  * - DB 不可用时不回退 FileProvider
  */
 
+// P1.4 估算统一：主路径同一估算器（cl100k，与上下文预算同源）；
+// 替换旧的 ascii/4 + nonAscii/1.5 启发式（日志 02 四套口径残留之一）
+import { TiktokenEstimator } from "@paw/core";
+import { closeSql, ping as dbPing } from "../db/connection.js";
 import { governanceDecisionDao } from "../db/dao/governanceDecision.js";
 import { memoryCandidateDao } from "../db/dao/memoryCandidate.js";
 import { memoryItemDao } from "../db/dao/memoryItem.js";
-import { closeSql, ping as dbPing } from "../db/connection.js";
-import { generateId } from "../db/modules/platform/idGen.js";
 import {
   ContextBuilder,
   GovernanceExecutor,
@@ -27,9 +29,7 @@ import {
   WorkingMemoryManager,
   executionRecorder,
 } from "../db/modules/index.js";
-// P1.4 估算统一：主路径同一估算器（cl100k，与上下文预算同源）；
-// 替换旧的 ascii/4 + nonAscii/1.5 启发式（日志 02 四套口径残留之一）
-import { TiktokenEstimator } from "@paw/core";
+import { generateId } from "../db/modules/platform/idGen.js";
 import type {
   FileActivity,
   MemoryCandidate,
@@ -40,7 +40,7 @@ import type {
   WorkingMemory,
 } from "../db/types.js";
 import { isSystemFinalizeMessage } from "../shared/memory-quality.js";
-import { resolveScope, type ResolvedScope } from "./scope.js";
+import { type ResolvedScope, resolveScope } from "./scope.js";
 import type {
   BeginTaskInput,
   BeginTaskResult,
@@ -110,7 +110,10 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
   private readonly governance = new MemoryGovernance();
   private readonly executor = new GovernanceExecutor();
   private readonly retriever = new MemoryRetriever();
-  private readonly ctxBuilder = new ContextBuilder(undefined, sharedMemoryEstimator);
+  private readonly ctxBuilder = new ContextBuilder(
+    undefined,
+    sharedMemoryEstimator,
+  );
   private readonly toolProcessor = new ToolResultProcessor();
   private readonly candidateEnricher?: MemoryRuntimeOptions["candidateEnricher"];
 
@@ -165,7 +168,9 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     const wm = await this.requireWm(input.taskId);
 
     let degraded = false;
-    let retrievalResult: Awaited<ReturnType<MemoryRetriever["retrieve"]>> | undefined;
+    let retrievalResult:
+      | Awaited<ReturnType<MemoryRetriever["retrieve"]>>
+      | undefined;
     try {
       retrievalResult = await this.retriever.retrieve({
         taskId: input.taskId,
@@ -188,7 +193,8 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       workingMemory: wm,
       retrievalResult,
       currentUserRequest: input.currentUserRequest,
-      tokenBudget: input.tokenBudget > 0 ? input.tokenBudget : DEFAULT_CONTEXT_BUDGET,
+      tokenBudget:
+        input.tokenBudget > 0 ? input.tokenBudget : DEFAULT_CONTEXT_BUDGET,
     });
 
     const items = (retrievalResult?.items ?? []).map((r) => ({
@@ -209,7 +215,9 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     };
   }
 
-  async onToolResult(input: OnToolResultInput): Promise<void> {
+  async onToolResult(
+    input: OnToolResultInput,
+  ): Promise<{ injected?: string } | undefined> {
     const rawOutput =
       typeof input.rawPayload === "string"
         ? input.rawPayload
@@ -322,6 +330,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
         currentTestSummary,
       };
     });
+    return undefined;
   }
 
   async patchWorkingMemory(input: PatchWorkingMemoryInput): Promise<void> {
@@ -420,15 +429,17 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
 
       if (patch.pinnedFacts !== undefined) {
         const now = new Date().toISOString();
-        const pinned: WorkingConstraint[] = patch.pinnedFacts.map((text, i) => ({
-          id: `pin_${i}`,
-          text,
-          source: "runtime" as const,
-          priority: 20,
-          confirmed: true,
-          temporary: false,
-          createdAt: now,
-        }));
+        const pinned: WorkingConstraint[] = patch.pinnedFacts.map(
+          (text, i) => ({
+            id: `pin_${i}`,
+            text,
+            source: "runtime" as const,
+            priority: 20,
+            confirmed: true,
+            temporary: false,
+            createdAt: now,
+          }),
+        );
         const nonPinned = (next.constraints ?? wm.constraints).filter(
           (c) => !c.id.startsWith("pin_"),
         );
@@ -686,7 +697,9 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
 
   private async withWmRetry(
     taskId: string,
-    buildPatch: (wm: WorkingMemory) => Promise<Partial<WorkingMemory>> | Partial<WorkingMemory>,
+    buildPatch: (
+      wm: WorkingMemory,
+    ) => Promise<Partial<WorkingMemory>> | Partial<WorkingMemory>,
   ): Promise<WorkingMemory> {
     let lastErr: unknown;
     for (let i = 0; i < MAX_WM_RETRIES; i++) {
@@ -701,7 +714,9 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     }
     throw lastErr instanceof Error
       ? lastErr
-      : new Error(`WorkingMemory update failed after ${MAX_WM_RETRIES} retries`);
+      : new Error(
+          `WorkingMemory update failed after ${MAX_WM_RETRIES} retries`,
+        );
   }
 
   /** enricher 草稿 → memory_candidates 行 */
@@ -740,9 +755,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
         },
         proposedConfidence: conf,
         sourceTaskIds: [taskId],
-        sourceRefs: [
-          { sourceType: "task_trace", taskId, capturedAt: now },
-        ],
+        sourceRefs: [{ sourceType: "task_trace", taskId, capturedAt: now }],
         evidenceRefs: [],
         possibleDuplicateIds: [],
         possibleConflictIds: [],

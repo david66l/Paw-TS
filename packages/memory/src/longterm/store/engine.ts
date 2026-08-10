@@ -178,10 +178,17 @@ export interface MemoryStoreEngine {
   delete(id: string): Promise<void>;
   /** 元数据过滤；默认排除已软失效条目 */
   query(filter: MemoryFilter): Promise<MemoryEntry[]>;
-  /** BM25/全文检索 */
-  searchText(query: string, k: number): Promise<ScoredId[]>;
-  /** embedding 向量检索 */
-  searchVector(query: string, k: number): Promise<ScoredId[]>;
+  /**
+   * BM25/全文检索。repo 可选：提供时只检索该仓库条目（scope->>'repositoryId'）。
+   * 缺省=跨仓库（Governor 相似召回保留跨 repo 去重语义，spec §5.6 已拍板）。
+   */
+  searchText(query: string, k: number, repo?: string): Promise<ScoredId[]>;
+  /**
+   * embedding 向量检索。repo 可选：提供时只检索该仓库条目——
+   * 注入路径必须 repo 密封（A 仓库任务不得注入 B 仓库记忆），
+   * 否则共享库中同内容异仓库条目会竞争 top-k。
+   */
+  searchVector(query: string, k: number, repo?: string): Promise<ScoredId[]>;
   /** 读效用账本；条目不存在返回 null */
   ledger(id: string): Promise<LedgerEntry | null>;
   /** 账本计数 +1（utility 封顶 LEDGER_UTILITY_MAX；freq 不封顶） */
