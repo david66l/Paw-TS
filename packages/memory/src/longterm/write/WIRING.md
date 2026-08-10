@@ -53,12 +53,13 @@ await pipeline.enqueue({
 }); // 兜底蒸馏，confidence ≤0.6
 ```
 
-## 效用结算（§7.1）
+## 效用结算 + 试用转正（§7.1 / §4.2）
 
 管线内置：`settleRunOutcome` 在 task_succeeded（verdict pass / user_accepted）
-处理时自动执行——按 runId 查 op-log read.inject 的注入条目 utility+1，
-并按 §10.3 规则（detectAdoption）记 read.adopted。**接线侧无需额外调用**，
-只要求注入时走了 TriggeredRetriever（M6，会自动落 read.inject）。
+处理时自动执行——按 runId 查 op-log `read.inject` 的正式条目 utility+1，
+并按 §10.3 规则（detectAdoption）记 read.adopted；同时查 `read.inject.trial`
+把本 run 随行注入过的试用教训转正为 episodic（`source=trial_graduated`）并从 trial 池删除。
+**接线侧无需额外调用**，只要求注入时走了 TriggeredRetriever（会落 read.inject / read.inject.trial）。
 
 ## 注意
 

@@ -3,7 +3,7 @@
  *
  * 失败轨迹的教训先落 trial 池（独立命名空间，不进正式检索）；
  * 随行注入时 attemptsLeft 递减（#8），耗尽由 janitor 物理丢弃；
- * 任务成功后"转正"为 EpisodicExperience（转正逻辑属 v2）。
+ * 所在任务验证成功后转正为 EpisodicExperience（source=trial_graduated，§4.2 / §12.3）。
  *
  * 教训生成（修复批次 B #7）：优先 LLM 蒸馏（Reflexion 式第一人称：哪个 action
  * 错、应该做什么，≤3 句，附 whenToUse/关键词作检索键）；超成本预算或蒸馏失败
@@ -12,7 +12,9 @@
 
 import { createHash } from "node:crypto";
 import { getSql, textArrayLiteral } from "../../db/connection.js";
-import type { TrialLesson } from "../store/engine.js";
+import { appendOpLog } from "../observability/op-log.js";
+import type { EpisodicExperience, MemoryStoreEngine, TrialLesson } from "../store/engine.js";
+import { deriveEntryId } from "../store/id.js";
 import type { DistillerLlm, DistillInput } from "./distiller.js";
 
 export interface TrialLessonRow extends TrialLesson {
@@ -66,6 +68,13 @@ export async function listTrialLessons(originTaskId?: string): Promise<TrialLess
   return (rows as unknown as Record<string, unknown>[]).map(rowToLesson);
 }
 
+/** 按 id 取单条试用教训；不存在返回 null。 */
+export async function getTrialLesson(id: string): Promise<TrialLessonRow | null> {
+  const sql = getSql();
+  const [row] = await sql`SELECT * FROM memory_trial_lessons WHERE id = ${id}`;
+  return row ? rowToLesson(row as Record<string, unknown>) : null;
+}
+
 /** 随行注入一次 → attemptsLeft-1（#8；耗尽由 janitor 物理丢弃）。返回剩余次数。 */
 export async function decrementTrialAttempts(id: string): Promise<number> {
   const sql = getSql();
@@ -74,6 +83,81 @@ export async function decrementTrialAttempts(id: string): Promise<number> {
     WHERE id = ${id} RETURNING attempts_left
   `;
   return row ? ((row as { attempts_left: number }).attempts_left) : 0;
+}
+
+/** 从 trial 池物理删除（转正成功后或调用方显式丢弃）。 */
+export async function removeTrialLesson(id: string): Promise<boolean> {
+  const sql = getSql();
+  const rows = await sql`DELETE FROM memory_trial_lessons WHERE id = ${id} RETURNING id`;
+  return rows.length > 0;
+}
+
+export interface GraduateTrialOptions {
+  engine: MemoryStoreEngine;
+  /** 转正时写入的 repo（注入 run 的仓库） */
+  repo: string;
+  /** 验证成功的 runId（证据指针） */
+  graduatingRunId: string;
+  now?: () => Date;
+}
+
+export interface GraduateTrialResult {
+  memoryId: string;
+  trialId: string;
+}
+
+/**
+ * 试用转正（spec §4.2）：trial → EpisodicExperience(source=trial_graduated)。
+ * - 正式入库后删除 trial 行（幂等：trial 已不存在 → null）
+ * - 同内容哈希幂等：重复转正得到同一 episodic id
+ */
+export async function graduateTrialLesson(
+  trialId: string,
+  opts: GraduateTrialOptions,
+): Promise<GraduateTrialResult | null> {
+  const lesson = await getTrialLesson(trialId);
+  if (!lesson) return null;
+
+  const nowIso = (opts.now?.() ?? new Date()).toISOString();
+  const whenToUse =
+    lesson.whenToUse?.trim() ||
+    "When retrying a task that previously failed with a similar error";
+  const perspective = lesson.lesson.trim();
+  // 操作建议：试用教训本身即 Reflexion 式行动指引（≤1 条，避免空 modification）
+  const modification = perspective ? [perspective.slice(0, 300)] : [];
+
+  const entry: EpisodicExperience = {
+    id: "",
+    kind: "episodic",
+    repo: opts.repo,
+    created: nowIso,
+    tValid: nowIso,
+    tInvalid: null,
+    source: "trial_graduated",
+    confidence: 0.75,
+    evidence: [
+      `runs/${lesson.originTaskId}`,
+      `runs/${opts.graduatingRunId}`,
+      `trial/${lesson.id}`,
+    ],
+    freq: 0,
+    utility: 1, // 转正当场即一次验证成功归因
+    whenToUse,
+    perspective,
+    modification,
+    issueType: "trial_graduated",
+    taskId: opts.graduatingRunId,
+  };
+
+  await opts.engine.put(entry);
+  const memoryId = deriveEntryId(entry);
+  await removeTrialLesson(trialId);
+  await appendOpLog("write.graduated", {
+    runId: opts.graduatingRunId,
+    entryIds: [memoryId],
+    detail: { trialId, originTaskId: lesson.originTaskId, source: "trial_graduated" },
+  });
+  return { memoryId, trialId };
 }
 
 // ── LLM 蒸馏（#7）──

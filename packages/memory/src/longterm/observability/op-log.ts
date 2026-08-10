@@ -15,10 +15,14 @@ import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
 export type MemoryOp =
   | "read.trigger"
   | "read.inject"
+  /** 试用教训随行注入（不进正式账本；供任务成功后转正） */
+  | "read.inject.trial"
   /** 注入采纳（spec §10.3 采纳率口径的原始记录，见 ledger.ts） */
   | "read.adopted"
   | "write.enqueued"
   | "write.rejected"
+  /** 试用教训转正为正式 episodic（source=trial_graduated） */
+  | "write.graduated"
   | "governed"
   | "lifecycle.purge"
   | "reindex"

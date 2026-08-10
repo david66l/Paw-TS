@@ -24,7 +24,7 @@ import { hybridRecall } from "../retrieval/hybrid.js";
 import { scanForSecrets } from "./secrets.js";
 import { MemoryDistiller, type DistillInput } from "./distiller.js";
 import { LongtermGovernor, type GovernorLlm, type GovernorCandidate } from "./governor.js";
-import { addTrialLesson } from "./trial.js";
+import { addTrialLesson, graduateTrialLesson } from "./trial.js";
 import type { CorrectionConfirmer } from "./correction.js";
 
 // ── 事件与门控类型（spec §9.1 + §5.3）──
@@ -273,13 +273,13 @@ export class MemoryWritePipeline {
             return this.createTrial(event.runId, event.goal ?? "", event.trajectory ?? "", runId);
           }
           const r = await this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
-          // 效用结算（§7.1）：该 run 注入过的条目 utility+1 + 采纳判定（§10.3）
-          await this.settleRunOutcome(event.runId, event.trajectory ?? "");
+          // 效用结算（§7.1）+ 试用转正（§4.2）：注入过的正式条目 utility+1；随行 trial 验证成功 → episodic
+          await this.settleRunOutcome(event.runId, event.trajectory ?? "", repo);
           return r;
         }
         if (verdict.kind === "user_accepted") {
           const r = await this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
-          await this.settleRunOutcome(event.runId, event.trajectory ?? "");
+          await this.settleRunOutcome(event.runId, event.trajectory ?? "", repo);
           return r;
         }
         // 禁止盲改条款（§5.3）：无任何反馈信号不得固化
@@ -525,29 +525,52 @@ export class MemoryWritePipeline {
   }
 
   /**
-   * 任务成功结算（§7.1 / §10.3）：按 runId 查 op-log read.inject 的注入条目，
-   * utility+1（同 run 归因，不跨 run）；轨迹文本中实际引用/遵循的条目记 read.adopted。
+   * 任务成功结算（§7.1 / §10.3 / §4.2）：
+   * - 正式库：按 runId 查 read.inject → utility+1 + 采纳判定
+   * - 试用池：按 runId 查 read.inject.trial → 转正为 episodic(source=trial_graduated)
    * 结算失败不阻塞主流程（§9.6）。
    */
-  private async settleRunOutcome(runId: string, trajectoryText: string): Promise<void> {
+  private async settleRunOutcome(runId: string, trajectoryText: string, repo: string): Promise<void> {
     try {
       const injects = await queryOpLog({ runId, op: "read.inject", limit: 100 });
       const ids = [...new Set(injects.flatMap((l) => l.entryIds))];
-      if (ids.length === 0) return;
-      await recordTaskSuccess(this.engine, ids);
+      if (ids.length > 0) {
+        await recordTaskSuccess(this.engine, ids);
 
-      const entries = (
-        await Promise.all(ids.map((id) => this.engine.get(id).catch(() => null)))
-      ).filter((e): e is MemoryEntry => e !== null);
-      const adopted = detectAdoption(
-        entries.map((e) => ({
-          id: e.id,
-          keywords: e.kind === "semantic" ? e.keywords : [],
-          modifications: e.kind === "episodic" ? e.modification : [],
-        })),
-        trajectoryText,
-      );
-      if (adopted.length > 0) await recordAdoption(runId, adopted, { by: "detectAdoption" });
+        const entries = (
+          await Promise.all(ids.map((id) => this.engine.get(id).catch(() => null)))
+        ).filter((e): e is MemoryEntry => e !== null);
+        const adopted = detectAdoption(
+          entries.map((e) => ({
+            id: e.id,
+            keywords: e.kind === "semantic" ? e.keywords : [],
+            modifications: e.kind === "episodic" ? e.modification : [],
+          })),
+          trajectoryText,
+        );
+        if (adopted.length > 0) await recordAdoption(runId, adopted, { by: "detectAdoption" });
+      }
+
+      // 试用转正：本 run 随行注入过的 trial，在验证成功后入库正式库
+      const trialInjects = await queryOpLog({ runId, op: "read.inject.trial", limit: 50 });
+      const trialIds = [...new Set(trialInjects.flatMap((l) => l.entryIds))];
+      for (const trialId of trialIds) {
+        try {
+          const graduated = await graduateTrialLesson(trialId, {
+            engine: this.engine,
+            repo,
+            graduatingRunId: runId,
+            now: this.now,
+          });
+          if (graduated) {
+            this.emit?.({
+              type: "memory.governed",
+              op: "ADD",
+              entryId: graduated.memoryId,
+            });
+          }
+        } catch { /* 单条转正失败不阻塞其余 */ }
+      }
     } catch { /* 账本允许近似 */ }
   }
 

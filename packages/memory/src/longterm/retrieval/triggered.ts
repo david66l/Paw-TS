@@ -507,10 +507,21 @@ export class TriggeredRetriever {
       } else {
         // 账本：注入即 freq+1（trial 不进正式账本）；op-log read.inject 由 recordRetrievalHits 落
         const formalIds = kept.filter((i) => i.kind !== "trial").map((i) => i.id);
-        await recordRetrievalHits(this.engine, formalIds, {
-          runId,
-          detail: { totalTokens: pkg.totalTokens, degraded },
-        });
+        const trialIds = kept.filter((i) => i.kind === "trial").map((i) => i.id);
+        if (formalIds.length > 0) {
+          await recordRetrievalHits(this.engine, formalIds, {
+            runId,
+            detail: { totalTokens: pkg.totalTokens, degraded },
+          });
+        }
+        // 试用随行单独记 op（供任务成功后转正，§4.2 / §12.3）
+        if (trialIds.length > 0) {
+          await appendOpLog("read.inject.trial", {
+            runId,
+            entryIds: trialIds,
+            detail: { totalTokens: pkg.totalTokens },
+          });
+        }
         this.emit?.({ type: "memory.inject", itemIds: kept.map((i) => i.id), totalTokens: pkg.totalTokens, degraded });
       }
     }
