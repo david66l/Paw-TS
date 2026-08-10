@@ -20,6 +20,8 @@ import {
   isCoveredByHints,
   parseRerankOutput,
   buildRerankPrompt,
+  inferApplicabilityLabel,
+  resolveInjectStatus,
   type RerankerLlm,
 } from "../src/longterm/retrieval/triggered.js";
 import type { EpisodicExperience, SemanticFact } from "../src/longterm/store/engine.js";
@@ -98,6 +100,62 @@ describe("parseRerankOutput（§6.4 输出契约）", () => {
   test("buildRerankPrompt 含整数序号候选", () => {
     const prompt = buildRerankPrompt("q", []);
     expect(prompt).toContain("seq");
+  });
+});
+
+describe("disagreement gate（§6.5）", () => {
+  const now = new Date().toISOString();
+  const baseEpisodic = (whenToUse: string, perspective: string): EpisodicExperience => ({
+    id: "",
+    kind: "episodic",
+    repo: "r",
+    created: now,
+    tValid: now,
+    tInvalid: null,
+    source: "agent_verified",
+    confidence: 0.9,
+    evidence: [],
+    freq: 0,
+    utility: 0,
+    whenToUse,
+    perspective,
+    modification: ["do the thing"],
+    issueType: "TestError",
+    taskId: "t",
+  });
+
+  test("启发式：特征词重叠 ≥2 → applicable，否则 reference", () => {
+    const strong = baseEpisodic(
+      "When AmberModuleResolutionError appears after ESM migration",
+      "Check exports map first",
+    );
+    expect(
+      inferApplicabilityLabel(
+        "AmberModuleResolutionError after ESM migration failed",
+        strong,
+      ),
+    ).toBe("applicable");
+
+    const weak = baseEpisodic(
+      "When completely unrelated database migrations stall",
+      "Vacuum then retry",
+    );
+    expect(
+      inferApplicabilityLabel(
+        "AmberModuleResolutionError after ESM migration failed",
+        weak,
+      ),
+    ).toBe("reference");
+  });
+
+  test("精排 label 优先于启发式；无 label 时走启发式", () => {
+    const entry = baseEpisodic(
+      "When AmberModuleResolutionError appears after ESM migration",
+      "Check exports map first",
+    );
+    expect(resolveInjectStatus("AmberModuleResolutionError ESM migration", entry, "reference")).toBe("reference");
+    expect(resolveInjectStatus("unrelated query", entry, "applicable")).toBe("verified");
+    expect(resolveInjectStatus("AmberModuleResolutionError ESM migration", entry)).toBe("verified");
   });
 });
 
@@ -200,6 +258,12 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     expect(pkg.items[0]!.id).toBe(targetId);
     expect(pkg.render()).toContain("<agent-memory");
     expect(pkg.render()).toContain('status="verified"');
+    expect(pkg.render()).toContain("建议策略"); // §6.5 applicable 措辞
+    // gate op-log
+    const gates = await queryOpLog({ runId: `${RUN}_t1`, op: "read.gate" });
+    expect(gates.length).toBe(1);
+    expect(gates[0]!.detail.applicable).toBe(1);
+    expect(gates[0]!.detail.source).toBe("heuristic"); // 无精排
     // RunEvent 发射
     expect(emitted.some((e) => e.type === "memory.trigger" && e.triggerType === "task_start")).toBe(true);
     expect(emitted.some((e) => e.type === "memory.inject")).toBe(true);
@@ -252,6 +316,33 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     expect(pkg.items[0]!.status).toBe("reference");
     expect(pkg.render()).toContain("历史参考（可能不适用）");
     expect(pkg.render()).toContain('status="reference"');
+    const gates = await queryOpLog({ runId: `${RUN}_ref`, op: "read.gate" });
+    expect(gates[0]!.detail.reference).toBe(1);
+    expect(gates[0]!.detail.source).toBe("rerank");
+  });
+
+  it("无精排 + 弱相关命中 → 启发式判 reference（宁弱勿强）", async () => {
+    // whenToUse 与 query 几乎无共享长特征词 → 启发式 reference
+    const e = makeEpisodic(
+      "When coral database vacuum stalls overnight",
+      "Coral vacuum stalls usually come from lock contention",
+    );
+    await engine.put(e);
+    createdIds.push(deriveEntryId(e));
+
+    // 用 T4 显式查询把条目捞进来（不走精排），query 词面与 whenToUse 弱重叠
+    const pkg = await makeRetriever().retrieve({
+      type: "explicit_query",
+      question: "coral vacuum",
+      repo: REPO,
+      runId: `${RUN}_heur_ref`,
+    });
+    const hit = pkg.items.find((i) => i.id === deriveEntryId(e));
+    expect(hit).toBeDefined();
+    // "coral"/"vacuum" 若被 extractMatchTerms 收成短词可能不够 2 个长特征命中
+    // coral=5 chars（≤6 不入选），vacuum=6（≤6 不入选）→ terms 空 → reference
+    expect(hit!.status).toBe("reference");
+    expect(pkg.render()).toContain("历史参考（可能不适用）");
   });
 
   it("§6.8-4 否定句逐字保留", async () => {

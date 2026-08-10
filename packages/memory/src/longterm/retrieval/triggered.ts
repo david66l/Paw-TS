@@ -219,6 +219,33 @@ function entryWhenToUse(entry: MemoryEntry): string | undefined {
   return entry.kind === "episodic" ? entry.whenToUse : undefined;
 }
 
+// ── Disagreement Gate（§6.5）──
+
+/**
+ * 无精排 label 时的保守启发式：query 特征词与 whenToUse/正文重叠 ≥2 → applicable，
+ * 否则 reference（宁弱勿强，避免无 LLM 判定时硬塞「建议策略」）。
+ */
+export function inferApplicabilityLabel(
+  query: string,
+  entry: MemoryEntry,
+): "applicable" | "reference" {
+  const haystack = [entryWhenToUse(entry) ?? "", entryText(entry)].join("\n").toLowerCase();
+  const terms = extractMatchTerms(query);
+  if (terms.length === 0) return "reference";
+  const hits = terms.filter((t) => haystack.includes(t)).length;
+  return hits >= 2 ? "applicable" : "reference";
+}
+
+/** 精排 label 优先；缺失时走启发式。返回注入 status（applicable→verified）。 */
+export function resolveInjectStatus(
+  query: string,
+  entry: MemoryEntry,
+  label?: "applicable" | "reference",
+): InjectStatus {
+  const resolved = label ?? inferApplicabilityLabel(query, entry);
+  return resolved === "reference" ? "reference" : "verified";
+}
+
 // ── 触发点配置（§6.1 表）──
 
 const TRIGGER_KINDS: Record<MemoryTrigger["type"], MemoryKind[] | undefined> = {
@@ -361,18 +388,32 @@ export class TriggeredRetriever {
       selected = [...episodic, ...profiles];
     }
 
-    // ── 组装注入项 ──
+    // ── 组装注入项 + disagreement gate（§6.5）──
     const items: InjectedMemory[] = selected.map((s) => ({
       id: s.entry.id,
       kind: s.entry.kind,
       text: entryText(s.entry),
       whenToUse: entryWhenToUse(s.entry),
-      // disagreement gate（§6.5）：reference → 弱措辞身份
-      status: s.label === "reference" ? "reference" : "verified",
+      status: resolveInjectStatus(query, s.entry, s.label),
       why: s.why,
       score: s.score,
       supportCount: s.entry.kind === "profile" ? s.entry.supportCount : undefined,
     }));
+
+    // gate 可观测：applicable(=verified) / reference 计数（trial 随后追加，不计入本行）
+    const gateApplicable = items.filter((i) => i.status === "verified").length;
+    const gateReference = items.filter((i) => i.status === "reference").length;
+    if (items.length > 0) {
+      await appendOpLog("read.gate", {
+        runId,
+        entryIds: items.map((i) => i.id),
+        detail: {
+          applicable: gateApplicable,
+          reference: gateReference,
+          source: selected.some((s) => s.label != null) ? "rerank" : "heuristic",
+        },
+      });
+    }
 
     // ── trial 池随行（T1/T2，不占正式条额，§6.1/§4.3）──
     if (trigger.type === "task_start" || trigger.type === "action_failed") {
@@ -567,7 +608,8 @@ export function extractMatchTerms(query: string): string[] {
 }
 
 const STATUS_PREFIX: Record<InjectStatus, string> = {
-  verified: "历史经验",
+  // §6.5：applicable → 建议策略；reference → 历史参考（弱措辞）
+  verified: "建议策略",
   reference: "历史参考（可能不适用）",
   trial: "试用经验（未验证）",
 };

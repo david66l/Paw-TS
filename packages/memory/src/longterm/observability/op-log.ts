@@ -17,6 +17,8 @@ export type MemoryOp =
   | "read.inject"
   /** 试用教训随行注入（不进正式账本；供任务成功后转正） */
   | "read.inject.trial"
+  /** disagreement gate 适用性判定结果（applicable/reference 计数） */
+  | "read.gate"
   /** 注入采纳（spec §10.3 采纳率口径的原始记录，见 ledger.ts） */
   | "read.adopted"
   | "write.enqueued"
