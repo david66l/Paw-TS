@@ -28,6 +28,7 @@ completeTask ──► 入队 outbox（异步）：failed→试用通道 / 测�
   蒸馏/精排用主模型（fake 模型自动跳过），裁决用 settings.local.json 解析的强模型；缺失时降级
   （无蒸馏 → append-only 原文摘要；无裁决 → 直 ADD；无精排 → 召回直取 k 减半）
 - **写入语义**：`completeTask` 只入队，`memory.extracted` 事件的 entries = 已入队事件数（异步固化）；失败教训先入 trial 池，同主题任务验证成功后转正为 `source=trial_graduated` 的正式 episodic
+- **注入门控**：精排（或无精排时的启发式）给 applicable/reference；不适用则弱措辞「历史参考」，避免硬推旧经验
 - **存量迁移**：`paw-ts memory migrate-v1-to-v2 [--dry-run] [--repo <id>]`（type→kind 映射 + 重算 embedding，幂等）
 
 ## 使用默认 db（v2 同样适用）
