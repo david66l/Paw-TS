@@ -180,6 +180,14 @@ const MAX_AUTO_CONTEXT_FILES = 8;
 /** Max chars per file to include in context. */
 const MAX_FILE_CHARS = 8_000;
 
+/**
+ * 自动上下文注入总量上限（e2e 实测修复）：8 文件 × 8K 字符 = 64K 字符
+ * ≈ 16K tokens 的一次性注入会撑爆压缩 head 预算（head ≤4K tokens）→
+ * 压缩边界错乱、middle 被吞。注入内容控制在 ~3K tokens 内，
+ * 模型需要细节时可自行 read_file。
+ */
+const MAX_AUTO_CONTEXT_TOTAL_CHARS = 12_000;
+
 export interface AutoContextResult {
   readonly content: string;
   readonly filesRead: readonly string[];
@@ -277,20 +285,25 @@ export function discoverContext(
   const filesRead: string[] = [];
   const filesNotFound: string[] = [];
   const blocks: string[] = [];
+  let totalChars = 0;
 
   for (const { filePath } of scored.slice(0, MAX_AUTO_CONTEXT_FILES)) {
     if (excludeFiles?.includes(filePath)) continue;
+    // 总量上限：剩余额度不足的文件跳过（文件列表仍记录）
+    const remaining = MAX_AUTO_CONTEXT_TOTAL_CHARS - totalChars;
+    if (remaining <= 0) break;
     const result = readWorkspaceFile(workspaceRoot, filePath, {
-      limit: Math.floor(MAX_FILE_CHARS / 80), // rough line estimate
+      limit: Math.floor(Math.min(MAX_FILE_CHARS, remaining) / 80), // rough line estimate
     });
     if (result.error || result.content === undefined) {
       filesNotFound.push(filePath);
       continue;
     }
     let content = result.content;
-    if (content.length > MAX_FILE_CHARS) {
-      content = `${content.slice(0, MAX_FILE_CHARS)}\n... (truncated)`;
+    if (content.length > remaining) {
+      content = `${content.slice(0, remaining)}\n... (truncated)`;
     }
+    totalChars += content.length;
     blocks.push(`<file path="${filePath}">\n${content}\n</file>`);
     filesRead.push(filePath);
   }

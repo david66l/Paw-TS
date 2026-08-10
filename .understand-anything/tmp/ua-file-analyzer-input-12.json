@@ -1,0 +1,15 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "packages/store/src/plan-item.ts", "language": "typescript", "sizeLines": 80, "fileCategory": "code"},
+    {"path": "packages/store/src/plan-items-json.ts", "language": "typescript", "sizeLines": 120, "fileCategory": "code"},
+    {"path": "packages/store/src/plan-snapshot.ts", "language": "typescript", "sizeLines": 139, "fileCategory": "code"},
+    {"path": "packages/store/src/plan.ts", "language": "typescript", "sizeLines": 115, "fileCategory": "code"},
+    {"path": "packages/store/src/task-planner.ts", "language": "typescript", "sizeLines": 87, "fileCategory": "code"},
+    {"path": "packages/store/test/plan-items-json.test.ts", "language": "typescript", "sizeLines": 32, "fileCategory": "code"},
+    {"path": "packages/store/test/plan-snapshot.test.ts", "language": "typescript", "sizeLines": 59, "fileCategory": "code"},
+    {"path": "packages/store/test/plan.test.ts", "language": "typescript", "sizeLines": 31, "fileCategory": "code"},
+    {"path": "packages/store/test/task-planner.test.ts", "language": "typescript", "sizeLines": 55, "fileCategory": "code"}
+  ],
+  "batchImportData": {"packages/store/src/plan-item.ts": [], "packages/store/src/plan-items-json.ts": ["packages/store/src/plan-item.ts"], "packages/store/src/plan-snapshot.ts": ["packages/store/src/plan.ts"], "packages/store/src/plan.ts": ["packages/store/src/plan-item.ts"], "packages/store/src/task-planner.ts": ["packages/store/src/plan-item.ts", "packages/store/src/plan.ts"], "packages/store/test/plan-items-json.test.ts": ["packages/store/src/plan-item.ts", "packages/store/src/plan-items-json.ts"], "packages/store/test/plan-snapshot.test.ts": ["packages/store/src/plan-item.ts", "packages/store/src/plan-snapshot.ts", "packages/store/src/plan.ts"], "packages/store/test/plan.test.ts": ["packages/store/src/plan-item.ts", "packages/store/src/plan.ts"], "packages/store/test/task-planner.test.ts": ["packages/store/src/plan-item.ts", "packages/store/src/task-planner.ts"]}
+}

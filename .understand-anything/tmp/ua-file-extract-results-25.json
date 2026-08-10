@@ -1,0 +1,1106 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 9,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "文档/工程/BENCHMARK_RESULTS.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 34,
+      "nonEmptyLines": 25,
+      "sections": [
+        {
+          "heading": "Benchmark results (sample)",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Context compression (synthetic fixture)",
+          "level": 2,
+          "line": 10
+        },
+        {
+          "heading": "Memory retrieval (golden set, 7 memories, 5 queries)",
+          "level": 2,
+          "line": 25
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "文档/工程/ENGINEERING_EXCELLENCE_PLAN.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 626,
+      "nonEmptyLines": 474,
+      "sections": [
+        {
+          "heading": "Paw-TS 工程卓越改进方案",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、现状总评",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "核心数据速览",
+          "level": 3,
+          "line": 13
+        },
+        {
+          "heading": "二、改进方案：七大支柱",
+          "level": 2,
+          "line": 29
+        },
+        {
+          "heading": "支柱 1：质量门禁体系（P0 — 立即执行）",
+          "level": 3,
+          "line": 31
+        },
+        {
+          "heading": "1.1 修复现有质量问题（1-2 天）",
+          "level": 4,
+          "line": 35
+        },
+        {
+          "heading": "1.2 GitHub Actions CI 流水线（1 天）",
+          "level": 4,
+          "line": 45
+        },
+        {
+          "heading": "1.3 Pre-commit Hooks（2 小时）",
+          "level": 4,
+          "line": 74
+        },
+        {
+          "heading": "支柱 2：架构治理与模块拆分（P1 — 1-2 周）",
+          "level": 3,
+          "line": 92
+        },
+        {
+          "heading": "2.1 Orchestrator Phase Handler 重构",
+          "level": 4,
+          "line": 96
+        },
+        {
+          "heading": "2.2 工具注册表重构",
+          "level": 4,
+          "line": 121
+        },
+        {
+          "heading": "2.3 引入循环依赖检测",
+          "level": 4,
+          "line": 143
+        },
+        {
+          "heading": "支柱 3：可观测性体系（P1 — 1 周）",
+          "level": 3,
+          "line": 155
+        },
+        {
+          "heading": "3.1 结构化日志（Structured Logging）",
+          "level": 4,
+          "line": 165
+        },
+        {
+          "heading": "3.2 OpenTelemetry Tracing（可选增强）",
+          "level": 4,
+          "line": 194
+        },
+        {
+          "heading": "3.3 Metrics 与告警（生产级必备）",
+          "level": 4,
+          "line": 222
+        },
+        {
+          "heading": "支柱 4：安全纵深防御（P1 — 3-5 天）",
+          "level": 3,
+          "line": 250
+        },
+        {
+          "heading": "4.1 Shell 守卫：黑名单 → 白名单",
+          "level": 4,
+          "line": 254
+        },
+        {
+          "heading": "4.2 MCP 安全配置校验",
+          "level": 4,
+          "line": 284
+        },
+        {
+          "heading": "4.3 Secrets 管理与扫描",
+          "level": 4,
+          "line": 302
+        },
+        {
+          "heading": "4.4 路径安全增强",
+          "level": 4,
+          "line": 312
+        },
+        {
+          "heading": "支柱 5：开发体验（DX）优化（P2 — 3-5 天）",
+          "level": 3,
+          "line": 342
+        },
+        {
+          "heading": "5.1 Runtime 版本锁定",
+          "level": 4,
+          "line": 344
+        },
+        {
+          "heading": "5.2 统一 Dev 命令",
+          "level": 4,
+          "line": 356
+        },
+        {
+          "heading": "5.3 Turborepo 构建管道（可选）",
+          "level": 4,
+          "line": 369
+        },
+        {
+          "heading": "5.4 IDE 配置",
+          "level": 4,
+          "line": 385
+        },
+        {
+          "heading": "支柱 6：测试体系强化（P2 — 1 周）",
+          "level": 3,
+          "line": 399
+        },
+        {
+          "heading": "6.1 覆盖率门禁",
+          "level": 4,
+          "line": 401
+        },
+        {
+          "heading": "6.2 故障注入测试",
+          "level": 4,
+          "line": 412
+        },
+        {
+          "heading": "6.3 压力测试",
+          "level": 4,
+          "line": 425
+        },
+        {
+          "heading": "6.4 测试数据工厂",
+          "level": 4,
+          "line": 435
+        },
+        {
+          "heading": "支柱 7：文档与版本管理（P2 — 3-5 天）",
+          "level": 3,
+          "line": 451
+        },
+        {
+          "heading": "7.1 补齐核心文档",
+          "level": 4,
+          "line": 453
+        },
+        {
+          "heading": "7.2 Conventional Commits + Changesets",
+          "level": 4,
+          "line": 462
+        },
+        {
+          "heading": "7.3 Commit Message 规范",
+          "level": 4,
+          "line": 485
+        },
+        {
+          "heading": "三、实施路线图",
+          "level": 2,
+          "line": 513
+        },
+        {
+          "heading": "Phase 0: 止血（Week 0 — 2-3 天）",
+          "level": 3,
+          "line": 515
+        },
+        {
+          "heading": "Phase 1: 质量门禁（Week 1）",
+          "level": 3,
+          "line": 526
+        },
+        {
+          "heading": "Phase 2: 架构治理（Week 2-3）",
+          "level": 3,
+          "line": 535
+        },
+        {
+          "heading": "Phase 3: 可观测性（Week 3-4）",
+          "level": 3,
+          "line": 545
+        },
+        {
+          "heading": "Phase 4: 安全加固（Week 4）",
+          "level": 3,
+          "line": 555
+        },
+        {
+          "heading": "Phase 5: 文档与版本（Week 5）",
+          "level": 3,
+          "line": 565
+        },
+        {
+          "heading": "Phase 6: 测试强化（持续）",
+          "level": 3,
+          "line": 575
+        },
+        {
+          "heading": "四、预期收益",
+          "level": 2,
+          "line": 586
+        },
+        {
+          "heading": "五、不做的事（减法原则）",
+          "level": 2,
+          "line": 600
+        },
+        {
+          "heading": "六、参考标准",
+          "level": 2,
+          "line": 612
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 46
+      }
+    },
+    {
+      "path": "文档/工程/EVAL_ARCHITECTURE_PLAN.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 387,
+      "nonEmptyLines": 297,
+      "sections": [
+        {
+          "heading": "Paw-TS Agent 自动化评估体系 — 详细架构方案",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Context",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "总体架构",
+          "level": 2,
+          "line": 15
+        },
+        {
+          "heading": "一、插件架构：EvalHooks — 唯一需要改动核心的地方",
+          "level": 2,
+          "line": 58
+        },
+        {
+          "heading": "1.1 核心思路",
+          "level": 3,
+          "line": 60
+        },
+        {
+          "heading": "1.2 新增接口（放在 `packages/core/src/eval-hooks.ts`）",
+          "level": 3,
+          "line": 64
+        },
+        {
+          "heading": "1.3 在 orchestrator 中接入（改动量极小）",
+          "level": 3,
+          "line": 95
+        },
+        {
+          "heading": "二、全链路数据收集设计",
+          "level": 2,
+          "line": 114
+        },
+        {
+          "heading": "2.1 采集内容（对比现有事件系统的差距）",
+          "level": 3,
+          "line": 116
+        },
+        {
+          "heading": "2.2 数据结构",
+          "level": 3,
+          "line": 128
+        },
+        {
+          "heading": "2.3 数据采集器实现",
+          "level": 3,
+          "line": 147
+        },
+        {
+          "heading": "三、测试数据集架构",
+          "level": 2,
+          "line": 153
+        },
+        {
+          "heading": "3.1 测试用例类型定义",
+          "level": 3,
+          "line": 155
+        },
+        {
+          "heading": "3.2 规则类型（RuleSpec）",
+          "level": 3,
+          "line": 182
+        },
+        {
+          "heading": "3.3 内置用例集（~120 条）",
+          "level": 3,
+          "line": 198
+        },
+        {
+          "heading": "3.4 用例示例",
+          "level": 3,
+          "line": 211
+        },
+        {
+          "heading": "四、阅卷层：混合评分体系",
+          "level": 2,
+          "line": 236
+        },
+        {
+          "heading": "4.1 两路评分管线",
+          "level": 3,
+          "line": 238
+        },
+        {
+          "heading": "4.2 评分维度（扩展现有 judge 的 4 维度 → 9 维度）",
+          "level": 3,
+          "line": 250
+        },
+        {
+          "heading": "4.3 规则引擎（RuleScorer）",
+          "level": 3,
+          "line": 265
+        },
+        {
+          "heading": "4.4 LLM 评分（LlmScorer）",
+          "level": 3,
+          "line": 269
+        },
+        {
+          "heading": "4.5 多轮聚合",
+          "level": 3,
+          "line": 277
+        },
+        {
+          "heading": "五、CLI 集成",
+          "level": 2,
+          "line": 290
+        },
+        {
+          "heading": "5.1 命令",
+          "level": 3,
+          "line": 292
+        },
+        {
+          "heading": "5.2 集成方式",
+          "level": 3,
+          "line": 304
+        },
+        {
+          "heading": "5.3 配置",
+          "level": 3,
+          "line": 308
+        },
+        {
+          "heading": "六、训练/测试数据补全策略",
+          "level": 2,
+          "line": 327
+        },
+        {
+          "heading": "6.1 现状",
+          "level": 3,
+          "line": 329
+        },
+        {
+          "heading": "6.2 三阶段补全方案",
+          "level": 3,
+          "line": 333
+        },
+        {
+          "heading": "6.3 数据格式",
+          "level": 3,
+          "line": 351
+        },
+        {
+          "heading": "七、实施路线",
+          "level": 2,
+          "line": 357
+        },
+        {
+          "heading": "八、关键设计决策",
+          "level": 2,
+          "line": 368
+        },
+        {
+          "heading": "验证方式",
+          "level": 2,
+          "line": 382
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 33
+      }
+    },
+    {
+      "path": "文档/工程/INTERVIEW_READINESS_PLAN.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 57,
+      "nonEmptyLines": 42,
+      "sections": [
+        {
+          "heading": "Paw-TS 大厂面试就绪计划",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Phase 1：工程门禁（P0）",
+          "level": 2,
+          "line": 8
+        },
+        {
+          "heading": "Phase 2：代码与叙事对齐（P0）",
+          "level": 2,
+          "line": 17
+        },
+        {
+          "heading": "Phase 3：可量化评测（P1）",
+          "level": 2,
+          "line": 25
+        },
+        {
+          "heading": "Phase 4：对外文档（P1）",
+          "level": 2,
+          "line": 33
+        },
+        {
+          "heading": "Phase 5：仓库卫生（P2，可选）",
+          "level": 2,
+          "line": 40
+        },
+        {
+          "heading": "统一验证命令",
+          "level": 2,
+          "line": 49
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    },
+    {
+      "path": "文档/工程/Paw-TS从0到1完整解析.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 373,
+      "nonEmptyLines": 298,
+      "sections": [
+        {
+          "heading": "Paw-TS：从 0 到 1 完整解析",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "这是什么？",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "项目骨架：Monorepo 布局",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "第 1 步：LLM 抽象层 (`packages/models`)",
+          "level": 2,
+          "line": 29
+        },
+        {
+          "heading": "第 2 步：上下文管理器 (`packages/core` — `context-manager.ts`)",
+          "level": 2,
+          "line": 57
+        },
+        {
+          "heading": "第 3 步：上下文三层压缩体系",
+          "level": 2,
+          "line": 81
+        },
+        {
+          "heading": "第 4 步：记忆系统 (`packages/core` — memory/*)",
+          "level": 2,
+          "line": 112
+        },
+        {
+          "heading": "第 5 步：工具注册与执行 (`packages/harness`)",
+          "level": 2,
+          "line": 134
+        },
+        {
+          "heading": "第 6 步：System Prompt 构建 (`packages/core` — `system-prompt/`)",
+          "level": 2,
+          "line": 166
+        },
+        {
+          "heading": "第 7 步：AgentOrchestrator — ReAct 主循环 (`packages/agent`)",
+          "level": 2,
+          "line": 189
+        },
+        {
+          "heading": "Run 的完整生命周期",
+          "level": 3,
+          "line": 193
+        },
+        {
+          "heading": "关键设计点",
+          "level": 3,
+          "line": 222
+        },
+        {
+          "heading": "第 8 步：子 Agent 系统",
+          "level": 2,
+          "line": 233
+        },
+        {
+          "heading": "第 9 步：记忆提取（Run 完成后）",
+          "level": 2,
+          "line": 253
+        },
+        {
+          "heading": "第 10 步：CLI + TUI 应用层",
+          "level": 2,
+          "line": 265
+        },
+        {
+          "heading": "完整数据流总结",
+          "level": 2,
+          "line": 285
+        },
+        {
+          "heading": "如果要从头实现",
+          "level": 2,
+          "line": 341
+        },
+        {
+          "heading": "关键文件索引",
+          "level": 2,
+          "line": 356
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 18
+      }
+    },
+    {
+      "path": "文档/工程/TEST_REPORT.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 171,
+      "nonEmptyLines": 139,
+      "sections": [
+        {
+          "heading": "Paw-TS 核心能力测试报告",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、Agent 工作流测试",
+          "level": 2,
+          "line": 10
+        },
+        {
+          "heading": "1.1 多轮对话工作流",
+          "level": 3,
+          "line": 15
+        },
+        {
+          "heading": "1.2 并行工具调用",
+          "level": 3,
+          "line": 23
+        },
+        {
+          "heading": "1.3 Plan 计划系统",
+          "level": 3,
+          "line": 31
+        },
+        {
+          "heading": "1.4 工具审批流",
+          "level": 3,
+          "line": 39
+        },
+        {
+          "heading": "1.5 中断信号",
+          "level": 3,
+          "line": 47
+        },
+        {
+          "heading": "二、记忆机制测试",
+          "level": 2,
+          "line": 56
+        },
+        {
+          "heading": "2.1 Session Memory（会话记忆）",
+          "level": 3,
+          "line": 60
+        },
+        {
+          "heading": "2.2 Auto Memory（自动记忆）",
+          "level": 3,
+          "line": 69
+        },
+        {
+          "heading": "2.3 记忆提取 Agent",
+          "level": 3,
+          "line": 78
+        },
+        {
+          "heading": "三、上下文压缩测试",
+          "level": 2,
+          "line": 88
+        },
+        {
+          "heading": "3.1 ContextCompactor（Layer 2/3 压缩器）",
+          "level": 3,
+          "line": 92
+        },
+        {
+          "heading": "3.2 pruneToolResults（Layer 1 修剪器）",
+          "level": 3,
+          "line": 105
+        },
+        {
+          "heading": "3.3 完整压缩流水线",
+          "level": 3,
+          "line": 115
+        },
+        {
+          "heading": "四、现有单元测试回归",
+          "level": 2,
+          "line": 126
+        },
+        {
+          "heading": "五、关键发现与建议",
+          "level": 2,
+          "line": 143
+        },
+        {
+          "heading": "5.1 已验证的核心设计",
+          "level": 3,
+          "line": 145
+        },
+        {
+          "heading": "5.2 轻微问题",
+          "level": 3,
+          "line": 152
+        },
+        {
+          "heading": "5.3 未覆盖但设计存在的功能",
+          "level": 3,
+          "line": 156
+        },
+        {
+          "heading": "六、运行方式",
+          "level": 2,
+          "line": 165
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 21
+      }
+    },
+    {
+      "path": "文档/工程/UPGRADE_PLAN.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 370,
+      "nonEmptyLines": 275,
+      "sections": [
+        {
+          "heading": "Paw-TS 架构设计升级计划：通过大厂 AI Agent 面试",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "目标画像",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "一、设计诊断：现有架构的面试风险地图",
+          "level": 2,
+          "line": 12
+        },
+        {
+          "heading": "1.1 Orchestrator — 设计层面最大风险",
+          "level": 3,
+          "line": 14
+        },
+        {
+          "heading": "1.2 ContextManager — 算法设计会被 challenge",
+          "level": 3,
+          "line": 32
+        },
+        {
+          "heading": "1.3 模型抽象层 — 设计亮点，但不够深",
+          "level": 3,
+          "line": 49
+        },
+        {
+          "heading": "1.4 工具系统 — 设计有深度，但覆盖不完整",
+          "level": 3,
+          "line": 68
+        },
+        {
+          "heading": "1.5 上下文压缩 — 设计亮点，但策略可深挖",
+          "level": 3,
+          "line": 85
+        },
+        {
+          "heading": "1.6 错误处理 — 设计薄弱",
+          "level": 3,
+          "line": 103
+        },
+        {
+          "heading": "二、升级路线图：聚焦\"设计能扛住问\"",
+          "level": 2,
+          "line": 119
+        },
+        {
+          "heading": "Phase 1: Orchestrator 重构（Week 1）",
+          "level": 3,
+          "line": 121
+        },
+        {
+          "heading": "任务 1.1: Phase Handler 拆分",
+          "level": 4,
+          "line": 125
+        },
+        {
+          "heading": "任务 1.2: 消除重复逻辑",
+          "level": 4,
+          "line": 146
+        },
+        {
+          "heading": "任务 1.3: 状态机显式化",
+          "level": 4,
+          "line": 159
+        },
+        {
+          "heading": "Phase 2: 核心算法优化（Week 2）",
+          "level": 3,
+          "line": 181
+        },
+        {
+          "heading": "任务 2.1: ContextManager 截断优化",
+          "level": 4,
+          "line": 185
+        },
+        {
+          "heading": "任务 2.2: Token 估算精确化",
+          "level": 4,
+          "line": 192
+        },
+        {
+          "heading": "任务 2.3: 路径安全策略",
+          "level": 4,
+          "line": 209
+        },
+        {
+          "heading": "Phase 3: Robustness 设计（Week 3）",
+          "level": 3,
+          "line": 224
+        },
+        {
+          "heading": "任务 3.1: LLM 调用重试机制",
+          "level": 4,
+          "line": 228
+        },
+        {
+          "heading": "任务 3.2: MCP 降级模式",
+          "level": 4,
+          "line": 246
+        },
+        {
+          "heading": "任务 3.3: 原子写入",
+          "level": 4,
+          "line": 253
+        },
+        {
+          "heading": "Phase 4: 设计亮点包装（Week 4）",
+          "level": 3,
+          "line": 267
+        },
+        {
+          "heading": "任务 4.1: 写架构文档",
+          "level": 4,
+          "line": 271
+        },
+        {
+          "heading": "任务 4.2: 写设计决策记录（ADR）",
+          "level": 4,
+          "line": 277
+        },
+        {
+          "heading": "任务 4.3: 写面试 Q&A",
+          "level": 4,
+          "line": 286
+        },
+        {
+          "heading": "Phase 5: 缓冲与演练（Week 5-6）",
+          "level": 3,
+          "line": 296
+        },
+        {
+          "heading": "三、面试话术核心框架",
+          "level": 2,
+          "line": 304
+        },
+        {
+          "heading": "开场（30 秒）",
+          "level": 3,
+          "line": 306
+        },
+        {
+          "heading": "三个设计亮点（每个 1-2 分钟）",
+          "level": 3,
+          "line": 309
+        },
+        {
+          "heading": "坦诚不足（15 秒）",
+          "level": 3,
+          "line": 326
+        },
+        {
+          "heading": "四、不做的事（减法）",
+          "level": 2,
+          "line": 331
+        },
+        {
+          "heading": "五、每周检查清单",
+          "level": 2,
+          "line": 346
+        },
+        {
+          "heading": "W1 结束标准",
+          "level": 3,
+          "line": 348
+        },
+        {
+          "heading": "W2 结束标准",
+          "level": 3,
+          "line": 353
+        },
+        {
+          "heading": "W3 结束标准",
+          "level": 3,
+          "line": 358
+        },
+        {
+          "heading": "W4 结束标准",
+          "level": 3,
+          "line": 363
+        },
+        {
+          "heading": "W5-6 结束标准",
+          "level": 3,
+          "line": 368
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 38
+      }
+    },
+    {
+      "path": "文档/工程/deepseek-v4-flash-eval-report.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 44,
+      "nonEmptyLines": 35,
+      "sections": [
+        {
+          "heading": "deepseek-v4-flash 评估报告",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "总览",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "真实失败（模型能力边界）",
+          "level": 2,
+          "line": 19
+        },
+        {
+          "heading": "安全加固效果",
+          "level": 2,
+          "line": 31
+        },
+        {
+          "heading": "备注",
+          "level": 2,
+          "line": 39
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 5
+      }
+    },
+    {
+      "path": "文档/工程/上下文压缩三层体系.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 249,
+      "nonEmptyLines": 180,
+      "sections": [
+        {
+          "heading": "Paw-TS 上下文压缩三层体系",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "问题",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "L1 Prune（规则层，零 LLM 调用）",
+          "level": 2,
+          "line": 24
+        },
+        {
+          "heading": "阶段 A：单个工具输出超大",
+          "level": 3,
+          "line": 30
+        },
+        {
+          "heading": "阶段 B：老旧工具输出数量太多",
+          "level": 3,
+          "line": 48
+        },
+        {
+          "heading": "处理流程",
+          "level": 3,
+          "line": 54
+        },
+        {
+          "heading": "L2 Compact（LLM 层，仅一次辅助模型调用）",
+          "level": 2,
+          "line": 67
+        },
+        {
+          "heading": "触发条件（四重门控）",
+          "level": 3,
+          "line": 71
+        },
+        {
+          "heading": "三段式分区",
+          "level": 3,
+          "line": 80
+        },
+        {
+          "heading": "压缩 Agent 调用",
+          "level": 3,
+          "line": 100
+        },
+        {
+          "heading": "质量门控",
+          "level": 3,
+          "line": 121
+        },
+        {
+          "heading": "增量更新模式",
+          "level": 3,
+          "line": 129
+        },
+        {
+          "heading": "L3 Protect（保护层）",
+          "level": 2,
+          "line": 146
+        },
+        {
+          "heading": "保护内容",
+          "level": 3,
+          "line": 150
+        },
+        {
+          "heading": "驱逐优先级体系",
+          "level": 3,
+          "line": 158
+        },
+        {
+          "heading": "驱逐算法",
+          "level": 3,
+          "line": 172
+        },
+        {
+          "heading": "上下文预算分配",
+          "level": 2,
+          "line": 182
+        },
+        {
+          "heading": "完整数据流",
+          "level": 2,
+          "line": 201
+        },
+        {
+          "heading": "面试叙事模板",
+          "level": 2,
+          "line": 233
+        },
+        {
+          "heading": "关键文件索引",
+          "level": 2,
+          "line": 237
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 20
+      }
+    }
+  ]
+}

@@ -30,11 +30,13 @@ beforeAll(async () => {
   const [row] = await sql`SELECT 1 AS ok`;
   expect((row as { ok: number }).ok).toBe(1);
 
+  // 显式 v1：v2 已成默认（v2 闭环见 runtime-v2.e2e.test.ts），本测试验收 v1 回滚路径
   runtime = await createMemoryRuntime({
     workspaceRoot: WORKSPACE,
     userId: USER,
     repositoryId: REPO,
     workspaceId: REPO,
+    runtime: "v1",
   });
   expect(await runtime.ping()).toBe(true);
 });

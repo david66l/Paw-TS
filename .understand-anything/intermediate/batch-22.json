@@ -1,0 +1,86 @@
+{
+  "nodes": [
+    {
+      "id": "document:ARCHITECTURE.md",
+      "type": "document",
+      "name": "ARCHITECTURE.md",
+      "filePath": "ARCHITECTURE.md",
+      "summary": "Paw-TS 项目架构概述文档，涵盖技术栈（Bun + TypeScript monorepo）、ReAct 循环、三层上下文压缩（Prune/Compact/Protect）、内存检索、多智能体和安全机制等核心设计。",
+      "tags": ["documentation", "architecture", "overview", "design-document"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Paw 项目的主入口文档，包含 monorepo 布局说明、开发环境搭建（lint/typecheck/test）、Agent 工具目录（harness）、功能状态表和基准测试命令。",
+      "tags": ["documentation", "entry-point", "getting-started", "overview"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:biome.json",
+      "type": "config",
+      "name": "biome.json",
+      "filePath": "biome.json",
+      "summary": "Biome 代码检查与格式化配置，启用 Git VCS 集成、导入排序、推荐规则集（含 noUnusedImports、noExplicitAny 等），使用空格缩进。",
+      "tags": ["configuration", "linting", "formatting", "code-quality"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "package.json",
+      "summary": "Paw monorepo 的根包配置，定义 workspaces（packages/*、apps/*）、各子包的 typecheck/test/lint/benchmark 脚本以及核心依赖（MCP SDK、tiktoken）。",
+      "tags": ["configuration", "monorepo", "build-system", "entry-point"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:tsconfig.base.json",
+      "type": "config",
+      "name": "tsconfig.base.json",
+      "filePath": "tsconfig.base.json",
+      "summary": "TypeScript 基础编译配置，启用 strict 模式、ES2022 目标、Bundler 模块解析、声明文件生成和源码映射，所有子包通过 extends 继承此配置。",
+      "tags": ["configuration", "typescript", "build-system", "base-config"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:README.md",
+      "target": "document:ARCHITECTURE.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:ARCHITECTURE.md",
+      "target": "document:README.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:package.json",
+      "target": "config:biome.json",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:package.json",
+      "target": "config:tsconfig.base.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "config:package.json",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+/* Changed files 内联卡：对齐 Figma「Changed N files +A −B」 */
+
+.card {
+  flex-shrink: 0;
+  margin: 6px 0 6px 44px;
+  border: 1px solid var(--glass-border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--glass-border-soft);
+}
+
+.headIcon {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.headTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stat {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.statAdd {
+  color: var(--success);
+}
+
+.statDel {
+  color: var(--danger);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.row:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.row:disabled {
+  cursor: default;
+}
+
+.badge {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.badgeNew {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.badgeMod {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.path {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.rowStat {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.caret {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.diff {
+  margin: 2px 8px 8px;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--glass-border-soft);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+
+.diffAdd {
+  color: #0a7a46;
+  background: rgba(18, 166, 106, 0.08);
+}
+
+.diffDel {
+  color: #c23333;
+  background: rgba(226, 75, 75, 0.08);
+}
+
+.diffHunk {
+  color: var(--text-accent);
+}
+
+.diffCtx {
+  color: var(--text-muted);
+}
+
+.fallback {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}

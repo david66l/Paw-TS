@@ -42,7 +42,7 @@
 export interface RunMetrics {
   readonly runId: string;
   readonly goal: string;
-  readonly status: "completed" | "failed";
+  readonly status: "completed" | "failed" | "aborted";
   /** 从 run.started 到 run.completed / run.failed 的墙钟耗时（毫秒） */
   readonly durationMs: number;
   /** 所有 model.request → model.done 对的模型延迟累加和（毫秒） */
@@ -122,18 +122,20 @@ export function formatRunMetricsSummary(m: RunMetrics): string {
   // 根据货币单位选择符号
   const sym = m.costCurrency === "CNY" ? "¥" : "$";
   // 智能格式化时间：>= 1 秒用 s，< 1 秒用 ms
-  const dur = m.durationMs >= 1000
-    ? `${(m.durationMs / 1000).toFixed(1)}s`
-    : `${m.durationMs}ms`;
+  const dur =
+    m.durationMs >= 1000
+      ? `${(m.durationMs / 1000).toFixed(1)}s`
+      : `${m.durationMs}ms`;
   // 智能格式化 token 数：>= 1000 用 K
-  const tok = m.totalTokens >= 1000
-    ? `${(m.totalTokens / 1000).toFixed(1)}K`
-    : `${m.totalTokens}`;
+  const tok =
+    m.totalTokens >= 1000
+      ? `${(m.totalTokens / 1000).toFixed(1)}K`
+      : `${m.totalTokens}`;
   // 仅当有工具调用时才显示工具成功率
-  const tools = m.toolCalls > 0
-    ? ` · ${m.toolSuccesses}/${m.toolCalls} tools`
-    : "";
+  const tools =
+    m.toolCalls > 0 ? ` · ${m.toolSuccesses}/${m.toolCalls} tools` : "";
   // 仅当有截断时才显示截断信息
-  const trunc = m.truncationCount > 0 ? ` · ${m.truncationCount}× truncated` : "";
+  const trunc =
+    m.truncationCount > 0 ? ` · ${m.truncationCount}× truncated` : "";
   return `${dur} · ${tok} tokens · ${sym}${m.estimatedCost.toFixed(4)}${tools}${trunc}`;
 }

@@ -1,0 +1,11 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "ARCHITECTURE.md", "language": "markdown", "sizeLines": 64, "fileCategory": "docs"},
+    {"path": "README.md", "language": "markdown", "sizeLines": 92, "fileCategory": "docs"},
+    {"path": "biome.json", "language": "json", "sizeLines": 27, "fileCategory": "config"},
+    {"path": "package.json", "language": "json", "sizeLines": 43, "fileCategory": "config"},
+    {"path": "tsconfig.base.json", "language": "json", "sizeLines": 22, "fileCategory": "config"}
+  ],
+  "batchImportData": {"ARCHITECTURE.md": [], "README.md": [], "biome.json": [], "package.json": [], "tsconfig.base.json": []}
+}

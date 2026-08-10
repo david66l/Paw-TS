@@ -1,0 +1,1700 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 12,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/core/src/actions.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 79,
+      "nonEmptyLines": 73,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/checkpoint.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 377,
+      "nonEmptyLines": 346,
+      "functions": [
+        {
+          "name": "extractCheckpointTargets",
+          "startLine": 66,
+          "endLine": 101,
+          "params": [
+            "tool",
+            "args"
+          ]
+        },
+        {
+          "name": "saveCheckpoint",
+          "startLine": 116,
+          "endLine": 186,
+          "params": [
+            "workspaceRoot",
+            "runId",
+            "seq",
+            "tool",
+            "args"
+          ]
+        },
+        {
+          "name": "applyCheckpointRestore",
+          "startLine": 196,
+          "endLine": 239,
+          "params": [
+            "checkpointDir",
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "undoLastCheckpoint",
+          "startLine": 246,
+          "endLine": 270,
+          "params": [
+            "workspaceRoot",
+            "runId"
+          ]
+        },
+        {
+          "name": "restoreCheckpoint",
+          "startLine": 284,
+          "endLine": 331,
+          "params": [
+            "workspaceRoot",
+            "runId",
+            "seq",
+            "opts"
+          ]
+        },
+        {
+          "name": "listCheckpoints",
+          "startLine": 336,
+          "endLine": 358,
+          "params": [
+            "workspaceRoot",
+            "runId"
+          ]
+        },
+        {
+          "name": "hashBytes",
+          "startLine": 361,
+          "endLine": 363,
+          "params": [
+            "buf"
+          ]
+        },
+        {
+          "name": "isMutatingTool",
+          "startLine": 369,
+          "endLine": 377,
+          "params": [
+            "tool"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "extractCheckpointTargets",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "saveCheckpoint",
+          "line": 116,
+          "isDefault": false
+        },
+        {
+          "name": "undoLastCheckpoint",
+          "line": 246,
+          "isDefault": false
+        },
+        {
+          "name": "restoreCheckpoint",
+          "line": 284,
+          "isDefault": false
+        },
+        {
+          "name": "listCheckpoints",
+          "line": 336,
+          "isDefault": false
+        },
+        {
+          "name": "isMutatingTool",
+          "line": 369,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "extractCheckpointTargets",
+          "callee": "Array.isArray",
+          "lineNumber": 71
+        },
+        {
+          "caller": "extractCheckpointTargets",
+          "callee": "patchText.split",
+          "lineNumber": 85
+        },
+        {
+          "caller": "extractCheckpointTargets",
+          "callee": "line.match",
+          "lineNumber": 86
+        },
+        {
+          "caller": "extractCheckpointTargets",
+          "callee": "paths.push",
+          "lineNumber": 88
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "extractCheckpointTargets",
+          "lineNumber": 123
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 124
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "checkpointsDir",
+          "lineNumber": 125
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "String",
+          "lineNumber": 126
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.mkdirSync",
+          "lineNumber": 128
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "Date.now",
+          "lineNumber": 137
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 139
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 140
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "JSON.stringify",
+          "lineNumber": 141
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "savedTargets.push",
+          "lineNumber": 144
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 148
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "full.startsWith",
+          "lineNumber": 150
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "path.resolve",
+          "lineNumber": 150
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.existsSync",
+          "lineNumber": 152
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.statSync(full).isFile",
+          "lineNumber": 152
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.statSync",
+          "lineNumber": 152
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.readFileSync",
+          "lineNumber": 153
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "hashBytes",
+          "lineNumber": 154
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 157
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "sanitizeFileName",
+          "lineNumber": 159
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 161
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "savedTargets.push",
+          "lineNumber": 162
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 165
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "sanitizeFileName",
+          "lineNumber": 167
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 169
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "savedTargets.push",
+          "lineNumber": 170
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "Date.now",
+          "lineNumber": 178
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 180
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 181
+        },
+        {
+          "caller": "saveCheckpoint",
+          "callee": "JSON.stringify",
+          "lineNumber": 182
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "path.join",
+          "lineNumber": 200
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "fs.existsSync",
+          "lineNumber": 201
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "JSON.parse",
+          "lineNumber": 203
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "fs.readFileSync",
+          "lineNumber": 204
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "path.join",
+          "lineNumber": 210
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "full.startsWith",
+          "lineNumber": 211
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "path.resolve",
+          "lineNumber": 211
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "path.join",
+          "lineNumber": 213
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "sanitizeFileName",
+          "lineNumber": 215
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "fs.existsSync",
+          "lineNumber": 217
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "fs.unlinkSync",
+          "lineNumber": 220
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "sanitizeFileName",
+          "lineNumber": 228
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "fs\n      .readdirSync(checkpointDir)\n      .filter",
+          "lineNumber": 229
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "fs\n      .readdirSync",
+          "lineNumber": 229
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "n.endsWith",
+          "lineNumber": 231
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "path.join",
+          "lineNumber": 233
+        },
+        {
+          "caller": "applyCheckpointRestore",
+          "callee": "fs.copyFileSync",
+          "lineNumber": 234
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "checkpointsDir",
+          "lineNumber": 250
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "fs.existsSync",
+          "lineNumber": 251
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "fs\n    .readdirSync(runCheckpointsDir)\n    .filter((n) => /^\\d+$/.test(n))\n    .map((n) => ({ name: n, seq: Number.parseInt(n, 10) }))\n    .sort",
+          "lineNumber": 254
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "fs\n    .readdirSync(runCheckpointsDir)\n    .filter((n) => /^\\d+$/.test(n))\n    .map",
+          "lineNumber": 254
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "fs\n    .readdirSync(runCheckpointsDir)\n    .filter",
+          "lineNumber": 254
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "fs\n    .readdirSync",
+          "lineNumber": 254
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "/^\\d+$/.test",
+          "lineNumber": 256
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "Number.parseInt",
+          "lineNumber": 257
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 261
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "applyCheckpointRestore",
+          "lineNumber": 262
+        },
+        {
+          "caller": "undoLastCheckpoint",
+          "callee": "fs.rmSync",
+          "lineNumber": 265
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "checkpointsDir",
+          "lineNumber": 290
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs.existsSync",
+          "lineNumber": 291
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 293
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "String",
+          "lineNumber": 293
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs.existsSync",
+          "lineNumber": 294
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "applyCheckpointRestore",
+          "lineNumber": 296
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs\n    .readdirSync(runCheckpointsDir)\n    .filter((n) => /^\\d+$/.test(n))\n    .map((n) => Number.parseInt(n, 10))\n    .filter",
+          "lineNumber": 300
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs\n    .readdirSync(runCheckpointsDir)\n    .filter((n) => /^\\d+$/.test(n))\n    .map",
+          "lineNumber": 300
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs\n    .readdirSync(runCheckpointsDir)\n    .filter",
+          "lineNumber": 300
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs\n    .readdirSync",
+          "lineNumber": 300
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "/^\\d+$/.test",
+          "lineNumber": 302
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "Number.parseInt",
+          "lineNumber": 303
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 308
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "String",
+          "lineNumber": 308
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "Date.now",
+          "lineNumber": 308
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs.mkdirSync",
+          "lineNumber": 309
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 311
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "String",
+          "lineNumber": 311
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 312
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "String",
+          "lineNumber": 312
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs.cpSync",
+          "lineNumber": 314
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "path.join",
+          "lineNumber": 322
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "String",
+          "lineNumber": 322
+        },
+        {
+          "caller": "restoreCheckpoint",
+          "callee": "fs.rmSync",
+          "lineNumber": 324
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "checkpointsDir",
+          "lineNumber": 340
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "fs.existsSync",
+          "lineNumber": 341
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "fs.readdirSync",
+          "lineNumber": 344
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "/^\\d+$/.test",
+          "lineNumber": 345
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "path.join",
+          "lineNumber": 346
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "fs.existsSync",
+          "lineNumber": 347
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "JSON.parse",
+          "lineNumber": 349
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "fs.readFileSync",
+          "lineNumber": 350
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "out.push",
+          "lineNumber": 352
+        },
+        {
+          "caller": "listCheckpoints",
+          "callee": "out.sort",
+          "lineNumber": 357
+        },
+        {
+          "caller": "hashBytes",
+          "callee": "createHash(\"sha256\").update(buf).digest(\"hex\").slice",
+          "lineNumber": 362
+        },
+        {
+          "caller": "hashBytes",
+          "callee": "createHash(\"sha256\").update(buf).digest",
+          "lineNumber": 362
+        },
+        {
+          "caller": "hashBytes",
+          "callee": "createHash(\"sha256\").update",
+          "lineNumber": 362
+        },
+        {
+          "caller": "hashBytes",
+          "callee": "createHash",
+          "lineNumber": 362
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 6,
+        "functionCount": 8,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/run-evaluator.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 189,
+      "nonEmptyLines": 181,
+      "functions": [
+        {
+          "name": "evaluateRunFromEnvelopes",
+          "startLine": 58,
+          "endLine": 164,
+          "params": [
+            "envelopes"
+          ]
+        },
+        {
+          "name": "evaluateRunFromJsonl",
+          "startLine": 177,
+          "endLine": 189,
+          "params": [
+            "path"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "evaluateRunFromEnvelopes",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "evaluateRunFromJsonl",
+          "line": 177,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "evaluateRunFromEnvelopes",
+          "callee": "Math.max",
+          "lineNumber": 136
+        },
+        {
+          "caller": "evaluateRunFromJsonl",
+          "callee": "readFile",
+          "lineNumber": 178
+        },
+        {
+          "caller": "evaluateRunFromJsonl",
+          "callee": "text\n    .split(\"\\n\")\n    .map((l) => l.trim())\n    .filter",
+          "lineNumber": 180
+        },
+        {
+          "caller": "evaluateRunFromJsonl",
+          "callee": "text\n    .split(\"\\n\")\n    .map",
+          "lineNumber": 180
+        },
+        {
+          "caller": "evaluateRunFromJsonl",
+          "callee": "text\n    .split",
+          "lineNumber": 180
+        },
+        {
+          "caller": "evaluateRunFromJsonl",
+          "callee": "l.trim",
+          "lineNumber": 182
+        },
+        {
+          "caller": "evaluateRunFromJsonl",
+          "callee": "lines.map",
+          "lineNumber": 185
+        },
+        {
+          "caller": "evaluateRunFromJsonl",
+          "callee": "JSON.parse",
+          "lineNumber": 186
+        },
+        {
+          "caller": "evaluateRunFromJsonl",
+          "callee": "evaluateRunFromEnvelopes",
+          "lineNumber": 188
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/run-events.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 463,
+      "nonEmptyLines": 459,
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/run-metrics.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 139,
+      "nonEmptyLines": 133,
+      "functions": [
+        {
+          "name": "formatRunMetricsSummary",
+          "startLine": 121,
+          "endLine": 139,
+          "params": [
+            "m"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "formatRunMetricsSummary",
+          "line": 121,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "formatRunMetricsSummary",
+          "callee": "(m.durationMs / 1000).toFixed",
+          "lineNumber": 126
+        },
+        {
+          "caller": "formatRunMetricsSummary",
+          "callee": "(m.totalTokens / 1000).toFixed",
+          "lineNumber": 130
+        },
+        {
+          "caller": "formatRunMetricsSummary",
+          "callee": "m.estimatedCost.toFixed",
+          "lineNumber": 138
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/run.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 48,
+      "nonEmptyLines": 45,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/session-store.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 508,
+      "nonEmptyLines": 485,
+      "functions": [
+        {
+          "name": "isEnvelope",
+          "startLine": 495,
+          "endLine": 508,
+          "params": [
+            "v"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "FileSystemSessionStore",
+          "startLine": 126,
+          "endLine": 484,
+          "methods": [
+            "constructor",
+            "runPath",
+            "saveEvent",
+            "listRuns",
+            "loadRun",
+            "loadRunPaginated",
+            "replayRun",
+            "getRunSummary",
+            "deleteRun",
+            "estimateLineCount",
+            "maybePrune"
+          ],
+          "properties": [
+            "sessionsDir",
+            "maxRuns"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "FileSystemSessionStore",
+          "line": 126,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "constructor",
+          "callee": "sessionsDir",
+          "lineNumber": 131
+        },
+        {
+          "caller": "constructor",
+          "callee": "fs.mkdirSync",
+          "lineNumber": 133
+        },
+        {
+          "caller": "runPath",
+          "callee": "sanitizeRunId",
+          "lineNumber": 138
+        },
+        {
+          "caller": "runPath",
+          "callee": "path.join",
+          "lineNumber": 139
+        },
+        {
+          "caller": "saveEvent",
+          "callee": "this.runPath",
+          "lineNumber": 148
+        },
+        {
+          "caller": "saveEvent",
+          "callee": "JSON.stringify",
+          "lineNumber": 149
+        },
+        {
+          "caller": "saveEvent",
+          "callee": "fs.appendFileSync",
+          "lineNumber": 150
+        },
+        {
+          "caller": "saveEvent",
+          "callee": "this.maybePrune",
+          "lineNumber": 151
+        },
+        {
+          "caller": "listRuns",
+          "callee": "fs.readdirSync",
+          "lineNumber": 162
+        },
+        {
+          "caller": "listRuns",
+          "callee": "name.endsWith",
+          "lineNumber": 163
+        },
+        {
+          "caller": "listRuns",
+          "callee": "name.slice",
+          "lineNumber": 164
+        },
+        {
+          "caller": "listRuns",
+          "callee": "this.getRunSummary",
+          "lineNumber": 165
+        },
+        {
+          "caller": "listRuns",
+          "callee": "entries.push",
+          "lineNumber": 166
+        },
+        {
+          "caller": "listRuns",
+          "callee": "entries.sort",
+          "lineNumber": 168
+        },
+        {
+          "caller": "loadRun",
+          "callee": "this.runPath",
+          "lineNumber": 178
+        },
+        {
+          "caller": "loadRun",
+          "callee": "fs.existsSync",
+          "lineNumber": 179
+        },
+        {
+          "caller": "loadRun",
+          "callee": "fs.readFileSync",
+          "lineNumber": 180
+        },
+        {
+          "caller": "loadRun",
+          "callee": "raw.split(\"\\n\").filter",
+          "lineNumber": 181
+        },
+        {
+          "caller": "loadRun",
+          "callee": "raw.split",
+          "lineNumber": 181
+        },
+        {
+          "caller": "loadRun",
+          "callee": "l.trim",
+          "lineNumber": 181
+        },
+        {
+          "caller": "loadRun",
+          "callee": "JSON.parse",
+          "lineNumber": 185
+        },
+        {
+          "caller": "loadRun",
+          "callee": "isEnvelope",
+          "lineNumber": 186
+        },
+        {
+          "caller": "loadRun",
+          "callee": "out.push",
+          "lineNumber": 186
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "this.runPath",
+          "lineNumber": 206
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "fs.existsSync",
+          "lineNumber": 207
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "fs.readFileSync",
+          "lineNumber": 208
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "raw.split(\"\\n\").filter",
+          "lineNumber": 209
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "raw.split",
+          "lineNumber": 209
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "l.trim",
+          "lineNumber": 209
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "Math.max",
+          "lineNumber": 212
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "Math.min",
+          "lineNumber": 213
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "JSON.parse",
+          "lineNumber": 217
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "isEnvelope",
+          "lineNumber": 218
+        },
+        {
+          "caller": "loadRunPaginated",
+          "callee": "events.push",
+          "lineNumber": 218
+        },
+        {
+          "caller": "replayRun",
+          "callee": "this.runPath",
+          "lineNumber": 245
+        },
+        {
+          "caller": "replayRun",
+          "callee": "fs.existsSync",
+          "lineNumber": 246
+        },
+        {
+          "caller": "replayRun",
+          "callee": "fs.createReadStream",
+          "lineNumber": 247
+        },
+        {
+          "caller": "cleanup",
+          "callee": "stream.destroy",
+          "lineNumber": 253
+        },
+        {
+          "caller": "next",
+          "callee": "buffer.indexOf",
+          "lineNumber": 263
+        },
+        {
+          "caller": "next",
+          "callee": "buffer.slice",
+          "lineNumber": 265
+        },
+        {
+          "caller": "next",
+          "callee": "buffer.slice",
+          "lineNumber": 266
+        },
+        {
+          "caller": "next",
+          "callee": "line.trim",
+          "lineNumber": 267
+        },
+        {
+          "caller": "next",
+          "callee": "JSON.parse",
+          "lineNumber": 269
+        },
+        {
+          "caller": "next",
+          "callee": "isEnvelope",
+          "lineNumber": 270
+        },
+        {
+          "caller": "next",
+          "callee": "stream.once",
+          "lineNumber": 280
+        },
+        {
+          "caller": "next",
+          "callee": "resolve",
+          "lineNumber": 280
+        },
+        {
+          "caller": "next",
+          "callee": "String",
+          "lineNumber": 280
+        },
+        {
+          "caller": "next",
+          "callee": "stream.once",
+          "lineNumber": 281
+        },
+        {
+          "caller": "next",
+          "callee": "resolve",
+          "lineNumber": 281
+        },
+        {
+          "caller": "next",
+          "callee": "stream.once",
+          "lineNumber": 282
+        },
+        {
+          "caller": "next",
+          "callee": "resolve",
+          "lineNumber": 282
+        },
+        {
+          "caller": "next",
+          "callee": "cleanup",
+          "lineNumber": 286
+        },
+        {
+          "caller": "next",
+          "callee": "buffer.trim",
+          "lineNumber": 288
+        },
+        {
+          "caller": "next",
+          "callee": "JSON.parse",
+          "lineNumber": 292
+        },
+        {
+          "caller": "next",
+          "callee": "isEnvelope",
+          "lineNumber": 293
+        },
+        {
+          "caller": "return",
+          "callee": "cleanup",
+          "lineNumber": 307
+        },
+        {
+          "caller": "throw",
+          "callee": "cleanup",
+          "lineNumber": 312
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "this.runPath",
+          "lineNumber": 332
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "fs.existsSync",
+          "lineNumber": 333
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "fs.openSync",
+          "lineNumber": 335
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "Buffer.alloc",
+          "lineNumber": 338
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "fs.readSync",
+          "lineNumber": 339
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "buf.toString",
+          "lineNumber": 340
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "head.split",
+          "lineNumber": 341
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "JSON.parse",
+          "lineNumber": 346
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "isEnvelope",
+          "lineNumber": 347
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "String",
+          "lineNumber": 357
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "fs.statSync",
+          "lineNumber": 366
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "Math.min",
+          "lineNumber": 377
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "Buffer.alloc",
+          "lineNumber": 378
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "fs.readSync",
+          "lineNumber": 379
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "tailBuf.toString",
+          "lineNumber": 380
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "tail.split(\"\\n\").filter",
+          "lineNumber": 381
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "tail.split",
+          "lineNumber": 381
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "l.trim",
+          "lineNumber": 381
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "this.estimateLineCount",
+          "lineNumber": 383
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "JSON.parse",
+          "lineNumber": 388
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "isEnvelope",
+          "lineNumber": 389
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "String",
+          "lineNumber": 394
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "String",
+          "lineNumber": 398
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "String",
+          "lineNumber": 400
+        },
+        {
+          "caller": "getRunSummary",
+          "callee": "fs.closeSync",
+          "lineNumber": 422
+        },
+        {
+          "caller": "deleteRun",
+          "callee": "this.runPath",
+          "lineNumber": 428
+        },
+        {
+          "caller": "deleteRun",
+          "callee": "fs.existsSync",
+          "lineNumber": 429
+        },
+        {
+          "caller": "deleteRun",
+          "callee": "fs.unlinkSync",
+          "lineNumber": 430
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "fs.openSync",
+          "lineNumber": 449
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "Buffer.alloc",
+          "lineNumber": 450
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "fs.readSync",
+          "lineNumber": 451
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "fs.closeSync",
+          "lineNumber": 452
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "buf.toString",
+          "lineNumber": 453
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "sample.split(\"\\n\").filter",
+          "lineNumber": 454
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "sample.split",
+          "lineNumber": 454
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "l.trim",
+          "lineNumber": 454
+        },
+        {
+          "caller": "estimateLineCount",
+          "callee": "Math.round",
+          "lineNumber": 457
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "fs\n      .readdirSync(this.sessionsDir)\n      .filter((n) => n.endsWith(\".jsonl\"))\n      .map((n) => ({\n        name: n,\n        mtime: fs.statSync(path.join(this.sessionsDir, n)).mtimeMs,\n      }))\n      .sort",
+          "lineNumber": 469
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "fs\n      .readdirSync(this.sessionsDir)\n      .filter((n) => n.endsWith(\".jsonl\"))\n      .map",
+          "lineNumber": 469
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "fs\n      .readdirSync(this.sessionsDir)\n      .filter",
+          "lineNumber": 469
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "fs\n      .readdirSync",
+          "lineNumber": 469
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "n.endsWith",
+          "lineNumber": 471
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "fs.statSync",
+          "lineNumber": 474
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "path.join",
+          "lineNumber": 474
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "files.shift",
+          "lineNumber": 478
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "fs.unlinkSync",
+          "lineNumber": 480
+        },
+        {
+          "caller": "maybePrune",
+          "callee": "path.join",
+          "lineNumber": 480
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/core/src/token-usage.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 37,
+      "nonEmptyLines": 36,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/workspace-paths.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 134,
+      "nonEmptyLines": 123,
+      "functions": [
+        {
+          "name": "projectHash",
+          "startLine": 50,
+          "endLine": 52,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "pawProjectsDir",
+          "startLine": 58,
+          "endLine": 60,
+          "params": []
+        },
+        {
+          "name": "projectBaseDir",
+          "startLine": 65,
+          "endLine": 67,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "memoryDir",
+          "startLine": 73,
+          "endLine": 75,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "sessionMemoryDir",
+          "startLine": 81,
+          "endLine": 83,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "checkpointsDir",
+          "startLine": 89,
+          "endLine": 91,
+          "params": [
+            "workspaceRoot",
+            "runId"
+          ]
+        },
+        {
+          "name": "sessionsDir",
+          "startLine": 97,
+          "endLine": 99,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "toolResultsDir",
+          "startLine": 105,
+          "endLine": 111,
+          "params": [
+            "workspaceRoot",
+            "runId"
+          ]
+        },
+        {
+          "name": "sanitizeRunId",
+          "startLine": 121,
+          "endLine": 123,
+          "params": [
+            "id"
+          ]
+        },
+        {
+          "name": "sanitizeFileName",
+          "startLine": 132,
+          "endLine": 134,
+          "params": [
+            "rel"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "projectHash",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "pawProjectsDir",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "projectBaseDir",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "memoryDir",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "sessionMemoryDir",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "checkpointsDir",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "sessionsDir",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "toolResultsDir",
+          "line": 105,
+          "isDefault": false
+        },
+        {
+          "name": "sanitizeRunId",
+          "line": 121,
+          "isDefault": false
+        },
+        {
+          "name": "sanitizeFileName",
+          "line": 132,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "projectHash",
+          "callee": "createHash(\"sha256\").update(workspaceRoot).digest(\"hex\").slice",
+          "lineNumber": 51
+        },
+        {
+          "caller": "projectHash",
+          "callee": "createHash(\"sha256\").update(workspaceRoot).digest",
+          "lineNumber": 51
+        },
+        {
+          "caller": "projectHash",
+          "callee": "createHash(\"sha256\").update",
+          "lineNumber": 51
+        },
+        {
+          "caller": "projectHash",
+          "callee": "createHash",
+          "lineNumber": 51
+        },
+        {
+          "caller": "pawProjectsDir",
+          "callee": "path.join",
+          "lineNumber": 59
+        },
+        {
+          "caller": "pawProjectsDir",
+          "callee": "homedir",
+          "lineNumber": 59
+        },
+        {
+          "caller": "projectBaseDir",
+          "callee": "path.join",
+          "lineNumber": 66
+        },
+        {
+          "caller": "projectBaseDir",
+          "callee": "pawProjectsDir",
+          "lineNumber": 66
+        },
+        {
+          "caller": "projectBaseDir",
+          "callee": "projectHash",
+          "lineNumber": 66
+        },
+        {
+          "caller": "memoryDir",
+          "callee": "path.join",
+          "lineNumber": 74
+        },
+        {
+          "caller": "memoryDir",
+          "callee": "projectBaseDir",
+          "lineNumber": 74
+        },
+        {
+          "caller": "sessionMemoryDir",
+          "callee": "path.join",
+          "lineNumber": 82
+        },
+        {
+          "caller": "sessionMemoryDir",
+          "callee": "projectBaseDir",
+          "lineNumber": 82
+        },
+        {
+          "caller": "checkpointsDir",
+          "callee": "path.join",
+          "lineNumber": 90
+        },
+        {
+          "caller": "checkpointsDir",
+          "callee": "sanitizeRunId",
+          "lineNumber": 90
+        },
+        {
+          "caller": "sessionsDir",
+          "callee": "path.join",
+          "lineNumber": 98
+        },
+        {
+          "caller": "toolResultsDir",
+          "callee": "path.join",
+          "lineNumber": 106
+        },
+        {
+          "caller": "toolResultsDir",
+          "callee": "sessionsDir",
+          "lineNumber": 107
+        },
+        {
+          "caller": "toolResultsDir",
+          "callee": "sanitizeRunId",
+          "lineNumber": 108
+        },
+        {
+          "caller": "sanitizeRunId",
+          "callee": "id.replace",
+          "lineNumber": 122
+        },
+        {
+          "caller": "sanitizeFileName",
+          "callee": "rel.replace",
+          "lineNumber": 133
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 10,
+        "functionCount": 10,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/test/checkpoint.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 185,
+      "nonEmptyLines": 153,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/test/run-evaluator.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 190,
+      "nonEmptyLines": 176,
+      "functions": [
+        {
+          "name": "env",
+          "startLine": 8,
+          "endLine": 10,
+          "params": [
+            "ts",
+            "event"
+          ]
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/test/session-store.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 243,
+      "nonEmptyLines": 224,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

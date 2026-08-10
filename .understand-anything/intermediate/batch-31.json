@@ -1,0 +1,394 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/workspace/test/watch.test.ts",
+      "type": "file",
+      "name": "watch.test.ts",
+      "filePath": "packages/workspace/test/watch.test.ts",
+      "summary": "测试文件。包含1 个函数的源码文件，共 93 行。",
+      "tags": [
+        "test",
+        "file-watcher"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/test/watch.test.ts:waitForExternalChanges",
+      "type": "function",
+      "name": "waitForExternalChanges",
+      "filePath": "packages/workspace/test/watch.test.ts",
+      "lineRange": [
+        8,
+        22
+      ],
+      "summary": "函数，第 8-22 行，参数: watcher、predicate。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/workspace/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/workspace/tsconfig.json",
+      "summary": "TypeScript 编译器配置，继承基础 tsconfig 并指定编译输入路径。",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:plans/memory-optimization-plan.md",
+      "type": "document",
+      "name": "memory-optimization-plan.md",
+      "filePath": "plans/memory-optimization-plan.md",
+      "summary": "包含 24 个章节的文档，主题为「Paw-TS 记忆系统 6 项优化实现方案」。",
+      "tags": [
+        "planning",
+        "memory",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/import-skill.ts",
+      "type": "file",
+      "name": "import-skill.ts",
+      "filePath": "scripts/import-skill.ts",
+      "summary": "技能导入脚本，将 Markdown 格式的技能定义解析并转换为 JSON。",
+      "tags": [
+        "script",
+        "skill-importer",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/import-skill.ts:parseFrontmatter",
+      "type": "function",
+      "name": "parseFrontmatter",
+      "filePath": "scripts/import-skill.ts",
+      "lineRange": [
+        29,
+        49
+      ],
+      "summary": "函数，第 29-49 行，参数: text。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/import-skill.ts:mdToJson",
+      "type": "function",
+      "name": "mdToJson",
+      "filePath": "scripts/import-skill.ts",
+      "lineRange": [
+        51,
+        71
+      ],
+      "summary": "函数，第 51-71 行，参数: markdown、skillId。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:tests/integration/sub-agent-prompts.md",
+      "type": "document",
+      "name": "sub-agent-prompts.md",
+      "filePath": "tests/integration/sub-agent-prompts.md",
+      "summary": "包含 8 个章节的文档，主题为「强制触发 Sub-Agent 的 Prompt 设计」。",
+      "tags": [
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:training_data/generate_stage_a_claude.py",
+      "type": "file",
+      "name": "generate_stage_a_claude.py",
+      "filePath": "training_data/generate_stage_a_claude.py",
+      "summary": "包含7 个函数的源码文件，共 477 行。",
+      "tags": [
+        "training-data"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:training_data/generate_stage_a_claude.py:build_tool_catalog",
+      "type": "function",
+      "name": "build_tool_catalog",
+      "filePath": "training_data/generate_stage_a_claude.py",
+      "lineRange": [
+        261,
+        286
+      ],
+      "summary": "函数（导出），第 261-286 行，参数: 无。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:training_data/generate_stage_a_claude.py:validate_tool_call",
+      "type": "function",
+      "name": "validate_tool_call",
+      "filePath": "training_data/generate_stage_a_claude.py",
+      "lineRange": [
+        289,
+        302
+      ],
+      "summary": "函数（导出），第 289-302 行，参数: tool_name、args。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:training_data/generate_stage_a_claude.py:validate_response",
+      "type": "function",
+      "name": "validate_response",
+      "filePath": "training_data/generate_stage_a_claude.py",
+      "lineRange": [
+        305,
+        326
+      ],
+      "summary": "函数（导出），第 305-326 行，参数: text。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:training_data/generate_stage_a_claude.py:call_claude",
+      "type": "function",
+      "name": "call_claude",
+      "filePath": "training_data/generate_stage_a_claude.py",
+      "lineRange": [
+        331,
+        352
+      ],
+      "summary": "函数（导出），第 331-352 行，参数: system、user、max_tokens。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:training_data/generate_stage_a_claude.py:parse_generated",
+      "type": "function",
+      "name": "parse_generated",
+      "filePath": "training_data/generate_stage_a_claude.py",
+      "lineRange": [
+        355,
+        370
+      ],
+      "summary": "函数（导出），第 355-370 行，参数: text。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:training_data/generate_stage_a_claude.py:generate_for_tool",
+      "type": "function",
+      "name": "generate_for_tool",
+      "filePath": "training_data/generate_stage_a_claude.py",
+      "lineRange": [
+        373,
+        436
+      ],
+      "summary": "函数（导出），第 373-436 行，参数: tool_name、count、output_path、stats、catalog。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:training_data/generate_stage_a_claude.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "training_data/generate_stage_a_claude.py",
+      "lineRange": [
+        439,
+        473
+      ],
+      "summary": "函数（导出），第 439-473 行，参数: 无。",
+      "tags": [
+        "function",
+        "exported",
+        "entry-point"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:training_data/stage_b_paw.jsonl",
+      "type": "file",
+      "name": "stage_b_paw.jsonl",
+      "filePath": "training_data/stage_b_paw.jsonl",
+      "summary": "训练数据文件（JSONL 格式），共 44 行。",
+      "tags": [
+        "training-data",
+        "data"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:training_data/stage_b_workflows.jsonl",
+      "type": "file",
+      "name": "stage_b_workflows.jsonl",
+      "filePath": "training_data/stage_b_workflows.jsonl",
+      "summary": "训练数据文件（JSONL 格式），共 71 行。",
+      "tags": [
+        "training-data",
+        "data"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/workspace/test/watch.test.ts",
+      "target": "function:packages/workspace/test/watch.test.ts:waitForExternalChanges",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/workspace/test/watch.test.ts",
+      "target": "file:packages/workspace/src/watch.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/import-skill.ts",
+      "target": "function:scripts/import-skill.ts:parseFrontmatter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/import-skill.ts",
+      "target": "function:scripts/import-skill.ts:mdToJson",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:build_tool_catalog",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:build_tool_catalog",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:validate_tool_call",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:validate_tool_call",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:validate_response",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:validate_response",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:call_claude",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:call_claude",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:parse_generated",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:parse_generated",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:generate_for_tool",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:generate_for_tool",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:training_data/generate_stage_a_claude.py",
+      "target": "function:training_data/generate_stage_a_claude.py:main",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/watch.ts",
+      "target": "file:packages/workspace/test/watch.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

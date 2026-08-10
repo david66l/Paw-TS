@@ -1,0 +1,467 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 5,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "benchmarks/judge/benchmark.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 150,
+      "nonEmptyLines": 133,
+      "functions": [
+        {
+          "name": "makeJudgeModel",
+          "startLine": 7,
+          "endLine": 16,
+          "params": [
+            "responses"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "makeJudgeModel",
+          "callee": "responses.map",
+          "lineNumber": 9
+        },
+        {
+          "caller": "makeJudgeModel",
+          "callee": "JSON.stringify",
+          "lineNumber": 10
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "benchmarks/judge/judge.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 110,
+      "nonEmptyLines": 99,
+      "functions": [
+        {
+          "name": "safeParseJson",
+          "startLine": 23,
+          "endLine": 34,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "clampScore",
+          "startLine": 36,
+          "endLine": 39,
+          "params": [
+            "n"
+          ]
+        },
+        {
+          "name": "normalizeDimension",
+          "startLine": 41,
+          "endLine": 53,
+          "params": [
+            "raw"
+          ]
+        },
+        {
+          "name": "judgeResponse",
+          "startLine": 63,
+          "endLine": 89,
+          "params": [
+            "model",
+            "input",
+            "config"
+          ]
+        },
+        {
+          "name": "judgeBatch",
+          "startLine": 94,
+          "endLine": 110,
+          "params": [
+            "model",
+            "inputs",
+            "config"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "judgeResponse",
+          "line": 63,
+          "isDefault": false
+        },
+        {
+          "name": "judgeBatch",
+          "line": 94,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "safeParseJson",
+          "callee": "text\n    .replace(/^```(?:json)?\\s*/i, \"\")\n    .replace(/\\s*```$/i, \"\")\n    .trim",
+          "lineNumber": 25
+        },
+        {
+          "caller": "safeParseJson",
+          "callee": "text\n    .replace(/^```(?:json)?\\s*/i, \"\")\n    .replace",
+          "lineNumber": 25
+        },
+        {
+          "caller": "safeParseJson",
+          "callee": "text\n    .replace",
+          "lineNumber": 25
+        },
+        {
+          "caller": "safeParseJson",
+          "callee": "JSON.parse",
+          "lineNumber": 30
+        },
+        {
+          "caller": "clampScore",
+          "callee": "Number.isFinite",
+          "lineNumber": 37
+        },
+        {
+          "caller": "clampScore",
+          "callee": "Math.max",
+          "lineNumber": 38
+        },
+        {
+          "caller": "clampScore",
+          "callee": "Math.min",
+          "lineNumber": 38
+        },
+        {
+          "caller": "clampScore",
+          "callee": "Math.round",
+          "lineNumber": 38
+        },
+        {
+          "caller": "normalizeDimension",
+          "callee": "clampScore",
+          "lineNumber": 47
+        },
+        {
+          "caller": "normalizeDimension",
+          "callee": "raw.reasoning.trim",
+          "lineNumber": 49
+        },
+        {
+          "caller": "normalizeDimension",
+          "callee": "raw.reasoning.trim",
+          "lineNumber": 50
+        },
+        {
+          "caller": "judgeResponse",
+          "callee": "buildJudgePrompt",
+          "lineNumber": 68
+        },
+        {
+          "caller": "judgeResponse",
+          "callee": "model.complete",
+          "lineNumber": 69
+        },
+        {
+          "caller": "judgeResponse",
+          "callee": "safeParseJson",
+          "lineNumber": 73
+        },
+        {
+          "caller": "judgeResponse",
+          "callee": "rawDimensions\n    .map(normalizeDimension)\n    .filter",
+          "lineNumber": 75
+        },
+        {
+          "caller": "judgeResponse",
+          "callee": "rawDimensions\n    .map",
+          "lineNumber": 75
+        },
+        {
+          "caller": "judgeResponse",
+          "callee": "computeOverall",
+          "lineNumber": 79
+        },
+        {
+          "caller": "judgeResponse",
+          "callee": "parsed.verdict.trim",
+          "lineNumber": 85
+        },
+        {
+          "caller": "judgeResponse",
+          "callee": "parsed.verdict.trim",
+          "lineNumber": 86
+        },
+        {
+          "caller": "judgeBatch",
+          "callee": "results.push",
+          "lineNumber": 101
+        },
+        {
+          "caller": "judgeBatch",
+          "callee": "judgeResponse",
+          "lineNumber": 101
+        },
+        {
+          "caller": "judgeBatch",
+          "callee": "Math.round",
+          "lineNumber": 106
+        },
+        {
+          "caller": "judgeBatch",
+          "callee": "results.reduce",
+          "lineNumber": 107
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 2,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "benchmarks/judge/prompts.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 85,
+      "nonEmptyLines": 69,
+      "functions": [
+        {
+          "name": "buildJudgePrompt",
+          "startLine": 19,
+          "endLine": 70,
+          "params": [
+            "input",
+            "config"
+          ]
+        },
+        {
+          "name": "computeOverall",
+          "startLine": 72,
+          "endLine": 85,
+          "params": [
+            "dimensions",
+            "config"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "buildJudgePrompt",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "computeOverall",
+          "line": 72,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "buildJudgePrompt",
+          "callee": "dimensions\n    .map((d) => `  - ${d}: ${DIMENSION_DESCRIPTIONS[d]}`)\n    .join",
+          "lineNumber": 25
+        },
+        {
+          "caller": "buildJudgePrompt",
+          "callee": "dimensions\n    .map",
+          "lineNumber": 25
+        },
+        {
+          "caller": "buildJudgePrompt",
+          "callee": "input.toolTrace.map((t) => `- ${t}`).join",
+          "lineNumber": 48
+        },
+        {
+          "caller": "buildJudgePrompt",
+          "callee": "input.toolTrace.map",
+          "lineNumber": 48
+        },
+        {
+          "caller": "computeOverall",
+          "callee": "dimensions.reduce",
+          "lineNumber": 77
+        },
+        {
+          "caller": "computeOverall",
+          "callee": "dimensions.reduce",
+          "lineNumber": 80
+        },
+        {
+          "caller": "computeOverall",
+          "callee": "Math.round",
+          "lineNumber": 84
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "benchmarks/judge/types.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 59,
+      "nonEmptyLines": 52,
+      "exports": [
+        {
+          "name": "DEFAULT_DIMENSIONS",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_WEIGHTS",
+          "line": 54,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/models/src/index.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 51,
+      "nonEmptyLines": 46,
+      "exports": [
+        {
+          "name": "buildAnthropicUserContent",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "buildOpenAiMessageContent",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "AnthropicContentBlock",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "OpenAiContentPart",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "createDefaultLanguageModel",
+          "line": 27,
+          "isDefault": false
+        },
+        {
+          "name": "createDeepSeekFlashModel",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "FakeLanguageModel",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "FakeModelResponse",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "OpenAICompatibleModel",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "OpenAICompatibleOptions",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "AnthropicCompatibleModel",
+          "line": 35,
+          "isDefault": false
+        },
+        {
+          "name": "AnthropicCompatibleOptions",
+          "line": 36,
+          "isDefault": false
+        },
+        {
+          "name": "LanguageModel",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "ModelCapabilities",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "ModelCompleteOptions",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "ToolDefinition",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "Attachment",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "ChatMessage",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "ChatRole",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "ModelCompletionResult",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "ModelStreamChunk",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "NativeToolCall",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "extractThinkBlocks",
+          "line": 51,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 23,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

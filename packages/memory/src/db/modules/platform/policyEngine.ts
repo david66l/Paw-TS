@@ -87,7 +87,7 @@ const DEFAULTS: EffectivePolicy = {
     autoGenerationEnabled: true,
   },
   retrieval: {
-    topK: 10,
+    topK: 6,
     minScore: 0.4,
     allowedMemoryTypes: ["task_summary", "decision", "failure", "project_knowledge", "user_preference", "rule", "skill"],
     tokenBudget: 4000,

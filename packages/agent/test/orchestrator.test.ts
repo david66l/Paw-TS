@@ -191,10 +191,6 @@ describe("AgentOrchestrator", () => {
     expect(events.some((e) => e.event.type === "agent.action")).toBe(false);
   });
 
-;
-
-;
-
   test("multi-turn: fake model lists then answers without a second tool", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-mt-"));
     writeFileSync(path.join(dir, "note.txt"), "x");
@@ -234,7 +230,7 @@ describe("AgentOrchestrator", () => {
     expect(r.message).toContain("Max steps (1)");
   });
 
-  test("pre-aborted signal returns failed without calling model", async () => {
+  test("pre-aborted signal returns aborted without calling model", async () => {
     const ac = new AbortController();
     ac.abort();
     let modelCalls = 0;
@@ -253,7 +249,7 @@ describe("AgentOrchestrator", () => {
       workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-ab-")),
       abortSignal: ac.signal,
     });
-    expect(r.status).toBe("failed");
+    expect(r.status).toBe("aborted");
     expect(r.message).toBe("Run aborted.");
     expect(modelCalls).toBe(0);
   });
@@ -615,7 +611,7 @@ describe("AgentOrchestrator", () => {
       maxSteps: 8,
       abortSignal: ac.signal,
     });
-    expect(r.status).toBe("failed");
+    expect(r.status).toBe("aborted");
     expect(r.message).toBe("Run aborted.");
   });
 
@@ -722,10 +718,6 @@ describe("AgentOrchestrator streaming shell", () => {
       expect(tr.event.ok).toBe(true);
     }
   });
-
-;
-
-;
 
   test("end-to-end: run.metrics matches offline evaluator", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-metrics-"));

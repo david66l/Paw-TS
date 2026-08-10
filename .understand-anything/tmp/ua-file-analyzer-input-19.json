@@ -1,0 +1,7 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": ".github/workflows/ci.yml", "language": "yaml", "sizeLines": 22, "fileCategory": "infra"}
+  ],
+  "batchImportData": {".github/workflows/ci.yml": []}
+}

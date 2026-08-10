@@ -10,11 +10,13 @@
  * - DB 不可用时不回退 FileProvider
  */
 
+// P1.4 估算统一：主路径同一估算器（cl100k，与上下文预算同源）；
+// 替换旧的 ascii/4 + nonAscii/1.5 启发式（日志 02 四套口径残留之一）
+import { TiktokenEstimator } from "@paw/core";
+import { closeSql, ping as dbPing } from "../db/connection.js";
 import { governanceDecisionDao } from "../db/dao/governanceDecision.js";
 import { memoryCandidateDao } from "../db/dao/memoryCandidate.js";
 import { memoryItemDao } from "../db/dao/memoryItem.js";
-import { closeSql, ping as dbPing } from "../db/connection.js";
-import { generateId } from "../db/modules/platform/idGen.js";
 import {
   ContextBuilder,
   GovernanceExecutor,
@@ -27,6 +29,7 @@ import {
   WorkingMemoryManager,
   executionRecorder,
 } from "../db/modules/index.js";
+import { generateId } from "../db/modules/platform/idGen.js";
 import type {
   FileActivity,
   MemoryCandidate,
@@ -36,7 +39,8 @@ import type {
   WorkingConstraint,
   WorkingMemory,
 } from "../db/types.js";
-import { resolveScope, type ResolvedScope } from "./scope.js";
+import { isSystemFinalizeMessage } from "../shared/memory-quality.js";
+import { type ResolvedScope, resolveScope } from "./scope.js";
 import type {
   BeginTaskInput,
   BeginTaskResult,
@@ -90,10 +94,11 @@ function toListItem(item: {
   };
 }
 
+/** P1.4 共享估算器实例（tiktoken WASM 按 encoding 全局单例，无重复加载） */
+const sharedMemoryEstimator = new TiktokenEstimator();
+
 function estimateTokens(text: string): number {
-  const ascii = (text.match(/[\x00-\x7F]/g) ?? []).length;
-  const nonAscii = text.length - ascii;
-  return Math.ceil(ascii / 4 + nonAscii / 1.5);
+  return sharedMemoryEstimator.count(text);
 }
 
 export class MemoryRuntimeImpl implements MemoryRuntime {
@@ -105,14 +110,19 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
   private readonly governance = new MemoryGovernance();
   private readonly executor = new GovernanceExecutor();
   private readonly retriever = new MemoryRetriever();
-  private readonly ctxBuilder = new ContextBuilder();
+  private readonly ctxBuilder = new ContextBuilder(
+    undefined,
+    sharedMemoryEstimator,
+  );
   private readonly toolProcessor = new ToolResultProcessor();
+  private readonly candidateEnricher?: MemoryRuntimeOptions["candidateEnricher"];
 
   /** runId → taskId（同进程多 run） */
   private readonly runTaskMap = new Map<string, string>();
 
   constructor(opts: MemoryRuntimeOptions) {
     this.scope = resolveScope(opts);
+    this.candidateEnricher = opts.candidateEnricher;
   }
 
   async ping(): Promise<boolean> {
@@ -158,7 +168,9 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     const wm = await this.requireWm(input.taskId);
 
     let degraded = false;
-    let retrievalResult: Awaited<ReturnType<MemoryRetriever["retrieve"]>> | undefined;
+    let retrievalResult:
+      | Awaited<ReturnType<MemoryRetriever["retrieve"]>>
+      | undefined;
     try {
       retrievalResult = await this.retriever.retrieve({
         taskId: input.taskId,
@@ -181,7 +193,8 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       workingMemory: wm,
       retrievalResult,
       currentUserRequest: input.currentUserRequest,
-      tokenBudget: input.tokenBudget > 0 ? input.tokenBudget : DEFAULT_CONTEXT_BUDGET,
+      tokenBudget:
+        input.tokenBudget > 0 ? input.tokenBudget : DEFAULT_CONTEXT_BUDGET,
     });
 
     const items = (retrievalResult?.items ?? []).map((r) => ({
@@ -189,6 +202,8 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       title: r.memory.title,
       score: r.score,
       type: r.memory.type,
+      summary: (r.memory.summary || r.memory.title).slice(0, 400),
+      relatedFiles: r.memory.relatedFiles ?? [],
     }));
 
     return {
@@ -200,7 +215,9 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     };
   }
 
-  async onToolResult(input: OnToolResultInput): Promise<void> {
+  async onToolResult(
+    input: OnToolResultInput,
+  ): Promise<{ injected?: string } | undefined> {
     const rawOutput =
       typeof input.rawPayload === "string"
         ? input.rawPayload
@@ -313,6 +330,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
         currentTestSummary,
       };
     });
+    return undefined;
   }
 
   async patchWorkingMemory(input: PatchWorkingMemoryInput): Promise<void> {
@@ -411,15 +429,17 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
 
       if (patch.pinnedFacts !== undefined) {
         const now = new Date().toISOString();
-        const pinned: WorkingConstraint[] = patch.pinnedFacts.map((text, i) => ({
-          id: `pin_${i}`,
-          text,
-          source: "runtime" as const,
-          priority: 20,
-          confirmed: true,
-          temporary: false,
-          createdAt: now,
-        }));
+        const pinned: WorkingConstraint[] = patch.pinnedFacts.map(
+          (text, i) => ({
+            id: `pin_${i}`,
+            text,
+            source: "runtime" as const,
+            priority: 20,
+            confirmed: true,
+            temporary: false,
+            createdAt: now,
+          }),
+        );
         const nonPinned = (next.constraints ?? wm.constraints).filter(
           (c) => !c.id.startsWith("pin_"),
         );
@@ -453,12 +473,13 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     const task = await this.taskMgr.getTask(input.taskId);
     if (!task) throw new Error(`TaskSession not found: ${input.taskId}`);
 
-    // 可选最终消息 → completedSteps
-    if (input.finalMessage?.trim()) {
+    // 可选最终消息 → completedSteps（过滤宿主占位文案，避免污染记忆）
+    const finalMsg = input.finalMessage?.trim() ?? "";
+    if (finalMsg && !isSystemFinalizeMessage(finalMsg)) {
       await this.withWmRetry(input.taskId, async (wm) => {
         const step = {
           id: generateId("done"),
-          summary: input.finalMessage!.slice(0, 500),
+          summary: finalMsg.slice(0, 500),
           toolCallIds: [] as string[],
           completedAt: new Date().toISOString(),
         };
@@ -503,13 +524,33 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     }
 
     const wm = await this.requireWm(input.taskId);
-    const candidates = await this.writer.writeFromFinalSnapshot({
+    let candidates = await this.writer.writeFromFinalSnapshot({
       taskId: input.taskId,
       workingMemory: wm,
       repositoryId: this.scope.repositoryId,
       userId: this.scope.userId,
       actor: { actorType: "system", actorId: "memory-runtime" },
     });
+
+    // 可选 enricher：追加候选（失败忽略）
+    if (this.candidateEnricher) {
+      try {
+        const drafts = await this.candidateEnricher({
+          taskId: input.taskId,
+          goal: wm.goal,
+          workingMemoryGoal: wm.goal,
+        });
+        const extra = await this.materializeEnrichmentDrafts(
+          input.taskId,
+          drafts ?? [],
+        );
+        if (extra.length > 0) {
+          candidates = [...candidates, ...extra];
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
 
     return this.promoteCandidates(candidates);
   }
@@ -656,7 +697,9 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
 
   private async withWmRetry(
     taskId: string,
-    buildPatch: (wm: WorkingMemory) => Promise<Partial<WorkingMemory>> | Partial<WorkingMemory>,
+    buildPatch: (
+      wm: WorkingMemory,
+    ) => Promise<Partial<WorkingMemory>> | Partial<WorkingMemory>,
   ): Promise<WorkingMemory> {
     let lastErr: unknown;
     for (let i = 0; i < MAX_WM_RETRIES; i++) {
@@ -671,7 +714,62 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     }
     throw lastErr instanceof Error
       ? lastErr
-      : new Error(`WorkingMemory update failed after ${MAX_WM_RETRIES} retries`);
+      : new Error(
+          `WorkingMemory update failed after ${MAX_WM_RETRIES} retries`,
+        );
+  }
+
+  /** enricher 草稿 → memory_candidates 行 */
+  private async materializeEnrichmentDrafts(
+    taskId: string,
+    drafts: readonly {
+      title: string;
+      summary: string;
+      type: string;
+      confidence?: number;
+    }[],
+  ): Promise<MemoryCandidate[]> {
+    const now = new Date().toISOString();
+    const out: MemoryCandidate[] = [];
+    for (const d of drafts) {
+      if (!d.title?.trim() || !d.summary?.trim()) continue;
+      const type = normalizeMemoryType(d.type);
+      const conf =
+        typeof d.confidence === "number"
+          ? Math.min(1, Math.max(0.3, d.confidence))
+          : 0.7;
+      const cand: MemoryCandidate = {
+        id: generateId("cand"),
+        schemaVersion: 1,
+        status: "draft",
+        proposedType: type,
+        proposedSubjectKey: `enrich:${type}:${this.scope.repositoryId}:${hashShort(d.title + d.summary)}`,
+        subjectKeyVersion: 1,
+        proposedTitle: d.title.slice(0, 200),
+        proposedSummary: d.summary.slice(0, 2000),
+        proposedPayload: { assertion: d.summary.slice(0, 2000) },
+        proposedScope: {
+          lifecycleScope: "persistent",
+          repositoryId: this.scope.repositoryId,
+          userId: this.scope.userId,
+        },
+        proposedConfidence: conf,
+        sourceTaskIds: [taskId],
+        sourceRefs: [{ sourceType: "task_trace", taskId, capturedAt: now }],
+        evidenceRefs: [],
+        possibleDuplicateIds: [],
+        possibleConflictIds: [],
+        riskLevel: "low",
+        reviewRequired: false,
+        generatedBy: { actorType: "system", actorId: "candidate-enricher" },
+        generationReason: "candidate_enricher",
+        sensitivity: "internal",
+        createdAt: now,
+        updatedAt: now,
+      };
+      out.push(await memoryCandidateDao.create(cand));
+    }
+    return out;
   }
 
   /**
@@ -758,6 +856,14 @@ function upsertFile(
   const next = [...list];
   next[idx] = activity;
   return next;
+}
+
+function hashShort(text: string): string {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
 }
 
 function normalizeMemoryType(raw?: string): MemoryType {

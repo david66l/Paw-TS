@@ -1,0 +1,44 @@
+{
+  "name": "Paw UI5 Editable Prototype",
+  "figmaFileKey": "thsDMEQKBsASiOzbX8Yk5U",
+  "figmaFileUrl": "https://www.figma.com/design/thsDMEQKBsASiOzbX8Yk5U",
+  "frames": {
+    "changes": {
+      "name": "Editable / Changes",
+      "nodeId": "8:2",
+      "url": "https://www.figma.com/design/thsDMEQKBsASiOzbX8Yk5U?node-id=8-2"
+    },
+    "plan": {
+      "name": "Editable / Plan",
+      "nodeId": "8:203",
+      "url": "https://www.figma.com/design/thsDMEQKBsASiOzbX8Yk5U?node-id=8-203"
+    },
+    "context": {
+      "name": "Editable / Context",
+      "nodeId": "8:406",
+      "url": "https://www.figma.com/design/thsDMEQKBsASiOzbX8Yk5U?node-id=8-406"
+    },
+    "memory": {
+      "name": "Editable / Memory",
+      "nodeId": "8:621",
+      "url": "https://www.figma.com/design/thsDMEQKBsASiOzbX8Yk5U?node-id=8-621"
+    }
+  },
+  "implementationScope": {
+    "type": "static interactive prototype",
+    "doNotUseScreenshotImagesAsUI": true,
+    "requiredInteractions": [
+      "Right panel tabs switch between Plan, Changes, Context, and Memory",
+      "Sidebar conversation selection can remain static",
+      "Composer can be non-functional",
+      "Open in Editor button can be a stub"
+    ],
+    "priority": [
+      "Three-column layout",
+      "Spacing and alignment",
+      "Typography",
+      "Right panel tab states",
+      "Scrollable right panel content where needed"
+    ]
+  }
+}

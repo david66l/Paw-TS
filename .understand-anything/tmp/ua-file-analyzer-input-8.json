@@ -1,0 +1,26 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "packages/core/src/context/budget.ts", "language": "typescript", "sizeLines": 143, "fileCategory": "code"},
+    {"path": "packages/core/src/prompt/loader.ts", "language": "typescript", "sizeLines": 91, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt.ts", "language": "typescript", "sizeLines": 132, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/assembler.ts", "language": "typescript", "sizeLines": 114, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/format.ts", "language": "typescript", "sizeLines": 113, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/actions.ts", "language": "typescript", "sizeLines": 32, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/doing-tasks.ts", "language": "typescript", "sizeLines": 46, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/environment.ts", "language": "typescript", "sizeLines": 151, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/identity.ts", "language": "typescript", "sizeLines": 26, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/memory.ts", "language": "typescript", "sizeLines": 199, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/output-efficiency.ts", "language": "typescript", "sizeLines": 36, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/security.ts", "language": "typescript", "sizeLines": 34, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/system.ts", "language": "typescript", "sizeLines": 34, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/tone-and-style.ts", "language": "typescript", "sizeLines": 33, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/using-tools.ts", "language": "typescript", "sizeLines": 132, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/sections/verification.ts", "language": "typescript", "sizeLines": 38, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/trim.ts", "language": "typescript", "sizeLines": 237, "fileCategory": "code"},
+    {"path": "packages/core/src/system-prompt/types.ts", "language": "typescript", "sizeLines": 105, "fileCategory": "code"},
+    {"path": "packages/core/test/context-budget.test.ts", "language": "typescript", "sizeLines": 68, "fileCategory": "code"},
+    {"path": "packages/core/test/system-prompt-budget.test.ts", "language": "typescript", "sizeLines": 101, "fileCategory": "code"}
+  ],
+  "batchImportData": {"packages/core/src/context/budget.ts": [], "packages/core/src/prompt/loader.ts": [], "packages/core/src/system-prompt.ts": ["packages/core/src/context/budget.ts", "packages/core/src/system-prompt/assembler.ts", "packages/core/src/system-prompt/trim.ts", "packages/core/src/system-prompt/types.ts", "packages/core/src/token-estimate.ts"], "packages/core/src/system-prompt/assembler.ts": ["packages/core/src/prompt/loader.ts", "packages/core/src/system-prompt/format.ts", "packages/core/src/system-prompt/sections/actions.ts", "packages/core/src/system-prompt/sections/doing-tasks.ts", "packages/core/src/system-prompt/sections/environment.ts", "packages/core/src/system-prompt/sections/identity.ts", "packages/core/src/system-prompt/sections/memory.ts", "packages/core/src/system-prompt/sections/output-efficiency.ts", "packages/core/src/system-prompt/sections/security.ts", "packages/core/src/system-prompt/sections/system.ts", "packages/core/src/system-prompt/sections/tone-and-style.ts", "packages/core/src/system-prompt/sections/using-tools.ts", "packages/core/src/system-prompt/sections/verification.ts", "packages/core/src/system-prompt/types.ts"], "packages/core/src/system-prompt/format.ts": [], "packages/core/src/system-prompt/sections/actions.ts": [], "packages/core/src/system-prompt/sections/doing-tasks.ts": ["packages/core/src/system-prompt/format.ts"], "packages/core/src/system-prompt/sections/environment.ts": ["packages/core/src/context/budget.ts", "packages/core/src/system-prompt/format.ts"], "packages/core/src/system-prompt/sections/identity.ts": [], "packages/core/src/system-prompt/sections/memory.ts": [], "packages/core/src/system-prompt/sections/output-efficiency.ts": [], "packages/core/src/system-prompt/sections/security.ts": [], "packages/core/src/system-prompt/sections/system.ts": ["packages/core/src/system-prompt/format.ts"], "packages/core/src/system-prompt/sections/tone-and-style.ts": ["packages/core/src/system-prompt/format.ts"], "packages/core/src/system-prompt/sections/using-tools.ts": [], "packages/core/src/system-prompt/sections/verification.ts": [], "packages/core/src/system-prompt/trim.ts": ["packages/core/src/system-prompt/types.ts"], "packages/core/src/system-prompt/types.ts": [], "packages/core/test/context-budget.test.ts": ["packages/core/src/context/budget.ts"], "packages/core/test/system-prompt-budget.test.ts": ["packages/core/src/system-prompt.ts"]}
+}

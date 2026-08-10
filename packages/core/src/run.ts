@@ -22,6 +22,7 @@ export type RunStatus =
   | "running"
   | "completed"
   | "failed"
+  | "aborted"
   | "unimplemented";
 
 export interface RunSpec {
@@ -39,6 +40,17 @@ export interface RunSpec {
   readonly abortSignal?: AbortSignal;
   /** 提供此状态时，orchestrator 从保存的状态恢复而非全新启动。 */
   readonly resumeFromState?: import("./app-state.js").AppState;
+  /**
+   * 桌面多轮：复用已有 Memory TaskSession（beginTask.resumeTaskId）。
+   */
+  readonly resumeMemoryTaskId?: string;
+  /**
+   * 为 true 时 run 结束不调用 completeTask（会话继续）；
+   * 由宿主在「新对话 / 结束会话」时显式 complete。
+   */
+  readonly deferMemoryComplete?: boolean;
+  /** 桌面会话 id：用于绑定 conversation → memory taskId。 */
+  readonly conversationId?: string;
 }
 
 export interface RunResult {

@@ -1,0 +1,755 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 5,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "文档/研究/paw-ts上下文压缩与记忆机制.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 704,
+      "nonEmptyLines": 534,
+      "sections": [
+        {
+          "heading": "paw-ts 上下文压缩与记忆机制设计方案",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、设计哲学：Why paw-ts 需要独特方案",
+          "level": 2,
+          "line": 8
+        },
+        {
+          "heading": "二、整体架构",
+          "level": 2,
+          "line": 33
+        },
+        {
+          "heading": "2.1 三层渐进式上下文压缩",
+          "level": 3,
+          "line": 35
+        },
+        {
+          "heading": "2.2 三层文件型记忆",
+          "level": 3,
+          "line": 45
+        },
+        {
+          "heading": "2.3 与现有系统的对接",
+          "level": 3,
+          "line": 55
+        },
+        {
+          "heading": "三、上下文压缩详细设计",
+          "level": 2,
+          "line": 69
+        },
+        {
+          "heading": "3.1 Layer 1: Prune — 工具输出修剪",
+          "level": 3,
+          "line": 71
+        },
+        {
+          "heading": "3.2 Layer 2: Session Memory — 会话记忆压缩",
+          "level": 3,
+          "line": 103
+        },
+        {
+          "heading": "3.3 Layer 3: Auto-Compact — 全对话总结",
+          "level": 3,
+          "line": 176
+        },
+        {
+          "heading": "3.4 与 paw-ts RunEvents 的集成",
+          "level": 3,
+          "line": 266
+        },
+        {
+          "heading": "四、记忆机制详细设计",
+          "level": 2,
+          "line": 287
+        },
+        {
+          "heading": "4.1 第1层：Project Memory（项目级）",
+          "level": 3,
+          "line": 289
+        },
+        {
+          "heading": "4.2 第2层：Auto Memory（自动提取记忆）",
+          "level": 3,
+          "line": 324
+        },
+        {
+          "heading": "4.3 第3层：Session Memory（会话级）",
+          "level": 3,
+          "line": 390
+        },
+        {
+          "heading": "4.4 记忆召回",
+          "level": 3,
+          "line": 423
+        },
+        {
+          "heading": "五、压缩与记忆的协同设计",
+          "level": 2,
+          "line": 447
+        },
+        {
+          "heading": "5.1 协同流程",
+          "level": 3,
+          "line": 449
+        },
+        {
+          "heading": "5.2 信息流向",
+          "level": 3,
+          "line": 475
+        },
+        {
+          "heading": "5.3 与 paw-ts 现有架构的对接点",
+          "level": 3,
+          "line": 499
+        },
+        {
+          "heading": "六、关键设计决策",
+          "level": 2,
+          "line": 512
+        },
+        {
+          "heading": "6.1 为什么选择「压缩与记忆一体化」？",
+          "level": 3,
+          "line": 514
+        },
+        {
+          "heading": "6.2 为什么记忆召回先用关键词匹配而非语义搜索？",
+          "level": 3,
+          "line": 525
+        },
+        {
+          "heading": "6.3 为什么 Session Memory 不是\"冻结快照\"？",
+          "level": 3,
+          "line": 534
+        },
+        {
+          "heading": "6.4 Token 估算策略",
+          "level": 3,
+          "line": 540
+        },
+        {
+          "heading": "6.5 为什么压缩和记忆都要 Fork 子 Agent，而不是让主模型自己处理？",
+          "level": 3,
+          "line": 556
+        },
+        {
+          "heading": "七、实施路线图",
+          "level": 2,
+          "line": 586
+        },
+        {
+          "heading": "Phase 1: 基础压缩（P0）",
+          "level": 3,
+          "line": 588
+        },
+        {
+          "heading": "Phase 2: 结构化压缩（P1）",
+          "level": 3,
+          "line": 607
+        },
+        {
+          "heading": "Phase 3: 跨会话记忆（P1）",
+          "level": 3,
+          "line": 632
+        },
+        {
+          "heading": "Phase 4: 高级优化（P2）",
+          "level": 3,
+          "line": 655
+        },
+        {
+          "heading": "八、与参考系统的对比总结",
+          "level": 2,
+          "line": 666
+        },
+        {
+          "heading": "九、风险与缓解",
+          "level": 2,
+          "line": 681
+        },
+        {
+          "heading": "十、最小可运行原型（MVP 范围）",
+          "level": 2,
+          "line": 693
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 34
+      }
+    },
+    {
+      "path": "文档/研究/上下文压缩分析.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 433,
+      "nonEmptyLines": 331,
+      "sections": [
+        {
+          "heading": "上下文压缩逻辑分析：Claude Code vs OpenCode vs Hermes",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、总体架构对比",
+          "level": 2,
+          "line": 11
+        },
+        {
+          "heading": "二、Claude Code — 六层递进架构",
+          "level": 2,
+          "line": 27
+        },
+        {
+          "heading": "2.1 架构概览",
+          "level": 3,
+          "line": 29
+        },
+        {
+          "heading": "2.2 各层详解",
+          "level": 3,
+          "line": 42
+        },
+        {
+          "heading": "Layer 1: Microcompact（微压缩）",
+          "level": 4,
+          "line": 44
+        },
+        {
+          "heading": "Layer 2: Session Memory（会话记忆）",
+          "level": 4,
+          "line": 52
+        },
+        {
+          "heading": "Layer 3: Auto-Compact（自动压缩）",
+          "level": 4,
+          "line": 62
+        },
+        {
+          "heading": "Layer 4: Partial Compact（部分压缩）",
+          "level": 4,
+          "line": 80
+        },
+        {
+          "heading": "Layer 5: API-Native Context Management",
+          "level": 4,
+          "line": 84
+        },
+        {
+          "heading": "Layer 6: Context Collapse（实验性）",
+          "level": 4,
+          "line": 92
+        },
+        {
+          "heading": "2.3 总结格式（Auto-Compact）",
+          "level": 3,
+          "line": 98
+        },
+        {
+          "heading": "2.4 关键阈值",
+          "level": 3,
+          "line": 112
+        },
+        {
+          "heading": "三、OpenCode — 两层精简架构",
+          "level": 2,
+          "line": 126
+        },
+        {
+          "heading": "3.1 架构概览",
+          "level": 3,
+          "line": 128
+        },
+        {
+          "heading": "3.2 Tier 1: Prune（工具输出修剪）",
+          "level": 3,
+          "line": 137
+        },
+        {
+          "heading": "3.3 Tier 2: Compaction（对话压缩）",
+          "level": 3,
+          "line": 148
+        },
+        {
+          "heading": "3.4 总结格式",
+          "level": 3,
+          "line": 168
+        },
+        {
+          "heading": "3.5 关键阈值",
+          "level": 3,
+          "line": 183
+        },
+        {
+          "heading": "3.6 设计亮点",
+          "level": 3,
+          "line": 195
+        },
+        {
+          "heading": "四、Hermes — 可插拔四阶段架构",
+          "level": 2,
+          "line": 203
+        },
+        {
+          "heading": "4.1 架构概览",
+          "level": 3,
+          "line": 205
+        },
+        {
+          "heading": "4.2 Phase 1: Prune Old Tool Results",
+          "level": 3,
+          "line": 216
+        },
+        {
+          "heading": "4.3 Phase 2: Determine Boundaries",
+          "level": 3,
+          "line": 223
+        },
+        {
+          "heading": "4.4 Phase 3: Generate Structured Summary",
+          "level": 3,
+          "line": 230
+        },
+        {
+          "heading": "4.5 Phase 4: Assemble Compressed Message List",
+          "level": 3,
+          "line": 238
+        },
+        {
+          "heading": "4.6 总结模板",
+          "level": 3,
+          "line": 245
+        },
+        {
+          "heading": "4.7 关键阈值",
+          "level": 3,
+          "line": 263
+        },
+        {
+          "heading": "4.8 Anti-Thrashing & 安全机制",
+          "level": 3,
+          "line": 277
+        },
+        {
+          "heading": "4.9 Memory 集成",
+          "level": 3,
+          "line": 286
+        },
+        {
+          "heading": "五、设计模式对比",
+          "level": 2,
+          "line": 293
+        },
+        {
+          "heading": "5.1 触发策略",
+          "level": 3,
+          "line": 295
+        },
+        {
+          "heading": "5.2 总结生成",
+          "level": 3,
+          "line": 310
+        },
+        {
+          "heading": "5.3 总结格式丰富度",
+          "level": 3,
+          "line": 324
+        },
+        {
+          "heading": "5.4 Token 管理",
+          "level": 3,
+          "line": 344
+        },
+        {
+          "heading": "六、对 paw-ts 的借鉴建议",
+          "level": 2,
+          "line": 355
+        },
+        {
+          "heading": "6.1 最小可行方案（MVP）",
+          "level": 3,
+          "line": 357
+        },
+        {
+          "heading": "6.2 推荐阈值",
+          "level": 3,
+          "line": 364
+        },
+        {
+          "heading": "6.3 推荐总结格式",
+          "level": 3,
+          "line": 373
+        },
+        {
+          "heading": "6.4 关键设计决策",
+          "level": 3,
+          "line": 390
+        },
+        {
+          "heading": "6.5 实现优先级",
+          "level": 3,
+          "line": 401
+        },
+        {
+          "heading": "七、核心源码文件索引",
+          "level": 2,
+          "line": 412
+        },
+        {
+          "heading": "Claude Code",
+          "level": 3,
+          "line": 414
+        },
+        {
+          "heading": "OpenCode",
+          "level": 3,
+          "line": 422
+        },
+        {
+          "heading": "Hermes",
+          "level": 3,
+          "line": 428
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 45
+      }
+    },
+    {
+      "path": "文档/研究/对比.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 170,
+      "nonEmptyLines": 126,
+      "sections": [
+        {
+          "heading": "Paw-TS vs Claude Code — 差距分析",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "规模对比",
+          "level": 2,
+          "line": 8
+        },
+        {
+          "heading": "按优先级排序的功能差距",
+          "level": 2,
+          "line": 21
+        },
+        {
+          "heading": "P0 — 核心 Agent 能力（最大差距）",
+          "level": 3,
+          "line": 23
+        },
+        {
+          "heading": "P1 — 工具生态（次大差距）",
+          "level": 3,
+          "line": 33
+        },
+        {
+          "heading": "P2 — Skills 系统 ✅ 已实现",
+          "level": 3,
+          "line": 63
+        },
+        {
+          "heading": "P3 — MCP 支持 ✅ 已实现",
+          "level": 3,
+          "line": 70
+        },
+        {
+          "heading": "P4 — 命令系统",
+          "level": 3,
+          "line": 84
+        },
+        {
+          "heading": "P5 — TUI  richness",
+          "level": 3,
+          "line": 97
+        },
+        {
+          "heading": "P6 — 基础设施",
+          "level": 3,
+          "line": 110
+        },
+        {
+          "heading": "架构层面差距",
+          "level": 2,
+          "line": 124
+        },
+        {
+          "heading": "建议的追赶路径",
+          "level": 2,
+          "line": 136
+        },
+        {
+          "heading": "Phase 1 — 核心补齐（2-3周）",
+          "level": 3,
+          "line": 138
+        },
+        {
+          "heading": "Phase 2 — 生态建设（2-4周）",
+          "level": 3,
+          "line": 144
+        },
+        {
+          "heading": "Phase 3 — 体验提升（1-2周）",
+          "level": 3,
+          "line": 150
+        },
+        {
+          "heading": "Phase 4 — 基础设施（可选）",
+          "level": 3,
+          "line": 156
+        },
+        {
+          "heading": "关键洞察",
+          "level": 2,
+          "line": 164
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 17
+      }
+    },
+    {
+      "path": "文档/研究/目前缺失的核心功能.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 58,
+      "nonEmptyLines": 56,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 0
+      }
+    },
+    {
+      "path": "文档/研究/记忆机制解析.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 463,
+      "nonEmptyLines": 367,
+      "sections": [
+        {
+          "heading": "Claude Code / OpenCode / Hermes 记忆机制解析",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、总体对比",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "二、Claude Code — 多层文件型记忆系统",
+          "level": 2,
+          "line": 21
+        },
+        {
+          "heading": "2.1 记忆的七层架构（从上到下）",
+          "level": 3,
+          "line": 25
+        },
+        {
+          "heading": "2.2 核心逻辑流程",
+          "level": 3,
+          "line": 37
+        },
+        {
+          "heading": "【流程1】启动时加载记忆",
+          "level": 4,
+          "line": 39
+        },
+        {
+          "heading": "【流程2】对话中自动提取记忆",
+          "level": 4,
+          "line": 61
+        },
+        {
+          "heading": "【流程3】查询时召回相关记忆",
+          "level": 4,
+          "line": 90
+        },
+        {
+          "heading": "【流程4】夜间自动整理（Auto-Dream）",
+          "level": 4,
+          "line": 111
+        },
+        {
+          "heading": "2.3 用户如何与记忆交互",
+          "level": 3,
+          "line": 135
+        },
+        {
+          "heading": "2.4 记忆文件格式",
+          "level": 3,
+          "line": 143
+        },
+        {
+          "heading": "三、OpenCode — 无专门记忆系统",
+          "level": 2,
+          "line": 169
+        },
+        {
+          "heading": "3.1 有什么",
+          "level": 3,
+          "line": 173
+        },
+        {
+          "heading": "3.2 没有什么",
+          "level": 3,
+          "line": 190
+        },
+        {
+          "heading": "3.3 设计取舍",
+          "level": 3,
+          "line": 197
+        },
+        {
+          "heading": "四、Hermes — 内置文件记忆 + 插件扩展",
+          "level": 2,
+          "line": 209
+        },
+        {
+          "heading": "4.1 第一层：内置记忆（Built-in Memory）",
+          "level": 3,
+          "line": 213
+        },
+        {
+          "heading": "存储位置",
+          "level": 4,
+          "line": 215
+        },
+        {
+          "heading": "逻辑流程",
+          "level": 4,
+          "line": 223
+        },
+        {
+          "heading": "文件格式",
+          "level": 4,
+          "line": 253
+        },
+        {
+          "heading": "4.2 第二层：外部记忆插件（External Memory Providers）",
+          "level": 3,
+          "line": 267
+        },
+        {
+          "heading": "插件生命周期",
+          "level": 4,
+          "line": 282
+        },
+        {
+          "heading": "4.3 第三层：会话存储（SQLite）",
+          "level": 3,
+          "line": 309
+        },
+        {
+          "heading": "4.4 与压缩机制的联动",
+          "level": 3,
+          "line": 326
+        },
+        {
+          "heading": "五、三个系统的核心差异",
+          "level": 2,
+          "line": 342
+        },
+        {
+          "heading": "5.1 记忆触发方式",
+          "level": 3,
+          "line": 344
+        },
+        {
+          "heading": "5.2 记忆更新策略",
+          "level": 3,
+          "line": 352
+        },
+        {
+          "heading": "5.3 记忆召回方式",
+          "level": 3,
+          "line": 360
+        },
+        {
+          "heading": "5.4 记忆范围",
+          "level": 3,
+          "line": 368
+        },
+        {
+          "heading": "六、对 paw-ts 的借鉴建议",
+          "level": 2,
+          "line": 378
+        },
+        {
+          "heading": "6.1 推荐方案：简化版 Claude Code 模型",
+          "level": 3,
+          "line": 380
+        },
+        {
+          "heading": "6.2 最小可行实现（MVP）",
+          "level": 3,
+          "line": 397
+        },
+        {
+          "heading": "6.3 关键设计决策",
+          "level": 3,
+          "line": 413
+        },
+        {
+          "heading": "6.4 与现有系统的对接",
+          "level": 3,
+          "line": 424
+        },
+        {
+          "heading": "七、核心源码文件索引",
+          "level": 2,
+          "line": 438
+        },
+        {
+          "heading": "Claude Code",
+          "level": 3,
+          "line": 440
+        },
+        {
+          "heading": "OpenCode",
+          "level": 3,
+          "line": 452
+        },
+        {
+          "heading": "Hermes",
+          "level": 3,
+          "line": 457
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 38
+      }
+    }
+  ]
+}

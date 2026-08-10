@@ -1,0 +1,63 @@
+{
+  "nodes": [
+    {
+      "id": "config:.understand-anything/config.json",
+      "type": "config",
+      "name": "config.json",
+      "filePath": ".understand-anything/config.json",
+      "summary": "Understand-Anything 插件的运行时配置，设定输出语言为中文（zh），控制知识图谱分析结果的本地化行为。",
+      "tags": ["configuration", "localization", "understand-anything"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:.understand-anything/fingerprints.json",
+      "type": "config",
+      "name": "fingerprints.json",
+      "filePath": ".understand-anything/fingerprints.json",
+      "summary": "Understand-Anything 插件的文件指纹缓存，存储每个项目文件的哈希值用于增量分析时快速检测变更，避免重复处理未修改的文件。",
+      "tags": ["caching", "incremental-analysis", "fingerprint", "understand-anything"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:.understand-anything/knowledge-graph.json",
+      "type": "config",
+      "name": "knowledge-graph.json",
+      "filePath": ".understand-anything/knowledge-graph.json",
+      "summary": "Understand-Anything 插件生成的完整知识图谱输出文件，包含所有节点、关系边、架构层划分和代码导览步骤，是项目分析的核心产物。",
+      "tags": ["knowledge-graph", "output", "graph-data", "understand-anything"],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:.understand-anything/meta.json",
+      "type": "config",
+      "name": "meta.json",
+      "filePath": ".understand-anything/meta.json",
+      "summary": "Understand-Anything 分析过程的元数据记录，包括上次分析时间戳、Git 提交哈希、版本号和分析文件总数。",
+      "tags": ["metadata", "versioning", "tracking", "understand-anything"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:.understand-anything/meta.json",
+      "target": "config:.understand-anything/knowledge-graph.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:.understand-anything/meta.json",
+      "target": "config:.understand-anything/fingerprints.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:.understand-anything/config.json",
+      "target": "config:.understand-anything/knowledge-graph.json",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

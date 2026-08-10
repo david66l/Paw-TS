@@ -1,0 +1,72 @@
+{
+  "nodes": [
+    {
+      "id": "document:文档/研究/paw-ts上下文压缩与记忆机制.md",
+      "type": "document",
+      "name": "paw-ts上下文压缩与记忆机制.md",
+      "filePath": "文档/研究/paw-ts上下文压缩与记忆机制.md",
+      "summary": "包含 34 个章节的文档，主题为「paw-ts 上下文压缩与记忆机制设计方案」。",
+      "tags": [
+        "memory",
+        "context-compression",
+        "research",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/研究/上下文压缩分析.md",
+      "type": "document",
+      "name": "上下文压缩分析.md",
+      "filePath": "文档/研究/上下文压缩分析.md",
+      "summary": "包含 45 个章节的文档，主题为「上下文压缩逻辑分析：Claude Code vs OpenCode vs Hermes」。",
+      "tags": [
+        "analysis",
+        "context-compression",
+        "research",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/研究/对比.md",
+      "type": "document",
+      "name": "对比.md",
+      "filePath": "文档/研究/对比.md",
+      "summary": "包含 17 个章节的文档，主题为「Paw-TS vs Claude Code — 差距分析」。",
+      "tags": [
+        "comparison",
+        "research",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:文档/研究/目前缺失的核心功能.md",
+      "type": "document",
+      "name": "目前缺失的核心功能.md",
+      "filePath": "文档/研究/目前缺失的核心功能.md",
+      "summary": "文档文件，共 58 行。",
+      "tags": [
+        "gap-analysis",
+        "research",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:文档/研究/记忆机制解析.md",
+      "type": "document",
+      "name": "记忆机制解析.md",
+      "filePath": "文档/研究/记忆机制解析.md",
+      "summary": "包含 38 个章节的文档，主题为「Claude Code / OpenCode / Hermes 记忆机制解析」。",
+      "tags": [
+        "memory",
+        "research",
+        "documentation"
+      ],
+      "complexity": "complex"
+    }
+  ],
+  "edges": []
+}

@@ -226,7 +226,7 @@ describe("Phase 1: abort signal cascade", () => {
       abortSignal: ac.signal,
     });
 
-    expect(result.status).toBe("failed");
+    expect(result.status).toBe("aborted");
   });
 });
 

@@ -1,0 +1,62 @@
+{
+  "passed": 11,
+  "failed": 0,
+  "results": [
+    {
+      "name": "S0 Phase1 API present",
+      "ok": true,
+      "detail": "{\"agentReady\":true,\"repoRoot\":\"/Users/Zhuanz/Documents/CS/项目/paw-ts\",\"hasList\":true,\"hasOnList\":true}"
+    },
+    {
+      "name": "S1 memory.list total library",
+      "ok": true,
+      "detail": "3 items, vitest=true ioredis=true"
+    },
+    {
+      "name": "S1b Memory tab UI",
+      "ok": true,
+      "detail": "本次会话命中 0 条 q: 不要调用工具。一句话：我们单测框架约定是什么？ 尚无注入记忆（或尚未检索） 总库（本工作区） 刷新 DECISION Desktop memory finalize on new chat Desktop multi-turn defers completeTask until user clicks new conversati"
+    },
+    {
+      "name": "S2 retrieve preference (vitest)",
+      "ok": true,
+      "detail": "uiHit=true answerVitest=true panel=本次会话命中 1 条 / 1 候选 q: 不要调用工具。根据你记得的项目约定：单元测试应该用什么框架？只回答框架名一个词（例如 vitest 或 jest）。 USER_PREFERENCE Prefer vitest for unit tests 0.47 In this monorepo, always use v"
+    },
+    {
+      "name": "S3 multi-turn history recall",
+      "ok": true,
+      "detail": "found 蓝鲸 in chat"
+    },
+    {
+      "name": "S4a Context panel has run data",
+      "ok": true,
+      "detail": "相关文件（本 RUN） packages/memory/package.json 循环 Turn 3 / 24 估算 TOKEN 13,850 上下文预算 System 3,302 / 80,000 Tools 1,504 / 70,000 History 9,046 / 850,000 TOKEN 用量 输入 42,453 输出 367 累计 42,820 token · $0.0125"
+    },
+    {
+      "name": "S4b Changes tab reachable",
+      "ok": true,
+      "detail": "Δ 暂无文件变更"
+    },
+    {
+      "name": "S4c tool read produced answer",
+      "ok": true,
+      "detail": " \"@paw/memory\"，这是 @paw 命名空间下的 scoped npm 包名，代表该 monorepo 中的记忆（memory）模块。包版本为 0.0.1，设置为 private: true，类型为 ESM 模块。它导出三个入口（根、db、runtime），依赖 @paw/core 和 postgres。 本机 Bun · 自动批准工具 清空 发送 ↵ Plan Changes Context Memory ◎ 暂无执行计划"
+    },
+    {
+      "name": "S5 Plan panel populated",
+      "ok": true,
+      "detail": "用工具列出工作区顶层目录名 说明 apps 和 packages 各自大概职责 最后用一句话总结。请先列出你的执行计划再开始 rev 1 task_completed"
+    },
+    {
+      "name": "S6 chitchat + new conversation finalize",
+      "ok": true,
+      "detail": "UI reset ok"
+    },
+    {
+      "name": "S7 redis preference recall",
+      "ok": true,
+      "detail": "bodyHas=true memHas=true"
+    }
+  ],
+  "at": "2026-07-10T12:56:45.638Z"
+}

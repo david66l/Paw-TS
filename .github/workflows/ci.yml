@@ -61,3 +61,21 @@ jobs:
           bun test packages/memory/test/runtime.e2e.test.ts
           bun test packages/memory/test/migrate-legacy.test.ts
           bun test packages/agent/test/memory-runtime-cutover.test.ts
+
+      - name: v2 longterm memory pipeline + engine tests
+        run: |
+          bun test packages/memory/test/longterm-store.test.ts
+          bun test packages/memory/test/write-pipeline.test.ts
+          bun test packages/memory/test/governor.test.ts
+          bun test packages/memory/test/hybrid-recall.test.ts
+          bun test packages/memory/test/triggered-retrieval.test.ts
+          bun test packages/memory/test/lifecycle.test.ts
+          bun test packages/memory/test/observability.test.ts
+          bun test packages/memory/test/red-team.test.ts
+
+      - name: v2 runtime cutover tests
+        run: |
+          bun test packages/memory/test/runtime-v2.e2e.test.ts
+          bun test packages/memory/test/v2-degrade.test.ts
+          bun test packages/memory/test/migrate-v1-to-v2.test.ts
+          bun test packages/agent/test/memory-v2-cutover.test.ts

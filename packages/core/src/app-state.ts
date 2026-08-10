@@ -27,12 +27,7 @@
  * - **按时间排序**：list() 返回的结果按 savedAt 降序排列，最新保存的状态排在最前
  */
 
-import {
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { atomicWrite } from "./utils/fs.js";
 
@@ -71,8 +66,8 @@ export interface AppState {
   readonly taskState?: unknown;
   /** 运行已完成时的最终结果 */
   readonly outcome?: {
-    /** 完成状态：成功或失败 */
-    readonly status: "completed" | "failed";
+    /** 完成状态：成功、失败或用户中止 */
+    readonly status: "completed" | "failed" | "aborted";
     /** 结果描述信息 */
     readonly message: string;
   };

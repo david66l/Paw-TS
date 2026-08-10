@@ -34,6 +34,7 @@ export const GIT_STATUS = "workspace.git_status" as const;
 export const GIT_LOG = "workspace.git_log" as const;
 export const GIT_DIFF = "workspace.git_diff" as const;
 export const RUN_AGENT = "workspace.run_agent" as const;
+export const CREATE_AGENT = "workspace.create_agent" as const;
 export const RUN_SKILL = "workspace.run_skill" as const;
 export const LSP = "workspace.lsp" as const;
 export const APPLY_PATCH = "workspace.apply_patch" as const;
@@ -41,6 +42,7 @@ export const SYMBOL_SEARCH = "workspace.symbol_search" as const;
 export const MEMORY_LIST = "memory.list" as const;
 export const MEMORY_READ = "memory.read" as const;
 export const MEMORY_SAVE = "memory.save" as const;
+export const CONTEXT_RECALL = "context.recall" as const;
 
 const BUILTIN_TOOLS = [
   READ,
@@ -60,6 +62,7 @@ const BUILTIN_TOOLS = [
   GIT_LOG,
   GIT_DIFF,
   RUN_AGENT,
+  CREATE_AGENT,
   RUN_SKILL,
   LSP,
   APPLY_PATCH,
@@ -67,6 +70,7 @@ const BUILTIN_TOOLS = [
   MEMORY_LIST,
   MEMORY_READ,
   MEMORY_SAVE,
+  CONTEXT_RECALL,
 ] as const;
 
 export type BuiltinToolName = (typeof BUILTIN_TOOLS)[number];
@@ -95,7 +99,8 @@ export function toolRequiresApproval(
     tool === SYMBOL_SEARCH ||
     tool === LSP ||
     tool === MEMORY_LIST ||
-    tool === MEMORY_READ
+    tool === MEMORY_READ ||
+    tool === CONTEXT_RECALL
   )
     return false;
   if (tool === SHELL && args) {
@@ -292,9 +297,14 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
     }),
     fn(
       RUN_AGENT,
-      "Launch a sub-agent to handle a complex task.",
+      "Launch a registered sub-agent (prefer agent_id from the agent roster). Falls back to agent_type if no id.",
       {
         goal: { type: "string", description: "Goal for the sub-agent" },
+        agent_id: {
+          type: "string",
+          description:
+            "Registered agent id from .paw/agents (e.g. bianmu, keji). Preferred over agent_type.",
+        },
         max_steps: {
           type: "integer",
           description: "Max steps for the sub-agent",
@@ -302,15 +312,60 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
         agent_type: {
           type: "string",
           enum: ["simple", "research", "coding", "planning", "relay"],
-          description: "Sub-agent specialization",
+          description: "Legacy specialization when agent_id is omitted",
         },
         child_policy: {
           type: "string",
           enum: ["read_only", "read_write"],
-          description: "Tool write policy for the sub-agent",
+          description: "Tool write policy override for the sub-agent",
         },
       },
       ["goal"],
+    ),
+    fn(
+      CREATE_AGENT,
+      "Create a new worker Agent definition under .paw/agents/<id>.md (validated, reusable). Use when no existing agent fits; then run_agent with that agent_id.",
+      {
+        id: {
+          type: "string",
+          description: "Agent id (lowercase letters, digits, _-)",
+        },
+        name: { type: "string", description: "Display name" },
+        role: { type: "string", description: "Short role label" },
+        prompt: {
+          type: "string",
+          description: "System prompt body for the agent",
+        },
+        tools: {
+          type: "string",
+          description:
+            'Tool allowlist: "inherit" or comma-separated names (e.g. read_file, write_file, run_shell)',
+        },
+        child_policy: {
+          type: "string",
+          enum: ["read_only", "read_write"],
+          description: "Default read_only",
+        },
+        model: {
+          type: "string",
+          enum: ["flash", "pro", "inherit"],
+          description: "Model preference",
+        },
+        output_format: {
+          type: "string",
+          description: "Expected output format",
+        },
+        emoji: { type: "string", description: "Optional emoji for roster" },
+        description: {
+          type: "string",
+          description: "One-line description for the roster",
+        },
+        overwrite: {
+          type: "boolean",
+          description: "Overwrite existing agent file if true",
+        },
+      },
+      ["id", "name", "prompt"],
     ),
     fn(
       RUN_SKILL,
@@ -376,7 +431,36 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
       },
       ["name", "content", "type"],
     ),
+    fn(
+      CONTEXT_RECALL,
+      "Restore the full content of an archived (previously truncated) tool output by its archive id. Use when an [archived id=N, ...] marker appears in a tool result and you need the full text. For outputs larger than 8000 chars, use part=head (start) / part=tail (end) / part=chunk with offset to page through. After recall, that id stays permanently addressable for this task.",
+      {
+        id: {
+          type: "string",
+          description:
+            "Archive id from an [archived id=N ...] marker, or a content hash. Unknown ids fall back to keyword search.",
+        },
+        part: {
+          type: "string",
+          enum: ["head", "tail", "chunk"],
+          description:
+            "Which window to return: head (start), tail (end), or chunk (cursor via offset)",
+        },
+        offset: {
+          type: "integer",
+          description: "Chunk cursor: character offset from start (part=chunk)",
+        },
+        limit: {
+          type: "integer",
+          description: "Max chars to return (default 8000, hard cap 8000)",
+        },
+      },
+      ["id"],
+    ),
   ];
+  // P5.2 前缀稳定完整版：内置工具按名称固定排序（确定性 schema 顺序，
+  // 避免迭代顺序抖动导致 system prompt 逐字节变化破坏 prompt cache）
+  defs.sort((a, b) => a.function.name.localeCompare(b.function.name));
   if (mcp) {
     for (const t of mcp.listTools()) {
       defs.push({
@@ -420,6 +504,7 @@ export function toolCatalogText(mcp?: McpClientManager): string {
     `{"tool":"${MEMORY_LIST}","args":{}} — list MemoryRuntime entries (short titles)`,
     `{"tool":"${MEMORY_READ}","args":{"name":"<name-or-id>"}} — read full memory body by name/id`,
     `{"tool":"${MEMORY_SAVE}","args":{"name":"<unique-name>","content":"<focused markdown>","type":"project|user|feedback|reference","tags":["tag1"],"priority":"mid"}} — save via governance (not a local md file)`,
+    `{"tool":"${CONTEXT_RECALL}","args":{"id":"<archive-id-from-[archived-marker]>","part":"head|tail|chunk","offset":0,"limit":8000}} — restore a truncated/evicted tool output by id (fallback: keyword search on unknown ids)`,
   ];
 
   if (mcp) {

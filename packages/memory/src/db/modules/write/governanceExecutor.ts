@@ -13,7 +13,7 @@ import { memoryItemDao } from "../../dao/memoryItem.js";
 import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
 import type { GovernanceDecision, MemoryItem, MemoryStatus, ScopeDescriptor } from "../../types.js";
 import { generateId } from "../platform/idGen.js";
-import { NGramEmbeddingService, storeEmbedding } from "../platform/embeddingService.js";
+import { NGramEmbeddingService, storeEmbedding, MEMORY_EMBEDDING_DIMENSIONS } from "../platform/embeddingService.js";
 
 export interface ExecutionResult {
   success: boolean;
@@ -123,7 +123,7 @@ export class GovernanceExecutor {
 
         // 异步生成 embedding
         try {
-          const embedder = new NGramEmbeddingService();
+          const embedder = new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS);
           await storeEmbedding(memoryId, "1", await embedder.embed(`${item.title} ${item.summary}`));
         } catch { /* non-blocking */ }
 

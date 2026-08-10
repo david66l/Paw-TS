@@ -1,0 +1,47 @@
+{
+  "nodes": [
+    {
+      "id": "document:文档/架构/ARCHITECTURE_AND_FEATURES_PLAN.md",
+      "type": "document",
+      "name": "ARCHITECTURE_AND_FEATURES_PLAN.md",
+      "filePath": "文档/架构/ARCHITECTURE_AND_FEATURES_PLAN.md",
+      "summary": "包含 71 个章节的文档，主题为「Paw-TS 架构与功能设计改进方案」。",
+      "tags": [
+        "planning",
+        "architecture",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/架构/multi-agent-architecture-analysis.md",
+      "type": "document",
+      "name": "multi-agent-architecture-analysis.md",
+      "filePath": "文档/架构/multi-agent-architecture-analysis.md",
+      "summary": "包含 35 个章节的文档，主题为「Multi-Agent 架构分析：基于\"需要多个子 Agent\"需求的重新评估」。",
+      "tags": [
+        "analysis",
+        "architecture",
+        "multi-agent",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/架构/multi-agent-state-data-flow-analysis.md",
+      "type": "document",
+      "name": "multi-agent-state-data-flow-analysis.md",
+      "filePath": "文档/架构/multi-agent-state-data-flow-analysis.md",
+      "summary": "包含 27 个章节的文档，主题为「Multi-Agent 状态流转与数据流转分析」。",
+      "tags": [
+        "analysis",
+        "architecture",
+        "multi-agent",
+        "data-flow",
+        "state-management"
+      ],
+      "complexity": "complex"
+    }
+  ],
+  "edges": []
+}

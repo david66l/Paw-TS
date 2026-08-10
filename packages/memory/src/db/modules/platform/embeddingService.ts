@@ -15,6 +15,13 @@ export interface EmbeddingService {
 }
 
 /**
+ * 记忆库 embedding 统一维度：必须与 memory_embeddings.embedding 列（V008，vector(1536)）一致。
+ * 所有写入/查询 memory_embeddings 的调用点必须使用此维度，
+ * 否则维度不匹配会在 pgvector 层报错并被静默吞掉。
+ */
+export const MEMORY_EMBEDDING_DIMENSIONS = 1536;
+
+/**
  * 默认实现：字符 n-gram 统计 → 稀疏哈希向量。
  * 不需要任何外部依赖或 API key，适合 MVP 快速验证。
  * 精度远低于模型 embedding，但能区分明显不同的文本。

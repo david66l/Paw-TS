@@ -3,12 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { ContextCompactor } from "../../packages/core/src/context-compactor.js";
-import type { ChatMessage } from "../../packages/core/src/context-manager.js";
-import { pruneToolResults } from "../../packages/core/src/context-pruner.js";
-import {
-  DEFAULT_KEEP_RECENT_TOOLS,
-} from "../../packages/core/src/tool-result-storage.js";
+import { ContextCompactor } from "../../packages/core/src/context/compactor.js";
+import type { ChatMessage } from "../../packages/core/src/context/manager.js";
+import { pruneToolResults } from "../../packages/core/src/context/pruner.js";
+import { DEFAULT_KEEP_RECENT_TOOLS } from "../../packages/core/src/tool-result/storage.js";
 import { estimateMessageTokens } from "../../packages/core/src/token-estimate.js";
 import { loadLocalLongBench } from "./adapter.js";
 

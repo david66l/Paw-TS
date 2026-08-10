@@ -1,0 +1,54 @@
+{
+  "nodes": [
+    {
+      "id": "config:apps/tui/bunfig.toml",
+      "type": "config",
+      "name": "bunfig.toml",
+      "filePath": "apps/tui/bunfig.toml",
+      "summary": "Bun 运行时配置文件，预加载 @opentui/solid/preload 模块以支持 SolidJS 组件在终端中的 JSX 渲染转换。",
+      "tags": ["configuration", "bun", "runtime", "solidjs"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:apps/tui/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "apps/tui/package.json",
+      "summary": "Paw TUI 终端交互应用的包配置，基于 OpenTUI + SolidJS 构建，提供命令行对话界面，依赖 @paw/agent、@paw/core 等工作区包及 OpenTUI 生态组件。",
+      "tags": ["configuration", "tui", "solidjs", "terminal-ui", "workspace-package"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:apps/tui/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "apps/tui/tsconfig.json",
+      "summary": "TUI 应用的 TypeScript 配置，继承根目录 tsconfig.base.json，保留 JSX 语法由 @opentui/solid 在运行时转换，包含源码和测试文件。",
+      "tags": ["configuration", "typescript", "tui", "solidjs"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:apps/tui/tsconfig.json",
+      "target": "config:tsconfig.base.json",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:apps/tui/package.json",
+      "target": "config:apps/tui/bunfig.toml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:apps/tui/package.json",
+      "target": "config:apps/tui/tsconfig.json",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

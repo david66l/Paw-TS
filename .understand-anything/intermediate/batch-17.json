@@ -1,0 +1,158 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/harness/src/sandbox/detect-runtime.ts",
+      "type": "file",
+      "name": "detect-runtime.ts",
+      "filePath": "packages/harness/src/sandbox/detect-runtime.ts",
+      "summary": "容器运行时检测模块，通过同步执行 docker/podman version 命令探测宿主机上第一个可用的 OCI 容器运行时，支持偏好优先级配置。",
+      "tags": ["container", "docker", "podman", "runtime-detection"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/harness/src/sandbox/docker-runner.ts",
+      "type": "file",
+      "name": "docker-runner.ts",
+      "filePath": "packages/harness/src/sandbox/docker-runner.ts",
+      "summary": "Docker/Podman 沙箱命令构建器，将用户 Shell 命令包装为安全的容器执行命令（docker run/podman run），通过路径映射、网络隔离、内存和进程数限制等多层安全策略实现纵深防御。",
+      "tags": ["sandbox", "container", "docker", "security", "isolation"],
+      "complexity": "moderate",
+      "languageNotes": "支持 workspace（读写挂载）和 strict（只读挂载+tmpfs）两种沙箱模式，并实现了路径映射的纵深防御：即使上游传入越界路径也会安全回退到 /workspace。"
+    },
+    {
+      "id": "file:packages/harness/src/sandbox/types.ts",
+      "type": "file",
+      "name": "types.ts",
+      "filePath": "packages/harness/src/sandbox/types.ts",
+      "summary": "Shell 执行沙箱的类型定义，包括沙箱模式枚举、网络策略、配置接口及默认常量（DEFAULT_SANDBOX_IMAGE、OFF_SHELL_SANDBOX）和状态守卫函数。",
+      "tags": ["type-definition", "sandbox", "configuration", "constants"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/harness/src/sandbox/detect-runtime.ts:detectContainerRuntime",
+      "type": "function",
+      "name": "detectContainerRuntime",
+      "filePath": "packages/harness/src/sandbox/detect-runtime.ts",
+      "lineRange": [42, 65],
+      "summary": "按优先级顺序依次探测候选容器运行时（默认 Docker 优先），通过 spawnSync 执行 version 命令（5秒超时）检测可用性，返回第一个可用的运行时名称。",
+      "tags": ["container", "runtime-detection", "docker", "podman"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/harness/src/sandbox/docker-runner.ts:hostPathToContainerPath",
+      "type": "function",
+      "name": "hostPathToContainerPath",
+      "filePath": "packages/harness/src/sandbox/docker-runner.ts",
+      "lineRange": [88, 108],
+      "summary": "将宿主机文件路径映射为容器内路径，工作区根目录映射为 /workspace，工作区外的路径安全回退到 /workspace。",
+      "tags": ["sandbox", "path-mapping", "security"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/harness/src/sandbox/docker-runner.ts:buildDockerShellExecSpec",
+      "type": "function",
+      "name": "buildDockerShellExecSpec",
+      "filePath": "packages/harness/src/sandbox/docker-runner.ts",
+      "lineRange": [126, 190],
+      "summary": "构建完整的 Docker/Podman 容器执行规范，包括运行时检测、安全选项配置（--rm、--network、--pids-limit、--memory、--cpus）、卷挂载和工作目录设置。",
+      "tags": ["sandbox", "container", "command-builder", "security"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/harness/src/sandbox/types.ts:isShellSandboxEnabled",
+      "type": "function",
+      "name": "isShellSandboxEnabled",
+      "filePath": "packages/harness/src/sandbox/types.ts",
+      "lineRange": [47, 51],
+      "summary": "类型守卫函数，判断沙箱配置是否已启用（非 off 模式），启用时窄化类型为 workspace 或 strict 模式。",
+      "tags": ["type-guard", "sandbox", "validation"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/harness/src/sandbox/docker-runner.ts",
+      "target": "file:packages/harness/src/sandbox/detect-runtime.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/docker-runner.ts",
+      "target": "file:packages/harness/src/sandbox/types.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/detect-runtime.ts",
+      "target": "function:packages/harness/src/sandbox/detect-runtime.ts:detectContainerRuntime",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/docker-runner.ts",
+      "target": "function:packages/harness/src/sandbox/docker-runner.ts:hostPathToContainerPath",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/docker-runner.ts",
+      "target": "function:packages/harness/src/sandbox/docker-runner.ts:buildDockerShellExecSpec",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/types.ts",
+      "target": "function:packages/harness/src/sandbox/types.ts:isShellSandboxEnabled",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/detect-runtime.ts",
+      "target": "function:packages/harness/src/sandbox/detect-runtime.ts:detectContainerRuntime",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/docker-runner.ts",
+      "target": "function:packages/harness/src/sandbox/docker-runner.ts:hostPathToContainerPath",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/docker-runner.ts",
+      "target": "function:packages/harness/src/sandbox/docker-runner.ts:buildDockerShellExecSpec",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/harness/src/sandbox/types.ts",
+      "target": "function:packages/harness/src/sandbox/types.ts:isShellSandboxEnabled",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/harness/src/sandbox/docker-runner.ts:buildDockerShellExecSpec",
+      "target": "function:packages/harness/src/sandbox/detect-runtime.ts:detectContainerRuntime",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/harness/src/sandbox/docker-runner.ts:buildDockerShellExecSpec",
+      "target": "function:packages/harness/src/sandbox/docker-runner.ts:hostPathToContainerPath",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

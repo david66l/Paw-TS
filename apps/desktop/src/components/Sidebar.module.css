@@ -1,0 +1,521 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  height: 100%;
+  padding: 0 var(--space-3) var(--space-3);
+  gap: var(--space-3);
+  position: relative;
+}
+
+.dragRegion {
+  height: var(--titlebar-height);
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--space-1);
+  -webkit-app-region: no-drag;
+}
+
+.logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(210, 225, 255, 0.75)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 14px rgba(40, 80, 160, 0.14), inset 0 1px 0
+    rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.hostOn,
+.hostOff {
+  font-size: 11px;
+  font-weight: 560;
+}
+
+.hostOn {
+  color: var(--success);
+}
+
+.hostOff {
+  color: var(--text-muted);
+}
+
+/* 新对话：也带一点玻璃高光的实体按钮 */
+.newBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-on-accent);
+  background: var(--button-primary-bg);
+  border: 1px solid var(--button-primary-border);
+  box-shadow: var(--button-primary-shadow);
+  -webkit-app-region: no-drag;
+  overflow: hidden;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, opacity 0.12s ease;
+}
+
+.newBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0.05) 40%,
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+.newBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(26, 107, 255, 0.4), inset 0 1px 0
+    rgba(255, 255, 255, 0.4);
+}
+
+.newBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.plus {
+  position: relative;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1;
+  -webkit-app-region: no-drag;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-1);
+  flex-shrink: 0;
+}
+
+.sectionLabel {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sectionCount {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: var(--glass-bg-chip);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid var(--glass-border-soft);
+  border-radius: var(--radius-pill);
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.sessionList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 3px 6px 1px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.sessionList::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sessionList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  border: 1px solid rgba(120, 150, 200, 0.15);
+}
+
+/**
+ * 会话芯片 = 小块液体玻璃
+ * 低不透明 + blur/saturate + 白边 + 多层 inset 高光
+ */
+.sessionItem,
+.sessionItemActive {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-shrink: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border-soft);
+  background: var(--glass-bg-chip);
+  backdrop-filter: blur(var(--glass-blur-chip)) saturate(var(--glass-saturate))
+    brightness(1.04);
+  -webkit-backdrop-filter: blur(var(--glass-blur-chip))
+    saturate(var(--glass-saturate)) brightness(1.04);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-soft);
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s
+    ease, transform 0.14s ease;
+}
+
+/* 斜向 specular 高光层 */
+.sessionItem::before,
+.sessionItemActive::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-specular);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.85;
+}
+
+/* 内壁散射 + 底部微亮 */
+.sessionItem::after,
+.sessionItemActive::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.25), inset 0 -10px 20px
+    -12px rgba(255, 255, 255, 0.35);
+}
+
+.sessionItem:hover {
+  background: var(--glass-bg-chip-hover);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-highlight), 0 8px 24px rgba(40, 80, 160, 0.1);
+  transform: translateY(-0.5px);
+}
+
+.sessionItemActive {
+  background: var(--glass-bg-chip-active);
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 1px 0 0 rgba(255, 255, 255, 0.4),
+    inset -1px 0 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 0 rgba(120, 170, 255, 0.2),
+    0 10px 28px rgba(26, 107, 255, 0.14),
+    0 0 0 1px rgba(26, 107, 255, 0.12);
+}
+
+/* 选中左侧折射棱边（玻璃厚度感） */
+.sessionItemActive > .sessionMain {
+  box-shadow: inset 3px 0 0 0 rgba(26, 107, 255, 0.55);
+}
+
+.sessionMain {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.sessionMain:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sessionTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionItemActive .sessionTitle {
+  color: #0d2a62;
+}
+
+.sessionTime {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sessionItemActive .sessionTime {
+  color: var(--text-secondary);
+}
+
+/* 右键操作菜单 —— 小块液态玻璃，fixed 定位在光标处 */
+.contextMenu {
+  position: fixed;
+  z-index: 50;
+  min-width: 148px;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-chip-hover);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  box-shadow: 0 12px 32px rgba(30, 41, 59, 0.22), inset 0 1px 0
+    rgba(255, 255, 255, 0.7);
+  -webkit-app-region: no-drag;
+}
+
+.contextItem,
+.contextItemDanger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 560;
+  text-align: left;
+  cursor: pointer;
+}
+
+.contextItem {
+  color: var(--text-primary);
+}
+
+.contextItem:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.contextItemDanger {
+  color: var(--danger);
+}
+
+.contextItemDanger:hover:not(:disabled) {
+  background: rgba(226, 75, 75, 0.12);
+}
+
+.contextItemDanger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.contextConfirmText {
+  padding: 6px 10px 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.runningDot,
+.idleDot,
+.idleDotMuted {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.runningDot {
+  background: var(--running);
+  box-shadow: 0 0 0 3px rgba(26, 107, 255, 0.2);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.idleDot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(18, 166, 106, 0.18);
+}
+
+.idleDotMuted {
+  background: rgba(120, 140, 180, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* 左下角：设置行 + 本地用户占位卡（布局对齐设计 8:259 / 8:261） */
+.footerCards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.settingsRow,
+.profileCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border-soft);
+  background: var(--glass-bg-chip);
+  backdrop-filter: blur(var(--glass-blur-chip)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-chip))
+    saturate(var(--glass-saturate));
+  box-shadow: var(--glass-highlight), var(--glass-shadow-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.14s
+    ease;
+}
+
+.settingsRow:hover,
+.profileCard:hover {
+  background: var(--glass-bg-chip-hover);
+  border-color: var(--glass-border);
+  transform: translateY(-0.5px);
+}
+
+.settingsRow {
+  height: 44px;
+  padding: 0 14px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settingsIcon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.settingsText {
+  letter-spacing: -0.01em;
+}
+
+.profileCard {
+  height: 64px;
+  padding: 0 12px;
+  border-radius: 14px;
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(150deg, #4fd6e6, #2bb3c8);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 8px
+    rgba(40, 150, 170, 0.3);
+}
+
+.profileText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.profileName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profileSub {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profileCaret {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+@supports not (
+    (backdrop-filter: blur(1px)) or
+    (-webkit-backdrop-filter: blur(1px))
+  ) {
+  .sessionItem,
+  .sessionItemActive {
+    background: rgba(255, 255, 255, 0.82);
+  }
+}

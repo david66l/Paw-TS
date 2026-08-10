@@ -1,0 +1,62 @@
+{
+  "passed": 11,
+  "failed": 0,
+  "results": [
+    {
+      "name": "M0 API ready",
+      "ok": true,
+      "detail": "{\"agentReady\":true,\"hasList\":true}"
+    },
+    {
+      "name": "M1 library has seeds",
+      "ok": true,
+      "detail": "3 items: Desktop memory finalize on new chat | Redis client is ioredis | Prefer vitest for unit tests"
+    },
+    {
+      "name": "M1b Memory tab UI seeds",
+      "ok": true,
+      "detail": "本次会话命中 0 条 尚无注入记忆（或尚未检索） 总库（本工作区） 刷新 DECISION Desktop memory finalize on new chat Desktop multi-turn defers completeTask until user clicks new conversation. PRO"
+    },
+    {
+      "name": "M2 retrieve vitest",
+      "ok": true,
+      "detail": "hit=true ans=true"
+    },
+    {
+      "name": "M3 retrieve ioredis",
+      "ok": true,
+      "detail": "body=true mem=true"
+    },
+    {
+      "name": "M4 multi-turn history",
+      "ok": true,
+      "detail": "银狐 recalled"
+    },
+    {
+      "name": "M5 chitchat finalize no poison",
+      "ok": true,
+      "detail": "lib=3"
+    },
+    {
+      "name": "M6 explicit remember after finalize",
+      "ok": true,
+      "detail": "Desktop memory finalize on new chat | Redis client is ioredis | Prefer vitest for unit tests"
+    },
+    {
+      "name": "M7 readonly tool + context",
+      "ok": true,
+      "detail": "file+answer ok"
+    },
+    {
+      "name": "M8 plan bootstrap",
+      "ok": true,
+      "detail": "只说顶层有 packages 只说有 apps 一句话结束。不要调用工具 rev 0 bootstrap_from_goal"
+    },
+    {
+      "name": "M9 session hits panel",
+      "ok": true,
+      "detail": "本次会话命中 0 条 q: 不要调用工具。一句话：我们单测框架约定是什么？ 尚无注入记忆（或尚未检索） 总库（本工作区） 刷新 DECISION Desktop memory finalize on new chat Desktop multi-turn defers completeTask until user clicks new conversati"
+    }
+  ],
+  "at": "2026-07-10T12:55:36.851Z"
+}

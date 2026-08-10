@@ -1,0 +1,419 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 9,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/store/src/plan-item.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 80,
+      "nonEmptyLines": 76,
+      "functions": [
+        {
+          "name": "createPlanItem",
+          "startLine": 63,
+          "endLine": 80,
+          "params": [
+            "partial"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PlanItemStatus",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "createPlanItem",
+          "line": 63,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/store/src/plan-items-json.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 120,
+      "nonEmptyLines": 108,
+      "functions": [
+        {
+          "name": "isPlanItemStatus",
+          "startLine": 31,
+          "endLine": 33,
+          "params": [
+            "s"
+          ]
+        },
+        {
+          "name": "planItemsFromUnknown",
+          "startLine": 49,
+          "endLine": 120,
+          "params": [
+            "items"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "planItemsFromUnknown",
+          "line": 49,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "isPlanItemStatus",
+          "callee": "STATUS_SET.has",
+          "lineNumber": 32
+        },
+        {
+          "caller": "planItemsFromUnknown",
+          "callee": "Array.isArray",
+          "lineNumber": 53
+        },
+        {
+          "caller": "planItemsFromUnknown",
+          "callee": "isPlanItemStatus",
+          "lineNumber": 77
+        },
+        {
+          "caller": "planItemsFromUnknown",
+          "callee": "Array.isArray",
+          "lineNumber": 83
+        },
+        {
+          "caller": "planItemsFromUnknown",
+          "callee": "dependsRaw.filter",
+          "lineNumber": 84
+        },
+        {
+          "caller": "planItemsFromUnknown",
+          "callee": "out.push",
+          "lineNumber": 108
+        },
+        {
+          "caller": "planItemsFromUnknown",
+          "callee": "createPlanItem",
+          "lineNumber": 109
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/store/src/plan-snapshot.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 139,
+      "nonEmptyLines": 131,
+      "functions": [
+        {
+          "name": "resolveMaxItems",
+          "startLine": 78,
+          "endLine": 90,
+          "params": [
+            "options"
+          ]
+        },
+        {
+          "name": "planToSnapshotPayload",
+          "startLine": 106,
+          "endLine": 139,
+          "params": [
+            "plan",
+            "options"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "DEFAULT_PLAN_SNAPSHOT_MAX_ITEMS",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "planToSnapshotPayload",
+          "line": 106,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "resolveMaxItems",
+          "callee": "Number.isFinite",
+          "lineNumber": 85
+        },
+        {
+          "caller": "planToSnapshotPayload",
+          "callee": "resolveMaxItems",
+          "lineNumber": 110
+        },
+        {
+          "caller": "planToSnapshotPayload",
+          "callee": "plan.nextPending",
+          "lineNumber": 112
+        },
+        {
+          "caller": "planToSnapshotPayload",
+          "callee": "plan.items.map",
+          "lineNumber": 114
+        },
+        {
+          "caller": "planToSnapshotPayload",
+          "callee": "Number.isFinite",
+          "lineNumber": 124
+        },
+        {
+          "caller": "planToSnapshotPayload",
+          "callee": "Number.isFinite",
+          "lineNumber": 126
+        },
+        {
+          "caller": "planToSnapshotPayload",
+          "callee": "mapped.slice",
+          "lineNumber": 127
+        },
+        {
+          "caller": "planToSnapshotPayload",
+          "callee": "Math.floor",
+          "lineNumber": 127
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/store/src/plan.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 115,
+      "nonEmptyLines": 108,
+      "classes": [
+        {
+          "name": "Plan",
+          "startLine": 37,
+          "endLine": 115,
+          "methods": [
+            "constructor",
+            "addItem",
+            "updateItemStatus",
+            "nextPending",
+            "allComplete"
+          ],
+          "properties": [
+            "workflow_id",
+            "items",
+            "revision",
+            "last_updated_at"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Plan",
+          "line": 37,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "addItem",
+          "callee": "this.items.push",
+          "lineNumber": 61
+        },
+        {
+          "caller": "nextPending",
+          "callee": "this.items.filter((i) => i.status === S.COMPLETED).map",
+          "lineNumber": 93
+        },
+        {
+          "caller": "nextPending",
+          "callee": "this.items.filter",
+          "lineNumber": 93
+        },
+        {
+          "caller": "nextPending",
+          "callee": "item.depends_on.every",
+          "lineNumber": 97
+        },
+        {
+          "caller": "nextPending",
+          "callee": "completed.has",
+          "lineNumber": 97
+        },
+        {
+          "caller": "allComplete",
+          "callee": "this.items.every",
+          "lineNumber": 111
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/store/src/task-planner.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 87,
+      "nonEmptyLines": 79,
+      "classes": [
+        {
+          "name": "TaskPlanner",
+          "startLine": 22,
+          "endLine": 87,
+          "methods": [
+            "createPlan",
+            "applyUpdate",
+            "plan"
+          ],
+          "properties": [
+            "_plan"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "TaskPlanner",
+          "line": 22,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "createPlan",
+          "callee": "String(i).padStart",
+          "lineNumber": 35
+        },
+        {
+          "caller": "createPlan",
+          "callee": "String",
+          "lineNumber": 35
+        },
+        {
+          "caller": "createPlan",
+          "callee": "Array.isArray",
+          "lineNumber": 36
+        },
+        {
+          "caller": "createPlan",
+          "callee": "task.depends_on.filter",
+          "lineNumber": 37
+        },
+        {
+          "caller": "createPlan",
+          "callee": "items.push",
+          "lineNumber": 39
+        },
+        {
+          "caller": "createPlan",
+          "callee": "createPlanItem",
+          "lineNumber": 40
+        },
+        {
+          "caller": "createPlan",
+          "callee": "String(i).padStart",
+          "lineNumber": 41
+        },
+        {
+          "caller": "createPlan",
+          "callee": "String",
+          "lineNumber": 41
+        },
+        {
+          "caller": "applyUpdate",
+          "callee": "this._plan.items.find",
+          "lineNumber": 67
+        },
+        {
+          "caller": "applyUpdate",
+          "callee": "this._plan.items.push",
+          "lineNumber": 77
+        },
+        {
+          "caller": "applyUpdate",
+          "callee": "newItems.map",
+          "lineNumber": 78
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/store/test/plan-items-json.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 32,
+      "nonEmptyLines": 29,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/store/test/plan-snapshot.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 59,
+      "nonEmptyLines": 55,
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/store/test/plan.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 31,
+      "nonEmptyLines": 28,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/store/test/task-planner.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 55,
+      "nonEmptyLines": 49,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

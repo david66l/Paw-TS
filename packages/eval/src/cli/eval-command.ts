@@ -40,6 +40,15 @@ import {
   resolveModel,
 } from "@paw/settings";
 import type { LanguageModel } from "@paw/models";
+import {
+  ChatClient,
+  resolveLlmConfig,
+  type LlmStats,
+} from "@paw/memory/longterm";
+import {
+  runMemoryAdversarial,
+  renderMemoryAdversarialReport,
+} from "../memory-adversarial/index.js";
 
 /** CLI 命令参数，由命令行解析后传入 */
 export interface EvalCommandArgs {
@@ -61,6 +70,16 @@ export interface EvalCommandArgs {
   readonly sandbox?: boolean;
   /** 训练数据导出路径（JSONL 格式） */
   readonly saveTraces?: string;
+  /** memory-adversarial：judge 模型 provider（默认同 --model） */
+  readonly judgeProvider?: string;
+  /** memory-adversarial：JSON 输出 */
+  readonly json?: boolean;
+  /** memory-adversarial：保留 DB 数据与临时工作区 */
+  readonly keep?: boolean;
+  /** memory-adversarial：最多运行夹具数 */
+  readonly maxSamples?: number;
+  /** memory-adversarial：per-fixture 超时（毫秒） */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -80,10 +99,12 @@ export async function runEvalCommand(
       return runEval(args);
     case "list":
       return listSuites();
+    case "memory-adversarial":
+      return runMemoryAdversarialCommand(args);
     default:
       return {
         ok: false,
-        text: `Unknown eval subcommand: ${args.subcommand}\nUsage: paw eval run|list`,
+        text: `Unknown eval subcommand: ${args.subcommand}\nUsage: paw eval run|list|memory-adversarial`,
       };
   }
 }
@@ -194,6 +215,53 @@ function listSuites(): { ok: boolean; text: string } {
   }
   lines.push(`  - all (${total} cases total)`);
   return { ok: true, text: lines.join("\n") };
+}
+
+/**
+ * M10「先答→纠错」端到端反事实评测（spec §11.4 完整版）。
+ *
+ * 装配：agent 模型用 resolveEvalModel（OpenAICompatibleModel），judge 用
+ * resolveLlmConfig + ChatClient（@paw/memory/longterm，60s 超时、共享 stats）。
+ * 返回 ok = passed===true；passed null（无 judged 样本）/ false → fail-closed。
+ */
+async function runMemoryAdversarialCommand(
+  args: EvalCommandArgs,
+): Promise<{ ok: boolean; text: string }> {
+  const cwd = args.workspaceRoot ?? process.cwd();
+  const stats: LlmStats = {
+    calls: 0,
+    retries: 0,
+    failures: 0,
+    totalMs: 0,
+    estimatedTokens: 0,
+  };
+  const judgeProvider = args.judgeProvider ?? args.model;
+  const judgeCfg = resolveLlmConfig({ provider: judgeProvider, cwd });
+  if ("error" in judgeCfg) {
+    return { ok: false, text: judgeCfg.error };
+  }
+  const judge = new ChatClient(judgeCfg, 60_000, stats);
+  const model = resolveEvalModel(cwd, args.model);
+
+  try {
+    const report = await runMemoryAdversarial({
+      model,
+      judge,
+      provider: args.model,
+      judgeProvider,
+      maxSamples: args.maxSamples,
+      keep: args.keep,
+      fixtureTimeoutMs: args.timeoutMs,
+      stats,
+    });
+    const text = args.json
+      ? JSON.stringify(report, null, 2)
+      : renderMemoryAdversarialReport(report);
+    return { ok: report.passed === true, text };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, text: `memory-adversarial run failed: ${msg}` };
+  }
 }
 
 /**

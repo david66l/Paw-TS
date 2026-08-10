@@ -1,0 +1,17 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "benchmarks/judge/benchmark.test.ts", "language": "typescript", "sizeLines": 150, "fileCategory": "code"},
+    {"path": "benchmarks/judge/judge.ts", "language": "typescript", "sizeLines": 110, "fileCategory": "code"},
+    {"path": "benchmarks/judge/prompts.ts", "language": "typescript", "sizeLines": 85, "fileCategory": "code"},
+    {"path": "benchmarks/judge/types.ts", "language": "typescript", "sizeLines": 59, "fileCategory": "code"},
+    {"path": "packages/models/src/index.ts", "language": "typescript", "sizeLines": 51, "fileCategory": "code"}
+  ],
+  "batchImportData": {
+    "benchmarks/judge/benchmark.test.ts": ["benchmarks/judge/judge.ts", "benchmarks/judge/types.ts", "packages/models/src/index.ts"],
+    "benchmarks/judge/judge.ts": ["benchmarks/judge/prompts.ts", "benchmarks/judge/types.ts", "packages/models/src/index.ts"],
+    "benchmarks/judge/prompts.ts": ["benchmarks/judge/types.ts"],
+    "benchmarks/judge/types.ts": [],
+    "packages/models/src/index.ts": []
+  }
+}

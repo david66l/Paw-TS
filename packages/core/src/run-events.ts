@@ -46,6 +46,16 @@ import type { AgentAction } from "./actions.js";
 import type { RunStatus } from "./run.js";
 import type { ModelTokenUsage } from "./token-usage.js";
 
+/** 单个被修改文件的变更统计（挂在 tool.result 事件上） */
+export interface ToolFileChange {
+  /** 相对工作区的路径（edit 返回绝对路径时会归一化） */
+  readonly path: string;
+  readonly added: number;
+  readonly removed: number;
+  /** unified diff 文本（已截断），可选 */
+  readonly diff?: string;
+}
+
 /**
  * 运行生命周期事件联合类型
  *
@@ -138,6 +148,8 @@ export type RunEvent =
       readonly tool: string;
       /** 工具调用参数 */
       readonly args: unknown;
+      /** 可选：子 Agent 调用（run_agent）的稳定 id，= child-{runId}-{idx}，与 agentId 一致 */
+      readonly callId?: string;
     }
   /** 工具执行完成（成功或失败） */
   | {
@@ -150,6 +162,11 @@ export type RunEvent =
       readonly summary: string;
       /** 详细结果，可选 */
       readonly detail?: string;
+      /**
+       * 修改性工具的文件变更统计（write_file / edit_file / apply_patch）：
+       * 每个被改文件一条，供 UI 展示「Changed N files +A −B」与 diff 预览
+       */
+      readonly fileChanges?: readonly ToolFileChange[];
     }
   /** 工具输出流式块（例如长时间运行的命令的 stdout/stderr） */
   | {
@@ -160,6 +177,16 @@ export type RunEvent =
       readonly chunk: string;
       /** 是否为 stderr（错误输出流） */
       readonly isStderr: boolean;
+    }
+  /** 并行子 Agent 的文件锁等待/冲突（供 UI 展示锁竞争） */
+  | {
+      readonly type: "agent.file_lock";
+      /** wait = 开始等待他人持有的锁；denied = 等待超时仍未获得 */
+      readonly status: "wait" | "denied";
+      /** 被争用的文件路径 */
+      readonly path: string;
+      /** 当前持有者（子 Agent runId） */
+      readonly holder?: string;
     }
   /** 工具调用需要用户审批（审批模式开启时） */
   | {
@@ -210,9 +237,17 @@ export type RunEvent =
       readonly itemCount: number;
       /** 修改原因（如添加了新任务、标记某任务完成等） */
       readonly reason: string;
+      /**
+       * 当前完整计划快照（可选，桌面右栏优先用此渲染）。
+       * 缺省时 UI 可回退到 agent.action plan_update 增量合并。
+       */
+      readonly items?: readonly {
+        readonly id: string;
+        readonly text: string;
+        readonly status?: string;
+      }[];
     }
-  /** 第一层压缩：工具结果裁剪完成 */
-  /** Layer 1: tool-result pruning completed. */
+  /** 第一层压缩：工具结果裁剪完成 */ /** Layer 1: tool-result pruning completed. */
   | {
       readonly type: "compression.prune.done";
       /** 裁剪释放的 token 数 */
@@ -242,6 +277,28 @@ export type RunEvent =
       readonly type: "compression.skipped";
       /** 跳过的原因（如 "below_threshold"、"anti_thrashing"） */
       readonly reason: string;
+      /** 压缩前 token（诊断用） */
+      readonly beforeTokens?: number;
+      /** 压缩后估算 token（诊断用） */
+      readonly afterTokens?: number;
+    }
+  /** P5.1 侧信道触发：monitor 判定该压缩（子任务完成/低密度/关键问题） */
+  /** Side-channel monitor decided compaction is due. */
+  | {
+      readonly type: "compression.monitor.trigger";
+      /** 触发原因：subtask_end / low_density / critical_issue / budget_critical */
+      readonly reason: string;
+      /** 是否强制压缩（跳过预算阈值检查） */
+      readonly force: boolean;
+    }
+  /** P2.7 行为闭环：压缩后模型重复获取已保留的信息（摘要质量低信号） */
+  /** Post-compaction duplicate access detected (low summary quality signal). */
+  | {
+      readonly type: "compression.quality.low";
+      /** 重复获取的项（file:/cmd: 前缀） */
+      readonly repeated: readonly string[];
+      /** 相关压缩发生的轮次 */
+      readonly compactTurn: number;
     }
   /**
    * 上下文预算快照（按池划分：system / tools / history）
@@ -281,6 +338,59 @@ export type RunEvent =
       readonly sections: readonly string[];
       /** 裁剪释放的 token 总数 */
       readonly freedTokens: number;
+    }
+  /** P4.3 逐块账本：上下文按块粒度的用量/状态快照（VISTA dashboard） */
+  /** Per-block context ledger (VISTA-style dashboard). */
+  | {
+      readonly type: "context.blocks";
+      /** 各块的账本行：id / 类型 / token / 轮龄 / 状态 */
+      readonly blocks: readonly {
+        readonly id: string;
+        readonly type:
+          | "system"
+          | "summary"
+          | "pinned"
+          | "tool"
+          | "conversation"
+          | "recall";
+        readonly tokens: number;
+        readonly ageTurns: number;
+        readonly status: "pinned" | "visible" | "archived";
+      }[];
+    }
+  /** P4.4 压缩版本化：一次压缩 = 一次 commit（快照已落盘） */
+  /** Compaction committed with a restorable snapshot. */
+  | {
+      readonly type: "compression.commit";
+      /** 压缩提交序号（1-based） */
+      readonly commit: number;
+      /** 快照文件路径 */
+      readonly snapshotPath: string;
+      /** 压缩前 token 数 */
+      readonly beforeTokens: number;
+      /** 压缩后 token 数 */
+      readonly afterTokens: number;
+    }
+  /** P4.3 硬守卫：上下文预算已满，拒绝继续注入并提示模型 */
+  /** Hard guard: history budget exhausted, further injection refused. */
+  | {
+      readonly type: "context.guard";
+      /** 当前历史 token 用量 */
+      readonly historyUsed: number;
+      /** 历史池预算 */
+      readonly historyBudget: number;
+      readonly reason: "budget_exhausted";
+    }
+  /** 约束生命周期：LLM 调和后约束集合变化（覆盖/撤销/过期/新增） */
+  /** Constraint lifecycle: reconciled by LLM (superseded/revoked/expired/added). */
+  | {
+      readonly type: "task.constraints.updated";
+      /** 当前有效（active）约束 */
+      readonly active: readonly string[];
+      /** 被覆盖/撤销/过期的约束 */
+      readonly superseded: readonly string[];
+      /** 调和是否成功（false = 降级路径，保守保留全部） */
+      readonly ok: boolean;
     }
   /** 记忆提取代理保存了新的记忆条目 */
   /** Memory extraction agent saved new entries. */
@@ -358,6 +468,10 @@ export type RunEvent =
         readonly summary: string;
         /** 关联的文件列表 */
         readonly relatedFiles: readonly string[];
+        /** 记忆类型（preference / decision / …） */
+        readonly type?: string;
+        /** 相关性得分 */
+        readonly score?: number;
       }[];
     }
   /** 每轮动态记忆注入（追加到 user 消息，不影响 system prompt cache） */
@@ -367,6 +481,54 @@ export type RunEvent =
       readonly recordCount: number;
       /** 注入文本的估算 token 数 */
       readonly tokens: number;
+    }
+  /**
+   * 记忆检索触发（spec v2 §9.5，M6 检索管线接线发射点）
+   *
+   * 事件触发式检索的起点：任务开始/命令失败/压缩后/显式查询。
+   */
+  /** Memory retrieval trigger fired (spec v2 §9.5). */
+  | {
+      readonly type: "memory.trigger";
+      /** 触发点：task_start / action_failed / post_compact / explicit_query */
+      readonly triggerType: string;
+      /** 查询摘要（截断，非全文） */
+      readonly querySummary: string;
+    }
+  /** 记忆注入完成（spec v2 §9.5；TUI 实时展示"本次注入了哪条记忆"） */
+  | {
+      readonly type: "memory.inject";
+      /** 注入的条目 id 列表 */
+      readonly itemIds: readonly string[];
+      /** 注入总 token 数（预算 ≤500） */
+      readonly totalTokens: number;
+      /** 是否降级（embedding/精排不可用，召回直取） */
+      readonly degraded?: boolean;
+    }
+  /** 记忆写入事件入队（spec v2 §9.5；异步写管线，M4 接线） */
+  | {
+      readonly type: "memory.write.enqueued";
+      /** 写入事件类型：task_succeeded / task_failed / user_correction / session_finalize */
+      readonly eventType: string;
+      readonly runId?: string;
+    }
+  /** 记忆写入被拒绝（spec v2 §9.5：密钥/schema/未验证门控，M4 接线） */
+  | {
+      readonly type: "memory.write.rejected";
+      readonly reason: "secret" | "schema" | "unverified";
+      readonly detail: string;
+    }
+  /** Governor 裁决完成（spec v2 §9.5，M5 接线） */
+  | {
+      readonly type: "memory.governed";
+      readonly op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP";
+      readonly entryId: string;
+    }
+  /** 生命周期清理（spec v2 §9.5：效用删除/容量清理，M7 接线） */
+  | {
+      readonly type: "memory.lifecycle.purge";
+      readonly entryIds: readonly string[];
+      readonly reason: string;
     }
   /** 模型输出被截断（finish_reason = "length" 或 "max_tokens"） */
   /** Model output was truncated (finish_reason = length/max_tokens). */

@@ -1,0 +1,9 @@
+{
+  "projectRoot": "/Users/Zhuanz/Documents/CS/项目/paw-ts",
+  "batchFiles": [
+    {"path": "docker/paw-sandbox/Dockerfile", "language": "dockerfile", "sizeLines": 14, "fileCategory": "infra"}
+  ],
+  "batchImportData": {
+    "docker/paw-sandbox/Dockerfile": []
+  }
+}

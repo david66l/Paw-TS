@@ -16,7 +16,7 @@ import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
 import { getSql } from "../../connection.js";
 import type { GovernanceDecision, MemoryItem, MemoryStatus, ScopeDescriptor } from "../../types.js";
 import { generateId } from "../platform/idGen.js";
-import { NGramEmbeddingService, storeEmbedding } from "../platform/embeddingService.js";
+import { NGramEmbeddingService, storeEmbedding, MEMORY_EMBEDDING_DIMENSIONS } from "../platform/embeddingService.js";
 
 export interface ExecuteResult {
   success: boolean;
@@ -101,7 +101,7 @@ export class MemoryStore {
 
     // 异步生成 embedding（不阻塞写入）
     try {
-      const embedder = new NGramEmbeddingService();
+      const embedder = new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS);
       const text = `${item.title} ${item.summary}`;
       const vec = await embedder.embed(text);
       await storeEmbedding(memoryId, item.version.toString(), vec);

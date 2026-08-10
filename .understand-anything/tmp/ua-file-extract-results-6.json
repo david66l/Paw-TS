@@ -1,0 +1,3131 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 21,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/workspace/src/files/read.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 704,
+      "nonEmptyLines": 646,
+      "functions": [
+        {
+          "name": "fnmatchLite",
+          "startLine": 41,
+          "endLine": 53,
+          "params": [
+            "fileName",
+            "pattern"
+          ]
+        },
+        {
+          "name": "depthFromDir",
+          "startLine": 55,
+          "endLine": 61,
+          "params": [
+            "dirpath",
+            "filePath"
+          ]
+        },
+        {
+          "name": "isIgnoredUnderDir",
+          "startLine": 63,
+          "endLine": 65,
+          "params": [
+            "relParts"
+          ]
+        },
+        {
+          "name": "readWorkspaceFile",
+          "startLine": 77,
+          "endLine": 109,
+          "params": [
+            "workspaceRoot",
+            "relPath",
+            "options"
+          ]
+        },
+        {
+          "name": "listWorkspaceFiles",
+          "startLine": 119,
+          "endLine": 192,
+          "params": [
+            "workspaceRoot",
+            "directory",
+            "options"
+          ]
+        },
+        {
+          "name": "searchWorkspaceText",
+          "startLine": 219,
+          "endLine": 380,
+          "params": [
+            "workspaceRoot",
+            "relPath",
+            "options"
+          ]
+        },
+        {
+          "name": "globToRegex",
+          "startLine": 384,
+          "endLine": 405,
+          "params": [
+            "pattern"
+          ]
+        },
+        {
+          "name": "matchGlobPattern",
+          "startLine": 408,
+          "endLine": 447,
+          "params": [
+            "filePath",
+            "pattern"
+          ]
+        },
+        {
+          "name": "globWorkspaceFiles",
+          "startLine": 460,
+          "endLine": 527,
+          "params": [
+            "workspaceRoot",
+            "relPath",
+            "options"
+          ]
+        },
+        {
+          "name": "applyHeadLimit",
+          "startLine": 549,
+          "endLine": 559,
+          "params": [
+            "items",
+            "limit",
+            "offset"
+          ]
+        },
+        {
+          "name": "formatGrepContent",
+          "startLine": 561,
+          "endLine": 589,
+          "params": [
+            "matches",
+            "showLineNumbers"
+          ]
+        },
+        {
+          "name": "grepWorkspaceText",
+          "startLine": 592,
+          "endLine": 704,
+          "params": [
+            "workspaceRoot",
+            "relPath",
+            "options"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "readWorkspaceFile",
+          "line": 77,
+          "isDefault": false
+        },
+        {
+          "name": "listWorkspaceFiles",
+          "line": 119,
+          "isDefault": false
+        },
+        {
+          "name": "searchWorkspaceText",
+          "line": 219,
+          "isDefault": false
+        },
+        {
+          "name": "globWorkspaceFiles",
+          "line": 460,
+          "isDefault": false
+        },
+        {
+          "name": "grepWorkspaceText",
+          "line": 592,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "fnmatchLite",
+          "callee": "pattern.includes",
+          "lineNumber": 45
+        },
+        {
+          "caller": "fnmatchLite",
+          "callee": "pattern.includes",
+          "lineNumber": 45
+        },
+        {
+          "caller": "fnmatchLite",
+          "callee": "pattern.replace",
+          "lineNumber": 48
+        },
+        {
+          "caller": "fnmatchLite",
+          "callee": "escaped.replaceAll(\"?\", \".\").replaceAll",
+          "lineNumber": 50
+        },
+        {
+          "caller": "fnmatchLite",
+          "callee": "escaped.replaceAll",
+          "lineNumber": 50
+        },
+        {
+          "caller": "fnmatchLite",
+          "callee": "re.test",
+          "lineNumber": 52
+        },
+        {
+          "caller": "depthFromDir",
+          "callee": "path.relative",
+          "lineNumber": 56
+        },
+        {
+          "caller": "depthFromDir",
+          "callee": "rel.split",
+          "lineNumber": 60
+        },
+        {
+          "caller": "isIgnoredUnderDir",
+          "callee": "relParts.some",
+          "lineNumber": 64
+        },
+        {
+          "caller": "isIgnoredUnderDir",
+          "callee": "LIST_IGNORE_DIR.has",
+          "lineNumber": 64
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 83
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "fs.existsSync",
+          "lineNumber": 88
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "fs.statSync(filepath).isFile",
+          "lineNumber": 88
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "fs.statSync",
+          "lineNumber": 88
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "fs.readFileSync",
+          "lineNumber": 91
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "allText.split",
+          "lineNumber": 92
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "lines.slice",
+          "lineNumber": 96
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "lines.slice",
+          "lineNumber": 99
+        },
+        {
+          "caller": "readWorkspaceFile",
+          "callee": "lines.join",
+          "lineNumber": 101
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 125
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "fs.existsSync",
+          "lineNumber": 130
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "fs.statSync(dirpath).isDirectory",
+          "lineNumber": 130
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "fs.statSync",
+          "lineNumber": 130
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "fs.readdirSync",
+          "lineNumber": 137
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "ent.isFile",
+          "lineNumber": 138
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "fnmatchLite",
+          "lineNumber": 141
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "path.relative",
+          "lineNumber": 144
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "path.join",
+          "lineNumber": 144
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "isIgnoredUnderDir",
+          "lineNumber": 145
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "rel.split",
+          "lineNumber": 145
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "collected.push",
+          "lineNumber": 148
+        },
+        {
+          "caller": "walk",
+          "callee": "fs.readdirSync",
+          "lineNumber": 154
+        },
+        {
+          "caller": "walk",
+          "callee": "path.join",
+          "lineNumber": 159
+        },
+        {
+          "caller": "walk",
+          "callee": "path.relative",
+          "lineNumber": 160
+        },
+        {
+          "caller": "walk",
+          "callee": "relToListRoot\n          .split(path.sep)\n          .filter",
+          "lineNumber": 161
+        },
+        {
+          "caller": "walk",
+          "callee": "relToListRoot\n          .split",
+          "lineNumber": 161
+        },
+        {
+          "caller": "walk",
+          "callee": "isIgnoredUnderDir",
+          "lineNumber": 164
+        },
+        {
+          "caller": "walk",
+          "callee": "ent.isDirectory",
+          "lineNumber": 167
+        },
+        {
+          "caller": "walk",
+          "callee": "depthFromDir",
+          "lineNumber": 168
+        },
+        {
+          "caller": "walk",
+          "callee": "walk",
+          "lineNumber": 171
+        },
+        {
+          "caller": "walk",
+          "callee": "ent.isFile",
+          "lineNumber": 172
+        },
+        {
+          "caller": "walk",
+          "callee": "fnmatchLite",
+          "lineNumber": 173
+        },
+        {
+          "caller": "walk",
+          "callee": "collected.push",
+          "lineNumber": 176
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "walk",
+          "lineNumber": 180
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "[...collected].sort",
+          "lineNumber": 183
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "a.localeCompare",
+          "lineNumber": 183
+        },
+        {
+          "caller": "listWorkspaceFiles",
+          "callee": "sorted.slice",
+          "lineNumber": 185
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "Math.min",
+          "lineNumber": 240
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "Math.max",
+          "lineNumber": 241
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "Math.floor",
+          "lineNumber": 241
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 245
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "fs.existsSync",
+          "lineNumber": 250
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "re.test",
+          "lineNumber": 258
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "pattern.toLowerCase",
+          "lineNumber": 263
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "line.toLowerCase",
+          "lineNumber": 265
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "hay.includes",
+          "lineNumber": 266
+        },
+        {
+          "caller": "relPosix",
+          "callee": "path.relative(workspaceRoot, fullPath).split(path.sep).join",
+          "lineNumber": 274
+        },
+        {
+          "caller": "relPosix",
+          "callee": "path.relative(workspaceRoot, fullPath).split",
+          "lineNumber": 274
+        },
+        {
+          "caller": "relPosix",
+          "callee": "path.relative",
+          "lineNumber": 274
+        },
+        {
+          "caller": "tryFile",
+          "callee": "fs.statSync",
+          "lineNumber": 282
+        },
+        {
+          "caller": "tryFile",
+          "callee": "st.isFile",
+          "lineNumber": 286
+        },
+        {
+          "caller": "tryFile",
+          "callee": "fs.readFileSync",
+          "lineNumber": 292
+        },
+        {
+          "caller": "tryFile",
+          "callee": "content.includes",
+          "lineNumber": 296
+        },
+        {
+          "caller": "tryFile",
+          "callee": "content.split",
+          "lineNumber": 299
+        },
+        {
+          "caller": "tryFile",
+          "callee": "matcher",
+          "lineNumber": 305
+        },
+        {
+          "caller": "tryFile",
+          "callee": "matches.push",
+          "lineNumber": 306
+        },
+        {
+          "caller": "tryFile",
+          "callee": "relPosix",
+          "lineNumber": 307
+        },
+        {
+          "caller": "tryFile",
+          "callee": "line.slice",
+          "lineNumber": 309
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "fs.statSync",
+          "lineNumber": 315
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "st.isFile",
+          "lineNumber": 316
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "fnmatchLite",
+          "lineNumber": 317
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "path.basename",
+          "lineNumber": 317
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "tryFile",
+          "lineNumber": 325
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "st.isDirectory",
+          "lineNumber": 333
+        },
+        {
+          "caller": "walk",
+          "callee": "fs.readdirSync",
+          "lineNumber": 344
+        },
+        {
+          "caller": "walk",
+          "callee": "path.join",
+          "lineNumber": 352
+        },
+        {
+          "caller": "walk",
+          "callee": "path.relative",
+          "lineNumber": 353
+        },
+        {
+          "caller": "walk",
+          "callee": "relToWs.split(path.sep).filter",
+          "lineNumber": 354
+        },
+        {
+          "caller": "walk",
+          "callee": "relToWs.split",
+          "lineNumber": 354
+        },
+        {
+          "caller": "walk",
+          "callee": "isIgnoredUnderDir",
+          "lineNumber": 355
+        },
+        {
+          "caller": "walk",
+          "callee": "ent.isDirectory",
+          "lineNumber": 358
+        },
+        {
+          "caller": "walk",
+          "callee": "depthFromDir",
+          "lineNumber": 359
+        },
+        {
+          "caller": "walk",
+          "callee": "walk",
+          "lineNumber": 362
+        },
+        {
+          "caller": "walk",
+          "callee": "ent.isFile",
+          "lineNumber": 363
+        },
+        {
+          "caller": "walk",
+          "callee": "fnmatchLite",
+          "lineNumber": 364
+        },
+        {
+          "caller": "walk",
+          "callee": "tryFile",
+          "lineNumber": 367
+        },
+        {
+          "caller": "searchWorkspaceText",
+          "callee": "walk",
+          "lineNumber": 372
+        },
+        {
+          "caller": "globToRegex",
+          "callee": "pattern.charAt",
+          "lineNumber": 388
+        },
+        {
+          "caller": "globToRegex",
+          "callee": "/[.+^${}()|[\\]\\\\]/.test",
+          "lineNumber": 395
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "filePath.replace",
+          "lineNumber": 409
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "pattern.replace",
+          "lineNumber": 410
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "pat.startsWith",
+          "lineNumber": 413
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "pat.slice",
+          "lineNumber": 414
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "globToRegex",
+          "lineNumber": 415
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "fp.split",
+          "lineNumber": 416
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "parts.slice(i).join",
+          "lineNumber": 418
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "parts.slice",
+          "lineNumber": 418
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "suffixRe.test",
+          "lineNumber": 419
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "pat.indexOf",
+          "lineNumber": 427
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "pat.slice",
+          "lineNumber": 429
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "pat.slice",
+          "lineNumber": 430
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "fp.startsWith",
+          "lineNumber": 431
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "fp.slice",
+          "lineNumber": 434
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "rest.split(\"/\").filter",
+          "lineNumber": 435
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "rest.split",
+          "lineNumber": 435
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "globToRegex",
+          "lineNumber": 436
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "parts.slice(i).join",
+          "lineNumber": 438
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "parts.slice",
+          "lineNumber": 438
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "suffixRe.test",
+          "lineNumber": 439
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "globToRegex(pat).test",
+          "lineNumber": 446
+        },
+        {
+          "caller": "matchGlobPattern",
+          "callee": "globToRegex",
+          "lineNumber": 446
+        },
+        {
+          "caller": "globWorkspaceFiles",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 466
+        },
+        {
+          "caller": "globWorkspaceFiles",
+          "callee": "fs.existsSync",
+          "lineNumber": 471
+        },
+        {
+          "caller": "globWorkspaceFiles",
+          "callee": "fs.statSync",
+          "lineNumber": 474
+        },
+        {
+          "caller": "globWorkspaceFiles",
+          "callee": "st.isDirectory",
+          "lineNumber": 475
+        },
+        {
+          "caller": "relPosix",
+          "callee": "path.relative(workspaceRoot, fullPath).split(path.sep).join",
+          "lineNumber": 483
+        },
+        {
+          "caller": "relPosix",
+          "callee": "path.relative(workspaceRoot, fullPath).split",
+          "lineNumber": 483
+        },
+        {
+          "caller": "relPosix",
+          "callee": "path.relative",
+          "lineNumber": 483
+        },
+        {
+          "caller": "walk",
+          "callee": "fs.readdirSync",
+          "lineNumber": 491
+        },
+        {
+          "caller": "walk",
+          "callee": "path.join",
+          "lineNumber": 499
+        },
+        {
+          "caller": "walk",
+          "callee": "path.relative",
+          "lineNumber": 500
+        },
+        {
+          "caller": "walk",
+          "callee": "relToWs.split(path.sep).filter",
+          "lineNumber": 501
+        },
+        {
+          "caller": "walk",
+          "callee": "relToWs.split",
+          "lineNumber": 501
+        },
+        {
+          "caller": "walk",
+          "callee": "isIgnoredUnderDir",
+          "lineNumber": 502
+        },
+        {
+          "caller": "walk",
+          "callee": "ent.isDirectory",
+          "lineNumber": 505
+        },
+        {
+          "caller": "walk",
+          "callee": "depthFromDir",
+          "lineNumber": 506
+        },
+        {
+          "caller": "walk",
+          "callee": "walk",
+          "lineNumber": 509
+        },
+        {
+          "caller": "walk",
+          "callee": "ent.isFile",
+          "lineNumber": 510
+        },
+        {
+          "caller": "walk",
+          "callee": "relPosix",
+          "lineNumber": 511
+        },
+        {
+          "caller": "walk",
+          "callee": "matchGlobPattern",
+          "lineNumber": 512
+        },
+        {
+          "caller": "walk",
+          "callee": "files.push",
+          "lineNumber": 513
+        },
+        {
+          "caller": "globWorkspaceFiles",
+          "callee": "walk",
+          "lineNumber": 519
+        },
+        {
+          "caller": "globWorkspaceFiles",
+          "callee": "[...files].sort",
+          "lineNumber": 521
+        },
+        {
+          "caller": "globWorkspaceFiles",
+          "callee": "a.localeCompare",
+          "lineNumber": 521
+        },
+        {
+          "caller": "applyHeadLimit",
+          "callee": "items.slice",
+          "lineNumber": 555
+        },
+        {
+          "caller": "applyHeadLimit",
+          "callee": "items.slice",
+          "lineNumber": 557
+        },
+        {
+          "caller": "formatGrepContent",
+          "callee": "lines.push",
+          "lineNumber": 570
+        },
+        {
+          "caller": "formatGrepContent",
+          "callee": "lines.push",
+          "lineNumber": 572
+        },
+        {
+          "caller": "formatGrepContent",
+          "callee": "lines.push",
+          "lineNumber": 577
+        },
+        {
+          "caller": "formatGrepContent",
+          "callee": "lines.push",
+          "lineNumber": 581
+        },
+        {
+          "caller": "formatGrepContent",
+          "callee": "lines.push",
+          "lineNumber": 584
+        },
+        {
+          "caller": "formatGrepContent",
+          "callee": "lines.join",
+          "lineNumber": 588
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "searchWorkspaceText",
+          "lineNumber": 625
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "matches.map",
+          "lineNumber": 640
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "applyHeadLimit",
+          "lineNumber": 641
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "fileCache.get",
+          "lineNumber": 659
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "path.join",
+          "lineNumber": 662
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "fs.readFileSync",
+          "lineNumber": 663
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "content.split",
+          "lineNumber": 664
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "fileCache.set",
+          "lineNumber": 665
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "lines.slice",
+          "lineNumber": 673
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "Math.max",
+          "lineNumber": 673
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "lines.slice",
+          "lineNumber": 677
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "Math.min",
+          "lineNumber": 679
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "grepMatches.push",
+          "lineNumber": 682
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "applyHeadLimit",
+          "lineNumber": 691
+        },
+        {
+          "caller": "grepWorkspaceText",
+          "callee": "formatGrepContent",
+          "lineNumber": 696
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 5,
+        "functionCount": 12,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/src/files/write.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 288,
+      "nonEmptyLines": 265,
+      "functions": [
+        {
+          "name": "normalizeForFuzzy",
+          "startLine": 44,
+          "endLine": 46,
+          "params": [
+            "s"
+          ]
+        },
+        {
+          "name": "computeDiffStats",
+          "startLine": 54,
+          "endLine": 84,
+          "params": [
+            "filePath",
+            "oldContent",
+            "newContent"
+          ]
+        },
+        {
+          "name": "editWorkspaceFile",
+          "startLine": 96,
+          "endLine": 256,
+          "params": [
+            "workspaceRoot",
+            "relPath",
+            "options"
+          ]
+        },
+        {
+          "name": "writeWorkspaceFile",
+          "startLine": 267,
+          "endLine": 288,
+          "params": [
+            "workspaceRoot",
+            "relPath",
+            "content",
+            "options"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "editWorkspaceFile",
+          "line": 96,
+          "isDefault": false
+        },
+        {
+          "name": "writeWorkspaceFile",
+          "line": 267,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "normalizeForFuzzy",
+          "callee": "s.replace(/\\r\\n/g, \"\\n\").trim",
+          "lineNumber": 45
+        },
+        {
+          "caller": "normalizeForFuzzy",
+          "callee": "s.replace",
+          "lineNumber": 45
+        },
+        {
+          "caller": "computeDiffStats",
+          "callee": "structuredPatch",
+          "lineNumber": 62
+        },
+        {
+          "caller": "computeDiffStats",
+          "callee": "line.startsWith",
+          "lineNumber": 74
+        },
+        {
+          "caller": "computeDiffStats",
+          "callee": "line.startsWith",
+          "lineNumber": 75
+        },
+        {
+          "caller": "computeDiffStats",
+          "callee": "formatPatch(patch).slice",
+          "lineNumber": 79
+        },
+        {
+          "caller": "computeDiffStats",
+          "callee": "formatPatch",
+          "lineNumber": 79
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 115
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "fs.existsSync",
+          "lineNumber": 120
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "fs.statSync(filepath).isFile",
+          "lineNumber": 120
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "fs.statSync",
+          "lineNumber": 120
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "fs.readFileSync",
+          "lineNumber": 125
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "String",
+          "lineNumber": 127
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "Buffer.byteLength",
+          "lineNumber": 130
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "content.endsWith",
+          "lineNumber": 138
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "content.split",
+          "lineNumber": 139
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "lines.pop",
+          "lineNumber": 146
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "Math.min",
+          "lineNumber": 155
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "lines.slice",
+          "lineNumber": 156
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "lines.slice",
+          "lineNumber": 157
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "newString.split",
+          "lineNumber": 158
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "newLines.join",
+          "lineNumber": 160
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 165
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "String",
+          "lineNumber": 167
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "computeDiffStats",
+          "lineNumber": 170
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "content.split",
+          "lineNumber": 191
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "content.replace",
+          "lineNumber": 194
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 196
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "String",
+          "lineNumber": 198
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "computeDiffStats",
+          "lineNumber": 201
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "normalizeForFuzzy",
+          "lineNumber": 216
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "normalizeForFuzzy",
+          "lineNumber": 217
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "normContent.split",
+          "lineNumber": 218
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "content.split",
+          "lineNumber": 220
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "normalizeForFuzzy",
+          "lineNumber": 222
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "replacedLines.join",
+          "lineNumber": 225
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 227
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "String",
+          "lineNumber": 229
+        },
+        {
+          "caller": "editWorkspaceFile",
+          "callee": "computeDiffStats",
+          "lineNumber": 232
+        },
+        {
+          "caller": "writeWorkspaceFile",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 273
+        },
+        {
+          "caller": "writeWorkspaceFile",
+          "callee": "Buffer.byteLength",
+          "lineNumber": 275
+        },
+        {
+          "caller": "writeWorkspaceFile",
+          "callee": "path.dirname",
+          "lineNumber": 280
+        },
+        {
+          "caller": "writeWorkspaceFile",
+          "callee": "fs.existsSync",
+          "lineNumber": 281
+        },
+        {
+          "caller": "writeWorkspaceFile",
+          "callee": "fs.mkdirSync",
+          "lineNumber": 281
+        },
+        {
+          "caller": "writeWorkspaceFile",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 283
+        },
+        {
+          "caller": "writeWorkspaceFile",
+          "callee": "Buffer.byteLength",
+          "lineNumber": 284
+        },
+        {
+          "caller": "writeWorkspaceFile",
+          "callee": "String",
+          "lineNumber": 286
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/src/git-tools.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 193,
+      "nonEmptyLines": 176,
+      "functions": [
+        {
+          "name": "runGit",
+          "startLine": 48,
+          "endLine": 73,
+          "params": [
+            "cwd",
+            "args"
+          ]
+        },
+        {
+          "name": "gitStatus",
+          "startLine": 75,
+          "endLine": 137,
+          "params": [
+            "workspaceRoot"
+          ]
+        },
+        {
+          "name": "gitLog",
+          "startLine": 139,
+          "endLine": 170,
+          "params": [
+            "workspaceRoot",
+            "maxCount"
+          ]
+        },
+        {
+          "name": "gitDiff",
+          "startLine": 172,
+          "endLine": 182,
+          "params": [
+            "workspaceRoot",
+            "filePath"
+          ]
+        },
+        {
+          "name": "gitCommit",
+          "startLine": 184,
+          "endLine": 193,
+          "params": [
+            "workspaceRoot",
+            "message"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "gitStatus",
+          "line": 75,
+          "isDefault": false
+        },
+        {
+          "name": "gitLog",
+          "line": 139,
+          "isDefault": false
+        },
+        {
+          "name": "gitDiff",
+          "line": 172,
+          "isDefault": false
+        },
+        {
+          "name": "gitCommit",
+          "line": 184,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "runGit",
+          "callee": "spawnSync",
+          "lineNumber": 53
+        },
+        {
+          "caller": "runGit",
+          "callee": "String",
+          "lineNumber": 70
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "runGit",
+          "lineNumber": 76
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "r.stdout.split(\"\\n\").filter",
+          "lineNumber": 81
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "r.stdout.split",
+          "lineNumber": 81
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "l.trim",
+          "lineNumber": 81
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "line.startsWith",
+          "lineNumber": 92
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "line.slice",
+          "lineNumber": 93
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "branchInfo.match",
+          "lineNumber": 94
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "remote.match",
+          "lineNumber": 101
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "remote.match",
+          "lineNumber": 102
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "Number.parseInt",
+          "lineNumber": 103
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "Number.parseInt",
+          "lineNumber": 104
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "line.slice",
+          "lineNumber": 110
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "line.slice",
+          "lineNumber": 111
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "untracked.push",
+          "lineNumber": 115
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "status.startsWith",
+          "lineNumber": 116
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "renamed.push",
+          "lineNumber": 117
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "staged.push",
+          "lineNumber": 120
+        },
+        {
+          "caller": "gitStatus",
+          "callee": "modified.push",
+          "lineNumber": 123
+        },
+        {
+          "caller": "gitLog",
+          "callee": "runGit",
+          "lineNumber": 140
+        },
+        {
+          "caller": "gitLog",
+          "callee": "r.stdout.split(\"\\n\").filter",
+          "lineNumber": 156
+        },
+        {
+          "caller": "gitLog",
+          "callee": "r.stdout.split",
+          "lineNumber": 156
+        },
+        {
+          "caller": "gitLog",
+          "callee": "l.trim",
+          "lineNumber": 156
+        },
+        {
+          "caller": "gitLog",
+          "callee": "line.split",
+          "lineNumber": 158
+        },
+        {
+          "caller": "gitLog",
+          "callee": "commits.push",
+          "lineNumber": 160
+        },
+        {
+          "caller": "gitDiff",
+          "callee": "runGit",
+          "lineNumber": 177
+        },
+        {
+          "caller": "gitCommit",
+          "callee": "runGit",
+          "lineNumber": 188
+        },
+        {
+          "caller": "gitCommit",
+          "callee": "r.stdout.trim",
+          "lineNumber": 192
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/src/mention-resolver.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 144,
+      "nonEmptyLines": 133,
+      "functions": [
+        {
+          "name": "imageMimeType",
+          "startLine": 32,
+          "endLine": 34,
+          "params": [
+            "filePath"
+          ]
+        },
+        {
+          "name": "extractAtMentions",
+          "startLine": 56,
+          "endLine": 76,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "stripAtMentions",
+          "startLine": 79,
+          "endLine": 86,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "resolveMentions",
+          "startLine": 92,
+          "endLine": 144,
+          "params": [
+            "workspaceRoot",
+            "text"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "extractAtMentions",
+          "line": 56,
+          "isDefault": false
+        },
+        {
+          "name": "stripAtMentions",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "resolveMentions",
+          "line": 92,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "imageMimeType",
+          "callee": "path.extname(filePath).toLowerCase",
+          "lineNumber": 33
+        },
+        {
+          "caller": "imageMimeType",
+          "callee": "path.extname",
+          "lineNumber": 33
+        },
+        {
+          "caller": "extractAtMentions",
+          "callee": "text.matchAll",
+          "lineNumber": 60
+        },
+        {
+          "caller": "extractAtMentions",
+          "callee": "mentions.push",
+          "lineNumber": 61
+        },
+        {
+          "caller": "extractAtMentions",
+          "callee": "text.matchAll",
+          "lineNumber": 65
+        },
+        {
+          "caller": "extractAtMentions",
+          "callee": "mentions.push",
+          "lineNumber": 66
+        },
+        {
+          "caller": "extractAtMentions",
+          "callee": "text.replace(doubleQuoted, \"\").replace",
+          "lineNumber": 70
+        },
+        {
+          "caller": "extractAtMentions",
+          "callee": "text.replace",
+          "lineNumber": 70
+        },
+        {
+          "caller": "extractAtMentions",
+          "callee": "remaining.matchAll",
+          "lineNumber": 72
+        },
+        {
+          "caller": "extractAtMentions",
+          "callee": "mentions.push",
+          "lineNumber": 73
+        },
+        {
+          "caller": "stripAtMentions",
+          "callee": "text\n    .replace(/@\"[^\"]+\"/g, \"\")\n    .replace(/@'[^']+'/g, \"\")\n    .replace(/@[\\w./~_-]+/g, \"\")\n    .replace(/\\s{2,}/g, \" \")\n    .trim",
+          "lineNumber": 80
+        },
+        {
+          "caller": "stripAtMentions",
+          "callee": "text\n    .replace(/@\"[^\"]+\"/g, \"\")\n    .replace(/@'[^']+'/g, \"\")\n    .replace(/@[\\w./~_-]+/g, \"\")\n    .replace",
+          "lineNumber": 80
+        },
+        {
+          "caller": "stripAtMentions",
+          "callee": "text\n    .replace(/@\"[^\"]+\"/g, \"\")\n    .replace(/@'[^']+'/g, \"\")\n    .replace",
+          "lineNumber": 80
+        },
+        {
+          "caller": "stripAtMentions",
+          "callee": "text\n    .replace(/@\"[^\"]+\"/g, \"\")\n    .replace",
+          "lineNumber": 80
+        },
+        {
+          "caller": "stripAtMentions",
+          "callee": "text\n    .replace",
+          "lineNumber": 80
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "extractAtMentions",
+          "lineNumber": 96
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "rel.startsWith",
+          "lineNumber": 103
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "rel.replace",
+          "lineNumber": 104
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "path.resolve",
+          "lineNumber": 107
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "target.startsWith",
+          "lineNumber": 108
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "path.resolve",
+          "lineNumber": 108
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "notFound.push",
+          "lineNumber": 109
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "fs.existsSync",
+          "lineNumber": 112
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "fs.statSync(target).isDirectory",
+          "lineNumber": 112
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "fs.statSync",
+          "lineNumber": 112
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "notFound.push",
+          "lineNumber": 113
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "imageMimeType",
+          "lineNumber": 116
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "fs.readFileSync",
+          "lineNumber": 118
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "attachments.push",
+          "lineNumber": 119
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "data.toString",
+          "lineNumber": 122
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "readWorkspaceFile",
+          "lineNumber": 127
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "notFound.push",
+          "lineNumber": 129
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "attachments.push",
+          "lineNumber": 132
+        },
+        {
+          "caller": "resolveMentions",
+          "callee": "stripAtMentions",
+          "lineNumber": 140
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 3,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/src/notebook-tools.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 221,
+      "nonEmptyLines": 205,
+      "functions": [
+        {
+          "name": "asNotebookJson",
+          "startLine": 69,
+          "endLine": 75,
+          "params": [
+            "v"
+          ]
+        },
+        {
+          "name": "setSource",
+          "startLine": 87,
+          "endLine": 97,
+          "params": [
+            "cell",
+            "source"
+          ]
+        },
+        {
+          "name": "editNotebook",
+          "startLine": 115,
+          "endLine": 221,
+          "params": [
+            "workspaceRoot",
+            "relPath",
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "editNotebook",
+          "line": 115,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "asNotebookJson",
+          "callee": "Array.isArray",
+          "lineNumber": 72
+        },
+        {
+          "caller": "setSource",
+          "callee": "Array.isArray",
+          "lineNumber": 90
+        },
+        {
+          "caller": "setSource",
+          "callee": "source\n      .split(\"\\n\")\n      .map",
+          "lineNumber": 91
+        },
+        {
+          "caller": "setSource",
+          "callee": "source\n      .split",
+          "lineNumber": 91
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 121
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "fs.readFileSync",
+          "lineNumber": 130
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "JSON.parse",
+          "lineNumber": 139
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "asNotebookJson",
+          "lineNumber": 145
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "setSource",
+          "lineNumber": 163
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "setSource",
+          "lineNumber": 183
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "nb.cells.push",
+          "lineNumber": 184
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "setSource",
+          "lineNumber": 195
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "nb.cells.splice",
+          "lineNumber": 200
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "nb.cells.splice",
+          "lineNumber": 209
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 214
+        },
+        {
+          "caller": "editNotebook",
+          "callee": "JSON.stringify",
+          "lineNumber": 214
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/src/patch-tools.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 253,
+      "nonEmptyLines": 234,
+      "functions": [
+        {
+          "name": "countLinesChanged",
+          "startLine": 71,
+          "endLine": 84,
+          "params": [
+            "patch"
+          ]
+        },
+        {
+          "name": "applyWorkspacePatch",
+          "startLine": 98,
+          "endLine": 253,
+          "params": [
+            "workspaceRoot",
+            "patchText"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "applyWorkspacePatch",
+          "line": 98,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "countLinesChanged",
+          "callee": "line.startsWith",
+          "lineNumber": 79
+        },
+        {
+          "caller": "countLinesChanged",
+          "callee": "line.startsWith",
+          "lineNumber": 80
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "patchText.trim",
+          "lineNumber": 102
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "parsePatch",
+          "lineNumber": 108
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "rawPath.replace",
+          "lineNumber": 139
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 140
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "targets.push",
+          "lineNumber": 148
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "fs.existsSync",
+          "lineNumber": 156
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "fs.statSync(t.resolvedPath).isFile",
+          "lineNumber": 157
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "fs.statSync",
+          "lineNumber": 157
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "originals.set",
+          "lineNumber": 159
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "fs.readFileSync",
+          "lineNumber": 159
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "String",
+          "lineNumber": 169
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "originals.get",
+          "lineNumber": 182
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "applyPatch",
+          "lineNumber": 183
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "targets.find",
+          "lineNumber": 191
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "originals.get",
+          "lineNumber": 193
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 195
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 216
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "countLinesChanged",
+          "lineNumber": 217
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "results.push",
+          "lineNumber": 218
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "String",
+          "lineNumber": 225
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "targets.find",
+          "lineNumber": 229
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "originals.get",
+          "lineNumber": 231
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 233
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "results.filter",
+          "lineNumber": 247
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "results.reduce",
+          "lineNumber": 248
+        },
+        {
+          "caller": "applyWorkspacePatch",
+          "callee": "results.reduce",
+          "lineNumber": 249
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/src/path-guard.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 139,
+      "nonEmptyLines": 124,
+      "functions": [
+        {
+          "name": "isPathInsideRoot",
+          "startLine": 38,
+          "endLine": 52,
+          "params": [
+            "rootResolved",
+            "targetResolved"
+          ]
+        },
+        {
+          "name": "nearestExistingPath",
+          "startLine": 55,
+          "endLine": 64,
+          "params": [
+            "absPath",
+            "rootAbs"
+          ]
+        },
+        {
+          "name": "realpathExisting",
+          "startLine": 66,
+          "endLine": 68,
+          "params": [
+            "absPath"
+          ]
+        },
+        {
+          "name": "segments",
+          "startLine": 70,
+          "endLine": 72,
+          "params": [
+            "absPath"
+          ]
+        },
+        {
+          "name": "hasSensitiveSegment",
+          "startLine": 75,
+          "endLine": 81,
+          "params": [
+            "absPath"
+          ]
+        },
+        {
+          "name": "checkWorkspacePath",
+          "startLine": 94,
+          "endLine": 139,
+          "params": [
+            "workspaceRoot",
+            "userPath"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "SENSITIVE_PATH_SEGMENTS",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "isPathInsideRoot",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "checkWorkspacePath",
+          "line": 94,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "isPathInsideRoot",
+          "callee": "path.resolve",
+          "lineNumber": 42
+        },
+        {
+          "caller": "isPathInsideRoot",
+          "callee": "path.resolve",
+          "lineNumber": 43
+        },
+        {
+          "caller": "isPathInsideRoot",
+          "callee": "path.relative",
+          "lineNumber": 45
+        },
+        {
+          "caller": "isPathInsideRoot",
+          "callee": "rel.startsWith",
+          "lineNumber": 48
+        },
+        {
+          "caller": "isPathInsideRoot",
+          "callee": "path.isAbsolute",
+          "lineNumber": 50
+        },
+        {
+          "caller": "nearestExistingPath",
+          "callee": "fs.existsSync",
+          "lineNumber": 57
+        },
+        {
+          "caller": "nearestExistingPath",
+          "callee": "path.dirname",
+          "lineNumber": 58
+        },
+        {
+          "caller": "nearestExistingPath",
+          "callee": "isPathInsideRoot",
+          "lineNumber": 60
+        },
+        {
+          "caller": "realpathExisting",
+          "callee": "fs.realpathSync.native",
+          "lineNumber": 67
+        },
+        {
+          "caller": "realpathExisting",
+          "callee": "fs.realpathSync",
+          "lineNumber": 67
+        },
+        {
+          "caller": "segments",
+          "callee": "absPath.split(path.sep).filter",
+          "lineNumber": 71
+        },
+        {
+          "caller": "segments",
+          "callee": "absPath.split",
+          "lineNumber": 71
+        },
+        {
+          "caller": "hasSensitiveSegment",
+          "callee": "segments",
+          "lineNumber": 76
+        },
+        {
+          "caller": "hasSensitiveSegment",
+          "callee": "SENSITIVE_PATH_SEGMENTS.has",
+          "lineNumber": 78
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "path.resolve",
+          "lineNumber": 101
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "realpathExisting",
+          "lineNumber": 102
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "path.isAbsolute",
+          "lineNumber": 109
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "path.resolve",
+          "lineNumber": 110
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "path.resolve",
+          "lineNumber": 111
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "isPathInsideRoot",
+          "lineNumber": 117
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "nearestExistingPath",
+          "lineNumber": 123
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "realpathExisting",
+          "lineNumber": 124
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "isPathInsideRoot",
+          "lineNumber": 125
+        },
+        {
+          "caller": "checkWorkspacePath",
+          "callee": "hasSensitiveSegment",
+          "lineNumber": 133
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 6,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/src/project-context.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 714,
+      "nonEmptyLines": 676,
+      "functions": [
+        {
+          "name": "extractKeywords",
+          "startLine": 189,
+          "endLine": 205,
+          "params": [
+            "goal"
+          ]
+        },
+        {
+          "name": "scoreFile",
+          "startLine": 207,
+          "endLine": 229,
+          "params": [
+            "filePath",
+            "matchCount",
+            "modifiedFiles"
+          ]
+        },
+        {
+          "name": "discoverContext",
+          "startLine": 234,
+          "endLine": 304,
+          "params": [
+            "workspaceRoot",
+            "goal",
+            "excludeFiles"
+          ]
+        },
+        {
+          "name": "isConfigFile",
+          "startLine": 334,
+          "endLine": 370,
+          "params": [
+            "name"
+          ]
+        },
+        {
+          "name": "isReadme",
+          "startLine": 373,
+          "endLine": 375,
+          "params": [
+            "name"
+          ]
+        },
+        {
+          "name": "isSourceFile",
+          "startLine": 384,
+          "endLine": 432,
+          "params": [
+            "name"
+          ]
+        },
+        {
+          "name": "countByExtension",
+          "startLine": 435,
+          "endLine": 442,
+          "params": [
+            "files"
+          ]
+        },
+        {
+          "name": "detectProjectType",
+          "startLine": 458,
+          "endLine": 521,
+          "params": [
+            "files"
+          ]
+        },
+        {
+          "name": "readFileSnippet",
+          "startLine": 529,
+          "endLine": 550,
+          "params": [
+            "workspaceRoot",
+            "relPath",
+            "maxBytes"
+          ]
+        },
+        {
+          "name": "generateBrief",
+          "startLine": 566,
+          "endLine": 647,
+          "params": [
+            "workspaceRoot",
+            "opts"
+          ]
+        },
+        {
+          "name": "collectFiles",
+          "startLine": 663,
+          "endLine": 714,
+          "params": [
+            "baseDir",
+            "dir",
+            "maxFiles",
+            "depth"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "discoverContext",
+          "line": 234,
+          "isDefault": false
+        },
+        {
+          "name": "generateBrief",
+          "line": 566,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "extractKeywords",
+          "callee": "goal\n    .toLowerCase()\n    .replace(/[^a-z0-9_./-]+/g, \" \")\n    .split(/\\s+/)\n    .filter",
+          "lineNumber": 190
+        },
+        {
+          "caller": "extractKeywords",
+          "callee": "goal\n    .toLowerCase()\n    .replace(/[^a-z0-9_./-]+/g, \" \")\n    .split",
+          "lineNumber": 190
+        },
+        {
+          "caller": "extractKeywords",
+          "callee": "goal\n    .toLowerCase()\n    .replace",
+          "lineNumber": 190
+        },
+        {
+          "caller": "extractKeywords",
+          "callee": "goal\n    .toLowerCase",
+          "lineNumber": 190
+        },
+        {
+          "caller": "extractKeywords",
+          "callee": "STOP_WORDS.has",
+          "lineNumber": 194
+        },
+        {
+          "caller": "extractKeywords",
+          "callee": "seen.has",
+          "lineNumber": 199
+        },
+        {
+          "caller": "extractKeywords",
+          "callee": "seen.add",
+          "lineNumber": 200
+        },
+        {
+          "caller": "extractKeywords",
+          "callee": "out.push",
+          "lineNumber": 201
+        },
+        {
+          "caller": "extractKeywords",
+          "callee": "out.slice",
+          "lineNumber": 204
+        },
+        {
+          "caller": "scoreFile",
+          "callee": "modifiedFiles.has",
+          "lineNumber": 214
+        },
+        {
+          "caller": "scoreFile",
+          "callee": "path.extname",
+          "lineNumber": 218
+        },
+        {
+          "caller": "scoreFile",
+          "callee": "[\".json\", \".lock\", \".log\", \".md\", \".txt\"].includes",
+          "lineNumber": 219
+        },
+        {
+          "caller": "scoreFile",
+          "callee": "[\".ts\", \".tsx\", \".js\", \".jsx\", \".py\", \".rs\", \".go\", \".java\"].includes",
+          "lineNumber": 224
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "extractKeywords",
+          "lineNumber": 239
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "gitStatus",
+          "lineNumber": 245
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "grepWorkspaceText",
+          "lineNumber": 254
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "fileScores.get",
+          "lineNumber": 264
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "fileScores.set",
+          "lineNumber": 265
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "Array.from(fileScores.entries()).map",
+          "lineNumber": 270
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "Array.from",
+          "lineNumber": 270
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "fileScores.entries",
+          "lineNumber": 270
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "scoreFile",
+          "lineNumber": 272
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "scored.sort",
+          "lineNumber": 274
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "scored.slice",
+          "lineNumber": 281
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "excludeFiles?.includes",
+          "lineNumber": 282
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "readWorkspaceFile",
+          "lineNumber": 283
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "Math.floor",
+          "lineNumber": 284
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "filesNotFound.push",
+          "lineNumber": 287
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "content.slice",
+          "lineNumber": 292
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "blocks.push",
+          "lineNumber": 294
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "filesRead.push",
+          "lineNumber": 295
+        },
+        {
+          "caller": "discoverContext",
+          "callee": "blocks.join",
+          "lineNumber": 302
+        },
+        {
+          "caller": "isConfigFile",
+          "callee": "configNames.has",
+          "lineNumber": 369
+        },
+        {
+          "caller": "isConfigFile",
+          "callee": "name.toLowerCase",
+          "lineNumber": 369
+        },
+        {
+          "caller": "isReadme",
+          "callee": "/^readme/i.test",
+          "lineNumber": 374
+        },
+        {
+          "caller": "isSourceFile",
+          "callee": "path.extname(name).toLowerCase",
+          "lineNumber": 385
+        },
+        {
+          "caller": "isSourceFile",
+          "callee": "path.extname",
+          "lineNumber": 385
+        },
+        {
+          "caller": "isSourceFile",
+          "callee": "[\n    \".ts\",\n    \".tsx\",\n    \".js\",\n    \".jsx\",\n    \".py\",\n    \".rs\",\n    \".go\",\n    \".java\",\n    \".kt\",\n    \".scala\",\n    \".rb\",\n    \".php\",\n    \".cs\",\n    \".cpp\",\n    \".c\",\n    \".h\",\n    \".hpp\",\n    \".swift\",\n    \".m\",\n    \".mm\",\n    \".r\",\n    \".pl\",\n    \".sh\",\n    \".bat\",\n    \".ps1\",\n    \".lua\",\n    \".ex\",\n    \".exs\",\n    \".clj\",\n    \".cljs\",\n    \".hs\",\n    \".elm\",\n    \".erl\",\n    \".fs\",\n    \".fsx\",\n    \".ml\",\n    \".mli\",\n    \".dart\",\n    \".groovy\",\n    \".nim\",\n    \".vue\",\n    \".svelte\",\n    \".astro\",\n    \".solid\",\n  ].includes",
+          "lineNumber": 386
+        },
+        {
+          "caller": "countByExtension",
+          "callee": "path.extname(f.name).toLowerCase",
+          "lineNumber": 438
+        },
+        {
+          "caller": "countByExtension",
+          "callee": "path.extname",
+          "lineNumber": 438
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "files.map",
+          "lineNumber": 459
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "f.name.toLowerCase",
+          "lineNumber": 459
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 460
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "files.some",
+          "lineNumber": 462
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "files.some",
+          "lineNumber": 472
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "files.some",
+          "lineNumber": 479
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "f.relPath.includes",
+          "lineNumber": 480
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "f.relPath.includes",
+          "lineNumber": 480
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 488
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 489
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 490
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 494
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 497
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 500
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 503
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 507
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 508
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 509
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 514
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 515
+        },
+        {
+          "caller": "detectProjectType",
+          "callee": "names.has",
+          "lineNumber": 516
+        },
+        {
+          "caller": "readFileSnippet",
+          "callee": "path.join",
+          "lineNumber": 535
+        },
+        {
+          "caller": "readFileSnippet",
+          "callee": "fs.openSync",
+          "lineNumber": 536
+        },
+        {
+          "caller": "readFileSnippet",
+          "callee": "Buffer.alloc",
+          "lineNumber": 537
+        },
+        {
+          "caller": "readFileSnippet",
+          "callee": "fs.readSync",
+          "lineNumber": 538
+        },
+        {
+          "caller": "readFileSnippet",
+          "callee": "fs.closeSync",
+          "lineNumber": 539
+        },
+        {
+          "caller": "readFileSnippet",
+          "callee": "buf.toString",
+          "lineNumber": 540
+        },
+        {
+          "caller": "readFileSnippet",
+          "callee": "text.lastIndexOf",
+          "lineNumber": 542
+        },
+        {
+          "caller": "readFileSnippet",
+          "callee": "text.slice",
+          "lineNumber": 544
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "opts?.path?.trim",
+          "lineNumber": 570
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "checkWorkspacePath",
+          "lineNumber": 572
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "collectFiles",
+          "lineNumber": 582
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "String",
+          "lineNumber": 584
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "detectProjectType",
+          "lineNumber": 592
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "countByExtension",
+          "lineNumber": 593
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "Object.entries(extCounts)\n    .sort((a, b) => b[1] - a[1])\n    .slice",
+          "lineNumber": 595
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "Object.entries(extCounts)\n    .sort",
+          "lineNumber": 595
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "Object.entries",
+          "lineNumber": 595
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "files.filter",
+          "lineNumber": 599
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "isConfigFile",
+          "lineNumber": 599
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "files.filter",
+          "lineNumber": 600
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "isReadme",
+          "lineNumber": 600
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "files.filter",
+          "lineNumber": 601
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "isSourceFile",
+          "lineNumber": 601
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 604
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 605
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 606
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 607
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 610
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 612
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 614
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 619
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "readmeFiles.slice",
+          "lineNumber": 620
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "readFileSnippet",
+          "lineNumber": 621
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 623
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 624
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "snippet.slice",
+          "lineNumber": 624
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 625
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 632
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "configFiles.slice",
+          "lineNumber": 633
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "readFileSnippet",
+          "lineNumber": 634
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 636
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 637
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "snippet.slice",
+          "lineNumber": 637
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.push",
+          "lineNumber": 638
+        },
+        {
+          "caller": "generateBrief",
+          "callee": "lines.join",
+          "lineNumber": 644
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "fs.readdirSync",
+          "lineNumber": 689
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "entry.isDirectory",
+          "lineNumber": 692
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "IGNORE_DIRS.has",
+          "lineNumber": 693
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "results.push",
+          "lineNumber": 694
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "collectFiles",
+          "lineNumber": 695
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "path.join",
+          "lineNumber": 697
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "entry.isFile",
+          "lineNumber": 703
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "path.join",
+          "lineNumber": 704
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "fs.statSync",
+          "lineNumber": 705
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "results.push",
+          "lineNumber": 706
+        },
+        {
+          "caller": "collectFiles",
+          "callee": "path.relative",
+          "lineNumber": 708
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 2,
+        "functionCount": 11,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/auto-context.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 131,
+      "nonEmptyLines": 122,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/brief-tools.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 79,
+      "nonEmptyLines": 72,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/edit-file.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 226,
+      "nonEmptyLines": 208,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/git-tools.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 67,
+      "nonEmptyLines": 60,
+      "callGraph": [
+        {
+          "caller": "initGitRepo",
+          "callee": "execSync",
+          "lineNumber": 11
+        },
+        {
+          "caller": "initGitRepo",
+          "callee": "execSync",
+          "lineNumber": 12
+        },
+        {
+          "caller": "initGitRepo",
+          "callee": "execSync",
+          "lineNumber": 13
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/glob.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 66,
+      "nonEmptyLines": 59,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/grep.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 131,
+      "nonEmptyLines": 121,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/local-fs.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 38,
+      "nonEmptyLines": 34,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/mention-resolver.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 116,
+      "nonEmptyLines": 100,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/notebook-tools.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 148,
+      "nonEmptyLines": 141,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/patch-tools.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 140,
+      "nonEmptyLines": 124,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/path-guard.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 69,
+      "nonEmptyLines": 58,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/search.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 24,
+      "nonEmptyLines": 21,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/workspace/test/write-file.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 23,
+      "nonEmptyLines": 20,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

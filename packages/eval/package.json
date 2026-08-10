@@ -15,7 +15,8 @@
     "@paw/agent": "workspace:*",
     "@paw/models": "workspace:*",
     "@paw/settings": "workspace:*",
-    "@paw/harness": "workspace:*"
+    "@paw/harness": "workspace:*",
+    "@paw/memory": "workspace:*"
   },
   "devDependencies": {
     "zod": "^3.22.0"

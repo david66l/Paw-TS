@@ -1,0 +1,4480 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 27,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/memory/src/auto-memory.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 505,
+      "nonEmptyLines": 473,
+      "functions": [
+        {
+          "name": "parseCsvList",
+          "startLine": 486,
+          "endLine": 493,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "isValidType",
+          "startLine": 496,
+          "endLine": 500,
+          "params": [
+            "t"
+          ]
+        },
+        {
+          "name": "isValidPriority",
+          "startLine": 503,
+          "endLine": 505,
+          "params": [
+            "p"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "AutoMemoryStore",
+          "startLine": 97,
+          "endLine": 478,
+          "methods": [
+            "constructor",
+            "list",
+            "load",
+            "save",
+            "delete",
+            "loadIndex",
+            "upsert",
+            "findSimilar",
+            "buildIndex",
+            "loadAllIndexShards",
+            "cleanStaleShards",
+            "archiveExpired"
+          ],
+          "properties": [
+            "memoryDir",
+            "MAX_SHARD_SIZE"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "AutoMemoryStore",
+          "line": 97,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "constructor",
+          "callee": "memoryDir",
+          "lineNumber": 106
+        },
+        {
+          "caller": "list",
+          "callee": "existsSync",
+          "lineNumber": 116
+        },
+        {
+          "caller": "isShardFile",
+          "callee": "/^MEMORY-\\d+\\.md$/.test",
+          "lineNumber": 119
+        },
+        {
+          "caller": "list",
+          "callee": "readdirSync(this.memoryDir)\n      .filter((f) => f.endsWith(\".md\") && !isShardFile(f))\n      .map((f) => this.load(path.basename(f, \".md\")))\n      .filter",
+          "lineNumber": 120
+        },
+        {
+          "caller": "list",
+          "callee": "readdirSync(this.memoryDir)\n      .filter((f) => f.endsWith(\".md\") && !isShardFile(f))\n      .map",
+          "lineNumber": 120
+        },
+        {
+          "caller": "list",
+          "callee": "readdirSync(this.memoryDir)\n      .filter",
+          "lineNumber": 120
+        },
+        {
+          "caller": "list",
+          "callee": "readdirSync",
+          "lineNumber": 120
+        },
+        {
+          "caller": "list",
+          "callee": "f.endsWith",
+          "lineNumber": 121
+        },
+        {
+          "caller": "list",
+          "callee": "isShardFile",
+          "lineNumber": 121
+        },
+        {
+          "caller": "list",
+          "callee": "this.load",
+          "lineNumber": 122
+        },
+        {
+          "caller": "list",
+          "callee": "path.basename",
+          "lineNumber": 122
+        },
+        {
+          "caller": "load",
+          "callee": "path.join",
+          "lineNumber": 136
+        },
+        {
+          "caller": "load",
+          "callee": "existsSync",
+          "lineNumber": 137
+        },
+        {
+          "caller": "load",
+          "callee": "readFileSync",
+          "lineNumber": 139
+        },
+        {
+          "caller": "load",
+          "callee": "splitFrontmatter",
+          "lineNumber": 140
+        },
+        {
+          "caller": "load",
+          "callee": "parseYamlFrontmatter",
+          "lineNumber": 142
+        },
+        {
+          "caller": "load",
+          "callee": "split.body.trim",
+          "lineNumber": 143
+        },
+        {
+          "caller": "load",
+          "callee": "isValidType",
+          "lineNumber": 146
+        },
+        {
+          "caller": "load",
+          "callee": "Number",
+          "lineNumber": 147
+        },
+        {
+          "caller": "load",
+          "callee": "Number",
+          "lineNumber": 148
+        },
+        {
+          "caller": "load",
+          "callee": "fm.embedding_v1?.trim",
+          "lineNumber": 150
+        },
+        {
+          "caller": "load",
+          "callee": "isValidPriority",
+          "lineNumber": 151
+        },
+        {
+          "caller": "load",
+          "callee": "parseCsvList",
+          "lineNumber": 152
+        },
+        {
+          "caller": "load",
+          "callee": "parseCsvList",
+          "lineNumber": 153
+        },
+        {
+          "caller": "load",
+          "callee": "parseCsvList",
+          "lineNumber": 154
+        },
+        {
+          "caller": "load",
+          "callee": "parseCsvList",
+          "lineNumber": 155
+        },
+        {
+          "caller": "load",
+          "callee": "Number",
+          "lineNumber": 156
+        },
+        {
+          "caller": "load",
+          "callee": "parseCsvList",
+          "lineNumber": 157
+        },
+        {
+          "caller": "load",
+          "callee": "Number.isNaN",
+          "lineNumber": 164
+        },
+        {
+          "caller": "load",
+          "callee": "Number.isNaN",
+          "lineNumber": 167
+        },
+        {
+          "caller": "load",
+          "callee": "Number.isNaN",
+          "lineNumber": 176
+        },
+        {
+          "caller": "save",
+          "callee": "path.join",
+          "lineNumber": 191
+        },
+        {
+          "caller": "save",
+          "callee": "mkdirSync",
+          "lineNumber": 192
+        },
+        {
+          "caller": "save",
+          "callee": "String",
+          "lineNumber": 200
+        },
+        {
+          "caller": "save",
+          "callee": "String",
+          "lineNumber": 201
+        },
+        {
+          "caller": "save",
+          "callee": "entry.tags.join",
+          "lineNumber": 205
+        },
+        {
+          "caller": "save",
+          "callee": "entry.relatedFiles.join",
+          "lineNumber": 206
+        },
+        {
+          "caller": "save",
+          "callee": "entry.error_signatures.join",
+          "lineNumber": 207
+        },
+        {
+          "caller": "save",
+          "callee": "entry.tools_used.join",
+          "lineNumber": 208
+        },
+        {
+          "caller": "save",
+          "callee": "String",
+          "lineNumber": 209
+        },
+        {
+          "caller": "save",
+          "callee": "entry.linked_memories.join",
+          "lineNumber": 210
+        },
+        {
+          "caller": "save",
+          "callee": "stringifyYamlFrontmatter",
+          "lineNumber": 211
+        },
+        {
+          "caller": "save",
+          "callee": "writeFileSync",
+          "lineNumber": 213
+        },
+        {
+          "caller": "delete",
+          "callee": "path.join",
+          "lineNumber": 222
+        },
+        {
+          "caller": "delete",
+          "callee": "existsSync",
+          "lineNumber": 223
+        },
+        {
+          "caller": "delete",
+          "callee": "rmSync",
+          "lineNumber": 224
+        },
+        {
+          "caller": "loadIndex",
+          "callee": "path.join",
+          "lineNumber": 237
+        },
+        {
+          "caller": "loadIndex",
+          "callee": "existsSync",
+          "lineNumber": 238
+        },
+        {
+          "caller": "loadIndex",
+          "callee": "readFileSync",
+          "lineNumber": 240
+        },
+        {
+          "caller": "loadIndex",
+          "callee": "text.split",
+          "lineNumber": 241
+        },
+        {
+          "caller": "loadIndex",
+          "callee": "text.trimEnd",
+          "lineNumber": 242
+        },
+        {
+          "caller": "loadIndex",
+          "callee": "lines.slice(0, maxLines).join",
+          "lineNumber": 245
+        },
+        {
+          "caller": "loadIndex",
+          "callee": "lines.slice",
+          "lineNumber": 245
+        },
+        {
+          "caller": "upsert",
+          "callee": "this.findSimilar",
+          "lineNumber": 266
+        },
+        {
+          "caller": "upsert",
+          "callee": "this.load",
+          "lineNumber": 268
+        },
+        {
+          "caller": "upsert",
+          "callee": "this.save",
+          "lineNumber": 269
+        },
+        {
+          "caller": "upsert",
+          "callee": "Date.now",
+          "lineNumber": 285
+        },
+        {
+          "caller": "upsert",
+          "callee": "this.save",
+          "lineNumber": 290
+        },
+        {
+          "caller": "upsert",
+          "callee": "Date.now",
+          "lineNumber": 292
+        },
+        {
+          "caller": "upsert",
+          "callee": "Date.now",
+          "lineNumber": 293
+        },
+        {
+          "caller": "findSimilar",
+          "callee": "this.load",
+          "lineNumber": 311
+        },
+        {
+          "caller": "norm",
+          "callee": "s.trim().toLowerCase",
+          "lineNumber": 314
+        },
+        {
+          "caller": "norm",
+          "callee": "s.trim",
+          "lineNumber": 314
+        },
+        {
+          "caller": "findSimilar",
+          "callee": "norm",
+          "lineNumber": 315
+        },
+        {
+          "caller": "findSimilar",
+          "callee": "this.list",
+          "lineNumber": 319
+        },
+        {
+          "caller": "findSimilar",
+          "callee": "norm",
+          "lineNumber": 320
+        },
+        {
+          "caller": "findSimilar",
+          "callee": "entry.name.match",
+          "lineNumber": 325
+        },
+        {
+          "caller": "findSimilar",
+          "callee": "this.list",
+          "lineNumber": 329
+        },
+        {
+          "caller": "findSimilar",
+          "callee": "namePattern.test",
+          "lineNumber": 330
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "archiveExpiredEntries",
+          "lineNumber": 355
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "this.list",
+          "lineNumber": 355
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "rebuildArchiveIndex",
+          "lineNumber": 357
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "this.list",
+          "lineNumber": 360
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "Math.ceil",
+          "lineNumber": 361
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "entries.slice",
+          "lineNumber": 365
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "slice.map",
+          "lineNumber": 371
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "writeFileSync",
+          "lineNumber": 376
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "path.join",
+          "lineNumber": 377
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "shardLines.join",
+          "lineNumber": 378
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "this.cleanStaleShards",
+          "lineNumber": 384
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "Array.from",
+          "lineNumber": 392
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "path.join",
+          "lineNumber": 395
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "writeFileSync",
+          "lineNumber": 396
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "masterLines.join",
+          "lineNumber": 396
+        },
+        {
+          "caller": "buildIndex",
+          "callee": "masterLines.join",
+          "lineNumber": 397
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "path.join",
+          "lineNumber": 407
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "existsSync",
+          "lineNumber": 408
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "readFileSync",
+          "lineNumber": 412
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "master.match",
+          "lineNumber": 413
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "readFileSync",
+          "lineNumber": 418
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "text.includes",
+          "lineNumber": 419
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "text.trimEnd",
+          "lineNumber": 420
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "path.join",
+          "lineNumber": 428
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "existsSync",
+          "lineNumber": 429
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "readFileSync",
+          "lineNumber": 430
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "parts.push",
+          "lineNumber": 431
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "content.trimEnd",
+          "lineNumber": 431
+        },
+        {
+          "caller": "loadAllIndexShards",
+          "callee": "parts.join",
+          "lineNumber": 434
+        },
+        {
+          "caller": "cleanStaleShards",
+          "callee": "path.join",
+          "lineNumber": 453
+        },
+        {
+          "caller": "cleanStaleShards",
+          "callee": "existsSync",
+          "lineNumber": 454
+        },
+        {
+          "caller": "cleanStaleShards",
+          "callee": "rmSync",
+          "lineNumber": 455
+        },
+        {
+          "caller": "archiveExpired",
+          "callee": "archiveExpiredEntries",
+          "lineNumber": 475
+        },
+        {
+          "caller": "archiveExpired",
+          "callee": "this.list",
+          "lineNumber": 475
+        },
+        {
+          "caller": "parseCsvList",
+          "callee": "value\n    .split(\",\")\n    .map((s) => s.trim())\n    .filter",
+          "lineNumber": 488
+        },
+        {
+          "caller": "parseCsvList",
+          "callee": "value\n    .split(\",\")\n    .map",
+          "lineNumber": 488
+        },
+        {
+          "caller": "parseCsvList",
+          "callee": "value\n    .split",
+          "lineNumber": 488
+        },
+        {
+          "caller": "parseCsvList",
+          "callee": "s.trim",
+          "lineNumber": 490
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 3,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/memory/src/embedding-cache.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 337,
+      "nonEmptyLines": 312,
+      "functions": [
+        {
+          "name": "resolveEmbeddingConfig",
+          "startLine": 328,
+          "endLine": 337,
+          "params": [
+            "settings"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "EmbeddingCache",
+          "startLine": 76,
+          "endLine": 321,
+          "methods": [
+            "constructor",
+            "embeddingModel",
+            "embeddingBaseUrl",
+            "computeEmbedding",
+            "setQueryCache",
+            "clearQueryCache",
+            "computeMemoryEmbedding",
+            "encodeEmbedding",
+            "decodeEmbedding",
+            "cosineSimilarity",
+            "textSimilarity"
+          ],
+          "properties": [
+            "model",
+            "baseUrl",
+            "timeoutMs",
+            "queryCache",
+            "queryCacheKeys"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "EmbeddingCache",
+          "line": 76,
+          "isDefault": false
+        },
+        {
+          "name": "resolveEmbeddingConfig",
+          "line": 328,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "constructor",
+          "callee": "config?.baseUrl?.replace",
+          "lineNumber": 89
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "text.trim",
+          "lineNumber": 115
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "trimmed.slice",
+          "lineNumber": 119
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "this.queryCache.get",
+          "lineNumber": 120
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "fetch",
+          "lineNumber": 124
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "JSON.stringify",
+          "lineNumber": 127
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "AbortSignal.timeout",
+          "lineNumber": 129
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "res.json",
+          "lineNumber": 132
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "Array.isArray",
+          "lineNumber": 134
+        },
+        {
+          "caller": "computeEmbedding",
+          "callee": "this.setQueryCache",
+          "lineNumber": 135
+        },
+        {
+          "caller": "setQueryCache",
+          "callee": "this.queryCache.has",
+          "lineNumber": 152
+        },
+        {
+          "caller": "setQueryCache",
+          "callee": "this.queryCacheKeys.indexOf",
+          "lineNumber": 154
+        },
+        {
+          "caller": "setQueryCache",
+          "callee": "this.queryCacheKeys.splice",
+          "lineNumber": 155
+        },
+        {
+          "caller": "setQueryCache",
+          "callee": "this.queryCacheKeys.shift",
+          "lineNumber": 159
+        },
+        {
+          "caller": "setQueryCache",
+          "callee": "this.queryCache.delete",
+          "lineNumber": 160
+        },
+        {
+          "caller": "setQueryCache",
+          "callee": "this.queryCache.set",
+          "lineNumber": 162
+        },
+        {
+          "caller": "setQueryCache",
+          "callee": "this.queryCacheKeys.push",
+          "lineNumber": 164
+        },
+        {
+          "caller": "clearQueryCache",
+          "callee": "this.queryCache.clear",
+          "lineNumber": 169
+        },
+        {
+          "caller": "computeMemoryEmbedding",
+          "callee": "[entry.title, entry.summary, entry.content]\n      .filter((x) => x.trim())  // 过滤空字段，避免多余换行\n      .join",
+          "lineNumber": 182
+        },
+        {
+          "caller": "computeMemoryEmbedding",
+          "callee": "[entry.title, entry.summary, entry.content]\n      .filter",
+          "lineNumber": 182
+        },
+        {
+          "caller": "computeMemoryEmbedding",
+          "callee": "x.trim",
+          "lineNumber": 183
+        },
+        {
+          "caller": "computeMemoryEmbedding",
+          "callee": "this.computeEmbedding",
+          "lineNumber": 185
+        },
+        {
+          "caller": "encodeEmbedding",
+          "callee": "Buffer.from(bytes).toString",
+          "lineNumber": 199
+        },
+        {
+          "caller": "encodeEmbedding",
+          "callee": "Buffer.from",
+          "lineNumber": 199
+        },
+        {
+          "caller": "decodeEmbedding",
+          "callee": "encoded.trim",
+          "lineNumber": 211
+        },
+        {
+          "caller": "decodeEmbedding",
+          "callee": "Buffer.from",
+          "lineNumber": 213
+        },
+        {
+          "caller": "decodeEmbedding",
+          "callee": "Array.from",
+          "lineNumber": 220
+        },
+        {
+          "caller": "cosineSimilarity",
+          "callee": "Math.min",
+          "lineNumber": 238
+        },
+        {
+          "caller": "cosineSimilarity",
+          "callee": "Math.sqrt",
+          "lineNumber": 252
+        },
+        {
+          "caller": "cosineSimilarity",
+          "callee": "Math.sqrt",
+          "lineNumber": 252
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "query.toLowerCase().trim",
+          "lineNumber": 269
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "query.toLowerCase",
+          "lineNumber": 269
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "target.toLowerCase().trim",
+          "lineNumber": 270
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "target.toLowerCase",
+          "lineNumber": 270
+        },
+        {
+          "caller": "tokenize",
+          "callee": "s.split",
+          "lineNumber": 277
+        },
+        {
+          "caller": "tokenize",
+          "callee": "tokens.add",
+          "lineNumber": 278
+        },
+        {
+          "caller": "tokenize",
+          "callee": "cjk.test",
+          "lineNumber": 282
+        },
+        {
+          "caller": "tokenize",
+          "callee": "s.split",
+          "lineNumber": 284
+        },
+        {
+          "caller": "tokenize",
+          "callee": "tokens.add",
+          "lineNumber": 287
+        },
+        {
+          "caller": "tokenize",
+          "callee": "span.slice",
+          "lineNumber": 287
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "tokenize",
+          "lineNumber": 293
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "tokenize",
+          "lineNumber": 294
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "tWords.has",
+          "lineNumber": 297
+        },
+        {
+          "caller": "bigrams",
+          "callee": "bgs.add",
+          "lineNumber": 306
+        },
+        {
+          "caller": "bigrams",
+          "callee": "s.slice",
+          "lineNumber": 306
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "bigrams",
+          "lineNumber": 309
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "bigrams",
+          "lineNumber": 310
+        },
+        {
+          "caller": "textSimilarity",
+          "callee": "tBigrams.has",
+          "lineNumber": 313
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 1,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/memory/src/index.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 99,
+      "nonEmptyLines": 85,
+      "exports": [
+        {
+          "name": "retrieveMemories",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "RetrieveMemoriesOptions",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "KeywordMemoryRetriever",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_RETRIEVAL_CONFIG",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "RetrievalConfig",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "RetrievalQuery",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryRetrievalResult",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_CASCADE_CONFIG",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "formatMemoryManifest",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "LLM_FALLBACK_SCORE",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "shouldEscalateToLlmFallback",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "CascadeFallbackConfig",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "LlmMemorySelectFn",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "LlmMemorySelectInput",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "sessionMemoryToRecord",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "autoMemoryToRecord",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "extractCleanMemoryQuery",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "extractFilePaths",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "extractErrorSignatures",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "inferTags",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "buildRetrievalSignalsFromMessages",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "isMemoryMetaQuery",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "isArchitectureQuery",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "isReferenceMemory",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "classifyTask",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "PRIORITY_COEFFICIENTS",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryRetrievalSignals",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryRecord",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "MemorySource",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryScope",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryPriority",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "TaskProfile",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "TASK_PROFILE_BUDGETS",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "ProfileBudget",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "scoreMemoryRecord",
+          "line": 56,
+          "isDefault": false
+        },
+        {
+          "name": "selectRecords",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "selectMetaFallback",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "SelectedRecords",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "tokenize",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "stripPathLikeText",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "normalizePathSeparators",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "pathMatchScore",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "UnifiedMemoryStore",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "UnifiedMemoryStoreOptions",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "AutoMemoryStore",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "AutoMemoryEntry",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "AutoMemoryPriority",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "loadProjectMemory",
+          "line": 75,
+          "isDefault": false
+        },
+        {
+          "name": "ProjectMemory",
+          "line": 75,
+          "isDefault": false
+        },
+        {
+          "name": "SessionMemoryStore",
+          "line": 78,
+          "isDefault": false
+        },
+        {
+          "name": "SessionMemory",
+          "line": 78,
+          "isDefault": false
+        },
+        {
+          "name": "EmbeddingCache",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "resolveEmbeddingConfig",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "EmbeddingCacheEntry",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "EmbeddingConfig",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "runReflection",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "shouldRunReflection",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "resetReflectionCounter",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionPlan",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionMergeAction",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionArchiveAction",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionConflictAction",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectorOptions",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "ReflectionState",
+          "line": 89,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 64,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-archive.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 206,
+      "nonEmptyLines": 189,
+      "functions": [
+        {
+          "name": "archiveDirFor",
+          "startLine": 56,
+          "endLine": 58,
+          "params": [
+            "memoryDir"
+          ]
+        },
+        {
+          "name": "archiveEntryByName",
+          "startLine": 73,
+          "endLine": 86,
+          "params": [
+            "name",
+            "memoryDir"
+          ]
+        },
+        {
+          "name": "shouldArchiveEntry",
+          "startLine": 106,
+          "endLine": 135,
+          "params": [
+            "entry",
+            "now",
+            "maxAgeDays"
+          ]
+        },
+        {
+          "name": "archiveExpiredEntries",
+          "startLine": 149,
+          "endLine": 168,
+          "params": [
+            "entries",
+            "memoryDir",
+            "maxAgeDays"
+          ]
+        },
+        {
+          "name": "rebuildArchiveIndex",
+          "startLine": 184,
+          "endLine": 206,
+          "params": [
+            "memoryDir"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "archiveDirFor",
+          "line": 56,
+          "isDefault": false
+        },
+        {
+          "name": "archiveEntryByName",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "shouldArchiveEntry",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "archiveExpiredEntries",
+          "line": 149,
+          "isDefault": false
+        },
+        {
+          "name": "rebuildArchiveIndex",
+          "line": 184,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "archiveDirFor",
+          "callee": "path.join",
+          "lineNumber": 57
+        },
+        {
+          "caller": "archiveEntryByName",
+          "callee": "archiveDirFor",
+          "lineNumber": 74
+        },
+        {
+          "caller": "archiveEntryByName",
+          "callee": "mkdirSync",
+          "lineNumber": 76
+        },
+        {
+          "caller": "archiveEntryByName",
+          "callee": "path.join",
+          "lineNumber": 77
+        },
+        {
+          "caller": "archiveEntryByName",
+          "callee": "path.join",
+          "lineNumber": 78
+        },
+        {
+          "caller": "archiveEntryByName",
+          "callee": "existsSync",
+          "lineNumber": 81
+        },
+        {
+          "caller": "archiveEntryByName",
+          "callee": "renameSync",
+          "lineNumber": 84
+        },
+        {
+          "caller": "archiveExpiredEntries",
+          "callee": "Date.now",
+          "lineNumber": 155
+        },
+        {
+          "caller": "archiveExpiredEntries",
+          "callee": "shouldArchiveEntry",
+          "lineNumber": 159
+        },
+        {
+          "caller": "archiveExpiredEntries",
+          "callee": "archiveEntryByName",
+          "lineNumber": 161
+        },
+        {
+          "caller": "archiveExpiredEntries",
+          "callee": "archivedNames.push",
+          "lineNumber": 162
+        },
+        {
+          "caller": "rebuildArchiveIndex",
+          "callee": "archiveDirFor",
+          "lineNumber": 185
+        },
+        {
+          "caller": "rebuildArchiveIndex",
+          "callee": "existsSync",
+          "lineNumber": 188
+        },
+        {
+          "caller": "rebuildArchiveIndex",
+          "callee": "readdirSync(archiveDir)\n      .filter",
+          "lineNumber": 192
+        },
+        {
+          "caller": "rebuildArchiveIndex",
+          "callee": "readdirSync",
+          "lineNumber": 192
+        },
+        {
+          "caller": "rebuildArchiveIndex",
+          "callee": "f.endsWith",
+          "lineNumber": 193
+        },
+        {
+          "caller": "rebuildArchiveIndex",
+          "callee": "writeFileSync",
+          "lineNumber": 197
+        },
+        {
+          "caller": "rebuildArchiveIndex",
+          "callee": "path.join",
+          "lineNumber": 198
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 5,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-profiles.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 102,
+      "nonEmptyLines": 99,
+      "exports": [
+        {
+          "name": "TASK_PROFILE_BUDGETS",
+          "line": 53,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-query.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 445,
+      "nonEmptyLines": 414,
+      "functions": [
+        {
+          "name": "extractCleanMemoryQuery",
+          "startLine": 46,
+          "endLine": 53,
+          "params": [
+            "goal"
+          ]
+        },
+        {
+          "name": "buildRetrievalSignalsFromMessages",
+          "startLine": 78,
+          "endLine": 113,
+          "params": [
+            "messages",
+            "lookback"
+          ]
+        },
+        {
+          "name": "isMemoryMetaQuery",
+          "startLine": 123,
+          "endLine": 152,
+          "params": [
+            "goal"
+          ]
+        },
+        {
+          "name": "isArchitectureQuery",
+          "startLine": 177,
+          "endLine": 180,
+          "params": [
+            "goal"
+          ]
+        },
+        {
+          "name": "isReferenceMemory",
+          "startLine": 186,
+          "endLine": 188,
+          "params": [
+            "record"
+          ]
+        },
+        {
+          "name": "classifyTask",
+          "startLine": 286,
+          "endLine": 307,
+          "params": [
+            "goal",
+            "errorMessage"
+          ]
+        },
+        {
+          "name": "matchWord",
+          "startLine": 318,
+          "endLine": 332,
+          "params": [
+            "keyword",
+            "text"
+          ]
+        },
+        {
+          "name": "escapeRegExp",
+          "startLine": 337,
+          "endLine": 339,
+          "params": [
+            "s"
+          ]
+        },
+        {
+          "name": "extractFilePaths",
+          "startLine": 349,
+          "endLine": 360,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "extractErrorSignatures",
+          "startLine": 372,
+          "endLine": 403,
+          "params": [
+            "errorsAndFixes"
+          ]
+        },
+        {
+          "name": "inferTags",
+          "startLine": 413,
+          "endLine": 445,
+          "params": [
+            "sm"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "extractCleanMemoryQuery",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "buildRetrievalSignalsFromMessages",
+          "line": 78,
+          "isDefault": false
+        },
+        {
+          "name": "isMemoryMetaQuery",
+          "line": 123,
+          "isDefault": false
+        },
+        {
+          "name": "isArchitectureQuery",
+          "line": 177,
+          "isDefault": false
+        },
+        {
+          "name": "isReferenceMemory",
+          "line": 186,
+          "isDefault": false
+        },
+        {
+          "name": "classifyTask",
+          "line": 286,
+          "isDefault": false
+        },
+        {
+          "name": "extractFilePaths",
+          "line": 349,
+          "isDefault": false
+        },
+        {
+          "name": "extractErrorSignatures",
+          "line": 372,
+          "isDefault": false
+        },
+        {
+          "name": "inferTags",
+          "line": 413,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "extractCleanMemoryQuery",
+          "callee": "goal.indexOf",
+          "lineNumber": 48
+        },
+        {
+          "caller": "extractCleanMemoryQuery",
+          "callee": "goal.slice(idx + marker.length).trim",
+          "lineNumber": 50
+        },
+        {
+          "caller": "extractCleanMemoryQuery",
+          "callee": "goal.slice",
+          "lineNumber": 50
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "messages.filter((m) => m.role !== \"system\").slice",
+          "lineNumber": 83
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "messages.filter",
+          "lineNumber": 83
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "extractFilePaths",
+          "lineNumber": 90
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "recentFilesSet.add",
+          "lineNumber": 91
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "isToolResultMessage",
+          "lineNumber": 95
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "splitToolBlocks",
+          "lineNumber": 97
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "parseToolResult",
+          "lineNumber": 98
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "recentToolNames.push",
+          "lineNumber": 100
+        },
+        {
+          "caller": "buildRetrievalSignalsFromMessages",
+          "callee": "msg.content.slice",
+          "lineNumber": 103
+        },
+        {
+          "caller": "isMemoryMetaQuery",
+          "callee": "goal.trim",
+          "lineNumber": 124
+        },
+        {
+          "caller": "isMemoryMetaQuery",
+          "callee": "/(?:还记得|记不记得|之前的记忆|有哪些\\s*(?:reference\\s*)?记忆|什么记忆|记得.*吗)/i.test",
+          "lineNumber": 127
+        },
+        {
+          "caller": "isMemoryMetaQuery",
+          "callee": "/以前.{0,8}记(?!录|录器|账|号|者)/i.test",
+          "lineNumber": 134
+        },
+        {
+          "caller": "isMemoryMetaQuery",
+          "callee": "/\\b(?:what|which|list|show)\\s+(?:are\\s+)?(?:my|the|all|stored)?\\s*memories\\b/i.test",
+          "lineNumber": 139
+        },
+        {
+          "caller": "isMemoryMetaQuery",
+          "callee": "/\\bdo\\s+you\\s+remember\\b/i.test",
+          "lineNumber": 145
+        },
+        {
+          "caller": "isMemoryMetaQuery",
+          "callee": "/\\brecall\\s+(?:our|the|any)\\s+memories\\b/i.test",
+          "lineNumber": 148
+        },
+        {
+          "caller": "isArchitectureQuery",
+          "callee": "goal.toLowerCase",
+          "lineNumber": 178
+        },
+        {
+          "caller": "isArchitectureQuery",
+          "callee": "ARCHITECTURE_QUERY_KEYWORDS.some",
+          "lineNumber": 179
+        },
+        {
+          "caller": "isArchitectureQuery",
+          "callee": "lower.includes",
+          "lineNumber": 179
+        },
+        {
+          "caller": "isReferenceMemory",
+          "callee": "record.tags.includes",
+          "lineNumber": 187
+        },
+        {
+          "caller": "classifyTask",
+          "callee": "goal.toLowerCase",
+          "lineNumber": 290
+        },
+        {
+          "caller": "classifyTask",
+          "callee": "BUG_FIX_KEYWORDS.some",
+          "lineNumber": 294
+        },
+        {
+          "caller": "classifyTask",
+          "callee": "matchWord",
+          "lineNumber": 294
+        },
+        {
+          "caller": "classifyTask",
+          "callee": "SIMPLE_SCRIPT_KEYWORDS.some",
+          "lineNumber": 297
+        },
+        {
+          "caller": "classifyTask",
+          "callee": "matchWord",
+          "lineNumber": 297
+        },
+        {
+          "caller": "classifyTask",
+          "callee": "REFACTOR_ARCH_KEYWORDS.some",
+          "lineNumber": 302
+        },
+        {
+          "caller": "classifyTask",
+          "callee": "matchWord",
+          "lineNumber": 302
+        },
+        {
+          "caller": "matchWord",
+          "callee": "escapeRegExp",
+          "lineNumber": 323
+        },
+        {
+          "caller": "matchWord",
+          "callee": "re.test",
+          "lineNumber": 325
+        },
+        {
+          "caller": "matchWord",
+          "callee": "text.includes",
+          "lineNumber": 331
+        },
+        {
+          "caller": "escapeRegExp",
+          "callee": "s.replace",
+          "lineNumber": 338
+        },
+        {
+          "caller": "extractFilePaths",
+          "callee": "re.exec",
+          "lineNumber": 354
+        },
+        {
+          "caller": "extractFilePaths",
+          "callee": "paths.push",
+          "lineNumber": 356
+        },
+        {
+          "caller": "extractFilePaths",
+          "callee": "re.exec",
+          "lineNumber": 357
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "text.match",
+          "lineNumber": 380
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "signatures.push",
+          "lineNumber": 381
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "text.match",
+          "lineNumber": 384
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "signatures.push",
+          "lineNumber": 387
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "text\n      .split(\"\\n\")\n      .filter((l) =>\n        /cannot|does not|is not|failed|undefined|null/.test(l.toLowerCase()),\n      )\n      .slice",
+          "lineNumber": 390
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "text\n      .split(\"\\n\")\n      .filter",
+          "lineNumber": 390
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "text\n      .split",
+          "lineNumber": 390
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "/cannot|does not|is not|failed|undefined|null/.test",
+          "lineNumber": 393
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "l.toLowerCase",
+          "lineNumber": 393
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "line.trim().slice",
+          "lineNumber": 397
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "line.trim",
+          "lineNumber": 397
+        },
+        {
+          "caller": "extractErrorSignatures",
+          "callee": "signatures.push",
+          "lineNumber": 398
+        },
+        {
+          "caller": "inferTags",
+          "callee": "[sm.task, sm.currentState, ...(sm.errorsAndFixes ?? [])]\n    .join(\" \")\n    .toLowerCase",
+          "lineNumber": 420
+        },
+        {
+          "caller": "inferTags",
+          "callee": "[sm.task, sm.currentState, ...(sm.errorsAndFixes ?? [])]\n    .join",
+          "lineNumber": 420
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 425
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 425
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 425
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 426
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 427
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 427
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 428
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 428
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 428
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 429
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 429
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 429
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 431
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 432
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 433
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 435
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 436
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 436
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 437
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 438
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 438
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 439
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 440
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 440
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 440
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 441
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 441
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 441
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 442
+        },
+        {
+          "caller": "inferTags",
+          "callee": "text.includes",
+          "lineNumber": 442
+        },
+        {
+          "caller": "inferTags",
+          "callee": "tags.add",
+          "lineNumber": 442
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 9,
+        "functionCount": 11,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-record.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 226,
+      "nonEmptyLines": 212,
+      "functions": [
+        {
+          "name": "sessionMemoryToRecord",
+          "startLine": 135,
+          "endLine": 163,
+          "params": [
+            "sm"
+          ]
+        },
+        {
+          "name": "autoMemoryToRecord",
+          "startLine": 175,
+          "endLine": 209,
+          "params": [
+            "entry",
+            "mtime"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "TaskProfile",
+          "line": 70,
+          "isDefault": false
+        },
+        {
+          "name": "PRIORITY_COEFFICIENTS",
+          "line": 79,
+          "isDefault": false
+        },
+        {
+          "name": "sessionMemoryToRecord",
+          "line": 135,
+          "isDefault": false
+        },
+        {
+          "name": "autoMemoryToRecord",
+          "line": 175,
+          "isDefault": false
+        },
+        {
+          "name": "classifyTask",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "extractCleanMemoryQuery",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "extractErrorSignatures",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "extractFilePaths",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "inferTags",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "isArchitectureQuery",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "isMemoryMetaQuery",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "isReferenceMemory",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "buildRetrievalSignalsFromMessages",
+          "line": 215,
+          "isDefault": false
+        },
+        {
+          "name": "MemoryRetrievalSignals",
+          "line": 215,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "sessionMemoryToRecord",
+          "callee": "[\n      sm.task,\n      sm.currentState,\n      ...(sm.keyDecisions ?? []),\n      ...(sm.errorsAndFixes ?? []),\n      sm.relevantContext,\n    ]\n      .filter((x): x is string => !!x)\n      .join",
+          "lineNumber": 145
+        },
+        {
+          "caller": "sessionMemoryToRecord",
+          "callee": "[\n      sm.task,\n      sm.currentState,\n      ...(sm.keyDecisions ?? []),\n      ...(sm.errorsAndFixes ?? []),\n      sm.relevantContext,\n    ]\n      .filter",
+          "lineNumber": 145
+        },
+        {
+          "caller": "sessionMemoryToRecord",
+          "callee": "inferTags",
+          "lineNumber": 154
+        },
+        {
+          "caller": "sessionMemoryToRecord",
+          "callee": "extractErrorSignatures",
+          "lineNumber": 157
+        },
+        {
+          "caller": "autoMemoryToRecord",
+          "callee": "Date.now",
+          "lineNumber": 180
+        },
+        {
+          "caller": "autoMemoryToRecord",
+          "callee": "EmbeddingCache.decodeEmbedding",
+          "lineNumber": 185
+        },
+        {
+          "caller": "autoMemoryToRecord",
+          "callee": "extractFilePaths",
+          "lineNumber": 200
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 14,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-reflector.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 350,
+      "nonEmptyLines": 306,
+      "functions": [
+        {
+          "name": "loadReflectionState",
+          "startLine": 49,
+          "endLine": 63,
+          "params": [
+            "memoryDir"
+          ]
+        },
+        {
+          "name": "saveReflectionState",
+          "startLine": 66,
+          "endLine": 73,
+          "params": [
+            "memoryDir",
+            "state"
+          ]
+        },
+        {
+          "name": "shouldRunReflection",
+          "startLine": 81,
+          "endLine": 91,
+          "params": [
+            "memoryDir"
+          ]
+        },
+        {
+          "name": "resetReflectionCounter",
+          "startLine": 94,
+          "endLine": 96,
+          "params": [
+            "memoryDir"
+          ]
+        },
+        {
+          "name": "buildReflectionPrompt",
+          "startLine": 138,
+          "endLine": 181,
+          "params": [
+            "entries"
+          ]
+        },
+        {
+          "name": "runReflection",
+          "startLine": 206,
+          "endLine": 281,
+          "params": [
+            "opts"
+          ]
+        },
+        {
+          "name": "parseReflectionPlan",
+          "startLine": 291,
+          "endLine": 328,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "mergeContent",
+          "startLine": 336,
+          "endLine": 340,
+          "params": [
+            "keeper",
+            "removed"
+          ]
+        },
+        {
+          "name": "mergeArrays",
+          "startLine": 346,
+          "endLine": 350,
+          "params": [
+            "a",
+            "b"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "shouldRunReflection",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "resetReflectionCounter",
+          "line": 94,
+          "isDefault": false
+        },
+        {
+          "name": "runReflection",
+          "line": 206,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "loadReflectionState",
+          "callee": "path.join",
+          "lineNumber": 50
+        },
+        {
+          "caller": "loadReflectionState",
+          "callee": "existsSync",
+          "lineNumber": 52
+        },
+        {
+          "caller": "loadReflectionState",
+          "callee": "JSON.parse",
+          "lineNumber": 53
+        },
+        {
+          "caller": "loadReflectionState",
+          "callee": "readFileSync",
+          "lineNumber": 53
+        },
+        {
+          "caller": "saveReflectionState",
+          "callee": "mkdirSync",
+          "lineNumber": 67
+        },
+        {
+          "caller": "saveReflectionState",
+          "callee": "writeFileSync",
+          "lineNumber": 68
+        },
+        {
+          "caller": "saveReflectionState",
+          "callee": "path.join",
+          "lineNumber": 69
+        },
+        {
+          "caller": "saveReflectionState",
+          "callee": "JSON.stringify",
+          "lineNumber": 70
+        },
+        {
+          "caller": "shouldRunReflection",
+          "callee": "loadReflectionState",
+          "lineNumber": 82
+        },
+        {
+          "caller": "shouldRunReflection",
+          "callee": "Date.now",
+          "lineNumber": 87
+        },
+        {
+          "caller": "shouldRunReflection",
+          "callee": "saveReflectionState",
+          "lineNumber": 89
+        },
+        {
+          "caller": "resetReflectionCounter",
+          "callee": "saveReflectionState",
+          "lineNumber": 95
+        },
+        {
+          "caller": "resetReflectionCounter",
+          "callee": "Date.now",
+          "lineNumber": 95
+        },
+        {
+          "caller": "buildReflectionPrompt",
+          "callee": "entries\n    .map((e) =>\n      `- [${e.name}] type=${e.type} priority=${e.priority} updated=${new Date(e.updatedAt).toISOString().slice(0, 10)} tags=[${e.tags.join(\",\")}] desc=\"${e.description}\"`,\n    )\n    .join",
+          "lineNumber": 146
+        },
+        {
+          "caller": "buildReflectionPrompt",
+          "callee": "entries\n    .map",
+          "lineNumber": 146
+        },
+        {
+          "caller": "buildReflectionPrompt",
+          "callee": "new Date(e.updatedAt).toISOString().slice",
+          "lineNumber": 148
+        },
+        {
+          "caller": "buildReflectionPrompt",
+          "callee": "new Date(e.updatedAt).toISOString",
+          "lineNumber": 148
+        },
+        {
+          "caller": "buildReflectionPrompt",
+          "callee": "e.tags.join",
+          "lineNumber": 148
+        },
+        {
+          "caller": "runReflection",
+          "callee": "opts.store.list",
+          "lineNumber": 209
+        },
+        {
+          "caller": "runReflection",
+          "callee": "entries.map",
+          "lineNumber": 212
+        },
+        {
+          "caller": "runReflection",
+          "callee": "opts.complete",
+          "lineNumber": 224
+        },
+        {
+          "caller": "runReflection",
+          "callee": "buildReflectionPrompt",
+          "lineNumber": 226
+        },
+        {
+          "caller": "runReflection",
+          "callee": "parseReflectionPlan",
+          "lineNumber": 228
+        },
+        {
+          "caller": "runReflection",
+          "callee": "opts.store.load",
+          "lineNumber": 238
+        },
+        {
+          "caller": "runReflection",
+          "callee": "opts.store.load",
+          "lineNumber": 244
+        },
+        {
+          "caller": "runReflection",
+          "callee": "mergeContent",
+          "lineNumber": 248
+        },
+        {
+          "caller": "runReflection",
+          "callee": "mergeArrays",
+          "lineNumber": 249
+        },
+        {
+          "caller": "runReflection",
+          "callee": "mergeArrays",
+          "lineNumber": 250
+        },
+        {
+          "caller": "runReflection",
+          "callee": "mergeArrays",
+          "lineNumber": 251
+        },
+        {
+          "caller": "runReflection",
+          "callee": "Date.now",
+          "lineNumber": 259
+        },
+        {
+          "caller": "runReflection",
+          "callee": "opts.store.save",
+          "lineNumber": 261
+        },
+        {
+          "caller": "runReflection",
+          "callee": "opts.store.delete",
+          "lineNumber": 263
+        },
+        {
+          "caller": "runReflection",
+          "callee": "archiveEntryByName",
+          "lineNumber": 270
+        },
+        {
+          "caller": "runReflection",
+          "callee": "opts.store.buildIndex",
+          "lineNumber": 277
+        },
+        {
+          "caller": "parseReflectionPlan",
+          "callee": "text.match",
+          "lineNumber": 293
+        },
+        {
+          "caller": "parseReflectionPlan",
+          "callee": "JSON.parse",
+          "lineNumber": 297
+        },
+        {
+          "caller": "parseReflectionPlan",
+          "callee": "(parsed.merges ?? [])\n        .filter((m) => m.keep && m.remove?.length)  // 过滤掉缺少必填字段的项\n        .map",
+          "lineNumber": 304
+        },
+        {
+          "caller": "parseReflectionPlan",
+          "callee": "(parsed.merges ?? [])\n        .filter",
+          "lineNumber": 304
+        },
+        {
+          "caller": "parseReflectionPlan",
+          "callee": "(parsed.archive ?? [])\n        .filter((a) => a.name)\n        .map",
+          "lineNumber": 311
+        },
+        {
+          "caller": "parseReflectionPlan",
+          "callee": "(parsed.archive ?? [])\n        .filter",
+          "lineNumber": 311
+        },
+        {
+          "caller": "parseReflectionPlan",
+          "callee": "(parsed.conflicts ?? [])\n        .filter((c) => c.a && c.b)\n        .map",
+          "lineNumber": 317
+        },
+        {
+          "caller": "parseReflectionPlan",
+          "callee": "(parsed.conflicts ?? [])\n        .filter",
+          "lineNumber": 317
+        },
+        {
+          "caller": "mergeContent",
+          "callee": "removed.trim",
+          "lineNumber": 337
+        },
+        {
+          "caller": "mergeContent",
+          "callee": "keeper.includes",
+          "lineNumber": 338
+        },
+        {
+          "caller": "mergeContent",
+          "callee": "removed.trim",
+          "lineNumber": 338
+        },
+        {
+          "caller": "mergeContent",
+          "callee": "keeper.trim",
+          "lineNumber": 339
+        },
+        {
+          "caller": "mergeContent",
+          "callee": "removed.trim",
+          "lineNumber": 339
+        },
+        {
+          "caller": "mergeArrays",
+          "callee": "set.add",
+          "lineNumber": 348
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 3,
+        "functionCount": 9,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-retrieval-cascade.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 175,
+      "nonEmptyLines": 160,
+      "functions": [
+        {
+          "name": "formatMemoryManifest",
+          "startLine": 110,
+          "endLine": 119,
+          "params": [
+            "records"
+          ]
+        },
+        {
+          "name": "shouldEscalateToLlmFallback",
+          "startLine": 139,
+          "endLine": 175,
+          "params": [
+            "keywordResult",
+            "ranked",
+            "poolSize",
+            "config"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "DEFAULT_CASCADE_CONFIG",
+          "line": 42,
+          "isDefault": false
+        },
+        {
+          "name": "LLM_FALLBACK_SCORE",
+          "line": 98,
+          "isDefault": false
+        },
+        {
+          "name": "formatMemoryManifest",
+          "line": 110,
+          "isDefault": false
+        },
+        {
+          "name": "shouldEscalateToLlmFallback",
+          "line": 139,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "formatMemoryManifest",
+          "callee": "records\n    .map((record) => {\n      const tags =\n        record.tags.length > 0 ? ` (tags: ${record.tags.join(\", \")})` : \"\";\n      const summary = record.summary.trim() || record.content.slice(0, 120);\n      return `[${record.id}] [${record.source}] ${record.title} — ${summary}${tags}`;\n    })\n    .join",
+          "lineNumber": 111
+        },
+        {
+          "caller": "formatMemoryManifest",
+          "callee": "records\n    .map",
+          "lineNumber": 111
+        },
+        {
+          "caller": "formatMemoryManifest",
+          "callee": "record.tags.join",
+          "lineNumber": 114
+        },
+        {
+          "caller": "formatMemoryManifest",
+          "callee": "record.summary.trim",
+          "lineNumber": 115
+        },
+        {
+          "caller": "formatMemoryManifest",
+          "callee": "record.content.slice",
+          "lineNumber": 115
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 4,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-retrieve.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 250,
+      "nonEmptyLines": 227,
+      "functions": [
+        {
+          "name": "semanticRerank",
+          "startLine": 62,
+          "endLine": 79,
+          "params": [
+            "ranked",
+            "queryEmbedding"
+          ]
+        },
+        {
+          "name": "retrieveCascadeMemories",
+          "startLine": 84,
+          "endLine": 221,
+          "params": [
+            "store",
+            "query",
+            "options"
+          ]
+        },
+        {
+          "name": "retrieveMemories",
+          "startLine": 230,
+          "endLine": 250,
+          "params": [
+            "store",
+            "query",
+            "options"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "retrieveMemories",
+          "line": 230,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "semanticRerank",
+          "callee": "ranked.map",
+          "lineNumber": 66
+        },
+        {
+          "caller": "semanticRerank",
+          "callee": "EmbeddingCache.cosineSimilarity",
+          "lineNumber": 69
+        },
+        {
+          "caller": "semanticRerank",
+          "callee": "reranked.sort",
+          "lineNumber": 77
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "retriever.rankRecords",
+          "lineNumber": 98
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "ranked.slice",
+          "lineNumber": 99
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "top30.map",
+          "lineNumber": 102
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "semanticRerank",
+          "lineNumber": 110
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "top30.map",
+          "lineNumber": 111
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "reranked.map",
+          "lineNumber": 114
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "retriever.buildResult",
+          "lineNumber": 126
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "store.listExcludingCurrent",
+          "lineNumber": 131
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "shouldEscalateToLlmFallback",
+          "lineNumber": 139
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "tier2Ranked.map",
+          "lineNumber": 142
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "[...pool].sort",
+          "lineNumber": 147
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "shards.push",
+          "lineNumber": 151
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "sorted.slice",
+          "lineNumber": 151
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "shards.slice",
+          "lineNumber": 153
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "shard.map",
+          "lineNumber": 161
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "options.llmSelect",
+          "lineNumber": 162
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "formatMemoryManifest",
+          "lineNumber": 164
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "candidateIds.includes",
+          "lineNumber": 168
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "selectedIds.add",
+          "lineNumber": 169
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "[...selectedIds]\n        .map((id) => {\n          // 先在 Tier2 重排结果中找，再回退到排序后的池\n          const record =\n            tier2Ranked.find((r) => r.record.id === id)?.record ??\n            sorted.find((r) => r.id === id);\n          if (!record) return null;\n          return {\n            record,\n            score: scoreById.get(id) ?? LLM_FALLBACK_SCORE,\n          };\n        })\n        .filter(\n          (\n            item,\n          ): item is { record: MemoryRecord; score: number } =>\n            item !== null,\n        )\n        .slice",
+          "lineNumber": 176
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "[...selectedIds]\n        .map((id) => {\n          // 先在 Tier2 重排结果中找，再回退到排序后的池\n          const record =\n            tier2Ranked.find((r) => r.record.id === id)?.record ??\n            sorted.find((r) => r.id === id);\n          if (!record) return null;\n          return {\n            record,\n            score: scoreById.get(id) ?? LLM_FALLBACK_SCORE,\n          };\n        })\n        .filter",
+          "lineNumber": 176
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "[...selectedIds]\n        .map",
+          "lineNumber": 176
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "tier2Ranked.find",
+          "lineNumber": 180
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "sorted.find",
+          "lineNumber": 181
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "scoreById.get",
+          "lineNumber": 185
+        },
+        {
+          "caller": "retrieveCascadeMemories",
+          "callee": "retriever.buildResult",
+          "lineNumber": 197
+        },
+        {
+          "caller": "retrieveMemories",
+          "callee": "classifyTask",
+          "lineNumber": 240
+        },
+        {
+          "caller": "retrieveMemories",
+          "callee": "retrieveCascadeMemories",
+          "lineNumber": 243
+        },
+        {
+          "caller": "retrieveMemories",
+          "callee": "retriever.retrieve",
+          "lineNumber": 248
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 1,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-retriever.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 294,
+      "nonEmptyLines": 270,
+      "classes": [
+        {
+          "name": "KeywordMemoryRetriever",
+          "startLine": 138,
+          "endLine": 294,
+          "methods": [
+            "constructor",
+            "retrieve",
+            "rankRecords",
+            "buildResult",
+            "countEmbeddingCacheStats"
+          ],
+          "properties": [
+            "store",
+            "config"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "TASK_PROFILE_BUDGETS",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "ProfileBudget",
+          "line": 51,
+          "isDefault": false
+        },
+        {
+          "name": "DEFAULT_RETRIEVAL_CONFIG",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "KeywordMemoryRetriever",
+          "line": 138,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "retrieve",
+          "callee": "this.rankRecords",
+          "lineNumber": 159
+        },
+        {
+          "caller": "retrieve",
+          "callee": "this.buildResult",
+          "lineNumber": 160
+        },
+        {
+          "caller": "retrieve",
+          "callee": "this.countEmbeddingCacheStats",
+          "lineNumber": 161
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "this.store.listExcludingCurrent",
+          "lineNumber": 180
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "tokenize",
+          "lineNumber": 183
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "stripPathLikeText",
+          "lineNumber": 183
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "[query.currentFile, ...(query.recentFiles ?? [])].filter",
+          "lineNumber": 186
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "tokenize",
+          "lineNumber": 192
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "all.map",
+          "lineNumber": 196
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "scoreMemoryRecord",
+          "lineNumber": 198
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "scored\n      .filter((s) => s.score > minScore)\n      .sort",
+          "lineNumber": 203
+        },
+        {
+          "caller": "rankRecords",
+          "callee": "scored\n      .filter",
+          "lineNumber": 203
+        },
+        {
+          "caller": "buildResult",
+          "callee": "this.store.listExcludingCurrent",
+          "lineNumber": 243
+        },
+        {
+          "caller": "buildResult",
+          "callee": "selectRecords",
+          "lineNumber": 246
+        },
+        {
+          "caller": "buildResult",
+          "callee": "isMemoryMetaQuery",
+          "lineNumber": 251
+        },
+        {
+          "caller": "buildResult",
+          "callee": "selectMetaFallback",
+          "lineNumber": 252
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 4,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-scorer.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 391,
+      "nonEmptyLines": 358,
+      "functions": [
+        {
+          "name": "scoreMemoryRecord",
+          "startLine": 135,
+          "endLine": 391,
+          "params": [
+            "m",
+            "query",
+            "queryWords",
+            "queryFiles",
+            "errWords"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "scoreMemoryRecord",
+          "line": 135,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "stripPathLikeText",
+          "lineNumber": 148
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "[m.title, m.summary, ...m.tags].join",
+          "lineNumber": 149
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "tokenize",
+          "lineNumber": 151
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "queryWords.filter",
+          "lineNumber": 152
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "headWords.includes",
+          "lineNumber": 152
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "stripPathLikeText",
+          "lineNumber": 155
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "tokenize",
+          "lineNumber": 156
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "queryWords.filter",
+          "lineNumber": 157
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "bodyWords.includes",
+          "lineNumber": 157
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "pathMatchScore",
+          "lineNumber": 169
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "errWords.some",
+          "lineNumber": 178
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "sig.toLowerCase().includes",
+          "lineNumber": 178
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "sig.toLowerCase",
+          "lineNumber": 178
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "[m.title, m.summary, m.content, ...m.tags]\n      .join(\" \")\n      .toLowerCase",
+          "lineNumber": 189
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "[m.title, m.summary, m.content, ...m.tags]\n      .join",
+          "lineNumber": 189
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "m.tags.includes",
+          "lineNumber": 194
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "toolName.split(\".\").pop",
+          "lineNumber": 196
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "toolName.split",
+          "lineNumber": 196
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "haystack.includes",
+          "lineNumber": 197
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "haystack.includes",
+          "lineNumber": 197
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "normalizePathSeparators(qf).split",
+          "lineNumber": 217
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "normalizePathSeparators",
+          "lineNumber": 217
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "normalizePathSeparators(relFile).split",
+          "lineNumber": 218
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "normalizePathSeparators",
+          "lineNumber": 218
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "Math.min",
+          "lineNumber": 220
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "Date.now",
+          "lineNumber": 238
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "Math.max",
+          "lineNumber": 244
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "m.title.trim",
+          "lineNumber": 255
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "tokenize",
+          "lineNumber": 256
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "queryWords.filter",
+          "lineNumber": 257
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "taskWords.includes",
+          "lineNumber": 257
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "m.relatedFiles.some",
+          "lineNumber": 276
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "query.recentFiles!.some",
+          "lineNumber": 277
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "normalizePathSeparators",
+          "lineNumber": 278
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "normalizePathSeparators",
+          "lineNumber": 279
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "qNorm.endsWith",
+          "lineNumber": 283
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "mNorm.split(\"/\").pop",
+          "lineNumber": 283
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "mNorm.split",
+          "lineNumber": 283
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "m.relatedErrors.some",
+          "lineNumber": 291
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "errWords.some",
+          "lineNumber": 292
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "sig.toLowerCase().includes",
+          "lineNumber": 292
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "sig.toLowerCase",
+          "lineNumber": 292
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "m.tags.some",
+          "lineNumber": 302
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "query.recentToolNames!.some",
+          "lineNumber": 303
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "tn.split(\".\").pop",
+          "lineNumber": 304
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "tn.split",
+          "lineNumber": 304
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "Math.min",
+          "lineNumber": 312
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "isReferenceMemory",
+          "lineNumber": 319
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "isArchitectureQuery",
+          "lineNumber": 325
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "isReferenceMemory",
+          "lineNumber": 325
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "EmbeddingCache.cosineSimilarity",
+          "lineNumber": 337
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "EmbeddingCache.textSimilarity",
+          "lineNumber": 344
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "[m.title, m.summary, m.content].join",
+          "lineNumber": 346
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "profileBudget.preferredTags.some",
+          "lineNumber": 365
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "m.tags.includes",
+          "lineNumber": 366
+        },
+        {
+          "caller": "scoreMemoryRecord",
+          "callee": "Date.now",
+          "lineNumber": 377
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-selector.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 213,
+      "nonEmptyLines": 197,
+      "functions": [
+        {
+          "name": "selectRecords",
+          "startLine": 82,
+          "endLine": 126,
+          "params": [
+            "sorted",
+            "limit",
+            "maxTokens",
+            "cfg"
+          ]
+        },
+        {
+          "name": "selectMetaFallback",
+          "startLine": 146,
+          "endLine": 186,
+          "params": [
+            "all",
+            "limit",
+            "maxTokens",
+            "cfg"
+          ]
+        },
+        {
+          "name": "estimateRecordTokens",
+          "startLine": 202,
+          "endLine": 213,
+          "params": [
+            "m",
+            "includeTopDetail"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "TASK_PROFILE_BUDGETS",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "ProfileBudget",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "selectRecords",
+          "line": 82,
+          "isDefault": false
+        },
+        {
+          "name": "selectMetaFallback",
+          "line": 146,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "selectRecords",
+          "callee": "estimateRecordTokens",
+          "lineNumber": 101
+        },
+        {
+          "caller": "selectRecords",
+          "callee": "records.push",
+          "lineNumber": 116
+        },
+        {
+          "caller": "selectRecords",
+          "callee": "scores.push",
+          "lineNumber": 117
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "Date.now",
+          "lineNumber": 152
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "[...all]\n    .filter((m) => m.tags.includes(\"reference\"))\n    .sort",
+          "lineNumber": 157
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "[...all]\n    .filter",
+          "lineNumber": 157
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "m.tags.includes",
+          "lineNumber": 158
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "seen.has",
+          "lineNumber": 161
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "pool.push",
+          "lineNumber": 162
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "seen.add",
+          "lineNumber": 163
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "[...all].sort",
+          "lineNumber": 167
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "seen.has",
+          "lineNumber": 171
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "pool.push",
+          "lineNumber": 173
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "seen.add",
+          "lineNumber": 174
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "selectRecords",
+          "lineNumber": 179
+        },
+        {
+          "caller": "selectMetaFallback",
+          "callee": "pool.map",
+          "lineNumber": 180
+        },
+        {
+          "caller": "estimateRecordTokens",
+          "callee": "[m.title, m.summary, ...m.relatedFiles].join",
+          "lineNumber": 206
+        },
+        {
+          "caller": "estimateRecordTokens",
+          "callee": "_tokenEstimator.count",
+          "lineNumber": 207
+        },
+        {
+          "caller": "estimateRecordTokens",
+          "callee": "m.content.trim",
+          "lineNumber": 209
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 4,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/memory-tokenizer.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 152,
+      "nonEmptyLines": 141,
+      "functions": [
+        {
+          "name": "tokenize",
+          "startLine": 39,
+          "endLine": 62,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "normalizePathSeparators",
+          "startLine": 68,
+          "endLine": 70,
+          "params": [
+            "p"
+          ]
+        },
+        {
+          "name": "stripPathLikeText",
+          "startLine": 85,
+          "endLine": 98,
+          "params": [
+            "text"
+          ]
+        },
+        {
+          "name": "pathMatchScore",
+          "startLine": 116,
+          "endLine": 152,
+          "params": [
+            "current",
+            "related",
+            "allowBroadPathMatch"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "tokenize",
+          "line": 39,
+          "isDefault": false
+        },
+        {
+          "name": "normalizePathSeparators",
+          "line": 68,
+          "isDefault": false
+        },
+        {
+          "name": "stripPathLikeText",
+          "line": 85,
+          "isDefault": false
+        },
+        {
+          "name": "pathMatchScore",
+          "line": 116,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "tokenize",
+          "callee": "text\n    .toLowerCase()\n    .replace(/[^\\w\\s一-鿿]/g, \" \")\n    .trim",
+          "lineNumber": 41
+        },
+        {
+          "caller": "tokenize",
+          "callee": "text\n    .toLowerCase()\n    .replace",
+          "lineNumber": 41
+        },
+        {
+          "caller": "tokenize",
+          "callee": "text\n    .toLowerCase",
+          "lineNumber": 41
+        },
+        {
+          "caller": "tokenize",
+          "callee": "normalized.split",
+          "lineNumber": 48
+        },
+        {
+          "caller": "tokenize",
+          "callee": "/^[一-鿿]+$/.test",
+          "lineNumber": 51
+        },
+        {
+          "caller": "tokenize",
+          "callee": "tokens.add",
+          "lineNumber": 52
+        },
+        {
+          "caller": "tokenize",
+          "callee": "tokens.add",
+          "lineNumber": 54
+        },
+        {
+          "caller": "tokenize",
+          "callee": "chunk.slice",
+          "lineNumber": 54
+        },
+        {
+          "caller": "tokenize",
+          "callee": "tokens.add",
+          "lineNumber": 59
+        },
+        {
+          "caller": "normalizePathSeparators",
+          "callee": "p.replace",
+          "lineNumber": 69
+        },
+        {
+          "caller": "stripPathLikeText",
+          "callee": "text.replace",
+          "lineNumber": 86
+        },
+        {
+          "caller": "stripPathLikeText",
+          "callee": "match.trim",
+          "lineNumber": 89
+        },
+        {
+          "caller": "stripPathLikeText",
+          "callee": "trimmed.slice",
+          "lineNumber": 91
+        },
+        {
+          "caller": "stripPathLikeText",
+          "callee": "trimmed.lastIndexOf",
+          "lineNumber": 91
+        },
+        {
+          "caller": "stripPathLikeText",
+          "callee": "basename.replace",
+          "lineNumber": 93
+        },
+        {
+          "caller": "stripPathLikeText",
+          "callee": "stem.replace",
+          "lineNumber": 95
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "normalizePathSeparators",
+          "lineNumber": 122
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "normalizePathSeparators",
+          "lineNumber": 123
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "cur.slice",
+          "lineNumber": 129
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "cur.lastIndexOf",
+          "lineNumber": 129
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "rel.slice",
+          "lineNumber": 130
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "rel.lastIndexOf",
+          "lineNumber": 130
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "cur.slice",
+          "lineNumber": 137
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "cur.lastIndexOf",
+          "lineNumber": 137
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "rel.slice",
+          "lineNumber": 138
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "rel.lastIndexOf",
+          "lineNumber": 138
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "cur.split",
+          "lineNumber": 142
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "rel.split",
+          "lineNumber": 143
+        },
+        {
+          "caller": "pathMatchScore",
+          "callee": "Math.min",
+          "lineNumber": 145
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/src/session-memory.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 263,
+      "nonEmptyLines": 245,
+      "classes": [
+        {
+          "name": "SessionMemoryStore",
+          "startLine": 83,
+          "endLine": 263,
+          "methods": [
+            "constructor",
+            "load",
+            "save",
+            "loadLatest",
+            "listRecent",
+            "toMarkdown",
+            "fromMarkdown"
+          ],
+          "properties": [
+            "sessionsDir"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "SessionMemoryStore",
+          "line": 83,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "constructor",
+          "callee": "sessionMemoryDir",
+          "lineNumber": 93
+        },
+        {
+          "caller": "load",
+          "callee": "path.join",
+          "lineNumber": 103
+        },
+        {
+          "caller": "load",
+          "callee": "existsSync",
+          "lineNumber": 104
+        },
+        {
+          "caller": "load",
+          "callee": "readFileSync",
+          "lineNumber": 105
+        },
+        {
+          "caller": "load",
+          "callee": "this.fromMarkdown",
+          "lineNumber": 106
+        },
+        {
+          "caller": "save",
+          "callee": "path.join",
+          "lineNumber": 118
+        },
+        {
+          "caller": "save",
+          "callee": "mkdirSync",
+          "lineNumber": 119
+        },
+        {
+          "caller": "save",
+          "callee": "writeFileSync",
+          "lineNumber": 120
+        },
+        {
+          "caller": "save",
+          "callee": "this.toMarkdown",
+          "lineNumber": 120
+        },
+        {
+          "caller": "loadLatest",
+          "callee": "this.listRecent",
+          "lineNumber": 129
+        },
+        {
+          "caller": "listRecent",
+          "callee": "existsSync",
+          "lineNumber": 141
+        },
+        {
+          "caller": "listRecent",
+          "callee": "readdirSync(this.sessionsDir)\n      .filter((f) => f.endsWith(\".md\"))\n      .map((f) => {\n        const fp = path.join(this.sessionsDir, f);\n        return { path: fp, mtime: statSync(fp).mtimeMs };\n      })\n      // 按修改时间降序排序（最新的在前）\n      .sort((a, b) => b.mtime - a.mtime)\n      .slice",
+          "lineNumber": 142
+        },
+        {
+          "caller": "listRecent",
+          "callee": "readdirSync(this.sessionsDir)\n      .filter((f) => f.endsWith(\".md\"))\n      .map((f) => {\n        const fp = path.join(this.sessionsDir, f);\n        return { path: fp, mtime: statSync(fp).mtimeMs };\n      })\n      // 按修改时间降序排序（最新的在前）\n      .sort",
+          "lineNumber": 142
+        },
+        {
+          "caller": "listRecent",
+          "callee": "readdirSync(this.sessionsDir)\n      .filter((f) => f.endsWith(\".md\"))\n      .map",
+          "lineNumber": 142
+        },
+        {
+          "caller": "listRecent",
+          "callee": "readdirSync(this.sessionsDir)\n      .filter",
+          "lineNumber": 142
+        },
+        {
+          "caller": "listRecent",
+          "callee": "readdirSync",
+          "lineNumber": 142
+        },
+        {
+          "caller": "listRecent",
+          "callee": "f.endsWith",
+          "lineNumber": 143
+        },
+        {
+          "caller": "listRecent",
+          "callee": "path.join",
+          "lineNumber": 145
+        },
+        {
+          "caller": "listRecent",
+          "callee": "statSync",
+          "lineNumber": 146
+        },
+        {
+          "caller": "listRecent",
+          "callee": "readFileSync",
+          "lineNumber": 154
+        },
+        {
+          "caller": "listRecent",
+          "callee": "this.fromMarkdown",
+          "lineNumber": 155
+        },
+        {
+          "caller": "listRecent",
+          "callee": "memories.push",
+          "lineNumber": 156
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "String",
+          "lineNumber": 176
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "sections.push",
+          "lineNumber": 182
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "sections.push",
+          "lineNumber": 185
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "sections.push",
+          "lineNumber": 188
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "memory.filesAndFunctions.join",
+          "lineNumber": 189
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "sections.push",
+          "lineNumber": 193
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "memory.keyDecisions.map((d) => `- ${d}`).join",
+          "lineNumber": 194
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "memory.keyDecisions.map",
+          "lineNumber": 194
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "sections.push",
+          "lineNumber": 198
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "memory.errorsAndFixes.map((e) => `- ${e}`).join",
+          "lineNumber": 199
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "memory.errorsAndFixes.map",
+          "lineNumber": 199
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "sections.push",
+          "lineNumber": 203
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "sections.join",
+          "lineNumber": 208
+        },
+        {
+          "caller": "toMarkdown",
+          "callee": "stringifyYamlFrontmatter",
+          "lineNumber": 209
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "splitFrontmatter",
+          "lineNumber": 225
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "parseYamlFrontmatter",
+          "lineNumber": 227
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "Number",
+          "lineNumber": 232
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "Number.isNaN",
+          "lineNumber": 234
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "parseMarkdownSections",
+          "lineNumber": 237
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "sections[\"files & functions\"]\n        ?.split(\"\\n\")\n        .filter",
+          "lineNumber": 246
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "sections[\"files & functions\"]\n        ?.split",
+          "lineNumber": 246
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "sections[\"key decisions\"]\n        ?.split(\"\\n\")\n        .filter((l) => l.startsWith(\"- \"))\n        .map",
+          "lineNumber": 250
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "sections[\"key decisions\"]\n        ?.split(\"\\n\")\n        .filter",
+          "lineNumber": 250
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "sections[\"key decisions\"]\n        ?.split",
+          "lineNumber": 250
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "l.startsWith",
+          "lineNumber": 252
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "l.slice",
+          "lineNumber": 253
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "sections[\"errors & fixes\"]\n        ?.split(\"\\n\")\n        .filter((l) => l.startsWith(\"- \"))\n        .map",
+          "lineNumber": 255
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "sections[\"errors & fixes\"]\n        ?.split(\"\\n\")\n        .filter",
+          "lineNumber": 255
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "sections[\"errors & fixes\"]\n        ?.split",
+          "lineNumber": 255
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "l.startsWith",
+          "lineNumber": 257
+        },
+        {
+          "caller": "fromMarkdown",
+          "callee": "l.slice",
+          "lineNumber": 258
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/memory/src/unified-memory-store.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 163,
+      "nonEmptyLines": 152,
+      "classes": [
+        {
+          "name": "UnifiedMemoryStore",
+          "startLine": 70,
+          "endLine": 163,
+          "methods": [
+            "constructor",
+            "list",
+            "listExcludingCurrent",
+            "getAutoMtime"
+          ],
+          "properties": [
+            "autoStore",
+            "sessionStore",
+            "sessionId",
+            "sessionPoolSize"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "UnifiedMemoryStore",
+          "line": 70,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "list",
+          "callee": "this.autoStore.list",
+          "lineNumber": 108
+        },
+        {
+          "caller": "list",
+          "callee": "this.getAutoMtime",
+          "lineNumber": 109
+        },
+        {
+          "caller": "list",
+          "callee": "records.push",
+          "lineNumber": 110
+        },
+        {
+          "caller": "list",
+          "callee": "autoMemoryToRecord",
+          "lineNumber": 110
+        },
+        {
+          "caller": "list",
+          "callee": "this.sessionStore.listRecent",
+          "lineNumber": 114
+        },
+        {
+          "caller": "list",
+          "callee": "records.push",
+          "lineNumber": 115
+        },
+        {
+          "caller": "list",
+          "callee": "sessionMemoryToRecord",
+          "lineNumber": 115
+        },
+        {
+          "caller": "listExcludingCurrent",
+          "callee": "this.list().filter",
+          "lineNumber": 133
+        },
+        {
+          "caller": "listExcludingCurrent",
+          "callee": "this.list",
+          "lineNumber": 133
+        },
+        {
+          "caller": "getAutoMtime",
+          "callee": "statSync",
+          "lineNumber": 157
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/memory/test/embedding-cache.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 180,
+      "nonEmptyLines": 156,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/test/fixtures.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 34,
+      "nonEmptyLines": 31,
+      "functions": [
+        {
+          "name": "makeRecord",
+          "startLine": 7,
+          "endLine": 26,
+          "params": [
+            "overrides"
+          ]
+        },
+        {
+          "name": "fakeEmbedding",
+          "startLine": 28,
+          "endLine": 34,
+          "params": [
+            "seed",
+            "dims"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "makeRecord",
+          "line": 7,
+          "isDefault": false
+        },
+        {
+          "name": "fakeEmbedding",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "makeRecord",
+          "callee": "Date.now",
+          "lineNumber": 12
+        },
+        {
+          "caller": "makeRecord",
+          "callee": "Date.now",
+          "lineNumber": 13
+        },
+        {
+          "caller": "rng",
+          "callee": "Math.sin",
+          "lineNumber": 30
+        },
+        {
+          "caller": "rng",
+          "callee": "Math.floor",
+          "lineNumber": 31
+        },
+        {
+          "caller": "fakeEmbedding",
+          "callee": "Array.from",
+          "lineNumber": 33
+        },
+        {
+          "caller": "fakeEmbedding",
+          "callee": "rng",
+          "lineNumber": 33
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/test/memory-e2e.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 446,
+      "nonEmptyLines": 411,
+      "functions": [
+        {
+          "name": "extractSessionHighlightsToAutoMemory",
+          "startLine": 29,
+          "endLine": 117,
+          "params": [
+            "opts"
+          ]
+        },
+        {
+          "name": "retrieve",
+          "startLine": 126,
+          "endLine": 128,
+          "params": [
+            "q"
+          ]
+        },
+        {
+          "name": "rank",
+          "startLine": 129,
+          "endLine": 131,
+          "params": [
+            "q"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "Date.now",
+          "lineNumber": 35
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\")\n    .update(sessionMemory.session)\n    .digest(\"hex\")\n    .slice",
+          "lineNumber": 39
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\")\n    .update(sessionMemory.session)\n    .digest",
+          "lineNumber": 39
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\")\n    .update",
+          "lineNumber": 39
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash",
+          "lineNumber": 39
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "decision.trim",
+          "lineNumber": 57
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update(trimmed).digest(\"hex\").slice",
+          "lineNumber": 59
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update(trimmed).digest",
+          "lineNumber": 59
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update",
+          "lineNumber": 59
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash",
+          "lineNumber": 59
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "entries.push",
+          "lineNumber": 60
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "trimmed.slice",
+          "lineNumber": 62
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "(sessionMemory.filesAndFunctions ?? []).join",
+          "lineNumber": 63
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "err.trim",
+          "lineNumber": 73
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update(trimmed).digest(\"hex\").slice",
+          "lineNumber": 75
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update(trimmed).digest",
+          "lineNumber": 75
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash(\"sha256\").update",
+          "lineNumber": 75
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "createHash",
+          "lineNumber": 75
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "entries.push",
+          "lineNumber": 76
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "trimmed.slice",
+          "lineNumber": 78
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "(sessionMemory.filesAndFunctions ?? []).join",
+          "lineNumber": 79
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "extractErrorSignatures",
+          "lineNumber": 83
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "extractErrorSignatures",
+          "lineNumber": 84
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "autoMemoryStore.upsert",
+          "lineNumber": 94
+        },
+        {
+          "caller": "extractSessionHighlightsToAutoMemory",
+          "callee": "autoMemoryStore.buildIndex",
+          "lineNumber": 113
+        },
+        {
+          "caller": "retrieve",
+          "callee": "new KeywordMemoryRetriever(unified).retrieve",
+          "lineNumber": 127
+        },
+        {
+          "caller": "rank",
+          "callee": "new KeywordMemoryRetriever(unified).rankRecords",
+          "lineNumber": 130
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 0,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/test/memory-recall-semantic.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 145,
+      "nonEmptyLines": 130,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/test/memory-record.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 42,
+      "nonEmptyLines": 37,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/test/memory-retrieval-cascade.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 168,
+      "nonEmptyLines": 155,
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/test/memory-retriever.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 633,
+      "nonEmptyLines": 552,
+      "classes": [
+        {
+          "name": "FakeStore",
+          "startLine": 7,
+          "endLine": 17,
+          "methods": [
+            "add",
+            "listExcludingCurrent"
+          ],
+          "properties": [
+            "records"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "add",
+          "callee": "this.records.push",
+          "lineNumber": 11
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/memory/test/memory-v11-benchmark.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 154,
+      "nonEmptyLines": 146,
+      "classes": [
+        {
+          "name": "FixtureStore",
+          "startLine": 13,
+          "endLine": 19,
+          "methods": [
+            "constructor",
+            "listExcludingCurrent"
+          ],
+          "properties": []
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/memory/test/memory-v12-features.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 519,
+      "nonEmptyLines": 437,
+      "classes": [
+        {
+          "name": "FakeStore",
+          "startLine": 94,
+          "endLine": 98,
+          "methods": [
+            "add",
+            "listExcludingCurrent"
+          ],
+          "properties": [
+            "records"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "add",
+          "callee": "this.records.push",
+          "lineNumber": 96
+        },
+        {
+          "caller": "setupStore",
+          "callee": "mkdtempSync",
+          "lineNumber": 226
+        },
+        {
+          "caller": "setupStore",
+          "callee": "path.join",
+          "lineNumber": 226
+        },
+        {
+          "caller": "setupStore",
+          "callee": "tmpdir",
+          "lineNumber": 226
+        },
+        {
+          "caller": "setupStore",
+          "callee": "path.join",
+          "lineNumber": 229
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "packages/memory/test/session-memory.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 154,
+      "nonEmptyLines": 138,
+      "callGraph": [
+        {
+          "caller": "makeMemory",
+          "callee": "Date.now",
+          "lineNumber": 33
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/memory/test/unified-memory-store.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 76,
+      "nonEmptyLines": 69,
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

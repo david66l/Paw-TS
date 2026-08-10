@@ -1,0 +1,739 @@
+{
+  "nodes": [
+    {
+      "id": "document:.claude/plans/dynamic-toasting-quilt.md",
+      "type": "document",
+      "name": "dynamic-toasting-quilt.md",
+      "filePath": ".claude/plans/dynamic-toasting-quilt.md",
+      "summary": "包含 8 个章节的文档，主题为「A.2 Session ↔ Auto Memory 双向联动 + 跨会话 Boost」。",
+      "tags": [
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:.memory/remember_number.md",
+      "type": "document",
+      "name": "remember_number.md",
+      "filePath": ".memory/remember_number.md",
+      "summary": "文档文件，共 5 行。",
+      "tags": [
+        "documentation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:.understand-anything/.understandignore",
+      "type": "file",
+      "name": ".understandignore",
+      "filePath": ".understand-anything/.understandignore",
+      "summary": "Understand-Anything 忽略规则文件，定义扫描与分析时需要排除的文件与目录。",
+      "tags": [
+        "configuration",
+        "ignore-rules"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:.understand-anything/intermediate/scan-result.json",
+      "type": "config",
+      "name": "scan-result.json",
+      "filePath": ".understand-anything/intermediate/scan-result.json",
+      "summary": "项目扫描结果，包含所有文件的清单、语言检测、框架信息与导入映射。",
+      "tags": [
+        "configuration",
+        "project-scan",
+        "metadata"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/架构决策/001-context-compression.md",
+      "type": "document",
+      "name": "001-context-compression.md",
+      "filePath": "文档/架构决策/001-context-compression.md",
+      "summary": "包含 5 个章节的文档，主题为「ADR 001: Three-layer context compression」。",
+      "tags": [
+        "architecture",
+        "context-compression",
+        "adr",
+        "documentation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:文档/阶段计划/phase1-agent-orchestration/orchestration-mode-analysis.md",
+      "type": "document",
+      "name": "orchestration-mode-analysis.md",
+      "filePath": "文档/阶段计划/phase1-agent-orchestration/orchestration-mode-analysis.md",
+      "summary": "包含 24 个章节的文档，主题为「Phase 1 编排模式分析：三种架构对比与推荐」。",
+      "tags": [
+        "planning",
+        "analysis",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/阶段计划/phase1-agent-orchestration/plan.md",
+      "type": "document",
+      "name": "plan.md",
+      "filePath": "文档/阶段计划/phase1-agent-orchestration/plan.md",
+      "summary": "包含 47 个章节的文档，主题为「Phase 1 计划：Agent Orchestrator 架构重构（最终确认版 v2）」。",
+      "tags": [
+        "planning",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/阶段计划/phase2-context-management/plan.md",
+      "type": "document",
+      "name": "plan.md",
+      "filePath": "文档/阶段计划/phase2-context-management/plan.md",
+      "summary": "包含 23 个章节的文档，主题为「Phase 2 规划分析 — 上下文管理架构优化」。",
+      "tags": [
+        "planning",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:文档/阶段计划/phase3-memory-retrieval/plan.md",
+      "type": "document",
+      "name": "plan.md",
+      "filePath": "文档/阶段计划/phase3-memory-retrieval/plan.md",
+      "summary": "包含 41 个章节的文档，主题为「Phase 3 规划分析 — 轻量记忆检索化」。",
+      "tags": [
+        "planning",
+        "documentation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:文档/阶段计划/phase3.5-memory-hygiene/plan.md",
+      "type": "document",
+      "name": "plan.md",
+      "filePath": "文档/阶段计划/phase3.5-memory-hygiene/plan.md",
+      "summary": "包含 13 个章节的文档，主题为「Phase 3.5: Memory Hygiene / Index / Coverage」。",
+      "tags": [
+        "planning",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:文档/演示/GOLDEN_PATH.md",
+      "type": "document",
+      "name": "GOLDEN_PATH.md",
+      "filePath": "文档/演示/GOLDEN_PATH.md",
+      "summary": "包含 8 个章节的文档，主题为「Golden Path Demo」。",
+      "tags": [
+        "demo",
+        "documentation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:文档/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "文档/README.md",
+      "summary": "包含 3 个章节的文档，主题为「Paw-TS 文档索引」。",
+      "tags": [
+        "entry-point",
+        "documentation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:apps/cli/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "apps/cli/package.json",
+      "summary": "包配置文件，定义 package.json 对应包的依赖、脚本与模块导出。",
+      "tags": [
+        "configuration",
+        "package-manager",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/cli/src/main.ts",
+      "type": "file",
+      "name": "main.ts",
+      "filePath": "apps/cli/src/main.ts",
+      "summary": "CLI 入口，共 228 行。",
+      "tags": [
+        "entry-point",
+        "cli"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/cli/src/main.ts:usage",
+      "type": "function",
+      "name": "usage",
+      "filePath": "apps/cli/src/main.ts",
+      "lineRange": [
+        19,
+        34
+      ],
+      "summary": "函数，第 19-34 行，参数: 无。",
+      "tags": [
+        "function",
+        "cli-help"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/cli/src/main.ts:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "apps/cli/src/main.ts",
+      "lineRange": [
+        36,
+        226
+      ],
+      "summary": "函数，第 36-226 行，参数: 无。",
+      "tags": [
+        "function",
+        "entry-point"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/cli/test/cli-smoke.test.ts",
+      "type": "file",
+      "name": "cli-smoke.test.ts",
+      "filePath": "apps/cli/test/cli-smoke.test.ts",
+      "summary": "测试文件。源码文件，共 27 行。",
+      "tags": [
+        "test",
+        "cli"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:apps/cli/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "apps/cli/tsconfig.json",
+      "summary": "TypeScript 编译器配置，继承基础 tsconfig 并指定编译输入路径。",
+      "tags": [
+        "configuration",
+        "typescript",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/tui/src/jsx-runtime.ts",
+      "type": "file",
+      "name": "jsx-runtime.ts",
+      "filePath": "apps/tui/src/jsx-runtime.ts",
+      "summary": "包含1 个函数的源码文件，共 35 行。",
+      "tags": [
+        "jsx-runtime"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/tui/src/jsx-runtime.ts:jsxDEV",
+      "type": "function",
+      "name": "jsxDEV",
+      "filePath": "apps/tui/src/jsx-runtime.ts",
+      "lineRange": [
+        21,
+        33
+      ],
+      "summary": "函数（导出），第 21-33 行，参数: type、props、key、_isStatic、_source 等 6 个参数。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/tui/Untitled",
+      "type": "file",
+      "name": "Untitled",
+      "filePath": "apps/tui/Untitled",
+      "summary": "空文件或占位文件。",
+      "tags": [
+        "placeholder"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:benchmarks/download-data.py",
+      "type": "file",
+      "name": "download-data.py",
+      "filePath": "benchmarks/download-data.py",
+      "summary": "包含3 个函数的源码文件，共 89 行。",
+      "tags": [
+        "data-download",
+        "benchmark"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:benchmarks/download-data.py:save_jsonl",
+      "type": "function",
+      "name": "save_jsonl",
+      "filePath": "benchmarks/download-data.py",
+      "lineRange": [
+        22,
+        25
+      ],
+      "summary": "函数（导出），第 22-25 行，参数: path、records。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:benchmarks/download-data.py:download_repobench",
+      "type": "function",
+      "name": "download_repobench",
+      "filePath": "benchmarks/download-data.py",
+      "lineRange": [
+        28,
+        58
+      ],
+      "summary": "函数（导出），第 28-58 行，参数: max_samples。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:benchmarks/download-data.py:download_longbench_code",
+      "type": "function",
+      "name": "download_longbench_code",
+      "filePath": "benchmarks/download-data.py",
+      "lineRange": [
+        61,
+        83
+      ],
+      "summary": "函数（导出），第 61-83 行，参数: max_samples。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:benchmarks/judge/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "benchmarks/judge/README.md",
+      "summary": "包含 7 个章节的文档，主题为「LLM-as-a-Judge for paw-ts」。",
+      "tags": [
+        "entry-point",
+        "benchmark",
+        "documentation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:benchmarks/repobench/adapter.ts",
+      "type": "file",
+      "name": "adapter.ts",
+      "filePath": "benchmarks/repobench/adapter.ts",
+      "summary": "包含4 个函数的源码文件，共 200 行。",
+      "tags": [
+        "benchmark",
+        "adapter"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:benchmarks/repobench/adapter.ts:extractSnippets",
+      "type": "function",
+      "name": "extractSnippets",
+      "filePath": "benchmarks/repobench/adapter.ts",
+      "lineRange": [
+        49,
+        102
+      ],
+      "summary": "函数，第 49-102 行，参数: filePath、content。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:benchmarks/repobench/adapter.ts:loadLocalCorpus",
+      "type": "function",
+      "name": "loadLocalCorpus",
+      "filePath": "benchmarks/repobench/adapter.ts",
+      "lineRange": [
+        105,
+        156
+      ],
+      "summary": "函数（导出），第 105-156 行，参数: 无。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:benchmarks/repobench/adapter.ts:loadLocalQueries",
+      "type": "function",
+      "name": "loadLocalQueries",
+      "filePath": "benchmarks/repobench/adapter.ts",
+      "lineRange": [
+        163,
+        200
+      ],
+      "summary": "函数（导出），第 163-200 行，参数: 无。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:benchmarks/repobench/benchmark.test.ts",
+      "type": "file",
+      "name": "benchmark.test.ts",
+      "filePath": "benchmarks/repobench/benchmark.test.ts",
+      "summary": "测试文件。包含3 个函数、1 个类的源码文件，共 128 行。",
+      "tags": [
+        "test",
+        "benchmark"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:benchmarks/repobench/benchmark.test.ts:mrr",
+      "type": "function",
+      "name": "mrr",
+      "filePath": "benchmarks/repobench/benchmark.test.ts",
+      "lineRange": [
+        38,
+        49
+      ],
+      "summary": "函数，第 38-49 行，参数: retrievedIds、expected。",
+      "tags": [
+        "function"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:benchmarks/repobench/benchmark.test.ts:CorpusStore",
+      "type": "class",
+      "name": "CorpusStore",
+      "filePath": "benchmarks/repobench/benchmark.test.ts",
+      "lineRange": [
+        8,
+        18
+      ],
+      "summary": "类，第 8-18 行，2 个方法，1 个属性。",
+      "tags": [
+        "class",
+        "store"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:benchmarks/swe-bench/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "benchmarks/swe-bench/README.md",
+      "summary": "包含 8 个章节的文档，主题为「SWE-bench Lite Adapter for paw-ts」。",
+      "tags": [
+        "entry-point",
+        "benchmark",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:benchmarks/swe-bench/run.py",
+      "type": "file",
+      "name": "run.py",
+      "filePath": "benchmarks/swe-bench/run.py",
+      "summary": "包含4 个函数的源码文件，共 128 行。",
+      "tags": [
+        "benchmark-runner",
+        "benchmark"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:benchmarks/swe-bench/run.py:clone_repo",
+      "type": "function",
+      "name": "clone_repo",
+      "filePath": "benchmarks/swe-bench/run.py",
+      "lineRange": [
+        23,
+        36
+      ],
+      "summary": "函数（导出），第 23-36 行，参数: repo、commit、dest。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:benchmarks/swe-bench/run.py:run_paw_ts",
+      "type": "function",
+      "name": "run_paw_ts",
+      "filePath": "benchmarks/swe-bench/run.py",
+      "lineRange": [
+        39,
+        55
+      ],
+      "summary": "函数（导出），第 39-55 行，参数: workspace、goal、run_id。",
+      "tags": [
+        "function",
+        "exported",
+        "runner"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:benchmarks/swe-bench/run.py:extract_patch",
+      "type": "function",
+      "name": "extract_patch",
+      "filePath": "benchmarks/swe-bench/run.py",
+      "lineRange": [
+        58,
+        65
+      ],
+      "summary": "函数（导出），第 58-65 行，参数: workspace。",
+      "tags": [
+        "function",
+        "exported"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:benchmarks/swe-bench/run.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "benchmarks/swe-bench/run.py",
+      "lineRange": [
+        68,
+        124
+      ],
+      "summary": "函数（导出），第 68-124 行，参数: 无。",
+      "tags": [
+        "function",
+        "exported",
+        "entry-point"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/升级/第1轮-工具调用协议升级.md",
+      "type": "document",
+      "name": "第1轮-工具调用协议升级.md",
+      "filePath": "docs/升级/第1轮-工具调用协议升级.md",
+      "summary": "包含 11 个章节的文档，主题为「第1轮升级：工具调用协议 — 原生 function calling 优先」。",
+      "tags": [
+        "upgrade",
+        "documentation"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/cli/src/main.ts",
+      "target": "function:apps/cli/src/main.ts:usage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/cli/src/main.ts",
+      "target": "function:apps/cli/src/main.ts:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/tui/src/jsx-runtime.ts",
+      "target": "function:apps/tui/src/jsx-runtime.ts:jsxDEV",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/tui/src/jsx-runtime.ts",
+      "target": "function:apps/tui/src/jsx-runtime.ts:jsxDEV",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/download-data.py",
+      "target": "function:benchmarks/download-data.py:save_jsonl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/download-data.py",
+      "target": "function:benchmarks/download-data.py:save_jsonl",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/download-data.py",
+      "target": "function:benchmarks/download-data.py:download_repobench",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/download-data.py",
+      "target": "function:benchmarks/download-data.py:download_repobench",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/download-data.py",
+      "target": "function:benchmarks/download-data.py:download_longbench_code",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/download-data.py",
+      "target": "function:benchmarks/download-data.py:download_longbench_code",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/repobench/adapter.ts",
+      "target": "function:benchmarks/repobench/adapter.ts:extractSnippets",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/repobench/adapter.ts",
+      "target": "function:benchmarks/repobench/adapter.ts:loadLocalCorpus",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/repobench/adapter.ts",
+      "target": "function:benchmarks/repobench/adapter.ts:loadLocalCorpus",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/repobench/adapter.ts",
+      "target": "function:benchmarks/repobench/adapter.ts:loadLocalQueries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/repobench/adapter.ts",
+      "target": "function:benchmarks/repobench/adapter.ts:loadLocalQueries",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/repobench/benchmark.test.ts",
+      "target": "function:benchmarks/repobench/benchmark.test.ts:mrr",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/repobench/benchmark.test.ts",
+      "target": "class:benchmarks/repobench/benchmark.test.ts:CorpusStore",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/repobench/benchmark.test.ts",
+      "target": "file:benchmarks/repobench/adapter.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:benchmarks/swe-bench/run.py",
+      "target": "function:benchmarks/swe-bench/run.py:clone_repo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/swe-bench/run.py",
+      "target": "function:benchmarks/swe-bench/run.py:clone_repo",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/swe-bench/run.py",
+      "target": "function:benchmarks/swe-bench/run.py:run_paw_ts",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/swe-bench/run.py",
+      "target": "function:benchmarks/swe-bench/run.py:run_paw_ts",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/swe-bench/run.py",
+      "target": "function:benchmarks/swe-bench/run.py:extract_patch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/swe-bench/run.py",
+      "target": "function:benchmarks/swe-bench/run.py:extract_patch",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/swe-bench/run.py",
+      "target": "function:benchmarks/swe-bench/run.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:benchmarks/swe-bench/run.py",
+      "target": "function:benchmarks/swe-bench/run.py:main",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:benchmarks/repobench/adapter.ts",
+      "target": "file:benchmarks/repobench/benchmark.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

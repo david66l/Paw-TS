@@ -1,0 +1,78 @@
+{
+  "nodes": [
+    {
+      "id": "service:docker/paw-sandbox/Dockerfile",
+      "type": "service",
+      "name": "Dockerfile",
+      "filePath": "docker/paw-sandbox/Dockerfile",
+      "summary": "Paw Shell 沙箱的基础 Docker 镜像，基于 Debian Bookworm Slim 构建，预装 curl、git、ripgrep、procps 等开发工具，用于在容器内安全执行 LLM 生成的 Shell 命令。",
+      "tags": ["containerization", "infrastructure", "sandbox", "security"],
+      "complexity": "simple",
+      "languageNotes": "单阶段构建，使用 --no-install-recommends 和 apt 缓存清理减小镜像体积；设置 WORKDIR /workspace 作为沙箱工作目录。"
+    },
+    {
+      "id": "step:docker/paw-sandbox/Dockerfile:FROM debian:bookworm-slim",
+      "type": "service",
+      "name": "FROM debian:bookworm-slim",
+      "filePath": "docker/paw-sandbox/Dockerfile",
+      "summary": "基于官方 Debian Bookworm Slim 镜像作为基础层。",
+      "tags": ["base-image", "debian"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:docker/paw-sandbox/Dockerfile:RUN apt-get update \\",
+      "type": "service",
+      "name": "RUN apt-get update \\",
+      "filePath": "docker/paw-sandbox/Dockerfile",
+      "summary": "安装沙箱运行所需的系统工具包：ca-certificates、curl、findutils、git、grep、procps、ripgrep，安装后清理 apt 缓存。",
+      "tags": ["package-install", "tools"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:docker/paw-sandbox/Dockerfile:WORKDIR /workspace",
+      "type": "service",
+      "name": "WORKDIR /workspace",
+      "filePath": "docker/paw-sandbox/Dockerfile",
+      "summary": "设置容器默认工作目录为 /workspace，与沙箱路径映射逻辑对应。",
+      "tags": ["workdir", "configuration"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "service:docker/paw-sandbox/Dockerfile",
+      "target": "step:docker/paw-sandbox/Dockerfile:FROM debian:bookworm-slim",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker/paw-sandbox/Dockerfile",
+      "target": "step:docker/paw-sandbox/Dockerfile:RUN apt-get update \\",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker/paw-sandbox/Dockerfile",
+      "target": "step:docker/paw-sandbox/Dockerfile:WORKDIR /workspace",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker/paw-sandbox/Dockerfile",
+      "target": "file:packages/harness/src/sandbox/docker-runner.ts",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:docker/paw-sandbox/Dockerfile",
+      "target": "file:packages/harness/src/sandbox/types.ts",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

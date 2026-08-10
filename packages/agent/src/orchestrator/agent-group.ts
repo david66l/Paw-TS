@@ -17,8 +17,9 @@ import type { RunEvent, RunEventEnvelope } from "@paw/core";
 import type { AgentToolCallAction } from "@paw/core";
 import type { SubAgentLauncher } from "@paw/harness";
 import type { WorkspaceWatcher } from "@paw/workspace";
-import { MULTI_AGENT_LIMITS, PARENT_FORWARD_EVENTS } from "./constants.js";
 import { parseRunAgentMaxSteps } from "./agent-args.js";
+import { MULTI_AGENT_LIMITS, PARENT_FORWARD_EVENTS } from "./constants.js";
+import { FileLockManager } from "./file-lock.js";
 import type {
   AgentRunState,
   ChildAgentState,
@@ -106,6 +107,10 @@ export class AgentGroup {
       ? AbortSignal.any([parentSignal, this.localController.signal])
       : this.localController.signal;
 
+    // 本批并行子 Agent 共享的文件锁表：先到先得，冲突者等待/超时失败。
+    // 批次粒度即可——不同 launchAll 之间是串行的，不会并发写。
+    const fileLock = new FileLockManager();
+
     // 构建 ChildController 列表
     const controllers: ChildController[] = calls.map((call, idx) => {
       const agentId = `child-${this.parentRunId}-${idx}`;
@@ -118,8 +123,8 @@ export class AgentGroup {
         call.args && typeof call.args === "object"
           ? (call.args as Record<string, unknown>)
           : undefined;
-      const maxSteps =
-        parseRunAgentMaxSteps(callArgs) ?? MULTI_AGENT_LIMITS.maxChildSteps;
+      // 未传 max_steps 时留给 launcher（可按 AgentSpec.maxSteps）
+      const maxSteps = parseRunAgentMaxSteps(callArgs);
 
       const state: ChildAgentState = {
         agentId,
@@ -132,12 +137,14 @@ export class AgentGroup {
       const promise = this.launcher
         .launchStreaming({
           goal,
-          maxSteps,
+          ...(maxSteps !== undefined ? { maxSteps } : {}),
           signal: childSignal,
           parentRunId: this.parentRunId,
           agentId,
           onEvent: (envelope) => this.onChildEvent(agentId, envelope),
           sharedContext,
+          args: callArgs,
+          fileLock,
         })
         .then((result) => {
           this.updateChildState(agentId, "completed", 100, result);
@@ -151,12 +158,16 @@ export class AgentGroup {
             summary: `Child agent failed: ${errorMsg}`,
             errors: [errorMsg],
           };
+        })
+        .finally(() => {
+          // 子 Agent 运行结束：释放其持有的全部文件锁
+          fileLock.releaseAll(agentId);
         });
 
       const controller: ChildController = {
         agentId,
         goal,
-        maxSteps,
+        maxSteps: maxSteps ?? MULTI_AGENT_LIMITS.maxChildSteps,
         promise,
         state,
       };
@@ -227,9 +238,7 @@ export class AgentGroup {
       case "loop.tick": {
         const maxSteps = controller.maxSteps;
         const progress =
-          maxSteps > 0
-            ? Math.min(50, (event.turn / maxSteps) * 50)
-            : 0;
+          maxSteps > 0 ? Math.min(50, (event.turn / maxSteps) * 50) : 0;
         this.updateChildState(agentId, "model_calling", progress);
         break;
       }
@@ -260,6 +269,9 @@ export class AgentGroup {
         event: {
           type: childEventType as RunEvent["type"],
           agentId,
+          // 顶层 hoist：与 run_agent tool.call 的 callId 一致；goal 便于前端直接取用
+          callId: agentId,
+          goal: controller.goal,
           originalEvent: event,
         } as unknown as RunEvent,
       });

@@ -19,15 +19,131 @@
  * - 用于断点恢复时回滚文件状态
  */
 
-import type { AgentToolCallAction, ContextManager, RunEvent } from "@paw/core";
-import { isMutatingTool } from "@paw/core";
+import type {
+  AgentToolCallAction,
+  ArtifactRegistry,
+  ContextManager,
+  RunEvent,
+  ToolFileChange,
+} from "@paw/core";
+import { extractCheckpointTargets, isMutatingTool } from "@paw/core";
 import { saveCheckpoint } from "@paw/core";
-import type { HarnessContext, ShellSandboxConfig, ToolRunResult } from "@paw/harness";
+import type {
+  HarnessContext,
+  ShellSandboxConfig,
+  ToolRunResult,
+} from "@paw/harness";
 import { toolRequiresApproval } from "@paw/harness";
-import { DefaultContextSummarizer } from "./context-summarizer.js";
-import { SUB_AGENT_TOOL_NAME } from "./constants.js";
-import { formatToolResultEventDetail } from "../tool-result-detail.js";
+import type { FileLockLike } from "@paw/harness";
 import type { TaskStateManager } from "../task-state.js";
+import { formatToolResultEventDetail } from "../tool-result-detail.js";
+import { SUB_AGENT_TOOL_NAME } from "./constants.js";
+import { DefaultContextSummarizer } from "./context-summarizer.js";
+import { truncatePayloadWithOutcome } from "./truncate-payload.js";
+
+/** 文件锁等待超时（毫秒）：超时后该工具调用按冲突失败返回 */
+const FILE_LOCK_TIMEOUT_MS = 20_000;
+
+/**
+ * 从工具结果 payload 提取文件变更统计（供 tool.result 事件的 fileChanges 字段）。
+ * 兼容三种 payload：
+ * - write_file / edit_file：单对象 {path, linesAdded, linesRemoved, diff?}
+ * - apply_patch：{results: [{path, linesAdded?, linesRemoved?, ok}]}
+ */
+export function fileChangesFromPayload(
+  payload: unknown,
+  workspaceRoot: string,
+): ToolFileChange[] | undefined {
+  const direct = toFileChange(payload, workspaceRoot);
+  if (direct) return [direct];
+  if (payload !== null && typeof payload === "object") {
+    const results = (payload as Record<string, unknown>).results;
+    if (Array.isArray(results)) {
+      const out = results
+        .map((r) => toFileChange(r, workspaceRoot))
+        .filter((c): c is ToolFileChange => c !== undefined);
+      if (out.length > 0) return out;
+    }
+  }
+  return undefined;
+}
+
+function toFileChange(
+  value: unknown,
+  workspaceRoot: string,
+): ToolFileChange | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const o = value as Record<string, unknown>;
+  if (o.ok === false) return undefined;
+  const added = o.linesAdded;
+  const removed = o.linesRemoved;
+  if (typeof added !== "number" && typeof removed !== "number") {
+    return undefined;
+  }
+  let p = typeof o.path === "string" ? o.path : "";
+  // edit_file 返回绝对路径 → 归一化为工作区相对路径
+  const root = workspaceRoot.replace(/[/\\]$/, "");
+  if (p.startsWith(`${root}/`) || p.startsWith(`${root}\\`)) {
+    p = p.slice(root.length + 1);
+  }
+  return {
+    path: p || "(unknown)",
+    added: typeof added === "number" ? added : 0,
+    removed: typeof removed === "number" ? removed : 0,
+    ...(typeof o.diff === "string" && o.diff ? { diff: o.diff } : {}),
+  };
+}
+
+/**
+ * 从多文件 unified patch 文本中抽取某个文件的 diff 段。
+ * 按 `--- ` 行切段（每段 = 一个文件），用 `+++ ` 行匹配目标路径。
+ * 供 apply_patch 的结果补齐 per-file diff（其 payload 只有 +/− 无文本）。
+ */
+export function extractFilePatch(
+  patchText: string,
+  filePath: string,
+): string | undefined {
+  if (!patchText || !filePath) return undefined;
+  const sections: string[][] = [];
+  let cur: string[] | null = null;
+  for (const line of patchText.split("\n")) {
+    if (line.startsWith("--- ")) {
+      if (cur) sections.push(cur);
+      cur = [line];
+    } else if (cur) {
+      cur.push(line);
+    }
+    // diff --git / Index: 等头行不在 --- 段内，自然丢弃
+  }
+  if (cur) sections.push(cur);
+
+  const norm = (p: string) =>
+    p
+      .replace(/^[ab]\//, "")
+      .replace(/\\/g, "/")
+      .trim();
+  const want = norm(filePath);
+  for (const sec of sections) {
+    const plusLine = sec.find((l) => l.startsWith("+++ "));
+    if (!plusLine) continue;
+    const target = norm(plusLine.slice(4).replace(/^"|"$/g, ""));
+    if (
+      target === want ||
+      target.endsWith(`/${want}`) ||
+      want.endsWith(`/${target}`)
+    ) {
+      return sec.join("\n").slice(0, 2048);
+    }
+  }
+  return undefined;
+}
+
+/** 从 tool.call args 中取 patch 文本（apply_patch 的 args 形如 {patch: "..."}） */
+function patchTextFromArgs(args: unknown): string | undefined {
+  if (args === null || typeof args !== "object") return undefined;
+  const p = (args as Record<string, unknown>).patch;
+  return typeof p === "string" ? p : undefined;
+}
 
 /** 工具执行的环境上下文 */
 interface ToolExecutionContext {
@@ -46,11 +162,18 @@ interface ToolExecutionContext {
   readonly checkpointSeq: { n: number };
   /** 子 Agent 策略 */
   readonly childPolicy?: "read_only" | "read_write";
+  /** 并行子 Agent 的文件锁（仅子 Agent 注入；root 无锁） */
+  readonly fileLock?: FileLockLike;
   /** Shell 沙箱配置 */
   readonly shellSandbox?: ShellSandboxConfig;
   /** 可插拔记忆后端（注入到 HarnessContext 供 memory.save 使用） */
   readonly memoryRuntime?: HarnessContext["memoryRuntime"];
   readonly memoryTaskId?: string;
+  readonly createAgent?: HarnessContext["createAgent"];
+  /** 工具白名单硬裁（与 Orchestrator.allowedTools 一致） */
+  readonly allowedTools?: readonly string[] | null;
+  /** P3 冷库：会话级可寻址归档（context.recall 执行 + 截断全文归档） */
+  readonly artifactRegistry?: ArtifactRegistry;
 }
 
 /** 审批上下文 */
@@ -108,12 +231,62 @@ export async function executeToolCalls(
   toolCtx: ToolExecutionContext,
   approvalCtx: ApprovalContext,
 ): Promise<ToolRunResult[]> {
-  // 步骤 1：子 Agent 策略前置检查（审批之前）
-  // read_only 模式下直接拒绝修改性工具，不需要询问用户
-  const blockedByPolicy = calls.map(
-    (call) =>
-      toolCtx.childPolicy === "read_only" && isMutatingTool(call.tool),
-  );
+  // 步骤 1：策略前置检查（审批之前）
+  // - read_only：拒绝修改性工具
+  // - allowedTools：拒绝不在白名单的工具
+  const allowSet =
+    toolCtx.allowedTools && toolCtx.allowedTools.length > 0
+      ? new Set(toolCtx.allowedTools)
+      : null;
+  const blockedByPolicy = calls.map((call) => {
+    if (toolCtx.childPolicy === "read_only" && isMutatingTool(call.tool)) {
+      return true;
+    }
+    if (allowSet && !allowSet.has(call.tool)) {
+      return true;
+    }
+    return false;
+  });
+
+  // 步骤 1.5：并行子 Agent 的文件锁（仅当注入 fileLock，即子 Agent 场景）
+  // 占用语义：先到先得，后来的等待，超时按冲突失败。
+  const lockConflict: (string | undefined)[] = calls.map(() => undefined);
+  if (toolCtx.fileLock) {
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[i]!;
+      if (blockedByPolicy[i]) continue;
+      // shell 目标不可预测，跳过锁（与 checkpoint 的 __shell_cmd__ 一致）
+      if (!isMutatingTool(call.tool) || call.tool === "workspace.run_shell") {
+        continue;
+      }
+      const targets = extractCheckpointTargets(call.tool, call.args).filter(
+        (t) => t !== "__shell_cmd__",
+      );
+      if (targets.length === 0) continue;
+      const r = await toolCtx.fileLock.acquire(
+        targets,
+        toolCtx.runId,
+        FILE_LOCK_TIMEOUT_MS,
+        (conflict) => {
+          toolCtx.emit({
+            type: "agent.file_lock",
+            status: "wait",
+            path: conflict.path ?? targets[0]!,
+            ...(conflict.holder ? { holder: conflict.holder } : {}),
+          });
+        },
+      );
+      if (!r.ok) {
+        lockConflict[i] = r.path ?? targets[0]!;
+        toolCtx.emit({
+          type: "agent.file_lock",
+          status: "denied",
+          path: r.path ?? targets[0]!,
+          ...(r.holder ? { holder: r.holder } : {}),
+        });
+      }
+    }
+  }
 
   // 步骤 2：收集审批结果（串行 — UI 交互必须有序）
   const approvals: boolean[] = [];
@@ -184,10 +357,23 @@ export async function executeToolCalls(
     calls.map(async (call, i) => {
       // 被策略阻止 → 返回 block 结果
       if (blockedByPolicy[i]) {
+        const reason =
+          allowSet && !allowSet.has(call.tool)
+            ? "tool_not_in_allowlist"
+            : "read_only_policy";
         return {
           ok: false,
-          summary: `Tool ${call.tool} blocked: child agent is in read_only mode`,
-          payload: { blocked: true, reason: "read_only_policy" },
+          summary: `Tool ${call.tool} blocked: ${reason}`,
+          payload: { blocked: true, reason },
+        };
+      }
+      // 文件锁冲突 → 返回冲突结果（模型可改派/重试）
+      const conflictPath = lockConflict[i];
+      if (conflictPath !== undefined) {
+        return {
+          ok: false,
+          summary: `File lock conflict: ${conflictPath} is being written by another agent; try a different file or retry later`,
+          payload: { conflict: true, path: conflictPath },
         };
       }
       // 被用户拒绝 → 返回 deny 结果
@@ -253,6 +439,10 @@ export async function executeToolCalls(
           ...(toolCtx.memoryTaskId
             ? { memoryTaskId: toolCtx.memoryTaskId }
             : {}),
+          ...(toolCtx.createAgent ? { createAgent: toolCtx.createAgent } : {}),
+          ...(toolCtx.artifactRegistry
+            ? { artifactRegistry: toolCtx.artifactRegistry }
+            : {}),
         },
         call.tool,
         call.args,
@@ -292,6 +482,10 @@ export function finalizeToolExecution(
     readonly thinking?: string;
     readonly taskState?: TaskStateManager;
     readonly saveStateFn: () => void;
+    /** 会话级工具输出去重器（P1 入口闸） */
+    readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
+    /** P3 冷库：截断的全文按内容哈希归档，注入 [archived id] 引用桩 */
+    readonly artifactRegistry?: ArtifactRegistry;
   },
 ): {
   readonly type: "continue" | "completed";
@@ -302,12 +496,25 @@ export function finalizeToolExecution(
     const call = calls[i]!;
     const tr = results[i]!;
     ctx.taskState?.recordToolResult(call, tr);
+    let fileChanges = tr.ok
+      ? fileChangesFromPayload(tr.payload, ctx.workspaceRoot)
+      : undefined;
+    // apply_patch：payload 只有 +/− 统计，从调用参数里抽取 per-file diff 文本补齐
+    const patchText = patchTextFromArgs(call.args);
+    if (fileChanges && patchText) {
+      fileChanges = fileChanges.map((c) => {
+        if (c.diff) return c;
+        const diff = extractFilePatch(patchText, c.path);
+        return diff ? { ...c, diff } : c;
+      });
+    }
     ctx.emit({
       type: "tool.result",
       tool: call.tool,
       ok: tr.ok,
       summary: tr.summary,
       detail: formatToolResultEventDetail(tr),
+      ...(fileChanges ? { fileChanges } : {}),
     });
   }
 
@@ -315,13 +522,44 @@ export function finalizeToolExecution(
   ctx.ctxMgr.addAssistant(ctx.text, ctx.thinking);
 
   // 步骤 3：将工具执行结果作为 user 消息加入（模型在下一轮看到这些）
+  // v3 P1 入口闸：注入前做「内容哈希去重 + 分档截断」，
+  // 单条结果在进入上下文前就被控制到预算内（TokenPilot ingestion gate）
+  // v3 P3 冷库：截断的全文按内容哈希归档（ARC 存储与呈现分离），
+  // 上下文中只留头尾预览 + [archived id=N] 引用桩，可经 context.recall 取回。
+  const archive = ctx.artifactRegistry;
   ctx.ctxMgr.addToolResults(
-    results.map((tr, i) => ({
-      tool: calls[i]!.tool,
-      ok: tr.ok,
-      summary: tr.summary,
-      payload: tr.payload,
-    })),
+    results.map((tr, i) => {
+      const tool = calls[i]!.tool;
+      const callerText = ctx.text;
+      let payload: unknown = tr.payload;
+      // 去重：同一内容重复出现 → 预览引用（重复读文件/重复跑命令的浪费源）
+      const dup = ctx.payloadDeduper?.check(payload);
+      if (dup) {
+        const archived = archive?.getByHash(dup.hash);
+        payload = archived
+          ? `[repeat of #${dup.hash}, same content as turn ${dup.turn}] ${archive!.toStub(archived.id)}`
+          : `[repeat of #${dup.hash}, same content as turn ${dup.turn}]`;
+      } else {
+        ctx.payloadDeduper?.record(payload, ctx.turn);
+      }
+      // 分档截断（read 类不截断；run_shell 等头尾保留 + 错误行智能保留）
+      const outcome = truncatePayloadWithOutcome(payload, tool);
+      payload = outcome.payload;
+      // 截断发生 → 全文归档 + 引用桩（可寻址恢复的前提）
+      if (outcome.truncated && outcome.fullText && archive) {
+        const id = archive.store(outcome.fullText, {
+          tool,
+          ok: tr.ok,
+          turn: ctx.turn,
+          callerText,
+        });
+        if (id) {
+          const stub = archive.toStub(id);
+          payload = `${String(payload)}\n${stub}`;
+        }
+      }
+      return { tool, ok: tr.ok, summary: tr.summary, payload };
+    }),
   );
 
   // 步骤 4：处理工具产生的新消息

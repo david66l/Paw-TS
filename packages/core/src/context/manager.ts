@@ -263,7 +263,11 @@ export class ContextManager {
    * 在上下文里保留预览。零 LLM 调用。
    */
   prune(config?: PruneConfig): PruneResult {
-    const result = pruneToolResults(this.history, config);
+    const result = pruneToolResults(this.history, {
+      ...config,
+      // P1.4 估算统一：L1 释放量用主路径同一估算器
+      estimator: this._estimator,
+    });
     if (result.pruned) {
       this.history = result.messages;
     }

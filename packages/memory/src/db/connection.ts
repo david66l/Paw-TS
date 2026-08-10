@@ -45,3 +45,14 @@ export function parseJson(v: unknown): unknown {
   if (typeof v === "string") return JSON.parse(v) as unknown;
   return v;
 }
+
+/**
+ * text[] 列的数组字面量（配合 ::text[] cast 使用）。
+ *
+ * postgres.js 的 sql.array() 依赖连接建立后异步获取的数组类型映射；
+ * 冷连接上第一个含数组参数的查询会拿到未初始化的序列化器而报错。
+ * 用字面量 + 显式 cast 可完全绕开驱动类型推断：`${textArrayLiteral(xs)}::text[]`。
+ */
+export function textArrayLiteral(xs: readonly string[]): string {
+  return "{" + xs.map((x) => `"${x.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",") + "}";
+}

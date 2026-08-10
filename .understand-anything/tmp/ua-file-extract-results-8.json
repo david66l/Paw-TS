@@ -1,0 +1,1236 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 20,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "packages/core/src/context/budget.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 143,
+      "nonEmptyLines": 131,
+      "functions": [
+        {
+          "name": "resolveBudgetRatios",
+          "startLine": 69,
+          "endLine": 74,
+          "params": [
+            "contextWindow"
+          ]
+        },
+        {
+          "name": "allocateContextBudget",
+          "startLine": 77,
+          "endLine": 89,
+          "params": [
+            "contextWindow",
+            "ratios"
+          ]
+        },
+        {
+          "name": "measureContextBudget",
+          "startLine": 98,
+          "endLine": 125,
+          "params": [
+            "opts"
+          ]
+        },
+        {
+          "name": "shouldCompactHistory",
+          "startLine": 128,
+          "endLine": 130,
+          "params": [
+            "snapshot"
+          ]
+        },
+        {
+          "name": "truncateTextToTokenBudget",
+          "startLine": 136,
+          "endLine": 143,
+          "params": [
+            "text",
+            "maxTokens"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "DEFAULT_BUDGET_RATIOS",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "LARGE_WINDOW_BUDGET_RATIOS",
+          "line": 40,
+          "isDefault": false
+        },
+        {
+          "name": "resolveBudgetRatios",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "allocateContextBudget",
+          "line": 77,
+          "isDefault": false
+        },
+        {
+          "name": "measureContextBudget",
+          "line": 98,
+          "isDefault": false
+        },
+        {
+          "name": "shouldCompactHistory",
+          "line": 128,
+          "isDefault": false
+        },
+        {
+          "name": "MEMORY_INJECTION_DETAIL_TOKENS",
+          "line": 133,
+          "isDefault": false
+        },
+        {
+          "name": "truncateTextToTokenBudget",
+          "line": 136,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "allocateContextBudget",
+          "callee": "resolveBudgetRatios",
+          "lineNumber": 81
+        },
+        {
+          "caller": "allocateContextBudget",
+          "callee": "Math.floor",
+          "lineNumber": 84
+        },
+        {
+          "caller": "allocateContextBudget",
+          "callee": "Math.floor",
+          "lineNumber": 85
+        },
+        {
+          "caller": "allocateContextBudget",
+          "callee": "Math.floor",
+          "lineNumber": 86
+        },
+        {
+          "caller": "allocateContextBudget",
+          "callee": "Math.floor",
+          "lineNumber": 87
+        },
+        {
+          "caller": "measureContextBudget",
+          "callee": "allocateContextBudget",
+          "lineNumber": 107
+        },
+        {
+          "caller": "measureContextBudget",
+          "callee": "Math.max",
+          "lineNumber": 110
+        },
+        {
+          "caller": "measureContextBudget",
+          "callee": "Math.floor",
+          "lineNumber": 112
+        },
+        {
+          "caller": "truncateTextToTokenBudget",
+          "callee": "text.slice",
+          "lineNumber": 142
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 8,
+        "functionCount": 5,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/prompt/loader.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 91,
+      "nonEmptyLines": 84,
+      "functions": [
+        {
+          "name": "resolveBasePrompt",
+          "startLine": 49,
+          "endLine": 65,
+          "params": [
+            "modelId"
+          ]
+        },
+        {
+          "name": "selectPromptFile",
+          "startLine": 80,
+          "endLine": 91,
+          "params": [
+            "modelId"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolveBasePrompt",
+          "line": 49,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "resolveBasePrompt",
+          "callee": "selectPromptFile",
+          "lineNumber": 50
+        },
+        {
+          "caller": "resolveBasePrompt",
+          "callee": "readFileSync(join(PROMPT_DIR, file), \"utf-8\").trim",
+          "lineNumber": 53
+        },
+        {
+          "caller": "resolveBasePrompt",
+          "callee": "readFileSync",
+          "lineNumber": 53
+        },
+        {
+          "caller": "resolveBasePrompt",
+          "callee": "join",
+          "lineNumber": 53
+        },
+        {
+          "caller": "resolveBasePrompt",
+          "callee": "readFileSync(join(PROMPT_DIR, \"default.txt\"), \"utf-8\").trim",
+          "lineNumber": 58
+        },
+        {
+          "caller": "resolveBasePrompt",
+          "callee": "readFileSync",
+          "lineNumber": 58
+        },
+        {
+          "caller": "resolveBasePrompt",
+          "callee": "join",
+          "lineNumber": 58
+        },
+        {
+          "caller": "selectPromptFile",
+          "callee": "modelId.toLowerCase",
+          "lineNumber": 83
+        },
+        {
+          "caller": "selectPromptFile",
+          "callee": "id.includes",
+          "lineNumber": 85
+        },
+        {
+          "caller": "selectPromptFile",
+          "callee": "id.includes",
+          "lineNumber": 86
+        },
+        {
+          "caller": "selectPromptFile",
+          "callee": "id.includes",
+          "lineNumber": 87
+        },
+        {
+          "caller": "selectPromptFile",
+          "callee": "id.includes",
+          "lineNumber": 87
+        },
+        {
+          "caller": "selectPromptFile",
+          "callee": "id.includes",
+          "lineNumber": 88
+        },
+        {
+          "caller": "selectPromptFile",
+          "callee": "id.includes",
+          "lineNumber": 88
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 132,
+      "nonEmptyLines": 121,
+      "functions": [
+        {
+          "name": "buildSystemPrompt",
+          "startLine": 84,
+          "endLine": 86,
+          "params": [
+            "opts"
+          ]
+        },
+        {
+          "name": "buildSystemPromptWithBudget",
+          "startLine": 104,
+          "endLine": 132,
+          "params": [
+            "opts",
+            "systemBudget",
+            "estimate"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "SystemPromptOptions",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "SystemPromptBuildResult",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "SystemPromptTrimEntry",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "assembleSystemPrompt",
+          "line": 54,
+          "isDefault": false
+        },
+        {
+          "name": "MAX_STEPS_WARNING",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "buildSystemPrompt",
+          "line": 84,
+          "isDefault": false
+        },
+        {
+          "name": "buildSystemPromptWithBudget",
+          "line": 104,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "buildSystemPrompt",
+          "callee": "buildSystemPromptWithBudget",
+          "lineNumber": 85
+        },
+        {
+          "caller": "buildSystemPromptWithBudget",
+          "callee": "assembleSystemPrompt",
+          "lineNumber": 113
+        },
+        {
+          "caller": "buildSystemPromptWithBudget",
+          "callee": "doEstimate",
+          "lineNumber": 114
+        },
+        {
+          "caller": "buildSystemPromptWithBudget",
+          "callee": "trimSystemPromptToBudget",
+          "lineNumber": 123
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 7,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/assembler.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 114,
+      "nonEmptyLines": 107,
+      "functions": [
+        {
+          "name": "assembleSystemPrompt",
+          "startLine": 42,
+          "endLine": 114,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "assembleSystemPrompt",
+          "line": 42,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "process.env.SHELL?.split(\"/\").pop",
+          "lineNumber": 44
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "process.env.SHELL?.split",
+          "lineNumber": 44
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "`${platform} ${process.env.OS_VERSION ?? \"\"}`.trim",
+          "lineNumber": 45
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "truncateChars",
+          "lineNumber": 50
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "truncateChars",
+          "lineNumber": 58
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "resolveBasePrompt",
+          "lineNumber": 65
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "[\n      getIdentitySection(),\n      getSecurityBoundariesSection(),\n      getSystemSection(),\n      getDoingTasksSection(),\n      getVerificationSection(),\n      getActionsSection(),\n      getToneAndStyleSection(),\n      getOutputEfficiencySection(),\n    ].join",
+          "lineNumber": 66
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getIdentitySection",
+          "lineNumber": 67
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getSecurityBoundariesSection",
+          "lineNumber": 68
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getSystemSection",
+          "lineNumber": 69
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getDoingTasksSection",
+          "lineNumber": 70
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getVerificationSection",
+          "lineNumber": 71
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getActionsSection",
+          "lineNumber": 72
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getToneAndStyleSection",
+          "lineNumber": 73
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getOutputEfficiencySection",
+          "lineNumber": 74
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getUsingToolsSection",
+          "lineNumber": 79
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getMemorySection",
+          "lineNumber": 85
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "getEnvironmentSection",
+          "lineNumber": 91
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "sections.filter((s): s is string => s !== null).join",
+          "lineNumber": 113
+        },
+        {
+          "caller": "assembleSystemPrompt",
+          "callee": "sections.filter",
+          "lineNumber": 113
+        }
+      ],
+      "metrics": {
+        "importCount": 14,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/format.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 113,
+      "nonEmptyLines": 109,
+      "functions": [
+        {
+          "name": "truncateChars",
+          "startLine": 44,
+          "endLine": 48,
+          "params": [
+            "text",
+            "maxChars"
+          ]
+        },
+        {
+          "name": "bullets",
+          "startLine": 65,
+          "endLine": 70,
+          "params": [
+            "items"
+          ]
+        },
+        {
+          "name": "section",
+          "startLine": 86,
+          "endLine": 88,
+          "params": [
+            "heading",
+            "body"
+          ]
+        },
+        {
+          "name": "sectionBullets",
+          "startLine": 108,
+          "endLine": 113,
+          "params": [
+            "heading",
+            "items"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "truncateChars",
+          "line": 44,
+          "isDefault": false
+        },
+        {
+          "name": "bullets",
+          "line": 65,
+          "isDefault": false
+        },
+        {
+          "name": "section",
+          "line": 86,
+          "isDefault": false
+        },
+        {
+          "name": "sectionBullets",
+          "line": 108,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "truncateChars",
+          "callee": "text.slice",
+          "lineNumber": 47
+        },
+        {
+          "caller": "truncateChars",
+          "callee": "Math.max",
+          "lineNumber": 47
+        },
+        {
+          "caller": "bullets",
+          "callee": "items\n    .filter((x): x is string => typeof x === \"string\")  // 类型守卫：过滤后 items 类型收窄为 string[]\n    .map((s) => `- ${s}`)\n    .join",
+          "lineNumber": 66
+        },
+        {
+          "caller": "bullets",
+          "callee": "items\n    .filter((x): x is string => typeof x === \"string\")  // 类型守卫：过滤后 items 类型收窄为 string[]\n    .map",
+          "lineNumber": 66
+        },
+        {
+          "caller": "bullets",
+          "callee": "items\n    .filter",
+          "lineNumber": 66
+        },
+        {
+          "caller": "sectionBullets",
+          "callee": "section",
+          "lineNumber": 112
+        },
+        {
+          "caller": "sectionBullets",
+          "callee": "bullets",
+          "lineNumber": 112
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/actions.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 32,
+      "nonEmptyLines": 29,
+      "functions": [
+        {
+          "name": "getActionsSection",
+          "startLine": 21,
+          "endLine": 32,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "getActionsSection",
+          "line": 21,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/doing-tasks.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 46,
+      "nonEmptyLines": 45,
+      "functions": [
+        {
+          "name": "getDoingTasksSection",
+          "startLine": 24,
+          "endLine": 46,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "getDoingTasksSection",
+          "line": 24,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getDoingTasksSection",
+          "callee": "sectionBullets",
+          "lineNumber": 25
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/environment.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 151,
+      "nonEmptyLines": 141,
+      "functions": [
+        {
+          "name": "getEnvironmentSection",
+          "startLine": 28,
+          "endLine": 151,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "getEnvironmentSection",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "bullets",
+          "lineNumber": 80
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 85
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 90
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 95
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 103
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "opts.relevantMemories.slice",
+          "lineNumber": 113
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 119
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 122
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "m.content.trim",
+          "lineNumber": 124
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 125
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "truncateTextToTokenBudget",
+          "lineNumber": 126
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 131
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "m.relatedFiles.join",
+          "lineNumber": 131
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 138
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.push",
+          "lineNumber": 143
+        },
+        {
+          "caller": "getEnvironmentSection",
+          "callee": "lines.join",
+          "lineNumber": 150
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/identity.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 26,
+      "nonEmptyLines": 24,
+      "functions": [
+        {
+          "name": "getIdentitySection",
+          "startLine": 20,
+          "endLine": 26,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "getIdentitySection",
+          "line": 20,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/memory.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 199,
+      "nonEmptyLines": 192,
+      "functions": [
+        {
+          "name": "getMemorySection",
+          "startLine": 138,
+          "endLine": 199,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "getMemorySection",
+          "line": 138,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getMemorySection",
+          "callee": "lines.push",
+          "lineNumber": 195
+        },
+        {
+          "caller": "getMemorySection",
+          "callee": "lines.join",
+          "lineNumber": 198
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/output-efficiency.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 36,
+      "nonEmptyLines": 31,
+      "functions": [
+        {
+          "name": "getOutputEfficiencySection",
+          "startLine": 21,
+          "endLine": 36,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "getOutputEfficiencySection",
+          "line": 21,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/security.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 34,
+      "nonEmptyLines": 29,
+      "functions": [
+        {
+          "name": "getSecurityBoundariesSection",
+          "startLine": 22,
+          "endLine": 34,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "getSecurityBoundariesSection",
+          "line": 22,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/system.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 34,
+      "nonEmptyLines": 33,
+      "functions": [
+        {
+          "name": "getSystemSection",
+          "startLine": 23,
+          "endLine": 34,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "getSystemSection",
+          "line": 23,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getSystemSection",
+          "callee": "sectionBullets",
+          "lineNumber": 24
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/tone-and-style.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 33,
+      "nonEmptyLines": 32,
+      "functions": [
+        {
+          "name": "getToneAndStyleSection",
+          "startLine": 23,
+          "endLine": 33,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "getToneAndStyleSection",
+          "line": 23,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getToneAndStyleSection",
+          "callee": "sectionBullets",
+          "lineNumber": 24
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/using-tools.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 132,
+      "nonEmptyLines": 124,
+      "functions": [
+        {
+          "name": "getUsingToolsSection",
+          "startLine": 24,
+          "endLine": 132,
+          "params": [
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "getUsingToolsSection",
+          "line": 24,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getUsingToolsSection",
+          "callee": "lines.push",
+          "lineNumber": 35
+        },
+        {
+          "caller": "getUsingToolsSection",
+          "callee": "lines.push",
+          "lineNumber": 64
+        },
+        {
+          "caller": "getUsingToolsSection",
+          "callee": "lines.push",
+          "lineNumber": 78
+        },
+        {
+          "caller": "getUsingToolsSection",
+          "callee": "lines.push",
+          "lineNumber": 86
+        },
+        {
+          "caller": "getUsingToolsSection",
+          "callee": "lines.push",
+          "lineNumber": 93
+        },
+        {
+          "caller": "getUsingToolsSection",
+          "callee": "lines.push",
+          "lineNumber": 99
+        },
+        {
+          "caller": "getUsingToolsSection",
+          "callee": "lines.push",
+          "lineNumber": 121
+        },
+        {
+          "caller": "getUsingToolsSection",
+          "callee": "lines.join",
+          "lineNumber": 131
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/sections/verification.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 38,
+      "nonEmptyLines": 34,
+      "functions": [
+        {
+          "name": "getVerificationSection",
+          "startLine": 24,
+          "endLine": 38,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "getVerificationSection",
+          "line": 24,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/trim.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 237,
+      "nonEmptyLines": 225,
+      "functions": [
+        {
+          "name": "trimSystemPromptToBudget",
+          "startLine": 184,
+          "endLine": 237,
+          "params": [
+            "input"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "trimSystemPromptToBudget",
+          "line": 184,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "assemble",
+          "lineNumber": 203
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "estimate",
+          "lineNumber": 204
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "trimmed.push",
+          "lineNumber": 206
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "Math.max",
+          "lineNumber": 209
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "assemble",
+          "lineNumber": 218
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "estimate",
+          "lineNumber": 219
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "trimmed.push",
+          "lineNumber": 221
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "Math.max",
+          "lineNumber": 223
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "assemble",
+          "lineNumber": 230
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "truncate",
+          "lineNumber": 231
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "trimmed.push",
+          "lineNumber": 232
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "Math.max",
+          "lineNumber": 234
+        },
+        {
+          "caller": "trimSystemPromptToBudget",
+          "callee": "estimate",
+          "lineNumber": 234
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/src/system-prompt/types.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 105,
+      "nonEmptyLines": 101,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/test/context-budget.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 68,
+      "nonEmptyLines": 62,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "packages/core/test/system-prompt-budget.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 101,
+      "nonEmptyLines": 93,
+      "functions": [
+        {
+          "name": "makeMemory",
+          "startLine": 5,
+          "endLine": 23,
+          "params": [
+            "id",
+            "content"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "makeMemory",
+          "callee": "Date.now",
+          "lineNumber": 10
+        },
+        {
+          "caller": "makeMemory",
+          "callee": "Date.now",
+          "lineNumber": 11
+        },
+        {
+          "caller": "makeMemory",
+          "callee": "content.slice",
+          "lineNumber": 13
+        },
+        {
+          "caller": "estimate",
+          "callee": "Math.ceil",
+          "lineNumber": 79
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    }
+  ]
+}

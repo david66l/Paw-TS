@@ -15,7 +15,7 @@ import type {
 } from "../../types.js";
 import { generateId } from "../platform/idGen.js";
 import { PolicyEngine, type GovernancePolicy } from "../platform/policyEngine.js";
-import { NGramEmbeddingService, cosineSimilarity } from "../platform/embeddingService.js";
+import { NGramEmbeddingService, cosineSimilarity, MEMORY_EMBEDDING_DIMENSIONS } from "../platform/embeddingService.js";
 
 export interface EvaluateInput {
   candidateId: string;
@@ -83,7 +83,7 @@ export class MemoryGovernance {
     }
 
     // 2b. 语义去重：用 embedding 检测不同 subjectKey 但内容相似的记忆
-    const embedder = new NGramEmbeddingService();
+    const embedder = new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS);
     const candidateText = `${candidate.proposedTitle} ${candidate.proposedSummary}`;
     const candidateVec = await embedder.embed(candidateText);
 

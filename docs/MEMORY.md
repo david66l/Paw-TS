@@ -1,19 +1,36 @@
 # Paw 记忆系统（Memory Runtime）
 
-> 权威设计：`文档/记忆机制spec/`  
+> 权威设计：`文档/记忆机制spec/`（v1）+ `文档/记忆机制spec-v2/`（v2 文献驱动重设计）  
 > 工程替换方案：`plans/memory-full-cutover-plan.md`  
-> 实现：`packages/memory/src/db/**` + `packages/memory/src/runtime/**`
+> 实现：`packages/memory/src/db/**` + `packages/memory/src/runtime/**` + `packages/memory/src/longterm/**`
 
-## 两套后端
+## 两代 Runtime
 
 | 后端 | 说明 |
 |------|------|
-| **db**（**唯一在线路径**） | Postgres + TaskSession / Governance / ContextBuilder |
+| **v2**（**默认在线路径**） | `MemoryRuntimeV2`：PostgresMemoryStoreEngine + MemoryWritePipeline（五道关异步写入）+ TriggeredRetriever（T1–T4 事件触发检索） |
+| **v1**（回滚路径） | `MemoryRuntimeImpl`：TaskSession / Governance / ContextBuilder；`PAW_MEMORY_RUNTIME=v1` 或 `runtime: "v1"` 显式启用 |
 | **file** | **已从 Agent 在线路径移除**；仅 `migrate-legacy` 读取旧 MD |
 
-**Cutover 进度：** Phase 0–5（删在线 file 路径）完成。无 Postgres 时 **degrade**（空记忆）。
+**Cutover 进度：** Phase 0–5（删在线 file 路径）完成 + v2 接入主管线完成（2026-08-09）。无 Postgres 时 **degrade**（空记忆，worker 静默）。
 
-## 使用默认 db
+## v2 在线路径（默认）
+
+```
+beginTask ──► opaque taskId + 进程内轨迹缓冲（goal/branch）
+buildContextSection ──► T1 task_start 检索（≤500 tokens XML 注入段）
+onToolResult ──► 轨迹跟踪 + 测试结果（verdict 门控）；失败且可行动 → T2 action_failed 检索注入 [Memory hint]
+压缩后 ──► T3 post_compact 检索注入（复用 SessionMemory 提示去重）
+completeTask ──► 入队 outbox（异步）：failed→试用通道 / 测试全过→固化 / 无测试→session_finalize 兜底（conf≤0.6）
+```
+
+- **LLM 接线**（`AgentOrchestrator` 选项 `memoryLlm: "agent"|"settings"|"off"`，默认 "agent"）：
+  蒸馏/精排用主模型（fake 模型自动跳过），裁决用 settings.local.json 解析的强模型；缺失时降级
+  （无蒸馏 → append-only 原文摘要；无裁决 → 直 ADD；无精排 → 召回直取 k 减半）
+- **写入语义**：`completeTask` 只入队，`memory.extracted` 事件的 entries = 已入队事件数（异步固化）
+- **存量迁移**：`paw-ts memory migrate-v1-to-v2 [--dry-run] [--repo <id>]`（type→kind 映射 + 重算 embedding，幂等）
+
+## 使用默认 db（v2 同样适用）
 
 ### 1. Postgres
 
@@ -64,7 +81,7 @@ Memory backend db: ready
 
 若有 pending migration，doctor 退出码为 1，并提示 `bun run memory:migrate`。
 
-## 运行时行为（db）
+## 运行时行为（db，v1 回滚路径）
 
 一次 Agent Run：
 
@@ -79,11 +96,23 @@ DB 不可达时：**不**回退写 file；Run 继续，记忆段为空（degrade
 ## 验证命令
 
 ```bash
-# Runtime 闭环 e2e
-DATABASE_URL=postgresql:///paw_memory_test bun run memory:test:runtime
+# v2 Runtime 闭环 e2e
+DATABASE_URL=postgresql:///paw_memory_test bun test packages/memory/test/runtime-v2.e2e.test.ts
 
-# Agent 接线
+# v2 Agent 接线
+DATABASE_URL=postgresql:///paw_memory_test bun test packages/agent/test/memory-v2-cutover.test.ts
+
+# v1 回滚路径
+DATABASE_URL=postgresql:///paw_memory_test bun test packages/memory/test/runtime.e2e.test.ts
 DATABASE_URL=postgresql:///paw_memory_test bun test packages/agent/test/memory-runtime-cutover.test.ts
+
+# v2 引擎/管线/迁移
+DATABASE_URL=postgresql:///paw_memory_test bun test packages/memory/test/longterm-store.test.ts
+DATABASE_URL=postgresql:///paw_memory_test bun test packages/memory/test/write-pipeline.test.ts
+DATABASE_URL=postgresql:///paw_memory_test bun test packages/memory/test/migrate-v1-to-v2.test.ts
+
+# Runtime 闭环 e2e（v1）
+DATABASE_URL=postgresql:///paw_memory_test bun run memory:test:runtime
 
 # 模块级 db e2e
 DATABASE_URL=postgresql:///paw_memory_test bun run memory:test:db
@@ -93,13 +122,14 @@ DATABASE_URL=postgresql:///paw_memory_test bun run memory:test:db
 
 | 路径 | 职责 |
 |------|------|
-| `packages/memory/src/runtime/` | **MemoryRuntime** 门面（agent 唯一推荐入口） |
-| `packages/memory/src/db/` | Schema、DAO、治理与检索实现 |
+| `packages/memory/src/runtime/` | **MemoryRuntime** 门面（v1 + v2 两个实现，工厂按开关选择） |
+| `packages/memory/src/longterm/` | **v2 长记忆管线**（写入五道关、触发式检索、存储引擎、生命周期、可观测、CLI、评测） |
+| `packages/memory/src/db/` | Schema、DAO、治理与检索实现（v1 底座 + v2 复用表） |
 | `packages/memory/src/shared/` | 查询清洗、共享类型、embedding cache |
 | `packages/memory/src/session/` | L2 会话压缩记忆 |
 | `packages/memory/src/project/` | 项目指令（PAW/CLAUDE） |
 | `packages/memory/src/compat/` | 旧 MD 读写（仅迁移用） |
-| `packages/agent/src/orchestrator.ts` | 在线路径走 MemoryRuntime（Postgres） |
+| `packages/agent/src/orchestrator.ts` | 在线路径走 MemoryRuntime（默认 v2） |
 | `packages/harness` | `memory.*` 工具走 Runtime |
 
 ### `packages/memory/src` 目录（按职责拆分，避免单夹文件过多）

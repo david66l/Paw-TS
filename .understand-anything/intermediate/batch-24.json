@@ -1,0 +1,100 @@
+{
+  "nodes": [
+    {
+      "id": "document:fine_tune/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "fine_tune/README.md",
+      "summary": "Qwen3-14B 微调流程完整文档，包含文件说明、验证流程（数据准备→autodl 训练→vLLM 加载→评估对比）和判断标准，以及验证通过后的全量微调指南。",
+      "tags": ["documentation", "fine-tuning", "llm", "qwen", "lora"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:fine_tune/dataset_info.json",
+      "type": "config",
+      "name": "dataset_info.json",
+      "filePath": "fine_tune/dataset_info.json",
+      "summary": "LLaMA-Factory 数据集注册配置，定义 paw_validation（30 条验证数据）和 paw_full（全量训练数据）两个数据集，均采用 ShareGPT 格式。",
+      "tags": ["configuration", "dataset", "llama-factory", "fine-tuning"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:fine_tune/eval_comparison.sh",
+      "type": "file",
+      "name": "eval_comparison.sh",
+      "filePath": "fine_tune/eval_comparison.sh",
+      "summary": "微调前后对比评估脚本，运行 paw eval 对 10 条核心用例进行基线测试，然后提示手动切换到微调模型并重跑以对比 pass rate。",
+      "tags": ["script", "evaluation", "benchmark", "fine-tuning", "comparison"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:fine_tune/lora_config.yaml",
+      "type": "config",
+      "name": "lora_config.yaml",
+      "filePath": "fine_tune/lora_config.yaml",
+      "summary": "LLaMA-Factory LoRA 微调验证轮配置，使用 Qwen3-14B-AWQ 作为基座模型，rank=16、1 epoch、cosine 学习率调度，预计训练时间约 10 分钟。",
+      "tags": ["configuration", "lora", "llama-factory", "fine-tuning", "training"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:fine_tune/run_validation.sh",
+      "type": "file",
+      "name": "run_validation.sh",
+      "filePath": "fine_tune/run_validation.sh",
+      "summary": "微调验证训练脚本，在 autodl 服务器上依次执行：安装 LLaMA-Factory → 启动 LoRA 训练 → 导出合并权重，生成可被 vLLM 加载的模型文件。",
+      "tags": ["script", "fine-tuning", "lora", "training", "automation"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:fine_tune/README.md",
+      "target": "config:fine_tune/dataset_info.json",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:fine_tune/README.md",
+      "target": "config:fine_tune/lora_config.yaml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:fine_tune/README.md",
+      "target": "file:fine_tune/run_validation.sh",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:fine_tune/README.md",
+      "target": "file:fine_tune/eval_comparison.sh",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:fine_tune/run_validation.sh",
+      "target": "config:fine_tune/lora_config.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:fine_tune/lora_config.yaml",
+      "target": "config:fine_tune/dataset_info.json",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:fine_tune/eval_comparison.sh",
+      "target": "file:fine_tune/run_validation.sh",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

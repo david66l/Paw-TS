@@ -1,0 +1,720 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 3,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "文档/架构/ARCHITECTURE_AND_FEATURES_PLAN.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 1275,
+      "nonEmptyLines": 998,
+      "sections": [
+        {
+          "heading": "Paw-TS 架构与功能设计改进方案",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、架构设计评估与改进",
+          "level": 2,
+          "line": 11
+        },
+        {
+          "heading": "1. Agent 编排架构",
+          "level": 3,
+          "line": 13
+        },
+        {
+          "heading": "当前设计",
+          "level": 4,
+          "line": 15
+        },
+        {
+          "heading": "大厂标准",
+          "level": 4,
+          "line": 29
+        },
+        {
+          "heading": "差距分析",
+          "level": 4,
+          "line": 39
+        },
+        {
+          "heading": "改进方案：Phase Handler + 显式状态机",
+          "level": 4,
+          "line": 49
+        },
+        {
+          "heading": "2. 上下文管理架构",
+          "level": 3,
+          "line": 113
+        },
+        {
+          "heading": "当前设计",
+          "level": 4,
+          "line": 115
+        },
+        {
+          "heading": "大厂标准：Claude Code Context 架构",
+          "level": 4,
+          "line": 130
+        },
+        {
+          "heading": "差距分析",
+          "level": 4,
+          "line": 145
+        },
+        {
+          "heading": "改进方案",
+          "level": 4,
+          "line": 155
+        },
+        {
+          "heading": "3. 记忆系统架构",
+          "level": 3,
+          "line": 238
+        },
+        {
+          "heading": "当前设计",
+          "level": 4,
+          "line": 240
+        },
+        {
+          "heading": "大厂标准",
+          "level": 4,
+          "line": 251
+        },
+        {
+          "heading": "差距分析",
+          "level": 4,
+          "line": 261
+        },
+        {
+          "heading": "改进方案：四层记忆 + 向量检索",
+          "level": 4,
+          "line": 272
+        },
+        {
+          "heading": "4. 事件与持久化架构",
+          "level": 3,
+          "line": 337
+        },
+        {
+          "heading": "当前设计",
+          "level": 4,
+          "line": 339
+        },
+        {
+          "heading": "大厂标准",
+          "level": 4,
+          "line": 354
+        },
+        {
+          "heading": "差距分析",
+          "level": 4,
+          "line": 364
+        },
+        {
+          "heading": "改进方案：统一事件存储 + Projection 模式",
+          "level": 4,
+          "line": 374
+        },
+        {
+          "heading": "5. 工具系统架构",
+          "level": 3,
+          "line": 421
+        },
+        {
+          "heading": "当前设计",
+          "level": 4,
+          "line": 423
+        },
+        {
+          "heading": "差距",
+          "level": 4,
+          "line": 435
+        },
+        {
+          "heading": "改进方案：可插拔工具注册表",
+          "level": 4,
+          "line": 445
+        },
+        {
+          "heading": "6. 模型适配架构",
+          "level": 3,
+          "line": 527
+        },
+        {
+          "heading": "当前设计",
+          "level": 4,
+          "line": 529
+        },
+        {
+          "heading": "改进方案",
+          "level": 4,
+          "line": 551
+        },
+        {
+          "heading": "7. 部署与运行架构",
+          "level": 3,
+          "line": 611
+        },
+        {
+          "heading": "当前状态",
+          "level": 4,
+          "line": 613
+        },
+        {
+          "heading": "改进方案",
+          "level": 4,
+          "line": 623
+        },
+        {
+          "heading": "8. 安全架构",
+          "level": 3,
+          "line": 702
+        },
+        {
+          "heading": "当前设计（两层防护）",
+          "level": 4,
+          "line": 704
+        },
+        {
+          "heading": "大厂标准（四层防护）",
+          "level": 4,
+          "line": 711
+        },
+        {
+          "heading": "改进方案",
+          "level": 4,
+          "line": 720
+        },
+        {
+          "heading": "二、功能设计评估与改进",
+          "level": 2,
+          "line": 776
+        },
+        {
+          "heading": "功能成熟度总览",
+          "level": 3,
+          "line": 778
+        },
+        {
+          "heading": "P0 — 阻碍生产使用的致命缺失",
+          "level": 3,
+          "line": 795
+        },
+        {
+          "heading": "1. 图像输入未实际上传",
+          "level": 4,
+          "line": 797
+        },
+        {
+          "heading": "2. Ollama 有配置无实现",
+          "level": 4,
+          "line": 831
+        },
+        {
+          "heading": "3. 无 Yolo Mode 一键切换",
+          "level": 4,
+          "line": 849
+        },
+        {
+          "heading": "P1 — 显著影响体验的功能缺失",
+          "level": 3,
+          "line": 867
+        },
+        {
+          "heading": "4. IDE Bridge（双向通信）",
+          "level": 4,
+          "line": 869
+        },
+        {
+          "heading": "5. Chrome / 浏览器集成",
+          "level": 4,
+          "line": 906
+        },
+        {
+          "heading": "6. Embedding 语义搜索",
+          "level": 4,
+          "line": 922
+        },
+        {
+          "heading": "7. Plan 自动调度器",
+          "level": 4,
+          "line": 961
+        },
+        {
+          "heading": "8. TUI 体验增强",
+          "level": 4,
+          "line": 997
+        },
+        {
+          "heading": "9. 丰富的 Slash 命令系统",
+          "level": 4,
+          "line": 1009
+        },
+        {
+          "heading": "P2 — 长期竞争力",
+          "level": 3,
+          "line": 1030
+        },
+        {
+          "heading": "10. Feature Flags（功能开关）",
+          "level": 4,
+          "line": 1032
+        },
+        {
+          "heading": "11. Plugin 系统",
+          "level": 4,
+          "line": 1048
+        },
+        {
+          "heading": "12. Voice Input",
+          "level": 4,
+          "line": 1067
+        },
+        {
+          "heading": "三、实施路线图",
+          "level": 2,
+          "line": 1079
+        },
+        {
+          "heading": "Phase 1: 架构地基（Week 1-2）",
+          "level": 3,
+          "line": 1081
+        },
+        {
+          "heading": "Phase 2: 核心功能补齐（Week 3-4）",
+          "level": 3,
+          "line": 1090
+        },
+        {
+          "heading": "Phase 3: 体验提升（Week 5-6）",
+          "level": 3,
+          "line": 1100
+        },
+        {
+          "heading": "Phase 4: 智能化增强（Week 7-8）",
+          "level": 3,
+          "line": 1110
+        },
+        {
+          "heading": "Phase 5: 生态建设（Week 9-10）",
+          "level": 3,
+          "line": 1119
+        },
+        {
+          "heading": "四、关键决策记录（ADR 草案）",
+          "level": 2,
+          "line": 1130
+        },
+        {
+          "heading": "ADR-001: Phase Handler 模式",
+          "level": 3,
+          "line": 1132
+        },
+        {
+          "heading": "ADR-002: 工具注册表模式",
+          "level": 3,
+          "line": 1145
+        },
+        {
+          "heading": "ADR-003: 本地 Embedding vs 云端",
+          "level": 3,
+          "line": 1158
+        },
+        {
+          "heading": "ADR-004: 单体 API 还是微服务",
+          "level": 3,
+          "line": 1171
+        },
+        {
+          "heading": "五、参考架构",
+          "level": 2,
+          "line": 1186
+        },
+        {
+          "heading": "Claude Code 架构（推测，基于代码量分析）",
+          "level": 3,
+          "line": 1188
+        },
+        {
+          "heading": "Paw-TS 目标架构（改进后）",
+          "level": 3,
+          "line": 1218
+        },
+        {
+          "heading": "六、总结",
+          "level": 2,
+          "line": 1243
+        },
+        {
+          "heading": "当前优势（不应丢弃）",
+          "level": 3,
+          "line": 1245
+        },
+        {
+          "heading": "核心瓶颈",
+          "level": 3,
+          "line": 1254
+        },
+        {
+          "heading": "务实的追赶路径",
+          "level": 3,
+          "line": 1262
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 71
+      }
+    },
+    {
+      "path": "文档/架构/multi-agent-architecture-analysis.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 568,
+      "nonEmptyLines": 446,
+      "sections": [
+        {
+          "heading": "Multi-Agent 架构分析：基于\"需要多个子 Agent\"需求的重新评估",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、当前子 Agent 实现诊断",
+          "level": 2,
+          "line": 8
+        },
+        {
+          "heading": "1.1 现有代码结构",
+          "level": 3,
+          "line": 10
+        },
+        {
+          "heading": "1.2 当前局限性",
+          "level": 3,
+          "line": 40
+        },
+        {
+          "heading": "1.3 关键 Bug",
+          "level": 3,
+          "line": 51
+        },
+        {
+          "heading": "二、三种模式在 Multi-Agent 场景下的能力对比",
+          "level": 2,
+          "line": 57
+        },
+        {
+          "heading": "2.1 Claude Code — 嵌套 Sub-agents（顺序执行）",
+          "level": 3,
+          "line": 59
+        },
+        {
+          "heading": "2.2 OpenCode (Assistants API) — Thread 共享 + 多 Run",
+          "level": 3,
+          "line": 102
+        },
+        {
+          "heading": "2.3 Devin — 并行 Agents + 中央调度器",
+          "level": 3,
+          "line": 142
+        },
+        {
+          "heading": "三、推荐方案：层次化 Agent Group（混合模式）",
+          "level": 2,
+          "line": 190
+        },
+        {
+          "heading": "3.1 核心决策",
+          "level": 3,
+          "line": 192
+        },
+        {
+          "heading": "3.2 目标架构：AgentGroup",
+          "level": 3,
+          "line": 213
+        },
+        {
+          "heading": "四、关键机制设计",
+          "level": 2,
+          "line": 253
+        },
+        {
+          "heading": "4.1 消息处理",
+          "level": 3,
+          "line": 255
+        },
+        {
+          "heading": "4.2 合并策略",
+          "level": 3,
+          "line": 292
+        },
+        {
+          "heading": "4.3 状态管理",
+          "level": 3,
+          "line": 358
+        },
+        {
+          "heading": "五、与三种模式的映射",
+          "level": 2,
+          "line": 411
+        },
+        {
+          "heading": "六、对 PHASE1_PLAN 的调整",
+          "level": 2,
+          "line": 424
+        },
+        {
+          "heading": "6.1 原 PHASE1_PLAN 的局限",
+          "level": 3,
+          "line": 426
+        },
+        {
+          "heading": "6.2 必须引入的新组件",
+          "level": 3,
+          "line": 434
+        },
+        {
+          "heading": "6.3 调整后的文件拆分",
+          "level": 3,
+          "line": 444
+        },
+        {
+          "heading": "6.4 `executeTurn` 中 Multi-Agent 相关改动",
+          "level": 3,
+          "line": 456
+        },
+        {
+          "heading": "6.5 与状态机的关系",
+          "level": 3,
+          "line": 468
+        },
+        {
+          "heading": "七、验证策略",
+          "level": 2,
+          "line": 491
+        },
+        {
+          "heading": "7.1 新增测试场景",
+          "level": 3,
+          "line": 493
+        },
+        {
+          "heading": "7.2 行为一致性检查",
+          "level": 3,
+          "line": 503
+        },
+        {
+          "heading": "八、面试话术（Multi-Agent 设计）",
+          "level": 2,
+          "line": 512
+        },
+        {
+          "heading": "开场（30 秒）",
+          "level": 3,
+          "line": 514
+        },
+        {
+          "heading": "为什么不用 Devin 的中央调度器",
+          "level": 3,
+          "line": 518
+        },
+        {
+          "heading": "消息处理",
+          "level": 3,
+          "line": 522
+        },
+        {
+          "heading": "合并策略",
+          "level": 3,
+          "line": 526
+        },
+        {
+          "heading": "状态管理",
+          "level": 3,
+          "line": 530
+        },
+        {
+          "heading": "九、结论",
+          "level": 2,
+          "line": 536
+        },
+        {
+          "heading": "最终推荐",
+          "level": 3,
+          "line": 538
+        },
+        {
+          "heading": "PHASE1_PLAN 调整总结",
+          "level": 3,
+          "line": 548
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 35
+      }
+    },
+    {
+      "path": "文档/架构/multi-agent-state-data-flow-analysis.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 709,
+      "nonEmptyLines": 587,
+      "sections": [
+        {
+          "heading": "Multi-Agent 状态流转与数据流转分析",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一、当前代码的状态与数据流转（基线）",
+          "level": 2,
+          "line": 8
+        },
+        {
+          "heading": "1.1 单 Agent 状态流转",
+          "level": 3,
+          "line": 10
+        },
+        {
+          "heading": "1.2 单 Agent 数据流转",
+          "level": 3,
+          "line": 57
+        },
+        {
+          "heading": "二、Multi-Agent 引入后的状态流转推演",
+          "level": 2,
+          "line": 101
+        },
+        {
+          "heading": "2.1 理想状态流转（设计意图）",
+          "level": 3,
+          "line": 103
+        },
+        {
+          "heading": "2.2 实际状态流转（代码推演）",
+          "level": 3,
+          "line": 145
+        },
+        {
+          "heading": "三、Multi-Agent 引入后的数据流转推演",
+          "level": 2,
+          "line": 266
+        },
+        {
+          "heading": "3.1 理想数据流转（设计意图）",
+          "level": 3,
+          "line": 268
+        },
+        {
+          "heading": "3.2 实际数据流转（代码推演）",
+          "level": 3,
+          "line": 285
+        },
+        {
+          "heading": "四、核心问题总结",
+          "level": 2,
+          "line": 350
+        },
+        {
+          "heading": "五、解决方案",
+          "level": 2,
+          "line": 365
+        },
+        {
+          "heading": "5.1 问题 1 & 3：状态层级可视化",
+          "level": 3,
+          "line": 367
+        },
+        {
+          "heading": "5.2 问题 2：事件上报路径",
+          "level": 3,
+          "line": 406
+        },
+        {
+          "heading": "5.3 问题 4：AbortSignal 传递",
+          "level": 3,
+          "line": 441
+        },
+        {
+          "heading": "5.4 问题 5：SharedContext 快照策略",
+          "level": 3,
+          "line": 467
+        },
+        {
+          "heading": "5.5 问题 6：事件过滤",
+          "level": 3,
+          "line": 495
+        },
+        {
+          "heading": "5.6 问题 7：渐进式合并",
+          "level": 3,
+          "line": 538
+        },
+        {
+          "heading": "5.7 问题 8：文件修改可见性",
+          "level": 3,
+          "line": 569
+        },
+        {
+          "heading": "六、调整后的架构图",
+          "level": 2,
+          "line": 592
+        },
+        {
+          "heading": "七、验证清单（状态与数据流转）",
+          "level": 2,
+          "line": 647
+        },
+        {
+          "heading": "状态流转验证",
+          "level": 3,
+          "line": 649
+        },
+        {
+          "heading": "数据流转验证",
+          "level": 3,
+          "line": 658
+        },
+        {
+          "heading": "八、结论",
+          "level": 2,
+          "line": 669
+        },
+        {
+          "heading": "原方案的问题",
+          "level": 3,
+          "line": 671
+        },
+        {
+          "heading": "修正后的方案",
+          "level": 3,
+          "line": 683
+        },
+        {
+          "heading": "对 PHASE1_PLAN 的影响",
+          "level": 3,
+          "line": 694
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 27
+      }
+    }
+  ]
+}

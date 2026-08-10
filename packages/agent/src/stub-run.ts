@@ -38,6 +38,20 @@ export interface StubRunOptions {
   readonly useWorktree?: boolean;
   readonly resumeSession?: boolean;
   readonly skillsDir?: string;
+  /**
+   * 桌面多轮：已拼好的「历史 + 当前请求」goal 前缀由调用方处理时可不传；
+   * 若传入 conversationHistory，将在 resumeSession 逻辑之前拼入 effectiveGoal。
+   */
+  readonly conversationHistory?: readonly {
+    readonly role: "user" | "assistant";
+    readonly content: string;
+  }[];
+  /** 会话 id：绑定 Memory TaskSession */
+  readonly conversationId?: string;
+  /** 复用已有 memory task */
+  readonly resumeMemoryTaskId?: string;
+  /** 本 run 结束不 completeTask（多轮中间轮） */
+  readonly deferMemoryComplete?: boolean;
 }
 
 export type { AskUserResolveInput, ToolApprovalInput };
@@ -131,7 +145,7 @@ async function doRun(
   workspaceRoot: string,
   options: StubRunOptions | undefined,
 ): Promise<{ ok: boolean; text: string; exitCode: number }> {
-  const { orch, watcher } = createRunOrchestrator({
+  const { orch, watcher, rootMaxSteps } = createRunOrchestrator({
     workspaceRoot,
     skillsDir: options?.skillsDir,
     resolveAskUser: options?.resolveAskUser,
@@ -143,12 +157,40 @@ async function doRun(
   });
 
   let effectiveGoal = goal;
+
+  // 桌面多轮：把近期对话挂在 goal 前（与 resumeSession 可叠加）
+  const hist = options?.conversationHistory;
+  if (hist && hist.length > 0) {
+    const lines = [
+      "[Conversation so far — context only. Act on the CURRENT user request below.]",
+    ];
+    for (const t of hist) {
+      if (!t.content?.trim()) continue;
+      lines.push(
+        `${t.role === "user" ? "User" : "Assistant"}: ${t.content.trim()}`,
+      );
+    }
+    let block = lines.join("\n");
+    if (block.length > 12_000) {
+      block = "…(earlier turns truncated)…\n" + block.slice(-12_000);
+    }
+    // 若调用方已拼好 [Current user request]，不再包一层
+    if (goal.includes("[Current user request]")) {
+      effectiveGoal = `${block}\n\n${goal}`;
+    } else {
+      effectiveGoal = `${block}\n\n[Current user request]\n${goal}`;
+    }
+  }
+
   if (options?.resumeSession !== false) {
     const sessionCtx = buildSessionContext(workspaceRoot);
     const stateCtx = buildAppStateContext(workspaceRoot);
     const contextParts = [sessionCtx, stateCtx].filter(Boolean);
     if (contextParts.length > 0) {
-      effectiveGoal = `${contextParts.join("\n\n")}\n\n[Current user request]\n${goal}`;
+      const core = effectiveGoal.includes("[Current user request]")
+        ? effectiveGoal
+        : `[Current user request]\n${effectiveGoal}`;
+      effectiveGoal = `${contextParts.join("\n\n")}\n\n${core}`;
     }
   }
 
@@ -157,7 +199,15 @@ async function doRun(
     runId,
     goal: effectiveGoal,
     workspaceRoot,
-    maxSteps: options?.maxSteps,
+    // root Spec 的 maxSteps（如狸花 32）作为默认值；显式传入优先
+    maxSteps: options?.maxSteps ?? rootMaxSteps,
+    ...(options?.conversationId
+      ? { conversationId: options.conversationId }
+      : {}),
+    ...(options?.resumeMemoryTaskId
+      ? { resumeMemoryTaskId: options.resumeMemoryTaskId }
+      : {}),
+    ...(options?.deferMemoryComplete ? { deferMemoryComplete: true } : {}),
   };
 
   const resultFormat = options?.resultTextFormat ?? "json";
@@ -218,10 +268,7 @@ export async function formatDoctorOutput(root: string): Promise<{
   text: string;
 }> {
   const settingsPath = defaultSettingsPath(root);
-  const lines: string[] = [
-    `workspace: ${root}`,
-    `settings:  ${settingsPath}`,
-  ];
+  const lines: string[] = [`workspace: ${root}`, `settings:  ${settingsPath}`];
 
   let settingsOk = true;
   let settingsObj: Record<string, unknown> | undefined;
@@ -232,17 +279,13 @@ export async function formatDoctorOutput(root: string): Promise<{
     lines.push(JSON.stringify(redactSettingsForDisplay(s), null, 2));
   } catch (e) {
     settingsOk = false;
-    lines.push(
-      `settings error: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    lines.push(`settings error: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // 记忆健康检查
   try {
-    const {
-      checkMemoryHealth,
-      resolveMemoryBackendFromSettings,
-    } = await import("@paw/memory");
+    const { checkMemoryHealth, resolveMemoryBackendFromSettings } =
+      await import("@paw/memory");
     const backend = resolveMemoryBackendFromSettings(settingsObj);
     const health = await checkMemoryHealth({
       backend,

@@ -173,6 +173,7 @@ function scanAgentActions(
  * 为一次工具调用生成去重 key。
  *
  * 同一工具 + 相同参数被视为重复调用，避免模型在同一轮里重复输出。
+ * 参数键按字典序稳定序列化，避免同一对象因键顺序不同被误判为不同调用。
  *
  * @param tool 工具名
  * @param args 工具参数
@@ -181,7 +182,23 @@ export function toolCallDedupKey(
   tool: string,
   args: Record<string, unknown>,
 ): string {
-  return `${tool}:${JSON.stringify(args)}`;
+  return `${tool}:${stableStringify(args)}`;
+}
+
+/** 键序无关的稳定 JSON 序列化（对象键排序，数组保序）。 */
+function stableStringify(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    const keys = Object.keys(o).sort();
+    return `{${keys
+      .map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 /**
@@ -273,6 +290,20 @@ function parseArguments(v: unknown): Record<string, unknown> | null {
   return null;
 }
 
+/** 判断 tool 信封里装的是不是结构化动作名（而非真实工具） */
+function isStructuredActionKind(toolId: string): boolean {
+  const kind = toolId.toLowerCase().replace(/-/g, "_");
+  return (
+    kind === "ask_user" ||
+    kind === "askuser" ||
+    kind === "final_answer" ||
+    kind === "finalanswer" ||
+    kind === "plan_update" ||
+    kind === "planupdate" ||
+    kind === "abort"
+  );
+}
+
 /**
  * 从单个 JSON 对象中识别并解析 action。
  *
@@ -297,6 +328,13 @@ function parseActionFromJsonObject(
       : typeof obj.name === "string" && obj.name
         ? obj.name
         : null;
+  // 模型常把结构化动作装进 tool 信封发出（{"tool":"ask_user","args":{...}}），
+  // 若按未知工具拒绝，ask_user 等动作会静默退化成普通文本回答。
+  // 这里还原成 action 形式，继续走下方结构化解析。
+  if (toolId && isStructuredActionKind(toolId)) {
+    const inner = asRecord(obj.args) ?? parseArguments(obj.arguments) ?? {};
+    return parseActionFromJsonObject({ ...inner, action: toolId }, knownTools);
+  }
   if (toolId) {
     // 已知工具名过滤：不在注册表中的工具名直接拒绝
     // 这消除了代码块和文件内容中的大量误匹配
@@ -394,4 +432,141 @@ function asRecord(v: unknown): Record<string, unknown> | null {
     return v as Record<string, unknown>;
   }
   return null;
+}
+
+// ═════════════════════════════════════════════════════════════
+// 解析诊断（Parse Diagnosis）
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * 模型输出解析诊断的三态结果。
+ *
+ * - ok：解析出有效 action，或输出中没有任何工具调用痕迹（纯对话）
+ * - malformed：有工具调用痕迹（如 `{"tool":` 前缀）但 JSON 语法错误或被截断
+ * - invalid：JSON 语法正确，但字段缺失（如 final_answer 无 summary）或工具名未知
+ *
+ * 调用方（handleNoAction）根据诊断决定是否把具体原因回灌给模型，
+ * 而不是把坏输出静默降级为普通文本回复。
+ */
+export type ParseDiagnosis =
+  | { readonly kind: "ok" }
+  | { readonly kind: "malformed"; readonly reason: string }
+  | { readonly kind: "invalid"; readonly reason: string };
+
+/** 工具/动作 JSON 痕迹：`{"tool":` / `{"name":` / `{"action":` / `{"type":` */
+const ACTION_JSON_TRACE_RE = /\{\s*"(?:tool|name|action|type)"\s*:/;
+
+/** 结构化动作缺字段时的原因描述（与 parseActionFromJsonObject 的校验一致）。 */
+function describeInvalidAction(
+  obj: Record<string, unknown>,
+  knownTools?: ReadonlySet<string>,
+): string | null {
+  const toolId =
+    typeof obj.tool === "string" && obj.tool
+      ? obj.tool
+      : typeof obj.name === "string" && obj.name
+        ? obj.name
+        : null;
+  if (toolId) {
+    if (knownTools && !knownTools.has(toolId)) {
+      const sample = [...knownTools].slice(0, 8).join(", ");
+      const suffix = knownTools.size > 8 ? ", …" : "";
+      return `unknown tool "${toolId}" (available tools: ${sample}${suffix})`;
+    }
+    // tool 信封里的结构化动作（如 {"tool":"final_answer","args":{}}）→ 检查必需字段
+    const inner = asRecord(obj.args) ?? parseArguments(obj.arguments) ?? {};
+    const innerKind = String(inner.action ?? inner.type ?? toolId)
+      .toLowerCase()
+      .replace(/-/g, "_");
+    if (
+      (innerKind === "final_answer" || innerKind === "finalanswer") &&
+      typeof inner.summary !== "string"
+    ) {
+      return `final_answer requires a string field "summary"`;
+    }
+    if (
+      (innerKind === "ask_user" || innerKind === "askuser") &&
+      typeof inner.question !== "string"
+    ) {
+      return `ask_user requires a string field "question"`;
+    }
+    if (innerKind === "abort" && typeof inner.reason !== "string") {
+      return `abort requires a string field "reason"`;
+    }
+    return null;
+  }
+  const rawKind =
+    (typeof obj.action === "string" && obj.action) ||
+    (typeof obj.type === "string" && obj.type) ||
+    "";
+  const kind = rawKind.toLowerCase().replace(/-/g, "_");
+  if (kind === "final_answer" || kind === "finalanswer") {
+    if (typeof obj.summary !== "string") {
+      return `final_answer requires a string field "summary"`;
+    }
+  }
+  if (kind === "ask_user" || kind === "askuser") {
+    if (typeof obj.question !== "string") {
+      return `ask_user requires a string field "question"`;
+    }
+  }
+  if (kind === "abort" && typeof obj.reason !== "string") {
+    return `abort requires a string field "reason"`;
+  }
+  return null;
+}
+
+/**
+ * 诊断模型输出无法解析的原因。
+ *
+ * 仅当输出中没有可识别的 action 时调用（有 action 就走正常路径，无需诊断）。
+ * 返回：
+ * - malformed：窗口内有 `{"tool"` 等痕迹，但从痕迹位置开始的 JSON 无法解析
+ * - invalid：JSON 语法正确，但缺字段 / 工具名未知
+ * - ok：没有工具调用痕迹（纯对话），不需要干预
+ */
+export function diagnoseParseFailure(
+  text: string,
+  opts?: ParseToolCallOptions,
+): ParseDiagnosis {
+  const scanWindow = opts?.scanWindow ?? DEFAULT_JSON_SCAN_WINDOW;
+  const windowStart =
+    scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
+  const window = text.slice(windowStart);
+
+  let i = window.indexOf("{");
+  while (i !== -1) {
+    const head = window.slice(i, i + 200);
+    if (ACTION_JSON_TRACE_RE.test(head)) {
+      // 从痕迹位置逐步扩展，尝试完整解析
+      let parseError: Error | null = null;
+      for (let j = i + 1; j <= window.length; j++) {
+        const slice = window.slice(i, j);
+        try {
+          const obj = JSON.parse(slice) as unknown;
+          if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+            const cause = describeInvalidAction(
+              obj as Record<string, unknown>,
+              opts?.knownTools,
+            );
+            if (cause) {
+              return { kind: "invalid", reason: cause };
+            }
+            // 能解析且字段完整 → 不该走到这里（调用方应已解析出 action）
+            return { kind: "ok" };
+          }
+        } catch (err) {
+          parseError = err instanceof Error ? err : new Error(String(err));
+        }
+      }
+      // 到文本末尾都没解析成功 → 语法错误或被截断
+      const line = (window.slice(0, i).match(/\n/g)?.length ?? 0) + 1;
+      const reason = parseError?.message
+        ? `invalid JSON starting near line ${line}: ${parseError.message}`
+        : `unterminated JSON object near line ${line} (output may have been cut off)`;
+      return { kind: "malformed", reason };
+    }
+    i = window.indexOf("{", i + 1);
+  }
+  return { kind: "ok" };
 }

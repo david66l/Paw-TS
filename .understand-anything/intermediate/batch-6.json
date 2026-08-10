@@ -1,0 +1,1524 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/workspace/src/files/read.ts",
+      "type": "file",
+      "name": "read.ts",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "summary": "TypeScript 源文件，12 个函数，646 行。",
+      "tags": [
+        "workspace",
+        "file-operations",
+        "tools"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/workspace/src/files/read.ts:readWorkspaceFile",
+      "type": "function",
+      "name": "readWorkspaceFile",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "lineRange": [
+        77,
+        109
+      ],
+      "summary": "函数 readWorkspaceFile(workspaceRoot, relPath, options)，32 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/files/read.ts:listWorkspaceFiles",
+      "type": "function",
+      "name": "listWorkspaceFiles",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "lineRange": [
+        119,
+        192
+      ],
+      "summary": "函数 listWorkspaceFiles(workspaceRoot, directory, options)，73 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/files/read.ts:searchWorkspaceText",
+      "type": "function",
+      "name": "searchWorkspaceText",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "lineRange": [
+        219,
+        380
+      ],
+      "summary": "函数 searchWorkspaceText(workspaceRoot, relPath, options)，161 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/files/read.ts:globToRegex",
+      "type": "function",
+      "name": "globToRegex",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "lineRange": [
+        384,
+        405
+      ],
+      "summary": "函数 globToRegex(pattern)，21 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/files/read.ts:matchGlobPattern",
+      "type": "function",
+      "name": "matchGlobPattern",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "lineRange": [
+        408,
+        447
+      ],
+      "summary": "函数 matchGlobPattern(filePath, pattern)，39 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/files/read.ts:globWorkspaceFiles",
+      "type": "function",
+      "name": "globWorkspaceFiles",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "lineRange": [
+        460,
+        527
+      ],
+      "summary": "函数 globWorkspaceFiles(workspaceRoot, relPath, options)，67 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/files/read.ts:formatGrepContent",
+      "type": "function",
+      "name": "formatGrepContent",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "lineRange": [
+        561,
+        589
+      ],
+      "summary": "格式化函数 formatGrepContent(matches, showLineNumbers)，28 行。",
+      "tags": [
+        "formatting",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/files/read.ts:grepWorkspaceText",
+      "type": "function",
+      "name": "grepWorkspaceText",
+      "filePath": "packages/workspace/src/files/read.ts",
+      "lineRange": [
+        592,
+        704
+      ],
+      "summary": "函数 grepWorkspaceText(workspaceRoot, relPath, options)，112 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/src/files/write.ts",
+      "type": "file",
+      "name": "write.ts",
+      "filePath": "packages/workspace/src/files/write.ts",
+      "summary": "TypeScript 源文件，4 个函数，265 行。",
+      "tags": [
+        "workspace",
+        "file-operations",
+        "tools"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/workspace/src/files/write.ts:computeDiffStats",
+      "type": "function",
+      "name": "computeDiffStats",
+      "filePath": "packages/workspace/src/files/write.ts",
+      "lineRange": [
+        54,
+        84
+      ],
+      "summary": "计算/评分函数 computeDiffStats(filePath, oldContent, newContent)，30 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/files/write.ts:editWorkspaceFile",
+      "type": "function",
+      "name": "editWorkspaceFile",
+      "filePath": "packages/workspace/src/files/write.ts",
+      "lineRange": [
+        96,
+        256
+      ],
+      "summary": "函数 editWorkspaceFile(workspaceRoot, relPath, options)，160 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/files/write.ts:writeWorkspaceFile",
+      "type": "function",
+      "name": "writeWorkspaceFile",
+      "filePath": "packages/workspace/src/files/write.ts",
+      "lineRange": [
+        267,
+        288
+      ],
+      "summary": "函数 writeWorkspaceFile(workspaceRoot, relPath, content, options)，21 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/src/git-tools.ts",
+      "type": "file",
+      "name": "git-tools.ts",
+      "filePath": "packages/workspace/src/git-tools.ts",
+      "summary": "TypeScript 源文件，5 个函数，176 行。",
+      "tags": [
+        "workspace",
+        "git",
+        "tools"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/git-tools.ts:runGit",
+      "type": "function",
+      "name": "runGit",
+      "filePath": "packages/workspace/src/git-tools.ts",
+      "lineRange": [
+        48,
+        73
+      ],
+      "summary": "执行函数 runGit(cwd, args)，25 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/git-tools.ts:gitStatus",
+      "type": "function",
+      "name": "gitStatus",
+      "filePath": "packages/workspace/src/git-tools.ts",
+      "lineRange": [
+        75,
+        137
+      ],
+      "summary": "函数 gitStatus(workspaceRoot)，62 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/git-tools.ts:gitLog",
+      "type": "function",
+      "name": "gitLog",
+      "filePath": "packages/workspace/src/git-tools.ts",
+      "lineRange": [
+        139,
+        170
+      ],
+      "summary": "函数 gitLog(workspaceRoot, maxCount)，31 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/git-tools.ts:gitDiff",
+      "type": "function",
+      "name": "gitDiff",
+      "filePath": "packages/workspace/src/git-tools.ts",
+      "lineRange": [
+        172,
+        182
+      ],
+      "summary": "函数 gitDiff(workspaceRoot, filePath)，10 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/src/mention-resolver.ts",
+      "type": "file",
+      "name": "mention-resolver.ts",
+      "filePath": "packages/workspace/src/mention-resolver.ts",
+      "summary": "TypeScript 源文件，4 个函数，133 行。",
+      "tags": [
+        "workspace",
+        "mention",
+        "tools"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/mention-resolver.ts:extractAtMentions",
+      "type": "function",
+      "name": "extractAtMentions",
+      "filePath": "packages/workspace/src/mention-resolver.ts",
+      "lineRange": [
+        56,
+        76
+      ],
+      "summary": "提取函数 extractAtMentions(text)，20 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/mention-resolver.ts:resolveMentions",
+      "type": "function",
+      "name": "resolveMentions",
+      "filePath": "packages/workspace/src/mention-resolver.ts",
+      "lineRange": [
+        92,
+        144
+      ],
+      "summary": "解析配置函数 resolveMentions(workspaceRoot, text)，52 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/src/notebook-tools.ts",
+      "type": "file",
+      "name": "notebook-tools.ts",
+      "filePath": "packages/workspace/src/notebook-tools.ts",
+      "summary": "TypeScript 源文件，3 个函数，205 行。",
+      "tags": [
+        "workspace",
+        "notebook",
+        "tools"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/workspace/src/notebook-tools.ts:editNotebook",
+      "type": "function",
+      "name": "editNotebook",
+      "filePath": "packages/workspace/src/notebook-tools.ts",
+      "lineRange": [
+        115,
+        221
+      ],
+      "summary": "函数 editNotebook(workspaceRoot, relPath, opts)，106 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/src/patch-tools.ts",
+      "type": "file",
+      "name": "patch-tools.ts",
+      "filePath": "packages/workspace/src/patch-tools.ts",
+      "summary": "TypeScript 源文件，2 个函数，234 行。",
+      "tags": [
+        "workspace",
+        "patch",
+        "tools"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/workspace/src/patch-tools.ts:applyWorkspacePatch",
+      "type": "function",
+      "name": "applyWorkspacePatch",
+      "filePath": "packages/workspace/src/patch-tools.ts",
+      "lineRange": [
+        98,
+        253
+      ],
+      "summary": "函数 applyWorkspacePatch(workspaceRoot, patchText)，155 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/src/path-guard.ts",
+      "type": "file",
+      "name": "path-guard.ts",
+      "filePath": "packages/workspace/src/path-guard.ts",
+      "summary": "TypeScript 源文件，6 个函数，124 行。",
+      "tags": [
+        "workspace",
+        "security",
+        "tools"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/path-guard.ts:isPathInsideRoot",
+      "type": "function",
+      "name": "isPathInsideRoot",
+      "filePath": "packages/workspace/src/path-guard.ts",
+      "lineRange": [
+        38,
+        52
+      ],
+      "summary": "函数 isPathInsideRoot(rootResolved, targetResolved)，14 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/path-guard.ts:checkWorkspacePath",
+      "type": "function",
+      "name": "checkWorkspacePath",
+      "filePath": "packages/workspace/src/path-guard.ts",
+      "lineRange": [
+        94,
+        139
+      ],
+      "summary": "验证函数 checkWorkspacePath(workspaceRoot, userPath)，45 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/src/project-context.ts",
+      "type": "file",
+      "name": "project-context.ts",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "summary": "TypeScript 源文件，11 个函数，676 行。",
+      "tags": [
+        "workspace",
+        "context",
+        "auto-detection"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:extractKeywords",
+      "type": "function",
+      "name": "extractKeywords",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        189,
+        205
+      ],
+      "summary": "提取函数 extractKeywords(goal)，16 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:scoreFile",
+      "type": "function",
+      "name": "scoreFile",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        207,
+        229
+      ],
+      "summary": "计算/评分函数 scoreFile(filePath, matchCount, modifiedFiles)，22 行。",
+      "tags": [
+        "scoring",
+        "utility",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:discoverContext",
+      "type": "function",
+      "name": "discoverContext",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        234,
+        304
+      ],
+      "summary": "函数 discoverContext(workspaceRoot, goal, excludeFiles)，70 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:isConfigFile",
+      "type": "function",
+      "name": "isConfigFile",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        334,
+        370
+      ],
+      "summary": "函数 isConfigFile(name)，36 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:isSourceFile",
+      "type": "function",
+      "name": "isSourceFile",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        384,
+        432
+      ],
+      "summary": "函数 isSourceFile(name)，48 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:detectProjectType",
+      "type": "function",
+      "name": "detectProjectType",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        458,
+        521
+      ],
+      "summary": "函数 detectProjectType(files)，63 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:readFileSnippet",
+      "type": "function",
+      "name": "readFileSnippet",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        529,
+        550
+      ],
+      "summary": "函数 readFileSnippet(workspaceRoot, relPath, maxBytes)，21 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "type": "function",
+      "name": "generateBrief",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        566,
+        647
+      ],
+      "summary": "函数 generateBrief(workspaceRoot, opts)，81 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/workspace/src/project-context.ts:collectFiles",
+      "type": "function",
+      "name": "collectFiles",
+      "filePath": "packages/workspace/src/project-context.ts",
+      "lineRange": [
+        663,
+        714
+      ],
+      "summary": "函数 collectFiles(baseDir, dir, maxFiles, depth)，51 行。",
+      "tags": [
+        "utility",
+        "utility2",
+        "utility3"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/auto-context.test.ts",
+      "type": "file",
+      "name": "auto-context.test.ts",
+      "filePath": "packages/workspace/test/auto-context.test.ts",
+      "summary": "单元测试文件，0 个测试函数，122 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/brief-tools.test.ts",
+      "type": "file",
+      "name": "brief-tools.test.ts",
+      "filePath": "packages/workspace/test/brief-tools.test.ts",
+      "summary": "单元测试文件，0 个测试函数，72 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/edit-file.test.ts",
+      "type": "file",
+      "name": "edit-file.test.ts",
+      "filePath": "packages/workspace/test/edit-file.test.ts",
+      "summary": "单元测试文件，0 个测试函数，208 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/workspace/test/git-tools.test.ts",
+      "type": "file",
+      "name": "git-tools.test.ts",
+      "filePath": "packages/workspace/test/git-tools.test.ts",
+      "summary": "单元测试文件，0 个测试函数，60 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/glob.test.ts",
+      "type": "file",
+      "name": "glob.test.ts",
+      "filePath": "packages/workspace/test/glob.test.ts",
+      "summary": "单元测试文件，0 个测试函数，59 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/grep.test.ts",
+      "type": "file",
+      "name": "grep.test.ts",
+      "filePath": "packages/workspace/test/grep.test.ts",
+      "summary": "单元测试文件，0 个测试函数，121 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/local-fs.test.ts",
+      "type": "file",
+      "name": "local-fs.test.ts",
+      "filePath": "packages/workspace/test/local-fs.test.ts",
+      "summary": "单元测试文件，0 个测试函数，34 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/test/mention-resolver.test.ts",
+      "type": "file",
+      "name": "mention-resolver.test.ts",
+      "filePath": "packages/workspace/test/mention-resolver.test.ts",
+      "summary": "单元测试文件，0 个测试函数，100 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/notebook-tools.test.ts",
+      "type": "file",
+      "name": "notebook-tools.test.ts",
+      "filePath": "packages/workspace/test/notebook-tools.test.ts",
+      "summary": "单元测试文件，0 个测试函数，141 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/patch-tools.test.ts",
+      "type": "file",
+      "name": "patch-tools.test.ts",
+      "filePath": "packages/workspace/test/patch-tools.test.ts",
+      "summary": "单元测试文件，0 个测试函数，124 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/path-guard.test.ts",
+      "type": "file",
+      "name": "path-guard.test.ts",
+      "filePath": "packages/workspace/test/path-guard.test.ts",
+      "summary": "单元测试文件，0 个测试函数，58 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/workspace/test/search.test.ts",
+      "type": "file",
+      "name": "search.test.ts",
+      "filePath": "packages/workspace/test/search.test.ts",
+      "summary": "单元测试文件，0 个测试函数，21 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/workspace/test/write-file.test.ts",
+      "type": "file",
+      "name": "write-file.test.ts",
+      "filePath": "packages/workspace/test/write-file.test.ts",
+      "summary": "单元测试文件，0 个测试函数，20 行有效代码。",
+      "tags": [
+        "test",
+        "unit-test",
+        "workspace"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:readWorkspaceFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:listWorkspaceFiles",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:searchWorkspaceText",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:globToRegex",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:matchGlobPattern",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:globWorkspaceFiles",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:formatGrepContent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:grepWorkspaceText",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:readWorkspaceFile",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:listWorkspaceFiles",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:searchWorkspaceText",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:globWorkspaceFiles",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "function:packages/workspace/src/files/read.ts:grepWorkspaceText",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "file:packages/workspace/src/path-guard.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/workspace/src/files/read.ts:matchGlobPattern",
+      "target": "function:packages/workspace/src/files/read.ts:globToRegex",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/files/read.ts:matchGlobPattern",
+      "target": "function:packages/workspace/src/files/read.ts:globToRegex",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/files/read.ts:matchGlobPattern",
+      "target": "function:packages/workspace/src/files/read.ts:globToRegex",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/files/read.ts:grepWorkspaceText",
+      "target": "function:packages/workspace/src/files/read.ts:searchWorkspaceText",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/files/read.ts:grepWorkspaceText",
+      "target": "function:packages/workspace/src/files/read.ts:formatGrepContent",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/files/write.ts",
+      "target": "function:packages/workspace/src/files/write.ts:computeDiffStats",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/write.ts",
+      "target": "function:packages/workspace/src/files/write.ts:editWorkspaceFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/write.ts",
+      "target": "function:packages/workspace/src/files/write.ts:writeWorkspaceFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/files/write.ts",
+      "target": "function:packages/workspace/src/files/write.ts:editWorkspaceFile",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/files/write.ts",
+      "target": "function:packages/workspace/src/files/write.ts:writeWorkspaceFile",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/files/write.ts",
+      "target": "file:packages/workspace/src/path-guard.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/workspace/src/files/write.ts:editWorkspaceFile",
+      "target": "function:packages/workspace/src/files/write.ts:computeDiffStats",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/files/write.ts:editWorkspaceFile",
+      "target": "function:packages/workspace/src/files/write.ts:computeDiffStats",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/files/write.ts:editWorkspaceFile",
+      "target": "function:packages/workspace/src/files/write.ts:computeDiffStats",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/git-tools.ts",
+      "target": "function:packages/workspace/src/git-tools.ts:runGit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/git-tools.ts",
+      "target": "function:packages/workspace/src/git-tools.ts:gitStatus",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/git-tools.ts",
+      "target": "function:packages/workspace/src/git-tools.ts:gitLog",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/git-tools.ts",
+      "target": "function:packages/workspace/src/git-tools.ts:gitDiff",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/git-tools.ts",
+      "target": "function:packages/workspace/src/git-tools.ts:gitStatus",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/git-tools.ts",
+      "target": "function:packages/workspace/src/git-tools.ts:gitLog",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/git-tools.ts",
+      "target": "function:packages/workspace/src/git-tools.ts:gitDiff",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/git-tools.ts:gitStatus",
+      "target": "function:packages/workspace/src/git-tools.ts:runGit",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/git-tools.ts:gitLog",
+      "target": "function:packages/workspace/src/git-tools.ts:runGit",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/git-tools.ts:gitDiff",
+      "target": "function:packages/workspace/src/git-tools.ts:runGit",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/mention-resolver.ts",
+      "target": "function:packages/workspace/src/mention-resolver.ts:extractAtMentions",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/mention-resolver.ts",
+      "target": "function:packages/workspace/src/mention-resolver.ts:resolveMentions",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/mention-resolver.ts",
+      "target": "function:packages/workspace/src/mention-resolver.ts:extractAtMentions",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/mention-resolver.ts",
+      "target": "function:packages/workspace/src/mention-resolver.ts:resolveMentions",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/mention-resolver.ts",
+      "target": "file:packages/workspace/src/files/read.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/workspace/src/mention-resolver.ts:resolveMentions",
+      "target": "function:packages/workspace/src/mention-resolver.ts:extractAtMentions",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/notebook-tools.ts",
+      "target": "function:packages/workspace/src/notebook-tools.ts:editNotebook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/notebook-tools.ts",
+      "target": "function:packages/workspace/src/notebook-tools.ts:editNotebook",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/notebook-tools.ts",
+      "target": "file:packages/workspace/src/path-guard.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/patch-tools.ts",
+      "target": "function:packages/workspace/src/patch-tools.ts:applyWorkspacePatch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/patch-tools.ts",
+      "target": "function:packages/workspace/src/patch-tools.ts:applyWorkspacePatch",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/patch-tools.ts",
+      "target": "file:packages/workspace/src/path-guard.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/path-guard.ts",
+      "target": "function:packages/workspace/src/path-guard.ts:isPathInsideRoot",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/path-guard.ts",
+      "target": "function:packages/workspace/src/path-guard.ts:checkWorkspacePath",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/path-guard.ts",
+      "target": "function:packages/workspace/src/path-guard.ts:isPathInsideRoot",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/path-guard.ts",
+      "target": "function:packages/workspace/src/path-guard.ts:checkWorkspacePath",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/path-guard.ts:checkWorkspacePath",
+      "target": "function:packages/workspace/src/path-guard.ts:isPathInsideRoot",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/path-guard.ts:checkWorkspacePath",
+      "target": "function:packages/workspace/src/path-guard.ts:isPathInsideRoot",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:extractKeywords",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:scoreFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:discoverContext",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:isConfigFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:isSourceFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:detectProjectType",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:readFileSnippet",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:collectFiles",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:discoverContext",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "file:packages/workspace/src/files/read.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "file:packages/workspace/src/git-tools.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "file:packages/workspace/src/path-guard.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:discoverContext",
+      "target": "function:packages/workspace/src/project-context.ts:extractKeywords",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:discoverContext",
+      "target": "function:packages/workspace/src/project-context.ts:scoreFile",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "target": "function:packages/workspace/src/project-context.ts:collectFiles",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "target": "function:packages/workspace/src/project-context.ts:detectProjectType",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "target": "function:packages/workspace/src/project-context.ts:isConfigFile",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "target": "function:packages/workspace/src/project-context.ts:isSourceFile",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "target": "function:packages/workspace/src/project-context.ts:readFileSnippet",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:generateBrief",
+      "target": "function:packages/workspace/src/project-context.ts:readFileSnippet",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/workspace/src/project-context.ts:collectFiles",
+      "target": "function:packages/workspace/src/project-context.ts:collectFiles",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/workspace/test/auto-context.test.ts",
+      "target": "file:packages/workspace/src/project-context.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "file:packages/workspace/test/auto-context.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/brief-tools.test.ts",
+      "target": "file:packages/workspace/src/project-context.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/project-context.ts",
+      "target": "file:packages/workspace/test/brief-tools.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/edit-file.test.ts",
+      "target": "file:packages/workspace/src/files/write.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/files/write.ts",
+      "target": "file:packages/workspace/test/edit-file.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/git-tools.test.ts",
+      "target": "file:packages/workspace/src/git-tools.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/git-tools.ts",
+      "target": "file:packages/workspace/test/git-tools.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/glob.test.ts",
+      "target": "file:packages/workspace/src/files/read.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "file:packages/workspace/test/glob.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/grep.test.ts",
+      "target": "file:packages/workspace/src/files/read.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "file:packages/workspace/test/grep.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/local-fs.test.ts",
+      "target": "file:packages/workspace/src/files/read.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "file:packages/workspace/test/local-fs.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/mention-resolver.test.ts",
+      "target": "file:packages/workspace/src/mention-resolver.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/mention-resolver.ts",
+      "target": "file:packages/workspace/test/mention-resolver.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/notebook-tools.test.ts",
+      "target": "file:packages/workspace/src/notebook-tools.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/notebook-tools.ts",
+      "target": "file:packages/workspace/test/notebook-tools.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/patch-tools.test.ts",
+      "target": "file:packages/workspace/src/patch-tools.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/patch-tools.ts",
+      "target": "file:packages/workspace/test/patch-tools.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/path-guard.test.ts",
+      "target": "file:packages/workspace/src/path-guard.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/path-guard.ts",
+      "target": "file:packages/workspace/test/path-guard.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/search.test.ts",
+      "target": "file:packages/workspace/src/files/read.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/files/read.ts",
+      "target": "file:packages/workspace/test/search.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:packages/workspace/test/write-file.test.ts",
+      "target": "file:packages/workspace/src/files/write.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/workspace/src/files/write.ts",
+      "target": "file:packages/workspace/test/write-file.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

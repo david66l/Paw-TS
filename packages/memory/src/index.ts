@@ -17,6 +17,8 @@
 export {
   createMemoryRuntime,
   MemoryRuntimeImpl,
+  MemoryRuntimeV2,
+  resetMemoryV2Core,
   checkMemoryHealth,
   resolveMemoryBackendFromSettings,
   migrateLegacyMemories,
@@ -34,6 +36,9 @@ export {
   type MigrateLegacyResult,
   type MemoryListItem,
   type MemoryRuntime,
+  type MemoryCandidateEnricher,
+  type MemoryCandidateEnrichmentDraft,
+  type MemoryRuntimeLlm,
   type MemoryRuntimeOptions,
   type OnToolResultInput,
   type PatchWorkingMemoryInput,
@@ -46,11 +51,22 @@ export {
 export {
   extractCleanMemoryQuery,
   extractFilePaths,
+  buildConversationAwareQuery,
+  cleanMemoryTitle,
+  extractExplicitRememberText,
+  hasDurableMemorySignal,
+  isDecisionStep,
+  isLowValueChitchat,
+  isSystemFinalizeMessage,
+  isWorthWritingLongTermMemory,
+  shouldWriteTaskSummary,
+  tokenizeForMemoryScore,
   type MemoryRecord,
   type MemorySource,
   type MemoryScope,
   type MemoryPriority,
   type TaskProfile,
+  type MemoryWriteSignalInput,
 } from "./shared/memory-record.js";
 
 export {
@@ -62,9 +78,15 @@ export {
   type MemoryStatus,
 } from "./shared/memory-types.js";
 
-export { loadProjectMemory, type ProjectMemory } from "./project/project-memory.js";
+export {
+  loadProjectMemory,
+  type ProjectMemory,
+} from "./project/project-memory.js";
 
-export { SessionMemoryStore, type SessionMemory } from "./session/session-memory.js";
+export {
+  SessionMemoryStore,
+  type SessionMemory,
+} from "./session/session-memory.js";
 
 export {
   AutoMemoryStore,

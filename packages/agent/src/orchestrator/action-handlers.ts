@@ -30,6 +30,11 @@ import type {
   TodoStore,
 } from "@paw/core";
 import type { TaskPlanner } from "@paw/store";
+import type { ParseDiagnosis } from "../parse-agent-action.js";
+import {
+  markPlanItemsCompleted,
+  planItemsToEventSnapshot,
+} from "../plan-bootstrap.js";
 import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
@@ -69,20 +74,43 @@ interface ActionHandlerContext {
   readonly evalHooks?: EvalHooks;
   readonly memoryRuntime?: import("@paw/memory").MemoryRuntime;
   readonly memoryTaskId?: string;
+  readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
+  readonly allowedTools?: readonly string[] | null;
+  /** 并行子 Agent 的文件锁（仅子 Agent 注入） */
+  readonly fileLock?: import("@paw/harness").FileLockLike;
 }
 
 // ═════════════════════════════════════════════════════════════
 // 动作分发入口
 // ═════════════════════════════════════════════════════════════
 
+/** 格式错误反馈次数上限（防止死循环） */
+const FORMAT_ERROR_NUDGE_LIMIT = 2;
+
+/** 原生通道解析失败的调用（未执行，需回灌给模型） */
+export interface NativeToolError {
+  readonly id: string;
+  readonly name: string;
+  readonly raw: string;
+}
+
+/** 解析阶段的反馈信息：文本通道诊断 + 原生通道失败调用 */
+export interface ParseFeedback {
+  /** 文本通道解析诊断（无 action 时使用） */
+  readonly diagnosis?: ParseDiagnosis;
+  /** 原生通道解析失败的调用（拒绝执行） */
+  readonly nativeToolErrors?: readonly NativeToolError[];
+}
+
 /**
  * 动作分发主函数。
  *
  * 路由优先级：
- * 1. 子 Agent 调用（run_agent）→ 独立处理，与普通工具调用分开
- * 2. 普通工具调用 → 通过 tool-runner 执行
- * 3. 结构化 action（final_answer / abort / ask_user / plan_update）
- * 4. 无 action → auto-nudge 或直接完成
+ * 1. 原生通道解析失败的调用（nativeToolErrors）→ 注入错误工具结果，不执行
+ * 2. 子 Agent 调用（run_agent）→ 独立处理，与普通工具调用分开
+ * 3. 普通工具调用 → 通过 tool-runner 执行
+ * 4. 结构化 action（final_answer / abort / ask_user / plan_update）
+ * 5. 无 action → 格式反馈（解析失败时）或 auto-nudge 或直接完成
  */
 export async function handleAction(
   actions: AgentAction[],
@@ -92,7 +120,24 @@ export async function handleAction(
   text: string,
   thinking: string | undefined,
   opts: ActionHandlerContext,
-): Promise<{ readonly state: TurnState; readonly flags: TurnFlags; readonly subResults?: Array<{ runId: string; summary: string }> }> {
+  feedback?: ParseFeedback,
+): Promise<{
+  readonly state: TurnState;
+  readonly flags: TurnFlags;
+  readonly subResults?: Array<{ runId: string; summary: string }>;
+}> {
+  // 原生通道解析失败的调用：拒绝执行，注入错误工具结果让模型自纠
+  if (feedback?.nativeToolErrors && feedback.nativeToolErrors.length > 0) {
+    return handleNativeToolErrors(
+      feedback.nativeToolErrors,
+      ctx,
+      flags,
+      text,
+      thinking,
+      opts,
+    );
+  }
+
   // 按工具类型分流：子 Agent vs 普通工具
   const subAgentCalls = toolCalls.filter(isSubAgentCall);
   const normalToolCalls = toolCalls.filter((c) => !isSubAgentCall(c));
@@ -110,7 +155,14 @@ export async function handleAction(
   // 没有工具调用 → 处理结构化 action
   const action = actions[0] ?? null;
   if (!action) {
-    return handleNoAction(ctx, flags, text, thinking, opts);
+    return handleNoAction(
+      ctx,
+      flags,
+      text,
+      thinking,
+      opts,
+      feedback?.diagnosis,
+    );
   }
 
   ctx.emit({ type: "agent.action", action });
@@ -137,12 +189,14 @@ export async function handleAction(
 /**
  * 处理"模型没有返回任何结构化动作"的情况。
  *
- * 两种可能：
- * 1. 模型用过工具但忘记输出 final_answer → auto-nudge：推一条消息让模型继续
- * 2. 模型真的完成了（对话式回复，不需要工具）→ 直接作为 completed 返回
+ * 三种可能：
+ * 1. 模型尝试输出工具调用但格式坏了（JSON 语法错误 / 字段缺失 / 工具名未知）
+ *    → 格式反馈：把具体原因回灌给模型，让它自纠（绝不静默降级为纯文本回复）
+ * 2. 模型用过工具但忘记输出 final_answer → auto-nudge：推一条消息让模型继续
+ * 3. 模型真的完成了（对话式回复，不需要工具）→ 直接作为 completed 返回
  *
- * auto-nudge 限制：最多推动 2 次（autoContinueNudges < 2），防止死循环。
- * 同时要求 hasEverUsedTools === true，纯对话场景不触发推动。
+ * 反馈上限：格式反馈与 auto-nudge 独立计数（formatErrorNudges / autoContinueNudges），
+ * 各自最多 2 次，防止死循环。
  */
 function handleNoAction(
   ctx: PhaseContext,
@@ -150,6 +204,7 @@ function handleNoAction(
   text: string,
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn">,
+  diagnosis?: ParseDiagnosis,
 ): { readonly state: TurnState; readonly flags: TurnFlags } {
   const displayText =
     text.trim() ||
@@ -159,6 +214,25 @@ function handleNoAction(
 
   // 已是最后一轮：不能再 nudge，否则会耗尽 maxSteps 变成 failed
   const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
+
+  // 格式反馈：输出有工具调用痕迹但解析失败 → 回灌具体原因，绝不静默降级
+  const formatNudges = flags.formatErrorNudges ?? 0;
+  if (
+    diagnosis &&
+    diagnosis.kind !== "ok" &&
+    formatNudges < FORMAT_ERROR_NUDGE_LIMIT &&
+    !noRoomForAnotherTurn
+  ) {
+    const nextFlags: TurnFlags = {
+      ...flags,
+      formatErrorNudges: formatNudges + 1,
+      lastTurnHadToolCall: false,
+    };
+    ctx.ctxMgr.addAssistant(text, thinking);
+    ctx.ctxMgr.addUser(formatErrorFeedbackMessage(diagnosis));
+    opts.saveStateFn();
+    return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  }
 
   // 用过工具但没给 final_answer → auto-nudge（且还有后续轮次预算）
   if (
@@ -193,6 +267,69 @@ function handleNoAction(
   };
 }
 
+/** 格式错误反馈消息：具体原因 + 正确格式示例（参考 OpenHands 的 corrective nudge 注入形式）。 */
+function formatErrorFeedbackMessage(
+  diagnosis: Extract<ParseDiagnosis, { kind: "malformed" | "invalid" }>,
+): string {
+  return [
+    "[Your last output could not be parsed as a tool call and was NOT executed.]",
+    `Reason: ${diagnosis.reason}.`,
+    "Correct format is a single JSON object, no surrounding text or code fences:",
+    '{"tool":"workspace.read_file","args":{"path":"<file>"}}',
+    "Fix the format and retry the call, or if you are done reply with:",
+    '{"action":"final_answer","summary":"<your complete findings>"}',
+  ].join("\n");
+}
+
+/**
+ * 原生通道解析失败的调用：拒绝执行，注入错误工具结果。
+ *
+ * 模型下一轮会看到「assistant 文本 + 解析失败的工具结果」，
+ * 能够直接看到自己发的内容和错误原因，自我纠正后重新发起调用。
+ */
+function handleNativeToolErrors(
+  errors: readonly NativeToolError[],
+  ctx: PhaseContext,
+  flags: TurnFlags,
+  text: string,
+  thinking: string | undefined,
+  opts: Pick<ActionHandlerContext, "saveStateFn">,
+): { readonly state: TurnState; readonly flags: TurnFlags } {
+  const nextFlags: TurnFlags = {
+    ...flags,
+    lastTurnHadToolCall: false,
+  };
+
+  ctx.emit({ type: "phase", name: "tool" });
+  ctx.ctxMgr.addAssistant(text, thinking);
+
+  const results = errors.map((e) => {
+    const summary = `[Tool call not executed] arguments for "${e.name}" failed to parse as JSON. Raw input (truncated): ${e.raw.slice(0, 160)}. Retry the call with valid JSON arguments.`;
+    ctx.emit({
+      type: "tool.result",
+      tool: e.name,
+      ok: false,
+      summary,
+    });
+    return { tool: e.name, ok: false, summary };
+  });
+  ctx.ctxMgr.addToolResults(results);
+
+  // maxSteps 检查：最后一轮不再继续，降级为完成（避免 loop exhausted）
+  if (ctx.turn + 1 >= ctx.maxSteps) {
+    return {
+      state: {
+        type: "completed",
+        message: `Max steps (${ctx.maxSteps}) reached after malformed tool call(s)`,
+      },
+      flags: nextFlags,
+    };
+  }
+
+  opts.saveStateFn();
+  return { state: { type: "continue", nextFlags }, flags: nextFlags };
+}
+
 // ═════════════════════════════════════════════════════════════
 // handleFinalAnswer：答案完成
 // ═════════════════════════════════════════════════════════════
@@ -213,13 +350,13 @@ function handleFinalAnswer(
   flags: TurnFlags,
   text: string,
   thinking: string | undefined,
-  opts: Pick<
-    ActionHandlerContext,
-    "todoStore" | "planner" | "saveStateFn"
-  >,
+  opts: Pick<ActionHandlerContext, "todoStore" | "planner" | "saveStateFn">,
 ): { readonly state: TurnState; readonly flags: TurnFlags } {
   const plan = opts.planner.plan;
-  const hasPendingPlan = plan && !plan.allComplete && plan.items.length > 0;
+  // 仅当计划被模型/applyUpdate 推进过（revision>0）才因 pending plan 而 nudge。
+  // goal bootstrap 的 plan  revision 仍为 0，避免「右栏兜底计划」卡住 final_answer。
+  const hasPendingPlan =
+    !!plan && !plan.allComplete && plan.items.length > 0 && plan.revision > 0;
   const hasPendingTodos = opts.todoStore?.items.some(
     (t) => t.status !== "done",
   );
@@ -267,7 +404,21 @@ function handleFinalAnswer(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  // 无 pending 工作 → 真正完成
+  // 无 pending 工作 / 不再 nudge → 真正完成；把 plan 项标 done 供右栏展示
+  if (plan && plan.items.length > 0) {
+    const completed = markPlanItemsCompleted(plan.items);
+    plan.items.splice(0, plan.items.length, ...completed);
+    plan.revision += 1;
+    ctx.taskState.setPlan(plan.items);
+    ctx.emit({
+      type: "plan.updated",
+      revision: plan.revision,
+      itemCount: plan.items.length,
+      reason: "task_completed",
+      items: planItemsToEventSnapshot(plan.items),
+    });
+  }
+
   return {
     state: {
       type: "completed",
@@ -433,11 +584,17 @@ async function handlePlanUpdate(
           /* best-effort */
         });
     }
+    const snapshotItems = p.items.map((item) => ({
+      id: item.id,
+      text: (item.note?.trim() || item.task_id || item.id).slice(0, 500),
+      status: item.status,
+    }));
     ctx.emit({
       type: "plan.updated",
       revision: p.revision,
       itemCount: p.items.length,
       reason: action.reason,
+      items: snapshotItems,
     });
   }
 
@@ -527,6 +684,10 @@ async function handleToolCalls(
       shellSandbox: ctx.shellSandbox,
       memoryRuntime: opts.memoryRuntime,
       memoryTaskId: opts.memoryTaskId ?? ctx.memoryTaskId,
+      createAgent: opts.createAgent,
+      allowedTools: opts.allowedTools,
+      fileLock: opts.fileLock,
+      artifactRegistry: ctx.artifactRegistry,
     },
     {
       resolveToolApproval: opts.resolveToolApproval,
@@ -548,14 +709,15 @@ async function handleToolCalls(
     });
   }
 
-  // 新记忆：工具结果写入 WorkingMemory（best-effort）
+  // 新记忆：工具结果写入（best-effort）；v2 失败触发 T2 action_failed 检索注入 [Memory hint]
   const runtime = opts.memoryRuntime ?? ctx.memoryRuntime;
   const memTaskId = opts.memoryTaskId ?? ctx.memoryTaskId;
   if (runtime && memTaskId) {
+    const injections: string[] = [];
     for (let i = 0; i < calls.length; i++) {
       const call = calls[i]!;
       const tr = results[i]!;
-      await runtime
+      const injected = await runtime
         .onToolResult({
           taskId: memTaskId,
           toolName: call.tool,
@@ -565,9 +727,13 @@ async function handleToolCalls(
           rawPayload: tr.payload,
           idempotencyKey: `${ctx.runId}-t${ctx.turn}-${i}-${call.tool}`,
         })
-        .catch(() => {
-          /* best-effort */
-        });
+        .catch(() => undefined);
+      if (injected?.injected) injections.push(injected.injected);
+    }
+    if (injections.length > 0) {
+      ctx.ctxMgr.addUser(
+        `[Memory hint]\n${injections.join("\n\n").slice(0, 2000)}`,
+      );
     }
   }
 
@@ -584,6 +750,8 @@ async function handleToolCalls(
     thinking,
     taskState: ctx.taskState,
     saveStateFn: opts.saveStateFn,
+    payloadDeduper: ctx.payloadDeduper,
+    artifactRegistry: ctx.artifactRegistry,
   });
 
   // 如果工具执行过程中触发了 maxSteps 检查，直接完成
@@ -622,7 +790,11 @@ async function handleRunAgent(
   text: string,
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn" | "agentGroup" | "evalHooks">,
-): Promise<{ readonly state: TurnState; readonly flags: TurnFlags; readonly subResults?: Array<{ runId: string; summary: string }> }> {
+): Promise<{
+  readonly state: TurnState;
+  readonly flags: TurnFlags;
+  readonly subResults?: Array<{ runId: string; summary: string }>;
+}> {
   const nextFlags: TurnFlags = {
     ...flags,
     lastTurnHadToolCall: true,
@@ -637,10 +809,15 @@ async function handleRunAgent(
     };
   }
 
-  // 为每个子 Agent 调用发出 tool.call 事件
-  for (const call of calls) {
-    ctx.emit({ type: "tool.call", tool: call.tool, args: call.args });
-  }
+  // 为每个子 Agent 调用发出 tool.call 事件（callId 与 AgentGroup 分配的 agentId 一致）
+  calls.forEach((call, i) => {
+    ctx.emit({
+      type: "tool.call",
+      tool: call.tool,
+      args: call.args,
+      callId: `child-${ctx.runId}-${i}`,
+    });
+  });
 
   const summarizer = new DefaultContextSummarizer();
 
@@ -700,20 +877,27 @@ async function handleRunAgent(
     })),
   );
 
-  // P4: 提取子 Agent 摘要供父 Agent 收割
-  const subResults = results.map((r) => ({
-    runId: `sub-${Date.now()}`,
+  // P4: 提取子 Agent 摘要供父 Agent 收割（runId 与 AgentGroup 的 child id 一致）
+  const subResults = results.map((r, i) => ({
+    runId: `child-${ctx.runId}-${i}`,
     summary: r.summary,
   }));
 
   if (ctx.turn + 1 >= ctx.maxSteps) {
     return {
-      state: { type: "completed", message: `Max steps (${ctx.maxSteps}) reached after sub-agents` },
+      state: {
+        type: "completed",
+        message: `Max steps (${ctx.maxSteps}) reached after sub-agents`,
+      },
       flags: nextFlags,
       subResults,
     };
   }
 
   opts.saveStateFn();
-  return { state: { type: "continue", nextFlags }, flags: nextFlags, subResults };
+  return {
+    state: { type: "continue", nextFlags },
+    flags: nextFlags,
+    subResults,
+  };
 }

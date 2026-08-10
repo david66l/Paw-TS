@@ -1,0 +1,1241 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/agent/src/orchestrator/memory-extraction.ts",
+      "type": "file",
+      "name": "memory-extraction.ts",
+      "filePath": "packages/agent/src/orchestrator/memory-extraction.ts",
+      "summary": "TypeScript 源文件，1 个函数，150 行。",
+      "tags": [
+        "memory",
+        "agent",
+        "orchestration",
+        "extraction"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/memory-extraction.ts:runMemoryExtractionAfterRun",
+      "type": "function",
+      "name": "runMemoryExtractionAfterRun",
+      "filePath": "packages/agent/src/orchestrator/memory-extraction.ts",
+      "lineRange": [
+        45,
+        161
+      ],
+      "summary": "执行函数 runMemoryExtractionAfterRun(opts)，116 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "type": "file",
+      "name": "session-summarizer.ts",
+      "filePath": "packages/agent/src/orchestrator/session-summarizer.ts",
+      "summary": "TypeScript 源文件，4 个函数，267 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "session-management"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/session-summarizer.ts:extractSessionHighlightsToAutoMemory",
+      "type": "function",
+      "name": "extractSessionHighlightsToAutoMemory",
+      "filePath": "packages/agent/src/orchestrator/session-summarizer.ts",
+      "lineRange": [
+        44,
+        150
+      ],
+      "summary": "提取函数 extractSessionHighlightsToAutoMemory(opts)，106 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/session-summarizer.ts:buildShortSessionUser",
+      "type": "function",
+      "name": "buildShortSessionUser",
+      "filePath": "packages/agent/src/orchestrator/session-summarizer.ts",
+      "lineRange": [
+        165,
+        196
+      ],
+      "summary": "构建函数 buildShortSessionUser(goal, finalAnswer, filePaths, errors)，31 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/session-summarizer.ts:parseShortSessionSummary",
+      "type": "function",
+      "name": "parseShortSessionSummary",
+      "filePath": "packages/agent/src/orchestrator/session-summarizer.ts",
+      "lineRange": [
+        199,
+        232
+      ],
+      "summary": "解析函数 parseShortSessionSummary(text, sessionId, project, goal)，33 行。",
+      "tags": [
+        "parsing",
+        "summarization",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/session-summarizer.ts:maybeGenerateShortSessionMemory",
+      "type": "function",
+      "name": "maybeGenerateShortSessionMemory",
+      "filePath": "packages/agent/src/orchestrator/session-summarizer.ts",
+      "lineRange": [
+        244,
+        295
+      ],
+      "summary": "函数 maybeGenerateShortSessionMemory(opts)，51 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "type": "file",
+      "name": "tool-runner.ts",
+      "filePath": "packages/agent/src/orchestrator/tool-runner.ts",
+      "summary": "TypeScript 源文件，3 个函数，320 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "tool-execution"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/tool-runner.ts:toolNeedsApprovalGate",
+      "type": "function",
+      "name": "toolNeedsApprovalGate",
+      "filePath": "packages/agent/src/orchestrator/tool-runner.ts",
+      "lineRange": [
+        71,
+        87
+      ],
+      "summary": "审批函数 toolNeedsApprovalGate(tool, args, approvalPolicy, hasApprovalResolver)，16 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/tool-runner.ts:executeToolCalls",
+      "type": "function",
+      "name": "executeToolCalls",
+      "filePath": "packages/agent/src/orchestrator/tool-runner.ts",
+      "lineRange": [
+        102,
+        254
+      ],
+      "summary": "执行函数 executeToolCalls(calls, toolCtx, approvalCtx)，152 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/orchestrator/tool-runner.ts:finalizeToolExecution",
+      "type": "function",
+      "name": "finalizeToolExecution",
+      "filePath": "packages/agent/src/orchestrator/tool-runner.ts",
+      "lineRange": [
+        270,
+        338
+      ],
+      "summary": "函数 finalizeToolExecution(calls, results, ctx)，68 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/orchestrator/types.ts",
+      "type": "file",
+      "name": "types.ts",
+      "filePath": "packages/agent/src/orchestrator/types.ts",
+      "summary": "TypeScript 源文件，0 个函数，262 行。",
+      "tags": [
+        "agent",
+        "orchestration",
+        "type-definition"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/agent/src/parse-agent-action.ts",
+      "type": "file",
+      "name": "parse-agent-action.ts",
+      "filePath": "packages/agent/src/parse-agent-action.ts",
+      "summary": "TypeScript 源文件，9 个函数，369 行。",
+      "tags": [
+        "agent",
+        "parsing",
+        "utilities"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/parse-agent-action.ts:extractJsonObjects",
+      "type": "function",
+      "name": "extractJsonObjects",
+      "filePath": "packages/agent/src/parse-agent-action.ts",
+      "lineRange": [
+        88,
+        135
+      ],
+      "summary": "提取函数 extractJsonObjects(text, scanWindow)，47 行。",
+      "tags": [
+        "extraction",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/parse-agent-action.ts:parseAgentActionFromModelText",
+      "type": "function",
+      "name": "parseAgentActionFromModelText",
+      "filePath": "packages/agent/src/parse-agent-action.ts",
+      "lineRange": [
+        195,
+        205
+      ],
+      "summary": "解析函数 parseAgentActionFromModelText(text, opts)，10 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/parse-agent-action.ts:parseAgentActionsFromModelText",
+      "type": "function",
+      "name": "parseAgentActionsFromModelText",
+      "filePath": "packages/agent/src/parse-agent-action.ts",
+      "lineRange": [
+        219,
+        252
+      ],
+      "summary": "解析函数 parseAgentActionsFromModelText(text, opts)，33 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/parse-agent-action.ts:parseArguments",
+      "type": "function",
+      "name": "parseArguments",
+      "filePath": "packages/agent/src/parse-agent-action.ts",
+      "lineRange": [
+        259,
+        274
+      ],
+      "summary": "解析函数 parseArguments(v)，15 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/parse-agent-action.ts:parseActionFromJsonObject",
+      "type": "function",
+      "name": "parseActionFromJsonObject",
+      "filePath": "packages/agent/src/parse-agent-action.ts",
+      "lineRange": [
+        288,
+        390
+      ],
+      "summary": "解析函数 parseActionFromJsonObject(obj, knownTools)，102 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/resilience/circuit-breaker.ts",
+      "type": "file",
+      "name": "circuit-breaker.ts",
+      "filePath": "packages/agent/src/resilience/circuit-breaker.ts",
+      "summary": "TypeScript 源文件，0 个函数，2 个类，181 行。",
+      "tags": [
+        "agent",
+        "resilience",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:packages/agent/src/resilience/circuit-breaker.ts:CircuitBreaker",
+      "type": "class",
+      "name": "CircuitBreaker",
+      "filePath": "packages/agent/src/resilience/circuit-breaker.ts",
+      "lineRange": [
+        76,
+        202
+      ],
+      "summary": "类 CircuitBreaker，10 个方法、9 个属性，126 行。",
+      "tags": [
+        "core",
+        "component",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/resolve-max-steps.ts",
+      "type": "file",
+      "name": "resolve-max-steps.ts",
+      "filePath": "packages/agent/src/resolve-max-steps.ts",
+      "summary": "TypeScript 源文件，2 个函数，53 行。",
+      "tags": [
+        "agent",
+        "configuration",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/resolve-max-steps.ts:resolveMaxSteps",
+      "type": "function",
+      "name": "resolveMaxSteps",
+      "filePath": "packages/agent/src/resolve-max-steps.ts",
+      "lineRange": [
+        41,
+        57
+      ],
+      "summary": "解析配置函数 resolveMaxSteps(workspaceRoot, override)，16 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/resolve-memory-retrieval.ts",
+      "type": "file",
+      "name": "resolve-memory-retrieval.ts",
+      "filePath": "packages/agent/src/resolve-memory-retrieval.ts",
+      "summary": "TypeScript 源文件，3 个函数，67 行。",
+      "tags": [
+        "memory",
+        "retrieval",
+        "agent",
+        "configuration",
+        "evaluation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/resolve-memory-retrieval.ts:resolveMemoryRetrievalSettings",
+      "type": "function",
+      "name": "resolveMemoryRetrievalSettings",
+      "filePath": "packages/agent/src/resolve-memory-retrieval.ts",
+      "lineRange": [
+        32,
+        42
+      ],
+      "summary": "设置函数 resolveMemoryRetrievalSettings(workspaceRoot)，10 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/resolve-memory-retrieval.ts:toRetrieveMemoriesOptions",
+      "type": "function",
+      "name": "toRetrieveMemoriesOptions",
+      "filePath": "packages/agent/src/resolve-memory-retrieval.ts",
+      "lineRange": [
+        58,
+        76
+      ],
+      "summary": "检索函数 toRetrieveMemoriesOptions(settings, runtime)，18 行。",
+      "tags": [
+        "retrieval",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/resolve-plan-snapshot-max-items.ts",
+      "type": "file",
+      "name": "resolve-plan-snapshot-max-items.ts",
+      "filePath": "packages/agent/src/resolve-plan-snapshot-max-items.ts",
+      "summary": "TypeScript 源文件，2 个函数，34 行。",
+      "tags": [
+        "agent",
+        "configuration",
+        "utilities"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/resolve-shell-sandbox.ts",
+      "type": "file",
+      "name": "resolve-shell-sandbox.ts",
+      "filePath": "packages/agent/src/resolve-shell-sandbox.ts",
+      "summary": "TypeScript 源文件，4 个函数，103 行。",
+      "tags": [
+        "agent",
+        "sandbox",
+        "configuration"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/resolve-shell-sandbox.ts:parseSandboxConfig",
+      "type": "function",
+      "name": "parseSandboxConfig",
+      "filePath": "packages/agent/src/resolve-shell-sandbox.ts",
+      "lineRange": [
+        59,
+        97
+      ],
+      "summary": "解析函数 parseSandboxConfig(value)，38 行。",
+      "tags": [
+        "parsing",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/session.ts",
+      "type": "file",
+      "name": "session.ts",
+      "filePath": "packages/agent/src/session.ts",
+      "summary": "TypeScript 源文件，2 个函数，175 行。",
+      "tags": [
+        "agent",
+        "session-management",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/session.ts:createRunSessionController",
+      "type": "function",
+      "name": "createRunSessionController",
+      "filePath": "packages/agent/src/session.ts",
+      "lineRange": [
+        53,
+        93
+      ],
+      "summary": "构建函数 createRunSessionController(no params)，40 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/session.ts:createPersistentSession",
+      "type": "function",
+      "name": "createPersistentSession",
+      "filePath": "packages/agent/src/session.ts",
+      "lineRange": [
+        127,
+        194
+      ],
+      "summary": "构建函数 createPersistentSession(opts)，67 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/agent/src/settings.ts",
+      "type": "file",
+      "name": "settings.ts",
+      "filePath": "packages/agent/src/settings.ts",
+      "summary": "TypeScript 源文件，5 个函数，110 行。",
+      "tags": [
+        "agent",
+        "configuration",
+        "utilities"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/settings.ts:readSetting",
+      "type": "function",
+      "name": "readSetting",
+      "filePath": "packages/agent/src/settings.ts",
+      "lineRange": [
+        34,
+        50
+      ],
+      "summary": "设置函数 readSetting(workspaceRoot, selector, defaultValue, parse)，16 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/settings.ts:readEmbeddingConfig",
+      "type": "function",
+      "name": "readEmbeddingConfig",
+      "filePath": "packages/agent/src/settings.ts",
+      "lineRange": [
+        64,
+        77
+      ],
+      "summary": "向量嵌入函数 readEmbeddingConfig(workspaceRoot)，13 行。",
+      "tags": [
+        "embeddings",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/settings.ts:computeMemoryEmbedding",
+      "type": "function",
+      "name": "computeMemoryEmbedding",
+      "filePath": "packages/agent/src/settings.ts",
+      "lineRange": [
+        85,
+        97
+      ],
+      "summary": "计算/评分函数 computeMemoryEmbedding(workspaceRoot, input)，12 行。",
+      "tags": [
+        "embeddings",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/settings.ts:computeQueryEmbedding",
+      "type": "function",
+      "name": "computeQueryEmbedding",
+      "filePath": "packages/agent/src/settings.ts",
+      "lineRange": [
+        104,
+        116
+      ],
+      "summary": "计算/评分函数 computeQueryEmbedding(workspaceRoot, query)，12 行。",
+      "tags": [
+        "embeddings",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/agent/src/stub-run.ts",
+      "type": "file",
+      "name": "stub-run.ts",
+      "filePath": "packages/agent/src/stub-run.ts",
+      "summary": "TypeScript 源文件，8 个函数，227 行。",
+      "tags": [
+        "agent",
+        "stub",
+        "utilities"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:packages/agent/src/stub-run.ts:formatStubRunResult",
+      "type": "function",
+      "name": "formatStubRunResult",
+      "filePath": "packages/agent/src/stub-run.ts",
+      "lineRange": [
+        45,
+        60
+      ],
+      "summary": "格式化函数 formatStubRunResult(result, format)，15 行。",
+      "tags": [
+        "formatting",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/stub-run.ts:buildSessionContext",
+      "type": "function",
+      "name": "buildSessionContext",
+      "filePath": "packages/agent/src/stub-run.ts",
+      "lineRange": [
+        62,
+        88
+      ],
+      "summary": "构建函数 buildSessionContext(workspaceRoot)，26 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/stub-run.ts:buildAppStateContext",
+      "type": "function",
+      "name": "buildAppStateContext",
+      "filePath": "packages/agent/src/stub-run.ts",
+      "lineRange": [
+        90,
+        127
+      ],
+      "summary": "构建函数 buildAppStateContext(workspaceRoot)，37 行。",
+      "tags": [
+        "factory",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/stub-run.ts:doRun",
+      "type": "function",
+      "name": "doRun",
+      "filePath": "packages/agent/src/stub-run.ts",
+      "lineRange": [
+        129,
+        184
+      ],
+      "summary": "执行函数 doRun(goal, workspaceRoot, options)，55 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/agent/src/stub-run.ts:runStubRun",
+      "type": "function",
+      "name": "runStubRun",
+      "filePath": "packages/agent/src/stub-run.ts",
+      "lineRange": [
+        186,
+        207
+      ],
+      "summary": "执行函数 runStubRun(goal, options)，21 行。",
+      "tags": [
+        "utility",
+        "utility1",
+        "utility2"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/agent/src/stub-run.ts:formatDoctorOutput",
+      "type": "function",
+      "name": "formatDoctorOutput",
+      "filePath": "packages/agent/src/stub-run.ts",
+      "lineRange": [
+        209,
+        225
+      ],
+      "summary": "格式化函数 formatDoctorOutput(root)，16 行。",
+      "tags": [
+        "formatting",
+        "utility",
+        "utility2"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/agent/src/orchestrator/memory-extraction.ts",
+      "target": "function:packages/agent/src/orchestrator/memory-extraction.ts:runMemoryExtractionAfterRun",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/memory-extraction.ts",
+      "target": "function:packages/agent/src/orchestrator/memory-extraction.ts:runMemoryExtractionAfterRun",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/memory-extraction.ts",
+      "target": "file:packages/agent/src/format-conversation-for-memory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/memory-extraction.ts",
+      "target": "file:packages/agent/src/memory-extraction-agent.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/memory-extraction.ts",
+      "target": "file:packages/agent/src/settings.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/session-summarizer.ts:extractSessionHighlightsToAutoMemory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/session-summarizer.ts:buildShortSessionUser",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/session-summarizer.ts:parseShortSessionSummary",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/session-summarizer.ts:maybeGenerateShortSessionMemory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/session-summarizer.ts:extractSessionHighlightsToAutoMemory",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "target": "function:packages/agent/src/orchestrator/session-summarizer.ts:maybeGenerateShortSessionMemory",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "target": "file:packages/agent/src/auxiliary-complete.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/session-summarizer.ts",
+      "target": "file:packages/agent/src/settings.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/session-summarizer.ts:maybeGenerateShortSessionMemory",
+      "target": "function:packages/agent/src/orchestrator/session-summarizer.ts:buildShortSessionUser",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/session-summarizer.ts:maybeGenerateShortSessionMemory",
+      "target": "function:packages/agent/src/orchestrator/session-summarizer.ts:parseShortSessionSummary",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "target": "function:packages/agent/src/orchestrator/tool-runner.ts:toolNeedsApprovalGate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "target": "function:packages/agent/src/orchestrator/tool-runner.ts:executeToolCalls",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "target": "function:packages/agent/src/orchestrator/tool-runner.ts:finalizeToolExecution",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "target": "function:packages/agent/src/orchestrator/tool-runner.ts:executeToolCalls",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "target": "function:packages/agent/src/orchestrator/tool-runner.ts:finalizeToolExecution",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "target": "file:packages/agent/src/orchestrator/constants.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "target": "file:packages/agent/src/orchestrator/context-summarizer.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/orchestrator/tool-runner.ts",
+      "target": "file:packages/agent/src/tool-result-detail.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/orchestrator/tool-runner.ts:executeToolCalls",
+      "target": "function:packages/agent/src/orchestrator/tool-runner.ts:toolNeedsApprovalGate",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/parse-agent-action.ts",
+      "target": "function:packages/agent/src/parse-agent-action.ts:extractJsonObjects",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/parse-agent-action.ts",
+      "target": "function:packages/agent/src/parse-agent-action.ts:parseAgentActionFromModelText",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/parse-agent-action.ts",
+      "target": "function:packages/agent/src/parse-agent-action.ts:parseAgentActionsFromModelText",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/parse-agent-action.ts",
+      "target": "function:packages/agent/src/parse-agent-action.ts:parseArguments",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/parse-agent-action.ts",
+      "target": "function:packages/agent/src/parse-agent-action.ts:parseActionFromJsonObject",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/parse-agent-action.ts",
+      "target": "function:packages/agent/src/parse-agent-action.ts:parseAgentActionFromModelText",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/parse-agent-action.ts",
+      "target": "function:packages/agent/src/parse-agent-action.ts:parseAgentActionsFromModelText",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/parse-agent-action.ts:parseActionFromJsonObject",
+      "target": "function:packages/agent/src/parse-agent-action.ts:parseArguments",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/resilience/circuit-breaker.ts",
+      "target": "class:packages/agent/src/resilience/circuit-breaker.ts:CircuitBreaker",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/resilience/circuit-breaker.ts",
+      "target": "class:packages/agent/src/resilience/circuit-breaker.ts:CircuitBreaker",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/resolve-max-steps.ts",
+      "target": "function:packages/agent/src/resolve-max-steps.ts:resolveMaxSteps",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/resolve-max-steps.ts",
+      "target": "function:packages/agent/src/resolve-max-steps.ts:resolveMaxSteps",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/resolve-max-steps.ts",
+      "target": "file:packages/agent/src/settings.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/resolve-memory-retrieval.ts",
+      "target": "function:packages/agent/src/resolve-memory-retrieval.ts:resolveMemoryRetrievalSettings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/resolve-memory-retrieval.ts",
+      "target": "function:packages/agent/src/resolve-memory-retrieval.ts:toRetrieveMemoriesOptions",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/resolve-memory-retrieval.ts",
+      "target": "function:packages/agent/src/resolve-memory-retrieval.ts:resolveMemoryRetrievalSettings",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/resolve-memory-retrieval.ts",
+      "target": "function:packages/agent/src/resolve-memory-retrieval.ts:toRetrieveMemoriesOptions",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/resolve-memory-retrieval.ts",
+      "target": "file:packages/agent/src/llm-memory-selector.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/resolve-memory-retrieval.ts",
+      "target": "file:packages/agent/src/settings.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/resolve-plan-snapshot-max-items.ts",
+      "target": "file:packages/agent/src/settings.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/resolve-shell-sandbox.ts",
+      "target": "function:packages/agent/src/resolve-shell-sandbox.ts:parseSandboxConfig",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/resolve-shell-sandbox.ts",
+      "target": "file:packages/agent/src/settings.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/session.ts",
+      "target": "function:packages/agent/src/session.ts:createRunSessionController",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/session.ts",
+      "target": "function:packages/agent/src/session.ts:createPersistentSession",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/session.ts",
+      "target": "function:packages/agent/src/session.ts:createRunSessionController",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/session.ts",
+      "target": "function:packages/agent/src/session.ts:createPersistentSession",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/session.ts",
+      "target": "file:packages/agent/src/orchestrator-factory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/session.ts",
+      "target": "file:packages/agent/src/orchestrator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/session.ts",
+      "target": "file:packages/agent/src/stub-run.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/settings.ts",
+      "target": "function:packages/agent/src/settings.ts:readSetting",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/settings.ts",
+      "target": "function:packages/agent/src/settings.ts:readEmbeddingConfig",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/settings.ts",
+      "target": "function:packages/agent/src/settings.ts:computeMemoryEmbedding",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/settings.ts",
+      "target": "function:packages/agent/src/settings.ts:computeQueryEmbedding",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/settings.ts",
+      "target": "function:packages/agent/src/settings.ts:readSetting",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/settings.ts",
+      "target": "function:packages/agent/src/settings.ts:readEmbeddingConfig",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/settings.ts",
+      "target": "function:packages/agent/src/settings.ts:computeMemoryEmbedding",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/settings.ts",
+      "target": "function:packages/agent/src/settings.ts:computeQueryEmbedding",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/settings.ts:computeMemoryEmbedding",
+      "target": "function:packages/agent/src/settings.ts:readEmbeddingConfig",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/settings.ts:computeQueryEmbedding",
+      "target": "function:packages/agent/src/settings.ts:readEmbeddingConfig",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "function:packages/agent/src/stub-run.ts:formatStubRunResult",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "function:packages/agent/src/stub-run.ts:buildSessionContext",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "function:packages/agent/src/stub-run.ts:buildAppStateContext",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "function:packages/agent/src/stub-run.ts:doRun",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "function:packages/agent/src/stub-run.ts:runStubRun",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "function:packages/agent/src/stub-run.ts:formatDoctorOutput",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "function:packages/agent/src/stub-run.ts:runStubRun",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "function:packages/agent/src/stub-run.ts:formatDoctorOutput",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "file:packages/agent/src/orchestrator-factory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/agent/src/stub-run.ts",
+      "target": "file:packages/agent/src/orchestrator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:packages/agent/src/stub-run.ts:doRun",
+      "target": "function:packages/agent/src/stub-run.ts:buildSessionContext",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/stub-run.ts:doRun",
+      "target": "function:packages/agent/src/stub-run.ts:buildAppStateContext",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/stub-run.ts:doRun",
+      "target": "function:packages/agent/src/stub-run.ts:formatStubRunResult",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/stub-run.ts:doRun",
+      "target": "function:packages/agent/src/stub-run.ts:formatStubRunResult",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/stub-run.ts:runStubRun",
+      "target": "function:packages/agent/src/stub-run.ts:doRun",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:packages/agent/src/stub-run.ts:runStubRun",
+      "target": "function:packages/agent/src/stub-run.ts:doRun",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}
