@@ -61,6 +61,17 @@ await pipeline.enqueue({
 把本 run 随行注入过的试用教训转正为 episodic（`source=trial_graduated`）并从 trial 池删除。
 **接线侧无需额外调用**，只要求注入时走了 TriggeredRetriever（会落 read.inject / read.inject.trial）。
 
+## Profile 画像写入（§4.2 / §7.3）
+
+`admitProfile` / `enforceProfileCapacity`（`./profile.ts`）已导出：
+
+- **证据门槛**：`evidence` 去重后 ≥3，且 insight 须为行为描述（拒绝「很谨慎」）
+- **同主题**：词面重叠 ≥2 → EDIT 合并证据（不占新名额）
+- **满 15**：REMOVE 效用最低的非 `user_statement` 再 ADD；无可腾位 → reject
+- **janitor**：`runLifecycleOnce` 调用 `enforceProfileCapacity` 强制腾位（不再只报告）
+
+从 episodic 周期性抽象画像属 **v3 巩固调度**（§7.6）；v2 提供可调用门面，供 CLI / 巩固任务 / 测试直接写入。
+
 ## 注意
 
 - readonly 模式（CI）：构造时传 `readonly: () => loadMemoryConfig().readonly`，

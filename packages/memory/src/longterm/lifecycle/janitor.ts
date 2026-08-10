@@ -10,7 +10,8 @@
  * 无采纳数据视为"信号不足"（缺失 ≠ 负信号，§7.1），不单独定罪。
  *
  * 豁免：freq<8（试用期保护）、source=user_statement（永不自动删）、
- * profile supportCount≥3（需巩固流程复核）。
+ * profile supportCount≥3（效用删除候选豁免，需巩固流程复核）。
+ * 容量：profile 超 cap 时按效用腾位（enforceProfileCapacity，user_statement 豁免）。
  *
  * 灰度（§7.2）：前 200 条候选进 review 队列人工确认；队列 resolved 中
  * rejected 占比 <5% 后转全自动（误删率达标）。
@@ -24,6 +25,7 @@ import { generateId } from "../../db/modules/platform/idGen.js";
 import type { MemoryStoreEngine } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import { appendOpLog } from "../observability/op-log.js";
+import { enforceProfileCapacity } from "../write/profile.js";
 
 export interface LifecycleConfig {
   deleteMinFreq: number;
@@ -79,7 +81,7 @@ export interface LifecycleReport {
     episodicInvalidated: string[];
     semanticInvalidated: string[];
     trialDropped: string[];
-    /** profile 超限数（只报告，裁决属 v2） */
+    /** 强制腾位后仍超限的条数（通常为 0；全是 user_statement 时可能 >0） */
     profileOverCap: number;
   };
   reviewQueuePending: number;
@@ -339,9 +341,24 @@ export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<Lifec
   const exhausted = await sql`DELETE FROM memory_trial_lessons WHERE attempts_left <= 0 RETURNING id`;
   report.capacity.trialDropped.push(...(exhausted as unknown as { id: string }[]).map((r) => r.id));
 
-  // profile 超限只报告（ADD/REMOVE/EDIT 裁决属 v2）
+  // profile 超限：按效用腾位软失效（user_statement 豁免；写入侧 ADD/EDIT 见 admitProfile）
   const profileCount = rows.filter((r) => r.type === "profile").length;
-  report.capacity.profileOverCap = Math.max(0, profileCount - cfg.profileCap);
+  const profileRemoved = await enforceProfileCapacity(engine, {
+    repo: cfg.repo,
+    cap: cfg.profileCap,
+    now: opts.now,
+  });
+  if (profileRemoved.length > 0) {
+    opts.emit?.({
+      type: "memory.lifecycle.purge",
+      entryIds: profileRemoved,
+      reason: "capacity",
+    });
+  }
+  report.capacity.profileOverCap = Math.max(
+    0,
+    profileCount - profileRemoved.length - cfg.profileCap,
+  );
 
   return report;
 }
