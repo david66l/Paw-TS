@@ -66,6 +66,10 @@ export function claudeCodeArgs(goal: string): string[] {
     "max",
     "--autocompact",
     "1m",
+    // --tools accepts a variadic list. Keep another flag after the value so
+    // the final positional goal cannot be consumed as an additional tool.
+    "--tools",
+    "Read,Edit,Write,Bash,Glob,Grep",
     "--no-session-persistence",
     "--disable-slash-commands",
     "--output-format",
@@ -73,8 +77,6 @@ export function claudeCodeArgs(goal: string): string[] {
     "--permission-mode",
     "bypassPermissions",
     "--dangerously-skip-permissions",
-    "--tools",
-    "Read,Edit,Write,Bash,Glob,Grep",
     goal,
   ];
 }
@@ -478,4 +480,49 @@ export async function runSweCompareArm(opts: {
   } finally {
     if (!opts.keep) workspace.cleanup();
   }
+}
+
+/** Run the official verifier against an already persisted patch, without resampling. */
+export function verifySweCompareResult(opts: {
+  readonly repoRoot: string;
+  readonly resultPath: string;
+  readonly timeoutSec?: number;
+}): SweCompareRunResult {
+  const previous = JSON.parse(
+    readFileSync(opts.resultPath, "utf8"),
+  ) as SweCompareRunResult;
+  if (!previous.patch.trim()) {
+    throw new Error(`cannot verify empty patch: ${previous.runId}`);
+  }
+  const predictionPath = path.join(
+    path.dirname(opts.resultPath),
+    "prediction.jsonl",
+  );
+  writePredictionsJsonl(predictionPath, [
+    {
+      instance_id: previous.instanceId,
+      model_name_or_path: `swe-compare-${previous.runner}`,
+      model_patch: previous.patch,
+    },
+  ]);
+  const checked = runSwebenchHarness({
+    predictionsPath: predictionPath,
+    instanceIds: [previous.instanceId],
+    runId: previous.runId,
+    maxWorkers: 1,
+    timeoutSec: opts.timeoutSec ?? 1800,
+    cwd: opts.repoRoot,
+  });
+  const updated: SweCompareRunResult = {
+    ...previous,
+    resolved: checked.resolved,
+    resolvedSource: checked.source,
+    verifier: {
+      ...(checked.reportPath ? { reportPath: checked.reportPath } : {}),
+      ...(checked.detail ? { detail: checked.detail } : {}),
+      ...(checked.error ? { error: checked.error } : {}),
+    },
+  };
+  writeJsonAtomic(opts.resultPath, updated);
+  return updated;
 }

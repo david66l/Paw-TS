@@ -19,6 +19,8 @@ describe("SWE compare runner", () => {
     expect(args).toContain("--no-session-persistence");
     expect(args).toContain("--disable-slash-commands");
     expect(args).toContain("--dangerously-skip-permissions");
+    const toolsIndex = args.indexOf("--tools");
+    expect(args[toolsIndex + 2]?.startsWith("--")).toBe(true);
     expect(args.at(-1)).toBe(goal);
   });
 

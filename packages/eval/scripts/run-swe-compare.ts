@@ -2,7 +2,10 @@
 
 import path from "node:path";
 
-import { runSweCompareArm } from "../src/swe-compare/index.js";
+import {
+  runSweCompareArm,
+  verifySweCompareResult,
+} from "../src/swe-compare/index.js";
 
 function value(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -11,9 +14,18 @@ function value(name: string): string | undefined {
 
 const instanceId = value("--instance");
 const runner = value("--runner");
+const verifyResult = value("--verify-result");
+if (verifyResult) {
+  const result = verifySweCompareResult({
+    repoRoot: process.cwd(),
+    resultPath: path.resolve(verifyResult),
+  });
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(result.resolved ? 0 : 1);
+}
 if (!instanceId || (runner !== "paw" && runner !== "claude")) {
   throw new Error(
-    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep]",
+    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep] OR --verify-result <result.json>",
   );
 }
 const repoRoot = process.cwd();

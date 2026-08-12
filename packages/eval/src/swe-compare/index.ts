@@ -15,6 +15,7 @@ export {
   claudeCodeArgs,
   runSweCompareArm,
   validateCompareRun,
+  verifySweCompareResult,
   type SweCompareRunnerName,
   type SweCompareRunResult,
 } from "./runner.js";
