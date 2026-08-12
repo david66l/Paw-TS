@@ -54,8 +54,10 @@ export interface SweCompareManifest {
     readonly dockerServerVersion?: string;
   };
   readonly budget: {
-    readonly maxSteps: 64;
-    readonly timeoutMs: 1_500_000;
+    /** Paw internal safety cap; Claude Code CLI has no equivalent public flag. */
+    readonly pawMaxSteps: 64;
+    /** Shared wall-clock cap used by both product runners. */
+    readonly sharedTimeoutMs: 1_500_000;
     readonly codingPhaseBudget: false;
   };
   readonly runners: {

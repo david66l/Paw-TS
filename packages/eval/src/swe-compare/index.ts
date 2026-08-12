@@ -11,6 +11,13 @@ export {
   preflightSweCompareInstance,
   PREFLIGHT_SENTINEL_PATCH,
 } from "./preflight.js";
+export {
+  claudeCodeArgs,
+  runSweCompareArm,
+  validateCompareRun,
+  type SweCompareRunnerName,
+  type SweCompareRunResult,
+} from "./runner.js";
 export type {
   SweCompareInstanceManifest,
   SweCompareManifest,

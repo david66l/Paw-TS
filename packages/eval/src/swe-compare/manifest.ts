@@ -199,8 +199,8 @@ export function createSweCompareManifest(opts: {
       ...(dockerVersion ? { dockerServerVersion: dockerVersion } : {}),
     },
     budget: {
-      maxSteps: 64,
-      timeoutMs: 1_500_000,
+      pawMaxSteps: 64,
+      sharedTimeoutMs: 1_500_000,
       codingPhaseBudget: false,
     },
     runners: {
