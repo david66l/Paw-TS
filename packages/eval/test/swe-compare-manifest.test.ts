@@ -80,6 +80,11 @@ describe("SWE compare manifest", () => {
       instance.instance_id,
       "utf8",
     );
+    writeFileSync(
+      path.join(root, "benchmarks", "swe-compare", "README.md"),
+      `Frozen protocol example: ${instance.instance_id}`,
+      "utf8",
+    );
     mkdirSync(path.join(root, ".paw", "code-index"), { recursive: true });
     writeFileSync(
       path.join(root, ".paw", "code-index", "repo-map.json"),

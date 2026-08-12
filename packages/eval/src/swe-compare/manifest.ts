@@ -90,6 +90,7 @@ export function findLocalTrajectoryHits(
     .filter(Boolean)
     .map((line) => line.replace(/\\/g, "/"))
     .filter((line) => line !== "benchmarks/swe-bench/swe-bench-lite.jsonl")
+    .filter((line) => line !== "benchmarks/swe-compare/README.md")
     .filter((line) => !line.startsWith("benchmarks/swe-compare/manifests/"))
     .filter((line) => !line.startsWith("benchmarks/swe-compare/preflight/"))
     .filter((line) => !line.startsWith("benchmarks/swe-compare/runs/"))
