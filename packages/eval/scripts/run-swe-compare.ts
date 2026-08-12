@@ -3,6 +3,7 @@
 import path from "node:path";
 
 import {
+  recoverClaudeResultPatch,
   runSweCompareArm,
   verifySweCompareResult,
 } from "../src/swe-compare/index.js";
@@ -15,6 +16,25 @@ function value(name: string): string | undefined {
 const instanceId = value("--instance");
 const runner = value("--runner");
 const verifyResult = value("--verify-result");
+const recoverResult = value("--recover-result-patch");
+if (recoverResult) {
+  const result = recoverClaudeResultPatch({
+    repoRoot: process.cwd(),
+    resultPath: path.resolve(recoverResult),
+  });
+  console.log(
+    JSON.stringify(
+      {
+        runId: result.runId,
+        patchChars: result.patchChars,
+        patchSource: result.patchSource,
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(0);
+}
 if (verifyResult) {
   const result = verifySweCompareResult({
     repoRoot: process.cwd(),
@@ -25,7 +45,7 @@ if (verifyResult) {
 }
 if (!instanceId || (runner !== "paw" && runner !== "claude")) {
   throw new Error(
-    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep] OR --verify-result <result.json>",
+    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json>",
   );
 }
 const repoRoot = process.cwd();

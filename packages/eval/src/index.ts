@@ -81,6 +81,12 @@ export type { EvalRunnerOptions, EvalRunnerResult } from "./runner.js";
 export {
   createSweCompareManifest,
   buildSweCompareGoal,
+  extractClaudePatchFromTrace,
+  parseClaudeStream,
+  recoverClaudeResultPatch,
+  runSweCompareArm,
+  validateCompareRun,
+  verifySweCompareResult,
   writeSweCompareManifest,
   SWE_COMPARE_SEEN_EXCLUSIONS,
   SWE_COMPARE_FORMAL_DEV_IDS,

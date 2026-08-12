@@ -39,6 +39,7 @@ export interface SweCompareRunResult {
   readonly status: "completed" | "failed" | "timeout";
   readonly patch: string;
   readonly patchChars: number;
+  readonly patchSource?: "workspace" | "claude_trace_git_diff" | "none";
   readonly resolved: boolean;
   readonly resolvedSource: "swebench_harness" | "none" | "error";
   readonly modelCalls?: number;
@@ -341,6 +342,57 @@ export function parseClaudeStream(stdout: string): {
   };
 }
 
+export function extractClaudePatchFromTrace(
+  trace: readonly unknown[],
+): string | undefined {
+  const diffToolIds = new Set<string>();
+  let patch: string | undefined;
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const event = item as Record<string, unknown>;
+    const message = event.message;
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      continue;
+    }
+    const content = (message as Record<string, unknown>).content;
+    if (!Array.isArray(content)) continue;
+    for (const rawBlock of content) {
+      if (
+        !rawBlock ||
+        typeof rawBlock !== "object" ||
+        Array.isArray(rawBlock)
+      ) {
+        continue;
+      }
+      const block = rawBlock as Record<string, unknown>;
+      if (block.type === "tool_use" && block.name === "Bash") {
+        const input = block.input;
+        const command =
+          input && typeof input === "object" && !Array.isArray(input)
+            ? (input as Record<string, unknown>).command
+            : undefined;
+        if (
+          typeof block.id === "string" &&
+          typeof command === "string" &&
+          /^\s*git\s+diff(?:\s|$)/i.test(command)
+        ) {
+          diffToolIds.add(block.id);
+        }
+      }
+      if (
+        block.type === "tool_result" &&
+        typeof block.tool_use_id === "string" &&
+        diffToolIds.has(block.tool_use_id) &&
+        typeof block.content === "string" &&
+        block.content.trimStart().startsWith("diff --git ")
+      ) {
+        patch = block.content.trim();
+      }
+    }
+  }
+  return patch;
+}
+
 async function runClaude(opts: {
   readonly workspaceRoot: string;
   readonly goal: string;
@@ -353,6 +405,7 @@ async function runClaude(opts: {
   completionTokens?: number;
   totalTokens?: number;
   turns?: number;
+  recoveredPatch?: string;
   trace: unknown;
 }> {
   const executable = process.platform === "win32" ? "claude.cmd" : "claude";
@@ -410,6 +463,9 @@ async function runClaude(opts: {
     completionTokens: output,
     totalTokens: input + cache + output,
     turns: parsed.num_turns,
+    ...(extractClaudePatchFromTrace(trace)
+      ? { recoveredPatch: extractClaudePatchFromTrace(trace) }
+      : {}),
     trace,
   };
 }
@@ -459,7 +515,15 @@ export async function runSweCompareArm(opts: {
             goal,
             timeoutMs: manifest.budget.sharedTimeoutMs,
           });
-    const patch = gitDiff(workspace.root);
+    const workspacePatch = gitDiff(workspace.root);
+    const recoveredPatch =
+      "recoveredPatch" in execution ? (execution.recoveredPatch ?? "") : "";
+    const patch = workspacePatch || recoveredPatch;
+    const patchSource = workspacePatch
+      ? "workspace"
+      : recoveredPatch
+        ? "claude_trace_git_diff"
+        : "none";
     const tracePath = path.join(
       "benchmarks",
       "swe-compare",
@@ -468,7 +532,11 @@ export async function runSweCompareArm(opts: {
       "trace.json",
     );
     writeJsonAtomic(path.join(opts.repoRoot, tracePath), execution.trace);
-    const { trace: _trace, ...executionSummary } = execution;
+    const {
+      trace: _trace,
+      recoveredPatch: _recoveredPatch,
+      ...executionSummary
+    } = execution;
     let resolved = false;
     let resolvedSource: "swebench_harness" | "none" | "error" = "none";
     let verifier: SweCompareRunResult["verifier"];
@@ -520,6 +588,7 @@ export async function runSweCompareArm(opts: {
       ...executionSummary,
       patch,
       patchChars: patch.length,
+      patchSource,
       resolved,
       resolvedSource,
       tracePath: tracePath.replace(/\\/g, "/"),
@@ -540,6 +609,38 @@ export async function runSweCompareArm(opts: {
   } finally {
     if (!opts.keep) workspace.cleanup();
   }
+}
+
+/** Recover an empty Claude result from its persisted, paired `git diff` tool event. */
+export function recoverClaudeResultPatch(opts: {
+  readonly repoRoot: string;
+  readonly resultPath: string;
+}): SweCompareRunResult {
+  const previous = JSON.parse(
+    readFileSync(opts.resultPath, "utf8"),
+  ) as SweCompareRunResult;
+  if (previous.runner !== "claude") {
+    throw new Error(
+      `patch recovery only supports Claude results: ${previous.runId}`,
+    );
+  }
+  if (previous.patch.trim()) {
+    throw new Error(`result already contains a patch: ${previous.runId}`);
+  }
+  const tracePath = path.join(opts.repoRoot, previous.tracePath);
+  const trace = JSON.parse(readFileSync(tracePath, "utf8")) as unknown[];
+  const patch = extractClaudePatchFromTrace(trace);
+  if (!patch) {
+    throw new Error(`no paired git diff result in trace: ${previous.runId}`);
+  }
+  const updated: SweCompareRunResult = {
+    ...previous,
+    patch,
+    patchChars: patch.length,
+    patchSource: "claude_trace_git_diff",
+  };
+  writeJsonAtomic(opts.resultPath, updated);
+  return updated;
 }
 
 /** Run the official verifier against an already persisted patch, without resampling. */

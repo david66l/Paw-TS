@@ -13,6 +13,9 @@ export {
 } from "./preflight.js";
 export {
   claudeCodeArgs,
+  extractClaudePatchFromTrace,
+  parseClaudeStream,
+  recoverClaudeResultPatch,
   runSweCompareArm,
   validateCompareRun,
   verifySweCompareResult,
