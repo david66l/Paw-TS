@@ -261,10 +261,11 @@ describe("AgentOrchestrator compression & budget", () => {
     }
   });
 
-  test("P5.1 侧信道触发：subtask_end 信号下强制压缩（低于预算阈值也可触发）", async () => {
+  test("P5.1 侧信道：低占用 subtask_end 不强制压缩", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-monitor-"));
     const events: RunEventEnvelope[] = [];
-    // 历史远低于压缩阈值：靠 monitor 判定 subtask_end 强制压缩。
+    // 历史远低于压缩阈值：即使 monitor 判定 subtask_end，也不应烧一次
+    // 辅助模型调用。实测这会在任务即将 final_answer 时引入额外故障点。
     // 体量 ~15K tokens（tail 8K 保底下 middle 仍可压缩 ≥20%）
     const chunk = "word ".repeat(800); // ~4K chars ≈ 1K tokens
     const smallHistory: ChatMessage[] = [
@@ -336,15 +337,10 @@ describe("AgentOrchestrator compression & budget", () => {
     const trigger = events.find(
       (e) => e.event.type === "compression.monitor.trigger",
     );
-    expect(trigger?.event.type).toBe("compression.monitor.trigger");
-    if (trigger?.event.type === "compression.monitor.trigger") {
-      expect(trigger.event.reason).toBe("subtask_end");
-      expect(trigger.event.force).toBe(true);
-    }
-    // 强制压缩实际执行（auto_compact.done）
+    expect(trigger).toBeUndefined();
     const done = events.find(
       (e) => e.event.type === "compression.auto_compact.done",
     );
-    expect(done).toBeDefined();
+    expect(done).toBeUndefined();
   });
 });

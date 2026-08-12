@@ -91,6 +91,26 @@ export {
   type M10Fixture,
 } from "./memory-adversarial/index.js";
 
+// ── SWE-Exp 配对（记忆开/关 → 最终测试是否通过） ──
+export {
+  runSweExpBuiltin,
+  runSweExpAgent,
+  mergeExternalResolveResults,
+  buildSameRepoPairs,
+  loadSweInstancesJsonl,
+  summarizeSweExp,
+  renderSweExpReport,
+  distillHistoryLesson,
+  assertNoGoldLeak,
+  SWE_EXP_BUILTIN_PAIRS,
+  type SweExpReport,
+  type SweExpRunOptions,
+  type SweExpMode,
+  type SweExpPair,
+  type SweInstance,
+  type SweExpAgentRunOptions,
+} from "./swe-exp/index.js";
+
 // ── CLI ──
 export { runEvalCommand } from "./cli/eval-command.js";
 export type { EvalCommandArgs } from "./cli/eval-command.js";

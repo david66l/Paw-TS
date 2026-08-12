@@ -24,7 +24,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { AgentOrchestrator } from "@paw/agent";
+import { AgentOrchestrator, createAutonomyProfile } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import {
   buildConversationAwareQuery,
@@ -198,10 +198,14 @@ export async function runMemoryAdversarial(
       const timer = setTimeout(() => abort.abort(), timeoutMs);
       timer.unref?.();
       const events: RunEventEnvelope[] = [];
+      const profile = createAutonomyProfile("headless");
+      profile.apply();
       const orchestrator = new AgentOrchestrator({
         model: opts.model,
         memoryExtraction: "off", // 废弃 no-op；completeTask 仍会写（per-fixture scope 隔离 + cleanup 回收）
-        resolveToolApproval: async () => true,
+        resolveToolApproval: profile.resolveToolApproval,
+        resolveAskUser: profile.resolveAskUser,
+        approvalPolicy: profile.approvalPolicy,
         onEvent: (e) => events.push(e),
         evalHooks: {
           afterModelCall: () => { modelCalls += 1; },

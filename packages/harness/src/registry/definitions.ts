@@ -198,11 +198,16 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
     ),
     fn(
       EDIT,
-      "Perform exact string replacements in an existing file.",
+      "Perform exact string replacements in an existing file. Line endings are matched flexibly (CRLF/LF). If old_string matches multiple places, either add more surrounding context or set replace_all=true.",
       {
         path: { type: "string", description: "Relative path to the file" },
         old_string: { type: "string", description: "Text to find and replace" },
         new_string: { type: "string", description: "Replacement text" },
+        replace_all: {
+          type: "boolean",
+          description:
+            "If true, replace every occurrence of old_string (default false requires a unique match)",
+        },
       },
       ["path", "old_string", "new_string"],
     ),

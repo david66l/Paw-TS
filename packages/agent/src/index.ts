@@ -39,6 +39,13 @@ export {
   type RunOrchestratorOptions,
 } from "./orchestrator-factory.js";
 export {
+  resolveCollaborationMode,
+  CODING_ROOT_IDENTITY,
+  CODING_LIFECYCLE_BUDGET,
+  type CollaborationMode,
+  type ResolvedCollaboration,
+} from "./collaboration-mode.js";
+export {
   runStubRun,
   formatDoctorOutput,
   formatFsListOutput,
@@ -83,3 +90,35 @@ export {
   DEFAULT_AGENT_SEEDS,
   AGENT_ROSTER_ORDER,
 } from "./agents/index.js";
+
+export {
+  createAutonomyProfile,
+  type AutonomyLevel,
+  type AutonomyProfile,
+  type AutonomyProfileOptions,
+} from "./autonomy/index.js";
+export {
+  decideCompletion,
+  checkVerification,
+  evaluateFinalAnswer,
+  evaluateBudgetExhaustion,
+  collectToolRecoveryMessage,
+  resolveLifecycleBudget,
+  createBudgetAbort,
+  DEFAULT_LIFECYCLE_BUDGET,
+  HEADLESS_LIFECYCLE_BUDGET,
+  REQUIRE_MUTATION_MARKER,
+  goalRequiresMutation,
+  type CompletionDecision,
+  type VerificationDecision,
+  type LifecycleBudget,
+} from "./lifecycle/index.js";
+export {
+  advanceCodingPhase,
+  codingPhaseBlockReason,
+  EMPTY_CODING_PHASE_STATE,
+  CODING_PHASE_BUDGET_MARKER,
+  goalUsesCodingPhaseBudget,
+  isCodingVerificationCall,
+  type CodingPhaseState,
+} from "./lifecycle/coding-phase.js";

@@ -140,9 +140,13 @@ export function createPersistentSession(
     planSnapshotMaxItems: opts.planSnapshotMaxItems,
     memoryExtraction: "background",
     onEvent: opts.onEvent,
+    collaborationMode: opts.collaborationMode,
+    rootAgentId: opts.rootAgentId,
+    autonomy: opts.autonomy,
+    budget: opts.budget,
   });
 
-  // 显式传参 > root Agent Spec 的 maxSteps > 默认 40
+  // 显式传参 > coding 64 / root Spec maxSteps > 默认
   const maxSteps = opts.maxSteps ?? rootMaxSteps ?? 40;
 
   const appStateStore = new FileSystemAppStateStore({

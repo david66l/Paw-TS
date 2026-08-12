@@ -27,6 +27,7 @@
  */
 
 import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { listBuiltinSuites, resolveSuite } from "../test-suite/loader.js";
 import { EvalRunner, type EvalRunnerOptions } from "../runner.js";
 import type { ReportFormat } from "../scorer/reporter.js";
@@ -49,10 +50,15 @@ import {
   runMemoryAdversarial,
   renderMemoryAdversarialReport,
 } from "../memory-adversarial/index.js";
+import {
+  runSweExpBuiltin,
+  renderSweExpReport,
+  type SweExpMode,
+} from "../swe-exp/index.js";
 
 /** CLI 命令参数，由命令行解析后传入 */
 export interface EvalCommandArgs {
-  /** 子命令：'run' 或 'list' */
+  /** 子命令：'run' | 'list' | 'memory-adversarial' | 'swe-exp' */
   readonly subcommand: string;
   /** 要运行的测试套件名称 */
   readonly suite?: string;
@@ -72,14 +78,24 @@ export interface EvalCommandArgs {
   readonly saveTraces?: string;
   /** memory-adversarial：judge 模型 provider（默认同 --model） */
   readonly judgeProvider?: string;
-  /** memory-adversarial：JSON 输出 */
+  /** memory-adversarial / swe-exp：JSON 输出 */
   readonly json?: boolean;
-  /** memory-adversarial：保留 DB 数据与临时工作区 */
+  /** memory-adversarial / swe-exp：保留 DB 数据与临时工作区 */
   readonly keep?: boolean;
-  /** memory-adversarial：最多运行夹具数 */
+  /** memory-adversarial / swe-exp：最多运行夹具/对数 */
   readonly maxSamples?: number;
   /** memory-adversarial：per-fixture 超时（毫秒） */
   readonly timeoutMs?: number;
+  /** swe-exp：fake | deterministic | agent（默认 deterministic） */
+  readonly sweExpMode?: SweExpMode;
+  /** swe-exp：报告写出路径 */
+  readonly reportPath?: string;
+  /** swe-exp agent：续跑 suite run id */
+  readonly suiteRunId?: string;
+  /** swe-exp agent：跳过 Docker harness */
+  readonly skipHarness?: boolean;
+  /** swe-exp agent：max steps */
+  readonly maxSteps?: number;
 }
 
 /**
@@ -101,10 +117,12 @@ export async function runEvalCommand(
       return listSuites();
     case "memory-adversarial":
       return runMemoryAdversarialCommand(args);
+    case "swe-exp":
+      return runSweExpCommand(args);
     default:
       return {
         ok: false,
-        text: `Unknown eval subcommand: ${args.subcommand}\nUsage: paw eval run|list|memory-adversarial`,
+        text: `Unknown eval subcommand: ${args.subcommand}\nUsage: paw eval run|list|memory-adversarial|swe-exp`,
       };
   }
 }
@@ -261,6 +279,45 @@ async function runMemoryAdversarialCommand(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, text: `memory-adversarial run failed: ${msg}` };
+  }
+}
+
+/**
+ * SWE-Exp 配对：同一 probe 上 memory on/off，核心指标 = 最终测试是否通过。
+ * 默认 deterministic（需 DATABASE_URL）；`--mode fake` 纯冒烟不碰库。
+ */
+async function runSweExpCommand(
+  args: EvalCommandArgs,
+): Promise<{ ok: boolean; text: string }> {
+  const mode = args.sweExpMode ?? "deterministic";
+  try {
+    const report = await runSweExpBuiltin({
+      mode,
+      maxPairs: args.maxSamples,
+      keep: args.keep,
+      repoRoot: args.workspaceRoot ?? process.cwd(),
+      suiteRunId: args.suiteRunId,
+      maxSteps: args.maxSteps,
+      timeoutMs: args.timeoutMs,
+      modelProvider: args.model,
+      skipHarness: args.skipHarness,
+    });
+    const cwd = args.workspaceRoot ?? process.cwd();
+    const outPath =
+      args.reportPath ??
+      join(cwd, "benchmarks", "swe-exp", "last-run.json");
+    try {
+      writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    } catch {
+      /* 目录可能不存在；仍返回报告正文 */
+    }
+    const text = args.json
+      ? JSON.stringify(report, null, 2)
+      : `${renderSweExpReport(report)}\n(report → ${outPath})`;
+    return { ok: report.passed === true, text };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, text: `swe-exp run failed: ${msg}` };
   }
 }
 

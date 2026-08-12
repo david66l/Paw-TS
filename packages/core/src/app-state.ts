@@ -66,8 +66,8 @@ export interface AppState {
   readonly taskState?: unknown;
   /** 运行已完成时的最终结果 */
   readonly outcome?: {
-    /** 完成状态：成功、失败或用户中止 */
-    readonly status: "completed" | "failed" | "aborted";
+    /** 完成状态：成功、失败、不完整或用户中止 */
+    readonly status: "completed" | "failed" | "aborted" | "incomplete";
     /** 结果描述信息 */
     readonly message: string;
   };

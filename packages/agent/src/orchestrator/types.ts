@@ -95,6 +95,8 @@ export type TurnState =
   | { readonly type: "completed"; readonly message: string }
   /** 任务失败 */
   | { readonly type: "failed"; readonly message: string }
+  /** 预算耗尽 / 未达完成契约（诚实不完整） */
+  | { readonly type: "incomplete"; readonly message: string }
   /** 继续下一轮（携带更新后的 flags）*/
   | { readonly type: "continue"; readonly nextFlags: TurnFlags };
 
@@ -115,12 +117,22 @@ export interface TurnFlags {
   readonly autoContinueNudges: number;
   /** 格式错误反馈次数（输出无法解析时回灌给模型，防止死循环） */
   readonly formatErrorNudges?: number;
+  /** VerificationGate nudge 次数 */
+  readonly verifyNudges?: number;
   /** 上一轮是否执行了工具调用 */
   readonly lastTurnHadToolCall: boolean;
   /** 本轮 Run 中是否使用过工具 */
   readonly hasEverUsedTools: boolean;
+  /** Idle-fuse：近期失败签名 */
+  readonly failureSignatures?: readonly string[];
+  /** Idle-fuse 已触发次数 */
+  readonly idleFuseTrips?: number;
   /** maxSteps 警告是否已发出（私有字段，_ 前缀表示内部使用） */
   _maxStepsWarned?: boolean;
+  /** [require_mutation] coding tasks: bounded locate/edit/verify phase state. */
+  readonly codingPhase?: import("../lifecycle/coding-phase.js").CodingPhaseState;
+  /** Consecutive model turns attempting tools blocked by CodingPhase. */
+  readonly codingPhaseViolationTurns?: number;
 }
 
 // ═════════════════════════════════════════════════════════════

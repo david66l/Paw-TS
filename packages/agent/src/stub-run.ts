@@ -33,6 +33,12 @@ export interface StubRunOptions {
   readonly resolveAskUser?: (input: AskUserResolveInput) => Promise<string>;
   readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
   readonly approvalPolicy?: (tool: string) => boolean | undefined;
+  /** Autonomy profile; default headless when no interactive resolvers. */
+  readonly autonomy?: import("./autonomy/profile.js").AutonomyLevel | import("./autonomy/profile.js").AutonomyProfileOptions;
+  /** Daily coding (default) vs multi-agent orchestration. */
+  readonly collaborationMode?: import("./collaboration-mode.js").CollaborationMode;
+  readonly rootAgentId?: string;
+  readonly budget?: Partial<import("./lifecycle/budget.js").LifecycleBudget>;
   readonly resultTextFormat?: "json" | "minimal";
   readonly mcpServers?: readonly McpServerConfig[];
   readonly useWorktree?: boolean;
@@ -61,10 +67,19 @@ function formatStubRunResult(
   format: "json" | "minimal",
 ): { ok: boolean; text: string; exitCode: number } {
   const exitCode =
-    result.status === "failed" ? 1 : result.status === "unimplemented" ? 3 : 0;
-  const ok = result.status !== "failed";
+    result.status === "failed" || result.status === "incomplete"
+      ? 1
+      : result.status === "unimplemented"
+        ? 3
+        : 0;
+  const ok =
+    result.status !== "failed" && result.status !== "incomplete";
   if (format === "minimal") {
-    if (result.status === "failed" || result.status === "unimplemented") {
+    if (
+      result.status === "failed" ||
+      result.status === "incomplete" ||
+      result.status === "unimplemented"
+    ) {
       return { ok, text: result.message, exitCode };
     }
     return { ok, text: "", exitCode };
@@ -151,9 +166,13 @@ async function doRun(
     resolveAskUser: options?.resolveAskUser,
     resolveToolApproval: options?.resolveToolApproval,
     approvalPolicy: options?.approvalPolicy,
+    autonomy: options?.autonomy,
     mcpServers: options?.mcpServers,
     planSnapshotMaxItems: options?.planSnapshotMaxItems,
     onEvent: options?.onEvent,
+    collaborationMode: options?.collaborationMode,
+    rootAgentId: options?.rootAgentId,
+    budget: options?.budget,
   });
 
   let effectiveGoal = goal;
@@ -238,10 +257,14 @@ export async function runStubRun(
   options?: StubRunOptions,
 ): Promise<{ ok: boolean; text: string; exitCode: number }> {
   const workspaceRoot = (() => {
-    const given = options?.workspaceRoot?.trim()
-      ? path.resolve(options.workspaceRoot)
-      : path.resolve(".");
-    return findPawRoot(given) ?? given;
+    // Explicit workspaceRoot is trusted (same as AgentOrchestrator.run).
+    // findPawRoot only for cwd-default — otherwise longrun harness dirs under
+    // the monorepo get silently re-anchored to the repo root.
+    if (options?.workspaceRoot?.trim()) {
+      return path.resolve(options.workspaceRoot);
+    }
+    const cwd = path.resolve(".");
+    return findPawRoot(cwd) ?? cwd;
   })();
 
   if (options?.useWorktree) {

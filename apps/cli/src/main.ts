@@ -27,9 +27,10 @@ Usage:
   paw-ts config [--root <dir>] [--get <key>] [--set <key> <value>]
   paw-ts commit [--root <dir>] [--message <text>]
   paw-ts stub-run [--goal <text>] [--max-steps <n>] [--worktree]
-  paw-ts memory list|why|forget|stats|diff [--kind <k>] [--all] [--since <iso>] [--repo <id>]
+  paw-ts memory list|why|forget|stats|diff|mab|smoke|redteam [...]
   paw-ts eval run [--suite <name>] [--sandbox] [--repetitions <n>] [--output console|markdown|json]
   paw-ts eval list
+  paw-ts eval swe-exp [--mode fake|deterministic|agent] [--max-samples N] [--max-steps N] [--suite-run-id ID] [--skip-harness|--eval-only] [--json] [--keep]
 `);
   process.exit(2);
 }
@@ -195,6 +196,24 @@ async function main(): Promise<void> {
     const timeoutMsIdx = argv.indexOf("--timeout-ms");
     const timeoutMs =
       timeoutMsIdx !== -1 ? Number(argv[timeoutMsIdx + 1]) : undefined;
+    const modeIdx = argv.indexOf("--mode");
+    const sweExpModeRaw = modeIdx !== -1 ? argv[modeIdx + 1] : undefined;
+    const sweExpMode =
+      sweExpModeRaw === "fake" ||
+      sweExpModeRaw === "deterministic" ||
+      sweExpModeRaw === "agent"
+        ? sweExpModeRaw
+        : undefined;
+    const reportIdx = argv.indexOf("--report");
+    const reportPath = reportIdx !== -1 ? argv[reportIdx + 1] : undefined;
+    const suiteRunIdx = argv.indexOf("--suite-run-id");
+    const suiteRunId =
+      suiteRunIdx !== -1 ? argv[suiteRunIdx + 1] : undefined;
+    const skipHarness = argv.includes("--skip-harness");
+    const maxStepsIdx = argv.indexOf("--max-steps");
+    const maxStepsRaw =
+      maxStepsIdx !== -1 ? Number(argv[maxStepsIdx + 1]) : undefined;
+    const maxSteps = Number.isFinite(maxStepsRaw) ? maxStepsRaw : undefined;
     const root = parseRootFromArgv(process.cwd(), argv);
 
     const r = await runEvalCommand({
@@ -212,6 +231,11 @@ async function main(): Promise<void> {
       keep,
       maxSamples: Number.isFinite(maxSamples) ? maxSamples : undefined,
       timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : undefined,
+      sweExpMode,
+      reportPath,
+      suiteRunId,
+      skipHarness,
+      maxSteps,
     });
     if (r.ok) {
       console.log(r.text);

@@ -164,6 +164,11 @@ export interface HarnessContext {
   /** Docker/Podman 沙箱策略配置 */
   readonly shellSandbox?: ShellSandboxConfig;
   /**
+   * Unified approval bus: when true, shell "ask" policy was already approved
+   * at the tool-approval gate — execute must not re-block as a second gate.
+   */
+  readonly shellCommandPreApproved?: boolean;
+  /**
    * 记忆 Runtime 门面（duck-typed，避免 harness→memory 硬依赖）。
    * memory.list/read/save 唯一在线入口。
    */

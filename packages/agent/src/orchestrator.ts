@@ -206,7 +206,7 @@ import {
 } from "./resilience/circuit-breaker.js";
 import { resolveMaxSteps } from "./resolve-max-steps.js";
 import { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";
-import { TaskStateManager } from "./task-state.js";
+import { TaskStateManager, formatTaskStateForContext } from "./task-state.js";
 
 // ═════════════════════════════════════════════════════════════
 // 公开接口
@@ -324,6 +324,9 @@ export class AgentOrchestrator {
 
   /** 压缩冷却轮数：一次压缩后至少等 N 轮才允许再次压缩，避免频繁压缩影响体验 */
   private static readonly COMPACT_COOLDOWN_TURNS = 5;
+  /** Side-channel compaction must not become a failure point on tiny histories. */
+  private static readonly MONITOR_COMPACT_MIN_HISTORY_RATIO = 0.2;
+  private static readonly COMPRESSION_MODEL_TIMEOUT_MS = 45_000;
 
   /** 外部文件变更检测时忽略的目录（这些目录的变更不提示用户） */
   private static readonly STALE_IGNORE_DIRS = new Set([
@@ -753,8 +756,16 @@ export class AgentOrchestrator {
           continue;
         }
 
-        if (state.type === "completed" || state.type === "failed") {
+        if (
+          state.type === "completed" ||
+          state.type === "failed" ||
+          state.type === "incomplete"
+        ) {
           // 保存断点续跑状态
+          const appStatus =
+            state.type === "incomplete"
+              ? ("incomplete" as const)
+              : state.type;
           this.saveState(
             runId,
             spec.goal,
@@ -765,94 +776,125 @@ export class AgentOrchestrator {
             planner,
             taskState,
             {
-              status: state.type,
+              status: appStatus,
               message: state.message,
             },
           );
-          emit({
-            type: "run.completed",
+          const {
+            evaluateBudgetExhaustion,
+            evaluateFinalAnswer,
+            runResultFromDecision,
+            evidenceFromTaskState,
+          } = await import("./lifecycle/task-lifecycle.js");
+          let runResult: import("@paw/core").RunResult = {
+            runId,
             status: state.type,
             message: state.message,
-          });
-          emitRunMetrics(state.type);
+            evidence: evidenceFromTaskState(taskState.snapshot()),
+          };
+          if (state.type === "completed") {
+            const ev = evaluateFinalAnswer(
+              state.message,
+              taskState.snapshot(),
+              flags.hasEverUsedTools,
+            );
+            if (ev.decision) {
+              runResult = runResultFromDecision(runId, ev.decision);
+            } else {
+              runResult = {
+                ...runResult,
+                outcome: "model_declared",
+                completionReason: "final_answer",
+              };
+            }
+          } else if (state.type === "incomplete") {
+            const snap = taskState.snapshot();
+            const looksLikeVerify =
+              /verification|skip_verify|no passing test/i.test(state.message);
+            const decision = looksLikeVerify
+              ? evaluateFinalAnswer(
+                  state.message,
+                  snap,
+                  flags.hasEverUsedTools,
+                ).decision ??
+                evaluateBudgetExhaustion(
+                  state.message,
+                  snap,
+                  "budget_exhausted",
+                )
+              : evaluateBudgetExhaustion(
+                  state.message,
+                  snap,
+                  "budget_exhausted",
+                );
+            runResult = {
+              ...runResultFromDecision(runId, decision),
+              message: state.message,
+              status: "incomplete",
+            };
+          } else {
+            runResult = {
+              ...runResult,
+              outcome: "failed",
+              completionReason: "failed",
+            };
+          }
 
-          if (state.type === "completed" || state.type === "failed") {
-            // 唯一长期记忆写入：MemoryRuntime.completeTask
-            // 桌面多轮：deferMemoryComplete 时跳过，由宿主在结束会话时 complete
-            if (
-              this._memoryRuntime &&
-              this._memoryTaskId &&
-              !this._deferMemoryComplete
-            ) {
-              try {
-                const writeResult = await this._memoryRuntime.completeTask({
-                  taskId: this._memoryTaskId,
-                  status: state.type === "completed" ? "completed" : "failed",
-                  finalMessage: state.message,
-                });
-                emit({
-                  type: "memory.extracted",
-                  runId,
-                  // v2 语义：entries = 已入队写入事件数（异步管线在后台固化）
-                  entries: writeResult.candidates,
-                  rejected: writeResult.rejected + writeResult.pendingReview,
-                });
-              } catch {
-                /* best-effort */
-              }
+          emit({
+            type: "run.completed",
+            status: runResult.status,
+            message: runResult.message,
+          });
+          emitRunMetrics(
+            runResult.status === "incomplete"
+              ? "failed"
+              : runResult.status === "completed"
+                ? "completed"
+                : "failed",
+          );
+
+          if (
+            this._memoryRuntime &&
+            this._memoryTaskId &&
+            !this._deferMemoryComplete
+          ) {
+            try {
+              const writeResult = await this._memoryRuntime.completeTask({
+                taskId: this._memoryTaskId,
+                status:
+                  runResult.status === "completed" ? "completed" : "failed",
+                finalMessage: runResult.message,
+              });
+              emit({
+                type: "memory.extracted",
+                runId,
+                entries: writeResult.candidates,
+                rejected: writeResult.rejected + writeResult.pendingReview,
+              });
+            } catch {
+              /* best-effort */
             }
           }
-          return { runId, status: state.type, message: state.message };
+          return runResult;
         }
       }
 
-      // 循环耗尽：maxSteps 轮后仍未得到 final 动作
-      // 若已用过工具且有 assistant 文本，降级为 completed（避免最后一轮 nudge 浪费后整 run 变 failed）
+      // 循环耗尽：maxSteps 轮后仍未得到 final 动作 → incomplete（禁止 soft-complete 造假）
       const lastAssistant = [...ctxMgr.buildMessages()]
         .reverse()
         .find((m) => m.role === "assistant" && m.content.trim().length > 0);
-      const softMessage = lastAssistant?.content.trim();
-      if (flags.hasEverUsedTools && softMessage) {
-        const message = softMessage;
-        this.saveState(
-          runId,
-          spec.goal,
-          workspaceRoot,
-          maxSteps,
-          maxSteps,
-          ctxMgr,
-          planner,
-          taskState,
-          { status: "completed", message },
-        );
-        emit({ type: "run.completed", status: "completed", message });
-        emitRunMetrics?.("completed");
-        if (
-          this._memoryRuntime &&
-          this._memoryTaskId &&
-          !this._deferMemoryComplete
-        ) {
-          try {
-            const writeResult = await this._memoryRuntime.completeTask({
-              taskId: this._memoryTaskId,
-              status: "completed",
-              finalMessage: message,
-            });
-            emit({
-              type: "memory.extracted",
-              runId,
-              // v2 语义：entries = 已入队写入事件数（异步管线在后台固化）
-              entries: writeResult.candidates,
-              rejected: writeResult.rejected + writeResult.pendingReview,
-            });
-          } catch {
-            /* best-effort */
-          }
-        }
-        return { runId, status: "completed", message };
-      }
-
-      const exhaustedMessage = "internal: model loop exhausted without return";
+      const softMessage =
+        lastAssistant?.content.trim() ||
+        "internal: model loop exhausted without return";
+      const { evaluateBudgetExhaustion, runResultFromDecision } = await import(
+        "./lifecycle/task-lifecycle.js"
+      );
+      const decision = evaluateBudgetExhaustion(
+        softMessage,
+        taskState.snapshot(),
+        "budget_exhausted",
+      );
+      const runResult = runResultFromDecision(runId, decision);
       this.saveState(
         runId,
         spec.goal,
@@ -862,13 +904,36 @@ export class AgentOrchestrator {
         ctxMgr,
         planner,
         taskState,
-        {
-          status: "failed",
-          message: exhaustedMessage,
-        },
+        { status: "incomplete", message: runResult.message },
       );
+      emit({
+        type: "run.completed",
+        status: "incomplete",
+        message: runResult.message,
+      });
       emitRunMetrics?.("failed");
-      return { runId, status: "failed", message: exhaustedMessage };
+      if (
+        this._memoryRuntime &&
+        this._memoryTaskId &&
+        !this._deferMemoryComplete
+      ) {
+        try {
+          const writeResult = await this._memoryRuntime.completeTask({
+            taskId: this._memoryTaskId,
+            status: "failed",
+            finalMessage: runResult.message,
+          });
+          emit({
+            type: "memory.extracted",
+            runId,
+            entries: writeResult.candidates,
+            rejected: writeResult.rejected + writeResult.pendingReview,
+          });
+        } catch {
+          /* best-effort */
+        }
+      }
+      return runResult;
     } catch (e) {
       // 异常安全：即使初始化未完成（init 为 undefined），也返回合理的错误
       const aborted = e instanceof Error && e.name === "AbortError";
@@ -1181,11 +1246,17 @@ export class AgentOrchestrator {
       );
 
       // 调用辅助模型生成压缩摘要
+      const compressionTimeout = AbortSignal.timeout(
+        AgentOrchestrator.COMPRESSION_MODEL_TIMEOUT_MS,
+      );
+      const compressionSignal = signal
+        ? AbortSignal.any([signal, compressionTimeout])
+        : compressionTimeout;
       const { summary, sessionMemory } = await runCompressionAgent(
         auxModel,
         prompt,
         runId,
-        signal,
+        compressionSignal,
       );
 
       // 验证摘要质量（v3 三层门控：规则层 + 实体层）
@@ -1644,10 +1715,18 @@ export class AgentOrchestrator {
     const historyBudget = budgetSnapshot.allocation.historyBudget;
     const remainingRatio =
       historyBudget > 0 ? 1 - budgetSnapshot.historyUsed / historyBudget : 1;
+    const historyUsageRatio =
+      historyBudget > 0 ? budgetSnapshot.historyUsed / historyBudget : 0;
     if (this.monitor.shouldEvaluate(ctx.turn, remainingRatio)) {
       const decision = evaluateTrigger(ctx.ctxMgr.buildMessages());
-      this.monitor.noteEvaluated(decision.triggered);
-      if (decision.triggered && !compactor.isDisabled) {
+      const budgetCritical = decision.reason === "budget_critical";
+      const enoughHistoryToBenefit =
+        historyUsageRatio >=
+        AgentOrchestrator.MONITOR_COMPACT_MIN_HISTORY_RATIO;
+      const shouldForceCompact =
+        decision.triggered && (budgetCritical || enoughHistoryToBenefit);
+      this.monitor.noteEvaluated(shouldForceCompact);
+      if (shouldForceCompact && !compactor.isDisabled) {
         emit({
           type: "compression.monitor.trigger",
           reason: decision.reason ?? "subtask_end",
@@ -1959,10 +2038,13 @@ export class AgentOrchestrator {
             ),
           ]
         : [];
+    // TaskLifecycle：filesChanged / tests / commands 进入 Context Package（控制面可见）
+    const taskBlock = formatTaskStateForContext(taskSnap);
     const text = [
       CONTEXT_PACKAGE_PREFIX,
       `[Task] ${taskSnap.goal}`,
       ...constraintLines,
+      taskBlock,
       this._memoryContextSection || "",
       ...codeLines,
     ]
@@ -2041,7 +2123,10 @@ export class AgentOrchestrator {
     ctxMgr: ContextManager,
     planner: TaskPlanner,
     taskState: TaskStateManager,
-    outcome?: { status: "completed" | "failed" | "aborted"; message: string },
+    outcome?: {
+      status: "completed" | "failed" | "aborted" | "incomplete";
+      message: string;
+    },
   ): void {
     if (!this.appStateStore) return;
     // 清理 goal 中的历史会话前缀，只保留当前请求文本
@@ -2773,7 +2858,14 @@ export class AgentOrchestrator {
         event,
       };
       this.onEvent?.(envelope);
-      this.sessionStore?.saveEvent(runId, envelope);
+      // Streaming chunk events contain the full accumulated text, not a delta.
+      // Persisting every token therefore grows a session quadratically (a
+      // modest long reasoning turn produced a 188 MB JSONL file). The final
+      // model.done event is complete, while the separate recovery stream
+      // protects an in-flight response, so partial snapshots stay live-only.
+      if (event.type !== "model.chunk" && event.type !== "model.thinking") {
+        this.sessionStore?.saveEvent(runId, envelope);
+      }
     };
 
     /** 运行结束时发出汇总指标事件 */

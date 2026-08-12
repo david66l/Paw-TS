@@ -6,6 +6,7 @@
  * DB 不可用时返回 ok:false + 友好文案，不抛异常。
  */
 
+import { join } from "node:path";
 import { closeSql } from "../db/connection.js";
 import { loadMemoryConfig, saveMemoryConfig } from "./config.js";
 import {
@@ -17,7 +18,18 @@ import {
   resolveLlmConfig,
   runBackboneSmoke,
   runRedteamSuite,
+  BUILTIN_CODING_FIXTURES,
+  filterMabSamples,
+  loadMabSamplesFromFile,
+  loadOrFetchMabHf,
+  renderMabReport,
+  runMemoryAgentBench,
+  type MabDimension,
+  renderMechReport,
+  runMechanismSuite,
+  type MechSuiteName,
 } from "./eval/index.js";
+import { resetMemoryV2Core } from "../runtime/index.js";
 import {
   parseReplayJsonl,
   renderReplayReport,
@@ -56,7 +68,10 @@ export interface MemoryCliArgs {
     | "reindex"
     | "redteam"
     | "smoke"
-    | "migrate-v1-to-v2" | "enable";
+    | "mab"
+    | "mechanism"
+    | "migrate-v1-to-v2"
+    | "enable";
   id?: string;
   kind?: MemoryKind;
   all?: boolean;
@@ -89,6 +104,20 @@ export interface MemoryCliArgs {
   autoReadonly?: boolean;
   /** smoke --no-governed：注入真实 Governor（默认 true，走完整五道关） */
   noGoverned?: boolean;
+  /** mab：使用内置 coding-mini 夹具（默认，若未传 --data/--hf） */
+  builtin?: boolean;
+  /** mab：从 HuggingFace 拉取/缓存官方四维 */
+  hf?: boolean;
+  /** mab：HF 缓存目录（默认 benchmarks/memory-agent-bench/hf-cache） */
+  hfCache?: string;
+  /** mab：强制重拉 HF（忽略缓存内容仍会写回） */
+  hfForce?: boolean;
+  /** mab：数据文件路径（JSON / JSONL / {data:[]}） */
+  data?: string;
+  /** mab / mechanism：维度或套件过滤，逗号分隔 */
+  dimensions?: string;
+  /** mab：chunk 字符预算 */
+  chunkSize?: number;
 }
 
 export interface MemoryCliResult {
@@ -123,6 +152,12 @@ Usage:
                                   §11.4 扰动评测（反事实纠正/噪声抗压/否定句保持，真实 LLM）
   paw-ts memory smoke [--provider <name>] [--json] [--keep] [--no-governed] [--auto-readonly]
                                   §11.5 backbone 冒烟（10 条写入/检索：schema 合格率、检索命中率、弱模型专项）
+  paw-ts memory mab [--builtin] [--hf] [--hf-cache <dir>] [--hf-force] [--data <path>]
+                    [--dimension AR,TTL,LRU,CR,SF] [--chunk-size N]
+                    [--provider <name>] [--json] [--keep] [--max-samples N]
+                                  §11.3 MemoryAgentBench（正增益+配对；--hf 官方全量）
+  paw-ts memory mechanism [--suite trial,gate,profile,cap] [--json] [--keep]
+                                  §12.3 机制验收（Trial→Gate→Profile→Cap，DB 闭环）
   paw-ts memory migrate-v1-to-v2 [--dry-run] [--repo <id>]
                                   v1 存量迁移到 v2（type→kind 映射 + payload 规范化 + 重算 embedding；幂等）
   paw-ts memory enable [on|off]  记忆总开关（orchestrator 零调用语义；不带参数显示当前状态）
@@ -151,7 +186,10 @@ export function parseMemoryArgs(
       "reindex",
       "redteam",
       "smoke",
+      "mab",
+      "mechanism",
       "migrate-v1-to-v2",
+      "enable",
     ].includes(sub)
   ) {
     return { error: `未知子命令: ${sub}\n\n${USAGE}` };
@@ -170,6 +208,16 @@ export function parseMemoryArgs(
       out.review = true;
     } else if (a === "--sweep") {
       out.sweep = true;
+    } else if (a === "--builtin") {
+      out.builtin = true;
+    } else if (a === "--hf") {
+      out.hf = true;
+    } else if (a === "--hf-cache") {
+      const v = args[++i];
+      if (!v) return { error: "--hf-cache 缺路径" };
+      out.hfCache = v;
+    } else if (a === "--hf-force") {
+      out.hfForce = true;
     } else if (a === "--approve") {
       const v = args[++i];
       if (!v) return { error: "--approve 缺 entryId" };
@@ -186,6 +234,18 @@ export function parseMemoryArgs(
       const v = args[++i];
       if (!v) return { error: "--dir 缺路径" };
       out.dir = v;
+    } else if (a === "--data") {
+      const v = args[++i];
+      if (!v) return { error: "--data 缺路径" };
+      out.data = v;
+    } else if (a === "--dimension" || a === "--dimensions" || a === "--suite" || a === "--suites") {
+      const v = args[++i];
+      if (!v) return { error: "--dimension/--suite 缺值" };
+      out.dimensions = v;
+    } else if (a === "--chunk-size") {
+      const v = Number(args[++i]);
+      if (!Number.isFinite(v) || v <= 0) return { error: "--chunk-size 需为正整数" };
+      out.chunkSize = v;
     } else if (a === "--keep") {
       out.keep = true;
     } else if (a === "--auto-readonly") {
@@ -517,6 +577,160 @@ export async function runMemoryCommand(
         const text = parsed.json
           ? JSON.stringify(report, null, 2)
           : renderBackboneSmokeReport(report);
+        return report.passed === true
+          ? { ok: true, text }
+          : { ok: false, text };
+      }
+
+      case "mab": {
+        const stats: LlmStats = {
+          calls: 0,
+          retries: 0,
+          failures: 0,
+          totalMs: 0,
+          estimatedTokens: 0,
+        };
+        const backboneCfg = resolveLlmConfig({ provider: parsed.provider });
+        if ("error" in backboneCfg)
+          return { ok: false, text: backboneCfg.error };
+
+        const dimAllowed = new Set<MabDimension>(["AR", "TTL", "LRU", "CR", "SF"]);
+        let dimensions: MabDimension[] | undefined;
+        if (parsed.dimensions) {
+          dimensions = [];
+          for (const part of parsed.dimensions.split(/[,+\s]+/).filter(Boolean)) {
+            const d = part.toUpperCase() as MabDimension;
+            if (!dimAllowed.has(d)) {
+              return {
+                ok: false,
+                text: `未知维度: ${part}（允许 AR,TTL,LRU,CR,SF）`,
+              };
+            }
+            dimensions.push(d);
+          }
+        }
+
+        const warnings: string[] = [];
+        let samples =
+          parsed.data
+            ? loadMabSamplesFromFile(parsed.data, {
+                defaultDimension: dimensions?.length === 1 ? dimensions[0] : undefined,
+              })
+            : [];
+        if (parsed.data && samples.length === 0) {
+          return {
+            ok: false,
+            text: `未能从 ${parsed.data} 解析出样本（需 context + questions/qa；可加 --dimension 注入维度）`,
+          };
+        }
+
+        if (parsed.hf) {
+          const cacheDir =
+            parsed.hfCache ??
+            join(process.cwd(), "benchmarks", "memory-agent-bench", "hf-cache");
+          const parquetDir = join(
+            process.cwd(),
+            "benchmarks",
+            "memory-agent-bench",
+            "hf-dataset",
+            "data",
+          );
+          const hfDims = (dimensions ?? ["AR", "TTL", "LRU", "CR"]).filter((d) => d !== "SF");
+          const splits = hfDims
+            .map((d) =>
+              (
+                {
+                  AR: "Accurate_Retrieval",
+                  TTL: "Test_Time_Learning",
+                  LRU: "Long_Range_Understanding",
+                  CR: "Conflict_Resolution",
+                } as const
+              )[d as "AR" | "TTL" | "LRU" | "CR"],
+            )
+            .filter(Boolean);
+          const loaded = await loadOrFetchMabHf({
+            cacheDir,
+            parquetDir,
+            splits,
+            forceFetch: parsed.hfForce,
+          });
+          warnings.push(...loaded.warnings);
+          samples = [...samples, ...loaded.samples];
+          if (loaded.samples.length === 0 && !parsed.builtin && !parsed.data) {
+            return {
+              ok: false,
+              text: `HF 无样本（source=${loaded.source}）。警告:\n${warnings.join("\n") || "(无)"}`,
+            };
+          }
+        }
+
+        // 默认 / --builtin：内置 coding-mini（含 SF）；与 --hf/--data 可叠加
+        if (parsed.builtin || (!parsed.data && !parsed.hf)) {
+          samples = [...samples, ...BUILTIN_CODING_FIXTURES];
+        } else if (parsed.builtin === undefined && parsed.hf) {
+          // HF 全量默认仍附带 SF 内置条，否则 SF 断言缺席
+          const wantSf = !dimensions || dimensions.includes("SF");
+          if (wantSf) samples = [...samples, ...BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF")];
+        }
+
+        samples = filterMabSamples(samples, {
+          dimensions,
+          maxSamples: parsed.maxSamples,
+          maxQaPerSample: parsed.hf ? 5 : undefined,
+        });
+        if (samples.length === 0) {
+          return { ok: false, text: "过滤后无样本可跑" };
+        }
+
+        const report = await runMemoryAgentBench({
+          samples,
+          backbone: new ChatClient(backboneCfg, parsed.hf ? 180_000 : 60_000, stats),
+          engine,
+          stats,
+          keep: parsed.keep,
+          maxSamples: undefined, // 已在 filter 阶段截断
+          chunkSize: parsed.chunkSize ?? (parsed.hf ? 4096 : undefined),
+          maxChunks: parsed.hf ? 48 : undefined,
+          llmBudget: parsed.hf ? 50_000 : undefined,
+          dimensions,
+        });
+        const finalReport =
+          warnings.length > 0
+            ? { ...report, warnings: [...report.warnings, ...warnings] }
+            : report;
+        const text = parsed.json
+          ? JSON.stringify(finalReport, null, 2)
+          : renderMabReport(finalReport);
+        return finalReport.passed === true
+          ? { ok: true, text }
+          : { ok: false, text };
+      }
+
+      case "mechanism": {
+        resetMemoryV2Core();
+        const allowed = new Set<MechSuiteName>(["trial", "gate", "profile", "cap"]);
+        let suites: MechSuiteName[] | undefined;
+        if (parsed.dimensions) {
+          suites = [];
+          for (const part of parsed.dimensions.split(/[,+\s]+/).filter(Boolean)) {
+            const s = part.toLowerCase() as MechSuiteName;
+            if (!allowed.has(s)) {
+              return {
+                ok: false,
+                text: `未知套件: ${part}（允许 trial,gate,profile,cap）`,
+              };
+            }
+            suites.push(s);
+          }
+        }
+        const report = await runMechanismSuite({
+          suites,
+          keep: parsed.keep,
+        });
+        resetMemoryV2Core();
+        const text = parsed.json
+          ? JSON.stringify(report, null, 2)
+          : renderMechReport(report);
         return report.passed === true
           ? { ok: true, text }
           : { ok: false, text };

@@ -399,6 +399,13 @@ export function evaluatePolicy(
 let _config: PolicyConfig | undefined;
 
 /**
+ * Fresh built-in policy (always a new object; does not touch the process singleton).
+ */
+export function createBuiltinPolicyConfig(): PolicyConfig {
+  return builtinRules();
+}
+
+/**
  * 获取默认策略配置。
  *
  * 首次调用时惰性构建内置默认规则，后续调用返回同一实例。

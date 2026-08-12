@@ -47,7 +47,7 @@ export function getUsingToolsSection(opts: {
     "Other structured actions (also valid JSON on their own line):",
     `{"action":"final_answer","summary":"..."} — task is done, report to the user`,
     `{"action":"ask_user","question":"..."} — ask the user a question`,
-    `{"action":"plan_update","reason":"...","new_items":[...],"deprecated_items":[...]} — update the plan`,
+    `{"action":"plan_update","reason":"...","new_items":[...],"deprecated_items":[...]} — add plan items or update existing items by id (including status: pending|running|completed|blocked|skipped|failed)`,
     `{"action":"abort","reason":"..."} — abort the task`,
     "",
     // ReAct 模式：观察→思考→行动，循环直到完成

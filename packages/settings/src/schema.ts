@@ -74,6 +74,17 @@ export const pawSettingsLocalSchema = z
      */
     memory_retrieval: z.enum(["keyword", "cascade"]).optional(),
     /**
+     * Agent 协作模式：
+     * - `coding`（默认）：单人长跑编码，完整 edit→test→fix loop，不灌花名册
+     * - `orchestrated` / `team`：狸花调度多 Agent
+     */
+    agent_mode: z
+      .enum(["coding", "orchestrated", "team", "multi"])
+      .optional(),
+    collaboration_mode: z
+      .enum(["coding", "orchestrated", "team", "multi"])
+      .optional(),
+    /**
      * Ollama embedding 模型名，用于语义记忆增强。
      * 例如 "nomic-embed-text"、"bge-m3"。未设置 = 无语义增强。
      */

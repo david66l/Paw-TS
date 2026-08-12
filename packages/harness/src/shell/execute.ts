@@ -19,6 +19,12 @@ export interface RunShellOptions {
   readonly cwd?: string;
   readonly timeoutMs?: number;
   readonly shellSandbox?: ShellSandboxConfig;
+  /**
+   * When true, skip the shell-policy "ask" gate — the caller already obtained
+   * approval via the unified tool-approval bus (AutonomyProfile / resolveToolApproval).
+   * Deny rules still apply.
+   */
+  readonly skipApprovalGate?: boolean;
 }
 
 export interface RunShellStreamingOptions extends RunShellOptions {
@@ -110,7 +116,7 @@ export function runShellInWorkspace(
   if (!guard.allowed) {
     return { error: guard.reason ?? "command rejected by shell guard" };
   }
-  if (guard.requiresApproval) {
+  if (guard.requiresApproval && !options.skipApprovalGate) {
     return {
       error: guard.reason ?? "command requires approval",
       requiresApproval: true,
@@ -190,7 +196,7 @@ export function runShellInWorkspaceStreaming(
       resolve({ error: guard.reason ?? "command rejected by shell guard" });
       return;
     }
-    if (guard.requiresApproval) {
+    if (guard.requiresApproval && !options.skipApprovalGate) {
       resolve({
         error: guard.reason ?? "command requires approval",
         requiresApproval: true,

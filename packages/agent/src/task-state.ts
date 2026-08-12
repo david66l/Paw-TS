@@ -12,6 +12,8 @@ export interface TestResultSummary {
   readonly command: string;
   readonly passed: boolean;
   readonly summary: string;
+  /** 文件最近一次变更的版本；用于拒绝“改代码前跑过的旧绿测”。 */
+  readonly mutationRevision?: number;
 }
 
 /**
@@ -39,6 +41,9 @@ export interface TaskState {
   readonly filesChanged: readonly string[];
   readonly commandsRun: readonly CommandSummary[];
   readonly testResults: readonly TestResultSummary[];
+  /** 每次成功写文件/应用 patch 单调递增；旧快照缺省为 0。 */
+  readonly mutationRevision?: number;
+  readonly fileLockConflicts: readonly string[];
   readonly currentHypothesis?: string;
   readonly rejectedHypotheses: readonly string[];
   readonly pinnedFacts: readonly string[];
@@ -51,9 +56,15 @@ export class TaskStateManager {
   private state: TaskState;
 
   constructor(goal: string, restored?: unknown) {
-    this.state = isTaskState(restored)
-      ? restored
-      : {
+    if (isTaskState(restored)) {
+      this.state = {
+        ...restored,
+        fileLockConflicts: Array.isArray(restored.fileLockConflicts)
+          ? restored.fileLockConflicts
+          : [],
+      };
+    } else {
+      this.state = {
           goal,
           constraints: extractConstraints(goal).map((text) => ({
             text,
@@ -65,15 +76,33 @@ export class TaskStateManager {
           filesChanged: [],
           commandsRun: [],
           testResults: [],
+          mutationRevision: 0,
+          fileLockConflicts: [],
           rejectedHypotheses: [],
           pinnedFacts: [],
           knownNonGoals: [],
           updatedAt: Date.now(),
         };
+    }
   }
 
   snapshot(): TaskState {
     return this.state;
+  }
+
+  recordFileLockConflict(path: string): void {
+    const p = path.trim();
+    if (!p) return;
+    if (this.state.fileLockConflicts.includes(p)) return;
+    this.state = {
+      ...this.state,
+      fileLockConflicts: [...this.state.fileLockConflicts, p].slice(-20),
+      pinnedFacts: [
+        ...this.state.pinnedFacts,
+        `file_lock_conflict: ${p}`,
+      ].slice(-20),
+      updatedAt: Date.now(),
+    };
   }
 
   /** 当前有效的约束（active）——红线区/摘要校验的唯一来源 */
@@ -132,6 +161,7 @@ export class TaskStateManager {
     const commandsRun = [...this.state.commandsRun];
     const testResults = [...this.state.testResults];
     const pinnedFacts = [...this.state.pinnedFacts];
+    let mutationRevision = this.state.mutationRevision ?? 0;
 
     if (result.ok && call.tool === "workspace.read_file") {
       pushUnique(filesRead, stringArg(args.path));
@@ -144,12 +174,14 @@ export class TaskStateManager {
         call.tool === "workspace.notebook_edit")
     ) {
       pushUnique(filesChanged, stringArg(args.path));
+      mutationRevision += 1;
     }
 
     if (result.ok && call.tool === "workspace.apply_patch") {
       for (const path of extractPatchPaths(stringArg(args.patch))) {
         pushUnique(filesChanged, path);
       }
+      mutationRevision += 1;
     }
 
     if (call.tool === "workspace.run_shell") {
@@ -167,6 +199,7 @@ export class TaskStateManager {
             command,
             passed: result.ok,
             summary: result.summary,
+            mutationRevision,
           });
         }
       }
@@ -182,6 +215,7 @@ export class TaskStateManager {
       filesChanged,
       commandsRun: commandsRun.slice(-20),
       testResults: testResults.slice(-20),
+      mutationRevision,
       pinnedFacts: pinnedFacts.slice(-20),
       updatedAt: Date.now(),
     };
@@ -201,6 +235,11 @@ export function formatTaskStateForContext(state: TaskState): string {
   appendList(lines, "Files changed", state.filesChanged);
   appendList(lines, "Commands run", state.commandsRun.map((c) => `${c.ok ? "ok" : "failed"}: ${c.command}`));
   appendList(lines, "Tests", state.testResults.map((t) => `${t.passed ? "passed" : "failed"}: ${t.command}`));
+  appendList(lines, "Plan", state.plan);
+  if ((state.mutationRevision ?? 0) > 0) {
+    lines.push(`Mutation revision: ${state.mutationRevision}`);
+  }
+  appendList(lines, "File lock conflicts", state.fileLockConflicts ?? []);
   appendList(lines, "Pinned facts", state.pinnedFacts);
   if (state.nextStep) lines.push(`Next step: ${state.nextStep}`);
   return lines.join("\n");
@@ -244,7 +283,21 @@ function extractPatchPaths(patch: string): string[] {
 }
 
 function looksLikeTestCommand(command: string): boolean {
-  return /\b(?:test|spec|vitest|jest|bun test|npm test|pnpm test|yarn test|pytest|go test|cargo test)\b/i.test(command);
+  const c = command.trim();
+  // "pip install pytest" / "npm i jest" 不是跑测
+  if (/\b(?:pip3?|uv|npm|pnpm|yarn|bun)\s+(?:install|add|i)\b/i.test(c)) {
+    return false;
+  }
+  // 只认「真正执行测试」的命令形态（可出现在 && / ; 链中）
+  return (
+    /(?:^|[;&|]\s*)(?:python(?:3)?\s+-m\s+)?pytest\b/i.test(c) ||
+    /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+test\b/i.test(c) ||
+    /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+run\s+(?:test|check|build|lint|typecheck|e2e|verify)(?::[\w-]+)?\b/i.test(c) ||
+    /(?:^|[;&|]\s*)(?:npx\s+)?(?:vitest|jest)\b/i.test(c) ||
+    /(?:^|[;&|]\s*)node\s+[^\s;|]*(?:test|smoke|verify|e2e)[^\s;|]*\b/i.test(c) ||
+    /(?:^|[;&|]\s*)go\s+test\b/i.test(c) ||
+    /(?:^|[;&|]\s*)cargo\s+test\b/i.test(c)
+  );
 }
 
 function pushUnique(list: string[], value: string): void {
@@ -285,5 +338,8 @@ function summarizePlanItem(item: unknown): string {
   if (typeof item === "string") return item;
   if (!isRecord(item)) return String(item);
   const text = item.text ?? item.content ?? item.title ?? item.step ?? item.id;
-  return typeof text === "string" ? text : JSON.stringify(item);
+  if (typeof text !== "string") return JSON.stringify(item);
+  const status = typeof item.status === "string" ? item.status : undefined;
+  const taskId = typeof item.task_id === "string" ? item.task_id : undefined;
+  return [status ? `[${status}]` : "", taskId ?? text].filter(Boolean).join(" ");
 }

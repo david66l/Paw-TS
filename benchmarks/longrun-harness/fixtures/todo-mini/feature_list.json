@@ -1,0 +1,197 @@
+[
+  {
+    "id": "todo-heading",
+    "category": "functional",
+    "description": "App shows a Todo heading",
+    "steps": ["Open /", "See heading with Todo"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "expect_text", "selector": "[data-testid=app-title]", "text": "Todo" }
+      ]
+    }
+  },
+  {
+    "id": "todo-add",
+    "category": "functional",
+    "description": "User can add a todo via input + Add",
+    "steps": ["Type text", "Click Add", "See item in list"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "buy milk" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "expect_text", "selector": "[data-testid=todo-list]", "text": "buy milk" }
+      ]
+    }
+  },
+  {
+    "id": "todo-empty-state",
+    "category": "ux",
+    "description": "Empty state visible when list has no items",
+    "steps": ["Open fresh app", "See empty state"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "expect_visible", "selector": "[data-testid=todo-empty]" }
+      ]
+    }
+  },
+  {
+    "id": "todo-toggle-complete",
+    "category": "functional",
+    "description": "Clicking a todo toggles completed state",
+    "steps": ["Add item", "Click item", "See completed styling"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "walk dog" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "click", "selector": "[data-testid=todo-item]" },
+        { "type": "expect_visible", "selector": "[data-testid=todo-item].completed" }
+      ]
+    }
+  },
+  {
+    "id": "todo-delete",
+    "category": "functional",
+    "description": "Delete removes the todo",
+    "steps": ["Add item", "Click delete", "Item gone"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "temp task" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "click", "selector": "[data-testid=todo-delete]" },
+        { "type": "expect_count", "selector": "[data-testid=todo-item]", "count": 0 }
+      ]
+    }
+  },
+  {
+    "id": "todo-persist",
+    "category": "data",
+    "description": "Todos persist across reload via localStorage",
+    "steps": ["Add item", "Reload", "Item still there"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "persist me" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "goto", "path": "/" },
+        { "type": "expect_text", "selector": "[data-testid=todo-list]", "text": "persist me" }
+      ]
+    }
+  },
+  {
+    "id": "todo-filter-active",
+    "category": "functional",
+    "description": "Active filter hides completed todos",
+    "steps": ["Add two", "Complete one", "Filter Active", "Only active shown"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "active one" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "done one" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "click", "selector": "[data-testid=todo-item]:has-text('done one')" },
+        { "type": "click", "selector": "[data-testid=filter-active]" },
+        { "type": "expect_text", "selector": "[data-testid=todo-list]", "text": "active one" },
+        { "type": "expect_count", "selector": "[data-testid=todo-item]", "count": 1 }
+      ]
+    }
+  },
+  {
+    "id": "todo-remaining-count",
+    "category": "functional",
+    "description": "Shows remaining active todo count",
+    "steps": ["Add items", "Complete one", "See remaining count"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "a" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "b" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "expect_text", "selector": "[data-testid=todo-count]", "text": "2" }
+      ]
+    }
+  },
+  {
+    "id": "todo-clear-completed",
+    "category": "functional",
+    "description": "Clear completed removes only completed",
+    "steps": ["Add two", "Complete one", "Clear completed", "Active remains"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "keep" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "drop" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "click", "selector": "[data-testid=todo-item]:has-text('drop')" },
+        { "type": "click", "selector": "[data-testid=clear-completed]" },
+        { "type": "expect_text", "selector": "[data-testid=todo-list]", "text": "keep" },
+        { "type": "expect_count", "selector": "[data-testid=todo-item]", "count": 1 }
+      ]
+    }
+  },
+  {
+    "id": "todo-input-clears",
+    "category": "ux",
+    "description": "Input clears after adding a todo",
+    "steps": ["Type", "Add", "Input empty"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "clear me" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "expect_text", "selector": "[data-testid=todo-input]", "text": "" }
+      ]
+    }
+  },
+  {
+    "id": "todo-style-layout",
+    "category": "style",
+    "description": "Main app shell is visible with list region",
+    "steps": ["Open /", "See app shell and list region"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "expect_visible", "selector": "[data-testid=app-shell]" },
+        { "type": "expect_visible", "selector": "[data-testid=todo-input]" },
+        { "type": "expect_visible", "selector": "[data-testid=todo-empty]" }
+      ]
+    }
+  },
+  {
+    "id": "todo-filter-all",
+    "category": "functional",
+    "description": "All filter shows both active and completed",
+    "steps": ["Add two", "Complete one", "Filter All", "Both visible"],
+    "passes": false,
+    "e2e": {
+      "actions": [
+        { "type": "goto", "path": "/" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "one" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "fill", "selector": "[data-testid=todo-input]", "value": "two" },
+        { "type": "click", "selector": "[data-testid=todo-add]" },
+        { "type": "click", "selector": "[data-testid=todo-item]:has-text('two')" },
+        { "type": "click", "selector": "[data-testid=filter-all]" },
+        { "type": "expect_count", "selector": "[data-testid=todo-item]", "count": 2 }
+      ]
+    }
+  }
+]

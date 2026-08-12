@@ -7,6 +7,43 @@ import path from "node:path";
 import { editWorkspaceFile } from "../src/files/write.js";
 
 describe("editWorkspaceFile — string mode", () => {
+  test("CRLF file accepts LF old_string and preserves CRLF", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    writeFileSync(
+      path.join(root, "a.py"),
+      "def f():\r\n    return get_type_hints(self.parent)\r\n",
+      "utf8",
+    );
+    const r = editWorkspaceFile(root, "a.py", {
+      oldString: "    return get_type_hints(self.parent)\n",
+      newString:
+        "    return get_type_hints(self.parent, None, self.config.autodoc_type_aliases)\n",
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.replacements).toBe(1);
+    const content = fs.readFileSync(path.join(root, "a.py"), "utf8");
+    expect(content).toContain("\r\n");
+    expect(content).toContain(
+      "get_type_hints(self.parent, None, self.config.autodoc_type_aliases)",
+    );
+    expect(content.includes("\n") && !content.includes("\r\n")).toBe(false);
+  });
+
+  test("replace_all replaces every occurrence", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    writeFileSync(path.join(root, "a.txt"), "foo bar\nfoo baz\n", "utf8");
+    const r = editWorkspaceFile(root, "a.txt", {
+      oldString: "foo",
+      newString: "qux",
+      replaceAll: true,
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.replacements).toBe(2);
+    expect(fs.readFileSync(path.join(root, "a.txt"), "utf8")).toBe(
+      "qux bar\nqux baz\n",
+    );
+  });
+
   test("replaces unique match", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
     writeFileSync(path.join(root, "a.txt"), "hello world\nfoo bar\n", "utf8");
@@ -42,6 +79,7 @@ describe("editWorkspaceFile — string mode", () => {
       newString: "bar",
     });
     expect(r.error).toContain("appears 3 times");
+    expect(r.error).toContain("replace_all");
     expect(r.replacements).toBeUndefined();
   });
 

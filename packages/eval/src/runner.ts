@@ -38,7 +38,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { AgentOrchestrator, type AgentOrchestratorOptions } from "@paw/agent";
+import {
+  AgentOrchestrator,
+  createAutonomyProfile,
+  type AgentOrchestratorOptions,
+} from "@paw/agent";
 import type { LanguageModel } from "@paw/models";
 import type { TestCase } from "./test-suite/types.js";
 import type { EvalRunRecord } from "./eval-record.js";
@@ -233,12 +237,16 @@ export class EvalRunner {
       modelLabel,
     );
 
+    const profile = createAutonomyProfile("headless");
+    profile.apply();
+
     const orchestratorOpts: AgentOrchestratorOptions = {
       model: this.opts.model,
       evalHooks: collector,
       memoryExtraction: "off", // 评测中禁用以保证独立性
-      // 沙箱模式下自动批准所有工具（worktree 是临时的）
-      resolveToolApproval: async () => true,
+      resolveToolApproval: profile.resolveToolApproval,
+      resolveAskUser: profile.resolveAskUser,
+      approvalPolicy: profile.approvalPolicy,
     };
 
     const orchestrator = new AgentOrchestrator(orchestratorOpts);

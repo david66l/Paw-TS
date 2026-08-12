@@ -60,3 +60,31 @@ web-project/
 index.html
 training_data/stage_c_deepseek_teacher.jsonl
 training_data/*.jsonl
+
+# Long-run harness workspaces / reports
+benchmarks/longrun-harness/.workspace/
+benchmarks/longrun-harness/runs/
+benchmarks/longrun-harness/last-run.json
+
+# Downloaded benchmark datasets / generated Hugging Face caches
+benchmarks/memory-agent-bench/hf-dataset/
+benchmarks/memory-agent-bench/hf-cache/*
+!benchmarks/memory-agent-bench/hf-cache/.gitkeep
+benchmarks/swe-bench/swe-bench-lite.jsonl
+benchmarks/swe-exp/repos/
+benchmarks/swe-exp/runs/
+benchmarks/swe-exp/last-run.json
+
+# Generated benchmark logs / reports (source harnesses and fixtures are kept)
+logs/
+benchmarks/**/*.log
+benchmarks/memory-agent-bench/last-run*.json
+benchmarks/memory-mechanism/last-run.json
+/paw-capability-first*.json
+/paw-ts-memory-*.json
+
+# Python/runtime scratch
+__pycache__/
+*.pyc
+/.cursor-tasklifecycle-plan-extract.md
+/hello.txt

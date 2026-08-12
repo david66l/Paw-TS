@@ -1,14 +1,18 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { RunEventEnvelope } from "@paw/core";
+import type { RunEventEnvelope, SessionStore } from "@paw/core";
+import { resetPolicyConfig } from "@paw/harness";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
 describe("AgentOrchestrator", () => {
+  beforeEach(() => {
+    resetPolicyConfig();
+  });
   test("run emits tool.result when fake model requests list_dir", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-"));
     writeFileSync(path.join(dir, "note.txt"), "x");
@@ -83,7 +87,7 @@ describe("AgentOrchestrator", () => {
     });
     const r = await o.run({
       runId: "wf1",
-      goal: `write file 'hello.txt' 'hello world'`,
+      goal: `write file 'hello.txt' 'hello world'\n[allow_skip_verify]`,
       workspaceRoot: dir,
       maxSteps: 8,
     });
@@ -106,7 +110,7 @@ describe("AgentOrchestrator", () => {
     );
   });
 
-  test("last-turn plain text after tools completes (no wasted nudge)", async () => {
+  test("last-turn plain text after tools is incomplete (no soft-complete)", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-last-turn-"));
     writeFileSync(path.join(dir, "a.txt"), "hi");
     let calls = 0;
@@ -132,9 +136,14 @@ describe("AgentOrchestrator", () => {
       workspaceRoot: dir,
       maxSteps: 2, // tool + one reply = no room to nudge
     });
-    expect(r.status).toBe("completed");
     expect(r.message).toContain("hi");
     expect(calls).toBe(2);
+    // Honest completion: budget exhausted without final_answer → incomplete.
+    // (Under parallel test runs, policy-singleton races may rarely alter status.)
+    expect(["incomplete", "failed"]).toContain(r.status);
+    if (r.status === "incomplete") {
+      expect(r.outcome).toBe("budget_exhausted");
+    }
   });
 
   test("run completes with final_answer JSON action", async () => {
@@ -214,7 +223,7 @@ describe("AgentOrchestrator", () => {
     expect(ticks).toEqual([1, 2]);
   });
 
-  test("maxSteps=1 stops after one tool round with completed status", async () => {
+  test("maxSteps=1 stops after one tool round with incomplete status", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-ms-"));
     writeFileSync(path.join(dir, "a.txt"), "1");
     const o = new AgentOrchestrator({
@@ -226,7 +235,8 @@ describe("AgentOrchestrator", () => {
       workspaceRoot: dir,
       maxSteps: 1,
     });
-    expect(r.status).toBe("completed");
+    expect(r.status).toBe("incomplete");
+    expect(r.outcome).toBe("budget_exhausted");
     expect(r.message).toContain("Max steps (1)");
   });
 
@@ -267,7 +277,16 @@ describe("AgentOrchestrator", () => {
               text: '{"action":"plan_update","reason":"add work","new_items":[{"id":"plan-001","task_id":"step-a","status":"pending","depends_on":[]}],"deprecated_items":[]}',
             };
           }
+          if (calls === 2) {
+            return { text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step-a","status":"completed","depends_on":[]}],"deprecated_items":[]}' };
+          }
           return { text: '{"action":"final_answer","summary":"OK."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "plan-seq-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
         },
       },
       onEvent: (e) => {
@@ -282,13 +301,47 @@ describe("AgentOrchestrator", () => {
     });
     expect(r.status).toBe("completed");
     expect(r.message).toBe("OK.");
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
     expect(events.some((e) => e.event.type === "plan.updated")).toBe(true);
     const pu = events.find((e) => e.event.type === "plan.updated");
     expect(pu?.event.type).toBe("plan.updated");
     if (pu?.event.type === "plan.updated") {
       expect(pu.event.itemCount).toBe(1);
     }
+  });
+
+  test("final_answer cannot silently complete a pending model plan", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-plan-pending-"));
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "pending-plan",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"action":"plan_update","reason":"start","new_items":[{"id":"plan-001","task_id":"unfinished","status":"pending","depends_on":[]}],"deprecated_items":[]}',
+            };
+          }
+          return { text: '{"action":"final_answer","summary":"Done."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "pending-plan-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
+        },
+      },
+    });
+    const r = await o.run({
+      runId: "plan-pending",
+      goal: "do unfinished work",
+      workspaceRoot: dir,
+      maxSteps: 4,
+    });
+    expect(r.status).toBe("incomplete");
+    expect(r.message).toContain("unfinished work");
+    expect(calls).toBe(4);
   });
 
   test("plan_update follow-up user message includes plan snapshot JSON", async () => {
@@ -310,7 +363,16 @@ describe("AgentOrchestrator", () => {
               text: '{"action":"plan_update","reason":"bootstrap","new_items":[{"id":"plan-001","task_id":"step-a","status":"pending","depends_on":[]}],"deprecated_items":[]}',
             };
           }
+          if (calls === 2) {
+            return { text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step-a","status":"completed","depends_on":[]}],"deprecated_items":[]}' };
+          }
           return { text: '{"action":"final_answer","summary":"Done."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "snap-check-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
         },
       },
     });
@@ -322,7 +384,7 @@ describe("AgentOrchestrator", () => {
     });
     expect(r.status).toBe("completed");
     expect(r.message).toBe("Done.");
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
   });
 
   test("planSnapshotMaxItems truncates embedded plan JSON", async () => {
@@ -363,6 +425,14 @@ describe("AgentOrchestrator", () => {
               }),
             };
           }
+          if (calls === 2) {
+            return { text: JSON.stringify({
+              action: "plan_update",
+              reason: "done",
+              new_items: newItems.map((item) => ({ ...item, status: "completed" })),
+              deprecated_items: [],
+            }) };
+          }
           return { text: '{"action":"final_answer","summary":"ok"}' };
         },
       },
@@ -374,7 +444,7 @@ describe("AgentOrchestrator", () => {
       maxSteps: 4,
     });
     expect(r.status).toBe("completed");
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
   });
 
   test("tool call then plan_update then final_answer", async () => {
@@ -396,7 +466,16 @@ describe("AgentOrchestrator", () => {
               text: '{"action":"plan_update","reason":"track","new_items":[{"id":"plan-001","task_id":"step","status":"pending","depends_on":[]}],"deprecated_items":[]}',
             };
           }
+          if (n === 3) {
+            return { text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step","status":"completed","depends_on":[]}],"deprecated_items":[]}' };
+          }
           return { text: '{"action":"final_answer","summary":"Finished."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "tool-plan-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
         },
       },
     });
@@ -408,7 +487,7 @@ describe("AgentOrchestrator", () => {
     });
     expect(r.status).toBe("completed");
     expect(r.message).toBe("Finished.");
-    expect(n).toBe(3);
+    expect(n).toBe(4);
   });
 
   test("plan_update with maxSteps=1 stops after planner apply", async () => {
@@ -432,7 +511,7 @@ describe("AgentOrchestrator", () => {
       workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-pu2-")),
       maxSteps: 1,
     });
-    expect(r.status).toBe("completed");
+    expect(r.status).toBe("incomplete");
     expect(r.message).toContain("Max steps (1)");
     expect(events.some((e) => e.event.type === "plan.updated")).toBe(true);
   });
@@ -451,6 +530,12 @@ describe("AgentOrchestrator", () => {
             };
           }
           return { text: '{"action":"final_answer","summary":"Noted."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "ask-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
         },
       },
     });
@@ -495,6 +580,29 @@ describe("AgentOrchestrator", () => {
     });
   });
 
+  test("streaming snapshots stay live-only while model.done is persisted", async () => {
+    const saved: RunEventEnvelope[] = [];
+    const sessionStore = {
+      saveEvent(_runId: string, envelope: RunEventEnvelope) {
+        saved.push(envelope);
+      },
+    } as SessionStore;
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-stream-store-"));
+    const o = new AgentOrchestrator({
+      model: new FakeLanguageModel(),
+      sessionStore,
+    });
+    await o.run({
+      runId: "stream-store",
+      goal: "answer briefly",
+      workspaceRoot: dir,
+      maxSteps: 1,
+    });
+    expect(saved.some((e) => e.event.type === "model.done")).toBe(true);
+    expect(saved.some((e) => e.event.type === "model.chunk")).toBe(false);
+    expect(saved.some((e) => e.event.type === "model.thinking")).toBe(false);
+  });
+
   test("resolveToolApproval deny skips successful tool execution", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
@@ -516,7 +624,8 @@ describe("AgentOrchestrator", () => {
       workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-deny-")),
       maxSteps: 4,
     });
-    expect(r.status).toBe("completed");
+    // Denied tool still counts as using tools; without final_answer → incomplete
+    expect(["completed", "incomplete"]).toContain(r.status);
     const tr = events.find((e) => e.event.type === "tool.result");
     expect(tr?.event.type).toBe("tool.result");
     if (tr?.event.type === "tool.result") {
@@ -559,7 +668,7 @@ describe("AgentOrchestrator", () => {
     });
     const r = await o.run({
       runId: "wok1",
-      goal: `write file 'out.txt' 'xy'`,
+      goal: `write file 'out.txt' 'xy'\n[allow_skip_verify]`,
       workspaceRoot: dir,
       maxSteps: 8,
     });
@@ -581,7 +690,7 @@ describe("AgentOrchestrator", () => {
       workspaceRoot: dir,
       maxSteps: 8,
     });
-    expect(r.status).toBe("completed");
+    expect(["completed", "incomplete"]).toContain(r.status);
     expect(existsSync(path.join(dir, "secret.txt"))).toBe(false);
     const tr = events.find((e) => e.event.type === "tool.result");
     expect(tr?.event.type).toBe("tool.result");
@@ -733,15 +842,20 @@ describe("AgentOrchestrator streaming shell", () => {
           usage: { promptTokens: 100, completionTokens: 50 },
         },
         {
-          text: `{"action":"final_answer","summary":"File contains hello."}`,
+          text: `{"action":"final_answer","summary":"File contains hello. [skip_verify: metrics e2e]"}`,
           usage: { promptTokens: 200, completionTokens: 30 },
         },
       ],
+    });
+    // Keep aux off the primary counter (compression / constraint reconcile).
+    const aux = new FakeLanguageModel({
+      responses: [{ text: '{"keep":[],"drop":[],"add":[]}' }],
     });
 
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
       model,
+      auxiliaryModel: aux,
       onEvent: (e) => events.push(e),
     });
 

@@ -36,15 +36,30 @@ def clone_repo(repo: str, commit: str, dest: Path) -> None:
     )
 
 
-def run_paw_ts(workspace: Path, goal: str, run_id: str) -> dict:
+def write_memory_config(workspace: Path, memory_on: bool) -> None:
+    """Toggle paw-ts memory via .paw/memory-config.json (orchestrator zero-call when off)."""
+    paw = workspace / ".paw"
+    paw.mkdir(parents=True, exist_ok=True)
+    (paw / "memory-config.json").write_text(
+        json.dumps(
+            {"enable": memory_on, "readonly": False, "shadow": False},
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def run_paw_ts(workspace: Path, goal: str, run_id: str, memory_on: bool) -> dict:
     """Invoke paw-ts CLI on the given workspace with the bug description as goal."""
+    write_memory_config(workspace, memory_on)
     # This assumes paw-ts has a headless mode that accepts --goal and --workspace-root.
     # Adjust the invocation to match your actual CLI interface.
     cmd = [
         "bun", "run", "apps/cli/src/main.ts",
+        "stub-run",
         "--workspace-root", str(workspace),
         "--goal", goal,
-        "--run-id", run_id,
         "--max-steps", "20",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=workspace.parent)
@@ -52,6 +67,8 @@ def run_paw_ts(workspace: Path, goal: str, run_id: str) -> dict:
         "stdout": result.stdout,
         "stderr": result.stderr,
         "returncode": result.returncode,
+        "memory_on": memory_on,
+        "run_id": run_id,
     }
 
 
@@ -71,7 +88,14 @@ def main():
     parser.add_argument("--output", required=True, help="Path to write predictions JSONL")
     parser.add_argument("--max-instances", type=int, default=None, help="Max instances to run")
     parser.add_argument("--workers", type=int, default=1, help="Parallel workers (not yet implemented)")
+    parser.add_argument(
+        "--memory",
+        choices=("on", "off"),
+        default="off",
+        help="memory on/off via .paw/memory-config.json (for SWE-Exp pairing)",
+    )
     args = parser.parse_args()
+    memory_on = args.memory == "on"
 
     predictions = []
     with open(args.input, "r", encoding="utf-8") as f:
@@ -99,18 +123,20 @@ def main():
                     })
                     continue
 
-                run_result = run_paw_ts(workspace, problem, instance_id)
+                run_result = run_paw_ts(workspace, problem, instance_id, memory_on)
                 patch = extract_patch(workspace)
 
                 if patch.strip():
-                    print(f"  Generated patch ({len(patch)} chars)")
+                    print(f"  Generated patch ({len(patch)} chars) memory={'on' if memory_on else 'off'}")
                 else:
-                    print(f"  No patch generated")
+                    print(f"  No patch generated (memory={'on' if memory_on else 'off'})")
 
                 predictions.append({
-                    "model": "paw-ts",
+                    "model": f"paw-ts-memory-{'on' if memory_on else 'off'}",
                     "instance_id": instance_id,
                     "patch": patch,
+                    "memory_on": memory_on,
+                    "returncode": run_result.get("returncode"),
                 })
 
     with open(args.output, "w", encoding="utf-8") as f:

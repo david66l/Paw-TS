@@ -52,4 +52,19 @@ describe("TaskPlanner", () => {
     const tp = new TaskPlanner();
     expect(() => tp.applyUpdate([], [], "x")).toThrow(/No plan exists/);
   });
+
+  test("applyUpdate can advance an existing item instead of duplicating it", () => {
+    const tp = new TaskPlanner();
+    tp.createPlan("wf", [{ id: "step-a" }]);
+    const current = tp.plan!.items[0]!;
+    const done = createPlanItem({
+      id: current.id,
+      task_id: current.task_id,
+      status: PlanItemStatus.COMPLETED,
+    });
+    const p = tp.applyUpdate([done], [], "implemented and verified");
+    expect(p.items).toHaveLength(1);
+    expect(p.items[0]?.status).toBe(PlanItemStatus.COMPLETED);
+    expect(p.allComplete).toBe(true);
+  });
 });

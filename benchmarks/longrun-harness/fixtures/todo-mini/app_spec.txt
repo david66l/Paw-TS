@@ -1,0 +1,27 @@
+Todo Web App — minimal greenfield spec for paw long-run harness
+
+Goal: a single-page Todo app in the browser (desktop UI), usable without login.
+
+Stack (preferred):
+- Vite + React + TypeScript
+- Dev server on http://127.0.0.1:5173
+
+Must-have user-visible behaviors:
+1. Page title / heading shows that this is a Todo app
+2. Text input + Add button to create a todo
+3. New todos appear in a list
+4. Clicking a todo toggles completed (visual strike-through or completed class)
+5. Delete control removes a todo from the list
+6. Empty state when there are no todos
+7. Persist todos to localStorage and restore on reload
+8. Filter: All / Active / Completed
+9. Counter of remaining active todos
+10. Clear completed removes only completed items
+
+UI requirements:
+- Use stable selectors: data-testid attributes listed in feature_list.json e2e actions
+- Works in Chromium desktop viewport (~1280x720)
+- No backend required for the mini preset
+
+Out of scope for mini:
+- Multi-user auth, sync server, mobile native apps

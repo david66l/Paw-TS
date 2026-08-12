@@ -228,9 +228,13 @@ describe("断点4: root maxSteps 不生效", () => {
     writeFileMemorySettings(dir);
     writeLhua(dir, LIHUA_MD_7);
 
-    const run = createRunOrchestrator({ workspaceRoot: dir });
+    const run = createRunOrchestrator({
+      workspaceRoot: dir,
+      collaborationMode: "orchestrated",
+    });
     try {
       expect(run.rootMaxSteps).toBe(7);
+      expect(run.collaborationMode).toBe("orchestrated");
     } finally {
       run.watcher.stop();
     }
@@ -241,7 +245,10 @@ describe("断点4: root maxSteps 不生效", () => {
     writeFileMemorySettings(dir);
     writeLhua(dir, LIHUA_MD_7);
 
-    const session = createPersistentSession({ workspaceRoot: dir });
+    const session = createPersistentSession({
+      workspaceRoot: dir,
+      collaborationMode: "orchestrated",
+    });
     try {
       let seen: number | undefined;
       const orch = session.orch as unknown as {
@@ -260,6 +267,7 @@ describe("断点4: root maxSteps 不生效", () => {
       // 显式传参优先于 Spec
       const session2 = createPersistentSession({
         workspaceRoot: dir,
+        collaborationMode: "orchestrated",
         maxSteps: 3,
       });
       try {

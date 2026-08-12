@@ -5,16 +5,7 @@
  * Run 是单次 Agent 执行的最小单元。
  *
  * RunSpec：orchestrator.run() 的输入。
- * - runId：唯一标识
- * - goal：用户可见的目标描述
- * - workspaceRoot：工作区根目录
- * - maxSteps：最多 model↔tool 轮数（可选，默认从 settings 读取）
- * - abortSignal：外部中断信号
- * - resumeFromState：从保存的 AppState 恢复（断点续跑）
- *
- * RunResult：orchestrator.run() 的输出。
- * - status：completed | failed | pending | running | unimplemented
- * - message：人类可读的结果摘要
+ * RunResult：orchestrator.run() 的输出（含完成契约与证据）。
  */
 
 export type RunStatus =
@@ -23,7 +14,39 @@ export type RunStatus =
   | "completed"
   | "failed"
   | "aborted"
+  | "incomplete"
   | "unimplemented";
+
+/** How / why the run ended (CompletionPolicy outcome). */
+export type CompletionOutcome =
+  | "verified"
+  | "model_declared"
+  | "budget_exhausted"
+  | "aborted"
+  | "incomplete"
+  | "failed";
+
+export interface RunCommandEvidence {
+  readonly command: string;
+  readonly ok: boolean;
+  readonly summary: string;
+}
+
+export interface RunTestEvidence {
+  readonly command: string;
+  readonly passed: boolean;
+  readonly summary: string;
+}
+
+/** Structured evidence attached to RunResult for eval / resume / memory. */
+export interface RunEvidence {
+  readonly filesChanged: readonly string[];
+  readonly commandsRun: readonly RunCommandEvidence[];
+  readonly testResults: readonly RunTestEvidence[];
+  readonly skipVerifyReason?: string;
+  /** Paths that hit parallel file-lock conflicts during the run. */
+  readonly fileLockConflicts?: readonly string[];
+}
 
 export interface RunSpec {
   readonly runId: string;
@@ -57,4 +80,10 @@ export interface RunResult {
   readonly runId: string;
   readonly status: RunStatus;
   readonly message: string;
+  /** CompletionPolicy outcome (when lifecycle is wired). */
+  readonly outcome?: CompletionOutcome;
+  /** Human/machine reason for the outcome. */
+  readonly completionReason?: string;
+  /** Task evidence snapshot at completion. */
+  readonly evidence?: RunEvidence;
 }

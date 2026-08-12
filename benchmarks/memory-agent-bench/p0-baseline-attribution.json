@@ -1,0 +1,44 @@
+{
+  "suite": "memory-agent-bench-attribution",
+  "generatedAt": "2026-08-11T05:33:00.000Z",
+  "baselineGitHead": "32d72d0",
+  "note": "recalled=true 仅表示检索返回了条目，不保证含 gold 答案。tie 归因无法从现有报告区分「写丢」与「抽稀/排序丢目标」。",
+  "dimensions": {
+    "AR": {
+      "report": "benchmarks/memory-agent-bench/last-run-hf-ar.json",
+      "nPairs": 110,
+      "wins": 5,
+      "losses": 0,
+      "ties": 105,
+      "tieNoRecall": 0,
+      "tieRecallButWrong": 105,
+      "params": { "maxChunks": 96, "chunkSize": 2048, "maxQaPerSample": 5 },
+      "interpretation": "105 ties 全部为「有召回条目但仍答错/不知道」；写入链路未表现为零召回。短板更可能是抽稀丢目标、检索排序噪声，或注入与题无关时提示触发「不知道」。"
+    },
+    "TTL": {
+      "report": "benchmarks/memory-agent-bench/last-run-hf.json",
+      "nPairs": 30,
+      "wins": 1,
+      "losses": 0,
+      "ties": 29,
+      "tieNoRecall": 0,
+      "tieRecallButWrong": 29,
+      "interpretation": "29 ties 同样全部有召回；ICL/推荐题多为「不知道」或错误标签。问题在范例命中与答题对齐，而非完全未写入。"
+    },
+    "CR": {
+      "nPairs": 40,
+      "wins": 7,
+      "losses": 0,
+      "ties": 33,
+      "tieNoRecall": 0,
+      "tieRecallButWrong": 33,
+      "note": "对照：同样零「没召回」，但 win 率高于 AR/TTL。"
+    }
+  },
+  "nextActions": [
+    "改进 AR：提高目标保留（少抽稀/按问题检索敏感抽稀）、加强 keyword/embedding 命中、放宽「不知道」触发条件并核对注入是否含 gold 子串",
+    "改进 TTL：ICL 范例检索与 label 抽取；只复跑 AR+TTL",
+    "不重跑 LRU",
+    "P0 收口后 SWE-Exp 配对协议"
+  ]
+}

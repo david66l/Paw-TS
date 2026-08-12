@@ -102,3 +102,18 @@ export {
   type McpServerConfig,
   type McpToolRef,
 } from "./mcp-client.js";
+export {
+  getDefaultPolicyConfig,
+  setPolicyConfig,
+  resetPolicyConfig,
+  createBuiltinPolicyConfig,
+  type PolicyAction,
+  type PolicyConfig,
+  type PolicyRule,
+  type ToolPolicy,
+} from "./shell-policy-config.js";
+export {
+  applyAutonomyShellPolicy,
+  buildAutonomyShellPolicy,
+  type AutonomyShellLevel,
+} from "./autonomy-shell-policy.js";

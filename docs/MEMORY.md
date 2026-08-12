@@ -118,6 +118,17 @@ DATABASE_URL=postgresql:///paw_memory_test bun run memory:test:runtime
 
 # 模块级 db e2e
 DATABASE_URL=postgresql:///paw_memory_test bun run memory:test:db
+
+# MemoryAgentBench 四维验（内置 coding-mini；需真实 LLM）
+DATABASE_URL=postgresql:///paw_memory_test bun run cli -- memory mab --builtin --provider <name> --json
+# 官方 HF 全量（缓存目录 benchmarks/memory-agent-bench/hf-cache）
+DATABASE_URL=postgresql:///paw_memory_test bun run packages/memory/scripts/run-mab-hf.ts
+# 达标：meanΔ>0 且配对 wins>losses；SF 抑制率≥0.8（若跑了 current）
+
+# SWE-Exp 配对（memory on/off → 最终测试是否通过；P1）
+bun run apps/cli/src/main.ts eval swe-exp --mode fake --json
+# deterministic 需 Postgres：seed 历史经验 → 召回打补丁 → node 测试
+DATABASE_URL=postgresql:///paw_memory_test bun run apps/cli/src/main.ts eval swe-exp --mode deterministic --json
 ```
 
 ## 相关包

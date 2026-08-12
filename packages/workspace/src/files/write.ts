@@ -40,6 +40,23 @@ function normalizeForFuzzy(s: string): string {
   return s.replace(/\r\n/g, "\n").trim();
 }
 
+function toLf(s: string): string {
+  return s.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+/** Prefer CRLF when the file already uses it (Windows checkouts). */
+function detectEol(content: string): "\r\n" | "\n" {
+  const crlf = (content.match(/\r\n/g) ?? []).length;
+  if (crlf === 0) return "\n";
+  const lfOnly = (content.match(/(?<!\r)\n/g) ?? []).length;
+  return crlf >= lfOnly ? "\r\n" : "\n";
+}
+
+function applyEol(s: string, eol: "\r\n" | "\n"): string {
+  const lf = toLf(s);
+  return eol === "\r\n" ? lf.replace(/\n/g, "\r\n") : lf;
+}
+
 interface DiffStats {
   linesAdded: number;
   linesRemoved: number;
@@ -97,6 +114,8 @@ export function editWorkspaceFile(
     startLine?: number;
     endLine?: number;
     fuzzy?: boolean;
+    /** When true, replace every LF-normalized match (not only unique). */
+    replaceAll?: boolean;
   },
 ): EditFileResult {
   const {
@@ -105,6 +124,7 @@ export function editWorkspaceFile(
     startLine,
     endLine,
     fuzzy = false,
+    replaceAll = false,
   } = options;
 
   const d = checkWorkspacePath(workspaceRoot, relPath);
@@ -128,9 +148,11 @@ export function editWorkspaceFile(
     };
   }
 
+  const eol = detectEol(content);
+
   // --- Line-based mode ---
   if (startLine !== undefined && startLine > 0) {
-    const hasTrailingNewline = content.endsWith("\n");
+    const hasTrailingNewline = /\r?\n$/.test(content);
     const lines = content.split(/\r?\n/);
     // Remove trailing empty element created by trailing newline
     if (
@@ -150,11 +172,11 @@ export function editWorkspaceFile(
     const e = endLine !== undefined ? Math.min(endLine, totalLines) : s;
     const before = lines.slice(0, s - 1);
     const after = lines.slice(e);
-    const replacementLines = newString ? newString.split(/\r?\n/) : [];
+    const replacementLines = newString ? toLf(newString).split("\n") : [];
     const newLines = [...before, ...replacementLines, ...after];
-    let newContent = newLines.join("\n");
+    let newContent = newLines.join(eol);
     if (hasTrailingNewline) {
-      newContent += "\n";
+      newContent += eol === "\r\n" ? "\r\n" : "\n";
     }
     try {
       fs.writeFileSync(filepath, newContent, { encoding: "utf8" });
@@ -182,11 +204,17 @@ export function editWorkspaceFile(
     return { error: "missing old_string (or start_line)" };
   }
 
-  const search = oldString;
-  const occurrences = content.split(search).length - 1;
+  // Match on LF-normalized text so CRLF checkouts accept LF old_string from models.
+  const contentLf = toLf(content);
+  const searchLf = toLf(oldString);
+  const newLf = toLf(newString);
+  const occurrences = contentLf.split(searchLf).length - 1;
 
-  if (occurrences === 1) {
-    const replaced = content.replace(search, newString);
+  if (occurrences === 1 || (replaceAll && occurrences > 1)) {
+    const replacedLf = replaceAll
+      ? contentLf.split(searchLf).join(newLf)
+      : contentLf.replace(searchLf, newLf);
+    const replaced = applyEol(replacedLf, eol);
     try {
       fs.writeFileSync(filepath, replaced, { encoding: "utf8" });
     } catch (err) {
@@ -200,7 +228,7 @@ export function editWorkspaceFile(
     );
     return {
       path: filepath,
-      replacements: 1,
+      replacements: occurrences,
       linesAdded,
       linesRemoved,
       diff: diffText,
@@ -208,36 +236,34 @@ export function editWorkspaceFile(
   }
 
   if (occurrences === 0 && fuzzy) {
-    const normSearch = normalizeForFuzzy(search);
-    const normContent = normalizeForFuzzy(content);
-    const fuzzyOccurrences = normContent.split(normSearch).length - 1;
-    if (fuzzyOccurrences === 1) {
-      const lines = content.split(/\r?\n/);
-      for (let i = 0; i < lines.length; i++) {
-        if (normalizeForFuzzy(lines[i]!) === normSearch) {
-          const replacedLines = [...lines];
-          replacedLines[i] = newString;
-          const replaced = replacedLines.join("\n");
-          try {
-            fs.writeFileSync(filepath, replaced, { encoding: "utf8" });
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { error: msg };
-          }
-          const { linesAdded, linesRemoved, diffText } = computeDiffStats(
-            filepath,
-            content,
-            replaced,
-          );
-          return {
-            path: filepath,
-            replacements: 1,
-            linesAdded,
-            linesRemoved,
-            diff: diffText,
-          };
-        }
+    const normSearch = normalizeForFuzzy(oldString);
+    const lines = content.split(/\r?\n/);
+    const fuzzyHits: number[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (normalizeForFuzzy(lines[i]!) === normSearch) fuzzyHits.push(i);
+    }
+    if (fuzzyHits.length === 1) {
+      const replacedLines = [...lines];
+      replacedLines[fuzzyHits[0]!] = newString;
+      const replaced = applyEol(replacedLines.join("\n"), eol);
+      try {
+        fs.writeFileSync(filepath, replaced, { encoding: "utf8" });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { error: msg };
       }
+      const { linesAdded, linesRemoved, diffText } = computeDiffStats(
+        filepath,
+        content,
+        replaced,
+      );
+      return {
+        path: filepath,
+        replacements: 1,
+        linesAdded,
+        linesRemoved,
+        diff: diffText,
+      };
     }
   }
 
@@ -246,7 +272,7 @@ export function editWorkspaceFile(
   }
 
   return {
-    error: `old_string appears ${occurrences} times in ${relPath}; provide more context for a unique match`,
+    error: `old_string appears ${occurrences} times in ${relPath}; provide more context for a unique match, or set replace_all=true`,
   };
 }
 

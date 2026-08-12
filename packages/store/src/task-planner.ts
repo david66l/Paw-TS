@@ -74,9 +74,32 @@ export class TaskPlanner {
       }
     }
 
-    this._plan.items.push(
-      ...newItems.map((i) => ({ ...i, depends_on: [...i.depends_on] })),
-    );
+    for (const incoming of newItems) {
+      const existing = this._plan.items.find((i) => i.id === incoming.id);
+      if (existing) {
+        existing.task_id = incoming.task_id;
+        existing.status = incoming.status;
+        existing.depends_on = [...incoming.depends_on];
+        existing.assigned_run_id = incoming.assigned_run_id;
+        existing.note = incoming.note;
+      } else {
+        this._plan.items.push({
+          ...incoming,
+          depends_on: [...incoming.depends_on],
+        });
+      }
+    }
+    for (const itemId of deprecatedIds) {
+      const item = this._plan.items.find((i) => i.id === itemId);
+      if (
+        item &&
+        item.status !== PlanItemStatus.FAILED &&
+        item.status !== PlanItemStatus.COMPLETED
+      ) {
+        item.status = PlanItemStatus.SKIPPED;
+        item.note = `Deprecated: ${reason}`;
+      }
+    }
     this._plan.revision += 1;
     return this._plan;
   }

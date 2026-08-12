@@ -176,7 +176,9 @@ function errorCodeForToolPayload(payload: unknown): ToolErrorCode {
     error.includes("blocked pattern") ||
     error.includes("blocked literal") ||
     error.includes("blocked command") ||
-    error.includes("blocked:")
+    error.includes("blocked:") ||
+    error.includes("requires approval") ||
+    error.includes("default action")
   ) {
     return "E_POLICY_DENIED";
   }
@@ -483,12 +485,17 @@ export async function executeTool(
         : typeof rec.fuzzy_match === "boolean"
           ? rec.fuzzy_match
           : false;
+    const replaceAll =
+      rec.replace_all === true ||
+      rec.replaceAll === true ||
+      rec.replace_all === "true";
     const r = editWorkspaceFile(ctx.workspaceRoot, filePath, {
       oldString: oldString || undefined,
       newString,
       ...(startLine !== undefined ? { startLine } : {}),
       ...(endLine !== undefined ? { endLine } : {}),
       ...(fuzzy ? { fuzzy: true } : {}),
+      ...(replaceAll ? { replaceAll: true } : {}),
     });
     if (r.error) {
       return toolErrorResult("edit_file", errorCodeForToolPayload(r), r.error, {
@@ -525,6 +532,7 @@ export async function executeTool(
       ...(cwd !== undefined ? { cwd } : {}),
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       ...(ctx.shellSandbox ? { shellSandbox: ctx.shellSandbox } : {}),
+      ...(ctx.shellCommandPreApproved ? { skipApprovalGate: true } : {}),
     };
     const onChunk = ctx.onShellChunk;
     const r = onChunk
@@ -537,7 +545,9 @@ export async function executeTool(
       const msg = r.timed_out ? "timeout" : r.error;
       const code: ToolErrorCode = r.timed_out
         ? "E_RETRY"
-        : errorCodeForToolPayload(r);
+        : r.requiresApproval
+          ? "E_POLICY_DENIED"
+          : errorCodeForToolPayload(r);
       return toolErrorResult("run_shell", code, msg);
     }
     const code = r.exit_code ?? "?";

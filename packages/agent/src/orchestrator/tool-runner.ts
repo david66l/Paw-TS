@@ -28,6 +28,7 @@ import type {
 } from "@paw/core";
 import { extractCheckpointTargets, isMutatingTool } from "@paw/core";
 import { saveCheckpoint } from "@paw/core";
+import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
 import type {
   HarnessContext,
   ShellSandboxConfig,
@@ -433,6 +434,10 @@ export async function executeToolCalls(
           ...(toolCtx.shellSandbox
             ? { shellSandbox: toolCtx.shellSandbox }
             : {}),
+          // Unified approval bus: tool gate approval covers shell "ask"
+          ...(approvals[i] && call.tool === "workspace.run_shell"
+            ? { shellCommandPreApproved: true }
+            : {}),
           ...(toolCtx.memoryRuntime
             ? { memoryRuntime: toolCtx.memoryRuntime }
             : {}),
@@ -486,16 +491,30 @@ export function finalizeToolExecution(
     readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
     /** P3 冷库：截断的全文按内容哈希归档，注入 [archived id] 引用桩 */
     readonly artifactRegistry?: ArtifactRegistry;
+    /** Idle-fuse failure signatures from prior turns */
+    readonly failureSignatures?: readonly string[];
   },
 ): {
-  readonly type: "continue" | "completed";
+  readonly type: "continue" | "incomplete";
   readonly message?: string;
+  readonly failureSignatures?: readonly string[];
+  readonly idleFuseTripped?: boolean;
 } {
   // 步骤 1：逐个发出工具结果事件
   for (let i = 0; i < calls.length; i++) {
     const call = calls[i]!;
     const tr = results[i]!;
     ctx.taskState?.recordToolResult(call, tr);
+    const conflictPayload =
+      tr.payload && typeof tr.payload === "object"
+        ? (tr.payload as Record<string, unknown>)
+        : null;
+    if (
+      conflictPayload?.conflict === true &&
+      typeof conflictPayload.path === "string"
+    ) {
+      ctx.taskState?.recordFileLockConflict(conflictPayload.path);
+    }
     let fileChanges = tr.ok
       ? fileChangesFromPayload(tr.payload, ctx.workspaceRoot)
       : undefined;
@@ -573,16 +592,32 @@ export function finalizeToolExecution(
     }
   }
 
-  // 步骤 5：Max steps 检查
+  // 步骤 4.5：ToolFailureRecovery + idle fuse（结构化恢复，而非只靠模型自由发挥）
+  const recovery = collectToolRecoveryMessage(
+    calls,
+    results,
+    ctx.failureSignatures,
+  );
+  if (recovery.message) {
+    ctx.ctxMgr.addUser(recovery.message);
+  }
+
+  // 步骤 5：Max steps 检查 → incomplete（禁止假 completed）
   if (ctx.turn + 1 >= ctx.maxSteps) {
     const toolNames = calls.map((c) => c.tool).join(", ");
     return {
-      type: "completed",
+      type: "incomplete",
       message: `Max steps (${ctx.maxSteps}) reached after tool(s): ${toolNames}`,
+      failureSignatures: recovery.signatures,
+      idleFuseTripped: recovery.fuseTripped,
     };
   }
 
   // 步骤 6：保存状态（断点续跑）+ 继续
   ctx.saveStateFn();
-  return { type: "continue" };
+  return {
+    type: "continue",
+    failureSignatures: recovery.signatures,
+    idleFuseTripped: recovery.fuseTripped,
+  };
 }

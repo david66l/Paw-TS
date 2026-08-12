@@ -161,7 +161,7 @@ export class FakeLanguageModel implements LanguageModel {
       .trim();
     // 如果消息是工具调用结果，直接返回 final_answer
     if (text.startsWith("[Tool ") || text.includes("Tool result")) {
-      return `Fake model: reviewed tool output; no further tools.\n{"action":"final_answer","summary":"Fake model completed after reviewing tool results."}`;
+      return `Fake model: reviewed tool output; no further tools.\n{"action":"final_answer","summary":"Fake model completed after reviewing tool results. [skip_verify: fake model harness]"}`;
     }
     const lower = text.toLowerCase();
     // ── 建站/落地页意图 ──

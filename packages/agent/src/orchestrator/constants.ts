@@ -19,8 +19,11 @@ export const MULTI_AGENT_LIMITS = {
   maxChildrenPerTurn: 3,
   /** 最大嵌套深度（0 = 父 Agent，1 = 子 Agent） */
   maxChildDepth: 1,
-  /** 每个子 Agent 的最大步数 */
-  maxChildSteps: 5,
+  /**
+   * 每个子 Agent 的最大步数（与 factory DefaultSubAgentLauncher /
+   * LifecycleBudget.childMaxSteps 对齐）。
+   */
+  maxChildSteps: 12,
 } as const;
 
 /** 子 Agent 文件访问策略 */

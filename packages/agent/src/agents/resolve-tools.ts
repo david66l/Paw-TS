@@ -97,14 +97,20 @@ export function resolveAllowedTools(opts: {
   readonly tools: "inherit" | readonly string[];
   readonly canSpawn: boolean;
 }): readonly string[] | null {
+  const stripSpawn = (list: readonly string[]) =>
+    list.filter(
+      (t) =>
+        t !== "workspace.run_agent" && t !== "workspace.create_agent",
+    );
+
   if (opts.tools === "inherit") {
     if (opts.canSpawn) return null;
-    // inherit 但不能 spawn：去掉 run_agent
-    return knownBuiltinTools().filter((t) => t !== "workspace.run_agent");
+    // inherit 但不能 spawn：去掉调度工具
+    return stripSpawn(knownBuiltinTools());
   }
   let list = [...opts.tools];
   if (!opts.canSpawn) {
-    list = list.filter((t) => t !== "workspace.run_agent");
+    list = stripSpawn(list);
   }
   // 去重
   return [...new Set(list)];

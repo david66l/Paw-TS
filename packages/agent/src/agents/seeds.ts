@@ -14,7 +14,7 @@ export const SEED_LIHUA: CreateAgentInput = {
   kind: "root",
   canSpawn: true,
   childPolicy: "read_write",
-  model: "pro",
+  model: "flash",
   maxSteps: 32,
   memoryExtraction: "background",
   tools: "inherit",
@@ -104,7 +104,7 @@ export const SEED_KEJI: CreateAgentInput = {
   kind: "worker",
   canSpawn: false,
   childPolicy: "read_only",
-  model: "pro",
+  model: "flash",
   maxSteps: 10,
   memoryExtraction: "off",
   tools:
@@ -144,7 +144,7 @@ export const SEED_BUOU: CreateAgentInput = {
   kind: "worker",
   canSpawn: false,
   childPolicy: "read_only",
-  model: "pro",
+  model: "flash",
   maxSteps: 12,
   memoryExtraction: "off",
   tools:

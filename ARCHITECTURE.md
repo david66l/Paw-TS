@@ -20,14 +20,29 @@ Repo-local overview for reviewers and implementers.
 
 ```
 User goal
+  → AutonomyProfile.apply (shell policy + approval bus)
   → MemoryRuntime.beginTask + buildContextSection
-  → context check (prune → compact if over threshold)
+  → TaskLifecycle observe (Context Package + TaskState)
   → model stream
   → parse action (tool | final | ask_user | plan | abort | run_agent)
-  → tool runner + onToolResult → WorkingMemory
+  → tool runner (unified approval; shell ask pre-approved)
+      → ToolFailureRecovery / idle fuse
+      → TaskState.update + onToolResult → WorkingMemory
+  → VerificationGate (on final_answer if mutations)
+  → CompletionPolicy → RunResult { status, outcome, evidence }
   → persist session + run events
   → finish → MemoryRuntime.completeTask (Writer → Governance → Store)
 ```
+
+**Control plane (TaskLifecycle):** `packages/agent/src/lifecycle/` + `packages/agent/src/autonomy/`
+
+| Module | Role |
+|--------|------|
+| AutonomyProfile | `interactive` / `supervised` / `headless` — approval + shell policy |
+| CompletionPolicy | Honest `completed` / `incomplete` / `failed` + evidence |
+| VerificationGate | Mutations require tests or `[skip_verify: …]` |
+| ToolFailureRecovery | Error-code driven hints + idle fuse (hard-stop) |
+| LifecycleBudget | maxSteps / timeout / childMaxSteps / idleFuseHardStopTrips |
 
 ## Context compression (three layers)
 
@@ -60,7 +75,11 @@ beginTask → buildContextSection → onToolResult*
 
 ## Multi-agent
 
-- Sub-agents via `SubAgentLauncher` (explore, compression, …)
+- **Collaboration modes** (`createRunOrchestrator` / settings `agent_mode`):
+  - `coding` (**default**): single long-run implementer; full TaskLifecycle loop (edit→test→fix); no roster / no spawn tools; budget 64 steps / 30min
+  - `orchestrated`: 狸花 + agent roster (`run_agent` / `create_agent`)
+- Multi-hour greenfield runs: outer loop in `benchmarks/longrun-harness/` (initializer + coding shifts + Playwright desktop E2E; not infinite `maxSteps`)
+- Sub-agents via `SubAgentLauncher` (explore, compression, …) when orchestrated
 - Parent receives summarized result; child events fold into parent log
 - db mode: sub-agent summaries patch parent WorkingMemory (no separate TaskSession in MVP)
 

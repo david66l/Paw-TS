@@ -325,7 +325,7 @@ export type { ModelTokenUsage } from "./token-usage.js";
 // ============================================================
 // 运行定义
 // ============================================================
-export type { RunResult, RunSpec, RunStatus } from "./run.js";
+export type { CompletionOutcome, RunEvidence, RunResult, RunSpec, RunStatus } from "./run.js";
 
 // ============================================================
 // 会话存储

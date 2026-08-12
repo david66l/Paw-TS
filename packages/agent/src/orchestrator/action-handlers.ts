@@ -30,6 +30,7 @@ import type {
   TodoStore,
 } from "@paw/core";
 import type { TaskPlanner } from "@paw/store";
+import type { ToolRunResult } from "@paw/harness";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
 import {
   markPlanItemsCompleted,
@@ -40,6 +41,23 @@ import { isSubAgentCall } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
 import { executeToolCalls, finalizeToolExecution } from "./tool-runner.js";
 import type { PhaseContext, TurnFlags, TurnState } from "./types.js";
+import {
+  decideCompletion,
+  evaluateBudgetExhaustion,
+  evaluateFinalAnswer,
+  IDLE_FUSE_ESCALATION,
+  goalRequiresMutation,
+  resolveLifecycleBudget,
+} from "../lifecycle/task-lifecycle.js";
+import {
+  advanceCodingPhase,
+  codingPhaseBlockReason,
+  EMPTY_CODING_PHASE_STATE,
+  goalUsesCodingPhaseBudget,
+  isCodingEditTool,
+  isCodingNavigationTool,
+  isCodingVerificationCall,
+} from "../lifecycle/coding-phase.js";
 
 /**
  * Action 处理器的依赖注入上下文。
@@ -255,7 +273,22 @@ function handleNoAction(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  // 真正完成：纯对话式回复，或最后一轮/nudge 用尽后的降级完成
+  // 用过工具但 nudge 用尽 / 无预算 → incomplete（禁止假 completed）
+  if (flags.hasEverUsedTools) {
+    ctx.ctxMgr.addAssistant(displayText, thinking);
+    ctx.emit({ type: "model.done", text: displayText });
+    const decision = evaluateBudgetExhaustion(
+      displayText,
+      ctx.taskState.snapshot(),
+      "budget_exhausted",
+    );
+    return {
+      state: { type: "incomplete", message: decision.message },
+      flags,
+    };
+  }
+
+  // 真正完成：纯对话式回复（未使用工具）
   ctx.ctxMgr.addAssistant(displayText, thinking);
   ctx.emit({ type: "model.done", text: displayText });
   return {
@@ -315,12 +348,17 @@ function handleNativeToolErrors(
   });
   ctx.ctxMgr.addToolResults(results);
 
-  // maxSteps 检查：最后一轮不再继续，降级为完成（避免 loop exhausted）
+  // maxSteps 检查：最后一轮不能纠正格式，诚实返回 incomplete。
   if (ctx.turn + 1 >= ctx.maxSteps) {
+    const decision = evaluateBudgetExhaustion(
+      `Max steps (${ctx.maxSteps}) reached after malformed tool call(s)`,
+      ctx.taskState.snapshot(),
+      "max_steps_after_tools",
+    );
     return {
       state: {
-        type: "completed",
-        message: `Max steps (${ctx.maxSteps}) reached after malformed tool call(s)`,
+        type: "incomplete",
+        message: decision.message,
       },
       flags: nextFlags,
     };
@@ -361,13 +399,12 @@ function handleFinalAnswer(
     (t) => t.status !== "done",
   );
 
-  // 有未完成的计划或 Todo，且上一轮刚执行了工具 → 推动继续
-  // 最后一轮没有预算再 nudge：直接接受 final_answer，避免 loop exhausted
+  // 有未完成的模型计划或 Todo 就不能宣告完成。还有预算时推动继续；
+  // 没预算时 honest-incomplete，绝不能把 pending 项自动涂绿。
   const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
   if (
     (hasPendingPlan || hasPendingTodos) &&
     flags.autoContinueNudges < 3 &&
-    flags.lastTurnHadToolCall &&
     !noRoomForAnotherTurn
   ) {
     const nextFlags: TurnFlags = {
@@ -404,7 +441,66 @@ function handleFinalAnswer(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  // 无 pending 工作 / 不再 nudge → 真正完成；把 plan 项标 done 供右栏展示
+  if (hasPendingPlan || hasPendingTodos) {
+    const pendingPlanCount =
+      plan?.items.filter(
+        (i) => i.status !== "completed" && i.status !== "skipped",
+      ).length ?? 0;
+    const pendingTodoCount =
+      opts.todoStore?.items.filter((t) => t.status !== "done").length ?? 0;
+    return {
+      state: {
+        type: "incomplete",
+        message: `The model declared completion with unfinished work (${pendingPlanCount} plan item(s), ${pendingTodoCount} todo(s)). Update their status with plan_update/todo_write or report an honest blocker.`,
+      },
+      flags,
+    };
+  }
+
+  const summary = action.summary.trim() || "(empty summary)";
+  const evaluated = evaluateFinalAnswer(
+    summary,
+    ctx.taskState.snapshot(),
+    flags.hasEverUsedTools,
+  );
+  const verifyNudges = flags.verifyNudges ?? 0;
+  if (
+    evaluated.shouldNudge &&
+    evaluated.nudgeMessage &&
+    verifyNudges < 2 &&
+    !noRoomForAnotherTurn
+  ) {
+    const nextFlags: TurnFlags = {
+      ...flags,
+      verifyNudges: verifyNudges + 1,
+      lastTurnHadToolCall: false,
+    };
+    ctx.ctxMgr.addAssistant(text, thinking);
+    ctx.ctxMgr.addUser(evaluated.nudgeMessage);
+    opts.saveStateFn();
+    return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  }
+
+  // Verification failed and no nudge budget → incomplete via CompletionPolicy
+  if (evaluated.shouldNudge || !evaluated.decision) {
+    const decision = decideCompletion({
+      intent: "final_answer",
+      message: summary,
+      taskState: ctx.taskState.snapshot(),
+      verification: evaluated.verification,
+      hasEverUsedTools: flags.hasEverUsedTools,
+    });
+    return {
+      state: {
+        type: "incomplete",
+        message: decision.message,
+      },
+      flags,
+    };
+  }
+
+  // 无 pending 工作 / 验证通过 → 真正完成。revision=0 的 bootstrap
+  // 计划只是 UI 兜底，可随最终完成同步标绿；模型计划必须已自行完成。
   if (plan && plan.items.length > 0) {
     const completed = markPlanItemsCompleted(plan.items);
     plan.items.splice(0, plan.items.length, ...completed);
@@ -419,10 +515,17 @@ function handleFinalAnswer(
     });
   }
 
+  const statusType =
+    evaluated.decision.status === "incomplete"
+      ? ("incomplete" as const)
+      : evaluated.decision.status === "failed"
+        ? ("failed" as const)
+        : ("completed" as const);
+
   return {
     state: {
-      type: "completed",
-      message: action.summary.trim() || "(empty summary)",
+      type: statusType,
+      message: evaluated.decision.message,
     },
     flags,
   };
@@ -612,10 +715,15 @@ async function handlePlanUpdate(
   ctx.ctxMgr.addUser(`Plan updated: ${action.reason}.\n\n${planBlock}`);
 
   if (ctx.turn + 1 >= ctx.maxSteps) {
+    const decision = evaluateBudgetExhaustion(
+      `Max steps (${ctx.maxSteps}) reached after plan_update`,
+      ctx.taskState.snapshot(),
+      "max_steps_after_tools",
+    );
     return {
       state: {
-        type: "completed",
-        message: `Max steps (${ctx.maxSteps}) reached after plan_update`,
+        type: "incomplete",
+        message: decision.message,
       },
       flags: nextFlags,
     };
@@ -666,8 +774,28 @@ async function handleToolCalls(
   const toolStartTime = Date.now();
 
   // 并行执行所有工具（审批门控 + 子 Agent 策略检查在内部处理）
-  const results = await executeToolCalls(
-    calls,
+  const codingPhaseEnabled =
+    goalRequiresMutation(ctx.specGoal) && goalUsesCodingPhaseBudget(ctx.specGoal);
+  const priorCodingPhase = flags.codingPhase ?? EMPTY_CODING_PHASE_STATE;
+  let projectedCodingPhase = priorCodingPhase;
+  const phaseBlockReasons = calls.map((call) => {
+    if (!codingPhaseEnabled) return null;
+    const reason = codingPhaseBlockReason(call, projectedCodingPhase);
+    if (!reason && isCodingNavigationTool(call.tool)) {
+      projectedCodingPhase = {
+        ...projectedCodingPhase,
+        navigationCalls: projectedCodingPhase.navigationCalls + 1,
+        postEditNavigationCalls:
+          projectedCodingPhase.successfulEdits > 0
+            ? projectedCodingPhase.postEditNavigationCalls + 1
+            : projectedCodingPhase.postEditNavigationCalls,
+      };
+    }
+    return reason;
+  });
+  const allowedCalls = calls.filter((_, index) => !phaseBlockReasons[index]);
+  const allowedResults = await executeToolCalls(
+    allowedCalls,
     {
       workspaceRoot: ctx.workspaceRoot,
       runId: ctx.runId,
@@ -694,6 +822,18 @@ async function handleToolCalls(
       approvalPolicy: opts.approvalPolicy,
     },
   );
+  let allowedIndex = 0;
+  const results: ToolRunResult[] = calls.map((_, index) => {
+    const blockReason = phaseBlockReasons[index];
+    if (blockReason) {
+      return {
+        ok: false,
+        payload: { code: "E_CODING_PHASE", message: blockReason },
+        summary: blockReason,
+      };
+    }
+    return allowedResults[allowedIndex++]!;
+  });
   const toolDuration = Date.now() - toolStartTime;
 
   // 评估钩子：逐个通知工具调用完成
@@ -752,18 +892,95 @@ async function handleToolCalls(
     saveStateFn: opts.saveStateFn,
     payloadDeduper: ctx.payloadDeduper,
     artifactRegistry: ctx.artifactRegistry,
+    failureSignatures: flags.failureSignatures,
   });
 
-  // 如果工具执行过程中触发了 maxSteps 检查，直接完成
-  if (final.type === "completed") {
+  const codingPhase = codingPhaseEnabled
+    ? advanceCodingPhase(priorCodingPhase, calls, results)
+    : undefined;
+  for (const nudge of codingPhase?.nudges ?? []) {
+    ctx.ctxMgr.addUser(nudge);
+  }
+  const phaseViolationThisTurn = phaseBlockReasons.some(Boolean);
+  const requiredPhaseActionSucceeded = calls.some(
+    (call, index) =>
+      results[index]?.ok === true &&
+      (priorCodingPhase.successfulEdits === 0
+        ? isCodingEditTool(call.tool)
+        : isCodingVerificationCall(call)),
+  );
+  const codingPhaseViolationTurns = phaseViolationThisTurn
+    ? (flags.codingPhaseViolationTurns ?? 0) + 1
+    : requiredPhaseActionSucceeded
+      ? 0
+      : (flags.codingPhaseViolationTurns ?? 0);
+
+  const madeProgress = results.some((result) => result.ok);
+  const fusedFlags: TurnFlags = {
+    ...nextFlags,
+    ...(codingPhase ? { codingPhase: codingPhase.state } : {}),
+    ...(codingPhaseEnabled ? { codingPhaseViolationTurns } : {}),
+    // These are consecutive-stall budgets, not lifetime counters. A concrete
+    // successful tool result proves the loop moved forward and earns a fresh
+    // recovery/finalization window.
+    ...(madeProgress
+      ? { autoContinueNudges: 0, verifyNudges: 0, idleFuseTrips: 0 }
+      : {}),
+    ...(final.failureSignatures
+      ? { failureSignatures: final.failureSignatures }
+      : {}),
+    ...(final.idleFuseTripped
+      ? { idleFuseTrips: (flags.idleFuseTrips ?? 0) + 1 }
+      : {}),
+  };
+
+  if (codingPhaseViolationTurns >= 2) {
+    const decision = decideCompletion({
+      intent: "budget_exhausted",
+      message:
+        "[CodingPhase:hard_stop] The agent attempted phase-blocked navigation on two turns without moving to the required edit/test action.",
+      taskState: ctx.taskState.snapshot(),
+      hasEverUsedTools: true,
+    });
     return {
-      state: { type: "completed", message: final.message! },
-      flags: nextFlags,
+      state: { type: "incomplete", message: decision.message },
+      flags: fusedFlags,
+    };
+  }
+
+  // Idle fuse hard-stop：重复同一失败达到预算后诚实 incomplete
+  const budget = resolveLifecycleBudget();
+  if (
+    final.idleFuseTripped &&
+    (fusedFlags.idleFuseTrips ?? 0) >= budget.idleFuseHardStopTrips
+  ) {
+    const decision = decideCompletion({
+      intent: "budget_exhausted",
+      message: `${IDLE_FUSE_ESCALATION}\n(idle fuse hard-stop after ${fusedFlags.idleFuseTrips} trips)`,
+      taskState: ctx.taskState.snapshot(),
+      hasEverUsedTools: true,
+    });
+    return {
+      state: { type: "incomplete", message: decision.message },
+      flags: fusedFlags,
+    };
+  }
+
+  // Max steps after tools → incomplete（CompletionPolicy）
+  if (final.type === "incomplete") {
+    const decision = evaluateBudgetExhaustion(
+      final.message ?? "Max steps reached after tools",
+      ctx.taskState.snapshot(),
+      "max_steps_after_tools",
+    );
+    return {
+      state: { type: "incomplete", message: decision.message },
+      flags: fusedFlags,
     };
   }
 
   // 正常情况：继续下一轮
-  return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  return { state: { type: "continue", nextFlags: fusedFlags }, flags: fusedFlags };
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -884,10 +1101,15 @@ async function handleRunAgent(
   }));
 
   if (ctx.turn + 1 >= ctx.maxSteps) {
+    const decision = evaluateBudgetExhaustion(
+      `Max steps (${ctx.maxSteps}) reached after sub-agents`,
+      ctx.taskState.snapshot(),
+      "max_steps_after_tools",
+    );
     return {
       state: {
-        type: "completed",
-        message: `Max steps (${ctx.maxSteps}) reached after sub-agents`,
+        type: "incomplete",
+        message: decision.message,
       },
       flags: nextFlags,
       subResults,
