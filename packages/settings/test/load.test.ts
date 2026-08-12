@@ -35,4 +35,24 @@ describe("loadPawSettingsLocal", () => {
       loadPawSettingsLocal(path.join(os.tmpdir(), "nope-paw-settings.json")),
     ).toThrow(PawError);
   });
+
+  test("rejects reasoning effort when thinking is disabled", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-set-invalid-"));
+    const p = path.join(dir, "settings.local.json");
+    fs.writeFileSync(
+      p,
+      JSON.stringify({
+        models: {
+          deepseek: {
+            model: "deepseek-v4-flash",
+            thinkingEnabled: false,
+            reasoningEffort: "max",
+          },
+        },
+      }),
+      "utf8",
+    );
+    expect(() => loadPawSettingsLocal(p)).toThrow(PawError);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 });

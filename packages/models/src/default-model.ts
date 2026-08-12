@@ -28,13 +28,13 @@ import path from "node:path";
 
 import {
   type CredentialProvider,
+  type PawSettingsLocal,
   defaultSettingsPath,
   hasApiKey,
   loadPawSettingsLocal,
   resolveApiKey,
   resolveBaseUrl,
   resolveModel,
-  type PawSettingsLocal,
 } from "@paw/settings";
 
 import { AnthropicCompatibleModel } from "./anthropic-compatible.js";
@@ -252,10 +252,11 @@ export function createDefaultLanguageModel(
   try {
     const { settings: s, path: loadedFrom } =
       loadSettingsForWorkspace(workspaceRoot);
-    if (path.resolve(loadedFrom) !== path.resolve(defaultSettingsPath(workspaceRoot))) {
-      console.warn(
-        `[paw] Settings not in workspace; using ${loadedFrom}`,
-      );
+    if (
+      path.resolve(loadedFrom) !==
+      path.resolve(defaultSettingsPath(workspaceRoot))
+    ) {
+      console.warn(`[paw] Settings not in workspace; using ${loadedFrom}`);
     }
 
     // 单入口：显式 provider 优先，否则回退到 API key 自动检测
@@ -301,6 +302,8 @@ export function createDefaultLanguageModel(
               : "https://api.openai.com/v1"),
           model: modelName,
           capabilities: resolveCapabilities(modelName),
+          thinkingEnabled: entry.thinkingEnabled,
+          reasoningEffort: entry.reasoningEffort,
         };
         return anthropic
           ? new AnthropicCompatibleModel(opts)
@@ -325,6 +328,7 @@ export function createDefaultLanguageModel(
           baseUrl,
           model,
           capabilities: resolveCapabilities(model),
+          reasoningEffort: s.models?.[activeProvider]?.reasoningEffort,
         });
       }
       return new OpenAICompatibleModel({
@@ -332,6 +336,8 @@ export function createDefaultLanguageModel(
         baseUrl,
         model,
         capabilities: resolveCapabilities(model),
+        thinkingEnabled: s.models?.[activeProvider]?.thinkingEnabled,
+        reasoningEffort: s.models?.[activeProvider]?.reasoningEffort,
       });
     }
 

@@ -36,7 +36,11 @@ export { AnthropicCompatibleModel } from "./anthropic-compatible.js";
 export type { AnthropicCompatibleOptions } from "./anthropic-compatible.js";
 
 // ── 核心类型 ──
-export type { LanguageModel, ModelCapabilities } from "./language-model.js";
+export type {
+  LanguageModel,
+  ModelCapabilities,
+  ModelRuntimeProfile,
+} from "./language-model.js";
 export type { ModelCompleteOptions, ToolDefinition } from "./model-options.js";
 export type {
   Attachment,

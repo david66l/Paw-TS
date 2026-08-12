@@ -19,8 +19,8 @@ import type { ModelTokenUsage } from "@paw/core";
 
 import type { LanguageModel, ModelCapabilities } from "./language-model.js";
 import {
-  buildAnthropicUserContent,
   type AnthropicContentBlock,
+  buildAnthropicUserContent,
 } from "./message-content.js";
 import type { ModelCompleteOptions } from "./model-options.js";
 import type {
@@ -34,6 +34,7 @@ export interface AnthropicCompatibleOptions {
   readonly baseUrl?: string;
   readonly model: string;
   readonly capabilities?: ModelCapabilities;
+  readonly reasoningEffort?: "high" | "max";
 }
 
 function abortError(): Error {
@@ -74,6 +75,7 @@ function toAnthropicMessages(messages: readonly ChatMessage[]): {
 export class AnthropicCompatibleModel implements LanguageModel {
   readonly label: string;
   readonly capabilities?: ModelCapabilities;
+  readonly runtimeProfile: import("./language-model.js").ModelRuntimeProfile;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly model: string;
@@ -87,6 +89,14 @@ export class AnthropicCompatibleModel implements LanguageModel {
     this.model = opts.model;
     this.label = `anthropic:${opts.model}`;
     this.capabilities = opts.capabilities;
+    this.runtimeProfile = {
+      protocol: "anthropic-compatible",
+      model: opts.model,
+      baseUrl: this.baseUrl,
+      ...(opts.reasoningEffort !== undefined
+        ? { reasoningEffort: opts.reasoningEffort }
+        : {}),
+    };
   }
 
   async complete(
@@ -103,6 +113,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
       messages: msgs,
       max_tokens: this.capabilities?.maxOutputTokens ?? 4096,
     };
+    if (this.runtimeProfile.reasoningEffort !== undefined) {
+      body.output_config = { effort: this.runtimeProfile.reasoningEffort };
+    }
     if (system) {
       body.system = system;
     }
@@ -158,6 +171,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
       max_tokens: this.capabilities?.maxOutputTokens ?? 4096,
       stream: true,
     };
+    if (this.runtimeProfile.reasoningEffort !== undefined) {
+      body.output_config = { effort: this.runtimeProfile.reasoningEffort };
+    }
     if (system) {
       body.system = system;
     }

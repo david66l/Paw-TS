@@ -31,11 +31,24 @@ const mcpServerConfigSchema = z.object({
  *
  * 所有字段可选：未设置时回退到旧版扁平字段或环境变量。
  */
-export const modelConfigSchema = z.object({
-  model: z.string().optional(),
-  apiKey: z.string().optional(),
-  baseUrl: z.string().optional(),
-});
+export const modelConfigSchema = z
+  .object({
+    model: z.string().optional(),
+    apiKey: z.string().optional(),
+    baseUrl: z.string().optional(),
+    /** 显式控制支持该能力的模型是否启用 thinking；不设置则沿用 provider 默认。 */
+    thinkingEnabled: z.boolean().optional(),
+    /** 统一的推理强度意图，由各 provider adapter 映射到原生请求字段。 */
+    reasoningEffort: z.enum(["high", "max"]).optional(),
+  })
+  .refine(
+    (value) =>
+      !(value.thinkingEnabled === false && value.reasoningEffort !== undefined),
+    {
+      message: "reasoningEffort requires thinkingEnabled to be true or omitted",
+      path: ["reasoningEffort"],
+    },
+  );
 
 /**
  * `.paw/settings.local.json` 的完整 schema。
@@ -78,9 +91,7 @@ export const pawSettingsLocalSchema = z
      * - `coding`（默认）：单人长跑编码，完整 edit→test→fix loop，不灌花名册
      * - `orchestrated` / `team`：狸花调度多 Agent
      */
-    agent_mode: z
-      .enum(["coding", "orchestrated", "team", "multi"])
-      .optional(),
+    agent_mode: z.enum(["coding", "orchestrated", "team", "multi"]).optional(),
     collaboration_mode: z
       .enum(["coding", "orchestrated", "team", "multi"])
       .optional(),

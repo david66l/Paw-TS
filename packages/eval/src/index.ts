@@ -77,6 +77,18 @@ export type {
 export { EvalRunner } from "./runner.js";
 export type { EvalRunnerOptions, EvalRunnerResult } from "./runner.js";
 
+// ── Paw vs Claude Code 公共 SWE-bench 对比 ──
+export {
+  createSweCompareManifest,
+  buildSweCompareGoal,
+  writeSweCompareManifest,
+  SWE_COMPARE_SEEN_EXCLUSIONS,
+  SWE_COMPARE_SMOKE_IDS,
+  type SweCompareInstanceManifest,
+  type SweCompareManifest,
+  type SweCompareQualification,
+} from "./swe-compare/index.js";
+
 // ── M10 记忆对抗（先答→纠错 端到端） ──
 export {
   runMemoryAdversarial,

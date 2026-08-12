@@ -28,12 +28,23 @@ export interface ModelCapabilities {
   readonly maxOutputTokens?: number;
 }
 
+/** 不含凭据的实际模型调用配置，供评测 manifest 和诊断记录。 */
+export interface ModelRuntimeProfile {
+  readonly protocol: "openai-compatible" | "anthropic-compatible";
+  readonly model: string;
+  readonly baseUrl: string;
+  readonly thinkingEnabled?: boolean;
+  readonly reasoningEffort?: "high" | "max";
+}
+
 /** 可插拔的 LLM — orchestrator 只依赖此接口。 */
 export interface LanguageModel {
   /** 人类可读的模型标识（如 "claude-sonnet-4-6"） */
   readonly label: string;
   /** 模型能力，用于动态上下文窗口大小。缺失时默认 128K。 */
   readonly capabilities?: ModelCapabilities;
+  /** 可选的脱敏运行配置；绝不包含 API key。 */
+  readonly runtimeProfile?: ModelRuntimeProfile;
   /** 非流式调用：发送消息，等待完整响应 */
   complete(
     messages: readonly ChatMessage[],

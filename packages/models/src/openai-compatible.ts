@@ -38,6 +38,8 @@ export interface OpenAICompatibleOptions {
   readonly baseUrl?: string;
   readonly model: string;
   readonly capabilities?: ModelCapabilities;
+  readonly thinkingEnabled?: boolean;
+  readonly reasoningEffort?: "high" | "max";
 }
 
 function abortError(): Error {
@@ -54,11 +56,17 @@ function abortError(): Error {
 export class OpenAICompatibleModel implements LanguageModel {
   readonly label: string;
   readonly capabilities?: ModelCapabilities;
+  readonly runtimeProfile: import("./language-model.js").ModelRuntimeProfile;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly model: string;
 
   constructor(opts: OpenAICompatibleOptions) {
+    if (opts.thinkingEnabled === false && opts.reasoningEffort !== undefined) {
+      throw new Error(
+        "reasoningEffort cannot be set when thinkingEnabled is false",
+      );
+    }
     this.apiKey = opts.apiKey;
     this.baseUrl = (opts.baseUrl ?? "https://api.openai.com/v1").replace(
       /\/$/,
@@ -73,6 +81,17 @@ export class OpenAICompatibleModel implements LanguageModel {
           ? `qwen3:${opts.model}`
           : `openai:${opts.model}`;
     this.capabilities = opts.capabilities;
+    this.runtimeProfile = {
+      protocol: "openai-compatible",
+      model: opts.model,
+      baseUrl: this.baseUrl,
+      ...(opts.thinkingEnabled !== undefined
+        ? { thinkingEnabled: opts.thinkingEnabled }
+        : {}),
+      ...(opts.reasoningEffort !== undefined
+        ? { reasoningEffort: opts.reasoningEffort }
+        : {}),
+    };
   }
 
   async complete(
@@ -95,8 +114,19 @@ export class OpenAICompatibleModel implements LanguageModel {
         }
         return payload;
       }),
-      temperature: 0.2,
+      ...(this.runtimeProfile.thinkingEnabled === true ||
+      this.runtimeProfile.reasoningEffort !== undefined
+        ? {}
+        : { temperature: 0.2 }),
     };
+    if (this.runtimeProfile.thinkingEnabled !== undefined) {
+      body.thinking = {
+        type: this.runtimeProfile.thinkingEnabled ? "enabled" : "disabled",
+      };
+    }
+    if (this.runtimeProfile.reasoningEffort !== undefined) {
+      body.reasoning_effort = this.runtimeProfile.reasoningEffort;
+    }
     if (options?.tools && options.tools.length > 0) {
       body.tools = options.tools;
     }
@@ -211,9 +241,20 @@ export class OpenAICompatibleModel implements LanguageModel {
     const baseStreamBody: Record<string, unknown> = {
       model: this.model,
       messages: messagesPayload,
-      temperature: 0.2,
+      ...(this.runtimeProfile.thinkingEnabled === true ||
+      this.runtimeProfile.reasoningEffort !== undefined
+        ? {}
+        : { temperature: 0.2 }),
       stream: true as const,
     };
+    if (this.runtimeProfile.thinkingEnabled !== undefined) {
+      baseStreamBody.thinking = {
+        type: this.runtimeProfile.thinkingEnabled ? "enabled" : "disabled",
+      };
+    }
+    if (this.runtimeProfile.reasoningEffort !== undefined) {
+      baseStreamBody.reasoning_effort = this.runtimeProfile.reasoningEffort;
+    }
     if (options?.tools && options.tools.length > 0) {
       baseStreamBody.tools = options.tools;
     }

@@ -74,6 +74,14 @@ benchmarks/swe-bench/swe-bench-lite.jsonl
 benchmarks/swe-exp/repos/
 benchmarks/swe-exp/runs/
 benchmarks/swe-exp/last-run.json
+benchmarks/swe-compare/preflight/
+benchmarks/swe-compare/runs/
+benchmarks/swe-compare/*.jsonl
+benchmarks/swe-compare/manifests/
+
+# Official SWE-bench writes schema-v2 summary JSON files at the repository root.
+/swe-compare-preflight-*.json
+/preflight-*.swecompare-preflight-*.json
 
 # Generated benchmark logs / reports (source harnesses and fixtures are kept)
 logs/

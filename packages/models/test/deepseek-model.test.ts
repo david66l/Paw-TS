@@ -41,6 +41,35 @@ describe("createDefaultLanguageModel with deepseek provider", () => {
     expect(m.label).toBe("deepseek:deepseek-v4");
   });
 
+  test("propagates explicit reasoning settings into runtime profile", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-deepseek-reasoning-"));
+    mkdirSync(path.join(dir, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(dir, ".paw", "settings.local.json"),
+      JSON.stringify({
+        provider: "deepseekEval",
+        models: {
+          deepseekEval: {
+            model: "deepseek-v4-flash",
+            apiKey: "sk-models",
+            baseUrl: "https://api.deepseek.com",
+            thinkingEnabled: true,
+            reasoningEffort: "max",
+          },
+        },
+      }),
+    );
+
+    const model = createDefaultLanguageModel(dir);
+
+    expect(model.runtimeProfile).toMatchObject({
+      protocol: "openai-compatible",
+      model: "deepseek-v4-flash",
+      thinkingEnabled: true,
+      reasoningEffort: "max",
+    });
+  });
+
   test("detects deepseek from openai key + deepseek base url", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-deepseek-compat-"));
     mkdirSync(path.join(dir, ".paw"), { recursive: true });
