@@ -13,12 +13,12 @@ import type {
   SweCompareManifest,
 } from "./types.js";
 
-export const SWE_COMPARE_SMOKE_IDS = [
+export const SWE_COMPARE_FORMAL_DEV_IDS = [
   "django__django-11019",
   "scikit-learn__scikit-learn-25638",
   "sympy__sympy-20049",
-  "pallets__flask-5063",
   "pylint-dev__pylint-7228",
+  "astropy__astropy-12907",
 ] as const;
 
 export const SWE_COMPARE_SEEN_EXCLUSIONS = [
@@ -29,6 +29,8 @@ export const SWE_COMPARE_SEEN_EXCLUSIONS = [
   "sphinx-doc__sphinx-8801",
   "pydata__xarray-4493",
   "matplotlib__matplotlib-25332",
+  // Engineering smoke only: Paw saw this before the paired runner baseline.
+  "pallets__flask-5063",
 ] as const;
 
 function sha256(value: string | Buffer): string {
@@ -118,7 +120,7 @@ export function createSweCompareManifest(opts: {
   const byId = new Map(
     instances.map((instance) => [instance.instance_id, instance]),
   );
-  const ids = [...(opts.instanceIds ?? SWE_COMPARE_SMOKE_IDS)];
+  const ids = [...(opts.instanceIds ?? SWE_COMPARE_FORMAL_DEV_IDS)];
   if (new Set(ids).size !== ids.length) {
     throw new Error("duplicate instance id in SWE compare selection");
   }
@@ -155,7 +157,7 @@ export function createSweCompareManifest(opts: {
     new Set(selected.map((instance) => instance.repo)).size !== selected.length
   ) {
     throw new Error(
-      "smoke selection must use at most one instance per repository",
+      "formal dev selection must use at most one instance per repository",
     );
   }
   const model = createDefaultLanguageModel(opts.repoRoot);
@@ -185,8 +187,8 @@ export function createSweCompareManifest(opts: {
       sha256: sha256(datasetBuffer),
     },
     selection: {
-      ruleVersion: "smoke-v1",
-      purpose: "engineering_smoke_not_headline_score",
+      ruleVersion: "formal-dev-v1",
+      purpose: "frozen_paired_dev_diagnostic_not_headline_score",
       ids,
       excludedSeenIds: SWE_COMPARE_SEEN_EXCLUSIONS,
     },
@@ -221,7 +223,7 @@ export function createSweCompareManifest(opts: {
 export function writeSweCompareManifest(
   repoRoot: string,
   manifest: SweCompareManifest,
-  fileName = "smoke-v1.json",
+  fileName = "formal-dev-v1.json",
 ): string {
   const out = path.join(
     repoRoot,

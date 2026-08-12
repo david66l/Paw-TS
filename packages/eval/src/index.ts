@@ -83,7 +83,7 @@ export {
   buildSweCompareGoal,
   writeSweCompareManifest,
   SWE_COMPARE_SEEN_EXCLUSIONS,
-  SWE_COMPARE_SMOKE_IDS,
+  SWE_COMPARE_FORMAL_DEV_IDS,
   type SweCompareInstanceManifest,
   type SweCompareManifest,
   type SweCompareQualification,

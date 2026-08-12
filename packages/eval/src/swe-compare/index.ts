@@ -3,7 +3,7 @@ export {
   findLocalTrajectoryHits,
   writeSweCompareManifest,
   SWE_COMPARE_SEEN_EXCLUSIONS,
-  SWE_COMPARE_SMOKE_IDS,
+  SWE_COMPARE_FORMAL_DEV_IDS,
 } from "./manifest.js";
 export { buildSweCompareGoal } from "./goal.js";
 export {

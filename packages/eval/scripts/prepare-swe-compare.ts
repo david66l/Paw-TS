@@ -8,19 +8,30 @@ import {
 const repoRoot = process.cwd();
 const fresh = createSweCompareManifest({ repoRoot });
 const manifestPath = new URL(
-  "../../../benchmarks/swe-compare/manifests/smoke-v1.json",
+  "../../../benchmarks/swe-compare/manifests/formal-dev-v1.json",
   import.meta.url,
 );
 let manifest = fresh;
-try {
-  const previous = JSON.parse(
-    await Bun.file(manifestPath).text(),
-  ) as typeof fresh;
-  const reusable = new Map(
-    previous.instances
-      .filter((item) => item.preflight)
-      .map((item) => [item.instanceId, item] as const),
-  );
+const reusable = new Map<string, (typeof fresh.instances)[number]>();
+for (const candidate of [
+  manifestPath,
+  new URL(
+    "../../../benchmarks/swe-compare/manifests/smoke-v1.json",
+    import.meta.url,
+  ),
+]) {
+  try {
+    const previous = JSON.parse(
+      await Bun.file(candidate).text(),
+    ) as typeof fresh;
+    for (const item of previous.instances.filter((entry) => entry.preflight)) {
+      if (!reusable.has(item.instanceId)) reusable.set(item.instanceId, item);
+    }
+  } catch {
+    // Missing or invalid runtime artifact: continue to the next source.
+  }
+}
+if (reusable.size > 0) {
   manifest = {
     ...fresh,
     instances: fresh.instances.map((item) => {
@@ -37,8 +48,6 @@ try {
         : item;
     }),
   };
-} catch {
-  // First run or invalid prior runtime artifact: create a static manifest.
 }
 const out = writeSweCompareManifest(repoRoot, manifest);
 console.log(

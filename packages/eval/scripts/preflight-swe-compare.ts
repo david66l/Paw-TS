@@ -13,7 +13,7 @@ const manifestPath = path.join(
   "benchmarks",
   "swe-compare",
   "manifests",
-  "smoke-v1.json",
+  "formal-dev-v1.json",
 );
 const manifest = preflightSweCompareInstance({
   repoRoot,

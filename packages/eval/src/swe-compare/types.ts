@@ -40,8 +40,8 @@ export interface SweCompareManifest {
     readonly sha256: string;
   };
   readonly selection: {
-    readonly ruleVersion: "smoke-v1";
-    readonly purpose: "engineering_smoke_not_headline_score";
+    readonly ruleVersion: "formal-dev-v1";
+    readonly purpose: "frozen_paired_dev_diagnostic_not_headline_score";
     readonly ids: readonly string[];
     readonly excludedSeenIds: readonly string[];
   };

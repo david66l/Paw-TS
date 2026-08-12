@@ -82,6 +82,8 @@ benchmarks/swe-compare/manifests/
 # Official SWE-bench writes schema-v2 summary JSON files at the repository root.
 /swe-compare-preflight-*.json
 /preflight-*.swecompare-preflight-*.json
+/swe-compare-paw.*.json
+/swe-compare-claude.*.json
 
 # Generated benchmark logs / reports (source harnesses and fixtures are kept)
 logs/

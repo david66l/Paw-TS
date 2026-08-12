@@ -73,7 +73,8 @@ export function claudeCodeArgs(goal: string): string[] {
     "--no-session-persistence",
     "--disable-slash-commands",
     "--output-format",
-    "json",
+    "stream-json",
+    "--verbose",
     "--permission-mode",
     "bypassPermissions",
     "--dangerously-skip-permissions",
@@ -273,7 +274,8 @@ async function runPaw(opts: {
   }
 }
 
-interface ClaudeJsonResult {
+export interface ClaudeJsonResult {
+  readonly type?: string;
   readonly is_error?: boolean;
   readonly num_turns?: number;
   readonly terminal_reason?: string;
@@ -283,6 +285,59 @@ interface ClaudeJsonResult {
     readonly output_tokens?: number;
     readonly cache_read_input_tokens?: number;
     readonly cache_creation_input_tokens?: number;
+  };
+}
+
+function sanitizeClaudeTraceEvent(value: unknown): unknown | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const event = value as Record<string, unknown>;
+  if (event.type === "system" && event.subtype === "thinking_tokens")
+    return null;
+  if (event.type !== "assistant") return event;
+  const message = event.message;
+  if (!message || typeof message !== "object" || Array.isArray(message)) {
+    return event;
+  }
+  const record = message as Record<string, unknown>;
+  const content = Array.isArray(record.content)
+    ? record.content.filter(
+        (block) =>
+          !block ||
+          typeof block !== "object" ||
+          Array.isArray(block) ||
+          (block as Record<string, unknown>).type !== "thinking",
+      )
+    : record.content;
+  if (Array.isArray(content) && content.length === 0) return null;
+  return { ...event, message: { ...record, content } };
+}
+
+export function parseClaudeStream(stdout: string): {
+  readonly result: ClaudeJsonResult;
+  readonly trace: readonly unknown[];
+} {
+  const parsed: unknown[] = [];
+  for (const raw of stdout.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    parsed.push(JSON.parse(line) as unknown);
+  }
+  const result = [...parsed]
+    .reverse()
+    .find(
+      (item): item is ClaudeJsonResult =>
+        !!item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        (item as ClaudeJsonResult).type === "result",
+    );
+  if (!result)
+    throw new Error("Claude Code stream has no terminal result event");
+  return {
+    result,
+    trace: parsed
+      .map(sanitizeClaudeTraceEvent)
+      .filter((item): item is unknown => item !== null),
   };
 }
 
@@ -326,13 +381,18 @@ async function runClaude(opts: {
       trace: { stderr: stderr.slice(0, 10_000) },
     };
   let parsed: ClaudeJsonResult | undefined;
+  let trace: readonly unknown[] = [];
   try {
-    parsed = JSON.parse(stdout) as ClaudeJsonResult;
+    const stream = parseClaudeStream(stdout);
+    parsed = stream.result;
+    trace = stream.trace;
   } catch {
     return {
       status: "failed",
       error: `Claude Code returned invalid JSON (exit ${exitCode}): ${stderr.slice(0, 1000)}`,
-      trace: { stdout, stderr: stderr.slice(0, 10_000) },
+      // stdout may contain reasoning blocks before a malformed line. Never
+      // persist it on parser failure; stderr is sufficient for infra triage.
+      trace: { stderr: stderr.slice(0, 10_000) },
     };
   }
   const input = parsed.usage?.input_tokens ?? 0;
@@ -350,7 +410,7 @@ async function runClaude(opts: {
     completionTokens: output,
     totalTokens: input + cache + output,
     turns: parsed.num_turns,
-    trace: parsed,
+    trace,
   };
 }
 

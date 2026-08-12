@@ -36,7 +36,7 @@ const result = await runSweCompareArm({
     "benchmarks",
     "swe-compare",
     "manifests",
-    "smoke-v1.json",
+    "formal-dev-v1.json",
   ),
   instanceId,
   runner,
