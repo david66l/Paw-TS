@@ -15,6 +15,7 @@ import {
   parseClaudeStream,
   recoverClaudeResultPatch,
   recoverPawResultPatch,
+  replayClaudeTracePatch,
   sweCompareNetworkViolation,
   validateCompareRun,
 } from "../src/swe-compare/runner.js";
@@ -101,7 +102,7 @@ describe("SWE compare runner", () => {
               type: "tool_use",
               id: "right",
               name: "Bash",
-              input: { command: "git diff --binary" },
+              input: { command: "cd repo && git diff --binary" },
             },
           ],
         },
@@ -127,6 +128,80 @@ describe("SWE compare runner", () => {
     expect(extractClaudePatchFromTrace(trace)).toBe(
       "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py",
     );
+  });
+
+  test("replays Claude's successful edits and later source resets", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-claude-replay-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    writeFileSync(path.join(root, "src", "keep.py"), "old\n", "utf8");
+    writeFileSync(path.join(root, "src", "reset.py"), "base\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const toolUse = (
+      id: string,
+      file: string,
+      oldText: string,
+      newText: string,
+    ) => ({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id,
+            name: "Edit",
+            input: {
+              file_path: `C:\\tmp\\task\\wt\\src\\${file}`,
+              old_string: oldText,
+              new_string: newText,
+              replace_all: false,
+            },
+          },
+        ],
+      },
+    });
+    const result = (id: string) => ({
+      type: "user",
+      message: {
+        content: [{ type: "tool_result", tool_use_id: id, content: "ok" }],
+      },
+    });
+    const trace = [
+      toolUse("keep", "keep.py", "old", "new"),
+      result("keep"),
+      toolUse("reset", "reset.py", "base", "temporary"),
+      result("reset"),
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "checkout",
+              name: "Bash",
+              input: {
+                command:
+                  "cd repo && git checkout -- src/reset.py && git status",
+              },
+            },
+          ],
+        },
+      },
+      result("checkout"),
+    ];
+    const replayed = replayClaudeTracePatch(trace, root);
+    expect(replayed.error).toBeUndefined();
+    expect(replayed.diff).toContain("src/keep.py");
+    expect(replayed.diff).not.toContain("src/reset.py");
+    expect(
+      readFileSync(path.join(root, "src", "reset.py"), "utf8").replace(
+        /\r\n/g,
+        "\n",
+      ),
+    ).toBe("base\n");
   });
 
   test("invalidates a trace that fetches and inspects an upstream fix", () => {
@@ -189,6 +264,52 @@ describe("SWE compare runner", () => {
       valid: false,
       violations: ["upstream_network_git_access"],
     });
+  });
+
+  test("does not invalidate network commands denied before execution", () => {
+    const deniedClaude = [
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "blocked",
+              name: "Bash",
+              input: { command: "curl https://example.test/fix.patch" },
+            },
+          ],
+        },
+      },
+      {
+        type: "system",
+        subtype: "permission_denied",
+        tool_use_id: "blocked",
+      },
+    ];
+    expect(auditClaudeTraceIntegrity(deniedClaude)).toEqual({
+      valid: true,
+      violations: [],
+    });
+    expect(
+      auditPawTraceIntegrity([
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.run_shell",
+            args: { command: "git fetch origin main" },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.run_shell",
+            ok: false,
+            summary: "tool execution denied by user",
+          },
+        },
+      ]),
+    ).toEqual({ valid: true, violations: [] });
   });
 
   test("blocks benchmark network tools before execution but permits offline/local work", () => {

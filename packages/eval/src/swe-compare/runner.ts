@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -42,6 +42,7 @@ export interface SweCompareRunResult {
   readonly patchSource?:
     | "workspace"
     | "claude_trace_git_diff"
+    | "claude_trace_mutation_replay"
     | "paw_trace_edit_replay"
     | "none";
   readonly artifactStatus?: "valid" | "patch_collection_failed";
@@ -430,7 +431,7 @@ export function extractClaudePatchFromTrace(
         if (
           typeof block.id === "string" &&
           typeof command === "string" &&
-          /^\s*git\s+diff(?:\s|$)/i.test(command)
+          /(?:^|&&|;)\s*git\s+diff(?:\s|$)/i.test(command)
         ) {
           diffToolIds.add(block.id);
         }
@@ -449,8 +450,57 @@ export function extractClaudePatchFromTrace(
   return patch;
 }
 
-function shellCommandsFromClaudeTrace(trace: readonly unknown[]): string[] {
-  const commands: string[] = [];
+interface ClaudeSuccessfulTool {
+  readonly name: string;
+  readonly input: Record<string, unknown>;
+}
+
+function successfulClaudeToolIds(trace: readonly unknown[]): Set<string> {
+  const denied = new Set<string>();
+  const successful = new Set<string>();
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const event = item as Record<string, unknown>;
+    if (
+      event.type === "system" &&
+      event.subtype === "permission_denied" &&
+      typeof event.tool_use_id === "string"
+    ) {
+      denied.add(event.tool_use_id);
+    }
+    const message = event.message;
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      continue;
+    }
+    const content = (message as Record<string, unknown>).content;
+    if (!Array.isArray(content)) continue;
+    for (const rawBlock of content) {
+      if (
+        !rawBlock ||
+        typeof rawBlock !== "object" ||
+        Array.isArray(rawBlock)
+      ) {
+        continue;
+      }
+      const block = rawBlock as Record<string, unknown>;
+      if (
+        block.type === "tool_result" &&
+        typeof block.tool_use_id === "string" &&
+        block.is_error !== true
+      ) {
+        successful.add(block.tool_use_id);
+      }
+    }
+  }
+  for (const id of denied) successful.delete(id);
+  return successful;
+}
+
+function successfulClaudeTools(
+  trace: readonly unknown[],
+): ClaudeSuccessfulTool[] {
+  const successfulIds = successfulClaudeToolIds(trace);
+  const tools: ClaudeSuccessfulTool[] = [];
   for (const item of trace) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const message = (item as Record<string, unknown>).message;
@@ -468,7 +518,198 @@ function shellCommandsFromClaudeTrace(trace: readonly unknown[]): string[] {
         continue;
       }
       const block = rawBlock as Record<string, unknown>;
-      if (block.type !== "tool_use" || block.name !== "Bash") continue;
+      if (
+        block.type !== "tool_use" ||
+        typeof block.id !== "string" ||
+        !successfulIds.has(block.id) ||
+        typeof block.name !== "string"
+      ) {
+        continue;
+      }
+      const input = block.input;
+      tools.push({
+        name: block.name,
+        input:
+          input && typeof input === "object" && !Array.isArray(input)
+            ? (input as Record<string, unknown>)
+            : {},
+      });
+    }
+  }
+  return tools;
+}
+
+function tracePathToWorkspaceRelative(value: string): string | undefined {
+  const normalized = value.replace(/\\/g, "/");
+  const worktreeMarker = normalized.toLowerCase().lastIndexOf("/wt/");
+  const relative =
+    worktreeMarker >= 0
+      ? normalized.slice(worktreeMarker + 4)
+      : path.isAbsolute(value)
+        ? undefined
+        : normalized;
+  if (
+    !relative ||
+    path.isAbsolute(relative) ||
+    relative.split("/").includes("..")
+  ) {
+    return undefined;
+  }
+  return relative;
+}
+
+function shellResetPaths(command: string): string[] {
+  const paths: string[] = [];
+  const matcher = /\bgit\s+(?:checkout|restore)\b([^;&\r\n]*)/gi;
+  for (const match of command.matchAll(matcher)) {
+    const tail = match[1] ?? "";
+    const separator = tail.lastIndexOf("--");
+    if (separator < 0) continue;
+    const rawPaths = tail.slice(separator + 2).trim();
+    for (const token of rawPaths.match(/"[^"]+"|'[^']+'|\S+/g) ?? []) {
+      paths.push(token.replace(/^(?:"|')|(?:"|')$/g, ""));
+    }
+  }
+  return paths;
+}
+
+/** Rebuild Claude's terminal source state from paired successful mutations. */
+export function replayClaudeTracePatch(
+  trace: readonly unknown[],
+  workspaceRoot: string,
+): { readonly diff?: string; readonly error?: string } {
+  const paths = new Set<string>();
+  let replayedMutation = false;
+  for (const tool of successfulClaudeTools(trace)) {
+    if (tool.name === "Edit") {
+      const filePath = tool.input.file_path;
+      const oldString = tool.input.old_string;
+      const newString = tool.input.new_string;
+      if (
+        typeof filePath !== "string" ||
+        typeof oldString !== "string" ||
+        typeof newString !== "string"
+      ) {
+        return { error: "Claude Edit event is missing replay fields" };
+      }
+      const relative = tracePathToWorkspaceRelative(filePath);
+      if (!relative) return { error: `unsafe Claude edit path: ${filePath}` };
+      const target = path.join(workspaceRoot, ...relative.split("/"));
+      const current = readFileSync(target, "utf8");
+      const replaceAll = tool.input.replace_all === true;
+      const first = current.indexOf(oldString);
+      if (
+        first < 0 ||
+        (!replaceAll && current.indexOf(oldString, first + 1) >= 0)
+      ) {
+        return {
+          error: `Claude edit replay anchor is not unique: ${relative}`,
+        };
+      }
+      writeFileSync(
+        target,
+        replaceAll
+          ? current.split(oldString).join(newString)
+          : current.slice(0, first) +
+              newString +
+              current.slice(first + oldString.length),
+        "utf8",
+      );
+      paths.add(relative);
+      replayedMutation = true;
+      continue;
+    }
+    if (tool.name === "Write") {
+      const filePath = tool.input.file_path;
+      const content = tool.input.content;
+      if (typeof filePath !== "string" || typeof content !== "string") {
+        return { error: "Claude Write event is missing replay fields" };
+      }
+      const relative = tracePathToWorkspaceRelative(filePath);
+      if (!relative) return { error: `unsafe Claude write path: ${filePath}` };
+      const target = path.join(workspaceRoot, ...relative.split("/"));
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, content, "utf8");
+      paths.add(relative);
+      replayedMutation = true;
+      continue;
+    }
+    if (tool.name !== "Bash" || typeof tool.input.command !== "string") {
+      continue;
+    }
+    for (const rawPath of shellResetPaths(tool.input.command)) {
+      const relative = tracePathToWorkspaceRelative(rawPath);
+      if (!relative) return { error: `unsafe Claude reset path: ${rawPath}` };
+      const reset = Bun.spawnSync(["git", "checkout", "HEAD", "--", relative], {
+        cwd: workspaceRoot,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      if (reset.exitCode !== 0) {
+        return {
+          error: `Claude reset replay failed for ${relative}: ${reset.stderr.toString().trim()}`,
+        };
+      }
+      paths.delete(relative);
+      replayedMutation = true;
+    }
+  }
+  if (!replayedMutation || paths.size === 0) {
+    return { error: "Claude trace has no terminal replayable mutation" };
+  }
+  return captureGitDiff(workspaceRoot, [...paths]);
+}
+
+function shellCommandsFromClaudeTrace(trace: readonly unknown[]): string[] {
+  const commands: string[] = [];
+  const deniedToolIds = new Set<string>();
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const event = item as Record<string, unknown>;
+    if (
+      event.type === "system" &&
+      event.subtype === "permission_denied" &&
+      typeof event.tool_use_id === "string"
+    ) {
+      deniedToolIds.add(event.tool_use_id);
+    }
+    const meta = event.tool_result_meta;
+    if (!Array.isArray(meta)) continue;
+    for (const raw of meta) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const record = raw as Record<string, unknown>;
+      if (
+        record.non_execution_kind === "permission-rule" &&
+        typeof record.id === "string"
+      ) {
+        deniedToolIds.add(record.id);
+      }
+    }
+  }
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const message = (item as Record<string, unknown>).message;
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      continue;
+    }
+    const content = (message as Record<string, unknown>).content;
+    if (!Array.isArray(content)) continue;
+    for (const rawBlock of content) {
+      if (
+        !rawBlock ||
+        typeof rawBlock !== "object" ||
+        Array.isArray(rawBlock)
+      ) {
+        continue;
+      }
+      const block = rawBlock as Record<string, unknown>;
+      if (
+        block.type !== "tool_use" ||
+        block.name !== "Bash" ||
+        (typeof block.id === "string" && deniedToolIds.has(block.id))
+      ) {
+        continue;
+      }
       const input = block.input;
       const command =
         input && typeof input === "object" && !Array.isArray(input)
@@ -482,21 +723,37 @@ function shellCommandsFromClaudeTrace(trace: readonly unknown[]): string[] {
 
 function shellCommandsFromPawTrace(trace: readonly unknown[]): string[] {
   const commands: string[] = [];
+  const pending: string[] = [];
   for (const item of trace) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const event = (item as Record<string, unknown>).event;
     if (!event || typeof event !== "object" || Array.isArray(event)) continue;
     const record = event as Record<string, unknown>;
-    if (record.type !== "tool.call" || record.tool !== "workspace.run_shell") {
+    if (record.tool !== "workspace.run_shell") {
       continue;
     }
-    const args = record.args;
-    const command =
-      args && typeof args === "object" && !Array.isArray(args)
-        ? (args as Record<string, unknown>).command
-        : undefined;
-    if (typeof command === "string") commands.push(command);
+    if (record.type === "tool.call") {
+      const args = record.args;
+      const command =
+        args && typeof args === "object" && !Array.isArray(args)
+          ? (args as Record<string, unknown>).command
+          : undefined;
+      if (typeof command === "string") pending.push(command);
+      continue;
+    }
+    if (record.type === "tool.result") {
+      const command = pending.shift();
+      if (!command) continue;
+      const summary = typeof record.summary === "string" ? record.summary : "";
+      if (!/execution denied|denied by user/i.test(summary)) {
+        commands.push(command);
+      }
+    }
   }
+  // Legacy/truncated traces may not contain the paired tool result. Preserve
+  // the conservative behavior for those: an unpaired network call is treated
+  // as potentially executed, never silently whitelisted.
+  commands.push(...pending);
   return commands;
 }
 
@@ -947,7 +1204,7 @@ export async function runSweCompareArm(opts: {
   }
 }
 
-/** Recover an empty Claude result from its persisted, paired `git diff` tool event. */
+/** Recover Claude's final patch from successful mutations, then paired diff fallback. */
 export function recoverClaudeResultPatch(opts: {
   readonly repoRoot: string;
   readonly resultPath: string;
@@ -960,20 +1217,64 @@ export function recoverClaudeResultPatch(opts: {
       `patch recovery only supports Claude results: ${previous.runId}`,
     );
   }
-  if (previous.patch.trim()) {
+  if (
+    previous.patch.trim() &&
+    previous.artifactStatus !== "patch_collection_failed"
+  ) {
     throw new Error(`result already contains a patch: ${previous.runId}`);
   }
   const tracePath = path.join(opts.repoRoot, previous.tracePath);
   const trace = JSON.parse(readFileSync(tracePath, "utf8")) as unknown[];
-  const patch = extractClaudePatchFromTrace(trace);
-  if (!patch) {
-    throw new Error(`no paired git diff result in trace: ${previous.runId}`);
+  let replayed: ReturnType<typeof replayClaudeTracePatch> = {
+    error: "Claude trace has no structured mutation to replay",
+  };
+  const hasStructuredMutation = successfulClaudeTools(trace).some(
+    (tool) => tool.name === "Edit" || tool.name === "Write",
+  );
+  if (hasStructuredMutation) {
+    const datasetPath = path.join(
+      opts.repoRoot,
+      "benchmarks",
+      "swe-bench",
+      "swe-bench-lite.jsonl",
+    );
+    const probe = loadLiteInstances(datasetPath).find(
+      (item) => item.instance_id === previous.instanceId,
+    );
+    if (!probe)
+      throw new Error(`dataset instance missing: ${previous.instanceId}`);
+    const gitRoot = ensureRepoClone(
+      probe.repo,
+      path.join(opts.repoRoot, "benchmarks", "swe-exp"),
+      { fetch: false },
+    );
+    const workspace = createCommitWorktree(
+      gitRoot,
+      probe.base_commit,
+      `recover-${previous.runId}`.slice(0, 60),
+    );
+    try {
+      replayed = replayClaudeTracePatch(trace, workspace.root);
+    } finally {
+      workspace.cleanup();
+    }
   }
+  const patch = replayed.diff?.trim() || extractClaudePatchFromTrace(trace);
+  if (!patch) {
+    throw new Error(
+      replayed.error ?? `no paired git diff result in trace: ${previous.runId}`,
+    );
+  }
+  const replaySucceeded = !!replayed.diff?.trim();
   const updated: SweCompareRunResult = {
     ...previous,
     patch,
     patchChars: patch.length,
-    patchSource: "claude_trace_git_diff",
+    patchSource: replaySucceeded
+      ? "claude_trace_mutation_replay"
+      : "claude_trace_git_diff",
+    artifactStatus: "valid",
+    patchCollectionError: undefined,
   };
   writeJsonAtomic(opts.resultPath, updated);
   return updated;
