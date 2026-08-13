@@ -31,6 +31,7 @@ import type {
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { TaskPlanner } from "@paw/store";
+import { candidateReviewInput } from "../candidate-review.js";
 import type {
   ToolEffectPolicy,
   ToolExecutionPolicy,
@@ -216,7 +217,7 @@ export async function handleAction(
 
   switch (action.type) {
     case "final_answer":
-      return handleFinalAnswer(
+      return await handleFinalAnswer(
         action,
         ctx,
         recoveredFlags,
@@ -491,14 +492,14 @@ function handleNativeToolErrors(
  *
  * 这样防止模型"过早完成"——比如还有 3 个文件没改就说做完了。
  */
-function handleFinalAnswer(
+async function handleFinalAnswer(
   action: Extract<AgentAction, { type: "final_answer" }>,
   ctx: PhaseContext,
   flags: TurnFlags,
   text: string,
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "todoStore" | "planner" | "saveStateFn">,
-): { readonly state: TurnState; readonly flags: TurnFlags } {
+): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const plan = opts.planner.plan;
   // 仅当计划被模型/applyUpdate 推进过（revision>0）才因 pending plan 而 nudge。
   // goal bootstrap 的 plan  revision 仍为 0，避免「右栏兜底计划」卡住 final_answer。
@@ -622,6 +623,17 @@ function handleFinalAnswer(
     };
   }
 
+  const candidateGate = await checkCandidateReviewGate(
+    summary,
+    ctx,
+    flags,
+    text,
+    thinking,
+    opts,
+    noRoomForAnotherTurn,
+  );
+  if (candidateGate) return candidateGate;
+
   // 无 pending 工作 / 验证通过 → 真正完成。revision=0 的 bootstrap
   // 计划只是 UI 兜底，可随最终完成同步标绿；模型计划必须已自行完成。
   if (plan && plan.items.length > 0) {
@@ -645,6 +657,110 @@ function handleFinalAnswer(
     },
     flags,
   };
+}
+
+async function checkCandidateReviewGate(
+  summary: string,
+  ctx: PhaseContext,
+  flags: TurnFlags,
+  text: string,
+  thinking: string | undefined,
+  opts: Pick<ActionHandlerContext, "saveStateFn">,
+  noRoomForAnotherTurn: boolean,
+): Promise<
+  { readonly state: TurnState; readonly flags: TurnFlags } | undefined
+> {
+  const reviewer = ctx.candidateReviewer;
+  const state = ctx.taskState.snapshot();
+  const revision = state.mutationRevision ?? 0;
+  if (!reviewer || revision === 0) return undefined;
+
+  let review =
+    state.candidateReview?.mutationRevision === revision
+      ? state.candidateReview
+      : undefined;
+  if (!review) {
+    try {
+      const result = await reviewer.review(
+        candidateReviewInput(
+          ctx.runId,
+          ctx.workspaceRoot,
+          summary,
+          state,
+          ctx.signal,
+          undefined,
+          ctx.ctxMgr.buildMessages(),
+        ),
+      );
+      const reviewSummary = boundCandidateReviewSummary(result.summary);
+      review = {
+        mutationRevision: revision,
+        verdict: result.verdict,
+        summary: reviewSummary,
+        reviewedAt: Date.now(),
+      };
+      ctx.emit({
+        type: "candidate.review",
+        mutationRevision: revision,
+        verdict: result.verdict,
+        summary: reviewSummary,
+        modelCalls: result.modelCalls ?? 0,
+        ...(result.usage ? { usage: result.usage } : {}),
+      });
+    } catch (error) {
+      const reviewSummary = boundCandidateReviewSummary(
+        `Independent review could not execute: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      review = {
+        mutationRevision: revision,
+        verdict: "partial",
+        summary: reviewSummary,
+        reviewedAt: Date.now(),
+      };
+      ctx.emit({
+        type: "candidate.review",
+        mutationRevision: revision,
+        verdict: "partial",
+        summary: reviewSummary,
+        modelCalls: 0,
+      });
+    }
+    ctx.taskState.recordCandidateReview(review);
+    opts.saveStateFn();
+  }
+
+  if (review.verdict === "pass") return undefined;
+  const previousNudges =
+    flags.candidateReviewRevision === revision
+      ? (flags.candidateReviewNudges ?? 0)
+      : 0;
+  const maxNudges = review.verdict === "fail" ? 2 : 1;
+  const message = `[IndependentReview:${review.verdict.toUpperCase()} r${revision}] ${review.summary}\n${
+    review.verdict === "fail"
+      ? "Fix the concrete issue, re-run relevant verification, inspect the new diff, and then try final_answer again. The reviewer will run again only after a real source mutation."
+      : "Address any actionable finding. If this is only an unavoidable environment limitation, try final_answer again and report the limitation honestly."
+  }`;
+  if (previousNudges < maxNudges && !noRoomForAnotherTurn) {
+    const nextFlags: TurnFlags = {
+      ...flags,
+      candidateReviewRevision: revision,
+      candidateReviewNudges: previousNudges + 1,
+      lastTurnHadToolCall: false,
+    };
+    ctx.ctxMgr.addAssistant(text, thinking);
+    ctx.ctxMgr.addUser(message);
+    opts.saveStateFn();
+    return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  }
+  if (review.verdict === "partial" && !noRoomForAnotherTurn) return undefined;
+  return { state: { type: "incomplete", message }, flags };
+}
+
+function boundCandidateReviewSummary(summary: string): string {
+  const maxChars = 8_000;
+  if (summary.length <= maxChars) return summary;
+  const tailChars = 2_000;
+  return `${summary.slice(0, maxChars - tailChars - 52)}\n[review summary truncated]\n${summary.slice(-tailChars)}`;
 }
 
 function handleAcceptanceGateFailure(

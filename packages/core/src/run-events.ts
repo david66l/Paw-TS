@@ -108,6 +108,15 @@ export type RunEvent =
   /** 解析出结构化的代理动作（V2 §8.5），编排器据此决定下一步分支 */
   /** Parsed structured outcome (V2 §8.5) before orchestrator branches. */
   | { readonly type: "agent.action"; readonly action: AgentAction }
+  /** Fresh-context semantic review of a candidate source revision. */
+  | {
+      readonly type: "candidate.review";
+      readonly mutationRevision: number;
+      readonly verdict: "pass" | "fail" | "partial";
+      readonly summary: string;
+      readonly modelCalls: number;
+      readonly usage?: ModelTokenUsage;
+    }
   /** 开始发送模型请求 */
   | {
       readonly type: "model.request";

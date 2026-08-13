@@ -708,7 +708,7 @@ export function validateCompareRun(
   }
 }
 
-function collectPawMetrics(events: readonly RunEventEnvelope[]): {
+export function collectPawMetrics(events: readonly RunEventEnvelope[]): {
   modelCalls: number;
   promptTokens: number;
   completionTokens: number;
@@ -724,6 +724,11 @@ function collectPawMetrics(events: readonly RunEventEnvelope[]): {
     const event = envelope.event;
     if (event.type === "model.done") {
       modelCalls += 1;
+      promptTokens += event.usage?.promptTokens ?? 0;
+      completionTokens += event.usage?.completionTokens ?? 0;
+      totalTokens += event.usage?.totalTokens ?? 0;
+    } else if (event.type === "candidate.review") {
+      modelCalls += event.modelCalls;
       promptTokens += event.usage?.promptTokens ?? 0;
       completionTokens += event.usage?.completionTokens ?? 0;
       totalTokens += event.usage?.totalTokens ?? 0;

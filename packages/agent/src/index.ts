@@ -22,6 +22,19 @@ export {
   type DefaultSubAgentLauncherOptions,
 } from "./sub-agent-launcher.js";
 export {
+  candidateReviewInput,
+  extractCandidateDeliberation,
+  ModelCandidateReviewer,
+  parseCandidateReview,
+  SubAgentCandidateReviewer,
+  type CandidateReviewInput,
+  type CandidateReviewResult,
+  type CandidateReviewer,
+  type CandidateReviewVerdict,
+  type ModelCandidateReviewerOptions,
+  type SubAgentCandidateReviewerOptions,
+} from "./candidate-review.js";
+export {
   runCompressionAgent,
   type CompressionAgentResult,
 } from "./compression-agent.js";

@@ -70,6 +70,13 @@ export interface AcceptanceCriterion {
   readonly evidenceMutationRevision?: number;
 }
 
+export interface CandidateReviewRecord {
+  readonly mutationRevision: number;
+  readonly verdict: "pass" | "fail" | "partial";
+  readonly summary: string;
+  readonly reviewedAt: number;
+}
+
 export interface TaskState {
   readonly goal: string;
   readonly constraints: readonly ConstraintRecord[];
@@ -92,6 +99,8 @@ export interface TaskState {
   readonly editRecoveryPath?: string;
   /** 最近一次成功检查最终 diff 时对应的文件变更版本。 */
   readonly diffInspectedRevision?: number;
+  /** Independent semantic review, valid only for its exact mutation revision. */
+  readonly candidateReview?: CandidateReviewRecord;
   readonly fileLockConflicts: readonly string[];
   readonly currentHypothesis?: string;
   readonly rejectedHypotheses: readonly string[];
@@ -348,6 +357,16 @@ export class TaskStateManager {
     };
   }
 
+  recordCandidateReview(
+    review: Omit<CandidateReviewRecord, "reviewedAt">,
+  ): void {
+    this.state = {
+      ...this.state,
+      candidateReview: { ...review, reviewedAt: Date.now() },
+      updatedAt: Date.now(),
+    };
+  }
+
   recordToolResult(call: AgentToolCallAction, result: ToolRunResult): void {
     // The native acceptance tool already updates this manager atomically via
     // the injected ledger. It is control-plane state, not repository evidence.
@@ -544,6 +563,15 @@ export function formatTaskStateForContext(state: TaskState): string {
   if ((state.mutationRevision ?? 0) > 0) {
     lines.push(`Mutation revision: ${state.mutationRevision}`);
     lines.push(...formatCompletionReadiness(state));
+    if (state.candidateReview) {
+      const freshness =
+        state.candidateReview.mutationRevision === state.mutationRevision
+          ? "current"
+          : "stale";
+      lines.push(
+        `Independent review: ${state.candidateReview.verdict} (${freshness} for r${state.candidateReview.mutationRevision}) — ${state.candidateReview.summary}`,
+      );
+    }
   }
   appendList(lines, "File lock conflicts", state.fileLockConflicts ?? []);
   appendList(lines, "Pinned facts", state.pinnedFacts);

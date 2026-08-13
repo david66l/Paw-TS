@@ -30,6 +30,7 @@ import {
   resolveModelForSpec,
 } from "./agents/index.js";
 import { createAutonomyProfile } from "./autonomy/profile.js";
+import { ModelCandidateReviewer } from "./candidate-review.js";
 import {
   type CollaborationMode,
   resolveCollaborationMode,
@@ -246,7 +247,14 @@ export function createRunOrchestrator(
     toolExecutionPolicy: opts.toolExecutionPolicy,
     toolEffectPolicy: opts.toolEffectPolicy,
     verificationPolicy: opts.verificationPolicy,
+    costTracker,
   });
+  const candidateReviewer = mainModel.runtimeProfile
+    ? new ModelCandidateReviewer({
+        model: subAgentModel,
+        costTracker,
+      })
+    : undefined;
 
   const createAgent = (input: {
     readonly id: string;
@@ -316,6 +324,7 @@ export function createRunOrchestrator(
     toolExecutionPolicy: opts.toolExecutionPolicy,
     toolEffectPolicy: opts.toolEffectPolicy,
     verificationPolicy: opts.verificationPolicy,
+    candidateReviewer,
     subAgentLauncher: collab.canSpawn ? subAgentLauncher : undefined,
     appStateStore,
     sessionStore,

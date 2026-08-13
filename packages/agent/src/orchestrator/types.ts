@@ -26,6 +26,7 @@ import type { McpClientManager } from "@paw/harness";
 import type { MemoryRuntime } from "@paw/memory";
 import type { LanguageModel, ToolDefinition } from "@paw/models";
 import type { TaskPlanner } from "@paw/store";
+import type { CandidateReviewer } from "../candidate-review.js";
 import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
 import type { CompletionDecision } from "../lifecycle/completion-policy.js";
 import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
@@ -128,6 +129,10 @@ export interface TurnFlags {
   readonly verifyNudges?: number;
   /** AcceptanceGate feedback attempts, independent from plan and verification. */
   readonly acceptanceNudges?: number;
+  /** Independent candidate-review feedback attempts for one source revision. */
+  readonly candidateReviewNudges?: number;
+  /** Revision to which candidateReviewNudges belongs. */
+  readonly candidateReviewRevision?: number;
   /** 上一轮是否执行了工具调用 */
   readonly lastTurnHadToolCall: boolean;
   /** 本轮 Run 中是否使用过工具 */
@@ -193,6 +198,8 @@ export interface PhaseContext {
   readonly memoryTaskId?: string;
   /** Trusted authority for completion evidence; never derived from model text. */
   readonly verificationPolicy?: VerificationPolicy;
+  /** Optional independent semantic reviewer; absent means the gate is disabled. */
+  readonly candidateReviewer?: CandidateReviewer;
 }
 
 // ═════════════════════════════════════════════════════════════

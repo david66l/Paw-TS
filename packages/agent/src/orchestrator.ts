@@ -150,6 +150,7 @@ import {
 
 import { type MemoryRuntime, createMemoryRuntime } from "@paw/memory";
 import { loadMemoryConfigSync } from "@paw/memory/longterm";
+import type { CandidateReviewer } from "./candidate-review.js";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
@@ -331,6 +332,8 @@ export interface AgentOrchestratorOptions {
   readonly toolEffectPolicy?: ToolEffectPolicy;
   /** Trusted completion authority; defaults to local verification. */
   readonly verificationPolicy?: VerificationPolicy;
+  /** Independent semantic review before completing a mutated task. */
+  readonly candidateReviewer?: CandidateReviewer;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -447,6 +450,7 @@ export class AgentOrchestrator {
   private readonly toolExecutionPolicy?: AgentOrchestratorOptions["toolExecutionPolicy"];
   private readonly toolEffectPolicy?: AgentOrchestratorOptions["toolEffectPolicy"];
   private readonly verificationPolicy?: AgentOrchestratorOptions["verificationPolicy"];
+  private readonly candidateReviewer?: CandidateReviewer;
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -458,6 +462,7 @@ export class AgentOrchestrator {
     this.toolExecutionPolicy = opts?.toolExecutionPolicy;
     this.toolEffectPolicy = opts?.toolEffectPolicy;
     this.verificationPolicy = opts?.verificationPolicy;
+    this.candidateReviewer = opts?.candidateReviewer;
     this.fileLock = opts?.fileLock;
     // P1 入口闸：会话级去重器（仅 root orchestrator；子 Agent 不重复去重）
     this._payloadDeduper = opts?.fileLock ? undefined : createPayloadDeduper();
@@ -770,6 +775,9 @@ export class AgentOrchestrator {
           ...(this._memoryTaskId ? { memoryTaskId: this._memoryTaskId } : {}),
           ...(this.verificationPolicy
             ? { verificationPolicy: this.verificationPolicy }
+            : {}),
+          ...(this.candidateReviewer
+            ? { candidateReviewer: this.candidateReviewer }
             : {}),
         };
 

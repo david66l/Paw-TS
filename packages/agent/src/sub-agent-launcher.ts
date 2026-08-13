@@ -5,7 +5,7 @@
  * 否则回退到旧 agent_type 文案 + SharedContext。
  */
 
-import type { RunEventEnvelope } from "@paw/core";
+import type { CostTracker, RunEventEnvelope } from "@paw/core";
 import { ContextManager } from "@paw/core";
 import type {
   McpServerConfig,
@@ -49,6 +49,8 @@ export interface DefaultSubAgentLauncherOptions {
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
   readonly toolEffectPolicy?: ToolEffectPolicy;
   readonly verificationPolicy?: VerificationPolicy;
+  /** Shared with the root run so child/reviewer usage is not hidden. */
+  readonly costTracker?: CostTracker;
 }
 
 function isSharedContext(value: unknown): value is SharedContext {
@@ -92,6 +94,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
   private readonly toolExecutionPolicy?: DefaultSubAgentLauncherOptions["toolExecutionPolicy"];
   private readonly toolEffectPolicy?: DefaultSubAgentLauncherOptions["toolEffectPolicy"];
   private readonly verificationPolicy?: DefaultSubAgentLauncherOptions["verificationPolicy"];
+  private readonly costTracker?: CostTracker;
 
   constructor(opts: DefaultSubAgentLauncherOptions) {
     this.workspaceRoot = opts.workspaceRoot;
@@ -106,6 +109,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
     this.toolExecutionPolicy = opts.toolExecutionPolicy;
     this.toolEffectPolicy = opts.toolEffectPolicy;
     this.verificationPolicy = opts.verificationPolicy;
+    this.costTracker = opts.costTracker;
   }
 
   private createChildOrchestrator(
@@ -135,6 +139,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
       toolExecutionPolicy: this.toolExecutionPolicy,
       toolEffectPolicy: this.toolEffectPolicy,
       verificationPolicy: this.verificationPolicy,
+      costTracker: this.costTracker,
       fileLock: extras?.fileLock,
       contextManager: extras?.contextManager,
       onEvent,

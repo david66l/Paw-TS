@@ -20,6 +20,7 @@ import {
   auditPawTraceIntegrity,
   auditSweCompareResult,
   claudeCodeArgs,
+  collectPawMetrics,
   collectTraceMutationHints,
   createSweCompareToolEffectPolicy,
   createSweCompareToolExecutionPolicy,
@@ -51,6 +52,52 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe("SWE compare runner", () => {
+  test("Paw metrics include independent candidate-review calls and usage", () => {
+    const events = [
+      {
+        runId: "metrics",
+        seq: 1,
+        ts: 1,
+        event: {
+          type: "model.done" as const,
+          text: "main",
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+        },
+      },
+      {
+        runId: "metrics",
+        seq: 2,
+        ts: 2,
+        event: {
+          type: "candidate.review" as const,
+          mutationRevision: 1,
+          verdict: "pass" as const,
+          summary: "ok",
+          modelCalls: 2,
+          usage: { promptTokens: 40, completionTokens: 10, totalTokens: 50 },
+        },
+      },
+      {
+        runId: "metrics",
+        seq: 3,
+        ts: 3,
+        event: {
+          type: "loop.tick" as const,
+          turn: 4,
+          maxSteps: 10,
+          estimatedTokens: 1_000,
+        },
+      },
+    ] satisfies RunEventEnvelope[];
+
+    expect(collectPawMetrics(events)).toEqual({
+      modelCalls: 3,
+      promptTokens: 140,
+      completionTokens: 30,
+      totalTokens: 170,
+      turns: 4,
+    });
+  });
   test("library rejects Claude against a Paw-only seen manifest", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-seen-no-claude-"));
     const manifestPath = path.join(root, "manifest.json");
