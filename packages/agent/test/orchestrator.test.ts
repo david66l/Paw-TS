@@ -363,6 +363,81 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(4);
   });
 
+  test("loop policy defers repeated investigation without consuming the task budget", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-loop-policy-"));
+    for (const file of [
+      "a.txt",
+      "b.txt",
+      "c.txt",
+      "d.txt",
+      "e.txt",
+      "f.txt",
+      "g.txt",
+    ]) {
+      writeFileSync(path.join(dir, file), file);
+    }
+    let calls = 0;
+    const events: RunEventEnvelope[] = [];
+    const o = new AgentOrchestrator({
+      model: {
+        label: "loop-policy-recovery",
+        async complete() {
+          calls += 1;
+          if (calls <= 3) {
+            const file = ["a.txt", "b.txt", "c.txt"][calls - 1];
+            return {
+              text: JSON.stringify({
+                tool: "workspace.read_file",
+                args: { path: file },
+              }),
+            };
+          }
+          if (calls <= 7) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.read_file",
+                args: {
+                  path: ["d.txt", "e.txt", "f.txt", "g.txt"][calls - 4],
+                },
+              }),
+            };
+          }
+          if (calls === 8) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.write_file",
+                args: { path: "fix.txt", content: "implemented" },
+              }),
+            };
+          }
+          return {
+            text: '{"action":"final_answer","summary":"Implemented. [skip_verify: fixture]"}',
+          };
+        },
+      },
+      retrySleep: async () => {},
+      onEvent: (event) => events.push(event),
+    });
+
+    const result = await o.run({
+      runId: "loop-policy-recovery",
+      goal: "Fix the issue in these files [allow_skip_verify] [coding_phase_budget]",
+      workspaceRoot: dir,
+      maxSteps: 10,
+    });
+
+    const policyBlocks = events.filter(
+      (event) =>
+        event.event.type === "tool.result" &&
+        event.event.ok === false &&
+        event.event.summary.includes("LoopPolicy:implementation_required"),
+    );
+    expect(policyBlocks).toHaveLength(2);
+    expect(result.status).toBe("completed");
+    expect(calls).toBe(9);
+    expect(readFileSync(path.join(dir, "fix.txt"), "utf8")).toBe("implemented");
+  });
+
   test("run completes without tool when model returns plain text", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({

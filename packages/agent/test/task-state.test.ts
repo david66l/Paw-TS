@@ -7,6 +7,24 @@ import {
 } from "../src/task-state.js";
 
 describe("TaskStateManager", () => {
+  test("does not record control-plane rejections as task failures", () => {
+    const state = new TaskStateManager("fix bug");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.read_file",
+        args: { path: "src/a.ts" },
+      },
+      {
+        ok: false,
+        payload: { code: "E_LOOP_POLICY" },
+        summary: "[LoopPolicy:implementation_required] edit now",
+      },
+    );
+    expect(state.snapshot().filesRead).toEqual([]);
+    expect(state.snapshot().pinnedFacts).toEqual([]);
+  });
+
   test("records file and test tool facts", () => {
     const state = new TaskStateManager("must keep changes minimal");
 

@@ -40,6 +40,8 @@ import {
   isCodingNavigationTool,
   isCodingVerificationCall,
 } from "../lifecycle/coding-phase.js";
+import { isControlPlaneToolResult } from "../lifecycle/control-plane.js";
+import { convergenceToolBlockReason } from "../lifecycle/convergence.js";
 import {
   IDLE_FUSE_ESCALATION,
   decideCompletion,
@@ -815,7 +817,14 @@ async function handleToolCalls(
     goalUsesCodingPhaseBudget(ctx.specGoal);
   const priorCodingPhase = flags.codingPhase ?? EMPTY_CODING_PHASE_STATE;
   let projectedCodingPhase = priorCodingPhase;
-  const phaseBlockReasons = calls.map((call) => {
+  const taskState = ctx.taskState.snapshot();
+  const convergenceBlockReasons = calls.map((call) =>
+    convergenceToolBlockReason(call, taskState, ctx.turn + 1, ctx.maxSteps),
+  );
+  const codingPhaseBlockReasons = calls.map((call, index) => {
+    // A call rejected by the general loop policy never reaches the opt-in
+    // coding-phase state machine and must not consume its violation budget.
+    if (convergenceBlockReasons[index]) return null;
     if (!codingPhaseEnabled) return null;
     const reason = codingPhaseBlockReason(call, projectedCodingPhase);
     if (!reason && isCodingNavigationTool(call.tool)) {
@@ -830,6 +839,10 @@ async function handleToolCalls(
     }
     return reason;
   });
+  const phaseBlockReasons = calls.map(
+    (_, index) =>
+      convergenceBlockReasons[index] ?? codingPhaseBlockReasons[index],
+  );
   const allowedCalls = calls.filter((_, index) => !phaseBlockReasons[index]);
   const allowedResults = await executeToolCalls(
     allowedCalls,
@@ -865,7 +878,12 @@ async function handleToolCalls(
     if (blockReason) {
       return {
         ok: false,
-        payload: { code: "E_CODING_PHASE", message: blockReason },
+        payload: {
+          code: convergenceBlockReasons[index]
+            ? "E_LOOP_POLICY"
+            : "E_CODING_PHASE",
+          message: blockReason,
+        },
         summary: blockReason,
       };
     }
@@ -894,6 +912,7 @@ async function handleToolCalls(
     for (let i = 0; i < calls.length; i++) {
       const call = calls[i]!;
       const tr = results[i]!;
+      if (isControlPlaneToolResult(tr)) continue;
       const injected = await runtime
         .onToolResult({
           taskId: memTaskId,
@@ -938,19 +957,24 @@ async function handleToolCalls(
   for (const nudge of codingPhase?.nudges ?? []) {
     ctx.ctxMgr.addUser(nudge);
   }
-  const phaseViolationThisTurn = phaseBlockReasons.some(Boolean);
-  const requiredPhaseActionSucceeded = calls.some(
-    (call, index) =>
-      results[index]?.ok === true &&
-      (priorCodingPhase.successfulEdits === 0
-        ? isCodingEditTool(call.tool)
-        : isCodingVerificationCall(call)),
-  );
-  const codingPhaseViolationTurns = phaseViolationThisTurn
-    ? (flags.codingPhaseViolationTurns ?? 0) + 1
-    : requiredPhaseActionSucceeded
-      ? 0
-      : (flags.codingPhaseViolationTurns ?? 0);
+  const phaseViolationThisTurn =
+    codingPhaseEnabled && codingPhaseBlockReasons.some(Boolean);
+  const requiredPhaseActionSucceeded =
+    codingPhaseEnabled &&
+    calls.some(
+      (call, index) =>
+        results[index]?.ok === true &&
+        (priorCodingPhase.successfulEdits === 0
+          ? isCodingEditTool(call.tool)
+          : isCodingVerificationCall(call)),
+    );
+  const codingPhaseViolationTurns = codingPhaseEnabled
+    ? phaseViolationThisTurn
+      ? (flags.codingPhaseViolationTurns ?? 0) + 1
+      : requiredPhaseActionSucceeded
+        ? 0
+        : (flags.codingPhaseViolationTurns ?? 0)
+    : 0;
 
   const madeProgress = results.some((result) => result.ok);
   const fusedFlags: TurnFlags = {
@@ -971,7 +995,7 @@ async function handleToolCalls(
       : {}),
   };
 
-  if (codingPhaseViolationTurns >= 2) {
+  if (codingPhaseEnabled && codingPhaseViolationTurns >= 2) {
     const decision = decideCompletion({
       intent: "budget_exhausted",
       message:

@@ -3,39 +3,40 @@
  */
 
 import type { RunResult } from "@paw/core";
+import type { ToolRunResult } from "@paw/harness";
 import type { TaskState } from "../task-state.js";
 import { formatTaskStateForContext } from "../task-state.js";
 import {
+  DEFAULT_LIFECYCLE_BUDGET,
+  HEADLESS_LIFECYCLE_BUDGET,
+  type LifecycleBudget,
+  createBudgetAbort,
+  resolveLifecycleBudget,
+} from "./budget.js";
+import {
+  type CompletionDecision,
+  type DecideCompletionInput,
   decideCompletion,
   evidenceFromTaskState,
   toRunResult,
-  type CompletionDecision,
-  type DecideCompletionInput,
 } from "./completion-policy.js";
+import { isControlPlaneToolResult } from "./control-plane.js";
 import {
-  checkVerification,
-  extractSkipVerifyReason,
-  goalRequiresMutation,
-  ALLOW_SKIP_VERIFY_MARKER,
-  REQUIRE_MUTATION_MARKER,
-  type VerificationDecision,
-} from "./verification-gate.js";
-import {
+  IDLE_FUSE_ESCALATION,
+  type RecoveryHint,
   formatRecoveryHints,
   idleFuseTripped,
   recoveryHintForToolResult,
   updateFailureSignatures,
-  IDLE_FUSE_ESCALATION,
-  type RecoveryHint,
 } from "./tool-recovery.js";
-import type { ToolRunResult } from "@paw/harness";
 import {
-  createBudgetAbort,
-  resolveLifecycleBudget,
-  DEFAULT_LIFECYCLE_BUDGET,
-  HEADLESS_LIFECYCLE_BUDGET,
-  type LifecycleBudget,
-} from "./budget.js";
+  ALLOW_SKIP_VERIFY_MARKER,
+  REQUIRE_MUTATION_MARKER,
+  type VerificationDecision,
+  checkVerification,
+  extractSkipVerifyReason,
+  goalRequiresMutation,
+} from "./verification-gate.js";
 
 export {
   decideCompletion,
@@ -130,15 +131,28 @@ export function collectToolRecoveryMessage(
   readonly signatures: readonly string[];
   readonly fuseTripped: boolean;
 } {
+  const productPairs = results.flatMap((result, index) => {
+    const call = calls[index];
+    return !call || isControlPlaneToolResult(result) ? [] : [{ call, result }];
+  });
+  if (productPairs.length === 0) {
+    return {
+      message: null,
+      signatures: failureSignatures ?? [],
+      fuseTripped: false,
+    };
+  }
+  const productCalls = productPairs.map(({ call }) => call);
+  const productResults = productPairs.map(({ result }) => result);
   const hints: RecoveryHint[] = [];
-  for (let i = 0; i < calls.length; i++) {
-    const hint = recoveryHintForToolResult(calls[i]!.tool, results[i]!);
+  for (const { call, result } of productPairs) {
+    const hint = recoveryHintForToolResult(call.tool, result);
     if (hint) hints.push(hint);
   }
   const signatures = updateFailureSignatures(
     failureSignatures,
-    calls,
-    results,
+    productCalls,
+    productResults,
   );
   const fuse = idleFuseTripped(signatures);
   const base = formatRecoveryHints(hints);

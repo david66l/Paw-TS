@@ -1,5 +1,6 @@
 import type { AgentToolCallAction } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
+import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
 
 export interface CommandSummary {
   readonly command: string;
@@ -158,6 +159,7 @@ export class TaskStateManager {
   }
 
   recordToolResult(call: AgentToolCallAction, result: ToolRunResult): void {
+    if (isControlPlaneToolResult(result)) return;
     const args = isRecord(call.args) ? call.args : {};
     const filesRead = [...this.state.filesRead];
     const filesChanged = [...this.state.filesChanged];

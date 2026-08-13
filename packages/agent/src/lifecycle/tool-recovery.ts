@@ -3,6 +3,7 @@
  */
 
 import type { ToolRunResult } from "@paw/harness";
+import { isControlPlaneToolResult } from "./control-plane.js";
 
 export type RecoveryAction =
   | "retry"
@@ -36,7 +37,7 @@ export function recoveryHintForToolResult(
   tool: string,
   result: ToolRunResult,
 ): RecoveryHint | null {
-  if (result.ok) return null;
+  if (result.ok || isControlPlaneToolResult(result)) return null;
 
   const summary = result.summary.toLowerCase();
   const err = payloadError(result.payload).toLowerCase();
@@ -62,11 +63,16 @@ export function recoveryHintForToolResult(
   ) {
     return {
       action: "use_apply_patch",
-      message: `[Recovery] edit_file failed to match old_string. Re-read the file for exact current text, add more surrounding context for uniqueness, set replace_all=true if every match should change, or use workspace.apply_patch with a unified diff.`,
+      message:
+        "[Recovery] edit_file failed to match old_string. Re-read the file for exact current text, add more surrounding context for uniqueness, set replace_all=true if every match should change, or use workspace.apply_patch with a unified diff.",
     };
   }
 
-  if (code === "E_RETRY" || blob.includes("timeout") || blob.includes("timed")) {
+  if (
+    code === "E_RETRY" ||
+    blob.includes("timeout") ||
+    blob.includes("timed")
+  ) {
     return {
       action: "retry",
       message: `[Recovery] ${tool} timed out or is retryable. Retry with a tighter scope or longer timeout_sec; avoid repeating the identical failing command blindly.`,
@@ -122,11 +128,22 @@ export function updateFailureSignatures(
   // recovered run.
   if (results.some((result) => result.ok)) return [];
 
+  const productFailures = results
+    .map((result, index) => ({ result, call: calls[index] }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        result: ToolRunResult;
+        call: { tool: string };
+      } => Boolean(entry.call) && !isControlPlaneToolResult(entry.result),
+    );
+  if (productFailures.length === 0) return prev ?? [];
+
   const next = [...(prev ?? [])];
-  for (let i = 0; i < calls.length; i++) {
-    const r = results[i];
-    if (!r || r.ok) continue;
-    next.push(failureSignature(calls[i]!.tool, r));
+  for (const { call, result } of productFailures) {
+    if (result.ok) continue;
+    next.push(failureSignature(call.tool, result));
   }
   return next.slice(-limit);
 }
@@ -145,4 +162,5 @@ export function idleFuseTripped(
   return count >= threshold;
 }
 
-export const IDLE_FUSE_ESCALATION = `[Recovery:idle_fuse] The same tool failure repeated. Stop retrying identically — change strategy (re-read, apply_patch, different test command) or output final_answer / abort with an honest status.`;
+export const IDLE_FUSE_ESCALATION =
+  "[Recovery:idle_fuse] The same tool failure repeated. Stop retrying identically — change strategy (re-read, apply_patch, different test command) or output final_answer / abort with an honest status.";

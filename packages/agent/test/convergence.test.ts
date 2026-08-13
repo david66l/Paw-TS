@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   convergenceEvidenceKey,
   convergenceGuidance,
+  convergenceToolBlockReason,
   convergenceWindow,
   implementationGuidance,
 } from "../src/lifecycle/convergence.js";
@@ -127,5 +128,101 @@ describe("convergence guidance", () => {
         }),
       ),
     ).toBe("r1:passed:stale");
+  });
+
+  test("defers investigation after midpoint while allowing edits and tests", () => {
+    const explored = state({
+      goal: "Fix the parser bug",
+      filesChanged: [],
+      filesRead: ["a.ts", "b.ts", "c.ts"],
+      mutationRevision: 0,
+    });
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.read_file",
+          args: { path: "d.ts" },
+        },
+        explored,
+        32,
+        64,
+      ),
+    ).toContain("implementation_required");
+    expect(
+      convergenceToolBlockReason(
+        { type: "tool_call", tool: "workspace.edit_file", args: {} },
+        explored,
+        32,
+        64,
+      ),
+    ).toBeNull();
+    expect(
+      convergenceToolBlockReason(
+        { type: "tool_call", tool: "workspace.git_status", args: {} },
+        explored,
+        32,
+        64,
+      ),
+    ).toContain("implementation_required");
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.symbol_search",
+          args: { query: "Parser" },
+        },
+        explored,
+        32,
+        64,
+      ),
+    ).toContain("implementation_required");
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.run_shell",
+          args: { command: "py -3.10 -m pytest tests/test_parser.py -q" },
+        },
+        explored,
+        32,
+        64,
+      ),
+    ).toBeNull();
+  });
+
+  test("enforces verify then diff then delivery in the closeout window", () => {
+    const read = {
+      type: "tool_call" as const,
+      tool: "workspace.grep",
+      args: { pattern: "more" },
+    };
+    expect(convergenceToolBlockReason(read, state(), 55, 64)).toContain(
+      "verify_current_revision",
+    );
+    const passed = state({
+      testResults: [
+        { command: "pytest", passed: true, summary: "ok", mutationRevision: 1 },
+      ],
+    });
+    expect(convergenceToolBlockReason(read, passed, 55, 64)).toContain(
+      "inspect_final_diff",
+    );
+    expect(
+      convergenceToolBlockReason(
+        { type: "tool_call", tool: "workspace.git_diff", args: {} },
+        passed,
+        55,
+        64,
+      ),
+    ).toBeNull();
+    expect(
+      convergenceToolBlockReason(
+        read,
+        { ...passed, diffInspectedRevision: 1 },
+        55,
+        64,
+      ),
+    ).toContain("LoopPolicy:deliver");
   });
 });

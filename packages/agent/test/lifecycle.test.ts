@@ -1,28 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import {
+  lifecycleGatesOk,
+  summarizeLifecycleGates,
+} from "../../eval/src/swe-exp/report.js";
+import {
+  createBudgetAbort,
+  resolveLifecycleBudget,
+} from "../src/lifecycle/budget.js";
+import {
+  EMPTY_CODING_PHASE_STATE,
+  advanceCodingPhase,
+  codingPhaseBlockReason,
+  goalUsesCodingPhaseBudget,
+} from "../src/lifecycle/coding-phase.js";
+import {
   decideCompletion,
   evidenceFromTaskState,
 } from "../src/lifecycle/completion-policy.js";
-import { checkVerification } from "../src/lifecycle/verification-gate.js";
+import { collectToolRecoveryMessage } from "../src/lifecycle/task-lifecycle.js";
 import {
   idleFuseTripped,
   recoveryHintForToolResult,
   updateFailureSignatures,
 } from "../src/lifecycle/tool-recovery.js";
-import {
-  resolveLifecycleBudget,
-  createBudgetAbort,
-} from "../src/lifecycle/budget.js";
-import {
-  advanceCodingPhase,
-  codingPhaseBlockReason,
-  EMPTY_CODING_PHASE_STATE,
-  goalUsesCodingPhaseBudget,
-} from "../src/lifecycle/coding-phase.js";
-import {
-  summarizeLifecycleGates,
-  lifecycleGatesOk,
-} from "../../eval/src/swe-exp/report.js";
+import { checkVerification } from "../src/lifecycle/verification-gate.js";
 import type { TaskState } from "../src/task-state.js";
 
 function baseState(over: Partial<TaskState> = {}): TaskState {
@@ -121,12 +122,15 @@ describe("VerificationGate", () => {
   });
 
   test("trusted task can allow skip_verify", () => {
-    const v = checkVerification(baseState({
-      goal: "fix bug\n[allow_skip_verify]",
-      filesChanged: ["x.ts"],
-    }), {
-      skipVerifyReason: "no test harness in workspace",
-    });
+    const v = checkVerification(
+      baseState({
+        goal: "fix bug\n[allow_skip_verify]",
+        filesChanged: ["x.ts"],
+      }),
+      {
+        skipVerifyReason: "no test harness in workspace",
+      },
+    );
     expect(v.ok).toBe(true);
     if (v.ok) expect(v.mode).toBe("skipped");
   });
@@ -222,6 +226,24 @@ describe("ToolFailureRecovery + idle fuse", () => {
     sigs = updateFailureSignatures(sigs, [{ tool: "read" }], [success]);
     expect(sigs).toEqual([]);
     expect(idleFuseTripped(sigs, 3)).toBe(false);
+  });
+
+  test("control-plane rejections do not create recovery or idle-fuse failures", () => {
+    const previous = ["workspace.read_file|E_IO|real failure"];
+    const recovery = collectToolRecoveryMessage(
+      [{ tool: "workspace.read_file" }],
+      [
+        {
+          ok: false,
+          payload: { code: "E_LOOP_POLICY" },
+          summary: "[LoopPolicy:implementation_required] edit now",
+        },
+      ],
+      previous,
+    );
+    expect(recovery.message).toBeNull();
+    expect(recovery.signatures).toEqual(previous);
+    expect(recovery.fuseTripped).toBe(false);
   });
 });
 
@@ -335,11 +357,11 @@ describe("SWE-Exp lifecycle gates", () => {
     expect(lifecycleGatesOk(summary)).toBe(true);
   });
 });
-  test("is opt-in rather than affecting every mutation task", () => {
-    expect(goalUsesCodingPhaseBudget("fix bug [require_mutation]")).toBe(false);
-    expect(
-      goalUsesCodingPhaseBudget(
-        "fix bug [require_mutation] [coding_phase_budget]",
-      ),
-    ).toBe(true);
-  });
+test("is opt-in rather than affecting every mutation task", () => {
+  expect(goalUsesCodingPhaseBudget("fix bug [require_mutation]")).toBe(false);
+  expect(
+    goalUsesCodingPhaseBudget(
+      "fix bug [require_mutation] [coding_phase_budget]",
+    ),
+  ).toBe(true);
+});
