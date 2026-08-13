@@ -123,7 +123,7 @@ export function runResultFromDecision(
 }
 
 export function collectToolRecoveryMessage(
-  calls: readonly { readonly tool: string }[],
+  calls: readonly { readonly tool: string; readonly args?: unknown }[],
   results: readonly ToolRunResult[],
   failureSignatures?: readonly string[],
 ): {

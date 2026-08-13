@@ -32,6 +32,48 @@ function errorCode(payload: unknown): string {
   return typeof rec.code === "string" ? rec.code : "";
 }
 
+function stableValue(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableValue(item)).join(",")}]`;
+  }
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableValue(record[key])}`)
+    .join(",")}}`;
+}
+
+function fingerprint(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function actionIdentity(call: {
+  readonly tool: string;
+  readonly args?: unknown;
+}): string {
+  const args =
+    call.tool === "workspace.run_shell" &&
+    call.args &&
+    typeof call.args === "object" &&
+    typeof (call.args as Record<string, unknown>).command === "string"
+      ? {
+          ...(call.args as Record<string, unknown>),
+          command: ((call.args as Record<string, unknown>).command as string)
+            .replace(/\r\n/g, "\n")
+            .trim(),
+        }
+      : call.args;
+  return fingerprint(`${call.tool}\n${stableValue(args ?? {})}`);
+}
+
 /** Build a recovery hint for a failed tool result, or null if none. */
 export function recoveryHintForToolResult(
   tool: string,
@@ -111,14 +153,19 @@ export function formatRecoveryHints(
 /**
  * Idle fuse: identical failure signatures repeated N times → escalate.
  */
-export function failureSignature(tool: string, result: ToolRunResult): string {
+export function failureSignature(
+  call: { readonly tool: string; readonly args?: unknown },
+  result: ToolRunResult,
+): string {
   const code = errorCode(result.payload) || (result.ok ? "ok" : "fail");
-  return `${tool}|${code}|${result.summary.slice(0, 80)}`;
+  return `${call.tool}|${actionIdentity(call)}|${code}|${fingerprint(
+    result.summary.slice(0, 240),
+  )}`;
 }
 
 export function updateFailureSignatures(
   prev: readonly string[] | undefined,
-  calls: readonly { tool: string }[],
+  calls: readonly { readonly tool: string; readonly args?: unknown }[],
   results: readonly ToolRunResult[],
   limit = 8,
 ): readonly string[] {
@@ -135,7 +182,7 @@ export function updateFailureSignatures(
         entry,
       ): entry is {
         result: ToolRunResult;
-        call: { tool: string };
+        call: { readonly tool: string; readonly args?: unknown };
       } => Boolean(entry.call) && !isControlPlaneToolResult(entry.result),
     );
   if (productFailures.length === 0) return prev ?? [];
@@ -143,7 +190,7 @@ export function updateFailureSignatures(
   const next = [...(prev ?? [])];
   for (const { call, result } of productFailures) {
     if (result.ok) continue;
-    next.push(failureSignature(call.tool, result));
+    next.push(failureSignature(call, result));
   }
   return next.slice(-limit);
 }

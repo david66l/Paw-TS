@@ -210,6 +210,49 @@ describe("ToolFailureRecovery + idle fuse", () => {
     expect(idleFuseTripped(sigs, 3)).toBe(true);
   });
 
+  test("different shell commands do not share an idle-fuse signature", () => {
+    const fail = {
+      ok: false as const,
+      summary: "run_shell: exit 1 — Command failed with exit code 1",
+      payload: {},
+    };
+    let sigs: readonly string[] = [];
+    for (const command of [
+      "python -c \"print('one')\"",
+      "python -c \"print('two')\"",
+      "python -c \"print('three')\"",
+      "python -c \"print('four')\"",
+    ]) {
+      sigs = updateFailureSignatures(
+        sigs,
+        [{ tool: "workspace.run_shell", args: { command } }],
+        [fail],
+      );
+    }
+    expect(idleFuseTripped(sigs, 3)).toBe(false);
+    expect(new Set(sigs).size).toBe(4);
+  });
+
+  test("the same shell action and failure still trips without exposing args", () => {
+    const secret = "token-super-secret";
+    const call = {
+      tool: "workspace.run_shell",
+      args: { command: `curl -H Authorization:${secret} localhost` },
+    };
+    const fail = {
+      ok: false as const,
+      summary: "run_shell: exit 1 — Command failed with exit code 1",
+      payload: {},
+    };
+    let sigs: readonly string[] = [];
+    for (let i = 0; i < 3; i++) {
+      sigs = updateFailureSignatures(sigs, [call], [fail]);
+    }
+    expect(idleFuseTripped(sigs, 3)).toBe(true);
+    expect(sigs.join("\n")).not.toContain(secret);
+    expect(sigs[0]).toBe(sigs[1]);
+  });
+
   test("successful progress resets the idle-fuse failure streak", () => {
     const fail = {
       ok: false as const,
