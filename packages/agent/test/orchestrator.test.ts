@@ -1040,6 +1040,128 @@ describe("AgentOrchestrator", () => {
     }
   });
 
+  test("trusted tool policy blocks before approval, checkpoint, and workspace write", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-policy-"));
+    const events: RunEventEnvelope[] = [];
+    let approvals = 0;
+    const o = new AgentOrchestrator({
+      model: new FakeLanguageModel(),
+      approvalPolicy: () => true,
+      resolveToolApproval: async () => {
+        approvals++;
+        return true;
+      },
+      toolExecutionPolicy: ({ tool }) =>
+        tool === "workspace.write_file"
+          ? {
+              allowed: false,
+              reason: "new_file_forbidden",
+              message: "Use an existing tracked source file.",
+            }
+          : { allowed: true },
+      onEvent: (event) => events.push(event),
+    });
+    const result = await o.run({
+      runId: "policy1",
+      goal: "write file 'blocked.txt' 'xy'",
+      workspaceRoot: dir,
+      maxSteps: 4,
+    });
+    expect(["completed", "incomplete"]).toContain(result.status);
+    expect(approvals).toBe(0);
+    expect(existsSync(path.join(dir, "blocked.txt"))).toBe(false);
+    expect(existsSync(path.join(dir, ".paw", "checkpoints"))).toBe(false);
+    const blocked = events.find(
+      (event) =>
+        event.event.type === "tool.result" &&
+        event.event.summary.includes("ToolPolicy:new_file_forbidden"),
+    );
+    expect(blocked?.event.type).toBe("tool.result");
+  });
+
+  test("external verification closes after a current harness failure and diff inspection", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-external-"));
+    writeFileSync(path.join(dir, "product.py"), "value = 1\n", "utf8");
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw-test@example.invalid"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "product.py"],
+      ["commit", "-m", "fixture"],
+    ]) {
+      const git = Bun.spawnSync(["git", ...args], {
+        cwd: dir,
+        stdout: "ignore",
+        stderr: "pipe",
+      });
+      expect(git.exitCode).toBe(0);
+    }
+
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "external-verification",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.edit_file",
+                args: {
+                  path: "product.py",
+                  old_string: "value = 1",
+                  new_string: "value = 2",
+                },
+              }),
+            };
+          }
+          if (calls === 2) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: {
+                  command: "python -m pytest --definitely-invalid-paw-option",
+                },
+              }),
+            };
+          }
+          if (calls === 3) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.git_diff",
+                args: {},
+              }),
+            };
+          }
+          return {
+            text: JSON.stringify({
+              action: "final_answer",
+              summary:
+                "Changed product.py; local pytest could not execute, so external verification remains pending.",
+            }),
+          };
+        },
+      },
+      verificationPolicy: { authority: "external", requireMutation: true },
+      retrySleep: async () => {},
+    });
+
+    const result = await o.run({
+      runId: "external-verification",
+      goal: "Fix the product value",
+      workspaceRoot: dir,
+      maxSteps: 6,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.outcome).toBe("model_declared");
+    expect(result.completionReason).toBe("external_verification_pending");
+    expect(result.evidence?.filesChanged).toContain("product.py");
+    expect(result.evidence?.testResults.at(-1)?.passed).toBe(false);
+    expect(result.message).toContain("external verification remains pending");
+    expect(calls).toBe(4);
+  });
+
   test("abort after first tool stops before next model turn", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-ab2-"));
     writeFileSync(path.join(dir, "x.txt"), "x");

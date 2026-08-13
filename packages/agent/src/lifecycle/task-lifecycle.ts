@@ -33,6 +33,7 @@ import {
   ALLOW_SKIP_VERIFY_MARKER,
   REQUIRE_MUTATION_MARKER,
   type VerificationDecision,
+  type VerificationPolicy,
   checkVerification,
   extractSkipVerifyReason,
   goalRequiresMutation,
@@ -60,6 +61,7 @@ export {
 export type {
   CompletionDecision,
   VerificationDecision,
+  VerificationPolicy,
   RecoveryHint,
   LifecycleBudget,
 };
@@ -73,6 +75,7 @@ export function evaluateFinalAnswer(
   message: string,
   taskState: TaskState,
   hasEverUsedTools: boolean,
+  verificationPolicy?: VerificationPolicy,
 ): {
   readonly verification: VerificationDecision;
   readonly decision: CompletionDecision | null;
@@ -83,6 +86,7 @@ export function evaluateFinalAnswer(
   const skip = extractSkipVerifyReason(message);
   const verification = checkVerification(taskState, {
     skipVerifyReason: skip,
+    policy: verificationPolicy,
   });
   if (!verification.ok) {
     return {

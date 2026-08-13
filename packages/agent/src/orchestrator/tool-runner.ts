@@ -35,6 +35,7 @@ import type {
 } from "@paw/harness";
 import { toolRequiresApproval } from "@paw/harness";
 import type { FileLockLike } from "@paw/harness";
+import type { ToolExecutionPolicy } from "../execution-policy.js";
 import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
 import type { TaskStateManager } from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
@@ -176,6 +177,8 @@ interface ToolExecutionContext {
   readonly allowedTools?: readonly string[] | null;
   /** P3 冷库：会话级可寻址归档（context.recall 执行 + 截断全文归档） */
   readonly artifactRegistry?: ArtifactRegistry;
+  /** Trusted policy gate, evaluated before approval, checkpoint, or execution. */
+  readonly toolExecutionPolicy?: ToolExecutionPolicy;
 }
 
 /** 审批上下文 */
@@ -240,15 +243,31 @@ export async function executeToolCalls(
     toolCtx.allowedTools && toolCtx.allowedTools.length > 0
       ? new Set(toolCtx.allowedTools)
       : null;
-  const blockedByPolicy = calls.map((call) => {
-    if (toolCtx.childPolicy === "read_only" && isMutatingTool(call.tool)) {
-      return true;
-    }
-    if (allowSet && !allowSet.has(call.tool)) {
-      return true;
-    }
-    return false;
-  });
+  const policyBlocks = await Promise.all(
+    calls.map(async (call) => {
+      if (toolCtx.childPolicy === "read_only" && isMutatingTool(call.tool)) {
+        return {
+          reason: "read_only_policy",
+          message: `Tool ${call.tool} is unavailable in a read-only child agent.`,
+        };
+      }
+      if (allowSet && !allowSet.has(call.tool)) {
+        return {
+          reason: "tool_not_in_allowlist",
+          message: `Tool ${call.tool} is not in this agent's tool allowlist.`,
+        };
+      }
+      const decision = await toolCtx.toolExecutionPolicy?.({
+        tool: call.tool,
+        args: call.args,
+        workspaceRoot: toolCtx.workspaceRoot,
+      });
+      return decision && !decision.allowed
+        ? { reason: decision.reason, message: decision.message }
+        : undefined;
+    }),
+  );
+  const blockedByPolicy = policyBlocks.map(Boolean);
 
   // 步骤 1.5：并行子 Agent 的文件锁（仅当注入 fileLock，即子 Agent 场景）
   // 占用语义：先到先得，后来的等待，超时按冲突失败。
@@ -346,8 +365,13 @@ export async function executeToolCalls(
 
   // 步骤 3：为修改性工具预分配 checkpoint 序列号
   // checkpoint 用于断点续跑时恢复文件状态
-  const checkpointNums: Array<number | undefined> = calls.map((call) => {
-    if (!isMutatingTool(call.tool)) return undefined;
+  const checkpointNums: Array<number | undefined> = calls.map((call, index) => {
+    if (
+      blockedByPolicy[index] ||
+      !approvals[index] ||
+      !isMutatingTool(call.tool)
+    )
+      return undefined;
     toolCtx.checkpointSeq.n += 1;
     return toolCtx.checkpointSeq.n;
   });
@@ -359,14 +383,16 @@ export async function executeToolCalls(
     calls.map(async (call, i) => {
       // 被策略阻止 → 返回 block 结果
       if (blockedByPolicy[i]) {
-        const reason =
-          allowSet && !allowSet.has(call.tool)
-            ? "tool_not_in_allowlist"
-            : "read_only_policy";
+        const block = policyBlocks[i]!;
         return {
           ok: false,
-          summary: `Tool ${call.tool} blocked: ${reason}`,
-          payload: { blocked: true, reason },
+          summary: `[ToolPolicy:${block.reason}] ${block.message}`,
+          payload: {
+            blocked: true,
+            code: "E_TOOL_POLICY",
+            reason: block.reason,
+            message: block.message,
+          },
         };
       }
       // 文件锁冲突 → 返回冲突结果（模型可改派/重试）

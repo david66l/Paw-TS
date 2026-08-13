@@ -153,6 +153,8 @@ import { loadMemoryConfigSync } from "@paw/memory/longterm";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
+import type { ToolExecutionPolicy } from "./execution-policy.js";
+import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import type { NativeToolError } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
@@ -320,6 +322,10 @@ export interface AgentOrchestratorOptions {
   readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
   /** P5.1 侧信道 monitor 配置（采样率/冷却/预算软启动，测试可注入） */
   readonly monitorOptions?: import("@paw/core").ContextMonitorOptions;
+  /** Trusted, task-scoped policy checked before tool side effects. */
+  readonly toolExecutionPolicy?: ToolExecutionPolicy;
+  /** Trusted completion authority; defaults to local verification. */
+  readonly verificationPolicy?: VerificationPolicy;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -433,6 +439,8 @@ export class AgentOrchestrator {
   private readonly agentCatalogText?: string;
   private readonly agentIdentityText?: string;
   private readonly createAgent?: AgentOrchestratorOptions["createAgent"];
+  private readonly toolExecutionPolicy?: AgentOrchestratorOptions["toolExecutionPolicy"];
+  private readonly verificationPolicy?: AgentOrchestratorOptions["verificationPolicy"];
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -441,6 +449,8 @@ export class AgentOrchestrator {
     this.resolveAskUser = opts?.resolveAskUser;
     this.resolveToolApproval = opts?.resolveToolApproval;
     this.approvalPolicy = opts?.approvalPolicy;
+    this.toolExecutionPolicy = opts?.toolExecutionPolicy;
+    this.verificationPolicy = opts?.verificationPolicy;
     this.fileLock = opts?.fileLock;
     // P1 入口闸：会话级去重器（仅 root orchestrator；子 Agent 不重复去重）
     this._payloadDeduper = opts?.fileLock ? undefined : createPayloadDeduper();
@@ -751,6 +761,9 @@ export class AgentOrchestrator {
             ? { memoryRuntime: this._memoryRuntime }
             : {}),
           ...(this._memoryTaskId ? { memoryTaskId: this._memoryTaskId } : {}),
+          ...(this.verificationPolicy
+            ? { verificationPolicy: this.verificationPolicy }
+            : {}),
         };
 
         // 执行一轮
@@ -1831,6 +1844,7 @@ export class AgentOrchestrator {
         taskSnapshot,
         turnsRemaining,
         maxSteps,
+        ctx.verificationPolicy,
       );
       if (guidance) ctxMgr.addUser(guidance);
       flags._convergenceEvidenceKey = evidenceKey;
@@ -1913,6 +1927,7 @@ export class AgentOrchestrator {
         memoryTaskId: this._memoryTaskId ?? undefined,
         createAgent: this.createAgent,
         allowedTools: this.allowedTools,
+        toolExecutionPolicy: this.toolExecutionPolicy,
       },
       {
         diagnosis,

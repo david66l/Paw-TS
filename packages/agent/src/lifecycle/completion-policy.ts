@@ -66,9 +66,7 @@ export function decideCompletion(
   input: DecideCompletionInput,
 ): CompletionDecision {
   const skipReason =
-    input.verification &&
-    input.verification.ok &&
-    input.verification.mode === "skipped"
+    input.verification?.ok && input.verification.mode === "skipped"
       ? input.verification.skipVerifyReason
       : undefined;
   const evidence = evidenceFromTaskState(input.taskState, skipReason);
@@ -121,10 +119,7 @@ export function decideCompletion(
     };
   }
 
-  if (
-    input.verification?.ok &&
-    input.verification.mode === "tests_passed"
-  ) {
+  if (input.verification?.ok && input.verification.mode === "tests_passed") {
     return {
       status: "completed",
       outcome: "verified",
@@ -134,14 +129,24 @@ export function decideCompletion(
     };
   }
 
-  if (
-    input.verification?.ok &&
-    input.verification.mode === "skipped"
-  ) {
+  if (input.verification?.ok && input.verification.mode === "skipped") {
     return {
       status: "completed",
       outcome: "model_declared",
       reason: "skip_verify",
+      message,
+      evidence,
+    };
+  }
+
+  if (
+    input.verification?.ok &&
+    input.verification.mode === "external_pending"
+  ) {
+    return {
+      status: "completed",
+      outcome: "model_declared",
+      reason: "external_verification_pending",
       message,
       evidence,
     };

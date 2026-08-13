@@ -18,6 +18,8 @@ import type { LanguageModel } from "@paw/models";
 import type { FileLockLike } from "@paw/harness";
 import { materializeAgent } from "./agents/factory.js";
 import type { AgentRegistry } from "./agents/registry.js";
+import type { ToolExecutionPolicy } from "./execution-policy.js";
+import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
 import { AgentOrchestrator, type ToolApprovalInput } from "./orchestrator.js";
 import { buildMinimalSharedContext } from "./orchestrator/agent-args.js";
 import type { SharedContext } from "./orchestrator/types.js";
@@ -41,6 +43,8 @@ export interface DefaultSubAgentLauncherOptions {
   readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
   /** 工具审批策略（与根 Orchestrator 同一语义） */
   readonly approvalPolicy?: (tool: string) => boolean | undefined;
+  readonly toolExecutionPolicy?: ToolExecutionPolicy;
+  readonly verificationPolicy?: VerificationPolicy;
 }
 
 function isSharedContext(value: unknown): value is SharedContext {
@@ -81,6 +85,8 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
   private readonly agentRegistry?: AgentRegistry;
   private readonly resolveToolApproval?: DefaultSubAgentLauncherOptions["resolveToolApproval"];
   private readonly approvalPolicy?: DefaultSubAgentLauncherOptions["approvalPolicy"];
+  private readonly toolExecutionPolicy?: DefaultSubAgentLauncherOptions["toolExecutionPolicy"];
+  private readonly verificationPolicy?: DefaultSubAgentLauncherOptions["verificationPolicy"];
 
   constructor(opts: DefaultSubAgentLauncherOptions) {
     this.workspaceRoot = opts.workspaceRoot;
@@ -92,6 +98,8 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
     this.agentRegistry = opts.agentRegistry;
     this.resolveToolApproval = opts.resolveToolApproval;
     this.approvalPolicy = opts.approvalPolicy;
+    this.toolExecutionPolicy = opts.toolExecutionPolicy;
+    this.verificationPolicy = opts.verificationPolicy;
   }
 
   private createChildOrchestrator(
@@ -118,6 +126,8 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
       allowedTools: extras?.allowedTools,
       resolveToolApproval: this.resolveToolApproval,
       approvalPolicy: this.approvalPolicy,
+      toolExecutionPolicy: this.toolExecutionPolicy,
+      verificationPolicy: this.verificationPolicy,
       fileLock: extras?.fileLock,
       contextManager: extras?.contextManager,
       onEvent,
@@ -211,8 +221,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
             ...(parentCtx?.state?.pending ?? []),
             ...mat.sharedContext.state.pending,
           ],
-          risks:
-            mat.sharedContext.state.risks ?? parentCtx?.state?.risks,
+          risks: mat.sharedContext.state.risks ?? parentCtx?.state?.risks,
         },
         parentConclusions: parentCtx?.parentConclusions,
       };

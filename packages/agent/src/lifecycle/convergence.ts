@@ -1,6 +1,7 @@
 import type { AgentToolCallAction } from "@paw/core";
 import type { TaskState } from "../task-state.js";
 import { isVerificationCommand, verificationOutcome } from "../task-state.js";
+import type { VerificationPolicy } from "./verification-gate.js";
 
 const SOURCE_MUTATION_TOOLS = new Set([
   "workspace.write_file",
@@ -94,6 +95,7 @@ export function convergenceToolBlockReason(
   state: TaskState,
   turn: number,
   maxSteps: number,
+  verificationPolicy?: VerificationPolicy,
 ): string | null {
   if (!goalLikelyRequiresImplementation(state.goal)) return null;
   if (isEditRecoveryRead(call, state)) return null;
@@ -140,6 +142,13 @@ export function convergenceToolBlockReason(
     verificationOutcome(latest) === "harness_failed" &&
     isInvestigationCall(call)
   ) {
+    if (verificationPolicy?.authority === "external") {
+      if ((state.diffInspectedRevision ?? 0) !== revision) {
+        if (isDiffInspection(call)) return null;
+        return "[LoopPolicy:inspect_external_diff] Local verification could not execute and the trusted external verifier will make the authoritative acceptance decision. Further harness construction is deferred. Inspect the final diff for scope and accidental files now.";
+      }
+      return "[LoopPolicy:deliver_external] Local verification could not execute, but the current product revision has an inspected final diff and a trusted external verifier is configured. Deliver final_answer now, report the local harness failure honestly, and do not claim tests passed.";
+    }
     const recoveryCalls = shellCallsSince(state, latest.shellCommandRevision);
     if (call.tool === "workspace.run_shell" && recoveryCalls < 4) return null;
     return "[LoopPolicy:recover_verification_harness] The last verification did not execute because its harness or environment failed; this is not evidence that the code is wrong. Repository browsing is deferred. Repair the local test invocation/environment with a bounded shell action, then rerun verification; after four recovery commands, edit or retry a concrete acceptance command instead of continuing environment exploration.";
@@ -175,6 +184,7 @@ export function convergenceGuidance(
   state: TaskState,
   turnsRemaining: number,
   maxSteps: number,
+  verificationPolicy?: VerificationPolicy,
 ): string | null {
   const revision = state.mutationRevision ?? 0;
   if (
@@ -192,7 +202,11 @@ export function convergenceGuidance(
       "Run the narrowest high-signal acceptance or regression test against the current source revision. Prefer an existing repository test or a direct command; do not build and debug a separate helper harness. Do not rely on a test that predates the latest edit.";
   } else if (verificationOutcome(latest) === "harness_failed") {
     next =
-      "The last verification did not execute because the harness or environment failed. Repair the invocation with a bounded diagnostic, then rerun it; do not treat infrastructure failure as a code assertion failure.";
+      verificationPolicy?.authority === "external"
+        ? (state.diffInspectedRevision ?? 0) === revision
+          ? "Local verification could not execute, and a trusted external verifier is configured. Deliver final_answer now with an honest local-verification caveat; do not claim tests passed."
+          : "Local verification could not execute, and a trusted external verifier is configured. Stop building replacement harnesses and inspect the final product diff now."
+        : "The last verification did not execute because the harness or environment failed. Repair the invocation with a bounded diagnostic, then rerun it; do not treat infrastructure failure as a code assertion failure.";
   } else if (verificationOutcome(latest) === "code_failed") {
     next =
       "Use the exact current test failure to revise the implementation, then rerun that test. Avoid reopening broad repository exploration.";

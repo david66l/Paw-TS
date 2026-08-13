@@ -31,13 +31,15 @@ import {
 } from "./agents/index.js";
 import { createAutonomyProfile } from "./autonomy/profile.js";
 import {
-  resolveCollaborationMode,
   type CollaborationMode,
+  resolveCollaborationMode,
 } from "./collaboration-mode.js";
+import type { ToolExecutionPolicy } from "./execution-policy.js";
 import {
-  resolveLifecycleBudget,
   type LifecycleBudget,
+  resolveLifecycleBudget,
 } from "./lifecycle/budget.js";
+import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
 import {
   AgentOrchestrator,
   type AskUserResolveInput,
@@ -52,12 +54,16 @@ export interface RunOrchestratorOptions {
   readonly resolveAskUser?: (input: AskUserResolveInput) => Promise<string>;
   readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
   readonly approvalPolicy?: (tool: string) => boolean | undefined;
+  readonly toolExecutionPolicy?: ToolExecutionPolicy;
+  readonly verificationPolicy?: VerificationPolicy;
   /**
    * Autonomy profile (default headless for CLI/eval long-runs).
    * When set, merges resolvers + applies shell policy unless explicit
    * resolveToolApproval / resolveAskUser overrides are provided for interactive.
    */
-  readonly autonomy?: import("./autonomy/profile.js").AutonomyLevel | import("./autonomy/profile.js").AutonomyProfileOptions;
+  readonly autonomy?:
+    | import("./autonomy/profile.js").AutonomyLevel
+    | import("./autonomy/profile.js").AutonomyProfileOptions;
   /** Lifecycle budgets (steps / child steps / idle fuse). */
   readonly budget?: Partial<LifecycleBudget>;
   readonly mcpServers?: readonly McpServerConfig[];
@@ -99,9 +105,10 @@ function loadWorkspaceSettings(
   workspaceRoot: string,
 ): Record<string, unknown> | undefined {
   try {
-    return loadPawSettingsLocal(
-      defaultSettingsPath(workspaceRoot),
-    ) as Record<string, unknown>;
+    return loadPawSettingsLocal(defaultSettingsPath(workspaceRoot)) as Record<
+      string,
+      unknown
+    >;
   } catch {
     return undefined;
   }
@@ -222,6 +229,8 @@ export function createRunOrchestrator(
     // 子 Agent 走同一（已串行化）审批通道：编码犬的写文件/改 patch 也会进审批门
     resolveToolApproval,
     approvalPolicy,
+    toolExecutionPolicy: opts.toolExecutionPolicy,
+    verificationPolicy: opts.verificationPolicy,
   });
 
   const createAgent = (input: {
@@ -279,7 +288,7 @@ export function createRunOrchestrator(
   const identityText =
     collab.identityText ??
     (rootSpec
-      ? `${rootSpec.emoji ? rootSpec.emoji + " " : ""}${rootSpec.name}（${rootSpec.role}）\n${rootSpec.prompt}`
+      ? `${rootSpec.emoji ? `${rootSpec.emoji} ` : ""}${rootSpec.name}（${rootSpec.role}）\n${rootSpec.prompt}`
       : undefined);
 
   const orch = new AgentOrchestrator({
@@ -289,6 +298,8 @@ export function createRunOrchestrator(
     resolveAskUser,
     resolveToolApproval,
     approvalPolicy,
+    toolExecutionPolicy: opts.toolExecutionPolicy,
+    verificationPolicy: opts.verificationPolicy,
     subAgentLauncher: collab.canSpawn ? subAgentLauncher : undefined,
     appStateStore,
     sessionStore,

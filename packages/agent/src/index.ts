@@ -97,6 +97,11 @@ export {
   type AutonomyProfile,
   type AutonomyProfileOptions,
 } from "./autonomy/index.js";
+export type {
+  ToolExecutionPolicy,
+  ToolExecutionPolicyDecision,
+  ToolExecutionPolicyInput,
+} from "./execution-policy.js";
 export {
   decideCompletion,
   checkVerification,

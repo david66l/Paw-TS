@@ -356,6 +356,39 @@ describe("convergence guidance", () => {
     ).toContain("recover_verification_harness");
   });
 
+  test("external verifier redirects harness failure to diff then honest delivery", () => {
+    const failed = state({
+      testResults: [
+        {
+          command: "pytest",
+          passed: false,
+          outcome: "harness_failed",
+          summary: "plugin missing",
+          mutationRevision: 1,
+        },
+      ],
+    });
+    const read = {
+      type: "tool_call" as const,
+      tool: "workspace.read_file",
+      args: { path: "more.py" },
+    };
+    expect(
+      convergenceToolBlockReason(read, failed, 40, 64, {
+        authority: "external",
+      }),
+    ).toContain("inspect_external_diff");
+    expect(
+      convergenceToolBlockReason(
+        read,
+        { ...failed, diffInspectedRevision: 1 },
+        41,
+        64,
+        { authority: "external" },
+      ),
+    ).toContain("deliver_external");
+  });
+
   test("allows only bounded diagnostics after a code verification failure", () => {
     const shell = {
       type: "tool_call" as const,

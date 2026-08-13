@@ -7,8 +7,10 @@ import {
   createRunOrchestrator,
   resolveLifecycleBudget,
 } from "@paw/agent";
+import type { ToolExecutionPolicy } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import { createDefaultLanguageModel } from "@paw/models";
+import { parsePatch } from "diff";
 
 import { writeJsonAtomic } from "../swe-exp/checkpoint.js";
 import { loadLiteInstances } from "../swe-exp/dataset.js";
@@ -174,6 +176,134 @@ function currentDirty(repoRoot: string): boolean {
   return new TextDecoder().decode(result.stdout).trim().length > 0;
 }
 
+function normalizePolicyPath(
+  workspaceRoot: string,
+  candidate: string,
+): string | undefined {
+  const absolute = path.isAbsolute(candidate)
+    ? path.resolve(candidate)
+    : path.resolve(workspaceRoot, candidate);
+  const relative = path.relative(path.resolve(workspaceRoot), absolute);
+  if (
+    !relative ||
+    relative === "." ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    return undefined;
+  }
+  const normalized = relative.replace(/\\/g, "/");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isTestMutationPath(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/").toLowerCase();
+  const name = normalized.split("/").at(-1) ?? normalized;
+  return (
+    normalized
+      .split("/")
+      .some((part) => ["test", "tests", "__tests__"].includes(part)) ||
+    /^test[_-]/.test(name) ||
+    /(?:^|[_-])tests?\.[^.]+$/.test(name) ||
+    /\.(?:test|spec)\.[^.]+$/.test(name) ||
+    name === "conftest.py"
+  );
+}
+
+function mutationTargets(tool: string, args: unknown): string[] {
+  const input =
+    args && typeof args === "object" && !Array.isArray(args)
+      ? (args as Record<string, unknown>)
+      : {};
+  if (
+    tool === "workspace.write_file" ||
+    tool === "workspace.edit_file" ||
+    tool === "workspace.notebook_edit"
+  ) {
+    return typeof input.path === "string" ? [input.path] : [];
+  }
+  if (tool !== "workspace.apply_patch" || typeof input.patch !== "string") {
+    return [];
+  }
+  try {
+    return parsePatch(input.patch).flatMap((part) =>
+      [part.oldFileName, part.newFileName]
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value !== "/dev/null",
+        )
+        .map((value) => value.replace(/^(?:a|b)\//, "")),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Compile the frozen SWE task contract into a trusted pre-execution gate.
+ * The model cannot weaken this policy by editing its own prompt or summary.
+ */
+export function createSweCompareToolExecutionPolicy(input: {
+  readonly workspaceRoot: string;
+  readonly trackedFiles: ReadonlySet<string>;
+}): ToolExecutionPolicy {
+  const tracked = new Set(
+    [...input.trackedFiles].map((file) =>
+      process.platform === "win32" ? file.toLowerCase() : file,
+    ),
+  );
+  return ({ tool, args }) => {
+    const targets = mutationTargets(tool, args);
+    if (targets.length === 0) return { allowed: true };
+    for (const target of targets) {
+      const relative = normalizePolicyPath(input.workspaceRoot, target);
+      if (!relative) {
+        return {
+          allowed: false,
+          reason: "mutation_outside_workspace",
+          message: `Mutation target ${target} is outside the task workspace. Edit an existing tracked product source file instead.`,
+        };
+      }
+      if (!tracked.has(relative)) {
+        return {
+          allowed: false,
+          reason: "new_file_forbidden",
+          message: `This task permits edits only to existing tracked source files; ${relative} is not tracked. Do not create helper, probe, patch, or replacement test files. Use the repository's existing source and test commands.`,
+        };
+      }
+      if (isTestMutationPath(relative)) {
+        return {
+          allowed: false,
+          reason: "test_mutation_forbidden",
+          message: `This task treats tests as read-only; ${relative} cannot be modified. Fix the existing product source instead.`,
+        };
+      }
+    }
+    return { allowed: true };
+  };
+}
+
+function trackedFiles(workspaceRoot: string): ReadonlySet<string> {
+  const result = Bun.spawnSync(["git", "ls-files", "-z"], {
+    cwd: workspaceRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `cannot freeze tracked-file policy: ${new TextDecoder().decode(result.stderr).trim()}`,
+    );
+  }
+  return new Set(
+    new TextDecoder()
+      .decode(result.stdout)
+      .split("\0")
+      .filter(Boolean)
+      .map((file) => file.replace(/\\/g, "/")),
+  );
+}
+
 function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -303,6 +433,14 @@ async function runPaw(opts: {
     // rejected before the harness spawns a process. Non-shell tools stay free.
     approvalPolicy: (tool) => tool === "workspace.run_shell",
     resolveToolApproval: async (input) => allowSweCompareToolCall(input),
+    toolExecutionPolicy: createSweCompareToolExecutionPolicy({
+      workspaceRoot: opts.workspaceRoot,
+      trackedFiles: trackedFiles(opts.workspaceRoot),
+    }),
+    // Local checks remain evidence, but the official SWE-bench container is
+    // authoritative. Harness failure may close only after a material edit and
+    // fresh diff inspection; it is never recorded as a local pass.
+    verificationPolicy: { authority: "external", requireMutation: true },
     onEvent: (event) => {
       if (
         event.event.type !== "model.chunk" &&

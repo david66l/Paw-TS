@@ -26,6 +26,8 @@ import type { McpClientManager } from "@paw/harness";
 import type { MemoryRuntime } from "@paw/memory";
 import type { LanguageModel, ToolDefinition } from "@paw/models";
 import type { TaskPlanner } from "@paw/store";
+import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
+import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
 import type { TaskStateManager } from "../task-state.js";
 
 // ═════════════════════════════════════════════════════════════
@@ -136,9 +138,7 @@ export interface TurnFlags {
   /** Mid-run no-mutation checkpoint has been injected. */
   _implementationWarned?: boolean;
   /** [require_mutation] coding tasks: bounded locate/edit/verify phase state. */
-  readonly codingPhase?: import(
-    "../lifecycle/coding-phase.js",
-  ).CodingPhaseState;
+  readonly codingPhase?: CodingPhaseState;
   /** Consecutive model turns attempting tools blocked by CodingPhase. */
   readonly codingPhaseViolationTurns?: number;
 }
@@ -186,6 +186,8 @@ export interface PhaseContext {
   readonly memoryRuntime?: MemoryRuntime;
   /** 当前 TaskSession id */
   readonly memoryTaskId?: string;
+  /** Trusted authority for completion evidence; never derived from model text. */
+  readonly verificationPolicy?: VerificationPolicy;
 }
 
 // ═════════════════════════════════════════════════════════════

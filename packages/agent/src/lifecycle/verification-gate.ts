@@ -8,7 +8,11 @@ import { verificationOutcome } from "../task-state.js";
 export type VerificationDecision =
   | {
       readonly ok: true;
-      readonly mode: "no_mutation" | "tests_passed" | "skipped";
+      readonly mode:
+        | "no_mutation"
+        | "tests_passed"
+        | "skipped"
+        | "external_pending";
       readonly skipVerifyReason?: string;
     }
   | {
@@ -27,6 +31,13 @@ export const REQUIRE_MUTATION_MARKER = "[require_mutation]";
  */
 export const ALLOW_SKIP_VERIFY_MARKER = "[allow_skip_verify]";
 
+/** Trusted completion authority. External mode never claims local tests passed. */
+export interface VerificationPolicy {
+  readonly authority: "local" | "external";
+  /** Trusted task contract; unlike a prompt marker, the model cannot remove it. */
+  readonly requireMutation?: boolean;
+}
+
 /** Extract optional skip_verify reason from a final_answer summary. */
 export function extractSkipVerifyReason(summary: string): string | undefined {
   const m = summary.match(SKIP_VERIFY_RE);
@@ -42,10 +53,13 @@ export function goalRequiresMutation(goal: string): boolean {
  */
 export function checkVerification(
   state: TaskState,
-  opts?: { readonly skipVerifyReason?: string },
+  opts?: {
+    readonly skipVerifyReason?: string;
+    readonly policy?: VerificationPolicy;
+  },
 ): VerificationDecision {
   if (state.filesChanged.length === 0) {
-    if (goalRequiresMutation(state.goal)) {
+    if (opts?.policy?.requireMutation || goalRequiresMutation(state.goal)) {
       return {
         ok: false,
         nudge:
@@ -89,6 +103,19 @@ export function checkVerification(
   }
 
   if (latest && verificationOutcome(latest) === "harness_failed") {
+    if (
+      opts?.policy?.authority === "external" &&
+      latestRevision === currentRevision
+    ) {
+      if ((state.diffInspectedRevision ?? 0) !== currentRevision) {
+        return {
+          ok: false,
+          nudge:
+            "Local verification could not execute and this task has a trusted external verifier. Inspect the final diff for the current revision before final_answer; do not claim that local tests passed.",
+        };
+      }
+      return { ok: true, mode: "external_pending" };
+    }
     return {
       ok: false,
       nudge: `Files were changed but the latest verification did not execute because its harness/environment failed (${latest.command}${latest.evidence ? `: ${latest.evidence}` : ""}). Repair or replace the verification command and obtain real test evidence before final_answer.`,

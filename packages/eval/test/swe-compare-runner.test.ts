@@ -11,6 +11,7 @@ import {
   auditSweCompareResult,
   claudeCodeArgs,
   collectTraceMutationHints,
+  createSweCompareToolExecutionPolicy,
   extractClaudePatchFromTrace,
   parseClaudeStream,
   recoverClaudeResultPatch,
@@ -35,6 +36,41 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe("SWE compare runner", () => {
+  test("trusted mutation policy allows tracked source but rejects helpers and tests", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-policy-"));
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    mkdirSync(path.join(root, "tests"), { recursive: true });
+    writeFileSync(path.join(root, "src", "app.py"), "x = 1\n", "utf8");
+    writeFileSync(path.join(root, "tests", "test_app.py"), "pass\n", "utf8");
+    const policy = createSweCompareToolExecutionPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["src/app.py", "tests/test_app.py"]),
+    });
+
+    expect(
+      await policy({
+        tool: "workspace.edit_file",
+        args: { path: "src/app.py" },
+        workspaceRoot: root,
+      }),
+    ).toEqual({ allowed: true });
+    const helper = await policy({
+      tool: "workspace.write_file",
+      args: { path: ".paw_verify.py" },
+      workspaceRoot: root,
+    });
+    expect(helper.allowed).toBe(false);
+    if (!helper.allowed) expect(helper.reason).toBe("new_file_forbidden");
+    const testEdit = await policy({
+      tool: "workspace.edit_file",
+      args: { path: "tests/test_app.py" },
+      workspaceRoot: root,
+    });
+    expect(testEdit.allowed).toBe(false);
+    if (!testEdit.allowed)
+      expect(testEdit.reason).toBe("test_mutation_forbidden");
+  });
+
   test("Claude Code command freezes clean 1M max-effort mode", () => {
     const goal = "neutral task";
     const args = claudeCodeArgs(goal);

@@ -211,6 +211,41 @@ describe("VerificationGate", () => {
       expect(v.nudge).not.toContain("Fix the implementation failure");
     }
   });
+
+  test("trusted external verifier accepts current harness failure only after diff inspection", () => {
+    const failed = baseState({
+      filesChanged: ["x.ts"],
+      mutationRevision: 1,
+      testResults: [
+        {
+          command: "pytest",
+          passed: false,
+          outcome: "harness_failed",
+          summary: "exit 4",
+          mutationRevision: 1,
+        },
+      ],
+    });
+    const beforeDiff = checkVerification(failed, {
+      policy: { authority: "external" },
+    });
+    expect(beforeDiff.ok).toBe(false);
+    if (!beforeDiff.ok)
+      expect(beforeDiff.nudge).toContain("Inspect the final diff");
+    const afterDiff = checkVerification(
+      { ...failed, diffInspectedRevision: 1 },
+      { policy: { authority: "external" } },
+    );
+    expect(afterDiff).toEqual({ ok: true, mode: "external_pending" });
+  });
+
+  test("trusted verification policy can require mutation without a prompt marker", () => {
+    const decision = checkVerification(baseState(), {
+      policy: { authority: "external", requireMutation: true },
+    });
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) expect(decision.nudge).toContain("requires file changes");
+  });
 });
 
 describe("ToolFailureRecovery + idle fuse", () => {

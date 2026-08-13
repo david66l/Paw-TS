@@ -31,6 +31,7 @@ import type {
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { TaskPlanner } from "@paw/store";
+import type { ToolExecutionPolicy } from "../execution-policy.js";
 import {
   EMPTY_CODING_PHASE_STATE,
   advanceCodingPhase,
@@ -100,6 +101,7 @@ interface ActionHandlerContext {
   readonly allowedTools?: readonly string[] | null;
   /** 并行子 Agent 的文件锁（仅子 Agent 注入） */
   readonly fileLock?: import("@paw/harness").FileLockLike;
+  readonly toolExecutionPolicy?: ToolExecutionPolicy;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -502,6 +504,7 @@ function handleFinalAnswer(
     summary,
     ctx.taskState.snapshot(),
     flags.hasEverUsedTools,
+    ctx.verificationPolicy,
   );
   const verifyNudges = flags.verifyNudges ?? 0;
   if (
@@ -821,7 +824,13 @@ async function handleToolCalls(
   let projectedCodingPhase = priorCodingPhase;
   const taskState = ctx.taskState.snapshot();
   const convergenceBlockReasons = calls.map((call) =>
-    convergenceToolBlockReason(call, taskState, ctx.turn + 1, ctx.maxSteps),
+    convergenceToolBlockReason(
+      call,
+      taskState,
+      ctx.turn + 1,
+      ctx.maxSteps,
+      ctx.verificationPolicy,
+    ),
   );
   const codingPhaseBlockReasons = calls.map((call, index) => {
     // A call rejected by the general loop policy never reaches the opt-in
@@ -869,6 +878,7 @@ async function handleToolCalls(
       allowedTools: opts.allowedTools,
       fileLock: opts.fileLock,
       artifactRegistry: ctx.artifactRegistry,
+      toolExecutionPolicy: opts.toolExecutionPolicy,
     },
     {
       resolveToolApproval: opts.resolveToolApproval,
