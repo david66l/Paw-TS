@@ -641,6 +641,38 @@ describe("SWE compare runner", () => {
             type: "tool.call",
             tool: "workspace.edit_file",
             args: {
+              path: "verify_tmp.py",
+              old_string: "old",
+              new_string: "new",
+            },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.edit_file",
+            ok: true,
+          },
+        },
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.run_shell",
+            args: { command: "del verify_tmp.py 2>nul" },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.run_shell",
+            ok: true,
+          },
+        },
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.edit_file",
+            args: {
               path: "sklearn/utils/multiclass.py",
               old_string: "from collections.abc import Sequence",
               new_string: "from collections.abc import Sequence  # replay",

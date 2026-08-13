@@ -1363,6 +1363,48 @@ function successfulPawEdits(trace: readonly unknown[]): PawSuccessfulEdit[] {
   return successful;
 }
 
+function successfulPawDeletedPaths(trace: readonly unknown[]): Set<string> {
+  const pending: string[] = [];
+  const deleted = new Set<string>();
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const raw = (item as Record<string, unknown>).event;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const event = raw as Record<string, unknown>;
+    if (event.type === "tool.call" && event.tool === "workspace.run_shell") {
+      const args = event.args;
+      const command =
+        args && typeof args === "object" && !Array.isArray(args)
+          ? (args as Record<string, unknown>).command
+          : undefined;
+      pending.push(typeof command === "string" ? command : "");
+      continue;
+    }
+    if (event.type !== "tool.result" || event.tool !== "workspace.run_shell") {
+      continue;
+    }
+    const command = pending.shift() ?? "";
+    if (event.ok !== true) continue;
+    for (const match of command.matchAll(
+      /(?:^|[;&]\s*)(?:del|rm)(?:\s+-[a-z]+)*\s+([^;&\r\n]+)/gi,
+    )) {
+      for (const token of (match[1] ?? "").match(/"[^"]+"|'[^']+'|\S+/g) ??
+        []) {
+        const value = token.replace(/^(?:"|')|(?:"|')$/g, "");
+        if (/^\d?>/i.test(value) || value === "nul") continue;
+        const normalized = value.replace(/\\/g, "/");
+        if (
+          !path.isAbsolute(normalized) &&
+          !normalized.split("/").includes("..")
+        ) {
+          deleted.add(normalized);
+        }
+      }
+    }
+  }
+  return deleted;
+}
+
 /** Recover a Paw patch by replaying only paired, successful edit_file events. */
 export function recoverPawResultPatch(opts: {
   readonly repoRoot: string;
@@ -1386,6 +1428,7 @@ export function recoverPawResultPatch(opts: {
     readFileSync(persistedTracePath, "utf8"),
   ) as unknown[];
   const edits = successfulPawEdits(trace);
+  const deletedPaths = successfulPawDeletedPaths(trace);
   if (edits.length === 0) {
     throw new Error(`no successful Paw edit_file events: ${previous.runId}`);
   }
@@ -1417,6 +1460,7 @@ export function recoverPawResultPatch(opts: {
       if (path.isAbsolute(normalized) || normalized.split("/").includes("..")) {
         throw new Error(`unsafe Paw edit path: ${edit.path}`);
       }
+      if (deletedPaths.has(normalized)) continue;
       const target = path.join(workspace.root, ...normalized.split("/"));
       const current = readFileSync(target, "utf8");
       const first = current.indexOf(edit.oldString);
