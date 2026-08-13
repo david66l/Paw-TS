@@ -785,13 +785,18 @@ export class AgentOrchestrator {
         }
 
         if (
+          state.type === "decided" ||
           state.type === "completed" ||
           state.type === "failed" ||
           state.type === "incomplete"
         ) {
+          const terminalStatus =
+            state.type === "decided" ? state.decision.status : state.type;
+          const terminalMessage =
+            state.type === "decided" ? state.decision.message : state.message;
           // 保存断点续跑状态
           const appStatus =
-            state.type === "incomplete" ? ("incomplete" as const) : state.type;
+            terminalStatus === "aborted" ? ("failed" as const) : terminalStatus;
           this.saveState(
             runId,
             spec.goal,
@@ -803,7 +808,7 @@ export class AgentOrchestrator {
             taskState,
             {
               status: appStatus,
-              message: state.message,
+              message: terminalMessage,
             },
           );
           const {
@@ -812,13 +817,16 @@ export class AgentOrchestrator {
             runResultFromDecision,
             evidenceFromTaskState,
           } = await import("./lifecycle/task-lifecycle.js");
-          let runResult: import("@paw/core").RunResult = {
-            runId,
-            status: state.type,
-            message: state.message,
-            evidence: evidenceFromTaskState(taskState.snapshot()),
-          };
-          if (state.type === "completed") {
+          let runResult: import("@paw/core").RunResult;
+          if (state.type === "decided") {
+            runResult = runResultFromDecision(runId, state.decision);
+          } else if (state.type === "completed") {
+            runResult = {
+              runId,
+              status: state.type,
+              message: state.message,
+              evidence: evidenceFromTaskState(taskState.snapshot()),
+            };
             const ev = evaluateFinalAnswer(
               state.message,
               taskState.snapshot(),
@@ -834,6 +842,12 @@ export class AgentOrchestrator {
               };
             }
           } else if (state.type === "incomplete") {
+            runResult = {
+              runId,
+              status: state.type,
+              message: state.message,
+              evidence: evidenceFromTaskState(taskState.snapshot()),
+            };
             const snap = taskState.snapshot();
             const looksLikeVerify =
               /verification|skip_verify|no passing test/i.test(state.message);
@@ -860,7 +874,10 @@ export class AgentOrchestrator {
             };
           } else {
             runResult = {
-              ...runResult,
+              runId,
+              status: state.type,
+              message: state.message,
+              evidence: evidenceFromTaskState(taskState.snapshot()),
               outcome: "failed",
               completionReason: "failed",
             };

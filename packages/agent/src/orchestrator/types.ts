@@ -27,6 +27,7 @@ import type { MemoryRuntime } from "@paw/memory";
 import type { LanguageModel, ToolDefinition } from "@paw/models";
 import type { TaskPlanner } from "@paw/store";
 import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
+import type { CompletionDecision } from "../lifecycle/completion-policy.js";
 import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
 import type { TaskStateManager } from "../task-state.js";
 
@@ -99,6 +100,8 @@ export type TurnState =
   | { readonly type: "failed"; readonly message: string }
   /** 预算耗尽 / 未达完成契约（诚实不完整） */
   | { readonly type: "incomplete"; readonly message: string }
+  /** CompletionPolicy 已作出唯一裁决；外层只能持久化/映射，不得重算。 */
+  | { readonly type: "decided"; readonly decision: CompletionDecision }
   /** 继续下一轮（携带更新后的 flags）*/
   | { readonly type: "continue"; readonly nextFlags: TurnFlags };
 

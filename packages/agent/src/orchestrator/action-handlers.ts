@@ -535,8 +535,8 @@ function handleFinalAnswer(
     });
     return {
       state: {
-        type: "incomplete",
-        message: decision.message,
+        type: "decided",
+        decision,
       },
       flags,
     };
@@ -558,17 +558,10 @@ function handleFinalAnswer(
     });
   }
 
-  const statusType =
-    evaluated.decision.status === "incomplete"
-      ? ("incomplete" as const)
-      : evaluated.decision.status === "failed"
-        ? ("failed" as const)
-        : ("completed" as const);
-
   return {
     state: {
-      type: statusType,
-      message: evaluated.decision.message,
+      type: "decided",
+      decision: evaluated.decision,
     },
     flags,
   };

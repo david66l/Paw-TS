@@ -1098,6 +1098,7 @@ describe("AgentOrchestrator", () => {
     }
 
     let calls = 0;
+    const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
       model: {
         label: "external-verification",
@@ -1142,8 +1143,12 @@ describe("AgentOrchestrator", () => {
           };
         },
       },
+      auxiliaryModel: new FakeLanguageModel({
+        responses: [{ text: '{"keep":[],"drop":[],"add":[]}' }],
+      }),
       verificationPolicy: { authority: "external", requireMutation: true },
       retrySleep: async () => {},
+      onEvent: (event) => events.push(event),
     });
 
     const result = await o.run({
@@ -1159,6 +1164,14 @@ describe("AgentOrchestrator", () => {
     expect(result.evidence?.filesChanged).toContain("product.py");
     expect(result.evidence?.testResults.at(-1)?.passed).toBe(false);
     expect(result.message).toContain("external verification remains pending");
+    expect(
+      events.some(
+        (event) =>
+          event.event.type === "tool.result" &&
+          event.event.tool === "workspace.git_diff" &&
+          event.event.ok,
+      ),
+    ).toBe(true);
     expect(calls).toBe(4);
   });
 
