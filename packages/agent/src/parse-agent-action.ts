@@ -35,6 +35,7 @@
  */
 
 import type {
+  AgentAcceptanceUpdateAction,
   AgentAction,
   AgentAskUserAction,
   AgentPlanUpdateAction,
@@ -384,6 +385,8 @@ function isStructuredActionKind(toolId: string): boolean {
     kind === "finalanswer" ||
     kind === "plan_update" ||
     kind === "planupdate" ||
+    kind === "acceptance_update" ||
+    kind === "acceptanceupdate" ||
     kind === "abort"
   );
 }
@@ -491,6 +494,19 @@ function parseActionFromJsonObject(
     return out;
   }
 
+  if (kind === "acceptance_update" || kind === "acceptanceupdate") {
+    const add = parseAcceptanceAdds(obj.add);
+    const updates = parseAcceptanceUpdates(obj.updates);
+    if (!add || !updates || add.length + updates.length === 0) return null;
+    const out: AgentAcceptanceUpdateAction = {
+      type: "acceptance_update",
+      add,
+      updates,
+      reason: typeof obj.reason === "string" ? obj.reason : "",
+    };
+    return out;
+  }
+
   // abort
   if (kind === "abort") {
     if (typeof obj.reason !== "string") {
@@ -516,6 +532,67 @@ function asRecord(v: unknown): Record<string, unknown> | null {
     return v as Record<string, unknown>;
   }
   return null;
+}
+
+function parseAcceptanceAdds(
+  value: unknown,
+): AgentAcceptanceUpdateAction["add"] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const result: Array<AgentAcceptanceUpdateAction["add"][number]> = [];
+  for (const raw of value) {
+    const item = asRecord(raw);
+    if (!item || typeof item.text !== "string") return null;
+    if (
+      item.source !== "user" &&
+      item.source !== "repository" &&
+      item.source !== "verification"
+    ) {
+      return null;
+    }
+    if (item.ref !== undefined && typeof item.ref !== "string") return null;
+    result.push({
+      text: item.text,
+      source: item.source,
+      ...(typeof item.ref === "string" ? { ref: item.ref } : {}),
+    });
+  }
+  return result;
+}
+
+function parseAcceptanceUpdates(
+  value: unknown,
+): AgentAcceptanceUpdateAction["updates"] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const result: Array<AgentAcceptanceUpdateAction["updates"][number]> = [];
+  for (const raw of value) {
+    const item = asRecord(raw);
+    if (!item || typeof item.id !== "string") return null;
+    if (
+      item.status !== "pending" &&
+      item.status !== "satisfied" &&
+      item.status !== "blocked" &&
+      item.status !== "superseded"
+    ) {
+      return null;
+    }
+    if (item.evidence !== undefined && typeof item.evidence !== "string") {
+      return null;
+    }
+    if (
+      item.status === "satisfied" &&
+      (typeof item.evidence !== "string" || !item.evidence.trim())
+    ) {
+      return null;
+    }
+    result.push({
+      id: item.id,
+      status: item.status,
+      ...(typeof item.evidence === "string" ? { evidence: item.evidence } : {}),
+    });
+  }
+  return result;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -552,6 +629,10 @@ function describeInvalidAction(
         ? obj.name
         : null;
   if (toolId) {
+    if (isStructuredActionKind(toolId)) {
+      const inner = asRecord(obj.args) ?? parseArguments(obj.arguments) ?? {};
+      return describeInvalidAction({ ...inner, action: toolId }, knownTools);
+    }
     if (knownTools && !knownTools.has(toolId)) {
       const sample = [...knownTools].slice(0, 8).join(", ");
       const suffix = knownTools.size > 8 ? ", …" : "";
@@ -592,6 +673,17 @@ function describeInvalidAction(
   if (kind === "ask_user" || kind === "askuser") {
     if (typeof obj.question !== "string") {
       return `ask_user requires a string field "question"`;
+    }
+  }
+  if (kind === "acceptance_update" || kind === "acceptanceupdate") {
+    const add = parseAcceptanceAdds(obj.add);
+    const updates = parseAcceptanceUpdates(obj.updates);
+    if (!add) return `acceptance_update has an invalid "add" list`;
+    if (!updates) {
+      return "acceptance_update has invalid updates; satisfied requires non-empty evidence";
+    }
+    if (add.length + updates.length === 0) {
+      return "acceptance_update requires at least one add or update";
     }
   }
   if (kind === "abort" && typeof obj.reason !== "string") {

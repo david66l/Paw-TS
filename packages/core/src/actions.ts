@@ -29,6 +29,7 @@ export type AgentAction =
   | AgentFinalAnswerAction
   | AgentAskUserAction
   | AgentPlanUpdateAction
+  | AgentAcceptanceUpdateAction
   | AgentAbortAction;
 
 /** 工具调用动作 —— 模型请求编排器执行某个工具 */
@@ -66,6 +67,22 @@ export interface AgentPlanUpdateAction {
   /** 被废弃/移除的计划条目 ID 列表 */
   readonly deprecatedItems: readonly string[];
   /** 计划变更的原因说明 */
+  readonly reason: string;
+}
+
+/** Durable acceptance-ledger update, separate from implementation steps. */
+export interface AgentAcceptanceUpdateAction {
+  readonly type: "acceptance_update";
+  readonly add: readonly {
+    readonly text: string;
+    readonly source: "user" | "repository" | "verification";
+    readonly ref?: string;
+  }[];
+  readonly updates: readonly {
+    readonly id: string;
+    readonly status: "pending" | "satisfied" | "blocked" | "superseded";
+    readonly evidence?: string;
+  }[];
   readonly reason: string;
 }
 

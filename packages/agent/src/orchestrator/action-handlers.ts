@@ -61,6 +61,7 @@ import {
   markPlanItemsCompleted,
   planItemsToEventSnapshot,
 } from "../plan-bootstrap.js";
+import { formatTaskStateForContext } from "../task-state.js";
 import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
@@ -233,10 +234,68 @@ export async function handleAction(
         thinking,
         opts,
       );
+    case "acceptance_update":
+      return handleAcceptanceUpdate(
+        action,
+        ctx,
+        recoveredFlags,
+        text,
+        thinking,
+        opts,
+      );
     default:
       // 未知 action 类型 → 回退到无 action 处理
       return handleNoAction(ctx, flags, text, thinking, opts);
   }
+}
+
+function handleAcceptanceUpdate(
+  action: Extract<AgentAction, { type: "acceptance_update" }>,
+  ctx: PhaseContext,
+  flags: TurnFlags,
+  text: string,
+  thinking: string | undefined,
+  opts: Pick<ActionHandlerContext, "saveStateFn">,
+): { readonly state: TurnState; readonly flags: TurnFlags } {
+  const knownIds = new Set(
+    ctx.taskState.acceptanceCriteria().map((criterion) => criterion.id),
+  );
+  const unknown = action.updates.find((update) => !knownIds.has(update.id));
+  ctx.ctxMgr.addAssistant(text, thinking);
+  if (unknown) {
+    ctx.ctxMgr.addUser(
+      `[AcceptanceLedger] Unknown criterion id ${unknown.id}. Read the current Acceptance criteria in [Current State], then retry with a valid id or add a new criterion explicitly.`,
+    );
+  } else {
+    ctx.taskState.registerAcceptanceCriteria(action.add, ctx.turn);
+    for (const update of action.updates) {
+      ctx.taskState.setAcceptanceCriterionStatus(
+        update.id,
+        update.status,
+        update.evidence,
+      );
+    }
+    ctx.ctxMgr.addUser(
+      `Acceptance ledger updated: ${action.reason || "explicit model update"}.\n\n${formatTaskStateForContext(ctx.taskState.snapshot())}`,
+    );
+  }
+  const nextFlags: TurnFlags = {
+    ...flags,
+    lastTurnHadToolCall: false,
+  };
+  if (ctx.turn + 1 >= ctx.maxSteps) {
+    const decision = evaluateBudgetExhaustion(
+      `Max steps (${ctx.maxSteps}) reached after acceptance_update`,
+      ctx.taskState.snapshot(),
+      "max_steps_after_tools",
+    );
+    return {
+      state: { type: "incomplete", message: decision.message },
+      flags: nextFlags,
+    };
+  }
+  opts.saveStateFn();
+  return { state: { type: "continue", nextFlags }, flags: nextFlags };
 }
 
 // ═════════════════════════════════════════════════════════════

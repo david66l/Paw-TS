@@ -640,6 +640,50 @@ describe("AgentOrchestrator", () => {
     }
   });
 
+  test("acceptance_update persists the ledger and requires explicit evidence", async () => {
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "acceptance-seq",
+        async complete(messages) {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"action":"acceptance_update","reason":"visible regression","add":[{"text":"Keep legacy output","source":"repository","ref":"tests/test_cli.py::test_simple"}],"updates":[]}',
+            };
+          }
+          const lastUser = messages
+            .filter((message) => message.role === "user")
+            .at(-1);
+          if (calls === 2) {
+            expect(lastUser?.content).toContain("acceptance-001 [pending]");
+            return {
+              text: '{"action":"acceptance_update","reason":"direct check passed","add":[],"updates":[{"id":"acceptance-001","status":"satisfied","evidence":"legacy output fixture passed"}]}',
+            };
+          }
+          expect(lastUser?.content).toContain("acceptance-001 [satisfied]");
+          expect(lastUser?.content).toContain("legacy output fixture passed");
+          return { text: '{"action":"final_answer","summary":"OK."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "acceptance-seq-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
+        },
+      },
+    });
+    const result = await o.run({
+      runId: "acceptance-seq",
+      goal: "inspect behavior",
+      workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-acceptance-")),
+      maxSteps: 4,
+    });
+    expect(result.message).toBe("OK.");
+    expect(result.status).toBe("completed");
+    expect(calls).toBe(3);
+  });
+
   test("final_answer cannot silently complete a pending model plan", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-plan-pending-"));
     let calls = 0;

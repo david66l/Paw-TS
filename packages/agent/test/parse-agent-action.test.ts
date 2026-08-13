@@ -170,6 +170,34 @@ describe("parseAgentActionFromModelText", () => {
     }
   });
 
+  test("parses strict acceptance_update and rejects evidence-free satisfaction", () => {
+    const action = parseAgentActionFromModelText(
+      '{"action":"acceptance_update","reason":"tests expose behavior","add":[{"text":"Keep legacy output","source":"repository","ref":"tests/test_cli.py"}],"updates":[]}',
+    );
+    expect(action).toEqual({
+      type: "acceptance_update",
+      reason: "tests expose behavior",
+      add: [
+        {
+          text: "Keep legacy output",
+          source: "repository",
+          ref: "tests/test_cli.py",
+        },
+      ],
+      updates: [],
+    });
+    expect(
+      parseAgentActionFromModelText(
+        '{"action":"acceptance_update","add":[],"updates":[{"id":"acceptance-001","status":"satisfied"}]}',
+      ),
+    ).toBeNull();
+    expect(
+      parseAgentActionFromModelText(
+        '{"action":"acceptance_update","add":[{"text":"x","source":"guessed"}],"updates":[]}',
+      ),
+    ).toBeNull();
+  });
+
   test("returns null for unrecognized JSON", () => {
     expect(parseAgentActionFromModelText('{"foo":1}')).toBe(null);
   });
@@ -383,6 +411,19 @@ describe("diagnoseParseFailure", () => {
     expect(d.kind).toBe("invalid");
     if (d.kind === "invalid") {
       expect(d.reason).toContain("question");
+    }
+  });
+
+  test("returns invalid for evidence-free acceptance satisfaction", () => {
+    const diagnosis = diagnoseParseFailure(
+      '{"action":"acceptance_update","add":[],"updates":[{"id":"acceptance-001","status":"satisfied"}]}',
+      { knownTools },
+    );
+    expect(diagnosis.kind).toBe("invalid");
+    if (diagnosis.kind === "invalid") {
+      expect(diagnosis.reason).toContain(
+        "satisfied requires non-empty evidence",
+      );
     }
   });
 
