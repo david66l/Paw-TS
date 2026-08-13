@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { resolveAllowedTools } from "../src/agents/resolve-tools.js";
 import {
   CODING_LIFECYCLE_BUDGET,
   CODING_ROOT_IDENTITY,
   resolveCollaborationMode,
 } from "../src/collaboration-mode.js";
 import { createRunOrchestrator } from "../src/orchestrator-factory.js";
-import { resolveAllowedTools } from "../src/agents/resolve-tools.js";
 import { cleanup, tmpDir, writeFileMemorySettings } from "./fixtures.js";
 
 describe("resolveCollaborationMode", () => {
@@ -34,6 +36,42 @@ describe("resolveCollaborationMode", () => {
 });
 
 describe("coding factory defaults", () => {
+  test("can keep mutable runtime records outside the project workspace", () => {
+    const dir = tmpDir("paw-collab-runtime-workspace-");
+    const runtime = tmpDir("paw-collab-runtime-state-");
+    try {
+      writeFileMemorySettings(dir);
+      const run = createRunOrchestrator({
+        workspaceRoot: dir,
+        runtimeStateRoot: runtime,
+        skipAgentSeeds: true,
+      });
+      try {
+        run.sessionStore.saveEvent("external-state", {
+          runId: "external-state",
+          seq: 1,
+          ts: 1,
+          event: { type: "run.started", goal: "test" },
+        });
+        expect(
+          existsSync(
+            path.join(runtime, ".paw", "sessions", "external-state.jsonl"),
+          ),
+        ).toBe(true);
+        expect(
+          existsSync(
+            path.join(dir, ".paw", "sessions", "external-state.jsonl"),
+          ),
+        ).toBe(false);
+      } finally {
+        run.watcher.stop();
+      }
+    } finally {
+      cleanup(dir);
+      cleanup(runtime);
+    }
+  });
+
   test("createRunOrchestrator defaults to coding with loop budget", () => {
     const dir = tmpDir("paw-collab-coding-");
     try {
@@ -43,12 +81,16 @@ describe("coding factory defaults", () => {
         expect(run.collaborationMode).toBe("coding");
         expect(run.rootMaxSteps).toBe(64);
         expect(CODING_ROOT_IDENTITY.length).toBeGreaterThan(40);
-        const tools = resolveAllowedTools({ tools: "inherit", canSpawn: false });
+        const tools = resolveAllowedTools({
+          tools: "inherit",
+          canSpawn: false,
+        });
         expect(tools).not.toBeNull();
-        expect(tools!.includes("workspace.edit_file")).toBe(true);
-        expect(tools!.includes("workspace.run_shell")).toBe(true);
-        expect(tools!.includes("workspace.run_agent")).toBe(false);
-        expect(tools!.includes("workspace.create_agent")).toBe(false);
+        if (!tools) throw new Error("coding tools unexpectedly unavailable");
+        expect(tools.includes("workspace.edit_file")).toBe(true);
+        expect(tools.includes("workspace.run_shell")).toBe(true);
+        expect(tools.includes("workspace.run_agent")).toBe(false);
+        expect(tools.includes("workspace.create_agent")).toBe(false);
       } finally {
         run.watcher.stop();
       }

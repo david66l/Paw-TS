@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { AgentOrchestrator } from "@paw/agent";
+import { AgentOrchestrator, createRunOrchestrator } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
@@ -140,6 +140,47 @@ describe("SWE compare runner", () => {
     expect(readFileSync(path.join(root, "src", "app.py"), "utf8")).toBe(
       "x = 2\n",
     );
+  });
+
+  test("shell effect audit restores a material candidate erased by checkout", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-candidate-"));
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    writeFileSync(path.join(root, "src", "product.py"), "value = 1\n", "utf8");
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "paw@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    writeFileSync(path.join(root, "src", "product.py"), "value = 2\n", "utf8");
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["src/product.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "git checkout -- src/product.py" },
+      workspaceRoot: root,
+    });
+    git(root, ["checkout", "--", "src/product.py"]);
+    const settled = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "git checkout -- src/product.py" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "exit 0", payload: {} },
+      },
+      prepared,
+    );
+    expect(settled.allowed).toBe(false);
+    if (settled.allowed !== false) throw new Error("expected rejection");
+    expect(settled.reason).toBe("prohibited_workspace_effect_recovered");
+    expect(settled.message).toContain("material candidate rollback");
+    expect(
+      readFileSync(path.join(root, "src", "product.py"), "utf8").replace(
+        /\r\n/g,
+        "\n",
+      ),
+    ).toBe("value = 2\n");
   });
 
   test("shell effect audit restores helper and test writes atomically", async () => {
@@ -363,6 +404,111 @@ describe("SWE compare runner", () => {
         "ToolEffectPolicy:prohibited_workspace_effect_recovered",
       ),
     );
+  });
+
+  test("external runtime state does not make a real shell result fail audit", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-runtime-workspace-"));
+    const runtimeRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-swe-runtime-state-"),
+    );
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    mkdirSync(path.join(root, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".paw", "settings.local.json"),
+      JSON.stringify({ shell: { sandbox: "off" } }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(root, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    writeFileSync(path.join(root, ".gitignore"), ".paw/\n", "utf8");
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", ".gitignore", "app.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const events: RunEventEnvelope[] = [];
+    let calls = 0;
+    const command =
+      process.platform === "win32" ? "cmd /c echo shell-ok" : "printf shell-ok";
+    const run = createRunOrchestrator({
+      workspaceRoot: root,
+      runtimeStateRoot: runtimeRoot,
+      skipAgentSeeds: true,
+      memoryExtraction: "off",
+      collaborationMode: "coding",
+      toolEffectPolicy: createSweCompareToolEffectPolicy({
+        workspaceRoot: root,
+        trackedFiles: new Set([".gitignore", "app.py"]),
+      }),
+      onEvent: (event) => events.push(event),
+    });
+    const fake = {
+      label: "external-runtime-e2e",
+      async complete() {
+        calls += 1;
+        if (calls === 1) {
+          return {
+            text: JSON.stringify({
+              tool: "workspace.run_shell",
+              args: { command },
+            }),
+          };
+        }
+        return {
+          text: JSON.stringify({
+            action: "final_answer",
+            summary: "The shell command completed.",
+          }),
+        };
+      },
+    };
+    // Factory model selection is config-backed; override only the deterministic
+    // fixture model while retaining the factory-owned external session store.
+    const orchestrator = new AgentOrchestrator({
+      model: fake,
+      auxiliaryModel: new FakeLanguageModel(),
+      sessionStore: run.sessionStore,
+      appStateStore: run.appStateStore,
+      toolEffectPolicy: createSweCompareToolEffectPolicy({
+        workspaceRoot: root,
+        trackedFiles: new Set([".gitignore", "app.py"]),
+      }),
+      onEvent: (event) => events.push(event),
+    });
+    try {
+      const result = await orchestrator.run({
+        runId: "external-runtime-e2e",
+        goal: "Run the local shell check and report the result.",
+        workspaceRoot: root,
+        maxSteps: 3,
+      });
+      expect(result.status).toBe("completed");
+      const summaries = events.flatMap((event) =>
+        event.event.type === "tool.result" ? [event.event.summary] : [],
+      );
+      expect(summaries).toContainEqual(expect.stringContaining("exit 0"));
+      expect(summaries.join("\n")).not.toContain("untracked baseline mutation");
+      expect(
+        existsSync(
+          path.join(
+            runtimeRoot,
+            ".paw",
+            "sessions",
+            "external-runtime-e2e.jsonl",
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        existsSync(
+          path.join(root, ".paw", "sessions", "external-runtime-e2e.jsonl"),
+        ),
+      ).toBe(false);
+    } finally {
+      run.watcher.stop();
+    }
   });
 
   test("Claude Code command freezes clean 1M max-effort mode", () => {

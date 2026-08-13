@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -293,6 +295,7 @@ export function createSweCompareToolExecutionPolicy(input: {
 interface SweWorkspaceEffectSnapshot {
   readonly head: string;
   readonly trackedPatch: string;
+  readonly trackedPaths: readonly string[];
   readonly untracked: ReadonlyMap<string, Buffer>;
 }
 
@@ -463,6 +466,12 @@ export function createSweCompareToolEffectPolicy(input: {
     return {
       head: gitText(input.workspaceRoot, ["rev-parse", "HEAD"]),
       trackedPatch: gitPatch(input.workspaceRoot),
+      trackedPaths: gitNullList(input.workspaceRoot, [
+        "diff",
+        "HEAD",
+        "--name-only",
+        "-z",
+      ]).filter((file) => !isTestMutationPath(file)),
       untracked: snapshotUntrackedFiles(input.workspaceRoot),
     };
   };
@@ -551,6 +560,22 @@ export function createSweCompareToolEffectPolicy(input: {
             if (existsSync(absolute))
               rmSync(absolute, { recursive: true, force: true });
           }
+        }
+        const afterTrackedPaths = new Set(
+          gitNullList(input.workspaceRoot, [
+            "diff",
+            "HEAD",
+            "--name-only",
+            "-z",
+          ]).filter((file) => !isTestMutationPath(file)),
+        );
+        const lostCandidatePaths = before.trackedPaths.filter(
+          (file) => !afterTrackedPaths.has(file),
+        );
+        if (lostCandidatePaths.length > 0) {
+          reasons.push(
+            `material candidate rollback: ${lostCandidatePaths.join(", ")}`,
+          );
         }
         if (reasons.length > 0 && currentHead === before.head) {
           restoreTrackedSnapshot(input.workspaceRoot, before);
@@ -741,37 +766,49 @@ async function runPaw(opts: {
     timeoutMs: opts.timeoutMs,
   });
   const abort = createBudgetAbort(opts.timeoutMs);
-  const { orch } = createRunOrchestrator({
-    workspaceRoot: opts.workspaceRoot,
-    autonomy: "headless",
-    budget,
-    memoryExtraction: "off",
-    collaborationMode: "coding",
-    // Every shell call crosses the eval policy gate so network attempts are
-    // rejected before the harness spawns a process. Non-shell tools stay free.
-    approvalPolicy: (tool) => tool === "workspace.run_shell",
-    resolveToolApproval: async (input) => allowSweCompareToolCall(input),
-    toolExecutionPolicy: createSweCompareToolExecutionPolicy({
+  const runtimeStateRoot = mkdtempSync(
+    path.join(tmpdir(), `paw-runtime-${opts.runId.slice(0, 48)}-`),
+  );
+  let runtime: ReturnType<typeof createRunOrchestrator>;
+  try {
+    runtime = createRunOrchestrator({
       workspaceRoot: opts.workspaceRoot,
-      trackedFiles: trackedFiles(opts.workspaceRoot),
-    }),
-    toolEffectPolicy: createSweCompareToolEffectPolicy({
-      workspaceRoot: opts.workspaceRoot,
-      trackedFiles: trackedFiles(opts.workspaceRoot),
-    }),
-    // Local checks remain evidence, but the official SWE-bench container is
-    // authoritative. Harness failure may close only after a material edit and
-    // fresh diff inspection; it is never recorded as a local pass.
-    verificationPolicy: { authority: "external", requireMutation: true },
-    onEvent: (event) => {
-      if (
-        event.event.type !== "model.chunk" &&
-        event.event.type !== "model.thinking"
-      ) {
-        events.push(event);
-      }
-    },
-  });
+      runtimeStateRoot,
+      autonomy: "headless",
+      budget,
+      memoryExtraction: "off",
+      collaborationMode: "coding",
+      // Every shell call crosses the eval policy gate so network attempts are
+      // rejected before the harness spawns a process. Non-shell tools stay free.
+      approvalPolicy: (tool) => tool === "workspace.run_shell",
+      resolveToolApproval: async (input) => allowSweCompareToolCall(input),
+      toolExecutionPolicy: createSweCompareToolExecutionPolicy({
+        workspaceRoot: opts.workspaceRoot,
+        trackedFiles: trackedFiles(opts.workspaceRoot),
+      }),
+      toolEffectPolicy: createSweCompareToolEffectPolicy({
+        workspaceRoot: opts.workspaceRoot,
+        trackedFiles: trackedFiles(opts.workspaceRoot),
+      }),
+      // Local checks remain evidence, but the official SWE-bench container is
+      // authoritative. Harness failure may close only after a material edit and
+      // fresh diff inspection; it is never recorded as a local pass.
+      verificationPolicy: { authority: "external", requireMutation: true },
+      onEvent: (event) => {
+        if (
+          event.event.type !== "model.chunk" &&
+          event.event.type !== "model.thinking"
+        ) {
+          events.push(event);
+        }
+      },
+    });
+  } catch (error) {
+    abort.clear();
+    rmSync(runtimeStateRoot, { recursive: true, force: true });
+    throw error;
+  }
+  const { orch, watcher } = runtime;
   try {
     const result = await orch.run({
       runId: opts.runId,
@@ -803,6 +840,8 @@ async function runPaw(opts: {
     };
   } finally {
     abort.clear();
+    watcher.stop();
+    rmSync(runtimeStateRoot, { recursive: true, force: true });
   }
 }
 

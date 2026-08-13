@@ -53,6 +53,13 @@ import { DefaultSubAgentLauncher } from "./sub-agent-launcher.js";
 
 export interface RunOrchestratorOptions {
   readonly workspaceRoot: string;
+  /**
+   * Optional caller-owned root for mutable runtime records (sessions/state).
+   * Project configuration, tools, skills, and source remain anchored to
+   * workspaceRoot. Sandboxed evaluators use this to keep control-plane writes
+   * outside the audited task checkout.
+   */
+  readonly runtimeStateRoot?: string;
   readonly skillsDir?: string;
   readonly resolveAskUser?: (input: AskUserResolveInput) => Promise<string>;
   readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
@@ -217,9 +224,12 @@ export function createRunOrchestrator(
       : createDefaultLanguageModel(workspaceRoot);
   const subAgentModel = createDeepSeekFlashModel(workspaceRoot) ?? mainModel;
 
-  const sessionStore = new FileSystemSessionStore({ workspaceRoot });
+  const runtimeStateRoot = opts.runtimeStateRoot ?? workspaceRoot;
+  const sessionStore = new FileSystemSessionStore({
+    workspaceRoot: runtimeStateRoot,
+  });
   const appStateStore = new FileSystemAppStateStore({
-    statesDir: path.join(workspaceRoot, ".paw", "states"),
+    statesDir: path.join(runtimeStateRoot, ".paw", "states"),
   });
 
   const subAgentLauncher = new DefaultSubAgentLauncher({
