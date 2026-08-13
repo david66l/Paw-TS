@@ -3,6 +3,7 @@
 import path from "node:path";
 
 import {
+  auditSweCompareResult,
   recoverClaudeResultPatch,
   runSweCompareArm,
   verifySweCompareResult,
@@ -17,6 +18,15 @@ const instanceId = value("--instance");
 const runner = value("--runner");
 const verifyResult = value("--verify-result");
 const recoverResult = value("--recover-result-patch");
+const auditResult = value("--audit-result");
+if (auditResult) {
+  const result = auditSweCompareResult({
+    repoRoot: process.cwd(),
+    resultPath: path.resolve(auditResult),
+  });
+  console.log(JSON.stringify(result.integrity, null, 2));
+  process.exit(result.integrity?.valid === false ? 1 : 0);
+}
 if (recoverResult) {
   const result = recoverClaudeResultPatch({
     repoRoot: process.cwd(),
@@ -45,7 +55,7 @@ if (verifyResult) {
 }
 if (!instanceId || (runner !== "paw" && runner !== "claude")) {
   throw new Error(
-    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json>",
+    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --audit-result <result.json>",
   );
 }
 const repoRoot = process.cwd();

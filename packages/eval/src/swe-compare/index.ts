@@ -12,6 +12,9 @@ export {
   PREFLIGHT_SENTINEL_PATCH,
 } from "./preflight.js";
 export {
+  auditClaudeTraceIntegrity,
+  auditPawTraceIntegrity,
+  auditSweCompareResult,
   claudeCodeArgs,
   extractClaudePatchFromTrace,
   parseClaudeStream,
@@ -21,6 +24,7 @@ export {
   verifySweCompareResult,
   type SweCompareRunnerName,
   type SweCompareRunResult,
+  type SweCompareIntegrityAudit,
 } from "./runner.js";
 export type {
   SweCompareInstanceManifest,

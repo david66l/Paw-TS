@@ -11,6 +11,7 @@ export function buildSweCompareGoal(probe: SweBenchLiteInstance): string {
     "Fix the bug described below so that the relevant tests pass.",
     "Work directly in the checked-out repository and modify existing tracked source files.",
     "Do not create helper scripts or patch files. Do not only describe a solution.",
+    "Do not access the network, fetch remotes, inspect upstream branches/commits, or search for an existing solution.",
     "Make a minimal change. Do not modify unrelated files or any test files.",
     "After editing, run the narrowest relevant tests that are feasible in this environment.",
     "Finish only after inspecting the final diff and reporting the verification performed.",

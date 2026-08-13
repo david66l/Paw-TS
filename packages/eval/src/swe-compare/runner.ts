@@ -17,9 +17,9 @@ import {
   writePredictionsJsonl,
 } from "../swe-exp/evaluate.js";
 import {
+  captureGitDiff,
   createCommitWorktree,
   ensureRepoClone,
-  gitDiff,
   writeArmPawConfig,
 } from "../swe-exp/repo-cache.js";
 import { buildSweCompareGoal } from "./goal.js";
@@ -40,6 +40,7 @@ export interface SweCompareRunResult {
   readonly patch: string;
   readonly patchChars: number;
   readonly patchSource?: "workspace" | "claude_trace_git_diff" | "none";
+  readonly integrity?: SweCompareIntegrityAudit;
   readonly resolved: boolean;
   readonly resolvedSource: "swebench_harness" | "none" | "error";
   readonly modelCalls?: number;
@@ -55,6 +56,11 @@ export interface SweCompareRunResult {
     readonly detail?: string;
     readonly error?: string;
   };
+}
+
+export interface SweCompareIntegrityAudit {
+  readonly valid: boolean;
+  readonly violations: readonly string[];
 }
 
 export function claudeCodeArgs(goal: string): string[] {
@@ -393,6 +399,93 @@ export function extractClaudePatchFromTrace(
   return patch;
 }
 
+function shellCommandsFromClaudeTrace(trace: readonly unknown[]): string[] {
+  const commands: string[] = [];
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const message = (item as Record<string, unknown>).message;
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      continue;
+    }
+    const content = (message as Record<string, unknown>).content;
+    if (!Array.isArray(content)) continue;
+    for (const rawBlock of content) {
+      if (
+        !rawBlock ||
+        typeof rawBlock !== "object" ||
+        Array.isArray(rawBlock)
+      ) {
+        continue;
+      }
+      const block = rawBlock as Record<string, unknown>;
+      if (block.type !== "tool_use" || block.name !== "Bash") continue;
+      const input = block.input;
+      const command =
+        input && typeof input === "object" && !Array.isArray(input)
+          ? (input as Record<string, unknown>).command
+          : undefined;
+      if (typeof command === "string") commands.push(command);
+    }
+  }
+  return commands;
+}
+
+function shellCommandsFromPawTrace(trace: readonly unknown[]): string[] {
+  const commands: string[] = [];
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const event = (item as Record<string, unknown>).event;
+    if (!event || typeof event !== "object" || Array.isArray(event)) continue;
+    const record = event as Record<string, unknown>;
+    if (record.type !== "tool.call" || record.tool !== "workspace.run_shell") {
+      continue;
+    }
+    const args = record.args;
+    const command =
+      args && typeof args === "object" && !Array.isArray(args)
+        ? (args as Record<string, unknown>).command
+        : undefined;
+    if (typeof command === "string") commands.push(command);
+  }
+  return commands;
+}
+
+/** Flag benchmark-invalid attempts to retrieve an existing public solution. */
+export function auditClaudeTraceIntegrity(
+  trace: readonly unknown[],
+): SweCompareIntegrityAudit {
+  return auditShellCommands(shellCommandsFromClaudeTrace(trace));
+}
+
+export function auditPawTraceIntegrity(
+  trace: readonly unknown[],
+): SweCompareIntegrityAudit {
+  return auditShellCommands(shellCommandsFromPawTrace(trace));
+}
+
+function auditShellCommands(
+  commands: readonly string[],
+): SweCompareIntegrityAudit {
+  const violations: string[] = [];
+  for (const command of commands) {
+    if (/\bgit\s+(?:fetch|pull|clone|ls-remote)\b/i.test(command)) {
+      violations.push("upstream_network_git_access");
+    }
+    if (
+      /\bgit\s+(?:show|log|diff)\b[^\r\n]*(?:origin\/|upstream\/)/i.test(
+        command,
+      )
+    ) {
+      violations.push("upstream_history_inspection");
+    }
+    if (/\b(?:curl|wget|Invoke-WebRequest)\b/i.test(command)) {
+      violations.push("outbound_network_command");
+    }
+  }
+  const unique = [...new Set(violations)];
+  return { valid: unique.length === 0, violations: unique };
+}
+
 async function runClaude(opts: {
   readonly workspaceRoot: string;
   readonly goal: string;
@@ -515,7 +608,13 @@ export async function runSweCompareArm(opts: {
             goal,
             timeoutMs: manifest.budget.sharedTimeoutMs,
           });
-    const workspacePatch = gitDiff(workspace.root);
+    const capturedPatch = captureGitDiff(workspace.root);
+    if (capturedPatch.error) {
+      throw new Error(
+        `workspace patch collection failed: ${capturedPatch.error}`,
+      );
+    }
+    const workspacePatch = capturedPatch.diff ?? "";
     const recoveredPatch =
       "recoveredPatch" in execution ? (execution.recoveredPatch ?? "") : "";
     const patch = workspacePatch || recoveredPatch;
@@ -532,15 +631,35 @@ export async function runSweCompareArm(opts: {
       "trace.json",
     );
     writeJsonAtomic(path.join(opts.repoRoot, tracePath), execution.trace);
-    const {
-      trace: _trace,
-      recoveredPatch: _recoveredPatch,
-      ...executionSummary
-    } = execution;
+    const executionSummary = {
+      status: execution.status,
+      ...(execution.terminalReason
+        ? { terminalReason: execution.terminalReason }
+        : {}),
+      ...(execution.error ? { error: execution.error } : {}),
+      ...(execution.promptTokens === undefined
+        ? {}
+        : { promptTokens: execution.promptTokens }),
+      ...(execution.completionTokens === undefined
+        ? {}
+        : { completionTokens: execution.completionTokens }),
+      ...(execution.totalTokens === undefined
+        ? {}
+        : { totalTokens: execution.totalTokens }),
+      ...(execution.turns === undefined ? {} : { turns: execution.turns }),
+      ...("modelCalls" in execution
+        ? { modelCalls: execution.modelCalls }
+        : {}),
+    };
+    const integrity = Array.isArray(execution.trace)
+      ? opts.runner === "claude"
+        ? auditClaudeTraceIntegrity(execution.trace)
+        : auditPawTraceIntegrity(execution.trace)
+      : { valid: true, violations: [] };
     let resolved = false;
     let resolvedSource: "swebench_harness" | "none" | "error" = "none";
     let verifier: SweCompareRunResult["verifier"];
-    if (!opts.skipVerifier && patch.trim()) {
+    if (!opts.skipVerifier && patch.trim() && integrity.valid) {
       const predictionPath = path.join(
         opts.repoRoot,
         "benchmarks",
@@ -589,6 +708,7 @@ export async function runSweCompareArm(opts: {
       patch,
       patchChars: patch.length,
       patchSource,
+      integrity,
       resolved,
       resolvedSource,
       tracePath: tracePath.replace(/\\/g, "/"),
@@ -638,6 +758,32 @@ export function recoverClaudeResultPatch(opts: {
     patch,
     patchChars: patch.length,
     patchSource: "claude_trace_git_diff",
+  };
+  writeJsonAtomic(opts.resultPath, updated);
+  return updated;
+}
+
+/** Re-audit a persisted run after integrity rules are strengthened. */
+export function auditSweCompareResult(opts: {
+  readonly repoRoot: string;
+  readonly resultPath: string;
+}): SweCompareRunResult {
+  const previous = JSON.parse(
+    readFileSync(opts.resultPath, "utf8"),
+  ) as SweCompareRunResult;
+  const tracePath = path.join(opts.repoRoot, previous.tracePath);
+  const trace = JSON.parse(readFileSync(tracePath, "utf8")) as unknown;
+  const integrity = Array.isArray(trace)
+    ? previous.runner === "claude"
+      ? auditClaudeTraceIntegrity(trace)
+      : auditPawTraceIntegrity(trace)
+    : { valid: true, violations: [] };
+  const updated: SweCompareRunResult = {
+    ...previous,
+    integrity,
+    ...(integrity.valid
+      ? {}
+      : { resolved: false, resolvedSource: "none" as const }),
   };
   writeJsonAtomic(opts.resultPath, updated);
   return updated;

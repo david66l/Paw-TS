@@ -18,6 +18,11 @@ export interface ArmWorkspace {
   readonly cleanup: () => void;
 }
 
+export interface GitDiffCapture {
+  readonly diff?: string;
+  readonly error?: string;
+}
+
 function runGit(
   cwd: string,
   args: string[],
@@ -45,10 +50,7 @@ export function repoCachePath(cacheDir: string, repo: string): string {
 }
 
 /** 确保 mirror/clone 存在；返回本地 git 根 */
-export function ensureRepoClone(
-  repo: string,
-  cacheDir: string,
-): string {
+export function ensureRepoClone(repo: string, cacheDir: string): string {
   const dest = repoCachePath(cacheDir, repo);
   mkdirSync(path.dirname(dest), { recursive: true });
   if (existsSync(path.join(dest, ".git"))) {
@@ -107,7 +109,9 @@ export function createCommitWorktree(
       runGit(gitRoot, ["fetch", "--unshallow"], 600_000);
       const again = runGit(gitRoot, ["fetch", "origin", commit], 600_000);
       if (!again.ok) {
-        throw new Error(`commit ${commit} not found in ${gitRoot}: ${cat.error}`);
+        throw new Error(
+          `commit ${commit} not found in ${gitRoot}: ${cat.error}`,
+        );
       }
     }
   }
@@ -115,36 +119,92 @@ export function createCommitWorktree(
   // Prefer LF in worktrees (match upstream / Linux harness; avoid edit_file CRLF misses)
   runGit(gitRoot, ["config", "core.autocrlf", "false"]);
 
-  const add = runGit(gitRoot, [
-    "-c",
-    "core.autocrlf=false",
-    "worktree",
-    "add",
-    "--detach",
+  mkdirSync(worktreeRoot, { recursive: true });
+  const init = runGit(
     worktreeRoot,
-    commit,
-  ]);
-  if (!add.ok) {
+    ["-c", "core.autocrlf=false", "init"],
+    600_000,
+  );
+  if (!init.ok) {
     try {
       rmSync(tmpBase, { recursive: true, force: true });
     } catch {
       /* ignore */
     }
-    throw new Error(`git worktree add failed: ${add.error}`);
+    throw new Error(`isolated benchmark init failed: ${init.error}`);
+  }
+  const fetched = runGit(
+    worktreeRoot,
+    [
+      "-c",
+      "protocol.file.allow=always",
+      "fetch",
+      "--depth=1",
+      "--no-tags",
+      gitRoot,
+      commit,
+    ],
+    600_000,
+  );
+  if (!fetched.ok) {
+    try {
+      rmSync(tmpBase, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    throw new Error(`isolated benchmark fetch failed: ${fetched.error}`);
+  }
+
+  const checkout = runGit(worktreeRoot, [
+    "-c",
+    "core.autocrlf=false",
+    "checkout",
+    "--detach",
+    "FETCH_HEAD",
+  ]);
+  if (!checkout.ok) {
+    try {
+      rmSync(tmpBase, { recursive: true, force: true });
+    } catch {
+      /* ignore cleanup failure; surface the isolation failure below */
+    }
+    throw new Error(`isolated benchmark checkout failed: ${checkout.error}`);
+  }
+
+  // Fetching one exact commit into a fresh shallow repository avoids exposing
+  // any later branch/ref/object and never configures a remote for the agent.
+  const refs = runGit(worktreeRoot, ["for-each-ref", "--format=%(refname)"]);
+  if (!refs.ok) {
+    throw new Error(`benchmark ref isolation failed: ${refs.error}`);
+  }
+  for (const ref of refs.stdout.split(/\r?\n/).map((x) => x.trim())) {
+    if (!ref) continue;
+    const deleted = runGit(worktreeRoot, ["update-ref", "-d", ref]);
+    if (!deleted.ok) {
+      throw new Error(
+        `benchmark ref isolation failed for ${ref}: ${deleted.error}`,
+      );
+    }
+  }
+  const expired = runGit(worktreeRoot, [
+    "reflog",
+    "expire",
+    "--expire=now",
+    "--all",
+  ]);
+  const pruned = runGit(worktreeRoot, ["gc", "--prune=now"]);
+  if (!expired.ok || !pruned.ok) {
+    throw new Error(
+      `benchmark object isolation failed: ${
+        !expired.ok ? expired.error : !pruned.ok ? pruned.error : "unknown"
+      }`,
+    );
   }
 
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
-    const rm = runGit(gitRoot, ["worktree", "remove", "--force", worktreeRoot]);
-    if (!rm.ok) {
-      try {
-        rmSync(worktreeRoot, { recursive: true, force: true });
-      } catch {
-        /* ignore */
-      }
-    }
     try {
       rmSync(tmpBase, { recursive: true, force: true });
     } catch {
@@ -156,13 +216,21 @@ export function createCommitWorktree(
 }
 
 export function gitDiff(workspaceRoot: string): string {
+  const captured = captureGitDiff(workspaceRoot);
+  if (captured.error) return "";
+  return captured.diff ?? "";
+}
+
+/** Capture both the patch and collection failure so evals cannot silently score empty. */
+export function captureGitDiff(workspaceRoot: string): GitDiffCapture {
   const r = runGit(workspaceRoot, ["diff", "--binary"]);
-  if (!r.ok) return "";
+  if (!r.ok) return { error: r.error };
   // 也包含 staged；SWE 通常改已有 tracked 文件
   const staged = runGit(workspaceRoot, ["diff", "--binary", "--cached"]);
   const parts = [r.stdout.trim()];
-  if (staged.ok && staged.stdout.trim()) parts.push(staged.stdout.trim());
-  return parts.filter(Boolean).join("\n");
+  if (!staged.ok) return { error: staged.error };
+  if (staged.stdout.trim()) parts.push(staged.stdout.trim());
+  return { diff: parts.filter(Boolean).join("\n") };
 }
 
 /** 写入每臂隔离的 .paw 配置 */

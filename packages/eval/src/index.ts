@@ -79,6 +79,9 @@ export type { EvalRunnerOptions, EvalRunnerResult } from "./runner.js";
 
 // ── Paw vs Claude Code 公共 SWE-bench 对比 ──
 export {
+  auditClaudeTraceIntegrity,
+  auditPawTraceIntegrity,
+  auditSweCompareResult,
   createSweCompareManifest,
   buildSweCompareGoal,
   extractClaudePatchFromTrace,
