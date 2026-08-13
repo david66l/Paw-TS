@@ -16,6 +16,7 @@ export {
   auditPawTraceIntegrity,
   auditSweCompareResult,
   claudeCodeArgs,
+  collectTraceMutationHints,
   extractClaudePatchFromTrace,
   parseClaudeStream,
   recoverClaudeResultPatch,

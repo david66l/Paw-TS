@@ -65,6 +65,11 @@ export interface SweCompareIntegrityAudit {
   readonly violations: readonly string[];
 }
 
+interface TraceMutationHints {
+  readonly explicitPaths: readonly string[];
+  readonly unknownWritePossible: boolean;
+}
+
 export function claudeCodeArgs(goal: string): string[] {
   return [
     "-p",
@@ -452,6 +457,94 @@ function shellCommandsFromPawTrace(trace: readonly unknown[]): string[] {
   return commands;
 }
 
+function commandMayWrite(command: string): boolean {
+  return /(?:\bgit\s+(?:apply|checkout|restore|reset|am)\b|\bsed\s+-i\b|\bperl\s+-pi\b|\b(?:rm|mv|cp|tee)\b|\b(?:writeFile|write_text|write_bytes)\b|(?<!\d)>\s*[^&\s])/i.test(
+    command,
+  );
+}
+
+export function collectTraceMutationHints(opts: {
+  readonly trace: readonly unknown[];
+  readonly runner: SweCompareRunnerName;
+  readonly workspaceRoot: string;
+}): TraceMutationHints {
+  const explicitPaths = new Set<string>();
+  let unknownWritePossible = false;
+  const addPath = (value: unknown) => {
+    if (typeof value !== "string" || !value.trim()) return;
+    const relative = path.isAbsolute(value)
+      ? path.relative(opts.workspaceRoot, value)
+      : value;
+    if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
+      explicitPaths.add(relative.replace(/\\/g, "/"));
+    }
+  };
+  for (const item of opts.trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    if (opts.runner === "paw") {
+      const event = (item as Record<string, unknown>).event;
+      if (!event || typeof event !== "object" || Array.isArray(event)) continue;
+      const record = event as Record<string, unknown>;
+      const args = record.args;
+      const argRecord =
+        args && typeof args === "object" && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : {};
+      if (
+        record.type === "tool.call" &&
+        record.tool === "workspace.edit_file"
+      ) {
+        addPath(argRecord.path);
+      }
+      if (
+        record.type === "tool.call" &&
+        record.tool === "workspace.run_shell" &&
+        typeof argRecord.command === "string" &&
+        commandMayWrite(argRecord.command)
+      ) {
+        unknownWritePossible = true;
+      }
+      continue;
+    }
+    const message = (item as Record<string, unknown>).message;
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      continue;
+    }
+    const content = (message as Record<string, unknown>).content;
+    if (!Array.isArray(content)) continue;
+    for (const rawBlock of content) {
+      if (
+        !rawBlock ||
+        typeof rawBlock !== "object" ||
+        Array.isArray(rawBlock)
+      ) {
+        continue;
+      }
+      const block = rawBlock as Record<string, unknown>;
+      if (block.type !== "tool_use") continue;
+      const input = block.input;
+      const inputRecord =
+        input && typeof input === "object" && !Array.isArray(input)
+          ? (input as Record<string, unknown>)
+          : {};
+      if (block.name === "Edit" || block.name === "Write") {
+        addPath(inputRecord.file_path);
+      }
+      if (
+        block.name === "Bash" &&
+        typeof inputRecord.command === "string" &&
+        commandMayWrite(inputRecord.command)
+      ) {
+        unknownWritePossible = true;
+      }
+    }
+  }
+  return {
+    explicitPaths: [...explicitPaths].sort(),
+    unknownWritePossible,
+  };
+}
+
 /** Flag benchmark-invalid attempts to retrieve an existing public solution. */
 export function auditClaudeTraceIntegrity(
   trace: readonly unknown[],
@@ -621,7 +714,23 @@ export async function runSweCompareArm(opts: {
     // A patch collection failure must remain an auditable infra-invalid sample
     // instead of deleting the model evidence in the surrounding finally block.
     writeJsonAtomic(path.join(opts.repoRoot, tracePath), execution.trace);
-    const capturedPatch = captureGitDiff(workspace.root);
+    const mutationHints = Array.isArray(execution.trace)
+      ? collectTraceMutationHints({
+          trace: execution.trace,
+          runner: opts.runner,
+          workspaceRoot: workspace.root,
+        })
+      : { explicitPaths: [], unknownWritePossible: true };
+    const capturedPatch =
+      mutationHints.explicitPaths.length === 0 &&
+      !mutationHints.unknownWritePossible
+        ? { diff: "" }
+        : captureGitDiff(
+            workspace.root,
+            mutationHints.unknownWritePossible
+              ? []
+              : mutationHints.explicitPaths,
+          );
     const workspacePatch = capturedPatch.diff ?? "";
     const recoveredPatch =
       "recoveredPatch" in execution ? (execution.recoveredPatch ?? "") : "";

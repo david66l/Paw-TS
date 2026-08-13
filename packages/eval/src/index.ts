@@ -83,6 +83,7 @@ export {
   auditPawTraceIntegrity,
   auditSweCompareResult,
   createSweCompareManifest,
+  collectTraceMutationHints,
   buildSweCompareGoal,
   extractClaudePatchFromTrace,
   parseClaudeStream,

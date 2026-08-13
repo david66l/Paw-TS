@@ -9,6 +9,7 @@ import {
   auditPawTraceIntegrity,
   auditSweCompareResult,
   claudeCodeArgs,
+  collectTraceMutationHints,
   extractClaudePatchFromTrace,
   parseClaudeStream,
   recoverClaudeResultPatch,
@@ -230,6 +231,50 @@ describe("SWE compare runner", () => {
     const captured = captureGitDiff(root);
     expect(captured.error).toBeUndefined();
     expect(captured.diff).toContain("+changed");
+  });
+
+  test("uses explicit edited paths and recognizes a read-only Paw trace", () => {
+    const root = path.join(tmpdir(), "paw-workspace");
+    expect(
+      collectTraceMutationHints({
+        runner: "paw",
+        workspaceRoot: root,
+        trace: [
+          {
+            event: {
+              type: "tool.call",
+              tool: "workspace.read_file",
+              args: { path: "src/a.py" },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ explicitPaths: [], unknownWritePossible: false });
+    expect(
+      collectTraceMutationHints({
+        runner: "claude",
+        workspaceRoot: root,
+        trace: [
+          {
+            type: "assistant",
+            message: {
+              content: [
+                {
+                  type: "tool_use",
+                  name: "Edit",
+                  input: { file_path: path.join(root, "src", "a.py") },
+                },
+                {
+                  type: "tool_use",
+                  name: "Bash",
+                  input: { command: "pytest src/test_a.py 2>&1" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    ).toEqual({ explicitPaths: ["src/a.py"], unknownWritePossible: false });
   });
 
   test("backfills an empty persisted Claude result without resampling", () => {
