@@ -233,6 +233,103 @@ describe("AgentOrchestrator compression & budget", () => {
     }
   });
 
+  test("pending acceptance survives successful compaction and blocks final_answer", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-accept-compact-"));
+    const events: RunEventEnvelope[] = [];
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "acceptance-after-compaction",
+        capabilities: { contextWindow: 128_000 },
+        async complete(messages) {
+          calls += 1;
+          expect(
+            messages.some((message) =>
+              message.content.includes("acceptance-001 [pending]"),
+            ),
+          ).toBe(true);
+          return { text: '{"action":"final_answer","summary":"Done."}' };
+        },
+      },
+      auxiliaryModel: auxiliaryModel((user) => {
+        if (
+          user.includes("Summarize the following conversation") ||
+          user.includes("Update the summary")
+        ) {
+          const body = "compressed detail line with padding\n".repeat(2_500);
+          return [
+            "## Active Task",
+            `Preserve acceptance state\n${body}`,
+            "## Goal",
+            "Finish safely",
+            "## Progress",
+            "- Inspected repository",
+            "## Key Decisions",
+            "- Keep the regression condition",
+            "## Relevant Files",
+            "- src/main.ts",
+            "## Errors & Fixes",
+            "- None",
+            "## Next Steps",
+            "1. Verify acceptance",
+            "## Pending Questions",
+            "- None",
+          ].join("\n");
+        }
+        return "";
+      }),
+      memoryExtraction: "off",
+      contextManager: largeHistoryContextManager(),
+      onEvent: (event) => events.push(event),
+    });
+    const result = await o.run({
+      runId: "acceptance-compaction",
+      goal: "preserve acceptance",
+      workspaceRoot: dir,
+      maxSteps: 4,
+      resumeFromState: {
+        runId: "acceptance-compaction",
+        goal: "preserve acceptance",
+        workspaceRoot: dir,
+        turn: 1,
+        maxSteps: 4,
+        savedAt: Date.now(),
+        messages: buildHugeHistory(),
+        taskState: {
+          goal: "preserve acceptance",
+          constraints: [],
+          acceptanceCriteria: [
+            {
+              id: "acceptance-001",
+              text: "Keep the legacy output",
+              source: { kind: "repository", turn: 0 },
+              status: "pending",
+            },
+          ],
+          plan: [],
+          filesRead: [],
+          filesChanged: [],
+          commandsRun: [],
+          testResults: [],
+          fileLockConflicts: [],
+          rejectedHypotheses: [],
+          pinnedFacts: [],
+          knownNonGoals: [],
+          updatedAt: Date.now(),
+        },
+      },
+    });
+    expect(result.message).toContain("[AcceptanceGate]");
+    expect(result.status).toBe("incomplete");
+    expect(result.message).toContain("acceptance-001 [pending]");
+    expect(calls).toBe(3);
+    expect(
+      events.some(
+        (event) => event.event.type === "compression.auto_compact.done",
+      ),
+    ).toBe(true);
+  });
+
   test("P4.3 context.blocks 逐块账本：system/pinned/tool 块齐全", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-blocks-"));
     const events: RunEventEnvelope[] = [];

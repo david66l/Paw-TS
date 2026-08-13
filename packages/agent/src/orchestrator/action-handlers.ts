@@ -49,7 +49,9 @@ import {
   isEditRecoveryRead,
 } from "../lifecycle/convergence.js";
 import {
+  type AcceptanceGateDecision,
   IDLE_FUSE_ESCALATION,
+  checkAcceptanceCriteria,
   decideCompletion,
   evaluateBudgetExhaustion,
   evaluateFinalAnswer,
@@ -281,6 +283,7 @@ function handleAcceptanceUpdate(
   }
   const nextFlags: TurnFlags = {
     ...flags,
+    acceptanceNudges: unknown ? flags.acceptanceNudges : 0,
     lastTurnHadToolCall: false,
   };
   if (ctx.turn + 1 >= ctx.maxSteps) {
@@ -381,6 +384,19 @@ function handleNoAction(
       state: { type: "incomplete", message: decision.message },
       flags,
     };
+  }
+
+  const acceptance = checkAcceptanceCriteria(ctx.taskState.snapshot());
+  if (!acceptance.ok) {
+    return handleAcceptanceGateFailure(
+      acceptance,
+      ctx,
+      flags,
+      text,
+      thinking,
+      opts,
+      noRoomForAnotherTurn,
+    );
   }
 
   // 真正完成：纯对话式回复（未使用工具）
@@ -562,6 +578,19 @@ function handleFinalAnswer(
     };
   }
 
+  const acceptance = checkAcceptanceCriteria(ctx.taskState.snapshot());
+  if (!acceptance.ok) {
+    return handleAcceptanceGateFailure(
+      acceptance,
+      ctx,
+      flags,
+      text,
+      thinking,
+      opts,
+      noRoomForAnotherTurn,
+    );
+  }
+
   const summary = action.summary.trim() || "(empty summary)";
   const evaluated = evaluateFinalAnswer(
     summary,
@@ -626,6 +655,41 @@ function handleFinalAnswer(
       type: "decided",
       decision: evaluated.decision,
     },
+    flags,
+  };
+}
+
+function handleAcceptanceGateFailure(
+  acceptance: Extract<AcceptanceGateDecision, { readonly ok: false }>,
+  ctx: PhaseContext,
+  flags: TurnFlags,
+  text: string,
+  thinking: string | undefined,
+  opts: Pick<ActionHandlerContext, "saveStateFn">,
+  noRoomForAnotherTurn: boolean,
+): { readonly state: TurnState; readonly flags: TurnFlags } {
+  if (acceptance.mode === "blocked") {
+    return {
+      state: { type: "incomplete", message: acceptance.message },
+      flags,
+    };
+  }
+
+  const acceptanceNudges = flags.acceptanceNudges ?? 0;
+  if (acceptanceNudges < 2 && !noRoomForAnotherTurn) {
+    const nextFlags: TurnFlags = {
+      ...flags,
+      acceptanceNudges: acceptanceNudges + 1,
+      lastTurnHadToolCall: false,
+    };
+    ctx.ctxMgr.addAssistant(text, thinking);
+    ctx.ctxMgr.addUser(acceptance.message);
+    opts.saveStateFn();
+    return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  }
+
+  return {
+    state: { type: "incomplete", message: acceptance.message },
     flags,
   };
 }

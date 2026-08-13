@@ -3,6 +3,7 @@ import {
   lifecycleGatesOk,
   summarizeLifecycleGates,
 } from "../../eval/src/swe-exp/report.js";
+import { checkAcceptanceCriteria } from "../src/lifecycle/acceptance-gate.js";
 import {
   createBudgetAbort,
   resolveLifecycleBudget,
@@ -108,6 +109,82 @@ describe("CompletionPolicy", () => {
     expect(evidenceFromTaskState(state).fileLockConflicts).toEqual([
       "src/a.ts",
     ]);
+  });
+});
+
+describe("AcceptanceGate", () => {
+  test("keeps legacy empty-ledger behavior permissive", () => {
+    expect(checkAcceptanceCriteria(baseState())).toEqual({
+      ok: true,
+      items: [],
+    });
+  });
+
+  test("requires pending and stale criteria to be re-verified", () => {
+    const decision = checkAcceptanceCriteria(
+      baseState({
+        mutationRevision: 2,
+        acceptanceCriteria: [
+          {
+            id: "acceptance-001",
+            text: "Keep legacy output",
+            source: { kind: "repository", turn: 1 },
+            status: "pending",
+          },
+          {
+            id: "acceptance-002",
+            text: "Show the new label",
+            source: { kind: "user", turn: 0 },
+            status: "satisfied",
+            evidence: "passed before the latest edit",
+            evidenceMutationRevision: 1,
+          },
+        ],
+      }),
+    );
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) {
+      expect(decision.mode).toBe("action_required");
+      expect(decision.message).toContain("acceptance-001 [pending]");
+      expect(decision.message).toContain("acceptance-002 [stale]");
+    }
+  });
+
+  test("treats blocked criteria as honest incomplete", () => {
+    const decision = checkAcceptanceCriteria(
+      baseState({
+        acceptanceCriteria: [
+          {
+            id: "acceptance-001",
+            text: "Run the official verifier",
+            source: { kind: "verification", turn: 3 },
+            status: "blocked",
+            evidence: "fixture service is unavailable",
+          },
+        ],
+      }),
+    );
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) expect(decision.mode).toBe("blocked");
+  });
+
+  test("accepts only current-revision satisfied criteria", () => {
+    const decision = checkAcceptanceCriteria(
+      baseState({
+        mutationRevision: 2,
+        acceptanceCriteria: [
+          {
+            id: "acceptance-001",
+            text: "Keep legacy output",
+            source: { kind: "repository", turn: 1 },
+            status: "satisfied",
+            evidence: "targeted regression passed",
+            evidenceMutationRevision: 2,
+          },
+        ],
+      }),
+    );
+    expect(decision.ok).toBe(true);
   });
 });
 

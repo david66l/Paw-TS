@@ -126,6 +126,8 @@ export interface TurnFlags {
   readonly formatErrorNudges?: number;
   /** VerificationGate nudge 次数 */
   readonly verifyNudges?: number;
+  /** AcceptanceGate feedback attempts, independent from plan and verification. */
+  readonly acceptanceNudges?: number;
   /** 上一轮是否执行了工具调用 */
   readonly lastTurnHadToolCall: boolean;
   /** 本轮 Run 中是否使用过工具 */

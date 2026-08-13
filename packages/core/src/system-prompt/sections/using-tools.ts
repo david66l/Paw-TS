@@ -49,6 +49,7 @@ export function getUsingToolsSection(opts: {
     `{"action":"ask_user","question":"..."} — ask the user a question`,
     `{"action":"plan_update","reason":"...","new_items":[...],"deprecated_items":[...]} — add plan items or update existing items by id (including status: pending|running|completed|blocked|skipped|failed)`,
     `{"action":"acceptance_update","reason":"...","add":[{"text":"observable requirement","source":"user|repository|verification","ref":"file/test/command"}],"updates":[{"id":"acceptance-001","status":"pending|satisfied|blocked|superseded","evidence":"required when satisfied"}]} — persist acceptance conditions separately from implementation steps; never mark satisfied without concrete evidence`,
+    "When repository tests or investigation reveal multi-branch requirements or regression conditions, register them before implementation. Before final_answer, resolve every active acceptance item against the current code revision; prior evidence becomes stale after another mutation.",
     `{"action":"abort","reason":"..."} — abort the task`,
     "",
     // ReAct 模式：观察→思考→行动，循环直到完成

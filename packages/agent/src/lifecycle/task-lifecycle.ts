@@ -7,6 +7,10 @@ import type { ToolRunResult } from "@paw/harness";
 import type { TaskState } from "../task-state.js";
 import { formatTaskStateForContext } from "../task-state.js";
 import {
+  type AcceptanceGateDecision,
+  checkAcceptanceCriteria,
+} from "./acceptance-gate.js";
+import {
   DEFAULT_LIFECYCLE_BUDGET,
   HEADLESS_LIFECYCLE_BUDGET,
   type LifecycleBudget,
@@ -57,6 +61,7 @@ export {
   resolveLifecycleBudget,
   DEFAULT_LIFECYCLE_BUDGET,
   HEADLESS_LIFECYCLE_BUDGET,
+  checkAcceptanceCriteria,
 };
 export type {
   CompletionDecision,
@@ -64,6 +69,7 @@ export type {
   VerificationPolicy,
   RecoveryHint,
   LifecycleBudget,
+  AcceptanceGateDecision,
 };
 
 /** Task state block for Context Package (control-plane visibility). */

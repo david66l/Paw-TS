@@ -16,6 +16,7 @@ export {
   evaluateBudgetExhaustion,
   runResultFromDecision,
   collectToolRecoveryMessage,
+  checkAcceptanceCriteria,
   resolveLifecycleBudget,
   createBudgetAbort,
   DEFAULT_LIFECYCLE_BUDGET,
@@ -24,6 +25,7 @@ export {
   type VerificationDecision,
   type RecoveryHint,
   type LifecycleBudget,
+  type AcceptanceGateDecision,
 } from "./task-lifecycle.js";
 
 export type { DecideCompletionInput } from "./completion-policy.js";

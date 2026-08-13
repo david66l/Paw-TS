@@ -658,6 +658,13 @@ describe("AgentOrchestrator", () => {
           if (calls === 2) {
             expect(lastUser?.content).toContain("acceptance-001 [pending]");
             return {
+              text: '{"action":"final_answer","summary":"Done too early."}',
+            };
+          }
+          if (calls === 3) {
+            expect(lastUser?.content).toContain("[AcceptanceGate]");
+            expect(lastUser?.content).toContain("acceptance-001 [pending]");
+            return {
               text: '{"action":"acceptance_update","reason":"direct check passed","add":[],"updates":[{"id":"acceptance-001","status":"satisfied","evidence":"legacy output fixture passed"}]}',
             };
           }
@@ -677,11 +684,86 @@ describe("AgentOrchestrator", () => {
       runId: "acceptance-seq",
       goal: "inspect behavior",
       workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-acceptance-")),
-      maxSteps: 4,
+      maxSteps: 5,
     });
     expect(result.message).toBe("OK.");
     expect(result.status).toBe("completed");
+    expect(calls).toBe(4);
+  });
+
+  test("blocked acceptance criterion ends honestly without a nudge loop", async () => {
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "acceptance-blocked",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"action":"acceptance_update","add":[{"text":"Run official verifier","source":"verification","ref":"run.py"}],"updates":[]}',
+            };
+          }
+          if (calls === 2) {
+            return {
+              text: '{"action":"acceptance_update","add":[],"updates":[{"id":"acceptance-001","status":"blocked","evidence":"verifier service unavailable"}]}',
+            };
+          }
+          return { text: '{"action":"final_answer","summary":"Done."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "acceptance-blocked-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
+        },
+      },
+    });
+    const result = await o.run({
+      runId: "acceptance-blocked",
+      goal: "run verification",
+      workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-blocked-")),
+      maxSteps: 6,
+    });
+    expect(result.status).toBe("incomplete");
+    expect(result.message).toContain("[AcceptanceGate]");
+    expect(result.message).toContain("acceptance-001 [blocked]");
     expect(calls).toBe(3);
+  });
+
+  test("plain conversational text cannot bypass a pending acceptance criterion", async () => {
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "acceptance-plain-text",
+        async complete(messages) {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"action":"acceptance_update","add":[{"text":"Preserve both output modes","source":"repository","ref":"tests/test_cli.py"}],"updates":[]}',
+            };
+          }
+          if (calls === 3) {
+            expect(messages.at(-1)?.content).toContain("[AcceptanceGate]");
+          }
+          return { text: "Everything is done." };
+        },
+      },
+      auxiliaryModel: {
+        label: "acceptance-plain-text-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
+        },
+      },
+    });
+    const result = await o.run({
+      runId: "acceptance-plain-text",
+      goal: "preserve modes",
+      workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-plain-")),
+      maxSteps: 5,
+    });
+    expect(result.status).toBe("incomplete");
+    expect(result.message).toContain("[AcceptanceGate]");
+    expect(calls).toBe(4);
   });
 
   test("final_answer cannot silently complete a pending model plan", async () => {
