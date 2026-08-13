@@ -55,11 +55,18 @@ export function repoCachePath(cacheDir: string, repo: string): string {
 export function ensureRepoClone(
   repo: string,
   cacheDir: string,
-  opts: { readonly fetch?: boolean } = {},
+  opts: {
+    readonly fetch?: boolean;
+    /** Explicit trusted mirror used by offline callers and deterministic tests. */
+    readonly cloneUrl?: string;
+  } = {},
 ): string {
   const dest = repoCachePath(cacheDir, repo);
   mkdirSync(path.dirname(dest), { recursive: true });
-  if (existsSync(path.join(dest, ".git"))) {
+  const existingHead = existsSync(path.join(dest, ".git"))
+    ? runGit(dest, ["rev-parse", "--verify", "HEAD^{commit}"])
+    : undefined;
+  if (existingHead?.ok) {
     runGit(dest, ["config", "core.autocrlf", "false"]);
     if (opts.fetch !== false) {
       const fetch = runGit(dest, ["fetch", "--all", "--tags"], 600_000);
@@ -69,7 +76,17 @@ export function ensureRepoClone(
     }
     return dest;
   }
-  const url = `https://github.com/${repo}.git`;
+  if (existsSync(dest)) {
+    console.warn(
+      `[swe-exp] removing unusable repository cache ${repo}: ${
+        existingHead && !existingHead.ok
+          ? existingHead.error
+          : "missing .git directory"
+      }`,
+    );
+    rmSync(dest, { recursive: true, force: true });
+  }
+  const url = opts.cloneUrl ?? `https://github.com/${repo}.git`;
   console.error(`[swe-exp] cloning ${url} → ${dest}`);
   mkdirSync(dest, { recursive: true });
   // 完整 clone：SWE-bench base_commit 常在历史深处，blob:none 偏克隆取不到 commit
@@ -89,7 +106,19 @@ export function ensureRepoClone(
       /* ignore */
     }
     throw new Error(
-      `git clone failed ${repo}: ${(clone.stderr || clone.stdout || "").trim()}`,
+      `git clone failed ${repo}: ${(
+        clone.stderr ||
+          clone.stdout ||
+          clone.error?.message ||
+          `git exit ${clone.status}`
+      ).trim()}`,
+    );
+  }
+  const clonedHead = runGit(dest, ["rev-parse", "--verify", "HEAD^{commit}"]);
+  if (!clonedHead.ok) {
+    rmSync(dest, { recursive: true, force: true });
+    throw new Error(
+      `git clone produced unusable checkout ${repo}: ${clonedHead.error}`,
     );
   }
   runGit(dest, ["config", "core.autocrlf", "false"]);
