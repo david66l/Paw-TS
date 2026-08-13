@@ -29,6 +29,7 @@ import {
   writePredictionsJsonl,
 } from "../swe-exp/evaluate.js";
 import {
+  type GitDiffCapture,
   captureGitDiff,
   createCommitWorktree,
   ensureRepoClone,
@@ -1289,7 +1290,7 @@ function pawShellCallRejectedBeforeExecution(summary: string): boolean {
 }
 
 function commandMayWrite(command: string): boolean {
-  return /(?:\bgit\s+(?:apply|checkout|restore|reset|am)\b|\bsed\s+-i\b|\bperl\s+-pi\b|\b(?:rm|mv|cp|tee)\b|\b(?:writeFile|write_text|write_bytes)\b|(?<!\d)>\s*[^&\s])/i.test(
+  return /(?:\bgit\s+(?:apply|checkout|restore|reset|am)\b|\bsed\s+-i\b|\bperl\s+-pi\b|\b(?:rm|del|mv|cp|tee|set-content|add-content|out-file|remove-item|move-item|copy-item)\b|\b(?:writeFile|write_text|write_bytes)\b|(?<!\d)>\s*[^&\s])/i.test(
     command,
   );
 }
@@ -1322,6 +1323,7 @@ export function collectTraceMutationHints(opts: {
           ? (args as Record<string, unknown>)
           : {};
       if (record.type === "tool.result" && Array.isArray(record.fileChanges)) {
+        let materialFileChange = false;
         for (const change of record.fileChanges) {
           if (!change || typeof change !== "object" || Array.isArray(change)) {
             continue;
@@ -1331,7 +1333,13 @@ export function collectTraceMutationHints(opts: {
             typeof fileChange.added === "number" ? fileChange.added : 0;
           const removed =
             typeof fileChange.removed === "number" ? fileChange.removed : 0;
-          if (added + removed > 0) addPath(fileChange.path);
+          if (added + removed > 0) {
+            addPath(fileChange.path);
+            materialFileChange = true;
+          }
+        }
+        if (materialFileChange && record.tool === "workspace.run_shell") {
+          unknownWritePossible = true;
         }
       }
       if (
@@ -1681,18 +1689,39 @@ export async function runSweCompareArm(opts: {
               ? []
               : mutationHints.explicitPaths,
           );
+    let replayedPawPatch: GitDiffCapture | undefined;
+    if (
+      capturedPatch.error &&
+      opts.runner === "paw" &&
+      Array.isArray(execution.trace) &&
+      pawTraceHasOnlyReplayableEdits(execution.trace, mutationHints)
+    ) {
+      replayedPawPatch = recoverReplayablePawPatch({
+        trace: execution.trace,
+        hints: mutationHints,
+        gitRoot,
+        baseCommit: probe.base_commit,
+        label: `capture-recover-${runId}`.slice(0, 60),
+      });
+    }
     const workspacePatch = capturedPatch.diff ?? "";
     const recoveredPatch =
       "recoveredPatch" in execution ? (execution.recoveredPatch ?? "") : "";
-    const patch = capturedPatch.error ? "" : workspacePatch || recoveredPatch;
+    const patch = capturedPatch.error
+      ? (replayedPawPatch?.diff ?? "")
+      : workspacePatch || recoveredPatch;
     const patchSource = workspacePatch
       ? "workspace"
-      : recoveredPatch && !capturedPatch.error
-        ? "claude_trace_git_diff"
-        : "none";
-    const artifactStatus = capturedPatch.error
-      ? "patch_collection_failed"
-      : "valid";
+      : replayedPawPatch?.diff
+        ? "paw_trace_edit_replay"
+        : recoveredPatch && !capturedPatch.error
+          ? "claude_trace_git_diff"
+          : "none";
+    const artifactStatus = patch.trim()
+      ? "valid"
+      : capturedPatch.error
+        ? "patch_collection_failed"
+        : "valid";
     const executionSummary = {
       status: execution.status,
       ...(execution.terminalReason
@@ -1777,7 +1806,11 @@ export async function runSweCompareArm(opts: {
       patchSource,
       artifactStatus,
       ...(capturedPatch.error
-        ? { patchCollectionError: capturedPatch.error }
+        ? {
+            patchCollectionError: replayedPawPatch?.error
+              ? `${capturedPatch.error}; trace replay failed: ${replayedPawPatch.error}`
+              : capturedPatch.error,
+          }
         : {}),
       integrity,
       resolved,
@@ -1919,6 +1952,104 @@ function successfulPawEdits(trace: readonly unknown[]): PawSuccessfulEdit[] {
   return successful;
 }
 
+/**
+ * Automatic recovery is narrower than the manual recovery command: every
+ * material path must be explained by a successful exact edit and no shell
+ * command may have an unpaired write effect.
+ */
+export function pawTraceHasOnlyReplayableEdits(
+  trace: readonly unknown[],
+  hints: TraceMutationHints,
+): boolean {
+  if (hints.unknownWritePossible) return false;
+  const editPaths = new Set(
+    successfulPawEdits(trace).map((edit) => edit.path.replace(/\\/g, "/")),
+  );
+  if (editPaths.size === 0) return false;
+  if (!hints.explicitPaths.every((file) => editPaths.has(file))) return false;
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const raw = (item as Record<string, unknown>).event;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const event = raw as Record<string, unknown>;
+    if (event.type !== "tool.call") continue;
+    if (
+      event.tool === "workspace.write_file" ||
+      event.tool === "workspace.apply_patch" ||
+      event.tool === "workspace.notebook_edit" ||
+      event.tool === "workspace.run_agent"
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Rebuild Paw's terminal source state from paired successful exact edits. */
+export function replayPawTracePatch(
+  trace: readonly unknown[],
+  workspaceRoot: string,
+): GitDiffCapture {
+  const edits = successfulPawEdits(trace);
+  const deletedPaths = successfulPawDeletedPaths(trace);
+  if (edits.length === 0) {
+    return { error: "Paw trace has no successful edit_file events" };
+  }
+  const paths = new Set<string>();
+  for (const edit of edits) {
+    const normalized = edit.path.replace(/\\/g, "/");
+    if (path.isAbsolute(normalized) || normalized.split("/").includes("..")) {
+      return { error: `unsafe Paw edit path: ${edit.path}` };
+    }
+    if (deletedPaths.has(normalized)) continue;
+    const target = path.join(workspaceRoot, ...normalized.split("/"));
+    const current = readFileSync(target, "utf8");
+    const first = current.indexOf(edit.oldString);
+    if (first < 0 || current.indexOf(edit.oldString, first + 1) >= 0) {
+      return { error: `Paw edit replay anchor is not unique: ${normalized}` };
+    }
+    writeFileSync(
+      target,
+      current.slice(0, first) +
+        edit.newString +
+        current.slice(first + edit.oldString.length),
+      "utf8",
+    );
+    paths.add(normalized);
+  }
+  if (paths.size === 0) {
+    return { error: "Paw trace has no terminal replayable mutation" };
+  }
+  return captureGitDiff(workspaceRoot, [...paths]);
+}
+
+/** Recover a fully replayable Paw trace without risking the persisted run. */
+export function recoverReplayablePawPatch(input: {
+  readonly trace: readonly unknown[];
+  readonly hints: TraceMutationHints;
+  readonly gitRoot: string;
+  readonly baseCommit: string;
+  readonly label: string;
+}): GitDiffCapture {
+  if (!pawTraceHasOnlyReplayableEdits(input.trace, input.hints)) {
+    return { error: "Paw trace contains mutations outside exact edit replay" };
+  }
+  try {
+    const workspace = createCommitWorktree(
+      input.gitRoot,
+      input.baseCommit,
+      input.label,
+    );
+    try {
+      return replayPawTracePatch(input.trace, workspace.root);
+    } finally {
+      workspace.cleanup();
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 function successfulPawDeletedPaths(trace: readonly unknown[]): Set<string> {
   const pending: string[] = [];
   const deleted = new Set<string>();
@@ -1983,11 +2114,6 @@ export function recoverPawResultPatch(opts: {
   const trace = JSON.parse(
     readFileSync(persistedTracePath, "utf8"),
   ) as unknown[];
-  const edits = successfulPawEdits(trace);
-  const deletedPaths = successfulPawDeletedPaths(trace);
-  if (edits.length === 0) {
-    throw new Error(`no successful Paw edit_file events: ${previous.runId}`);
-  }
   const datasetPath = path.join(
     opts.repoRoot,
     "benchmarks",
@@ -2010,29 +2136,7 @@ export function recoverPawResultPatch(opts: {
     `recover-${previous.runId}`.slice(0, 60),
   );
   try {
-    const paths = new Set<string>();
-    for (const edit of edits) {
-      const normalized = edit.path.replace(/\\/g, "/");
-      if (path.isAbsolute(normalized) || normalized.split("/").includes("..")) {
-        throw new Error(`unsafe Paw edit path: ${edit.path}`);
-      }
-      if (deletedPaths.has(normalized)) continue;
-      const target = path.join(workspace.root, ...normalized.split("/"));
-      const current = readFileSync(target, "utf8");
-      const first = current.indexOf(edit.oldString);
-      if (first < 0 || current.indexOf(edit.oldString, first + 1) >= 0) {
-        throw new Error(`Paw edit replay anchor is not unique: ${normalized}`);
-      }
-      writeFileSync(
-        target,
-        current.slice(0, first) +
-          edit.newString +
-          current.slice(first + edit.oldString.length),
-        "utf8",
-      );
-      paths.add(normalized);
-    }
-    const captured = captureGitDiff(workspace.root, [...paths]);
+    const captured = replayPawTracePatch(trace, workspace.root);
     if (captured.error || !captured.diff?.trim()) {
       throw new Error(
         captured.error ??

@@ -25,9 +25,12 @@ import {
   createSweCompareToolExecutionPolicy,
   extractClaudePatchFromTrace,
   parseClaudeStream,
+  pawTraceHasOnlyReplayableEdits,
   recoverClaudeResultPatch,
   recoverPawResultPatch,
+  recoverReplayablePawPatch,
   replayClaudeTracePatch,
+  replayPawTracePatch,
   runSweCompareArm,
   sweCompareLocalGoldViolation,
   sweCompareNetworkViolation,
@@ -1303,6 +1306,152 @@ describe("SWE compare runner", () => {
     expect(updated.artifactStatus).toBe("valid");
     expect(updated.patch).toContain("Sequence  # replay");
   }, 15_000);
+
+  test("auto replay requires every mutation path to be an exact Paw edit", () => {
+    const editTrace = [
+      {
+        event: {
+          type: "tool.call",
+          tool: "workspace.edit_file",
+          args: { path: "a.py", old_string: "old", new_string: "new" },
+        },
+      },
+      {
+        event: {
+          type: "tool.result",
+          tool: "workspace.edit_file",
+          ok: true,
+        },
+      },
+    ];
+    expect(
+      pawTraceHasOnlyReplayableEdits(editTrace, {
+        explicitPaths: ["a.py"],
+        unknownWritePossible: false,
+      }),
+    ).toBe(true);
+    expect(
+      pawTraceHasOnlyReplayableEdits(editTrace, {
+        explicitPaths: ["a.py", "unexplained.py"],
+        unknownWritePossible: false,
+      }),
+    ).toBe(false);
+    expect(
+      pawTraceHasOnlyReplayableEdits(editTrace, {
+        explicitPaths: ["a.py"],
+        unknownWritePossible: true,
+      }),
+    ).toBe(false);
+    expect(
+      pawTraceHasOnlyReplayableEdits(
+        [
+          ...editTrace,
+          {
+            event: {
+              type: "tool.call",
+              tool: "workspace.apply_patch",
+              args: {},
+            },
+          },
+        ],
+        { explicitPaths: ["a.py"], unknownWritePossible: false },
+      ),
+    ).toBe(false);
+    expect(
+      collectTraceMutationHints({
+        runner: "paw",
+        workspaceRoot: "C:/workspace",
+        trace: [
+          {
+            event: {
+              type: "tool.call",
+              tool: "workspace.run_shell",
+              args: { command: "python mutate.py" },
+            },
+          },
+          {
+            event: {
+              type: "tool.result",
+              tool: "workspace.run_shell",
+              ok: true,
+              fileChanges: [{ path: "a.py", added: 1, removed: 1 }],
+            },
+          },
+        ],
+      }),
+    ).toEqual({ explicitPaths: ["a.py"], unknownWritePossible: true });
+  });
+
+  test("replays exact Paw edits in a clean isolated repository", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-auto-replay-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.com"]);
+    git(root, ["config", "user.name", "Test"]);
+    writeFileSync(path.join(root, "a.py"), "old\n", "utf8");
+    git(root, ["add", "a.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const replayed = replayPawTracePatch(
+      [
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.edit_file",
+            args: { path: "a.py", old_string: "old", new_string: "new" },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.edit_file",
+            ok: true,
+          },
+        },
+      ],
+      root,
+    );
+    expect(replayed.error).toBeUndefined();
+    expect(replayed.diff).toContain("+new");
+  });
+
+  test("contains an automatic replay failure instead of losing the run", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-auto-contain-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.com"]);
+    git(root, ["config", "user.name", "Test"]);
+    writeFileSync(path.join(root, "a.py"), "old\n", "utf8");
+    git(root, ["add", "a.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const baseCommit = git(root, ["rev-parse", "HEAD"]);
+    const trace = [
+      {
+        event: {
+          type: "tool.call",
+          tool: "workspace.edit_file",
+          args: {
+            path: "missing.py",
+            old_string: "old",
+            new_string: "new",
+          },
+        },
+      },
+      {
+        event: {
+          type: "tool.result",
+          tool: "workspace.edit_file",
+          ok: true,
+        },
+      },
+    ];
+    const recovered = recoverReplayablePawPatch({
+      trace,
+      hints: { explicitPaths: ["missing.py"], unknownWritePossible: false },
+      gitRoot: root,
+      baseCommit,
+      label: "contain-failure",
+    });
+    expect(recovered.diff).toBeUndefined();
+    expect(recovered.error).toContain("missing.py");
+  });
 
   test("refuses to run when the current source tree is dirty", () => {
     const repoRoot = path.resolve(import.meta.dir, "../../..");
