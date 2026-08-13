@@ -88,6 +88,41 @@ export function claudeCodeArgs(goal: string): string[] {
     // the final positional goal cannot be consumed as an additional tool.
     "--tools",
     "Read,Edit,Write,Bash,Glob,Grep",
+    "--disallowedTools",
+    [
+      "WebFetch",
+      "WebSearch",
+      "Bash(curl *)",
+      "Bash(* curl *)",
+      "Bash(wget *)",
+      "Bash(* wget *)",
+      "Bash(Invoke-WebRequest *)",
+      "Bash(* Invoke-WebRequest *)",
+      "Bash(Invoke-RestMethod *)",
+      "Bash(* Invoke-RestMethod *)",
+      "Bash(iwr *)",
+      "Bash(* iwr *)",
+      "Bash(irm *)",
+      "Bash(* irm *)",
+      "Bash(gh *)",
+      "Bash(* gh *)",
+      "Bash(git fetch *)",
+      "Bash(* git fetch *)",
+      "Bash(git pull *)",
+      "Bash(* git pull *)",
+      "Bash(git clone *)",
+      "Bash(* git clone *)",
+      "Bash(git ls-remote *)",
+      "Bash(* git ls-remote *)",
+      "Bash(pip install *)",
+      "Bash(* pip install *)",
+      "Bash(pip download *)",
+      "Bash(* pip download *)",
+      "Bash(python -m pip install *)",
+      "Bash(* python -m pip install *)",
+      "Bash(python -m pip download *)",
+      "Bash(* python -m pip download *)",
+    ].join(","),
     "--no-session-persistence",
     "--disable-slash-commands",
     "--output-format",
@@ -249,6 +284,10 @@ async function runPaw(opts: {
     budget,
     memoryExtraction: "off",
     collaborationMode: "coding",
+    // Every shell call crosses the eval policy gate so network attempts are
+    // rejected before the harness spawns a process. Non-shell tools stay free.
+    approvalPolicy: (tool) => tool === "workspace.run_shell",
+    resolveToolApproval: async (input) => allowSweCompareToolCall(input),
     onEvent: (event) => {
       if (
         event.event.type !== "model.chunk" &&
@@ -567,9 +606,8 @@ function auditShellCommands(
 ): SweCompareIntegrityAudit {
   const violations: string[] = [];
   for (const command of commands) {
-    if (/\bgit\s+(?:fetch|pull|clone|ls-remote)\b/i.test(command)) {
-      violations.push("upstream_network_git_access");
-    }
+    const outbound = sweCompareNetworkViolation(command);
+    if (outbound) violations.push(outbound);
     if (
       /\bgit\s+(?:show|log|diff)\b[^\r\n]*(?:origin\/|upstream\/)/i.test(
         command,
@@ -577,12 +615,64 @@ function auditShellCommands(
     ) {
       violations.push("upstream_history_inspection");
     }
-    if (/\b(?:curl|wget|Invoke-WebRequest)\b/i.test(command)) {
-      violations.push("outbound_network_command");
-    }
   }
   const unique = [...new Set(violations)];
   return { valid: unique.length === 0, violations: unique };
+}
+
+/**
+ * Shared pre-execution/post-run rule for public benchmark network isolation.
+ * Offline package installs remain allowed when pip is explicitly --no-index.
+ */
+export function sweCompareNetworkViolation(
+  command: string,
+):
+  | "upstream_network_git_access"
+  | "outbound_network_command"
+  | "outbound_dependency_install"
+  | undefined {
+  if (/\bgit\s+(?:fetch|pull|clone|ls-remote)\b/i.test(command)) {
+    return "upstream_network_git_access";
+  }
+  if (
+    /\b(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|Start-BitsTransfer)\b/i.test(
+      command,
+    ) ||
+    /\bgh\s+(?:api|pr|issue|repo)\b/i.test(command) ||
+    /\bpython(?:\d+(?:\.\d+)?)?(?:\.exe)?\b[^\r\n]*(?:requests\.(?:get|post)|urllib\.request|urlopen\s*\(|httpx\.|aiohttp\.)/i.test(
+      command,
+    ) ||
+    /\bnode(?:\.exe)?\b[^\r\n]*\bfetch\s*\(/i.test(command)
+  ) {
+    return "outbound_network_command";
+  }
+  const dependencyCommand =
+    /(?:\bpython(?:\d+(?:\.\d+)?)?(?:\.exe)?\s+-m\s+pip|\bpip\d*(?:\.exe)?)\s+(?:install|download)\b/i.test(
+      command,
+    ) ||
+    /\b(?:conda|mamba|micromamba)(?:\.exe)?\s+(?:install|create|search)\b/i.test(
+      command,
+    ) ||
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:install|add)\b/i.test(command);
+  if (dependencyCommand && !/\bpip\b[^\r\n]*\s--no-index\b/i.test(command)) {
+    return "outbound_dependency_install";
+  }
+  return undefined;
+}
+
+export function allowSweCompareToolCall(input: {
+  readonly tool: string;
+  readonly args: unknown;
+}): boolean {
+  if (input.tool !== "workspace.run_shell") return true;
+  const args =
+    input.args && typeof input.args === "object" && !Array.isArray(input.args)
+      ? (input.args as Record<string, unknown>)
+      : {};
+  return (
+    typeof args.command !== "string" ||
+    sweCompareNetworkViolation(args.command) === undefined
+  );
 }
 
 async function runClaude(opts: {

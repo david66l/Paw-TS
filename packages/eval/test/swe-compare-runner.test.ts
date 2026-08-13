@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  allowSweCompareToolCall,
   auditClaudeTraceIntegrity,
   auditPawTraceIntegrity,
   auditSweCompareResult,
@@ -14,6 +15,7 @@ import {
   parseClaudeStream,
   recoverClaudeResultPatch,
   recoverPawResultPatch,
+  sweCompareNetworkViolation,
   validateCompareRun,
 } from "../src/swe-compare/runner.js";
 import type { SweCompareManifest } from "../src/swe-compare/types.js";
@@ -41,6 +43,10 @@ describe("SWE compare runner", () => {
     expect(args).toContain("--no-session-persistence");
     expect(args).toContain("--disable-slash-commands");
     expect(args).toContain("--dangerously-skip-permissions");
+    expect(args).toContain("--disallowedTools");
+    expect(args[args.indexOf("--disallowedTools") + 1]).toContain(
+      "Bash(* curl *)",
+    );
     expect(args).toContain("stream-json");
     expect(args).toContain("--verbose");
     const toolsIndex = args.indexOf("--tools");
@@ -183,6 +189,56 @@ describe("SWE compare runner", () => {
       valid: false,
       violations: ["upstream_network_git_access"],
     });
+  });
+
+  test("blocks benchmark network tools before execution but permits offline/local work", () => {
+    expect(sweCompareNetworkViolation("git fetch origin main")).toBe(
+      "upstream_network_git_access",
+    );
+    expect(
+      sweCompareNetworkViolation(
+        "cd /tmp && curl https://github.com/org/repo/pull/1.diff",
+      ),
+    ).toBe("outbound_network_command");
+    expect(sweCompareNetworkViolation("python -m pip install scipy")).toBe(
+      "outbound_dependency_install",
+    );
+    expect(
+      sweCompareNetworkViolation(
+        "C:\\Python310\\python.exe -m pip install scipy",
+      ),
+    ).toBe("outbound_dependency_install");
+    expect(
+      sweCompareNetworkViolation(
+        "python -c \"import requests; requests.get('https://example.test')\"",
+      ),
+    ).toBe("outbound_network_command");
+    expect(
+      sweCompareNetworkViolation(
+        "python -m pip install --no-index --find-links wheels scipy",
+      ),
+    ).toBeUndefined();
+    expect(
+      sweCompareNetworkViolation("pytest tests/test_local.py"),
+    ).toBeUndefined();
+    expect(
+      allowSweCompareToolCall({
+        tool: "workspace.run_shell",
+        args: { command: "wget https://example.test/fix.patch" },
+      }),
+    ).toBe(false);
+    expect(
+      allowSweCompareToolCall({
+        tool: "workspace.run_shell",
+        args: { command: "python -m pytest tests/test_local.py" },
+      }),
+    ).toBe(true);
+    expect(
+      allowSweCompareToolCall({
+        tool: "workspace.edit_file",
+        args: { path: "src/a.py" },
+      }),
+    ).toBe(true);
   });
 
   test("isolated benchmark checkout has no remote or future commit objects", () => {
