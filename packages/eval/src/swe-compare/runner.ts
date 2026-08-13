@@ -804,11 +804,18 @@ export function collectTraceMutationHints(opts: {
         args && typeof args === "object" && !Array.isArray(args)
           ? (args as Record<string, unknown>)
           : {};
-      if (
-        record.type === "tool.call" &&
-        record.tool === "workspace.edit_file"
-      ) {
-        addPath(argRecord.path);
+      if (record.type === "tool.result" && Array.isArray(record.fileChanges)) {
+        for (const change of record.fileChanges) {
+          if (!change || typeof change !== "object" || Array.isArray(change)) {
+            continue;
+          }
+          const fileChange = change as Record<string, unknown>;
+          const added =
+            typeof fileChange.added === "number" ? fileChange.added : 0;
+          const removed =
+            typeof fileChange.removed === "number" ? fileChange.removed : 0;
+          if (added + removed > 0) addPath(fileChange.path);
+        }
       }
       if (
         record.type === "tool.call" &&
@@ -852,6 +859,9 @@ export function collectTraceMutationHints(opts: {
         unknownWritePossible = true;
       }
     }
+  }
+  if (opts.runner === "paw") {
+    for (const edit of successfulPawEdits(opts.trace)) addPath(edit.path);
   }
   return {
     explicitPaths: [...explicitPaths].sort(),
@@ -1357,7 +1367,9 @@ function successfulPawEdits(trace: readonly unknown[]): PawSuccessfulEdit[] {
     }
     if (event.type === "tool.result" && event.tool === "workspace.edit_file") {
       const edit = pending.shift();
-      if (edit && event.ok === true) successful.push(edit);
+      if (edit && event.ok === true && edit.oldString !== edit.newString) {
+        successful.push(edit);
+      }
     }
   }
   return successful;

@@ -44,6 +44,8 @@ export interface PatchFileResult {
   readonly path: string;
   /** 是否应用成功 */
   readonly ok: boolean;
+  /** True when file content or file existence changed. */
+  readonly changed?: boolean;
   /** 新增行数（成功时） */
   readonly linesAdded?: number;
   /** 删除行数（成功时） */
@@ -212,6 +214,17 @@ export function applyWorkspacePatch(
       };
     }
 
+    if (patched === original && t.patch.isCreate !== true) {
+      results.push({
+        path: t.relPath,
+        ok: true,
+        changed: false,
+        linesAdded: 0,
+        linesRemoved: 0,
+      });
+      continue;
+    }
+
     // patch 应用成功 → 写入新内容（新文件时补建父目录）
     try {
       fs.mkdirSync(path.dirname(t.resolvedPath), { recursive: true });
@@ -220,6 +233,7 @@ export function applyWorkspacePatch(
       results.push({
         path: t.relPath,
         ok: true,
+        changed: true,
         linesAdded: counts.added,
         linesRemoved: counts.removed,
       });
@@ -249,6 +263,13 @@ export function applyWorkspacePatch(
   const okCount = results.filter((r) => r.ok).length;
   const totalAdded = results.reduce((s, r) => s + (r.linesAdded ?? 0), 0);
   const totalRemoved = results.reduce((s, r) => s + (r.linesRemoved ?? 0), 0);
+  if (!results.some((result) => result.ok && result.changed === true)) {
+    return {
+      ok: false,
+      results,
+      summary: "apply_patch: patch produced no content change",
+    };
+  }
   const summary = `apply_patch: ${okCount}/${results.length} file(s) edited (+${totalAdded}/-${totalRemoved})`;
 
   return { ok: true, results, summary };

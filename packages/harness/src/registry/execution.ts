@@ -34,18 +34,37 @@ import {
   runShellInWorkspaceStreaming,
 } from "../shell/index.js";
 
-import {
-  type ToolRunResult,
-  toolDefinitions,
-  READ, LIST, SEARCH, GLOB, GREP, WRITE, EDIT, SHELL, APPLY_PATCH,
-  WEBFETCH, WEBSEARCH, RUN_AGENT, CREATE_AGENT, RUN_SKILL,
-  GIT_STATUS, GIT_DIFF, GIT_LOG, LSP, NOTEBOOK_EDIT, SYMBOL_SEARCH,
-  BRIEF, TODO_WRITE, MEMORY_LIST, MEMORY_READ, MEMORY_SAVE,
-  CONTEXT_RECALL,
-} from "./definitions.js";
 import fs from "node:fs";
-
-
+import {
+  APPLY_PATCH,
+  BRIEF,
+  CONTEXT_RECALL,
+  CREATE_AGENT,
+  EDIT,
+  GIT_DIFF,
+  GIT_LOG,
+  GIT_STATUS,
+  GLOB,
+  GREP,
+  LIST,
+  LSP,
+  MEMORY_LIST,
+  MEMORY_READ,
+  MEMORY_SAVE,
+  NOTEBOOK_EDIT,
+  READ,
+  RUN_AGENT,
+  RUN_SKILL,
+  SEARCH,
+  SHELL,
+  SYMBOL_SEARCH,
+  TODO_WRITE,
+  type ToolRunResult,
+  WEBFETCH,
+  WEBSEARCH,
+  WRITE,
+  toolDefinitions,
+} from "./definitions.js";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v !== null && typeof v === "object" && !Array.isArray(v)
@@ -445,6 +464,14 @@ export async function executeTool(
         { path: filePath },
       );
     }
+    if (r.changed === false) {
+      return toolErrorResult(
+        "write_file",
+        "E_USER",
+        "write produced no content change",
+        { path: filePath },
+      );
+    }
     ctx.watcher?.markAgentWritten(filePath);
     return {
       ok: true,
@@ -501,6 +528,14 @@ export async function executeTool(
       return toolErrorResult("edit_file", errorCodeForToolPayload(r), r.error, {
         path: filePath,
       });
+    }
+    if (r.changed === false) {
+      return toolErrorResult(
+        "edit_file",
+        "E_USER",
+        "replacement produced no content change; use read_file or grep to inspect text",
+        { path: filePath },
+      );
     }
     const diffHint =
       r.linesAdded !== undefined && r.linesRemoved !== undefined
@@ -806,9 +841,7 @@ export async function executeTool(
       };
     }
     const role =
-      typeof rec.role === "string" && rec.role.trim()
-        ? rec.role.trim()
-        : name;
+      typeof rec.role === "string" && rec.role.trim() ? rec.role.trim() : name;
     const tools =
       typeof rec.tools === "string" && rec.tools.trim()
         ? rec.tools.trim()
@@ -828,9 +861,7 @@ export async function executeTool(
           ? rec.outputFormat.trim().replace(/\n/g, " ")
           : "Return a clear summary of what you did.";
     const emoji =
-      typeof rec.emoji === "string" && rec.emoji.trim()
-        ? rec.emoji.trim()
-        : "";
+      typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "";
     const description =
       typeof rec.description === "string" && rec.description.trim()
         ? rec.description.trim()
@@ -1017,7 +1048,9 @@ export async function executeTool(
     }
     const r = applyWorkspacePatch(ctx.workspaceRoot, patchText);
     if (r.ok) {
-      for (const f of r.results.filter((rr) => rr.ok).map((rr) => rr.path)) {
+      for (const f of r.results
+        .filter((rr) => rr.ok && rr.changed === true)
+        .map((rr) => rr.path)) {
         ctx.watcher?.markAgentWritten(f);
       }
     }

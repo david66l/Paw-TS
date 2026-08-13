@@ -158,6 +158,7 @@ describe("editWorkspaceFile — string mode", () => {
     expect(r.error).toBeUndefined();
     expect(r.linesAdded).toBe(0);
     expect(r.linesRemoved).toBe(0);
+    expect(r.changed).toBe(false);
   });
 
   test("fuzzy match ignores leading/trailing whitespace", () => {

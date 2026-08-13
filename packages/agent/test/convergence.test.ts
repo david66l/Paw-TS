@@ -193,6 +193,39 @@ describe("convergence guidance", () => {
     ).toBeNull();
   });
 
+  test("allows one exact-file reread after an edit anchor mismatch", () => {
+    const recovering = state({
+      filesChanged: [],
+      mutationRevision: 0,
+      filesRead: ["a.ts", "b.ts", "c.ts"],
+      editRecoveryPath: "src/target.py",
+    });
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.read_file",
+          args: { path: "src/target.py" },
+        },
+        recovering,
+        40,
+        64,
+      ),
+    ).toBeNull();
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.read_file",
+          args: { path: "src/other.py" },
+        },
+        recovering,
+        40,
+        64,
+      ),
+    ).toContain("implementation_required");
+  });
+
   test("enforces verify then diff then delivery in the closeout window", () => {
     const read = {
       type: "tool_call" as const,

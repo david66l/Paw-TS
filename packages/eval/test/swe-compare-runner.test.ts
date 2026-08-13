@@ -501,6 +501,29 @@ describe("SWE compare runner", () => {
     ).toEqual({ explicitPaths: [], unknownWritePossible: false });
     expect(
       collectTraceMutationHints({
+        runner: "paw",
+        workspaceRoot: root,
+        trace: [
+          {
+            event: {
+              type: "tool.call",
+              tool: "workspace.edit_file",
+              args: { path: "doc/probe.rst" },
+            },
+          },
+          {
+            event: {
+              type: "tool.result",
+              tool: "workspace.edit_file",
+              ok: true,
+              fileChanges: [],
+            },
+          },
+        ],
+      }),
+    ).toEqual({ explicitPaths: [], unknownWritePossible: false });
+    expect(
+      collectTraceMutationHints({
         runner: "claude",
         workspaceRoot: root,
         trace: [

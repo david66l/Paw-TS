@@ -33,6 +33,18 @@ function shellCallsSince(
   return Math.max(0, current - (revision ?? current));
 }
 
+export function isEditRecoveryRead(
+  call: AgentToolCallAction,
+  state: TaskState,
+): boolean {
+  return (
+    call.tool === "workspace.read_file" &&
+    typeof call.args.path === "string" &&
+    !!state.editRecoveryPath &&
+    call.args.path === state.editRecoveryPath
+  );
+}
+
 export function convergenceWindow(maxSteps: number): number {
   return Math.min(12, Math.max(4, Math.ceil(maxSteps * 0.2)));
 }
@@ -84,6 +96,7 @@ export function convergenceToolBlockReason(
   maxSteps: number,
 ): string | null {
   if (!goalLikelyRequiresImplementation(state.goal)) return null;
+  if (isEditRecoveryRead(call, state)) return null;
   const revision = state.mutationRevision ?? 0;
   if (
     revision === 0 &&

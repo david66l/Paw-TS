@@ -42,7 +42,11 @@ describe("TaskStateManager", () => {
         tool: "workspace.edit_file",
         args: { path: "src/a.ts" },
       },
-      { ok: true, summary: "edit_file: src/a.ts +1/-1", payload: {} },
+      {
+        ok: true,
+        summary: "edit_file: src/a.ts +1/-1",
+        payload: { path: "src/a.ts", linesAdded: 1, linesRemoved: 1 },
+      },
     );
     state.recordToolResult(
       {
@@ -90,7 +94,11 @@ describe("TaskStateManager", () => {
           tool: "workspace.edit_file",
           args: { path: "a.py" },
         },
-        { ok: true, summary: "edited", payload: {} },
+        {
+          ok: true,
+          summary: "edited",
+          payload: { path: "a.py", linesAdded: 1, linesRemoved: 1 },
+        },
       );
     edit();
     state.recordToolResult(
@@ -128,7 +136,11 @@ describe("TaskStateManager", () => {
         tool: "workspace.edit_file",
         args: { path: "a.py" },
       },
-      { ok: true, summary: "edited", payload: {} },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "a.py", linesAdded: 1, linesRemoved: 1 },
+      },
     );
     harness.recordToolResult(
       {
@@ -161,7 +173,11 @@ describe("TaskStateManager", () => {
         tool: "workspace.edit_file",
         args: { path: "a.py" },
       },
-      { ok: true, summary: "edited", payload: {} },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "a.py", linesAdded: 1, linesRemoved: 1 },
+      },
     );
     code.recordToolResult(
       {
@@ -198,8 +214,61 @@ describe("TaskStateManager", () => {
         tool: "workspace.edit_file",
         args: { path: "a.py" },
       },
-      { ok: true, summary: "edited", payload: {} },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "a.py", linesAdded: 1, linesRemoved: 1 },
+      },
     );
     expect(state.snapshot().mutationShellCommandRevision).toBe(25);
+  });
+
+  test("does not advance mutation state for a successful-looking no-op edit", () => {
+    const state = new TaskStateManager("fix bug");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "a.py", old_string: "same", new_string: "same" },
+      },
+      {
+        ok: true,
+        summary: "edit_file: a.py +0/-0",
+        payload: {
+          path: "a.py",
+          changed: false,
+          linesAdded: 0,
+          linesRemoved: 0,
+        },
+      },
+    );
+    expect(state.snapshot().mutationRevision).toBe(0);
+    expect(state.snapshot().filesChanged).toEqual([]);
+  });
+
+  test("retains one exact target after an edit anchor failure", () => {
+    const state = new TaskStateManager("fix bug");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "src/a.py", old_string: "old", new_string: "new" },
+      },
+      {
+        ok: false,
+        summary: "edit_file: E_USER old_string not found in src/a.py",
+        payload: { error_code: "E_USER" },
+      },
+    );
+    expect(state.snapshot().editRecoveryPath).toBe("src/a.py");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.read_file",
+        args: { path: "src/a.py" },
+      },
+      { ok: true, summary: "read", payload: {} },
+    );
+    expect(state.snapshot().editRecoveryPath).toBeUndefined();
   });
 });

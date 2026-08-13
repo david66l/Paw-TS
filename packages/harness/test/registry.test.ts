@@ -3,7 +3,6 @@ import fs, { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-
 import { executeTool, toolRequiresApproval } from "../src/registry/index.js";
 
 describe("executeTool", () => {
@@ -193,6 +192,24 @@ describe("executeTool", () => {
     expect(r.summary).toContain("edit_file");
     const content = fs.readFileSync(path.join(root, "x.txt"), "utf8");
     expect(content).toBe("hello paw\n");
+  });
+
+  test("workspace.edit_file rejects a no-op replacement as no progress", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-noop-"));
+    writeFileSync(path.join(root, "x.txt"), "same\n", "utf8");
+    const r = await executeTool(
+      { workspaceRoot: root },
+      "workspace.edit_file",
+      {
+        path: "x.txt",
+        old_string: "same",
+        new_string: "same",
+        replace_all: true,
+      },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.summary).toContain("no content change");
+    expect(fs.readFileSync(path.join(root, "x.txt"), "utf8")).toBe("same\n");
   });
 
   test("workspace.edit_file rejects missing old_string", async () => {

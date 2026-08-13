@@ -348,7 +348,7 @@ describe("CodingPhase locate → edit → verify budget", () => {
     const edited = advanceCodingPhase(
       EMPTY_CODING_PHASE_STATE,
       [call("workspace.edit_file")],
-      [{ ok: true }],
+      [{ ok: true, payload: { linesAdded: 1, linesRemoved: 1 } }],
     );
     expect(edited.nudges[0]).toContain("CodingPhase:verify");
     const browsed = advanceCodingPhase(
@@ -371,6 +371,21 @@ describe("CodingPhase locate → edit → verify budget", () => {
       [{ ok: false }],
     );
     expect(verified.state.verificationCalls).toBe(1);
+  });
+
+  test("a no-op edit does not leave the locate phase", () => {
+    const noOp = advanceCodingPhase(
+      EMPTY_CODING_PHASE_STATE,
+      [call("workspace.edit_file")],
+      [
+        {
+          ok: true,
+          payload: { changed: false, linesAdded: 0, linesRemoved: 0 },
+        },
+      ],
+    );
+    expect(noOp.state.successfulEdits).toBe(0);
+    expect(noOp.nudges).toEqual([]);
   });
 });
 

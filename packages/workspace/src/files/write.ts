@@ -25,6 +25,8 @@ const MAX_EDIT_BYTES = 512 * 1024;
 
 export interface EditFileResult {
   readonly path?: string;
+  /** Whether the persisted file content is materially different. */
+  readonly changed?: boolean;
   readonly replacements?: number;
   readonly linesAffected?: number;
   /** Number of lines added (from diff patch). */
@@ -191,6 +193,7 @@ export function editWorkspaceFile(
     );
     return {
       path: filepath,
+      changed: newContent !== content,
       replacements: 1,
       linesAffected: e - s + 1,
       linesAdded,
@@ -228,6 +231,7 @@ export function editWorkspaceFile(
     );
     return {
       path: filepath,
+      changed: replaced !== content,
       replacements: occurrences,
       linesAdded,
       linesRemoved,
@@ -259,6 +263,7 @@ export function editWorkspaceFile(
       );
       return {
         path: filepath,
+        changed: replaced !== content,
         replacements: 1,
         linesAdded,
         linesRemoved,
@@ -278,6 +283,8 @@ export function editWorkspaceFile(
 
 export interface WriteFileResult {
   readonly path?: string;
+  /** True for content changes and new-file creation, including an empty file. */
+  readonly changed?: boolean;
   readonly bytes_written?: number;
   /** 与 edit_file 对齐：结构化 diff 统计，供事件层/UI 展示 */
   readonly linesAdded?: number;
@@ -304,10 +311,9 @@ export function writeWorkspaceFile(
   try {
     // 写入前读旧内容算 diff 统计；读失败（二进制/权限）不阻断写入
     let oldContent = "";
+    const existed = fs.existsSync(d.resolvedPath);
     try {
-      oldContent = fs.existsSync(d.resolvedPath)
-        ? fs.readFileSync(d.resolvedPath, "utf8")
-        : "";
+      oldContent = existed ? fs.readFileSync(d.resolvedPath, "utf8") : "";
     } catch {
       /* best effort */
     }
@@ -323,6 +329,7 @@ export function writeWorkspaceFile(
     );
     return {
       path: relPath,
+      changed: !existed || oldContent !== content,
       bytes_written: Buffer.byteLength(content, "utf8"),
       linesAdded,
       linesRemoved,

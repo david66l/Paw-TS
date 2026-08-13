@@ -83,7 +83,7 @@ export function codingPhaseBlockReason(
 export function advanceCodingPhase(
   state: CodingPhaseState,
   calls: readonly AgentToolCallAction[],
-  results: readonly { readonly ok: boolean }[],
+  results: readonly { readonly ok: boolean; readonly payload?: unknown }[],
 ): { readonly state: CodingPhaseState; readonly nudges: readonly string[] } {
   const next = { ...state };
   const nudges: string[] = [];
@@ -94,7 +94,7 @@ export function advanceCodingPhase(
       next.navigationCalls += 1;
       if (next.successfulEdits > 0) next.postEditNavigationCalls += 1;
     }
-    if (isCodingEditTool(call.tool) && result.ok) {
+    if (isCodingEditTool(call.tool) && isMaterialEditResult(result)) {
       next.successfulEdits += 1;
       next.postEditNavigationCalls = 0;
       if (!next.verifyNudged) {
@@ -120,4 +120,32 @@ export function advanceCodingPhase(
     next.locateNudged = true;
   }
   return { state: next, nudges };
+}
+
+function isMaterialEditResult(result: {
+  readonly ok: boolean;
+  readonly payload?: unknown;
+}): boolean {
+  if (!result.ok || !result.payload || typeof result.payload !== "object") {
+    return false;
+  }
+  const payload = result.payload as Record<string, unknown>;
+  if (payload.changed === true) return true;
+  const direct =
+    (typeof payload.linesAdded === "number" ? payload.linesAdded : 0) +
+    (typeof payload.linesRemoved === "number" ? payload.linesRemoved : 0);
+  if (direct > 0) return true;
+  return (
+    Array.isArray(payload.results) &&
+    payload.results.some((item) => {
+      if (!item || typeof item !== "object") return false;
+      const row = item as Record<string, unknown>;
+      return (
+        row.ok !== false &&
+        (typeof row.linesAdded === "number" ? row.linesAdded : 0) +
+          (typeof row.linesRemoved === "number" ? row.linesRemoved : 0) >
+          0
+      );
+    })
+  );
 }

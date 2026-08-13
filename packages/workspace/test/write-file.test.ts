@@ -20,4 +20,11 @@ describe("writeWorkspaceFile", () => {
     const r = writeWorkspaceFile(root, "../../../etc/passwd", "x");
     expect(r.error).toBeDefined();
   });
+
+  test("reports whether an overwrite materially changed content", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-ws-write-change-"));
+    expect(writeWorkspaceFile(root, "x.txt", "same\n").changed).toBe(true);
+    expect(writeWorkspaceFile(root, "x.txt", "same\n").changed).toBe(false);
+    expect(writeWorkspaceFile(root, "empty.txt", "").changed).toBe(true);
+  });
 });

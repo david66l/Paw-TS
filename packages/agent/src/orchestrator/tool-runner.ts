@@ -28,7 +28,6 @@ import type {
 } from "@paw/core";
 import { extractCheckpointTargets, isMutatingTool } from "@paw/core";
 import { saveCheckpoint } from "@paw/core";
-import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
 import type {
   HarnessContext,
   ShellSandboxConfig,
@@ -36,6 +35,7 @@ import type {
 } from "@paw/harness";
 import { toolRequiresApproval } from "@paw/harness";
 import type { FileLockLike } from "@paw/harness";
+import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
 import type { TaskStateManager } from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
 import { SUB_AGENT_TOOL_NAME } from "./constants.js";
@@ -76,6 +76,7 @@ function toFileChange(
   if (value === null || typeof value !== "object") return undefined;
   const o = value as Record<string, unknown>;
   if (o.ok === false) return undefined;
+  if (o.changed === false) return undefined;
   const added = o.linesAdded;
   const removed = o.linesRemoved;
   if (typeof added !== "number" && typeof removed !== "number") {

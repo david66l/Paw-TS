@@ -54,6 +54,8 @@ export interface TaskState {
   readonly mutationRevision?: number;
   /** Shell-command revision at the most recent successful source mutation. */
   readonly mutationShellCommandRevision?: number;
+  /** Failed exact-edit target eligible for one policy-safe recovery read. */
+  readonly editRecoveryPath?: string;
   /** 最近一次成功检查最终 diff 时对应的文件变更版本。 */
   readonly diffInspectedRevision?: number;
   readonly fileLockConflicts: readonly string[];
@@ -183,29 +185,48 @@ export class TaskStateManager {
     let mutationRevision = this.state.mutationRevision ?? 0;
     let mutationShellCommandRevision =
       this.state.mutationShellCommandRevision ?? shellCommandRevision;
+    let editRecoveryPath = this.state.editRecoveryPath;
     let diffInspectedRevision = this.state.diffInspectedRevision ?? 0;
 
     if (result.ok && call.tool === "workspace.read_file") {
-      pushUnique(filesRead, stringArg(args.path));
+      const readPath = stringArg(args.path);
+      pushUnique(filesRead, readPath);
+      if (readPath && readPath === editRecoveryPath)
+        editRecoveryPath = undefined;
+    }
+
+    if (
+      !result.ok &&
+      call.tool === "workspace.edit_file" &&
+      /old_string|not found|no match/i.test(result.summary)
+    ) {
+      editRecoveryPath = stringArg(args.path) || editRecoveryPath;
     }
 
     if (
       result.ok &&
       (call.tool === "workspace.write_file" ||
         call.tool === "workspace.edit_file" ||
-        call.tool === "workspace.notebook_edit")
+        call.tool === "workspace.notebook_edit") &&
+      (call.tool === "workspace.notebook_edit" || hasMaterialFileChange(result))
     ) {
       pushUnique(filesChanged, stringArg(args.path));
       mutationRevision += 1;
       mutationShellCommandRevision = shellCommandRevision;
+      editRecoveryPath = undefined;
     }
 
-    if (result.ok && call.tool === "workspace.apply_patch") {
+    if (
+      result.ok &&
+      call.tool === "workspace.apply_patch" &&
+      hasMaterialFileChange(result)
+    ) {
       for (const path of extractPatchPaths(stringArg(args.patch))) {
         pushUnique(filesChanged, path);
       }
       mutationRevision += 1;
       mutationShellCommandRevision = shellCommandRevision;
+      editRecoveryPath = undefined;
     }
 
     if (call.tool === "workspace.run_shell") {
@@ -255,11 +276,40 @@ export class TaskStateManager {
       shellCommandRevision,
       mutationRevision,
       mutationShellCommandRevision,
+      ...(editRecoveryPath
+        ? { editRecoveryPath }
+        : { editRecoveryPath: undefined }),
       diffInspectedRevision,
       pinnedFacts: pinnedFacts.slice(-20),
       updatedAt: Date.now(),
     };
   }
+}
+
+function hasMaterialFileChange(result: ToolRunResult): boolean {
+  if (!result.ok || !isRecord(result.payload)) return false;
+  if (result.payload.changed === false) return false;
+  if (result.payload.changed === true) return true;
+  const directAdded = result.payload.linesAdded;
+  const directRemoved = result.payload.linesRemoved;
+  if (typeof directAdded === "number" || typeof directRemoved === "number") {
+    return (
+      (typeof directAdded === "number" ? directAdded : 0) +
+        (typeof directRemoved === "number" ? directRemoved : 0) >
+      0
+    );
+  }
+  if (Array.isArray(result.payload.results)) {
+    return result.payload.results.some((item) => {
+      if (!isRecord(item) || item.ok === false) return false;
+      if (item.changed === true) return true;
+      const added = typeof item.linesAdded === "number" ? item.linesAdded : 0;
+      const removed =
+        typeof item.linesRemoved === "number" ? item.linesRemoved : 0;
+      return added + removed > 0;
+    });
+  }
+  return result.payload.changed === true;
 }
 
 export function formatTaskStateForContext(state: TaskState): string {

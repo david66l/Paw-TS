@@ -36,12 +36,14 @@ import {
   advanceCodingPhase,
   codingPhaseBlockReason,
   goalUsesCodingPhaseBudget,
-  isCodingEditTool,
   isCodingNavigationTool,
   isCodingVerificationCall,
 } from "../lifecycle/coding-phase.js";
 import { isControlPlaneToolResult } from "../lifecycle/control-plane.js";
-import { convergenceToolBlockReason } from "../lifecycle/convergence.js";
+import {
+  convergenceToolBlockReason,
+  isEditRecoveryRead,
+} from "../lifecycle/convergence.js";
 import {
   IDLE_FUSE_ESCALATION,
   decideCompletion,
@@ -826,6 +828,7 @@ async function handleToolCalls(
     // coding-phase state machine and must not consume its violation budget.
     if (convergenceBlockReasons[index]) return null;
     if (!codingPhaseEnabled) return null;
+    if (isEditRecoveryRead(call, taskState)) return null;
     const reason = codingPhaseBlockReason(call, projectedCodingPhase);
     if (!reason && isCodingNavigationTool(call.tool)) {
       projectedCodingPhase = {
@@ -965,7 +968,8 @@ async function handleToolCalls(
       (call, index) =>
         results[index]?.ok === true &&
         (priorCodingPhase.successfulEdits === 0
-          ? isCodingEditTool(call.tool)
+          ? (codingPhase?.state.successfulEdits ?? 0) >
+            priorCodingPhase.successfulEdits
           : isCodingVerificationCall(call)),
     );
   const codingPhaseViolationTurns = codingPhaseEnabled
