@@ -77,6 +77,88 @@ interface ScannedAction {
 }
 
 /**
+ * Recover one high-confidence final_answer object from a provider wrapper.
+ * Some compatible endpoints emit literal newlines inside `summary` and append
+ * a stray array closer (`}]`). We repair only this terminal action shape —
+ * never malformed tool calls — so recovery cannot execute unintended tools.
+ */
+function recoverMalformedFinalAnswer(
+  text: string,
+  scanWindow: number,
+): ScannedAction | null {
+  const windowStart =
+    scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
+  const window = text.slice(windowStart);
+  const marker = /\{\s*"(?:action|type)"\s*:\s*"final_answer"/g;
+  const matches = [...window.matchAll(marker)];
+  const last = matches.at(-1);
+  if (last?.index === undefined) return null;
+  const start = windowStart + last.index;
+  let inString = false;
+  let escaped = false;
+  let depth = 0;
+  let end = -1;
+  let repaired = "";
+  for (let i = start; i < text.length; i++) {
+    const char = text.charAt(i);
+    if (inString) {
+      if (escaped) {
+        repaired += char;
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        repaired += char;
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        repaired += char;
+        inString = false;
+        continue;
+      }
+      if (char === "\n") {
+        repaired += "\\n";
+        continue;
+      }
+      if (char === "\r") {
+        repaired += "\\r";
+        continue;
+      }
+      if (char === "\t") {
+        repaired += "\\t";
+        continue;
+      }
+      repaired += char;
+      continue;
+    }
+    repaired += char;
+    if (char === '"') inString = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  if (end < 0 || inString || depth !== 0) return null;
+  // Only tolerate wrapper punctuation after the object. Prose after a broken
+  // object remains a parse failure and gets the normal self-correction nudge.
+  if (!/^[\s\]]*$/.test(text.slice(end))) return null;
+  try {
+    const obj = JSON.parse(repaired) as unknown;
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+    const action = parseActionFromJsonObject(obj as Record<string, unknown>);
+    if (action?.type !== "final_answer") return null;
+    return { action, start, end };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 从文本中提取所有有效的 JSON 对象，包括多行对象。
  *
  * 算法：从扫描窗口起始位置开始，找到每个 `{`，
@@ -140,11 +222,12 @@ function findFencedCodeBlockRanges(
 ): Array<{ start: number; end: number }> {
   const ranges: Array<{ start: number; end: number }> = [];
   const re = /```(?:json)?\s*\n([\s\S]*?)```/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
+  let m = re.exec(text);
+  while (m !== null) {
     const bodyStart = m.index + m[0].indexOf("\n") + 1;
     const bodyEnd = bodyStart + (m[1]?.length ?? 0);
     ranges.push({ start: bodyStart, end: bodyEnd });
+    m = re.exec(text);
   }
   return ranges;
 }
@@ -165,6 +248,10 @@ function scanAgentActions(
     if (action) {
       actions.push({ action, start, end });
     }
+  }
+  if (!actions.some((entry) => entry.action.type === "final_answer")) {
+    const recovered = recoverMalformedFinalAnswer(text, scanWindow);
+    if (recovered) actions.push(recovered);
   }
   return actions;
 }
@@ -215,10 +302,7 @@ export function parseAgentActionFromModelText(
 ): AgentAction | null {
   const scanWindow = opts?.scanWindow ?? DEFAULT_JSON_SCAN_WINDOW;
   const actions = scanAgentActions(text, scanWindow, opts?.knownTools);
-  for (let i = actions.length - 1; i >= 0; i--) {
-    return actions[i]!.action;
-  }
-  return null;
+  return actions.at(-1)?.action ?? null;
 }
 
 /**

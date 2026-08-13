@@ -97,6 +97,21 @@ describe("parseAgentActionFromModelText", () => {
     expect(a).toEqual({ type: "final_answer", summary: "x" });
   });
 
+  test("recovers only a malformed terminal final_answer wrapper", () => {
+    const recovered = parseAgentActionFromModelText(
+      '{"action":"final_answer","summary":"Changed one file.\n\nTests: 7 passed."}]',
+    );
+    expect(recovered).toEqual({
+      type: "final_answer",
+      summary: "Changed one file.\n\nTests: 7 passed.",
+    });
+    expect(
+      parseAgentActionFromModelText(
+        '{"tool":"workspace.run_shell","args":{"command":"echo a\necho b"}}]',
+      ),
+    ).toBeNull();
+  });
+
   test("parses abort", () => {
     const a = parseAgentActionFromModelText(
       '{"action":"abort","reason":"bad","can_resume":true}',

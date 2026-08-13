@@ -251,6 +251,34 @@ describe("AgentOrchestrator", () => {
     ).toBe(true);
   });
 
+  test("last turn accepts a high-confidence malformed final_answer envelope", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-final-repair-"));
+    writeFileSync(path.join(dir, "a.txt"), "hi");
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "final-repair",
+        async complete() {
+          calls += 1;
+          return calls === 1
+            ? { text: '{"tool":"workspace.read_file","args":{"path":"a.txt"}}' }
+            : {
+                text: '{"action":"final_answer","summary":"Read file.\nResult: hi"}]',
+              };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    const r = await o.run({
+      runId: "final-repair",
+      goal: "read a.txt",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+    expect(r.status).toBe("completed");
+    expect(r.message).toContain("Result: hi");
+  });
+
   test("run completes without tool when model returns plain text", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
@@ -352,7 +380,9 @@ describe("AgentOrchestrator", () => {
             };
           }
           if (calls === 2) {
-            return { text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step-a","status":"completed","depends_on":[]}],"deprecated_items":[]}' };
+            return {
+              text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step-a","status":"completed","depends_on":[]}],"deprecated_items":[]}',
+            };
           }
           return { text: '{"action":"final_answer","summary":"OK."}' };
         },
@@ -438,7 +468,9 @@ describe("AgentOrchestrator", () => {
             };
           }
           if (calls === 2) {
-            return { text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step-a","status":"completed","depends_on":[]}],"deprecated_items":[]}' };
+            return {
+              text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step-a","status":"completed","depends_on":[]}],"deprecated_items":[]}',
+            };
           }
           return { text: '{"action":"final_answer","summary":"Done."}' };
         },
@@ -500,12 +532,17 @@ describe("AgentOrchestrator", () => {
             };
           }
           if (calls === 2) {
-            return { text: JSON.stringify({
-              action: "plan_update",
-              reason: "done",
-              new_items: newItems.map((item) => ({ ...item, status: "completed" })),
-              deprecated_items: [],
-            }) };
+            return {
+              text: JSON.stringify({
+                action: "plan_update",
+                reason: "done",
+                new_items: newItems.map((item) => ({
+                  ...item,
+                  status: "completed",
+                })),
+                deprecated_items: [],
+              }),
+            };
           }
           return { text: '{"action":"final_answer","summary":"ok"}' };
         },
@@ -541,7 +578,9 @@ describe("AgentOrchestrator", () => {
             };
           }
           if (n === 3) {
-            return { text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step","status":"completed","depends_on":[]}],"deprecated_items":[]}' };
+            return {
+              text: '{"action":"plan_update","reason":"done","new_items":[{"id":"plan-001","task_id":"step","status":"completed","depends_on":[]}],"deprecated_items":[]}',
+            };
           }
           return { text: '{"action":"final_answer","summary":"Finished."}' };
         },
