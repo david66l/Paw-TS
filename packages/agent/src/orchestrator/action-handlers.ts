@@ -16,8 +16,8 @@
  * 特殊机制 —— auto-nudge（自动推动）：
  * 当模型在使用了工具后没有给出 final_answer 就停止时，系统会自动注入一条
  * 提示消息推动模型继续。这个机制防止模型"卡住"——比如模型调用了 Read 工具
- * 读取了文件，但忘了输出 final_answer。autoContinueNudges 限制最多推动 2 次，
- * 防止无限循环。
+ * 读取了文件，但忘了输出 final_answer。提示会随连续无动作次数升级；任务是否
+ * 终止仍只由 maxSteps、墙钟和 idle fuse 等生命周期预算决定。
  *
  * 添加新 action 类型只需在这里注册一个新的 handler，无需修改其他代码。
  */
@@ -29,8 +29,25 @@ import type {
   SkillRegistry,
   TodoStore,
 } from "@paw/core";
-import type { TaskPlanner } from "@paw/store";
 import type { ToolRunResult } from "@paw/harness";
+import type { TaskPlanner } from "@paw/store";
+import {
+  EMPTY_CODING_PHASE_STATE,
+  advanceCodingPhase,
+  codingPhaseBlockReason,
+  goalUsesCodingPhaseBudget,
+  isCodingEditTool,
+  isCodingNavigationTool,
+  isCodingVerificationCall,
+} from "../lifecycle/coding-phase.js";
+import {
+  IDLE_FUSE_ESCALATION,
+  decideCompletion,
+  evaluateBudgetExhaustion,
+  evaluateFinalAnswer,
+  goalRequiresMutation,
+  resolveLifecycleBudget,
+} from "../lifecycle/task-lifecycle.js";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
 import {
   markPlanItemsCompleted,
@@ -41,23 +58,6 @@ import { isSubAgentCall } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
 import { executeToolCalls, finalizeToolExecution } from "./tool-runner.js";
 import type { PhaseContext, TurnFlags, TurnState } from "./types.js";
-import {
-  decideCompletion,
-  evaluateBudgetExhaustion,
-  evaluateFinalAnswer,
-  IDLE_FUSE_ESCALATION,
-  goalRequiresMutation,
-  resolveLifecycleBudget,
-} from "../lifecycle/task-lifecycle.js";
-import {
-  advanceCodingPhase,
-  codingPhaseBlockReason,
-  EMPTY_CODING_PHASE_STATE,
-  goalUsesCodingPhaseBudget,
-  isCodingEditTool,
-  isCodingNavigationTool,
-  isCodingVerificationCall,
-} from "../lifecycle/coding-phase.js";
 
 /**
  * Action 处理器的依赖注入上下文。
@@ -159,15 +159,30 @@ export async function handleAction(
   // 按工具类型分流：子 Agent vs 普通工具
   const subAgentCalls = toolCalls.filter(isSubAgentCall);
   const normalToolCalls = toolCalls.filter((c) => !isSubAgentCall(c));
+  const recoveredFlags: TurnFlags = { ...flags, noActionNudges: 0 };
 
   // 子 Agent 调用（批量模式）
   if (subAgentCalls.length > 0) {
-    return handleRunAgent(subAgentCalls, ctx, flags, text, thinking, opts);
+    return handleRunAgent(
+      subAgentCalls,
+      ctx,
+      recoveredFlags,
+      text,
+      thinking,
+      opts,
+    );
   }
 
   // 普通工具调用
   if (normalToolCalls.length > 0) {
-    return handleToolCalls(normalToolCalls, ctx, flags, text, thinking, opts);
+    return handleToolCalls(
+      normalToolCalls,
+      ctx,
+      recoveredFlags,
+      text,
+      thinking,
+      opts,
+    );
   }
 
   // 没有工具调用 → 处理结构化 action
@@ -187,13 +202,27 @@ export async function handleAction(
 
   switch (action.type) {
     case "final_answer":
-      return handleFinalAnswer(action, ctx, flags, text, thinking, opts);
+      return handleFinalAnswer(
+        action,
+        ctx,
+        recoveredFlags,
+        text,
+        thinking,
+        opts,
+      );
     case "abort":
       return handleAbort(action);
     case "ask_user":
-      return handleAskUser(action, ctx, flags, text, thinking, opts);
+      return handleAskUser(action, ctx, recoveredFlags, text, thinking, opts);
     case "plan_update":
-      return handlePlanUpdate(action, ctx, flags, text, thinking, opts);
+      return handlePlanUpdate(
+        action,
+        ctx,
+        recoveredFlags,
+        text,
+        thinking,
+        opts,
+      );
     default:
       // 未知 action 类型 → 回退到无 action 处理
       return handleNoAction(ctx, flags, text, thinking, opts);
@@ -252,28 +281,25 @@ function handleNoAction(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  // 用过工具但没给 final_answer → auto-nudge（且还有后续轮次预算）
-  if (
-    flags.hasEverUsedTools &&
-    flags.autoContinueNudges < 2 &&
-    !noRoomForAnotherTurn
-  ) {
+  // 用过工具但没给 final_answer → 协议恢复（且还有后续轮次预算）。
+  // 这是可恢复状态，不是独立的任务终止预算。否则第三次无动作会在
+  // 23/64 之类的位置被错误标记为 maxSteps exhausted。
+  if (flags.hasEverUsedTools && !noRoomForAnotherTurn) {
+    const noActionNudges = flags.noActionNudges ?? 0;
     const nextFlags: TurnFlags = {
       ...flags,
-      autoContinueNudges: flags.autoContinueNudges + 1,
+      noActionNudges: noActionNudges + 1,
       lastTurnHadToolCall: false,
     };
     // 把模型的文本输出作为 assistant 消息注入
     ctx.ctxMgr.addAssistant(text, thinking);
     // 推一条提示让模型继续
-    ctx.ctxMgr.addUser(
-      `[You stopped without a final_answer action. If you have completed the task, output: {"action":"final_answer","summary":"<your complete findings here>"}. If not done, continue — call the next tool or take the next action.]`,
-    );
+    ctx.ctxMgr.addUser(noActionRecoveryMessage(noActionNudges + 1));
     opts.saveStateFn();
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  // 用过工具但 nudge 用尽 / 无预算 → incomplete（禁止假 completed）
+  // 真正没有后续轮次预算 → incomplete（禁止假 completed）
   if (flags.hasEverUsedTools) {
     ctx.ctxMgr.addAssistant(displayText, thinking);
     ctx.emit({ type: "model.done", text: displayText });
@@ -298,6 +324,16 @@ function handleNoAction(
     },
     flags,
   };
+}
+
+function noActionRecoveryMessage(attempt: number): string {
+  if (attempt === 1) {
+    return `[You stopped without a final_answer action. If you have completed the task, output: {"action":"final_answer","summary":"<your complete findings here>"}. If not done, continue — call the next tool or take the next action.]`;
+  }
+  if (attempt === 2) {
+    return `[Your previous response again contained no executable action. Continue by emitting exactly one valid tool call, or emit {"action":"final_answer","summary":"<complete result>"} only if the task is actually done.]`;
+  }
+  return `[Protocol recovery attempt ${attempt}: do not narrate the action you intend to take. Emit the valid tool-call JSON now. If and only if the task is complete, emit {"action":"final_answer","summary":"<complete result>"}.]`;
 }
 
 /** 格式错误反馈消息：具体原因 + 正确格式示例（参考 OpenHands 的 corrective nudge 注入形式）。 */
@@ -775,7 +811,8 @@ async function handleToolCalls(
 
   // 并行执行所有工具（审批门控 + 子 Agent 策略检查在内部处理）
   const codingPhaseEnabled =
-    goalRequiresMutation(ctx.specGoal) && goalUsesCodingPhaseBudget(ctx.specGoal);
+    goalRequiresMutation(ctx.specGoal) &&
+    goalUsesCodingPhaseBudget(ctx.specGoal);
   const priorCodingPhase = flags.codingPhase ?? EMPTY_CODING_PHASE_STATE;
   let projectedCodingPhase = priorCodingPhase;
   const phaseBlockReasons = calls.map((call) => {
@@ -980,7 +1017,10 @@ async function handleToolCalls(
   }
 
   // 正常情况：继续下一轮
-  return { state: { type: "continue", nextFlags: fusedFlags }, flags: fusedFlags };
+  return {
+    state: { type: "continue", nextFlags: fusedFlags },
+    flags: fusedFlags,
+  };
 }
 
 // ═════════════════════════════════════════════════════════════

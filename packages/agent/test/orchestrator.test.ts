@@ -146,6 +146,80 @@ describe("AgentOrchestrator", () => {
     }
   });
 
+  test("recovers after more than two consecutive no-action model turns", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-no-action-"));
+    writeFileSync(path.join(dir, "a.txt"), "hi");
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "no-action-recovery",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"tool":"workspace.read_file","args":{"path":"a.txt"}}',
+            };
+          }
+          if (calls <= 4) {
+            return { text: "I need to make the next tool call now." };
+          }
+          return {
+            text: '{"action":"final_answer","summary":"Read hi."}',
+          };
+        },
+      },
+      retrySleep: async () => {},
+    });
+
+    const r = await o.run({
+      runId: "no-action-recovers",
+      goal: "read a.txt",
+      workspaceRoot: dir,
+      maxSteps: 6,
+    });
+
+    expect(r.status).toBe("completed");
+    expect(r.message).toBe("Read hi.");
+    expect(calls).toBe(5);
+  });
+
+  test("repeated no-action turns stop only at the real maxSteps boundary", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-no-action-max-"));
+    writeFileSync(path.join(dir, "a.txt"), "hi");
+    let calls = 0;
+    const ticks: number[] = [];
+    const o = new AgentOrchestrator({
+      model: {
+        label: "no-action-max-steps",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"tool":"workspace.read_file","args":{"path":"a.txt"}}',
+            };
+          }
+          return { text: "I should act next." };
+        },
+      },
+      retrySleep: async () => {},
+      onEvent: (event) => {
+        if (event.event.type === "loop.tick") ticks.push(event.event.turn);
+      },
+    });
+
+    const r = await o.run({
+      runId: "no-action-max-steps",
+      goal: "read a.txt",
+      workspaceRoot: dir,
+      maxSteps: 5,
+    });
+
+    expect(r.status).toBe("incomplete");
+    expect(r.completionReason).toBe("max_steps_exhausted_without_final");
+    expect(ticks).toEqual([1, 2, 3, 4, 5]);
+    expect(calls).toBeGreaterThanOrEqual(5);
+  });
+
   test("run completes with final_answer JSON action", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({

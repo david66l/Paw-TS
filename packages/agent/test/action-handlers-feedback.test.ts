@@ -8,6 +8,7 @@ import {
 } from "../src/orchestrator/action-handlers.js";
 import type { PhaseContext, TurnFlags } from "../src/orchestrator/types.js";
 import type { ParseDiagnosis } from "../src/parse-agent-action.js";
+import { TaskStateManager } from "../src/task-state.js";
 
 interface RecordedMessage {
   role: "user" | "assistant";
@@ -47,7 +48,7 @@ function makeCtx(overrides?: {
     toolNameMap: new Map(),
     ctxMgr,
     planner: undefined,
-    taskState: undefined,
+    taskState: new TaskStateManager("test goal"),
     emit: (e: unknown) => events.push(e),
     checkpointSeq: { n: 0 },
     specGoal: "test goal",
@@ -173,7 +174,7 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
     }
   });
 
-  test("最后一轮没有预算：格式反馈不再触发，直接完成", async () => {
+  test("最后一轮没有预算：格式反馈不再触发，诚实返回 incomplete", async () => {
     const { ctx } = makeCtx({ turn: 9, maxSteps: 10 });
     const diagnosis: ParseDiagnosis = {
       kind: "malformed",
@@ -190,7 +191,7 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
       { diagnosis },
     );
 
-    expect(result.state.type).toBe("completed");
+    expect(result.state.type).toBe("incomplete");
   });
 });
 
@@ -231,7 +232,7 @@ describe("handleAction — 原生通道坏 args（拒绝执行 + 错误注入）
     expect(errResults.length).toBe(1);
   });
 
-  test("解析失败 + 最后一轮：降级为 completed", async () => {
+  test("解析失败 + 最后一轮：诚实返回 incomplete", async () => {
     const { ctx } = makeCtx({ turn: 9, maxSteps: 10 });
     const feedback: ParseFeedback = {
       nativeToolErrors: [
@@ -248,6 +249,6 @@ describe("handleAction — 原生通道坏 args（拒绝执行 + 错误注入）
       { planner: undefined as never, saveStateFn: noopSave },
       feedback,
     );
-    expect(result.state.type).toBe("completed");
+    expect(result.state.type).toBe("incomplete");
   });
 });

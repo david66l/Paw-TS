@@ -115,6 +115,8 @@ export type TurnState =
 export interface TurnFlags {
   /** 自动推动次数（防止死循环） */
   readonly autoContinueNudges: number;
+  /** Consecutive model turns with no parseable action after tool use. */
+  readonly noActionNudges?: number;
   /** 格式错误反馈次数（输出无法解析时回灌给模型，防止死循环） */
   readonly formatErrorNudges?: number;
   /** VerificationGate nudge 次数 */
@@ -130,7 +132,9 @@ export interface TurnFlags {
   /** maxSteps 警告是否已发出（私有字段，_ 前缀表示内部使用） */
   _maxStepsWarned?: boolean;
   /** [require_mutation] coding tasks: bounded locate/edit/verify phase state. */
-  readonly codingPhase?: import("../lifecycle/coding-phase.js").CodingPhaseState;
+  readonly codingPhase?: import(
+    "../lifecycle/coding-phase.js",
+  ).CodingPhaseState;
   /** Consecutive model turns attempting tools blocked by CodingPhase. */
   readonly codingPhaseViolationTurns?: number;
 }
