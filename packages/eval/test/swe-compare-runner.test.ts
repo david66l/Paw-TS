@@ -13,6 +13,7 @@ import {
   extractClaudePatchFromTrace,
   parseClaudeStream,
   recoverClaudeResultPatch,
+  recoverPawResultPatch,
   validateCompareRun,
 } from "../src/swe-compare/runner.js";
 import type { SweCompareManifest } from "../src/swe-compare/types.js";
@@ -233,6 +234,23 @@ describe("SWE compare runner", () => {
     expect(captured.diff).toContain("+changed");
   });
 
+  test("captures an explicit edited path directly from HEAD and the file", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-explicit-diff-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "eval@example.test"]);
+    git(root, ["config", "user.name", "Eval"]);
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    writeFileSync(path.join(root, "src", "value.py"), "value = 1\n", "utf8");
+    git(root, ["add", "src/value.py"]);
+    git(root, ["commit", "-m", "base"]);
+    writeFileSync(path.join(root, "src", "value.py"), "value = 2\n", "utf8");
+    const captured = captureGitDiff(root, ["src/value.py"]);
+    expect(captured.error).toBeUndefined();
+    expect(captured.diff).toContain("diff --git a/src/value.py b/src/value.py");
+    expect(captured.diff).toContain("-value = 1");
+    expect(captured.diff).toContain("+value = 2");
+  });
+
   test("uses explicit edited paths and recognizes a read-only Paw trace", () => {
     const root = path.join(tmpdir(), "paw-workspace");
     expect(
@@ -378,6 +396,58 @@ describe("SWE compare runner", () => {
     expect(updated.resolved).toBe(false);
     expect(updated.resolvedSource).toBe("none");
   });
+
+  test("replays only a paired successful Paw edit to recover a patch", () => {
+    const repoRoot = path.resolve(import.meta.dir, "../../..");
+    const runDir = mkdtempSync(path.join(tmpdir(), "paw-edit-replay-result-"));
+    const tracePath = path.join(runDir, "trace.json");
+    const resultPath = path.join(runDir, "result.json");
+    writeFileSync(
+      tracePath,
+      JSON.stringify([
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.edit_file",
+            args: {
+              path: "sklearn/utils/multiclass.py",
+              old_string: "from collections.abc import Sequence",
+              new_string: "from collections.abc import Sequence  # replay",
+            },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.edit_file",
+            ok: true,
+          },
+        },
+      ]),
+      "utf8",
+    );
+    writeFileSync(
+      resultPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        runId: "paw-replay-test",
+        runner: "paw",
+        instanceId: "scikit-learn__scikit-learn-25638",
+        patch: "",
+        patchChars: 0,
+        patchSource: "none",
+        artifactStatus: "patch_collection_failed",
+        resolved: false,
+        resolvedSource: "none",
+        tracePath,
+      }),
+      "utf8",
+    );
+    const updated = recoverPawResultPatch({ repoRoot, resultPath });
+    expect(updated.patchSource).toBe("paw_trace_edit_replay");
+    expect(updated.artifactStatus).toBe("valid");
+    expect(updated.patch).toContain("Sequence  # replay");
+  }, 15_000);
 
   test("refuses to run when the current source tree is dirty", () => {
     const repoRoot = path.resolve(import.meta.dir, "../../..");

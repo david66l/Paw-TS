@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -39,7 +39,11 @@ export interface SweCompareRunResult {
   readonly status: "completed" | "failed" | "timeout";
   readonly patch: string;
   readonly patchChars: number;
-  readonly patchSource?: "workspace" | "claude_trace_git_diff" | "none";
+  readonly patchSource?:
+    | "workspace"
+    | "claude_trace_git_diff"
+    | "paw_trace_edit_replay"
+    | "none";
   readonly artifactStatus?: "valid" | "patch_collection_failed";
   readonly patchCollectionError?: string;
   readonly integrity?: SweCompareIntegrityAudit;
@@ -680,6 +684,7 @@ export async function runSweCompareArm(opts: {
   const gitRoot = ensureRepoClone(
     probe.repo,
     path.join(opts.repoRoot, "benchmarks", "swe-exp"),
+    { fetch: false },
   );
   const workspace = createCommitWorktree(
     gitRoot,
@@ -882,6 +887,136 @@ export function recoverClaudeResultPatch(opts: {
   };
   writeJsonAtomic(opts.resultPath, updated);
   return updated;
+}
+
+interface PawSuccessfulEdit {
+  readonly path: string;
+  readonly oldString: string;
+  readonly newString: string;
+}
+
+function successfulPawEdits(trace: readonly unknown[]): PawSuccessfulEdit[] {
+  const pending: PawSuccessfulEdit[] = [];
+  const successful: PawSuccessfulEdit[] = [];
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const raw = (item as Record<string, unknown>).event;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const event = raw as Record<string, unknown>;
+    if (event.type === "tool.call" && event.tool === "workspace.edit_file") {
+      const args = event.args;
+      if (!args || typeof args !== "object" || Array.isArray(args)) continue;
+      const values = args as Record<string, unknown>;
+      if (
+        typeof values.path === "string" &&
+        typeof values.old_string === "string" &&
+        typeof values.new_string === "string"
+      ) {
+        pending.push({
+          path: values.path,
+          oldString: values.old_string,
+          newString: values.new_string,
+        });
+      }
+      continue;
+    }
+    if (event.type === "tool.result" && event.tool === "workspace.edit_file") {
+      const edit = pending.shift();
+      if (edit && event.ok === true) successful.push(edit);
+    }
+  }
+  return successful;
+}
+
+/** Recover a Paw patch by replaying only paired, successful edit_file events. */
+export function recoverPawResultPatch(opts: {
+  readonly repoRoot: string;
+  readonly resultPath: string;
+}): SweCompareRunResult {
+  const previous = JSON.parse(
+    readFileSync(opts.resultPath, "utf8"),
+  ) as SweCompareRunResult;
+  if (previous.runner !== "paw") {
+    throw new Error(
+      `Paw patch recovery requires a Paw result: ${previous.runId}`,
+    );
+  }
+  if (previous.patch.trim()) {
+    throw new Error(`result already contains a patch: ${previous.runId}`);
+  }
+  const persistedTracePath = path.isAbsolute(previous.tracePath)
+    ? previous.tracePath
+    : path.join(opts.repoRoot, previous.tracePath);
+  const trace = JSON.parse(
+    readFileSync(persistedTracePath, "utf8"),
+  ) as unknown[];
+  const edits = successfulPawEdits(trace);
+  if (edits.length === 0) {
+    throw new Error(`no successful Paw edit_file events: ${previous.runId}`);
+  }
+  const datasetPath = path.join(
+    opts.repoRoot,
+    "benchmarks",
+    "swe-bench",
+    "swe-bench-lite.jsonl",
+  );
+  const probe = loadLiteInstances(datasetPath).find(
+    (item) => item.instance_id === previous.instanceId,
+  );
+  if (!probe)
+    throw new Error(`dataset instance missing: ${previous.instanceId}`);
+  const gitRoot = ensureRepoClone(
+    probe.repo,
+    path.join(opts.repoRoot, "benchmarks", "swe-exp"),
+    { fetch: false },
+  );
+  const workspace = createCommitWorktree(
+    gitRoot,
+    probe.base_commit,
+    `recover-${previous.runId}`.slice(0, 60),
+  );
+  try {
+    const paths = new Set<string>();
+    for (const edit of edits) {
+      const normalized = edit.path.replace(/\\/g, "/");
+      if (path.isAbsolute(normalized) || normalized.split("/").includes("..")) {
+        throw new Error(`unsafe Paw edit path: ${edit.path}`);
+      }
+      const target = path.join(workspace.root, ...normalized.split("/"));
+      const current = readFileSync(target, "utf8");
+      const first = current.indexOf(edit.oldString);
+      if (first < 0 || current.indexOf(edit.oldString, first + 1) >= 0) {
+        throw new Error(`Paw edit replay anchor is not unique: ${normalized}`);
+      }
+      writeFileSync(
+        target,
+        current.slice(0, first) +
+          edit.newString +
+          current.slice(first + edit.oldString.length),
+        "utf8",
+      );
+      paths.add(normalized);
+    }
+    const captured = captureGitDiff(workspace.root, [...paths]);
+    if (captured.error || !captured.diff?.trim()) {
+      throw new Error(
+        captured.error ??
+          `Paw edit replay produced no patch: ${previous.runId}`,
+      );
+    }
+    const updated: SweCompareRunResult = {
+      ...previous,
+      patch: captured.diff,
+      patchChars: captured.diff.length,
+      patchSource: "paw_trace_edit_replay",
+      artifactStatus: "valid",
+      patchCollectionError: undefined,
+    };
+    writeJsonAtomic(opts.resultPath, updated);
+    return updated;
+  } finally {
+    workspace.cleanup();
+  }
 }
 
 /** Re-audit a persisted run after integrity rules are strengthened. */

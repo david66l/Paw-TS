@@ -7,11 +7,13 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { formatPatch, structuredPatch } from "diff";
 
 export interface ArmWorkspace {
   readonly root: string;
@@ -50,14 +52,20 @@ export function repoCachePath(cacheDir: string, repo: string): string {
 }
 
 /** 确保 mirror/clone 存在；返回本地 git 根 */
-export function ensureRepoClone(repo: string, cacheDir: string): string {
+export function ensureRepoClone(
+  repo: string,
+  cacheDir: string,
+  opts: { readonly fetch?: boolean } = {},
+): string {
   const dest = repoCachePath(cacheDir, repo);
   mkdirSync(path.dirname(dest), { recursive: true });
   if (existsSync(path.join(dest, ".git"))) {
     runGit(dest, ["config", "core.autocrlf", "false"]);
-    const fetch = runGit(dest, ["fetch", "--all", "--tags"], 600_000);
-    if (!fetch.ok) {
-      console.warn(`[swe-exp] git fetch warn ${repo}: ${fetch.error}`);
+    if (opts.fetch !== false) {
+      const fetch = runGit(dest, ["fetch", "--all", "--tags"], 600_000);
+      if (!fetch.ok) {
+        console.warn(`[swe-exp] git fetch warn ${repo}: ${fetch.error}`);
+      }
     }
     return dest;
   }
@@ -232,6 +240,9 @@ export function captureGitDiff(
   workspaceRoot: string,
   filePaths: readonly string[] = [],
 ): GitDiffCapture {
+  if (filePaths.length > 0) {
+    return captureExplicitFileDiff(workspaceRoot, filePaths);
+  }
   const diffArgs = [
     "-c",
     "core.autocrlf=false",
@@ -253,6 +264,63 @@ export function captureGitDiff(
   if (!staged.ok) return { error: staged.error };
   if (staged.stdout.trim()) parts.push(staged.stdout.trim());
   return { diff: parts.filter(Boolean).join("\n") };
+}
+
+function captureExplicitFileDiff(
+  workspaceRoot: string,
+  filePaths: readonly string[],
+): GitDiffCapture {
+  const parts: string[] = [];
+  for (const filePath of [...new Set(filePaths)].sort()) {
+    const normalized = filePath.replace(/\\/g, "/");
+    if (
+      !normalized ||
+      normalized.startsWith("/") ||
+      normalized.split("/").includes("..")
+    ) {
+      return { error: `unsafe explicit patch path: ${filePath}` };
+    }
+    const currentPath = path.join(workspaceRoot, ...normalized.split("/"));
+    const currentExists = existsSync(currentPath);
+    let current = "";
+    if (currentExists) {
+      try {
+        current = readFileSync(currentPath, "utf8");
+      } catch (error) {
+        return {
+          error: `cannot read edited path ${normalized}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        };
+      }
+    }
+    const baseline = runGit(
+      workspaceRoot,
+      ["show", `HEAD:${normalized}`],
+      60_000,
+    );
+    if (!baseline.ok) {
+      const tracked = runGit(
+        workspaceRoot,
+        ["ls-files", "--error-unmatch", "--", normalized],
+        60_000,
+      );
+      if (tracked.ok) {
+        return {
+          error: `cannot read HEAD version of ${normalized}: ${baseline.error}`,
+        };
+      }
+    }
+    const original = baseline.ok ? baseline.stdout : "";
+    if (original === current && baseline.ok === currentExists) continue;
+    const oldName = baseline.ok ? `a/${normalized}` : "/dev/null";
+    const newName = currentExists ? `b/${normalized}` : "/dev/null";
+    const patch = formatPatch(
+      structuredPatch(oldName, newName, original, current, "", ""),
+    ).trim();
+    parts.push(`diff --git a/${normalized} b/${normalized}\n${patch}`);
+  }
+  return { diff: parts.join("\n") };
 }
 
 /** 写入每臂隔离的 .paw 配置 */

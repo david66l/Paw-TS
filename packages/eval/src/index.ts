@@ -88,6 +88,7 @@ export {
   extractClaudePatchFromTrace,
   parseClaudeStream,
   recoverClaudeResultPatch,
+  recoverPawResultPatch,
   runSweCompareArm,
   validateCompareRun,
   verifySweCompareResult,

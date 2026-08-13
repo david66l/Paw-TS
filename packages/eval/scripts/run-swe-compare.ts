@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   auditSweCompareResult,
   recoverClaudeResultPatch,
+  recoverPawResultPatch,
   runSweCompareArm,
   verifySweCompareResult,
 } from "../src/swe-compare/index.js";
@@ -18,6 +19,25 @@ const instanceId = value("--instance");
 const runner = value("--runner");
 const verifyResult = value("--verify-result");
 const recoverResult = value("--recover-result-patch");
+const recoverPawResult = value("--recover-paw-result-patch");
+if (recoverPawResult) {
+  const result = recoverPawResultPatch({
+    repoRoot: process.cwd(),
+    resultPath: path.resolve(recoverPawResult),
+  });
+  console.log(
+    JSON.stringify(
+      {
+        runId: result.runId,
+        patchChars: result.patchChars,
+        patchSource: result.patchSource,
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(0);
+}
 const auditResult = value("--audit-result");
 if (auditResult) {
   const result = auditSweCompareResult({
@@ -55,7 +75,7 @@ if (verifyResult) {
 }
 if (!instanceId || (runner !== "paw" && runner !== "claude")) {
   throw new Error(
-    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --audit-result <result.json>",
+    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> OR --audit-result <result.json>",
   );
 }
 const repoRoot = process.cwd();
