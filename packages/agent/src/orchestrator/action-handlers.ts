@@ -259,31 +259,18 @@ function handleAcceptanceUpdate(
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn">,
 ): { readonly state: TurnState; readonly flags: TurnFlags } {
-  const knownIds = new Set(
-    ctx.taskState.acceptanceCriteria().map((criterion) => criterion.id),
-  );
-  const unknown = action.updates.find((update) => !knownIds.has(update.id));
   ctx.ctxMgr.addAssistant(text, thinking);
-  if (unknown) {
-    ctx.ctxMgr.addUser(
-      `[AcceptanceLedger] Unknown criterion id ${unknown.id}. Read the current Acceptance criteria in [Current State], then retry with a valid id or add a new criterion explicitly.`,
-    );
+  const applied = ctx.taskState.applyAcceptanceUpdate(action, ctx.turn);
+  if (!applied.ok) {
+    ctx.ctxMgr.addUser(`[AcceptanceLedger] ${applied.error}`);
   } else {
-    ctx.taskState.registerAcceptanceCriteria(action.add, ctx.turn);
-    for (const update of action.updates) {
-      ctx.taskState.setAcceptanceCriterionStatus(
-        update.id,
-        update.status,
-        update.evidence,
-      );
-    }
     ctx.ctxMgr.addUser(
       `Acceptance ledger updated: ${action.reason || "explicit model update"}.\n\n${formatTaskStateForContext(ctx.taskState.snapshot())}`,
     );
   }
   const nextFlags: TurnFlags = {
     ...flags,
-    acceptanceNudges: unknown ? flags.acceptanceNudges : 0,
+    acceptanceNudges: applied.ok ? 0 : flags.acceptanceNudges,
     lastTurnHadToolCall: false,
   };
   if (ctx.turn + 1 >= ctx.maxSteps) {
@@ -987,6 +974,9 @@ async function handleToolCalls(
       childPolicy: opts.childPolicy,
       subAgentLauncher: opts.subAgentLauncher,
       todoStore: opts.todoStore,
+      acceptanceLedger: {
+        apply: (input) => ctx.taskState.applyAcceptanceUpdate(input, ctx.turn),
+      },
       skillRegistry: opts.skillRegistry,
       watcher: opts.watcher,
       parentContextManager: ctx.ctxMgr,
@@ -1046,7 +1036,11 @@ async function handleToolCalls(
     for (let i = 0; i < calls.length; i++) {
       const call = calls[i]!;
       const tr = results[i]!;
-      if (isControlPlaneToolResult(tr)) continue;
+      if (
+        call.tool === "workspace.acceptance_update" ||
+        isControlPlaneToolResult(tr)
+      )
+        continue;
       const injected = await runtime
         .onToolResult({
           taskId: memTaskId,
@@ -1112,6 +1106,11 @@ async function handleToolCalls(
     : 0;
 
   const madeProgress = results.some((result) => result.ok);
+  const acceptanceProgress = calls.some(
+    (call, index) =>
+      call.tool === "workspace.acceptance_update" &&
+      results[index]?.ok === true,
+  );
   const fusedFlags: TurnFlags = {
     ...nextFlags,
     ...(codingPhase ? { codingPhase: codingPhase.state } : {}),
@@ -1122,6 +1121,7 @@ async function handleToolCalls(
     ...(madeProgress
       ? { autoContinueNudges: 0, verifyNudges: 0, idleFuseTrips: 0 }
       : {}),
+    ...(acceptanceProgress ? { acceptanceNudges: 0 } : {}),
     ...(final.failureSignatures
       ? { failureSignatures: final.failureSignatures }
       : {}),

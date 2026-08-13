@@ -19,8 +19,8 @@ import {
   pruneToolResults,
   shouldCompactHistory,
 } from "@paw/core";
-import { FakeLanguageModel } from "@paw/models";
 import { resetPolicyConfig } from "@paw/harness";
+import { FakeLanguageModel } from "@paw/models";
 import { runCompressionAgent } from "../src/compression-agent.js";
 import { cleanup, tmpDir } from "./fixtures.js";
 
@@ -227,8 +227,18 @@ describe("Agent Workflow", () => {
               action: "plan_update",
               reason: "steps completed",
               new_items: [
-                { id: "plan-001", task_id: "step-a", status: "completed", depends_on: [] },
-                { id: "plan-002", task_id: "step-b", status: "completed", depends_on: ["plan-001"] },
+                {
+                  id: "plan-001",
+                  task_id: "step-a",
+                  status: "completed",
+                  depends_on: [],
+                },
+                {
+                  id: "plan-002",
+                  task_id: "step-b",
+                  status: "completed",
+                  depends_on: ["plan-001"],
+                },
               ],
               deprecated_items: [],
             }),
@@ -690,7 +700,7 @@ describe("Context Compression", () => {
     cleanup(toolDir);
   });
 
-  test("pruneToolResults: protects skill/web_fetch/web_search/todo_write tools", () => {
+  test("pruneToolResults: protects durable control-state tool results", () => {
     const toolDir = tmpDir("paw-prune-");
     const messages: ChatMessage[] = [
       {
@@ -705,6 +715,10 @@ describe("Context Compression", () => {
         role: "user",
         content: `[Tool workspace.list_dir completed]\nFiles:\n${"a".repeat(60_000)}`,
       },
+      {
+        role: "user",
+        content: `[Tool workspace.acceptance_update completed]\nLedger:\n${"b".repeat(60_000)}`,
+      },
     ];
 
     const result = pruneToolResults(messages, { toolResultsDir: toolDir });
@@ -717,9 +731,13 @@ describe("Context Compression", () => {
     const listMsg = result.messages.find((m) =>
       m.content.includes("[Tool workspace.list_dir completed]"),
     );
+    const acceptanceMsg = result.messages.find((m) =>
+      m.content.includes("[Tool workspace.acceptance_update completed]"),
+    );
 
     expect(skillMsg?.content).not.toContain("<persisted-output>");
     expect(webMsg?.content).not.toContain("<persisted-output>");
+    expect(acceptanceMsg?.content).not.toContain("<persisted-output>");
     expect(listMsg?.content).toContain("<persisted-output>");
     cleanup(toolDir);
   });

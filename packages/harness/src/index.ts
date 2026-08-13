@@ -75,6 +75,7 @@ export {
   toolNameReverseMap,
   toolRequiresApproval,
   CONTEXT_RECALL,
+  ACCEPTANCE_UPDATE,
   type ToolName,
   type ToolRunResult,
 } from "./registry/index.js";

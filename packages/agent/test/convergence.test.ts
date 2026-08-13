@@ -161,6 +161,27 @@ describe("convergence guidance", () => {
     ).toBeNull();
     expect(
       convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.acceptance_update",
+          args: {
+            add: [
+              {
+                text: "Keep the legacy parser branch",
+                source: "repository",
+              },
+            ],
+            updates: [],
+            reason: "repository test discovered after investigation",
+          },
+        },
+        explored,
+        32,
+        64,
+      ),
+    ).toBeNull();
+    expect(
+      convergenceToolBlockReason(
         { type: "tool_call", tool: "workspace.git_status", args: {} },
         explored,
         32,

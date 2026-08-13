@@ -1,7 +1,7 @@
 import type { ChatMessage } from "@paw/models";
+import type { ToolDefinition } from "@paw/models";
 import type { McpClientManager } from "../mcp-client.js";
 import { classifyShellCommand } from "../shell/index.js";
-import type { ToolDefinition } from "@paw/models";
 
 export interface ToolRunResult {
   readonly ok: boolean;
@@ -28,6 +28,7 @@ export const SHELL = "workspace.run_shell" as const;
 export const WEBFETCH = "workspace.web_fetch" as const;
 export const WEBSEARCH = "workspace.web_search" as const;
 export const TODO_WRITE = "workspace.todo_write" as const;
+export const ACCEPTANCE_UPDATE = "workspace.acceptance_update" as const;
 export const NOTEBOOK_EDIT = "workspace.notebook_edit" as const;
 export const BRIEF = "workspace.brief" as const;
 export const GIT_STATUS = "workspace.git_status" as const;
@@ -56,6 +57,7 @@ const BUILTIN_TOOLS = [
   WEBFETCH,
   WEBSEARCH,
   TODO_WRITE,
+  ACCEPTANCE_UPDATE,
   NOTEBOOK_EDIT,
   BRIEF,
   GIT_STATUS,
@@ -100,7 +102,8 @@ export function toolRequiresApproval(
     tool === LSP ||
     tool === MEMORY_LIST ||
     tool === MEMORY_READ ||
-    tool === CONTEXT_RECALL
+    tool === CONTEXT_RECALL ||
+    tool === ACCEPTANCE_UPDATE
   )
     return false;
   if (tool === SHELL && args) {
@@ -123,7 +126,6 @@ export function listToolNames(mcp?: McpClientManager): readonly ToolName[] {
   }
   return built;
 }
-
 
 /** Map from sanitized function names back to paw-ts tool names. */
 export function toolNameReverseMap(
@@ -293,6 +295,64 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
       },
       ["todos"],
     ),
+    fn(
+      ACCEPTANCE_UPDATE,
+      "Persist observable acceptance and regression conditions separately from implementation todos. Use this proactively when user requirements, repository tests, or verification expose multiple behaviors. Add conditions before implementation; after verification, update each active condition with current-revision evidence. Never mark satisfied from intention or memory.",
+      {
+        add: {
+          type: "array",
+          description: "New observable conditions discovered this turn.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              text: {
+                type: "string",
+                description:
+                  "Concise observable behavior or regression condition",
+              },
+              source: {
+                type: "string",
+                enum: ["user", "repository", "verification"],
+              },
+              ref: {
+                type: "string",
+                description:
+                  "Optional user message, file, test, or command reference",
+              },
+            },
+            required: ["text", "source"],
+          },
+        },
+        updates: {
+          type: "array",
+          description:
+            "Status changes for existing criterion ids from Current State.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              id: { type: "string" },
+              status: {
+                type: "string",
+                enum: ["pending", "satisfied", "blocked", "superseded"],
+              },
+              evidence: {
+                type: "string",
+                description:
+                  "Concrete current-revision evidence; required for satisfied",
+              },
+            },
+            required: ["id", "status"],
+          },
+        },
+        reason: {
+          type: "string",
+          description: "Why the ledger changed based on new evidence",
+        },
+      },
+      ["add", "updates", "reason"],
+    ),
     fn(GIT_STATUS, "Show the working tree status.", {}),
     fn(GIT_LOG, "Show recent commit history.", {
       max_count: { type: "integer", description: "Number of commits to show" },
@@ -412,7 +472,8 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
       {
         name: {
           type: "string",
-          description: "Unique name for this memory entry (e.g. 'api-auth-pattern')",
+          description:
+            "Unique name for this memory entry (e.g. 'api-auth-pattern')",
         },
         content: {
           type: "string",
@@ -421,7 +482,8 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
         type: {
           type: "string",
           enum: ["user", "feedback", "project", "reference"],
-          description: "Memory type: user (preference), feedback, project (conventions/decisions), reference (external info)",
+          description:
+            "Memory type: user (preference), feedback, project (conventions/decisions), reference (external info)",
         },
         tags: {
           type: "array",

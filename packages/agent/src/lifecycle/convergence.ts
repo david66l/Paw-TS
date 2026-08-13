@@ -10,6 +10,11 @@ const SOURCE_MUTATION_TOOLS = new Set([
   "workspace.notebook_edit",
 ]);
 
+const CONTROL_STATE_TOOLS = new Set([
+  "workspace.todo_write",
+  "workspace.acceptance_update",
+]);
+
 function isDiffInspection(call: AgentToolCallAction): boolean {
   if (call.tool === "workspace.git_diff") return true;
   if (call.tool !== "workspace.run_shell") return false;
@@ -19,6 +24,7 @@ function isDiffInspection(call: AgentToolCallAction): boolean {
 }
 
 function isInvestigationCall(call: AgentToolCallAction): boolean {
+  if (CONTROL_STATE_TOOLS.has(call.tool)) return false;
   if (SOURCE_MUTATION_TOOLS.has(call.tool)) return false;
   if (call.tool !== "workspace.run_shell") return !isDiffInspection(call);
   const command =

@@ -12,24 +12,24 @@
  * 保护工具：skill/web_fetch/web_search/todo_write 等永远不会被裁剪或驱逐。
  */
 
-import type { ChatMessage } from "./manager.js";
 import { estimateTokens } from "../token-estimate.js";
 import type { TokenEstimator } from "../token-estimator.js";
-import { ArtifactRegistry } from "./archive.js";
 import {
+  type ParsedToolResult,
   isToolResultMessage,
   parseToolResult,
   splitToolBlocks,
-  type ParsedToolResult,
 } from "../tool-result/format.js";
 import {
-  buildPersistedToolResultContent,
   DEFAULT_KEEP_RECENT_TOOLS,
   DEFAULT_MAX_TOOL_OUTPUT_BYTES,
+  buildPersistedToolResultContent,
   isPersistedToolResult,
   persistToolResultToDisk,
   toolResultExceedsLimits,
 } from "../tool-result/storage.js";
+import type { ArtifactRegistry } from "./archive.js";
+import type { ChatMessage } from "./manager.js";
 
 export interface PruneConfig {
   /** `.paw/sessions/{runId}/tool-results` — 持久化路径；不提供则 L1 为 no-op */
@@ -66,6 +66,7 @@ const DEFAULT_PROTECTED_TOOLS = [
   "web_fetch",
   "web_search",
   "todo_write",
+  "workspace.acceptance_update",
 ];
 
 function isProtectedTool(
@@ -228,8 +229,7 @@ export function pruneToolResults(
     return { pruned: false, freedTokens: 0, messages };
   }
 
-  const keepRecentTools =
-    config?.keepRecentTools ?? DEFAULT_KEEP_RECENT_TOOLS;
+  const keepRecentTools = config?.keepRecentTools ?? DEFAULT_KEEP_RECENT_TOOLS;
   const maxToolOutputBytes =
     config?.maxToolOutputBytes ?? DEFAULT_MAX_TOOL_OUTPUT_BYTES;
   const protectedTools = new Set(

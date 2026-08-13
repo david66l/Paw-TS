@@ -157,6 +157,7 @@ interface ToolExecutionContext {
   readonly runId: string;
   readonly mcp?: HarnessContext["mcp"];
   readonly todoStore?: HarnessContext["todoStore"];
+  readonly acceptanceLedger?: HarnessContext["acceptanceLedger"];
   readonly subAgentLauncher?: HarnessContext["subAgentLauncher"];
   readonly skillRegistry?: HarnessContext["skillRegistry"];
   readonly watcher?: HarnessContext["watcher"];
@@ -472,6 +473,7 @@ export async function executeToolCalls(
         workspaceRoot: toolCtx.workspaceRoot,
         mcp: toolCtx.mcp,
         todoStore: toolCtx.todoStore,
+        acceptanceLedger: toolCtx.acceptanceLedger,
         subAgentLauncher: toolCtx.subAgentLauncher,
         skillRegistry: toolCtx.skillRegistry,
         watcher: toolCtx.watcher,
@@ -561,7 +563,10 @@ export async function executeToolCalls(
   };
 
   const results: ToolRunResult[] = [];
-  if (effectPolicyApplies.some(Boolean)) {
+  if (
+    effectPolicyApplies.some(Boolean) ||
+    calls.some((call) => call.tool === "workspace.acceptance_update")
+  ) {
     for (const [i, call] of calls.entries()) {
       results.push(await executeOne(call, i));
     }

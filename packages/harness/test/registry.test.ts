@@ -3,7 +3,11 @@ import fs, { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { executeTool, toolRequiresApproval } from "../src/registry/index.js";
+import {
+  executeTool,
+  toolDefinitions,
+  toolRequiresApproval,
+} from "../src/registry/index.js";
 
 describe("executeTool", () => {
   test("workspace.read_file reads a relative file", async () => {
@@ -82,6 +86,71 @@ describe("executeTool", () => {
     expect(toolRequiresApproval("workspace.brief")).toBe(false);
     expect(toolRequiresApproval("workspace.git_status")).toBe(false);
     expect(toolRequiresApproval("workspace.symbol_search")).toBe(false);
+    expect(toolRequiresApproval("workspace.acceptance_update")).toBe(false);
+  });
+
+  test("workspace.acceptance_update is a native tool with validated session execution", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-harness-acceptance-"));
+    const definition = toolDefinitions().find(
+      (tool) => tool.function.name === "workspace_acceptance_update",
+    );
+    expect(definition).toBeDefined();
+    expect(definition?.function.description).toContain("proactively");
+
+    const applied: unknown[] = [];
+    const result = await executeTool(
+      {
+        workspaceRoot: root,
+        acceptanceLedger: {
+          apply(input) {
+            applied.push(input);
+            return { ok: true, state: { ids: ["acceptance-001"] } };
+          },
+        },
+      },
+      "workspace.acceptance_update",
+      {
+        reason: "repository test exposes compatibility branch",
+        add: [
+          {
+            text: " Preserve legacy output. ",
+            source: "repository",
+            ref: " tests/test_cli.py ",
+          },
+        ],
+        updates: [],
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(applied).toEqual([
+      {
+        reason: "repository test exposes compatibility branch",
+        add: [
+          {
+            text: "Preserve legacy output.",
+            source: "repository",
+            ref: "tests/test_cli.py",
+          },
+        ],
+        updates: [],
+      },
+    ]);
+
+    const invalid = await executeTool(
+      {
+        workspaceRoot: root,
+        acceptanceLedger: { apply: () => ({ ok: true }) },
+      },
+      "workspace.acceptance_update",
+      {
+        reason: "wishful completion",
+        add: [],
+        updates: [{ id: "acceptance-001", status: "satisfied", evidence: " " }],
+      },
+    );
+    expect(invalid.ok).toBe(false);
+    expect(JSON.stringify(invalid.payload)).toContain("E_SCHEMA_INVALID");
+    expect(invalid.summary).toContain("requires non-empty evidence");
   });
 
   test("toolRequiresApproval for shell considers command content", () => {

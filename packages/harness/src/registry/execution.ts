@@ -36,6 +36,7 @@ import {
 
 import fs from "node:fs";
 import {
+  ACCEPTANCE_UPDATE,
   APPLY_PATCH,
   BRIEF,
   CONTEXT_RECALL,
@@ -65,6 +66,11 @@ import {
   WRITE,
   toolDefinitions,
 } from "./definitions.js";
+
+type AcceptanceUpdateInput = Omit<
+  import("@paw/core").AgentAcceptanceUpdateAction,
+  "type"
+>;
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v !== null && typeof v === "object" && !Array.isArray(v)
@@ -178,6 +184,73 @@ function toolErrorResult(
     ok: false,
     payload: makeToolError(code, message, detail),
     summary: `${tool}: ${code} ${message}`,
+  };
+}
+
+function parseAcceptanceUpdate(
+  rec: Record<string, unknown>,
+): AcceptanceUpdateInput | string {
+  const rawAdd = Array.isArray(rec.add) ? rec.add : [];
+  const rawUpdates = Array.isArray(rec.updates) ? rec.updates : [];
+  const add: Array<AcceptanceUpdateInput["add"][number]> = [];
+  const updates: Array<AcceptanceUpdateInput["updates"][number]> = [];
+  for (const [index, raw] of rawAdd.entries()) {
+    const item = asRecord(raw);
+    if (!item || typeof item.text !== "string" || !item.text.trim()) {
+      return `add[${index}].text must be a non-empty string`;
+    }
+    if (
+      item.source !== "user" &&
+      item.source !== "repository" &&
+      item.source !== "verification"
+    ) {
+      return `add[${index}].source must be user, repository, or verification`;
+    }
+    if (item.ref !== undefined && typeof item.ref !== "string") {
+      return `add[${index}].ref must be a string`;
+    }
+    add.push({
+      text: item.text.trim(),
+      source: item.source,
+      ...(typeof item.ref === "string" && item.ref.trim()
+        ? { ref: item.ref.trim() }
+        : {}),
+    });
+  }
+  for (const [index, raw] of rawUpdates.entries()) {
+    const item = asRecord(raw);
+    if (!item || typeof item.id !== "string" || !item.id.trim()) {
+      return `updates[${index}].id must be a non-empty string`;
+    }
+    if (
+      item.status !== "pending" &&
+      item.status !== "satisfied" &&
+      item.status !== "blocked" &&
+      item.status !== "superseded"
+    ) {
+      return `updates[${index}].status is invalid`;
+    }
+    if (item.evidence !== undefined && typeof item.evidence !== "string") {
+      return `updates[${index}].evidence must be a string`;
+    }
+    const evidence =
+      typeof item.evidence === "string" ? item.evidence.trim() : "";
+    if (item.status === "satisfied" && !evidence) {
+      return `updates[${index}] satisfied requires non-empty evidence`;
+    }
+    updates.push({
+      id: item.id.trim(),
+      status: item.status,
+      ...(evidence ? { evidence } : {}),
+    });
+  }
+  if (add.length === 0 && updates.length === 0) {
+    return "at least one add or update is required";
+  }
+  return {
+    add,
+    updates,
+    reason: typeof rec.reason === "string" ? rec.reason.trim() : "",
   };
 }
 
@@ -643,6 +716,35 @@ export async function executeTool(
       ok: true,
       payload: r,
       summary: `web_search: ${n} result(s)`,
+    };
+  }
+  if (tool === ACCEPTANCE_UPDATE) {
+    const parsed = parseAcceptanceUpdate(rec);
+    if (typeof parsed === "string") {
+      return toolErrorResult("acceptance_update", "E_SCHEMA_INVALID", parsed);
+    }
+    if (!ctx.acceptanceLedger) {
+      return toolErrorResult(
+        "acceptance_update",
+        "E_FATAL",
+        "acceptance ledger not configured",
+      );
+    }
+    const result = await ctx.acceptanceLedger.apply(parsed);
+    if (!result.ok) {
+      return toolErrorResult(
+        "acceptance_update",
+        "E_USER",
+        result.error ?? "acceptance ledger rejected the update",
+      );
+    }
+    return {
+      ok: true,
+      payload: {
+        updated: true,
+        state: result.state,
+      },
+      summary: `acceptance_update: ${parsed.add.length} added, ${parsed.updates.length} updated`,
     };
   }
   if (tool === TODO_WRITE) {

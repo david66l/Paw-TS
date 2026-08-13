@@ -18,7 +18,11 @@
  *   使用 AgentOrchestrator 实现，但接口不耦合到具体实现
  */
 
-import type { SkillRegistry, TodoStore } from "@paw/core";
+import type {
+  AgentAcceptanceUpdateAction,
+  SkillRegistry,
+  TodoStore,
+} from "@paw/core";
 import type { ArtifactRegistry as CoreArtifactRegistry } from "@paw/core";
 import type { WorkspaceWatcher } from "@paw/workspace";
 
@@ -116,6 +120,24 @@ export interface HarnessContext {
   readonly workspaceRoot: string;
   readonly mcp?: McpClientManager;
   readonly todoStore?: TodoStore;
+  /**
+   * Session-owned acceptance ledger. The agent layer injects the durable
+   * implementation so harness can expose a native tool without depending on
+   * @paw/agent (the same dependency-inversion pattern as memoryRuntime).
+   */
+  readonly acceptanceLedger?: {
+    apply(input: Omit<AgentAcceptanceUpdateAction, "type">):
+      | {
+          readonly ok: boolean;
+          readonly error?: string;
+          readonly state?: unknown;
+        }
+      | Promise<{
+          readonly ok: boolean;
+          readonly error?: string;
+          readonly state?: unknown;
+        }>;
+  };
   readonly subAgentLauncher?: SubAgentLauncher;
   readonly skillRegistry?: SkillRegistry;
   /** Shell 命令实时输出回调（流式推送到 TUI） */

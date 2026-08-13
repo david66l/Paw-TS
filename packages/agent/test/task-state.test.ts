@@ -56,6 +56,50 @@ describe("TaskStateManager", () => {
     );
   });
 
+  test("applies acceptance updates atomically", () => {
+    const state = new TaskStateManager("preserve compatibility");
+    state.registerAcceptanceCriteria(
+      [{ text: "Keep old output", source: "repository" }],
+      1,
+    );
+    const before = state.snapshot();
+    const rejected = state.applyAcceptanceUpdate(
+      {
+        reason: "mixed valid and invalid transaction",
+        add: [{ text: "New branch", source: "verification" }],
+        updates: [
+          {
+            id: "acceptance-missing",
+            status: "satisfied",
+            evidence: "test passed",
+          },
+        ],
+      },
+      2,
+    );
+    expect(rejected.ok).toBe(false);
+    expect(state.snapshot()).toEqual(before);
+
+    const accepted = state.applyAcceptanceUpdate(
+      {
+        reason: "direct test passed",
+        add: [],
+        updates: [
+          {
+            id: "acceptance-001",
+            status: "satisfied",
+            evidence: "tests/test_cli.py passed",
+          },
+        ],
+      },
+      2,
+    );
+    expect(accepted.ok).toBe(true);
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe(
+      "satisfied",
+    );
+  });
+
   test("makes satisfied acceptance evidence stale after a source mutation", () => {
     const state = new TaskStateManager("change route output");
     state.registerAcceptanceCriteria(

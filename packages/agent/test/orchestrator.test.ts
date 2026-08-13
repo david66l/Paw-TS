@@ -691,6 +691,94 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(4);
   });
 
+  test("native acceptance tool is model-visible and updates the durable gate", async () => {
+    let calls = 0;
+    const events: Array<{ event: { type: string; tool?: string } }> = [];
+    const o = new AgentOrchestrator({
+      model: {
+        label: "native-acceptance-seq",
+        async complete(messages, options) {
+          calls += 1;
+          const nativeTool = options?.tools?.find(
+            (tool) => tool.function.name === "workspace_acceptance_update",
+          );
+          expect(nativeTool).toBeDefined();
+          if (calls === 1) {
+            return {
+              text: "",
+              toolCalls: [
+                {
+                  id: "acceptance-add",
+                  name: "workspace_acceptance_update",
+                  arguments: {
+                    reason: "repository regression test",
+                    add: [
+                      {
+                        text: "Keep legacy output",
+                        source: "repository",
+                        ref: "tests/test_cli.py",
+                      },
+                    ],
+                    updates: [],
+                  },
+                },
+              ],
+            };
+          }
+          expect(messages.at(-1)?.content).toContain("acceptance-001");
+          if (calls === 2) {
+            return {
+              text: "",
+              toolCalls: [
+                {
+                  id: "acceptance-pass",
+                  name: "workspace_acceptance_update",
+                  arguments: {
+                    reason: "direct regression passed",
+                    add: [],
+                    updates: [
+                      {
+                        id: "acceptance-001",
+                        status: "satisfied",
+                        evidence: "tests/test_cli.py passed",
+                      },
+                    ],
+                  },
+                },
+              ],
+            };
+          }
+          return { text: '{"action":"final_answer","summary":"OK."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "native-acceptance-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
+        },
+      },
+      onEvent: (event) => {
+        events.push(event as (typeof events)[number]);
+      },
+    });
+    const result = await o.run({
+      runId: "native-acceptance-seq",
+      goal: "inspect compatibility behavior",
+      workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-native-acceptance-")),
+      maxSteps: 4,
+    });
+    expect(result.status).toBe("completed");
+    expect(result.message).toBe("OK.");
+    expect(calls).toBe(3);
+    expect(
+      events.filter(
+        (event) =>
+          event.event.type === "tool.call" &&
+          event.event.tool === "workspace.acceptance_update",
+      ),
+    ).toHaveLength(2);
+  });
+
   test("blocked acceptance criterion ends honestly without a nudge loop", async () => {
     let calls = 0;
     const o = new AgentOrchestrator({

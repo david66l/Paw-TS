@@ -5,6 +5,7 @@ export {
   toolDefinitions,
   toolCatalogText,
   CONTEXT_RECALL,
+  ACCEPTANCE_UPDATE,
   type ToolRunResult,
   type ToolName,
   type BuiltinToolName,

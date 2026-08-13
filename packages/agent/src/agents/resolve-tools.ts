@@ -21,6 +21,7 @@ const ALIASES: Record<string, string> = {
   web_fetch: "workspace.web_fetch",
   web_search: "workspace.web_search",
   todo_write: "workspace.todo_write",
+  acceptance_update: "workspace.acceptance_update",
   notebook_edit: "workspace.notebook_edit",
   brief: "workspace.brief",
   git_status: "workspace.git_status",
@@ -99,8 +100,7 @@ export function resolveAllowedTools(opts: {
 }): readonly string[] | null {
   const stripSpawn = (list: readonly string[]) =>
     list.filter(
-      (t) =>
-        t !== "workspace.run_agent" && t !== "workspace.create_agent",
+      (t) => t !== "workspace.run_agent" && t !== "workspace.create_agent",
     );
 
   if (opts.tools === "inherit") {

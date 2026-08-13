@@ -1,4 +1,7 @@
-import type { AgentToolCallAction } from "@paw/core";
+import type {
+  AgentAcceptanceUpdateAction,
+  AgentToolCallAction,
+} from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
 
@@ -162,6 +165,46 @@ export class TaskStateManager {
     return this.state.acceptanceCriteria ?? [];
   }
 
+  /** Apply one ledger transaction without partial writes on invalid ids. */
+  applyAcceptanceUpdate(
+    input: Omit<AgentAcceptanceUpdateAction, "type">,
+    currentTurn: number,
+  ):
+    | { readonly ok: true; readonly state: unknown }
+    | { readonly ok: false; readonly error: string } {
+    const knownIds = new Set(
+      this.acceptanceCriteria().map((criterion) => criterion.id),
+    );
+    const unknown = input.updates.find((update) => !knownIds.has(update.id));
+    if (unknown) {
+      return {
+        ok: false,
+        error: `Unknown criterion id ${unknown.id}. Read Acceptance criteria in Current State and retry with an existing id.`,
+      };
+    }
+    const evidenceFree = input.updates.find(
+      (update) => update.status === "satisfied" && !update.evidence?.trim(),
+    );
+    if (evidenceFree) {
+      return {
+        ok: false,
+        error: `Criterion ${evidenceFree.id} cannot be satisfied without concrete evidence.`,
+      };
+    }
+    this.registerAcceptanceCriteria(input.add, currentTurn);
+    for (const update of input.updates) {
+      this.setAcceptanceCriterionStatus(
+        update.id,
+        update.status,
+        update.evidence,
+      );
+    }
+    return {
+      ok: true,
+      state: { criteria: acceptanceReadiness(this.snapshot()) },
+    };
+  }
+
   registerAcceptanceCriteria(
     items: readonly {
       readonly text: string;
@@ -283,6 +326,9 @@ export class TaskStateManager {
   }
 
   recordToolResult(call: AgentToolCallAction, result: ToolRunResult): void {
+    // The native acceptance tool already updates this manager atomically via
+    // the injected ledger. It is control-plane state, not repository evidence.
+    if (call.tool === "workspace.acceptance_update") return;
     if (isControlPlaneToolResult(result)) return;
     const args = isRecord(call.args) ? call.args : {};
     const filesRead = [...this.state.filesRead];
