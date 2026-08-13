@@ -153,7 +153,10 @@ import { loadMemoryConfigSync } from "@paw/memory/longterm";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
-import type { ToolExecutionPolicy } from "./execution-policy.js";
+import type {
+  ToolEffectPolicy,
+  ToolExecutionPolicy,
+} from "./execution-policy.js";
 import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import type { NativeToolError } from "./orchestrator/action-handlers.js";
@@ -324,6 +327,8 @@ export interface AgentOrchestratorOptions {
   readonly monitorOptions?: import("@paw/core").ContextMonitorOptions;
   /** Trusted, task-scoped policy checked before tool side effects. */
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
+  /** Trusted before/after audit for filesystem or process effects. */
+  readonly toolEffectPolicy?: ToolEffectPolicy;
   /** Trusted completion authority; defaults to local verification. */
   readonly verificationPolicy?: VerificationPolicy;
 }
@@ -440,6 +445,7 @@ export class AgentOrchestrator {
   private readonly agentIdentityText?: string;
   private readonly createAgent?: AgentOrchestratorOptions["createAgent"];
   private readonly toolExecutionPolicy?: AgentOrchestratorOptions["toolExecutionPolicy"];
+  private readonly toolEffectPolicy?: AgentOrchestratorOptions["toolEffectPolicy"];
   private readonly verificationPolicy?: AgentOrchestratorOptions["verificationPolicy"];
 
   constructor(opts?: AgentOrchestratorOptions) {
@@ -450,6 +456,7 @@ export class AgentOrchestrator {
     this.resolveToolApproval = opts?.resolveToolApproval;
     this.approvalPolicy = opts?.approvalPolicy;
     this.toolExecutionPolicy = opts?.toolExecutionPolicy;
+    this.toolEffectPolicy = opts?.toolEffectPolicy;
     this.verificationPolicy = opts?.verificationPolicy;
     this.fileLock = opts?.fileLock;
     // P1 入口闸：会话级去重器（仅 root orchestrator；子 Agent 不重复去重）
@@ -1945,6 +1952,7 @@ export class AgentOrchestrator {
         createAgent: this.createAgent,
         allowedTools: this.allowedTools,
         toolExecutionPolicy: this.toolExecutionPolicy,
+        toolEffectPolicy: this.toolEffectPolicy,
       },
       {
         diagnosis,

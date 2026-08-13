@@ -84,6 +84,8 @@ export {
   auditSweCompareResult,
   createSweCompareManifest,
   collectTraceMutationHints,
+  createSweCompareToolEffectPolicy,
+  createSweCompareToolExecutionPolicy,
   buildSweCompareGoal,
   extractClaudePatchFromTrace,
   parseClaudeStream,

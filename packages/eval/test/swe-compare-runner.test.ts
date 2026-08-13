@@ -1,8 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { AgentOrchestrator } from "@paw/agent";
+import type { RunEventEnvelope } from "@paw/core";
+import { FakeLanguageModel } from "@paw/models";
 
 import {
   allowSweCompareToolCall,
@@ -11,6 +21,7 @@ import {
   auditSweCompareResult,
   claudeCodeArgs,
   collectTraceMutationHints,
+  createSweCompareToolEffectPolicy,
   createSweCompareToolExecutionPolicy,
   extractClaudePatchFromTrace,
   parseClaudeStream,
@@ -69,6 +80,268 @@ describe("SWE compare runner", () => {
     expect(testEdit.allowed).toBe(false);
     if (!testEdit.allowed)
       expect(testEdit.reason).toBe("test_mutation_forbidden");
+  });
+
+  test("shell effect audit keeps product edits and reports them", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-source-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    writeFileSync(path.join(root, "src", "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["src/app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "rewrite" },
+      workspaceRoot: root,
+    });
+    writeFileSync(path.join(root, "src", "app.py"), "x = 2\n", "utf8");
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "rewrite" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "exit 0", payload: {} },
+      },
+      prepared,
+    );
+    expect(decision.allowed).toBe(true);
+    if (decision.allowed) {
+      expect(decision.result?.payload).toEqual({
+        workspaceEffect: { changed: true, paths: ["src/app.py"] },
+      });
+    }
+    expect(readFileSync(path.join(root, "src", "app.py"), "utf8")).toBe(
+      "x = 2\n",
+    );
+  });
+
+  test("shell effect audit restores helper and test writes atomically", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-deny-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    mkdirSync(path.join(root, "tests"), { recursive: true });
+    writeFileSync(path.join(root, "src", "app.py"), "x = 1\n", "utf8");
+    writeFileSync(path.join(root, "tests", "test_app.py"), "pass\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["src/app.py", "tests/test_app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "bad rewrite" },
+      workspaceRoot: root,
+    });
+    writeFileSync(path.join(root, "src", "app.py"), "x = 2\n", "utf8");
+    writeFileSync(
+      path.join(root, "tests", "test_app.py"),
+      "assert False\n",
+      "utf8",
+    );
+    writeFileSync(path.join(root, "helper.py"), "probe\n", "utf8");
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "bad rewrite" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "exit 0", payload: {} },
+      },
+      prepared,
+    );
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.recovered).toBe(true);
+    expect(
+      readFileSync(path.join(root, "src", "app.py"), "utf8").replace(
+        /\r\n/g,
+        "\n",
+      ),
+    ).toBe("x = 1\n");
+    expect(
+      readFileSync(path.join(root, "tests", "test_app.py"), "utf8").replace(
+        /\r\n/g,
+        "\n",
+      ),
+    ).toBe("pass\n");
+    expect(existsSync(path.join(root, "helper.py"))).toBe(false);
+  });
+
+  test("shell effect audit removes ignored helpers introduced by a commit", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-history-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, ".gitignore"), "*.probe\n", "utf8");
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const baseline = git(root, ["rev-parse", "HEAD"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set([".gitignore", "app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "commit helper" },
+      workspaceRoot: root,
+    });
+    writeFileSync(path.join(root, "secret.probe"), "probe\n", "utf8");
+    git(root, ["add", "-f", "secret.probe"]);
+    git(root, ["commit", "-m", "bad helper"]);
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "commit helper" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "exit 0", payload: {} },
+      },
+      prepared,
+    );
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.recovered).toBe(true);
+    expect(git(root, ["rev-parse", "HEAD"])).toBe(baseline);
+    expect(existsSync(path.join(root, "secret.probe"))).toBe(false);
+  });
+
+  test("shell effect audit cleans test caches without rejecting verification", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-cache-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, ".gitignore"), "__pycache__/\n", "utf8");
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set([".gitignore", "app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "pytest" },
+      workspaceRoot: root,
+    });
+    mkdirSync(path.join(root, "__pycache__"));
+    writeFileSync(path.join(root, "__pycache__", "app.pyc"), "cache", "utf8");
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "pytest" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "tests passed", payload: {} },
+      },
+      prepared,
+    );
+    expect(decision).toEqual({ allowed: true });
+    expect(existsSync(path.join(root, "__pycache__", "app.pyc"))).toBe(false);
+  });
+
+  test("shell effect audit restores the ignored runner configuration baseline", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-config-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, ".gitignore"), ".paw/\n", "utf8");
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    mkdirSync(path.join(root, ".paw"));
+    writeFileSync(path.join(root, ".paw", "settings.json"), "frozen\n", "utf8");
+    git(root, ["add", ".gitignore", "app.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set([".gitignore", "app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "rewrite config" },
+      workspaceRoot: root,
+    });
+    writeFileSync(
+      path.join(root, ".paw", "settings.json"),
+      "weakened\n",
+      "utf8",
+    );
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "rewrite config" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "exit 0", payload: {} },
+      },
+      prepared,
+    );
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.recovered).toBe(true);
+    expect(readFileSync(path.join(root, ".paw", "settings.json"), "utf8")).toBe(
+      "frozen\n",
+    );
+  });
+
+  test("orchestrator rejects and restores a real shell helper write", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-e2e-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const events: RunEventEnvelope[] = [];
+    let calls = 0;
+    const helperCommand =
+      process.platform === "win32"
+        ? "cmd /c echo probe>helper.py"
+        : "printf probe > helper.py";
+    const orchestrator = new AgentOrchestrator({
+      model: {
+        label: "shell-effect-e2e",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: helperCommand },
+              }),
+            };
+          }
+          return {
+            text: JSON.stringify({
+              action: "final_answer",
+              summary: "The prohibited helper write was rejected.",
+            }),
+          };
+        },
+      },
+      auxiliaryModel: new FakeLanguageModel(),
+      toolEffectPolicy: createSweCompareToolEffectPolicy({
+        workspaceRoot: root,
+        trackedFiles: new Set(["app.py"]),
+      }),
+      onEvent: (event) => events.push(event),
+    });
+    await orchestrator.run({
+      runId: "shell-effect-e2e",
+      goal: "Run the requested local check without creating helper files.",
+      workspaceRoot: root,
+      maxSteps: 4,
+    });
+    expect(existsSync(path.join(root, "helper.py"))).toBe(false);
+    const toolSummaries = events.flatMap((event) =>
+      event.event.type === "tool.result" ? [event.event.summary] : [],
+    );
+    expect(toolSummaries).toContainEqual(
+      expect.stringContaining(
+        "ToolEffectPolicy:prohibited_workspace_effect_recovered",
+      ),
+    );
   });
 
   test("Claude Code command freezes clean 1M max-effort mode", () => {
@@ -300,6 +573,25 @@ describe("SWE compare runner", () => {
     ).toEqual({
       valid: false,
       violations: ["upstream_network_git_access"],
+    });
+  });
+
+  test("invalidates an unrecovered Paw workspace-effect failure", () => {
+    expect(
+      auditPawTraceIntegrity([
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.run_shell",
+            ok: false,
+            summary:
+              "[ToolEffectPolicy:prohibited_workspace_effect_unrecovered] rollback failed",
+          },
+        },
+      ]),
+    ).toEqual({
+      valid: false,
+      violations: ["workspace_effect_policy_failure"],
     });
   });
 

@@ -98,6 +98,9 @@ export {
   type AutonomyProfileOptions,
 } from "./autonomy/index.js";
 export type {
+  ToolEffectPolicy,
+  ToolEffectPolicyDecision,
+  ToolEffectPolicyInput,
   ToolExecutionPolicy,
   ToolExecutionPolicyDecision,
   ToolExecutionPolicyInput,

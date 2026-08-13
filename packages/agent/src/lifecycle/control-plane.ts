@@ -4,6 +4,7 @@ const CONTROL_PLANE_CODES = new Set([
   "E_LOOP_POLICY",
   "E_CODING_PHASE",
   "E_TOOL_POLICY",
+  "E_TOOL_EFFECT_POLICY",
 ]);
 
 /**
@@ -13,6 +14,10 @@ const CONTROL_PLANE_CODES = new Set([
  */
 export function isControlPlaneToolResult(result: ToolRunResult): boolean {
   if (!result.payload || typeof result.payload !== "object") return false;
-  const code = (result.payload as Record<string, unknown>).code;
+  const payload = result.payload as Record<string, unknown>;
+  const code = payload.code;
+  if (code === "E_TOOL_EFFECT_POLICY" && payload.recovered === false) {
+    return false;
+  }
   return typeof code === "string" && CONTROL_PLANE_CODES.has(code);
 }

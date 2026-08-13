@@ -1079,6 +1079,45 @@ describe("AgentOrchestrator", () => {
     expect(blocked?.event.type).toBe("tool.result");
   });
 
+  test("trusted effect policy settles before result events and TaskState", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-effect-policy-"));
+    const events: RunEventEnvelope[] = [];
+    const phases: string[] = [];
+    const o = new AgentOrchestrator({
+      model: new FakeLanguageModel(),
+      toolEffectPolicy: {
+        appliesTo: ({ tool }) => tool === "workspace.write_file",
+        prepare: () => {
+          phases.push("prepare");
+          return "before";
+        },
+        settle: (_input, prepared) => {
+          phases.push(`settle:${prepared}`);
+          return {
+            allowed: false,
+            reason: "effect_rejected",
+            message: "Rejected after execution.",
+            recovered: true,
+          };
+        },
+      },
+      onEvent: (event) => events.push(event),
+    });
+    await o.run({
+      runId: "effect1",
+      goal: "write file 'effect.txt' 'xy'",
+      workspaceRoot: dir,
+      maxSteps: 4,
+    });
+    expect(phases).toEqual(["prepare", "settle:before"]);
+    const rejected = events.find(
+      (event) =>
+        event.event.type === "tool.result" &&
+        event.event.summary.includes("ToolEffectPolicy:effect_rejected"),
+    );
+    expect(rejected?.event.type).toBe("tool.result");
+  });
+
   test("external verification closes after a current harness failure and diff inspection", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-external-"));
     writeFileSync(path.join(dir, "product.py"), "value = 1\n", "utf8");

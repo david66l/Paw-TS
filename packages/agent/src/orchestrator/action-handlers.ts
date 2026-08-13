@@ -31,7 +31,10 @@ import type {
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { TaskPlanner } from "@paw/store";
-import type { ToolExecutionPolicy } from "../execution-policy.js";
+import type {
+  ToolEffectPolicy,
+  ToolExecutionPolicy,
+} from "../execution-policy.js";
 import {
   EMPTY_CODING_PHASE_STATE,
   advanceCodingPhase,
@@ -102,6 +105,7 @@ interface ActionHandlerContext {
   /** 并行子 Agent 的文件锁（仅子 Agent 注入） */
   readonly fileLock?: import("@paw/harness").FileLockLike;
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
+  readonly toolEffectPolicy?: ToolEffectPolicy;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -872,6 +876,7 @@ async function handleToolCalls(
       fileLock: opts.fileLock,
       artifactRegistry: ctx.artifactRegistry,
       toolExecutionPolicy: opts.toolExecutionPolicy,
+      toolEffectPolicy: opts.toolEffectPolicy,
     },
     {
       resolveToolApproval: opts.resolveToolApproval,

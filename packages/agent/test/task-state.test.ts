@@ -23,6 +23,21 @@ describe("TaskStateManager", () => {
     );
     expect(state.snapshot().filesRead).toEqual([]);
     expect(state.snapshot().pinnedFacts).toEqual([]);
+
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "python helper.py" },
+      },
+      {
+        ok: false,
+        summary: "effect rejected",
+        payload: { code: "E_TOOL_EFFECT_POLICY" },
+      },
+    );
+    expect(state.snapshot().commandsRun).toEqual([]);
+    expect(state.snapshot().pinnedFacts).toEqual([]);
   });
 
   test("records file and test tool facts", () => {
@@ -244,6 +259,71 @@ describe("TaskStateManager", () => {
     );
     expect(state.snapshot().mutationRevision).toBe(0);
     expect(state.snapshot().filesChanged).toEqual([]);
+  });
+
+  test("records a trusted shell workspace effect as a source mutation", () => {
+    const state = new TaskStateManager("fix bug");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "python rewrite.py" },
+      },
+      {
+        ok: true,
+        summary: "run_shell: exit 0",
+        payload: {
+          workspaceEffect: { changed: true, paths: ["src/a.py"] },
+        },
+      },
+    );
+    expect(state.snapshot().mutationRevision).toBe(1);
+    expect(state.snapshot().mutationShellCommandRevision).toBe(1);
+    expect(state.snapshot().filesChanged).toEqual(["src/a.py"]);
+  });
+
+  test("records a shell mutation even when the process exits unsuccessfully", () => {
+    const state = new TaskStateManager("fix bug");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "python rewrite_then_fail.py" },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 1",
+        payload: {
+          workspaceEffect: { changed: true, paths: ["src/a.py"] },
+        },
+      },
+    );
+    expect(state.snapshot().mutationRevision).toBe(1);
+    expect(state.snapshot().filesChanged).toEqual(["src/a.py"]);
+    expect(state.snapshot().pinnedFacts).toEqual([
+      "workspace.run_shell failed: run_shell: exit 1",
+    ]);
+  });
+
+  test("retains an unrecovered effect-policy failure as task evidence", () => {
+    const state = new TaskStateManager("fix bug");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "bad command" },
+      },
+      {
+        ok: false,
+        summary: "[ToolEffectPolicy:settle_failed] rollback failed",
+        payload: {
+          code: "E_TOOL_EFFECT_POLICY",
+          recovered: false,
+        },
+      },
+    );
+    expect(state.snapshot().commandsRun).toHaveLength(1);
+    expect(state.snapshot().pinnedFacts[0]).toContain("rollback failed");
   });
 
   test("retains one exact target after an edit anchor failure", () => {

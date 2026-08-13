@@ -35,7 +35,10 @@ import type {
 } from "@paw/harness";
 import { toolRequiresApproval } from "@paw/harness";
 import type { FileLockLike } from "@paw/harness";
-import type { ToolExecutionPolicy } from "../execution-policy.js";
+import type {
+  ToolEffectPolicy,
+  ToolExecutionPolicy,
+} from "../execution-policy.js";
 import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
 import type { TaskStateManager } from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
@@ -179,6 +182,8 @@ interface ToolExecutionContext {
   readonly artifactRegistry?: ArtifactRegistry;
   /** Trusted policy gate, evaluated before approval, checkpoint, or execution. */
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
+  /** Trusted before/after audit for effects not derivable from tool args. */
+  readonly toolEffectPolicy?: ToolEffectPolicy;
 }
 
 /** 审批上下文 */
@@ -268,6 +273,15 @@ export async function executeToolCalls(
     }),
   );
   const blockedByPolicy = policyBlocks.map(Boolean);
+  const effectPolicyApplies = calls.map((call) =>
+    toolCtx.toolEffectPolicy
+      ? (toolCtx.toolEffectPolicy.appliesTo?.({
+          tool: call.tool,
+          args: call.args,
+          workspaceRoot: toolCtx.workspaceRoot,
+        }) ?? true)
+      : false,
+  );
 
   // 步骤 1.5：并行子 Agent 的文件锁（仅当注入 fileLock，即子 Agent 场景）
   // 占用语义：先到先得，后来的等待，超时按冲突失败。
@@ -376,111 +390,184 @@ export async function executeToolCalls(
     return toolCtx.checkpointSeq.n;
   });
 
-  // 步骤 4：并行执行所有工具
+  // 步骤 4：执行工具。注入 effect policy 时必须串行，确保每个 before/after
+  // 快照只归因于一个工具；没有 effect policy 时保留原有并行语义。
   // 使用动态 import 避免循环依赖
   const { executeTool } = await import("@paw/harness");
-  const results = await Promise.all(
-    calls.map(async (call, i) => {
-      // 被策略阻止 → 返回 block 结果
-      if (blockedByPolicy[i]) {
-        const block = policyBlocks[i]!;
-        return {
-          ok: false,
-          summary: `[ToolPolicy:${block.reason}] ${block.message}`,
-          payload: {
-            blocked: true,
-            code: "E_TOOL_POLICY",
-            reason: block.reason,
-            message: block.message,
-          },
-        };
-      }
-      // 文件锁冲突 → 返回冲突结果（模型可改派/重试）
-      const conflictPath = lockConflict[i];
-      if (conflictPath !== undefined) {
-        return {
-          ok: false,
-          summary: `File lock conflict: ${conflictPath} is being written by another agent; try a different file or retry later`,
-          payload: { conflict: true, path: conflictPath },
-        };
-      }
-      // 被用户拒绝 → 返回 deny 结果
-      if (!approvals[i]) {
-        return {
-          ok: false,
-          summary: "tool execution denied by user",
-          payload: { denied: true },
-        };
-      }
-
-      // 保存 checkpoint（修改性工具）
-      const cpNum = checkpointNums[i];
-      if (cpNum !== undefined) {
-        saveCheckpoint(
-          toolCtx.workspaceRoot,
-          toolCtx.runId,
-          cpNum,
-          call.tool,
-          call.args,
-        );
-      }
-
-      // 执行工具
-      return executeTool(
-        {
-          workspaceRoot: toolCtx.workspaceRoot,
-          mcp: toolCtx.mcp,
-          todoStore: toolCtx.todoStore,
-          subAgentLauncher: toolCtx.subAgentLauncher,
-          skillRegistry: toolCtx.skillRegistry,
-          watcher: toolCtx.watcher,
-          abortSignal: toolCtx.abortSignal,
-          parentRunId: toolCtx.runId,
-          // 构建子 Agent 的共享上下文（用于子 Agent 的工具调用）
-          buildSubAgentSharedContext: toolCtx.parentContextManager
-            ? ({ goal, args }) => {
-                const summarizer = new DefaultContextSummarizer();
-                return summarizer.summarizeForCall(
-                  toolCtx.parentContextManager!,
-                  {
-                    type: "tool_call",
-                    tool: SUB_AGENT_TOOL_NAME,
-                    args: { goal, ...args },
-                  },
-                );
-              }
-            : undefined,
-          // Shell 工具实时输出回调（流式推送到 TUI）
-          onShellChunk: (tool, chunk, isStderr) =>
-            toolCtx.emit({
-              type: "tool.result.chunk",
-              tool,
-              chunk,
-              isStderr,
-            }),
-          ...(toolCtx.shellSandbox
-            ? { shellSandbox: toolCtx.shellSandbox }
-            : {}),
-          // Unified approval bus: tool gate approval covers shell "ask"
-          ...(approvals[i] && call.tool === "workspace.run_shell"
-            ? { shellCommandPreApproved: true }
-            : {}),
-          ...(toolCtx.memoryRuntime
-            ? { memoryRuntime: toolCtx.memoryRuntime }
-            : {}),
-          ...(toolCtx.memoryTaskId
-            ? { memoryTaskId: toolCtx.memoryTaskId }
-            : {}),
-          ...(toolCtx.createAgent ? { createAgent: toolCtx.createAgent } : {}),
-          ...(toolCtx.artifactRegistry
-            ? { artifactRegistry: toolCtx.artifactRegistry }
-            : {}),
+  const executeOne = async (
+    call: AgentToolCallAction,
+    i: number,
+  ): Promise<ToolRunResult> => {
+    // 被策略阻止 → 返回 block 结果
+    if (blockedByPolicy[i]) {
+      const block = policyBlocks[i]!;
+      return {
+        ok: false,
+        summary: `[ToolPolicy:${block.reason}] ${block.message}`,
+        payload: {
+          blocked: true,
+          code: "E_TOOL_POLICY",
+          reason: block.reason,
+          message: block.message,
         },
+      };
+    }
+    // 文件锁冲突 → 返回冲突结果（模型可改派/重试）
+    const conflictPath = lockConflict[i];
+    if (conflictPath !== undefined) {
+      return {
+        ok: false,
+        summary: `File lock conflict: ${conflictPath} is being written by another agent; try a different file or retry later`,
+        payload: { conflict: true, path: conflictPath },
+      };
+    }
+    // 被用户拒绝 → 返回 deny 结果
+    if (!approvals[i]) {
+      return {
+        ok: false,
+        summary: "tool execution denied by user",
+        payload: { denied: true },
+      };
+    }
+
+    // 保存 checkpoint（修改性工具）
+    const cpNum = checkpointNums[i];
+    if (cpNum !== undefined) {
+      saveCheckpoint(
+        toolCtx.workspaceRoot,
+        toolCtx.runId,
+        cpNum,
         call.tool,
         call.args,
       );
-    }),
-  );
+    }
+
+    let prepared: unknown;
+    if (toolCtx.toolEffectPolicy && effectPolicyApplies[i]) {
+      try {
+        prepared = await toolCtx.toolEffectPolicy.prepare({
+          tool: call.tool,
+          args: call.args,
+          workspaceRoot: toolCtx.workspaceRoot,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          summary: `[ToolEffectPolicy:prepare_failed] ${message}`,
+          payload: {
+            blocked: true,
+            code: "E_TOOL_EFFECT_POLICY",
+            reason: "prepare_failed",
+            message,
+            executed: false,
+            recovered: true,
+          },
+        };
+      }
+    }
+
+    const rawResult = await executeTool(
+      {
+        workspaceRoot: toolCtx.workspaceRoot,
+        mcp: toolCtx.mcp,
+        todoStore: toolCtx.todoStore,
+        subAgentLauncher: toolCtx.subAgentLauncher,
+        skillRegistry: toolCtx.skillRegistry,
+        watcher: toolCtx.watcher,
+        abortSignal: toolCtx.abortSignal,
+        parentRunId: toolCtx.runId,
+        // 构建子 Agent 的共享上下文（用于子 Agent 的工具调用）
+        buildSubAgentSharedContext: toolCtx.parentContextManager
+          ? ({ goal, args }) => {
+              const summarizer = new DefaultContextSummarizer();
+              return summarizer.summarizeForCall(
+                toolCtx.parentContextManager!,
+                {
+                  type: "tool_call",
+                  tool: SUB_AGENT_TOOL_NAME,
+                  args: { goal, ...args },
+                },
+              );
+            }
+          : undefined,
+        // Shell 工具实时输出回调（流式推送到 TUI）
+        onShellChunk: (tool, chunk, isStderr) =>
+          toolCtx.emit({
+            type: "tool.result.chunk",
+            tool,
+            chunk,
+            isStderr,
+          }),
+        ...(toolCtx.shellSandbox ? { shellSandbox: toolCtx.shellSandbox } : {}),
+        // Unified approval bus: tool gate approval covers shell "ask"
+        ...(approvals[i] && call.tool === "workspace.run_shell"
+          ? { shellCommandPreApproved: true }
+          : {}),
+        ...(toolCtx.memoryRuntime
+          ? { memoryRuntime: toolCtx.memoryRuntime }
+          : {}),
+        ...(toolCtx.memoryTaskId ? { memoryTaskId: toolCtx.memoryTaskId } : {}),
+        ...(toolCtx.createAgent ? { createAgent: toolCtx.createAgent } : {}),
+        ...(toolCtx.artifactRegistry
+          ? { artifactRegistry: toolCtx.artifactRegistry }
+          : {}),
+      },
+      call.tool,
+      call.args,
+    );
+
+    if (!toolCtx.toolEffectPolicy || !effectPolicyApplies[i]) return rawResult;
+    try {
+      const decision = await toolCtx.toolEffectPolicy.settle(
+        {
+          tool: call.tool,
+          args: call.args,
+          workspaceRoot: toolCtx.workspaceRoot,
+          result: rawResult,
+        },
+        prepared,
+      );
+      if (decision.allowed) return decision.result ?? rawResult;
+      return {
+        ok: false,
+        summary: `[ToolEffectPolicy:${decision.reason}] ${decision.message}`,
+        payload: {
+          rejected: true,
+          code: "E_TOOL_EFFECT_POLICY",
+          reason: decision.reason,
+          message: decision.message,
+          executed: true,
+          recovered: decision.recovered,
+          originalOk: rawResult.ok,
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        summary: `[ToolEffectPolicy:settle_failed] ${message}`,
+        payload: {
+          rejected: true,
+          code: "E_TOOL_EFFECT_POLICY",
+          reason: "settle_failed",
+          message,
+          executed: true,
+          recovered: false,
+          originalOk: rawResult.ok,
+        },
+      };
+    }
+  };
+
+  const results: ToolRunResult[] = [];
+  if (effectPolicyApplies.some(Boolean)) {
+    for (const [i, call] of calls.entries()) {
+      results.push(await executeOne(call, i));
+    }
+  } else {
+    results.push(...(await Promise.all(calls.map(executeOne))));
+  }
 
   return results;
 }

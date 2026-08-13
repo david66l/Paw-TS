@@ -18,6 +18,8 @@ export {
   allowSweCompareToolCall,
   claudeCodeArgs,
   collectTraceMutationHints,
+  createSweCompareToolEffectPolicy,
+  createSweCompareToolExecutionPolicy,
   extractClaudePatchFromTrace,
   parseClaudeStream,
   recoverClaudeResultPatch,

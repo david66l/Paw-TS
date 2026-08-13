@@ -18,7 +18,10 @@ import type { LanguageModel } from "@paw/models";
 import type { FileLockLike } from "@paw/harness";
 import { materializeAgent } from "./agents/factory.js";
 import type { AgentRegistry } from "./agents/registry.js";
-import type { ToolExecutionPolicy } from "./execution-policy.js";
+import type {
+  ToolEffectPolicy,
+  ToolExecutionPolicy,
+} from "./execution-policy.js";
 import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
 import { AgentOrchestrator, type ToolApprovalInput } from "./orchestrator.js";
 import { buildMinimalSharedContext } from "./orchestrator/agent-args.js";
@@ -44,6 +47,7 @@ export interface DefaultSubAgentLauncherOptions {
   /** 工具审批策略（与根 Orchestrator 同一语义） */
   readonly approvalPolicy?: (tool: string) => boolean | undefined;
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
+  readonly toolEffectPolicy?: ToolEffectPolicy;
   readonly verificationPolicy?: VerificationPolicy;
 }
 
@@ -86,6 +90,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
   private readonly resolveToolApproval?: DefaultSubAgentLauncherOptions["resolveToolApproval"];
   private readonly approvalPolicy?: DefaultSubAgentLauncherOptions["approvalPolicy"];
   private readonly toolExecutionPolicy?: DefaultSubAgentLauncherOptions["toolExecutionPolicy"];
+  private readonly toolEffectPolicy?: DefaultSubAgentLauncherOptions["toolEffectPolicy"];
   private readonly verificationPolicy?: DefaultSubAgentLauncherOptions["verificationPolicy"];
 
   constructor(opts: DefaultSubAgentLauncherOptions) {
@@ -99,6 +104,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
     this.resolveToolApproval = opts.resolveToolApproval;
     this.approvalPolicy = opts.approvalPolicy;
     this.toolExecutionPolicy = opts.toolExecutionPolicy;
+    this.toolEffectPolicy = opts.toolEffectPolicy;
     this.verificationPolicy = opts.verificationPolicy;
   }
 
@@ -127,6 +133,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
       resolveToolApproval: this.resolveToolApproval,
       approvalPolicy: this.approvalPolicy,
       toolExecutionPolicy: this.toolExecutionPolicy,
+      toolEffectPolicy: this.toolEffectPolicy,
       verificationPolicy: this.verificationPolicy,
       fileLock: extras?.fileLock,
       contextManager: extras?.contextManager,

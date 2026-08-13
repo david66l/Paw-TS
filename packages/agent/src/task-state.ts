@@ -234,6 +234,19 @@ export class TaskStateManager {
       const cwd = stringArg(args.cwd);
       if (command) {
         shellCommandRevision += 1;
+        const effect = isRecord(result.payload)
+          ? result.payload.workspaceEffect
+          : undefined;
+        if (isRecord(effect) && effect.changed === true) {
+          const paths = Array.isArray(effect.paths) ? effect.paths : [];
+          for (const changedPath of paths) {
+            if (typeof changedPath === "string")
+              pushUnique(filesChanged, changedPath);
+          }
+          mutationRevision += 1;
+          mutationShellCommandRevision = shellCommandRevision;
+          editRecoveryPath = undefined;
+        }
         commandsRun.push({
           command,
           ...(cwd ? { cwd } : {}),

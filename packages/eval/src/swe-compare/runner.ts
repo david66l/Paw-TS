@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import {
@@ -7,7 +13,7 @@ import {
   createRunOrchestrator,
   resolveLifecycleBudget,
 } from "@paw/agent";
-import type { ToolExecutionPolicy } from "@paw/agent";
+import type { ToolEffectPolicy, ToolExecutionPolicy } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import { createDefaultLanguageModel } from "@paw/models";
 import { parsePatch } from "diff";
@@ -284,6 +290,307 @@ export function createSweCompareToolExecutionPolicy(input: {
   };
 }
 
+interface SweWorkspaceEffectSnapshot {
+  readonly head: string;
+  readonly trackedPatch: string;
+  readonly untracked: ReadonlyMap<string, Buffer>;
+}
+
+function gitNullList(workspaceRoot: string, args: readonly string[]): string[] {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: workspaceRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed: ${new TextDecoder().decode(result.stderr).trim()}`,
+    );
+  }
+  return new TextDecoder()
+    .decode(result.stdout)
+    .split("\0")
+    .filter(Boolean)
+    .map((file) => file.replace(/\\/g, "/"));
+}
+
+function gitText(workspaceRoot: string, args: readonly string[]): string {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: workspaceRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed: ${new TextDecoder().decode(result.stderr).trim()}`,
+    );
+  }
+  return new TextDecoder().decode(result.stdout).trim();
+}
+
+function normalizeFrozenPath(file: string): string {
+  const normalized = file.replace(/\\/g, "/");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isEphemeralGeneratedPath(file: string): boolean {
+  const parts = file.replace(/\\/g, "/").toLowerCase().split("/");
+  return parts.some((part) =>
+    [
+      "__pycache__",
+      ".pytest_cache",
+      ".mypy_cache",
+      ".ruff_cache",
+      ".coverage",
+    ].includes(part),
+  );
+}
+
+function snapshotUntrackedFiles(
+  workspaceRoot: string,
+): ReadonlyMap<string, Buffer> {
+  const files = gitNullList(workspaceRoot, ["ls-files", "--others", "-z"]);
+  const snapshot = new Map<string, Buffer>();
+  for (const file of files) {
+    const relative = normalizePolicyPath(workspaceRoot, file);
+    if (!relative) throw new Error(`unsafe untracked baseline path: ${file}`);
+    const absolute = path.resolve(workspaceRoot, relative);
+    if (!existsSync(absolute)) continue;
+    snapshot.set(normalizeFrozenPath(file), readFileSync(absolute));
+  }
+  return snapshot;
+}
+
+function restoreUntrackedBaseline(
+  workspaceRoot: string,
+  before: ReadonlyMap<string, Buffer>,
+): string[] {
+  const changed: string[] = [];
+  for (const [file, content] of before) {
+    const relative = normalizePolicyPath(workspaceRoot, file);
+    if (!relative) throw new Error(`unsafe untracked recovery path: ${file}`);
+    const absolute = path.resolve(workspaceRoot, relative);
+    const current = existsSync(absolute) ? readFileSync(absolute) : undefined;
+    if (current?.equals(content)) continue;
+    changed.push(file);
+    if (existsSync(absolute))
+      rmSync(absolute, { recursive: true, force: true });
+    mkdirSync(path.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, content);
+  }
+  return changed;
+}
+
+function gitPatch(workspaceRoot: string): string {
+  const result = Bun.spawnSync(["git", "diff", "--binary", "HEAD"], {
+    cwd: workspaceRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git diff --binary HEAD failed: ${new TextDecoder().decode(result.stderr).trim()}`,
+    );
+  }
+  return new TextDecoder().decode(result.stdout);
+}
+
+function restoreTrackedSnapshot(
+  workspaceRoot: string,
+  before: SweWorkspaceEffectSnapshot,
+): void {
+  gitText(workspaceRoot, ["reset", "--hard", before.head]);
+  if (!before.trackedPatch) return;
+  const result = Bun.spawnSync(["git", "apply", "--binary", "-"], {
+    cwd: workspaceRoot,
+    stdin: Buffer.from(before.trackedPatch, "utf8"),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git apply baseline failed: ${new TextDecoder().decode(result.stderr).trim()}`,
+    );
+  }
+}
+
+function withWorkspaceEffect(
+  result: import("@paw/harness").ToolRunResult,
+  paths: readonly string[],
+): import("@paw/harness").ToolRunResult {
+  const payload =
+    result.payload && typeof result.payload === "object"
+      ? (result.payload as Record<string, unknown>)
+      : { originalPayload: result.payload };
+  return {
+    ...result,
+    payload: {
+      ...payload,
+      workspaceEffect: { changed: true, paths },
+    },
+  };
+}
+
+/**
+ * Audit native shell effects in the isolated SWE worktree.
+ *
+ * This is deliberately separate from command-text policy. It restores exact
+ * prohibited tracked/new paths after the process exits, before the result
+ * reaches agent state. Known test caches are cleaned without turning an
+ * otherwise-valid verification command into a failure. It does not claim to
+ * confine writes outside `workspaceRoot`; native
+ * process/filesystem isolation remains the stronger production boundary.
+ */
+export function createSweCompareToolEffectPolicy(input: {
+  readonly workspaceRoot: string;
+  readonly trackedFiles: ReadonlySet<string>;
+}): ToolEffectPolicy {
+  const frozenTracked = new Set(
+    [...input.trackedFiles].map(normalizeFrozenPath),
+  );
+  const snapshot = (): SweWorkspaceEffectSnapshot => {
+    const dirtyTests = gitNullList(input.workspaceRoot, [
+      "diff",
+      "HEAD",
+      "--name-only",
+      "-z",
+    ]).filter(isTestMutationPath);
+    if (dirtyTests.length > 0) {
+      throw new Error(
+        `cannot audit shell from a dirty test baseline: ${dirtyTests.join(", ")}`,
+      );
+    }
+    return {
+      head: gitText(input.workspaceRoot, ["rev-parse", "HEAD"]),
+      trackedPatch: gitPatch(input.workspaceRoot),
+      untracked: snapshotUntrackedFiles(input.workspaceRoot),
+    };
+  };
+
+  return {
+    appliesTo: ({ tool }) => tool === "workspace.run_shell",
+    prepare: () => snapshot(),
+    settle: (effect, prepared) => {
+      const before = prepared as SweWorkspaceEffectSnapshot;
+      const reasons: string[] = [];
+      let recovered = true;
+      try {
+        const currentHead = gitText(input.workspaceRoot, ["rev-parse", "HEAD"]);
+        if (currentHead !== before.head) {
+          reasons.push("history mutation");
+          // Restore first: files introduced by a new commit become untracked
+          // only after HEAD returns to the frozen baseline.
+          restoreTrackedSnapshot(input.workspaceRoot, before);
+        }
+
+        const staged = gitNullList(input.workspaceRoot, [
+          "diff",
+          "--cached",
+          "--name-only",
+          "-z",
+        ]);
+        if (staged.length > 0) {
+          reasons.push(`index mutation: ${staged.join(", ")}`);
+          gitText(input.workspaceRoot, [
+            "reset",
+            "--quiet",
+            "HEAD",
+            "--",
+            ...staged,
+          ]);
+        }
+
+        const forbiddenTracked = gitNullList(input.workspaceRoot, [
+          "diff",
+          "HEAD",
+          "--name-only",
+          "-z",
+        ]).filter(isTestMutationPath);
+        if (forbiddenTracked.length > 0) {
+          reasons.push(`test mutation: ${forbiddenTracked.join(", ")}`);
+          gitText(input.workspaceRoot, [
+            "restore",
+            "--source=HEAD",
+            "--staged",
+            "--worktree",
+            "--",
+            ...forbiddenTracked,
+          ]);
+        }
+
+        const afterUntracked = gitNullList(input.workspaceRoot, [
+          "ls-files",
+          "--others",
+          "-z",
+        ]);
+        const changedBaselineFiles = restoreUntrackedBaseline(
+          input.workspaceRoot,
+          before.untracked,
+        );
+        if (changedBaselineFiles.length > 0) {
+          reasons.push(
+            `untracked baseline mutation: ${changedBaselineFiles.join(", ")}`,
+          );
+        }
+        const newFiles = afterUntracked.filter(
+          (file) =>
+            !before.untracked.has(normalizeFrozenPath(file)) &&
+            !frozenTracked.has(normalizeFrozenPath(file)),
+        );
+        if (newFiles.length > 0) {
+          const prohibitedNewFiles = newFiles.filter(
+            (file) => !isEphemeralGeneratedPath(file),
+          );
+          if (prohibitedNewFiles.length > 0) {
+            reasons.push(`new file: ${prohibitedNewFiles.join(", ")}`);
+          }
+          for (const file of newFiles) {
+            const relative = normalizePolicyPath(input.workspaceRoot, file);
+            if (!relative) throw new Error(`unsafe recovery path: ${file}`);
+            const absolute = path.resolve(input.workspaceRoot, relative);
+            if (existsSync(absolute))
+              rmSync(absolute, { recursive: true, force: true });
+          }
+        }
+        if (reasons.length > 0 && currentHead === before.head) {
+          restoreTrackedSnapshot(input.workspaceRoot, before);
+        }
+      } catch (error) {
+        recovered = false;
+        const message = error instanceof Error ? error.message : String(error);
+        reasons.push(`recovery failed: ${message}`);
+      }
+
+      if (reasons.length === 0) {
+        const afterPatch = gitPatch(input.workspaceRoot);
+        if (afterPatch === before.trackedPatch) return { allowed: true };
+        const changedPaths = gitNullList(input.workspaceRoot, [
+          "diff",
+          "HEAD",
+          "--name-only",
+          "-z",
+        ]).filter((file) => !isTestMutationPath(file));
+        return {
+          allowed: true,
+          result: withWorkspaceEffect(effect.result, changedPaths),
+        };
+      }
+      return {
+        allowed: false,
+        reason: recovered
+          ? "prohibited_workspace_effect_recovered"
+          : "prohibited_workspace_effect_unrecovered",
+        message: `Shell produced prohibited workspace effects (${reasons.join("; ")}). ${
+          recovered
+            ? "They were restored; edit only existing tracked product source files."
+            : "Recovery was incomplete; stop and inspect the isolated workspace."
+        }`,
+        recovered,
+      };
+    },
+  };
+}
+
 function trackedFiles(workspaceRoot: string): ReadonlySet<string> {
   const result = Bun.spawnSync(["git", "ls-files", "-z"], {
     cwd: workspaceRoot,
@@ -434,6 +741,10 @@ async function runPaw(opts: {
     approvalPolicy: (tool) => tool === "workspace.run_shell",
     resolveToolApproval: async (input) => allowSweCompareToolCall(input),
     toolExecutionPolicy: createSweCompareToolExecutionPolicy({
+      workspaceRoot: opts.workspaceRoot,
+      trackedFiles: trackedFiles(opts.workspaceRoot),
+    }),
+    toolEffectPolicy: createSweCompareToolEffectPolicy({
       workspaceRoot: opts.workspaceRoot,
       trackedFiles: trackedFiles(opts.workspaceRoot),
     }),
@@ -1027,7 +1338,25 @@ export function auditClaudeTraceIntegrity(
 export function auditPawTraceIntegrity(
   trace: readonly unknown[],
 ): SweCompareIntegrityAudit {
-  return auditShellCommands(shellCommandsFromPawTrace(trace));
+  const shellAudit = auditShellCommands(shellCommandsFromPawTrace(trace));
+  const violations = [...shellAudit.violations];
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const event = (item as Record<string, unknown>).event;
+    if (!event || typeof event !== "object" || Array.isArray(event)) continue;
+    const record = event as Record<string, unknown>;
+    if (
+      record.type === "tool.result" &&
+      typeof record.summary === "string" &&
+      /\[ToolEffectPolicy:(?:settle_failed|prohibited_workspace_effect_unrecovered)\]/.test(
+        record.summary,
+      )
+    ) {
+      violations.push("workspace_effect_policy_failure");
+    }
+  }
+  const unique = [...new Set(violations)];
+  return { valid: unique.length === 0, violations: unique };
 }
 
 function auditShellCommands(

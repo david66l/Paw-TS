@@ -34,7 +34,10 @@ import {
   type CollaborationMode,
   resolveCollaborationMode,
 } from "./collaboration-mode.js";
-import type { ToolExecutionPolicy } from "./execution-policy.js";
+import type {
+  ToolEffectPolicy,
+  ToolExecutionPolicy,
+} from "./execution-policy.js";
 import {
   type LifecycleBudget,
   resolveLifecycleBudget,
@@ -55,6 +58,7 @@ export interface RunOrchestratorOptions {
   readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
   readonly approvalPolicy?: (tool: string) => boolean | undefined;
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
+  readonly toolEffectPolicy?: ToolEffectPolicy;
   readonly verificationPolicy?: VerificationPolicy;
   /**
    * Autonomy profile (default headless for CLI/eval long-runs).
@@ -230,6 +234,7 @@ export function createRunOrchestrator(
     resolveToolApproval,
     approvalPolicy,
     toolExecutionPolicy: opts.toolExecutionPolicy,
+    toolEffectPolicy: opts.toolEffectPolicy,
     verificationPolicy: opts.verificationPolicy,
   });
 
@@ -299,6 +304,7 @@ export function createRunOrchestrator(
     resolveToolApproval,
     approvalPolicy,
     toolExecutionPolicy: opts.toolExecutionPolicy,
+    toolEffectPolicy: opts.toolEffectPolicy,
     verificationPolicy: opts.verificationPolicy,
     subAgentLauncher: collab.canSpawn ? subAgentLauncher : undefined,
     appStateStore,
