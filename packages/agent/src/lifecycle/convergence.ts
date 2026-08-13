@@ -1,6 +1,6 @@
 import type { AgentToolCallAction } from "@paw/core";
 import type { TaskState } from "../task-state.js";
-import { isVerificationCommand } from "../task-state.js";
+import { isVerificationCommand, verificationOutcome } from "../task-state.js";
 
 const SOURCE_MUTATION_TOOLS = new Set([
   "workspace.write_file",
@@ -23,6 +23,14 @@ function isInvestigationCall(call: AgentToolCallAction): boolean {
   const command =
     typeof call.args.command === "string" ? call.args.command : "";
   return !isVerificationCommand(command) && !isDiffInspection(call);
+}
+
+function shellCallsSince(
+  state: TaskState,
+  revision: number | undefined,
+): number {
+  const current = state.shellCommandRevision ?? state.commandsRun.length;
+  return Math.max(0, current - (revision ?? current));
 }
 
 export function convergenceWindow(maxSteps: number): number {
@@ -58,9 +66,7 @@ export function convergenceEvidenceKey(state: TaskState): string {
     ? "missing"
     : latest.mutationRevision !== revision
       ? "stale"
-      : latest.passed
-        ? "passed"
-        : "failed";
+      : verificationOutcome(latest);
   const diff =
     (state.diffInspectedRevision ?? 0) === revision ? "current" : "stale";
   return `r${revision}:${verification}:${diff}`;
@@ -87,18 +93,48 @@ export function convergenceToolBlockReason(
   ) {
     return "[LoopPolicy:implementation_required] The task is past its midpoint with substantial investigation but no recorded source change. This additional investigation is deferred. Make the smallest plausible product-source edit from the evidence already gathered, or run an existing narrow test that directly discriminates the candidate.";
   }
-  if (revision === 0 || turn <= maxSteps - convergenceWindow(maxSteps)) {
-    return null;
-  }
+  if (revision === 0) return null;
   const latest = state.testResults.at(-1);
   const currentVerification = latest?.mutationRevision === revision;
-  if ((!currentVerification || !latest.passed) && isInvestigationCall(call)) {
-    return latest && currentVerification
-      ? "[LoopPolicy:fix_current_failure] The current source revision has a failing verification. Broad investigation is deferred; use that exact failure to edit the implementation or rerun a narrower diagnostic test."
-      : "[LoopPolicy:verify_current_revision] The current source revision has no fresh verification. Broad investigation is deferred; run the narrowest existing repository test or direct acceptance command now.";
+  if (!currentVerification && isInvestigationCall(call)) {
+    const directChecks = shellCallsSince(
+      state,
+      state.mutationShellCommandRevision,
+    );
+    if (call.tool === "workspace.run_shell" && directChecks < 2) return null;
+    return "[LoopPolicy:verify_current_revision] The current source revision has no fresh verification. Broad investigation is deferred; run the narrowest existing repository test or direct acceptance command now.";
   }
   if (
-    latest?.passed &&
+    latest &&
+    currentVerification &&
+    verificationOutcome(latest) === "code_failed"
+  ) {
+    if (isInvestigationCall(call)) {
+      const diagnosticCalls = shellCallsSince(
+        state,
+        latest.shellCommandRevision,
+      );
+      if (call.tool === "workspace.run_shell" && diagnosticCalls < 2) {
+        return null;
+      }
+      return "[LoopPolicy:fix_current_failure] The current source revision has a failing code verification. Broad investigation is deferred; use the retained failure evidence to edit the implementation or rerun a narrower diagnostic test.";
+    }
+    return null;
+  }
+  if (
+    latest &&
+    currentVerification &&
+    verificationOutcome(latest) === "harness_failed" &&
+    isInvestigationCall(call)
+  ) {
+    const recoveryCalls = shellCallsSince(state, latest.shellCommandRevision);
+    if (call.tool === "workspace.run_shell" && recoveryCalls < 4) return null;
+    return "[LoopPolicy:recover_verification_harness] The last verification did not execute because its harness or environment failed; this is not evidence that the code is wrong. Repository browsing is deferred. Repair the local test invocation/environment with a bounded shell action, then rerun verification; after four recovery commands, edit or retry a concrete acceptance command instead of continuing environment exploration.";
+  }
+  if (turn <= maxSteps - convergenceWindow(maxSteps)) return null;
+  if (
+    latest &&
+    verificationOutcome(latest) === "passed" &&
     currentVerification &&
     (state.diffInspectedRevision ?? 0) !== revision &&
     !isDiffInspection(call) &&
@@ -107,7 +143,8 @@ export function convergenceToolBlockReason(
     return "[LoopPolicy:inspect_final_diff] Verification passes for the current source revision. Additional investigation is deferred until you inspect the final diff for scope and accidental changes.";
   }
   if (
-    latest?.passed &&
+    latest &&
+    verificationOutcome(latest) === "passed" &&
     currentVerification &&
     (state.diffInspectedRevision ?? 0) === revision &&
     isInvestigationCall(call)
@@ -140,7 +177,10 @@ export function convergenceGuidance(
   if (!currentVerification) {
     next =
       "Run the narrowest high-signal acceptance or regression test against the current source revision. Prefer an existing repository test or a direct command; do not build and debug a separate helper harness. Do not rely on a test that predates the latest edit.";
-  } else if (!latest.passed) {
+  } else if (verificationOutcome(latest) === "harness_failed") {
+    next =
+      "The last verification did not execute because the harness or environment failed. Repair the invocation with a bounded diagnostic, then rerun it; do not treat infrastructure failure as a code assertion failure.";
+  } else if (verificationOutcome(latest) === "code_failed") {
     next =
       "Use the exact current test failure to revise the implementation, then rerun that test. Avoid reopening broad repository exploration.";
   } else if ((state.diffInspectedRevision ?? 0) !== revision) {

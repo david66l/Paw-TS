@@ -184,7 +184,32 @@ describe("VerificationGate", () => {
       }),
     );
     expect(v.ok).toBe(false);
-    if (!v.ok) expect(v.nudge).toContain("latest verification failed");
+    if (!v.ok) expect(v.nudge).toContain("latest code verification failed");
+  });
+
+  test("harness failure blocks completion without blaming product code", () => {
+    const v = checkVerification(
+      baseState({
+        filesChanged: ["x.ts"],
+        mutationRevision: 1,
+        testResults: [
+          {
+            command: "pytest",
+            passed: false,
+            outcome: "harness_failed",
+            summary: "exit 1",
+            evidence: "Error importing plugin",
+            mutationRevision: 1,
+          },
+        ],
+      }),
+    );
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      expect(v.nudge).toContain("did not execute");
+      expect(v.nudge).toContain("Repair or replace the verification command");
+      expect(v.nudge).not.toContain("Fix the implementation failure");
+    }
   });
 });
 

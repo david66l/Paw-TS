@@ -438,6 +438,73 @@ describe("AgentOrchestrator", () => {
     expect(readFileSync(path.join(dir, "fix.txt"), "utf8")).toBe("implemented");
   });
 
+  test("loop policy requires fresh verification immediately after an edit", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-post-edit-verify-"));
+    writeFileSync(path.join(dir, "source.txt"), "before", "utf8");
+    writeFileSync(path.join(dir, "smoke-test.js"), "process.exit(0);", "utf8");
+    let calls = 0;
+    const events: RunEventEnvelope[] = [];
+    const o = new AgentOrchestrator({
+      model: {
+        label: "post-edit-verification",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.edit_file",
+                args: {
+                  path: "source.txt",
+                  old_string: "before",
+                  new_string: "after",
+                },
+              }),
+            };
+          }
+          if (calls === 2) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.read_file",
+                args: { path: "source.txt" },
+              }),
+            };
+          }
+          if (calls === 3) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: "node smoke-test.js" },
+              }),
+            };
+          }
+          return {
+            text: '{"action":"final_answer","summary":"Implemented and verified."}',
+          };
+        },
+      },
+      retrySleep: async () => {},
+      onEvent: (event) => events.push(event),
+    });
+
+    const result = await o.run({
+      runId: "post-edit-verification",
+      goal: "Fix source.txt",
+      workspaceRoot: dir,
+      maxSteps: 8,
+    });
+
+    expect(
+      events.some(
+        (event) =>
+          event.event.type === "tool.result" &&
+          event.event.summary.includes("LoopPolicy:verify_current_revision"),
+      ),
+    ).toBe(true);
+    expect(result.status).toBe("completed");
+    expect(calls).toBe(4);
+    expect(readFileSync(path.join(dir, "source.txt"), "utf8")).toBe("after");
+  });
+
   test("run completes without tool when model returns plain text", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({

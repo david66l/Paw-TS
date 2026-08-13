@@ -71,6 +71,8 @@ describe("TaskStateManager", () => {
     expect(snapshot.filesRead).toContain("src/a.ts");
     expect(snapshot.filesChanged).toContain("src/a.ts");
     expect(snapshot.commandsRun).toHaveLength(2);
+    expect(snapshot.shellCommandRevision).toBe(2);
+    expect(snapshot.mutationShellCommandRevision).toBe(0);
     expect(snapshot.testResults[0]?.passed).toBe(true);
     expect(snapshot.pinnedFacts[0]).toContain("workspace.run_shell failed");
 
@@ -116,5 +118,88 @@ describe("TaskStateManager", () => {
     ]);
     expect(isVerificationCommand("py -3.10 -m pytest tests -q")).toBe(true);
     expect(isVerificationCommand("pip install pytest")).toBe(false);
+  });
+
+  test("separates verification harness failures from code failures", () => {
+    const harness = new TaskStateManager("fix bug");
+    harness.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "a.py" },
+      },
+      { ok: true, summary: "edited", payload: {} },
+    );
+    harness.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "pytest tests/test_a.py -q" },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 1",
+        payload: {
+          exit_code: 1,
+          stderr:
+            "Error importing plugin x: ModuleNotFoundError: No module named 'project' token=secret-value",
+        },
+      },
+    );
+    const harnessResult = harness.snapshot().testResults.at(-1);
+    expect(harnessResult?.outcome).toBe("harness_failed");
+    expect(harnessResult?.evidence).toContain("Error importing plugin");
+    expect(harnessResult?.evidence).not.toContain("secret-value");
+    expect(formatCompletionReadiness(harness.snapshot())[1]).toContain(
+      "harness failed",
+    );
+
+    const code = new TaskStateManager("fix bug");
+    code.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "a.py" },
+      },
+      { ok: true, summary: "edited", payload: {} },
+    );
+    code.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "pytest tests/test_a.py -q" },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 1",
+        payload: { exit_code: 1, stdout: "FAILED test_value - assert 1 == 2" },
+      },
+    );
+    expect(code.snapshot().testResults.at(-1)?.outcome).toBe("code_failed");
+  });
+
+  test("keeps a monotonic shell revision when retained command history rolls over", () => {
+    const state = new TaskStateManager("fix bug");
+    for (let index = 0; index < 25; index += 1) {
+      state.recordToolResult(
+        {
+          type: "tool_call",
+          tool: "workspace.run_shell",
+          args: { command: `echo ${index}` },
+        },
+        { ok: true, summary: "ok", payload: {} },
+      );
+    }
+    expect(state.snapshot().commandsRun).toHaveLength(20);
+    expect(state.snapshot().shellCommandRevision).toBe(25);
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "a.py" },
+      },
+      { ok: true, summary: "edited", payload: {} },
+    );
+    expect(state.snapshot().mutationShellCommandRevision).toBe(25);
   });
 });

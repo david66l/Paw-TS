@@ -18,7 +18,9 @@ function state(overrides: Partial<TaskState> = {}): TaskState {
     filesChanged: ["a.py"],
     commandsRun: [],
     testResults: [],
+    shellCommandRevision: 0,
     mutationRevision: 1,
+    mutationShellCommandRevision: 0,
     diffInspectedRevision: 0,
     fileLockConflicts: [],
     rejectedHypotheses: [],
@@ -224,5 +226,132 @@ describe("convergence guidance", () => {
         64,
       ),
     ).toContain("LoopPolicy:deliver");
+  });
+
+  test("requires verification immediately after an edit but defers diff gating", () => {
+    const read = {
+      type: "tool_call" as const,
+      tool: "workspace.read_file",
+      args: { path: "more.ts" },
+    };
+    expect(convergenceToolBlockReason(read, state(), 35, 64)).toContain(
+      "verify_current_revision",
+    );
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.run_shell",
+          args: { command: "pytest tests/test_a.py -q" },
+        },
+        state(),
+        35,
+        64,
+      ),
+    ).toBeNull();
+    const directCheck = {
+      type: "tool_call" as const,
+      tool: "workspace.run_shell",
+      args: { command: "python -c \"print('acceptance')\"" },
+    };
+    expect(convergenceToolBlockReason(directCheck, state(), 35, 64)).toBeNull();
+    expect(
+      convergenceToolBlockReason(
+        directCheck,
+        state({ shellCommandRevision: 2 }),
+        37,
+        64,
+      ),
+    ).toContain("verify_current_revision");
+    const passed = state({
+      testResults: [
+        {
+          command: "pytest",
+          passed: true,
+          outcome: "passed",
+          summary: "ok",
+          mutationRevision: 1,
+        },
+      ],
+    });
+    expect(convergenceToolBlockReason(read, passed, 35, 64)).toBeNull();
+  });
+
+  test("allows bounded harness recovery without treating it as code failure", () => {
+    const shell = {
+      type: "tool_call" as const,
+      tool: "workspace.run_shell",
+      args: { command: "python --version" },
+    };
+    const failed = {
+      command: "pytest",
+      passed: false,
+      outcome: "harness_failed" as const,
+      summary: "plugin missing",
+      evidence: "Error importing plugin",
+      shellCommandRevision: 1,
+      mutationRevision: 1,
+    };
+    expect(
+      convergenceToolBlockReason(
+        shell,
+        state({
+          testResults: [failed],
+          shellCommandRevision: 1,
+          commandsRun: [],
+        }),
+        36,
+        64,
+      ),
+    ).toBeNull();
+    const fourRecoveryCommands = Array.from({ length: 5 }, (_, index) => ({
+      command: `probe-${index}`,
+      ok: false,
+      summary: "failed",
+    }));
+    expect(
+      convergenceToolBlockReason(
+        shell,
+        state({
+          testResults: [failed],
+          shellCommandRevision: 5,
+          commandsRun: fourRecoveryCommands,
+        }),
+        40,
+        64,
+      ),
+    ).toContain("recover_verification_harness");
+  });
+
+  test("allows only bounded diagnostics after a code verification failure", () => {
+    const shell = {
+      type: "tool_call" as const,
+      tool: "workspace.run_shell",
+      args: { command: "python -c \"print('diagnose')\"" },
+    };
+    const failed = {
+      command: "pytest",
+      passed: false,
+      outcome: "code_failed" as const,
+      summary: "assertion failed",
+      shellCommandRevision: 4,
+      mutationRevision: 1,
+    };
+    expect(
+      convergenceToolBlockReason(
+        shell,
+        state({ testResults: [failed], shellCommandRevision: 5 }),
+        40,
+        64,
+      ),
+    ).toBeNull();
+    expect(
+      convergenceToolBlockReason(
+        shell,
+        state({ testResults: [failed], shellCommandRevision: 6 }),
+        41,
+        64,
+      ),
+    ).toContain("fix_current_failure");
   });
 });

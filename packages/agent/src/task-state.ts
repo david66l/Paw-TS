@@ -12,7 +12,13 @@ export interface CommandSummary {
 export interface TestResultSummary {
   readonly command: string;
   readonly passed: boolean;
+  /** Structured result; absent on legacy snapshots and derived from passed. */
+  readonly outcome?: "passed" | "code_failed" | "harness_failed";
   readonly summary: string;
+  /** Short redacted diagnostic retained after the full tool payload is pruned. */
+  readonly evidence?: string;
+  /** Monotonic shell-command revision when this verification was recorded. */
+  readonly shellCommandRevision?: number;
   /** 文件最近一次变更的版本；用于拒绝“改代码前跑过的旧绿测”。 */
   readonly mutationRevision?: number;
 }
@@ -42,8 +48,12 @@ export interface TaskState {
   readonly filesChanged: readonly string[];
   readonly commandsRun: readonly CommandSummary[];
   readonly testResults: readonly TestResultSummary[];
+  /** Monotonic count of recorded shell commands; unlike commandsRun it is never truncated. */
+  readonly shellCommandRevision?: number;
   /** 每次成功写文件/应用 patch 单调递增；旧快照缺省为 0。 */
   readonly mutationRevision?: number;
+  /** Shell-command revision at the most recent successful source mutation. */
+  readonly mutationShellCommandRevision?: number;
   /** 最近一次成功检查最终 diff 时对应的文件变更版本。 */
   readonly diffInspectedRevision?: number;
   readonly fileLockConflicts: readonly string[];
@@ -79,7 +89,9 @@ export class TaskStateManager {
         filesChanged: [],
         commandsRun: [],
         testResults: [],
+        shellCommandRevision: 0,
         mutationRevision: 0,
+        mutationShellCommandRevision: 0,
         diffInspectedRevision: 0,
         fileLockConflicts: [],
         rejectedHypotheses: [],
@@ -166,7 +178,11 @@ export class TaskStateManager {
     const commandsRun = [...this.state.commandsRun];
     const testResults = [...this.state.testResults];
     const pinnedFacts = [...this.state.pinnedFacts];
+    let shellCommandRevision =
+      this.state.shellCommandRevision ?? this.state.commandsRun.length;
     let mutationRevision = this.state.mutationRevision ?? 0;
+    let mutationShellCommandRevision =
+      this.state.mutationShellCommandRevision ?? shellCommandRevision;
     let diffInspectedRevision = this.state.diffInspectedRevision ?? 0;
 
     if (result.ok && call.tool === "workspace.read_file") {
@@ -181,6 +197,7 @@ export class TaskStateManager {
     ) {
       pushUnique(filesChanged, stringArg(args.path));
       mutationRevision += 1;
+      mutationShellCommandRevision = shellCommandRevision;
     }
 
     if (result.ok && call.tool === "workspace.apply_patch") {
@@ -188,12 +205,14 @@ export class TaskStateManager {
         pushUnique(filesChanged, path);
       }
       mutationRevision += 1;
+      mutationShellCommandRevision = shellCommandRevision;
     }
 
     if (call.tool === "workspace.run_shell") {
       const command = stringArg(args.command);
       const cwd = stringArg(args.cwd);
       if (command) {
+        shellCommandRevision += 1;
         commandsRun.push({
           command,
           ...(cwd ? { cwd } : {}),
@@ -201,10 +220,15 @@ export class TaskStateManager {
           summary: result.summary,
         });
         if (isVerificationCommand(command)) {
+          const outcome = classifyVerificationOutcome(result);
+          const evidence = verificationEvidence(result);
           testResults.push({
             command,
-            passed: result.ok,
+            passed: outcome === "passed",
+            outcome,
             summary: result.summary,
+            ...(evidence ? { evidence } : {}),
+            shellCommandRevision,
             mutationRevision,
           });
         }
@@ -228,7 +252,9 @@ export class TaskStateManager {
       filesChanged,
       commandsRun: commandsRun.slice(-20),
       testResults: testResults.slice(-20),
+      shellCommandRevision,
       mutationRevision,
+      mutationShellCommandRevision,
       diffInspectedRevision,
       pinnedFacts: pinnedFacts.slice(-20),
       updatedAt: Date.now(),
@@ -256,7 +282,8 @@ export function formatTaskStateForContext(state: TaskState): string {
     lines,
     "Tests",
     state.testResults.map(
-      (t) => `${t.passed ? "passed" : "failed"}: ${t.command}`,
+      (t) =>
+        `${verificationOutcome(t)}: ${t.command}${t.evidence ? ` — ${t.evidence}` : ""}`,
     ),
   );
   appendList(lines, "Plan", state.plan);
@@ -278,9 +305,11 @@ export function formatCompletionReadiness(state: TaskState): string[] {
     ? "missing"
     : latest.mutationRevision !== revision
       ? `stale (verified r${latest.mutationRevision ?? 0})`
-      : latest.passed
+      : verificationOutcome(latest) === "passed"
         ? `passed for r${revision}`
-        : `failed for r${revision}`;
+        : verificationOutcome(latest) === "harness_failed"
+          ? `harness failed for r${revision} (verification did not execute)`
+          : `code failed for r${revision}`;
   const diffRevision = state.diffInspectedRevision ?? 0;
   const diff =
     diffRevision === revision
@@ -293,6 +322,52 @@ export function formatCompletionReadiness(state: TaskState): string[] {
     `- Verification: ${verification}`,
     `- Final diff: ${diff}`,
   ];
+}
+
+export function verificationOutcome(
+  result: TestResultSummary,
+): "passed" | "code_failed" | "harness_failed" {
+  return result.outcome ?? (result.passed ? "passed" : "code_failed");
+}
+
+function classifyVerificationOutcome(
+  result: ToolRunResult,
+): "passed" | "code_failed" | "harness_failed" {
+  if (result.ok) return "passed";
+  const payload = isRecord(result.payload) ? result.payload : {};
+  const exitCode = payload.exit_code;
+  const output = [payload.stdout, payload.stderr, result.summary]
+    .filter((value): value is string => typeof value === "string")
+    .join("\n");
+  if (
+    exitCode === 3 ||
+    exitCode === 4 ||
+    exitCode === 5 ||
+    /(?:error importing plugin|no tests (?:ran|collected)|pytest: (?:command )?not found|not recognized as an internal or external command|modulenotfounderror: no module named ['\"]pytest['\"]|could not find a version that satisfies)/i.test(
+      output,
+    )
+  ) {
+    return "harness_failed";
+  }
+  return "code_failed";
+}
+
+function verificationEvidence(result: ToolRunResult): string | undefined {
+  if (result.ok) return undefined;
+  const payload = isRecord(result.payload) ? result.payload : {};
+  const raw = [payload.stderr, payload.stdout]
+    .filter((value): value is string => typeof value === "string" && !!value)
+    .join("\n")
+    .trim();
+  if (!raw) return result.summary.slice(0, 300);
+  const redacted = raw
+    .replace(/\bBearer\s+[^\s]+/gi, "Bearer [REDACTED]")
+    .replace(
+      /\b(api[_-]?key|token|password)\s*[:=]\s*[^\s]+/gi,
+      "$1=[REDACTED]",
+    )
+    .replace(/\s+/g, " ");
+  return redacted.slice(-600);
 }
 
 function appendList(
