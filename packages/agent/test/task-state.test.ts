@@ -1,12 +1,118 @@
 import { describe, expect, test } from "bun:test";
 import {
   TaskStateManager,
+  acceptanceReadiness,
   formatCompletionReadiness,
   formatTaskStateForContext,
   isVerificationCommand,
 } from "../src/task-state.js";
 
 describe("TaskStateManager", () => {
+  test("keeps a durable acceptance ledger with stable ids", () => {
+    const state = new TaskStateManager("change route output");
+    state.registerAcceptanceCriteria(
+      [
+        {
+          text: "  Keep the legacy three-column output when no host is configured. ",
+          source: "repository",
+          ref: "tests/test_cli.py::test_simple",
+        },
+        {
+          text: "Use Host as the heading in host-matching mode.",
+          source: "repository",
+          ref: "tests/test_cli.py::test_host",
+        },
+      ],
+      3,
+    );
+    state.registerAcceptanceCriteria(
+      [
+        {
+          text: "Keep the legacy three-column output when no host is configured.",
+          source: "repository",
+        },
+      ],
+      4,
+    );
+
+    expect(state.acceptanceCriteria().map((item) => item.id)).toEqual([
+      "acceptance-001",
+      "acceptance-002",
+    ]);
+    expect(state.acceptanceCriteria()[0]?.source).toEqual({
+      kind: "repository",
+      turn: 3,
+      ref: "tests/test_cli.py::test_simple",
+    });
+
+    const restored = new TaskStateManager("ignored", state.snapshot());
+    restored.registerAcceptanceCriteria(
+      [{ text: "Show Subdomain in subdomain mode.", source: "user" }],
+      5,
+    );
+    expect(restored.acceptanceCriteria().at(-1)?.id).toBe("acceptance-003");
+    expect(formatTaskStateForContext(restored.snapshot())).toContain(
+      "acceptance-001 [pending]",
+    );
+  });
+
+  test("makes satisfied acceptance evidence stale after a source mutation", () => {
+    const state = new TaskStateManager("change route output");
+    state.registerAcceptanceCriteria(
+      [
+        {
+          text: "Existing route formatting remains compatible.",
+          source: "repository",
+          ref: "tests/test_cli.py",
+        },
+      ],
+      1,
+    );
+    expect(() =>
+      state.setAcceptanceCriterionStatus("acceptance-001", "satisfied"),
+    ).toThrow("requires evidence");
+    state.setAcceptanceCriterionStatus(
+      "acceptance-001",
+      "satisfied",
+      "tests/test_cli.py passed",
+    );
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe(
+      "satisfied",
+    );
+
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "src/flask/cli.py" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "src/flask/cli.py", linesAdded: 1, linesRemoved: 1 },
+      },
+    );
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe("stale");
+    expect(formatTaskStateForContext(state.snapshot())).toContain(
+      "acceptance-001 [stale]",
+    );
+    state.setAcceptanceCriterionStatus(
+      "acceptance-001",
+      "satisfied",
+      "pytest tests/test_cli.py: 57 passed",
+    );
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe(
+      "satisfied",
+    );
+  });
+
+  test("restores legacy snapshots with an empty acceptance ledger", () => {
+    const current = new TaskStateManager("fix bug").snapshot();
+    const { acceptanceCriteria: _removed, ...legacy } = current;
+    const restored = new TaskStateManager("ignored", legacy);
+    expect(restored.acceptanceCriteria()).toEqual([]);
+  });
+
   test("does not record control-plane rejections as task failures", () => {
     const state = new TaskStateManager("fix bug");
     state.recordToolResult(

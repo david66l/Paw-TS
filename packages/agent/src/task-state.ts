@@ -40,9 +40,35 @@ export interface ConstraintRecord {
   readonly status: "active" | "superseded" | "expired";
 }
 
+export type AcceptanceCriterionStatus =
+  | "pending"
+  | "satisfied"
+  | "blocked"
+  | "superseded";
+
+export interface AcceptanceCriterion {
+  /** Stable within one task snapshot and across resume. */
+  readonly id: string;
+  /** Concise observable behavior or regression condition. */
+  readonly text: string;
+  readonly source: {
+    readonly kind: "user" | "repository" | "verification";
+    readonly turn: number;
+    /** File, test, command, or user-message label that exposed the condition. */
+    readonly ref?: string;
+  };
+  readonly status: AcceptanceCriterionStatus;
+  /** Required for satisfied; optional diagnostic for blocked. */
+  readonly evidence?: string;
+  /** Source revision against which satisfied evidence was obtained. */
+  readonly evidenceMutationRevision?: number;
+}
+
 export interface TaskState {
   readonly goal: string;
   readonly constraints: readonly ConstraintRecord[];
+  /** Durable acceptance ledger; absent in legacy snapshots and restored as empty. */
+  readonly acceptanceCriteria?: readonly AcceptanceCriterion[];
   readonly plan: readonly string[];
   readonly filesRead: readonly string[];
   readonly filesChanged: readonly string[];
@@ -74,6 +100,9 @@ export class TaskStateManager {
     if (isTaskState(restored)) {
       this.state = {
         ...restored,
+        acceptanceCriteria: Array.isArray(restored.acceptanceCriteria)
+          ? restored.acceptanceCriteria
+          : [],
         fileLockConflicts: Array.isArray(restored.fileLockConflicts)
           ? restored.fileLockConflicts
           : [],
@@ -86,6 +115,7 @@ export class TaskStateManager {
           sourceTurn: 0,
           status: "active" as const,
         })),
+        acceptanceCriteria: [],
         plan: [],
         filesRead: [],
         filesChanged: [],
@@ -126,6 +156,86 @@ export class TaskStateManager {
   /** 当前有效的约束（active）——红线区/摘要校验的唯一来源 */
   activeConstraints(): readonly ConstraintRecord[] {
     return this.state.constraints.filter((c) => c.status === "active");
+  }
+
+  acceptanceCriteria(): readonly AcceptanceCriterion[] {
+    return this.state.acceptanceCriteria ?? [];
+  }
+
+  registerAcceptanceCriteria(
+    items: readonly {
+      readonly text: string;
+      readonly source: AcceptanceCriterion["source"]["kind"];
+      readonly ref?: string;
+    }[],
+    currentTurn: number,
+  ): void {
+    const criteria = [...this.acceptanceCriteria()];
+    let nextId = nextAcceptanceCriterionId(criteria);
+    let changed = false;
+    for (const item of items) {
+      const text = normalizeAcceptanceText(item.text);
+      if (!text) continue;
+      const duplicate = criteria.some(
+        (criterion) =>
+          criterion.status !== "superseded" &&
+          normalizeAcceptanceText(criterion.text).toLocaleLowerCase() ===
+            text.toLocaleLowerCase(),
+      );
+      if (duplicate) continue;
+      const ref = normalizeAcceptanceEvidence(item.ref);
+      criteria.push({
+        id: `acceptance-${String(nextId).padStart(3, "0")}`,
+        text,
+        source: {
+          kind: item.source,
+          turn: currentTurn,
+          ...(ref ? { ref } : {}),
+        },
+        status: "pending",
+      });
+      nextId += 1;
+      changed = true;
+    }
+    if (!changed) return;
+    this.state = {
+      ...this.state,
+      acceptanceCriteria: criteria,
+      updatedAt: Date.now(),
+    };
+  }
+
+  setAcceptanceCriterionStatus(
+    id: string,
+    status: AcceptanceCriterionStatus,
+    evidence?: string,
+  ): void {
+    const normalizedId = id.trim();
+    const normalizedEvidence = normalizeAcceptanceEvidence(evidence);
+    if (status === "satisfied" && !normalizedEvidence) {
+      throw new Error(
+        `satisfied acceptance criterion requires evidence: ${id}`,
+      );
+    }
+    let found = false;
+    const criteria = this.acceptanceCriteria().map((criterion) => {
+      if (criterion.id !== normalizedId) return criterion;
+      found = true;
+      return {
+        ...criterion,
+        status,
+        ...(normalizedEvidence ? { evidence: normalizedEvidence } : {}),
+        ...(status === "satisfied"
+          ? { evidenceMutationRevision: this.state.mutationRevision ?? 0 }
+          : { evidenceMutationRevision: undefined }),
+      };
+    });
+    if (!found) throw new Error(`unknown acceptance criterion: ${id}`);
+    this.state = {
+      ...this.state,
+      acceptanceCriteria: criteria,
+      updatedAt: Date.now(),
+    };
   }
 
   /** 目标变更（多轮会话新请求）——更新 goal，约束由 LLM 调和另行判定 */
@@ -334,6 +444,14 @@ export function formatTaskStateForContext(state: TaskState): string {
       .filter((c) => c.status === "active")
       .map((c) => `${c.text} (turn ${c.sourceTurn})`),
   );
+  appendList(
+    lines,
+    "Acceptance criteria",
+    acceptanceReadiness(state).map((item) => {
+      const source = `${item.criterion.source.kind}${item.criterion.source.ref ? `:${item.criterion.source.ref}` : ""}`;
+      return `${item.criterion.id} [${item.readiness}] ${item.criterion.text} (source ${source})${item.criterion.evidence ? ` — ${item.criterion.evidence}` : ""}`;
+    }),
+  );
   appendList(lines, "Files read", state.filesRead);
   appendList(lines, "Files changed", state.filesChanged);
   appendList(
@@ -358,6 +476,33 @@ export function formatTaskStateForContext(state: TaskState): string {
   appendList(lines, "Pinned facts", state.pinnedFacts);
   if (state.nextStep) lines.push(`Next step: ${state.nextStep}`);
   return lines.join("\n");
+}
+
+export interface AcceptanceReadinessItem {
+  readonly criterion: AcceptanceCriterion;
+  readonly readiness: "pending" | "satisfied" | "stale" | "blocked";
+}
+
+export function acceptanceReadiness(
+  state: TaskState,
+): AcceptanceReadinessItem[] {
+  const revision = state.mutationRevision ?? 0;
+  const items: AcceptanceReadinessItem[] = [];
+  for (const criterion of state.acceptanceCriteria ?? []) {
+    if (criterion.status === "superseded") continue;
+    if (criterion.status === "satisfied") {
+      items.push({
+        criterion,
+        readiness:
+          criterion.evidenceMutationRevision === revision
+            ? "satisfied"
+            : "stale",
+      });
+      continue;
+    }
+    items.push({ criterion, readiness: criterion.status });
+  }
+  return items;
 }
 
 export function formatCompletionReadiness(state: TaskState): string[] {
@@ -441,6 +586,27 @@ function appendList(
   if (values.length === 0) return;
   lines.push(`${label}:`);
   for (const value of values.slice(-10)) lines.push(`- ${value}`);
+}
+
+function nextAcceptanceCriterionId(
+  criteria: readonly AcceptanceCriterion[],
+): number {
+  let max = 0;
+  for (const criterion of criteria) {
+    const match = criterion.id.match(/^acceptance-(\d+)$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return max + 1;
+}
+
+function normalizeAcceptanceText(value: string): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, 500);
+}
+
+function normalizeAcceptanceEvidence(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized ? normalized.slice(0, 500) : undefined;
 }
 
 /** 约束关键词（行级识别，仅作候选——语义判定由 LLM 调和负责） */
