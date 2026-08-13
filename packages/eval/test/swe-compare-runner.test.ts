@@ -15,7 +15,10 @@ import {
   validateCompareRun,
 } from "../src/swe-compare/runner.js";
 import type { SweCompareManifest } from "../src/swe-compare/types.js";
-import { createCommitWorktree } from "../src/swe-exp/repo-cache.js";
+import {
+  captureGitDiff,
+  createCommitWorktree,
+} from "../src/swe-exp/repo-cache.js";
 
 function git(cwd: string, args: string[]): string {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -209,6 +212,21 @@ describe("SWE compare runner", () => {
     } finally {
       workspace.cleanup();
     }
+  });
+
+  test("patch capture ignores a configured external diff command", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-diff-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "eval@example.test"]);
+    git(root, ["config", "user.name", "Eval"]);
+    writeFileSync(path.join(root, "value.txt"), "base\n", "utf8");
+    git(root, ["add", "value.txt"]);
+    git(root, ["commit", "-m", "base"]);
+    git(root, ["config", "diff.external", "definitely-missing-paw-diff"]);
+    writeFileSync(path.join(root, "value.txt"), "changed\n", "utf8");
+    const captured = captureGitDiff(root);
+    expect(captured.error).toBeUndefined();
+    expect(captured.diff).toContain("+changed");
   });
 
   test("backfills an empty persisted Claude result without resampling", () => {

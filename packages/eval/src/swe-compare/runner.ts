@@ -40,6 +40,8 @@ export interface SweCompareRunResult {
   readonly patch: string;
   readonly patchChars: number;
   readonly patchSource?: "workspace" | "claude_trace_git_diff" | "none";
+  readonly artifactStatus?: "valid" | "patch_collection_failed";
+  readonly patchCollectionError?: string;
   readonly integrity?: SweCompareIntegrityAudit;
   readonly resolved: boolean;
   readonly resolvedSource: "swebench_harness" | "none" | "error";
@@ -608,21 +610,6 @@ export async function runSweCompareArm(opts: {
             goal,
             timeoutMs: manifest.budget.sharedTimeoutMs,
           });
-    const capturedPatch = captureGitDiff(workspace.root);
-    if (capturedPatch.error) {
-      throw new Error(
-        `workspace patch collection failed: ${capturedPatch.error}`,
-      );
-    }
-    const workspacePatch = capturedPatch.diff ?? "";
-    const recoveredPatch =
-      "recoveredPatch" in execution ? (execution.recoveredPatch ?? "") : "";
-    const patch = workspacePatch || recoveredPatch;
-    const patchSource = workspacePatch
-      ? "workspace"
-      : recoveredPatch
-        ? "claude_trace_git_diff"
-        : "none";
     const tracePath = path.join(
       "benchmarks",
       "swe-compare",
@@ -630,7 +617,23 @@ export async function runSweCompareArm(opts: {
       runId,
       "trace.json",
     );
+    // Persist the expensive agent trajectory before any post-run Git command.
+    // A patch collection failure must remain an auditable infra-invalid sample
+    // instead of deleting the model evidence in the surrounding finally block.
     writeJsonAtomic(path.join(opts.repoRoot, tracePath), execution.trace);
+    const capturedPatch = captureGitDiff(workspace.root);
+    const workspacePatch = capturedPatch.diff ?? "";
+    const recoveredPatch =
+      "recoveredPatch" in execution ? (execution.recoveredPatch ?? "") : "";
+    const patch = capturedPatch.error ? "" : workspacePatch || recoveredPatch;
+    const patchSource = workspacePatch
+      ? "workspace"
+      : recoveredPatch && !capturedPatch.error
+        ? "claude_trace_git_diff"
+        : "none";
+    const artifactStatus = capturedPatch.error
+      ? "patch_collection_failed"
+      : "valid";
     const executionSummary = {
       status: execution.status,
       ...(execution.terminalReason
@@ -659,7 +662,12 @@ export async function runSweCompareArm(opts: {
     let resolved = false;
     let resolvedSource: "swebench_harness" | "none" | "error" = "none";
     let verifier: SweCompareRunResult["verifier"];
-    if (!opts.skipVerifier && patch.trim() && integrity.valid) {
+    if (
+      !opts.skipVerifier &&
+      artifactStatus === "valid" &&
+      patch.trim() &&
+      integrity.valid
+    ) {
       const predictionPath = path.join(
         opts.repoRoot,
         "benchmarks",
@@ -708,6 +716,10 @@ export async function runSweCompareArm(opts: {
       patch,
       patchChars: patch.length,
       patchSource,
+      artifactStatus,
+      ...(capturedPatch.error
+        ? { patchCollectionError: capturedPatch.error }
+        : {}),
       integrity,
       resolved,
       resolvedSource,

@@ -223,10 +223,11 @@ export function gitDiff(workspaceRoot: string): string {
 
 /** Capture both the patch and collection failure so evals cannot silently score empty. */
 export function captureGitDiff(workspaceRoot: string): GitDiffCapture {
-  const r = runGit(workspaceRoot, ["diff", "--binary"]);
+  const diffArgs = ["diff", "--no-ext-diff", "--no-textconv", "--binary"];
+  const r = runGit(workspaceRoot, diffArgs, 60_000);
   if (!r.ok) return { error: r.error };
   // 也包含 staged；SWE 通常改已有 tracked 文件
-  const staged = runGit(workspaceRoot, ["diff", "--binary", "--cached"]);
+  const staged = runGit(workspaceRoot, [...diffArgs, "--cached"], 60_000);
   const parts = [r.stdout.trim()];
   if (!staged.ok) return { error: staged.error };
   if (staged.stdout.trim()) parts.push(staged.stdout.trim());

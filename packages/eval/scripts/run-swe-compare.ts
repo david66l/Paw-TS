@@ -74,4 +74,10 @@ const result = await runSweCompareArm({
   skipVerifier: process.argv.includes("--skip-verifier"),
 });
 console.log(JSON.stringify(result, null, 2));
-process.exit(result.status === "completed" ? 0 : 1);
+process.exit(
+  result.artifactStatus === "patch_collection_failed"
+    ? 2
+    : result.status === "completed"
+      ? 0
+      : 1,
+);
