@@ -1,4 +1,5 @@
 import type { AgentToolCallAction } from "@paw/core";
+import { isVerificationCommand } from "../task-state.js";
 
 export const CODING_LOCATE_NUDGE_AT = 10;
 export const CODING_LOCATE_HARD_LIMIT = 14;
@@ -53,19 +54,9 @@ export function isCodingEditTool(tool: string): boolean {
 
 export function isCodingVerificationCall(call: AgentToolCallAction): boolean {
   if (call.tool !== "workspace.run_shell") return false;
-  const command = typeof call.args.command === "string" ? call.args.command : "";
-  if (/\b(?:pip3?|uv|npm|pnpm|yarn|bun)\s+(?:install|add|i)\b/i.test(command)) {
-    return false;
-  }
-  return (
-    /(?:^|[;&|]\s*)(?:python(?:3)?\s+-m\s+)?pytest\b/i.test(command) ||
-    /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+test\b/i.test(command) ||
-    /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+run\s+(?:test|check|build|lint|typecheck|e2e|verify)(?::[\w-]+)?\b/i.test(command) ||
-    /(?:^|[;&|]\s*)(?:npx\s+)?(?:vitest|jest)\b/i.test(command) ||
-    /(?:^|[;&|]\s*)go\s+test\b/i.test(command) ||
-    /(?:^|[;&|]\s*)cargo\s+test\b/i.test(command) ||
-    /(?:^|[;&|]\s*)tox\b/i.test(command)
-  );
+  const command =
+    typeof call.args.command === "string" ? call.args.command : "";
+  return isVerificationCommand(command);
 }
 
 export function codingPhaseBlockReason(
@@ -94,7 +85,7 @@ export function advanceCodingPhase(
   calls: readonly AgentToolCallAction[],
   results: readonly { readonly ok: boolean }[],
 ): { readonly state: CodingPhaseState; readonly nudges: readonly string[] } {
-  let next = { ...state };
+  const next = { ...state };
   const nudges: string[] = [];
   for (let i = 0; i < calls.length; i++) {
     const call = calls[i]!;

@@ -43,6 +43,8 @@ export interface TaskState {
   readonly testResults: readonly TestResultSummary[];
   /** 每次成功写文件/应用 patch 单调递增；旧快照缺省为 0。 */
   readonly mutationRevision?: number;
+  /** 最近一次成功检查最终 diff 时对应的文件变更版本。 */
+  readonly diffInspectedRevision?: number;
   readonly fileLockConflicts: readonly string[];
   readonly currentHypothesis?: string;
   readonly rejectedHypotheses: readonly string[];
@@ -65,24 +67,25 @@ export class TaskStateManager {
       };
     } else {
       this.state = {
-          goal,
-          constraints: extractConstraints(goal).map((text) => ({
-            text,
-            sourceTurn: 0,
-            status: "active" as const,
-          })),
-          plan: [],
-          filesRead: [],
-          filesChanged: [],
-          commandsRun: [],
-          testResults: [],
-          mutationRevision: 0,
-          fileLockConflicts: [],
-          rejectedHypotheses: [],
-          pinnedFacts: [],
-          knownNonGoals: [],
-          updatedAt: Date.now(),
-        };
+        goal,
+        constraints: extractConstraints(goal).map((text) => ({
+          text,
+          sourceTurn: 0,
+          status: "active" as const,
+        })),
+        plan: [],
+        filesRead: [],
+        filesChanged: [],
+        commandsRun: [],
+        testResults: [],
+        mutationRevision: 0,
+        diffInspectedRevision: 0,
+        fileLockConflicts: [],
+        rejectedHypotheses: [],
+        pinnedFacts: [],
+        knownNonGoals: [],
+        updatedAt: Date.now(),
+      };
     }
   }
 
@@ -162,6 +165,7 @@ export class TaskStateManager {
     const testResults = [...this.state.testResults];
     const pinnedFacts = [...this.state.pinnedFacts];
     let mutationRevision = this.state.mutationRevision ?? 0;
+    let diffInspectedRevision = this.state.diffInspectedRevision ?? 0;
 
     if (result.ok && call.tool === "workspace.read_file") {
       pushUnique(filesRead, stringArg(args.path));
@@ -194,7 +198,7 @@ export class TaskStateManager {
           ok: result.ok,
           summary: result.summary,
         });
-        if (looksLikeTestCommand(command)) {
+        if (isVerificationCommand(command)) {
           testResults.push({
             command,
             passed: result.ok,
@@ -202,7 +206,14 @@ export class TaskStateManager {
             mutationRevision,
           });
         }
+        if (result.ok && looksLikeGitDiffCommand(command)) {
+          diffInspectedRevision = mutationRevision;
+        }
       }
+    }
+
+    if (result.ok && call.tool === "workspace.git_diff") {
+      diffInspectedRevision = mutationRevision;
     }
 
     if (!result.ok) {
@@ -216,6 +227,7 @@ export class TaskStateManager {
       commandsRun: commandsRun.slice(-20),
       testResults: testResults.slice(-20),
       mutationRevision,
+      diffInspectedRevision,
       pinnedFacts: pinnedFacts.slice(-20),
       updatedAt: Date.now(),
     };
@@ -233,11 +245,22 @@ export function formatTaskStateForContext(state: TaskState): string {
   );
   appendList(lines, "Files read", state.filesRead);
   appendList(lines, "Files changed", state.filesChanged);
-  appendList(lines, "Commands run", state.commandsRun.map((c) => `${c.ok ? "ok" : "failed"}: ${c.command}`));
-  appendList(lines, "Tests", state.testResults.map((t) => `${t.passed ? "passed" : "failed"}: ${t.command}`));
+  appendList(
+    lines,
+    "Commands run",
+    state.commandsRun.map((c) => `${c.ok ? "ok" : "failed"}: ${c.command}`),
+  );
+  appendList(
+    lines,
+    "Tests",
+    state.testResults.map(
+      (t) => `${t.passed ? "passed" : "failed"}: ${t.command}`,
+    ),
+  );
   appendList(lines, "Plan", state.plan);
   if ((state.mutationRevision ?? 0) > 0) {
     lines.push(`Mutation revision: ${state.mutationRevision}`);
+    lines.push(...formatCompletionReadiness(state));
   }
   appendList(lines, "File lock conflicts", state.fileLockConflicts ?? []);
   appendList(lines, "Pinned facts", state.pinnedFacts);
@@ -245,7 +268,36 @@ export function formatTaskStateForContext(state: TaskState): string {
   return lines.join("\n");
 }
 
-function appendList(lines: string[], label: string, values: readonly string[]): void {
+export function formatCompletionReadiness(state: TaskState): string[] {
+  const revision = state.mutationRevision ?? 0;
+  if (revision === 0) return [];
+  const latest = state.testResults.at(-1);
+  const verification = !latest
+    ? "missing"
+    : latest.mutationRevision !== revision
+      ? `stale (verified r${latest.mutationRevision ?? 0})`
+      : latest.passed
+        ? `passed for r${revision}`
+        : `failed for r${revision}`;
+  const diffRevision = state.diffInspectedRevision ?? 0;
+  const diff =
+    diffRevision === revision
+      ? `inspected for r${revision}`
+      : diffRevision > 0
+        ? `stale (inspected r${diffRevision})`
+        : "not inspected";
+  return [
+    "Completion readiness:",
+    `- Verification: ${verification}`,
+    `- Final diff: ${diff}`,
+  ];
+}
+
+function appendList(
+  lines: string[],
+  label: string,
+  values: readonly string[],
+): void {
   if (values.length === 0) return;
   lines.push(`${label}:`);
   for (const value of values.slice(-10)) lines.push(`- ${value}`);
@@ -282,7 +334,11 @@ function extractPatchPaths(patch: string): string[] {
   return paths;
 }
 
-function looksLikeTestCommand(command: string): boolean {
+function looksLikeGitDiffCommand(command: string): boolean {
+  return /(?:^|[;&|]\s*)git\s+diff(?:\s|$)/i.test(command);
+}
+
+export function isVerificationCommand(command: string): boolean {
   const c = command.trim();
   // "pip install pytest" / "npm i jest" 不是跑测
   if (/\b(?:pip3?|uv|npm|pnpm|yarn|bun)\s+(?:install|add|i)\b/i.test(c)) {
@@ -290,11 +346,17 @@ function looksLikeTestCommand(command: string): boolean {
   }
   // 只认「真正执行测试」的命令形态（可出现在 && / ; 链中）
   return (
-    /(?:^|[;&|]\s*)(?:python(?:3)?\s+-m\s+)?pytest\b/i.test(c) ||
+    /(?:^|[;&|]\s*)(?:(?:python(?:3)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+-m\s+)?pytest\b/i.test(
+      c,
+    ) ||
     /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+test\b/i.test(c) ||
-    /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+run\s+(?:test|check|build|lint|typecheck|e2e|verify)(?::[\w-]+)?\b/i.test(c) ||
+    /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+run\s+(?:test|check|build|lint|typecheck|e2e|verify)(?::[\w-]+)?\b/i.test(
+      c,
+    ) ||
     /(?:^|[;&|]\s*)(?:npx\s+)?(?:vitest|jest)\b/i.test(c) ||
-    /(?:^|[;&|]\s*)node\s+[^\s;|]*(?:test|smoke|verify|e2e)[^\s;|]*\b/i.test(c) ||
+    /(?:^|[;&|]\s*)node\s+[^\s;|]*(?:test|smoke|verify|e2e)[^\s;|]*\b/i.test(
+      c,
+    ) ||
     /(?:^|[;&|]\s*)go\s+test\b/i.test(c) ||
     /(?:^|[;&|]\s*)cargo\s+test\b/i.test(c)
   );
@@ -341,5 +403,7 @@ function summarizePlanItem(item: unknown): string {
   if (typeof text !== "string") return JSON.stringify(item);
   const status = typeof item.status === "string" ? item.status : undefined;
   const taskId = typeof item.task_id === "string" ? item.task_id : undefined;
-  return [status ? `[${status}]` : "", taskId ?? text].filter(Boolean).join(" ");
+  return [status ? `[${status}]` : "", taskId ?? text]
+    .filter(Boolean)
+    .join(" ");
 }

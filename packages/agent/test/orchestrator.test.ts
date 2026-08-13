@@ -279,6 +279,48 @@ describe("AgentOrchestrator", () => {
     expect(r.message).toContain("Result: hi");
   });
 
+  test("injects soft convergence guidance after a mutation without reducing steps", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-convergence-"));
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "convergence",
+        async complete(messages) {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"tool":"workspace.write_file","args":{"path":"a.txt","content":"done"}}',
+            };
+          }
+          const packageMessage = messages.find(
+            (message) =>
+              message.role === "user" &&
+              message.content.includes("[Context Package]"),
+          );
+          expect(packageMessage?.content).toContain("Mutation revision: 1");
+          expect(packageMessage?.content).toContain("Verification: missing");
+          expect(
+            messages.some((message) =>
+              message.content.includes("[Convergence checkpoint]"),
+            ),
+          ).toBe(true);
+          return {
+            text: '{"action":"final_answer","summary":"Done. [skip_verify: fixture]"}',
+          };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    const r = await o.run({
+      runId: "convergence",
+      goal: "write a.txt [allow_skip_verify]",
+      workspaceRoot: dir,
+      maxSteps: 4,
+    });
+    expect(r.status).toBe("completed");
+    expect(calls).toBe(2);
+  });
+
   test("run completes without tool when model returns plain text", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({

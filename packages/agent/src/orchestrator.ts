@@ -187,6 +187,7 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "Current plan:",
   "Note:",
 ];
+import { convergenceGuidance } from "./lifecycle/convergence.js";
 import type {
   PhaseContext,
   SharedContext,
@@ -1808,6 +1809,17 @@ export class AgentOrchestrator {
     // 步骤 4：注入 max-steps 警告
     // 当剩余轮数 ≤ 3 且已至少跑了 5 轮时，提示模型加快进度
     const turnsRemaining = maxSteps - ctx.turn;
+    if (!flags._convergenceWarned) {
+      const guidance = convergenceGuidance(
+        ctx.taskState.snapshot(),
+        turnsRemaining,
+        maxSteps,
+      );
+      if (guidance) {
+        ctxMgr.addUser(guidance);
+        flags._convergenceWarned = true;
+      }
+    }
     if (
       turnsRemaining <= 3 &&
       turnsRemaining > 0 &&
