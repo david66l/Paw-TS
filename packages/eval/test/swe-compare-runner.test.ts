@@ -16,6 +16,7 @@ import {
   recoverClaudeResultPatch,
   recoverPawResultPatch,
   replayClaudeTracePatch,
+  sweCompareLocalGoldViolation,
   sweCompareNetworkViolation,
   validateCompareRun,
 } from "../src/swe-compare/runner.js";
@@ -355,11 +356,64 @@ describe("SWE compare runner", () => {
       }),
     ).toBe(true);
     expect(
+      sweCompareLocalGoldViolation(
+        "diff repo/a.py C:/Python/Lib/site-packages/project/a.py",
+      ),
+    ).toBe("installed_future_source_access");
+    expect(
+      sweCompareLocalGoldViolation(
+        "pyarrow.ipc.open_stream('C:/Users/me/.cache/huggingface/swe-bench_lite-test.arrow'); row['test_patch']",
+      ),
+    ).toBe("benchmark_gold_data_access");
+    expect(
+      allowSweCompareToolCall({
+        tool: "workspace.run_shell",
+        args: { command: "grep -R fix /usr/lib/python/site-packages/project" },
+      }),
+    ).toBe(false);
+    expect(
       allowSweCompareToolCall({
         tool: "workspace.edit_file",
         args: { path: "src/a.py" },
       }),
     ).toBe(true);
+  });
+
+  test("invalidates successful Claude access to local future source or gold data", () => {
+    const tool = (
+      id: string,
+      name: string,
+      input: Record<string, unknown>,
+    ) => ({
+      type: "assistant",
+      message: { content: [{ type: "tool_use", id, name, input }] },
+    });
+    const result = (id: string) => ({
+      type: "user",
+      message: {
+        content: [{ type: "tool_result", tool_use_id: id, content: "ok" }],
+      },
+    });
+    expect(
+      auditClaudeTraceIntegrity([
+        tool("read", "Read", {
+          file_path:
+            "C:/Python/Lib/site-packages/sympy/physics/vector/point.py",
+        }),
+        result("read"),
+        tool("gold", "Bash", {
+          command:
+            "python -c \"import pyarrow; row['test_patch']\" C:/Users/me/.cache/huggingface/swe-bench_lite-test.arrow",
+        }),
+        result("gold"),
+      ]),
+    ).toEqual({
+      valid: false,
+      violations: [
+        "benchmark_gold_data_access",
+        "installed_future_source_access",
+      ],
+    });
   });
 
   test("isolated benchmark checkout has no remote or future commit objects", () => {

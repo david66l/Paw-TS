@@ -123,6 +123,20 @@ export function claudeCodeArgs(goal: string): string[] {
       "Bash(* python -m pip install *)",
       "Bash(python -m pip download *)",
       "Bash(* python -m pip download *)",
+      "Bash(* site-packages *)",
+      "Bash(* huggingface *)",
+      "Bash(* swe-bench *)",
+      "Bash(* test_patch *)",
+      "Read(*site-packages*)",
+      "Read(*dist-packages*)",
+      "Read(*huggingface*)",
+      "Read(*swe-bench*)",
+      "Grep(*site-packages*)",
+      "Grep(*dist-packages*)",
+      "Grep(*huggingface*)",
+      "Glob(*site-packages*)",
+      "Glob(*dist-packages*)",
+      "Glob(*huggingface*)",
     ].join(","),
     "--no-session-persistence",
     "--disable-slash-commands",
@@ -849,7 +863,17 @@ export function collectTraceMutationHints(opts: {
 export function auditClaudeTraceIntegrity(
   trace: readonly unknown[],
 ): SweCompareIntegrityAudit {
-  return auditShellCommands(shellCommandsFromClaudeTrace(trace));
+  const shellAudit = auditShellCommands(shellCommandsFromClaudeTrace(trace));
+  const violations = [...shellAudit.violations];
+  for (const tool of successfulClaudeTools(trace)) {
+    for (const value of Object.values(tool.input)) {
+      if (typeof value !== "string") continue;
+      const localGold = sweCompareLocalGoldViolation(value);
+      if (localGold) violations.push(localGold);
+    }
+  }
+  const unique = [...new Set(violations)];
+  return { valid: unique.length === 0, violations: unique };
 }
 
 export function auditPawTraceIntegrity(
@@ -865,6 +889,8 @@ function auditShellCommands(
   for (const command of commands) {
     const outbound = sweCompareNetworkViolation(command);
     if (outbound) violations.push(outbound);
+    const localGold = sweCompareLocalGoldViolation(command);
+    if (localGold) violations.push(localGold);
     if (
       /\bgit\s+(?:show|log|diff)\b[^\r\n]*(?:origin\/|upstream\/)/i.test(
         command,
@@ -875,6 +901,23 @@ function auditShellCommands(
   }
   const unique = [...new Set(violations)];
   return { valid: unique.length === 0, violations: unique };
+}
+
+/** Detect local copies of public benchmark answers outside the frozen repo. */
+export function sweCompareLocalGoldViolation(
+  value: string,
+): "installed_future_source_access" | "benchmark_gold_data_access" | undefined {
+  if (/(?:site-packages|dist-packages)[\\/]/i.test(value)) {
+    return "installed_future_source_access";
+  }
+  if (
+    /(?:[\\/]\.cache[\\/]huggingface[\\/]|swe[_-]?bench[^\s"']*\.(?:arrow|parquet|jsonl)|\btest_patch\b|\bgold_patch\b)/i.test(
+      value,
+    )
+  ) {
+    return "benchmark_gold_data_access";
+  }
+  return undefined;
 }
 
 /**
@@ -928,7 +971,8 @@ export function allowSweCompareToolCall(input: {
       : {};
   return (
     typeof args.command !== "string" ||
-    sweCompareNetworkViolation(args.command) === undefined
+    (sweCompareNetworkViolation(args.command) === undefined &&
+      sweCompareLocalGoldViolation(args.command) === undefined)
   );
 }
 
