@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  convergenceEvidenceKey,
   convergenceGuidance,
   convergenceWindow,
+  implementationGuidance,
 } from "../src/lifecycle/convergence.js";
 import type { TaskState } from "../src/task-state.js";
 
@@ -87,5 +89,43 @@ describe("convergence guidance", () => {
         32,
       ),
     ).toContain("deliver final_answer now");
+  });
+
+  test("nudges implementation at mid-run only for mutation goals with evidence", () => {
+    const explored = state({
+      goal: "Fix the parser bug",
+      filesChanged: [],
+      filesRead: ["a.ts", "b.ts", "c.ts"],
+      mutationRevision: 0,
+    });
+    expect(implementationGuidance(explored, 31, 64)).toBeNull();
+    expect(implementationGuidance(explored, 32, 64)).toContain(
+      "without a recorded source change",
+    );
+    expect(
+      implementationGuidance(
+        { ...explored, goal: "Explain the parser" },
+        40,
+        64,
+      ),
+    ).toBeNull();
+  });
+
+  test("keys closeout guidance by material evidence state", () => {
+    expect(convergenceEvidenceKey(state())).toBe("r1:missing:stale");
+    expect(
+      convergenceEvidenceKey(
+        state({
+          testResults: [
+            {
+              command: "pytest",
+              passed: true,
+              summary: "ok",
+              mutationRevision: 1,
+            },
+          ],
+        }),
+      ),
+    ).toBe("r1:passed:stale");
   });
 });

@@ -131,8 +131,10 @@ export interface TurnFlags {
   readonly idleFuseTrips?: number;
   /** maxSteps 警告是否已发出（私有字段，_ 前缀表示内部使用） */
   _maxStepsWarned?: boolean;
-  /** Soft evidence-based closeout checkpoint has been injected. */
-  _convergenceWarned?: boolean;
+  /** Last revision-scoped closeout state injected; unchanged states dedupe. */
+  _convergenceEvidenceKey?: string;
+  /** Mid-run no-mutation checkpoint has been injected. */
+  _implementationWarned?: boolean;
   /** [require_mutation] coding tasks: bounded locate/edit/verify phase state. */
   readonly codingPhase?: import(
     "../lifecycle/coding-phase.js",

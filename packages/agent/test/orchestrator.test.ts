@@ -321,6 +321,48 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(2);
   });
 
+  test("injects a mid-run implementation checkpoint after sustained read-only work", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-implementation-"));
+    for (const file of ["a.txt", "b.txt", "c.txt"]) {
+      writeFileSync(path.join(dir, file), file);
+    }
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "implementation-checkpoint",
+        async complete(messages) {
+          calls += 1;
+          if (calls <= 3) {
+            const file = ["a.txt", "b.txt", "c.txt"][calls - 1];
+            return {
+              text: JSON.stringify({
+                tool: "workspace.read_file",
+                args: { path: file },
+              }),
+            };
+          }
+          expect(
+            messages.some((message) =>
+              message.content.includes("[Implementation checkpoint]"),
+            ),
+          ).toBe(true);
+          return {
+            text: '{"action":"final_answer","summary":"Evidence gathered."}',
+          };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    const result = await o.run({
+      runId: "implementation-checkpoint",
+      goal: "Fix the issue described in these files",
+      workspaceRoot: dir,
+      maxSteps: 6,
+    });
+    expect(result.status).toBe("completed");
+    expect(calls).toBe(4);
+  });
+
   test("run completes without tool when model returns plain text", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
