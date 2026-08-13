@@ -1,9 +1,11 @@
 export {
   createSweCompareManifest,
+  createPawSeenDevelopmentManifest,
   findLocalTrajectoryHits,
   writeSweCompareManifest,
   SWE_COMPARE_SEEN_EXCLUSIONS,
   SWE_COMPARE_FORMAL_DEV_IDS,
+  PAW_SEEN_DEVELOPMENT_IDS,
 } from "./manifest.js";
 export { buildSweCompareGoal } from "./goal.js";
 export {

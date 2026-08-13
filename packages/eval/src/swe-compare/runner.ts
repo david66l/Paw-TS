@@ -632,6 +632,17 @@ export function validateCompareRun(
       `compare manifest commit mismatch: manifest=${manifest.sourceTree.gitCommit} current=${commit}`,
     );
   }
+  const seenDevelopment = manifest.protocol === "paw-only-seen-development";
+  if (
+    manifest.selection.ruleVersion !==
+      (seenDevelopment ? "paw-seen-dev-v1" : "formal-dev-v1") ||
+    manifest.selection.purpose !==
+      (seenDevelopment
+        ? "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score"
+        : "frozen_paired_dev_diagnostic_not_headline_score")
+  ) {
+    throw new Error("compare manifest protocol metadata is inconsistent");
+  }
   const instance = manifest.instances.find(
     (item) => item.instanceId === instanceId,
   );
@@ -1541,6 +1552,14 @@ export async function runSweCompareArm(opts: {
   const manifest = JSON.parse(
     readFileSync(opts.manifestPath, "utf8"),
   ) as SweCompareManifest;
+  if (
+    manifest.protocol === "paw-only-seen-development" &&
+    opts.runner !== "paw"
+  ) {
+    throw new Error(
+      "paw-only-seen-development manifests cannot run Claude or produce paired scores",
+    );
+  }
   validateCompareRun(opts.repoRoot, manifest, opts.instanceId);
   const datasetPath = path.join(opts.repoRoot, manifest.dataset.localPath);
   const probe = loadLiteInstances(datasetPath).find(

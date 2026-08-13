@@ -33,6 +33,21 @@ export const SWE_COMPARE_SEEN_EXCLUSIONS = [
   "pallets__flask-5063",
 ] as const;
 
+/**
+ * Cross-repository tasks already exposed to Paw during engineering.
+ * Diagnostic only: never count these as unseen holdout or headline score.
+ */
+export const PAW_SEEN_DEVELOPMENT_IDS = [
+  "django__django-11019",
+  "scikit-learn__scikit-learn-25638",
+  "sympy__sympy-20049",
+  "pylint-dev__pylint-7228",
+  "astropy__astropy-12907",
+  "pallets__flask-5063",
+  "pydata__xarray-4493",
+  "matplotlib__matplotlib-25332",
+] as const;
+
 function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -115,7 +130,9 @@ export function createSweCompareManifest(opts: {
   readonly datasetPath?: string;
   readonly instanceIds?: readonly string[];
   readonly now?: () => Date;
+  readonly mode?: "formal-paired" | "paw-seen-development";
 }): SweCompareManifest {
+  const pawSeenDevelopment = opts.mode === "paw-seen-development";
   const datasetPath = opts.datasetPath ?? defaultLiteJsonl(opts.repoRoot);
   const instances = loadLiteInstances(datasetPath);
   const byId = new Map(
@@ -130,7 +147,7 @@ export function createSweCompareManifest(opts: {
     if (!instance)
       throw new Error(`SWE-bench instance not found: ${instanceId}`);
     const hits = findLocalTrajectoryHits(opts.repoRoot, instanceId);
-    if (hits.length > 0) {
+    if (hits.length > 0 && !pawSeenDevelopment) {
       throw new Error(
         `instance ${instanceId} has prior local trajectory hits: ${hits.join(", ")}`,
       );
@@ -178,7 +195,9 @@ export function createSweCompareManifest(opts: {
   const dockerVersion = dockerServerVersion(opts.repoRoot);
   return {
     schemaVersion: 1,
-    protocol: "paw-vs-claude-public-swe",
+    protocol: pawSeenDevelopment
+      ? "paw-only-seen-development"
+      : "paw-vs-claude-public-swe",
     createdAt: (opts.now ?? (() => new Date()))().toISOString(),
     dataset: {
       name: "princeton-nlp/SWE-bench_Lite",
@@ -188,10 +207,12 @@ export function createSweCompareManifest(opts: {
       sha256: sha256(datasetBuffer),
     },
     selection: {
-      ruleVersion: "formal-dev-v1",
-      purpose: "frozen_paired_dev_diagnostic_not_headline_score",
+      ruleVersion: pawSeenDevelopment ? "paw-seen-dev-v1" : "formal-dev-v1",
+      purpose: pawSeenDevelopment
+        ? "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score"
+        : "frozen_paired_dev_diagnostic_not_headline_score",
       ids,
-      excludedSeenIds: SWE_COMPARE_SEEN_EXCLUSIONS,
+      excludedSeenIds: pawSeenDevelopment ? [] : SWE_COMPARE_SEEN_EXCLUSIONS,
     },
     sourceTree: {
       gitCommit: commandText("git", ["rev-parse", "HEAD"], opts.repoRoot),
@@ -219,6 +240,18 @@ export function createSweCompareManifest(opts: {
     },
     instances: selected,
   };
+}
+
+export function createPawSeenDevelopmentManifest(opts: {
+  readonly repoRoot: string;
+  readonly datasetPath?: string;
+  readonly now?: () => Date;
+}): SweCompareManifest {
+  return createSweCompareManifest({
+    ...opts,
+    instanceIds: PAW_SEEN_DEVELOPMENT_IDS,
+    mode: "paw-seen-development",
+  });
 }
 
 export function writeSweCompareManifest(

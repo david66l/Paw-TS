@@ -28,6 +28,7 @@ import {
   recoverClaudeResultPatch,
   recoverPawResultPatch,
   replayClaudeTracePatch,
+  runSweCompareArm,
   sweCompareLocalGoldViolation,
   sweCompareNetworkViolation,
   validateCompareRun,
@@ -47,6 +48,26 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe("SWE compare runner", () => {
+  test("library rejects Claude against a Paw-only seen manifest", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-seen-no-claude-"));
+    const manifestPath = path.join(root, "manifest.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        protocol: "paw-only-seen-development",
+      }),
+      "utf8",
+    );
+    await expect(
+      runSweCompareArm({
+        repoRoot: root,
+        manifestPath,
+        instanceId: "demo__repo-1",
+        runner: "claude",
+      }),
+    ).rejects.toThrow("cannot run Claude");
+  });
   test("trusted mutation policy allows tracked source but rejects helpers and tests", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-policy-"));
     mkdirSync(path.join(root, "src"), { recursive: true });

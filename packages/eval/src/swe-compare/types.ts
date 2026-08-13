@@ -30,7 +30,7 @@ export interface SweCompareInstanceManifest {
 
 export interface SweCompareManifest {
   readonly schemaVersion: 1;
-  readonly protocol: "paw-vs-claude-public-swe";
+  readonly protocol: "paw-vs-claude-public-swe" | "paw-only-seen-development";
   readonly createdAt: string;
   readonly dataset: {
     readonly name: "princeton-nlp/SWE-bench_Lite";
@@ -40,8 +40,10 @@ export interface SweCompareManifest {
     readonly sha256: string;
   };
   readonly selection: {
-    readonly ruleVersion: "formal-dev-v1";
-    readonly purpose: "frozen_paired_dev_diagnostic_not_headline_score";
+    readonly ruleVersion: "formal-dev-v1" | "paw-seen-dev-v1";
+    readonly purpose:
+      | "frozen_paired_dev_diagnostic_not_headline_score"
+      | "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score";
     readonly ids: readonly string[];
     readonly excludedSeenIds: readonly string[];
   };

@@ -20,6 +20,7 @@ const runner = value("--runner");
 const verifyResult = value("--verify-result");
 const recoverResult = value("--recover-result-patch");
 const recoverPawResult = value("--recover-paw-result-patch");
+const manifestName = value("--manifest") ?? "formal-dev-v1.json";
 if (recoverPawResult) {
   const result = recoverPawResultPatch({
     repoRoot: process.cwd(),
@@ -75,7 +76,12 @@ if (verifyResult) {
 }
 if (!instanceId || (runner !== "paw" && runner !== "claude")) {
   throw new Error(
-    "Usage: --instance <id> --runner paw|claude [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> OR --audit-result <result.json>",
+    "Usage: --instance <id> --runner paw|claude [--manifest <name.json>] [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> OR --audit-result <result.json>",
+  );
+}
+if (manifestName === "paw-seen-dev-v1.json" && runner !== "paw") {
+  throw new Error(
+    "paw-seen-dev-v1 is a Paw-only architecture diagnostic; Claude runs are forbidden",
   );
 }
 const repoRoot = process.cwd();
@@ -86,7 +92,7 @@ const result = await runSweCompareArm({
     "benchmarks",
     "swe-compare",
     "manifests",
-    "formal-dev-v1.json",
+    manifestName,
   ),
   instanceId,
   runner,

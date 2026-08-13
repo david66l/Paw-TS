@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { buildSweCompareGoal } from "../src/swe-compare/goal.js";
 import {
+  PAW_SEEN_DEVELOPMENT_IDS,
   createSweCompareManifest,
   findLocalTrajectoryHits,
 } from "../src/swe-compare/manifest.js";
@@ -29,6 +30,16 @@ const instance = {
 };
 
 describe("SWE compare manifest", () => {
+  test("freezes eight seen tasks from distinct repositories", () => {
+    expect(PAW_SEEN_DEVELOPMENT_IDS).toHaveLength(8);
+    expect(new Set(PAW_SEEN_DEVELOPMENT_IDS).size).toBe(8);
+    expect(
+      new Set(PAW_SEEN_DEVELOPMENT_IDS.map((id) => id.split("__")[0])).size,
+    ).toBe(8);
+    expect(PAW_SEEN_DEVELOPMENT_IDS).toContain("pylint-dev__pylint-7228");
+    expect(PAW_SEEN_DEVELOPMENT_IDS).toContain("pydata__xarray-4493");
+    expect(PAW_SEEN_DEVELOPMENT_IDS).toContain("matplotlib__matplotlib-25332");
+  });
   test("uses one provider-neutral goal without leaking gold", () => {
     const goal = buildSweCompareGoal({
       ...instance,

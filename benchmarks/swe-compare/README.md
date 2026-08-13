@@ -29,3 +29,18 @@ bun run packages/eval/scripts/run-swe-compare.ts \
 Generated manifests, preflight predictions, run artifacts, and official logs
 are intentionally ignored by Git. The selection rules and hashes are produced
 by tracked source; each clean baseline commit regenerates its own manifest.
+
+## Paw-only seen development set
+
+`paw-seen-dev-v1` contains eight cross-repository tasks already exposed to Paw
+during engineering. It exists only to diagnose Paw's architecture before any
+unseen holdout is opened. Its results are neither a holdout nor a headline
+score, and the CLI rejects Claude runs against this manifest.
+
+```bash
+bun run packages/eval/scripts/prepare-paw-seen-dev.ts
+bun run packages/eval/scripts/preflight-swe-compare.ts \
+  --manifest paw-seen-dev-v1.json --instance pylint-dev__pylint-7228
+bun run packages/eval/scripts/run-swe-compare.ts \
+  --manifest paw-seen-dev-v1.json --instance pylint-dev__pylint-7228 --runner paw
+```
