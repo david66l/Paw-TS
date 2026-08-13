@@ -61,6 +61,8 @@ export interface AcceptanceCriterion {
     readonly ref?: string;
   };
   readonly status: AcceptanceCriterionStatus;
+  /** Who is trusted to produce final verification for this condition. */
+  readonly verificationAuthority?: "agent" | "external";
   /** Required for satisfied; optional diagnostic for blocked. */
   readonly evidence?: string;
   /** Source revision against which satisfied evidence was obtained. */
@@ -74,6 +76,8 @@ export interface TaskState {
   readonly acceptanceCriteria?: readonly AcceptanceCriterion[];
   readonly plan: readonly string[];
   readonly filesRead: readonly string[];
+  /** Successful exact reads by normalized path; absent in legacy snapshots. */
+  readonly fileReadCounts?: Readonly<Record<string, number>>;
   readonly filesChanged: readonly string[];
   readonly commandsRun: readonly CommandSummary[];
   readonly testResults: readonly TestResultSummary[];
@@ -121,6 +125,7 @@ export class TaskStateManager {
         acceptanceCriteria: [],
         plan: [],
         filesRead: [],
+        fileReadCounts: {},
         filesChanged: [],
         commandsRun: [],
         testResults: [],
@@ -182,6 +187,19 @@ export class TaskStateManager {
         error: `Unknown criterion id ${unknown.id}. Read Acceptance criteria in Current State and retry with an existing id.`,
       };
     }
+    const external = input.updates.find((update) =>
+      this.acceptanceCriteria().some(
+        (criterion) =>
+          criterion.id === update.id &&
+          criterion.verificationAuthority === "external",
+      ),
+    );
+    if (external) {
+      return {
+        ok: false,
+        error: `Criterion ${external.id} is owned by a trusted external verifier and cannot be resolved by the model.`,
+      };
+    }
     const evidenceFree = input.updates.find(
       (update) => update.status === "satisfied" && !update.evidence?.trim(),
     );
@@ -210,6 +228,7 @@ export class TaskStateManager {
       readonly text: string;
       readonly source: AcceptanceCriterion["source"]["kind"];
       readonly ref?: string;
+      readonly verificationAuthority?: "agent" | "external";
     }[],
     currentTurn: number,
   ): void {
@@ -236,6 +255,9 @@ export class TaskStateManager {
           ...(ref ? { ref } : {}),
         },
         status: "pending",
+        ...(item.verificationAuthority
+          ? { verificationAuthority: item.verificationAuthority }
+          : {}),
       });
       nextId += 1;
       changed = true;
@@ -332,6 +354,7 @@ export class TaskStateManager {
     if (isControlPlaneToolResult(result)) return;
     const args = isRecord(call.args) ? call.args : {};
     const filesRead = [...this.state.filesRead];
+    const fileReadCounts = { ...(this.state.fileReadCounts ?? {}) };
     const filesChanged = [...this.state.filesChanged];
     const commandsRun = [...this.state.commandsRun];
     const testResults = [...this.state.testResults];
@@ -347,6 +370,8 @@ export class TaskStateManager {
     if (result.ok && call.tool === "workspace.read_file") {
       const readPath = stringArg(args.path);
       pushUnique(filesRead, readPath);
+      if (readPath)
+        fileReadCounts[readPath] = (fileReadCounts[readPath] ?? 0) + 1;
       if (readPath && readPath === editRecoveryPath)
         editRecoveryPath = undefined;
     }
@@ -439,6 +464,7 @@ export class TaskStateManager {
     this.state = {
       ...this.state,
       filesRead,
+      fileReadCounts,
       filesChanged,
       commandsRun: commandsRun.slice(-20),
       testResults: testResults.slice(-20),
@@ -526,7 +552,12 @@ export function formatTaskStateForContext(state: TaskState): string {
 
 export interface AcceptanceReadinessItem {
   readonly criterion: AcceptanceCriterion;
-  readonly readiness: "pending" | "satisfied" | "stale" | "blocked";
+  readonly readiness:
+    | "pending"
+    | "satisfied"
+    | "stale"
+    | "blocked"
+    | "external";
 }
 
 export function acceptanceReadiness(
@@ -536,6 +567,10 @@ export function acceptanceReadiness(
   const items: AcceptanceReadinessItem[] = [];
   for (const criterion of state.acceptanceCriteria ?? []) {
     if (criterion.status === "superseded") continue;
+    if (criterion.verificationAuthority === "external") {
+      items.push({ criterion, readiness: "external" });
+      continue;
+    }
     if (criterion.status === "satisfied") {
       items.push({
         criterion,
@@ -699,6 +734,9 @@ export function isVerificationCommand(command: string): boolean {
   // 只认「真正执行测试」的命令形态（可出现在 && / ; 链中）
   return (
     /(?:^|[;&|]\s*)(?:(?:python(?:3)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+-m\s+)?pytest\b/i.test(
+      c,
+    ) ||
+    /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+-m\s+unittest\b/i.test(
       c,
     ) ||
     /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+test\b/i.test(c) ||

@@ -186,6 +186,24 @@ describe("AcceptanceGate", () => {
     );
     expect(decision.ok).toBe(true);
   });
+
+  test("keeps externally verified criteria visible without blocking local closeout", () => {
+    const decision = checkAcceptanceCriteria(
+      baseState({
+        acceptanceCriteria: [
+          {
+            id: "acceptance-001",
+            text: "Official FAIL_TO_PASS suite",
+            source: { kind: "verification", turn: 0 },
+            status: "pending",
+            verificationAuthority: "external",
+          },
+        ],
+      }),
+    );
+    expect(decision.ok).toBe(true);
+    if (decision.ok) expect(decision.items[0]?.readiness).toBe("external");
+  });
 });
 
 describe("VerificationGate", () => {

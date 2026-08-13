@@ -328,6 +328,7 @@ export type { ModelTokenUsage } from "./token-usage.js";
 // ============================================================
 export type {
   CompletionOutcome,
+  RunAcceptanceCriterionSeed,
   RunEvidence,
   RunResult,
   RunSpec,

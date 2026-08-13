@@ -5,9 +5,9 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import {
+  REQUIRE_MUTATION_MARKER,
   createBudgetAbort,
   createRunOrchestrator,
-  REQUIRE_MUTATION_MARKER,
   resolveLifecycleBudget,
 } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
@@ -17,22 +17,20 @@ import {
   extractCleanMemoryQuery,
 } from "@paw/memory";
 import {
+  type EpisodicExperience,
   PostgresMemoryStoreEngine,
   deriveEntryId,
-  type EpisodicExperience,
 } from "@paw/memory/longterm";
 import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
 
+import { buildSweAcceptanceCriteria } from "./acceptance.js";
 import type {
   SweBenchLiteInstance,
   SweExpArmCheckpoint,
   SweExpArmResultExtended,
 } from "./agent-types.js";
 import { saveArmCheckpoint } from "./checkpoint.js";
-import {
-  assertNoGoldLeak,
-  distillHistoryLesson,
-} from "./history-seed.js";
+import { assertNoGoldLeak, distillHistoryLesson } from "./history-seed.js";
 import {
   createCommitWorktree,
   ensureRepoClone,
@@ -94,7 +92,10 @@ export function buildSweAgentGoal(probe: SweBenchLiteInstance): string {
       ? `External FAIL_TO_PASS acceptance tests (read-only; run these when feasible):\n${failToPass.map((test) => `- ${test}`).join("\n")}`
       : "No explicit FAIL_TO_PASS identifiers are available; locate the narrowest relevant existing test.",
     passToPass.length > 0
-      ? `Regression tests that must remain passing (read-only):\n${passToPass.slice(0, 20).map((test) => `- ${test}`).join("\n")}`
+      ? `Regression tests that must remain passing (read-only):\n${passToPass
+          .slice(0, 20)
+          .map((test) => `- ${test}`)
+          .join("\n")}`
       : "",
     "",
     probe.problem_statement,
@@ -272,10 +273,11 @@ export async function runAgentArm(
   opts: RunAgentArmOptions,
 ): Promise<SweExpArmCheckpoint> {
   const memoryOn = opts.arm === "on";
-  const repositoryId = `swe-exp-${opts.pairId}-${opts.arm}-${opts.suiteRunId}`.replace(
-    /[^a-zA-Z0-9_-]/g,
-    "_",
-  );
+  const repositoryId =
+    `swe-exp-${opts.pairId}-${opts.arm}-${opts.suiteRunId}`.replace(
+      /[^a-zA-Z0-9_-]/g,
+      "_",
+    );
   const armRunId = `${opts.suiteRunId}-${opts.pairId}-${opts.arm}`;
   const startedAt = new Date().toISOString();
 
@@ -366,6 +368,7 @@ export async function runAgentArm(
       const result = await orch.run({
         runId: armRunId,
         goal: buildSweAgentGoal(opts.probe),
+        initialAcceptanceCriteria: buildSweAcceptanceCriteria(opts.probe),
         workspaceRoot: wt.root,
         maxSteps: budget.maxSteps || rootMaxSteps || 32,
         abortSignal: budgetAbort.signal,

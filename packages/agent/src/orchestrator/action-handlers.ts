@@ -46,6 +46,7 @@ import {
 import { isControlPlaneToolResult } from "../lifecycle/control-plane.js";
 import {
   convergenceToolBlockReason,
+  isConvergenceRefreshRead,
   isEditRecoveryRead,
 } from "../lifecycle/convergence.js";
 import {
@@ -930,21 +931,36 @@ async function handleToolCalls(
   const priorCodingPhase = flags.codingPhase ?? EMPTY_CODING_PHASE_STATE;
   let projectedCodingPhase = priorCodingPhase;
   const taskState = ctx.taskState.snapshot();
-  const convergenceBlockReasons = calls.map((call) =>
-    convergenceToolBlockReason(
+  let convergenceRefreshGranted = false;
+  const convergenceBlockReasons = calls.map((call) => {
+    const isRefresh = isConvergenceRefreshRead(
+      call,
+      taskState,
+      ctx.turn + 1,
+      ctx.maxSteps,
+    );
+    if (isRefresh && convergenceRefreshGranted) {
+      return "[LoopPolicy:implementation_required] The one bounded pre-edit refresh read is already allocated in this tool batch. Make the smallest plausible source edit or run a narrow existing test now.";
+    }
+    if (isRefresh) convergenceRefreshGranted = true;
+    return convergenceToolBlockReason(
       call,
       taskState,
       ctx.turn + 1,
       ctx.maxSteps,
       ctx.verificationPolicy,
-    ),
-  );
+    );
+  });
   const codingPhaseBlockReasons = calls.map((call, index) => {
     // A call rejected by the general loop policy never reaches the opt-in
     // coding-phase state machine and must not consume its violation budget.
     if (convergenceBlockReasons[index]) return null;
     if (!codingPhaseEnabled) return null;
-    if (isEditRecoveryRead(call, taskState)) return null;
+    if (
+      isEditRecoveryRead(call, taskState) ||
+      isConvergenceRefreshRead(call, taskState, ctx.turn + 1, ctx.maxSteps)
+    )
+      return null;
     const reason = codingPhaseBlockReason(call, projectedCodingPhase);
     if (!reason && isCodingNavigationTool(call.tool)) {
       projectedCodingPhase = {

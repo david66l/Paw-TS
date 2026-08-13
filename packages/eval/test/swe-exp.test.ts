@@ -11,10 +11,13 @@ import { closeSql } from "@paw/memory/db";
 
 import {
   SWE_EXP_BUILTIN_PAIRS,
+  type SweExpPairResult,
+  type SweInstance,
   armOutcome,
   assertNoGoldLeak,
-  buildSweAgentGoal,
   buildSameRepoPairs,
+  buildSweAcceptanceCriteria,
+  buildSweAgentGoal,
   distillHistoryLesson,
   harnessPythonArgs,
   lessonGoalOverlap,
@@ -23,17 +26,17 @@ import {
   runSweExpAgent,
   runSweExpBuiltin,
   statementSimilarity,
-  summarizeSweExp,
   summarizeLifecycleGates,
+  summarizeSweExp,
   sweExpPassed,
-  type SweExpPairResult,
-  type SweInstance,
   writeJsonAtomic,
 } from "../src/swe-exp/index.js";
 
 describe("statementSimilarity / buildSameRepoPairs", () => {
   test("Jaccard 同文=1，无关≈0", () => {
-    expect(statementSimilarity("fix add overflow bug", "fix add overflow bug")).toBe(1);
+    expect(
+      statementSimilarity("fix add overflow bug", "fix add overflow bug"),
+    ).toBe(1);
     expect(statementSimilarity("alpha beta gamma", "zzzz yyyy xxxx")).toBe(0);
   });
 
@@ -42,12 +45,14 @@ describe("statementSimilarity / buildSameRepoPairs", () => {
       {
         instance_id: "demo__a-1",
         repo: "demo/a",
-        problem_statement: "Fix the cache invalidation when tokens rotate after deploy",
+        problem_statement:
+          "Fix the cache invalidation when tokens rotate after deploy",
       },
       {
         instance_id: "demo__a-2",
         repo: "demo/a",
-        problem_statement: "Fix cache invalidation tokens rotate during deploy window",
+        problem_statement:
+          "Fix cache invalidation tokens rotate during deploy window",
       },
       {
         instance_id: "demo__a-3",
@@ -57,7 +62,8 @@ describe("statementSimilarity / buildSameRepoPairs", () => {
       {
         instance_id: "other__1",
         repo: "other/b",
-        problem_statement: "Fix the cache invalidation when tokens rotate after deploy",
+        problem_statement:
+          "Fix the cache invalidation when tokens rotate after deploy",
       },
     ];
     const pairs = buildSameRepoPairs(instances, {
@@ -74,11 +80,7 @@ describe("statementSimilarity / buildSameRepoPairs", () => {
 });
 
 describe("summarizeSweExp / resolve Δ", () => {
-  const mk = (
-    id: string,
-    off: boolean,
-    on: boolean,
-  ): SweExpPairResult => {
+  const mk = (id: string, off: boolean, on: boolean): SweExpPairResult => {
     const offArm = { memoryOn: false as const, resolved: off };
     const onArm = { memoryOn: true as const, resolved: on };
     return {
@@ -134,7 +136,9 @@ describe("summarizeSweExp / resolve Δ", () => {
 describe("builtin fixtures guards", () => {
   test("lesson/goal overlap ≥2；fake 预设 on 优于 off", () => {
     for (const p of SWE_EXP_BUILTIN_PAIRS) {
-      expect(lessonGoalOverlap(p.goal, p.lesson.summary)).toBeGreaterThanOrEqual(2);
+      expect(
+        lessonGoalOverlap(p.goal, p.lesson.summary),
+      ).toBeGreaterThanOrEqual(2);
       expect(p.fakeOnResolved).toBe(true);
       expect(p.fakeOffResolved).toBe(false);
     }
@@ -220,6 +224,25 @@ describe("agent control-plane preflight/checkpoint", () => {
     expect(goal).not.toContain("[coding_phase_budget]");
     expect(goal).not.toContain("GOLD_PATCH_MUST_NOT_LEAK");
     expect(goal).not.toContain("GOLD_TEST_PATCH_MUST_NOT_LEAK");
+  });
+
+  test("trusted SWE metadata compiles into external acceptance state", () => {
+    const criteria = buildSweAcceptanceCriteria({
+      instance_id: "demo__repo-1",
+      repo: "demo/repo",
+      base_commit: "deadbeef",
+      problem_statement: "fix it",
+      FAIL_TO_PASS: ["tests/test_cache.py::test_rotation"],
+      PASS_TO_PASS: ["tests/test_cache.py::test_baseline"],
+    });
+    expect(criteria).toHaveLength(2);
+    expect(criteria.map((item) => item.ref)).toEqual([
+      "tests/test_cache.py::test_baseline",
+      "tests/test_cache.py::test_rotation",
+    ]);
+    expect(
+      criteria.every((item) => item.verificationAuthority === "external"),
+    ).toBe(true);
   });
 
   test("DB unavailable fails before either model arm runs", async () => {
@@ -312,8 +335,12 @@ describe("agent control-plane preflight/checkpoint", () => {
         ],
       });
       expect(preflightCalls).toBe(0);
-      expect(report.warnings).toContain("pair-1/off: eval_only_missing_checkpoint");
-      expect(report.warnings).toContain("pair-1/on: eval_only_missing_checkpoint");
+      expect(report.warnings).toContain(
+        "pair-1/off: eval_only_missing_checkpoint",
+      );
+      expect(report.warnings).toContain(
+        "pair-1/on: eval_only_missing_checkpoint",
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -373,7 +400,10 @@ describe("history-seed no gold", () => {
         "QuerySet.update() fails when annotating with F() on related fields in models.py",
     });
     expect(lesson.modification.length).toBeGreaterThan(0);
-    assertNoGoldLeak(lesson, "diff --git a/foo.py b/foo.py\n@@ -1 +1 @@\n-a\n+b\n");
+    assertNoGoldLeak(
+      lesson,
+      "diff --git a/foo.py b/foo.py\n@@ -1 +1 @@\n-a\n+b\n",
+    );
 
     expect(() =>
       distillHistoryLesson({

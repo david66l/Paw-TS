@@ -247,6 +247,45 @@ describe("convergence guidance", () => {
     ).toContain("implementation_required");
   });
 
+  test("allows one bounded pre-edit refresh read after midpoint", () => {
+    const refreshable = state({
+      filesChanged: [],
+      mutationRevision: 0,
+      filesRead: ["src/target.py", "tests/test_target.py"],
+      fileReadCounts: { "src/target.py": 1, "tests/test_target.py": 1 },
+      commandsRun: [{ command: "python -V", ok: true, summary: "ok" }],
+    });
+    const refresh = {
+      type: "tool_call" as const,
+      tool: "workspace.read_file",
+      args: { path: "src/target.py" },
+    };
+    expect(convergenceToolBlockReason(refresh, refreshable, 32, 64)).toBeNull();
+    expect(
+      convergenceToolBlockReason(
+        refresh,
+        {
+          ...refreshable,
+          fileReadCounts: { "src/target.py": 2, "tests/test_target.py": 1 },
+        },
+        33,
+        64,
+      ),
+    ).toContain("implementation_required");
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.read_file",
+          args: { path: "src/new.py" },
+        },
+        refreshable,
+        32,
+        64,
+      ),
+    ).toContain("implementation_required");
+  });
+
   test("enforces verify then diff then delivery in the closeout window", () => {
     const read = {
       type: "tool_call" as const,

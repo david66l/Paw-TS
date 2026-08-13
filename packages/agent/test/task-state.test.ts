@@ -157,6 +157,47 @@ describe("TaskStateManager", () => {
     expect(restored.acceptanceCriteria()).toEqual([]);
   });
 
+  test("retains trusted external acceptance without making the model self-certify it", () => {
+    const state = new TaskStateManager("fix bug");
+    state.registerAcceptanceCriteria(
+      [
+        {
+          text: "FAIL_TO_PASS must pass: tests/test_bug.py::test_fix",
+          source: "verification",
+          ref: "tests/test_bug.py::test_fix",
+          verificationAuthority: "external",
+        },
+      ],
+      0,
+    );
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe(
+      "external",
+    );
+    expect(formatTaskStateForContext(state.snapshot())).toContain(
+      "acceptance-001 [external]",
+    );
+    expect(
+      state.applyAcceptanceUpdate(
+        {
+          reason: "self certify",
+          add: [],
+          updates: [
+            {
+              id: "acceptance-001",
+              status: "satisfied",
+              evidence: "I think it passes",
+            },
+          ],
+        },
+        1,
+      ),
+    ).toEqual({
+      ok: false,
+      error:
+        "Criterion acceptance-001 is owned by a trusted external verifier and cannot be resolved by the model.",
+    });
+  });
+
   test("does not record control-plane rejections as task failures", () => {
     const state = new TaskStateManager("fix bug");
     state.recordToolResult(
@@ -290,6 +331,14 @@ describe("TaskStateManager", () => {
       "- Final diff: stale (inspected r1)",
     ]);
     expect(isVerificationCommand("py -3.10 -m pytest tests -q")).toBe(true);
+    expect(
+      isVerificationCommand(
+        "python -m unittest forms_tests.tests.test_media.FormsMediaTestCase -v",
+      ),
+    ).toBe(true);
+    expect(isVerificationCommand("python3.11 -m unittest discover -v")).toBe(
+      true,
+    );
     expect(isVerificationCommand("pip install pytest")).toBe(false);
   });
 

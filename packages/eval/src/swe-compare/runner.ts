@@ -17,9 +17,11 @@ import {
 } from "@paw/agent";
 import type { ToolEffectPolicy, ToolExecutionPolicy } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
+import type { RunAcceptanceCriterionSeed } from "@paw/core";
 import { createDefaultLanguageModel } from "@paw/models";
 import { parsePatch } from "diff";
 
+import { buildSweAcceptanceCriteria } from "../swe-exp/acceptance.js";
 import { writeJsonAtomic } from "../swe-exp/checkpoint.js";
 import { loadLiteInstances } from "../swe-exp/dataset.js";
 import {
@@ -738,6 +740,7 @@ async function runPaw(opts: {
   readonly runId: string;
   readonly maxSteps: number;
   readonly timeoutMs: number;
+  readonly initialAcceptanceCriteria: readonly RunAcceptanceCriterionSeed[];
 }): Promise<{
   status: "completed" | "failed" | "timeout";
   terminalReason?: string;
@@ -813,6 +816,7 @@ async function runPaw(opts: {
     const result = await orch.run({
       runId: opts.runId,
       goal: opts.goal,
+      initialAcceptanceCriteria: opts.initialAcceptanceCriteria,
       workspaceRoot: opts.workspaceRoot,
       maxSteps: opts.maxSteps,
       abortSignal: abort.signal,
@@ -1642,6 +1646,7 @@ export async function runSweCompareArm(opts: {
             runId,
             maxSteps: manifest.budget.pawMaxSteps,
             timeoutMs: manifest.budget.sharedTimeoutMs,
+            initialAcceptanceCriteria: buildSweAcceptanceCriteria(probe),
           })
         : await runClaude({
             workspaceRoot: workspace.root,

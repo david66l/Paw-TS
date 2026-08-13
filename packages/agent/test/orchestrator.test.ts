@@ -779,6 +779,45 @@ describe("AgentOrchestrator", () => {
     ).toHaveLength(2);
   });
 
+  test("trusted initial acceptance is visible on the first turn and externally owned", async () => {
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      model: {
+        label: "seeded-external-acceptance",
+        async complete(messages) {
+          calls += 1;
+          const context = messages.map((message) => message.content).join("\n");
+          expect(context).toContain(
+            "acceptance-001 [external] FAIL_TO_PASS must pass: tests/test_bug.py::test_fix",
+          );
+          return { text: '{"action":"final_answer","summary":"Ready."}' };
+        },
+      },
+      auxiliaryModel: {
+        label: "seeded-external-acceptance-aux",
+        async complete() {
+          return { text: '{"keep":[],"drop":[],"add":[]}' };
+        },
+      },
+    });
+    const result = await o.run({
+      runId: "seeded-external-acceptance",
+      goal: "inspect compatibility behavior",
+      initialAcceptanceCriteria: [
+        {
+          text: "FAIL_TO_PASS must pass: tests/test_bug.py::test_fix",
+          source: "verification",
+          ref: "tests/test_bug.py::test_fix",
+          verificationAuthority: "external",
+        },
+      ],
+      workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-seeded-acceptance-")),
+      maxSteps: 2,
+    });
+    expect(result.status).toBe("completed");
+    expect(calls).toBe(1);
+  });
+
   test("blocked acceptance criterion ends honestly without a nudge loop", async () => {
     let calls = 0;
     const o = new AgentOrchestrator({

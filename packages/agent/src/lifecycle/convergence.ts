@@ -52,6 +52,31 @@ export function isEditRecoveryRead(
   );
 }
 
+/**
+ * Permit one successful exact re-read after the no-mutation midpoint. The
+ * model may refresh a previously observed source region before editing, but it
+ * cannot turn this escape hatch into another browsing phase.
+ */
+export function isConvergenceRefreshRead(
+  call: AgentToolCallAction,
+  state: TaskState,
+  turn: number,
+  maxSteps: number,
+): boolean {
+  if (
+    call.tool !== "workspace.read_file" ||
+    typeof call.args.path !== "string" ||
+    (state.mutationRevision ?? 0) !== 0 ||
+    turn < Math.ceil(maxSteps * 0.5) ||
+    state.filesRead.length + state.commandsRun.length < 3 ||
+    !state.filesRead.includes(call.args.path)
+  ) {
+    return false;
+  }
+  const counts = state.fileReadCounts ?? {};
+  return !state.filesRead.some((path) => (counts[path] ?? 1) > 1);
+}
+
 export function convergenceWindow(maxSteps: number): number {
   return Math.min(12, Math.max(4, Math.ceil(maxSteps * 0.2)));
 }
@@ -105,6 +130,7 @@ export function convergenceToolBlockReason(
 ): string | null {
   if (!goalLikelyRequiresImplementation(state.goal)) return null;
   if (isEditRecoveryRead(call, state)) return null;
+  if (isConvergenceRefreshRead(call, state, turn, maxSteps)) return null;
   const revision = state.mutationRevision ?? 0;
   if (
     revision === 0 &&

@@ -48,10 +48,25 @@ export interface RunEvidence {
   readonly fileLockConflicts?: readonly string[];
 }
 
+/**
+ * Trusted, caller-supplied acceptance state. This is deliberately structured
+ * input: the orchestrator must not guess lifecycle gates by parsing prose from
+ * the model-visible goal.
+ */
+export interface RunAcceptanceCriterionSeed {
+  readonly text: string;
+  readonly source: "user" | "repository" | "verification";
+  readonly ref?: string;
+  /** External criteria remain visible, but a trusted external verifier closes them. */
+  readonly verificationAuthority?: "agent" | "external";
+}
+
 export interface RunSpec {
   readonly runId: string;
   /** 用户可见的本次 Run 目标。 */
   readonly goal: string;
+  /** Observable conditions known by the trusted caller before the first turn. */
+  readonly initialAcceptanceCriteria?: readonly RunAcceptanceCriterionSeed[];
   /** 工作区根目录的绝对或相对路径；由 harness 解析。 */
   readonly workspaceRoot?: string;
   /**

@@ -58,6 +58,7 @@ export {
 
 export { runSweExpAgent, type SweExpAgentRunOptions } from "./agent-harness.js";
 export { buildSweAgentGoal } from "./agent-arm.js";
+export { buildSweAcceptanceCriteria } from "./acceptance.js";
 export {
   harnessPythonArgs,
   parseResolvedFromHarnessOutput,

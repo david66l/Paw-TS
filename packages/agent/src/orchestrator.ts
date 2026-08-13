@@ -2994,6 +2994,10 @@ export class AgentOrchestrator {
       spec.goal,
       spec.resumeFromState?.taskState,
     );
+    taskState.registerAcceptanceCriteria(
+      spec.initialAcceptanceCriteria ?? [],
+      0,
+    );
     this._contextPackageCode = [];
     let startTurn = 0;
     const sessionMemoryStore = new SessionMemoryStore({ workspaceRoot });
