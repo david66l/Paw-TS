@@ -200,6 +200,9 @@ describe("SWE compare runner", () => {
     try {
       expect(git(workspace.root, ["remote"])).toBe("");
       expect(git(workspace.root, ["rev-parse", "HEAD"])).toBe(base);
+      expect(git(workspace.root, ["config", "--local", "core.autocrlf"])).toBe(
+        "false",
+      );
       const leaked = spawnSync(
         "git",
         ["cat-file", "-e", `${future}^{commit}`],

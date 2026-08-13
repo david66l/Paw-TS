@@ -133,6 +133,12 @@ export function createCommitWorktree(
     }
     throw new Error(`isolated benchmark init failed: ${init.error}`);
   }
+  const configured = runGit(worktreeRoot, ["config", "core.autocrlf", "false"]);
+  if (!configured.ok) {
+    throw new Error(
+      `isolated benchmark Git config failed: ${configured.error}`,
+    );
+  }
   const fetched = runGit(
     worktreeRoot,
     [
@@ -223,7 +229,14 @@ export function gitDiff(workspaceRoot: string): string {
 
 /** Capture both the patch and collection failure so evals cannot silently score empty. */
 export function captureGitDiff(workspaceRoot: string): GitDiffCapture {
-  const diffArgs = ["diff", "--no-ext-diff", "--no-textconv", "--binary"];
+  const diffArgs = [
+    "-c",
+    "core.autocrlf=false",
+    "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--binary",
+  ];
   const r = runGit(workspaceRoot, diffArgs, 60_000);
   if (!r.ok) return { error: r.error };
   // 也包含 staged；SWE 通常改已有 tracked 文件
