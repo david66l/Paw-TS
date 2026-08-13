@@ -316,7 +316,11 @@ describe("TaskStateManager", () => {
       { ok: true, summary: "1 passed", payload: {} },
     );
     state.recordToolResult(
-      { type: "tool_call", tool: "workspace.git_diff", args: {} },
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "git --no-pager diff -- a.py" },
+      },
       { ok: true, summary: "diff", payload: {} },
     );
     expect(formatCompletionReadiness(state.snapshot())).toEqual([

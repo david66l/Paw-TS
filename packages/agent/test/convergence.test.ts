@@ -440,6 +440,19 @@ describe("convergence guidance", () => {
     ).toContain("inspect_external_diff");
     expect(
       convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.run_shell",
+          args: { command: "git --no-pager diff -- a.py" },
+        },
+        failed,
+        40,
+        64,
+        { authority: "external" },
+      ),
+    ).toBeNull();
+    expect(
+      convergenceToolBlockReason(
         read,
         { ...failed, diffInspectedRevision: 1 },
         41,

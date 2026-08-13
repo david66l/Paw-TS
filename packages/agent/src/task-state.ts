@@ -4,6 +4,7 @@ import type {
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
+import { isGitDiffCommand } from "./shell-command.js";
 
 export interface CommandSummary {
   readonly command: string;
@@ -447,7 +448,7 @@ export class TaskStateManager {
             mutationRevision,
           });
         }
-        if (result.ok && looksLikeGitDiffCommand(command)) {
+        if (result.ok && isGitDiffCommand(command)) {
           diffInspectedRevision = mutationRevision;
         }
       }
@@ -719,10 +720,6 @@ function extractPatchPaths(patch: string): string[] {
     if (match?.[1]) paths.push(match[1].trim());
   }
   return paths;
-}
-
-function looksLikeGitDiffCommand(command: string): boolean {
-  return /(?:^|[;&|]\s*)git\s+diff(?:\s|$)/i.test(command);
 }
 
 export function isVerificationCommand(command: string): boolean {

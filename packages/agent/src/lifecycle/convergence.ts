@@ -1,4 +1,5 @@
 import type { AgentToolCallAction } from "@paw/core";
+import { isGitDiffCommand } from "../shell-command.js";
 import type { TaskState } from "../task-state.js";
 import { isVerificationCommand, verificationOutcome } from "../task-state.js";
 import type { VerificationPolicy } from "./verification-gate.js";
@@ -20,7 +21,7 @@ function isDiffInspection(call: AgentToolCallAction): boolean {
   if (call.tool !== "workspace.run_shell") return false;
   const command =
     typeof call.args.command === "string" ? call.args.command : "";
-  return /(?:^|[;&|]\s*)git\s+diff(?:\s|$)/i.test(command);
+  return isGitDiffCommand(command);
 }
 
 function isInvestigationCall(call: AgentToolCallAction): boolean {
