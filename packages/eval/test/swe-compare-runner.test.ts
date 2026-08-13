@@ -806,6 +806,80 @@ describe("SWE compare runner", () => {
         },
       ]),
     ).toEqual({ valid: true, violations: [] });
+
+    for (const summary of [
+      "[LoopPolicy:inspect_external_diff] inspect the final diff now",
+      "[ToolPolicy:network_isolation] outbound network is disabled",
+    ]) {
+      expect(
+        auditPawTraceIntegrity([
+          {
+            event: {
+              type: "tool.call",
+              tool: "workspace.run_shell",
+              args: { command: "python -m pip install -e . --no-deps" },
+            },
+          },
+          {
+            event: {
+              type: "tool.result",
+              tool: "workspace.run_shell",
+              ok: false,
+              summary,
+            },
+          },
+        ]),
+      ).toEqual({ valid: true, violations: [] });
+    }
+  });
+
+  test("still audits shell commands that executed and then failed", () => {
+    expect(
+      auditPawTraceIntegrity([
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.run_shell",
+            args: { command: "python -m pip install -e . --no-deps" },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.run_shell",
+            ok: false,
+            summary: "shell exited with code 1",
+          },
+        },
+      ]),
+    ).toEqual({
+      valid: false,
+      violations: ["outbound_dependency_install"],
+    });
+
+    expect(
+      auditPawTraceIntegrity([
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.run_shell",
+            args: { command: "python -m pip install -e . --no-deps" },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.run_shell",
+            ok: false,
+            summary:
+              "[ToolEffectPolicy:prohibited_workspace_effect_recovered] restored workspace",
+          },
+        },
+      ]),
+    ).toEqual({
+      valid: false,
+      violations: ["outbound_dependency_install"],
+    });
   });
 
   test("blocks benchmark network tools before execution but permits offline/local work", () => {

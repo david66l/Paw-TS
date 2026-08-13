@@ -1258,7 +1258,7 @@ function shellCommandsFromPawTrace(trace: readonly unknown[]): string[] {
       const command = pending.shift();
       if (!command) continue;
       const summary = typeof record.summary === "string" ? record.summary : "";
-      if (!/execution denied|denied by user/i.test(summary)) {
+      if (!pawShellCallRejectedBeforeExecution(summary)) {
         commands.push(command);
       }
     }
@@ -1268,6 +1268,20 @@ function shellCommandsFromPawTrace(trace: readonly unknown[]): string[] {
   // as potentially executed, never silently whitelisted.
   commands.push(...pending);
   return commands;
+}
+
+/**
+ * Only results produced by Paw's control plane before the shell executor runs
+ * can prove that a recorded tool.call had no benchmark-visible effect.
+ * ToolEffectPolicy is deliberately excluded because it evaluates an execution
+ * that already happened; ordinary shell failures are likewise still audited.
+ */
+function pawShellCallRejectedBeforeExecution(summary: string): boolean {
+  const normalized = summary.trim();
+  return (
+    /execution denied|denied by user/i.test(normalized) ||
+    /^\[(?:LoopPolicy|ToolPolicy):[^\]]+\]/.test(normalized)
+  );
 }
 
 function commandMayWrite(command: string): boolean {
