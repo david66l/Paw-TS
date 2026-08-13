@@ -14,6 +14,100 @@ const RETRYABLE_ERR = new Error("fetch failed: ECONNREFUSED");
 const NON_RETRYABLE_ERR = new Error("Invalid API key");
 
 describe("Model Retry", () => {
+  test("internal request timeout retries instead of aborting the run", async () => {
+    const dir = tmpDir("paw-retry-timeout-");
+    const events: RunEventEnvelope[] = [];
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      memoryLlm: "off",
+      modelRequestTimeoutMs: 10,
+      model: {
+        label: "timeout-then-success",
+        async complete(_messages, opts) {
+          calls += 1;
+          if (calls === 1) {
+            await new Promise<void>((_resolve, reject) => {
+              opts?.signal?.addEventListener(
+                "abort",
+                () => {
+                  const error = new Error("The operation was aborted");
+                  error.name = "AbortError";
+                  reject(error);
+                },
+                { once: true },
+              );
+            });
+          }
+          return {
+            text: '{"action":"final_answer","summary":"Recovered."}',
+          };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+    const result = await o.run({
+      runId: "retry-timeout",
+      goal: "finish",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+    expect(result.status).toBe("completed");
+    expect(calls).toBe(2);
+    const retry = events.find(
+      (event) => event.event.type === "model.retry.waiting",
+    );
+    expect(retry?.event.type).toBe("model.retry.waiting");
+    if (retry?.event.type === "model.retry.waiting") {
+      expect(retry.event.errorType).toBe("timeout");
+      expect(retry.event.error).toContain("Model request timeout");
+    }
+  });
+
+  test("parent abort still stops immediately without retry", async () => {
+    const dir = tmpDir("paw-retry-parent-abort-");
+    const controller = new AbortController();
+    const events: RunEventEnvelope[] = [];
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      memoryLlm: "off",
+      modelRequestTimeoutMs: 1_000,
+      model: {
+        label: "parent-abort",
+        async complete(_messages, opts) {
+          calls += 1;
+          await new Promise<void>((_resolve, reject) => {
+            opts?.signal?.addEventListener(
+              "abort",
+              () => {
+                const error = new Error("The operation was aborted");
+                error.name = "AbortError";
+                reject(error);
+              },
+              { once: true },
+            );
+            controller.abort();
+          });
+          return { text: "unreachable" };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+    const result = await o.run({
+      runId: "parent-abort",
+      goal: "finish",
+      workspaceRoot: dir,
+      maxSteps: 2,
+      abortSignal: controller.signal,
+    });
+    expect(result.status).toBe("aborted");
+    expect(calls).toBe(1);
+    expect(
+      events.some((event) => event.event.type === "model.retry.waiting"),
+    ).toBe(false);
+  });
+
   test("transient error retries and eventually succeeds", async () => {
     const dir = tmpDir("paw-retry-ok-");
     writeFileSync(path.join(dir, "a.txt"), "x");
@@ -171,7 +265,9 @@ describe("Model Retry", () => {
       workspaceRoot: dir,
       maxSteps: 3,
     });
-    const waitEvent = events.find((e) => e.event.type === "model.retry.waiting");
+    const waitEvent = events.find(
+      (e) => e.event.type === "model.retry.waiting",
+    );
     expect(waitEvent).toBeDefined();
     if (waitEvent?.event.type === "model.retry.waiting") {
       // Should be around 2s * jitter (0.5–1.0) = 1s–2s
@@ -208,7 +304,7 @@ describe("Model Retry", () => {
     for (let i = 0; i < 5; i++) {
       const events: RunEventEnvelope[] = [];
       const o = new AgentOrchestrator({
-      memoryLlm: "off",
+        memoryLlm: "off",
         model: new FakeLanguageModel({
           responses: [
             { error: RETRYABLE_ERR },
@@ -224,7 +320,9 @@ describe("Model Retry", () => {
         workspaceRoot: dir,
         maxSteps: 3,
       });
-      const waitEvent = events.find((e) => e.event.type === "model.retry.waiting");
+      const waitEvent = events.find(
+        (e) => e.event.type === "model.retry.waiting",
+      );
       if (waitEvent?.event.type === "model.retry.waiting") {
         delays.push(waitEvent.event.delayMs);
       }
@@ -260,7 +358,9 @@ describe("Model Retry", () => {
       workspaceRoot: dir,
       maxSteps: 3,
     });
-    const waitEvent = events.find((e) => e.event.type === "model.retry.waiting");
+    const waitEvent = events.find(
+      (e) => e.event.type === "model.retry.waiting",
+    );
     expect(waitEvent).toBeDefined();
     if (waitEvent?.event.type === "model.retry.waiting") {
       expect(waitEvent.event.errorType).toBe("server_error");

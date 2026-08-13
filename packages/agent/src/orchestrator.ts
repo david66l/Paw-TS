@@ -284,6 +284,8 @@ export interface AgentOrchestratorOptions {
   readonly auxiliaryModel?: LanguageModel;
   /** 测试注入：覆盖重试等待函数，默认 setTimeout */
   readonly retrySleep?: (ms: number) => Promise<void>;
+  /** 测试/运行时覆盖单次模型请求超时；默认 120 秒。 */
+  readonly modelRequestTimeoutMs?: number;
   /**
    * 运行后记忆提取策略：
    * - "background"：后台异步提取，不阻塞响应（默认）
@@ -343,7 +345,7 @@ export class AgentOrchestrator {
   private static readonly MAX_STALE_FILES = 30;
 
   /** 模型调用超时（毫秒）：2 分钟，防止单次调用无限等待 */
-  private static readonly MODEL_TIMEOUT_MS = 120_000;
+  private static readonly DEFAULT_MODEL_TIMEOUT_MS = 120_000;
 
   // ── 实例属性 ──
 
@@ -414,6 +416,7 @@ export class AgentOrchestrator {
   /** 流式恢复文件路径：模型输出时实时写盘，崩了可用于恢复 */
   private _streamRecoveryPath?: string;
   private readonly retrySleep: (ms: number) => Promise<void>;
+  private readonly modelRequestTimeoutMs: number;
   /** @deprecated 长期记忆写入已由 MemoryRuntime.completeTask 接管 */
   private readonly memoryExtraction: "background" | "await" | "off";
   /** v2 记忆 LLM 接线策略（"agent" | "settings" | "off"） */
@@ -453,6 +456,13 @@ export class AgentOrchestrator {
     // 重试等待函数：默认用 setTimeout，测试时可注入 fake timer
     this.retrySleep =
       opts?.retrySleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.modelRequestTimeoutMs = Math.max(
+      1,
+      Math.floor(
+        opts?.modelRequestTimeoutMs ??
+          AgentOrchestrator.DEFAULT_MODEL_TIMEOUT_MS,
+      ),
+    );
     this.memoryExtraction = opts?.memoryExtraction ?? "background";
     void this.memoryExtraction; // kept for API compat; writes go through Runtime
     this.memoryLlm = opts?.memoryLlm ?? "agent";
@@ -763,9 +773,7 @@ export class AgentOrchestrator {
         ) {
           // 保存断点续跑状态
           const appStatus =
-            state.type === "incomplete"
-              ? ("incomplete" as const)
-              : state.type;
+            state.type === "incomplete" ? ("incomplete" as const) : state.type;
           this.saveState(
             runId,
             spec.goal,
@@ -812,7 +820,7 @@ export class AgentOrchestrator {
             const looksLikeVerify =
               /verification|skip_verify|no passing test/i.test(state.message);
             const decision = looksLikeVerify
-              ? evaluateFinalAnswer(
+              ? (evaluateFinalAnswer(
                   state.message,
                   snap,
                   flags.hasEverUsedTools,
@@ -821,7 +829,7 @@ export class AgentOrchestrator {
                   state.message,
                   snap,
                   "budget_exhausted",
-                )
+                ))
               : evaluateBudgetExhaustion(
                   state.message,
                   snap,
@@ -2290,8 +2298,8 @@ export class AgentOrchestrator {
     /** 原生通道参数解析失败的调用（拒绝执行，需回灌给模型） */
     nativeToolErrors?: readonly NativeToolError[];
   }> {
-    // 创建超时信号：2 分钟
-    const timeout = AbortSignal.timeout(AgentOrchestrator.MODEL_TIMEOUT_MS);
+    // 内部请求超时必须与父级取消区分：前者可重试，后者应立即停 run。
+    const timeout = AbortSignal.timeout(this.modelRequestTimeoutMs);
     const combinedSignal = signal
       ? AbortSignal.any([signal, timeout])
       : timeout;
@@ -2307,187 +2315,194 @@ export class AgentOrchestrator {
       model.label.toLowerCase().includes("/qwen");
     const useStreaming = typeof streamFn === "function" && !isQwen;
 
-    if (useStreaming) {
-      // ═══ 流式调用 ═══
-      let acc = "";
-      let thinkingAcc = "";
-      let usage: ModelTokenUsage | undefined;
-      let finishReason: string | undefined;
-      const nativeToolCalls: NativeToolCall[] = [];
-      const malformedToolErrors: NativeToolError[] = [];
+    try {
+      if (useStreaming) {
+        // ═══ 流式调用 ═══
+        let acc = "";
+        let thinkingAcc = "";
+        let usage: ModelTokenUsage | undefined;
+        let finishReason: string | undefined;
+        const nativeToolCalls: NativeToolCall[] = [];
+        const malformedToolErrors: NativeToolError[] = [];
 
-      // 流式恢复：边收 chunk 边写盘，崩了不丢输出
-      let recoveryStream: fs.WriteStream | undefined;
-      if (this._streamRecoveryPath) {
-        await fsp.mkdir(path.dirname(this._streamRecoveryPath), {
-          recursive: true,
-        });
-        recoveryStream = fs.createWriteStream(this._streamRecoveryPath);
-        recoveryStream.on("error", () => {
-          // best-effort crash recovery; stream failures must not fail the run.
-        });
-      }
+        // 流式恢复：边收 chunk 边写盘，崩了不丢输出
+        let recoveryStream: fs.WriteStream | undefined;
+        if (this._streamRecoveryPath) {
+          await fsp.mkdir(path.dirname(this._streamRecoveryPath), {
+            recursive: true,
+          });
+          recoveryStream = fs.createWriteStream(this._streamRecoveryPath);
+          recoveryStream.on("error", () => {
+            // best-effort crash recovery; stream failures must not fail the run.
+          });
+        }
 
-      for await (const chunk of streamFn.call(model, messages, modelOpts)) {
-        if (chunk.type === "text") {
-          acc += chunk.delta;
-          recoveryStream?.write(chunk.delta);
-          emit({ type: "model.chunk", text: acc });
-        } else if (chunk.type === "thinking") {
-          thinkingAcc += chunk.delta;
-          recoveryStream?.write(`\n[thinking] ${chunk.delta}\n`);
-          emit({ type: "model.thinking", text: thinkingAcc });
-        } else if (chunk.type === "tool_use") {
-          // 原生 tool_use：收集为结构化对象，同时转为文本用于 TUI 显示
-          // 参数 JSON 解析失败 → 拒绝执行（绝不带空参数执行），
-          // 记录原始输入供下一轮回灌给模型自纠
-          let parsedArgs: Record<string, unknown> | null = null;
-          try {
-            const raw = JSON.parse(chunk.input);
-            parsedArgs =
-              raw !== null && typeof raw === "object" && !Array.isArray(raw)
-                ? (raw as Record<string, unknown>)
-                : null;
-          } catch {
-            parsedArgs = null;
-          }
-          if (parsedArgs === null) {
-            malformedToolErrors.push({
+        for await (const chunk of streamFn.call(model, messages, modelOpts)) {
+          if (chunk.type === "text") {
+            acc += chunk.delta;
+            recoveryStream?.write(chunk.delta);
+            emit({ type: "model.chunk", text: acc });
+          } else if (chunk.type === "thinking") {
+            thinkingAcc += chunk.delta;
+            recoveryStream?.write(`\n[thinking] ${chunk.delta}\n`);
+            emit({ type: "model.thinking", text: thinkingAcc });
+          } else if (chunk.type === "tool_use") {
+            // 原生 tool_use：收集为结构化对象，同时转为文本用于 TUI 显示
+            // 参数 JSON 解析失败 → 拒绝执行（绝不带空参数执行），
+            // 记录原始输入供下一轮回灌给模型自纠
+            let parsedArgs: Record<string, unknown> | null = null;
+            try {
+              const raw = JSON.parse(chunk.input);
+              parsedArgs =
+                raw !== null && typeof raw === "object" && !Array.isArray(raw)
+                  ? (raw as Record<string, unknown>)
+                  : null;
+            } catch {
+              parsedArgs = null;
+            }
+            if (parsedArgs === null) {
+              malformedToolErrors.push({
+                id: chunk.id,
+                name: chunk.name,
+                raw: chunk.input,
+              });
+              const display = JSON.stringify({
+                tool: chunk.name,
+                args: "[unparseable]",
+              });
+              acc += (acc ? "\n" : "") + display;
+              recoveryStream?.write((acc ? "\n" : "") + display);
+              emit({ type: "model.chunk", text: acc });
+              continue;
+            }
+            nativeToolCalls.push({
               id: chunk.id,
               name: chunk.name,
-              raw: chunk.input,
+              arguments: parsedArgs,
             });
             const display = JSON.stringify({
               tool: chunk.name,
-              args: "[unparseable]",
+              args: parsedArgs,
             });
             acc += (acc ? "\n" : "") + display;
             recoveryStream?.write((acc ? "\n" : "") + display);
             emit({ type: "model.chunk", text: acc });
-            continue;
+          } else if (chunk.type === "done") {
+            usage = chunk.usage;
+            finishReason = chunk.finishReason;
           }
-          nativeToolCalls.push({
-            id: chunk.id,
-            name: chunk.name,
-            arguments: parsedArgs,
-          });
-          const display = JSON.stringify({
-            tool: chunk.name,
-            args: parsedArgs,
-          });
-          acc += (acc ? "\n" : "") + display;
-          recoveryStream?.write((acc ? "\n" : "") + display);
-          emit({ type: "model.chunk", text: acc });
-        } else if (chunk.type === "done") {
-          usage = chunk.usage;
-          finishReason = chunk.finishReason;
         }
+
+        // 流正常结束：关流、删恢复文件（acc 里有全文，不需要它了）
+        if (recoveryStream) {
+          const closePromise = new Promise<void>((resolve) => {
+            recoveryStream!.once("close", resolve);
+          });
+          recoveryStream.end();
+          await closePromise;
+          fsp.unlink(this._streamRecoveryPath!).catch(() => {});
+        }
+
+        // 记录 token 用量和成本
+        if (usage) {
+          this.costTracker?.record(model.label, usage);
+          // P1.4 usage 回填校准：真实 prompt_tokens vs 估算（收敛 <10%，基线偏差 37%）
+          if (usage.promptTokens !== undefined) {
+            this._calibratedEstimator?.recordActual(
+              usage.promptTokens,
+              this._calibratedEstimator.estimateRawMessages(messages),
+            );
+            // P5.2 成本记账：累计命中率（阈值微调输入）
+            this._promptTokensAcc += usage.promptTokens;
+            this._cachedPromptTokensAcc += usage.cachedPromptTokens ?? 0;
+          }
+          const snap = this.costTracker?.snapshot();
+          if (snap)
+            emit({
+              type: "cost.update",
+              ...snap,
+              turnPromptTokens: usage.promptTokens,
+              turnCompletionTokens: usage.completionTokens,
+              ...(usage.cachedPromptTokens !== undefined
+                ? { cachedPromptTokens: usage.cachedPromptTokens }
+                : {}),
+            });
+        }
+
+        // 安全网：有些推理模型在 text delta 中嵌入 <think> 标签，
+        // 而不是通过独立的 thinking 流发出。这里做兜底提取。
+        const finalExtracted = extractThinkBlocks(acc);
+        const finalText = finalExtracted.text || acc;
+        const finalThinking =
+          [thinkingAcc, finalExtracted.thinking].filter(Boolean).join("\n\n") ||
+          undefined;
+
+        // 标准化工具调用格式
+        const normalized = AgentOrchestrator.normalizeToolCalls(
+          finalText,
+          toolNameMap,
+        );
+        return {
+          text: normalized,
+          rawText: acc,
+          thinking: finalThinking,
+          usage,
+          finishReason,
+          ...(nativeToolCalls.length > 0 ? { nativeToolCalls } : {}),
+          ...(malformedToolErrors.length > 0
+            ? { nativeToolErrors: malformedToolErrors }
+            : {}),
+        };
       }
 
-      // 流正常结束：关流、删恢复文件（acc 里有全文，不需要它了）
-      if (recoveryStream) {
-        const closePromise = new Promise<void>((resolve) => {
-          recoveryStream!.once("close", resolve);
-        });
-        recoveryStream.end();
-        await closePromise;
-        fsp.unlink(this._streamRecoveryPath!).catch(() => {});
-      }
+      // ═══ 非流式调用 ═══
+      const result = await model.complete(messages, modelOpts);
+      const normalizedResult = AgentOrchestrator.normalizeToolCalls(
+        result.text,
+        toolNameMap,
+      );
+      emit({ type: "model.chunk", text: normalizedResult });
 
-      // 记录 token 用量和成本
-      if (usage) {
-        this.costTracker?.record(model.label, usage);
-        // P1.4 usage 回填校准：真实 prompt_tokens vs 估算（收敛 <10%，基线偏差 37%）
-        if (usage.promptTokens !== undefined) {
+      if (result.usage) {
+        this.costTracker?.record(model.label, result.usage);
+        // P1.4 usage 回填校准（非流式路径）
+        if (result.usage.promptTokens !== undefined) {
           this._calibratedEstimator?.recordActual(
-            usage.promptTokens,
+            result.usage.promptTokens,
             this._calibratedEstimator.estimateRawMessages(messages),
           );
-          // P5.2 成本记账：累计命中率（阈值微调输入）
-          this._promptTokensAcc += usage.promptTokens;
-          this._cachedPromptTokensAcc += usage.cachedPromptTokens ?? 0;
+          // P5.2 成本记账：累计命中率
+          this._promptTokensAcc += result.usage.promptTokens;
+          this._cachedPromptTokensAcc += result.usage.cachedPromptTokens ?? 0;
         }
         const snap = this.costTracker?.snapshot();
         if (snap)
           emit({
             type: "cost.update",
             ...snap,
-            turnPromptTokens: usage.promptTokens,
-            turnCompletionTokens: usage.completionTokens,
-            ...(usage.cachedPromptTokens !== undefined
-              ? { cachedPromptTokens: usage.cachedPromptTokens }
+            turnPromptTokens: result.usage.promptTokens,
+            turnCompletionTokens: result.usage.completionTokens,
+            ...(result.usage.cachedPromptTokens !== undefined
+              ? { cachedPromptTokens: result.usage.cachedPromptTokens }
               : {}),
           });
       }
-
-      // 安全网：有些推理模型在 text delta 中嵌入 <think> 标签，
-      // 而不是通过独立的 thinking 流发出。这里做兜底提取。
-      const finalExtracted = extractThinkBlocks(acc);
-      const finalText = finalExtracted.text || acc;
-      const finalThinking =
-        [thinkingAcc, finalExtracted.thinking].filter(Boolean).join("\n\n") ||
-        undefined;
-
-      // 标准化工具调用格式
-      const normalized = AgentOrchestrator.normalizeToolCalls(
-        finalText,
-        toolNameMap,
-      );
       return {
-        text: normalized,
-        rawText: acc,
-        thinking: finalThinking,
-        usage,
-        finishReason,
-        ...(nativeToolCalls.length > 0 ? { nativeToolCalls } : {}),
-        ...(malformedToolErrors.length > 0
-          ? { nativeToolErrors: malformedToolErrors }
+        text: normalizedResult,
+        rawText: result.text,
+        thinking: result.thinking,
+        usage: result.usage,
+        finishReason: result.finishReason,
+        ...(result.toolCalls && result.toolCalls.length > 0
+          ? { nativeToolCalls: result.toolCalls }
           : {}),
       };
-    }
-
-    // ═══ 非流式调用 ═══
-    const result = await model.complete(messages, modelOpts);
-    const normalizedResult = AgentOrchestrator.normalizeToolCalls(
-      result.text,
-      toolNameMap,
-    );
-    emit({ type: "model.chunk", text: normalizedResult });
-
-    if (result.usage) {
-      this.costTracker?.record(model.label, result.usage);
-      // P1.4 usage 回填校准（非流式路径）
-      if (result.usage.promptTokens !== undefined) {
-        this._calibratedEstimator?.recordActual(
-          result.usage.promptTokens,
-          this._calibratedEstimator.estimateRawMessages(messages),
-        );
-        // P5.2 成本记账：累计命中率
-        this._promptTokensAcc += result.usage.promptTokens;
-        this._cachedPromptTokensAcc += result.usage.cachedPromptTokens ?? 0;
+    } catch (error) {
+      if (timeout.aborted && !signal?.aborted) {
+        throw new ModelRequestTimeoutError(this.modelRequestTimeoutMs, error);
       }
-      const snap = this.costTracker?.snapshot();
-      if (snap)
-        emit({
-          type: "cost.update",
-          ...snap,
-          turnPromptTokens: result.usage.promptTokens,
-          turnCompletionTokens: result.usage.completionTokens,
-          ...(result.usage.cachedPromptTokens !== undefined
-            ? { cachedPromptTokens: result.usage.cachedPromptTokens }
-            : {}),
-        });
+      throw error;
     }
-    return {
-      text: normalizedResult,
-      rawText: result.text,
-      thinking: result.thinking,
-      usage: result.usage,
-      finishReason: result.finishReason,
-      ...(result.toolCalls && result.toolCalls.length > 0
-        ? { nativeToolCalls: result.toolCalls }
-        : {}),
-    };
   }
 
   /**
@@ -3082,71 +3097,71 @@ export class AgentOrchestrator {
           emit({
             type: "memory.retrieve.done",
             query: retrievalQuery,
-          totalCandidates: 0,
-          selectedCount: 0,
-          scores: [],
-          injectedTokens: 0,
-          selectedMemories: [],
-          retrievalMode: "keyword",
-        });
-      } else {
-        const begun = await runtime.beginTask({
-          runId,
-          goal: cleanMemoryQuery || spec.goal,
-          title: (cleanMemoryQuery || spec.goal).slice(0, 120),
-          ...(spec.resumeMemoryTaskId
-            ? { resumeTaskId: spec.resumeMemoryTaskId }
-            : {}),
-        });
-        this._memoryRuntime = runtime;
-        this._memoryTaskId = begun.taskId;
-        this._lastDynamicMemoryGoal = spec.goal;
-        if (this._conversationId && begun.taskId) {
-          const { bindConversationMemoryTask } = await import(
-            "./conversation-memory-bind.js"
-          );
-          bindConversationMemoryTask(this._conversationId, begun.taskId);
-        }
-        // 续任务时刷新 WM goal 为当前请求摘要（不含整段 history）
-        if (begun.resumed && cleanMemoryQuery) {
-          await runtime
-            .patchWorkingMemory({
-              taskId: begun.taskId,
-              patch: { goal: cleanMemoryQuery.slice(0, 500) },
-            })
-            .catch(() => {
-              /* best-effort */
-            });
-        }
+            totalCandidates: 0,
+            selectedCount: 0,
+            scores: [],
+            injectedTokens: 0,
+            selectedMemories: [],
+            retrievalMode: "keyword",
+          });
+        } else {
+          const begun = await runtime.beginTask({
+            runId,
+            goal: cleanMemoryQuery || spec.goal,
+            title: (cleanMemoryQuery || spec.goal).slice(0, 120),
+            ...(spec.resumeMemoryTaskId
+              ? { resumeTaskId: spec.resumeMemoryTaskId }
+              : {}),
+          });
+          this._memoryRuntime = runtime;
+          this._memoryTaskId = begun.taskId;
+          this._lastDynamicMemoryGoal = spec.goal;
+          if (this._conversationId && begun.taskId) {
+            const { bindConversationMemoryTask } = await import(
+              "./conversation-memory-bind.js"
+            );
+            bindConversationMemoryTask(this._conversationId, begun.taskId);
+          }
+          // 续任务时刷新 WM goal 为当前请求摘要（不含整段 history）
+          if (begun.resumed && cleanMemoryQuery) {
+            await runtime
+              .patchWorkingMemory({
+                taskId: begun.taskId,
+                patch: { goal: cleanMemoryQuery.slice(0, 500) },
+              })
+              .catch(() => {
+                /* best-effort */
+              });
+          }
 
-        const section = await runtime.buildContextSection({
-          taskId: begun.taskId,
-          query: retrievalQuery,
-          tokenBudget: 1500,
-          currentUserRequest: cleanMemoryQuery || spec.goal,
-          limit: 8,
-        });
-        this._memoryContextSection = section.promptSection;
-        memoryContextSection = section.promptSection;
-        selectedForEvent = section.items.map((item) => ({
-          id: item.id,
-          title: item.title,
-          source: "auto",
-          summary: item.summary?.trim() || item.title,
-          relatedFiles: item.relatedFiles ? [...item.relatedFiles] : [],
-          ...(item.type ? { type: item.type } : {}),
-          score: item.score,
-        }));
-        emit({
-          type: "memory.retrieve.done",
-          query: retrievalQuery,
-          totalCandidates: section.items.length,
-          selectedCount: section.items.length,
-          scores: section.items.map((i) => i.score),
-          injectedTokens: section.tokens,
-          retrievalMode: "keyword",
-          selectedMemories: selectedForEvent,
-        });
+          const section = await runtime.buildContextSection({
+            taskId: begun.taskId,
+            query: retrievalQuery,
+            tokenBudget: 1500,
+            currentUserRequest: cleanMemoryQuery || spec.goal,
+            limit: 8,
+          });
+          this._memoryContextSection = section.promptSection;
+          memoryContextSection = section.promptSection;
+          selectedForEvent = section.items.map((item) => ({
+            id: item.id,
+            title: item.title,
+            source: "auto",
+            summary: item.summary?.trim() || item.title,
+            relatedFiles: item.relatedFiles ? [...item.relatedFiles] : [],
+            ...(item.type ? { type: item.type } : {}),
+            score: item.score,
+          }));
+          emit({
+            type: "memory.retrieve.done",
+            query: retrievalQuery,
+            totalCandidates: section.items.length,
+            selectedCount: section.items.length,
+            scores: section.items.map((i) => i.score),
+            injectedTokens: section.tokens,
+            retrievalMode: "keyword",
+            selectedMemories: selectedForEvent,
+          });
         }
       }
     } catch {
@@ -3551,6 +3566,15 @@ type RetryableErrorType =
   | "transient"
   | "non_retryable";
 
+class ModelRequestTimeoutError extends Error {
+  constructor(timeoutMs: number, options?: unknown) {
+    super(`Model request timeout after ${timeoutMs}ms`, {
+      ...(options === undefined ? {} : { cause: options }),
+    });
+    this.name = "ModelRequestTimeoutError";
+  }
+}
+
 interface ErrorClassification {
   readonly type: RetryableErrorType;
   /** 限流响应中的 Retry-After 时间（毫秒） */
@@ -3569,6 +3593,8 @@ function classifyError(err: unknown): ErrorClassification {
     return { type: "non_retryable" };
   }
   const msg = err.message;
+
+  if (err instanceof ModelRequestTimeoutError) return { type: "timeout" };
 
   // 429 限流 — 尝试提取 Retry-After 头
   if (/\b429\b/.test(msg)) {
