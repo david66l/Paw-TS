@@ -31,6 +31,7 @@ export {
   auditSweCompareResult,
   allowSweCompareToolCall,
   claudeCodeArgs,
+  compareProtocolMetadataIsValid,
   collectTraceMutationHints,
   createSweCompareToolEffectPolicy,
   createSweCompareToolExecutionPolicy,

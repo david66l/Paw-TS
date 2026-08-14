@@ -659,6 +659,27 @@ function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+export function compareProtocolMetadataIsValid(
+  manifest: SweCompareManifest,
+): boolean {
+  const seenDevelopment = manifest.protocol === "paw-only-seen-development";
+  const validRule = seenDevelopment
+    ? manifest.selection.ruleVersion === "paw-seen-dev-v1" ||
+      manifest.selection.ruleVersion === "paw-fresh-dev-v2" ||
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v3" ||
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v4" ||
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v5" ||
+      manifest.selection.ruleVersion === PAW_FRESH_QUALIFICATION_RULE.version
+    : manifest.selection.ruleVersion === "formal-dev-v1";
+  return (
+    validRule &&
+    manifest.selection.purpose ===
+      (seenDevelopment
+        ? "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score"
+        : "frozen_paired_dev_diagnostic_not_headline_score")
+  );
+}
+
 export function validateCompareRun(
   repoRoot: string,
   manifest: SweCompareManifest,
@@ -676,21 +697,7 @@ export function validateCompareRun(
       `compare manifest commit mismatch: manifest=${manifest.sourceTree.gitCommit} current=${commit}`,
     );
   }
-  const seenDevelopment = manifest.protocol === "paw-only-seen-development";
-  const validRule = seenDevelopment
-    ? manifest.selection.ruleVersion === "paw-seen-dev-v1" ||
-      manifest.selection.ruleVersion === "paw-fresh-dev-v2" ||
-      manifest.selection.ruleVersion === "paw-fresh-qualification-v3" ||
-      manifest.selection.ruleVersion === "paw-fresh-qualification-v4" ||
-      manifest.selection.ruleVersion === "paw-fresh-qualification-v5"
-    : manifest.selection.ruleVersion === "formal-dev-v1";
-  if (
-    !validRule ||
-    manifest.selection.purpose !==
-      (seenDevelopment
-        ? "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score"
-        : "frozen_paired_dev_diagnostic_not_headline_score")
-  ) {
+  if (!compareProtocolMetadataIsValid(manifest)) {
     throw new Error("compare manifest protocol metadata is inconsistent");
   }
   validatePawQualificationContract(manifest);

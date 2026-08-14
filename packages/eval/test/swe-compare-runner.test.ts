@@ -24,6 +24,7 @@ import {
   claudeCodeArgs,
   collectPawMetrics,
   collectTraceMutationHints,
+  compareProtocolMetadataIsValid,
   createSweCompareToolEffectPolicy,
   createSweCompareToolExecutionPolicy,
   extractClaudePatchFromTrace,
@@ -61,6 +62,30 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe("SWE compare runner", () => {
+  test("accepts the current v6 protocol metadata and rejects unknown versions", () => {
+    const current = {
+      protocol: "paw-only-seen-development",
+      selection: {
+        ruleVersion: PAW_FRESH_QUALIFICATION_RULE.version,
+        purpose:
+          "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score",
+      },
+    } as unknown as SweCompareManifest;
+    expect(compareProtocolMetadataIsValid(current)).toBe(true);
+    expect(
+      compareProtocolMetadataIsValid({
+        ...current,
+        selection: { ...current.selection, ruleVersion: "unknown-v7" },
+      } as unknown as SweCompareManifest),
+    ).toBe(false);
+    expect(
+      compareProtocolMetadataIsValid({
+        ...current,
+        selection: { ...current.selection, purpose: "headline_score" },
+      } as unknown as SweCompareManifest),
+    ).toBe(false);
+  });
+
   test("derives verification authority from versioned manifests", () => {
     const legacy = {
       runners: { paw: { memory: "off" } },
