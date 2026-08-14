@@ -12,6 +12,11 @@ const ids = Array.from(
   { length: PAW_QUALIFICATION_GATE.expectedSamples },
   (_, index) => `repo-${index}__issue-${index}`,
 );
+function idAt(index: number): string {
+  const id = ids[index];
+  if (!id) throw new Error(`missing qualification fixture id ${index}`);
+  return id;
+}
 const manifest = {
   selection: { ruleVersion: PAW_FRESH_QUALIFICATION_RULE.version, ids },
   sourceTree: { gitCommit: "frozen-commit", gitDirty: false },
@@ -46,7 +51,7 @@ describe("Paw qualification batch gate", () => {
       Array.from({ length: 9 }, (_, index) => result(index, true)),
     );
     expect(summary.state).toBe("in_progress");
-    expect(summary.pendingInstanceIds).toEqual([ids[9]]);
+    expect(summary.pendingInstanceIds).toEqual([idAt(9)]);
   });
 
   test("passes at seven official resolutions with auditable artifacts", () => {
@@ -75,5 +80,19 @@ describe("Paw qualification batch gate", () => {
     expect(() =>
       summarizePawQualification(manifest, [result(0, true), result(0, false)]),
     ).toThrow("duplicate qualification sample");
+  });
+
+  test("keeps a harness error pending so the persisted patch can be reverified", () => {
+    const infrastructureError = {
+      ...result(0, false),
+      resolvedSource: "error" as const,
+      verifier: { error: "test timed out" },
+    };
+    const summary = summarizePawQualification(manifest, [infrastructureError]);
+    expect(summary.samples).toBe(0);
+    expect(summary.verificationErrors).toBe(1);
+    expect(summary.verificationErrorInstanceIds).toEqual([idAt(0)]);
+    expect(summary.pendingInstanceIds).toContain(idAt(0));
+    expect(summary.failedInstanceIds).not.toContain(idAt(0));
   });
 });

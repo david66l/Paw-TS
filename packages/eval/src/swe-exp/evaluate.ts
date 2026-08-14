@@ -176,16 +176,7 @@ export function parseResolvedFromHarnessOutput(
         string,
         unknown
       >;
-      const resolvedIds = extractResolvedIds(report);
-      const ok = instanceId
-        ? resolvedIds.has(instanceId)
-        : resolvedIds.size > 0;
-      return {
-        resolved: ok,
-        source: "swebench_harness",
-        reportPath: c,
-        detail: `resolved_ids=${[...resolvedIds].join(",")}`,
-      };
+      return parseHarnessReport(report, instanceId, c);
     } catch {
       /* try next */
     }
@@ -202,16 +193,7 @@ export function parseResolvedFromHarnessOutput(
           string,
           unknown
         >;
-        const resolvedIds = extractResolvedIds(report);
-        const ok = instanceId
-          ? resolvedIds.has(instanceId)
-          : resolvedIds.size > 0;
-        return {
-          resolved: ok,
-          source: "swebench_harness",
-          reportPath,
-          detail: `resolved_ids=${[...resolvedIds].join(",")}`,
-        };
+        return parseHarnessReport(report, instanceId, reportPath);
       } catch {
         /* continue */
       }
@@ -236,6 +218,41 @@ export function parseResolvedFromHarnessOutput(
     detail: "harness finished but report not found",
     error: stdout.slice(0, 1500),
   };
+}
+
+function parseHarnessReport(
+  report: Record<string, unknown>,
+  instanceId: string | undefined,
+  reportPath: string,
+): HarnessEvalResult {
+  const resolvedIds = extractResolvedIds(report);
+  const errorIds = extractStringIds(report.error_ids);
+  const incompleteIds = extractStringIds(report.incomplete_ids);
+  const requestedInstanceErrored = instanceId
+    ? errorIds.has(instanceId) || incompleteIds.has(instanceId)
+    : errorIds.size > 0 || incompleteIds.size > 0;
+  if (requestedInstanceErrored) {
+    return {
+      resolved: false,
+      source: "error",
+      reportPath,
+      detail: `error_ids=${[...errorIds].join(",")};incomplete_ids=${[
+        ...incompleteIds,
+      ].join(",")}`,
+      error: "official SWE-bench harness did not produce a valid adjudication",
+    };
+  }
+  const ok = instanceId ? resolvedIds.has(instanceId) : resolvedIds.size > 0;
+  return {
+    resolved: ok,
+    source: "swebench_harness",
+    reportPath,
+    detail: `resolved_ids=${[...resolvedIds].join(",")}`,
+  };
+}
+
+function extractStringIds(value: unknown): Set<string> {
+  return new Set(Array.isArray(value) ? value.map(String) : []);
 }
 
 function extractResolvedIds(report: Record<string, unknown>): Set<string> {

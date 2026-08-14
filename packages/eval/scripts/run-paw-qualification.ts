@@ -7,6 +7,7 @@ import {
   loadPawQualificationResults,
   runSweCompareArm,
   summarizePawQualification,
+  verifySweCompareResult,
 } from "../src/swe-compare/index.js";
 import type { SweCompareManifest } from "../src/swe-compare/types.js";
 
@@ -27,10 +28,8 @@ const manifestPath = path.join(
 const manifest = JSON.parse(
   readFileSync(manifestPath, "utf8"),
 ) as SweCompareManifest;
-const before = summarizePawQualification(
-  manifest,
-  loadPawQualificationResults(repoRoot, manifest),
-);
+const existingResults = loadPawQualificationResults(repoRoot, manifest);
+const before = summarizePawQualification(manifest, existingResults);
 
 if (!process.argv.includes("--next") || before.complete) {
   console.log(JSON.stringify(before, null, 2));
@@ -40,14 +39,38 @@ if (!process.argv.includes("--next") || before.complete) {
 const instanceId = before.pendingInstanceIds[0];
 if (!instanceId) throw new Error("qualification batch has no pending instance");
 console.error(
-  `[paw-qualification] ${before.samples + 1}/10 start ${instanceId}`,
+  `[paw-qualification] ${before.samples + 1}/10 ${
+    before.verificationErrorInstanceIds.includes(instanceId)
+      ? "retry-verifier"
+      : "start"
+  } ${instanceId}`,
 );
-const result = await runSweCompareArm({
-  repoRoot,
-  manifestPath,
-  instanceId,
-  runner: "paw",
-});
+const retryResult = existingResults.find(
+  (candidate) => candidate.instanceId === instanceId,
+);
+const result =
+  retryResult && before.verificationErrorInstanceIds.includes(instanceId)
+    ? verifySweCompareResult({
+        repoRoot,
+        resultPath: path.join(
+          repoRoot,
+          "benchmarks",
+          "swe-compare",
+          "runs",
+          retryResult.runId,
+          "result.json",
+        ),
+        timeoutSec: Math.max(
+          600,
+          Math.floor(manifest.budget.sharedTimeoutMs / 1000),
+        ),
+      })
+    : await runSweCompareArm({
+        repoRoot,
+        manifestPath,
+        instanceId,
+        runner: "paw",
+      });
 const after = summarizePawQualification(
   manifest,
   loadPawQualificationResults(repoRoot, manifest),

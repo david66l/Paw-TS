@@ -23,7 +23,9 @@ export interface PawQualificationSummary {
   readonly officialResolved: number;
   readonly integrityViolations: number;
   readonly invalidArtifacts: number;
+  readonly verificationErrors: number;
   readonly pendingInstanceIds: readonly string[];
+  readonly verificationErrorInstanceIds: readonly string[];
   readonly resolvedInstanceIds: readonly string[];
   readonly failedInstanceIds: readonly string[];
 }
@@ -55,16 +57,23 @@ export function summarizePawQualification(
     byInstance.set(result.instanceId, result);
   }
 
-  const pendingInstanceIds = manifest.selection.ids.filter(
-    (id) => !byInstance.has(id),
+  const pendingInstanceIds = manifest.selection.ids.filter((id) => {
+    const result = byInstance.get(id);
+    return !result || isRetryableVerificationFailure(result);
+  });
+  const acceptedResults = results.filter(
+    (result) => !isRetryableVerificationFailure(result),
   );
-  const officialResolved = results.filter(
+  const verificationErrorInstanceIds = results
+    .filter(isRetryableVerificationFailure)
+    .map((result) => result.instanceId);
+  const officialResolved = acceptedResults.filter(
     (result) => result.resolved && result.resolvedSource === "swebench_harness",
   );
-  const integrityViolations = results.filter(
+  const integrityViolations = acceptedResults.filter(
     (result) => result.integrity?.valid !== true,
   ).length;
-  const invalidArtifacts = results.filter(
+  const invalidArtifacts = acceptedResults.filter(
     (result) => result.artifactStatus !== "valid" || !result.tracePath?.trim(),
   ).length;
   const complete = pendingInstanceIds.length === 0;
@@ -78,19 +87,33 @@ export function summarizePawQualification(
     state: complete ? (passed ? "passed" : "failed") : "in_progress",
     complete,
     passed,
-    samples: results.length,
+    samples: acceptedResults.length,
     officialResolved: officialResolved.length,
     integrityViolations,
     invalidArtifacts,
+    verificationErrors: verificationErrorInstanceIds.length,
     pendingInstanceIds,
+    verificationErrorInstanceIds,
     resolvedInstanceIds: officialResolved.map((result) => result.instanceId),
-    failedInstanceIds: results
+    failedInstanceIds: acceptedResults
       .filter(
         (result) =>
           !result.resolved || result.resolvedSource !== "swebench_harness",
       )
       .map((result) => result.instanceId),
   };
+}
+
+export function isRetryableVerificationFailure(
+  result: SweCompareRunResult,
+): boolean {
+  return (
+    result.artifactStatus === "valid" &&
+    result.integrity?.valid === true &&
+    Boolean(result.tracePath?.trim()) &&
+    Boolean(result.patch.trim()) &&
+    result.resolvedSource !== "swebench_harness"
+  );
 }
 
 export function loadPawQualificationResults(

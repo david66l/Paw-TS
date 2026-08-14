@@ -237,6 +237,31 @@ describe("agent control-plane preflight/checkpoint", () => {
     }
   });
 
+  test("official schema-v2 error ids are infrastructure errors, not unresolved code", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-exp-error-report-"));
+    try {
+      writeFileSync(
+        path.join(root, "swe-compare-paw.run-error.json"),
+        JSON.stringify({
+          resolved_ids: [],
+          error_ids: ["demo__repo-1"],
+          schema_version: 2,
+        }),
+      );
+      const parsed = parseResolvedFromHarnessOutput(
+        "",
+        "run-error",
+        "demo__repo-1",
+        root,
+      );
+      expect(parsed.resolved).toBe(false);
+      expect(parsed.source).toBe("error");
+      expect(parsed.error).toContain("did not produce a valid adjudication");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("agent goal exposes acceptance ids but never gold patches", () => {
     const goal = buildSweAgentGoal({
       instance_id: "demo__repo-1",
