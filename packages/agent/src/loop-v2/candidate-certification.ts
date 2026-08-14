@@ -34,6 +34,8 @@ export interface CandidateMutationInputV2 {
   readonly paths: readonly string[];
   readonly beforeHashes: Readonly<Record<string, string | null>>;
   readonly afterHashes: Readonly<Record<string, string | null>>;
+  readonly beforeContentRefs: Readonly<Record<string, string | null>>;
+  readonly afterContentRefs: Readonly<Record<string, string | null>>;
   readonly patchHash: string;
   readonly workspaceEffect: MutationJournalEntryV2["workspaceEffect"];
 }
@@ -80,6 +82,7 @@ export type CandidateReadinessGapCodeV2 =
   | "criterion_evidence_unknown"
   | "criterion_blocked"
   | "verification_missing"
+  | "verification_scope_missing"
   | "verification_code_failed"
   | "verification_unavailable"
   | "blocking_risk";
@@ -94,6 +97,9 @@ export interface CandidateReadinessGapV2 {
 
 export interface CandidateReadinessPolicyV2 {
   readonly requireProductMutation?: boolean;
+  readonly verificationAuthority?: "local" | "external" | "not_required";
+  readonly requiredVerificationScopes?: readonly string[];
+  /** @deprecated Use verificationAuthority. */
   readonly requireAuthoritativeVerification?: boolean;
 }
 
@@ -104,6 +110,12 @@ export interface CandidateReadinessV2 {
   /** External authority is never marked satisfied by the implementing model. */
   readonly pendingExternalCriterionIds: readonly string[];
   readonly currentAuthoritativeVerificationIds: readonly string[];
+  readonly localVerification:
+    | "not_required"
+    | "missing"
+    | "passed"
+    | "code_failed"
+    | "harness_failed";
 }
 
 export interface SemanticReviewFindingV2 {
@@ -165,6 +177,8 @@ export function buildCandidateInputV2(
       paths: sortedUnique(mutation.paths),
       beforeHashes: sortRecord(mutation.beforeHashes),
       afterHashes: sortRecord(mutation.afterHashes),
+      beforeContentRefs: sortRecord(mutation.beforeContentRefs),
+      afterContentRefs: sortRecord(mutation.afterContentRefs),
       patchHash: sha256Canonical(mutation.patch),
       workspaceEffect: mutation.workspaceEffect,
     }));
@@ -273,8 +287,12 @@ export function evaluateCandidateReadinessV2(
   const gaps: CandidateReadinessGapV2[] = [];
   const currentRevision = state.currentMutationRevision;
   const requireMutation = policy.requireProductMutation ?? true;
-  const requireVerification =
-    policy.requireAuthoritativeVerification ?? requireMutation;
+  const verificationAuthority =
+    policy.verificationAuthority ??
+    (policy.requireAuthoritativeVerification === false || !requireMutation
+      ? "not_required"
+      : "local");
+  const requireVerification = verificationAuthority !== "not_required";
 
   if (!state.goal) {
     gaps.push({ code: "goal_missing", message: "Task goal is not recorded." });
@@ -377,27 +395,81 @@ export function evaluateCandidateReadinessV2(
   const authoritativePasses = authoritative.filter(
     (verification) => verification.outcome === "passed",
   );
+  const codeFailures = authoritative.filter(
+    (verification) => verification.outcome === "code_failed",
+  );
+  const harnessFailures = authoritative.filter(
+    (verification) => verification.outcome === "harness_failed",
+  );
+  const requiredScopes = sortedUnique(
+    policy.requiredVerificationScopes?.filter((scope) => scope.trim()) ?? [],
+  );
+  const missingScopes = requiredScopes.filter(
+    (scope) =>
+      !authoritativePasses.some((verification) =>
+        verificationCoversScope(verification, scope),
+      ),
+  );
+  const harnessBlockedScopes = missingScopes.filter((scope) =>
+    harnessFailures.some((verification) =>
+      verificationCoversScope(verification, scope),
+    ),
+  );
+  const localVerification: CandidateReadinessV2["localVerification"] =
+    !requireVerification
+      ? "not_required"
+      : codeFailures.length > 0
+        ? "code_failed"
+        : missingScopes.length === 0 && authoritativePasses.length > 0
+          ? "passed"
+          : harnessFailures.length > 0
+            ? "harness_failed"
+            : "missing";
   if (requireVerification) {
-    const codeFailures = authoritative.filter(
-      (verification) => verification.outcome === "code_failed",
-    );
-    const harnessFailures = authoritative.filter(
-      (verification) => verification.outcome === "harness_failed",
-    );
     if (codeFailures.length > 0) {
       gaps.push({
         code: "verification_code_failed",
         evidenceRefs: codeFailures.map((verification) => verification.id),
         message: "Current authoritative verification reports a code failure.",
       });
-    } else if (authoritativePasses.length === 0 && harnessFailures.length > 0) {
+    } else if (
+      missingScopes.length > 0 &&
+      harnessBlockedScopes.length === missingScopes.length &&
+      verificationAuthority === "local"
+    ) {
+      gaps.push({
+        code: "verification_unavailable",
+        evidenceRefs: harnessFailures.map((verification) => verification.id),
+        message: `Required verification scopes are unavailable because the harness failed: ${missingScopes.join(", ")}.`,
+      });
+    } else if (
+      missingScopes.length > 0 &&
+      !(
+        verificationAuthority === "external" &&
+        harnessBlockedScopes.length === missingScopes.length
+      )
+    ) {
+      gaps.push({
+        code: "verification_scope_missing",
+        message: `Required verification scopes lack a current authoritative pass: ${missingScopes.join(", ")}.`,
+      });
+    } else if (
+      requiredScopes.length === 0 &&
+      authoritativePasses.length === 0 &&
+      harnessFailures.length > 0 &&
+      verificationAuthority === "local"
+    ) {
       gaps.push({
         code: "verification_unavailable",
         evidenceRefs: harnessFailures.map((verification) => verification.id),
         message:
           "Current authoritative verification is unavailable because the harness failed.",
       });
-    } else if (authoritativePasses.length === 0) {
+    } else if (
+      requiredScopes.length === 0 &&
+      authoritativePasses.length === 0 &&
+      harnessFailures.length === 0
+    ) {
       gaps.push({
         code: "verification_missing",
         message: "No current authoritative verification pass is recorded.",
@@ -436,6 +508,7 @@ export function evaluateCandidateReadinessV2(
     currentAuthoritativeVerificationIds: authoritativePasses.map(
       (verification) => verification.id,
     ),
+    localVerification,
   };
 }
 
@@ -742,7 +815,9 @@ function journalIsComplete(
       mutation.paths.every(
         (path) =>
           Object.hasOwn(mutation.beforeHashes, path) &&
-          Object.hasOwn(mutation.afterHashes, path),
+          Object.hasOwn(mutation.afterHashes, path) &&
+          Object.hasOwn(mutation.beforeContentRefs, path) &&
+          Object.hasOwn(mutation.afterContentRefs, path),
       ) &&
       mutation.patch.trim().length > 0,
   );
@@ -799,6 +874,15 @@ function normalizeVerification(
     argv: [...verification.argv],
     scope: sortedUnique(verification.scope),
   };
+}
+
+function verificationCoversScope(
+  verification: VerificationRecordV2,
+  requiredScope: string,
+): boolean {
+  return verification.scope.some(
+    (scope) => scope === "*" || scope === requiredScope,
+  );
 }
 
 function normalizeRisk(risk: RiskRecordV2): RiskRecordV2 {

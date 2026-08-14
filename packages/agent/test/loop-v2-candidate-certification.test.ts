@@ -47,6 +47,12 @@ function baseState(): WorkingDecisionStateV2 {
       paths: ["src/public.ts"],
       beforeHashes: { "src/public.ts": "before-r1" },
       afterHashes: { "src/public.ts": "after-r1" },
+      beforeContentRefs: {
+        "src/public.ts": "artifact://content/public-before-r1",
+      },
+      afterContentRefs: {
+        "src/public.ts": "artifact://content/public-after-r1",
+      },
       patch: "diff --git a/src/public.ts b/src/public.ts\n+fixed",
       workspaceEffect: "product",
     },
@@ -170,6 +176,12 @@ describe("Loop Kernel v2 candidate certification", () => {
         paths: ["src/public.ts"],
         beforeHashes: { "src/public.ts": "after-r1" },
         afterHashes: { "src/public.ts": "after-r2" },
+        beforeContentRefs: {
+          "src/public.ts": "artifact://content/public-after-r1",
+        },
+        afterContentRefs: {
+          "src/public.ts": "artifact://content/public-after-r2",
+        },
         patch: "diff --git a/src/public.ts b/src/public.ts\n+repair",
         workspaceEffect: "product",
       },

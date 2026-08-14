@@ -13,7 +13,11 @@
     "@paw/models": "workspace:*",
     "@paw/settings": "workspace:*",
     "@paw/store": "workspace:*",
-    "@paw/workspace": "workspace:*"
+    "@paw/workspace": "workspace:*",
+    "diff": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/diff": "^8.0.0"
   },
   "scripts": {
     "loop-v2:replay": "bun run scripts/replay-loop-v2.ts",

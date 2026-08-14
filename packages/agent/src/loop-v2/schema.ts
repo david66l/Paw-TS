@@ -174,6 +174,8 @@ export interface MutationJournalEntryV2 {
   readonly paths: readonly string[];
   readonly beforeHashes: Readonly<Record<string, string | null>>;
   readonly afterHashes: Readonly<Record<string, string | null>>;
+  readonly beforeContentRefs: Readonly<Record<string, string | null>>;
+  readonly afterContentRefs: Readonly<Record<string, string | null>>;
   readonly patch: string;
   readonly workspaceEffect: "product" | "test" | "control" | "unknown";
 }
@@ -504,6 +506,8 @@ function assertMutation(value: unknown): void {
   assertStringArray(value.paths, `${label}.paths`);
   assertHashRecord(value.beforeHashes, `${label}.beforeHashes`);
   assertHashRecord(value.afterHashes, `${label}.afterHashes`);
+  assertHashRecord(value.beforeContentRefs, `${label}.beforeContentRefs`);
+  assertHashRecord(value.afterContentRefs, `${label}.afterContentRefs`);
   assertNonEmptyString(value.patch, `${label}.patch`);
   assertOneOf(
     value.workspaceEffect,

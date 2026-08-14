@@ -231,6 +231,12 @@ describe("Loop Kernel v2 event projector", () => {
           paths: ["src/index.ts"],
           beforeHashes: { "src/index.ts": "before-1" },
           afterHashes: { "src/index.ts": "after-1" },
+          beforeContentRefs: {
+            "src/index.ts": "artifact://content/index-before-1",
+          },
+          afterContentRefs: {
+            "src/index.ts": "artifact://content/index-after-1",
+          },
           patch: "diff --git a/src/index.ts b/src/index.ts",
           workspaceEffect: "product",
         },

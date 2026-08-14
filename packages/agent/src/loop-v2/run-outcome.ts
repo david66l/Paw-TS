@@ -110,17 +110,7 @@ function deriveLocalVerification(
   input: DeriveRunOutcomeInputV2,
 ): RunOutcomeV2["localVerification"] {
   if (input.verificationRequired === false) return "not_required";
-  const gaps = input.readiness?.gaps ?? [];
-  if (gaps.some((gap) => gap.code === "verification_code_failed")) {
-    return "code_failed";
-  }
-  if (input.readiness?.currentAuthoritativeVerificationIds.length) {
-    return "passed";
-  }
-  if (gaps.some((gap) => gap.code === "verification_unavailable")) {
-    return "harness_failed";
-  }
-  return "missing";
+  return input.readiness?.localVerification ?? "missing";
 }
 
 function deriveCandidateStatus(

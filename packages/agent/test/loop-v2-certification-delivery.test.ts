@@ -49,6 +49,12 @@ function djangoCandidateState(): WorkingDecisionStateV2 {
       paths: ["django/urls/resolvers.py"],
       beforeHashes: { "django/urls/resolvers.py": "before" },
       afterHashes: { "django/urls/resolvers.py": "after" },
+      beforeContentRefs: {
+        "django/urls/resolvers.py": "artifact://content/resolver-before",
+      },
+      afterContentRefs: {
+        "django/urls/resolvers.py": "artifact://content/resolver-after",
+      },
       patch:
         "diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py\n@@ ResolverMatch.__init__\n- self.func = func\n+ self.func = func.func\n+ self.args = func.args + args\n+ self.kwargs = {**func.keywords, **kwargs}",
       workspaceEffect: "product",

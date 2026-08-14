@@ -1,5 +1,14 @@
 export { canonicalJson, sha256Canonical } from "./canonical.js";
 export {
+  artifactContentHashV2,
+  artifactEvidenceV2,
+  createArtifactContentBlobV2,
+  materializeCandidateArtifactV2,
+  type ArtifactContentBlobV2,
+  type ArtifactCrossCheckV2,
+  type MaterializedCandidateArtifactV2,
+} from "./artifact-materializer.js";
+export {
   buildCandidateInputV2,
   buildCandidateReviewPayloadV2,
   candidateInputHashV2,
