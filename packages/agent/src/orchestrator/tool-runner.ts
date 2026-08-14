@@ -233,6 +233,44 @@ export interface ToolExecutionBatchResult {
   )[];
 }
 
+export interface ToolResultCommitContext {
+  readonly emit: (event: RunEvent) => void;
+  readonly runId: string;
+  readonly workspaceRoot: string;
+  readonly turn: number;
+  readonly taskState?: TaskStateManager;
+  readonly observeLoopV2ToolCommit?: (
+    input: LoopV2ShadowToolCommitPortInput,
+  ) => void;
+}
+
+export interface ToolExecutionFinalizationContext
+  extends ToolResultCommitContext {
+  readonly ctxMgr: ContextManager;
+  readonly maxSteps: number;
+  readonly specGoal: string;
+  readonly text: string;
+  readonly thinking?: string;
+  readonly mutationCaptures?: readonly (
+    | LoopV2ShadowMutationCapture
+    | undefined
+  )[];
+  readonly saveStateFn: () => void;
+  /** 会话级工具输出去重器（P1 入口闸） */
+  readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
+  /** P3 冷库：截断的全文按内容哈希归档，注入 [archived id] 引用桩 */
+  readonly artifactRegistry?: ArtifactRegistry;
+  /** Idle-fuse failure signatures from prior turns */
+  readonly failureSignatures?: readonly string[];
+}
+
+export interface ToolExecutionFinalizationResult {
+  readonly type: "continue" | "incomplete";
+  readonly message?: string;
+  readonly failureSignatures?: readonly string[];
+  readonly idleFuseTripped?: boolean;
+}
+
 type MutationBeforeCapture =
   | Extract<LoopV2ShadowMutationCapture, { readonly status: "gap" }>
   | Readonly<{
@@ -683,108 +721,111 @@ export async function executeToolCalls(
 export function finalizeToolExecution(
   calls: readonly AgentToolCallAction[],
   results: ToolRunResult[],
-  ctx: {
-    readonly ctxMgr: ContextManager;
-    readonly emit: (event: RunEvent) => void;
-    readonly runId: string;
-    readonly workspaceRoot: string;
-    readonly turn: number;
-    readonly maxSteps: number;
-    readonly specGoal: string;
-    readonly text: string;
-    readonly thinking?: string;
-    readonly taskState?: TaskStateManager;
-    readonly mutationCaptures?: readonly (
-      | LoopV2ShadowMutationCapture
-      | undefined
-    )[];
-    readonly observeLoopV2ToolCommit?: (
-      input: LoopV2ShadowToolCommitPortInput,
-    ) => void;
-    readonly saveStateFn: () => void;
-    /** 会话级工具输出去重器（P1 入口闸） */
-    readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
-    /** P3 冷库：截断的全文按内容哈希归档，注入 [archived id] 引用桩 */
-    readonly artifactRegistry?: ArtifactRegistry;
-    /** Idle-fuse failure signatures from prior turns */
-    readonly failureSignatures?: readonly string[];
-  },
-): {
-  readonly type: "continue" | "incomplete";
-  readonly message?: string;
-  readonly failureSignatures?: readonly string[];
-  readonly idleFuseTripped?: boolean;
-} {
+  ctx: ToolExecutionFinalizationContext,
+): ToolExecutionFinalizationResult {
   const batchHasMutation = calls.some((call) => isMutatingTool(call.tool));
   // 步骤 1：逐个发出工具结果事件
   for (let i = 0; i < calls.length; i++) {
-    const call = calls[i]!;
-    const tr = results[i]!;
-    const taskStateBefore = ctx.taskState?.snapshot();
-    const repositoryRevision = `run:${ctx.runId}:mutation:${taskStateBefore?.mutationRevision ?? 0}`;
-    const sourceContentHash =
-      ctx.observeLoopV2ToolCommit &&
-      tr.ok &&
-      call.tool === "workspace.read_file" &&
-      !batchHasMutation
-        ? readSourceContentHash(ctx.workspaceRoot, call.args, tr.payload)
-        : undefined;
-    ctx.taskState?.recordToolResult(call, tr);
-    const taskStateAfter = ctx.taskState?.snapshot();
-    const verificationCapture = buildShadowVerificationCapture(
-      ctx.workspaceRoot,
-      call,
-      tr,
-      taskStateBefore,
-      taskStateAfter,
-    );
-    const conflictPayload =
-      tr.payload && typeof tr.payload === "object"
-        ? (tr.payload as Record<string, unknown>)
-        : null;
-    if (
-      conflictPayload?.conflict === true &&
-      typeof conflictPayload.path === "string"
-    ) {
-      ctx.taskState?.recordFileLockConflict(conflictPayload.path);
+    const call = calls[i];
+    const result = results[i];
+    if (!call || !result) {
+      throw new Error(`Tool result batch is missing source index ${i}`);
     }
-    let fileChanges = tr.ok
-      ? fileChangesFromPayload(tr.payload, ctx.workspaceRoot)
-      : undefined;
-    // apply_patch：payload 只有 +/− 统计，从调用参数里抽取 per-file diff 文本补齐
-    const patchText = patchTextFromArgs(call.args);
-    if (fileChanges && patchText) {
-      fileChanges = fileChanges.map((c) => {
-        if (c.diff) return c;
-        const diff = extractFilePatch(patchText, c.path);
-        return diff ? { ...c, diff } : c;
-      });
-    }
-    const workspaceEffect = workspaceEffectFromPayload(tr.payload);
-    ctx.emit({
-      type: "tool.result",
-      tool: call.tool,
-      ok: tr.ok,
-      summary: tr.summary,
-      detail: formatToolResultEventDetail(tr),
-      ...(workspaceEffect ? { workspaceEffect } : {}),
-      ...(fileChanges ? { fileChanges } : {}),
-    });
-    ctx.observeLoopV2ToolCommit?.({
-      callId: `legacy:${ctx.runId}:turn:${ctx.turn}:call:${i}`,
-      tool: call.tool,
-      args: call.args,
-      result: tr,
-      repositoryRevision,
+    commitToolExecutionResult(call, result, i, ctx, {
       concurrentMutation: batchHasMutation,
-      ...(sourceContentHash ? { sourceContentHash } : {}),
-      ...(ctx.mutationCaptures?.[i]
-        ? { mutationCapture: ctx.mutationCaptures[i] }
-        : {}),
-      ...(verificationCapture ? { verificationCapture } : {}),
+      mutationCapture: ctx.mutationCaptures?.[i],
     });
   }
 
+  return finalizeToolExecutionContext(calls, results, ctx);
+}
+
+/**
+ * Commit one tool result to TaskState, the durable legacy event stream, and
+ * the v2 observation port. A v2 exclusive scheduler must keep its barrier
+ * held until this function returns.
+ */
+export function commitToolExecutionResult(
+  call: AgentToolCallAction,
+  result: ToolRunResult,
+  sourceIndex: number,
+  ctx: ToolResultCommitContext,
+  options: {
+    readonly concurrentMutation: boolean;
+    readonly mutationCapture?: LoopV2ShadowMutationCapture;
+  },
+): void {
+  const taskStateBefore = ctx.taskState?.snapshot();
+  const repositoryRevision = `run:${ctx.runId}:mutation:${taskStateBefore?.mutationRevision ?? 0}`;
+  const sourceContentHash =
+    ctx.observeLoopV2ToolCommit &&
+    result.ok &&
+    call.tool === "workspace.read_file" &&
+    !options.concurrentMutation
+      ? readSourceContentHash(ctx.workspaceRoot, call.args, result.payload)
+      : undefined;
+  ctx.taskState?.recordToolResult(call, result);
+  const taskStateAfter = ctx.taskState?.snapshot();
+  const verificationCapture = buildShadowVerificationCapture(
+    ctx.workspaceRoot,
+    call,
+    result,
+    taskStateBefore,
+    taskStateAfter,
+  );
+  const conflictPayload =
+    result.payload && typeof result.payload === "object"
+      ? (result.payload as Record<string, unknown>)
+      : null;
+  if (
+    conflictPayload?.conflict === true &&
+    typeof conflictPayload.path === "string"
+  ) {
+    ctx.taskState?.recordFileLockConflict(conflictPayload.path);
+  }
+  let fileChanges = result.ok
+    ? fileChangesFromPayload(result.payload, ctx.workspaceRoot)
+    : undefined;
+  // apply_patch：payload 只有 +/− 统计，从调用参数里抽取 per-file diff 文本补齐
+  const patchText = patchTextFromArgs(call.args);
+  if (fileChanges && patchText) {
+    fileChanges = fileChanges.map((change) => {
+      if (change.diff) return change;
+      const diff = extractFilePatch(patchText, change.path);
+      return diff ? { ...change, diff } : change;
+    });
+  }
+  const workspaceEffect = workspaceEffectFromPayload(result.payload);
+  ctx.emit({
+    type: "tool.result",
+    tool: call.tool,
+    ok: result.ok,
+    summary: result.summary,
+    detail: formatToolResultEventDetail(result),
+    ...(workspaceEffect ? { workspaceEffect } : {}),
+    ...(fileChanges ? { fileChanges } : {}),
+  });
+  ctx.observeLoopV2ToolCommit?.({
+    callId: `legacy:${ctx.runId}:turn:${ctx.turn}:call:${sourceIndex}`,
+    tool: call.tool,
+    args: call.args,
+    result,
+    repositoryRevision,
+    concurrentMutation: options.concurrentMutation,
+    ...(sourceContentHash ? { sourceContentHash } : {}),
+    ...(options.mutationCapture
+      ? { mutationCapture: options.mutationCapture }
+      : {}),
+    ...(verificationCapture ? { verificationCapture } : {}),
+  });
+}
+
+/** Finish the model-facing batch after all source-ordered result commits. */
+export function finalizeToolExecutionContext(
+  calls: readonly AgentToolCallAction[],
+  results: ToolRunResult[],
+  ctx: ToolExecutionFinalizationContext,
+): ToolExecutionFinalizationResult {
   // 步骤 2：将模型的工具调用文本作为 assistant 消息加入
   ctx.ctxMgr.addAssistant(ctx.text, ctx.thinking);
 
