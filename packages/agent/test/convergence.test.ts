@@ -499,9 +499,9 @@ describe("convergence guidance", () => {
       command: "node verify-test.js 2>&1 | tail -20",
       passed: false,
       outcome: "harness_failed" as const,
-      failureKind: "invocation_error" as const,
+      failureKind: "untrusted_exit_status" as const,
       retryability: "retryable" as const,
-      summary: "tail is unavailable",
+      summary: "pipeline exit status does not prove the test passed",
       mutationRevision: 1,
     };
     const failed = state({ testResults: [retryable] });
@@ -560,9 +560,9 @@ describe("convergence guidance", () => {
           command: "python -m pytest tests/test_a.py 2>&1 | tail -20",
           passed: false,
           outcome: "harness_failed",
-          failureKind: "invocation_error",
+          failureKind: "untrusted_exit_status",
           retryability: "retryable",
-          summary: "tail is unavailable",
+          summary: "pipeline exit status does not prove the test passed",
           mutationRevision: 1,
         },
       ],

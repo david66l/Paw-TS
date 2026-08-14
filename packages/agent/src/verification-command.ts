@@ -1,4 +1,7 @@
-import { tokenizeCommandSegments } from "./shell-command.js";
+import {
+  type ShellCommandSegment,
+  parseCommandChain,
+} from "./shell-command.js";
 
 export type VerificationCommandFamily =
   | "pytest"
@@ -12,7 +15,11 @@ export type VerificationCommandFamily =
 
 export interface VerificationCommandIntent {
   readonly family: VerificationCommandFamily;
+  /** Whether the shell's final exit status proves this runner exited zero. */
+  readonly exitStatusReliable: boolean;
 }
+
+type VerificationSegmentIntent = Pick<VerificationCommandIntent, "family">;
 
 /** pytest modes which can exit successfully without executing assertions. */
 const PYTEST_NON_EXECUTION_OPTIONS = new Set([
@@ -112,7 +119,7 @@ function pythonScriptFamily(
 
 function analyzeSegment(
   rawTokens: readonly string[],
-): VerificationCommandIntent | undefined {
+): VerificationSegmentIntent | undefined {
   const tokens = stripEnvironmentPrefix(rawTokens);
   const executable = tokens[0] ? executableName(tokens[0]) : "";
   if (!executable) return undefined;
@@ -175,6 +182,27 @@ function analyzeSegment(
   return undefined;
 }
 
+function exitStatusProvesVerification(
+  chain: readonly ShellCommandSegment[],
+  verificationIndex: number,
+): boolean {
+  // An earlier OR fallback may skip this verification entirely when its left
+  // side succeeds. A background predecessor is similarly not an ordered proof.
+  for (let index = 0; index < verificationIndex; index += 1) {
+    const connector = chain[index]?.connectorAfter;
+    if (connector === "||" || connector === "&") return false;
+  }
+
+  // A following `&&` can only produce overall success after this runner
+  // succeeds. Pipes, fallbacks, sequential lists, and background execution can
+  // all replace or detach the runner's status, so they are not pass evidence.
+  for (let index = verificationIndex; index < chain.length; index += 1) {
+    const connector = chain[index]?.connectorAfter;
+    if (connector && connector !== "&&") return false;
+  }
+  return true;
+}
+
 /** Analyze whether a shell command actually intends to execute assertions. */
 export function analyzeVerificationCommand(
   command: string,
@@ -184,11 +212,18 @@ export function analyzeVerificationCommand(
   if (/\b(?:pip3?|uv|npm|pnpm|yarn|bun)\s+(?:install|add|i)\b/i.test(trimmed)) {
     return undefined;
   }
-  const segments = tokenizeCommandSegments(trimmed);
-  if (!segments) return undefined;
-  for (const segment of segments) {
-    const intent = analyzeSegment(segment);
-    if (intent) return intent;
+  const chain = parseCommandChain(trimmed);
+  if (!chain) return undefined;
+  for (let index = 0; index < chain.length; index += 1) {
+    const segment = chain[index];
+    if (!segment) continue;
+    const intent = analyzeSegment(segment.tokens);
+    if (intent) {
+      return {
+        ...intent,
+        exitStatusReliable: exitStatusProvesVerification(chain, index),
+      };
+    }
   }
   return undefined;
 }

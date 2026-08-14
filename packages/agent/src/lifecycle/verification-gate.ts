@@ -114,7 +114,9 @@ export function checkVerification(
       return {
         ok: false,
         nudge:
-          "The local verification failed for a recoverable command-invocation reason. Run one materially simpler direct command from the same test-runner family before final_answer; remove display-only pipes, redirections, wrappers, or invalid options.",
+          latest.failureKind === "untrusted_exit_status"
+            ? "The shell command contained a verification runner, but downstream control flow owns the final exit status, so it is not pass evidence. Run one materially simpler direct command from the same test-runner family before final_answer; remove display-only pipes, fallbacks, or trailing commands."
+            : "The local verification failed for a recoverable command-invocation reason. Run one materially simpler direct command from the same test-runner family before final_answer; remove display-only pipes, redirections, wrappers, or invalid options.",
       };
     }
     if (
@@ -125,14 +127,19 @@ export function checkVerification(
         return {
           ok: false,
           nudge:
-            "Local verification could not execute and this task has a trusted external verifier. Inspect the final diff for the current revision before final_answer; do not claim that local tests passed.",
+            latest.failureKind === "untrusted_exit_status"
+              ? "Local verification did not produce trustworthy pass evidence because shell control flow masked the runner status, and this task has a trusted external verifier. Inspect the final diff for the current revision before final_answer; do not claim that local tests passed."
+              : "Local verification could not execute and this task has a trusted external verifier. Inspect the final diff for the current revision before final_answer; do not claim that local tests passed.",
         };
       }
       return { ok: true, mode: "external_pending" };
     }
     return {
       ok: false,
-      nudge: `Files were changed but the latest verification did not execute because its harness/environment failed (${latest.command}${latest.evidence ? `: ${latest.evidence}` : ""}). Repair or replace the verification command and obtain real test evidence before final_answer.`,
+      nudge:
+        latest.failureKind === "untrusted_exit_status"
+          ? `Files were changed but the latest shell command's final exit status does not prove its verification runner passed (${latest.command}${latest.evidence ? `: ${latest.evidence}` : ""}). Run the verification directly or preserve its exit status explicitly before final_answer.`
+          : `Files were changed but the latest verification did not execute because its harness/environment failed (${latest.command}${latest.evidence ? `: ${latest.evidence}` : ""}). Repair or replace the verification command and obtain real test evidence before final_answer.`,
     };
   }
 

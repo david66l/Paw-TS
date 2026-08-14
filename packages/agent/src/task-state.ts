@@ -5,7 +5,11 @@ import type {
 import type { ToolRunResult } from "@paw/harness";
 import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
 import { isGitDiffCommand } from "./shell-command.js";
-import { isVerificationCommand } from "./verification-command.js";
+import {
+  type VerificationCommandIntent,
+  analyzeVerificationCommand,
+  isVerificationCommand,
+} from "./verification-command.js";
 
 export { isVerificationCommand };
 
@@ -28,6 +32,7 @@ export interface TestResultSummary {
     | "runner_unavailable"
     | "test_discovery"
     | "invocation_error"
+    | "untrusted_exit_status"
     | "test_failure";
   /** Harness-only recovery state; absent on passes, code failures, and legacy snapshots. */
   readonly retryability?: "retryable" | "terminal";
@@ -471,10 +476,12 @@ export class TaskStateManager {
           ok: result.ok,
           summary: result.summary,
         });
-        if (isVerificationCommand(command)) {
+        const verificationIntent = analyzeVerificationCommand(command);
+        if (verificationIntent) {
           const classification = classifyVerificationOutcome(
             result,
             filesChanged,
+            verificationIntent,
           );
           const evidence = verificationEvidence(result);
           testResults.push({
@@ -487,7 +494,7 @@ export class TaskStateManager {
             ...(classification.retryability
               ? { retryability: classification.retryability }
               : {}),
-            summary: result.summary,
+            summary: classification.summary ?? result.summary,
             ...(evidence ? { evidence } : {}),
             shellCommandRevision,
             mutationRevision,
@@ -652,7 +659,7 @@ export function formatCompletionReadiness(state: TaskState): string[] {
       : verificationOutcome(latest) === "passed"
         ? `passed for r${revision}`
         : verificationOutcome(latest) === "harness_failed"
-          ? `harness failed for r${revision} (verification did not execute${latest.failureKind ? `: ${latest.failureKind}${latest.retryability ? `/${latest.retryability}` : ""}` : ""})`
+          ? `harness failed for r${revision} (${latest.failureKind === "untrusted_exit_status" ? "test pass not proven" : "verification did not execute"}${latest.failureKind ? `: ${latest.failureKind}${latest.retryability ? `/${latest.retryability}` : ""}` : ""})`
           : `code failed for r${revision}`;
   const diffRevision = state.diffInspectedRevision ?? 0;
   const diff =
@@ -696,12 +703,23 @@ interface VerificationClassification {
   readonly outcome: "passed" | "code_failed" | "harness_failed";
   readonly failureKind?: TestResultSummary["failureKind"];
   readonly retryability?: TestResultSummary["retryability"];
+  readonly summary?: string;
 }
 
 function classifyVerificationOutcome(
   result: ToolRunResult,
   filesChanged: readonly string[],
+  intent: VerificationCommandIntent,
 ): VerificationClassification {
+  if (!intent.exitStatusReliable) {
+    return {
+      outcome: "harness_failed",
+      failureKind: "untrusted_exit_status",
+      retryability: "retryable",
+      summary:
+        "verification ran in shell control flow whose final exit status does not prove the test runner passed",
+    };
+  }
   if (result.ok) return { outcome: "passed" };
   const payload = isRecord(result.payload) ? result.payload : {};
   const exitCode = payload.exit_code;

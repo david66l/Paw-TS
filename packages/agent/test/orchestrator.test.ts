@@ -1501,7 +1501,7 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(5);
   });
 
-  test("external verification executes one simpler retry after a wrapper failure", async () => {
+  test("external verification retries once after an untrusted wrapper status", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-retryable-"));
     writeFileSync(path.join(dir, "product.js"), "export const value = 1;\n");
     writeFileSync(path.join(dir, "verify-test.js"), "process.exit(0);\n");
@@ -1594,7 +1594,7 @@ describe("AgentOrchestrator", () => {
     expect(result.evidence?.testResults[0]).toMatchObject({
       passed: false,
       outcome: "harness_failed",
-      failureKind: "invocation_error",
+      failureKind: "untrusted_exit_status",
       retryability: "retryable",
     });
     expect(result.evidence?.testResults[1]).toMatchObject({
@@ -1723,6 +1723,123 @@ describe("AgentOrchestrator", () => {
         (entry) => entry.command === "python -m pytest --version",
       ),
     ).toBe(true);
+    expect(calls).toBe(5);
+  });
+
+  test("a successful display stage cannot mask a failed verification stage", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-pipeline-proof-"));
+    writeFileSync(path.join(dir, "product.js"), "export const value = 1;\n");
+    writeFileSync(
+      path.join(dir, "failing-verify-test.js"),
+      'console.log("FAILED product assertion"); process.exit(1);\n',
+    );
+    writeFileSync(
+      path.join(dir, "display-helper.js"),
+      'process.stdin.resume(); process.stdin.on("end", () => console.log("display complete"));\n',
+    );
+    writeFileSync(
+      path.join(dir, "passing-verify-test.js"),
+      'console.log("1 test passed");\n',
+    );
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw-test@example.invalid"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "."],
+      ["commit", "-m", "fixture"],
+    ]) {
+      const git = Bun.spawnSync(["git", ...args], {
+        cwd: dir,
+        stdout: "ignore",
+        stderr: "pipe",
+      });
+      expect(git.exitCode).toBe(0);
+    }
+
+    const maskedCommand =
+      "node failing-verify-test.js | node display-helper.js";
+    const directCommand = "node passing-verify-test.js";
+    let calls = 0;
+    const orchestrator = new AgentOrchestrator({
+      model: {
+        label: "pipeline-proof",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.edit_file",
+                args: {
+                  path: "product.js",
+                  old_string: "value = 1",
+                  new_string: "value = 2",
+                },
+              }),
+            };
+          }
+          if (calls === 2) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: maskedCommand },
+              }),
+            };
+          }
+          if (calls === 3) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: directCommand },
+              }),
+            };
+          }
+          if (calls === 4) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.git_diff",
+                args: {},
+              }),
+            };
+          }
+          return {
+            text: JSON.stringify({
+              action: "final_answer",
+              summary: `Changed product.js; ${directCommand} passed.`,
+            }),
+          };
+        },
+      },
+      auxiliaryModel: new FakeLanguageModel({
+        responses: [{ text: '{"keep":[],"drop":[],"add":[]}' }],
+      }),
+      verificationPolicy: { authority: "external", requireMutation: true },
+      retrySleep: async () => {},
+    });
+
+    const result = await orchestrator.run({
+      runId: "pipeline-proof",
+      goal: "Fix the product value",
+      workspaceRoot: dir,
+      maxSteps: 7,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.outcome).toBe("verified");
+    expect(result.completionReason).toBe("tests_passed");
+    expect(result.evidence?.testResults).toEqual([
+      expect.objectContaining({
+        command: maskedCommand,
+        passed: false,
+        outcome: "harness_failed",
+        failureKind: "untrusted_exit_status",
+        retryability: "retryable",
+      }),
+      expect.objectContaining({
+        command: directCommand,
+        passed: true,
+        outcome: "passed",
+      }),
+    ]);
     expect(calls).toBe(5);
   });
 

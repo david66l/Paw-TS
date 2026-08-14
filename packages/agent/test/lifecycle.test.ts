@@ -351,6 +351,34 @@ describe("VerificationGate", () => {
     }
   });
 
+  test("masked shell status requires direct verification evidence", () => {
+    const v = checkVerification(
+      baseState({
+        filesChanged: ["x.ts"],
+        mutationRevision: 1,
+        testResults: [
+          {
+            command: "bun test | findstr passed",
+            passed: false,
+            outcome: "harness_failed",
+            failureKind: "untrusted_exit_status",
+            retryability: "retryable",
+            summary: "downstream control flow owns the final status",
+            mutationRevision: 1,
+          },
+        ],
+      }),
+    );
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      expect(v.nudge).toContain(
+        "does not prove its verification runner passed",
+      );
+      expect(v.nudge).toContain("Run the verification directly");
+      expect(v.nudge).not.toContain("did not execute");
+    }
+  });
+
   test("trusted external verifier accepts current harness failure only after diff inspection", () => {
     const failed = baseState({
       filesChanged: ["x.ts"],

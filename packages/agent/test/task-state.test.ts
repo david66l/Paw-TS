@@ -491,6 +491,53 @@ describe("TaskStateManager", () => {
     ]);
   });
 
+  test("does not accept a downstream pipeline exit code as test pass evidence", () => {
+    const state = new TaskStateManager("fix a masked test failure");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "src/a.py" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "src/a.py", linesAdded: 1, linesRemoved: 1 },
+      },
+    );
+    const command = "python -m pytest tests/test_a.py -q | findstr passed";
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command },
+      },
+      {
+        ok: true,
+        summary: "run_shell: exit 0",
+        payload: {
+          exit_code: 0,
+          stdout: "FAILED tests/test_a.py::test_value - assert 1 == 2\npassed",
+        },
+      },
+    );
+
+    expect(state.snapshot().testResults.at(-1)).toMatchObject({
+      command,
+      passed: false,
+      outcome: "harness_failed",
+      failureKind: "untrusted_exit_status",
+      retryability: "retryable",
+      mutationRevision: 1,
+      summary:
+        "verification ran in shell control flow whose final exit status does not prove the test runner passed",
+    });
+    expect(hasVerificationRetryAvailable(state.snapshot())).toBe(true);
+    expect(formatCompletionReadiness(state.snapshot())).toContain(
+      "- Verification: harness failed for r1 (test pass not proven: untrusted_exit_status/retryable)",
+    );
+  });
+
   test("classifies repository-runner dependency failures without hiding candidate imports", () => {
     const unavailable = new TaskStateManager("fix Django query validation");
     unavailable.recordToolResult(
@@ -567,7 +614,7 @@ describe("TaskStateManager", () => {
     );
     expect(wrapperFailure.snapshot().testResults.at(-1)).toMatchObject({
       outcome: "harness_failed",
-      failureKind: "invocation_error",
+      failureKind: "untrusted_exit_status",
       retryability: "retryable",
     });
     expect(hasVerificationRetryAvailable(wrapperFailure.snapshot())).toBe(true);

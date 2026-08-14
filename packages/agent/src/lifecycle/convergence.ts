@@ -231,16 +231,23 @@ export function convergenceToolBlockReason(
     verificationOutcome(latest) === "harness_failed" &&
     (isInvestigationCall(call) || isVerificationCall(call))
   ) {
+    const statusUntrusted = latest.failureKind === "untrusted_exit_status";
     if (verificationPolicy?.authority === "external") {
       if ((state.diffInspectedRevision ?? 0) !== revision) {
         if (isDiffInspection(call)) return null;
-        return "[LoopPolicy:inspect_external_diff] Local verification could not execute and the trusted external verifier will make the authoritative acceptance decision. Do not run another local test command for this source revision. Further harness construction is deferred. Inspect the final diff for scope and accidental files now.";
+        return statusUntrusted
+          ? "[LoopPolicy:inspect_external_diff] Local shell control flow did not preserve trustworthy verification status, and the bounded direct retry is exhausted. The trusted external verifier will make the authoritative acceptance decision. Do not run another local test command for this source revision. Inspect the final diff for scope and accidental files now."
+          : "[LoopPolicy:inspect_external_diff] Local verification could not execute and the trusted external verifier will make the authoritative acceptance decision. Do not run another local test command for this source revision. Further harness construction is deferred. Inspect the final diff for scope and accidental files now.";
       }
-      return "[LoopPolicy:deliver_external] Local verification could not execute, but the current product revision has an inspected final diff and a trusted external verifier is configured. Do not run another local test command for this source revision. Deliver final_answer now, report the local harness failure honestly, and do not claim tests passed.";
+      return statusUntrusted
+        ? "[LoopPolicy:deliver_external] Local shell control flow did not produce trustworthy test-pass evidence, but the current product revision has an inspected final diff and a trusted external verifier is configured. Do not run another local test command for this source revision. Deliver final_answer now, report the evidence limitation honestly, and do not claim tests passed."
+        : "[LoopPolicy:deliver_external] Local verification could not execute, but the current product revision has an inspected final diff and a trusted external verifier is configured. Do not run another local test command for this source revision. Deliver final_answer now, report the local harness failure honestly, and do not claim tests passed.";
     }
     const recoveryCalls = shellCallsSince(state, latest.shellCommandRevision);
     if (call.tool === "workspace.run_shell" && recoveryCalls < 4) return null;
-    return "[LoopPolicy:recover_verification_harness] The last verification did not execute because its harness or environment failed; this is not evidence that the code is wrong. Repository browsing is deferred. Repair the local test invocation/environment with a bounded shell action, then rerun verification; after four recovery commands, edit or retry a concrete acceptance command instead of continuing environment exploration.";
+    return statusUntrusted
+      ? "[LoopPolicy:recover_verification_harness] The last shell command did not preserve the verification runner's exit status, so it is neither pass evidence nor proof that the code is wrong. Repository browsing is deferred. Run the test directly or explicitly preserve its status with a bounded shell action."
+      : "[LoopPolicy:recover_verification_harness] The last verification did not execute because its harness or environment failed; this is not evidence that the code is wrong. Repository browsing is deferred. Repair the local test invocation/environment with a bounded shell action, then rerun verification; after four recovery commands, edit or retry a concrete acceptance command instead of continuing environment exploration.";
   }
   if (turn <= maxSteps - convergenceWindow(maxSteps)) return null;
   if (
@@ -290,14 +297,23 @@ export function convergenceGuidance(
     next =
       "Run the narrowest high-signal acceptance or regression test against the current source revision. Prefer an existing repository test or a direct command; do not build and debug a separate helper harness. Do not rely on a test that predates the latest edit.";
   } else if (verificationOutcome(latest) === "harness_failed") {
+    const statusUntrusted = latest.failureKind === "untrusted_exit_status";
     next =
       verificationPolicy?.authority === "external"
         ? hasVerificationRetryAvailable(state)
-          ? "The verification command failed for a recoverable invocation reason. Run one materially simpler direct command from the same test-runner family now; remove display-only pipes, redirections, wrappers, or invalid options."
+          ? statusUntrusted
+            ? "The shell command's final status does not prove the verification runner passed. Run one materially simpler direct command from the same test-runner family now; remove display-only pipes, fallbacks, or trailing commands."
+            : "The verification command failed for a recoverable invocation reason. Run one materially simpler direct command from the same test-runner family now; remove display-only pipes, redirections, wrappers, or invalid options."
           : (state.diffInspectedRevision ?? 0) === revision
-            ? "Local verification could not execute, and a trusted external verifier is configured. Deliver final_answer now with an honest local-verification caveat; do not claim tests passed."
-            : "Local verification could not execute, and a trusted external verifier is configured. Stop building replacement harnesses and inspect the final product diff now."
-        : "The last verification did not execute because the harness or environment failed. Repair the invocation with a bounded diagnostic, then rerun it; do not treat infrastructure failure as a code assertion failure.";
+            ? statusUntrusted
+              ? "Local verification did not produce trustworthy pass evidence, and a trusted external verifier is configured. Deliver final_answer now with an honest evidence caveat; do not claim tests passed."
+              : "Local verification could not execute, and a trusted external verifier is configured. Deliver final_answer now with an honest local-verification caveat; do not claim tests passed."
+            : statusUntrusted
+              ? "Local shell control flow did not preserve the verification status, and a trusted external verifier is configured. Stop building replacement harnesses and inspect the final product diff now."
+              : "Local verification could not execute, and a trusted external verifier is configured. Stop building replacement harnesses and inspect the final product diff now."
+        : statusUntrusted
+          ? "The last shell command did not preserve the verification runner's exit status. Run the test directly or explicitly preserve its status; do not treat the downstream command's exit zero as a test pass."
+          : "The last verification did not execute because the harness or environment failed. Repair the invocation with a bounded diagnostic, then rerun it; do not treat infrastructure failure as a code assertion failure.";
   } else if (verificationOutcome(latest) === "code_failed") {
     next =
       "Use the exact current test failure to revise the implementation, then rerun that test. Avoid reopening broad repository exploration.";

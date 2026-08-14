@@ -65,4 +65,38 @@ describe("verification command intent", () => {
     expect(verificationCommandFamily("go test ./...")).toBe("go");
     expect(verificationCommandFamily("cargo test --workspace")).toBe("cargo");
   });
+
+  test("separates verification intent from trustworthy final exit status", () => {
+    const unreliable = [
+      "pytest tests/test_a.py | tail -20",
+      "pytest tests/test_a.py 2>&1 | findstr passed",
+      "pytest tests/test_a.py || echo ignored",
+      "pytest tests/test_a.py ; echo done",
+      "pytest tests/test_a.py\necho done",
+      "pytest tests/test_a.py &",
+      "echo cached || pytest tests/test_a.py",
+      "pytest tests/test_a.py && echo done || echo recovered",
+    ];
+    for (const command of unreliable) {
+      expect(analyzeVerificationCommand(command)).toEqual({
+        family: "pytest",
+        exitStatusReliable: false,
+      });
+    }
+
+    const reliable = [
+      "pytest tests/test_a.py",
+      "set PYTHONPATH=.&&pytest tests/test_a.py",
+      "pytest tests/test_a.py && echo done",
+      "echo preparing ; pytest tests/test_a.py",
+      "echo input | pytest tests/test_a.py",
+      "pytest tests/test_a.py;",
+    ];
+    for (const command of reliable) {
+      expect(analyzeVerificationCommand(command)).toEqual({
+        family: "pytest",
+        exitStatusReliable: true,
+      });
+    }
+  });
 });

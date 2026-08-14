@@ -74,12 +74,46 @@ function isAttachedLongGitOption(token: string): boolean {
 }
 
 export function splitCommandSegments(command: string): string[] {
-  const segments: string[] = [];
+  return parseCommandChain(command)?.map((segment) => segment.text) ?? [];
+}
+
+export type ShellCommandConnector = "&&" | "||" | "|" | "|&" | ";" | "&" | "\n";
+
+export interface ShellCommandSegment {
+  readonly text: string;
+  readonly tokens: readonly string[];
+  readonly connectorBefore?: ShellCommandConnector;
+  readonly connectorAfter?: ShellCommandConnector;
+}
+
+interface RawCommandSegment {
+  readonly text: string;
+  connectorAfter?: ShellCommandConnector;
+}
+
+/**
+ * Parse the small, quote-aware command-chain subset needed by intent and
+ * evidence classifiers. It deliberately preserves control operators rather
+ * than pretending every segment shares the final shell exit status.
+ */
+export function parseCommandChain(
+  command: string,
+): readonly ShellCommandSegment[] | null {
+  const rawSegments: RawCommandSegment[] = [];
   let current = "";
   let quote: "'" | '"' | undefined;
   let escaped = false;
 
-  for (const character of command) {
+  const finishSegment = (connectorAfter?: ShellCommandConnector): boolean => {
+    const text = current.trim();
+    if (!text) return false;
+    rawSegments.push({ text, ...(connectorAfter ? { connectorAfter } : {}) });
+    current = "";
+    return true;
+  };
+
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index] ?? "";
     if (escaped) {
       current += character;
       escaped = false;
@@ -100,20 +134,75 @@ export function splitCommandSegments(command: string): string[] {
       quote = character;
       continue;
     }
+
+    // Preserve POSIX/CMD fd duplication and Bash combined redirection. These
+    // ampersands are redirection syntax, not command-chain connectors.
     if (
+      character === "&" &&
+      (current.trimEnd().endsWith(">") || command[index + 1] === ">")
+    ) {
+      current += character;
+      continue;
+    }
+
+    let connector: ShellCommandConnector | undefined;
+    const pair = command.slice(index, index + 2);
+    if (pair === "&&" || pair === "||" || pair === "|&") {
+      connector = pair;
+      index += 1;
+    } else if (character === "\r" && command[index + 1] === "\n") {
+      connector = "\n";
+      index += 1;
+    } else if (
       character === ";" ||
       character === "&" ||
       character === "|" ||
       character === "\n"
     ) {
-      if (current.trim()) segments.push(current.trim());
-      current = "";
+      connector = character === "\n" ? "\n" : character;
+    }
+
+    if (connector) {
+      if (!finishSegment(connector)) {
+        // Blank lines are harmless separators. Other missing operands are
+        // invalid or too shell-specific for this conservative classifier.
+        if (connector === "\n") continue;
+        return null;
+      }
       continue;
     }
     current += character;
   }
-  if (current.trim()) segments.push(current.trim());
-  return segments;
+
+  if (quote || escaped) return null;
+  if (!finishSegment()) {
+    const last = rawSegments.at(-1);
+    if (!last) return [];
+    if (last.connectorAfter === ";" || last.connectorAfter === "\n") {
+      last.connectorAfter = undefined;
+    } else if (last.connectorAfter !== "&") {
+      return null;
+    }
+  }
+
+  const parsed: ShellCommandSegment[] = [];
+  for (let index = 0; index < rawSegments.length; index += 1) {
+    const segment = rawSegments[index];
+    if (!segment) continue;
+    const tokens = tokenizeCommandSegment(segment.text);
+    if (!tokens || tokens.length === 0) return null;
+    parsed.push({
+      text: segment.text,
+      tokens,
+      ...(index > 0
+        ? { connectorBefore: rawSegments[index - 1]?.connectorAfter }
+        : {}),
+      ...(segment.connectorAfter
+        ? { connectorAfter: segment.connectorAfter }
+        : {}),
+    });
+  }
+  return parsed;
 }
 
 export function tokenizeCommandSegment(segment: string): string[] | null {
@@ -185,11 +274,7 @@ export function tokenizeCommandSegment(segment: string): string[] | null {
  * shared, quote-aware view of executable and argument tokens.
  */
 export function tokenizeCommandSegments(command: string): string[][] | null {
-  const tokenized: string[][] = [];
-  for (const segment of splitCommandSegments(command)) {
-    const tokens = tokenizeCommandSegment(segment);
-    if (!tokens) return null;
-    if (tokens.length > 0) tokenized.push(tokens);
-  }
-  return tokenized;
+  return (
+    parseCommandChain(command)?.map((segment) => [...segment.tokens]) ?? null
+  );
 }

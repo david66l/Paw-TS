@@ -44,6 +44,7 @@ export interface RunTestEvidence {
     | "runner_unavailable"
     | "test_discovery"
     | "invocation_error"
+    | "untrusted_exit_status"
     | "test_failure";
   /** Whether one bounded command-level recovery may still produce evidence. */
   readonly retryability?: "retryable" | "terminal";
