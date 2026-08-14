@@ -16,6 +16,7 @@ import {
 } from "../src/lifecycle/coding-phase.js";
 import {
   decideCompletion,
+  decideIncomplete,
   evidenceFromTaskState,
 } from "../src/lifecycle/completion-policy.js";
 import { collectToolRecoveryMessage } from "../src/lifecycle/task-lifecycle.js";
@@ -58,6 +59,28 @@ describe("CompletionPolicy", () => {
     });
     expect(d.status).toBe("incomplete");
     expect(d.outcome).toBe("budget_exhausted");
+  });
+
+  test("structured incomplete preserves its producer-owned reason", () => {
+    const decision = decideIncomplete({
+      reason: "provider_protocol_empty_response",
+      message: "Provider recovery exhausted.",
+      taskState: baseState({ filesChanged: ["a.py"] }),
+    });
+    expect(decision).toMatchObject({
+      status: "incomplete",
+      outcome: "incomplete",
+      reason: "provider_protocol_empty_response",
+      message: "Provider recovery exhausted.",
+      evidence: { filesChanged: ["a.py"] },
+    });
+    expect(() =>
+      decideIncomplete({
+        reason: " ",
+        message: "missing reason",
+        taskState: baseState(),
+      }),
+    ).toThrow("reason is required");
   });
 
   test("final_answer without mutation is model_declared completed", () => {

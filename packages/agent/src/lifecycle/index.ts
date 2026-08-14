@@ -1,5 +1,6 @@
 export {
   decideCompletion,
+  decideIncomplete,
   evidenceFromTaskState,
   toRunResult,
   checkVerification,
@@ -29,7 +30,10 @@ export {
   type AcceptanceGateDecision,
 } from "./task-lifecycle.js";
 
-export type { DecideCompletionInput } from "./completion-policy.js";
+export type {
+  DecideCompletionInput,
+  DecideIncompleteInput,
+} from "./completion-policy.js";
 export {
   advanceCodingPhase,
   codingPhaseBlockReason,

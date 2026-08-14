@@ -21,6 +21,7 @@ import {
   type CompletionDecision,
   type DecideCompletionInput,
   decideCompletion,
+  decideIncomplete,
   evidenceFromTaskState,
   toRunResult,
 } from "./completion-policy.js";
@@ -45,6 +46,7 @@ import {
 
 export {
   decideCompletion,
+  decideIncomplete,
   evidenceFromTaskState,
   toRunResult,
   checkVerification,

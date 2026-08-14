@@ -58,6 +58,7 @@ import {
   IDLE_FUSE_ESCALATION,
   checkAcceptanceCriteria,
   decideCompletion,
+  decideIncomplete,
   evaluateBudgetExhaustion,
   evaluateFinalAnswer,
   goalRequiresMutation,
@@ -312,7 +313,7 @@ function handleAcceptanceUpdate(
       "max_steps_after_tools",
     );
     return {
-      state: { type: "incomplete", message: decision.message },
+      state: { type: "decided", decision },
       flags: nextFlags,
     };
   }
@@ -400,7 +401,7 @@ function handleNoAction(
       "budget_exhausted",
     );
     return {
-      state: { type: "incomplete", message: decision.message },
+      state: { type: "decided", decision },
       flags,
     };
   }
@@ -496,10 +497,7 @@ function handleNativeToolErrors(
       "max_steps_after_tools",
     );
     return {
-      state: {
-        type: "incomplete",
-        message: decision.message,
-      },
+      state: { type: "decided", decision },
       flags: nextFlags,
     };
   }
@@ -588,11 +586,13 @@ async function handleFinalAnswer(
       ).length ?? 0;
     const pendingTodoCount =
       opts.todoStore?.items.filter((t) => t.status !== "done").length ?? 0;
+    const decision = decideIncomplete({
+      reason: "pending_work",
+      message: `The model declared completion with unfinished work (${pendingPlanCount} plan item(s), ${pendingTodoCount} todo(s)). Update their status with plan_update/todo_write or report an honest blocker.`,
+      taskState: ctx.taskState.snapshot(),
+    });
     return {
-      state: {
-        type: "incomplete",
-        message: `The model declared completion with unfinished work (${pendingPlanCount} plan item(s), ${pendingTodoCount} todo(s)). Update their status with plan_update/todo_write or report an honest blocker.`,
-      },
+      state: { type: "decided", decision },
       flags,
     };
   }
@@ -613,12 +613,14 @@ async function handleFinalAnswer(
   if (ctx.loopKernelVersion === "v2") {
     const assessment = ctx.getLoopV2CandidateAssessment?.();
     if (!assessment) {
+      const decision = decideIncomplete({
+        reason: "loop_v2_candidate_assessment_missing",
+        message:
+          "[LoopV2Readiness:ASSESSMENT_MISSING] The persisted candidate assessment was not available, so completion was rejected fail-closed.",
+        taskState: ctx.taskState.snapshot(),
+      });
       return {
-        state: {
-          type: "incomplete",
-          message:
-            "[LoopV2Readiness:ASSESSMENT_MISSING] The persisted candidate assessment was not available, so completion was rejected fail-closed.",
-        },
+        state: { type: "decided", decision },
         flags,
       };
     }
@@ -641,11 +643,13 @@ async function handleFinalAnswer(
       return { state: { type: "continue", nextFlags }, flags: nextFlags };
     }
     if (readinessGate.type === "incomplete") {
+      const decision = decideIncomplete({
+        reason: `loop_v2_readiness_${readinessGate.reason}`,
+        message: `${readinessGate.message}\nNo additional readiness retry was opened (${readinessGate.reason}).`,
+        taskState: ctx.taskState.snapshot(),
+      });
       return {
-        state: {
-          type: "incomplete",
-          message: `${readinessGate.message}\nNo additional readiness retry was opened (${readinessGate.reason}).`,
-        },
+        state: { type: "decided", decision },
         flags,
       };
     }
@@ -778,8 +782,12 @@ async function checkLoopV2SemanticReviewGate(
   }
   return {
     state: {
-      type: "incomplete",
-      message: `${gate.message}\nNo additional semantic review retry was opened (${gate.reason}).`,
+      type: "decided",
+      decision: decideIncomplete({
+        reason: `loop_v2_semantic_review_${gate.reason}`,
+        message: `${gate.message}\nNo additional semantic review retry was opened (${gate.reason}).`,
+        taskState: ctx.taskState.snapshot(),
+      }),
     },
     flags,
   };
@@ -934,8 +942,13 @@ function handleAcceptanceGateFailure(
   noRoomForAnotherTurn: boolean,
 ): { readonly state: TurnState; readonly flags: TurnFlags } {
   if (acceptance.mode === "blocked") {
+    const decision = decideIncomplete({
+      reason: "acceptance_blocked",
+      message: acceptance.message,
+      taskState: ctx.taskState.snapshot(),
+    });
     return {
-      state: { type: "incomplete", message: acceptance.message },
+      state: { type: "decided", decision },
       flags,
     };
   }
@@ -953,8 +966,13 @@ function handleAcceptanceGateFailure(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
+  const decision = decideIncomplete({
+    reason: "acceptance_pending",
+    message: acceptance.message,
+    taskState: ctx.taskState.snapshot(),
+  });
   return {
-    state: { type: "incomplete", message: acceptance.message },
+    state: { type: "decided", decision },
     flags,
   };
 }
@@ -1149,10 +1167,7 @@ async function handlePlanUpdate(
       "max_steps_after_tools",
     );
     return {
-      state: {
-        type: "incomplete",
-        message: decision.message,
-      },
+      state: { type: "decided", decision },
       flags: nextFlags,
     };
   }
@@ -1568,7 +1583,7 @@ async function handleToolCalls(
       hasEverUsedTools: true,
     });
     return {
-      state: { type: "incomplete", message: decision.message },
+      state: { type: "decided", decision },
       flags: fusedFlags,
       ...(subResults.length > 0 ? { subResults } : {}),
     };
@@ -1587,7 +1602,7 @@ async function handleToolCalls(
       hasEverUsedTools: true,
     });
     return {
-      state: { type: "incomplete", message: decision.message },
+      state: { type: "decided", decision },
       flags: fusedFlags,
       ...(subResults.length > 0 ? { subResults } : {}),
     };
@@ -1601,7 +1616,7 @@ async function handleToolCalls(
       "max_steps_after_tools",
     );
     return {
-      state: { type: "incomplete", message: decision.message },
+      state: { type: "decided", decision },
       flags: fusedFlags,
       ...(subResults.length > 0 ? { subResults } : {}),
     };
@@ -1739,10 +1754,7 @@ async function handleRunAgent(
       "max_steps_after_tools",
     );
     return {
-      state: {
-        type: "incomplete",
-        message: decision.message,
-      },
+      state: { type: "decided", decision },
       flags: nextFlags,
       subResults,
     };

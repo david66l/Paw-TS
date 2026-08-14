@@ -191,7 +191,13 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
       { diagnosis },
     );
 
-    expect(result.state.type).toBe("incomplete");
+    expect(result.state).toMatchObject({
+      type: "decided",
+      decision: {
+        status: "incomplete",
+        reason: "max_steps_exhausted_without_final",
+      },
+    });
   });
 });
 
@@ -249,6 +255,12 @@ describe("handleAction — 原生通道坏 args（拒绝执行 + 错误注入）
       { planner: undefined as never, saveStateFn: noopSave },
       feedback,
     );
-    expect(result.state.type).toBe("incomplete");
+    expect(result.state).toMatchObject({
+      type: "decided",
+      decision: {
+        status: "incomplete",
+        reason: "max_steps_reached_after_tools",
+      },
+    });
   });
 });

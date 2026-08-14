@@ -62,6 +62,31 @@ export interface DecideCompletionInput {
   readonly hasEverUsedTools?: boolean;
 }
 
+export interface DecideIncompleteInput {
+  readonly reason: string;
+  readonly message: string;
+  readonly taskState: TaskState;
+  readonly outcome?: Extract<
+    CompletionOutcome,
+    "incomplete" | "budget_exhausted"
+  >;
+}
+
+/** Creates one authoritative incomplete decision without parsing its prose. */
+export function decideIncomplete(
+  input: DecideIncompleteInput,
+): CompletionDecision {
+  const reason = input.reason.trim();
+  if (!reason) throw new Error("Incomplete completion reason is required");
+  return {
+    status: "incomplete",
+    outcome: input.outcome ?? "incomplete",
+    reason,
+    message: input.message.trim() || "(empty)",
+    evidence: evidenceFromTaskState(input.taskState),
+  };
+}
+
 /**
  * Decide final Run status/outcome. Never marks budget exhaustion as completed.
  */

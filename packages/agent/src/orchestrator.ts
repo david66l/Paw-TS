@@ -183,6 +183,7 @@ import type {
   ToolEffectPolicy,
   ToolExecutionPolicy,
 } from "./execution-policy.js";
+import { decideIncomplete } from "./lifecycle/completion-policy.js";
 import {
   type VerificationPolicy,
   goalAllowsSkipVerification,
@@ -2135,9 +2136,14 @@ export class AgentOrchestrator {
 
       if (terminal.decision.kind === "recover_protocol") {
         if (ctx.turn + 1 >= ctx.maxSteps) {
+          const message = `Provider protocol recovery could not run before max steps: ${terminal.decision.issue}`;
           return {
-            type: "incomplete",
-            message: `Provider protocol recovery could not run before max steps: ${terminal.decision.issue}`,
+            type: "decided",
+            decision: decideIncomplete({
+              reason: `provider_protocol_${terminal.decision.issue}_recovery_budget_exhausted`,
+              message,
+              taskState: ctx.taskState.snapshot(),
+            }),
           };
         }
         ctx.ctxMgr.addAssistant(text, thinking);
@@ -2161,8 +2167,12 @@ export class AgentOrchestrator {
           ctx.ctxMgr.addAssistant(text, thinking);
         }
         return {
-          type: "incomplete",
-          message: `[ProviderProtocol:${terminal.decision.reasonCode}] ${terminal.decision.detail}`,
+          type: "decided",
+          decision: decideIncomplete({
+            reason: `provider_protocol_${terminal.decision.reasonCode}`,
+            message: `[ProviderProtocol:${terminal.decision.reasonCode}] ${terminal.decision.detail}`,
+            taskState: ctx.taskState.snapshot(),
+          }),
         };
       }
       if (terminal.decision.kind === "candidate_proposed") {

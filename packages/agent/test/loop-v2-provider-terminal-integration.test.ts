@@ -161,7 +161,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         v2Outcome: {
           executionStatus: "incomplete",
           candidateStatus: "none",
-          reasonCode: "max_steps_exhausted_without_final",
+          reasonCode: "provider_protocol_empty_response",
         },
         comparison: "equal",
       });
@@ -213,11 +213,11 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         legacyTerminal: {
           status: "incomplete",
           outcome: "budget_exhausted",
-          reasonCode: "max_steps_exhausted_without_final",
+          reasonCode: "max_steps_reached_after_tools",
         },
         v2Outcome: {
           executionStatus: "incomplete",
-          reasonCode: "max_steps_exhausted_without_final",
+          reasonCode: "max_steps_reached_after_tools",
         },
         comparison: "equal",
       });
