@@ -11,6 +11,8 @@ import {
   PAW_FRESH_QUALIFICATION_V4_RULE,
   PAW_FRESH_QUALIFICATION_V5_RULE,
   PAW_FRESH_QUALIFICATION_V5_RUN_IDS,
+  PAW_FRESH_QUALIFICATION_V6_RULE,
+  PAW_FRESH_QUALIFICATION_V6_RUN_IDS,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
@@ -112,15 +114,20 @@ describe("SWE compare manifest", () => {
     }
   });
 
-  test("selects ten v6 repositories after excluding the v5 model-run sample", () => {
+  test("selects ten v7 repositories after excluding model runs and Requests", () => {
     expect(PAW_FRESH_QUALIFICATION_V3_RULE.count).toBe(5);
     expect(PAW_FRESH_QUALIFICATION_V4_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V5_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_V6_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.version).toBe(
-      "paw-fresh-qualification-v6",
+      "paw-fresh-qualification-v7",
     );
     expect(PAW_FRESH_QUALIFICATION_V5_RUN_IDS).toEqual(["sympy__sympy-14024"]);
+    expect(PAW_FRESH_QUALIFICATION_V6_RUN_IDS).toEqual(["psf__requests-2317"]);
+    expect(PAW_FRESH_QUALIFICATION_RULE.excludedRepos).toEqual([
+      "psf/requests",
+    ]);
     expect(PAW_FRESH_QUALIFICATION_RULE.fallbackMinFailToPass).toBe(1);
     expect(PAW_FRESH_QUALIFICATION_RULE.seed).toBe(
       PAW_FRESH_QUALIFICATION_V3_RULE.seed,
@@ -165,6 +172,16 @@ describe("SWE compare manifest", () => {
     });
     candidates.push({
       ...qualifying,
+      instance_id: PAW_FRESH_QUALIFICATION_V6_RUN_IDS[0],
+      repo: "v6-model-run/repo",
+    });
+    candidates.push({
+      ...qualifying,
+      instance_id: "requests__networked-test",
+      repo: "psf/requests",
+    });
+    candidates.push({
+      ...qualifying,
       instance_id: PAW_FRESH_V2_IDS[0],
       repo: "already-exposed/repo",
     });
@@ -201,6 +218,8 @@ describe("SWE compare manifest", () => {
     );
     expect(selected).not.toContain(PAW_FRESH_V2_IDS[0]);
     expect(selected).not.toContain(PAW_FRESH_QUALIFICATION_V5_RUN_IDS[0]);
+    expect(selected).not.toContain(PAW_FRESH_QUALIFICATION_V6_RUN_IDS[0]);
+    expect(selected).not.toContain("requests__networked-test");
     expect(selected).not.toContain("zero-f2p__repo");
     expect(selected).not.toContain("too-small-p2p__repo");
     expect(selected.filter((id) => id.startsWith("fallback-")).length).toBe(1);

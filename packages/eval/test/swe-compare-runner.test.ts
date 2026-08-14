@@ -62,7 +62,7 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe("SWE compare runner", () => {
-  test("accepts the current v6 protocol metadata and rejects unknown versions", () => {
+  test("accepts the current v7 protocol metadata and rejects unknown versions", () => {
     const current = {
       protocol: "paw-only-seen-development",
       selection: {
@@ -75,7 +75,7 @@ describe("SWE compare runner", () => {
     expect(
       compareProtocolMetadataIsValid({
         ...current,
-        selection: { ...current.selection, ruleVersion: "unknown-v7" },
+        selection: { ...current.selection, ruleVersion: "unknown-v8" },
       } as unknown as SweCompareManifest),
     ).toBe(false);
     expect(

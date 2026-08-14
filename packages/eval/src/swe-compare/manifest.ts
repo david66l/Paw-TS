@@ -116,10 +116,29 @@ const PAW_QUALIFICATION_EXPOSED_IDS: readonly string[] = [
   ...new Set([...PAW_KNOWN_EXPOSED_IDS, ...PAW_FRESH_QUALIFICATION_V5_RUN_IDS]),
 ];
 
-/** Current contract: restart ten tasks on one post-fix source commit. */
-export const PAW_FRESH_QUALIFICATION_RULE = {
+/** First post-fix ten-task contract; Requests ended without a grader verdict. */
+export const PAW_FRESH_QUALIFICATION_V6_RULE = {
   ...PAW_FRESH_QUALIFICATION_V5_RULE,
   version: "paw-fresh-qualification-v6" as const,
+} as const;
+
+/** v6 samples that received a Paw model trajectory and are no longer unseen. */
+export const PAW_FRESH_QUALIFICATION_V6_RUN_IDS = [
+  "psf__requests-2317",
+] as const;
+
+const PAW_QUALIFICATION_V7_EXPOSED_IDS: readonly string[] = [
+  ...new Set([
+    ...PAW_QUALIFICATION_EXPOSED_IDS,
+    ...PAW_FRESH_QUALIFICATION_V6_RUN_IDS,
+  ]),
+];
+
+/** Current contract: ten unseen tasks without externally networked Requests tests. */
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  ...PAW_FRESH_QUALIFICATION_V6_RULE,
+  version: "paw-fresh-qualification-v7" as const,
+  excludedRepos: ["psf/requests"] as const,
 } as const;
 
 function sha256(value: string | Buffer): string {
@@ -211,7 +230,8 @@ export function createSweCompareManifest(opts: {
     | "paw-fresh-qualification-v3"
     | "paw-fresh-qualification-v4"
     | "paw-fresh-qualification-v5"
-    | "paw-fresh-qualification-v6";
+    | "paw-fresh-qualification-v6"
+    | "paw-fresh-qualification-v7";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;
@@ -374,6 +394,7 @@ interface PawFreshSelectionRule {
   readonly minPassToPass: number;
   readonly maxPassToPass: number;
   readonly fallbackMinFailToPass?: number;
+  readonly excludedRepos?: readonly string[];
 }
 
 function selectPawFreshIds(opts: {
@@ -385,6 +406,7 @@ function selectPawFreshIds(opts: {
   const datasetPath = opts.datasetPath ?? defaultLiteJsonl(opts.repoRoot);
   const knownIds = new Set(opts.excludedIds);
   const rule = opts.rule;
+  const excludedRepos = new Set(rule.excludedRepos ?? []);
   const instances = loadLiteInstances(datasetPath);
   const rankedCandidates = (minFailToPass: number) =>
     instances
@@ -393,6 +415,7 @@ function selectPawFreshIds(opts: {
         const passToPass = instance.PASS_TO_PASS?.length ?? 0;
         return (
           !knownIds.has(instance.instance_id) &&
+          !excludedRepos.has(instance.repo) &&
           failToPass >= minFailToPass &&
           failToPass <= rule.maxFailToPass &&
           passToPass >= rule.minPassToPass &&
@@ -441,7 +464,7 @@ export function selectPawFreshQualificationIds(opts: {
 }): string[] {
   return selectPawFreshIds({
     ...opts,
-    excludedIds: PAW_QUALIFICATION_EXPOSED_IDS,
+    excludedIds: PAW_QUALIFICATION_V7_EXPOSED_IDS,
     rule: PAW_FRESH_QUALIFICATION_RULE,
   });
 }
@@ -471,7 +494,7 @@ export function createPawFreshQualificationManifest(opts: {
     instanceIds: selectPawFreshQualificationIds(opts),
     mode: "paw-seen-development",
     pawDevelopmentRuleVersion: rule.version,
-    excludedSeenIds: PAW_QUALIFICATION_EXPOSED_IDS,
+    excludedSeenIds: PAW_QUALIFICATION_V7_EXPOSED_IDS,
     pawMaxSteps: rule.pawMaxSteps,
     sharedTimeoutMs: rule.sharedTimeoutMs,
     verificationAuthority: rule.verificationAuthority,
