@@ -424,10 +424,16 @@ export async function runSweExpAgent(
       warnings.push("skip_harness: resolved left false; patches recorded");
     }
   } finally {
-    try {
-      await closeSql();
-    } catch {
-      /* ignore */
+    // Only a suite with an unfinished memory-on arm owns this process-global
+    // pool lifecycle. In particular, eval-only and off-only resume paths must
+    // not wait on or close a connection created by another runtime in the
+    // same process.
+    if (needsMemory) {
+      try {
+        await closeSql();
+      } catch {
+        /* ignore */
+      }
     }
   }
 

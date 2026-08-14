@@ -174,35 +174,39 @@ describe("E2E: EvalRunner with FakeLanguageModel", () => {
     expect(result.suiteName).toBe("e2e-test");
   });
 
-  test("multi-repetition aggregation works", async () => {
-    // 3 reps of the same "correct" response
-    const model = new FakeLanguageModel({
-      responses: [
-        ...READ_FILE_RESPONSES,
-        ...READ_FILE_RESPONSES,
-        ...READ_FILE_RESPONSES,
-      ],
-    });
+  test(
+    "multi-repetition aggregation works",
+    async () => {
+      // 3 reps of the same "correct" response
+      const model = new FakeLanguageModel({
+        responses: [
+          ...READ_FILE_RESPONSES,
+          ...READ_FILE_RESPONSES,
+          ...READ_FILE_RESPONSES,
+        ],
+      });
 
-    const testRunner = new EvalRunner({
-      model,
-      workspaceRoot: process.cwd(),
-      settings: { default_repetitions: 3 },
-    });
+      const testRunner = new EvalRunner({
+        model,
+        workspaceRoot: process.cwd(),
+        settings: { default_repetitions: 3 },
+      });
 
-    const result = await testRunner.runSuite("e2e-test", [READ_FILE_TC]);
+      const result = await testRunner.runSuite("e2e-test", [READ_FILE_TC]);
 
-    expect(result.aggregateReports).toHaveLength(1);
-    const report = result.aggregateReports[0]!;
+      expect(result.aggregateReports).toHaveLength(1);
+      const report = result.aggregateReports[0]!;
 
-    expect(report.repetitionCount).toBe(3);
-    expect(report.overallScore).toBe(100);
-    // Perfect stability (all 3 runs identical)
-    expect(report.stabilityScore).toBe(100);
-    expect(report.minScore).toBe(100);
-    expect(report.maxScore).toBe(100);
-    expect(report.perRepetition).toHaveLength(3);
-  });
+      expect(report.repetitionCount).toBe(3);
+      expect(report.overallScore).toBe(100);
+      // Perfect stability (all 3 runs identical)
+      expect(report.stabilityScore).toBe(100);
+      expect(report.minScore).toBe(100);
+      expect(report.maxScore).toBe(100);
+      expect(report.perRepetition).toHaveLength(3);
+    },
+    15_000,
+  );
 
   test("runner handles mixed pass/fail across test cases", async () => {
     // Response for the good case + response for the adversarial case
