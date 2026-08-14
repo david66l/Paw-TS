@@ -155,10 +155,29 @@ const PAW_QUALIFICATION_V8_EXPOSED_IDS: readonly string[] = [
   ]),
 ];
 
-/** Current contract: ten unseen tasks after the three-sample v7 diagnostic. */
-export const PAW_FRESH_QUALIFICATION_RULE = {
+/** First contract after the three-sample v7 diagnostic. */
+export const PAW_FRESH_QUALIFICATION_V8_RULE = {
   ...PAW_FRESH_QUALIFICATION_V7_RULE,
   version: "paw-fresh-qualification-v8" as const,
+} as const;
+
+/** v8 samples that received a Paw model trajectory and are no longer unseen. */
+export const PAW_FRESH_QUALIFICATION_V8_RUN_IDS = [
+  "django__django-16820",
+  "scikit-learn__scikit-learn-14092",
+] as const;
+
+const PAW_QUALIFICATION_V9_EXPOSED_IDS: readonly string[] = [
+  ...new Set([
+    ...PAW_QUALIFICATION_V8_EXPOSED_IDS,
+    ...PAW_FRESH_QUALIFICATION_V8_RUN_IDS,
+  ]),
+];
+
+/** Current contract: ten unseen tasks after the two-sample v8 diagnostic. */
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  ...PAW_FRESH_QUALIFICATION_V8_RULE,
+  version: "paw-fresh-qualification-v9" as const,
 } as const;
 
 function sha256(value: string | Buffer): string {
@@ -252,7 +271,8 @@ export function createSweCompareManifest(opts: {
     | "paw-fresh-qualification-v5"
     | "paw-fresh-qualification-v6"
     | "paw-fresh-qualification-v7"
-    | "paw-fresh-qualification-v8";
+    | "paw-fresh-qualification-v8"
+    | "paw-fresh-qualification-v9";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;
@@ -485,7 +505,7 @@ export function selectPawFreshQualificationIds(opts: {
 }): string[] {
   return selectPawFreshIds({
     ...opts,
-    excludedIds: PAW_QUALIFICATION_V8_EXPOSED_IDS,
+    excludedIds: PAW_QUALIFICATION_V9_EXPOSED_IDS,
     rule: PAW_FRESH_QUALIFICATION_RULE,
   });
 }
@@ -515,7 +535,7 @@ export function createPawFreshQualificationManifest(opts: {
     instanceIds: selectPawFreshQualificationIds(opts),
     mode: "paw-seen-development",
     pawDevelopmentRuleVersion: rule.version,
-    excludedSeenIds: PAW_QUALIFICATION_V8_EXPOSED_IDS,
+    excludedSeenIds: PAW_QUALIFICATION_V9_EXPOSED_IDS,
     pawMaxSteps: rule.pawMaxSteps,
     sharedTimeoutMs: rule.sharedTimeoutMs,
     verificationAuthority: rule.verificationAuthority,
