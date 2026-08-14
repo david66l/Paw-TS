@@ -678,7 +678,8 @@ export function validateCompareRun(
     ? manifest.selection.ruleVersion === "paw-seen-dev-v1" ||
       manifest.selection.ruleVersion === "paw-fresh-dev-v2" ||
       manifest.selection.ruleVersion === "paw-fresh-qualification-v3" ||
-      manifest.selection.ruleVersion === "paw-fresh-qualification-v4"
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v4" ||
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v5"
     : manifest.selection.ruleVersion === "formal-dev-v1";
   if (
     !validRule ||

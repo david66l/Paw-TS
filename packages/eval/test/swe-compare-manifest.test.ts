@@ -8,6 +8,7 @@ import {
   PAW_FRESH_DEVELOPMENT_RULE,
   PAW_FRESH_QUALIFICATION_RULE,
   PAW_FRESH_QUALIFICATION_V3_RULE,
+  PAW_FRESH_QUALIFICATION_V4_RULE,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
@@ -109,9 +110,11 @@ describe("SWE compare manifest", () => {
     }
   });
 
-  test("selects ten v4 repositories as a deterministic extension of v3", () => {
+  test("selects ten v5 repositories as nine strict plus one fallback", () => {
     expect(PAW_FRESH_QUALIFICATION_V3_RULE.count).toBe(5);
+    expect(PAW_FRESH_QUALIFICATION_V4_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_RULE.fallbackMinFailToPass).toBe(1);
     expect(PAW_FRESH_QUALIFICATION_RULE.seed).toBe(
       PAW_FRESH_QUALIFICATION_V3_RULE.seed,
     );
@@ -127,7 +130,7 @@ describe("SWE compare manifest", () => {
         (_, index) => `tests/test_regression.py::test_${index}`,
       ),
     );
-    const candidates = Array.from({ length: 12 }, (_, index) => ({
+    const candidates = Array.from({ length: 9 }, (_, index) => ({
       ...instance,
       instance_id: `qualification-${index}__repo-${index}`,
       repo: `qualification-${index}/repo`,
@@ -136,6 +139,16 @@ describe("SWE compare manifest", () => {
       FAIL_TO_PASS: failToPass,
       PASS_TO_PASS: passToPass,
     }));
+    const fallbackCandidates = Array.from({ length: 3 }, (_, index) => ({
+      ...instance,
+      instance_id: `fallback-${index}__repo-${index}`,
+      repo: `fallback-${index}/repo`,
+      base_commit: `fallback-base-${index}`,
+      problem_statement: "fallback task prose",
+      FAIL_TO_PASS: JSON.stringify(["tests/test_fix.py::test_a"]),
+      PASS_TO_PASS: passToPass,
+    }));
+    candidates.push(...fallbackCandidates);
     const qualifying = candidates[0];
     if (!qualifying) throw new Error("v3 fixture has no qualifying candidate");
     candidates.push({
@@ -145,9 +158,9 @@ describe("SWE compare manifest", () => {
     });
     candidates.push({
       ...qualifying,
-      instance_id: "too-small-f2p__repo",
-      repo: "too-small-f2p/repo",
-      FAIL_TO_PASS: JSON.stringify(["tests/test_fix.py::test_a"]),
+      instance_id: "zero-f2p__repo",
+      repo: "zero-f2p/repo",
+      FAIL_TO_PASS: JSON.stringify([]),
     });
     candidates.push({
       ...qualifying,
@@ -175,8 +188,12 @@ describe("SWE compare manifest", () => {
       PAW_FRESH_QUALIFICATION_RULE.count,
     );
     expect(selected).not.toContain(PAW_FRESH_V2_IDS[0]);
-    expect(selected).not.toContain("too-small-f2p__repo");
+    expect(selected).not.toContain("zero-f2p__repo");
     expect(selected).not.toContain("too-small-p2p__repo");
+    expect(selected.filter((id) => id.startsWith("fallback-")).length).toBe(1);
+    expect(
+      selected.slice(0, 9).every((id) => id.startsWith("qualification-")),
+    ).toBe(true);
 
     writeFileSync(
       datasetPath,

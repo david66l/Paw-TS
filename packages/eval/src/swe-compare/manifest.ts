@@ -90,14 +90,21 @@ export const PAW_FRESH_QUALIFICATION_V3_RULE = {
   verificationEnvironment: "instance_image" as const,
 } as const;
 
-/** Current qualification contract: a deterministic prefix extension of v3. */
-export const PAW_FRESH_QUALIFICATION_RULE = {
+/** Infeasible on Lite: only nine unseen repositories satisfy the strict tier. */
+export const PAW_FRESH_QUALIFICATION_V4_RULE = {
   ...PAW_FRESH_QUALIFICATION_V3_RULE,
   version: "paw-fresh-qualification-v4" as const,
   // Keep the committed v3 rank so the five extra tasks extend the prefix;
   // no result, task prose, or model trajectory participates in selection.
   seed: PAW_FRESH_QUALIFICATION_V3_RULE.seed,
   count: 10,
+} as const;
+
+/** Current contract: keep all strict candidates, then fill from a declared tier. */
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  ...PAW_FRESH_QUALIFICATION_V4_RULE,
+  version: "paw-fresh-qualification-v5" as const,
+  fallbackMinFailToPass: 1,
 } as const;
 
 function sha256(value: string | Buffer): string {
@@ -187,7 +194,8 @@ export function createSweCompareManifest(opts: {
     | "paw-seen-dev-v1"
     | "paw-fresh-dev-v2"
     | "paw-fresh-qualification-v3"
-    | "paw-fresh-qualification-v4";
+    | "paw-fresh-qualification-v4"
+    | "paw-fresh-qualification-v5";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;
@@ -349,6 +357,7 @@ interface PawFreshSelectionRule {
   readonly maxFailToPass: number;
   readonly minPassToPass: number;
   readonly maxPassToPass: number;
+  readonly fallbackMinFailToPass?: number;
 }
 
 function selectPawFreshIds(opts: {
@@ -360,37 +369,51 @@ function selectPawFreshIds(opts: {
   const datasetPath = opts.datasetPath ?? defaultLiteJsonl(opts.repoRoot);
   const knownIds = new Set(opts.excludedIds);
   const rule = opts.rule;
-  const candidates = loadLiteInstances(datasetPath)
-    .filter((instance) => {
-      const failToPass = instance.FAIL_TO_PASS?.length ?? 0;
-      const passToPass = instance.PASS_TO_PASS?.length ?? 0;
-      return (
-        !knownIds.has(instance.instance_id) &&
-        failToPass >= rule.minFailToPass &&
-        failToPass <= rule.maxFailToPass &&
-        passToPass >= rule.minPassToPass &&
-        passToPass <= rule.maxPassToPass
+  const instances = loadLiteInstances(datasetPath);
+  const rankedCandidates = (minFailToPass: number) =>
+    instances
+      .filter((instance) => {
+        const failToPass = instance.FAIL_TO_PASS?.length ?? 0;
+        const passToPass = instance.PASS_TO_PASS?.length ?? 0;
+        return (
+          !knownIds.has(instance.instance_id) &&
+          failToPass >= minFailToPass &&
+          failToPass <= rule.maxFailToPass &&
+          passToPass >= rule.minPassToPass &&
+          passToPass <= rule.maxPassToPass
+        );
+      })
+      .map((instance) => ({
+        instance,
+        rank: sha256(`${rule.seed}\0${instance.instance_id}`),
+      }))
+      .sort(
+        (a, b) =>
+          a.rank.localeCompare(b.rank) ||
+          a.instance.instance_id.localeCompare(b.instance.instance_id),
       );
-    })
-    .map((instance) => ({
-      instance,
-      rank: sha256(`${rule.seed}\0${instance.instance_id}`),
-    }))
-    .sort(
-      (a, b) =>
-        a.rank.localeCompare(b.rank) ||
-        a.instance.instance_id.localeCompare(b.instance.instance_id),
-    );
   const selected: string[] = [];
   const selectedRepos = new Set<string>();
-  for (const { instance } of candidates) {
-    if (selectedRepos.has(instance.repo)) continue;
-    if (findLocalTrajectoryHits(opts.repoRoot, instance.instance_id).length > 0)
-      continue;
-    selected.push(instance.instance_id);
-    selectedRepos.add(instance.repo);
-    if (selected.length === rule.count) return selected;
+  const appendTier = (minFailToPass: number): void => {
+    for (const { instance } of rankedCandidates(minFailToPass)) {
+      if (selectedRepos.has(instance.repo)) continue;
+      if (
+        findLocalTrajectoryHits(opts.repoRoot, instance.instance_id).length > 0
+      )
+        continue;
+      selected.push(instance.instance_id);
+      selectedRepos.add(instance.repo);
+      if (selected.length === rule.count) return;
+    }
+  };
+  appendTier(rule.minFailToPass);
+  if (
+    selected.length < rule.count &&
+    rule.fallbackMinFailToPass !== undefined
+  ) {
+    appendTier(rule.fallbackMinFailToPass);
   }
+  if (selected.length === rule.count) return selected;
   throw new Error(
     `only ${selected.length}/${rule.count} fresh cross-repository SWE-bench tasks satisfy ${rule.version}`,
   );
