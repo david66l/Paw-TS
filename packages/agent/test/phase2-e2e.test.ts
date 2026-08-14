@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { RunEventEnvelope } from "@paw/core";
-import { FileSystemAppStateStore } from "@paw/core";
+import {
+  FileSystemAppStateStore,
+  FileSystemSessionStore,
+  listCheckpoints,
+  saveCheckpoint,
+} from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
@@ -32,7 +37,9 @@ describe("Phase 2 E2E — Retry", () => {
       maxSteps: 3,
     });
     expect(r.status).toBe("completed");
-    const waitEvent = events.find((e) => e.event.type === "model.retry.waiting");
+    const waitEvent = events.find(
+      (e) => e.event.type === "model.retry.waiting",
+    );
     expect(waitEvent).toBeDefined();
     if (waitEvent?.event.type === "model.retry.waiting") {
       expect(waitEvent.event.errorType).toBe("rate_limit");
@@ -94,7 +101,9 @@ describe("Phase 2 E2E — Circuit Breaker", () => {
     expect(r.status).toBe("failed");
 
     // Should see retry events (3 attempts = 2 retries)
-    const retries = events.filter((e) => e.event.type === "model.retry.waiting");
+    const retries = events.filter(
+      (e) => e.event.type === "model.retry.waiting",
+    );
     expect(retries.length).toBe(2);
 
     // After 2 failures the breaker should have opened
@@ -142,7 +151,9 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
     const dir = tmpDir("paw-e2e-resume-");
     writeFileSync(path.join(dir, "a.txt"), "hello");
 
-    const store = new FileSystemAppStateStore({ statesDir: path.join(dir, ".paw", "states") });
+    const store = new FileSystemAppStateStore({
+      statesDir: path.join(dir, ".paw", "states"),
+    });
     const model = new FakeLanguageModel({
       responses: [
         { text: '{"action":"final_answer","summary":"First run done."}' },
@@ -185,13 +196,77 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
     expect(r2.message).toBe("Resumed run done.");
   });
 
+  test("resumeRun continues durable event and checkpoint sequences", async () => {
+    const dir = tmpDir("paw-e2e-resume-sequences-");
+    writeFileSync(path.join(dir, "a.txt"), "before", "utf8");
+    const runId = "e2e-resume-sequences";
+    const appStateStore = new FileSystemAppStateStore({
+      statesDir: path.join(dir, ".paw", "states"),
+    });
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot: dir });
+    appStateStore.save({
+      runId,
+      goal: "Update a.txt. [allow_skip_verify]",
+      workspaceRoot: dir,
+      turn: 0,
+      maxSteps: 3,
+      messages: [
+        { role: "user", content: "Update a.txt. [allow_skip_verify]" },
+      ],
+      savedAt: Date.now(),
+    });
+    sessionStore.saveEvent(runId, {
+      runId,
+      seq: 40,
+      ts: Date.now(),
+      event: { type: "run.started", goal: "Update a.txt." },
+    });
+    saveCheckpoint(dir, runId, 1, "workspace.edit_file", {
+      path: "a.txt",
+    });
+    saveCheckpoint(dir, runId, 2, "workspace.edit_file", {
+      path: "a.txt",
+    });
+
+    const resumedEvents: RunEventEnvelope[] = [];
+    const orchestrator = new AgentOrchestrator({
+      model: new FakeLanguageModel({
+        responses: [
+          {
+            text: JSON.stringify({
+              tool: "workspace.edit_file",
+              args: {
+                path: "a.txt",
+                old_string: "before",
+                new_string: "after",
+              },
+            }),
+          },
+          { text: '{"action":"final_answer","summary":"Done."}' },
+        ],
+      }),
+      appStateStore,
+      sessionStore,
+      onEvent: (event) => resumedEvents.push(event),
+      retrySleep: async () => {},
+    });
+
+    const result = await orchestrator.resumeRun({ runId });
+
+    expect(["completed", "incomplete"]).toContain(result.status);
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("after");
+    expect(resumedEvents.length).toBeGreaterThan(0);
+    expect(resumedEvents.every((event) => event.seq > 40)).toBe(true);
+    expect(listCheckpoints(dir, runId).some((entry) => entry.seq === 3)).toBe(
+      true,
+    );
+  });
+
   test("restoreCheckpoint rolls back file changes", async () => {
     const dir = tmpDir("paw-e2e-cp-");
     writeFileSync(path.join(dir, "a.txt"), "original", "utf8");
 
-    const { saveCheckpoint, restoreCheckpoint } = await import(
-      "@paw/core"
-    );
+    const { saveCheckpoint, restoreCheckpoint } = await import("@paw/core");
 
     saveCheckpoint(dir, "run-cp", 1, "workspace.write_file", {
       path: "a.txt",
@@ -205,7 +280,9 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
     });
     writeFileSync(path.join(dir, "a.txt"), "modified-again", "utf8");
 
-    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("modified-again");
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe(
+      "modified-again",
+    );
 
     // Restore to seq 1
     const restored = restoreCheckpoint(dir, "run-cp", 1);

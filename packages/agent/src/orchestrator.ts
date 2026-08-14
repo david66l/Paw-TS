@@ -90,6 +90,7 @@ import {
   isContextSummaryMessage,
   isProtectedUserConstraint,
   isToolResultMessage,
+  listCheckpoints,
   loadProjectMemory,
   loadSkillsFromDirectory,
   measureContextBudget,
@@ -2888,6 +2889,30 @@ export class AgentOrchestrator {
 
     const seq = { n: 0 };
     const checkpointSeq = { n: 0 };
+    if (spec.resumeFromState) {
+      // A resumed run appends to the same durable event/checkpoint streams.
+      // Restarting either counter at zero creates duplicate event identities
+      // and can overwrite rollback snapshots from the pre-crash trajectory.
+      try {
+        const persisted = this.sessionStore?.loadRun(runId) ?? [];
+        seq.n = persisted.reduce(
+          (max, envelope) => Math.max(max, envelope.seq),
+          0,
+        );
+      } catch {
+        // A damaged optional event log must not make the saved AppState
+        // unusable. The resumed run still proceeds, starting a fresh segment.
+      }
+      try {
+        checkpointSeq.n = listCheckpoints(workspaceRoot, runId).reduce(
+          (max, checkpoint) => Math.max(max, checkpoint.seq),
+          0,
+        );
+      } catch {
+        // Checkpoint discovery is best-effort; tool execution remains usable
+        // even when old rollback metadata is unreadable.
+      }
+    }
 
     // ── 运行指标累加器 ──
     // 通过解析 emit 的事件流来累积指标，避免额外增加埋点代码
