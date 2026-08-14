@@ -75,3 +75,34 @@ bun run packages/eval/scripts/preflight-swe-compare.ts \
 bun run packages/eval/scripts/run-swe-compare.ts \
   --manifest paw-fresh-dev-v2.json --instance <frozen-instance-id> --runner paw
 ```
+
+The frozen v2 batch finished **4/5 resolved**. It is architecture-development
+evidence only: every candidate patch changed one product file, the run used
+memory off, and the Paw completion policy could hand local harness failures to
+the official external verifier after inspecting the diff. It therefore does
+not establish multi-file long-task reliability, memory benefit, self-verifying
+completion, or a Paw-vs-Claude result. The five IDs are permanently exposed
+after this batch and must be excluded from every later fresh selection.
+
+The next Paw-only batch is intentionally a different qualification stage. Its
+protocol must be frozen before task text is inspected and must:
+
+- select five still-unseen repositories deterministically, excluding all prior
+  seen and fresh-v2 IDs;
+- increase the public acceptance surface (test-count metadata only), without
+  reading problem text, gold patches, or test patches for selection;
+- keep memory off so the first question remains whether the core loop can
+  finish normally;
+- use a relaxed safety ceiling rather than an optimization budget;
+- require Paw to produce trustworthy local verification evidence or finish
+  honestly incomplete; the official SWE-bench harness runs only afterwards to
+  score the frozen candidate and cannot retroactively turn a local claim into
+  evidence;
+- report resolved rate together with changed-file count, turns, model calls,
+  tokens, pruning/compaction, reviewer retries, terminal reason, and evidence
+  quality. A batch of one-file fixes cannot close the multi-file qualification
+  gate even if resolved is high.
+
+Do not implement this by silently changing `paw-fresh-dev-v2`. Introduce a new
+versioned manifest rule and deterministic tests, freeze it from a clean commit,
+run no-model preflight, then execute each selected task once in frozen order.
