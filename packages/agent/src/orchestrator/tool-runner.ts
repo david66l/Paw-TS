@@ -564,6 +564,9 @@ export async function executeToolCalls(
           executed: true,
           recovered: decision.recovered,
           originalOk: rawResult.ok,
+          ...(decision.recovered
+            ? { workspaceEffect: { changed: false, paths: [] } }
+            : {}),
         },
       };
     } catch (error) {

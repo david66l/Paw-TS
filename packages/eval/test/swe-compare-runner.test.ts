@@ -576,6 +576,18 @@ describe("SWE compare runner", () => {
         "ToolEffectPolicy:prohibited_workspace_effect_recovered",
       ),
     );
+    const recoveredResult = events.find(
+      (event) =>
+        event.event.type === "tool.result" &&
+        event.event.summary.includes(
+          "ToolEffectPolicy:prohibited_workspace_effect_recovered",
+        ),
+    );
+    expect(
+      recoveredResult?.event.type === "tool.result"
+        ? recoveredResult.event.workspaceEffect
+        : undefined,
+    ).toEqual({ changed: false, paths: [] });
   });
 
   test("external runtime state does not make a real shell result fail audit", async () => {
@@ -1284,6 +1296,30 @@ describe("SWE compare runner", () => {
             event: {
               type: "tool.call",
               tool: "workspace.run_shell",
+              args: { command: "python setup.py build_ext --inplace" },
+            },
+          },
+          {
+            event: {
+              type: "tool.result",
+              tool: "workspace.run_shell",
+              ok: false,
+              summary:
+                "[ToolEffectPolicy:prohibited_workspace_effect_recovered] restored workspace",
+            },
+          },
+        ],
+      }),
+    ).toEqual({ explicitPaths: [], unknownWritePossible: false });
+    expect(
+      collectTraceMutationHints({
+        runner: "paw",
+        workspaceRoot: root,
+        trace: [
+          {
+            event: {
+              type: "tool.call",
+              tool: "workspace.run_shell",
               args: { command: "pytest > /tmp/pytest.log 2>&1" },
             },
           },
@@ -1728,6 +1764,46 @@ describe("SWE compare runner", () => {
     );
     expect(replayed.error).toBeUndefined();
     expect(replayed.diff).toContain("+new");
+  });
+
+  test("replays a successful replace_all Paw edit", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-replace-all-replay-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.com"]);
+    git(root, ["config", "user.name", "Test"]);
+    writeFileSync(
+      path.join(root, "a.py"),
+      "yield value\nyield value\n",
+      "utf8",
+    );
+    git(root, ["add", "a.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const replayed = replayPawTracePatch(
+      [
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.edit_file",
+            args: {
+              path: "a.py",
+              old_string: "yield value",
+              new_string: "yield value.copy()",
+              replace_all: true,
+            },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.edit_file",
+            ok: true,
+          },
+        },
+      ],
+      root,
+    );
+    expect(replayed.error).toBeUndefined();
+    expect(replayed.diff?.match(/yield value\.copy\(\)/g)).toHaveLength(2);
   });
 
   test("replays LF trace edits against CRLF benchmark checkouts", () => {

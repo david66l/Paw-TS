@@ -788,7 +788,7 @@ function classifyVerificationOutcome(
         };
   }
   if (
-    /(?:pytest: (?:command )?not found|modulenotfounderror: no module named ['\"]pytest['\"]|could not find a version that satisfies)/i.test(
+    /(?:pytest: (?:command )?not found|(?:modulenotfounderror:\s*)?no module named ['\"]?pytest['\"]?|could not find a version that satisfies)/i.test(
       output,
     )
   ) {

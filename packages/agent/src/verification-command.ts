@@ -107,7 +107,11 @@ function pythonScriptFamily(
   const script = tokens[index];
   if (!script) return undefined;
   const name = executableName(script);
+  const normalizedScript = script.replaceAll("\\", "/").toLowerCase();
   if (/^(?:run_tests|runtests)\.py$/i.test(name)) return "python-runner";
+  if (/(?:^|\/)bin\/(?:test|doctest)$/.test(normalizedScript)) {
+    return "python-runner";
+  }
   if (
     /^manage\.py$/i.test(name) &&
     tokens[index + 1]?.toLowerCase() === "test"

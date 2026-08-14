@@ -367,6 +367,59 @@ describe("TaskStateManager", () => {
     expect(isVerificationCommand("pip install pytest")).toBe(false);
   });
 
+  test("records SymPy's native runner and treats missing pytest as harness failure", () => {
+    const state = new TaskStateManager("fix SymPy bug");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "sympy/utilities/iterables.py" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "sympy/utilities/iterables.py" },
+      },
+    );
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: {
+          command: "python -m pytest sympy/utilities/tests/test_iterables.py",
+        },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 1",
+        payload: {
+          exit_code: 1,
+          stderr: "/opt/python: No module named pytest",
+        },
+      },
+    );
+    expect(state.snapshot().testResults.at(-1)?.outcome).toBe("harness_failed");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: {
+          command: "python bin/test sympy/utilities/tests/test_iterables.py",
+        },
+      },
+      {
+        ok: true,
+        summary: "43 passed",
+        payload: { exit_code: 0, stdout: "43 passed, 0 failed" },
+      },
+    );
+    expect(state.snapshot().testResults.at(-1)).toMatchObject({
+      family: "python-runner",
+      outcome: "passed",
+      passed: true,
+    });
+  });
+
   test("separates verification harness failures from code failures", () => {
     const harness = new TaskStateManager("fix bug");
     harness.recordToolResult(

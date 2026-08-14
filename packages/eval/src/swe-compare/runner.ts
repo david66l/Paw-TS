@@ -1446,8 +1446,16 @@ export function collectTraceMutationHints(opts: {
             unknownWritePossible = true;
           }
         } else if (commandMayWrite(command)) {
-          // Legacy and non-audited traces retain command-text conservatism.
-          unknownWritePossible = true;
+          const summary =
+            typeof record.summary === "string" ? record.summary : "";
+          if (
+            !summary.startsWith(
+              "[ToolEffectPolicy:prohibited_workspace_effect_recovered]",
+            )
+          ) {
+            // Legacy and non-audited traces retain command-text conservatism.
+            unknownWritePossible = true;
+          }
         }
       }
       continue;
@@ -2032,6 +2040,7 @@ interface PawSuccessfulEdit {
   readonly path: string;
   readonly oldString: string;
   readonly newString: string;
+  readonly replaceAll: boolean;
 }
 
 function successfulPawEdits(trace: readonly unknown[]): PawSuccessfulEdit[] {
@@ -2055,6 +2064,7 @@ function successfulPawEdits(trace: readonly unknown[]): PawSuccessfulEdit[] {
           path: values.path,
           oldString: values.old_string,
           newString: values.new_string,
+          replaceAll: values.replace_all === true,
         });
       }
       continue;
@@ -2122,6 +2132,7 @@ export function replayPawTracePatch(
     const replayed = editWorkspaceFile(workspaceRoot, normalized, {
       oldString: edit.oldString,
       newString: edit.newString,
+      replaceAll: edit.replaceAll,
     });
     if (replayed.error) {
       return {

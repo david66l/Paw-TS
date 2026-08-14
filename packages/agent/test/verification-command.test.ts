@@ -58,6 +58,16 @@ describe("verification command intent", () => {
     expect(verificationCommandFamily("python manage.py test app.tests")).toBe(
       "django",
     );
+    expect(
+      verificationCommandFamily(
+        "python bin/test sympy/utilities/tests/test_iterables.py",
+      ),
+    ).toBe("python-runner");
+    expect(
+      verificationCommandFamily(
+        "python bin/doctest sympy/utilities/iterables.py",
+      ),
+    ).toBe("python-runner");
     expect(verificationCommandFamily("bun test packages/agent")).toBe(
       "javascript",
     );
