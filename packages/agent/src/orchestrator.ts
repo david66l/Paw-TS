@@ -105,9 +105,11 @@ import {
 } from "@paw/core";
 import {
   type LoopKernelVersion,
+  type LoopV2LiveCandidateAssessmentV1,
   type LoopV2ShadowObserver,
   type LoopV2ShadowReport,
   type LoopV2ShadowToolCommitPortInput,
+  assessLoopV2LiveCandidateV1,
   createLoopV2ShadowObserver,
   createProviderTerminalStateV2,
   normalizeProviderResponseV2,
@@ -169,7 +171,10 @@ import type {
   ToolEffectPolicy,
   ToolExecutionPolicy,
 } from "./execution-policy.js";
-import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
+import {
+  type VerificationPolicy,
+  goalRequiresMutation,
+} from "./lifecycle/verification-gate.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import type { NativeToolError } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
@@ -365,6 +370,10 @@ export interface AgentOrchestratorOptions {
   readonly loopKernelVersion?: LoopKernelVersion;
   /** Terminal v2-shadow diagnostics. Observer failures never affect the run. */
   readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
+  /** Strict derived candidate facts for explicit v2; callback failures are diagnostic-only. */
+  readonly onLoopV2CandidateAssessment?: (
+    assessment: LoopV2LiveCandidateAssessmentV1,
+  ) => void;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -485,7 +494,11 @@ export class AgentOrchestrator {
   private readonly candidateReviewer?: CandidateReviewer;
   private readonly loopKernelVersion: LoopKernelVersion;
   private readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
+  private readonly onLoopV2CandidateAssessment?: (
+    assessment: LoopV2LiveCandidateAssessmentV1,
+  ) => void;
   private _lastLoopV2ShadowReport?: LoopV2ShadowReport;
+  private _lastLoopV2CandidateAssessment?: LoopV2LiveCandidateAssessmentV1;
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -502,6 +515,7 @@ export class AgentOrchestrator {
     this.loopKernelVersion =
       opts?.loopKernelVersion ?? resolveLoopKernelVersion();
     this.onLoopV2ShadowReport = opts?.onLoopV2ShadowReport;
+    this.onLoopV2CandidateAssessment = opts?.onLoopV2CandidateAssessment;
     this.fileLock = opts?.fileLock;
     // P1 入口闸：会话级去重器（仅 root orchestrator；子 Agent 不重复去重）
     this._payloadDeduper = opts?.fileLock ? undefined : createPayloadDeduper();
@@ -550,6 +564,13 @@ export class AgentOrchestrator {
   /** Most recent shadow snapshot, exposed without changing RunResult. */
   getLastLoopV2ShadowReport(): LoopV2ShadowReport | undefined {
     return this._lastLoopV2ShadowReport;
+  }
+
+  /** Most recent strict candidate projection for explicit v2. */
+  getLastLoopV2CandidateAssessment():
+    | LoopV2LiveCandidateAssessmentV1
+    | undefined {
+    return this._lastLoopV2CandidateAssessment;
   }
 
   /** 按 allowedTools 过滤 toolDefs（硬裁） */
@@ -3029,11 +3050,12 @@ export class AgentOrchestrator {
 
     const seq = { n: 0 };
     const checkpointSeq = { n: 0 };
-    const loopV2Shadow: LoopV2ShadowObserver | undefined =
-      this.loopKernelVersion === "v2-shadow"
+    const loopV2Projection: LoopV2ShadowObserver | undefined =
+      this.loopKernelVersion === "v2-shadow" || this.loopKernelVersion === "v2"
         ? createLoopV2ShadowObserver(runId)
         : undefined;
     this._lastLoopV2ShadowReport = undefined;
+    this._lastLoopV2CandidateAssessment = undefined;
     if (spec.resumeFromState) {
       // A resumed run appends to the same durable event/checkpoint streams.
       // Restarting either counter at zero creates duplicate event identities
@@ -3130,21 +3152,50 @@ export class AgentOrchestrator {
       if (event.type !== "model.chunk" && event.type !== "model.thinking") {
         this.sessionStore?.saveEvent(runId, envelope);
       }
-      // Shadow observation happens after the legacy delivery/persistence path.
-      // It is deliberately unable to emit legacy events or alter model/tool
-      // state, and neither projection nor consumer failures may fail the run.
-      if (loopV2Shadow) {
+      // Projection happens after the legacy delivery/persistence path. Shadow
+      // remains fail-open; explicit v2 treats projection integrity as runtime
+      // authority and therefore fails closed before continuing the loop.
+      if (loopV2Projection) {
         try {
-          loopV2Shadow.observe(envelope);
-          if (event.type === "run.completed" || event.type === "run.failed") {
-            this._lastLoopV2ShadowReport = loopV2Shadow.snapshot();
+          loopV2Projection.observe(envelope);
+          if (
+            this.loopKernelVersion === "v2" &&
+            event.type === "agent.action" &&
+            event.action.type === "final_answer"
+          ) {
+            const report = loopV2Projection.snapshot();
+            const requireProductMutation =
+              this.verificationPolicy?.requireMutation ??
+              goalRequiresMutation(spec.goal);
+            const requiresVerification =
+              requireProductMutation ||
+              report.state.currentMutationRevision > 0;
+            const assessment = assessLoopV2LiveCandidateV1(report, {
+              requireProductMutation,
+              verificationAuthority: requiresVerification
+                ? (this.verificationPolicy?.authority ?? "local")
+                : "not_required",
+            });
+            this._lastLoopV2CandidateAssessment = assessment;
+            try {
+              this.onLoopV2CandidateAssessment?.(assessment);
+            } catch {
+              // A consumer callback is not completion authority.
+            }
+          }
+          if (
+            this.loopKernelVersion === "v2-shadow" &&
+            (event.type === "run.completed" || event.type === "run.failed")
+          ) {
+            this._lastLoopV2ShadowReport = loopV2Projection.snapshot();
             try {
               this.onLoopV2ShadowReport?.(this._lastLoopV2ShadowReport);
             } catch {
               // A diagnostic sink is not execution authority.
             }
           }
-        } catch {
+        } catch (error) {
+          if (this.loopKernelVersion === "v2") throw error;
           // Shadow migration must remain fail-open while v1 is authoritative.
         }
       }
@@ -3167,11 +3218,12 @@ export class AgentOrchestrator {
       });
     };
 
-    const observeLoopV2ToolCommit = loopV2Shadow
+    const observeLoopV2ToolCommit = loopV2Projection
       ? (input: LoopV2ShadowToolCommitPortInput) => {
           try {
-            loopV2Shadow.observeToolCommit({ ...input, sourceSeq: seq.n });
-          } catch {
+            loopV2Projection.observeToolCommit({ ...input, sourceSeq: seq.n });
+          } catch (error) {
+            if (this.loopKernelVersion === "v2") throw error;
             // Rich shadow capture is diagnostic-only while v1 is authoritative.
           }
         }

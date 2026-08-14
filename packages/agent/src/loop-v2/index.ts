@@ -45,6 +45,11 @@ export {
   type OmittedCandidateClaimV2,
 } from "./host-report.js";
 export {
+  LOOP_V2_LIVE_CANDIDATE_SCHEMA_VERSION,
+  assessLoopV2LiveCandidateV1,
+  type LoopV2LiveCandidateAssessmentV1,
+} from "./live-candidate.js";
+export {
   evidenceFingerprint,
   extendReadCoverage,
   readCoverageKey,
