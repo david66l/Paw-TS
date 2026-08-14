@@ -87,11 +87,25 @@ export class AgentGroup {
     calls: readonly AgentToolCallAction[],
     sharedCtxForCall: (call: AgentToolCallAction) => SharedContext,
     parentSignal?: AbortSignal,
+    sourceIndices?: readonly number[],
   ): Promise<SubAgentResult[]> {
-    // 守卫：每轮最大子 Agent 数
-    if (calls.length > MULTI_AGENT_LIMITS.maxChildrenPerTurn) {
+    const callIndices = sourceIndices ?? calls.map((_call, index) => index);
+    if (
+      callIndices.length !== calls.length ||
+      callIndices.some((index) => !Number.isSafeInteger(index) || index < 0) ||
+      new Set(callIndices).size !== callIndices.length
+    ) {
       throw new Error(
-        `Cannot launch ${calls.length} child agents; max is ${MULTI_AGENT_LIMITS.maxChildrenPerTurn}`,
+        "Child agent source indices must be unique non-negative integers aligned with calls",
+      );
+    }
+    // 守卫：每轮最大子 Agent 数
+    if (
+      calls.length > MULTI_AGENT_LIMITS.maxChildrenPerTurn ||
+      this.children.size + calls.length > MULTI_AGENT_LIMITS.maxChildrenPerTurn
+    ) {
+      throw new Error(
+        `Cannot launch ${calls.length} child agents with ${this.children.size} already active; max is ${MULTI_AGENT_LIMITS.maxChildrenPerTurn}`,
       );
     }
 
@@ -113,7 +127,16 @@ export class AgentGroup {
 
     // 构建 ChildController 列表
     const controllers: ChildController[] = calls.map((call, idx) => {
-      const agentId = `child-${this.parentRunId}-${idx}`;
+      const sourceIndex = callIndices[idx];
+      if (sourceIndex === undefined) {
+        throw new Error(`Missing child agent source index ${idx}`);
+      }
+      const agentId = `child-${this.parentRunId}-${sourceIndex}`;
+      if (this.children.has(agentId)) {
+        throw new Error(
+          `Child agent source index is already active: ${sourceIndex}`,
+        );
+      }
       const goal =
         typeof call.args?.goal === "string"
           ? call.args.goal

@@ -58,6 +58,7 @@ import type {
 } from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
 import { analyzeVerificationInvocation } from "../verification-command.js";
+import { parseChildPolicy } from "./agent-args.js";
 import { SUB_AGENT_TOOL_NAME } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
 import { truncatePayloadWithOutcome } from "./truncate-payload.js";
@@ -300,7 +301,7 @@ export interface ApprovalContext {
  * 2. 没有 resolver → 不需要审批（无人交互环境，默认允许）
  * 3. 有 resolver → 调用 toolRequiresApproval 检查默认规则
  */
-function toolNeedsApprovalGate(
+export function toolNeedsApprovalGate(
   tool: string,
   args: Record<string, unknown> | undefined,
   approvalPolicy: ((tool: string) => boolean | undefined) | undefined,
@@ -732,6 +733,15 @@ const V2_PARALLEL_TOOLS = new Set([
 export function classifyToolExecutionV2(
   call: AgentToolCallAction,
 ): ToolExecutionModeV2 {
+  if (call.tool === SUB_AGENT_TOOL_NAME) {
+    const args =
+      call.args && typeof call.args === "object" && !Array.isArray(call.args)
+        ? (call.args as Record<string, unknown>)
+        : undefined;
+    return (parseChildPolicy(args) ?? "read_only") === "read_only"
+      ? { kind: "parallel" }
+      : { kind: "exclusive" };
+  }
   return V2_PARALLEL_TOOLS.has(call.tool)
     ? { kind: "parallel" }
     : { kind: "exclusive" };
@@ -740,6 +750,16 @@ export function classifyToolExecutionV2(
 export interface ToolExecutionV2Options {
   readonly preSettledResults?: readonly (ToolRunResult | undefined)[];
   readonly maxParallel?: number;
+  readonly dispatchOverride?: (
+    call: AgentToolCallAction,
+    sourceIndex: number,
+  ) => Promise<
+    | {
+        readonly result: ToolRunResult;
+        readonly mutationCapture?: LoopV2ShadowMutationCapture;
+      }
+    | undefined
+  >;
   readonly commit: (
     call: AgentToolCallAction,
     result: ToolRunResult,
@@ -838,6 +858,11 @@ export async function executeToolCallsV2(
         if (!sourceCall) {
           throw new Error(`Tool scheduler missing source call ${sourceIndex}`);
         }
+        const overridden = await options.dispatchOverride?.(
+          sourceCall,
+          sourceIndex,
+        );
+        if (overridden) return overridden;
         const batch = await executeToolCalls(
           [sourceCall],
           { ...toolCtx, captureLoopV2Facts: true },

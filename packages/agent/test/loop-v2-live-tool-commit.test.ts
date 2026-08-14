@@ -17,6 +17,7 @@ import {
   commitToolExecutionResult,
   executeToolCallsV2,
 } from "../src/orchestrator/tool-runner.js";
+import { DefaultSubAgentLauncher } from "../src/sub-agent-launcher.js";
 import { TaskStateManager } from "../src/task-state.js";
 
 interface PreparedCall {
@@ -287,6 +288,77 @@ describe("Loop Kernel v2 live tool commit seam", () => {
     );
   });
 
+  test("a child changedFiles report advances the parent mutation revision", () => {
+    const taskState = new TaskStateManager("delegate a source change");
+    commitToolExecutionResult(
+      toolCall("workspace.run_agent", {
+        goal: "change child.ts",
+        child_policy: "read_write",
+      }),
+      {
+        ok: true,
+        summary: "child changed one file",
+        payload: { changedFiles: ["child.ts"] },
+      },
+      0,
+      {
+        emit: () => {},
+        runId: "v2-child-mutation",
+        workspaceRoot: os.tmpdir(),
+        turn: 0,
+        taskState,
+      },
+      {
+        concurrentMutation: false,
+        mutationCapture: {
+          status: "gap",
+          reason: "unbounded_mutation_surface",
+        },
+      },
+    );
+    expect(taskState.snapshot().mutationRevision).toBe(1);
+    expect(taskState.snapshot().filesChanged).toEqual(["child.ts"]);
+  });
+
+  test("sub-agent launcher derives changedFiles from durable child events", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-v2-child-changes-"),
+    );
+    let childCalls = 0;
+    const launcher = new DefaultSubAgentLauncher({
+      workspaceRoot,
+      model: {
+        label: "v2-writing-child",
+        async complete() {
+          childCalls += 1;
+          return childCalls === 1
+            ? {
+                text: '{"tool":"workspace.write_file","args":{"path":"child.ts","content":"export const child = true;\\n"}}',
+              }
+            : {
+                text: '{"action":"final_answer","summary":"child wrote file [skip_verify: deterministic child fixture]"}',
+              };
+        },
+      },
+      maxSteps: 3,
+    });
+    try {
+      const child = await launcher.launch(
+        "write child.ts\n[allow_skip_verify]",
+        3,
+        {
+          args: { child_policy: "read_write" },
+          parentRunId: "v2-child-parent",
+          agentId: "child-v2-child-parent-0",
+        },
+      );
+      expect(child.status).toBe("completed");
+      expect(child.changedFiles).toEqual(["child.ts"]);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("policy denial commits in source order without dropping a read sibling", async () => {
     const workspaceRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "paw-v2-policy-"),
@@ -477,6 +549,95 @@ describe("Loop Kernel v2 live tool commit seam", () => {
         ),
       ).toBeTrue();
       expect(fs.existsSync(path.join(workspaceRoot, "never.txt"))).toBeFalse();
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("explicit v2 keeps run_agent, grep, and edit siblings in one ordered batch", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-v2-mixed-child-"),
+    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "zero\n", "utf8");
+    let parentCalls = 0;
+    const events: RunEventEnvelope[] = [];
+    const launcher = new DefaultSubAgentLauncher({
+      workspaceRoot,
+      model: {
+        label: "v2-read-only-child",
+        async complete() {
+          return {
+            text: '{"action":"final_answer","summary":"child inspected source"}',
+          };
+        },
+      },
+      maxSteps: 2,
+    });
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      subAgentLauncher: launcher,
+      model: {
+        label: "v2-mixed-child-parent",
+        async complete() {
+          parentCalls += 1;
+          if (parentCalls === 1) {
+            return {
+              text: [
+                '{"tool":"workspace.run_agent","args":{"goal":"inspect source.txt","child_policy":"read_only"}}',
+                '{"tool":"workspace.grep","args":{"pattern":"zero","path":"source.txt"}}',
+                '{"tool":"workspace.run_agent","args":{"goal":"inspect repository conventions","child_policy":"read_only"}}',
+                '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"zero","new_string":"done"}}',
+              ].join("\n"),
+            };
+          }
+          return {
+            text: '{"action":"final_answer","summary":"mixed batch complete [skip_verify: deterministic scheduler fixture]"}',
+          };
+        },
+      },
+      onEvent(event) {
+        events.push(event);
+      },
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-mixed-child",
+        goal: "inspect then change source.txt\n[allow_skip_verify]",
+        workspaceRoot,
+        maxSteps: 4,
+      });
+      expect(result.status).toBe("completed");
+      expect(
+        fs.readFileSync(path.join(workspaceRoot, "source.txt"), "utf8"),
+      ).toBe("done\n");
+      const rootResults = events
+        .filter((event) => event.event.type === "tool.result")
+        .map((event) =>
+          event.event.type === "tool.result" ? event.event.tool : "",
+        );
+      expect(rootResults).toEqual([
+        "workspace.run_agent",
+        "workspace.grep",
+        "workspace.run_agent",
+        "workspace.edit_file",
+      ]);
+      expect(
+        events.some(
+          (event) =>
+            event.event.type === "tool.call" &&
+            event.event.tool === "workspace.run_agent" &&
+            event.event.callId === "child-v2-mixed-child-0",
+        ),
+      ).toBeTrue();
+      expect(
+        events.some(
+          (event) =>
+            event.event.type === "tool.call" &&
+            event.event.tool === "workspace.run_agent" &&
+            event.event.callId === "child-v2-mixed-child-2",
+        ),
+      ).toBeTrue();
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }

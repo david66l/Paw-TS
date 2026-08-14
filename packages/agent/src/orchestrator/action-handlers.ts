@@ -70,6 +70,7 @@ import {
   planItemsToEventSnapshot,
 } from "../plan-bootstrap.js";
 import { formatTaskStateForContext } from "../task-state.js";
+import { parseChildPolicy } from "./agent-args.js";
 import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
@@ -80,6 +81,7 @@ import {
   executeToolCallsV2,
   finalizeToolExecution,
   finalizeToolExecutionContext,
+  toolNeedsApprovalGate,
 } from "./tool-runner.js";
 import type { PhaseContext, TurnFlags, TurnState } from "./types.js";
 
@@ -186,6 +188,19 @@ export async function handleAction(
   const subAgentCalls = toolCalls.filter(isSubAgentCall);
   const normalToolCalls = toolCalls.filter((c) => !isSubAgentCall(c));
   const recoveredFlags: TurnFlags = { ...flags, noActionNudges: 0 };
+
+  // V2 owns the complete model-ordered batch. Child calls are scheduler items,
+  // so a sibling grep/edit cannot be silently dropped by the legacy split.
+  if (ctx.loopKernelVersion === "v2" && toolCalls.length > 0) {
+    return handleToolCalls(
+      toolCalls,
+      ctx,
+      recoveredFlags,
+      text,
+      thinking,
+      opts,
+    );
+  }
 
   // 子 Agent 调用（批量模式）
   if (subAgentCalls.length > 0) {
@@ -1068,7 +1083,11 @@ async function handleToolCalls(
   text: string,
   thinking: string | undefined,
   opts: ActionHandlerContext,
-): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
+): Promise<{
+  readonly state: TurnState;
+  readonly flags: TurnFlags;
+  readonly subResults?: Array<{ runId: string; summary: string }>;
+}> {
   const nextFlags: TurnFlags = {
     ...flags,
     lastTurnHadToolCall: true,
@@ -1080,8 +1099,15 @@ async function handleToolCalls(
     ctx.emit({ type: "agent.action", action });
   }
   ctx.emit({ type: "phase", name: "tool" });
-  for (const call of calls) {
-    ctx.emit({ type: "tool.call", tool: call.tool, args: call.args });
+  for (const [sourceIndex, call] of calls.entries()) {
+    ctx.emit({
+      type: "tool.call",
+      tool: call.tool,
+      args: call.args,
+      ...(ctx.loopKernelVersion === "v2" && isSubAgentCall(call)
+        ? { callId: `child-${ctx.runId}-${sourceIndex}` }
+        : {}),
+    });
   }
 
   const toolStartTime = Date.now();
@@ -1182,6 +1208,82 @@ async function handleToolCalls(
       approvalContext,
       {
         preSettledResults: calls.map((_, index) => blockedResult(index)),
+        async dispatchOverride(call, sourceIndex) {
+          if (!isSubAgentCall(call)) return undefined;
+          const args =
+            call.args &&
+            typeof call.args === "object" &&
+            !Array.isArray(call.args)
+              ? (call.args as Record<string, unknown>)
+              : undefined;
+          const effectPolicyApplies = opts.toolEffectPolicy
+            ? (opts.toolEffectPolicy.appliesTo?.({
+                tool: call.tool,
+                args: call.args,
+                workspaceRoot: ctx.workspaceRoot,
+              }) ?? true)
+            : false;
+          const approvalApplies = toolNeedsApprovalGate(
+            call.tool,
+            args,
+            opts.approvalPolicy,
+            Boolean(opts.resolveToolApproval),
+          );
+          // Trusted policy/effect/approval stays owned by the established
+          // single-call runner. The harness launcher still preserves this
+          // scheduler slot; AgentGroup is used only when no gate is bypassed.
+          if (
+            opts.toolExecutionPolicy ||
+            effectPolicyApplies ||
+            approvalApplies
+          ) {
+            return undefined;
+          }
+          if (!opts.agentGroup) {
+            return {
+              result: {
+                ok: false,
+                summary: "run_agent: sub-agent launcher not configured",
+                payload: { error: "sub-agent launcher not configured" },
+              },
+              mutationCapture: createLoopV2NoMutationCapture(),
+            };
+          }
+          ctx.emit({ type: "phase", name: "waiting_children" });
+          const summarizer = new DefaultContextSummarizer();
+          const childResults = await opts.agentGroup.launchAll(
+            [call],
+            (childCall) => summarizer.summarizeForCall(ctx.ctxMgr, childCall),
+            ctx.signal,
+            [sourceIndex],
+          );
+          ctx.emit({ type: "phase", name: "merging_results" });
+          const child = childResults[0];
+          if (!child) {
+            throw new Error(`Missing child result at source ${sourceIndex}`);
+          }
+          const readWrite =
+            (parseChildPolicy(args) ?? "read_only") === "read_write";
+          return {
+            result: {
+              ok: child.status === "completed",
+              summary: child.summary,
+              payload: {
+                status: child.status,
+                findings: child.findings,
+                changedFiles: child.changedFiles,
+                testsRun: child.testsRun,
+                errors: child.errors,
+              },
+            },
+            mutationCapture: readWrite
+              ? {
+                  status: "gap",
+                  reason: "unbounded_mutation_surface",
+                }
+              : createLoopV2NoMutationCapture(),
+          };
+        },
         commit(call, result, mutationCapture, sourceIndex) {
           commitToolExecutionResult(call, result, sourceIndex, ctx, {
             concurrentMutation: false,
@@ -1290,6 +1392,16 @@ async function handleToolCalls(
   const final = commitsOwnedByScheduler
     ? finalizeToolExecutionContext(calls, results, finalizationContext)
     : finalizeToolExecution(calls, results, finalizationContext);
+  const subResults = calls.flatMap((call, sourceIndex) =>
+    isSubAgentCall(call)
+      ? [
+          {
+            runId: `child-${ctx.runId}-${sourceIndex}`,
+            summary: results[sourceIndex]?.summary ?? "Child agent failed",
+          },
+        ]
+      : [],
+  );
 
   const codingPhase = codingPhaseEnabled
     ? advanceCodingPhase(priorCodingPhase, calls, results)
@@ -1358,6 +1470,7 @@ async function handleToolCalls(
     return {
       state: { type: "incomplete", message: decision.message },
       flags: fusedFlags,
+      ...(subResults.length > 0 ? { subResults } : {}),
     };
   }
 
@@ -1376,6 +1489,7 @@ async function handleToolCalls(
     return {
       state: { type: "incomplete", message: decision.message },
       flags: fusedFlags,
+      ...(subResults.length > 0 ? { subResults } : {}),
     };
   }
 
@@ -1389,6 +1503,7 @@ async function handleToolCalls(
     return {
       state: { type: "incomplete", message: decision.message },
       flags: fusedFlags,
+      ...(subResults.length > 0 ? { subResults } : {}),
     };
   }
 
@@ -1396,6 +1511,7 @@ async function handleToolCalls(
   return {
     state: { type: "continue", nextFlags: fusedFlags },
     flags: fusedFlags,
+    ...(subResults.length > 0 ? { subResults } : {}),
   };
 }
 

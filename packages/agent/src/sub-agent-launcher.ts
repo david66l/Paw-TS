@@ -292,10 +292,12 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
       maxSteps,
       abortSignal: options.signal,
     });
+    const changedFiles = collectChangedFiles(events);
 
     return {
       status: result.status === "completed" ? "completed" : "failed",
       summary: result.message,
+      ...(changedFiles.length > 0 ? { changedFiles } : {}),
       trace: {
         messages: ctxMgr.buildMessages(),
         events,
@@ -303,4 +305,21 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
       },
     };
   }
+}
+
+function collectChangedFiles(
+  events: readonly RunEventEnvelope[],
+): readonly string[] {
+  const changed = new Set<string>();
+  for (const envelope of events) {
+    const event = envelope.event;
+    if (event.type !== "tool.result" || !event.ok) continue;
+    for (const fileChange of event.fileChanges ?? []) {
+      if (fileChange.path) changed.add(fileChange.path);
+    }
+    for (const changedPath of event.workspaceEffect?.paths ?? []) {
+      if (changedPath) changed.add(changedPath);
+    }
+  }
+  return [...changed].sort();
 }
