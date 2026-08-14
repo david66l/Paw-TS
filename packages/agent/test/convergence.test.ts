@@ -132,7 +132,7 @@ describe("convergence guidance", () => {
     ).toBe("r1:passed:stale");
   });
 
-  test("defers investigation after midpoint while allowing edits and tests", () => {
+  test("keeps the no-mutation midpoint advisory-only", () => {
     const explored = state({
       goal: "Fix the parser bug",
       filesChanged: [],
@@ -150,7 +150,7 @@ describe("convergence guidance", () => {
         32,
         64,
       ),
-    ).toContain("implementation_required");
+    ).toBeNull();
     expect(
       convergenceToolBlockReason(
         { type: "tool_call", tool: "workspace.edit_file", args: {} },
@@ -187,7 +187,7 @@ describe("convergence guidance", () => {
         32,
         64,
       ),
-    ).toContain("implementation_required");
+    ).toBeNull();
     expect(
       convergenceToolBlockReason(
         {
@@ -199,7 +199,7 @@ describe("convergence guidance", () => {
         32,
         64,
       ),
-    ).toContain("implementation_required");
+    ).toBeNull();
     expect(
       convergenceToolBlockReason(
         {
@@ -214,10 +214,10 @@ describe("convergence guidance", () => {
     ).toBeNull();
   });
 
-  test("allows one exact-file reread after an edit anchor mismatch", () => {
+  test("allows an edit-anchor recovery read while preserving post-edit verification", () => {
     const recovering = state({
-      filesChanged: [],
-      mutationRevision: 0,
+      filesChanged: ["src/target.py"],
+      mutationRevision: 1,
       filesRead: ["a.ts", "b.ts", "c.ts"],
       editRecoveryPath: "src/target.py",
     });
@@ -244,46 +244,52 @@ describe("convergence guidance", () => {
         40,
         64,
       ),
-    ).toContain("implementation_required");
+    ).toContain("verify_current_revision");
   });
 
-  test("allows one bounded pre-edit refresh read after midpoint", () => {
-    const refreshable = state({
+  test("allows the unseen source span from the Django 15738 failure trace", () => {
+    const explored = state({
+      goal: "Fix FK to M2M migration ordering",
       filesChanged: [],
       mutationRevision: 0,
-      filesRead: ["src/target.py", "tests/test_target.py"],
-      fileReadCounts: { "src/target.py": 1, "tests/test_target.py": 1 },
-      commandsRun: [{ command: "python -V", ok: true, summary: "ok" }],
+      filesRead: [
+        "django/db/migrations/autodetector.py",
+        "tests/migrations/test_autodetector.py",
+      ],
+      fileReadCounts: {
+        "django/db/migrations/autodetector.py": 22,
+        "tests/migrations/test_autodetector.py": 4,
+      },
+      commandsRun: Array.from({ length: 6 }, (_, index) => ({
+        command: `diagnostic-${index}`,
+        ok: index === 0,
+        summary: "trace evidence",
+      })),
     });
-    const refresh = {
+    const unseenRange = {
       type: "tool_call" as const,
       tool: "workspace.read_file",
-      args: { path: "src/target.py" },
+      args: {
+        path: "django/db/migrations/autodetector.py",
+        offset: 1189,
+        limit: 60,
+      },
     };
-    expect(convergenceToolBlockReason(refresh, refreshable, 32, 64)).toBeNull();
     expect(
-      convergenceToolBlockReason(
-        refresh,
-        {
-          ...refreshable,
-          fileReadCounts: { "src/target.py": 2, "tests/test_target.py": 1 },
-        },
-        33,
-        64,
-      ),
-    ).toContain("implementation_required");
+      convergenceToolBlockReason(unseenRange, explored, 49, 96),
+    ).toBeNull();
     expect(
       convergenceToolBlockReason(
         {
           type: "tool_call",
-          tool: "workspace.read_file",
-          args: { path: "src/new.py" },
+          tool: "workspace.symbol_search",
+          args: { query: "generate_altered_fields" },
         },
-        refreshable,
-        32,
-        64,
+        explored,
+        51,
+        96,
       ),
-    ).toContain("implementation_required");
+    ).toBeNull();
   });
 
   test("enforces verify then diff then delivery in the closeout window", () => {

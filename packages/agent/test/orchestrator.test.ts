@@ -369,7 +369,7 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(4);
   });
 
-  test("loop policy defers repeated investigation without consuming the task budget", async () => {
+  test("repeat-loop guidance is advisory and preserves the task budget", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-loop-policy-"));
     for (const file of [
       "a.txt",
@@ -383,32 +383,26 @@ describe("AgentOrchestrator", () => {
       writeFileSync(path.join(dir, file), file);
     }
     let calls = 0;
+    let sawRepeatReminder = false;
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
       model: {
         label: "loop-policy-recovery",
-        async complete() {
+        async complete(messages) {
           calls += 1;
           if (calls <= 3) {
-            const file = ["a.txt", "b.txt", "c.txt"][calls - 1];
             return {
               text: JSON.stringify({
                 tool: "workspace.read_file",
-                args: { path: file },
+                args: { path: "a.txt" },
               }),
             };
           }
-          if (calls <= 7) {
-            return {
-              text: JSON.stringify({
-                tool: "workspace.read_file",
-                args: {
-                  path: ["d.txt", "e.txt", "f.txt", "g.txt"][calls - 4],
-                },
-              }),
-            };
-          }
-          if (calls === 8) {
+          if (calls === 4) {
+            sawRepeatReminder = messages
+              .map((message) => message.content)
+              .join("\n")
+              .includes("exact same tool call");
             return {
               text: JSON.stringify({
                 tool: "workspace.write_file",
@@ -429,18 +423,38 @@ describe("AgentOrchestrator", () => {
       runId: "loop-policy-recovery",
       goal: "Fix the issue in these files [allow_skip_verify] [coding_phase_budget]",
       workspaceRoot: dir,
-      maxSteps: 10,
+      maxSteps: 6,
     });
 
     const policyBlocks = events.filter(
       (event) =>
         event.event.type === "tool.result" &&
         event.event.ok === false &&
-        event.event.summary.includes("LoopPolicy:implementation_required"),
+        event.event.summary.includes("LoopPolicy"),
     );
-    expect(policyBlocks).toHaveLength(2);
+    expect(policyBlocks).toHaveLength(0);
+    expect(calls).toBe(5);
+    expect(
+      events
+        .filter((event) => event.event.type === "tool.call")
+        .map((event) =>
+          event.event.type === "tool.call" ? event.event.tool : "",
+        ),
+    ).toEqual([
+      "workspace.read_file",
+      "workspace.read_file",
+      "workspace.read_file",
+      "workspace.write_file",
+    ]);
+    expect(
+      events.find(
+        (event) =>
+          event.event.type === "tool.result" &&
+          event.event.tool === "workspace.write_file",
+      ),
+    ).toMatchObject({ event: { ok: true } });
+    expect(sawRepeatReminder).toBe(true);
     expect(result.status).toBe("completed");
-    expect(calls).toBe(9);
     expect(readFileSync(path.join(dir, "fix.txt"), "utf8")).toBe("implemented");
   });
 

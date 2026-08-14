@@ -50,9 +50,9 @@ import {
 import { isControlPlaneToolResult } from "../lifecycle/control-plane.js";
 import {
   convergenceToolBlockReason,
-  isConvergenceRefreshRead,
   isEditRecoveryRead,
 } from "../lifecycle/convergence.js";
+import { advanceRepeatToolReminder } from "../lifecycle/repeat-tool-reminder.js";
 import {
   type AcceptanceGateDecision,
   IDLE_FUSE_ESCALATION,
@@ -1085,36 +1085,21 @@ async function handleToolCalls(
   const priorCodingPhase = flags.codingPhase ?? EMPTY_CODING_PHASE_STATE;
   let projectedCodingPhase = priorCodingPhase;
   const taskState = ctx.taskState.snapshot();
-  let convergenceRefreshGranted = false;
-  const convergenceBlockReasons = calls.map((call) => {
-    const isRefresh = isConvergenceRefreshRead(
-      call,
-      taskState,
-      ctx.turn + 1,
-      ctx.maxSteps,
-    );
-    if (isRefresh && convergenceRefreshGranted) {
-      return "[LoopPolicy:implementation_required] The one bounded pre-edit refresh read is already allocated in this tool batch. Make the smallest plausible source edit or run a narrow existing test now.";
-    }
-    if (isRefresh) convergenceRefreshGranted = true;
-    return convergenceToolBlockReason(
+  const convergenceBlockReasons = calls.map((call) =>
+    convergenceToolBlockReason(
       call,
       taskState,
       ctx.turn + 1,
       ctx.maxSteps,
       ctx.verificationPolicy,
-    );
-  });
+    ),
+  );
   const codingPhaseBlockReasons = calls.map((call, index) => {
     // A call rejected by the general loop policy never reaches the opt-in
     // coding-phase state machine and must not consume its violation budget.
     if (convergenceBlockReasons[index]) return null;
     if (!codingPhaseEnabled) return null;
-    if (
-      isEditRecoveryRead(call, taskState) ||
-      isConvergenceRefreshRead(call, taskState, ctx.turn + 1, ctx.maxSteps)
-    )
-      return null;
+    if (isEditRecoveryRead(call, taskState)) return null;
     const reason = codingPhaseBlockReason(call, projectedCodingPhase);
     if (!reason && isCodingNavigationTool(call.tool)) {
       projectedCodingPhase = {
@@ -1252,6 +1237,10 @@ async function handleToolCalls(
   const codingPhase = codingPhaseEnabled
     ? advanceCodingPhase(priorCodingPhase, calls, results)
     : undefined;
+  const repeatTool = advanceRepeatToolReminder(flags.repeatTool, calls);
+  for (const nudge of repeatTool.reminders) {
+    ctx.ctxMgr.addUser(nudge);
+  }
   for (const nudge of codingPhase?.nudges ?? []) {
     ctx.ctxMgr.addUser(nudge);
   }
@@ -1283,6 +1272,7 @@ async function handleToolCalls(
   );
   const fusedFlags: TurnFlags = {
     ...nextFlags,
+    ...(repeatTool.state ? { repeatTool: repeatTool.state } : {}),
     ...(codingPhase ? { codingPhase: codingPhase.state } : {}),
     ...(codingPhaseEnabled ? { codingPhaseViolationTurns } : {}),
     // These are consecutive-stall budgets, not lifetime counters. A concrete

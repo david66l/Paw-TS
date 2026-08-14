@@ -44,3 +44,8 @@ export {
   goalUsesCodingPhaseBudget,
   type CodingPhaseState,
 } from "./coding-phase.js";
+export {
+  advanceRepeatToolReminder,
+  type RepeatToolReminderResult,
+  type RepeatToolState,
+} from "./repeat-tool-reminder.js";

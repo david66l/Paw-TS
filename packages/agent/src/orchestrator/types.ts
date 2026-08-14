@@ -29,6 +29,7 @@ import type { TaskPlanner } from "@paw/store";
 import type { CandidateReviewer } from "../candidate-review.js";
 import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
 import type { CompletionDecision } from "../lifecycle/completion-policy.js";
+import type { RepeatToolState } from "../lifecycle/repeat-tool-reminder.js";
 import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
 import type { TaskStateManager } from "../task-state.js";
 
@@ -153,6 +154,8 @@ export interface TurnFlags {
   readonly codingPhase?: CodingPhaseState;
   /** Consecutive model turns attempting tools blocked by CodingPhase. */
   readonly codingPhaseViolationTurns?: number;
+  /** Advisory chain for consecutive tool calls with identical arguments. */
+  readonly repeatTool?: RepeatToolState;
 }
 
 // ═════════════════════════════════════════════════════════════

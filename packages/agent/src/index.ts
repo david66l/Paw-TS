@@ -147,3 +147,8 @@ export {
   isCodingVerificationCall,
   type CodingPhaseState,
 } from "./lifecycle/coding-phase.js";
+export {
+  advanceRepeatToolReminder,
+  type RepeatToolReminderResult,
+  type RepeatToolState,
+} from "./lifecycle/repeat-tool-reminder.js";

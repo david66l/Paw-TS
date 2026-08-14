@@ -88,31 +88,6 @@ export function isEditRecoveryRead(
   );
 }
 
-/**
- * Permit one successful exact re-read after the no-mutation midpoint. The
- * model may refresh a previously observed source region before editing, but it
- * cannot turn this escape hatch into another browsing phase.
- */
-export function isConvergenceRefreshRead(
-  call: AgentToolCallAction,
-  state: TaskState,
-  turn: number,
-  maxSteps: number,
-): boolean {
-  if (
-    call.tool !== "workspace.read_file" ||
-    typeof call.args.path !== "string" ||
-    (state.mutationRevision ?? 0) !== 0 ||
-    turn < Math.ceil(maxSteps * 0.5) ||
-    state.filesRead.length + state.commandsRun.length < 3 ||
-    !state.filesRead.includes(call.args.path)
-  ) {
-    return false;
-  }
-  const counts = state.fileReadCounts ?? {};
-  return !state.filesRead.some((path) => (counts[path] ?? 1) > 1);
-}
-
 export function convergenceWindow(maxSteps: number): number {
   return Math.min(12, Math.max(4, Math.ceil(maxSteps * 0.2)));
 }
@@ -136,7 +111,7 @@ export function implementationGuidance(
   ) {
     return null;
   }
-  return "[Implementation checkpoint] Half of the available model turns have been used without a recorded source change. Consolidate the evidence already gathered into the smallest plausible implementation now. Prefer editing the product source and running an existing narrow test; do not spend the remaining run building a separate verification harness unless the repository has no usable test path.";
+  return "[Implementation checkpoint] Half of the available model turns have been used without a recorded source change. Consolidate the evidence into the smallest plausible implementation soon. If one specific unseen source span or materially different diagnostic is still required to edit safely, gather it now; avoid exact repeats and broad browsing. Then edit the product source and run the narrowest existing test.";
 }
 
 export function convergenceEvidenceKey(state: TaskState): string {
@@ -168,16 +143,7 @@ export function convergenceToolBlockReason(
 ): string | null {
   if (!goalLikelyRequiresImplementation(state.goal)) return null;
   if (isEditRecoveryRead(call, state)) return null;
-  if (isConvergenceRefreshRead(call, state, turn, maxSteps)) return null;
   const revision = state.mutationRevision ?? 0;
-  if (
-    revision === 0 &&
-    turn >= Math.ceil(maxSteps * 0.5) &&
-    state.filesRead.length + state.commandsRun.length >= 3 &&
-    isInvestigationCall(call)
-  ) {
-    return "[LoopPolicy:implementation_required] The task is past its midpoint with substantial investigation but no recorded source change. This additional investigation is deferred. Make the smallest plausible product-source edit from the evidence already gathered, or run an existing narrow test that directly discriminates the candidate.";
-  }
   if (revision === 0) return null;
   const latest = state.testResults.at(-1);
   const currentVerification = latest?.mutationRevision === revision;

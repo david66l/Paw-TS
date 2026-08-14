@@ -189,6 +189,7 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[Task]",
   "[Memory refresh]",
   "[Context guard]",
+  "[Loop reminder]",
   "[Continue from where you were cut off",
   "Plan updated:",
   "Current plan:",
