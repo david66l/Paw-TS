@@ -32,6 +32,7 @@ import type { CompletionDecision } from "../lifecycle/completion-policy.js";
 import type { RepeatToolState } from "../lifecycle/repeat-tool-reminder.js";
 import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
 import type { LoopV2ShadowToolCommitPortInput } from "../loop-v2/index.js";
+import type { LoopKernelVersion } from "../loop-v2/index.js";
 import type { TaskStateManager } from "../task-state.js";
 
 // ═════════════════════════════════════════════════════════════
@@ -171,6 +172,7 @@ export interface TurnFlags {
  */
 export interface PhaseContext {
   readonly runId: string;
+  readonly loopKernelVersion?: LoopKernelVersion;
   readonly workspaceRoot: string;
   /** 当前轮次（0-based） */
   readonly turn: number;

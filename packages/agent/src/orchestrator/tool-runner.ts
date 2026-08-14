@@ -48,7 +48,9 @@ import type {
   LoopV2ShadowMutationCapture,
   LoopV2ShadowToolCommitPortInput,
   LoopV2ShadowVerificationCapture,
+  ToolExecutionModeV2,
 } from "../loop-v2/index.js";
+import { executeToolBatchV2 } from "../loop-v2/index.js";
 import type {
   TaskState,
   TaskStateManager,
@@ -188,7 +190,7 @@ function patchTextFromArgs(args: unknown): string | undefined {
 }
 
 /** 工具执行的环境上下文 */
-interface ToolExecutionContext {
+export interface ToolExecutionContext {
   readonly workspaceRoot: string;
   readonly runId: string;
   readonly mcp?: HarnessContext["mcp"];
@@ -280,7 +282,7 @@ type MutationBeforeCapture =
     }>;
 
 /** 审批上下文 */
-interface ApprovalContext {
+export interface ApprovalContext {
   readonly resolveToolApproval?:
     | ((input: {
         readonly tool: string;
@@ -702,6 +704,198 @@ export async function executeToolCalls(
   }
 
   return { results, mutationCaptures };
+}
+
+const V2_PARALLEL_TOOLS = new Set([
+  "workspace.read_file",
+  "workspace.list_dir",
+  "workspace.search",
+  "workspace.glob",
+  "workspace.grep",
+  "workspace.web_fetch",
+  "workspace.web_search",
+  "workspace.brief",
+  "workspace.git_status",
+  "workspace.git_log",
+  "workspace.git_diff",
+  "workspace.lsp",
+  "workspace.symbol_search",
+  "memory.list",
+  "memory.read",
+]);
+
+/**
+ * Only explicitly declared read-only tools may overlap in v2. Shell, writes,
+ * control-plane mutations, MCP tools, and unknown tools fail closed to an
+ * exclusive barrier.
+ */
+export function classifyToolExecutionV2(
+  call: AgentToolCallAction,
+): ToolExecutionModeV2 {
+  return V2_PARALLEL_TOOLS.has(call.tool)
+    ? { kind: "parallel" }
+    : { kind: "exclusive" };
+}
+
+export interface ToolExecutionV2Options {
+  readonly preSettledResults?: readonly (ToolRunResult | undefined)[];
+  readonly maxParallel?: number;
+  readonly commit: (
+    call: AgentToolCallAction,
+    result: ToolRunResult,
+    mutationCapture: LoopV2ShadowMutationCapture | undefined,
+    sourceIndex: number,
+    mode: ToolExecutionModeV2,
+  ) => Promise<void> | void;
+}
+
+export interface ToolExecutionBatchResultV2 extends ToolExecutionBatchResult {
+  readonly aborted: boolean;
+}
+
+interface SettledToolCallV2 {
+  readonly result: ToolRunResult;
+  readonly mutationCapture?: LoopV2ShadowMutationCapture;
+}
+
+/**
+ * Production adapter for one model-ordered v2 tool batch. Legacy single-call
+ * execution remains the authority for policy/approval/checkpoint/tool effects;
+ * the v2 scheduler owns overlap, barriers, source-order commit, and abort fill.
+ */
+export async function executeToolCallsV2(
+  calls: readonly AgentToolCallAction[],
+  toolCtx: ToolExecutionContext,
+  approvalCtx: ApprovalContext,
+  options: ToolExecutionV2Options,
+): Promise<ToolExecutionBatchResultV2> {
+  const scheduled = calls.map((call, sourceIndex) => ({
+    callId: `v2:${toolCtx.runId}:call:${sourceIndex}`,
+    tool: call.tool,
+    args:
+      call.args && typeof call.args === "object" && !Array.isArray(call.args)
+        ? (call.args as Readonly<Record<string, unknown>>)
+        : {},
+  }));
+  const sourceIndexByCallId = new Map(
+    scheduled.map((call, sourceIndex) => [call.callId, sourceIndex] as const),
+  );
+  const outcome = await executeToolBatchV2<
+    number,
+    SettledToolCallV2,
+    SettledToolCallV2
+  >(
+    scheduled,
+    {
+      classify(scheduledCall) {
+        const index = sourceIndexByCallId.get(scheduledCall.callId);
+        if (index === undefined) return { kind: "exclusive" };
+        const sourceCall = calls[index];
+        if (!sourceCall) return { kind: "exclusive" };
+        const args =
+          sourceCall.args &&
+          typeof sourceCall.args === "object" &&
+          !Array.isArray(sourceCall.args)
+            ? (sourceCall.args as Record<string, unknown>)
+            : undefined;
+        if (
+          toolNeedsApprovalGate(
+            sourceCall.tool,
+            args,
+            approvalCtx.approvalPolicy,
+            Boolean(approvalCtx.resolveToolApproval),
+          )
+        ) {
+          return { kind: "exclusive" };
+        }
+        if (
+          toolCtx.toolEffectPolicy &&
+          (toolCtx.toolEffectPolicy.appliesTo?.({
+            tool: sourceCall.tool,
+            args: sourceCall.args,
+            workspaceRoot: toolCtx.workspaceRoot,
+          }) ??
+            true)
+        ) {
+          return { kind: "exclusive" };
+        }
+        return classifyToolExecutionV2(sourceCall);
+      },
+      async prepare(_scheduled, index) {
+        const settled = options.preSettledResults?.[index];
+        return settled
+          ? {
+              kind: "settled",
+              result: {
+                result: settled,
+                mutationCapture: createLoopV2NoMutationCapture(),
+              },
+            }
+          : { kind: "dispatch", prepared: index };
+      },
+      async dispatch(sourceIndex) {
+        const sourceCall = calls[sourceIndex];
+        if (!sourceCall) {
+          throw new Error(`Tool scheduler missing source call ${sourceIndex}`);
+        }
+        const batch = await executeToolCalls(
+          [sourceCall],
+          { ...toolCtx, captureLoopV2Facts: true },
+          approvalCtx,
+        );
+        const result = batch.results[0];
+        if (!result) {
+          throw new Error(`Tool scheduler missing result ${sourceIndex}`);
+        }
+        return {
+          result,
+          ...(batch.mutationCaptures[0]
+            ? { mutationCapture: batch.mutationCaptures[0] }
+            : {}),
+        };
+      },
+      async commit(_scheduled, settled, index, mode) {
+        const sourceCall = calls[index];
+        if (!sourceCall) {
+          throw new Error(`Tool scheduler missing commit call ${index}`);
+        }
+        await options.commit(
+          sourceCall,
+          settled.result,
+          settled.mutationCapture,
+          index,
+          mode,
+        );
+        return settled;
+      },
+      async skip(_scheduled, index) {
+        return {
+          result: {
+            ok: false,
+            summary: "tool execution skipped because the run was aborted",
+            payload: {
+              skipped: true,
+              code: "E_RUN_ABORTED",
+              sourceIndex: index,
+            },
+          },
+          mutationCapture: createLoopV2NoMutationCapture(),
+        };
+      },
+    },
+    {
+      ...(options.maxParallel === undefined
+        ? {}
+        : { maxParallel: options.maxParallel }),
+      ...(toolCtx.abortSignal ? { signal: toolCtx.abortSignal } : {}),
+    },
+  );
+  const ordered = outcome.committed.map((entry) => entry.value);
+  return {
+    results: ordered.map((entry) => entry.result),
+    mutationCaptures: ordered.map((entry) => entry.mutationCapture),
+    aborted: outcome.aborted,
+  };
 }
 
 /**

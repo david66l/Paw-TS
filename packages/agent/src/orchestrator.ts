@@ -777,6 +777,7 @@ export class AgentOrchestrator {
         // PhaseContext 包含这一轮需要的所有信息，传递给 executeTurn
         const phaseCtx: PhaseContext = {
           runId,
+          loopKernelVersion: this.loopKernelVersion,
           workspaceRoot,
           turn,
           maxSteps,

@@ -63,6 +63,7 @@ import {
   goalRequiresMutation,
   resolveLifecycleBudget,
 } from "../lifecycle/task-lifecycle.js";
+import type { LoopV2ShadowMutationCapture } from "../loop-v2/index.js";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
 import {
   markPlanItemsCompleted,
@@ -73,9 +74,12 @@ import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
 import {
+  commitToolExecutionResult,
   createLoopV2NoMutationCapture,
   executeToolCalls,
+  executeToolCallsV2,
   finalizeToolExecution,
+  finalizeToolExecutionContext,
 } from "./tool-runner.js";
 import type { PhaseContext, TurnFlags, TurnState } from "./types.js";
 
@@ -1121,70 +1125,101 @@ async function handleToolCalls(
     (_, index) =>
       convergenceBlockReasons[index] ?? codingPhaseBlockReasons[index],
   );
-  const allowedCalls = calls.filter((_, index) => !phaseBlockReasons[index]);
-  const allowedBatch = await executeToolCalls(
-    allowedCalls,
-    {
-      workspaceRoot: ctx.workspaceRoot,
-      runId: ctx.runId,
-      mcp: ctx.mcp,
-      emit: ctx.emit,
-      checkpointSeq: ctx.checkpointSeq,
-      childPolicy: opts.childPolicy,
-      subAgentLauncher: opts.subAgentLauncher,
-      todoStore: opts.todoStore,
-      acceptanceLedger: {
-        apply: (input) => ctx.taskState.applyAcceptanceUpdate(input, ctx.turn),
-      },
-      skillRegistry: opts.skillRegistry,
-      watcher: opts.watcher,
-      parentContextManager: ctx.ctxMgr,
-      abortSignal: ctx.signal,
-      shellSandbox: ctx.shellSandbox,
-      memoryRuntime: opts.memoryRuntime,
-      memoryTaskId: opts.memoryTaskId ?? ctx.memoryTaskId,
-      createAgent: opts.createAgent,
-      allowedTools: opts.allowedTools,
-      fileLock: opts.fileLock,
-      artifactRegistry: ctx.artifactRegistry,
-      toolExecutionPolicy: opts.toolExecutionPolicy,
-      toolEffectPolicy: opts.toolEffectPolicy,
-      captureLoopV2Facts: Boolean(ctx.observeLoopV2ToolCommit),
-    },
-    {
-      resolveToolApproval: opts.resolveToolApproval,
-      approvalPolicy: opts.approvalPolicy,
-    },
-  );
-  const allowedResults = allowedBatch.results;
-  let allowedIndex = 0;
-  const mutationCaptures: Array<
-    (typeof allowedBatch.mutationCaptures)[number]
-  > = [];
-  const results: ToolRunResult[] = calls.map((_, index) => {
+  const blockedResult = (index: number): ToolRunResult | undefined => {
     const blockReason = phaseBlockReasons[index];
-    if (blockReason) {
-      mutationCaptures.push(
-        ctx.observeLoopV2ToolCommit
-          ? createLoopV2NoMutationCapture()
-          : undefined,
-      );
-      return {
-        ok: false,
-        payload: {
-          code: convergenceBlockReasons[index]
-            ? "E_LOOP_POLICY"
-            : "E_CODING_PHASE",
-          message: blockReason,
+    if (!blockReason) return undefined;
+    return {
+      ok: false,
+      payload: {
+        code: convergenceBlockReasons[index]
+          ? "E_LOOP_POLICY"
+          : "E_CODING_PHASE",
+        message: blockReason,
+      },
+      summary: blockReason,
+    };
+  };
+  const toolExecutionContext = {
+    workspaceRoot: ctx.workspaceRoot,
+    runId: ctx.runId,
+    mcp: ctx.mcp,
+    emit: ctx.emit,
+    checkpointSeq: ctx.checkpointSeq,
+    childPolicy: opts.childPolicy,
+    subAgentLauncher: opts.subAgentLauncher,
+    todoStore: opts.todoStore,
+    acceptanceLedger: {
+      apply: (
+        input: Parameters<typeof ctx.taskState.applyAcceptanceUpdate>[0],
+      ) => ctx.taskState.applyAcceptanceUpdate(input, ctx.turn),
+    },
+    skillRegistry: opts.skillRegistry,
+    watcher: opts.watcher,
+    parentContextManager: ctx.ctxMgr,
+    abortSignal: ctx.signal,
+    shellSandbox: ctx.shellSandbox,
+    memoryRuntime: opts.memoryRuntime,
+    memoryTaskId: opts.memoryTaskId ?? ctx.memoryTaskId,
+    createAgent: opts.createAgent,
+    allowedTools: opts.allowedTools,
+    fileLock: opts.fileLock,
+    artifactRegistry: ctx.artifactRegistry,
+    toolExecutionPolicy: opts.toolExecutionPolicy,
+    toolEffectPolicy: opts.toolEffectPolicy,
+    captureLoopV2Facts: Boolean(ctx.observeLoopV2ToolCommit),
+  };
+  const approvalContext = {
+    resolveToolApproval: opts.resolveToolApproval,
+    approvalPolicy: opts.approvalPolicy,
+  };
+  let results: ToolRunResult[];
+  let mutationCaptures: Array<LoopV2ShadowMutationCapture | undefined>;
+  const commitsOwnedByScheduler = ctx.loopKernelVersion === "v2";
+  if (commitsOwnedByScheduler) {
+    const batch = await executeToolCallsV2(
+      calls,
+      toolExecutionContext,
+      approvalContext,
+      {
+        preSettledResults: calls.map((_, index) => blockedResult(index)),
+        commit(call, result, mutationCapture, sourceIndex) {
+          commitToolExecutionResult(call, result, sourceIndex, ctx, {
+            concurrentMutation: false,
+            ...(mutationCapture ? { mutationCapture } : {}),
+          });
         },
-        summary: blockReason,
-      };
-    }
-    const result = allowedResults[allowedIndex]!;
-    mutationCaptures.push(allowedBatch.mutationCaptures[allowedIndex]);
-    allowedIndex += 1;
-    return result;
-  });
+      },
+    );
+    results = [...batch.results];
+    mutationCaptures = [...batch.mutationCaptures];
+  } else {
+    const allowedCalls = calls.filter((_, index) => !phaseBlockReasons[index]);
+    const allowedBatch = await executeToolCalls(
+      allowedCalls,
+      toolExecutionContext,
+      approvalContext,
+    );
+    const allowedResults = allowedBatch.results;
+    let allowedIndex = 0;
+    mutationCaptures = [];
+    results = calls.map((_, index) => {
+      const blocked = blockedResult(index);
+      if (blocked) {
+        mutationCaptures.push(
+          ctx.observeLoopV2ToolCommit
+            ? createLoopV2NoMutationCapture()
+            : undefined,
+        );
+        return blocked;
+      }
+      const result = allowedResults[allowedIndex];
+      if (!result)
+        throw new Error(`Missing allowed tool result ${allowedIndex}`);
+      mutationCaptures.push(allowedBatch.mutationCaptures[allowedIndex]);
+      allowedIndex += 1;
+      return result;
+    });
+  }
   const toolDuration = Date.now() - toolStartTime;
 
   // 评估钩子：逐个通知工具调用完成
@@ -1234,7 +1269,7 @@ async function handleToolCalls(
   }
 
   // 将工具结果注入上下文（assistant 消息 + tool results）
-  const final = finalizeToolExecution(calls, results, {
+  const finalizationContext = {
     ctxMgr: ctx.ctxMgr,
     emit: ctx.emit,
     runId: ctx.runId,
@@ -1251,7 +1286,10 @@ async function handleToolCalls(
     payloadDeduper: ctx.payloadDeduper,
     artifactRegistry: ctx.artifactRegistry,
     failureSignatures: flags.failureSignatures,
-  });
+  };
+  const final = commitsOwnedByScheduler
+    ? finalizeToolExecutionContext(calls, results, finalizationContext)
+    : finalizeToolExecution(calls, results, finalizationContext);
 
   const codingPhase = codingPhaseEnabled
     ? advanceCodingPhase(priorCodingPhase, calls, results)

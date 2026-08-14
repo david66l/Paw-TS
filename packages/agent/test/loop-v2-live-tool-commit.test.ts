@@ -3,11 +3,20 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { AgentToolCallAction, RunEvent } from "@paw/core";
+import type {
+  AgentToolCallAction,
+  RunEvent,
+  RunEventEnvelope,
+} from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 
 import { executeToolBatchV2 } from "../src/loop-v2/index.js";
-import { commitToolExecutionResult } from "../src/orchestrator/tool-runner.js";
+import { AgentOrchestrator } from "../src/orchestrator.js";
+import {
+  classifyToolExecutionV2,
+  commitToolExecutionResult,
+  executeToolCallsV2,
+} from "../src/orchestrator/tool-runner.js";
 import { TaskStateManager } from "../src/task-state.js";
 
 interface PreparedCall {
@@ -189,6 +198,285 @@ describe("Loop Kernel v2 live tool commit seam", () => {
           trace.indexOf(`${index + 1}:body:start`),
         );
       }
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("explicit v2 routes a real mixed batch through source-ordered exclusive edits", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-v2-live-orchestrator-"),
+    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "zero\n", "utf8");
+    const events: RunEventEnvelope[] = [];
+    let modelCalls = 0;
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      model: {
+        label: "v2-live-mixed-fixture",
+        async complete() {
+          modelCalls += 1;
+          if (modelCalls === 1) {
+            return {
+              text: [
+                '{"tool":"workspace.read_file","args":{"path":"source.txt","offset":0,"limit":1}}',
+                '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"zero","new_string":"one"}}',
+                '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"one","new_string":"two"}}',
+                '{"tool":"workspace.read_file","args":{"path":"source.txt","offset":1,"limit":1}}',
+              ].join("\n"),
+            };
+          }
+          return {
+            text: '{"action":"final_answer","summary":"updated source [skip_verify: deterministic scheduler fixture]"}',
+          };
+        },
+      },
+      onEvent(event) {
+        events.push(event);
+      },
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-live-mixed",
+        goal: "change source.txt from zero to two\n[allow_skip_verify]",
+        workspaceRoot,
+        maxSteps: 4,
+      });
+      expect(result.status).toBe("completed");
+      expect(modelCalls).toBe(2);
+      expect(
+        fs.readFileSync(path.join(workspaceRoot, "source.txt"), "utf8"),
+      ).toBe("two\n");
+      expect(
+        events
+          .filter((event) => event.event.type === "tool.result")
+          .map((event) =>
+            event.event.type === "tool.result" ? event.event.tool : "",
+          ),
+      ).toEqual([
+        "workspace.read_file",
+        "workspace.edit_file",
+        "workspace.edit_file",
+        "workspace.read_file",
+      ]);
+      const checkpointRoot = path.join(
+        workspaceRoot,
+        ".paw",
+        "checkpoints",
+        "v2-live-mixed",
+      );
+      expect(fs.readdirSync(checkpointRoot).sort()).toEqual(["1", "2"]);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("production classifier allows only declared reads to overlap", () => {
+    expect(
+      classifyToolExecutionV2(toolCall("workspace.grep", { pattern: "needle" }))
+        .kind,
+    ).toBe("parallel");
+    expect(
+      classifyToolExecutionV2(
+        toolCall("workspace.run_shell", { command: "git status" }),
+      ).kind,
+    ).toBe("exclusive");
+    expect(classifyToolExecutionV2(toolCall("mcp.unknown", {})).kind).toBe(
+      "exclusive",
+    );
+  });
+
+  test("policy denial commits in source order without dropping a read sibling", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-v2-policy-"),
+    );
+    fs.writeFileSync(path.join(workspaceRoot, "visible.txt"), "ok\n", "utf8");
+    const calls = [
+      toolCall("workspace.list_dir", { path: "." }),
+      toolCall("workspace.write_file", {
+        path: "blocked.txt",
+        content: "no",
+      }),
+    ];
+    const committed: string[] = [];
+    try {
+      const batch = await executeToolCallsV2(
+        calls,
+        {
+          workspaceRoot,
+          runId: "v2-policy",
+          emit: () => {},
+          checkpointSeq: { n: 0 },
+          toolExecutionPolicy: ({ tool }) =>
+            tool === "workspace.write_file"
+              ? {
+                  allowed: false,
+                  reason: "fixture_deny",
+                  message: "write denied",
+                }
+              : { allowed: true },
+        },
+        {},
+        {
+          commit(call) {
+            committed.push(call.tool);
+          },
+        },
+      );
+      expect(committed).toEqual(["workspace.list_dir", "workspace.write_file"]);
+      expect(batch.results.map((result) => result.ok)).toEqual([true, false]);
+      expect(batch.results[1]?.summary).toContain("fixture_deny");
+      expect(
+        fs.existsSync(path.join(workspaceRoot, "blocked.txt")),
+      ).toBeFalse();
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("a caller-forced approval keeps otherwise read-only calls exclusive", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-v2-read-approval-"),
+    );
+    fs.mkdirSync(path.join(workspaceRoot, "a"));
+    fs.mkdirSync(path.join(workspaceRoot, "b"));
+    let activeApprovals = 0;
+    let maxActiveApprovals = 0;
+    const committed: string[] = [];
+    try {
+      const batch = await executeToolCallsV2(
+        [
+          toolCall("workspace.list_dir", { path: "a" }),
+          toolCall("workspace.list_dir", { path: "b" }),
+        ],
+        {
+          workspaceRoot,
+          runId: "v2-read-approval",
+          emit: () => {},
+          checkpointSeq: { n: 0 },
+        },
+        {
+          approvalPolicy: () => true,
+          async resolveToolApproval(input) {
+            activeApprovals += 1;
+            maxActiveApprovals = Math.max(maxActiveApprovals, activeApprovals);
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            committed.push(String((input.args as { path?: string }).path));
+            activeApprovals -= 1;
+            return true;
+          },
+        },
+        { commit: () => {} },
+      );
+      expect(batch.results.map((result) => result.ok)).toEqual([true, true]);
+      expect(maxActiveApprovals).toBe(1);
+      expect(committed).toEqual(["a", "b"]);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("audited no-effect shell closes an exclusive mutation capture", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-v2-shell-audit-"),
+    );
+    const captures: unknown[] = [];
+    try {
+      const batch = await executeToolCallsV2(
+        [
+          toolCall("workspace.run_shell", {
+            command: "node -e \"process.stdout.write('ok')\"",
+          }),
+        ],
+        {
+          workspaceRoot,
+          runId: "v2-shell-audit",
+          emit: () => {},
+          checkpointSeq: { n: 0 },
+          toolEffectPolicy: {
+            appliesTo: () => true,
+            prepare: () => ({ before: true }),
+            settle(input) {
+              const payload =
+                input.result.payload &&
+                typeof input.result.payload === "object" &&
+                !Array.isArray(input.result.payload)
+                  ? input.result.payload
+                  : {};
+              return {
+                allowed: true,
+                result: {
+                  ...input.result,
+                  payload: {
+                    ...payload,
+                    workspaceEffect: { changed: false, paths: [] },
+                  },
+                },
+              };
+            },
+          },
+        },
+        {},
+        {
+          commit(_call, _result, capture) {
+            captures.push(capture);
+          },
+        },
+      );
+      expect(batch.results[0]?.ok).toBeTrue();
+      expect(captures).toEqual([
+        {
+          status: "complete",
+          paths: [],
+          beforeContents: {},
+          afterContents: {},
+        },
+      ]);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("pre-aborted production batch commits explicit skips and performs no write", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-v2-abort-"),
+    );
+    const controller = new AbortController();
+    controller.abort();
+    const committed: ToolRunResult[] = [];
+    try {
+      const batch = await executeToolCallsV2(
+        [
+          toolCall("workspace.write_file", {
+            path: "never.txt",
+            content: "never",
+          }),
+          toolCall("workspace.list_dir", { path: "." }),
+        ],
+        {
+          workspaceRoot,
+          runId: "v2-abort",
+          emit: () => {},
+          checkpointSeq: { n: 0 },
+          abortSignal: controller.signal,
+        },
+        {},
+        {
+          commit(_call, result) {
+            committed.push(result);
+          },
+        },
+      );
+      expect(batch.aborted).toBeTrue();
+      expect(committed).toHaveLength(2);
+      expect(
+        committed.every(
+          (result) =>
+            (result.payload as { code?: string }).code === "E_RUN_ABORTED",
+        ),
+      ).toBeTrue();
+      expect(fs.existsSync(path.join(workspaceRoot, "never.txt"))).toBeFalse();
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
