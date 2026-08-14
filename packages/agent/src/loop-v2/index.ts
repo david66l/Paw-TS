@@ -1,5 +1,27 @@
 export { canonicalJson, sha256Canonical } from "./canonical.js";
 export {
+  buildCandidateInputV2,
+  candidateInputHashV2,
+  createSemanticReviewLedgerV2,
+  evaluateCandidateReadinessV2,
+  reviewCandidateOnceV2,
+  semanticReviewKeyV2,
+  type CandidateArtifactEvidenceV2,
+  type CandidateInputV2,
+  type CandidateMutationInputV2,
+  type CandidateReadinessGapCodeV2,
+  type CandidateReadinessGapV2,
+  type CandidateReadinessPolicyV2,
+  type CandidateReadinessV2,
+  type CandidateSnapshotV2,
+  type SemanticReviewerV2,
+  type SemanticReviewFindingV2,
+  type SemanticReviewLedgerV2,
+  type SemanticReviewOnceResultV2,
+  type SemanticReviewRecordV2,
+  type SemanticReviewV2,
+} from "./candidate-certification.js";
+export {
   evidenceFingerprint,
   extendReadCoverage,
   readCoverageKey,
