@@ -189,7 +189,7 @@ describe("SWE compare runner", () => {
     ).toThrow("terminal AppState");
   });
 
-  test("accepts the current v9 protocol metadata and rejects unknown versions", () => {
+  test("accepts the current v10 protocol metadata and rejects unknown versions", () => {
     const current = {
       protocol: "paw-only-seen-development",
       selection: {

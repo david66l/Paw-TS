@@ -18,7 +18,7 @@ function value(name: string): string | undefined {
 }
 
 const repoRoot = process.cwd();
-const manifestName = value("--manifest") ?? "paw-fresh-qualification-v9.json";
+const manifestName = value("--manifest") ?? "paw-fresh-qualification-v10.json";
 const manifestPath = path.join(
   repoRoot,
   "benchmarks",
