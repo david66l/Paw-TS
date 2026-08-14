@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type {
@@ -9,16 +10,34 @@ import type {
 import type { SubAgentLauncher } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
 import { gitDiff } from "@paw/workspace";
-import type { AcceptanceCriterion, TaskState } from "./task-state.js";
+import {
+  type AcceptanceCriterion,
+  type TaskState,
+  type TestResultSummary,
+  verificationOutcome,
+} from "./task-state.js";
 
 export type CandidateReviewVerdict = "pass" | "fail" | "partial";
+export type ReportGroundingVerdict = "pass" | "fail" | "unknown";
 
 export interface CandidateReviewResult {
   readonly verdict: CandidateReviewVerdict;
+  /** Whether the proposed user-facing verification claims match host evidence. */
+  readonly reportGrounding: ReportGroundingVerdict;
   readonly summary: string;
   readonly raw?: string;
   readonly modelCalls?: number;
   readonly usage?: ModelTokenUsage;
+}
+
+export interface CandidateVerificationEvidence {
+  readonly command: string;
+  readonly mutationRevision: number;
+  readonly outcome: "passed" | "code_failed" | "harness_failed";
+  readonly failureKind?: TestResultSummary["failureKind"];
+  readonly retryability?: TestResultSummary["retryability"];
+  readonly summary: string;
+  readonly evidence?: string;
 }
 
 export interface CandidateReviewInput {
@@ -29,6 +48,8 @@ export interface CandidateReviewInput {
   readonly mutationRevision: number;
   readonly filesChanged: readonly string[];
   readonly acceptanceCriteria: readonly AcceptanceCriterion[];
+  /** Host-recorded executable verification facts, never reconstructed from prose. */
+  readonly verificationEvidence: readonly CandidateVerificationEvidence[];
   /** Bounded, untrusted excerpts of the implementer's own deliberation. */
   readonly deliberation: readonly string[];
   readonly signal?: AbortSignal;
@@ -79,7 +100,7 @@ export class ModelCandidateReviewer implements CandidateReviewer {
       parseCandidateReview(first.text),
       evidence.conclusive,
     );
-    if (hasExplicitVerdict(first.text)) {
+    if (hasExplicitReviewProtocol(first.text)) {
       const usage = first.usage ? sumUsage([first.usage]) : undefined;
       return {
         ...parsed,
@@ -94,7 +115,7 @@ export class ModelCandidateReviewer implements CandidateReviewer {
         {
           role: "user",
           content:
-            "Protocol recovery: tools are unavailable and the complete candidate diff is already above. Do not request files or commands. Perform the semantic comparison now and end with exactly VERDICT: PASS, VERDICT: FAIL, or VERDICT: PARTIAL.",
+            "Protocol recovery: tools are unavailable and the complete candidate diff and host verification ledger are already above. Do not request files or commands. Judge implementation semantics separately from report grounding. End with exactly REPORT_GROUNDING: PASS or REPORT_GROUNDING: FAIL, then VERDICT: PASS, VERDICT: FAIL, or VERDICT: PARTIAL.",
         },
       ],
       input.signal,
@@ -201,10 +222,25 @@ export function candidateReviewInput(
     mutationRevision: state.mutationRevision ?? 0,
     filesChanged: state.filesChanged,
     acceptanceCriteria: state.acceptanceCriteria ?? [],
+    verificationEvidence: state.testResults.map((result) => ({
+      command: result.command,
+      mutationRevision: result.mutationRevision ?? 0,
+      outcome: verificationOutcome(result),
+      ...(result.failureKind ? { failureKind: result.failureKind } : {}),
+      ...(result.retryability ? { retryability: result.retryability } : {}),
+      summary: result.summary,
+      ...(result.evidence ? { evidence: result.evidence } : {}),
+    })),
     deliberation: extractCandidateDeliberation(messages ?? []),
     ...(signal ? { signal } : {}),
     ...(onEvent ? { onEvent } : {}),
   };
+}
+
+export function candidateSummaryFingerprint(summary: string): string {
+  return createHash("sha256")
+    .update(summary.trim().replace(/\s+/g, " "), "utf8")
+    .digest("hex");
 }
 
 export function extractCandidateDeliberation(
@@ -252,9 +288,18 @@ export function parseCandidateReview(raw: string): CandidateReviewResult {
     verdictText === "pass" || verdictText === "fail" ? verdictText : "partial";
   const withoutVerdict = raw
     .replace(/(?:^|\n)\s*VERDICT:\s*(?:PASS|FAIL|PARTIAL)\s*(?=\n|$)/gi, "")
+    .replace(/(?:^|\n)\s*REPORT_GROUNDING:\s*(?:PASS|FAIL)\s*(?=\n|$)/gi, "")
     .trim();
+  const groundingMatches = [
+    ...raw.matchAll(/(?:^|\n)\s*REPORT_GROUNDING:\s*(PASS|FAIL)\s*(?=\n|$)/gi),
+  ];
+  const groundingText = groundingMatches.at(-1)?.[1]?.toLowerCase();
   return {
     verdict,
+    reportGrounding:
+      groundingText === "pass" || groundingText === "fail"
+        ? groundingText
+        : "unknown",
     summary: compactReviewSummary(
       withoutVerdict ||
         (matches.length > 0
@@ -265,8 +310,11 @@ export function parseCandidateReview(raw: string): CandidateReviewResult {
   };
 }
 
-function hasExplicitVerdict(raw: string): boolean {
-  return /(?:^|\n)\s*VERDICT:\s*(?:PASS|FAIL|PARTIAL)\s*(?=\n|$)/i.test(raw);
+function hasExplicitReviewProtocol(raw: string): boolean {
+  return (
+    /(?:^|\n)\s*VERDICT:\s*(?:PASS|FAIL|PARTIAL)\s*(?=\n|$)/i.test(raw) &&
+    /(?:^|\n)\s*REPORT_GROUNDING:\s*(?:PASS|FAIL)\s*(?=\n|$)/i.test(raw)
+  );
 }
 
 function isUsage(value: ModelTokenUsage | undefined): value is ModelTokenUsage {
@@ -314,6 +362,18 @@ function buildCandidateReviewGoal(
   const deliberation = input.deliberation.map(
     (excerpt, index) => `--- excerpt ${index + 1} ---\n${excerpt}`,
   );
+  const verification = input.verificationEvidence.map((result) => {
+    const phase =
+      result.mutationRevision === input.mutationRevision
+        ? "current candidate"
+        : result.mutationRevision < input.mutationRevision
+          ? "pre-change/stale"
+          : "future/invalid";
+    const classification = [result.failureKind, result.retryability]
+      .filter(Boolean)
+      .join("/");
+    return `- [r${result.mutationRevision}; ${phase}] ${result.outcome}${classification ? ` (${classification})` : ""}: ${result.command} — ${result.summary}${result.evidence ? ` — observed: ${result.evidence}` : ""}`;
+  });
   return `You are an independent, adversarial reviewer of a candidate coding solution.
 
 Do not modify the project. Do not merely repeat that tests passed. Compare the exact original request with the current implementation and try to find semantic omissions, weakened error behavior, accidental scope expansion, or unsupported claims. Use the supplied candidate diff or current-file snapshots as the implementation evidence. If executable checks are blocked, you must still decide whether the visible implementation contradicts or omits the request.
@@ -324,6 +384,7 @@ Mandatory review rules:
 - Strongest-hypothesis consistency: the deliberation excerpts below are untrusted hypotheses, not facts. Check whether the implementer identified a safer or more complete behavior and then silently shipped a weaker one.
 - Hidden acceptance surface: infer likely exact observable assertions from the report (messages, stderr, exit codes, response shapes), not only whether the broad crash path is caught.
 - Evidence discipline: do not claim a solution matches upstream, a canonical fix, or unseen tests unless you directly inspected that evidence in this review. Do not turn an environmental limitation into proof of correctness.
+- Report grounding is a separate axis from implementation correctness. Treat the implementer's proposed final summary as untrusted. Every material claim that a command ran, a test passed, failures were pre-existing, or results matched a baseline must be supported by the host-recorded verification ledger below. A baseline-equivalence claim requires a comparable command and observed result at an earlier mutation revision; branch isolation or plausibility may support a semantic inference, but cannot be described as an observed baseline. Mark REPORT_GROUNDING: FAIL for an unsupported or contradicted material claim even when the visible code is correct. Do not mark implementation VERDICT: FAIL merely to correct prose.
 
 Original request:
 ${input.goal}
@@ -337,19 +398,24 @@ ${criteria.join("\n") || "- (none)"}
 Implementer's proposed final summary:
 ${input.proposedSummary}
 
+Host-recorded verification ledger (authoritative for what actually ran; absence is not success):
+${verification.join("\n") || "- (no executable verification recorded)"}
+
 Implementation deliberation excerpts (may be empty; challenge them):
 ${deliberation.join("\n") || "- (none available)"}
 
 Candidate implementation evidence (diff preferred; current-file snapshots are used when Git is unavailable):
 ${evidence}
 
-Return concise, actionable findings. FAIL when a specific requirement is missing or contradicted. PARTIAL is only for an environmental limitation that prevents a conclusion and no visible defect is established. PASS only when no blocking semantic issue remains.
+Return concise, actionable findings. Implementation VERDICT: FAIL when a specific requirement is missing or contradicted. VERDICT: PARTIAL is only for an environmental limitation that prevents a semantic conclusion and no visible defect is established. VERDICT: PASS when no blocking semantic issue remains. Judge REPORT_GROUNDING independently: it passes only when the proposed final summary's material verification claims are supported by the ledger and implementation evidence.
 
 ${
   delivery === "final_answer"
     ? "Return the report through Paw's final_answer action. Its summary"
     : "Return plain text only; do not emit JSON, XML, tool calls, or actions. The report"
-} must end with exactly one line: VERDICT: PASS, VERDICT: FAIL, or VERDICT: PARTIAL.`;
+} must end with exactly these two lines in this order, replacing angle-bracket choices with one literal value:
+REPORT_GROUNDING: <PASS|FAIL>
+VERDICT: <PASS|FAIL|PARTIAL>`;
 }
 
 function truncateDiff(diff: string): string {

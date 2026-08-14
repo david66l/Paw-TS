@@ -314,7 +314,11 @@ describe("TaskStateManager", () => {
         tool: "workspace.run_shell",
         args: { command: "py -3.10 -m pytest tests/test_a.py -q" },
       },
-      { ok: true, summary: "1 passed", payload: {} },
+      {
+        ok: true,
+        summary: "run_shell: exit 0",
+        payload: { exit_code: 0, stdout: "1 passed in 0.12s" },
+      },
     );
     state.recordToolResult(
       {
@@ -329,6 +333,9 @@ describe("TaskStateManager", () => {
       "- Verification: passed for r1",
       "- Final diff: inspected for r1",
     ]);
+    expect(state.snapshot().testResults.at(-1)?.evidence).toBe(
+      "1 passed in 0.12s",
+    );
     edit();
     expect(formatCompletionReadiness(state.snapshot())).toEqual([
       "Completion readiness:",

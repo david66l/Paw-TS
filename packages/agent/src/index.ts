@@ -23,6 +23,7 @@ export {
 } from "./sub-agent-launcher.js";
 export {
   candidateReviewInput,
+  candidateSummaryFingerprint,
   extractCandidateDeliberation,
   ModelCandidateReviewer,
   parseCandidateReview,
@@ -31,7 +32,9 @@ export {
   type CandidateReviewResult,
   type CandidateReviewer,
   type CandidateReviewVerdict,
+  type CandidateVerificationEvidence,
   type ModelCandidateReviewerOptions,
+  type ReportGroundingVerdict,
   type SubAgentCandidateReviewerOptions,
 } from "./candidate-review.js";
 export {

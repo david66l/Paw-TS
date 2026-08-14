@@ -82,6 +82,10 @@ export interface AcceptanceCriterion {
 export interface CandidateReviewRecord {
   readonly mutationRevision: number;
   readonly verdict: "pass" | "fail" | "partial";
+  /** Independent judgment of the proposed final summary's factual grounding. */
+  readonly reportGrounding?: "pass" | "fail" | "unknown";
+  /** Stable digest of the exact proposed summary reviewed on this source revision. */
+  readonly summaryFingerprint?: string;
   readonly summary: string;
   readonly reviewedAt: number;
 }
@@ -587,7 +591,7 @@ export function formatTaskStateForContext(state: TaskState): string {
           ? "current"
           : "stale";
       lines.push(
-        `Independent review: ${state.candidateReview.verdict} (${freshness} for r${state.candidateReview.mutationRevision}) — ${state.candidateReview.summary}`,
+        `Independent review: ${state.candidateReview.verdict}/${state.candidateReview.reportGrounding ?? "legacy-report-unknown"} (${freshness} for r${state.candidateReview.mutationRevision}) — ${state.candidateReview.summary}`,
       );
     }
   }
@@ -782,7 +786,6 @@ function classifyVerificationOutcome(
 }
 
 function verificationEvidence(result: ToolRunResult): string | undefined {
-  if (result.ok) return undefined;
   const payload = isRecord(result.payload) ? result.payload : {};
   const raw = [payload.stderr, payload.stdout]
     .filter((value): value is string => typeof value === "string" && !!value)

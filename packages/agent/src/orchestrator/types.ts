@@ -133,6 +133,8 @@ export interface TurnFlags {
   readonly candidateReviewNudges?: number;
   /** Revision to which candidateReviewNudges belongs. */
   readonly candidateReviewRevision?: number;
+  /** Proposed-summary digest to which report-grounding nudges belong. */
+  readonly candidateReviewSummaryFingerprint?: string;
   /** 上一轮是否执行了工具调用 */
   readonly lastTurnHadToolCall: boolean;
   /** 本轮 Run 中是否使用过工具 */

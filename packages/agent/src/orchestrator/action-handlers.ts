@@ -31,7 +31,10 @@ import type {
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { TaskPlanner } from "@paw/store";
-import { candidateReviewInput } from "../candidate-review.js";
+import {
+  candidateReviewInput,
+  candidateSummaryFingerprint,
+} from "../candidate-review.js";
 import type {
   ToolEffectPolicy,
   ToolExecutionPolicy,
@@ -675,9 +678,17 @@ async function checkCandidateReviewGate(
   const revision = state.mutationRevision ?? 0;
   if (!reviewer || revision === 0) return undefined;
 
-  let review =
+  const summaryFingerprint = candidateSummaryFingerprint(summary);
+  const recorded =
     state.candidateReview?.mutationRevision === revision
       ? state.candidateReview
+      : undefined;
+
+  let review =
+    recorded &&
+    (recorded.verdict !== "pass" ||
+      recorded.summaryFingerprint === summaryFingerprint)
+      ? recorded
       : undefined;
   if (!review) {
     try {
@@ -696,6 +707,8 @@ async function checkCandidateReviewGate(
       review = {
         mutationRevision: revision,
         verdict: result.verdict,
+        reportGrounding: result.reportGrounding,
+        summaryFingerprint,
         summary: reviewSummary,
         reviewedAt: Date.now(),
       };
@@ -703,6 +716,7 @@ async function checkCandidateReviewGate(
         type: "candidate.review",
         mutationRevision: revision,
         verdict: result.verdict,
+        reportGrounding: result.reportGrounding,
         summary: reviewSummary,
         modelCalls: result.modelCalls ?? 0,
         ...(result.usage ? { usage: result.usage } : {}),
@@ -714,6 +728,8 @@ async function checkCandidateReviewGate(
       review = {
         mutationRevision: revision,
         verdict: "partial",
+        reportGrounding: "unknown",
+        summaryFingerprint,
         summary: reviewSummary,
         reviewedAt: Date.now(),
       };
@@ -721,6 +737,7 @@ async function checkCandidateReviewGate(
         type: "candidate.review",
         mutationRevision: revision,
         verdict: "partial",
+        reportGrounding: "unknown",
         summary: reviewSummary,
         modelCalls: 0,
       });
@@ -729,22 +746,42 @@ async function checkCandidateReviewGate(
     opts.saveStateFn();
   }
 
-  if (review.verdict === "pass") return undefined;
+  const reportGrounding = review.reportGrounding ?? "unknown";
+  if (review.verdict === "pass" && reportGrounding === "pass") {
+    return undefined;
+  }
+  if (review.verdict === "partial" && reportGrounding !== "pass") {
+    return {
+      state: {
+        type: "incomplete",
+        message: `[IndependentReview:PROTOCOL_INCOMPLETE r${revision}] ${review.summary}\nThe independent reviewer did not establish report grounding after protocol recovery, so completion is fail-closed.`,
+      },
+      flags,
+    };
+  }
+  const reportIssue = review.verdict === "pass" && reportGrounding !== "pass";
   const previousNudges =
-    flags.candidateReviewRevision === revision
+    flags.candidateReviewRevision === revision &&
+    (!reportIssue ||
+      flags.candidateReviewSummaryFingerprint === summaryFingerprint)
       ? (flags.candidateReviewNudges ?? 0)
       : 0;
-  const maxNudges = review.verdict === "fail" ? 2 : 1;
-  const message = `[IndependentReview:${review.verdict.toUpperCase()} r${revision}] ${review.summary}\n${
-    review.verdict === "fail"
-      ? "Fix the concrete issue, re-run relevant verification, inspect the new diff, and then try final_answer again. The reviewer will run again only after a real source mutation."
-      : "Address any actionable finding. If this is only an unavoidable environment limitation, try final_answer again and report the limitation honestly."
-  }`;
+  const maxNudges = reportIssue ? 2 : review.verdict === "fail" ? 2 : 1;
+  const message = reportIssue
+    ? `[IndependentReview:REPORT_GROUNDING_${reportGrounding.toUpperCase()} r${revision}] ${review.summary}\nRevise only the proposed final summary so every verification, baseline, and pass/fail claim matches the host-recorded evidence. Do not mutate source merely to satisfy this reporting gate. A materially revised summary will be reviewed again on the same source revision.`
+    : `[IndependentReview:${review.verdict.toUpperCase()} r${revision}] ${review.summary}\n${
+        review.verdict === "fail"
+          ? "Fix the concrete issue, re-run relevant verification, inspect the new diff, and then try final_answer again. The semantic reviewer will run again only after a real source mutation."
+          : "Address any actionable semantic finding. If this is only an unavoidable environment limitation, try final_answer again and report the limitation honestly."
+      }`;
   if (previousNudges < maxNudges && !noRoomForAnotherTurn) {
     const nextFlags: TurnFlags = {
       ...flags,
       candidateReviewRevision: revision,
       candidateReviewNudges: previousNudges + 1,
+      ...(reportIssue
+        ? { candidateReviewSummaryFingerprint: summaryFingerprint }
+        : {}),
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
@@ -752,6 +789,7 @@ async function checkCandidateReviewGate(
     opts.saveStateFn();
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
+  if (reportIssue) return { state: { type: "incomplete", message }, flags };
   if (review.verdict === "partial" && !noRoomForAnotherTurn) return undefined;
   return { state: { type: "incomplete", message }, flags };
 }

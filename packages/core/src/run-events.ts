@@ -113,6 +113,7 @@ export type RunEvent =
       readonly type: "candidate.review";
       readonly mutationRevision: number;
       readonly verdict: "pass" | "fail" | "partial";
+      readonly reportGrounding?: "pass" | "fail" | "unknown";
       readonly summary: string;
       readonly modelCalls: number;
       readonly usage?: ModelTokenUsage;
