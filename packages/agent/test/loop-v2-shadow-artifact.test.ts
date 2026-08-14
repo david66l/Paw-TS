@@ -211,6 +211,12 @@ describe("Loop Kernel v2 shadow artifacts", () => {
         ok: true,
         summary: "legacy summary",
       }),
+      envelope(30, {
+        type: "tool.result",
+        tool: "workspace.run_shell",
+        ok: true,
+        summary: "legacy test output",
+      }),
       envelope(40, {
         type: "run.completed",
         status: "incomplete",
@@ -224,6 +230,7 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     expect(artifact.assessment.legacyTerminal?.status).toBe("incomplete");
     expect(artifact.assessment.coverage.gapsByReason).toEqual({
       legacy_evidence_missing_content_identity: 1,
+      legacy_verification_missing_authority_scope: 1,
     });
     expect(() =>
       replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", [

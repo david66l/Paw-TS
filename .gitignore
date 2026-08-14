@@ -76,6 +76,7 @@ benchmarks/swe-exp/runs/
 benchmarks/swe-exp/last-run.json
 benchmarks/swe-compare/preflight/
 benchmarks/swe-compare/runs/
+benchmarks/swe-compare/shadow-reports/
 benchmarks/swe-compare/*.jsonl
 benchmarks/swe-compare/manifests/
 

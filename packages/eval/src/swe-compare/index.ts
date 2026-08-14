@@ -72,6 +72,13 @@ export {
   summarizePawQualification,
   type PawQualificationSummary,
 } from "./qualification.js";
+export {
+  LOOP_V2_SHADOW_SUMMARY_SCHEMA_VERSION,
+  replayPawShadowTraces,
+  type LoopV2ShadowReplayEntryV1,
+  type LoopV2ShadowReplaySummaryV1,
+  type ReplayPawShadowTracesOptions,
+} from "./shadow-replay.js";
 export type {
   SweCompareInstanceManifest,
   SweCompareManifest,

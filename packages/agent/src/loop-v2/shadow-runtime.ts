@@ -575,7 +575,7 @@ function isReadOrSearchTool(tool: string): boolean {
 }
 
 function isDiagnosticTool(tool: string): boolean {
-  return /(?:^|\.)(?:shell|exec|run_command|terminal)$/.test(tool);
+  return /(?:^|\.)(?:run_shell|shell|exec|run_command|terminal)$/.test(tool);
 }
 
 function isRichEvidenceTool(tool: string): boolean {
