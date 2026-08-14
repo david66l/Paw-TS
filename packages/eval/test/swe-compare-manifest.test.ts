@@ -13,6 +13,8 @@ import {
   PAW_FRESH_QUALIFICATION_V5_RUN_IDS,
   PAW_FRESH_QUALIFICATION_V6_RULE,
   PAW_FRESH_QUALIFICATION_V6_RUN_IDS,
+  PAW_FRESH_QUALIFICATION_V7_RULE,
+  PAW_FRESH_QUALIFICATION_V7_RUN_IDS,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
@@ -114,17 +116,23 @@ describe("SWE compare manifest", () => {
     }
   });
 
-  test("selects ten v7 repositories after excluding model runs and Requests", () => {
+  test("selects ten v8 repositories after excluding model runs and Requests", () => {
     expect(PAW_FRESH_QUALIFICATION_V3_RULE.count).toBe(5);
     expect(PAW_FRESH_QUALIFICATION_V4_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V5_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V6_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_V7_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.version).toBe(
-      "paw-fresh-qualification-v7",
+      "paw-fresh-qualification-v8",
     );
     expect(PAW_FRESH_QUALIFICATION_V5_RUN_IDS).toEqual(["sympy__sympy-14024"]);
     expect(PAW_FRESH_QUALIFICATION_V6_RUN_IDS).toEqual(["psf__requests-2317"]);
+    expect(PAW_FRESH_QUALIFICATION_V7_RUN_IDS).toEqual([
+      "django__django-11001",
+      "scikit-learn__scikit-learn-15535",
+      "sympy__sympy-20154",
+    ]);
     expect(PAW_FRESH_QUALIFICATION_RULE.excludedRepos).toEqual([
       "psf/requests",
     ]);
@@ -175,6 +183,16 @@ describe("SWE compare manifest", () => {
       instance_id: PAW_FRESH_QUALIFICATION_V6_RUN_IDS[0],
       repo: "v6-model-run/repo",
     });
+    for (const [
+      index,
+      instanceId,
+    ] of PAW_FRESH_QUALIFICATION_V7_RUN_IDS.entries()) {
+      candidates.push({
+        ...qualifying,
+        instance_id: instanceId,
+        repo: `v7-model-run-${index}/repo`,
+      });
+    }
     candidates.push({
       ...qualifying,
       instance_id: "requests__networked-test",
@@ -219,6 +237,9 @@ describe("SWE compare manifest", () => {
     expect(selected).not.toContain(PAW_FRESH_V2_IDS[0]);
     expect(selected).not.toContain(PAW_FRESH_QUALIFICATION_V5_RUN_IDS[0]);
     expect(selected).not.toContain(PAW_FRESH_QUALIFICATION_V6_RUN_IDS[0]);
+    for (const instanceId of PAW_FRESH_QUALIFICATION_V7_RUN_IDS) {
+      expect(selected).not.toContain(instanceId);
+    }
     expect(selected).not.toContain("requests__networked-test");
     expect(selected).not.toContain("zero-f2p__repo");
     expect(selected).not.toContain("too-small-p2p__repo");

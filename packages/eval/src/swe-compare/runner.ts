@@ -670,6 +670,7 @@ export function compareProtocolMetadataIsValid(
       manifest.selection.ruleVersion === "paw-fresh-qualification-v4" ||
       manifest.selection.ruleVersion === "paw-fresh-qualification-v5" ||
       manifest.selection.ruleVersion === "paw-fresh-qualification-v6" ||
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v7" ||
       manifest.selection.ruleVersion === PAW_FRESH_QUALIFICATION_RULE.version
     : manifest.selection.ruleVersion === "formal-dev-v1";
   return (

@@ -48,7 +48,8 @@ export interface SweCompareManifest {
       | "paw-fresh-qualification-v4"
       | "paw-fresh-qualification-v5"
       | "paw-fresh-qualification-v6"
-      | "paw-fresh-qualification-v7";
+      | "paw-fresh-qualification-v7"
+      | "paw-fresh-qualification-v8";
     readonly purpose:
       | "frozen_paired_dev_diagnostic_not_headline_score"
       | "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score";
