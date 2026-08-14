@@ -203,7 +203,14 @@ function candidateArtifactEvidence(
   candidate?: LoopV2LiveCandidateArtifactV1,
 ): CandidateArtifactEvidenceV2 | undefined {
   const status = candidate?.assessment.artifact.status;
-  if (!candidate || status === "none") return undefined;
+  if (
+    !candidate ||
+    status === "none" ||
+    (!candidate.policy.requireProductMutation &&
+      candidate.assessment.mutationRevision === 0)
+  ) {
+    return undefined;
+  }
   return {
     reconstructible: status === "valid",
     crossCheck: "unavailable",

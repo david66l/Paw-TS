@@ -106,6 +106,7 @@ import {
 } from "@paw/core";
 import {
   type LoopKernelVersion,
+  type LoopV2LegacyTerminalV1,
   type LoopV2LiveCandidateAssessmentV1,
   LoopV2LiveReviewRuntimeV1,
   type LoopV2ShadowObserver,
@@ -225,6 +226,24 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "Current plan:",
   "Note:",
 ];
+
+function loopV2LegacyTerminalFromRunResult(
+  result: RunResult,
+): LoopV2LegacyTerminalV1 {
+  if (
+    result.status !== "completed" &&
+    result.status !== "incomplete" &&
+    result.status !== "failed" &&
+    result.status !== "aborted"
+  ) {
+    throw new Error(`Unsupported loop v2 terminal status: ${result.status}`);
+  }
+  return {
+    status: result.status,
+    ...(result.outcome ? { outcome: result.outcome } : {}),
+    ...(result.completionReason ? { reasonCode: result.completionReason } : {}),
+  };
+}
 
 function providerProtocolRecoveryMessageV2(
   issue: "empty_response" | "truncated_response" | "missing_tool_calls",
@@ -719,6 +738,7 @@ export class AgentOrchestrator {
     let emitRunMetrics:
       | ((status: "completed" | "failed" | "aborted") => void)
       | undefined;
+    let persistLoopV2Terminal: ((result: RunResult) => void) | undefined;
 
     try {
       // 阶段 1：初始化（记忆检索、system prompt 构建、MCP 连接等）
@@ -743,6 +763,15 @@ export class AgentOrchestrator {
         taskState,
       } = init;
       emitRunMetrics = _emitRunMetrics;
+      persistLoopV2Terminal = (result) => {
+        try {
+          init?.persistLoopV2Terminal?.(
+            loopV2LegacyTerminalFromRunResult(result),
+          );
+        } catch {
+          // Dual calculation remains diagnostic until the authority cutover.
+        }
+      };
       const signal = spec.abortSignal;
 
       // 创建 AgentGroup 用于管理子 Agent
@@ -861,9 +890,11 @@ export class AgentOrchestrator {
               message,
             },
           );
+          const runResult = { runId, status: "aborted", message } as const;
+          persistLoopV2Terminal(runResult);
           emit({ type: "run.completed", status: "aborted", message });
           emitRunMetrics("aborted");
-          return { runId, status: "aborted", message };
+          return runResult;
         }
 
         // 构造当前轮次的上下文对象（PhaseContext）
@@ -1033,6 +1064,7 @@ export class AgentOrchestrator {
             };
           }
 
+          persistLoopV2Terminal(runResult);
           emit({
             type: "run.completed",
             status: runResult.status,
@@ -1099,6 +1131,7 @@ export class AgentOrchestrator {
         taskState,
         { status: "incomplete", message: runResult.message },
       );
+      persistLoopV2Terminal(runResult);
       emit({
         type: "run.completed",
         status: "incomplete",
@@ -1157,12 +1190,14 @@ export class AgentOrchestrator {
             message,
           },
         );
+        const runResult: RunResult = { runId, status, message };
+        persistLoopV2Terminal?.(runResult);
         if (!aborted) {
           emit({ type: "run.failed", message });
         }
         emit({ type: "run.completed", status, message });
         emitRunMetrics?.(status);
-        return { runId, status, message };
+        return runResult;
       }
       return { runId: spec.runId, status, message };
     } finally {
@@ -3084,6 +3119,7 @@ export class AgentOrchestrator {
     emit: (event: RunEvent) => void;
     observeLoopV2ToolCommit?: (input: LoopV2ShadowToolCommitPortInput) => void;
     reviewLoopV2Candidate?: NonNullable<PhaseContext["reviewLoopV2Candidate"]>;
+    persistLoopV2Terminal?: (legacy: LoopV2LegacyTerminalV1) => void;
     emitRunMetrics: (status: "completed" | "failed" | "aborted") => void;
     seq: { n: number };
     checkpointSeq: { n: number };
@@ -3412,6 +3448,11 @@ export class AgentOrchestrator {
             ...(result.usage ? { usage: result.usage } : {}),
           });
           return result;
+        }
+      : undefined;
+    const persistLoopV2Terminal = loopV2LiveReviewRuntime
+      ? (legacy: LoopV2LegacyTerminalV1) => {
+          loopV2LiveReviewRuntime.persistTerminal(legacy);
         }
       : undefined;
 
@@ -3919,6 +3960,7 @@ export class AgentOrchestrator {
       emit,
       ...(observeLoopV2ToolCommit ? { observeLoopV2ToolCommit } : {}),
       ...(reviewLoopV2Candidate ? { reviewLoopV2Candidate } : {}),
+      ...(persistLoopV2Terminal ? { persistLoopV2Terminal } : {}),
       emitRunMetrics,
       seq,
       checkpointSeq,

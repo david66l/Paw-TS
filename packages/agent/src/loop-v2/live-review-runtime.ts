@@ -32,6 +32,14 @@ import {
   serializeLoopV2LiveReviewClaimV1,
 } from "./live-review-claim.js";
 import {
+  type LoopV2LegacyTerminalV1,
+  type LoopV2LiveTerminalArtifactV1,
+  buildLoopV2LiveTerminalArtifactV1,
+  loopV2LiveTerminalArtifactPath,
+  parseLoopV2LiveTerminalArtifactV1,
+  serializeLoopV2LiveTerminalArtifactV1,
+} from "./live-terminal-artifact.js";
+import {
   type SemanticReviewModelV2,
   type SemanticReviewUsageV2,
   createModelSemanticReviewerV2,
@@ -220,6 +228,35 @@ export class LoopV2LiveReviewRuntimeV1 {
       );
     }
     return { ...result, modelCalls, ...(usage ? { usage } : {}) };
+  }
+
+  /** Persists the non-authoritative v1/v2 terminal comparison and rereads it. */
+  persistTerminal(
+    legacyTerminal: LoopV2LegacyTerminalV1,
+  ): LoopV2LiveTerminalArtifactV1 {
+    const artifact = buildLoopV2LiveTerminalArtifactV1({
+      runId: this.runId,
+      legacyTerminal,
+      ...(this.candidate ? { candidate: this.candidate } : {}),
+      ...(this.review ? { review: this.review } : {}),
+    });
+    const artifactPath = loopV2LiveTerminalArtifactPath(
+      this.workspaceRoot,
+      this.runId,
+    );
+    atomicWrite(
+      artifactPath,
+      serializeLoopV2LiveTerminalArtifactV1(
+        artifact,
+        this.candidate,
+        this.review,
+      ),
+    );
+    return parseLoopV2LiveTerminalArtifactV1(
+      fs.readFileSync(artifactPath, "utf8"),
+      this.candidate,
+      this.review,
+    );
   }
 
   private persistClaim(

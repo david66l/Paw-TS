@@ -21,10 +21,12 @@ import {
   loopV2LiveArtifactPath,
   loopV2LiveReviewArtifactPath,
   loopV2LiveReviewClaimPath,
+  loopV2LiveTerminalArtifactPath,
   loopV2ProjectionCheckpointPath,
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2LiveReviewArtifactV1,
   parseLoopV2LiveReviewClaimV1,
+  parseLoopV2LiveTerminalArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
   reviewCandidateOnceV2,
   serializeLoopV2LiveReviewArtifactV1,
@@ -85,6 +87,34 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.status).toBe("completed");
       expect(result.message).toBe("The file contains hello.");
       expect(model.callCount).toBe(2);
+      const candidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(
+          loopV2LiveArtifactPath(workspaceRoot, "v2-provider-natural"),
+          "utf8",
+        ),
+      );
+      expect(
+        parseLoopV2LiveTerminalArtifactV1(
+          fs.readFileSync(
+            loopV2LiveTerminalArtifactPath(
+              workspaceRoot,
+              "v2-provider-natural",
+            ),
+            "utf8",
+          ),
+          candidate,
+        ),
+      ).toMatchObject({
+        legacyTerminal: { status: "completed" },
+        v2Outcome: {
+          executionStatus: "incomplete",
+          candidateStatus: "proposed",
+          localVerification: "not_required",
+          artifactStatus: "none",
+          reasonCode: "semantic_review_missing",
+        },
+        comparison: "legacy_more_permissive",
+      });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -119,8 +149,114 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.message).toContain("ProviderProtocol:empty_response");
       expect(result.message).toContain("recovery exhausted");
       expect(model.callCount).toBe(3);
+      expect(
+        parseLoopV2LiveTerminalArtifactV1(
+          fs.readFileSync(
+            loopV2LiveTerminalArtifactPath(workspaceRoot, "v2-provider-empty"),
+            "utf8",
+          ),
+        ),
+      ).toMatchObject({
+        legacyTerminal: { status: "incomplete" },
+        v2Outcome: {
+          executionStatus: "incomplete",
+          candidateStatus: "none",
+          reasonCode: "max_steps_exhausted_without_final",
+        },
+        comparison: "equal",
+      });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("terminal dual-calculation covers max-step exhaustion and runtime failure", async () => {
+    const exhaustedWorkspace = tempWorkspace("paw-v2-terminal-exhausted-");
+    const failedWorkspace = tempWorkspace("paw-v2-terminal-failed-");
+    fs.writeFileSync(
+      path.join(exhaustedWorkspace, "note.txt"),
+      "hello\n",
+      "utf8",
+    );
+
+    try {
+      const exhausted = await new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: new FakeLanguageModel({
+          responses: [
+            {
+              text: '{"tool":"workspace.read_file","args":{"path":"note.txt"}}',
+              finishReason: "stop",
+            },
+          ],
+        }),
+      }).run({
+        runId: "v2-terminal-exhausted",
+        goal: "Read note.txt.",
+        workspaceRoot: exhaustedWorkspace,
+        maxSteps: 1,
+      });
+      expect(exhausted.status).toBe("incomplete");
+      expect(
+        parseLoopV2LiveTerminalArtifactV1(
+          fs.readFileSync(
+            loopV2LiveTerminalArtifactPath(
+              exhaustedWorkspace,
+              "v2-terminal-exhausted",
+            ),
+            "utf8",
+          ),
+        ),
+      ).toMatchObject({
+        legacyTerminal: {
+          status: "incomplete",
+          outcome: "budget_exhausted",
+          reasonCode: "max_steps_exhausted_without_final",
+        },
+        v2Outcome: {
+          executionStatus: "incomplete",
+          reasonCode: "max_steps_exhausted_without_final",
+        },
+        comparison: "equal",
+      });
+
+      const failed = await new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: new FakeLanguageModel({
+          responses: [{ error: "HTTP 400 terminal fixture" }],
+        }),
+      }).run({
+        runId: "v2-terminal-failed",
+        goal: "Trigger the deterministic provider failure.",
+        workspaceRoot: failedWorkspace,
+        maxSteps: 2,
+      });
+      expect(failed.status).toBe("failed");
+      expect(
+        parseLoopV2LiveTerminalArtifactV1(
+          fs.readFileSync(
+            loopV2LiveTerminalArtifactPath(
+              failedWorkspace,
+              "v2-terminal-failed",
+            ),
+            "utf8",
+          ),
+        ),
+      ).toMatchObject({
+        legacyTerminal: { status: "failed" },
+        v2Outcome: {
+          executionStatus: "failed",
+          reasonCode: "runtime_failed",
+        },
+        comparison: "equal",
+      });
+    } finally {
+      fs.rmSync(exhaustedWorkspace, { recursive: true, force: true });
+      fs.rmSync(failedWorkspace, { recursive: true, force: true });
     }
   });
 
@@ -171,6 +307,21 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         abortSignal: abort.signal,
       });
       expect(interrupted.status).toBe("aborted");
+      expect(
+        parseLoopV2LiveTerminalArtifactV1(
+          fs.readFileSync(
+            loopV2LiveTerminalArtifactPath(workspaceRoot, runId),
+            "utf8",
+          ),
+        ),
+      ).toMatchObject({
+        legacyTerminal: { status: "aborted" },
+        v2Outcome: {
+          executionStatus: "aborted",
+          reasonCode: "user_aborted",
+        },
+        comparison: "equal",
+      });
 
       const checkpoint = parseLoopV2ProjectionCheckpointV1(
         fs.readFileSync(
@@ -386,6 +537,31 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         fs.existsSync(loopV2LiveReviewClaimPath(workspaceRoot, runId)),
       ).toBeTrue();
       expect(persistedReview.record.review.verdict).toBe("pass");
+      expect(
+        parseLoopV2LiveTerminalArtifactV1(
+          fs.readFileSync(
+            loopV2LiveTerminalArtifactPath(workspaceRoot, runId),
+            "utf8",
+          ),
+          candidate,
+          persistedReview,
+        ),
+      ).toMatchObject({
+        legacyTerminal: {
+          status: "completed",
+          outcome: "verified",
+          reasonCode: "tests_passed",
+        },
+        v2Outcome: {
+          executionStatus: "completed",
+          candidateStatus: "certified",
+          localVerification: "passed",
+          externalVerification: "not_configured",
+          artifactStatus: "valid",
+          reasonCode: "candidate_certified",
+        },
+        comparison: "equal",
+      });
       expect(
         events.find((event) => event.event.type === "candidate.review")?.event,
       ).toMatchObject({
