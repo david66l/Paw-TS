@@ -108,6 +108,7 @@ export {
 } from "./semantic-reviewer.js";
 export {
   createLoopV2ShadowObserver,
+  restoreLoopV2ProjectionObserver,
   type LegacyRunEventEnvelopeV1,
   type LoopV2ShadowCoverage,
   type LoopV2ShadowDiagnostic,

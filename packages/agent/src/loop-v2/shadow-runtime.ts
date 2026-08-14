@@ -159,17 +159,28 @@ export type LoopV2ShadowToolCommitPortInput = Omit<
  */
 export function createLoopV2ShadowObserver(
   runId: string,
+  seed?: LoopV2ShadowReport,
 ): LoopV2ShadowObserver {
   if (!runId.trim()) throw new Error("Loop v2 shadow runId must not be empty");
+  if (seed && seed.runId !== runId) {
+    throw new Error(`Loop v2 seed run mismatch: ${seed.runId} != ${runId}`);
+  }
 
-  let sourceThroughSeq = 0;
-  let state = createWorkingDecisionStateV2(runId);
-  const projectedEvents: LoopV2Envelope[] = [];
-  const diagnostics: LoopV2ShadowDiagnostic[] = [];
-  const artifactBlobs = new Map<string, ArtifactContentBlobV2>();
+  let sourceThroughSeq = seed?.sourceThroughSeq ?? 0;
+  let state = seed?.state ?? createWorkingDecisionStateV2(runId);
+  const projectedEvents: LoopV2Envelope[] = seed
+    ? [...seed.projectedEvents]
+    : [];
+  const diagnostics: LoopV2ShadowDiagnostic[] = seed
+    ? [...seed.diagnostics]
+    : [];
+  const artifactBlobs = new Map<string, ArtifactContentBlobV2>(
+    seed?.artifactBlobs.map((blob) => [blob.ref, blob]) ?? [],
+  );
   const sourceTimestamps = new Map<number, number>();
   const consumedToolCommits = new Set<number>();
-  let legacyTerminal: LoopV2ShadowLegacyTerminal | undefined;
+  let legacyTerminal: LoopV2ShadowLegacyTerminal | undefined =
+    seed?.legacyTerminal;
 
   const record = (
     envelope: LegacyRunEventEnvelopeV1,
@@ -184,7 +195,7 @@ export function createLoopV2ShadowObserver(
     });
   };
 
-  return {
+  const observer: LoopV2ShadowObserver = {
     observe(envelope) {
       if (envelope.runId !== runId) {
         throw new Error(
@@ -491,6 +502,17 @@ export function createLoopV2ShadowObserver(
       };
     },
   };
+  if (seed && observer.snapshot().reportHash !== seed.reportHash) {
+    throw new Error("Loop v2 restored observer does not match seed report");
+  }
+  return observer;
+}
+
+/** Restore only from a report that has already passed strict artifact parse. */
+export function restoreLoopV2ProjectionObserver(
+  report: LoopV2ShadowReport,
+): LoopV2ShadowObserver {
+  return createLoopV2ShadowObserver(report.runId, report);
 }
 
 function normalizeLegacyRunStatus(

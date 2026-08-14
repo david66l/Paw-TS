@@ -117,6 +117,7 @@ import {
   normalizeProviderResponseV2,
   parseLoopV2LiveCandidateArtifactV1,
   resolveLoopKernelVersion,
+  restoreLoopV2ProjectionObserver,
   serializeLoopV2LiveCandidateArtifactV1,
 } from "./loop-v2/index.js";
 
@@ -3054,10 +3055,7 @@ export class AgentOrchestrator {
 
     const seq = { n: 0 };
     const checkpointSeq = { n: 0 };
-    const loopV2Projection: LoopV2ShadowObserver | undefined =
-      this.loopKernelVersion === "v2-shadow" || this.loopKernelVersion === "v2"
-        ? createLoopV2ShadowObserver(runId)
-        : undefined;
+    let loopV2Projection: LoopV2ShadowObserver | undefined;
     this._lastLoopV2ShadowReport = undefined;
     this._lastLoopV2CandidateAssessment = undefined;
     if (spec.resumeFromState) {
@@ -3082,6 +3080,33 @@ export class AgentOrchestrator {
       } catch {
         // Checkpoint discovery is best-effort; tool execution remains usable
         // even when old rollback metadata is unreadable.
+      }
+    }
+    if (
+      this.loopKernelVersion === "v2-shadow" ||
+      this.loopKernelVersion === "v2"
+    ) {
+      const liveArtifactPath = loopV2LiveArtifactPath(workspaceRoot, runId);
+      if (
+        this.loopKernelVersion === "v2" &&
+        spec.resumeFromState &&
+        fs.existsSync(liveArtifactPath)
+      ) {
+        const persisted = parseLoopV2LiveCandidateArtifactV1(
+          fs.readFileSync(liveArtifactPath, "utf8"),
+        );
+        if (persisted.report.runId !== runId) {
+          throw new Error("Loop v2 resume artifact runId mismatch");
+        }
+        if (persisted.report.sourceThroughSeq > seq.n) {
+          throw new Error(
+            `Loop v2 resume artifact is ahead of legacy events: ${persisted.report.sourceThroughSeq} > ${seq.n}`,
+          );
+        }
+        loopV2Projection = restoreLoopV2ProjectionObserver(persisted.report);
+        this._lastLoopV2CandidateAssessment = persisted.assessment;
+      } else {
+        loopV2Projection = createLoopV2ShadowObserver(runId);
       }
     }
 

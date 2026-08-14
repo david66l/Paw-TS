@@ -11,6 +11,7 @@ import {
   createLoopV2ShadowObserver,
   evaluateCandidateReadinessV2,
   materializeCandidateArtifactV2,
+  restoreLoopV2ProjectionObserver,
 } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
@@ -23,6 +24,38 @@ function legacyEnvelope(
 }
 
 describe("Loop Kernel v2 shadow migration", () => {
+  test("strict projection restore preserves the report and accepts later source seq", () => {
+    const original = createLoopV2ShadowObserver("shadow-restore");
+    original.observe(
+      legacyEnvelope(
+        1,
+        { type: "run.started", goal: "Inspect without mutation" },
+        "shadow-restore",
+      ),
+    );
+    original.observe(
+      legacyEnvelope(
+        2,
+        {
+          type: "agent.action",
+          action: { type: "final_answer", summary: "wording is not identity" },
+        },
+        "shadow-restore",
+      ),
+    );
+    const before = original.snapshot();
+    const restored = restoreLoopV2ProjectionObserver(before);
+
+    expect(restored.snapshot()).toEqual(before);
+    restored.observe(
+      legacyEnvelope(9, { type: "phase", name: "model" }, "shadow-restore"),
+    );
+    expect(restored.snapshot()).toMatchObject({
+      sourceThroughSeq: 9,
+      stateHash: before.stateHash,
+    });
+  });
+
   test("rich read facts project exact coverage while repeated spans stay non-progress", () => {
     const observer = createLoopV2ShadowObserver("shadow-r19");
     observer.observe(
