@@ -72,7 +72,7 @@ export function buildLoopV2ShadowArtifactV1(
   report: LoopV2ShadowReport,
   policy: CandidateReadinessPolicyV2 = {},
 ): LoopV2ShadowArtifactV1 {
-  assertShadowReportIntegrity(report);
+  assertLoopV2ShadowReportIntegrity(report);
   const normalizedPolicy = normalizePolicy(policy);
   const assessment = assessLoopV2ShadowReportV1(report, normalizedPolicy);
   const withoutHash = {
@@ -231,7 +231,7 @@ export function assertLoopV2ShadowArtifactV1(
     throw new Error("Invalid loop v2 shadow artifact kind");
   }
   const report = record.report as LoopV2ShadowReport;
-  assertShadowReportIntegrity(report);
+  assertLoopV2ShadowReportIntegrity(report);
   const policy = asRecord(record.policy, "artifact policy");
   const expected = buildLoopV2ShadowArtifactV1(
     report,
@@ -293,7 +293,9 @@ function normalizePolicy(
   };
 }
 
-function assertShadowReportIntegrity(report: LoopV2ShadowReport): void {
+export function assertLoopV2ShadowReportIntegrity(
+  report: LoopV2ShadowReport,
+): void {
   const record = asRecord(report, "report");
   if (typeof record.runId !== "string" || !record.runId.trim()) {
     throw new Error("Loop v2 shadow report runId is missing");

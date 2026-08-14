@@ -3,12 +3,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { FileSystemAppStateStore, FileSystemSessionStore } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
+import type { ToolEffectPolicy } from "../src/execution-policy.js";
 import {
   type LoopV2LiveCandidateAssessmentV1,
   loopV2LiveArtifactPath,
+  loopV2ProjectionCheckpointPath,
   parseLoopV2LiveCandidateArtifactV1,
+  parseLoopV2ProjectionCheckpointV1,
 } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
@@ -82,6 +86,121 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.message).toContain("ProviderProtocol:empty_response");
       expect(result.message).toContain("recovery exhausted");
       expect(model.callCount).toBe(3);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("resume restores pre-candidate rich commits from the latest projection checkpoint", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-projection-resume-");
+    const runId = "v2-projection-resume";
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const appStateStore = new FileSystemAppStateStore({
+      statesDir: path.join(workspaceRoot, ".paw", "states"),
+    });
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot });
+    const abort = new AbortController();
+    const effectPolicy: ToolEffectPolicy = {
+      appliesTo: ({ tool }) => tool === "workspace.run_shell",
+      prepare: () => undefined,
+      settle: ({ result }) => ({
+        allowed: true as const,
+        result: {
+          ...result,
+          payload: {
+            ...(result.payload as Record<string, unknown>),
+            workspaceEffect: { changed: false, paths: [] },
+          },
+        },
+      }),
+    };
+
+    try {
+      const first = new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: new FakeLanguageModel({
+          responses: [
+            {
+              text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+              finishReason: "stop",
+            },
+          ],
+        }),
+        appStateStore,
+        sessionStore,
+        onEvent(envelope) {
+          if (envelope.event.type === "tool.result") abort.abort();
+        },
+      });
+      const interrupted = await first.run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 5,
+        abortSignal: abort.signal,
+      });
+      expect(interrupted.status).toBe("aborted");
+
+      const checkpoint = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
+          "utf8",
+        ),
+      );
+      expect(checkpoint.report.state.currentMutationRevision).toBe(1);
+      expect(checkpoint.report.state.currentCandidate).toBeUndefined();
+      const tampered = JSON.parse(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
+          "utf8",
+        ),
+      ) as { report: { state: { currentMutationRevision: number } } };
+      tampered.report.state.currentMutationRevision = 2;
+      expect(() =>
+        parseLoopV2ProjectionCheckpointV1(JSON.stringify(tampered)),
+      ).toThrow("projected state mismatch");
+      expect(
+        fs.existsSync(loopV2LiveArtifactPath(workspaceRoot, runId)),
+      ).toBeFalse();
+
+      const resumed = new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: new FakeLanguageModel({
+          responses: [
+            {
+              text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+              finishReason: "stop",
+            },
+            { text: "The resumed change is verified.", finishReason: "stop" },
+          ],
+        }),
+        appStateStore,
+        sessionStore,
+        toolEffectPolicy: effectPolicy,
+      });
+      const result = await resumed.resumeRun({ runId, workspaceRoot });
+      expect(result.status).toBe("completed");
+      expect(resumed.getLastLoopV2CandidateAssessment()).toMatchObject({
+        facts: { evidence: 0, mutations: 1, verification: 1 },
+        readiness: {
+          disposition: "ready_for_review",
+          readyForSemanticReview: true,
+          gaps: [],
+        },
+      });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }

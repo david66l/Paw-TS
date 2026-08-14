@@ -111,14 +111,18 @@ import {
   type LoopV2ShadowReport,
   type LoopV2ShadowToolCommitPortInput,
   buildLoopV2LiveCandidateArtifactV1,
+  buildLoopV2ProjectionCheckpointV1,
   createLoopV2ShadowObserver,
   createProviderTerminalStateV2,
   loopV2LiveArtifactPath,
+  loopV2ProjectionCheckpointPath,
   normalizeProviderResponseV2,
   parseLoopV2LiveCandidateArtifactV1,
+  parseLoopV2ProjectionCheckpointV1,
   resolveLoopKernelVersion,
   restoreLoopV2ProjectionObserver,
   serializeLoopV2LiveCandidateArtifactV1,
+  serializeLoopV2ProjectionCheckpointV1,
 } from "./loop-v2/index.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -3087,24 +3091,61 @@ export class AgentOrchestrator {
       this.loopKernelVersion === "v2"
     ) {
       const liveArtifactPath = loopV2LiveArtifactPath(workspaceRoot, runId);
-      if (
-        this.loopKernelVersion === "v2" &&
-        spec.resumeFromState &&
-        fs.existsSync(liveArtifactPath)
-      ) {
-        const persisted = parseLoopV2LiveCandidateArtifactV1(
-          fs.readFileSync(liveArtifactPath, "utf8"),
+      const projectionCheckpointPath = loopV2ProjectionCheckpointPath(
+        workspaceRoot,
+        runId,
+      );
+      if (this.loopKernelVersion === "v2" && spec.resumeFromState) {
+        const candidateArtifact = fs.existsSync(liveArtifactPath)
+          ? parseLoopV2LiveCandidateArtifactV1(
+              fs.readFileSync(liveArtifactPath, "utf8"),
+            )
+          : undefined;
+        const projectionCheckpoint = fs.existsSync(projectionCheckpointPath)
+          ? parseLoopV2ProjectionCheckpointV1(
+              fs.readFileSync(projectionCheckpointPath, "utf8"),
+            )
+          : undefined;
+        const reports = [
+          candidateArtifact?.report,
+          projectionCheckpoint?.report,
+        ].filter(
+          (report): report is LoopV2ShadowReport => report !== undefined,
         );
-        if (persisted.report.runId !== runId) {
-          throw new Error("Loop v2 resume artifact runId mismatch");
+        for (const report of reports) {
+          if (report.runId !== runId) {
+            throw new Error("Loop v2 resume artifact runId mismatch");
+          }
+          if (report.sourceThroughSeq > seq.n) {
+            throw new Error(
+              `Loop v2 resume artifact is ahead of legacy events: ${report.sourceThroughSeq} > ${seq.n}`,
+            );
+          }
         }
-        if (persisted.report.sourceThroughSeq > seq.n) {
+        if (
+          candidateArtifact &&
+          projectionCheckpoint &&
+          candidateArtifact.report.sourceThroughSeq ===
+            projectionCheckpoint.report.sourceThroughSeq &&
+          candidateArtifact.report.reportHash !==
+            projectionCheckpoint.report.reportHash
+        ) {
           throw new Error(
-            `Loop v2 resume artifact is ahead of legacy events: ${persisted.report.sourceThroughSeq} > ${seq.n}`,
+            "Loop v2 resume artifacts conflict at the same source seq",
           );
         }
-        loopV2Projection = restoreLoopV2ProjectionObserver(persisted.report);
-        this._lastLoopV2CandidateAssessment = persisted.assessment;
+        const restoredReport = reports.sort(
+          (left, right) => right.sourceThroughSeq - left.sourceThroughSeq,
+        )[0];
+        loopV2Projection = restoredReport
+          ? restoreLoopV2ProjectionObserver(restoredReport)
+          : createLoopV2ShadowObserver(runId);
+        if (
+          restoredReport &&
+          candidateArtifact?.report.reportHash === restoredReport.reportHash
+        ) {
+          this._lastLoopV2CandidateAssessment = candidateArtifact.assessment;
+        }
       } else {
         loopV2Projection = createLoopV2ShadowObserver(runId);
       }
@@ -3260,6 +3301,22 @@ export class AgentOrchestrator {
       ? (input: LoopV2ShadowToolCommitPortInput) => {
           try {
             loopV2Projection.observeToolCommit({ ...input, sourceSeq: seq.n });
+            if (this.loopKernelVersion === "v2") {
+              const checkpoint = buildLoopV2ProjectionCheckpointV1(
+                loopV2Projection.snapshot(),
+              );
+              const checkpointPath = loopV2ProjectionCheckpointPath(
+                workspaceRoot,
+                runId,
+              );
+              atomicWrite(
+                checkpointPath,
+                serializeLoopV2ProjectionCheckpointV1(checkpoint),
+              );
+              parseLoopV2ProjectionCheckpointV1(
+                fs.readFileSync(checkpointPath, "utf8"),
+              );
+            }
           } catch (error) {
             if (this.loopKernelVersion === "v2") throw error;
             // Rich shadow capture is diagnostic-only while v1 is authoritative.

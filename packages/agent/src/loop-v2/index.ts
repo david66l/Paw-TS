@@ -59,6 +59,15 @@ export {
   type LoopV2LiveCandidateArtifactV1,
 } from "./live-artifact.js";
 export {
+  LOOP_V2_PROJECTION_CHECKPOINT_SCHEMA_VERSION,
+  assertLoopV2ProjectionCheckpointV1,
+  buildLoopV2ProjectionCheckpointV1,
+  loopV2ProjectionCheckpointPath,
+  parseLoopV2ProjectionCheckpointV1,
+  serializeLoopV2ProjectionCheckpointV1,
+  type LoopV2ProjectionCheckpointV1,
+} from "./live-checkpoint.js";
+export {
   evidenceFingerprint,
   extendReadCoverage,
   readCoverageKey,
@@ -123,6 +132,7 @@ export {
   type LoopV2ShadowLegacyTerminal,
 } from "./shadow-runtime.js";
 export {
+  assertLoopV2ShadowReportIntegrity,
   assertLoopV2ShadowArtifactV1,
   assessLoopV2ShadowReportV1,
   buildLoopV2ShadowArtifactV1,
