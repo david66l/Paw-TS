@@ -503,12 +503,22 @@ interface MutationJournalEntryV2 {
   readonly paths: readonly string[];
   readonly beforeHashes: Readonly<Record<string, string | null>>;
   readonly afterHashes: Readonly<Record<string, string | null>>;
+  readonly beforeContentRefs: Readonly<Record<string, string | null>>;
+  readonly afterContentRefs: Readonly<Record<string, string | null>>;
   readonly patch: string;
   readonly workspaceEffect: "product" | "test" | "control" | "unknown";
 }
 ```
 
-最终 patch 从 journal 顺序重放/合并产生；Git diff 用于检测 journal 漏记、外部写入或基线漂移。Git 超时不能把已有 journal 候选变为空 patch，但 cross-check 不一致必须标记 artifact invalid，不能静默接受。
+`patch` 必须是本次 mutation 的完整、未截断 delta，不能复用 UI/tool-result 中为展示而截到 2048 字符的 diff。`beforeContentRefs/afterContentRefs` 指向 host 在 exclusive barrier 内保存的不可变原始内容；文件不存在用 `null`，内容引用解析出的 bytes 必须与同路径 hash 一致。未知写路径的 shell/sub-agent 只有在 after-effect audit 枚举并捕获全部实际变化后才能形成可重建 journal，否则候选 artifact 为 invalid，不能因工具返回 `ok` 猜测完整。
+
+最终标准 unified diff 不通过串接多个 step delta 产生：对每个路径取 journal 中最早的 before content 与最后的 after content，验证中间相邻 revision 的 after hash 等于下一次 before hash，再由纯 materializer 生成一次 baseline→terminal diff。这样同一文件多次编辑、新建、删除和回改都只产生一个可应用的最终文件 patch。Git diff 仅用于检测 journal 漏记、外部写入或基线漂移；Git 超时不能把已有 journal 候选变为空 patch，但 cross-check 不一致必须标记 artifact invalid，不能静默接受。
+
+### 13.1 2026-08-15 实现前证据修订
+
+只读审计现有 Paw 路径确认，`packages/workspace/src/files/write.ts` 的 `computeDiffStats()` 对 write/edit diff 固定 `.slice(0, 2048)`；`apply_patch` 的完整输入虽在 tool call 中，但它是相对于当时 workspace 的单步 delta；checkpoint 只保存 mutation 前文件，`run_shell` 仅存 shell metadata。旧 SWE recovery 因此只敢重放 exact `edit_file`，遇到 write/apply_patch/notebook/sub-agent/shell 就拒绝自动恢复。这证明原先只列 `beforeHashes/afterHashes/patch` 的接口不足以兑现 R14 的“Git 不是产物单点”，不是实现便利问题。
+
+因此 schema 在尚未进入 v2-shadow、没有生产 v2 event log 的阶段补充 content refs，并把“full step delta + immutable before/after contents + continuity check”冻结为 artifact invariant。content blob 可由外围 artifact store 保存，kernel/projector 只持引用与 hash；模型上下文不自动注入全文。该修订不授权读取 benchmark gold/test patch，也不允许为特定题选择恢复路径。
 
 ## 14. 兼容与迁移
 
