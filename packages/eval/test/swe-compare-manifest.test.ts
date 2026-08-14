@@ -5,9 +5,12 @@ import path from "node:path";
 
 import { buildSweCompareGoal } from "../src/swe-compare/goal.js";
 import {
+  PAW_FRESH_DEVELOPMENT_RULE,
+  PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
   createSweCompareManifest,
   findLocalTrajectoryHits,
+  selectPawFreshDevelopmentIds,
 } from "../src/swe-compare/manifest.js";
 import {
   PREFLIGHT_SENTINEL_PATCH,
@@ -39,6 +42,59 @@ describe("SWE compare manifest", () => {
     expect(PAW_SEEN_DEVELOPMENT_IDS).toContain("pylint-dev__pylint-7228");
     expect(PAW_SEEN_DEVELOPMENT_IDS).toContain("pydata__xarray-4493");
     expect(PAW_SEEN_DEVELOPMENT_IDS).toContain("matplotlib__matplotlib-25332");
+  });
+
+  test("selects five fresh repositories deterministically without task text", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-fresh-selection-"));
+    const datasetPath = path.join(
+      root,
+      "benchmarks",
+      "swe-bench",
+      "swe-bench-lite.jsonl",
+    );
+    mkdirSync(path.dirname(datasetPath), { recursive: true });
+    const candidates = Array.from({ length: 7 }, (_, index) => ({
+      ...instance,
+      instance_id: `fresh-${index}__repo-${index}`,
+      repo: `fresh-${index}/repo`,
+      base_commit: `base-${index}`,
+      problem_statement:
+        index % 2 === 0 ? "apparently easy" : "apparently difficult",
+    }));
+    candidates.push({ ...instance, instance_id: PAW_SEEN_DEVELOPMENT_IDS[0] });
+    writeFileSync(
+      datasetPath,
+      `${candidates.map((item) => JSON.stringify(item)).join("\n")}\n`,
+      "utf8",
+    );
+    const selected = selectPawFreshDevelopmentIds({
+      repoRoot: root,
+      datasetPath,
+    });
+    expect(selected).toHaveLength(PAW_FRESH_DEVELOPMENT_RULE.count);
+    expect(
+      new Set(
+        selected.map(
+          (id) => candidates.find((item) => item.instance_id === id)?.repo,
+        ),
+      ).size,
+    ).toBe(PAW_FRESH_DEVELOPMENT_RULE.count);
+    expect(selected).not.toContain(PAW_SEEN_DEVELOPMENT_IDS[0]);
+    expect(PAW_KNOWN_EXPOSED_IDS).toContain(PAW_SEEN_DEVELOPMENT_IDS[0]);
+
+    writeFileSync(
+      datasetPath,
+      `${[...candidates]
+        .reverse()
+        .map((item) =>
+          JSON.stringify({ ...item, problem_statement: "changed after sort" }),
+        )
+        .join("\n")}\n`,
+      "utf8",
+    );
+    expect(
+      selectPawFreshDevelopmentIds({ repoRoot: root, datasetPath }),
+    ).toEqual(selected);
   });
   test("uses one provider-neutral goal without leaking gold", () => {
     const goal = buildSweCompareGoal({

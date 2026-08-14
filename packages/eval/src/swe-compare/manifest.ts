@@ -48,6 +48,20 @@ export const PAW_SEEN_DEVELOPMENT_IDS = [
   "matplotlib__matplotlib-25332",
 ] as const;
 
+export const PAW_FRESH_DEVELOPMENT_RULE = {
+  version: "paw-fresh-dev-v2" as const,
+  seed: "paw-fresh-dev-v2",
+  count: 5,
+  minFailToPass: 1,
+  maxFailToPass: 20,
+  minPassToPass: 5,
+  maxPassToPass: 500,
+} as const;
+
+export const PAW_KNOWN_EXPOSED_IDS: readonly string[] = [
+  ...new Set([...SWE_COMPARE_SEEN_EXCLUSIONS, ...PAW_SEEN_DEVELOPMENT_IDS]),
+];
+
 function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -131,6 +145,8 @@ export function createSweCompareManifest(opts: {
   readonly instanceIds?: readonly string[];
   readonly now?: () => Date;
   readonly mode?: "formal-paired" | "paw-seen-development";
+  readonly pawDevelopmentRuleVersion?: "paw-seen-dev-v1" | "paw-fresh-dev-v2";
+  readonly excludedSeenIds?: readonly string[];
 }): SweCompareManifest {
   const pawSeenDevelopment = opts.mode === "paw-seen-development";
   const datasetPath = opts.datasetPath ?? defaultLiteJsonl(opts.repoRoot);
@@ -207,12 +223,16 @@ export function createSweCompareManifest(opts: {
       sha256: sha256(datasetBuffer),
     },
     selection: {
-      ruleVersion: pawSeenDevelopment ? "paw-seen-dev-v1" : "formal-dev-v1",
+      ruleVersion: pawSeenDevelopment
+        ? (opts.pawDevelopmentRuleVersion ?? "paw-seen-dev-v1")
+        : "formal-dev-v1",
       purpose: pawSeenDevelopment
         ? "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score"
         : "frozen_paired_dev_diagnostic_not_headline_score",
       ids,
-      excludedSeenIds: pawSeenDevelopment ? [] : SWE_COMPARE_SEEN_EXCLUSIONS,
+      excludedSeenIds: pawSeenDevelopment
+        ? (opts.excludedSeenIds ?? [])
+        : SWE_COMPARE_SEEN_EXCLUSIONS,
     },
     sourceTree: {
       gitCommit: commandText("git", ["rev-parse", "HEAD"], opts.repoRoot),
@@ -251,6 +271,68 @@ export function createPawSeenDevelopmentManifest(opts: {
     ...opts,
     instanceIds: PAW_SEEN_DEVELOPMENT_IDS,
     mode: "paw-seen-development",
+  });
+}
+
+/**
+ * Freeze fresh Paw-only development tasks without reading their problem text
+ * or gold patches for selection. A salted hash makes ordering deterministic;
+ * the metadata bounds keep the official verifier operationally feasible.
+ */
+export function selectPawFreshDevelopmentIds(opts: {
+  readonly repoRoot: string;
+  readonly datasetPath?: string;
+}): string[] {
+  const datasetPath = opts.datasetPath ?? defaultLiteJsonl(opts.repoRoot);
+  const knownIds = new Set(PAW_KNOWN_EXPOSED_IDS);
+  const rule = PAW_FRESH_DEVELOPMENT_RULE;
+  const candidates = loadLiteInstances(datasetPath)
+    .filter((instance) => {
+      const failToPass = instance.FAIL_TO_PASS?.length ?? 0;
+      const passToPass = instance.PASS_TO_PASS?.length ?? 0;
+      return (
+        !knownIds.has(instance.instance_id) &&
+        failToPass >= rule.minFailToPass &&
+        failToPass <= rule.maxFailToPass &&
+        passToPass >= rule.minPassToPass &&
+        passToPass <= rule.maxPassToPass
+      );
+    })
+    .map((instance) => ({
+      instance,
+      rank: sha256(`${rule.seed}\0${instance.instance_id}`),
+    }))
+    .sort(
+      (a, b) =>
+        a.rank.localeCompare(b.rank) ||
+        a.instance.instance_id.localeCompare(b.instance.instance_id),
+    );
+  const selected: string[] = [];
+  const selectedRepos = new Set<string>();
+  for (const { instance } of candidates) {
+    if (selectedRepos.has(instance.repo)) continue;
+    if (findLocalTrajectoryHits(opts.repoRoot, instance.instance_id).length > 0)
+      continue;
+    selected.push(instance.instance_id);
+    selectedRepos.add(instance.repo);
+    if (selected.length === rule.count) return selected;
+  }
+  throw new Error(
+    `only ${selected.length}/${rule.count} fresh cross-repository SWE-bench tasks satisfy paw-fresh-dev-v2`,
+  );
+}
+
+export function createPawFreshDevelopmentManifest(opts: {
+  readonly repoRoot: string;
+  readonly datasetPath?: string;
+  readonly now?: () => Date;
+}): SweCompareManifest {
+  return createSweCompareManifest({
+    ...opts,
+    instanceIds: selectPawFreshDevelopmentIds(opts),
+    mode: "paw-seen-development",
+    pawDevelopmentRuleVersion: PAW_FRESH_DEVELOPMENT_RULE.version,
+    excludedSeenIds: PAW_KNOWN_EXPOSED_IDS,
   });
 }
 

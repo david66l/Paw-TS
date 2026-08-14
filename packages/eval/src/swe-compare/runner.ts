@@ -662,9 +662,12 @@ export function validateCompareRun(
     );
   }
   const seenDevelopment = manifest.protocol === "paw-only-seen-development";
+  const validRule = seenDevelopment
+    ? manifest.selection.ruleVersion === "paw-seen-dev-v1" ||
+      manifest.selection.ruleVersion === "paw-fresh-dev-v2"
+    : manifest.selection.ruleVersion === "formal-dev-v1";
   if (
-    manifest.selection.ruleVersion !==
-      (seenDevelopment ? "paw-seen-dev-v1" : "formal-dev-v1") ||
+    !validRule ||
     manifest.selection.purpose !==
       (seenDevelopment
         ? "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score"

@@ -58,3 +58,20 @@ bun run packages/eval/scripts/run-swe-compare.ts \
 recomputing a patch that already has `patchSource=paw_trace_edit_replay` (for
 example after fixing replay compatibility). It refuses to overwrite workspace,
 Claude, or manually sourced patches.
+
+## Paw-only fresh development set
+
+`paw-fresh-dev-v2` freezes five task IDs that have no known local Paw
+trajectory. Selection never reads problem text or gold: it excludes every
+known exposed ID, applies public F2P/P2P count bounds, sorts by a fixed salted
+SHA-256 of the instance ID, and takes at most one task per repository. Once
+run, these tasks become seen development evidence and are never promoted to a
+holdout or headline score.
+
+```bash
+bun run packages/eval/scripts/prepare-paw-fresh-dev.ts
+bun run packages/eval/scripts/preflight-swe-compare.ts \
+  --manifest paw-fresh-dev-v2.json --instance <frozen-instance-id>
+bun run packages/eval/scripts/run-swe-compare.ts \
+  --manifest paw-fresh-dev-v2.json --instance <frozen-instance-id> --runner paw
+```

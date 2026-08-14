@@ -40,7 +40,10 @@ export interface SweCompareManifest {
     readonly sha256: string;
   };
   readonly selection: {
-    readonly ruleVersion: "formal-dev-v1" | "paw-seen-dev-v1";
+    readonly ruleVersion:
+      | "formal-dev-v1"
+      | "paw-seen-dev-v1"
+      | "paw-fresh-dev-v2";
     readonly purpose:
       | "frozen_paired_dev_diagnostic_not_headline_score"
       | "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score";
