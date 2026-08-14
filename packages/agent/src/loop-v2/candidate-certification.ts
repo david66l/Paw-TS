@@ -222,7 +222,10 @@ export function buildCandidateInputV2(
       .map(normalizeRisk)
       .sort(compareById),
     snapshotHashes: snapshots
-      .map((snapshot) => ({ ...snapshot }))
+      .map((snapshot) => ({
+        path: snapshot.path,
+        contentHash: snapshot.contentHash,
+      }))
       .sort((left, right) => left.path.localeCompare(right.path)),
   };
 }

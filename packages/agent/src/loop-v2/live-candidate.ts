@@ -2,7 +2,10 @@ import type { MaterializedCandidateArtifactV2 } from "./artifact-materializer.js
 import type {
   CandidateReadinessPolicyV2,
   CandidateReadinessV2,
+  CandidateReviewPayloadV2,
 } from "./candidate-certification.js";
+import { buildCandidateReviewPayloadV2 } from "./candidate-certification.js";
+import { materializeTerminalCandidateSnapshotsV2 } from "./candidate-snapshots.js";
 import { sha256Canonical } from "./canonical.js";
 import {
   type LoopV2ShadowArtifactPolicyV1,
@@ -78,4 +81,28 @@ export function assessLoopV2LiveCandidateV1(
     ...withoutHash,
     assessmentHash: sha256Canonical(withoutHash),
   };
+}
+
+/** Strict reviewer payload whose identity must equal the persisted candidate. */
+export function buildLoopV2LiveReviewPayloadV1(
+  report: LoopV2ShadowReport,
+): CandidateReviewPayloadV2 {
+  buildLoopV2ShadowArtifactV1(report);
+  const candidate = report.state.currentCandidate;
+  if (!candidate) {
+    throw new Error("Loop v2 live review payload requires candidate.proposed");
+  }
+  const payload = buildCandidateReviewPayloadV2(
+    report.state,
+    materializeTerminalCandidateSnapshotsV2(report.state, report.artifactBlobs),
+  );
+  if (
+    payload.candidateInputHash !== candidate.candidateInputHash ||
+    payload.input.mutationRevision !== candidate.mutationRevision
+  ) {
+    throw new Error(
+      `Loop v2 live review payload identity mismatch: ${payload.candidateInputHash} != ${candidate.candidateInputHash}`,
+    );
+  }
+  return payload;
 }

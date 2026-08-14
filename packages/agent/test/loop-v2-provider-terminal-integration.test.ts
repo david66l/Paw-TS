@@ -9,6 +9,7 @@ import { FakeLanguageModel } from "@paw/models";
 import type { ToolEffectPolicy } from "../src/execution-policy.js";
 import {
   type LoopV2LiveCandidateAssessmentV1,
+  buildLoopV2LiveReviewPayloadV1,
   loopV2LiveArtifactPath,
   loopV2ProjectionCheckpointPath,
   parseLoopV2LiveCandidateArtifactV1,
@@ -543,6 +544,16 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         fs.readFileSync(artifactPath, "utf8"),
       );
       expect(persisted.assessment).toEqual(captured);
+      const reviewPayload = buildLoopV2LiveReviewPayloadV1(persisted.report);
+      expect(reviewPayload.candidateInputHash).toBe(
+        captured.candidateInputHash,
+      );
+      expect(reviewPayload.snapshots).toEqual([
+        expect.objectContaining({
+          path: "source.txt",
+          content: "after\n",
+        }),
+      ]);
       return captured;
     };
 

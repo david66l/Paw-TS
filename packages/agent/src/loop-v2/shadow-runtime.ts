@@ -8,6 +8,7 @@ import {
   buildCandidateInputV2,
   candidateInputHashV2,
 } from "./candidate-certification.js";
+import { materializeTerminalCandidateSnapshotsV2 } from "./candidate-snapshots.js";
 import { canonicalJson, sha256Canonical } from "./canonical.js";
 import {
   createWorkingDecisionStateV2,
@@ -263,7 +264,9 @@ export function createLoopV2ShadowObserver(
         const proposedAtSeq = projectedEvents.length + 1;
         const input = buildCandidateInputV2(
           state,
-          terminalCandidateSnapshots(state),
+          materializeTerminalCandidateSnapshotsV2(state, [
+            ...artifactBlobs.values(),
+          ]).map(({ path, contentHash }) => ({ path, contentHash })),
         );
         const candidateInputHash = candidateInputHashV2(input);
         const projected: LoopV2Envelope = {
@@ -282,6 +285,19 @@ export function createLoopV2ShadowObserver(
           },
         };
         state = projectLoopV2Event(state, projected).state;
+        const projectedIdentity = candidateInputHashV2(
+          buildCandidateInputV2(
+            state,
+            materializeTerminalCandidateSnapshotsV2(state, [
+              ...artifactBlobs.values(),
+            ]).map(({ path, contentHash }) => ({ path, contentHash })),
+          ),
+        );
+        if (projectedIdentity !== candidateInputHash) {
+          throw new Error(
+            `Loop v2 candidate identity changed during projection: ${candidateInputHash} != ${projectedIdentity}`,
+          );
+        }
         projectedEvents.push(projected);
         record(envelope, "projected", "rich_candidate_projected");
         return;
@@ -524,25 +540,6 @@ function normalizeLegacyRunStatus(
     value === "incomplete"
     ? value
     : "unknown";
-}
-
-function terminalCandidateSnapshots(
-  state: WorkingDecisionStateV2,
-): readonly Readonly<{ path: string; contentHash: string }>[] {
-  const terminalHashes = new Map<string, string | null>();
-  const mutations = Object.values(state.mutations).sort(
-    (left, right) =>
-      left.mutationRevision - right.mutationRevision || left.seq - right.seq,
-  );
-  for (const mutation of mutations) {
-    for (const path of mutation.paths) {
-      terminalHashes.set(path, mutation.afterHashes[path] ?? null);
-    }
-  }
-  return [...terminalHashes]
-    .filter((entry): entry is [string, string] => entry[1] !== null)
-    .map(([path, contentHash]) => ({ path, contentHash }))
-    .sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function classifyLegacyEvent(

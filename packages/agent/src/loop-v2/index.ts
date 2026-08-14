@@ -10,6 +10,7 @@ export {
   type ArtifactTransitionInputV2,
   type MaterializedCandidateArtifactV2,
 } from "./artifact-materializer.js";
+export { materializeTerminalCandidateSnapshotsV2 } from "./candidate-snapshots.js";
 export {
   buildCandidateInputV2,
   buildCandidateReviewPayloadV2,
@@ -47,6 +48,7 @@ export {
 export {
   LOOP_V2_LIVE_CANDIDATE_SCHEMA_VERSION,
   assessLoopV2LiveCandidateV1,
+  buildLoopV2LiveReviewPayloadV1,
   type LoopV2LiveCandidateAssessmentV1,
 } from "./live-candidate.js";
 export {
