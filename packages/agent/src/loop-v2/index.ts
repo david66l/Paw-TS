@@ -98,6 +98,8 @@ export {
   type LoopV2ShadowObserver,
   type LoopV2ShadowReason,
   type LoopV2ShadowReport,
+  type LoopV2ShadowToolCommitInput,
+  type LoopV2ShadowToolCommitPortInput,
 } from "./shadow-runtime.js";
 export {
   executeToolBatchV2,

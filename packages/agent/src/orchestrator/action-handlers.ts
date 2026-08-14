@@ -1228,6 +1228,7 @@ async function handleToolCalls(
     text,
     thinking,
     taskState: ctx.taskState,
+    observeLoopV2ToolCommit: ctx.observeLoopV2ToolCommit,
     saveStateFn: opts.saveStateFn,
     payloadDeduper: ctx.payloadDeduper,
     artifactRegistry: ctx.artifactRegistry,

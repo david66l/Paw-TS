@@ -1,4 +1,9 @@
-import { sha256Canonical } from "./canonical.js";
+import {
+  type ArtifactContentBlobV2,
+  artifactContentHashV2,
+  createArtifactContentBlobV2,
+} from "./artifact-materializer.js";
+import { canonicalJson, sha256Canonical } from "./canonical.js";
 import {
   createWorkingDecisionStateV2,
   decisionStateHash,
@@ -21,6 +26,11 @@ export type LoopV2ShadowReason =
   | "legacy_verification_missing_authority_scope"
   | "legacy_candidate_missing_certification_input"
   | "legacy_compaction_missing_artifact_refs"
+  | "rich_read_projected"
+  | "rich_search_projected"
+  | "rich_tool_failed"
+  | "rich_observation_invalid"
+  | "rich_concurrent_mutation_ambiguous"
   | "non_decision_event";
 
 export interface LoopV2ShadowDiagnostic {
@@ -41,6 +51,7 @@ export interface LoopV2ShadowReport {
   readonly runId: string;
   readonly sourceThroughSeq: number;
   readonly projectedEvents: readonly LoopV2Envelope[];
+  readonly artifactBlobs: readonly ArtifactContentBlobV2[];
   readonly diagnostics: readonly LoopV2ShadowDiagnostic[];
   readonly coverage: LoopV2ShadowCoverage;
   readonly state: WorkingDecisionStateV2;
@@ -50,6 +61,7 @@ export interface LoopV2ShadowReport {
 
 export interface LoopV2ShadowObserver {
   observe(envelope: LegacyRunEventEnvelopeV1): void;
+  observeToolCommit(input: LoopV2ShadowToolCommitInput): void;
   snapshot(): LoopV2ShadowReport;
 }
 
@@ -60,6 +72,28 @@ export interface LegacyRunEventEnvelopeV1 {
   readonly ts: number;
   readonly event: { readonly type: string };
 }
+
+export interface LoopV2ShadowToolCommitInput {
+  readonly sourceSeq: number;
+  readonly callId: string;
+  readonly tool: string;
+  readonly args: unknown;
+  readonly result: Readonly<{
+    readonly ok: boolean;
+    readonly payload: unknown;
+    readonly summary: string;
+  }>;
+  readonly repositoryRevision: string;
+  /** Hash of the complete file version, distinct from the observed span blob. */
+  readonly sourceContentHash?: string;
+  /** A sibling mutation may race a read/search in the legacy parallel batch. */
+  readonly concurrentMutation: boolean;
+}
+
+export type LoopV2ShadowToolCommitPortInput = Omit<
+  LoopV2ShadowToolCommitInput,
+  "sourceSeq"
+>;
 
 /**
  * Observe the legacy loop without inventing facts that its event contract
@@ -77,6 +111,9 @@ export function createLoopV2ShadowObserver(
   let state = createWorkingDecisionStateV2(runId);
   const projectedEvents: LoopV2Envelope[] = [];
   const diagnostics: LoopV2ShadowDiagnostic[] = [];
+  const artifactBlobs = new Map<string, ArtifactContentBlobV2>();
+  const sourceTimestamps = new Map<number, number>();
+  const consumedToolCommits = new Set<number>();
 
   const record = (
     envelope: LegacyRunEventEnvelopeV1,
@@ -107,6 +144,7 @@ export function createLoopV2ShadowObserver(
         );
       }
       sourceThroughSeq = envelope.seq;
+      sourceTimestamps.set(envelope.seq, envelope.ts);
 
       if (envelope.event.type === "run.started") {
         if (state.goal) {
@@ -138,6 +176,82 @@ export function createLoopV2ShadowObserver(
       record(envelope, classification.disposition, classification.reason);
     },
 
+    observeToolCommit(input) {
+      if (input.sourceSeq !== sourceThroughSeq) {
+        throw new Error(
+          `Loop v2 rich tool commit must follow its source event: ${input.sourceSeq} != ${sourceThroughSeq}`,
+        );
+      }
+      if (consumedToolCommits.has(input.sourceSeq)) {
+        throw new Error(
+          `Loop v2 rich tool commit already consumed source ${input.sourceSeq}`,
+        );
+      }
+      let diagnosticIndex = -1;
+      for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
+        if (diagnostics[index]?.sourceSeq === input.sourceSeq) {
+          diagnosticIndex = index;
+          break;
+        }
+      }
+      const diagnostic = diagnostics[diagnosticIndex];
+      if (!diagnostic || diagnostic.sourceEventType !== "tool.result") {
+        throw new Error(
+          `Loop v2 rich tool commit has no matching tool.result at ${input.sourceSeq}`,
+        );
+      }
+      consumedToolCommits.add(input.sourceSeq);
+
+      if (!isRichEvidenceTool(input.tool)) return;
+      if (!input.result.ok) {
+        diagnostics[diagnosticIndex] = {
+          ...diagnostic,
+          disposition: "ignored",
+          reason: "rich_tool_failed",
+        };
+        return;
+      }
+      if (input.concurrentMutation) {
+        diagnostics[diagnosticIndex] = {
+          ...diagnostic,
+          disposition: "gap",
+          reason: "rich_concurrent_mutation_ambiguous",
+        };
+        return;
+      }
+
+      const rich = buildRichEvidence(input);
+      if (!rich) {
+        diagnostics[diagnosticIndex] = {
+          ...diagnostic,
+          disposition: "gap",
+          reason: "rich_observation_invalid",
+        };
+        return;
+      }
+      artifactBlobs.set(rich.blob.ref, rich.blob);
+      const projected: LoopV2Envelope = {
+        schemaVersion: LOOP_V2_SCHEMA_VERSION,
+        runId,
+        seq: projectedEvents.length + 1,
+        ts: sourceTimestamps.get(input.sourceSeq) ?? 0,
+        event: {
+          type: "evidence.observed",
+          observation: rich.observation,
+        },
+      };
+      state = projectLoopV2Event(state, projected).state;
+      projectedEvents.push(projected);
+      diagnostics[diagnosticIndex] = {
+        ...diagnostic,
+        disposition: "projected",
+        reason:
+          rich.observation.kind === "read"
+            ? "rich_read_projected"
+            : "rich_search_projected",
+      };
+    },
+
     snapshot() {
       const coverage: LoopV2ShadowCoverage = {
         observed: diagnostics.length,
@@ -155,6 +269,9 @@ export function createLoopV2ShadowObserver(
         runId,
         sourceThroughSeq,
         projectedEvents: [...projectedEvents],
+        artifactBlobs: [...artifactBlobs.values()].sort((left, right) =>
+          left.ref.localeCompare(right.ref),
+        ),
         diagnostics: [...diagnostics],
         coverage,
         state,
@@ -231,6 +348,105 @@ function isReadOrSearchTool(tool: string): boolean {
 
 function isDiagnosticTool(tool: string): boolean {
   return /(?:^|\.)(?:shell|exec|run_command|terminal)$/.test(tool);
+}
+
+function isRichEvidenceTool(tool: string): boolean {
+  return (
+    tool === "workspace.read_file" ||
+    tool === "workspace.search" ||
+    tool === "workspace.grep" ||
+    tool === "workspace.glob"
+  );
+}
+
+function buildRichEvidence(input: LoopV2ShadowToolCommitInput):
+  | Readonly<{
+      blob: ArtifactContentBlobV2;
+      observation:
+        | import("./schema.js").ReadEvidenceObservation
+        | import("./schema.js").SearchEvidenceObservation;
+    }>
+  | undefined {
+  const args = asRecord(input.args);
+  const payload = asRecord(input.result.payload);
+  if (!args || !payload) return undefined;
+
+  if (input.tool === "workspace.read_file") {
+    const path = readString(args, "path");
+    const content = readString(payload, "content");
+    const rawOffset = args.offset;
+    const rawLineCount = payload.line_count;
+    const start =
+      rawOffset === undefined
+        ? 0
+        : typeof rawOffset === "number" &&
+            Number.isSafeInteger(rawOffset) &&
+            rawOffset >= 0
+          ? rawOffset
+          : undefined;
+    const lineCount =
+      typeof rawLineCount === "number" &&
+      Number.isSafeInteger(rawLineCount) &&
+      rawLineCount >= 0
+        ? rawLineCount
+        : undefined;
+    if (
+      !path ||
+      content === undefined ||
+      start === undefined ||
+      lineCount === undefined ||
+      !input.sourceContentHash
+    ) {
+      return undefined;
+    }
+    const blob = createArtifactContentBlobV2(content);
+    return {
+      blob,
+      observation: {
+        kind: "read",
+        path: normalizeEvidencePath(path),
+        start,
+        endExclusive: start + lineCount,
+        contentHash: input.sourceContentHash,
+        repositoryRevision: input.repositoryRevision,
+        artifactRef: blob.ref,
+      },
+    };
+  }
+
+  const root = readString(args, "path") ?? ".";
+  const query = readString(args, "pattern");
+  if (!query) return undefined;
+  const serialized = canonicalJson(input.result.payload);
+  const blob = createArtifactContentBlobV2(serialized);
+  const options = Object.fromEntries(
+    Object.entries(args).filter(([key]) => key !== "path" && key !== "pattern"),
+  );
+  return {
+    blob,
+    observation: {
+      kind: "search",
+      root: normalizeEvidencePath(root),
+      query,
+      ...(Object.keys(options).length > 0 ? { options } : {}),
+      resultHash: artifactContentHashV2(serialized),
+      repositoryRevision: input.repositoryRevision,
+      artifactRef: blob.ref,
+    },
+  };
+}
+
+function normalizeEvidencePath(value: string): string {
+  return value.replace(/\\/g, "/").replace(/^\.\//, "") || ".";
+}
+
+function asRecord(
+  value: unknown,
+): Readonly<Record<string, unknown>> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Readonly<Record<string, unknown>>;
 }
 
 function readRecord(

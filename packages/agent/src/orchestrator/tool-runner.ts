@@ -19,6 +19,10 @@
  * - 用于断点恢复时回滚文件状态
  */
 
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+
 import type {
   AgentToolCallAction,
   ArtifactRegistry,
@@ -40,6 +44,7 @@ import type {
   ToolExecutionPolicy,
 } from "../execution-policy.js";
 import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
+import type { LoopV2ShadowToolCommitPortInput } from "../loop-v2/index.js";
 import type { TaskStateManager } from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
 import { SUB_AGENT_TOOL_NAME } from "./constants.js";
@@ -630,6 +635,9 @@ export function finalizeToolExecution(
     readonly text: string;
     readonly thinking?: string;
     readonly taskState?: TaskStateManager;
+    readonly observeLoopV2ToolCommit?: (
+      input: LoopV2ShadowToolCommitPortInput,
+    ) => void;
     readonly saveStateFn: () => void;
     /** 会话级工具输出去重器（P1 入口闸） */
     readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
@@ -644,10 +652,19 @@ export function finalizeToolExecution(
   readonly failureSignatures?: readonly string[];
   readonly idleFuseTripped?: boolean;
 } {
+  const batchHasMutation = calls.some((call) => isMutatingTool(call.tool));
   // 步骤 1：逐个发出工具结果事件
   for (let i = 0; i < calls.length; i++) {
     const call = calls[i]!;
     const tr = results[i]!;
+    const repositoryRevision = `run:${ctx.runId}:mutation:${ctx.taskState?.snapshot().mutationRevision ?? 0}`;
+    const sourceContentHash =
+      ctx.observeLoopV2ToolCommit &&
+      tr.ok &&
+      call.tool === "workspace.read_file" &&
+      !batchHasMutation
+        ? readSourceContentHash(ctx.workspaceRoot, call.args, tr.payload)
+        : undefined;
     ctx.taskState?.recordToolResult(call, tr);
     const conflictPayload =
       tr.payload && typeof tr.payload === "object"
@@ -680,6 +697,15 @@ export function finalizeToolExecution(
       detail: formatToolResultEventDetail(tr),
       ...(workspaceEffect ? { workspaceEffect } : {}),
       ...(fileChanges ? { fileChanges } : {}),
+    });
+    ctx.observeLoopV2ToolCommit?.({
+      callId: `legacy:${ctx.runId}:turn:${ctx.turn}:call:${i}`,
+      tool: call.tool,
+      args: call.args,
+      result: tr,
+      repositoryRevision,
+      concurrentMutation: batchHasMutation,
+      ...(sourceContentHash ? { sourceContentHash } : {}),
     });
   }
 
@@ -766,4 +792,50 @@ export function finalizeToolExecution(
     failureSignatures: recovery.signatures,
     idleFuseTripped: recovery.fuseTripped,
   };
+}
+
+function readSourceContentHash(
+  workspaceRoot: string,
+  args: unknown,
+  payload: unknown,
+): string | undefined {
+  if (
+    !args ||
+    typeof args !== "object" ||
+    Array.isArray(args) ||
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
+  ) {
+    return undefined;
+  }
+  const argRecord = args as Readonly<Record<string, unknown>>;
+  const payloadRecord = payload as Readonly<Record<string, unknown>>;
+  const requestedPath = argRecord.path;
+  if (typeof requestedPath !== "string" || !requestedPath.trim()) {
+    return undefined;
+  }
+  const root = path.resolve(workspaceRoot);
+  const resolved = path.resolve(root, requestedPath);
+  const relative = path.relative(root, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+  try {
+    const bytes = fs.readFileSync(resolved);
+    const lines = bytes.toString("utf8").split(/\r?\n/);
+    const offset = typeof argRecord.offset === "number" ? argRecord.offset : 0;
+    const limit =
+      typeof argRecord.limit === "number" ? argRecord.limit : undefined;
+    const observed = lines
+      .slice(offset, limit === undefined ? undefined : offset + limit)
+      .join("\n");
+    if (
+      typeof payloadRecord.content !== "string" ||
+      observed !== payloadRecord.content
+    ) {
+      return undefined;
+    }
+    return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+  } catch {
+    return undefined;
+  }
 }

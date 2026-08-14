@@ -18,6 +18,128 @@ function legacyEnvelope(
 }
 
 describe("Loop Kernel v2 shadow migration", () => {
+  test("rich read facts project exact coverage while repeated spans stay non-progress", () => {
+    const observer = createLoopV2ShadowObserver("shadow-r19");
+    observer.observe(
+      legacyEnvelope(1, { type: "run.started", goal: "Inspect src/a.ts" }),
+    );
+    for (const seq of [2, 3]) {
+      observer.observe(
+        legacyEnvelope(seq, {
+          type: "tool.result",
+          tool: "workspace.read_file",
+          ok: true,
+          summary: "Read two lines",
+        }),
+      );
+      observer.observeToolCommit({
+        sourceSeq: seq,
+        callId: `call-${seq}`,
+        tool: "workspace.read_file",
+        args: { path: "src/a.ts", offset: 10, limit: 2 },
+        result: {
+          ok: true,
+          summary: "Read two lines",
+          payload: { content: "alpha\nbeta", line_count: 2 },
+        },
+        repositoryRevision: "run:shadow-r19:mutation:0",
+        sourceContentHash: "sha256:full-file-r0",
+        concurrentMutation: false,
+      });
+    }
+
+    const report = observer.snapshot();
+    expect(report.coverage).toEqual({
+      observed: 3,
+      projected: 3,
+      gaps: 0,
+      ignored: 0,
+    });
+    expect(report.projectedEvents).toHaveLength(3);
+    expect(report.artifactBlobs).toHaveLength(1);
+    const evidence = Object.values(report.state.evidence);
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]?.observationCount).toBe(2);
+    expect(evidence[0]?.observation).toEqual({
+      kind: "read",
+      path: "src/a.ts",
+      start: 10,
+      endExclusive: 12,
+      contentHash: "sha256:full-file-r0",
+      repositoryRevision: "run:shadow-r19:mutation:0",
+      artifactRef: report.artifactBlobs[0]?.ref,
+    });
+    expect(report.diagnostics.slice(1).map((item) => item.reason)).toEqual([
+      "rich_read_projected",
+      "rich_read_projected",
+    ]);
+  });
+
+  test("rich search is hashed from raw results and a racing mutation stays a gap", () => {
+    const observer = createLoopV2ShadowObserver("shadow-r19");
+    observer.observe(
+      legacyEnvelope(1, { type: "run.started", goal: "Find the symbol" }),
+    );
+    observer.observe(
+      legacyEnvelope(2, {
+        type: "tool.result",
+        tool: "workspace.search",
+        ok: true,
+        summary: "one match",
+      }),
+    );
+    observer.observeToolCommit({
+      sourceSeq: 2,
+      callId: "search-2",
+      tool: "workspace.search",
+      args: { path: "src", pattern: "needle", case_sensitive: true },
+      result: {
+        ok: true,
+        summary: "one match",
+        payload: { matches: [{ path: "src/a.ts", line: 3, text: "needle" }] },
+      },
+      repositoryRevision: "run:shadow-r19:mutation:0",
+      concurrentMutation: false,
+    });
+    observer.observe(
+      legacyEnvelope(3, {
+        type: "tool.result",
+        tool: "workspace.read_file",
+        ok: true,
+        summary: "raced read",
+      }),
+    );
+    observer.observeToolCommit({
+      sourceSeq: 3,
+      callId: "read-3",
+      tool: "workspace.read_file",
+      args: { path: "src/a.ts" },
+      result: {
+        ok: true,
+        summary: "raced read",
+        payload: { content: "needle", line_count: 1 },
+      },
+      repositoryRevision: "run:shadow-r19:mutation:0",
+      sourceContentHash: "sha256:full-file-r0",
+      concurrentMutation: true,
+    });
+
+    const report = observer.snapshot();
+    expect(Object.values(report.state.evidence)).toHaveLength(1);
+    expect(Object.values(report.state.evidence)[0]?.observation.kind).toBe(
+      "search",
+    );
+    expect(report.coverage).toEqual({
+      observed: 3,
+      projected: 2,
+      gaps: 1,
+      ignored: 0,
+    });
+    expect(report.diagnostics.at(-1)?.reason).toBe(
+      "rich_concurrent_mutation_ambiguous",
+    );
+  });
+
   test("R19 projects only facts proved by the legacy event contract", () => {
     const observer = createLoopV2ShadowObserver("shadow-r19");
     observer.observe(
@@ -143,12 +265,12 @@ describe("Loop Kernel v2 shadow migration", () => {
     const [v1Result, shadowResult] = await Promise.all([
       v1.run({
         runId: "shadow-parity",
-        goal: "list the directory",
+        goal: "read file 'note.txt'",
         workspaceRoot: makeWorkspace("v1"),
       }),
       shadow.run({
         runId: "shadow-parity",
-        goal: "list the directory",
+        goal: "read file 'note.txt'",
         workspaceRoot: makeWorkspace("v2"),
       }),
     ]);
@@ -167,8 +289,13 @@ describe("Loop Kernel v2 shadow migration", () => {
           item.event.type === "run.failed",
       );
     expect(report?.sourceThroughSeq).toBe(terminal?.seq);
-    expect(report?.projectedEvents).toHaveLength(1);
-    expect(report?.coverage.gaps).toBeGreaterThan(0);
+    expect(report?.projectedEvents).toHaveLength(2);
+    expect(Object.keys(report?.state.evidence ?? {})).toHaveLength(1);
+    expect(
+      report?.diagnostics.some(
+        (diagnostic) => diagnostic.reason === "rich_read_projected",
+      ),
+    ).toBe(true);
     expect(terminalReports).toBe(1);
   });
 });

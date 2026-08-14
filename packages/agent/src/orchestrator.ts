@@ -107,6 +107,7 @@ import {
   type LoopKernelVersion,
   type LoopV2ShadowObserver,
   type LoopV2ShadowReport,
+  type LoopV2ShadowToolCommitPortInput,
   createLoopV2ShadowObserver,
   resolveLoopKernelVersion,
 } from "./loop-v2/index.js";
@@ -806,6 +807,9 @@ export class AgentOrchestrator {
             : {}),
           ...(this.candidateReviewer
             ? { candidateReviewer: this.candidateReviewer }
+            : {}),
+          ...(init.observeLoopV2ToolCommit
+            ? { observeLoopV2ToolCommit: init.observeLoopV2ToolCommit }
             : {}),
         };
 
@@ -2887,6 +2891,7 @@ export class AgentOrchestrator {
     compactor: ContextCompactor;
     artifactRegistry: ArtifactRegistry;
     emit: (event: RunEvent) => void;
+    observeLoopV2ToolCommit?: (input: LoopV2ShadowToolCommitPortInput) => void;
     emitRunMetrics: (status: "completed" | "failed" | "aborted") => void;
     seq: { n: number };
     checkpointSeq: { n: number };
@@ -3049,6 +3054,16 @@ export class AgentOrchestrator {
         truncationCount: metrics.truncationCount,
       });
     };
+
+    const observeLoopV2ToolCommit = loopV2Shadow
+      ? (input: LoopV2ShadowToolCommitPortInput) => {
+          try {
+            loopV2Shadow.observeToolCommit({ ...input, sourceSeq: seq.n });
+          } catch {
+            // Rich shadow capture is diagnostic-only while v1 is authoritative.
+          }
+        }
+      : undefined;
 
     runStartTime = Date.now();
     emit({ type: "run.started", goal: spec.goal });
@@ -3552,6 +3567,7 @@ export class AgentOrchestrator {
       compactor,
       artifactRegistry,
       emit,
+      ...(observeLoopV2ToolCommit ? { observeLoopV2ToolCommit } : {}),
       emitRunMetrics,
       seq,
       checkpointSeq,

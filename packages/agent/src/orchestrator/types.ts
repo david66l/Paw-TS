@@ -31,6 +31,7 @@ import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
 import type { CompletionDecision } from "../lifecycle/completion-policy.js";
 import type { RepeatToolState } from "../lifecycle/repeat-tool-reminder.js";
 import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
+import type { LoopV2ShadowToolCommitPortInput } from "../loop-v2/index.js";
 import type { TaskStateManager } from "../task-state.js";
 
 // ═════════════════════════════════════════════════════════════
@@ -205,6 +206,10 @@ export interface PhaseContext {
   readonly verificationPolicy?: VerificationPolicy;
   /** Optional independent semantic reviewer; absent means the gate is disabled. */
   readonly candidateReviewer?: CandidateReviewer;
+  /** Read-only shadow observation after the matching legacy tool.result. */
+  readonly observeLoopV2ToolCommit?: (
+    input: LoopV2ShadowToolCommitPortInput,
+  ) => void;
 }
 
 // ═════════════════════════════════════════════════════════════
