@@ -107,6 +107,7 @@ import {
 import {
   type LoopKernelVersion,
   type LoopV2LiveCandidateAssessmentV1,
+  LoopV2LiveReviewRuntimeV1,
   type LoopV2ShadowObserver,
   type LoopV2ShadowReport,
   type LoopV2ShadowToolCommitPortInput,
@@ -120,9 +121,9 @@ import {
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
   parseLoopV2ReadinessFeedbackMarker,
+  parseLoopV2SemanticReviewFeedbackMarker,
   resolveLoopKernelVersion,
   restoreLoopV2ProjectionObserver,
-  serializeLoopV2LiveCandidateArtifactV1,
   serializeLoopV2ProjectionCheckpointV1,
 } from "./loop-v2/index.js";
 
@@ -218,6 +219,7 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[Loop reminder]",
   "[ProviderProtocol:",
   "[LoopV2Readiness:",
+  "[LoopV2SemanticReview:",
   "[Continue from where you were cut off",
   "Plan updated:",
   "Current plan:",
@@ -378,6 +380,8 @@ export interface AgentOrchestratorOptions {
   readonly shellSandbox?: import("@paw/harness").ShellSandboxConfig;
   /** Independent semantic review before completing a mutated task. */
   readonly candidateReviewer?: CandidateReviewer;
+  /** Independent one-call review model used only by explicit loop v2. */
+  readonly loopV2SemanticReviewModel?: LanguageModel;
   /** Loop kernel selection; defaults to PAW_LOOP_KERNEL_VERSION, then v1. */
   readonly loopKernelVersion?: LoopKernelVersion;
   /** Terminal v2-shadow diagnostics. Observer failures never affect the run. */
@@ -504,6 +508,7 @@ export class AgentOrchestrator {
   private readonly verificationPolicy?: AgentOrchestratorOptions["verificationPolicy"];
   private readonly shellSandbox?: AgentOrchestratorOptions["shellSandbox"];
   private readonly candidateReviewer?: CandidateReviewer;
+  private readonly loopV2SemanticReviewModel?: LanguageModel;
   private readonly loopKernelVersion: LoopKernelVersion;
   private readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
   private readonly onLoopV2CandidateAssessment?: (
@@ -524,6 +529,7 @@ export class AgentOrchestrator {
     this.verificationPolicy = opts?.verificationPolicy;
     this.shellSandbox = opts?.shellSandbox;
     this.candidateReviewer = opts?.candidateReviewer;
+    this.loopV2SemanticReviewModel = opts?.loopV2SemanticReviewModel;
     this.loopKernelVersion =
       opts?.loopKernelVersion ?? resolveLoopKernelVersion();
     this.onLoopV2ShadowReport = opts?.onLoopV2ShadowReport;
@@ -767,6 +773,15 @@ export class AgentOrchestrator {
               )
               .find((state) => state !== undefined)
           : undefined;
+      const restoredSemanticReviewFeedback =
+        this.loopKernelVersion === "v2" && spec.resumeFromState
+          ? [...spec.resumeFromState.messages]
+              .reverse()
+              .map((message) =>
+                parseLoopV2SemanticReviewFeedbackMarker(message.content),
+              )
+              .find((state) => state !== undefined)
+          : undefined;
       let flags: TurnFlags = {
         autoContinueNudges: 0,
         lastTurnHadToolCall: false,
@@ -775,6 +790,13 @@ export class AgentOrchestrator {
           ? {
               loopV2ReadinessFeedbackKey: restoredReadinessFeedback.key,
               loopV2ReadinessNudges: restoredReadinessFeedback.nudges,
+            }
+          : {}),
+        ...(restoredSemanticReviewFeedback
+          ? {
+              loopV2SemanticReviewFeedbackKey:
+                restoredSemanticReviewFeedback.key,
+              loopV2SemanticReviewNudges: restoredSemanticReviewFeedback.nudges,
             }
           : {}),
         ...(this.loopKernelVersion === "v2"
@@ -885,6 +907,9 @@ export class AgentOrchestrator {
                 getLoopV2CandidateAssessment: () =>
                   this._lastLoopV2CandidateAssessment,
               }
+            : {}),
+          ...(init.reviewLoopV2Candidate
+            ? { reviewLoopV2Candidate: init.reviewLoopV2Candidate }
             : {}),
           ...(init.observeLoopV2ToolCommit
             ? { observeLoopV2ToolCommit: init.observeLoopV2ToolCommit }
@@ -3058,6 +3083,7 @@ export class AgentOrchestrator {
     artifactRegistry: ArtifactRegistry;
     emit: (event: RunEvent) => void;
     observeLoopV2ToolCommit?: (input: LoopV2ShadowToolCommitPortInput) => void;
+    reviewLoopV2Candidate?: NonNullable<PhaseContext["reviewLoopV2Candidate"]>;
     emitRunMetrics: (status: "completed" | "failed" | "aborted") => void;
     seq: { n: number };
     checkpointSeq: { n: number };
@@ -3080,6 +3106,19 @@ export class AgentOrchestrator {
       return findPawRoot(cwd) ?? cwd;
     })();
     const maxSteps = resolveMaxSteps(workspaceRoot, spec.maxSteps);
+    const loopV2LiveReviewRuntime =
+      this.loopKernelVersion === "v2"
+        ? new LoopV2LiveReviewRuntimeV1({
+            workspaceRoot,
+            runId,
+            ...(this.loopV2SemanticReviewModel
+              ? { model: this.loopV2SemanticReviewModel }
+              : {}),
+            ...(spec.abortSignal ? { signal: spec.abortSignal } : {}),
+            onUsage: (modelLabel, usage) =>
+              this.costTracker?.record(modelLabel, usage),
+          })
+        : undefined;
 
     const seq = { n: 0 };
     const checkpointSeq = { n: 0 };
@@ -3169,6 +3208,7 @@ export class AgentOrchestrator {
           candidateArtifact?.report.reportHash === restoredReport.reportHash
         ) {
           this._lastLoopV2CandidateAssessment = candidateArtifact.assessment;
+          loopV2LiveReviewRuntime?.restoreCandidate(candidateArtifact);
         }
       } else {
         loopV2Projection = createLoopV2ShadowObserver(runId);
@@ -3273,14 +3313,13 @@ export class AgentOrchestrator {
                   : "not_required",
             } as const;
             const artifact = buildLoopV2LiveCandidateArtifactV1(report, policy);
-            const artifactPath = loopV2LiveArtifactPath(workspaceRoot, runId);
-            atomicWrite(
-              artifactPath,
-              serializeLoopV2LiveCandidateArtifactV1(artifact),
-            );
-            const persisted = parseLoopV2LiveCandidateArtifactV1(
-              fs.readFileSync(artifactPath, "utf8"),
-            );
+            if (!loopV2LiveReviewRuntime) {
+              throw new Error(
+                "Loop v2 live review runtime was not initialized",
+              );
+            }
+            const persisted =
+              loopV2LiveReviewRuntime.persistCandidate(artifact);
             this._lastLoopV2CandidateAssessment = persisted.assessment;
             try {
               this.onLoopV2CandidateAssessment?.(persisted.assessment);
@@ -3347,6 +3386,32 @@ export class AgentOrchestrator {
             if (this.loopKernelVersion === "v2") throw error;
             // Rich shadow capture is diagnostic-only while v1 is authoritative.
           }
+        }
+      : undefined;
+
+    const reviewLoopV2Candidate = loopV2LiveReviewRuntime?.canReview
+      ? async () => {
+          const result = await loopV2LiveReviewRuntime.reviewCandidate();
+
+          const summary = result.review.findings.length
+            ? result.review.findings
+                .slice(0, 8)
+                .map(
+                  (finding) =>
+                    `${finding.severity}: ${finding.observedChange} Risk: ${finding.risk}`,
+                )
+                .join("\n")
+                .slice(0, 8_000)
+            : `Loop v2 semantic review ${result.review.verdict}.`;
+          emit({
+            type: "candidate.review",
+            mutationRevision: result.review.mutationRevision,
+            verdict: result.review.verdict,
+            summary,
+            modelCalls: result.modelCalls,
+            ...(result.usage ? { usage: result.usage } : {}),
+          });
+          return result;
         }
       : undefined;
 
@@ -3853,6 +3918,7 @@ export class AgentOrchestrator {
       artifactRegistry,
       emit,
       ...(observeLoopV2ToolCommit ? { observeLoopV2ToolCommit } : {}),
+      ...(reviewLoopV2Candidate ? { reviewLoopV2Candidate } : {}),
       emitRunMetrics,
       seq,
       checkpointSeq,

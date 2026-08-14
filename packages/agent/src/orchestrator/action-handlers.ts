@@ -66,6 +66,7 @@ import {
 import {
   type LoopV2ShadowMutationCapture,
   evaluateLoopV2ReadinessGateV1,
+  evaluateLoopV2SemanticReviewGateV1,
 } from "../loop-v2/index.js";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
 import {
@@ -693,8 +694,7 @@ async function handleFinalAnswer(
     };
   }
 
-  const candidateGate = await checkCandidateReviewGate(
-    summary,
+  const loopV2SemanticGate = await checkLoopV2SemanticReviewGate(
     ctx,
     flags,
     text,
@@ -702,6 +702,19 @@ async function handleFinalAnswer(
     opts,
     noRoomForAnotherTurn,
   );
+  if (loopV2SemanticGate) return loopV2SemanticGate;
+
+  const candidateGate = ctx.reviewLoopV2Candidate
+    ? undefined
+    : await checkCandidateReviewGate(
+        summary,
+        ctx,
+        flags,
+        text,
+        thinking,
+        opts,
+        noRoomForAnotherTurn,
+      );
   if (candidateGate) return candidateGate;
 
   // 无 pending 工作 / 验证通过 → 真正完成。revision=0 的 bootstrap
@@ -724,6 +737,49 @@ async function handleFinalAnswer(
     state: {
       type: "decided",
       decision: evaluated.decision,
+    },
+    flags,
+  };
+}
+
+async function checkLoopV2SemanticReviewGate(
+  ctx: PhaseContext,
+  flags: TurnFlags,
+  text: string,
+  thinking: string | undefined,
+  opts: Pick<ActionHandlerContext, "saveStateFn">,
+  noRoomForAnotherTurn: boolean,
+): Promise<
+  { readonly state: TurnState; readonly flags: TurnFlags } | undefined
+> {
+  if (!ctx.reviewLoopV2Candidate) return undefined;
+  const revision = ctx.taskState.snapshot().mutationRevision ?? 0;
+  if (revision === 0) return undefined;
+
+  const result = await ctx.reviewLoopV2Candidate();
+  const gate = evaluateLoopV2SemanticReviewGateV1({
+    result,
+    priorKey: flags.loopV2SemanticReviewFeedbackKey,
+    priorNudges: flags.loopV2SemanticReviewNudges,
+    noRoomForAnotherTurn,
+  });
+  if (gate.type === "accept") return undefined;
+  if (gate.type === "feedback") {
+    const nextFlags: TurnFlags = {
+      ...flags,
+      loopV2SemanticReviewFeedbackKey: gate.key,
+      loopV2SemanticReviewNudges: 1,
+      lastTurnHadToolCall: false,
+    };
+    ctx.ctxMgr.addAssistant(text, thinking);
+    ctx.ctxMgr.addUser(gate.message);
+    opts.saveStateFn();
+    return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  }
+  return {
+    state: {
+      type: "incomplete",
+      message: `${gate.message}\nNo additional semantic review retry was opened (${gate.reason}).`,
     },
     flags,
   };

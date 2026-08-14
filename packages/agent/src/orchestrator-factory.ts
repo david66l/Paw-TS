@@ -45,7 +45,11 @@ import {
   resolveLifecycleBudget,
 } from "./lifecycle/budget.js";
 import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
-import type { LoopKernelVersion, LoopV2ShadowReport } from "./loop-v2/index.js";
+import {
+  type LoopKernelVersion,
+  type LoopV2ShadowReport,
+  resolveLoopKernelVersion,
+} from "./loop-v2/index.js";
 import {
   AgentOrchestrator,
   type AskUserResolveInput,
@@ -166,6 +170,8 @@ export function createRunOrchestrator(
   opts: RunOrchestratorOptions,
 ): RunOrchestrator {
   const { workspaceRoot } = opts;
+  const loopKernelVersion =
+    opts.loopKernelVersion ?? resolveLoopKernelVersion();
 
   const settings = loadWorkspaceSettings(workspaceRoot);
   const collab = resolveCollaborationMode({
@@ -267,12 +273,17 @@ export function createRunOrchestrator(
     shellSandbox: opts.shellSandbox,
     costTracker,
   });
-  const candidateReviewer = mainModel.runtimeProfile
-    ? new ModelCandidateReviewer({
-        model: subAgentModel,
-        costTracker,
-      })
-    : undefined;
+  const candidateReviewer =
+    loopKernelVersion !== "v2" && mainModel.runtimeProfile
+      ? new ModelCandidateReviewer({
+          model: subAgentModel,
+          costTracker,
+        })
+      : undefined;
+  const loopV2SemanticReviewModel =
+    loopKernelVersion === "v2" && mainModel.runtimeProfile
+      ? subAgentModel
+      : undefined;
 
   const createAgent = (input: {
     readonly id: string;
@@ -344,6 +355,7 @@ export function createRunOrchestrator(
     verificationPolicy: opts.verificationPolicy,
     shellSandbox: opts.shellSandbox,
     candidateReviewer,
+    loopV2SemanticReviewModel,
     subAgentLauncher: collab.canSpawn ? subAgentLauncher : undefined,
     appStateStore,
     sessionStore,
@@ -358,7 +370,7 @@ export function createRunOrchestrator(
         ? "background"
         : (rootSpec?.memoryExtraction ?? "background")),
     onEvent: opts.onEvent,
-    loopKernelVersion: opts.loopKernelVersion,
+    loopKernelVersion,
     onLoopV2ShadowReport: opts.onLoopV2ShadowReport,
     allowedTools,
     agentCatalogText: collab.injectRoster

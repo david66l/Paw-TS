@@ -19,6 +19,7 @@ import type {
   ArtifactRegistry,
   ChatMessage,
   ContextManager,
+  ModelTokenUsage,
   RunEvent,
   RunEventEnvelope,
 } from "@paw/core";
@@ -36,6 +37,7 @@ import type {
   LoopV2LiveCandidateAssessmentV1,
   LoopV2ShadowToolCommitPortInput,
   ProviderTerminalStateV2,
+  SemanticReviewOnceResultV2,
 } from "../loop-v2/index.js";
 import type { TaskStateManager } from "../task-state.js";
 
@@ -168,6 +170,10 @@ export interface TurnFlags {
   readonly loopV2ReadinessFeedbackKey?: string;
   /** Feedback count for the matching v2 readiness identity (currently 0 or 1). */
   readonly loopV2ReadinessNudges?: number;
+  /** Stable semantic review identity that already received repair feedback. */
+  readonly loopV2SemanticReviewFeedbackKey?: string;
+  /** Feedback count for the matching semantic review identity (0 or 1). */
+  readonly loopV2SemanticReviewNudges?: number;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -222,6 +228,14 @@ export interface PhaseContext {
   readonly getLoopV2CandidateAssessment?: () =>
     | LoopV2LiveCandidateAssessmentV1
     | undefined;
+  /** Candidate-bound, durable, at-most-once explicit-v2 review transaction. */
+  readonly reviewLoopV2Candidate?: () => Promise<
+    SemanticReviewOnceResultV2 &
+      Readonly<{
+        readonly modelCalls: number;
+        readonly usage?: ModelTokenUsage;
+      }>
+  >;
   /** Read-only shadow observation after the matching legacy tool.result. */
   readonly observeLoopV2ToolCommit?: (
     input: LoopV2ShadowToolCommitPortInput,

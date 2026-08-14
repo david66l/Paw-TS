@@ -3,8 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { FileSystemAppStateStore, FileSystemSessionStore } from "@paw/core";
-import { FakeLanguageModel } from "@paw/models";
+import {
+  FileSystemAppStateStore,
+  FileSystemSessionStore,
+  type RunEventEnvelope,
+} from "@paw/core";
+import { FakeLanguageModel, type LanguageModel } from "@paw/models";
 
 import type { ToolEffectPolicy } from "../src/execution-policy.js";
 import {
@@ -15,6 +19,8 @@ import {
   createInterruptedSemanticReviewRecordV2,
   createSemanticReviewLedgerV2,
   loopV2LiveArtifactPath,
+  loopV2LiveReviewArtifactPath,
+  loopV2LiveReviewClaimPath,
   loopV2ProjectionCheckpointPath,
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2LiveReviewArtifactV1,
@@ -270,6 +276,349 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           readyForSemanticReview: true,
           gaps: [],
         },
+      });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("explicit v2 persists and accounts one semantic review before completion", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-semantic-pass-");
+    const runId = "v2-semantic-pass";
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+          finishReason: "stop",
+        },
+        { text: "Implemented and verified.", finishReason: "stop" },
+      ],
+    });
+    let reviewCalls = 0;
+    let legacyReviewerCalls = 0;
+    const reviewModel: LanguageModel = {
+      label: "v2-semantic-review-fixture",
+      async complete(messages) {
+        reviewCalls += 1;
+        const material = messages.at(-1)?.content ?? "";
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
+          material,
+        )?.[1];
+        const mutationRevision = Number(
+          /"mutationRevision":(\d+)/.exec(material)?.[1],
+        );
+        if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
+          throw new Error(
+            "Reviewer fixture did not receive candidate identity",
+          );
+        }
+        return {
+          text: JSON.stringify({
+            candidateInputHash,
+            mutationRevision,
+            verdict: "pass",
+            findings: [],
+          }),
+          usage: {
+            promptTokens: 11,
+            completionTokens: 3,
+          },
+          finishReason: "stop",
+        };
+      },
+    };
+    const events: RunEventEnvelope[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      loopV2SemanticReviewModel: reviewModel,
+      candidateReviewer: {
+        async review() {
+          legacyReviewerCalls += 1;
+          return {
+            verdict: "pass",
+            reportGrounding: "pass",
+            summary: "Legacy reviewer must not run in explicit v2.",
+          };
+        },
+      },
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+      onEvent: (event) => events.push(event),
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 6,
+      });
+      expect(result.status).toBe("completed");
+      expect(reviewCalls).toBe(1);
+      expect(legacyReviewerCalls).toBe(0);
+      const candidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
+      );
+      const persistedReview = parseLoopV2LiveReviewArtifactV1(
+        fs.readFileSync(
+          loopV2LiveReviewArtifactPath(workspaceRoot, runId),
+          "utf8",
+        ),
+        candidate,
+      );
+      expect(
+        fs.existsSync(loopV2LiveReviewClaimPath(workspaceRoot, runId)),
+      ).toBeTrue();
+      expect(persistedReview.record.review.verdict).toBe("pass");
+      expect(
+        events.find((event) => event.event.type === "candidate.review")?.event,
+      ).toMatchObject({
+        type: "candidate.review",
+        verdict: "pass",
+        modelCalls: 1,
+        usage: { promptTokens: 11, completionTokens: 3, totalTokens: 14 },
+      });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("resume reuses the same semantic candidate and does not review revised prose", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-semantic-resume-");
+    const runId = "v2-semantic-resume";
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const appStateStore = new FileSystemAppStateStore({
+      statesDir: path.join(workspaceRoot, ".paw", "states"),
+    });
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot });
+    const abort = new AbortController();
+    let reviewCalls = 0;
+    const reviewModel: LanguageModel = {
+      label: "v2-semantic-partial-fixture",
+      async complete(messages) {
+        reviewCalls += 1;
+        const material = messages.at(-1)?.content ?? "";
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
+          material,
+        )?.[1];
+        const mutationRevision = Number(
+          /"mutationRevision":(\d+)/.exec(material)?.[1],
+        );
+        return {
+          text: JSON.stringify({
+            candidateInputHash,
+            mutationRevision,
+            verdict: "partial",
+            findings: [
+              {
+                severity: "warning",
+                observedChange: "The candidate needs an independent follow-up.",
+                risk: "Semantic certification is incomplete.",
+                evidenceRefs: ["snapshot:source.txt"],
+              },
+            ],
+          }),
+          finishReason: "stop",
+        };
+      },
+    };
+    const first = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model: new FakeLanguageModel({
+        responses: [
+          {
+            text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+            finishReason: "stop",
+          },
+          {
+            text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+            finishReason: "stop",
+          },
+          { text: "First proposed report.", finishReason: "stop" },
+        ],
+      }),
+      loopV2SemanticReviewModel: reviewModel,
+      appStateStore,
+      sessionStore,
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+      onEvent: (event) => {
+        if (event.event.type === "candidate.review") abort.abort();
+      },
+    });
+
+    try {
+      const interrupted = await first.run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 6,
+        abortSignal: abort.signal,
+      });
+      expect(interrupted.status).toBe("aborted");
+      expect(reviewCalls).toBe(1);
+      const firstCandidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
+      );
+
+      const resumedEvents: RunEventEnvelope[] = [];
+      const resumed = new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: new FakeLanguageModel({
+          responses: [
+            { text: "Reworded report, no fact change.", finishReason: "stop" },
+          ],
+        }),
+        loopV2SemanticReviewModel: reviewModel,
+        appStateStore,
+        sessionStore,
+        toolEffectPolicy: trustedNoEffectShellPolicy(),
+        onEvent: (event) => resumedEvents.push(event),
+      });
+      const result = await resumed.resumeRun({ runId, workspaceRoot });
+      expect(result.status).toBe("incomplete");
+      expect(result.message).toContain("feedback_exhausted");
+      expect(reviewCalls).toBe(1);
+      const resumedCandidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
+      );
+      expect(resumedCandidate.artifactHash).toBe(firstCandidate.artifactHash);
+      expect(
+        resumedEvents.find((event) => event.event.type === "candidate.review")
+          ?.event,
+      ).toMatchObject({
+        type: "candidate.review",
+        verdict: "partial",
+        modelCalls: 0,
+      });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("resume converts an unsettled review claim to partial without another model call", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-semantic-claim-resume-");
+    const runId = "v2-semantic-claim-resume";
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const appStateStore = new FileSystemAppStateStore({
+      statesDir: path.join(workspaceRoot, ".paw", "states"),
+    });
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot });
+    const first = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model: new FakeLanguageModel({
+        responses: [
+          {
+            text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+            finishReason: "stop",
+          },
+          {
+            text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+            finishReason: "stop",
+          },
+          { text: "Candidate before reviewer dispatch.", finishReason: "stop" },
+        ],
+      }),
+      appStateStore,
+      sessionStore,
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+    });
+
+    try {
+      const firstResult = await first.run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 7,
+      });
+      expect(firstResult.status).toBe("completed");
+      const candidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
+      );
+      const claim = buildLoopV2LiveReviewClaimV1(candidate);
+      fs.writeFileSync(
+        loopV2LiveReviewClaimPath(workspaceRoot, runId),
+        serializeLoopV2LiveReviewClaimV1(claim, candidate),
+        "utf8",
+      );
+
+      let reviewCalls = 0;
+      const reviewModel: LanguageModel = {
+        label: "must-not-repeat-claimed-review",
+        async complete() {
+          reviewCalls += 1;
+          return { text: "{}" };
+        },
+      };
+      const resumed = new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: new FakeLanguageModel({
+          responses: [
+            { text: "Resume the same candidate.", finishReason: "stop" },
+            { text: "Still the same candidate.", finishReason: "stop" },
+          ],
+        }),
+        loopV2SemanticReviewModel: reviewModel,
+        appStateStore,
+        sessionStore,
+        toolEffectPolicy: trustedNoEffectShellPolicy(),
+      });
+      const result = await resumed.resumeRun({ runId, workspaceRoot });
+      expect(result.status).toBe("incomplete");
+      expect(result.message).toContain("feedback_exhausted");
+      expect(reviewCalls).toBe(0);
+      const interruptedReview = parseLoopV2LiveReviewArtifactV1(
+        fs.readFileSync(
+          loopV2LiveReviewArtifactPath(workspaceRoot, runId),
+          "utf8",
+        ),
+        candidate,
+      );
+      expect(interruptedReview.record).toMatchObject({
+        completion: "protocol_partial",
+        reasonCode: "reviewer_interrupted",
+        review: { verdict: "partial" },
       });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });

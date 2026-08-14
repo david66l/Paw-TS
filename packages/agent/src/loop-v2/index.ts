@@ -90,6 +90,11 @@ export {
   type LoopV2LiveReviewArtifactV1,
 } from "./live-review-artifact.js";
 export {
+  LoopV2LiveReviewRuntimeV1,
+  type LoopV2LiveReviewRuntimeOptionsV1,
+  type LoopV2LiveReviewRuntimeResultV1,
+} from "./live-review-runtime.js";
+export {
   evidenceFingerprint,
   extendReadCoverage,
   readCoverageKey,
@@ -144,6 +149,13 @@ export {
   type SemanticReviewModelV2,
   type SemanticReviewUsageV2,
 } from "./semantic-reviewer.js";
+export {
+  LOOP_V2_SEMANTIC_REVIEW_FEEDBACK_LIMIT,
+  evaluateLoopV2SemanticReviewGateV1,
+  parseLoopV2SemanticReviewFeedbackMarker,
+  type LoopV2SemanticReviewFeedbackStateV1,
+  type LoopV2SemanticReviewGateDecisionV1,
+} from "./semantic-review-gate.js";
 export {
   createLoopV2ShadowObserver,
   restoreLoopV2ProjectionObserver,
