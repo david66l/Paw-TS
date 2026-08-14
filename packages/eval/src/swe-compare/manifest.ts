@@ -100,11 +100,26 @@ export const PAW_FRESH_QUALIFICATION_V4_RULE = {
   count: 10,
 } as const;
 
-/** Current contract: keep all strict candidates, then fill from a declared tier. */
-export const PAW_FRESH_QUALIFICATION_RULE = {
+/** First ten-task contract; its only model-run sample is now a diagnostic. */
+export const PAW_FRESH_QUALIFICATION_V5_RULE = {
   ...PAW_FRESH_QUALIFICATION_V4_RULE,
   version: "paw-fresh-qualification-v5" as const,
   fallbackMinFailToPass: 1,
+} as const;
+
+/** v5 samples that received a Paw model trajectory and are no longer unseen. */
+export const PAW_FRESH_QUALIFICATION_V5_RUN_IDS = [
+  "sympy__sympy-14024",
+] as const;
+
+const PAW_QUALIFICATION_EXPOSED_IDS: readonly string[] = [
+  ...new Set([...PAW_KNOWN_EXPOSED_IDS, ...PAW_FRESH_QUALIFICATION_V5_RUN_IDS]),
+];
+
+/** Current contract: restart ten tasks on one post-fix source commit. */
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  ...PAW_FRESH_QUALIFICATION_V5_RULE,
+  version: "paw-fresh-qualification-v6" as const,
 } as const;
 
 function sha256(value: string | Buffer): string {
@@ -195,7 +210,8 @@ export function createSweCompareManifest(opts: {
     | "paw-fresh-dev-v2"
     | "paw-fresh-qualification-v3"
     | "paw-fresh-qualification-v4"
-    | "paw-fresh-qualification-v5";
+    | "paw-fresh-qualification-v5"
+    | "paw-fresh-qualification-v6";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;
@@ -425,7 +441,7 @@ export function selectPawFreshQualificationIds(opts: {
 }): string[] {
   return selectPawFreshIds({
     ...opts,
-    excludedIds: PAW_KNOWN_EXPOSED_IDS,
+    excludedIds: PAW_QUALIFICATION_EXPOSED_IDS,
     rule: PAW_FRESH_QUALIFICATION_RULE,
   });
 }
@@ -455,7 +471,7 @@ export function createPawFreshQualificationManifest(opts: {
     instanceIds: selectPawFreshQualificationIds(opts),
     mode: "paw-seen-development",
     pawDevelopmentRuleVersion: rule.version,
-    excludedSeenIds: PAW_KNOWN_EXPOSED_IDS,
+    excludedSeenIds: PAW_QUALIFICATION_EXPOSED_IDS,
     pawMaxSteps: rule.pawMaxSteps,
     sharedTimeoutMs: rule.sharedTimeoutMs,
     verificationAuthority: rule.verificationAuthority,

@@ -9,6 +9,8 @@ import {
   PAW_FRESH_QUALIFICATION_RULE,
   PAW_FRESH_QUALIFICATION_V3_RULE,
   PAW_FRESH_QUALIFICATION_V4_RULE,
+  PAW_FRESH_QUALIFICATION_V5_RULE,
+  PAW_FRESH_QUALIFICATION_V5_RUN_IDS,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
@@ -110,10 +112,15 @@ describe("SWE compare manifest", () => {
     }
   });
 
-  test("selects ten v5 repositories as nine strict plus one fallback", () => {
+  test("selects ten v6 repositories after excluding the v5 model-run sample", () => {
     expect(PAW_FRESH_QUALIFICATION_V3_RULE.count).toBe(5);
     expect(PAW_FRESH_QUALIFICATION_V4_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_V5_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_RULE.version).toBe(
+      "paw-fresh-qualification-v6",
+    );
+    expect(PAW_FRESH_QUALIFICATION_V5_RUN_IDS).toEqual(["sympy__sympy-14024"]);
     expect(PAW_FRESH_QUALIFICATION_RULE.fallbackMinFailToPass).toBe(1);
     expect(PAW_FRESH_QUALIFICATION_RULE.seed).toBe(
       PAW_FRESH_QUALIFICATION_V3_RULE.seed,
@@ -153,6 +160,11 @@ describe("SWE compare manifest", () => {
     if (!qualifying) throw new Error("v3 fixture has no qualifying candidate");
     candidates.push({
       ...qualifying,
+      instance_id: PAW_FRESH_QUALIFICATION_V5_RUN_IDS[0],
+      repo: "v5-model-run/repo",
+    });
+    candidates.push({
+      ...qualifying,
       instance_id: PAW_FRESH_V2_IDS[0],
       repo: "already-exposed/repo",
     });
@@ -188,6 +200,7 @@ describe("SWE compare manifest", () => {
       PAW_FRESH_QUALIFICATION_RULE.count,
     );
     expect(selected).not.toContain(PAW_FRESH_V2_IDS[0]);
+    expect(selected).not.toContain(PAW_FRESH_QUALIFICATION_V5_RUN_IDS[0]);
     expect(selected).not.toContain("zero-f2p__repo");
     expect(selected).not.toContain("too-small-p2p__repo");
     expect(selected.filter((id) => id.startsWith("fallback-")).length).toBe(1);
