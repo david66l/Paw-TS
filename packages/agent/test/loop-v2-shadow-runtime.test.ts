@@ -7,7 +7,9 @@ import type { RunEvent, RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
 import {
+  artifactEvidenceV2,
   createLoopV2ShadowObserver,
+  evaluateCandidateReadinessV2,
   materializeCandidateArtifactV2,
 } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
@@ -229,10 +231,110 @@ describe("Loop Kernel v2 shadow migration", () => {
         reason: "unbounded_mutation_surface",
       },
     });
+    observer.observe(
+      legacyEnvelope(3, {
+        type: "tool.result",
+        tool: "workspace.run_shell",
+        ok: true,
+        summary: "untrusted test result",
+      }),
+    );
+    observer.observeToolCommit({
+      sourceSeq: 3,
+      callId: "test-3",
+      tool: "workspace.run_shell",
+      args: { command: "pytest tests/test_other.py -q" },
+      result: {
+        ok: true,
+        summary: "1 passed",
+        payload: { stdout: "1 passed", exit_code: 0 },
+      },
+      repositoryRevision: "run:shadow-r19:mutation:0",
+      concurrentMutation: true,
+      mutationCapture: {
+        status: "gap",
+        reason: "unbounded_mutation_surface",
+      },
+      verificationCapture: {
+        runner: "pytest",
+        argv: ["pytest", "tests/test_other.py", "-q"],
+        cwd: "C:/workspace",
+        scope: ["tests/test_other.py"],
+        mutationRevision: 0,
+        outcome: "passed",
+        exitCode: 0,
+        output: "1 passed",
+        authoritative: true,
+      },
+    });
 
     const report = observer.snapshot();
     expect(Object.keys(report.state.mutations)).toHaveLength(0);
-    expect(report.diagnostics.at(-1)?.reason).toBe("rich_mutation_capture_gap");
+    expect(Object.keys(report.state.verification)).toHaveLength(0);
+    expect(report.diagnostics.slice(-2).map((item) => item.reason)).toEqual([
+      "rich_mutation_capture_gap",
+      "rich_verification_effect_ambiguous",
+    ]);
+  });
+
+  test("verification projects only with a no-mutation effect audit", () => {
+    const observer = createLoopV2ShadowObserver("shadow-r19");
+    observer.observe(
+      legacyEnvelope(1, { type: "run.started", goal: "Run the tests" }),
+    );
+    observer.observe(
+      legacyEnvelope(2, {
+        type: "tool.result",
+        tool: "workspace.run_shell",
+        ok: true,
+        summary: "2 passed",
+        workspaceEffect: { changed: false, paths: [] },
+      }),
+    );
+    observer.observeToolCommit({
+      sourceSeq: 2,
+      callId: "test-2",
+      tool: "workspace.run_shell",
+      args: { command: "pytest tests/test_value.py -q" },
+      result: {
+        ok: true,
+        summary: "2 passed",
+        payload: { stdout: "2 passed", exit_code: 0 },
+      },
+      repositoryRevision: "run:shadow-r19:mutation:0",
+      concurrentMutation: true,
+      mutationCapture: {
+        status: "complete",
+        paths: [],
+        beforeContents: {},
+        afterContents: {},
+      },
+      verificationCapture: {
+        runner: "pytest",
+        argv: ["pytest", "tests/test_value.py", "-q"],
+        cwd: "C:/workspace",
+        scope: ["tests/test_value.py"],
+        mutationRevision: 0,
+        outcome: "passed",
+        exitCode: 0,
+        output: "2 passed",
+        authoritative: true,
+      },
+    });
+
+    const report = observer.snapshot();
+    const verification = Object.values(report.state.verification);
+    expect(verification).toHaveLength(1);
+    expect(verification[0]).toMatchObject({
+      runner: "pytest",
+      argv: ["pytest", "tests/test_value.py", "-q"],
+      mutationRevision: 0,
+      outcome: "passed",
+      authoritative: true,
+    });
+    expect(report.diagnostics.at(-1)?.reason).toBe(
+      "rich_verification_projected",
+    );
   });
 
   test("R19 projects only facts proved by the legacy event contract", () => {
@@ -272,25 +374,28 @@ describe("Loop Kernel v2 shadow migration", () => {
     );
 
     const report = observer.snapshot();
-    expect(report.projectedEvents).toHaveLength(1);
+    expect(report.projectedEvents).toHaveLength(2);
     expect(report.projectedEvents[0]?.event.type).toBe("task.started");
     expect(report.state.goal?.verbatim).toBe(
       "Fix the bug and verify the behavior.",
     );
     expect(Object.keys(report.state.evidence)).toHaveLength(0);
     expect(Object.keys(report.state.mutations)).toHaveLength(0);
-    expect(report.state.currentCandidate).toBeUndefined();
+    expect(report.state.currentCandidate).toMatchObject({
+      mutationRevision: 0,
+      proposedAtSeq: 2,
+    });
     expect(report.coverage).toEqual({
       observed: 4,
-      projected: 1,
-      gaps: 3,
+      projected: 2,
+      gaps: 2,
       ignored: 0,
     });
     expect(report.diagnostics.map((item) => item.reason)).toEqual([
       "task_started_projected",
       "legacy_evidence_missing_content_identity",
       "legacy_mutation_missing_content_refs",
-      "legacy_candidate_missing_certification_input",
+      "rich_candidate_projected",
     ]);
   });
 
@@ -384,7 +489,7 @@ describe("Loop Kernel v2 shadow migration", () => {
           item.event.type === "run.failed",
       );
     expect(report?.sourceThroughSeq).toBe(terminal?.seq);
-    expect(report?.projectedEvents).toHaveLength(2);
+    expect(report?.projectedEvents).toHaveLength(3);
     expect(Object.keys(report?.state.evidence ?? {})).toHaveLength(1);
     expect(
       report?.diagnostics.some(
@@ -421,5 +526,179 @@ describe("Loop Kernel v2 shadow migration", () => {
         (item) => item.reason === "rich_mutation_projected",
       ),
     ).toBe(true);
+    expect(report?.state.currentCandidate).toMatchObject({
+      mutationRevision: 1,
+    });
+  });
+
+  test("live audited shell reuses TaskState verification classification", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-shadow-verify-"));
+    writeFileSync(path.join(dir, "smoke-test.js"), "process.exit(0);", "utf8");
+    let modelCalls = 0;
+    const shadow = new AgentOrchestrator({
+      model: {
+        label: "shadow-verification",
+        async complete() {
+          modelCalls += 1;
+          return modelCalls === 1
+            ? {
+                text: JSON.stringify({
+                  tool: "workspace.run_shell",
+                  args: { command: "node smoke-test.js" },
+                }),
+              }
+            : { text: '{"type":"final_answer","summary":"Verified."}' };
+        },
+      },
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      loopKernelVersion: "v2-shadow",
+      toolEffectPolicy: {
+        appliesTo: ({ tool }) => tool === "workspace.run_shell",
+        prepare: () => undefined,
+        settle: ({ result }) => ({
+          allowed: true,
+          result: {
+            ...result,
+            payload: {
+              ...(result.payload as Record<string, unknown>),
+              workspaceEffect: { changed: false, paths: [] },
+            },
+          },
+        }),
+      },
+    });
+    const result = await shadow.run({
+      runId: "shadow-live-verification",
+      goal: "Run the smoke test and report the result.",
+      workspaceRoot: dir,
+      maxSteps: 5,
+    });
+
+    expect(result.status).toBe("completed");
+    const report = shadow.getLastLoopV2ShadowReport();
+    const verification = Object.values(report?.state.verification ?? {});
+    expect(verification).toHaveLength(1);
+    expect(verification[0]).toMatchObject({
+      runner: "custom",
+      argv: ["node", "smoke-test.js"],
+      scope: ["smoke-test.js"],
+      outcome: "passed",
+      mutationRevision: 0,
+      authoritative: true,
+    });
+    expect(report?.state.currentMutationRevision).toBe(0);
+    expect(report?.state.currentCandidate).toMatchObject({
+      mutationRevision: 0,
+    });
+  });
+
+  test("live read-edit-test-final trajectory projects an auditable v2 candidate", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-shadow-trajectory-"));
+    writeFileSync(path.join(dir, "source.txt"), "before", "utf8");
+    writeFileSync(path.join(dir, "smoke-test.js"), "process.exit(0);", "utf8");
+    let modelCalls = 0;
+    const shadow = new AgentOrchestrator({
+      model: {
+        label: "shadow-full-trajectory",
+        async complete() {
+          modelCalls += 1;
+          if (modelCalls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.read_file",
+                args: { path: "source.txt" },
+              }),
+            };
+          }
+          if (modelCalls === 2) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.edit_file",
+                args: {
+                  path: "source.txt",
+                  old_string: "before",
+                  new_string: "after",
+                },
+              }),
+            };
+          }
+          if (modelCalls === 3) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: "node smoke-test.js" },
+              }),
+            };
+          }
+          return {
+            text: JSON.stringify({
+              action: "final_answer",
+              summary: "Implemented and verified.",
+            }),
+          };
+        },
+      },
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      loopKernelVersion: "v2-shadow",
+      toolEffectPolicy: {
+        appliesTo: ({ tool }) => tool === "workspace.run_shell",
+        prepare: () => undefined,
+        settle: ({ result }) => ({
+          allowed: true,
+          result: {
+            ...result,
+            payload: {
+              ...(result.payload as Record<string, unknown>),
+              workspaceEffect: { changed: false, paths: [] },
+            },
+          },
+        }),
+      },
+    });
+    const result = await shadow.run({
+      runId: "shadow-full-trajectory",
+      goal: "Read, fix, and verify source.txt.",
+      workspaceRoot: dir,
+      maxSteps: 8,
+    });
+
+    expect(result.status).toBe("completed");
+    const report = shadow.getLastLoopV2ShadowReport();
+    if (!report) throw new Error("Missing shadow report");
+    expect(report.state.currentMutationRevision).toBe(1);
+    expect(Object.keys(report.state.evidence)).toHaveLength(1);
+    expect(Object.keys(report.state.mutations)).toHaveLength(1);
+    expect(Object.keys(report.state.verification)).toHaveLength(1);
+    expect(report.state.currentCandidate).toMatchObject({
+      mutationRevision: 1,
+      proposedAtSeq: 5,
+    });
+    expect(report.diagnostics.map((item) => item.reason)).toEqual(
+      expect.arrayContaining([
+        "rich_read_projected",
+        "rich_mutation_projected",
+        "rich_verification_projected",
+        "rich_candidate_projected",
+      ]),
+    );
+    const artifact = materializeCandidateArtifactV2(
+      Object.values(report.state.mutations),
+      report.artifactBlobs,
+      { status: "unavailable" },
+    );
+    expect(artifact.status).toBe("valid");
+    expect(artifact.patch).toContain("+after");
+    const readiness = evaluateCandidateReadinessV2(
+      report.state,
+      artifactEvidenceV2(artifact),
+    );
+    expect(readiness).toMatchObject({
+      disposition: "ready_for_review",
+      readyForSemanticReview: true,
+      localVerification: "passed",
+      gaps: [],
+    });
   });
 });

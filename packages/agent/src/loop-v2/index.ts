@@ -103,6 +103,7 @@ export {
   type LoopV2ShadowToolCommitInput,
   type LoopV2ShadowToolCommitPortInput,
   type LoopV2ShadowMutationCapture,
+  type LoopV2ShadowVerificationCapture,
 } from "./shadow-runtime.js";
 export {
   executeToolBatchV2,

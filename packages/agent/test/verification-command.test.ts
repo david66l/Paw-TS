@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   analyzeVerificationCommand,
+  analyzeVerificationInvocation,
   isVerificationCommand,
   verificationCommandFamily,
 } from "../src/verification-command.js";
@@ -21,6 +22,18 @@ describe("verification command intent", () => {
       expect(isVerificationCommand(command)).toBe(true);
       expect(verificationCommandFamily(command)).toBe("pytest");
     }
+  });
+
+  test("retains the exact quote-aware runner argv for durable evidence", () => {
+    expect(
+      analyzeVerificationInvocation(
+        'python -m pytest "tests/test value.py::test_case" -q && echo done',
+      ),
+    ).toEqual({
+      family: "pytest",
+      exitStatusReliable: true,
+      argv: ["python", "-m", "pytest", "tests/test value.py::test_case", "-q"],
+    });
   });
 
   test("rejects successful pytest modes which execute no assertions", () => {

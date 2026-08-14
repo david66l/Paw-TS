@@ -4,6 +4,10 @@ import {
   createArtifactContentBlobV2,
   renderMutationStepPatchV2,
 } from "./artifact-materializer.js";
+import {
+  buildCandidateInputV2,
+  candidateInputHashV2,
+} from "./candidate-certification.js";
 import { canonicalJson, sha256Canonical } from "./canonical.js";
 import {
   createWorkingDecisionStateV2,
@@ -25,7 +29,6 @@ export type LoopV2ShadowReason =
   | "legacy_evidence_missing_content_identity"
   | "legacy_mutation_missing_content_refs"
   | "legacy_verification_missing_authority_scope"
-  | "legacy_candidate_missing_certification_input"
   | "legacy_compaction_missing_artifact_refs"
   | "rich_read_projected"
   | "rich_search_projected"
@@ -35,6 +38,10 @@ export type LoopV2ShadowReason =
   | "rich_mutation_projected"
   | "rich_mutation_no_effect"
   | "rich_mutation_capture_gap"
+  | "rich_verification_projected"
+  | "rich_verification_revision_gap"
+  | "rich_verification_effect_ambiguous"
+  | "rich_candidate_projected"
   | "non_decision_event";
 
 export interface LoopV2ShadowDiagnostic {
@@ -93,6 +100,20 @@ export interface LoopV2ShadowToolCommitInput {
   /** A sibling mutation may race a read/search in the legacy parallel batch. */
   readonly concurrentMutation: boolean;
   readonly mutationCapture?: LoopV2ShadowMutationCapture;
+  readonly verificationCapture?: LoopV2ShadowVerificationCapture;
+}
+
+export interface LoopV2ShadowVerificationCapture {
+  readonly runner: import("./schema.js").VerificationRecordV2["runner"];
+  readonly argv: readonly string[];
+  readonly cwd: string;
+  readonly scope: readonly string[];
+  readonly mutationRevision: number;
+  readonly outcome: import("./schema.js").VerificationRecordV2["outcome"];
+  readonly exitCode?: number;
+  readonly failureClass?: string;
+  readonly output: string;
+  readonly authoritative: boolean;
 }
 
 export type LoopV2ShadowMutationCapture =
@@ -193,6 +214,38 @@ export function createLoopV2ShadowObserver(
         return;
       }
 
+      if (
+        envelope.event.type === "agent.action" &&
+        readString(readRecord(envelope.event, "action"), "type") ===
+          "final_answer"
+      ) {
+        const proposedAtSeq = projectedEvents.length + 1;
+        const input = buildCandidateInputV2(
+          state,
+          terminalCandidateSnapshots(state),
+        );
+        const candidateInputHash = candidateInputHashV2(input);
+        const projected: LoopV2Envelope = {
+          schemaVersion: LOOP_V2_SCHEMA_VERSION,
+          runId,
+          seq: proposedAtSeq,
+          ts: envelope.ts,
+          event: {
+            type: "candidate.proposed",
+            candidate: {
+              id: `candidate-${candidateInputHash.slice(0, 16)}`,
+              mutationRevision: state.currentMutationRevision,
+              candidateInputHash,
+              proposedAtSeq,
+            },
+          },
+        };
+        state = projectLoopV2Event(state, projected).state;
+        projectedEvents.push(projected);
+        record(envelope, "projected", "rich_candidate_projected");
+        return;
+      }
+
       const classification = classifyLegacyEvent(envelope.event);
       record(envelope, classification.disposition, classification.reason);
     },
@@ -222,6 +275,69 @@ export function createLoopV2ShadowObserver(
         );
       }
       consumedToolCommits.add(input.sourceSeq);
+
+      if (input.verificationCapture) {
+        const auditedNoMutation =
+          input.mutationCapture?.status === "complete" &&
+          input.mutationCapture.paths.length === 0;
+        if (!auditedNoMutation) {
+          diagnostics[diagnosticIndex] = {
+            ...diagnostic,
+            disposition: "gap",
+            reason: "rich_verification_effect_ambiguous",
+          };
+          return;
+        }
+        if (
+          input.verificationCapture.mutationRevision !==
+          state.currentMutationRevision
+        ) {
+          diagnostics[diagnosticIndex] = {
+            ...diagnostic,
+            disposition: "gap",
+            reason: "rich_verification_revision_gap",
+          };
+          return;
+        }
+        const blob = createArtifactContentBlobV2(
+          input.verificationCapture.output,
+        );
+        artifactBlobs.set(blob.ref, blob);
+        const projected: LoopV2Envelope = {
+          schemaVersion: LOOP_V2_SCHEMA_VERSION,
+          runId,
+          seq: projectedEvents.length + 1,
+          ts: sourceTimestamps.get(input.sourceSeq) ?? 0,
+          event: {
+            type: "verification.recorded",
+            verification: {
+              id: `verification-${input.callId}`,
+              runner: input.verificationCapture.runner,
+              argv: input.verificationCapture.argv,
+              cwd: input.verificationCapture.cwd,
+              scope: input.verificationCapture.scope,
+              mutationRevision: input.verificationCapture.mutationRevision,
+              outcome: input.verificationCapture.outcome,
+              ...(input.verificationCapture.exitCode !== undefined
+                ? { exitCode: input.verificationCapture.exitCode }
+                : {}),
+              ...(input.verificationCapture.failureClass
+                ? { failureClass: input.verificationCapture.failureClass }
+                : {}),
+              outputArtifactRef: blob.ref,
+              authoritative: input.verificationCapture.authoritative,
+            },
+          },
+        };
+        state = projectLoopV2Event(state, projected).state;
+        projectedEvents.push(projected);
+        diagnostics[diagnosticIndex] = {
+          ...diagnostic,
+          disposition: "projected",
+          reason: "rich_verification_projected",
+        };
+        return;
+      }
 
       if (isMutationTool(input.tool)) {
         const mutation = buildRichMutation(
@@ -346,6 +462,25 @@ export function createLoopV2ShadowObserver(
   };
 }
 
+function terminalCandidateSnapshots(
+  state: WorkingDecisionStateV2,
+): readonly Readonly<{ path: string; contentHash: string }>[] {
+  const terminalHashes = new Map<string, string | null>();
+  const mutations = Object.values(state.mutations).sort(
+    (left, right) =>
+      left.mutationRevision - right.mutationRevision || left.seq - right.seq,
+  );
+  for (const mutation of mutations) {
+    for (const path of mutation.paths) {
+      terminalHashes.set(path, mutation.afterHashes[path] ?? null);
+    }
+  }
+  return [...terminalHashes]
+    .filter((entry): entry is [string, string] => entry[1] !== null)
+    .map(([path, contentHash]) => ({ path, contentHash }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
 function classifyLegacyEvent(
   event: LegacyRunEventEnvelopeV1["event"],
 ): Readonly<{
@@ -356,16 +491,6 @@ function classifyLegacyEvent(
     return {
       disposition: "ignored",
       reason: "mechanical_phase_not_semantic",
-    };
-  }
-
-  if (
-    event.type === "agent.action" &&
-    readString(readRecord(event, "action"), "type") === "final_answer"
-  ) {
-    return {
-      disposition: "gap",
-      reason: "legacy_candidate_missing_certification_input",
     };
   }
 

@@ -19,6 +19,11 @@ export interface VerificationCommandIntent {
   readonly exitStatusReliable: boolean;
 }
 
+export interface VerificationInvocation extends VerificationCommandIntent {
+  /** Exact quote-aware argv of the segment that invokes the runner. */
+  readonly argv: readonly string[];
+}
+
 type VerificationSegmentIntent = Pick<VerificationCommandIntent, "family">;
 
 /** pytest modes which can exit successfully without executing assertions. */
@@ -211,6 +216,18 @@ function exitStatusProvesVerification(
 export function analyzeVerificationCommand(
   command: string,
 ): VerificationCommandIntent | undefined {
+  const invocation = analyzeVerificationInvocation(command);
+  return invocation
+    ? {
+        family: invocation.family,
+        exitStatusReliable: invocation.exitStatusReliable,
+      }
+    : undefined;
+}
+
+export function analyzeVerificationInvocation(
+  command: string,
+): VerificationInvocation | undefined {
   const trimmed = command.trim();
   if (!trimmed) return undefined;
   if (/\b(?:pip3?|uv|npm|pnpm|yarn|bun)\s+(?:install|add|i)\b/i.test(trimmed)) {
@@ -226,6 +243,7 @@ export function analyzeVerificationCommand(
       return {
         ...intent,
         exitStatusReliable: exitStatusProvesVerification(chain, index),
+        argv: segment.tokens,
       };
     }
   }

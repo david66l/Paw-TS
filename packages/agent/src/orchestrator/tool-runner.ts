@@ -47,9 +47,15 @@ import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
 import type {
   LoopV2ShadowMutationCapture,
   LoopV2ShadowToolCommitPortInput,
+  LoopV2ShadowVerificationCapture,
 } from "../loop-v2/index.js";
-import type { TaskStateManager } from "../task-state.js";
+import type {
+  TaskState,
+  TaskStateManager,
+  TestResultSummary,
+} from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
+import { analyzeVerificationInvocation } from "../verification-command.js";
 import { SUB_AGENT_TOOL_NAME } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
 import { truncatePayloadWithOutcome } from "./truncate-payload.js";
@@ -627,6 +633,7 @@ export async function executeToolCalls(
       mutationCaptures[i] = captureMutationAfter(
         toolCtx.workspaceRoot,
         beforeCapture,
+        settledResult,
       );
     }
     return settledResult;
@@ -701,7 +708,8 @@ export function finalizeToolExecution(
   for (let i = 0; i < calls.length; i++) {
     const call = calls[i]!;
     const tr = results[i]!;
-    const repositoryRevision = `run:${ctx.runId}:mutation:${ctx.taskState?.snapshot().mutationRevision ?? 0}`;
+    const taskStateBefore = ctx.taskState?.snapshot();
+    const repositoryRevision = `run:${ctx.runId}:mutation:${taskStateBefore?.mutationRevision ?? 0}`;
     const sourceContentHash =
       ctx.observeLoopV2ToolCommit &&
       tr.ok &&
@@ -710,6 +718,14 @@ export function finalizeToolExecution(
         ? readSourceContentHash(ctx.workspaceRoot, call.args, tr.payload)
         : undefined;
     ctx.taskState?.recordToolResult(call, tr);
+    const taskStateAfter = ctx.taskState?.snapshot();
+    const verificationCapture = buildShadowVerificationCapture(
+      ctx.workspaceRoot,
+      call,
+      tr,
+      taskStateBefore,
+      taskStateAfter,
+    );
     const conflictPayload =
       tr.payload && typeof tr.payload === "object"
         ? (tr.payload as Record<string, unknown>)
@@ -753,6 +769,7 @@ export function finalizeToolExecution(
       ...(ctx.mutationCaptures?.[i]
         ? { mutationCapture: ctx.mutationCaptures[i] }
         : {}),
+      ...(verificationCapture ? { verificationCapture } : {}),
     });
   }
 
@@ -915,8 +932,22 @@ function captureMutationBefore(
 function captureMutationAfter(
   workspaceRoot: string,
   before: MutationBeforeCapture,
+  result: ToolRunResult,
 ): LoopV2ShadowMutationCapture {
-  if (before.status === "gap") return before;
+  if (before.status === "gap") {
+    if (
+      before.reason === "unbounded_mutation_surface" &&
+      workspaceEffectFromPayload(result.payload)?.changed === false
+    ) {
+      return {
+        status: "complete",
+        paths: [],
+        beforeContents: {},
+        afterContents: {},
+      };
+    }
+    return before;
+  }
   const afterContents = captureTargetContents(workspaceRoot, before.paths);
   return afterContents
     ? {
@@ -926,6 +957,94 @@ function captureMutationAfter(
         afterContents,
       }
     : { status: "gap", reason: "capture_failed" };
+}
+
+function buildShadowVerificationCapture(
+  workspaceRoot: string,
+  call: AgentToolCallAction,
+  result: ToolRunResult,
+  before: TaskState | undefined,
+  after: TaskState | undefined,
+): LoopV2ShadowToolCommitPortInput["verificationCapture"] {
+  if (call.tool !== "workspace.run_shell" || !before || !after) {
+    return undefined;
+  }
+  if ((after.shellCommandRevision ?? 0) <= (before.shellCommandRevision ?? 0)) {
+    return undefined;
+  }
+  const testResult = after.testResults.at(-1);
+  if (
+    !testResult ||
+    testResult.shellCommandRevision !== after.shellCommandRevision
+  ) {
+    return undefined;
+  }
+  const invocation = analyzeVerificationInvocation(testResult.command);
+  if (!invocation || invocation.argv.length === 0) return undefined;
+  const args =
+    call.args && typeof call.args === "object" && !Array.isArray(call.args)
+      ? (call.args as Readonly<Record<string, unknown>>)
+      : {};
+  const requestedCwd = typeof args.cwd === "string" ? args.cwd : ".";
+  const cwd = path.resolve(workspaceRoot, requestedCwd);
+  const payload =
+    result.payload &&
+    typeof result.payload === "object" &&
+    !Array.isArray(result.payload)
+      ? (result.payload as Readonly<Record<string, unknown>>)
+      : {};
+  const exitCode = payload.exit_code;
+  return {
+    runner: verificationRunner(testResult, invocation.argv),
+    argv: invocation.argv,
+    cwd,
+    scope: verificationScope(invocation.argv),
+    mutationRevision: testResult.mutationRevision ?? 0,
+    outcome:
+      testResult.outcome ?? (testResult.passed ? "passed" : "code_failed"),
+    ...(typeof exitCode === "number" &&
+    Number.isSafeInteger(exitCode) &&
+    exitCode >= 0
+      ? { exitCode }
+      : {}),
+    ...(testResult.failureKind ? { failureClass: testResult.failureKind } : {}),
+    output: [payload.stdout, payload.stderr, result.summary]
+      .filter((value): value is string => typeof value === "string" && !!value)
+      .join("\n"),
+    authoritative: true,
+  };
+}
+
+function verificationRunner(
+  result: TestResultSummary,
+  argv: readonly string[],
+): LoopV2ShadowVerificationCapture["runner"] {
+  if (result.family === "pytest") return "pytest";
+  if (result.family === "unittest") return "unittest";
+  if (result.family === "javascript") {
+    const executable = argv[0]?.replaceAll("\\", "/").split("/").at(-1);
+    return executable?.toLowerCase().startsWith("bun")
+      ? "bun_test"
+      : "npm_test";
+  }
+  return "custom";
+}
+
+function verificationScope(argv: readonly string[]): readonly string[] {
+  return [
+    ...new Set(
+      argv
+        .slice(1)
+        .filter(
+          (token) =>
+            !token.startsWith("-") &&
+            (/[\\/]/.test(token) ||
+              /::/.test(token) ||
+              /\.(?:py|ts|tsx|js|jsx)$/i.test(token)),
+        )
+        .map((token) => token.replaceAll("\\", "/")),
+    ),
+  ];
 }
 
 function normalizeMutationTargets(
