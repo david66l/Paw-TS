@@ -1,7 +1,9 @@
 export { canonicalJson, sha256Canonical } from "./canonical.js";
 export {
   buildCandidateInputV2,
+  buildCandidateReviewPayloadV2,
   candidateInputHashV2,
+  candidateSnapshotHashV2,
   createSemanticReviewLedgerV2,
   evaluateCandidateReadinessV2,
   reviewCandidateOnceV2,
@@ -13,7 +15,9 @@ export {
   type CandidateReadinessGapV2,
   type CandidateReadinessPolicyV2,
   type CandidateReadinessV2,
+  type CandidateReviewPayloadV2,
   type CandidateSnapshotV2,
+  type CandidateSourceSnapshotV2,
   type SemanticReviewerV2,
   type SemanticReviewFindingV2,
   type SemanticReviewLedgerV2,
@@ -21,6 +25,14 @@ export {
   type SemanticReviewRecordV2,
   type SemanticReviewV2,
 } from "./candidate-certification.js";
+export {
+  renderHostReportV2,
+  type CandidateDeliveryNoteV2,
+  type CandidateVerificationClaimV2,
+  type HostReportInputV2,
+  type HostReportV2,
+  type OmittedCandidateClaimV2,
+} from "./host-report.js";
 export {
   evidenceFingerprint,
   extendReadCoverage,
@@ -56,6 +68,18 @@ export {
   restoreLoopV2Checkpoint,
   type LoopV2ReplayResult,
 } from "./replay.js";
+export {
+  deriveRunOutcomeV2,
+  type DeriveRunOutcomeInputV2,
+  type RunOutcomeV2,
+} from "./run-outcome.js";
+export {
+  buildSemanticReviewMessagesV2,
+  createModelSemanticReviewerV2,
+  type ModelSemanticReviewerOptionsV2,
+  type SemanticReviewModelV2,
+  type SemanticReviewUsageV2,
+} from "./semantic-reviewer.js";
 export {
   executeToolBatchV2,
   type CommittedToolCallV2,

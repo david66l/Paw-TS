@@ -5,7 +5,9 @@ import {
   type SemanticReviewLedgerV2,
   type WorkingDecisionStateV2,
   buildCandidateInputV2,
+  buildCandidateReviewPayloadV2,
   candidateInputHashV2,
+  candidateSnapshotHashV2,
   createSemanticReviewLedgerV2,
   createWorkingDecisionStateV2,
   evaluateCandidateReadinessV2,
@@ -259,8 +261,13 @@ describe("Loop Kernel v2 candidate certification", () => {
   });
 
   test("R05 reviews one semantic candidate once across six different summaries", async () => {
-    const input = buildCandidateInputV2(baseState(), [
-      { path: "src/public.ts", contentHash: "snapshot-r1" },
+    const content = "export function renderPublic() { return 'fixed'; }";
+    const payload = buildCandidateReviewPayloadV2(baseState(), [
+      {
+        path: "src/public.ts",
+        contentHash: candidateSnapshotHashV2(content),
+        content,
+      },
     ]);
     let ledger: SemanticReviewLedgerV2 = createSemanticReviewLedgerV2();
     let calls = 0;
@@ -272,12 +279,12 @@ describe("Loop Kernel v2 candidate certification", () => {
     for (const _summary of summaries) {
       const result = await reviewCandidateOnceV2(
         ledger,
-        input,
+        payload,
         async (value) => {
           calls += 1;
           return {
-            candidateInputHash: candidateInputHashV2(value),
-            mutationRevision: value.mutationRevision,
+            candidateInputHash: value.candidateInputHash,
+            mutationRevision: value.input.mutationRevision,
             verdict: "pass",
             findings: [],
           };
@@ -291,11 +298,11 @@ describe("Loop Kernel v2 candidate certification", () => {
   });
 
   test("R18 records malformed reviewer output once as partial and never retries", async () => {
-    const input = buildCandidateInputV2(baseState(), []);
+    const payload = buildCandidateReviewPayloadV2(baseState(), []);
     let calls = 0;
     const first = await reviewCandidateOnceV2(
       createSemanticReviewLedgerV2(),
-      input,
+      payload,
       async () => {
         calls += 1;
         return { verdict: "looks-good" };
@@ -303,7 +310,7 @@ describe("Loop Kernel v2 candidate certification", () => {
     );
     const second = await reviewCandidateOnceV2(
       first.ledger,
-      input,
+      payload,
       async () => {
         calls += 1;
         throw new Error("must not run");

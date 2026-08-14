@@ -15,6 +15,10 @@ export interface CandidateSnapshotV2 {
   readonly contentHash: string;
 }
 
+export interface CandidateSourceSnapshotV2 extends CandidateSnapshotV2 {
+  readonly content: string;
+}
+
 export interface CandidateArtifactEvidenceV2 {
   /** The journal can be replayed into the candidate patch without Git. */
   readonly reconstructible: boolean;
@@ -50,6 +54,18 @@ export interface CandidateInputV2 {
   readonly currentVerification: readonly VerificationRecordV2[];
   readonly unresolvedRisks: readonly RiskRecordV2[];
   readonly snapshotHashes: readonly CandidateSnapshotV2[];
+}
+
+export interface CandidateReviewPayloadV2 {
+  readonly input: CandidateInputV2;
+  readonly candidateInputHash: string;
+  readonly goal: string;
+  readonly mutationPatches: readonly Readonly<{
+    readonly callId: string;
+    readonly mutationRevision: number;
+    readonly patch: string;
+  }>[];
+  readonly snapshots: readonly CandidateSourceSnapshotV2[];
 }
 
 export type CandidateReadinessGapCodeV2 =
@@ -127,7 +143,9 @@ export interface SemanticReviewOnceResultV2 {
   readonly ledger: SemanticReviewLedgerV2;
 }
 
-export type SemanticReviewerV2 = (input: CandidateInputV2) => Promise<unknown>;
+export type SemanticReviewerV2 = (
+  payload: CandidateReviewPayloadV2,
+) => Promise<unknown>;
 
 export function buildCandidateInputV2(
   state: WorkingDecisionStateV2,
@@ -197,6 +215,37 @@ export function buildCandidateInputV2(
 
 export function candidateInputHashV2(input: CandidateInputV2): string {
   return sha256Canonical(input);
+}
+
+export function candidateSnapshotHashV2(content: string): string {
+  return sha256Canonical(content);
+}
+
+export function buildCandidateReviewPayloadV2(
+  state: WorkingDecisionStateV2,
+  snapshots: readonly CandidateSourceSnapshotV2[],
+): CandidateReviewPayloadV2 {
+  for (const snapshot of snapshots) {
+    if (candidateSnapshotHashV2(snapshot.content) !== snapshot.contentHash) {
+      throw new Error(`Candidate snapshot hash mismatch: ${snapshot.path}`);
+    }
+  }
+  const input = buildCandidateInputV2(state, snapshots);
+  return {
+    input,
+    candidateInputHash: candidateInputHashV2(input),
+    goal: state.goal?.verbatim ?? "",
+    mutationPatches: Object.values(state.mutations)
+      .sort(compareMutations)
+      .map((mutation) => ({
+        callId: mutation.callId,
+        mutationRevision: mutation.mutationRevision,
+        patch: mutation.patch,
+      })),
+    snapshots: snapshots
+      .map((snapshot) => ({ ...snapshot }))
+      .sort((left, right) => left.path.localeCompare(right.path)),
+  };
 }
 
 export function semanticReviewKeyV2(
@@ -401,11 +450,15 @@ export function createSemanticReviewLedgerV2(): SemanticReviewLedgerV2 {
  */
 export async function reviewCandidateOnceV2(
   ledger: SemanticReviewLedgerV2,
-  input: CandidateInputV2,
+  payload: CandidateReviewPayloadV2,
   reviewer: SemanticReviewerV2,
 ): Promise<SemanticReviewOnceResultV2> {
-  const inputHash = candidateInputHashV2(input);
-  const reviewKey = semanticReviewKeyV2(input.mutationRevision, inputHash);
+  assertReviewPayloadIdentity(payload);
+  const inputHash = payload.candidateInputHash;
+  const reviewKey = semanticReviewKeyV2(
+    payload.input.mutationRevision,
+    inputHash,
+  );
   const recorded = ledger.records[reviewKey];
   if (recorded) {
     return {
@@ -418,12 +471,8 @@ export async function reviewCandidateOnceV2(
 
   let record: SemanticReviewRecordV2;
   try {
-    const raw = await reviewer(input);
-    const review = parseSemanticReviewV2(
-      raw,
-      inputHash,
-      input.mutationRevision,
-    );
+    const raw = await reviewer(payload);
+    const review = parseSemanticReviewV2(raw, payload);
     record = { reviewKey, review, completion: "completed" };
   } catch (error) {
     const protocolInvalid = error instanceof SemanticReviewProtocolError;
@@ -431,7 +480,7 @@ export async function reviewCandidateOnceV2(
       reviewKey,
       review: partialReview(
         inputHash,
-        input.mutationRevision,
+        payload.input.mutationRevision,
         protocolInvalid
           ? "Reviewer returned an invalid structured verdict."
           : "Reviewer did not complete.",
@@ -457,9 +506,10 @@ class SemanticReviewProtocolError extends Error {}
 
 function parseSemanticReviewV2(
   value: unknown,
-  expectedHash: string,
-  expectedRevision: number,
+  payload: CandidateReviewPayloadV2,
 ): SemanticReviewV2 {
+  const expectedHash = payload.candidateInputHash;
+  const expectedRevision = payload.input.mutationRevision;
   if (!isRecord(value)) {
     throw new SemanticReviewProtocolError("Semantic review must be an object");
   }
@@ -473,7 +523,9 @@ function parseSemanticReviewV2(
       "Semantic review identity is invalid",
     );
   }
-  const findings = value.findings.map(parseFinding);
+  const findings = value.findings.map((finding) =>
+    parseFinding(finding, payload),
+  );
   if (
     value.verdict === "pass" &&
     findings.some((finding) => finding.severity === "blocking")
@@ -498,7 +550,10 @@ function parseSemanticReviewV2(
   };
 }
 
-function parseFinding(value: unknown): SemanticReviewFindingV2 {
+function parseFinding(
+  value: unknown,
+  payload: CandidateReviewPayloadV2,
+): SemanticReviewFindingV2 {
   if (!isRecord(value)) {
     throw new SemanticReviewProtocolError("Review finding must be an object");
   }
@@ -527,6 +582,70 @@ function parseFinding(value: unknown): SemanticReviewFindingV2 {
       "Blocking findings must bind visible evidence",
     );
   }
+  const criterionIds = new Set(
+    payload.input.criteria.map((criterion) => criterion.id),
+  );
+  const invariantIds = new Set(
+    payload.input.invariants.map((invariant) => invariant.id),
+  );
+  if (
+    typeof value.criterionId === "string" &&
+    !criterionIds.has(value.criterionId)
+  ) {
+    throw new SemanticReviewProtocolError(
+      `Review finding refers to unknown criterion: ${value.criterionId}`,
+    );
+  }
+  if (
+    typeof value.invariantId === "string" &&
+    !invariantIds.has(value.invariantId)
+  ) {
+    throw new SemanticReviewProtocolError(
+      `Review finding refers to unknown invariant: ${value.invariantId}`,
+    );
+  }
+  const visibleEvidenceRefs = new Set([
+    ...payload.mutationPatches.map((mutation) => `mutation:${mutation.callId}`),
+    ...payload.input.changedPublicSurface.map(
+      (surface) => `surface:${surface.id}`,
+    ),
+    ...payload.input.currentVerification.map((verification) => verification.id),
+    ...payload.snapshots.map((snapshot) => `snapshot:${snapshot.path}`),
+  ]);
+  const unknownEvidenceRefs = value.evidenceRefs.filter(
+    (reference) => !visibleEvidenceRefs.has(reference),
+  );
+  if (unknownEvidenceRefs.length > 0) {
+    throw new SemanticReviewProtocolError(
+      `Review finding refers to evidence outside its payload: ${unknownEvidenceRefs.join(", ")}`,
+    );
+  }
+  const visibleFiles = new Set([
+    ...payload.input.mutationJournal.flatMap((mutation) => mutation.paths),
+    ...payload.snapshots.map((snapshot) => snapshot.path),
+  ]);
+  if (typeof value.file === "string" && !visibleFiles.has(value.file)) {
+    throw new SemanticReviewProtocolError(
+      `Review finding refers to a file outside its payload: ${value.file}`,
+    );
+  }
+  const referencesPublicSurface = value.evidenceRefs.some((reference) => {
+    if (!reference.startsWith("surface:")) return false;
+    const surfaceId = reference.slice("surface:".length);
+    return payload.input.changedPublicSurface.some(
+      (surface) => surface.id === surfaceId,
+    );
+  });
+  if (
+    value.severity === "blocking" &&
+    referencesPublicSurface &&
+    (typeof value.minimalAlternative !== "string" ||
+      !value.minimalAlternative.trim())
+  ) {
+    throw new SemanticReviewProtocolError(
+      "Blocking public-surface findings must compare a minimal alternative",
+    );
+  }
   return {
     severity: value.severity,
     ...(typeof value.criterionId === "string"
@@ -546,6 +665,49 @@ function parseFinding(value: unknown): SemanticReviewFindingV2 {
       : {}),
     evidenceRefs: [...value.evidenceRefs] as string[],
   };
+}
+
+function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
+  const expectedHash = candidateInputHashV2(payload.input);
+  if (payload.candidateInputHash !== expectedHash) {
+    throw new Error("Candidate review payload identity hash mismatch");
+  }
+  const patchByCallId = new Map(
+    payload.mutationPatches.map((mutation) => [mutation.callId, mutation]),
+  );
+  if (patchByCallId.size !== payload.input.mutationJournal.length) {
+    throw new Error("Candidate review payload mutation set is incomplete");
+  }
+  for (const mutation of payload.input.mutationJournal) {
+    const material = patchByCallId.get(mutation.callId);
+    if (
+      !material ||
+      material.mutationRevision !== mutation.mutationRevision ||
+      sha256Canonical(material.patch) !== mutation.patchHash
+    ) {
+      throw new Error(
+        `Candidate review payload patch mismatch: ${mutation.callId}`,
+      );
+    }
+  }
+  const snapshotByPath = new Map(
+    payload.snapshots.map((snapshot) => [snapshot.path, snapshot]),
+  );
+  if (snapshotByPath.size !== payload.input.snapshotHashes.length) {
+    throw new Error("Candidate review payload snapshot set is incomplete");
+  }
+  for (const snapshot of payload.input.snapshotHashes) {
+    const material = snapshotByPath.get(snapshot.path);
+    if (
+      !material ||
+      material.contentHash !== snapshot.contentHash ||
+      candidateSnapshotHashV2(material.content) !== snapshot.contentHash
+    ) {
+      throw new Error(
+        `Candidate review payload snapshot mismatch: ${snapshot.path}`,
+      );
+    }
+  }
 }
 
 function partialReview(
