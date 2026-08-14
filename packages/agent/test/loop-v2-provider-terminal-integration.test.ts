@@ -5,7 +5,11 @@ import path from "node:path";
 
 import { FakeLanguageModel } from "@paw/models";
 
-import type { LoopV2LiveCandidateAssessmentV1 } from "../src/loop-v2/index.js";
+import {
+  type LoopV2LiveCandidateAssessmentV1,
+  loopV2LiveArtifactPath,
+  parseLoopV2LiveCandidateArtifactV1,
+} from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
 function tempWorkspace(prefix: string): string {
@@ -219,11 +223,30 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.status).toBe("completed");
       expect(orchestrator.getLastLoopV2CandidateAssessment()).toEqual(captured);
       if (!captured) throw new Error("Missing live candidate assessment");
+      const artifactPath = loopV2LiveArtifactPath(
+        workspaceRoot,
+        "v2-live-candidate-identity",
+      );
+      const persisted = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(artifactPath, "utf8"),
+      );
+      expect(persisted.assessment).toEqual(captured);
       return captured;
     };
 
     try {
       const natural = await runTrajectory("Implemented through natural stop.");
+      const artifactPath = loopV2LiveArtifactPath(
+        workspaceRoot,
+        "v2-live-candidate-identity",
+      );
+      const tampered = JSON.parse(fs.readFileSync(artifactPath, "utf8")) as {
+        assessment: { candidateInputHash: string };
+      };
+      tampered.assessment.candidateInputHash = "tampered";
+      expect(() =>
+        parseLoopV2LiveCandidateArtifactV1(JSON.stringify(tampered)),
+      ).toThrow("assessment does not match");
       fs.writeFileSync(sourcePath, "before\n", "utf8");
       const legacy = await runTrajectory(
         '{"action":"final_answer","summary":"Different legacy wording."}',

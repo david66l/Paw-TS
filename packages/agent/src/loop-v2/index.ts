@@ -50,6 +50,15 @@ export {
   type LoopV2LiveCandidateAssessmentV1,
 } from "./live-candidate.js";
 export {
+  LOOP_V2_LIVE_ARTIFACT_SCHEMA_VERSION,
+  assertLoopV2LiveCandidateArtifactV1,
+  buildLoopV2LiveCandidateArtifactV1,
+  loopV2LiveArtifactPath,
+  parseLoopV2LiveCandidateArtifactV1,
+  serializeLoopV2LiveCandidateArtifactV1,
+  type LoopV2LiveCandidateArtifactV1,
+} from "./live-artifact.js";
+export {
   evidenceFingerprint,
   extendReadCoverage,
   readCoverageKey,

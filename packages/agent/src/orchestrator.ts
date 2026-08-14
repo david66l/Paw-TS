@@ -76,6 +76,7 @@ import {
   type TodoStore,
   type TokenEstimator,
   allocateContextBudget,
+  atomicWrite,
   buildConversationAwareQuery,
   buildSystemPromptWithBudget,
   compressionSavingsRatio,
@@ -109,11 +110,14 @@ import {
   type LoopV2ShadowObserver,
   type LoopV2ShadowReport,
   type LoopV2ShadowToolCommitPortInput,
-  assessLoopV2LiveCandidateV1,
+  buildLoopV2LiveCandidateArtifactV1,
   createLoopV2ShadowObserver,
   createProviderTerminalStateV2,
+  loopV2LiveArtifactPath,
   normalizeProviderResponseV2,
+  parseLoopV2LiveCandidateArtifactV1,
   resolveLoopKernelVersion,
+  serializeLoopV2LiveCandidateArtifactV1,
 } from "./loop-v2/index.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -3170,15 +3174,24 @@ export class AgentOrchestrator {
             const requiresVerification =
               requireProductMutation ||
               report.state.currentMutationRevision > 0;
-            const assessment = assessLoopV2LiveCandidateV1(report, {
+            const policy = {
               requireProductMutation,
               verificationAuthority: requiresVerification
                 ? (this.verificationPolicy?.authority ?? "local")
                 : "not_required",
-            });
-            this._lastLoopV2CandidateAssessment = assessment;
+            } as const;
+            const artifact = buildLoopV2LiveCandidateArtifactV1(report, policy);
+            const artifactPath = loopV2LiveArtifactPath(workspaceRoot, runId);
+            atomicWrite(
+              artifactPath,
+              serializeLoopV2LiveCandidateArtifactV1(artifact),
+            );
+            const persisted = parseLoopV2LiveCandidateArtifactV1(
+              fs.readFileSync(artifactPath, "utf8"),
+            );
+            this._lastLoopV2CandidateAssessment = persisted.assessment;
             try {
-              this.onLoopV2CandidateAssessment?.(assessment);
+              this.onLoopV2CandidateAssessment?.(persisted.assessment);
             } catch {
               // A consumer callback is not completion authority.
             }
