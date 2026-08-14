@@ -36,6 +36,8 @@ export function evidenceFromTaskState(
     testResults: state.testResults.map((t) => ({
       command: t.command,
       passed: t.passed,
+      ...(t.outcome ? { outcome: t.outcome } : {}),
+      ...(t.failureKind ? { failureKind: t.failureKind } : {}),
       summary: t.summary,
     })),
     ...(skipVerifyReason ? { skipVerifyReason } : {}),

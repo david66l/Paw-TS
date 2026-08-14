@@ -33,6 +33,13 @@ function isInvestigationCall(call: AgentToolCallAction): boolean {
   return !isVerificationCommand(command) && !isDiffInspection(call);
 }
 
+function isVerificationCall(call: AgentToolCallAction): boolean {
+  if (call.tool !== "workspace.run_shell") return false;
+  const command =
+    typeof call.args.command === "string" ? call.args.command : "";
+  return isVerificationCommand(command);
+}
+
 function shellCallsSince(
   state: TaskState,
   revision: number | undefined,
@@ -120,7 +127,9 @@ export function convergenceEvidenceKey(state: TaskState): string {
 /**
  * Executable phase policy for mutation tasks. Unlike a prompt, a blocked
  * investigation becomes a tool result the model must observe. The policy does
- * not consume or shrink maxSteps, and always permits edits and verification.
+ * not consume or shrink maxSteps, and always permits edits. Verification is
+ * permitted except after an external-authority harness failure has established
+ * that the local environment cannot decide acceptance for this revision.
  */
 export function convergenceToolBlockReason(
   call: AgentToolCallAction,
@@ -173,14 +182,14 @@ export function convergenceToolBlockReason(
     latest &&
     currentVerification &&
     verificationOutcome(latest) === "harness_failed" &&
-    isInvestigationCall(call)
+    (isInvestigationCall(call) || isVerificationCall(call))
   ) {
     if (verificationPolicy?.authority === "external") {
       if ((state.diffInspectedRevision ?? 0) !== revision) {
         if (isDiffInspection(call)) return null;
-        return "[LoopPolicy:inspect_external_diff] Local verification could not execute and the trusted external verifier will make the authoritative acceptance decision. Further harness construction is deferred. Inspect the final diff for scope and accidental files now.";
+        return "[LoopPolicy:inspect_external_diff] Local verification could not execute and the trusted external verifier will make the authoritative acceptance decision. Do not run another local test command for this source revision. Further harness construction is deferred. Inspect the final diff for scope and accidental files now.";
       }
-      return "[LoopPolicy:deliver_external] Local verification could not execute, but the current product revision has an inspected final diff and a trusted external verifier is configured. Deliver final_answer now, report the local harness failure honestly, and do not claim tests passed.";
+      return "[LoopPolicy:deliver_external] Local verification could not execute, but the current product revision has an inspected final diff and a trusted external verifier is configured. Do not run another local test command for this source revision. Deliver final_answer now, report the local harness failure honestly, and do not claim tests passed.";
     }
     const recoveryCalls = shellCallsSince(state, latest.shellCommandRevision);
     if (call.tool === "workspace.run_shell" && recoveryCalls < 4) return null;

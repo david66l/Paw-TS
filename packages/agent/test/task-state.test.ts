@@ -343,6 +343,19 @@ describe("TaskStateManager", () => {
     expect(isVerificationCommand("python3.11 -m unittest discover -v")).toBe(
       true,
     );
+    expect(
+      isVerificationCommand(
+        "python tests/runtests.py expressions.tests.BasicExpressionsTests",
+      ),
+    ).toBe(true);
+    expect(
+      isVerificationCommand(
+        "set PYTHONPATH=.&&python tests\\runtests.py queries.test_q.QCheckTests",
+      ),
+    ).toBe(true);
+    expect(isVerificationCommand("python manage.py test app.tests")).toBe(true);
+    expect(isVerificationCommand("python -m django test app.tests")).toBe(true);
+    expect(isVerificationCommand("python scripts/contest.py")).toBe(false);
     expect(isVerificationCommand("pip install pytest")).toBe(false);
   });
 
@@ -378,6 +391,7 @@ describe("TaskStateManager", () => {
     );
     const harnessResult = harness.snapshot().testResults.at(-1);
     expect(harnessResult?.outcome).toBe("harness_failed");
+    expect(harnessResult?.failureKind).toBe("missing_dependency");
     expect(harnessResult?.evidence).toContain("Error importing plugin");
     expect(harnessResult?.evidence).not.toContain("secret-value");
     expect(formatCompletionReadiness(harness.snapshot())[1]).toContain(
@@ -410,6 +424,84 @@ describe("TaskStateManager", () => {
       },
     );
     expect(code.snapshot().testResults.at(-1)?.outcome).toBe("code_failed");
+  });
+
+  test("classifies repository-runner dependency failures without hiding candidate imports", () => {
+    const unavailable = new TaskStateManager("fix Django query validation");
+    unavailable.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "django/db/models/sql/query.py" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: {
+          path: "django/db/models/sql/query.py",
+          linesAdded: 1,
+          linesRemoved: 1,
+        },
+      },
+    );
+    unavailable.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: {
+          command:
+            "set PYTHONPATH=.&&python tests\\runtests.py queries.test_q.QCheckTests",
+        },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 1",
+        payload: {
+          exit_code: 1,
+          stderr:
+            "Traceback (most recent call last): File 'django/__init__.py', line 1, in <module> ModuleNotFoundError: No module named 'asgiref'",
+        },
+      },
+    );
+    expect(unavailable.snapshot().testResults.at(-1)).toMatchObject({
+      outcome: "harness_failed",
+      failureKind: "missing_dependency",
+      mutationRevision: 1,
+    });
+
+    const candidateImport = new TaskStateManager("fix import");
+    candidateImport.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "src/a.py" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "src/a.py", linesAdded: 1, linesRemoved: 0 },
+      },
+    );
+    candidateImport.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "pytest tests/test_a.py -q" },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 2",
+        payload: {
+          exit_code: 2,
+          stderr:
+            "ImportError while importing test module. File 'src/a.py', line 2, in <module> ModuleNotFoundError: No module named 'new_dependency'",
+        },
+      },
+    );
+    expect(candidateImport.snapshot().testResults.at(-1)).toMatchObject({
+      outcome: "code_failed",
+      failureKind: "test_failure",
+    });
   });
 
   test("keeps a monotonic shell revision when retained command history rolls over", () => {

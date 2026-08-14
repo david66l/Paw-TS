@@ -35,6 +35,15 @@ export interface RunCommandEvidence {
 export interface RunTestEvidence {
   readonly command: string;
   readonly passed: boolean;
+  /** Structured verification result; optional for backwards compatibility. */
+  readonly outcome?: "passed" | "code_failed" | "harness_failed";
+  /** Why a failed verification was classified as code or harness failure. */
+  readonly failureKind?:
+    | "missing_dependency"
+    | "runner_unavailable"
+    | "test_discovery"
+    | "invocation_error"
+    | "test_failure";
   readonly summary: string;
 }
 

@@ -1374,11 +1374,16 @@ describe("AgentOrchestrator", () => {
   test("external verification closes after a current harness failure and diff inspection", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-external-"));
     writeFileSync(path.join(dir, "product.py"), "value = 1\n", "utf8");
+    writeFileSync(
+      path.join(dir, "runtests.py"),
+      "import dependency_that_is_not_installed_for_paw_test\n",
+      "utf8",
+    );
     for (const args of [
       ["init"],
       ["config", "user.email", "paw-test@example.invalid"],
       ["config", "user.name", "Paw Test"],
-      ["add", "product.py"],
+      ["add", "product.py", "runtests.py"],
       ["commit", "-m", "fixture"],
     ]) {
       const git = Bun.spawnSync(["git", ...args], {
@@ -1413,12 +1418,22 @@ describe("AgentOrchestrator", () => {
               text: JSON.stringify({
                 tool: "workspace.run_shell",
                 args: {
-                  command: "python -m pytest --definitely-invalid-paw-option",
+                  command: "python runtests.py",
                 },
               }),
             };
           }
           if (calls === 3) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: {
+                  command: "python runtests.py --different-invocation",
+                },
+              }),
+            };
+          }
+          if (calls === 4) {
             return {
               text: JSON.stringify({
                 tool: "workspace.git_diff",
@@ -1447,14 +1462,19 @@ describe("AgentOrchestrator", () => {
       runId: "external-verification",
       goal: "Fix the product value",
       workspaceRoot: dir,
-      maxSteps: 6,
+      maxSteps: 7,
     });
 
     expect(result.status).toBe("completed");
     expect(result.outcome).toBe("model_declared");
     expect(result.completionReason).toBe("external_verification_pending");
     expect(result.evidence?.filesChanged).toContain("product.py");
-    expect(result.evidence?.testResults.at(-1)?.passed).toBe(false);
+    expect(result.evidence?.testResults).toHaveLength(1);
+    expect(result.evidence?.testResults.at(-1)).toMatchObject({
+      passed: false,
+      outcome: "harness_failed",
+      failureKind: "missing_dependency",
+    });
     expect(result.message).toContain("external verification remains pending");
     expect(
       events.some(
@@ -1464,7 +1484,15 @@ describe("AgentOrchestrator", () => {
           event.event.ok,
       ),
     ).toBe(true);
-    expect(calls).toBe(4);
+    expect(
+      events.some(
+        (event) =>
+          event.event.type === "tool.result" &&
+          event.event.tool === "workspace.run_shell" &&
+          event.event.summary.includes("inspect_external_diff"),
+      ),
+    ).toBe(true);
+    expect(calls).toBe(5);
   });
 
   test("abort after first tool stops before next model turn", async () => {

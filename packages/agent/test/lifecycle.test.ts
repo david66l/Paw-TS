@@ -110,6 +110,26 @@ describe("CompletionPolicy", () => {
       "src/a.ts",
     ]);
   });
+
+  test("structured verification failures survive the run evidence boundary", () => {
+    const evidence = evidenceFromTaskState(
+      baseState({
+        testResults: [
+          {
+            command: "python runtests.py",
+            passed: false,
+            outcome: "harness_failed",
+            failureKind: "missing_dependency",
+            summary: "No module named dependency",
+          },
+        ],
+      }),
+    );
+    expect(evidence.testResults[0]).toMatchObject({
+      outcome: "harness_failed",
+      failureKind: "missing_dependency",
+    });
+  });
 });
 
 describe("AcceptanceGate", () => {

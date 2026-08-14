@@ -18,6 +18,13 @@ export interface TestResultSummary {
   readonly passed: boolean;
   /** Structured result; absent on legacy snapshots and derived from passed. */
   readonly outcome?: "passed" | "code_failed" | "harness_failed";
+  /** Machine-readable reason for a failed verification classification. */
+  readonly failureKind?:
+    | "missing_dependency"
+    | "runner_unavailable"
+    | "test_discovery"
+    | "invocation_error"
+    | "test_failure";
   readonly summary: string;
   /** Short redacted diagnostic retained after the full tool payload is pruned. */
   readonly evidence?: string;
@@ -455,12 +462,18 @@ export class TaskStateManager {
           summary: result.summary,
         });
         if (isVerificationCommand(command)) {
-          const outcome = classifyVerificationOutcome(result);
+          const classification = classifyVerificationOutcome(
+            result,
+            filesChanged,
+          );
           const evidence = verificationEvidence(result);
           testResults.push({
             command,
-            passed: outcome === "passed",
-            outcome,
+            passed: classification.outcome === "passed",
+            outcome: classification.outcome,
+            ...(classification.failureKind
+              ? { failureKind: classification.failureKind }
+              : {}),
             summary: result.summary,
             ...(evidence ? { evidence } : {}),
             shellCommandRevision,
@@ -556,7 +569,7 @@ export function formatTaskStateForContext(state: TaskState): string {
     "Tests",
     state.testResults.map(
       (t) =>
-        `${verificationOutcome(t)}: ${t.command}${t.evidence ? ` — ${t.evidence}` : ""}`,
+        `${verificationOutcome(t)}${t.failureKind ? ` [${t.failureKind}]` : ""}: ${t.command}${t.evidence ? ` — ${t.evidence}` : ""}`,
     ),
   );
   appendList(lines, "Plan", state.plan);
@@ -626,7 +639,7 @@ export function formatCompletionReadiness(state: TaskState): string[] {
       : verificationOutcome(latest) === "passed"
         ? `passed for r${revision}`
         : verificationOutcome(latest) === "harness_failed"
-          ? `harness failed for r${revision} (verification did not execute)`
+          ? `harness failed for r${revision} (verification did not execute${latest.failureKind ? `: ${latest.failureKind}` : ""})`
           : `code failed for r${revision}`;
   const diffRevision = state.diffInspectedRevision ?? 0;
   const diff =
@@ -648,26 +661,56 @@ export function verificationOutcome(
   return result.outcome ?? (result.passed ? "passed" : "code_failed");
 }
 
+interface VerificationClassification {
+  readonly outcome: "passed" | "code_failed" | "harness_failed";
+  readonly failureKind?: TestResultSummary["failureKind"];
+}
+
 function classifyVerificationOutcome(
   result: ToolRunResult,
-): "passed" | "code_failed" | "harness_failed" {
-  if (result.ok) return "passed";
+  filesChanged: readonly string[],
+): VerificationClassification {
+  if (result.ok) return { outcome: "passed" };
   const payload = isRecord(result.payload) ? result.payload : {};
   const exitCode = payload.exit_code;
   const output = [payload.stdout, payload.stderr, result.summary]
     .filter((value): value is string => typeof value === "string")
     .join("\n");
+  const mentionsChangedFile = filesChanged.some((path) => {
+    const normalized = path.replaceAll("\\", "/").toLowerCase();
+    const basename = normalized.split("/").at(-1);
+    const normalizedOutput = output.replaceAll("\\", "/").toLowerCase();
+    return (
+      normalizedOutput.includes(normalized) ||
+      (!!basename && normalizedOutput.includes(basename))
+    );
+  });
+
   if (
-    exitCode === 3 ||
-    exitCode === 4 ||
-    exitCode === 5 ||
-    /(?:error importing plugin|no tests (?:ran|collected)|pytest: (?:command )?not found|not recognized as an internal or external command|modulenotfounderror: no module named ['\"]pytest['\"]|could not find a version that satisfies)/i.test(
+    /(?:pytest: (?:command )?not found|not recognized as an internal or external command|modulenotfounderror: no module named ['\"]pytest['\"]|could not find a version that satisfies)/i.test(
       output,
     )
   ) {
-    return "harness_failed";
+    return { outcome: "harness_failed", failureKind: "runner_unavailable" };
   }
-  return "code_failed";
+  if (
+    !mentionsChangedFile &&
+    /(?:modulenotfounderror|importerror):[^\n]*(?:no module named|cannot import)/i.test(
+      output,
+    )
+  ) {
+    return { outcome: "harness_failed", failureKind: "missing_dependency" };
+  }
+  if (exitCode === 5 || /no tests (?:ran|collected)/i.test(output)) {
+    return { outcome: "harness_failed", failureKind: "test_discovery" };
+  }
+  if (exitCode === 3 || /error importing plugin/i.test(output)) {
+    return { outcome: "harness_failed", failureKind: "invocation_error" };
+  }
+  if (exitCode === 4) {
+    return { outcome: "harness_failed", failureKind: "invocation_error" };
+  }
+  return { outcome: "code_failed", failureKind: "test_failure" };
 }
 
 function verificationEvidence(result: ToolRunResult): string | undefined {
@@ -762,6 +805,18 @@ export function isVerificationCommand(command: string): boolean {
       c,
     ) ||
     /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+-m\s+unittest\b/i.test(
+      c,
+    ) ||
+    /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+-m\s+django\s+test\b/i.test(
+      c,
+    ) ||
+    /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+(?:-\w+\s+)*(?:[^\s;&|]*[\\/])?(?:run_tests|runtests)\.py\b/i.test(
+      c,
+    ) ||
+    /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+(?:-\w+\s+)*(?:[^\s;&|]*[\\/])?manage\.py\s+test\b/i.test(
+      c,
+    ) ||
+    /(?:^|[;&|]\s*)(?:\.?[\\/])?(?:[^\s;&|]*[\\/])?(?:run_tests|runtests)\.py\b/i.test(
       c,
     ) ||
     /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+test\b/i.test(c) ||

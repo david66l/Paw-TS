@@ -438,6 +438,29 @@ describe("convergence guidance", () => {
         authority: "external",
       }),
     ).toContain("inspect_external_diff");
+    const anotherTest = {
+      type: "tool_call" as const,
+      tool: "workspace.run_shell",
+      args: { command: "python tests/runtests.py app.tests" },
+    };
+    expect(
+      convergenceToolBlockReason(anotherTest, failed, 40, 64, {
+        authority: "external",
+      }),
+    ).toContain("inspect_external_diff");
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.edit_file",
+          args: { path: "a.py", oldText: "old", newText: "new" },
+        },
+        failed,
+        40,
+        64,
+        { authority: "external" },
+      ),
+    ).toBeNull();
     expect(
       convergenceToolBlockReason(
         {
@@ -454,6 +477,15 @@ describe("convergence guidance", () => {
     expect(
       convergenceToolBlockReason(
         read,
+        { ...failed, diffInspectedRevision: 1 },
+        41,
+        64,
+        { authority: "external" },
+      ),
+    ).toContain("deliver_external");
+    expect(
+      convergenceToolBlockReason(
+        anotherTest,
         { ...failed, diffInspectedRevision: 1 },
         41,
         64,
