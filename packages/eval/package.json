@@ -17,6 +17,7 @@
     "@paw/settings": "workspace:*",
     "@paw/harness": "workspace:*",
     "@paw/memory": "workspace:*",
+    "@paw/workspace": "workspace:*",
     "diff": "^9.0.0"
   },
   "devDependencies": {

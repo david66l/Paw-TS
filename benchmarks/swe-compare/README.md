@@ -44,3 +44,17 @@ bun run packages/eval/scripts/preflight-swe-compare.ts \
 bun run packages/eval/scripts/run-swe-compare.ts \
   --manifest paw-seen-dev-v1.json --instance pylint-dev__pylint-7228 --runner paw
 ```
+
+If a Paw run finished but Git patch collection failed, its successful
+`workspace.edit_file` events can be replayed in a clean checkout without
+calling the model again:
+
+```bash
+bun run packages/eval/scripts/run-swe-compare.ts \
+  --recover-paw-result-patch benchmarks/swe-compare/runs/<run-id>/result.json
+```
+
+`--replace-replayed-patch` is a deliberately narrow repair switch for
+recomputing a patch that already has `patchSource=paw_trace_edit_replay` (for
+example after fixing replay compatibility). It refuses to overwrite workspace,
+Claude, or manually sourced patches.

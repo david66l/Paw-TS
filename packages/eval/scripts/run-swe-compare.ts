@@ -25,6 +25,7 @@ if (recoverPawResult) {
   const result = recoverPawResultPatch({
     repoRoot: process.cwd(),
     resultPath: path.resolve(recoverPawResult),
+    replaceReplayedPatch: process.argv.includes("--replace-replayed-patch"),
   });
   console.log(
     JSON.stringify(
@@ -76,7 +77,7 @@ if (verifyResult) {
 }
 if (!instanceId || (runner !== "paw" && runner !== "claude")) {
   throw new Error(
-    "Usage: --instance <id> --runner paw|claude [--manifest <name.json>] [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> OR --audit-result <result.json>",
+    "Usage: --instance <id> --runner paw|claude [--manifest <name.json>] [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> [--replace-replayed-patch] OR --audit-result <result.json>",
   );
 }
 if (manifestName === "paw-seen-dev-v1.json" && runner !== "paw") {

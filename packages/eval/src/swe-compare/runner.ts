@@ -19,6 +19,7 @@ import type { ToolEffectPolicy, ToolExecutionPolicy } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import type { RunAcceptanceCriterionSeed } from "@paw/core";
 import { createDefaultLanguageModel } from "@paw/models";
+import { editWorkspaceFile } from "@paw/workspace";
 import { parsePatch } from "diff";
 
 import { buildSweAcceptanceCriteria } from "../swe-exp/acceptance.js";
@@ -2007,19 +2008,18 @@ export function replayPawTracePatch(
       return { error: `unsafe Paw edit path: ${edit.path}` };
     }
     if (deletedPaths.has(normalized)) continue;
-    const target = path.join(workspaceRoot, ...normalized.split("/"));
-    const current = readFileSync(target, "utf8");
-    const first = current.indexOf(edit.oldString);
-    if (first < 0 || current.indexOf(edit.oldString, first + 1) >= 0) {
-      return { error: `Paw edit replay anchor is not unique: ${normalized}` };
+    const replayed = editWorkspaceFile(workspaceRoot, normalized, {
+      oldString: edit.oldString,
+      newString: edit.newString,
+    });
+    if (replayed.error) {
+      return {
+        error: `Paw edit replay failed for ${normalized}: ${replayed.error}`,
+      };
     }
-    writeFileSync(
-      target,
-      current.slice(0, first) +
-        edit.newString +
-        current.slice(first + edit.oldString.length),
-      "utf8",
-    );
+    if (replayed.changed !== true) {
+      return { error: `Paw edit replay made no change: ${normalized}` };
+    }
     paths.add(normalized);
   }
   if (paths.size === 0) {
@@ -2101,6 +2101,8 @@ function successfulPawDeletedPaths(trace: readonly unknown[]): Set<string> {
 export function recoverPawResultPatch(opts: {
   readonly repoRoot: string;
   readonly resultPath: string;
+  /** Recompute only a patch that was itself produced by Paw trace replay. */
+  readonly replaceReplayedPatch?: boolean;
 }): SweCompareRunResult {
   const previous = JSON.parse(
     readFileSync(opts.resultPath, "utf8"),
@@ -2110,7 +2112,13 @@ export function recoverPawResultPatch(opts: {
       `Paw patch recovery requires a Paw result: ${previous.runId}`,
     );
   }
-  if (previous.patch.trim()) {
+  if (
+    previous.patch.trim() &&
+    !(
+      opts.replaceReplayedPatch === true &&
+      previous.patchSource === "paw_trace_edit_replay"
+    )
+  ) {
     throw new Error(`result already contains a patch: ${previous.runId}`);
   }
   const persistedTracePath = path.isAbsolute(previous.tracePath)

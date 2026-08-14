@@ -340,16 +340,26 @@ function captureExplicitFileDiff(
         };
       }
     }
-    const original = baseline.ok ? baseline.stdout : "";
-    if (original === current && baseline.ok === currentExists) continue;
+    // Git for Windows may check a text blob out as CRLF even when the blob and
+    // `git show` output are LF. Compare and render text patches in one
+    // canonical EOL form so a small edit does not become a whole-file diff.
+    const original = baseline.ok ? normalizePatchText(baseline.stdout) : "";
+    const normalizedCurrent = normalizePatchText(current);
+    if (original === normalizedCurrent && baseline.ok === currentExists) {
+      continue;
+    }
     const oldName = baseline.ok ? `a/${normalized}` : "/dev/null";
     const newName = currentExists ? `b/${normalized}` : "/dev/null";
     const patch = formatPatch(
-      structuredPatch(oldName, newName, original, current, "", ""),
+      structuredPatch(oldName, newName, original, normalizedCurrent, "", ""),
     ).trim();
     parts.push(`diff --git a/${normalized} b/${normalized}\n${patch}`);
   }
   return { diff: parts.join("\n") };
+}
+
+function normalizePatchText(content: string): string {
+  return content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 /** 写入每臂隔离的 .paw 配置 */

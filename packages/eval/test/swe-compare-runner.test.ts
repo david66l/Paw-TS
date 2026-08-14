@@ -1101,6 +1101,32 @@ describe("SWE compare runner", () => {
     expect(captured.diff).toContain("+value = 2");
   });
 
+  test("explicit patch capture ignores checkout-only CRLF conversion", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-crlf-diff-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "eval@example.test"]);
+    git(root, ["config", "user.name", "Eval"]);
+    writeFileSync(path.join(root, ".gitattributes"), "* text=auto\n", "utf8");
+    writeFileSync(
+      path.join(root, "value.py"),
+      "before\nvalue = 1\nafter\n",
+      "utf8",
+    );
+    git(root, ["add", ".gitattributes", "value.py"]);
+    git(root, ["commit", "-m", "base"]);
+    writeFileSync(
+      path.join(root, "value.py"),
+      "before\r\nvalue = 2\r\nafter\r\n",
+      "utf8",
+    );
+    const captured = captureGitDiff(root, ["value.py"]);
+    expect(captured.error).toBeUndefined();
+    expect(captured.diff).toContain("-value = 1");
+    expect(captured.diff).toContain("+value = 2");
+    expect(captured.diff).not.toContain("-before");
+    expect(captured.diff).not.toContain("+before");
+  });
+
   test("uses explicit edited paths and recognizes a read-only Paw trace", () => {
     const root = path.join(tmpdir(), "paw-workspace");
     expect(
@@ -1429,6 +1455,43 @@ describe("SWE compare runner", () => {
     ).toEqual({ explicitPaths: ["a.py"], unknownWritePossible: true });
   });
 
+  test("manual Paw recovery can replace only an earlier replayed patch", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-replay-replace-"));
+    const resultPath = path.join(root, "result.json");
+    const base = {
+      schemaVersion: 1,
+      runId: "replayed",
+      runner: "paw",
+      instanceId: "demo",
+      patch: "existing",
+      patchChars: 8,
+      resolved: false,
+      resolvedSource: "none",
+      tracePath: "trace.json",
+    };
+    writeFileSync(
+      resultPath,
+      JSON.stringify({ ...base, patchSource: "workspace" }),
+      "utf8",
+    );
+    expect(() =>
+      recoverPawResultPatch({
+        repoRoot: root,
+        resultPath,
+        replaceReplayedPatch: true,
+      }),
+    ).toThrow("result already contains a patch");
+
+    writeFileSync(
+      resultPath,
+      JSON.stringify({ ...base, patchSource: "paw_trace_edit_replay" }),
+      "utf8",
+    );
+    expect(() => recoverPawResultPatch({ repoRoot: root, resultPath })).toThrow(
+      "result already contains a patch",
+    );
+  });
+
   test("replays exact Paw edits in a clean isolated repository", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-auto-replay-"));
     git(root, ["init"]);
@@ -1458,6 +1521,51 @@ describe("SWE compare runner", () => {
     );
     expect(replayed.error).toBeUndefined();
     expect(replayed.diff).toContain("+new");
+  });
+
+  test("replays LF trace edits against CRLF benchmark checkouts", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-crlf-replay-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.com"]);
+    git(root, ["config", "user.name", "Test"]);
+    git(root, ["config", "core.autocrlf", "false"]);
+    writeFileSync(
+      path.join(root, "a.py"),
+      "before\r\nold\r\nafter\r\n",
+      "utf8",
+    );
+    git(root, ["add", "a.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const replayed = replayPawTracePatch(
+      [
+        {
+          event: {
+            type: "tool.call",
+            tool: "workspace.edit_file",
+            args: {
+              path: "a.py",
+              old_string: "before\nold\nafter",
+              new_string: "before\nnew\nafter",
+            },
+          },
+        },
+        {
+          event: {
+            type: "tool.result",
+            tool: "workspace.edit_file",
+            ok: true,
+          },
+        },
+      ],
+      root,
+    );
+    expect(replayed.error).toBeUndefined();
+    expect(replayed.diff).toContain("+new");
+    expect(replayed.diff).not.toContain("-before");
+    expect(replayed.diff).not.toContain("+before");
+    expect(readFileSync(path.join(root, "a.py"), "utf8")).toBe(
+      "before\r\nnew\r\nafter\r\n",
+    );
   });
 
   test("contains an automatic replay failure instead of losing the run", () => {
