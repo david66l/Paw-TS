@@ -58,6 +58,18 @@ export interface LoopV2ShadowCoverage {
   readonly ignored: number;
 }
 
+export interface LoopV2ShadowLegacyTerminal {
+  readonly sourceSeq: number;
+  readonly eventType: "run.completed" | "run.failed";
+  readonly status:
+    | "completed"
+    | "failed"
+    | "aborted"
+    | "incomplete"
+    | "unknown";
+  readonly messageHash?: string;
+}
+
 export interface LoopV2ShadowReport {
   readonly runId: string;
   readonly sourceThroughSeq: number;
@@ -65,6 +77,7 @@ export interface LoopV2ShadowReport {
   readonly artifactBlobs: readonly ArtifactContentBlobV2[];
   readonly diagnostics: readonly LoopV2ShadowDiagnostic[];
   readonly coverage: LoopV2ShadowCoverage;
+  readonly legacyTerminal?: LoopV2ShadowLegacyTerminal;
   readonly state: WorkingDecisionStateV2;
   readonly stateHash: string;
   readonly reportHash: string;
@@ -156,6 +169,7 @@ export function createLoopV2ShadowObserver(
   const artifactBlobs = new Map<string, ArtifactContentBlobV2>();
   const sourceTimestamps = new Map<number, number>();
   const consumedToolCommits = new Set<number>();
+  let legacyTerminal: LoopV2ShadowLegacyTerminal | undefined;
 
   const record = (
     envelope: LegacyRunEventEnvelopeV1,
@@ -187,6 +201,22 @@ export function createLoopV2ShadowObserver(
       }
       sourceThroughSeq = envelope.seq;
       sourceTimestamps.set(envelope.seq, envelope.ts);
+
+      if (
+        envelope.event.type === "run.completed" ||
+        envelope.event.type === "run.failed"
+      ) {
+        const message = readString(envelope.event, "message");
+        legacyTerminal = {
+          sourceSeq: envelope.seq,
+          eventType: envelope.event.type,
+          status:
+            envelope.event.type === "run.failed"
+              ? "failed"
+              : normalizeLegacyRunStatus(readString(envelope.event, "status")),
+          ...(message ? { messageHash: sha256Canonical(message) } : {}),
+        };
+      }
 
       if (envelope.event.type === "run.started") {
         if (state.goal) {
@@ -451,6 +481,7 @@ export function createLoopV2ShadowObserver(
         ),
         diagnostics: [...diagnostics],
         coverage,
+        ...(legacyTerminal ? { legacyTerminal } : {}),
         state,
         stateHash: decisionStateHash(state),
       };
@@ -460,6 +491,17 @@ export function createLoopV2ShadowObserver(
       };
     },
   };
+}
+
+function normalizeLegacyRunStatus(
+  value: string | undefined,
+): LoopV2ShadowLegacyTerminal["status"] {
+  return value === "completed" ||
+    value === "failed" ||
+    value === "aborted" ||
+    value === "incomplete"
+    ? value
+    : "unknown";
 }
 
 function terminalCandidateSnapshots(

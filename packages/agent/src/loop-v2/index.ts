@@ -104,7 +104,20 @@ export {
   type LoopV2ShadowToolCommitPortInput,
   type LoopV2ShadowMutationCapture,
   type LoopV2ShadowVerificationCapture,
+  type LoopV2ShadowLegacyTerminal,
 } from "./shadow-runtime.js";
+export {
+  assertLoopV2ShadowArtifactV1,
+  assessLoopV2ShadowReportV1,
+  buildLoopV2ShadowArtifactV1,
+  LOOP_V2_SHADOW_ARTIFACT_SCHEMA_VERSION,
+  parseLoopV2ShadowArtifactV1,
+  replayLegacyTraceToLoopV2ShadowV1,
+  serializeLoopV2ShadowArtifactV1,
+  type LoopV2ShadowArtifactPolicyV1,
+  type LoopV2ShadowArtifactV1,
+  type LoopV2ShadowAssessmentV1,
+} from "./shadow-artifact.js";
 export {
   executeToolBatchV2,
   type CommittedToolCallV2,
