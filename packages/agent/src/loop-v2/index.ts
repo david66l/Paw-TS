@@ -90,6 +90,16 @@ export {
   type SemanticReviewUsageV2,
 } from "./semantic-reviewer.js";
 export {
+  createLoopV2ShadowObserver,
+  type LegacyRunEventEnvelopeV1,
+  type LoopV2ShadowCoverage,
+  type LoopV2ShadowDiagnostic,
+  type LoopV2ShadowDisposition,
+  type LoopV2ShadowObserver,
+  type LoopV2ShadowReason,
+  type LoopV2ShadowReport,
+} from "./shadow-runtime.js";
+export {
   executeToolBatchV2,
   type CommittedToolCallV2,
   type ScheduledToolCallV2,

@@ -103,6 +103,13 @@ import {
   stripContextSummaryMessages,
   validateCompressionSummary,
 } from "@paw/core";
+import {
+  type LoopKernelVersion,
+  type LoopV2ShadowObserver,
+  type LoopV2ShadowReport,
+  createLoopV2ShadowObserver,
+  resolveLoopKernelVersion,
+} from "./loop-v2/index.js";
 
 // ─────────────────────────────────────────────────────────────
 // @paw/harness：执行层 — MCP 客户端、工具定义、Shell 沙箱
@@ -338,6 +345,10 @@ export interface AgentOrchestratorOptions {
   readonly shellSandbox?: import("@paw/harness").ShellSandboxConfig;
   /** Independent semantic review before completing a mutated task. */
   readonly candidateReviewer?: CandidateReviewer;
+  /** Loop kernel selection; defaults to PAW_LOOP_KERNEL_VERSION, then v1. */
+  readonly loopKernelVersion?: LoopKernelVersion;
+  /** Terminal v2-shadow diagnostics. Observer failures never affect the run. */
+  readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -456,6 +467,9 @@ export class AgentOrchestrator {
   private readonly verificationPolicy?: AgentOrchestratorOptions["verificationPolicy"];
   private readonly shellSandbox?: AgentOrchestratorOptions["shellSandbox"];
   private readonly candidateReviewer?: CandidateReviewer;
+  private readonly loopKernelVersion: LoopKernelVersion;
+  private readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
+  private _lastLoopV2ShadowReport?: LoopV2ShadowReport;
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -469,6 +483,9 @@ export class AgentOrchestrator {
     this.verificationPolicy = opts?.verificationPolicy;
     this.shellSandbox = opts?.shellSandbox;
     this.candidateReviewer = opts?.candidateReviewer;
+    this.loopKernelVersion =
+      opts?.loopKernelVersion ?? resolveLoopKernelVersion();
+    this.onLoopV2ShadowReport = opts?.onLoopV2ShadowReport;
     this.fileLock = opts?.fileLock;
     // P1 入口闸：会话级去重器（仅 root orchestrator；子 Agent 不重复去重）
     this._payloadDeduper = opts?.fileLock ? undefined : createPayloadDeduper();
@@ -512,6 +529,11 @@ export class AgentOrchestrator {
         this.skillRegistry.register(skill);
       }
     }
+  }
+
+  /** Most recent shadow snapshot, exposed without changing RunResult. */
+  getLastLoopV2ShadowReport(): LoopV2ShadowReport | undefined {
+    return this._lastLoopV2ShadowReport;
   }
 
   /** 按 allowedTools 过滤 toolDefs（硬裁） */
@@ -2890,6 +2912,11 @@ export class AgentOrchestrator {
 
     const seq = { n: 0 };
     const checkpointSeq = { n: 0 };
+    const loopV2Shadow: LoopV2ShadowObserver | undefined =
+      this.loopKernelVersion === "v2-shadow"
+        ? createLoopV2ShadowObserver(runId)
+        : undefined;
+    this._lastLoopV2ShadowReport = undefined;
     if (spec.resumeFromState) {
       // A resumed run appends to the same durable event/checkpoint streams.
       // Restarting either counter at zero creates duplicate event identities
@@ -2985,6 +3012,24 @@ export class AgentOrchestrator {
       // protects an in-flight response, so partial snapshots stay live-only.
       if (event.type !== "model.chunk" && event.type !== "model.thinking") {
         this.sessionStore?.saveEvent(runId, envelope);
+      }
+      // Shadow observation happens after the legacy delivery/persistence path.
+      // It is deliberately unable to emit legacy events or alter model/tool
+      // state, and neither projection nor consumer failures may fail the run.
+      if (loopV2Shadow) {
+        try {
+          loopV2Shadow.observe(envelope);
+          if (event.type === "run.completed" || event.type === "run.failed") {
+            this._lastLoopV2ShadowReport = loopV2Shadow.snapshot();
+            try {
+              this.onLoopV2ShadowReport?.(this._lastLoopV2ShadowReport);
+            } catch {
+              // A diagnostic sink is not execution authority.
+            }
+          }
+        } catch {
+          // Shadow migration must remain fail-open while v1 is authoritative.
+        }
       }
     };
 
