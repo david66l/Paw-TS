@@ -9,11 +9,16 @@ import { FakeLanguageModel } from "@paw/models";
 import type { ToolEffectPolicy } from "../src/execution-policy.js";
 import {
   type LoopV2LiveCandidateAssessmentV1,
+  buildLoopV2LiveReviewArtifactV1,
   buildLoopV2LiveReviewPayloadV1,
+  createSemanticReviewLedgerV2,
   loopV2LiveArtifactPath,
   loopV2ProjectionCheckpointPath,
   parseLoopV2LiveCandidateArtifactV1,
+  parseLoopV2LiveReviewArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
+  reviewCandidateOnceV2,
+  serializeLoopV2LiveReviewArtifactV1,
 } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
@@ -554,6 +559,49 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           content: "after\n",
         }),
       ]);
+      let reviewerCalls = 0;
+      const reviewed = await reviewCandidateOnceV2(
+        createSemanticReviewLedgerV2(),
+        reviewPayload,
+        async () => {
+          reviewerCalls += 1;
+          return {
+            candidateInputHash: reviewPayload.candidateInputHash,
+            mutationRevision: reviewPayload.input.mutationRevision,
+            verdict: "pass",
+            findings: [],
+          };
+        },
+      );
+      const record = reviewed.ledger.records[reviewed.reviewKey];
+      if (!record) throw new Error("Missing semantic review record");
+      const reviewArtifact = buildLoopV2LiveReviewArtifactV1(persisted, record);
+      const parsedReview = parseLoopV2LiveReviewArtifactV1(
+        serializeLoopV2LiveReviewArtifactV1(reviewArtifact, persisted),
+        persisted,
+      );
+      expect(parsedReview.record).toEqual(record);
+      const resumed = await reviewCandidateOnceV2(
+        { records: { [parsedReview.reviewKey]: parsedReview.record } },
+        reviewPayload,
+        async () => {
+          reviewerCalls += 1;
+          return {};
+        },
+      );
+      expect(resumed.reused).toBe(true);
+      expect(reviewerCalls).toBe(1);
+
+      const tamperedReview = JSON.parse(JSON.stringify(reviewArtifact)) as {
+        record: { review: { verdict: string } };
+      };
+      tamperedReview.record.review.verdict = "fail";
+      expect(() =>
+        parseLoopV2LiveReviewArtifactV1(
+          JSON.stringify(tamperedReview),
+          persisted,
+        ),
+      ).toThrow();
       return captured;
     };
 

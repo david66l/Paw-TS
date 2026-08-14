@@ -1,4 +1,4 @@
-import { sha256Canonical } from "./canonical.js";
+import { canonicalJson, sha256Canonical } from "./canonical.js";
 import {
   type BehavioralInvariantV2,
   type ChangeSurfaceRecordV2,
@@ -540,9 +540,10 @@ export async function reviewCandidateOnceV2(
   );
   const recorded = ledger.records[reviewKey];
   if (recorded) {
+    const validated = validateSemanticReviewRecordV2(recorded, payload);
     return {
       reviewKey,
-      review: recorded.review,
+      review: validated.review,
       reused: true,
       ledger,
     };
@@ -579,6 +580,61 @@ export async function reviewCandidateOnceV2(
     reused: false,
     ledger: nextLedger,
   };
+}
+
+/** Strictly revalidates one persisted review record against its candidate. */
+export function validateSemanticReviewRecordV2(
+  value: unknown,
+  payload: CandidateReviewPayloadV2,
+): SemanticReviewRecordV2 {
+  assertReviewPayloadIdentity(payload);
+  if (!isRecord(value)) {
+    throw new Error("Semantic review record must be an object");
+  }
+  const reviewKey = semanticReviewKeyV2(
+    payload.input.mutationRevision,
+    payload.candidateInputHash,
+  );
+  if (value.reviewKey !== reviewKey) {
+    throw new Error("Semantic review record key mismatch");
+  }
+
+  let normalized: SemanticReviewRecordV2;
+  if (value.completion === "completed") {
+    if (value.reasonCode !== undefined) {
+      throw new Error("Completed semantic review cannot have a reason code");
+    }
+    normalized = {
+      reviewKey,
+      review: parseSemanticReviewV2(value.review, payload),
+      completion: "completed",
+    };
+  } else if (value.completion === "protocol_partial") {
+    if (
+      value.reasonCode !== "reviewer_error" &&
+      value.reasonCode !== "reviewer_protocol_invalid"
+    ) {
+      throw new Error("Partial semantic review reason code is invalid");
+    }
+    normalized = {
+      reviewKey,
+      review: partialReview(
+        payload.candidateInputHash,
+        payload.input.mutationRevision,
+        value.reasonCode === "reviewer_protocol_invalid"
+          ? "Reviewer returned an invalid structured verdict."
+          : "Reviewer did not complete.",
+      ),
+      completion: "protocol_partial",
+      reasonCode: value.reasonCode,
+    };
+  } else {
+    throw new Error("Semantic review completion is invalid");
+  }
+  if (canonicalJson(value) !== canonicalJson(normalized)) {
+    throw new Error("Semantic review record is not canonical");
+  }
+  return normalized;
 }
 
 class SemanticReviewProtocolError extends Error {}

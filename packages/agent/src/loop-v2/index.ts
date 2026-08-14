@@ -20,6 +20,7 @@ export {
   evaluateCandidateReadinessV2,
   reviewCandidateOnceV2,
   semanticReviewKeyV2,
+  validateSemanticReviewRecordV2,
   type CandidateArtifactEvidenceV2,
   type CandidateInputV2,
   type CandidateMutationInputV2,
@@ -69,6 +70,15 @@ export {
   serializeLoopV2ProjectionCheckpointV1,
   type LoopV2ProjectionCheckpointV1,
 } from "./live-checkpoint.js";
+export {
+  LOOP_V2_LIVE_REVIEW_ARTIFACT_SCHEMA_VERSION,
+  assertLoopV2LiveReviewArtifactV1,
+  buildLoopV2LiveReviewArtifactV1,
+  loopV2LiveReviewArtifactPath,
+  parseLoopV2LiveReviewArtifactV1,
+  serializeLoopV2LiveReviewArtifactV1,
+  type LoopV2LiveReviewArtifactV1,
+} from "./live-review-artifact.js";
 export {
   evidenceFingerprint,
   extendReadCoverage,
