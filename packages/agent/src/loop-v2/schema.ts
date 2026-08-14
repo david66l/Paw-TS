@@ -235,6 +235,44 @@ export interface ProgressDeltaV2 {
   readonly meaningful: boolean;
 }
 
+export interface PolicyAdviceV2 {
+  readonly kind:
+    | "repeat_observed"
+    | "evidence_gap"
+    | "hypothesis_stale"
+    | "verification_due"
+    | "candidate_ready"
+    | "cost_warning";
+  readonly priority: "info" | "warning" | "urgent";
+  readonly evidenceRefs: readonly string[];
+  readonly message: string;
+}
+
+export interface ProgressAdvisorActionV2 {
+  readonly tool: string;
+  readonly args: Readonly<Record<string, unknown>>;
+  readonly repeatTracking: "tracked" | "transparent";
+}
+
+export interface ProgressAdvisorCycleV2 {
+  readonly cycle: number;
+  readonly projectedThroughSeq: number;
+  readonly actions: readonly ProgressAdvisorActionV2[];
+  readonly deltas: readonly ProgressDeltaV2[];
+}
+
+export interface ProgressAdvisorStateV2 {
+  readonly policyVersion: string;
+  readonly runId: string;
+  readonly lastCycle: number;
+  readonly consecutiveNoDeltaCycles: number;
+  readonly repeat?: Readonly<{
+    readonly key: string;
+    readonly tool: string;
+    readonly count: number;
+  }>;
+}
+
 export interface WorkingDecisionStateV2 {
   readonly schemaVersion: typeof LOOP_V2_SCHEMA_VERSION;
   readonly runId: string;

@@ -11,6 +11,14 @@ export {
   projectLoopV2Event,
 } from "./projector.js";
 export {
+  DEFAULT_PROGRESS_ADVISOR_CONFIG_V2,
+  PROGRESS_ADVISOR_POLICY_VERSION,
+  advanceProgressAdvisorV2,
+  createProgressAdvisorStateV2,
+  type ProgressAdvisorConfigV2,
+  type ProgressAdvisorResultV2,
+} from "./progress-advisor.js";
+export {
   createLoopV2Checkpoint,
   loopV2ReplayArtifactHash,
   replayLoopV2,
@@ -38,6 +46,10 @@ export {
   type MutationJournalEntryV2,
   type NextActionV2,
   type ProgressDeltaV2,
+  type PolicyAdviceV2,
+  type ProgressAdvisorActionV2,
+  type ProgressAdvisorCycleV2,
+  type ProgressAdvisorStateV2,
   type ReadCoverageV2,
   type ReadEvidenceObservation,
   type RiskRecordV2,
