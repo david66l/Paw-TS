@@ -38,8 +38,8 @@
  */
 
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // 类型定义
@@ -163,7 +163,7 @@ function flushSync(): void {
     const entry = BUFFER.shift();
     if (!entry) continue;
     // 写入 JSON Line 格式：每行一个 JSON 对象
-    writer.write(JSON.stringify(entry) + "\n");
+    writer.write(`${JSON.stringify(entry)}\n`);
   }
 }
 
@@ -182,6 +182,9 @@ function startFlushTimer(): void {
       // 不在日志写入失败时抛出异常，不阻塞主业务
     }
   }, FLUSH_INTERVAL_MS);
+  // Audit flushing is best-effort background work and must never keep a CLI,
+  // test process, or completed eval arm alive by itself.
+  _flushTimer.unref();
 }
 
 // ---------------------------------------------------------------------------

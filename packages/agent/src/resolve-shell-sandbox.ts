@@ -85,6 +85,19 @@ function parseSandboxConfig(value: unknown): ShellSandboxConfig | undefined {
     typeof raw.cpus === "number" && Number.isFinite(raw.cpus)
       ? Math.max(0.25, raw.cpus)
       : undefined;
+  const containerWorkspaceRoot =
+    typeof raw.container_workspace_root === "string" &&
+    raw.container_workspace_root.trim()
+      ? raw.container_workspace_root.trim()
+      : undefined;
+  const commandShell =
+    raw.command_shell === "bash" || raw.command_shell === "sh"
+      ? raw.command_shell
+      : undefined;
+  const pullPolicy =
+    raw.pull_policy === "missing" || raw.pull_policy === "never"
+      ? raw.pull_policy
+      : undefined;
 
   return {
     mode,
@@ -93,6 +106,9 @@ function parseSandboxConfig(value: unknown): ShellSandboxConfig | undefined {
     ...(runtime ? { runtime } : {}),
     ...(memoryMb !== undefined ? { memoryMb } : {}),
     ...(cpus !== undefined ? { cpus } : {}),
+    ...(containerWorkspaceRoot ? { containerWorkspaceRoot } : {}),
+    ...(commandShell ? { commandShell } : {}),
+    ...(pullPolicy ? { pullPolicy } : {}),
   };
 }
 

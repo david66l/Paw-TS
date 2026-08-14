@@ -1,6 +1,7 @@
 import type { ChatMessage } from "@paw/models";
 import type { ToolDefinition } from "@paw/models";
 import type { McpClientManager } from "../mcp-client.js";
+import type { ShellSandboxConfig } from "../sandbox/types.js";
 import { classifyShellCommand } from "../shell/index.js";
 
 export interface ToolRunResult {
@@ -141,7 +142,10 @@ export function toolNameReverseMap(
 /** OpenAI-format tool definitions for native function calling.
  *  Names are sanitized (dots → underscores) for providers that restrict identifiers.
  *  Use {@link toolNameReverseMap} to map results back to paw-ts tool names. */
-export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
+export function toolDefinitions(
+  mcp?: McpClientManager,
+  options?: { readonly shellSandbox?: ShellSandboxConfig },
+): ToolDefinition[] {
   const fn = (
     name: string,
     desc: string,
@@ -159,8 +163,13 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
       },
     },
   });
-  const shellDialect =
-    process.platform === "win32"
+  const sandboxShell =
+    options?.shellSandbox && options.shellSandbox.mode !== "off"
+      ? (options.shellSandbox.commandShell ?? "sh")
+      : undefined;
+  const shellDialect = sandboxShell
+    ? `Commands run inside the configured Linux container under POSIX /bin/${sandboxShell} syntax.`
+    : process.platform === "win32"
       ? "Commands run under native Windows cmd.exe syntax. POSIX-only display helpers such as tail/head are unavailable unless the repository provides them."
       : "Commands run under POSIX /bin/sh syntax.";
   const defs: ToolDefinition[] = [

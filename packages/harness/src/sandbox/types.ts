@@ -31,6 +31,12 @@ export interface ShellSandboxConfig {
   readonly memoryMb?: number;
   /** CPU 限制（核心数） */
   readonly cpus?: number;
+  /** Container path that represents the host workspace (default `/workspace`). */
+  readonly containerWorkspaceRoot?: string;
+  /** Shell available in the target image (default `sh`). */
+  readonly commandShell?: "sh" | "bash";
+  /** Image acquisition policy (default `missing`; locked evals use `never`). */
+  readonly pullPolicy?: "missing" | "never";
 }
 
 /** 默认沙箱镜像：Debian Bookworm Slim（体积小、工具全） */

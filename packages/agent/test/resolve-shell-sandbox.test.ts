@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -18,7 +18,14 @@ describe("resolveShellSandboxConfig", () => {
     writeFileSync(
       path.join(root, ".paw", "settings.local.json"),
       JSON.stringify({
-        sandbox: { mode: "workspace", network: "deny", image: "paw/sandbox:dev" },
+        sandbox: {
+          mode: "workspace",
+          network: "deny",
+          image: "paw/sandbox:dev",
+          container_workspace_root: "/testbed",
+          command_shell: "bash",
+          pull_policy: "never",
+        },
       }),
     );
 
@@ -26,5 +33,8 @@ describe("resolveShellSandboxConfig", () => {
     expect(cfg.mode).toBe("workspace");
     expect(cfg.network).toBe("deny");
     expect(cfg.image).toBe("paw/sandbox:dev");
+    expect(cfg.containerWorkspaceRoot).toBe("/testbed");
+    expect(cfg.commandShell).toBe("bash");
+    expect(cfg.pullPolicy).toBe("never");
   });
 });

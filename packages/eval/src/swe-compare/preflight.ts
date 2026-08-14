@@ -93,6 +93,9 @@ export function preflightSweCompareInstance(opts: {
     maxWorkers: 1,
     timeoutSec: opts.timeoutSec ?? 3600,
     cwd: opts.repoRoot,
+    ...(manifest.runners.paw.verificationEnvironment === "instance_image"
+      ? { cacheLevel: "instance" as const, cleanImages: false }
+      : {}),
   });
   let qualification: "eligible" | "infra_excluded" = "infra_excluded";
   let completed = false;

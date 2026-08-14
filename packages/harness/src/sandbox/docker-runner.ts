@@ -40,6 +40,7 @@
  * 安全地限制在 `/workspace` 内。
  */
 
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { detectContainerRuntime } from "./detect-runtime.js";
@@ -66,6 +67,13 @@ export interface DockerShellExecSpec {
   readonly network: ShellSandboxNetwork;
   /** 沙箱模式 */
   readonly mode: "workspace" | "strict";
+  /** Container path holding the bind-mounted host workspace. */
+  readonly containerWorkspaceRoot: string;
+  /** Shell used to interpret the model command inside the image. */
+  readonly commandShell: "sh" | "bash";
+  /** Unique lifecycle handle used to force-remove timed-out containers. */
+  readonly containerName: string;
+  readonly pullPolicy: "missing" | "never";
 }
 
 /**
@@ -88,6 +96,7 @@ export interface DockerShellExecSpec {
 export function hostPathToContainerPath(
   workspaceRoot: string,
   hostPath: string,
+  containerWorkspaceRoot = "/workspace",
 ): string {
   const root = path.resolve(workspaceRoot);
   const target = path.resolve(hostPath);
@@ -95,16 +104,35 @@ export function hostPathToContainerPath(
 
   // 就是工作区根目录本身
   if (!rel || rel === ".") {
-    return "/workspace";
+    return containerWorkspaceRoot;
   }
 
   // 路径在工作区外 → 安全回退到 /workspace（纵深防御）
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    return "/workspace";
+    return containerWorkspaceRoot;
   }
 
   // 将相对路径映射到容器内的 /workspace 目录下
-  return `/workspace/${rel.split(path.sep).join("/")}`;
+  return `${containerWorkspaceRoot}/${rel.split(path.sep).join("/")}`;
+}
+
+function resolveContainerWorkspaceRoot(
+  value: string | undefined,
+): { readonly root: string } | { readonly error: string } {
+  const raw = value?.trim() || "/workspace";
+  const normalized = path.posix.normalize(raw);
+  if (
+    !path.posix.isAbsolute(raw) ||
+    normalized === "/" ||
+    normalized === "." ||
+    normalized.startsWith("/../") ||
+    raw.includes("\0")
+  ) {
+    return {
+      error: `invalid container workspace root: ${JSON.stringify(raw)}`,
+    };
+  }
+  return { root: normalized.replace(/\/$/, "") };
 }
 
 /**
@@ -131,6 +159,11 @@ export function buildDockerShellExecSpec(
     readonly command: string;
   },
 ): DockerShellExecSpec | { readonly error: string } {
+  const containerRoot = resolveContainerWorkspaceRoot(
+    config.containerWorkspaceRoot,
+  );
+  if ("error" in containerRoot) return containerRoot;
+
   // 1. 检测可用的容器运行时
   const runtime = detectContainerRuntime(config.runtime);
   if (!runtime) {
@@ -142,42 +175,59 @@ export function buildDockerShellExecSpec(
 
   // 2. 路径映射
   const workspaceRoot = path.resolve(input.workspaceRoot);
-  const containerCwd = hostPathToContainerPath(workspaceRoot, input.cwdPath);
+  const containerWorkspaceRoot = containerRoot.root;
+  const containerCwd = hostPathToContainerPath(
+    workspaceRoot,
+    input.cwdPath,
+    containerWorkspaceRoot,
+  );
   const image = config.image.trim() || DEFAULT_SANDBOX_IMAGE;
-  const memoryMb = config.memoryMb ?? 2048;  // 默认 2GB 内存限制
-  const cpus = config.cpus ?? 2;              // 默认 2 核 CPU 限制
+  const commandShell = config.commandShell ?? "sh";
+  const pullPolicy = config.pullPolicy ?? "missing";
+  const containerName = `paw-shell-${process.pid}-${randomUUID().slice(0, 12)}`;
+  const memoryMb = config.memoryMb ?? 2048; // 默认 2GB 内存限制
+  const cpus = config.cpus ?? 2; // 默认 2 核 CPU 限制
 
   // 3. 组装 docker run 基础参数
   const args: string[] = [
     "run",
-    "--rm",        // 执行完成后自动删除容器
-    "-i",          // 保持 stdin 打开（允许管道输入）
-    "-w",          // 设置容器内工作目录
+    "--rm", // 执行完成后自动删除容器
+    "--name",
+    containerName,
+    "--stop-timeout",
+    "1",
+    "--pull",
+    pullPolicy,
+    "-i", // 保持 stdin 打开（允许管道输入）
+    "-w", // 设置容器内工作目录
     containerCwd,
-    "-v",          // 挂载宿主机工作区到容器
-    `${workspaceRoot}:/workspace:rw`,
-    "--pids-limit", "256",    // 限制最大进程数（防 fork bomb）
-    "--memory",    `${memoryMb}m`,  // 内存限制
-    "--cpus",      String(cpus),    // CPU 核心数限制
+    "--mount", // Bind only the exact trusted workspace into the container.
+    `type=bind,source=${workspaceRoot},target=${containerWorkspaceRoot}`,
+    "--pids-limit",
+    "256", // 限制最大进程数（防 fork bomb）
+    "--memory",
+    `${memoryMb}m`, // 内存限制
+    "--cpus",
+    String(cpus), // CPU 核心数限制
   ];
 
   // 4. 网络策略
   if (config.network === "deny") {
-    args.push("--network", "none");  // 完全断网
+    args.push("--network", "none"); // 完全断网
   }
   // "full" 时保持默认网络，不添加额外限制
 
   // 5. 严格模式：只读根文件系统 + 独立的临时目录
   if (config.mode === "strict") {
     args.push(
-      "--read-only",              // 根文件系统只读
-      "--tmpfs",                  // /tmp 作为内存文件系统
-      "/tmp:exec,nosuid,size=512m",  // 可执行、禁止 setuid、512MB 上限
+      "--read-only", // 根文件系统只读
+      "--tmpfs", // /tmp 作为内存文件系统
+      "/tmp:exec,nosuid,size=512m", // 可执行、禁止 setuid、512MB 上限
     );
   }
 
-  // 6. 末尾追加镜像名和要执行的命令（通过 sh -lc 执行，支持别名和环境）
-  args.push(image, "sh", "-lc", input.command);
+  // 6. 末尾追加镜像名和要执行的命令
+  args.push(image, commandShell, "-lc", input.command);
 
   return {
     runtime,
@@ -186,5 +236,9 @@ export function buildDockerShellExecSpec(
     image,
     network: config.network,
     mode: config.mode,
+    containerWorkspaceRoot,
+    commandShell,
+    containerName,
+    pullPolicy,
   };
 }

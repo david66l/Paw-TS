@@ -5,12 +5,17 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { ensureRepoClone, repoCachePath } from "../src/swe-exp/repo-cache.js";
+import {
+  ensureRepoClone,
+  repoCachePath,
+  writeArmPawConfig,
+} from "../src/swe-exp/repo-cache.js";
 
 function git(cwd: string, args: string[]): string {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -21,6 +26,30 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe("SWE repository cache", () => {
+  test("isolated arm settings never contain host provider credentials", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-config-"));
+    try {
+      writeArmPawConfig({
+        workspaceRoot: root,
+        repositoryId: "qualification-demo",
+        memoryEnable: false,
+      });
+      const settings = JSON.parse(
+        readFileSync(path.join(root, ".paw", "settings.local.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(settings).toEqual({
+        memory_backend: "db",
+        repository_id: "qualification-demo",
+        user_id: "swe-exp",
+      });
+      expect(JSON.stringify(settings)).not.toMatch(
+        /api[_-]?key|token|secret|password/i,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("replaces an interrupted .git-only clone with a verified checkout", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-cache-"));
     const remote = path.join(root, "remote");

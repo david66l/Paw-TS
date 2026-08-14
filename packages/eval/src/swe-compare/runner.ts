@@ -22,7 +22,11 @@ import type {
 } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import type { RunAcceptanceCriterionSeed } from "@paw/core";
-import { createDefaultLanguageModel } from "@paw/models";
+import type { ShellSandboxConfig } from "@paw/harness";
+import {
+  createDeepSeekFlashModel,
+  createDefaultLanguageModel,
+} from "@paw/models";
 import { editWorkspaceFile } from "@paw/workspace";
 import { parsePatch } from "diff";
 
@@ -43,6 +47,7 @@ import {
 import { buildSweCompareGoal } from "./goal.js";
 import { PAW_FRESH_QUALIFICATION_RULE } from "./manifest.js";
 import type { SweCompareManifest } from "./types.js";
+import { assertPawVerificationEnvironmentReady } from "./verification-environment.js";
 
 export type SweCompareRunnerName = "paw" | "claude";
 
@@ -749,20 +754,6 @@ export function validatePawQualificationContract(
   }
 }
 
-/**
- * v3 promises that Paw's own verification runs inside the official instance
- * image. Until that executor is wired, refuse the run instead of silently
- * falling back to the host and publishing incomparable evidence.
- */
-export function assertPawVerificationEnvironmentReady(
-  manifest: SweCompareManifest,
-): void {
-  if (manifest.runners.paw.verificationEnvironment !== "instance_image") return;
-  throw new Error(
-    "Paw instance_image verification is not implemented; qualification run is blocked",
-  );
-}
-
 export function collectPawMetrics(events: readonly RunEventEnvelope[]): {
   modelCalls: number;
   promptTokens: number;
@@ -802,6 +793,7 @@ async function runPaw(opts: {
   readonly maxSteps: number;
   readonly timeoutMs: number;
   readonly verificationPolicy: VerificationPolicy;
+  readonly shellSandbox?: ShellSandboxConfig;
   readonly initialAcceptanceCriteria: readonly RunAcceptanceCriterionSeed[];
 }): Promise<{
   status: "completed" | "failed" | "timeout";
@@ -818,12 +810,6 @@ async function runPaw(opts: {
     workspaceRoot: opts.workspaceRoot,
     repositoryId: `swe-compare-${opts.runId}`,
     memoryEnable: false,
-    hostSettings: JSON.parse(
-      readFileSync(
-        path.join(opts.repoRoot, ".paw", "settings.local.json"),
-        "utf8",
-      ),
-    ) as Record<string, unknown>,
   });
   const events: RunEventEnvelope[] = [];
   const budget = resolveLifecycleBudget({
@@ -836,8 +822,11 @@ async function runPaw(opts: {
   );
   let runtime: ReturnType<typeof createRunOrchestrator>;
   try {
+    const mainModel = createDefaultLanguageModel(opts.repoRoot);
     runtime = createRunOrchestrator({
       workspaceRoot: opts.workspaceRoot,
+      mainModel,
+      subAgentModel: createDeepSeekFlashModel(opts.repoRoot) ?? mainModel,
       runtimeStateRoot,
       autonomy: "headless",
       budget,
@@ -859,6 +848,7 @@ async function runPaw(opts: {
       // authoritative. Harness failure may close only after a material edit and
       // fresh diff inspection; it is never recorded as a local pass.
       verificationPolicy: opts.verificationPolicy,
+      shellSandbox: opts.shellSandbox,
       onEvent: (event) => {
         if (
           event.event.type !== "model.chunk" &&
@@ -1687,9 +1677,10 @@ export async function runSweCompareArm(opts: {
     );
   }
   validateCompareRun(opts.repoRoot, manifest, opts.instanceId);
-  if (opts.runner === "paw") {
-    assertPawVerificationEnvironmentReady(manifest);
-  }
+  const pawShellSandbox =
+    opts.runner === "paw"
+      ? assertPawVerificationEnvironmentReady(manifest, opts.instanceId)
+      : undefined;
   const datasetPath = path.join(opts.repoRoot, manifest.dataset.localPath);
   const probe = loadLiteInstances(datasetPath).find(
     (item) => item.instance_id === opts.instanceId,
@@ -1719,6 +1710,7 @@ export async function runSweCompareArm(opts: {
             maxSteps: manifest.budget.pawMaxSteps,
             timeoutMs: manifest.budget.sharedTimeoutMs,
             verificationPolicy: pawVerificationPolicyFromManifest(manifest),
+            shellSandbox: pawShellSandbox,
             initialAcceptanceCriteria: buildSweAcceptanceCriteria(probe),
           })
         : await runClaude({

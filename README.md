@@ -108,3 +108,9 @@ Example:
 bun run benchmark          # all under benchmarks/
 bun run benchmark:judge
 ```
+
+SWE qualification runs can inject a trusted official instance-image shell
+environment into Paw's normal Runtime. The isolated checkout is mounted at
+`/testbed`; the container has no network, never pulls during an agent run, and
+host model credentials are not copied into the checkout. See the newest entry
+in `文档/记忆机制spec-v2/实施进度日志.md` for the frozen protocol and evidence.

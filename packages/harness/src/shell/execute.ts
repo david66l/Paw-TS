@@ -36,6 +36,15 @@ interface ShellSpawnTarget {
   readonly command: string;
   readonly args: readonly string[];
   readonly sandbox?: RunShellResult["sandbox"];
+  readonly cleanupSandbox?: () => void;
+}
+
+function forceRemoveContainer(runtime: string, containerName: string): void {
+  spawnSync(runtime, ["rm", "-f", containerName], {
+    encoding: "utf8",
+    timeout: 3_000,
+    windowsHide: true,
+  });
 }
 
 function resolveShellSpawnTarget(
@@ -46,12 +55,6 @@ function resolveShellSpawnTarget(
   win: boolean,
 ): ShellSpawnTarget | { readonly error: string } {
   if (isShellSandboxEnabled(shellSandbox)) {
-    if (win) {
-      return {
-        error:
-          "shell sandbox requires docker/podman and is not supported on native Windows cmd; use WSL or set sandbox.mode to off",
-      };
-    }
     const spec = buildDockerShellExecSpec(shellSandbox, {
       workspaceRoot,
       cwdPath,
@@ -68,7 +71,13 @@ function resolveShellSpawnTarget(
         runtime: spec.runtime,
         image: spec.image,
         network: spec.network,
+        containerWorkspaceRoot: spec.containerWorkspaceRoot,
+        commandShell: spec.commandShell,
+        containerName: spec.containerName,
+        pullPolicy: spec.pullPolicy,
       },
+      cleanupSandbox: () =>
+        forceRemoveContainer(spec.runtime, spec.containerName),
     };
   }
 
@@ -165,16 +174,19 @@ export function runShellInWorkspace(
 
   if (proc.error) {
     const e = proc.error as NodeJS.ErrnoException & { killed?: boolean };
+    spawnTarget.cleanupSandbox?.();
     if (e.code === "ETIMEDOUT" || proc.signal === "SIGTERM") {
       return {
         error: `timeout after ${timeoutMs}ms`,
         timed_out: true,
         cwd: cwdPath,
+        ...(spawnTarget.sandbox ? { sandbox: spawnTarget.sandbox } : {}),
       };
     }
     return {
       error: e.message ?? String(proc.error),
       cwd: cwdPath,
+      ...(spawnTarget.sandbox ? { sandbox: spawnTarget.sandbox } : {}),
     };
   }
 
@@ -243,6 +255,12 @@ export function runShellInWorkspaceStreaming(
     let killedByTimeout = false;
     let totalBytes = 0;
     let killedByOutputLimit = false;
+    let sandboxCleanupStarted = false;
+    const cleanupSandbox = (): void => {
+      if (sandboxCleanupStarted) return;
+      sandboxCleanupStarted = true;
+      spawnTarget.cleanupSandbox?.();
+    };
 
     const proc = spawn(spawnTarget.command, [...spawnTarget.args], {
       cwd: isShellSandboxEnabled(options.shellSandbox) ? undefined : cwdPath,
@@ -253,6 +271,7 @@ export function runShellInWorkspaceStreaming(
 
     const timeoutId = setTimeout(() => {
       killedByTimeout = true;
+      cleanupSandbox();
       proc.kill("SIGTERM");
     }, timeoutMs);
 
@@ -260,6 +279,7 @@ export function runShellInWorkspaceStreaming(
       totalBytes += data.length;
       if (totalBytes > MAX_OUTPUT_BYTES && !killedByOutputLimit) {
         killedByOutputLimit = true;
+        cleanupSandbox();
         proc.kill("SIGTERM");
         return;
       }
@@ -272,6 +292,7 @@ export function runShellInWorkspaceStreaming(
       totalBytes += data.length;
       if (totalBytes > MAX_OUTPUT_BYTES && !killedByOutputLimit) {
         killedByOutputLimit = true;
+        cleanupSandbox();
         proc.kill("SIGTERM");
         return;
       }
@@ -282,6 +303,7 @@ export function runShellInWorkspaceStreaming(
 
     proc.on("error", (err: Error) => {
       clearTimeout(timeoutId);
+      cleanupSandbox();
       resolve({
         error: err.message,
         timed_out: killedByTimeout,

@@ -114,6 +114,9 @@ export const pawSettingsLocalSchema = z
         runtime: z.enum(["docker", "podman"]).optional(),
         memory_mb: z.number().int().positive().optional(),
         cpus: z.number().positive().optional(),
+        container_workspace_root: z.string().optional(),
+        command_shell: z.enum(["sh", "bash"]).optional(),
+        pull_policy: z.enum(["missing", "never"]).optional(),
       })
       .optional(),
     /**

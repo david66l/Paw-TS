@@ -104,6 +104,22 @@ describe("executeTool", () => {
     expect(description).toContain("captured and bounded by the host");
   });
 
+  test("run_shell describes the injected container shell instead of the host", () => {
+    const definition = toolDefinitions(undefined, {
+      shellSandbox: {
+        mode: "workspace",
+        network: "deny",
+        image: "local:test",
+        containerWorkspaceRoot: "/testbed",
+        commandShell: "bash",
+      },
+    }).find((tool) => tool.function.name === "workspace_run_shell");
+    const description = definition?.function.description ?? "";
+    expect(description).toContain("Linux container");
+    expect(description).toContain("POSIX /bin/bash");
+    expect(description).not.toContain("Windows cmd.exe");
+  });
+
   test("workspace.acceptance_update is a native tool with validated session execution", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-acceptance-"));
     const definition = toolDefinitions().find(

@@ -16,7 +16,6 @@ import { FakeLanguageModel } from "@paw/models";
 
 import {
   allowSweCompareToolCall,
-  assertPawVerificationEnvironmentReady,
   auditClaudeTraceIntegrity,
   auditPawTraceIntegrity,
   auditSweCompareResult,
@@ -41,6 +40,11 @@ import {
   validatePawQualificationContract,
 } from "../src/swe-compare/runner.js";
 import type { SweCompareManifest } from "../src/swe-compare/types.js";
+import {
+  assertPawVerificationEnvironmentReady,
+  pawInstanceImageSandbox,
+  swebenchInstanceImageName,
+} from "../src/swe-compare/verification-environment.js";
 import {
   captureGitDiff,
   createCommitWorktree,
@@ -75,7 +79,7 @@ describe("SWE compare runner", () => {
     });
   });
 
-  test("fails closed when the frozen v3 contract drifts or its executor is absent", () => {
+  test("fails closed when the frozen v3 contract drifts or its image is absent", () => {
     const manifest = {
       selection: { ruleVersion: "paw-fresh-qualification-v3" },
       budget: {
@@ -92,9 +96,27 @@ describe("SWE compare runner", () => {
       },
     } as unknown as SweCompareManifest;
     expect(() => validatePawQualificationContract(manifest)).not.toThrow();
-    expect(() => assertPawVerificationEnvironmentReady(manifest)).toThrow(
-      "instance_image verification is not implemented",
-    );
+    const instanceId = "demo__repo-1";
+    const expectedImage = "swebench/sweb.eval.x86_64.demo_1776_repo-1:latest";
+    expect(swebenchInstanceImageName(instanceId)).toBe(expectedImage);
+    expect(pawInstanceImageSandbox(instanceId)).toMatchObject({
+      image: expectedImage,
+      network: "deny",
+      containerWorkspaceRoot: "/testbed",
+      commandShell: "bash",
+      pullPolicy: "never",
+    });
+    let inspected = "";
+    expect(
+      assertPawVerificationEnvironmentReady(manifest, instanceId, (image) => {
+        inspected = image;
+        return true;
+      }),
+    ).toEqual(pawInstanceImageSandbox(instanceId));
+    expect(inspected).toBe(expectedImage);
+    expect(() =>
+      assertPawVerificationEnvironmentReady(manifest, instanceId, () => false),
+    ).toThrow("instance image is not available locally");
     expect(() =>
       validatePawQualificationContract({
         ...manifest,

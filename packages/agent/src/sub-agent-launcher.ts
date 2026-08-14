@@ -9,6 +9,7 @@ import type { CostTracker, RunEventEnvelope } from "@paw/core";
 import { ContextManager } from "@paw/core";
 import type {
   McpServerConfig,
+  ShellSandboxConfig,
   SubAgentLaunchOptions,
   SubAgentLauncher,
   SubAgentResult,
@@ -49,6 +50,7 @@ export interface DefaultSubAgentLauncherOptions {
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
   readonly toolEffectPolicy?: ToolEffectPolicy;
   readonly verificationPolicy?: VerificationPolicy;
+  readonly shellSandbox?: ShellSandboxConfig;
   /** Shared with the root run so child/reviewer usage is not hidden. */
   readonly costTracker?: CostTracker;
 }
@@ -94,6 +96,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
   private readonly toolExecutionPolicy?: DefaultSubAgentLauncherOptions["toolExecutionPolicy"];
   private readonly toolEffectPolicy?: DefaultSubAgentLauncherOptions["toolEffectPolicy"];
   private readonly verificationPolicy?: DefaultSubAgentLauncherOptions["verificationPolicy"];
+  private readonly shellSandbox?: DefaultSubAgentLauncherOptions["shellSandbox"];
   private readonly costTracker?: CostTracker;
 
   constructor(opts: DefaultSubAgentLauncherOptions) {
@@ -109,6 +112,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
     this.toolExecutionPolicy = opts.toolExecutionPolicy;
     this.toolEffectPolicy = opts.toolEffectPolicy;
     this.verificationPolicy = opts.verificationPolicy;
+    this.shellSandbox = opts.shellSandbox;
     this.costTracker = opts.costTracker;
   }
 
@@ -139,6 +143,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
       toolExecutionPolicy: this.toolExecutionPolicy,
       toolEffectPolicy: this.toolEffectPolicy,
       verificationPolicy: this.verificationPolicy,
+      shellSandbox: this.shellSandbox,
       costTracker: this.costTracker,
       fileLock: extras?.fileLock,
       contextManager: extras?.contextManager,

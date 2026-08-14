@@ -52,6 +52,37 @@ export function harnessPythonArgs(
   return ["-m", "swebench.harness.run_evaluation", ...officialArgs];
 }
 
+export function officialHarnessArgs(opts: {
+  readonly dataset: string;
+  readonly predictionsPath: string;
+  readonly runId: string;
+  readonly maxWorkers: number;
+  readonly instanceIds: readonly string[];
+  readonly cacheLevel?: "none" | "base" | "env" | "instance";
+  readonly cleanImages?: boolean;
+}): string[] {
+  const args = [
+    "--dataset_name",
+    opts.dataset,
+    "--predictions_path",
+    opts.predictionsPath,
+    "--run_id",
+    opts.runId,
+    "--max_workers",
+    String(opts.maxWorkers),
+  ];
+  if (opts.instanceIds.length >= 1) {
+    args.push("--instance_ids", ...opts.instanceIds);
+  }
+  if (opts.cacheLevel) {
+    args.push("--cache_level", opts.cacheLevel);
+  }
+  if (opts.cleanImages !== undefined) {
+    args.push("--clean", String(opts.cleanImages));
+  }
+  return args;
+}
+
 /**
  * 调用官方 swebench harness 评测。
  * Windows：通过 benchmarks/swe-exp/win_shim 注入假 resource 模块（Unix-only）。
@@ -64,6 +95,9 @@ export function runSwebenchHarness(opts: {
   readonly maxWorkers?: number;
   readonly timeoutSec?: number;
   readonly cwd?: string;
+  /** Retain official image layers needed by a later agent-side verification run. */
+  readonly cacheLevel?: "none" | "base" | "env" | "instance";
+  readonly cleanImages?: boolean;
 }): HarnessEvalResult {
   const dataset = opts.datasetName ?? "princeton-nlp/SWE-bench_Lite";
   const cwd = opts.cwd ?? process.cwd();
@@ -71,19 +105,15 @@ export function runSwebenchHarness(opts: {
     ? opts.predictionsPath
     : path.join(cwd, opts.predictionsPath);
 
-  const officialArgs = [
-    "--dataset_name",
+  const officialArgs = officialHarnessArgs({
     dataset,
-    "--predictions_path",
-    predAbs,
-    "--run_id",
-    opts.runId,
-    "--max_workers",
-    String(opts.maxWorkers ?? 1),
-  ];
-  if (opts.instanceIds.length >= 1) {
-    officialArgs.push("--instance_ids", ...opts.instanceIds);
-  }
+    predictionsPath: predAbs,
+    runId: opts.runId,
+    maxWorkers: opts.maxWorkers ?? 1,
+    instanceIds: opts.instanceIds,
+    cacheLevel: opts.cacheLevel,
+    cleanImages: opts.cleanImages,
+  });
   const args = harnessPythonArgs(cwd, officialArgs);
 
   const env = { ...process.env };

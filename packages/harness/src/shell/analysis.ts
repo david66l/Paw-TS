@@ -15,6 +15,10 @@ export interface RunShellResult {
     readonly runtime: string;
     readonly image: string;
     readonly network: "deny" | "full";
+    readonly containerWorkspaceRoot: string;
+    readonly commandShell: "sh" | "bash";
+    readonly containerName: string;
+    readonly pullPolicy: "missing" | "never";
   };
 }
 
@@ -284,4 +288,3 @@ export function interpretShellExitCode(
     message: `Command failed with exit code ${exitCode}`,
   };
 }
-

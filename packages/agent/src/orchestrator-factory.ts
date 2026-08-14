@@ -13,6 +13,7 @@ import {
 } from "@paw/core";
 import type { RunEventEnvelope } from "@paw/core";
 import type { McpServerConfig } from "@paw/harness";
+import type { ShellSandboxConfig } from "@paw/harness";
 import {
   createDeepSeekFlashModel,
   createDefaultLanguageModel,
@@ -55,6 +56,13 @@ import { DefaultSubAgentLauncher } from "./sub-agent-launcher.js";
 export interface RunOrchestratorOptions {
   readonly workspaceRoot: string;
   /**
+   * Caller-owned model instances for trusted control planes such as evaluators.
+   * This keeps provider credentials out of an untrusted task checkout while
+   * preserving the normal workspace-backed model resolution by default.
+   */
+  readonly mainModel?: LanguageModel;
+  readonly subAgentModel?: LanguageModel;
+  /**
    * Optional caller-owned root for mutable runtime records (sessions/state).
    * Project configuration, tools, skills, and source remain anchored to
    * workspaceRoot. Sandboxed evaluators use this to keep control-plane writes
@@ -68,6 +76,8 @@ export interface RunOrchestratorOptions {
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
   readonly toolEffectPolicy?: ToolEffectPolicy;
   readonly verificationPolicy?: VerificationPolicy;
+  /** Trusted shell execution environment override for this run. */
+  readonly shellSandbox?: ShellSandboxConfig;
   /**
    * Autonomy profile (default headless for CLI/eval long-runs).
    * When set, merges resolvers + applies shell policy unless explicit
@@ -219,11 +229,13 @@ export function createRunOrchestrator(
     : undefined;
 
   const mainModel =
-    rootSpec && opts.workspaceRoot
+    opts.mainModel ??
+    (rootSpec && opts.workspaceRoot
       ? (resolveModelForSpec(rootSpec, workspaceRoot) ??
         createDefaultLanguageModel(workspaceRoot))
-      : createDefaultLanguageModel(workspaceRoot);
-  const subAgentModel = createDeepSeekFlashModel(workspaceRoot) ?? mainModel;
+      : createDefaultLanguageModel(workspaceRoot));
+  const subAgentModel =
+    opts.subAgentModel ?? createDeepSeekFlashModel(workspaceRoot) ?? mainModel;
 
   const runtimeStateRoot = opts.runtimeStateRoot ?? workspaceRoot;
   const sessionStore = new FileSystemSessionStore({
@@ -247,6 +259,7 @@ export function createRunOrchestrator(
     toolExecutionPolicy: opts.toolExecutionPolicy,
     toolEffectPolicy: opts.toolEffectPolicy,
     verificationPolicy: opts.verificationPolicy,
+    shellSandbox: opts.shellSandbox,
     costTracker,
   });
   const candidateReviewer = mainModel.runtimeProfile
@@ -324,6 +337,7 @@ export function createRunOrchestrator(
     toolExecutionPolicy: opts.toolExecutionPolicy,
     toolEffectPolicy: opts.toolEffectPolicy,
     verificationPolicy: opts.verificationPolicy,
+    shellSandbox: opts.shellSandbox,
     candidateReviewer,
     subAgentLauncher: collab.canSpawn ? subAgentLauncher : undefined,
     appStateStore,

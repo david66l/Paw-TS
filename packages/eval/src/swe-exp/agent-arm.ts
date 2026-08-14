@@ -21,7 +21,11 @@ import {
   PostgresMemoryStoreEngine,
   deriveEntryId,
 } from "@paw/memory/longterm";
-import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
+import {
+  createDeepSeekFlashModel,
+  createDefaultLanguageModel,
+} from "@paw/models";
+import { defaultSettingsPath } from "@paw/settings";
 
 import { buildSweAcceptanceCriteria } from "./acceptance.js";
 import type {
@@ -52,18 +56,6 @@ export interface RunAgentArmOptions {
   readonly timeoutMs: number;
   readonly keep?: boolean;
   readonly skipEval?: boolean;
-}
-
-function loadHostSettings(
-  hostRoot: string,
-): Record<string, unknown> | undefined {
-  try {
-    const p = defaultSettingsPath(hostRoot);
-    if (!existsSync(p)) return undefined;
-    return loadPawSettingsLocal(p) as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
 }
 
 function retrievalQuery(goal: string): string {
@@ -306,12 +298,10 @@ export async function runAgentArm(
     running = { ...running, workspaceRoot: wt.root };
     saveArmCheckpoint(opts.checkpointDir, opts.suiteRunId, running);
 
-    const hostSettings = loadHostSettings(opts.hostWorkspaceRoot);
     writeArmPawConfig({
       workspaceRoot: wt.root,
       repositoryId,
       memoryEnable: memoryOn,
-      hostSettings,
     });
 
     let recalled = false;
@@ -338,8 +328,12 @@ export async function runAgentArm(
     });
     const budgetAbort = createBudgetAbort(budget.timeoutMs);
     // Coding eval: single long-run agent (edit→test→fix), not 狸花调度
-    const { orch, rootMaxSteps } = createRunOrchestrator({
+    const mainModel = createDefaultLanguageModel(opts.hostWorkspaceRoot);
+    const { orch, rootMaxSteps, watcher } = createRunOrchestrator({
       workspaceRoot: wt.root,
+      mainModel,
+      subAgentModel:
+        createDeepSeekFlashModel(opts.hostWorkspaceRoot) ?? mainModel,
       autonomy: "headless",
       budget,
       // The evaluator only needs terminal/model/tool events for metrics.
@@ -392,6 +386,7 @@ export async function runAgentArm(
       failureReason = e instanceof Error ? e.message : String(e);
     } finally {
       budgetAbort.clear();
+      watcher.stop();
     }
 
     const metrics = collectMetrics(events);

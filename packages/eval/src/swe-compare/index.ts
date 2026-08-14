@@ -36,7 +36,6 @@ export {
   recoverPawResultPatch,
   sweCompareNetworkViolation,
   runSweCompareArm,
-  assertPawVerificationEnvironmentReady,
   pawVerificationPolicyFromManifest,
   validateCompareRun,
   validatePawQualificationContract,
@@ -45,6 +44,11 @@ export {
   type SweCompareRunResult,
   type SweCompareIntegrityAudit,
 } from "./runner.js";
+export {
+  assertPawVerificationEnvironmentReady,
+  pawInstanceImageSandbox,
+  swebenchInstanceImageName,
+} from "./verification-environment.js";
 export type {
   SweCompareInstanceManifest,
   SweCompareManifest,

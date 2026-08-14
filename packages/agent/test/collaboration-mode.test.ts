@@ -36,6 +36,33 @@ describe("resolveCollaborationMode", () => {
 });
 
 describe("coding factory defaults", () => {
+  test("accepts caller-owned models without resolving credentials from the workspace", () => {
+    const dir = tmpDir("paw-collab-injected-model-");
+    const model = {
+      label: "trusted-control-plane-model",
+      async complete() {
+        return { text: "done" };
+      },
+    };
+    try {
+      writeFileMemorySettings(dir);
+      const run = createRunOrchestrator({
+        workspaceRoot: dir,
+        mainModel: model,
+        subAgentModel: model,
+        skipAgentSeeds: true,
+      });
+      try {
+        expect(run.mainModel).toBe(model);
+        expect(run.subAgentModel).toBe(model);
+      } finally {
+        run.watcher.stop();
+      }
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test("can keep mutable runtime records outside the project workspace", () => {
     const dir = tmpDir("paw-collab-runtime-workspace-");
     const runtime = tmpDir("paw-collab-runtime-state-");

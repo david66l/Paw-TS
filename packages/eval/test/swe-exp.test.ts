@@ -22,6 +22,7 @@ import {
   harnessPythonArgs,
   lessonGoalOverlap,
   mergeExternalResolveResults,
+  officialHarnessArgs,
   parseResolvedFromHarnessOutput,
   runSweExpAgent,
   runSweExpBuiltin,
@@ -185,6 +186,35 @@ describe("agent control-plane preflight/checkpoint", () => {
       "benchmarks/swe-exp/run_harness_lf.py",
     );
     expect(args.slice(1)).toEqual(["--run_id", "x"]);
+  });
+
+  test("official harness can retain an instance image for agent verification", () => {
+    expect(
+      officialHarnessArgs({
+        dataset: "princeton-nlp/SWE-bench_Lite",
+        predictionsPath: "predictions.jsonl",
+        runId: "preflight",
+        maxWorkers: 1,
+        instanceIds: ["demo__repo-1"],
+        cacheLevel: "instance",
+        cleanImages: false,
+      }),
+    ).toEqual([
+      "--dataset_name",
+      "princeton-nlp/SWE-bench_Lite",
+      "--predictions_path",
+      "predictions.jsonl",
+      "--run_id",
+      "preflight",
+      "--max_workers",
+      "1",
+      "--instance_ids",
+      "demo__repo-1",
+      "--cache_level",
+      "instance",
+      "--clean",
+      "false",
+    ]);
   });
 
   test("official schema-v2 root report resolves the exact run id", () => {

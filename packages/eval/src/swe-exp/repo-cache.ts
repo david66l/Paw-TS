@@ -362,18 +362,15 @@ function normalizePatchText(content: string): string {
   return content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
-/** 写入每臂隔离的 .paw 配置 */
+/** Write the non-secret Paw runtime configuration for an isolated eval arm. */
 export function writeArmPawConfig(opts: {
   workspaceRoot: string;
   repositoryId: string;
   memoryEnable: boolean;
-  /** 可选：从宿主复制的 settings 片段（模型密钥等） */
-  hostSettings?: Record<string, unknown>;
 }): void {
   const paw = path.join(opts.workspaceRoot, ".paw");
   mkdirSync(paw, { recursive: true });
   const settings: Record<string, unknown> = {
-    ...(opts.hostSettings ?? {}),
     memory_backend: "db",
     repository_id: opts.repositoryId,
     user_id: "swe-exp",

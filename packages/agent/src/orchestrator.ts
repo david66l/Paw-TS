@@ -332,6 +332,8 @@ export interface AgentOrchestratorOptions {
   readonly toolEffectPolicy?: ToolEffectPolicy;
   /** Trusted completion authority; defaults to local verification. */
   readonly verificationPolicy?: VerificationPolicy;
+  /** Trusted execution environment override; workspace settings are the fallback. */
+  readonly shellSandbox?: import("@paw/harness").ShellSandboxConfig;
   /** Independent semantic review before completing a mutated task. */
   readonly candidateReviewer?: CandidateReviewer;
 }
@@ -450,6 +452,7 @@ export class AgentOrchestrator {
   private readonly toolExecutionPolicy?: AgentOrchestratorOptions["toolExecutionPolicy"];
   private readonly toolEffectPolicy?: AgentOrchestratorOptions["toolEffectPolicy"];
   private readonly verificationPolicy?: AgentOrchestratorOptions["verificationPolicy"];
+  private readonly shellSandbox?: AgentOrchestratorOptions["shellSandbox"];
   private readonly candidateReviewer?: CandidateReviewer;
 
   constructor(opts?: AgentOrchestratorOptions) {
@@ -462,6 +465,7 @@ export class AgentOrchestrator {
     this.toolExecutionPolicy = opts?.toolExecutionPolicy;
     this.toolEffectPolicy = opts?.toolEffectPolicy;
     this.verificationPolicy = opts?.verificationPolicy;
+    this.shellSandbox = opts?.shellSandbox;
     this.candidateReviewer = opts?.candidateReviewer;
     this.fileLock = opts?.fileLock;
     // P1 入口闸：会话级去重器（仅 root orchestrator；子 Agent 不重复去重）
@@ -3032,12 +3036,17 @@ export class AgentOrchestrator {
       }
     }
 
-    // 获取完整的工具定义列表（内置工具 + MCP 工具）
+    const shellSandbox =
+      this.shellSandbox ?? resolveShellSandboxConfig(workspaceRoot);
+    // Tool descriptions must reflect the actual execution world, not merely
+    // the host OS (for example Windows hosting a Linux instance image).
     const toolNameMap = toolNameReverseMap(mcp);
-    const toolDefs = this.filterToolDefs(toolDefinitions(mcp), toolNameMap);
+    const toolDefs = this.filterToolDefs(
+      toolDefinitions(mcp, { shellSandbox }),
+      toolNameMap,
+    );
 
     const contextWindow = model.capabilities?.contextWindow ?? 128_000;
-    const shellSandbox = resolveShellSandboxConfig(workspaceRoot);
 
     // ═══ 子 Agent 模式（child）═══
     // 子 Agent 使用精简的 system prompt，不加载记忆/skills/git状态
