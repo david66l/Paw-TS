@@ -6,20 +6,23 @@ import {
 } from "../src/swe-compare/index.js";
 
 const repoRoot = process.cwd();
-const fileName = "paw-fresh-qualification-v3.json";
+const fileName = "paw-fresh-qualification-v4.json";
 const fresh = createPawFreshQualificationManifest({ repoRoot });
 let previous: typeof fresh | undefined;
-try {
-  previous = JSON.parse(
-    await Bun.file(
-      new URL(
-        `../../../benchmarks/swe-compare/manifests/${fileName}`,
-        import.meta.url,
-      ),
-    ).text(),
-  ) as typeof fresh;
-} catch {
-  // First freeze has no reusable no-model preflight results.
+for (const candidate of [fileName, "paw-fresh-qualification-v3.json"]) {
+  try {
+    previous = JSON.parse(
+      await Bun.file(
+        new URL(
+          `../../../benchmarks/swe-compare/manifests/${candidate}`,
+          import.meta.url,
+        ),
+      ).text(),
+    ) as typeof fresh;
+    break;
+  } catch {
+    // Try the prior prefix manifest before declaring a first freeze.
+  }
 }
 const reusable = new Map(
   (previous?.instances ?? [])

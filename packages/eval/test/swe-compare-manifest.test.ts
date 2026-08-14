@@ -7,6 +7,7 @@ import { buildSweCompareGoal } from "../src/swe-compare/goal.js";
 import {
   PAW_FRESH_DEVELOPMENT_RULE,
   PAW_FRESH_QUALIFICATION_RULE,
+  PAW_FRESH_QUALIFICATION_V3_RULE,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
@@ -108,7 +109,12 @@ describe("SWE compare manifest", () => {
     }
   });
 
-  test("selects v3 from unseen repositories with the frozen acceptance surface", () => {
+  test("selects ten v4 repositories as a deterministic extension of v3", () => {
+    expect(PAW_FRESH_QUALIFICATION_V3_RULE.count).toBe(5);
+    expect(PAW_FRESH_QUALIFICATION_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_RULE.seed).toBe(
+      PAW_FRESH_QUALIFICATION_V3_RULE.seed,
+    );
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-v3-selection-"));
     const datasetPath = path.join(root, "swe-bench-lite.jsonl");
     const failToPass = JSON.stringify([
@@ -121,7 +127,7 @@ describe("SWE compare manifest", () => {
         (_, index) => `tests/test_regression.py::test_${index}`,
       ),
     );
-    const candidates = Array.from({ length: 7 }, (_, index) => ({
+    const candidates = Array.from({ length: 12 }, (_, index) => ({
       ...instance,
       instance_id: `qualification-${index}__repo-${index}`,
       repo: `qualification-${index}/repo`,

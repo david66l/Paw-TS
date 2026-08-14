@@ -677,7 +677,8 @@ export function validateCompareRun(
   const validRule = seenDevelopment
     ? manifest.selection.ruleVersion === "paw-seen-dev-v1" ||
       manifest.selection.ruleVersion === "paw-fresh-dev-v2" ||
-      manifest.selection.ruleVersion === "paw-fresh-qualification-v3"
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v3" ||
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v4"
     : manifest.selection.ruleVersion === "formal-dev-v1";
   if (
     !validRule ||
@@ -742,6 +743,8 @@ export function validatePawQualificationContract(
   const rule = PAW_FRESH_QUALIFICATION_RULE;
   if (manifest.selection.ruleVersion !== rule.version) return;
   if (
+    manifest.selection.ids.length !== rule.count ||
+    new Set(manifest.selection.ids).size !== rule.count ||
     manifest.budget.pawMaxSteps !== rule.pawMaxSteps ||
     manifest.budget.sharedTimeoutMs !== rule.sharedTimeoutMs ||
     manifest.budget.codingPhaseBudget !== false ||

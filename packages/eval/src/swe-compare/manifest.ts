@@ -75,7 +75,8 @@ export const PAW_KNOWN_EXPOSED_IDS: readonly string[] = [
   ...new Set([...PAW_PRE_V2_EXPOSED_IDS, ...PAW_FRESH_V2_IDS]),
 ];
 
-export const PAW_FRESH_QUALIFICATION_RULE = {
+/** Superseded before any model run when the user expanded the batch to ten. */
+export const PAW_FRESH_QUALIFICATION_V3_RULE = {
   version: "paw-fresh-qualification-v3" as const,
   seed: "paw-fresh-qualification-v3",
   count: 5,
@@ -87,6 +88,16 @@ export const PAW_FRESH_QUALIFICATION_RULE = {
   sharedTimeoutMs: 2_700_000,
   verificationAuthority: "local" as const,
   verificationEnvironment: "instance_image" as const,
+} as const;
+
+/** Current qualification contract: a deterministic prefix extension of v3. */
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  ...PAW_FRESH_QUALIFICATION_V3_RULE,
+  version: "paw-fresh-qualification-v4" as const,
+  // Keep the committed v3 rank so the five extra tasks extend the prefix;
+  // no result, task prose, or model trajectory participates in selection.
+  seed: PAW_FRESH_QUALIFICATION_V3_RULE.seed,
+  count: 10,
 } as const;
 
 function sha256(value: string | Buffer): string {
@@ -175,7 +186,8 @@ export function createSweCompareManifest(opts: {
   readonly pawDevelopmentRuleVersion?:
     | "paw-seen-dev-v1"
     | "paw-fresh-dev-v2"
-    | "paw-fresh-qualification-v3";
+    | "paw-fresh-qualification-v3"
+    | "paw-fresh-qualification-v4";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;

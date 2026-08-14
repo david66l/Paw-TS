@@ -14,6 +14,8 @@ import { AgentOrchestrator, createRunOrchestrator } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
+import { PAW_FRESH_QUALIFICATION_RULE } from "../src/swe-compare/manifest.js";
+
 import {
   allowSweCompareToolCall,
   auditClaudeTraceIntegrity,
@@ -79,9 +81,15 @@ describe("SWE compare runner", () => {
     });
   });
 
-  test("fails closed when the frozen v3 contract drifts or its image is absent", () => {
+  test("fails closed when the current qualification contract drifts or its image is absent", () => {
     const manifest = {
-      selection: { ruleVersion: "paw-fresh-qualification-v3" },
+      selection: {
+        ruleVersion: PAW_FRESH_QUALIFICATION_RULE.version,
+        ids: Array.from(
+          { length: PAW_FRESH_QUALIFICATION_RULE.count },
+          (_, index) => `demo__repo-${index}`,
+        ),
+      },
       budget: {
         pawMaxSteps: 96,
         sharedTimeoutMs: 2_700_000,
@@ -121,6 +129,15 @@ describe("SWE compare runner", () => {
       validatePawQualificationContract({
         ...manifest,
         budget: { ...manifest.budget, pawMaxSteps: 95 },
+      }),
+    ).toThrow("contract drift");
+    expect(() =>
+      validatePawQualificationContract({
+        ...manifest,
+        selection: {
+          ...manifest.selection,
+          ids: manifest.selection.ids.slice(1),
+        },
       }),
     ).toThrow("contract drift");
   });
