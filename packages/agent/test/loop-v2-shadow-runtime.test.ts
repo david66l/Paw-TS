@@ -593,6 +593,88 @@ describe("Loop Kernel v2 shadow migration", () => {
     });
   });
 
+  test("no-effect and pre-execution denied shells stay audited without mutation gaps", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-shadow-no-effect-"));
+    let modelCalls = 0;
+    const shadow = new AgentOrchestrator({
+      model: {
+        label: "shadow-no-effect-shells",
+        async complete() {
+          modelCalls += 1;
+          if (modelCalls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: "node -e \"console.log('diagnostic')\"" },
+              }),
+            };
+          }
+          if (modelCalls === 2) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: "node -e \"console.log('blocked')\"" },
+              }),
+            };
+          }
+          return {
+            text: JSON.stringify({
+              action: "final_answer",
+              summary: "Diagnostics completed.",
+            }),
+          };
+        },
+      },
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      loopKernelVersion: "v2-shadow",
+      toolExecutionPolicy: ({ args }) => {
+        const command =
+          typeof args === "object" && args !== null && "command" in args
+            ? String(args.command)
+            : "";
+        return command.includes("blocked")
+          ? {
+              allowed: false,
+              reason: "diagnostic_blocked",
+              message: "Blocked before execution.",
+            }
+          : { allowed: true };
+      },
+      toolEffectPolicy: {
+        appliesTo: ({ tool }) => tool === "workspace.run_shell",
+        prepare: () => undefined,
+        settle: ({ result }) => ({
+          allowed: true,
+          result: {
+            ...result,
+            payload: {
+              ...(result.payload as Record<string, unknown>),
+              workspaceEffect: { changed: false, paths: [] },
+            },
+          },
+        }),
+      },
+    });
+    const result = await shadow.run({
+      runId: "shadow-no-effect-shells",
+      goal: "Run diagnostics without modifying the workspace.",
+      workspaceRoot: dir,
+      maxSteps: 6,
+    });
+
+    expect(result.status).toBe("completed");
+    const report = shadow.getLastLoopV2ShadowReport();
+    if (!report) throw new Error("Missing shadow report");
+    expect(report.coverage.gaps).toBe(0);
+    expect(report.state.currentMutationRevision).toBe(0);
+    expect(
+      report.diagnostics.filter(
+        (item) => item.reason === "rich_mutation_no_effect",
+      ),
+    ).toHaveLength(2);
+  });
+
   test("live read-edit-test-final trajectory projects an auditable v2 candidate", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-shadow-trajectory-"));
     writeFileSync(path.join(dir, "source.txt"), "before", "utf8");

@@ -460,6 +460,9 @@ export async function executeToolCalls(
   ): Promise<ToolRunResult> => {
     // 被策略阻止 → 返回 block 结果
     if (blockedByPolicy[i]) {
+      if (toolCtx.captureLoopV2Facts) {
+        mutationCaptures[i] = completeEmptyMutationCapture();
+      }
       const block = policyBlocks[i]!;
       return {
         ok: false,
@@ -475,6 +478,9 @@ export async function executeToolCalls(
     // 文件锁冲突 → 返回冲突结果（模型可改派/重试）
     const conflictPath = lockConflict[i];
     if (conflictPath !== undefined) {
+      if (toolCtx.captureLoopV2Facts) {
+        mutationCaptures[i] = completeEmptyMutationCapture();
+      }
       return {
         ok: false,
         summary: `File lock conflict: ${conflictPath} is being written by another agent; try a different file or retry later`,
@@ -483,6 +489,9 @@ export async function executeToolCalls(
     }
     // 被用户拒绝 → 返回 deny 结果
     if (!approvals[i]) {
+      if (toolCtx.captureLoopV2Facts) {
+        mutationCaptures[i] = completeEmptyMutationCapture();
+      }
       return {
         ok: false,
         summary: "tool execution denied by user",
@@ -515,6 +524,9 @@ export async function executeToolCalls(
           workspaceRoot: toolCtx.workspaceRoot,
         });
       } catch (error) {
+        if (toolCtx.captureLoopV2Facts) {
+          mutationCaptures[i] = completeEmptyMutationCapture();
+        }
         const message = error instanceof Error ? error.message : String(error);
         return {
           ok: false,
@@ -927,6 +939,15 @@ function captureMutationBefore(
   return beforeContents
     ? { status: "before", paths: normalized, beforeContents }
     : { status: "gap", reason: "capture_failed" };
+}
+
+function completeEmptyMutationCapture(): LoopV2ShadowMutationCapture {
+  return {
+    status: "complete",
+    paths: [],
+    beforeContents: {},
+    afterContents: {},
+  };
 }
 
 function captureMutationAfter(

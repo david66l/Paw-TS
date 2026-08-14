@@ -286,8 +286,8 @@ function renderTransitionPatch(transition: PathTransitionV2): string {
   const patch = structuredPatch(
     oldName,
     newName,
-    transition.beforeContent ?? "",
-    transition.afterContent ?? "",
+    normalizePatchContent(transition.beforeContent ?? ""),
+    normalizePatchContent(transition.afterContent ?? ""),
     undefined,
     undefined,
     { context: 3 },
@@ -335,10 +335,17 @@ function validateFullStepPatch(
       errors.push(`mutation r${mutation.mutationRevision} patch omits ${path}`);
       continue;
     }
-    const applied = applyPatch(contents.before ?? "", filePatch, {
-      autoConvertLineEndings: true,
-    });
-    if (applied === false || applied !== (contents.after ?? "")) {
+    const applied = applyPatch(
+      normalizePatchContent(contents.before ?? ""),
+      filePatch,
+      {
+        autoConvertLineEndings: true,
+      },
+    );
+    if (
+      applied === false ||
+      applied !== normalizePatchContent(contents.after ?? "")
+    ) {
       errors.push(
         `mutation r${mutation.mutationRevision} patch does not reproduce ${path}`,
       );
@@ -351,6 +358,10 @@ function validateFullStepPatch(
       );
     }
   }
+}
+
+function normalizePatchContent(value: string): string {
+  return value.replace(/\r\n?/g, "\n");
 }
 
 function normalizeArtifactPath(value: string): string | undefined {

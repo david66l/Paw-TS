@@ -611,8 +611,8 @@ function buildRichMutation(
     }> {
   const capture = input.mutationCapture;
   if (!capture || capture.status === "gap") return { kind: "gap" };
+  if (capture.paths.length === 0) return { kind: "unchanged" };
   if (
-    capture.paths.length === 0 ||
     new Set(capture.paths).size !== capture.paths.length ||
     capture.paths.some(
       (path) =>

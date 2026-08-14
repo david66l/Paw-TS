@@ -16,6 +16,7 @@ import {
   evaluateCandidateReadinessV2,
   materializeCandidateArtifactV2,
   projectLoopV2Event,
+  renderMutationStepPatchV2,
 } from "../src/loop-v2/index.js";
 
 const RUN_ID = "loop-v2-artifact";
@@ -150,6 +151,53 @@ describe("Loop Kernel v2 verification and artifact", () => {
     if (!finalPatch) throw new Error("missing final materialized patch");
     expect(applyPatch(before.content, finalPatch)).toBe(after.content);
     expect(artifact.patch).not.toContain("export const value = 2;");
+  });
+
+  test("materializes CRLF snapshots into a parseable canonical patch", () => {
+    const beforeText = [
+      "def _cstack(left, right):",
+      "    if left.ndim == 2:",
+      "        cleft = left",
+      "    else:",
+      "        cleft = np.zeros((left, left))",
+      "        cleft[-left:, -left:] = 1",
+      "    return cleft",
+      "",
+    ].join("\r\n");
+    const afterText = beforeText.replace(
+      "cleft[-left:, -left:] = 1",
+      "cleft[-left:, -left:] = right",
+    );
+    const before = createArtifactContentBlobV2(beforeText);
+    const after = createArtifactContentBlobV2(afterText);
+    const patch = renderMutationStepPatchV2([
+      {
+        path: FILE,
+        beforeContent: beforeText,
+        afterContent: afterText,
+      },
+    ]);
+    const entry: MutationJournalEntryV2 = {
+      seq: 2,
+      callId: "edit-crlf",
+      mutationRevision: 1,
+      paths: [FILE],
+      beforeHashes: { [FILE]: before.contentHash },
+      afterHashes: { [FILE]: after.contentHash },
+      beforeContentRefs: { [FILE]: before.ref },
+      afterContentRefs: { [FILE]: after.ref },
+      patch,
+      workspaceEffect: "product",
+    };
+
+    expect(() => parsePatch(patch)).not.toThrow();
+    const artifact = materializeCandidateArtifactV2([entry], [before, after], {
+      status: "unavailable",
+    });
+
+    expect(artifact.status).toBe("valid");
+    expect(artifact.patch).toContain("+        cleft[-left:, -left:] = right");
+    expect(artifact.errors).toEqual([]);
   });
 
   test("truncated step patches, broken continuity, and Git mismatches fail closed", () => {
