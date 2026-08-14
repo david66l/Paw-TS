@@ -120,6 +120,7 @@ describe("CompletionPolicy", () => {
             passed: false,
             outcome: "harness_failed",
             failureKind: "missing_dependency",
+            retryability: "terminal",
             summary: "No module named dependency",
           },
         ],
@@ -128,6 +129,7 @@ describe("CompletionPolicy", () => {
     expect(evidence.testResults[0]).toMatchObject({
       outcome: "harness_failed",
       failureKind: "missing_dependency",
+      retryability: "terminal",
     });
   });
 });
@@ -352,6 +354,36 @@ describe("VerificationGate", () => {
       { policy: { authority: "external" } },
     );
     expect(afterDiff).toEqual({ ok: true, mode: "external_pending" });
+  });
+
+  test("trusted external verifier requires one bounded retry for a recoverable invocation", () => {
+    const retryable = {
+      command: "node verify-test.js | missing-helper",
+      passed: false,
+      outcome: "harness_failed" as const,
+      failureKind: "invocation_error" as const,
+      retryability: "retryable" as const,
+      summary: "helper unavailable",
+      mutationRevision: 1,
+    };
+    const once = baseState({
+      filesChanged: ["x.ts"],
+      mutationRevision: 1,
+      diffInspectedRevision: 1,
+      testResults: [retryable],
+    });
+    const pendingRetry = checkVerification(once, {
+      policy: { authority: "external" },
+    });
+    expect(pendingRetry.ok).toBe(false);
+    if (!pendingRetry.ok)
+      expect(pendingRetry.nudge).toContain("materially simpler direct command");
+
+    const exhausted = checkVerification(
+      { ...once, testResults: [retryable, retryable] },
+      { policy: { authority: "external" } },
+    );
+    expect(exhausted).toEqual({ ok: true, mode: "external_pending" });
   });
 
   test("trusted verification policy can require mutation without a prompt marker", () => {

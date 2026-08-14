@@ -1495,6 +1495,116 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(5);
   });
 
+  test("external verification executes one simpler retry after a wrapper failure", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-retryable-"));
+    writeFileSync(path.join(dir, "product.js"), "export const value = 1;\n");
+    writeFileSync(path.join(dir, "verify-test.js"), "process.exit(0);\n");
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw-test@example.invalid"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "product.js", "verify-test.js"],
+      ["commit", "-m", "fixture"],
+    ]) {
+      const git = Bun.spawnSync(["git", ...args], {
+        cwd: dir,
+        stdout: "ignore",
+        stderr: "pipe",
+      });
+      expect(git.exitCode).toBe(0);
+    }
+
+    let calls = 0;
+    const events: RunEventEnvelope[] = [];
+    const orchestrator = new AgentOrchestrator({
+      model: {
+        label: "retryable-wrapper-verification",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.edit_file",
+                args: {
+                  path: "product.js",
+                  old_string: "value = 1",
+                  new_string: "value = 2",
+                },
+              }),
+            };
+          }
+          if (calls === 2) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: {
+                  command: "node verify-test.js | paw_missing_display_helper",
+                },
+              }),
+            };
+          }
+          if (calls === 3) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: "node verify-test.js" },
+              }),
+            };
+          }
+          if (calls === 4) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.git_diff",
+                args: {},
+              }),
+            };
+          }
+          return {
+            text: JSON.stringify({
+              action: "final_answer",
+              summary: "Changed product.js and the direct verification passed.",
+            }),
+          };
+        },
+      },
+      auxiliaryModel: new FakeLanguageModel({
+        responses: [{ text: '{"keep":[],"drop":[],"add":[]}' }],
+      }),
+      verificationPolicy: { authority: "external", requireMutation: true },
+      retrySleep: async () => {},
+      onEvent: (event) => events.push(event),
+    });
+
+    const result = await orchestrator.run({
+      runId: "retryable-wrapper-verification",
+      goal: "Fix the product value",
+      workspaceRoot: dir,
+      maxSteps: 7,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.outcome).toBe("verified");
+    expect(result.evidence?.testResults).toHaveLength(2);
+    expect(result.evidence?.testResults[0]).toMatchObject({
+      passed: false,
+      outcome: "harness_failed",
+      failureKind: "invocation_error",
+      retryability: "retryable",
+    });
+    expect(result.evidence?.testResults[1]).toMatchObject({
+      passed: true,
+      outcome: "passed",
+    });
+    expect(
+      events.some(
+        (event) =>
+          event.event.type === "tool.result" &&
+          event.event.summary.includes("simplify_verification_retry"),
+      ),
+    ).toBe(false);
+    expect(calls).toBe(5);
+  });
+
   test("abort after first tool stops before next model turn", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-ab2-"));
     writeFileSync(path.join(dir, "x.txt"), "x");

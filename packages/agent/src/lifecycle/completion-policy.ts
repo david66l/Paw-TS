@@ -38,6 +38,7 @@ export function evidenceFromTaskState(
       passed: t.passed,
       ...(t.outcome ? { outcome: t.outcome } : {}),
       ...(t.failureKind ? { failureKind: t.failureKind } : {}),
+      ...(t.retryability ? { retryability: t.retryability } : {}),
       summary: t.summary,
     })),
     ...(skipVerifyReason ? { skipVerifyReason } : {}),

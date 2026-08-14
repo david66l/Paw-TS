@@ -1,7 +1,11 @@
 import type { AgentToolCallAction } from "@paw/core";
 import { isGitDiffCommand } from "../shell-command.js";
 import type { TaskState } from "../task-state.js";
-import { isVerificationCommand, verificationOutcome } from "../task-state.js";
+import {
+  hasVerificationRetryAvailable,
+  isVerificationCommand,
+  verificationOutcome,
+} from "../task-state.js";
 import type { VerificationPolicy } from "./verification-gate.js";
 
 const SOURCE_MUTATION_TOOLS = new Set([
@@ -38,6 +42,43 @@ function isVerificationCall(call: AgentToolCallAction): boolean {
   const command =
     typeof call.args.command === "string" ? call.args.command : "";
   return isVerificationCommand(command);
+}
+
+function verificationFamily(command: string): string | undefined {
+  if (/\bpytest\b/i.test(command)) return "pytest";
+  if (/\bunittest\b/i.test(command)) return "unittest";
+  if (/\b(?:run_tests|runtests)\.py\b/i.test(command)) return "python-runner";
+  if (/\bmanage\.py\s+test\b|\b-m\s+django\s+test\b/i.test(command))
+    return "django";
+  if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i.test(command))
+    return "javascript";
+  if (/\b(?:vitest|jest)\b/i.test(command)) return "javascript";
+  if (/\bnode\s+[^\s;|]*(?:test|smoke|verify|e2e)[^\s;|]*/i.test(command))
+    return "node";
+  if (/\bgo\s+test\b/i.test(command)) return "go";
+  if (/\bcargo\s+test\b/i.test(command)) return "cargo";
+  return undefined;
+}
+
+function shellSyntaxComplexity(command: string): number {
+  return command.match(/&&|\|\||[|;<>]/g)?.length ?? 0;
+}
+
+function isSimplifiedVerificationRetry(
+  command: string,
+  failedCommand: string,
+): boolean {
+  const next = command.replace(/\s+/g, " ").trim();
+  const previous = failedCommand.replace(/\s+/g, " ").trim();
+  if (!next || next === previous) return false;
+  const family = verificationFamily(next);
+  if (!family || family !== verificationFamily(previous)) return false;
+  const nextComplexity = shellSyntaxComplexity(next);
+  const previousComplexity = shellSyntaxComplexity(previous);
+  return (
+    nextComplexity < previousComplexity ||
+    (nextComplexity === previousComplexity && next.length + 8 < previous.length)
+  );
 }
 
 function shellCallsSince(
@@ -153,6 +194,25 @@ export function convergenceToolBlockReason(
   if (revision === 0) return null;
   const latest = state.testResults.at(-1);
   const currentVerification = latest?.mutationRevision === revision;
+  if (
+    latest &&
+    currentVerification &&
+    verificationPolicy?.authority === "external" &&
+    hasVerificationRetryAvailable(state)
+  ) {
+    if (
+      SOURCE_MUTATION_TOOLS.has(call.tool) ||
+      CONTROL_STATE_TOOLS.has(call.tool)
+    )
+      return null;
+    if (isVerificationCall(call)) {
+      const command =
+        typeof call.args.command === "string" ? call.args.command : "";
+      if (isSimplifiedVerificationRetry(command, latest.command)) return null;
+      return "[LoopPolicy:simplify_verification_retry] The current revision has one recoverable verification invocation failure. One retry is available, but it must use the same test-runner family with a materially simpler direct command. Remove display-only pipes, redirections, wrappers, or invalid options; do not repeat or cosmetically rename the failed command.";
+    }
+    return "[LoopPolicy:retry_verification_directly] The current revision has one recoverable verification invocation failure. Before diff inspection or more investigation, run one materially simpler direct command from the same test-runner family. Remove display-only pipes, redirections, wrappers, or invalid options. If that retry cannot execute, the trusted external verifier will take over.";
+  }
   if (!currentVerification && isInvestigationCall(call)) {
     const directChecks = shellCallsSince(
       state,
@@ -245,9 +305,11 @@ export function convergenceGuidance(
   } else if (verificationOutcome(latest) === "harness_failed") {
     next =
       verificationPolicy?.authority === "external"
-        ? (state.diffInspectedRevision ?? 0) === revision
-          ? "Local verification could not execute, and a trusted external verifier is configured. Deliver final_answer now with an honest local-verification caveat; do not claim tests passed."
-          : "Local verification could not execute, and a trusted external verifier is configured. Stop building replacement harnesses and inspect the final product diff now."
+        ? hasVerificationRetryAvailable(state)
+          ? "The verification command failed for a recoverable invocation reason. Run one materially simpler direct command from the same test-runner family now; remove display-only pipes, redirections, wrappers, or invalid options."
+          : (state.diffInspectedRevision ?? 0) === revision
+            ? "Local verification could not execute, and a trusted external verifier is configured. Deliver final_answer now with an honest local-verification caveat; do not claim tests passed."
+            : "Local verification could not execute, and a trusted external verifier is configured. Stop building replacement harnesses and inspect the final product diff now."
         : "The last verification did not execute because the harness or environment failed. Repair the invocation with a bounded diagnostic, then rerun it; do not treat infrastructure failure as a code assertion failure.";
   } else if (verificationOutcome(latest) === "code_failed") {
     next =

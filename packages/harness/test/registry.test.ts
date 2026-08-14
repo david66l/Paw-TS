@@ -89,6 +89,21 @@ describe("executeTool", () => {
     expect(toolRequiresApproval("workspace.acceptance_update")).toBe(false);
   });
 
+  test("run_shell tells the model the actual host shell dialect", () => {
+    const definition = toolDefinitions().find(
+      (tool) => tool.function.name === "workspace_run_shell",
+    );
+    expect(definition).toBeDefined();
+    const description = definition?.function.description ?? "";
+    if (process.platform === "win32") {
+      expect(description).toContain("Windows cmd.exe");
+      expect(description).toContain("tail/head");
+    } else {
+      expect(description).toContain("POSIX /bin/sh");
+    }
+    expect(description).toContain("captured and bounded by the host");
+  });
+
   test("workspace.acceptance_update is a native tool with validated session execution", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-acceptance-"));
     const definition = toolDefinitions().find(

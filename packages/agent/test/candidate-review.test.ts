@@ -61,6 +61,12 @@ describe("candidate solution review", () => {
         async complete(messages) {
           receivedMessages = messages.length;
           expect(messages[1]?.content).toContain("Information preservation");
+          expect(messages[1]?.content).toContain(
+            "Canonical representation and precision",
+          );
+          expect(messages[1]?.content).toContain(
+            '"Parseable" or "looks standard" is not sufficient',
+          );
           expect(messages[1]?.content).toContain("strictly safer behavior");
           expect(messages[1]?.content).toContain(
             'message = f"Invalid regular expression: {value}"',

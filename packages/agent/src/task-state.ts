@@ -25,6 +25,8 @@ export interface TestResultSummary {
     | "test_discovery"
     | "invocation_error"
     | "test_failure";
+  /** Harness-only recovery state; absent on passes, code failures, and legacy snapshots. */
+  readonly retryability?: "retryable" | "terminal";
   readonly summary: string;
   /** Short redacted diagnostic retained after the full tool payload is pruned. */
   readonly evidence?: string;
@@ -474,6 +476,9 @@ export class TaskStateManager {
             ...(classification.failureKind
               ? { failureKind: classification.failureKind }
               : {}),
+            ...(classification.retryability
+              ? { retryability: classification.retryability }
+              : {}),
             summary: result.summary,
             ...(evidence ? { evidence } : {}),
             shellCommandRevision,
@@ -569,7 +574,7 @@ export function formatTaskStateForContext(state: TaskState): string {
     "Tests",
     state.testResults.map(
       (t) =>
-        `${verificationOutcome(t)}${t.failureKind ? ` [${t.failureKind}]` : ""}: ${t.command}${t.evidence ? ` — ${t.evidence}` : ""}`,
+        `${verificationOutcome(t)}${t.failureKind ? ` [${t.failureKind}${t.retryability ? `/${t.retryability}` : ""}]` : ""}: ${t.command}${t.evidence ? ` — ${t.evidence}` : ""}`,
     ),
   );
   appendList(lines, "Plan", state.plan);
@@ -639,7 +644,7 @@ export function formatCompletionReadiness(state: TaskState): string[] {
       : verificationOutcome(latest) === "passed"
         ? `passed for r${revision}`
         : verificationOutcome(latest) === "harness_failed"
-          ? `harness failed for r${revision} (verification did not execute${latest.failureKind ? `: ${latest.failureKind}` : ""})`
+          ? `harness failed for r${revision} (verification did not execute${latest.failureKind ? `: ${latest.failureKind}${latest.retryability ? `/${latest.retryability}` : ""}` : ""})`
           : `code failed for r${revision}`;
   const diffRevision = state.diffInspectedRevision ?? 0;
   const diff =
@@ -661,9 +666,28 @@ export function verificationOutcome(
   return result.outcome ?? (result.passed ? "passed" : "code_failed");
 }
 
+/** True only for the first retryable harness failure on the current revision. */
+export function hasVerificationRetryAvailable(state: TaskState): boolean {
+  const revision = state.mutationRevision ?? 0;
+  const current = state.testResults.filter(
+    (result) => result.mutationRevision === revision,
+  );
+  const latest = current.at(-1);
+  return (
+    latest?.retryability === "retryable" &&
+    verificationOutcome(latest) === "harness_failed" &&
+    current.filter(
+      (result) =>
+        verificationOutcome(result) === "harness_failed" &&
+        result.retryability === "retryable",
+    ).length === 1
+  );
+}
+
 interface VerificationClassification {
   readonly outcome: "passed" | "code_failed" | "harness_failed";
   readonly failureKind?: TestResultSummary["failureKind"];
+  readonly retryability?: TestResultSummary["retryability"];
 }
 
 function classifyVerificationOutcome(
@@ -676,6 +700,13 @@ function classifyVerificationOutcome(
   const output = [payload.stdout, payload.stderr, result.summary]
     .filter((value): value is string => typeof value === "string")
     .join("\n");
+  const missingExecutable =
+    output.match(
+      /['"]([^'"\r\n]+)['"] is not recognized as an internal or external command/i,
+    )?.[1] ??
+    output.match(
+      /(?:^|\n)(?:[^:\n]+:\s*\d+:\s*)?([a-zA-Z0-9_.-]+): (?:command )?not found/i,
+    )?.[1];
   const mentionsChangedFile = filesChanged.some((path) => {
     const normalized = path.replaceAll("\\", "/").toLowerCase();
     const basename = normalized.split("/").at(-1);
@@ -686,12 +717,33 @@ function classifyVerificationOutcome(
     );
   });
 
+  if (missingExecutable) {
+    const runtimeMissing =
+      /^(?:python(?:3(?:\.\d+)?)?|py|pytest|node|npm|pnpm|yarn|bun|npx|vitest|jest|go|cargo)$/i.test(
+        missingExecutable.trim(),
+      );
+    return runtimeMissing
+      ? {
+          outcome: "harness_failed",
+          failureKind: "runner_unavailable",
+          retryability: "terminal",
+        }
+      : {
+          outcome: "harness_failed",
+          failureKind: "invocation_error",
+          retryability: "retryable",
+        };
+  }
   if (
-    /(?:pytest: (?:command )?not found|not recognized as an internal or external command|modulenotfounderror: no module named ['\"]pytest['\"]|could not find a version that satisfies)/i.test(
+    /(?:pytest: (?:command )?not found|modulenotfounderror: no module named ['\"]pytest['\"]|could not find a version that satisfies)/i.test(
       output,
     )
   ) {
-    return { outcome: "harness_failed", failureKind: "runner_unavailable" };
+    return {
+      outcome: "harness_failed",
+      failureKind: "runner_unavailable",
+      retryability: "terminal",
+    };
   }
   if (
     !mentionsChangedFile &&
@@ -699,16 +751,32 @@ function classifyVerificationOutcome(
       output,
     )
   ) {
-    return { outcome: "harness_failed", failureKind: "missing_dependency" };
+    return {
+      outcome: "harness_failed",
+      failureKind: "missing_dependency",
+      retryability: "terminal",
+    };
   }
   if (exitCode === 5 || /no tests (?:ran|collected)/i.test(output)) {
-    return { outcome: "harness_failed", failureKind: "test_discovery" };
+    return {
+      outcome: "harness_failed",
+      failureKind: "test_discovery",
+      retryability: "terminal",
+    };
   }
   if (exitCode === 3 || /error importing plugin/i.test(output)) {
-    return { outcome: "harness_failed", failureKind: "invocation_error" };
+    return {
+      outcome: "harness_failed",
+      failureKind: "invocation_error",
+      retryability: "retryable",
+    };
   }
   if (exitCode === 4) {
-    return { outcome: "harness_failed", failureKind: "invocation_error" };
+    return {
+      outcome: "harness_failed",
+      failureKind: "invocation_error",
+      retryability: "retryable",
+    };
   }
   return { outcome: "code_failed", failureKind: "test_failure" };
 }

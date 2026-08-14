@@ -159,6 +159,10 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
       },
     },
   });
+  const shellDialect =
+    process.platform === "win32"
+      ? "Commands run under native Windows cmd.exe syntax. POSIX-only display helpers such as tail/head are unavailable unless the repository provides them."
+      : "Commands run under POSIX /bin/sh syntax.";
   const defs: ToolDefinition[] = [
     fn(
       READ,
@@ -243,9 +247,12 @@ export function toolDefinitions(mcp?: McpClientManager): ToolDefinition[] {
     ),
     fn(
       SHELL,
-      "Execute a shell command in the workspace.",
+      `Execute a shell command in the workspace. ${shellDialect} Output is captured and bounded by the host, so do not append display-only pipes merely to truncate output.`,
       {
-        command: { type: "string", description: "Shell command to execute" },
+        command: {
+          type: "string",
+          description: `Shell command to execute. ${shellDialect}`,
+        },
         cwd: {
           type: "string",
           description: "Working directory, relative to workspace root",

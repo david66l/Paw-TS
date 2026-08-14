@@ -3,7 +3,10 @@
  */
 
 import type { TaskState } from "../task-state.js";
-import { verificationOutcome } from "../task-state.js";
+import {
+  hasVerificationRetryAvailable,
+  verificationOutcome,
+} from "../task-state.js";
 
 export type VerificationDecision =
   | {
@@ -103,6 +106,17 @@ export function checkVerification(
   }
 
   if (latest && verificationOutcome(latest) === "harness_failed") {
+    if (
+      opts?.policy?.authority === "external" &&
+      latestRevision === currentRevision &&
+      hasVerificationRetryAvailable(state)
+    ) {
+      return {
+        ok: false,
+        nudge:
+          "The local verification failed for a recoverable command-invocation reason. Run one materially simpler direct command from the same test-runner family before final_answer; remove display-only pipes, redirections, wrappers, or invalid options.",
+      };
+    }
     if (
       opts?.policy?.authority === "external" &&
       latestRevision === currentRevision

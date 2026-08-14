@@ -4,6 +4,7 @@ import {
   acceptanceReadiness,
   formatCompletionReadiness,
   formatTaskStateForContext,
+  hasVerificationRetryAvailable,
   isVerificationCommand,
 } from "../src/task-state.js";
 
@@ -466,8 +467,46 @@ describe("TaskStateManager", () => {
     expect(unavailable.snapshot().testResults.at(-1)).toMatchObject({
       outcome: "harness_failed",
       failureKind: "missing_dependency",
+      retryability: "terminal",
       mutationRevision: 1,
     });
+    expect(hasVerificationRetryAvailable(unavailable.snapshot())).toBe(false);
+
+    const wrapperFailure = new TaskStateManager("verify a candidate");
+    wrapperFailure.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "src/a.js" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "src/a.js", linesAdded: 1, linesRemoved: 1 },
+      },
+    );
+    wrapperFailure.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "node verify-test.js | tail -20" },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 255",
+        payload: {
+          exit_code: 255,
+          stderr:
+            "'tail' is not recognized as an internal or external command, operable program or batch file.",
+        },
+      },
+    );
+    expect(wrapperFailure.snapshot().testResults.at(-1)).toMatchObject({
+      outcome: "harness_failed",
+      failureKind: "invocation_error",
+      retryability: "retryable",
+    });
+    expect(hasVerificationRetryAvailable(wrapperFailure.snapshot())).toBe(true);
 
     const candidateImport = new TaskStateManager("fix import");
     candidateImport.recordToolResult(

@@ -44,6 +44,8 @@ export interface RunTestEvidence {
     | "test_discovery"
     | "invocation_error"
     | "test_failure";
+  /** Whether one bounded command-level recovery may still produce evidence. */
+  readonly retryability?: "retryable" | "terminal";
   readonly summary: string;
 }
 

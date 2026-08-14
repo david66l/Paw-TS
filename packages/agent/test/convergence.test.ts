@@ -494,6 +494,65 @@ describe("convergence guidance", () => {
     ).toContain("deliver_external");
   });
 
+  test("external verifier allows one materially simpler invocation retry", () => {
+    const retryable = {
+      command: "node verify-test.js 2>&1 | tail -20",
+      passed: false,
+      outcome: "harness_failed" as const,
+      failureKind: "invocation_error" as const,
+      retryability: "retryable" as const,
+      summary: "tail is unavailable",
+      mutationRevision: 1,
+    };
+    const failed = state({ testResults: [retryable] });
+    const directRetry = {
+      type: "tool_call" as const,
+      tool: "workspace.run_shell",
+      args: { command: "node verify-test.js" },
+    };
+    expect(
+      convergenceToolBlockReason(directRetry, failed, 20, 64, {
+        authority: "external",
+      }),
+    ).toBeNull();
+    expect(
+      convergenceGuidance(failed, 10, 64, { authority: "external" }),
+    ).toContain("materially simpler direct command");
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.run_shell",
+          args: { command: retryable.command },
+        },
+        failed,
+        20,
+        64,
+        { authority: "external" },
+      ),
+    ).toContain("simplify_verification_retry");
+    expect(
+      convergenceToolBlockReason(
+        {
+          type: "tool_call",
+          tool: "workspace.git_diff",
+          args: {},
+        },
+        failed,
+        20,
+        64,
+        { authority: "external" },
+      ),
+    ).toContain("retry_verification_directly");
+
+    const exhausted = state({ testResults: [retryable, retryable] });
+    expect(
+      convergenceToolBlockReason(directRetry, exhausted, 21, 64, {
+        authority: "external",
+      }),
+    ).toContain("inspect_external_diff");
+  });
+
   test("allows only bounded diagnostics after a code verification failure", () => {
     const shell = {
       type: "tool_call" as const,
