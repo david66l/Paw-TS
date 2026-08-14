@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -246,6 +246,23 @@ describe("interpretShellExitCode", () => {
 });
 
 describe("runShellInWorkspaceStreaming", () => {
+  test("runs a leading quoted Windows command path with spaces", async () => {
+    if (process.platform !== "win32") return;
+    const root = mkdtempSync(path.join(tmpdir(), "paw-stream-quoted-"));
+    writeFileSync(
+      path.join(root, "probe runner.cmd"),
+      "@echo off\r\necho quoted-stream-ok:%~1\r\n",
+      "utf8",
+    );
+    const r = await runShellInWorkspaceStreaming(
+      root,
+      '"probe runner.cmd" "hello world"',
+      { skipApprovalGate: true },
+    );
+    expect(r.exit_code).toBe(0);
+    expect(r.stdout).toContain("quoted-stream-ok:hello world");
+  });
+
   test("stdout chunks are delivered", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-stream-"));
     const chunks: { text: string; isStderr: boolean }[] = [];
@@ -336,6 +353,21 @@ describe("runShellInWorkspaceStreaming", () => {
 });
 
 describe("runShellInWorkspace (sync smoke)", () => {
+  test("runs a leading quoted Windows command path with spaces", () => {
+    if (process.platform !== "win32") return;
+    const root = mkdtempSync(path.join(tmpdir(), "paw-sync-quoted-"));
+    writeFileSync(
+      path.join(root, "probe runner.cmd"),
+      "@echo off\r\necho quoted-sync-ok:%~1\r\n",
+      "utf8",
+    );
+    const r = runShellInWorkspace(root, '"probe runner.cmd" "hello world"', {
+      skipApprovalGate: true,
+    });
+    expect(r.exit_code).toBe(0);
+    expect(r.stdout).toContain("quoted-sync-ok:hello world");
+  });
+
   test("returns stdout", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-sync-"));
     const r = runShellInWorkspace(root, "echo sync-smoke");
@@ -345,7 +377,8 @@ describe("runShellInWorkspace (sync smoke)", () => {
 
   test("returns exit code 0 for success", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-sync-exit-"));
-    const r = runShellInWorkspace(root, "true");
+    const command = process.platform === "win32" ? "exit /b 0" : "true";
+    const r = runShellInWorkspace(root, command, { skipApprovalGate: true });
     expect(r.exit_code).toBe(0);
     expect(r.stdout).toBe("");
   });

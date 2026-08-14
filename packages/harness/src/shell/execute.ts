@@ -3,9 +3,9 @@ import { spawn, spawnSync } from "node:child_process";
 import { checkWorkspacePath } from "@paw/workspace";
 
 import {
+  type ShellSandboxConfig,
   buildDockerShellExecSpec,
   isShellSandboxEnabled,
-  type ShellSandboxConfig,
 } from "../sandbox/index.js";
 import { validateShellCommand } from "../shell-guard.js";
 import type { RunShellResult } from "./analysis.js";
@@ -75,7 +75,10 @@ function resolveShellSpawnTarget(
   return win
     ? {
         command: process.env.ComSpec ?? "cmd.exe",
-        args: ["/d", "/s", "/c", command],
+        // cmd /s strips the outer quotes around its /c string. Keep those
+        // transport quotes separate from any quotes owned by the command
+        // itself (for example a leading executable path with spaces).
+        args: ["/d", "/s", "/c", `"${command}"`],
       }
     : {
         command: "/bin/sh",
@@ -148,7 +151,16 @@ export function runShellInWorkspace(
     encoding: "utf8",
     timeout: timeoutMs,
     maxBuffer: MAX_OUTPUT_BYTES,
-    ...(win && !spawnTarget.sandbox ? { windowsHide: true } : {}),
+    ...(win && !spawnTarget.sandbox
+      ? {
+          windowsHide: true,
+          // We spawn cmd.exe explicitly rather than using `shell: true`, so
+          // Node will not enable this automatically. The final argv element
+          // is already a complete cmd command string and must not be quoted a
+          // second time, especially when it begins with a quoted executable.
+          windowsVerbatimArguments: true,
+        }
+      : {}),
   });
 
   if (proc.error) {
@@ -234,7 +246,9 @@ export function runShellInWorkspaceStreaming(
 
     const proc = spawn(spawnTarget.command, [...spawnTarget.args], {
       cwd: isShellSandboxEnabled(options.shellSandbox) ? undefined : cwdPath,
-      ...(win && !spawnTarget.sandbox ? { windowsHide: true } : {}),
+      ...(win && !spawnTarget.sandbox
+        ? { windowsHide: true, windowsVerbatimArguments: true }
+        : {}),
     });
 
     const timeoutId = setTimeout(() => {

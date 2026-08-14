@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -1605,18 +1611,30 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(5);
   });
 
-  test("diagnostic pytest cannot complete while an absolute runner test can", async () => {
+  test("diagnostic pytest cannot complete while a quoted real runner test can", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-real-test-intent-"));
     writeFileSync(path.join(dir, "product.ts"), "export const value = 1;\n");
     writeFileSync(
       path.join(dir, "verify.test.ts"),
       'import { expect, test } from "bun:test";\ntest("value", () => expect(2).toBe(2));\n',
     );
+    const absoluteTestCommand =
+      process.platform === "win32"
+        ? '"tools with spaces\\bun.cmd" test verify.test.ts'
+        : `${process.execPath} test verify.test.ts`;
+    if (process.platform === "win32") {
+      const toolDir = path.join(dir, "tools with spaces");
+      mkdirSync(toolDir);
+      writeFileSync(
+        path.join(toolDir, "bun.cmd"),
+        `@"${process.execPath}" %*\r\n`,
+      );
+    }
     for (const args of [
       ["init"],
       ["config", "user.email", "paw-test@example.invalid"],
       ["config", "user.name", "Paw Test"],
-      ["add", "product.ts", "verify.test.ts"],
+      ["add", "."],
       ["commit", "-m", "fixture"],
     ]) {
       const git = Bun.spawnSync(["git", ...args], {
@@ -1627,7 +1645,6 @@ describe("AgentOrchestrator", () => {
       expect(git.exitCode).toBe(0);
     }
 
-    const absoluteTestCommand = `${process.execPath} test verify.test.ts`;
     let calls = 0;
     const orchestrator = new AgentOrchestrator({
       model: {
