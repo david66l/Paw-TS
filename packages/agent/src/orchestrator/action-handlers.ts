@@ -63,7 +63,10 @@ import {
   goalRequiresMutation,
   resolveLifecycleBudget,
 } from "../lifecycle/task-lifecycle.js";
-import type { LoopV2ShadowMutationCapture } from "../loop-v2/index.js";
+import {
+  type LoopV2ShadowMutationCapture,
+  evaluateLoopV2ReadinessGateV1,
+} from "../loop-v2/index.js";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
 import {
   markPlanItemsCompleted,
@@ -604,6 +607,47 @@ async function handleFinalAnswer(
       opts,
       noRoomForAnotherTurn,
     );
+  }
+
+  if (ctx.loopKernelVersion === "v2") {
+    const assessment = ctx.getLoopV2CandidateAssessment?.();
+    if (!assessment) {
+      return {
+        state: {
+          type: "incomplete",
+          message:
+            "[LoopV2Readiness:ASSESSMENT_MISSING] The persisted candidate assessment was not available, so completion was rejected fail-closed.",
+        },
+        flags,
+      };
+    }
+    const readinessGate = evaluateLoopV2ReadinessGateV1({
+      assessment,
+      priorKey: flags.loopV2ReadinessFeedbackKey,
+      priorNudges: flags.loopV2ReadinessNudges,
+      noRoomForAnotherTurn,
+    });
+    if (readinessGate.type === "feedback") {
+      const nextFlags: TurnFlags = {
+        ...flags,
+        loopV2ReadinessFeedbackKey: readinessGate.key,
+        loopV2ReadinessNudges: 1,
+        lastTurnHadToolCall: false,
+      };
+      ctx.ctxMgr.addAssistant(text, thinking);
+      ctx.ctxMgr.addUser(readinessGate.message);
+      opts.saveStateFn();
+      return { state: { type: "continue", nextFlags }, flags: nextFlags };
+    }
+    if (readinessGate.type === "incomplete") {
+      return {
+        state: {
+          type: "incomplete",
+          message: `${readinessGate.message}\nNo additional readiness retry was opened (${readinessGate.reason}).`,
+        },
+        flags,
+      };
+    }
   }
 
   const summary = action.summary.trim() || "(empty summary)";

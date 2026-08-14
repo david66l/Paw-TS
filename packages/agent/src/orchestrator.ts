@@ -119,6 +119,7 @@ import {
   normalizeProviderResponseV2,
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
+  parseLoopV2ReadinessFeedbackMarker,
   resolveLoopKernelVersion,
   restoreLoopV2ProjectionObserver,
   serializeLoopV2LiveCandidateArtifactV1,
@@ -182,6 +183,7 @@ import type {
 } from "./execution-policy.js";
 import {
   type VerificationPolicy,
+  goalAllowsSkipVerification,
   goalRequiresMutation,
 } from "./lifecycle/verification-gate.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
@@ -215,6 +217,7 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[Context guard]",
   "[Loop reminder]",
   "[ProviderProtocol:",
+  "[LoopV2Readiness:",
   "[Continue from where you were cut off",
   "Plan updated:",
   "Current plan:",
@@ -755,10 +758,25 @@ export class AgentOrchestrator {
       // - autoContinueNudges: 连续自动继续次数（防止死循环）
       // - lastTurnHadToolCall: 上一轮是否执行了工具
       // - hasEverUsedTools: 是否使用过工具
+      const restoredReadinessFeedback =
+        this.loopKernelVersion === "v2" && spec.resumeFromState
+          ? [...spec.resumeFromState.messages]
+              .reverse()
+              .map((message) =>
+                parseLoopV2ReadinessFeedbackMarker(message.content),
+              )
+              .find((state) => state !== undefined)
+          : undefined;
       let flags: TurnFlags = {
         autoContinueNudges: 0,
         lastTurnHadToolCall: false,
         hasEverUsedTools: false,
+        ...(restoredReadinessFeedback
+          ? {
+              loopV2ReadinessFeedbackKey: restoredReadinessFeedback.key,
+              loopV2ReadinessNudges: restoredReadinessFeedback.nudges,
+            }
+          : {}),
         ...(this.loopKernelVersion === "v2"
           ? {
               providerTerminal: {
@@ -861,6 +879,12 @@ export class AgentOrchestrator {
             : {}),
           ...(this.candidateReviewer
             ? { candidateReviewer: this.candidateReviewer }
+            : {}),
+          ...(this.loopKernelVersion === "v2"
+            ? {
+                getLoopV2CandidateAssessment: () =>
+                  this._lastLoopV2CandidateAssessment,
+              }
             : {}),
           ...(init.observeLoopV2ToolCommit
             ? { observeLoopV2ToolCommit: init.observeLoopV2ToolCommit }
@@ -3237,14 +3261,16 @@ export class AgentOrchestrator {
             const requireProductMutation =
               this.verificationPolicy?.requireMutation ??
               goalRequiresMutation(spec.goal);
+            const trustedSkipAllowed = goalAllowsSkipVerification(spec.goal);
             const requiresVerification =
               requireProductMutation ||
               report.state.currentMutationRevision > 0;
             const policy = {
               requireProductMutation,
-              verificationAuthority: requiresVerification
-                ? (this.verificationPolicy?.authority ?? "local")
-                : "not_required",
+              verificationAuthority:
+                requiresVerification && !trustedSkipAllowed
+                  ? (this.verificationPolicy?.authority ?? "local")
+                  : "not_required",
             } as const;
             const artifact = buildLoopV2LiveCandidateArtifactV1(report, policy);
             const artifactPath = loopV2LiveArtifactPath(workspaceRoot, runId);

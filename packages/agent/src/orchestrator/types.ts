@@ -33,6 +33,7 @@ import type { RepeatToolState } from "../lifecycle/repeat-tool-reminder.js";
 import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
 import type {
   LoopKernelVersion,
+  LoopV2LiveCandidateAssessmentV1,
   LoopV2ShadowToolCommitPortInput,
   ProviderTerminalStateV2,
 } from "../loop-v2/index.js";
@@ -163,6 +164,10 @@ export interface TurnFlags {
   readonly repeatTool?: RepeatToolState;
   /** Explicit-v2 provider response cursor and bounded protocol-recovery state. */
   readonly providerTerminal?: ProviderTerminalStateV2;
+  /** Stable candidate+gap identity that already received v2 repair feedback. */
+  readonly loopV2ReadinessFeedbackKey?: string;
+  /** Feedback count for the matching v2 readiness identity (currently 0 or 1). */
+  readonly loopV2ReadinessNudges?: number;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -213,6 +218,10 @@ export interface PhaseContext {
   readonly verificationPolicy?: VerificationPolicy;
   /** Optional independent semantic reviewer; absent means the gate is disabled. */
   readonly candidateReviewer?: CandidateReviewer;
+  /** Strict persisted assessment created before final-answer dispatch. */
+  readonly getLoopV2CandidateAssessment?: () =>
+    | LoopV2LiveCandidateAssessmentV1
+    | undefined;
   /** Read-only shadow observation after the matching legacy tool.result. */
   readonly observeLoopV2ToolCommit?: (
     input: LoopV2ShadowToolCommitPortInput,

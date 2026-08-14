@@ -97,6 +97,13 @@ export {
   type ProviderTerminalStateV2,
 } from "./provider-terminal.js";
 export {
+  LOOP_V2_READINESS_FEEDBACK_LIMIT,
+  evaluateLoopV2ReadinessGateV1,
+  parseLoopV2ReadinessFeedbackMarker,
+  type LoopV2ReadinessFeedbackStateV1,
+  type LoopV2ReadinessGateDecisionV1,
+} from "./readiness-gate.js";
+export {
   createLoopV2Checkpoint,
   loopV2ReplayArtifactHash,
   replayLoopV2,

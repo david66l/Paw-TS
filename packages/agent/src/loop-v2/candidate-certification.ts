@@ -314,13 +314,16 @@ export function evaluateCandidateReadinessV2(
       message: "Mutation journal revisions are not contiguous and complete.",
     });
   }
-  if (!artifact.reconstructible) {
+  // A genuinely read-only candidate has no patch to reconstruct. Once any
+  // mutation exists (required or incidental), the artifact becomes mandatory.
+  const artifactRequired = requireMutation || currentRevision > 0;
+  if (artifactRequired && !artifact.reconstructible) {
     gaps.push({
       code: "artifact_unreconstructible",
       message: "The candidate patch cannot be reconstructed from the journal.",
     });
   }
-  if (artifact.crossCheck === "mismatch") {
+  if (artifactRequired && artifact.crossCheck === "mismatch") {
     gaps.push({
       code: "artifact_cross_check_mismatch",
       message: "The reconstructed candidate and Git cross-check disagree.",

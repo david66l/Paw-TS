@@ -20,6 +20,23 @@ function tempWorkspace(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
+function trustedNoEffectShellPolicy(): ToolEffectPolicy {
+  return {
+    appliesTo: ({ tool }) => tool === "workspace.run_shell",
+    prepare: () => undefined,
+    settle: ({ result }) => ({
+      allowed: true,
+      result: {
+        ...result,
+        payload: {
+          ...(result.payload as Record<string, unknown>),
+          workspaceEffect: { changed: false, paths: [] },
+        },
+      },
+    }),
+  };
+}
+
 describe("Loop Kernel v2 provider terminal production seam", () => {
   test("R11 natural stop after a tool becomes a candidate without a tail nudge", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-provider-natural-");
@@ -109,20 +126,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     });
     const sessionStore = new FileSystemSessionStore({ workspaceRoot });
     const abort = new AbortController();
-    const effectPolicy: ToolEffectPolicy = {
-      appliesTo: ({ tool }) => tool === "workspace.run_shell",
-      prepare: () => undefined,
-      settle: ({ result }) => ({
-        allowed: true as const,
-        result: {
-          ...result,
-          payload: {
-            ...(result.payload as Record<string, unknown>),
-            workspaceEffect: { changed: false, paths: [] },
-          },
-        },
-      }),
-    };
+    const effectPolicy = trustedNoEffectShellPolicy();
 
     try {
       const first = new AgentOrchestrator({
@@ -201,6 +205,195 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           gaps: [],
         },
       });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("v2 readiness feeds back one missing-verification gap then accepts a changed candidate", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-readiness-repair-");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        { text: "Done without verification.", finishReason: "stop" },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+          finishReason: "stop",
+        },
+        { text: "Implemented and verified.", finishReason: "stop" },
+      ],
+    });
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-readiness-repair",
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 6,
+      });
+      expect(result.status).toBe("completed");
+      expect(model.callCount).toBe(4);
+      expect(orchestrator.getLastLoopV2CandidateAssessment()).toMatchObject({
+        facts: { mutations: 1, verification: 1 },
+        readiness: {
+          disposition: "ready_for_review",
+          readyForSemanticReview: true,
+          gaps: [],
+        },
+      });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("v2 readiness rejects an unchanged not-ready candidate after one feedback", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-readiness-bounded-");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        { text: "Done without verification.", finishReason: "stop" },
+        { text: "Still done without new evidence.", finishReason: "stop" },
+      ],
+    });
+    let reviewerCalls = 0;
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      candidateReviewer: {
+        async review() {
+          reviewerCalls += 1;
+          return {
+            verdict: "pass",
+            reportGrounding: "pass",
+            summary: "must not run before deterministic readiness",
+          };
+        },
+      },
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-readiness-bounded",
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 6,
+      });
+      expect(result.status).toBe("incomplete");
+      expect(result.message).toContain("LoopV2Readiness:needs_work");
+      expect(result.message).toContain("verification_missing");
+      expect(result.message).toContain("feedback_exhausted");
+      expect(model.callCount).toBe(3);
+      expect(reviewerCalls).toBe(0);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("resume restores the durable readiness feedback marker without opening a second retry", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-readiness-resume-");
+    const runId = "v2-readiness-resume";
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    const appStateStore = new FileSystemAppStateStore({
+      statesDir: path.join(workspaceRoot, ".paw", "states"),
+    });
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot });
+    const abort = new AbortController();
+    const firstModel = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        { text: "Done without verification.", finishReason: "stop" },
+      ],
+    });
+    const first = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model: firstModel,
+      appStateStore,
+      sessionStore,
+      onEvent(envelope) {
+        if (
+          envelope.event.type === "agent.action" &&
+          envelope.event.action.type === "final_answer"
+        ) {
+          abort.abort();
+        }
+      },
+    });
+
+    try {
+      const interrupted = await first.run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 6,
+        abortSignal: abort.signal,
+      });
+      expect(interrupted.status).toBe("aborted");
+      expect(firstModel.callCount).toBe(2);
+      const saved = appStateStore.load(runId);
+      expect(
+        saved?.messages.some(
+          (message) =>
+            typeof message.content === "string" &&
+            message.content.startsWith("[LoopV2Readiness:needs_work"),
+        ),
+      ).toBeTrue();
+
+      const resumedModel = new FakeLanguageModel({
+        responses: [
+          { text: "Still done without new evidence.", finishReason: "stop" },
+        ],
+      });
+      const resumed = new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: resumedModel,
+        appStateStore,
+        sessionStore,
+      });
+      const result = await resumed.resumeRun({ runId, workspaceRoot });
+      expect(result.status).toBe("incomplete");
+      expect(result.message).toContain("feedback_exhausted");
+      expect(resumedModel.callCount).toBe(1);
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }

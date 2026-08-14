@@ -52,6 +52,10 @@ export function goalRequiresMutation(goal: string): boolean {
   return goal.includes(REQUIRE_MUTATION_MARKER);
 }
 
+export function goalAllowsSkipVerification(goal: string): boolean {
+  return goal.includes(ALLOW_SKIP_VERIFY_MARKER);
+}
+
 /**
  * Check whether TaskState has enough verification evidence to complete.
  */
@@ -75,7 +79,7 @@ export function checkVerification(
 
   if (
     opts?.skipVerifyReason?.trim() &&
-    state.goal.includes(ALLOW_SKIP_VERIFY_MARKER)
+    goalAllowsSkipVerification(state.goal)
   ) {
     return {
       ok: true,

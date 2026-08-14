@@ -165,6 +165,34 @@ describe("Loop Kernel v2 candidate certification", () => {
     ]);
   });
 
+  test("a genuinely read-only candidate does not require a synthetic empty patch", () => {
+    let state = createWorkingDecisionStateV2(RUN_ID);
+    state = append(state, {
+      type: "task.started",
+      goal: "Inspect the named file and report what it contains.",
+      sourceHash: "read-only-goal",
+    });
+    const readiness = evaluateCandidateReadinessV2(
+      state,
+      {
+        reconstructible: false,
+        crossCheck: "unavailable",
+        artifactRef: "artifact://empty-candidate",
+      },
+      {
+        requireProductMutation: false,
+        verificationAuthority: "not_required",
+      },
+    );
+
+    expect(readiness).toMatchObject({
+      disposition: "ready_for_review",
+      readyForSemanticReview: true,
+      localVerification: "not_required",
+      gaps: [],
+    });
+  });
+
   test("R17 makes r1 criterion evidence stale after an r2 mutation", () => {
     let state = baseState();
     state = append(state, {
