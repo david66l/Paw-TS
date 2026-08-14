@@ -1397,6 +1397,20 @@ export function collectTraceMutationHints(opts: {
         args && typeof args === "object" && !Array.isArray(args)
           ? (args as Record<string, unknown>)
           : {};
+      const shellResult =
+        record.type === "tool.result" && record.tool === "workspace.run_shell";
+      const rawEffect = shellResult ? record.workspaceEffect : undefined;
+      const auditedShellEffect =
+        rawEffect &&
+        typeof rawEffect === "object" &&
+        !Array.isArray(rawEffect) &&
+        typeof (rawEffect as Record<string, unknown>).changed === "boolean" &&
+        Array.isArray((rawEffect as Record<string, unknown>).paths)
+          ? (rawEffect as {
+              readonly changed: boolean;
+              readonly paths: readonly unknown[];
+            })
+          : undefined;
       if (
         record.type === "tool.call" &&
         record.tool === "workspace.run_shell"
@@ -1405,7 +1419,11 @@ export function collectTraceMutationHints(opts: {
           typeof argRecord.command === "string" ? argRecord.command : "",
         );
       }
-      if (record.type === "tool.result" && Array.isArray(record.fileChanges)) {
+      if (
+        record.type === "tool.result" &&
+        Array.isArray(record.fileChanges) &&
+        (!shellResult || !auditedShellEffect)
+      ) {
         let materialFileChange = false;
         for (const change of record.fileChanges) {
           if (!change || typeof change !== "object" || Array.isArray(change)) {
@@ -1425,31 +1443,21 @@ export function collectTraceMutationHints(opts: {
           unknownWritePossible = true;
         }
       }
-      if (
-        record.type === "tool.result" &&
-        record.tool === "workspace.run_shell"
-      ) {
+      if (shellResult) {
         const command = pendingPawShellCommands.shift() ?? "";
-        const rawEffect = record.workspaceEffect;
-        if (
-          rawEffect &&
-          typeof rawEffect === "object" &&
-          !Array.isArray(rawEffect) &&
-          typeof (rawEffect as Record<string, unknown>).changed === "boolean" &&
-          Array.isArray((rawEffect as Record<string, unknown>).paths)
-        ) {
-          const effect = rawEffect as {
-            readonly changed: boolean;
-            readonly paths: readonly unknown[];
-          };
-          if (effect.changed) {
-            for (const changedPath of effect.paths) addPath(changedPath);
+        if (auditedShellEffect) {
+          if (auditedShellEffect.changed) {
+            for (const changedPath of auditedShellEffect.paths) {
+              addPath(changedPath);
+            }
             unknownWritePossible = true;
           }
-        } else if (commandMayWrite(command)) {
+        } else {
           const summary =
             typeof record.summary === "string" ? record.summary : "";
           if (
+            !pawShellCallRejectedBeforeExecution(summary) &&
+            commandMayWrite(command) &&
             !summary.startsWith(
               "[ToolEffectPolicy:prohibited_workspace_effect_recovered]",
             )

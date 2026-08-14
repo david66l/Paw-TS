@@ -1627,6 +1627,24 @@ describe("SWE compare runner", () => {
         event: {
           type: "tool.call",
           tool: "workspace.run_shell",
+          args: {
+            command: "rm -rf build && pytest > /tmp/test.log 2>&1",
+          },
+        },
+      },
+      {
+        event: {
+          type: "tool.result",
+          tool: "workspace.run_shell",
+          ok: false,
+          summary:
+            "[LoopPolicy:recover_verification_harness] command rejected before execution",
+        },
+      },
+      {
+        event: {
+          type: "tool.call",
+          tool: "workspace.run_shell",
           args: { command: "pytest > /tmp/test.log 2>&1" },
         },
       },
@@ -1634,7 +1652,11 @@ describe("SWE compare runner", () => {
         event: {
           type: "tool.result",
           tool: "workspace.run_shell",
-          ok: true,
+          ok: false,
+          fileChanges: [
+            { path: "build/temp.o", added: 12, removed: 0 },
+            { path: "generated.so", added: 4, removed: 0 },
+          ],
           workspaceEffect: { changed: false, paths: [] },
         },
       },
