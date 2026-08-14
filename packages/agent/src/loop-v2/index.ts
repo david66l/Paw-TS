@@ -19,6 +19,15 @@ export {
   type ProgressAdvisorResultV2,
 } from "./progress-advisor.js";
 export {
+  createProviderTerminalStateV2,
+  normalizeProviderResponseV2,
+  type ProviderProtocolIssueV2,
+  type ProviderResponseV2,
+  type ProviderTerminalDecisionV2,
+  type ProviderTerminalResultV2,
+  type ProviderTerminalStateV2,
+} from "./provider-terminal.js";
+export {
   createLoopV2Checkpoint,
   loopV2ReplayArtifactHash,
   replayLoopV2,
