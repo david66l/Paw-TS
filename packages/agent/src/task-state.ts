@@ -5,6 +5,9 @@ import type {
 import type { ToolRunResult } from "@paw/harness";
 import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
 import { isGitDiffCommand } from "./shell-command.js";
+import { isVerificationCommand } from "./verification-command.js";
+
+export { isVerificationCommand };
 
 export interface CommandSummary {
   readonly command: string;
@@ -876,45 +879,6 @@ function extractPatchPaths(patch: string): string[] {
     if (match?.[1]) paths.push(match[1].trim());
   }
   return paths;
-}
-
-export function isVerificationCommand(command: string): boolean {
-  const c = command.trim();
-  // "pip install pytest" / "npm i jest" 不是跑测
-  if (/\b(?:pip3?|uv|npm|pnpm|yarn|bun)\s+(?:install|add|i)\b/i.test(c)) {
-    return false;
-  }
-  // 只认「真正执行测试」的命令形态（可出现在 && / ; 链中）
-  return (
-    /(?:^|[;&|]\s*)(?:(?:python(?:3)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+-m\s+)?pytest\b/i.test(
-      c,
-    ) ||
-    /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+-m\s+unittest\b/i.test(
-      c,
-    ) ||
-    /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+-m\s+django\s+test\b/i.test(
-      c,
-    ) ||
-    /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+(?:-\w+\s+)*(?:[^\s;&|]*[\\/])?(?:run_tests|runtests)\.py\b/i.test(
-      c,
-    ) ||
-    /(?:^|[;&|]\s*)(?:python(?:3(?:\.\d+)?)?|py(?:\s+-\d+(?:\.\d+)?)?)\s+(?:-\w+\s+)*(?:[^\s;&|]*[\\/])?manage\.py\s+test\b/i.test(
-      c,
-    ) ||
-    /(?:^|[;&|]\s*)(?:\.?[\\/])?(?:[^\s;&|]*[\\/])?(?:run_tests|runtests)\.py\b/i.test(
-      c,
-    ) ||
-    /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+test\b/i.test(c) ||
-    /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+run\s+(?:test|check|build|lint|typecheck|e2e|verify)(?::[\w-]+)?\b/i.test(
-      c,
-    ) ||
-    /(?:^|[;&|]\s*)(?:npx\s+)?(?:vitest|jest)\b/i.test(c) ||
-    /(?:^|[;&|]\s*)node\s+[^\s;|]*(?:test|smoke|verify|e2e)[^\s;|]*\b/i.test(
-      c,
-    ) ||
-    /(?:^|[;&|]\s*)go\s+test\b/i.test(c) ||
-    /(?:^|[;&|]\s*)cargo\s+test\b/i.test(c)
-  );
 }
 
 function pushUnique(list: string[], value: string): void {

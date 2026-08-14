@@ -73,7 +73,7 @@ function isAttachedLongGitOption(token: string): boolean {
   return GIT_GLOBAL_VALUE_OPTIONS.has(token.slice(0, separator));
 }
 
-function splitCommandSegments(command: string): string[] {
+export function splitCommandSegments(command: string): string[] {
   const segments: string[] = [];
   let current = "";
   let quote: "'" | '"' | undefined;
@@ -116,7 +116,7 @@ function splitCommandSegments(command: string): string[] {
   return segments;
 }
 
-function tokenizeCommandSegment(segment: string): string[] | null {
+export function tokenizeCommandSegment(segment: string): string[] | null {
   const tokens: string[] = [];
   let current = "";
   let quote: "'" | '"' | undefined;
@@ -130,7 +130,8 @@ function tokenizeCommandSegment(segment: string): string[] | null {
     tokenStarted = false;
   };
 
-  for (const character of segment) {
+  for (let index = 0; index < segment.length; index += 1) {
+    const character = segment[index] ?? "";
     if (escaped) {
       current += character;
       tokenStarted = true;
@@ -138,7 +139,17 @@ function tokenizeCommandSegment(segment: string): string[] | null {
       continue;
     }
     if (character === "\\") {
-      escaped = true;
+      const next = segment[index + 1];
+      const escapesNext = quote
+        ? quote === '"' && (next === '"' || next === "\\")
+        : next !== undefined && /\s|["'\\]/.test(next);
+      if (escapesNext) {
+        escaped = true;
+      } else {
+        // Backslash is a path separator in Windows shells. Preserve it unless
+        // it is unambiguously escaping shell whitespace, a quote, or itself.
+        current += character;
+      }
       tokenStarted = true;
       continue;
     }
@@ -166,4 +177,19 @@ function tokenizeCommandSegment(segment: string): string[] | null {
   if (quote || escaped) return null;
   finishToken();
   return tokens;
+}
+
+/**
+ * Tokenize each top-level shell segment for intent inspection. This is not a
+ * shell executor or a security parser; it only gives command classifiers one
+ * shared, quote-aware view of executable and argument tokens.
+ */
+export function tokenizeCommandSegments(command: string): string[][] | null {
+  const tokenized: string[][] = [];
+  for (const segment of splitCommandSegments(command)) {
+    const tokens = tokenizeCommandSegment(segment);
+    if (!tokens) return null;
+    if (tokens.length > 0) tokenized.push(tokens);
+  }
+  return tokenized;
 }

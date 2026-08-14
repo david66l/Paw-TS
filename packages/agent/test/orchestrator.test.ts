@@ -1605,6 +1605,110 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(5);
   });
 
+  test("diagnostic pytest cannot complete while an absolute runner test can", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-real-test-intent-"));
+    writeFileSync(path.join(dir, "product.ts"), "export const value = 1;\n");
+    writeFileSync(
+      path.join(dir, "verify.test.ts"),
+      'import { expect, test } from "bun:test";\ntest("value", () => expect(2).toBe(2));\n',
+    );
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw-test@example.invalid"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "product.ts", "verify.test.ts"],
+      ["commit", "-m", "fixture"],
+    ]) {
+      const git = Bun.spawnSync(["git", ...args], {
+        cwd: dir,
+        stdout: "ignore",
+        stderr: "pipe",
+      });
+      expect(git.exitCode).toBe(0);
+    }
+
+    const absoluteTestCommand = `${process.execPath} test verify.test.ts`;
+    let calls = 0;
+    const orchestrator = new AgentOrchestrator({
+      model: {
+        label: "real-verification-intent",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.edit_file",
+                args: {
+                  path: "product.ts",
+                  old_string: "value = 1",
+                  new_string: "value = 2",
+                },
+              }),
+            };
+          }
+          if (calls === 2) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: "python -m pytest --version" },
+              }),
+            };
+          }
+          if (calls === 3) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: absoluteTestCommand },
+              }),
+            };
+          }
+          if (calls === 4) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.git_diff",
+                args: {},
+              }),
+            };
+          }
+          return {
+            text: JSON.stringify({
+              action: "final_answer",
+              summary: `Changed product.ts; ${absoluteTestCommand} passed.`,
+            }),
+          };
+        },
+      },
+      auxiliaryModel: new FakeLanguageModel({
+        responses: [{ text: '{"keep":[],"drop":[],"add":[]}' }],
+      }),
+      verificationPolicy: { authority: "external", requireMutation: true },
+      retrySleep: async () => {},
+    });
+
+    const result = await orchestrator.run({
+      runId: "real-verification-intent",
+      goal: "Fix the product value",
+      workspaceRoot: dir,
+      maxSteps: 7,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.outcome).toBe("verified");
+    expect(result.completionReason).toBe("tests_passed");
+    expect(result.evidence?.testResults).toHaveLength(1);
+    expect(result.evidence?.testResults[0]).toMatchObject({
+      command: absoluteTestCommand,
+      passed: true,
+      outcome: "passed",
+    });
+    expect(
+      result.evidence?.commandsRun.some(
+        (entry) => entry.command === "python -m pytest --version",
+      ),
+    ).toBe(true);
+    expect(calls).toBe(5);
+  });
+
   test("external verification does not retry a terminal conftest environment failure", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-conftest-env-"));
     writeFileSync(path.join(dir, "product.py"), "value = 1\n", "utf8");

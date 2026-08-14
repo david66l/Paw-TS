@@ -3,9 +3,12 @@ import { isGitDiffCommand } from "../shell-command.js";
 import type { TaskState } from "../task-state.js";
 import {
   hasVerificationRetryAvailable,
-  isVerificationCommand,
   verificationOutcome,
 } from "../task-state.js";
+import {
+  isVerificationCommand,
+  verificationCommandFamily,
+} from "../verification-command.js";
 import type { VerificationPolicy } from "./verification-gate.js";
 
 const SOURCE_MUTATION_TOOLS = new Set([
@@ -44,22 +47,6 @@ function isVerificationCall(call: AgentToolCallAction): boolean {
   return isVerificationCommand(command);
 }
 
-function verificationFamily(command: string): string | undefined {
-  if (/\bpytest\b/i.test(command)) return "pytest";
-  if (/\bunittest\b/i.test(command)) return "unittest";
-  if (/\b(?:run_tests|runtests)\.py\b/i.test(command)) return "python-runner";
-  if (/\bmanage\.py\s+test\b|\b-m\s+django\s+test\b/i.test(command))
-    return "django";
-  if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i.test(command))
-    return "javascript";
-  if (/\b(?:vitest|jest)\b/i.test(command)) return "javascript";
-  if (/\bnode\s+[^\s;|]*(?:test|smoke|verify|e2e)[^\s;|]*/i.test(command))
-    return "node";
-  if (/\bgo\s+test\b/i.test(command)) return "go";
-  if (/\bcargo\s+test\b/i.test(command)) return "cargo";
-  return undefined;
-}
-
 function shellSyntaxComplexity(command: string): number {
   return command.match(/&&|\|\||[|;<>]/g)?.length ?? 0;
 }
@@ -71,8 +58,8 @@ function isSimplifiedVerificationRetry(
   const next = command.replace(/\s+/g, " ").trim();
   const previous = failedCommand.replace(/\s+/g, " ").trim();
   if (!next || next === previous) return false;
-  const family = verificationFamily(next);
-  if (!family || family !== verificationFamily(previous)) return false;
+  const family = verificationCommandFamily(next);
+  if (!family || family !== verificationCommandFamily(previous)) return false;
   const nextComplexity = shellSyntaxComplexity(next);
   const previousComplexity = shellSyntaxComplexity(previous);
   return (

@@ -434,6 +434,63 @@ describe("TaskStateManager", () => {
     expect(code.snapshot().testResults.at(-1)?.outcome).toBe("code_failed");
   });
 
+  test("records absolute-path pytest evidence but ignores pytest diagnostics", () => {
+    const state = new TaskStateManager("fix a Python regression");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "src/a.py" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "src/a.py", linesAdded: 1, linesRemoved: 1 },
+      },
+    );
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: {
+          command:
+            "C:\\Users\\Rain\\AppData\\Local\\Programs\\Python\\Python310\\python.exe -m pytest --version",
+        },
+      },
+      {
+        ok: true,
+        summary: "run_shell: exit 0",
+        payload: { exit_code: 0, stdout: "pytest 9.0.0" },
+      },
+    );
+    expect(state.snapshot().testResults).toHaveLength(0);
+
+    const command =
+      '"C:\\Program Files\\Python310\\python.exe" -m pytest tests/test_a.py -q';
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command },
+      },
+      {
+        ok: true,
+        summary: "run_shell: exit 0",
+        payload: { exit_code: 0, stdout: "1 passed in 0.12s" },
+      },
+    );
+
+    expect(state.snapshot().testResults).toEqual([
+      expect.objectContaining({
+        command,
+        passed: true,
+        outcome: "passed",
+        mutationRevision: 1,
+        evidence: "1 passed in 0.12s",
+      }),
+    ]);
+  });
+
   test("classifies repository-runner dependency failures without hiding candidate imports", () => {
     const unavailable = new TaskStateManager("fix Django query validation");
     unavailable.recordToolResult(

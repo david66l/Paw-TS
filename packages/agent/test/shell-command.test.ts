@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { isGitDiffCommand } from "../src/shell-command.js";
+import {
+  isGitDiffCommand,
+  tokenizeCommandSegment,
+} from "../src/shell-command.js";
 
 describe("isGitDiffCommand", () => {
   test("accepts Git global options before the diff subcommand", () => {
@@ -39,5 +42,23 @@ describe("isGitDiffCommand", () => {
   test("rejects malformed quoted or escaped commands", () => {
     expect(isGitDiffCommand('git --no-pager "diff')).toBe(false);
     expect(isGitDiffCommand("git --no-pager diff\\")).toBe(false);
+  });
+
+  test("tokenizes quoted Windows paths without erasing separators", () => {
+    expect(
+      tokenizeCommandSegment(
+        '"C:\\Program Files\\Python310\\python.exe" -m pytest tests\\test_a.py',
+      ),
+    ).toEqual([
+      "C:\\Program Files\\Python310\\python.exe",
+      "-m",
+      "pytest",
+      "tests\\test_a.py",
+    ]);
+    expect(tokenizeCommandSegment("git diff repo\\ path/file.ts")).toEqual([
+      "git",
+      "diff",
+      "repo path/file.ts",
+    ]);
   });
 });

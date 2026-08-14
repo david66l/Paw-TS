@@ -553,6 +553,46 @@ describe("convergence guidance", () => {
     ).toContain("inspect_external_diff");
   });
 
+  test("does not accept a pytest diagnostic as the simpler verification retry", () => {
+    const failed = state({
+      testResults: [
+        {
+          command: "python -m pytest tests/test_a.py 2>&1 | tail -20",
+          passed: false,
+          outcome: "harness_failed",
+          failureKind: "invocation_error",
+          retryability: "retryable",
+          summary: "tail is unavailable",
+          mutationRevision: 1,
+        },
+      ],
+    });
+    const diagnostic = {
+      type: "tool_call" as const,
+      tool: "workspace.run_shell",
+      args: { command: "python -m pytest --version" },
+    };
+    expect(
+      convergenceToolBlockReason(diagnostic, failed, 20, 64, {
+        authority: "external",
+      }),
+    ).toContain("retry_verification_directly");
+
+    const directTest = {
+      type: "tool_call" as const,
+      tool: "workspace.run_shell",
+      args: {
+        command:
+          '"C:\\Program Files\\Python310\\python.exe" -m pytest tests/test_a.py -q',
+      },
+    };
+    expect(
+      convergenceToolBlockReason(directTest, failed, 20, 64, {
+        authority: "external",
+      }),
+    ).toBeNull();
+  });
+
   test("allows only bounded diagnostics after a code verification failure", () => {
     const shell = {
       type: "tool_call" as const,
