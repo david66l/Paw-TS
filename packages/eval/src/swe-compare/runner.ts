@@ -2,12 +2,10 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -445,7 +443,7 @@ function withWorkspaceEffect(
     ...result,
     payload: {
       ...payload,
-      workspaceEffect: { changed: true, paths },
+      workspaceEffect: { changed: paths.length > 0, paths },
     },
   };
 }
@@ -604,7 +602,12 @@ export function createSweCompareToolEffectPolicy(input: {
 
       if (reasons.length === 0) {
         const afterPatch = gitPatch(input.workspaceRoot);
-        if (afterPatch === before.trackedPatch) return { allowed: true };
+        if (afterPatch === before.trackedPatch) {
+          return {
+            allowed: true,
+            result: withWorkspaceEffect(effect.result, []),
+          };
+        }
         const changedPaths = gitNullList(input.workspaceRoot, [
           "diff",
           "HEAD",
@@ -821,9 +824,18 @@ async function runPaw(opts: {
     timeoutMs: opts.timeoutMs,
   });
   const abort = createBudgetAbort(opts.timeoutMs);
-  const runtimeStateRoot = mkdtempSync(
-    path.join(tmpdir(), `paw-runtime-${opts.runId.slice(0, 48)}-`),
+  // The session store appends every event synchronously. Keep that durable
+  // control-plane log beside the benchmark result so an expensive trajectory
+  // survives a crash or a later patch-collection failure.
+  const runtimeStateRoot = path.join(
+    opts.repoRoot,
+    "benchmarks",
+    "swe-compare",
+    "runs",
+    opts.runId,
+    "runtime",
   );
+  mkdirSync(runtimeStateRoot, { recursive: true });
   let runtime: ReturnType<typeof createRunOrchestrator>;
   try {
     const mainModel = createDefaultLanguageModel(opts.repoRoot);
@@ -864,7 +876,6 @@ async function runPaw(opts: {
     });
   } catch (error) {
     abort.clear();
-    rmSync(runtimeStateRoot, { recursive: true, force: true });
     throw error;
   }
   const { orch, watcher } = runtime;
@@ -901,7 +912,6 @@ async function runPaw(opts: {
   } finally {
     abort.clear();
     watcher.stop();
-    rmSync(runtimeStateRoot, { recursive: true, force: true });
   }
 }
 
@@ -1356,6 +1366,7 @@ export function collectTraceMutationHints(opts: {
   readonly workspaceRoot: string;
 }): TraceMutationHints {
   const explicitPaths = new Set<string>();
+  const pendingPawShellCommands: string[] = [];
   let unknownWritePossible = false;
   const addPath = (value: unknown) => {
     if (typeof value !== "string" || !value.trim()) return;
@@ -1377,6 +1388,14 @@ export function collectTraceMutationHints(opts: {
         args && typeof args === "object" && !Array.isArray(args)
           ? (args as Record<string, unknown>)
           : {};
+      if (
+        record.type === "tool.call" &&
+        record.tool === "workspace.run_shell"
+      ) {
+        pendingPawShellCommands.push(
+          typeof argRecord.command === "string" ? argRecord.command : "",
+        );
+      }
       if (record.type === "tool.result" && Array.isArray(record.fileChanges)) {
         let materialFileChange = false;
         for (const change of record.fileChanges) {
@@ -1398,12 +1417,30 @@ export function collectTraceMutationHints(opts: {
         }
       }
       if (
-        record.type === "tool.call" &&
-        record.tool === "workspace.run_shell" &&
-        typeof argRecord.command === "string" &&
-        commandMayWrite(argRecord.command)
+        record.type === "tool.result" &&
+        record.tool === "workspace.run_shell"
       ) {
-        unknownWritePossible = true;
+        const command = pendingPawShellCommands.shift() ?? "";
+        const rawEffect = record.workspaceEffect;
+        if (
+          rawEffect &&
+          typeof rawEffect === "object" &&
+          !Array.isArray(rawEffect) &&
+          typeof (rawEffect as Record<string, unknown>).changed === "boolean" &&
+          Array.isArray((rawEffect as Record<string, unknown>).paths)
+        ) {
+          const effect = rawEffect as {
+            readonly changed: boolean;
+            readonly paths: readonly unknown[];
+          };
+          if (effect.changed) {
+            for (const changedPath of effect.paths) addPath(changedPath);
+            unknownWritePossible = true;
+          }
+        } else if (commandMayWrite(command)) {
+          // Legacy and non-audited traces retain command-text conservatism.
+          unknownWritePossible = true;
+        }
       }
       continue;
     }
@@ -1441,6 +1478,9 @@ export function collectTraceMutationHints(opts: {
     }
   }
   if (opts.runner === "paw") {
+    if (pendingPawShellCommands.some(commandMayWrite)) {
+      unknownWritePossible = true;
+    }
     for (const edit of successfulPawEdits(opts.trace)) addPath(edit.path);
   }
   return {

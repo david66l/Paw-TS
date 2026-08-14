@@ -25,7 +25,10 @@ import {
   updateFailureSignatures,
 } from "../src/lifecycle/tool-recovery.js";
 import { checkVerification } from "../src/lifecycle/verification-gate.js";
-import type { TaskState } from "../src/task-state.js";
+import {
+  type TaskState,
+  formatCompletionReadiness,
+} from "../src/task-state.js";
 
 function baseState(over: Partial<TaskState> = {}): TaskState {
   return {
@@ -324,6 +327,73 @@ describe("VerificationGate", () => {
     );
     expect(v.ok).toBe(false);
     if (!v.ok) expect(v.nudge).toContain("latest code verification failed");
+  });
+
+  test("later harness failure does not erase a current-revision pass", () => {
+    const state = baseState({
+      filesChanged: ["sympy/core/numbers.py"],
+      mutationRevision: 2,
+      testResults: [
+        {
+          command: "python bin/test sympy/core/tests/test_numbers.py",
+          family: "python-runner",
+          passed: true,
+          outcome: "passed",
+          summary: "85 passed",
+          mutationRevision: 2,
+        },
+        {
+          command: "python -m pytest sympy/core/tests/test_numbers.py",
+          family: "pytest",
+          passed: false,
+          outcome: "harness_failed",
+          failureKind: "runner_unavailable",
+          retryability: "terminal",
+          summary: "No module named pytest",
+          mutationRevision: 2,
+        },
+      ],
+    });
+    expect(checkVerification(state)).toEqual({
+      ok: true,
+      mode: "tests_passed",
+    });
+    expect(formatCompletionReadiness(state)).toContain(
+      "- Verification: passed for r2",
+    );
+  });
+
+  test("later harness failure does not hide a current-revision code failure", () => {
+    const decision = checkVerification(
+      baseState({
+        filesChanged: ["src/a.py"],
+        mutationRevision: 1,
+        testResults: [
+          {
+            command: "pytest tests/test_a.py",
+            family: "pytest",
+            passed: false,
+            outcome: "code_failed",
+            summary: "assertion failed",
+            mutationRevision: 1,
+          },
+          {
+            command: "python -m pytest tests/test_b.py",
+            family: "pytest",
+            passed: false,
+            outcome: "harness_failed",
+            failureKind: "runner_unavailable",
+            summary: "runner unavailable",
+            mutationRevision: 1,
+          },
+        ],
+      }),
+    );
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) {
+      expect(decision.nudge).toContain("latest code verification failed");
+      expect(decision.nudge).not.toContain("did not execute");
+    }
   });
 
   test("harness failure blocks completion without blaming product code", () => {

@@ -32,6 +32,7 @@ export interface CandidateReviewResult {
 
 export interface CandidateVerificationEvidence {
   readonly command: string;
+  readonly family?: TestResultSummary["family"];
   readonly mutationRevision: number;
   readonly outcome: "passed" | "code_failed" | "harness_failed";
   readonly failureKind?: TestResultSummary["failureKind"];
@@ -226,6 +227,7 @@ export function candidateReviewInput(
     acceptanceCriteria: state.acceptanceCriteria ?? [],
     verificationEvidence: state.testResults.map((result) => ({
       command: result.command,
+      ...(result.family ? { family: result.family } : {}),
       mutationRevision: result.mutationRevision ?? 0,
       outcome: verificationOutcome(result),
       ...(result.failureKind ? { failureKind: result.failureKind } : {}),
@@ -377,7 +379,7 @@ function buildCandidateReviewGoal(
     const classification = [result.failureKind, result.retryability]
       .filter(Boolean)
       .join("/");
-    return `- [r${result.mutationRevision}; ${phase}] ${result.outcome}${classification ? ` (${classification})` : ""}: ${result.command} — ${result.summary}${result.evidence ? ` — observed: ${result.evidence}` : ""}`;
+    return `- [r${result.mutationRevision}; ${phase}${result.family ? `; family=${result.family}` : ""}] ${result.outcome}${classification ? ` (${classification})` : ""}: ${result.command} — ${result.summary}${result.evidence ? ` — observed: ${result.evidence}` : ""}`;
   });
   const currentDiffInspected =
     input.filesChanged.length > 0 &&

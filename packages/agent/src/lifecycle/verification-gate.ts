@@ -5,6 +5,7 @@
 import type { TaskState } from "../task-state.js";
 import {
   hasVerificationRetryAvailable,
+  latestSubstantiveVerification,
   verificationOutcome,
 } from "../task-state.js";
 
@@ -85,12 +86,9 @@ export function checkVerification(
 
   const currentRevision = state.mutationRevision ?? 0;
   const latest = state.testResults[state.testResults.length - 1];
+  const substantive = latestSubstantiveVerification(state);
   const latestRevision = latest?.mutationRevision ?? 0;
-  if (
-    latest &&
-    verificationOutcome(latest) === "passed" &&
-    latestRevision === currentRevision
-  ) {
+  if (substantive && verificationOutcome(substantive) === "passed") {
     return { ok: true, mode: "tests_passed" };
   }
 
@@ -102,6 +100,13 @@ export function checkVerification(
     return {
       ok: false,
       nudge: `The last passing verification predates the latest file change (verified revision ${latestRevision}, current revision ${currentRevision}). Re-run the relevant verification after the final edit before final_answer.`,
+    };
+  }
+
+  if (substantive && verificationOutcome(substantive) === "code_failed") {
+    return {
+      ok: false,
+      nudge: `Files were changed but the latest code verification failed (${substantive.command}${substantive.evidence ? `: ${substantive.evidence}` : ""}). Fix the implementation failure and re-run verification before final_answer.`,
     };
   }
 
@@ -140,13 +145,6 @@ export function checkVerification(
         latest.failureKind === "untrusted_exit_status"
           ? `Files were changed but the latest shell command's final exit status does not prove its verification runner passed (${latest.command}${latest.evidence ? `: ${latest.evidence}` : ""}). Run the verification directly or preserve its exit status explicitly before final_answer.`
           : `Files were changed but the latest verification did not execute because its harness/environment failed (${latest.command}${latest.evidence ? `: ${latest.evidence}` : ""}). Repair or replace the verification command and obtain real test evidence before final_answer.`,
-    };
-  }
-
-  if (latest && verificationOutcome(latest) === "code_failed") {
-    return {
-      ok: false,
-      nudge: `Files were changed but the latest code verification failed (${latest.command}${latest.evidence ? `: ${latest.evidence}` : ""}). Fix the implementation failure and re-run verification before final_answer.`,
     };
   }
 

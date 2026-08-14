@@ -73,6 +73,28 @@ export function fileChangesFromPayload(
   return undefined;
 }
 
+function workspaceEffectFromPayload(
+  payload: unknown,
+):
+  | { readonly changed: boolean; readonly paths: readonly string[] }
+  | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return undefined;
+  }
+  const raw = (payload as Record<string, unknown>).workspaceEffect;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const effect = raw as Record<string, unknown>;
+  if (typeof effect.changed !== "boolean" || !Array.isArray(effect.paths)) {
+    return undefined;
+  }
+  return {
+    changed: effect.changed,
+    paths: effect.paths.filter(
+      (item): item is string => typeof item === "string" && item.length > 0,
+    ),
+  };
+}
+
 function toFileChange(
   value: unknown,
   workspaceRoot: string,
@@ -646,12 +668,14 @@ export function finalizeToolExecution(
         return diff ? { ...c, diff } : c;
       });
     }
+    const workspaceEffect = workspaceEffectFromPayload(tr.payload);
     ctx.emit({
       type: "tool.result",
       tool: call.tool,
       ok: tr.ok,
       summary: tr.summary,
       detail: formatToolResultEventDetail(tr),
+      ...(workspaceEffect ? { workspaceEffect } : {}),
       ...(fileChanges ? { fileChanges } : {}),
     });
   }

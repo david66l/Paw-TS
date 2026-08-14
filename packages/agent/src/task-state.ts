@@ -22,6 +22,8 @@ export interface CommandSummary {
 
 export interface TestResultSummary {
   readonly command: string;
+  /** Parsed runner family retained as verification-scope metadata. */
+  readonly family?: VerificationCommandIntent["family"];
   readonly passed: boolean;
   /** Structured result; absent on legacy snapshots and derived from passed. */
   readonly outcome?: "passed" | "code_failed" | "harness_failed";
@@ -486,6 +488,7 @@ export class TaskStateManager {
           const evidence = verificationEvidence(result);
           testResults.push({
             command,
+            family: verificationIntent.family,
             passed: classification.outcome === "passed",
             outcome: classification.outcome,
             ...(classification.failureKind
@@ -652,15 +655,21 @@ export function formatCompletionReadiness(state: TaskState): string[] {
   const revision = state.mutationRevision ?? 0;
   if (revision === 0) return [];
   const latest = state.testResults.at(-1);
+  const substantive = latestSubstantiveVerification(state);
   const verification = !latest
     ? "missing"
-    : latest.mutationRevision !== revision
+    : substantive?.mutationRevision !== revision &&
+        latest.mutationRevision !== revision
       ? `stale (verified r${latest.mutationRevision ?? 0})`
-      : verificationOutcome(latest) === "passed"
+      : substantive?.mutationRevision === revision &&
+          verificationOutcome(substantive) === "passed"
         ? `passed for r${revision}`
-        : verificationOutcome(latest) === "harness_failed"
-          ? `harness failed for r${revision} (${latest.failureKind === "untrusted_exit_status" ? "test pass not proven" : "verification did not execute"}${latest.failureKind ? `: ${latest.failureKind}${latest.retryability ? `/${latest.retryability}` : ""}` : ""})`
-          : `code failed for r${revision}`;
+        : substantive?.mutationRevision === revision &&
+            verificationOutcome(substantive) === "code_failed"
+          ? `code failed for r${revision}`
+          : verificationOutcome(latest) === "harness_failed"
+            ? `harness failed for r${revision} (${latest.failureKind === "untrusted_exit_status" ? "test pass not proven" : "verification did not execute"}${latest.failureKind ? `: ${latest.failureKind}${latest.retryability ? `/${latest.retryability}` : ""}` : ""})`
+            : `code failed for r${revision}`;
   const diffRevision = state.diffInspectedRevision ?? 0;
   const diff =
     diffRevision === revision
@@ -679,6 +688,24 @@ export function verificationOutcome(
   result: TestResultSummary,
 ): "passed" | "code_failed" | "harness_failed" {
   return result.outcome ?? (result.passed ? "passed" : "code_failed");
+}
+
+/** Latest code verdict for the current source revision; harness failures are diagnostic. */
+export function latestSubstantiveVerification(
+  state: TaskState,
+): TestResultSummary | undefined {
+  const revision = state.mutationRevision ?? 0;
+  for (let index = state.testResults.length - 1; index >= 0; index -= 1) {
+    const result = state.testResults[index];
+    if (
+      result &&
+      (result.mutationRevision ?? 0) === revision &&
+      verificationOutcome(result) !== "harness_failed"
+    ) {
+      return result;
+    }
+  }
+  return undefined;
 }
 
 /** True only for the first retryable harness failure on the current revision. */

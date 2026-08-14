@@ -172,6 +172,11 @@ export type RunEvent =
       readonly summary: string;
       /** 详细结果，可选 */
       readonly detail?: string;
+      /** Audited durable workspace effect for this tool result, when available. */
+      readonly workspaceEffect?: {
+        readonly changed: boolean;
+        readonly paths: readonly string[];
+      };
       /**
        * 修改性工具的文件变更统计（write_file / edit_file / apply_patch）：
        * 每个被改文件一条，供 UI 展示「Changed N files +A −B」与 diff 预览

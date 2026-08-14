@@ -442,7 +442,14 @@ describe("SWE compare runner", () => {
       },
       prepared,
     );
-    expect(decision).toEqual({ allowed: true });
+    expect(decision).toEqual({
+      allowed: true,
+      result: {
+        ok: true,
+        summary: "tests passed",
+        payload: { workspaceEffect: { changed: false, paths: [] } },
+      },
+    });
     expect(existsSync(path.join(root, "__pycache__", "app.pyc"))).toBe(false);
   });
 
@@ -631,6 +638,15 @@ describe("SWE compare runner", () => {
       );
       expect(summaries).toContainEqual(expect.stringContaining("exit 0"));
       expect(summaries.join("\n")).not.toContain("untracked baseline mutation");
+      expect(
+        events.find(
+          (event) =>
+            event.event.type === "tool.result" &&
+            event.event.tool === "workspace.run_shell",
+        )?.event,
+      ).toMatchObject({
+        workspaceEffect: { changed: false, paths: [] },
+      });
       expect(
         existsSync(
           path.join(
@@ -1242,6 +1258,52 @@ describe("SWE compare runner", () => {
           {
             event: {
               type: "tool.call",
+              tool: "workspace.run_shell",
+              args: { command: "pytest > /tmp/pytest.log 2>&1" },
+            },
+          },
+          {
+            event: {
+              type: "tool.result",
+              tool: "workspace.run_shell",
+              ok: true,
+              workspaceEffect: { changed: false, paths: [] },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ explicitPaths: [], unknownWritePossible: false });
+    expect(
+      collectTraceMutationHints({
+        runner: "paw",
+        workspaceRoot: root,
+        trace: [
+          {
+            event: {
+              type: "tool.call",
+              tool: "workspace.run_shell",
+              args: { command: "python rewrite.py" },
+            },
+          },
+          {
+            event: {
+              type: "tool.result",
+              tool: "workspace.run_shell",
+              ok: true,
+              workspaceEffect: { changed: true, paths: ["src/a.py"] },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ explicitPaths: ["src/a.py"], unknownWritePossible: true });
+    expect(
+      collectTraceMutationHints({
+        runner: "paw",
+        workspaceRoot: root,
+        trace: [
+          {
+            event: {
+              type: "tool.call",
               tool: "workspace.edit_file",
               args: { path: "doc/probe.rst" },
             },
@@ -1499,6 +1561,36 @@ describe("SWE compare runner", () => {
         unknownWritePossible: false,
       }),
     ).toBe(false);
+    const auditedTrace = [
+      {
+        event: {
+          type: "tool.call",
+          tool: "workspace.run_shell",
+          args: { command: "pytest > /tmp/test.log 2>&1" },
+        },
+      },
+      {
+        event: {
+          type: "tool.result",
+          tool: "workspace.run_shell",
+          ok: true,
+          workspaceEffect: { changed: false, paths: [] },
+        },
+      },
+      ...editTrace,
+    ];
+    const auditedHints = collectTraceMutationHints({
+      runner: "paw",
+      workspaceRoot: "C:/workspace",
+      trace: auditedTrace,
+    });
+    expect(auditedHints).toEqual({
+      explicitPaths: ["a.py"],
+      unknownWritePossible: false,
+    });
+    expect(pawTraceHasOnlyReplayableEdits(auditedTrace, auditedHints)).toBe(
+      true,
+    );
     expect(
       pawTraceHasOnlyReplayableEdits(editTrace, {
         explicitPaths: ["a.py"],
@@ -1696,6 +1788,62 @@ describe("SWE compare runner", () => {
     });
     expect(recovered.diff).toBeUndefined();
     expect(recovered.error).toContain("missing.py");
+  });
+
+  test("recovers an audited exact edit after a simulated terminal diff failure", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-auto-recover-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.com"]);
+    git(root, ["config", "user.name", "Test"]);
+    writeFileSync(path.join(root, "a.py"), "old\n", "utf8");
+    git(root, ["add", "a.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const trace = [
+      {
+        event: {
+          type: "tool.call",
+          tool: "workspace.run_shell",
+          args: { command: "pytest > /tmp/test.log 2>&1" },
+        },
+      },
+      {
+        event: {
+          type: "tool.result",
+          tool: "workspace.run_shell",
+          ok: true,
+          workspaceEffect: { changed: false, paths: [] },
+        },
+      },
+      {
+        event: {
+          type: "tool.call",
+          tool: "workspace.edit_file",
+          args: { path: "a.py", old_string: "old", new_string: "new" },
+        },
+      },
+      {
+        event: {
+          type: "tool.result",
+          tool: "workspace.edit_file",
+          ok: true,
+        },
+      },
+    ];
+    const hints = collectTraceMutationHints({
+      trace,
+      runner: "paw",
+      workspaceRoot: root,
+    });
+    const recovered = recoverReplayablePawPatch({
+      trace,
+      hints,
+      gitRoot: root,
+      baseCommit: git(root, ["rev-parse", "HEAD"]),
+      label: "simulated-terminal-diff-timeout",
+    });
+    expect(recovered.error).toBeUndefined();
+    expect(recovered.diff).toContain("-old");
+    expect(recovered.diff).toContain("+new");
   });
 
   test("refuses to run when the current source tree is dirty", () => {
