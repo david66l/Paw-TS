@@ -95,6 +95,19 @@ export {
   type LoopV2LiveReviewRuntimeResultV1,
 } from "./live-review-runtime.js";
 export {
+  assertLoopV2LiveTerminalArtifactV1,
+  buildLoopV2LiveTerminalArtifactV1,
+  compareLoopV2TerminalV1,
+  LOOP_V2_LIVE_TERMINAL_ARTIFACT_SCHEMA_VERSION,
+  loopV2LiveTerminalArtifactPath,
+  parseLoopV2LiveTerminalArtifactV1,
+  serializeLoopV2LiveTerminalArtifactV1,
+  type BuildLoopV2LiveTerminalArtifactInputV1,
+  type LoopV2LegacyTerminalV1,
+  type LoopV2LiveTerminalArtifactV1,
+  type LoopV2TerminalComparisonV1,
+} from "./live-terminal-artifact.js";
+export {
   evidenceFingerprint,
   extendReadCoverage,
   readCoverageKey,

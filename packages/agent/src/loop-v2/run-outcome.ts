@@ -34,7 +34,8 @@ export interface DeriveRunOutcomeInputV2 {
   readonly artifact?: CandidateArtifactEvidenceV2;
   readonly verificationRequired?: boolean;
   readonly externalVerification?: RunOutcomeV2["externalVerification"];
-  readonly interruptedBy?: "failed" | "aborted";
+  /** Authoritative host termination that candidate certification cannot upgrade. */
+  readonly interruptedBy?: "incomplete" | "failed" | "aborted";
   readonly interruptionReason?: string;
 }
 
@@ -55,7 +56,11 @@ export function deriveRunOutcomeV2(
       artifactStatus,
       reasonCode:
         input.interruptionReason?.trim() ||
-        (input.interruptedBy === "aborted" ? "user_aborted" : "runtime_failed"),
+        (input.interruptedBy === "aborted"
+          ? "user_aborted"
+          : input.interruptedBy === "failed"
+            ? "runtime_failed"
+            : "run_incomplete"),
     };
   }
 

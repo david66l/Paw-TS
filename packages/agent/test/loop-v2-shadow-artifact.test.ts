@@ -1,10 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  buildLoopV2LiveCandidateArtifactV1,
+  buildLoopV2LiveReviewArtifactV1,
+  buildLoopV2LiveReviewPayloadV1,
+  buildLoopV2LiveTerminalArtifactV1,
   buildLoopV2ShadowArtifactV1,
   createLoopV2ShadowObserver,
+  createSemanticReviewLedgerV2,
+  parseLoopV2LiveTerminalArtifactV1,
   parseLoopV2ShadowArtifactV1,
   replayLegacyTraceToLoopV2ShadowV1,
+  reviewCandidateOnceV2,
+  serializeLoopV2LiveTerminalArtifactV1,
   serializeLoopV2ShadowArtifactV1,
 } from "../src/loop-v2/index.js";
 
@@ -97,7 +105,117 @@ function completeCandidateReport() {
   return observer.snapshot();
 }
 
+async function reviewedCandidate(
+  verificationAuthority: "local" | "external" = "local",
+) {
+  const candidate = buildLoopV2LiveCandidateArtifactV1(
+    completeCandidateReport(),
+    {
+      requireProductMutation: true,
+      verificationAuthority,
+    },
+  );
+  const payload = buildLoopV2LiveReviewPayloadV1(candidate.report);
+  const reviewed = await reviewCandidateOnceV2(
+    createSemanticReviewLedgerV2(),
+    payload,
+    async () => ({
+      candidateInputHash: payload.candidateInputHash,
+      mutationRevision: payload.input.mutationRevision,
+      verdict: "pass",
+      findings: [],
+    }),
+  );
+  const record = reviewed.ledger.records[reviewed.reviewKey];
+  if (!record) throw new Error("review fixture did not settle");
+  return {
+    candidate,
+    review: buildLoopV2LiveReviewArtifactV1(candidate, record),
+  };
+}
+
 describe("Loop Kernel v2 shadow artifacts", () => {
+  test("live terminal dual-calculation is strict and preserves external pending", async () => {
+    const local = await reviewedCandidate("local");
+    const localTerminal = buildLoopV2LiveTerminalArtifactV1({
+      runId: local.candidate.report.runId,
+      candidate: local.candidate,
+      review: local.review,
+      legacyTerminal: {
+        status: "completed",
+        outcome: "verified",
+        reasonCode: "tests_passed",
+      },
+    });
+    expect(localTerminal.v2Outcome).toMatchObject({
+      executionStatus: "completed",
+      candidateStatus: "certified",
+      localVerification: "passed",
+      externalVerification: "not_configured",
+      artifactStatus: "valid",
+    });
+    expect(localTerminal.comparison).toBe("equal");
+    expect(
+      parseLoopV2LiveTerminalArtifactV1(
+        serializeLoopV2LiveTerminalArtifactV1(
+          localTerminal,
+          local.candidate,
+          local.review,
+        ),
+        local.candidate,
+        local.review,
+      ),
+    ).toEqual(localTerminal);
+
+    const external = await reviewedCandidate("external");
+    const externalTerminal = buildLoopV2LiveTerminalArtifactV1({
+      runId: external.candidate.report.runId,
+      candidate: external.candidate,
+      review: external.review,
+      legacyTerminal: { status: "completed", outcome: "model_declared" },
+    });
+    expect(externalTerminal.v2Outcome).toMatchObject({
+      executionStatus: "external_pending",
+      candidateStatus: "certified",
+      externalVerification: "pending",
+    });
+    expect(externalTerminal.comparison).toBe(
+      "legacy_completed_v2_external_pending",
+    );
+  });
+
+  test("host incomplete is monotonic and terminal tampering fails closed", async () => {
+    const fixture = await reviewedCandidate();
+    const terminal = buildLoopV2LiveTerminalArtifactV1({
+      runId: fixture.candidate.report.runId,
+      candidate: fixture.candidate,
+      review: fixture.review,
+      legacyTerminal: {
+        status: "incomplete",
+        outcome: "budget_exhausted",
+        reasonCode: "max_steps_exhausted_without_final",
+      },
+    });
+    expect(terminal.v2Outcome).toMatchObject({
+      executionStatus: "incomplete",
+      candidateStatus: "certified",
+      reasonCode: "max_steps_exhausted_without_final",
+    });
+    expect(terminal.comparison).toBe("equal");
+
+    const tampered = structuredClone(terminal) as {
+      v2Outcome: { executionStatus: string };
+    };
+    tampered.v2Outcome.executionStatus = "completed";
+    expect(() =>
+      parseLoopV2LiveTerminalArtifactV1(
+        JSON.stringify(tampered),
+        fixture.candidate,
+        fixture.review,
+      ),
+    ).toThrow("does not match evidence");
+  });
+
   test("persists a complete candidate as a deterministic, review-pending artifact", () => {
     const first = buildLoopV2ShadowArtifactV1(completeCandidateReport());
     const second = buildLoopV2ShadowArtifactV1(completeCandidateReport());
