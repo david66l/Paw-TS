@@ -135,6 +135,7 @@ export {
   goalRequiresMutation,
   type CompletionDecision,
   type VerificationDecision,
+  type VerificationPolicy,
   type LifecycleBudget,
 } from "./lifecycle/index.js";
 export {

@@ -15,7 +15,11 @@ import {
   createRunOrchestrator,
   resolveLifecycleBudget,
 } from "@paw/agent";
-import type { ToolEffectPolicy, ToolExecutionPolicy } from "@paw/agent";
+import type {
+  ToolEffectPolicy,
+  ToolExecutionPolicy,
+  VerificationPolicy,
+} from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import type { RunAcceptanceCriterionSeed } from "@paw/core";
 import { createDefaultLanguageModel } from "@paw/models";
@@ -37,6 +41,7 @@ import {
   writeArmPawConfig,
 } from "../swe-exp/repo-cache.js";
 import { buildSweCompareGoal } from "./goal.js";
+import { PAW_FRESH_QUALIFICATION_RULE } from "./manifest.js";
 import type { SweCompareManifest } from "./types.js";
 
 export type SweCompareRunnerName = "paw" | "claude";
@@ -70,6 +75,8 @@ export interface SweCompareRunResult {
   readonly totalTokens?: number;
   readonly turns?: number;
   readonly terminalReason?: string;
+  readonly verificationAuthority?: "local" | "external";
+  readonly verificationEnvironment?: "host" | "instance_image";
   readonly error?: string;
   readonly tracePath: string;
   readonly verifier?: {
@@ -664,7 +671,8 @@ export function validateCompareRun(
   const seenDevelopment = manifest.protocol === "paw-only-seen-development";
   const validRule = seenDevelopment
     ? manifest.selection.ruleVersion === "paw-seen-dev-v1" ||
-      manifest.selection.ruleVersion === "paw-fresh-dev-v2"
+      manifest.selection.ruleVersion === "paw-fresh-dev-v2" ||
+      manifest.selection.ruleVersion === "paw-fresh-qualification-v3"
     : manifest.selection.ruleVersion === "formal-dev-v1";
   if (
     !validRule ||
@@ -675,6 +683,7 @@ export function validateCompareRun(
   ) {
     throw new Error("compare manifest protocol metadata is inconsistent");
   }
+  validatePawQualificationContract(manifest);
   const instance = manifest.instances.find(
     (item) => item.instanceId === instanceId,
   );
@@ -710,6 +719,48 @@ export function validateCompareRun(
       `Paw runtime profile drift: manifest=${JSON.stringify(manifest.runners.paw.runtimeProfile)} current=${JSON.stringify(runtimeProfile)}`,
     );
   }
+}
+
+export function pawVerificationPolicyFromManifest(
+  manifest: SweCompareManifest,
+): VerificationPolicy {
+  return {
+    authority: manifest.runners.paw.verificationAuthority ?? "external",
+    requireMutation: true,
+  };
+}
+
+/** Fail closed if a versioned qualification rule drifts after it is frozen. */
+export function validatePawQualificationContract(
+  manifest: SweCompareManifest,
+): void {
+  const rule = PAW_FRESH_QUALIFICATION_RULE;
+  if (manifest.selection.ruleVersion !== rule.version) return;
+  if (
+    manifest.budget.pawMaxSteps !== rule.pawMaxSteps ||
+    manifest.budget.sharedTimeoutMs !== rule.sharedTimeoutMs ||
+    manifest.budget.codingPhaseBudget !== false ||
+    manifest.runners.paw.memory !== "off" ||
+    manifest.runners.paw.verificationAuthority !== rule.verificationAuthority ||
+    manifest.runners.paw.verificationEnvironment !==
+      rule.verificationEnvironment
+  ) {
+    throw new Error(`${rule.version} contract drift`);
+  }
+}
+
+/**
+ * v3 promises that Paw's own verification runs inside the official instance
+ * image. Until that executor is wired, refuse the run instead of silently
+ * falling back to the host and publishing incomparable evidence.
+ */
+export function assertPawVerificationEnvironmentReady(
+  manifest: SweCompareManifest,
+): void {
+  if (manifest.runners.paw.verificationEnvironment !== "instance_image") return;
+  throw new Error(
+    "Paw instance_image verification is not implemented; qualification run is blocked",
+  );
 }
 
 export function collectPawMetrics(events: readonly RunEventEnvelope[]): {
@@ -750,6 +801,7 @@ async function runPaw(opts: {
   readonly runId: string;
   readonly maxSteps: number;
   readonly timeoutMs: number;
+  readonly verificationPolicy: VerificationPolicy;
   readonly initialAcceptanceCriteria: readonly RunAcceptanceCriterionSeed[];
 }): Promise<{
   status: "completed" | "failed" | "timeout";
@@ -806,7 +858,7 @@ async function runPaw(opts: {
       // Local checks remain evidence, but the official SWE-bench container is
       // authoritative. Harness failure may close only after a material edit and
       // fresh diff inspection; it is never recorded as a local pass.
-      verificationPolicy: { authority: "external", requireMutation: true },
+      verificationPolicy: opts.verificationPolicy,
       onEvent: (event) => {
         if (
           event.event.type !== "model.chunk" &&
@@ -1635,6 +1687,9 @@ export async function runSweCompareArm(opts: {
     );
   }
   validateCompareRun(opts.repoRoot, manifest, opts.instanceId);
+  if (opts.runner === "paw") {
+    assertPawVerificationEnvironmentReady(manifest);
+  }
   const datasetPath = path.join(opts.repoRoot, manifest.dataset.localPath);
   const probe = loadLiteInstances(datasetPath).find(
     (item) => item.instance_id === opts.instanceId,
@@ -1663,6 +1718,7 @@ export async function runSweCompareArm(opts: {
             runId,
             maxSteps: manifest.budget.pawMaxSteps,
             timeoutMs: manifest.budget.sharedTimeoutMs,
+            verificationPolicy: pawVerificationPolicyFromManifest(manifest),
             initialAcceptanceCriteria: buildSweAcceptanceCriteria(probe),
           })
         : await runClaude({
@@ -1824,6 +1880,14 @@ export async function runSweCompareArm(opts: {
       integrity,
       resolved,
       resolvedSource,
+      ...(opts.runner === "paw"
+        ? {
+            verificationAuthority:
+              manifest.runners.paw.verificationAuthority ?? "external",
+            verificationEnvironment:
+              manifest.runners.paw.verificationEnvironment ?? "host",
+          }
+        : {}),
       tracePath: tracePath.replace(/\\/g, "/"),
       ...(verifier ? { verifier } : {}),
     };

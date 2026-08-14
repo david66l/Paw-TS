@@ -6,11 +6,14 @@ import path from "node:path";
 import { buildSweCompareGoal } from "../src/swe-compare/goal.js";
 import {
   PAW_FRESH_DEVELOPMENT_RULE,
+  PAW_FRESH_QUALIFICATION_RULE,
+  PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
   createSweCompareManifest,
   findLocalTrajectoryHits,
   selectPawFreshDevelopmentIds,
+  selectPawFreshQualificationIds,
 } from "../src/swe-compare/manifest.js";
 import {
   PREFLIGHT_SENTINEL_PATCH,
@@ -94,6 +97,93 @@ describe("SWE compare manifest", () => {
     );
     expect(
       selectPawFreshDevelopmentIds({ repoRoot: root, datasetPath }),
+    ).toEqual(selected);
+  });
+
+  test("freezes v2 results as permanently exposed while preserving v2 selection", () => {
+    expect(PAW_FRESH_V2_IDS).toHaveLength(5);
+    expect(new Set(PAW_FRESH_V2_IDS).size).toBe(5);
+    for (const id of PAW_FRESH_V2_IDS) {
+      expect(PAW_KNOWN_EXPOSED_IDS).toContain(id);
+    }
+  });
+
+  test("selects v3 from unseen repositories with the frozen acceptance surface", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-v3-selection-"));
+    const datasetPath = path.join(root, "swe-bench-lite.jsonl");
+    const failToPass = JSON.stringify([
+      "tests/test_fix.py::test_a",
+      "tests/test_fix.py::test_b",
+    ]);
+    const passToPass = JSON.stringify(
+      Array.from(
+        { length: 20 },
+        (_, index) => `tests/test_regression.py::test_${index}`,
+      ),
+    );
+    const candidates = Array.from({ length: 7 }, (_, index) => ({
+      ...instance,
+      instance_id: `qualification-${index}__repo-${index}`,
+      repo: `qualification-${index}/repo`,
+      base_commit: `qualification-base-${index}`,
+      problem_statement: index % 2 === 0 ? "short" : "longer task prose",
+      FAIL_TO_PASS: failToPass,
+      PASS_TO_PASS: passToPass,
+    }));
+    const qualifying = candidates[0];
+    if (!qualifying) throw new Error("v3 fixture has no qualifying candidate");
+    candidates.push({
+      ...qualifying,
+      instance_id: PAW_FRESH_V2_IDS[0],
+      repo: "already-exposed/repo",
+    });
+    candidates.push({
+      ...qualifying,
+      instance_id: "too-small-f2p__repo",
+      repo: "too-small-f2p/repo",
+      FAIL_TO_PASS: JSON.stringify(["tests/test_fix.py::test_a"]),
+    });
+    candidates.push({
+      ...qualifying,
+      instance_id: "too-small-p2p__repo",
+      repo: "too-small-p2p/repo",
+      PASS_TO_PASS: JSON.stringify(
+        Array.from(
+          { length: 19 },
+          (_, index) => `tests/test_regression.py::test_${index}`,
+        ),
+      ),
+    });
+    writeFileSync(
+      datasetPath,
+      `${candidates.map((item) => JSON.stringify(item)).join("\n")}\n`,
+      "utf8",
+    );
+
+    const selected = selectPawFreshQualificationIds({
+      repoRoot: root,
+      datasetPath,
+    });
+    expect(selected).toHaveLength(PAW_FRESH_QUALIFICATION_RULE.count);
+    expect(new Set(selected.map((id) => id.split("__")[0])).size).toBe(
+      PAW_FRESH_QUALIFICATION_RULE.count,
+    );
+    expect(selected).not.toContain(PAW_FRESH_V2_IDS[0]);
+    expect(selected).not.toContain("too-small-f2p__repo");
+    expect(selected).not.toContain("too-small-p2p__repo");
+
+    writeFileSync(
+      datasetPath,
+      `${[...candidates]
+        .reverse()
+        .map((item) =>
+          JSON.stringify({ ...item, problem_statement: "rewritten task text" }),
+        )
+        .join("\n")}\n`,
+      "utf8",
+    );
+    expect(
+      selectPawFreshQualificationIds({ repoRoot: root, datasetPath }),
     ).toEqual(selected);
   });
   test("uses one provider-neutral goal without leaking gold", () => {

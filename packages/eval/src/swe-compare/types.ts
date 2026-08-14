@@ -43,7 +43,8 @@ export interface SweCompareManifest {
     readonly ruleVersion:
       | "formal-dev-v1"
       | "paw-seen-dev-v1"
-      | "paw-fresh-dev-v2";
+      | "paw-fresh-dev-v2"
+      | "paw-fresh-qualification-v3";
     readonly purpose:
       | "frozen_paired_dev_diagnostic_not_headline_score"
       | "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score";
@@ -60,14 +61,18 @@ export interface SweCompareManifest {
   };
   readonly budget: {
     /** Paw internal safety cap; Claude Code CLI has no equivalent public flag. */
-    readonly pawMaxSteps: 64;
+    readonly pawMaxSteps: number;
     /** Shared wall-clock cap used by both product runners. */
-    readonly sharedTimeoutMs: 1_500_000;
+    readonly sharedTimeoutMs: number;
     readonly codingPhaseBudget: false;
   };
   readonly runners: {
     readonly paw: {
       readonly memory: "off";
+      /** Legacy manifests omitted this and are interpreted as external. */
+      readonly verificationAuthority?: "local" | "external";
+      /** Host is legacy; instance_image is required before v3 may freeze. */
+      readonly verificationEnvironment?: "host" | "instance_image";
       readonly runtimeProfile: ModelRuntimeProfile;
     };
     readonly claudeCode: {

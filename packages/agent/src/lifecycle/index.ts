@@ -23,6 +23,7 @@ export {
   HEADLESS_LIFECYCLE_BUDGET,
   type CompletionDecision,
   type VerificationDecision,
+  type VerificationPolicy,
   type RecoveryHint,
   type LifecycleBudget,
   type AcceptanceGateDecision,

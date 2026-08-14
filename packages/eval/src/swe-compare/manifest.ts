@@ -58,9 +58,36 @@ export const PAW_FRESH_DEVELOPMENT_RULE = {
   maxPassToPass: 500,
 } as const;
 
-export const PAW_KNOWN_EXPOSED_IDS: readonly string[] = [
+/** Frozen output of the v2 rule; these became seen after their single runs. */
+export const PAW_FRESH_V2_IDS = [
+  "django__django-13028",
+  "pytest-dev__pytest-5692",
+  "sphinx-doc__sphinx-8627",
+  "astropy__astropy-14995",
+  "sympy__sympy-21614",
+] as const;
+
+const PAW_PRE_V2_EXPOSED_IDS: readonly string[] = [
   ...new Set([...SWE_COMPARE_SEEN_EXCLUSIONS, ...PAW_SEEN_DEVELOPMENT_IDS]),
 ];
+
+export const PAW_KNOWN_EXPOSED_IDS: readonly string[] = [
+  ...new Set([...PAW_PRE_V2_EXPOSED_IDS, ...PAW_FRESH_V2_IDS]),
+];
+
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  version: "paw-fresh-qualification-v3" as const,
+  seed: "paw-fresh-qualification-v3",
+  count: 5,
+  minFailToPass: 2,
+  maxFailToPass: 20,
+  minPassToPass: 20,
+  maxPassToPass: 500,
+  pawMaxSteps: 96,
+  sharedTimeoutMs: 2_700_000,
+  verificationAuthority: "local" as const,
+  verificationEnvironment: "instance_image" as const,
+} as const;
 
 function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
@@ -145,8 +172,15 @@ export function createSweCompareManifest(opts: {
   readonly instanceIds?: readonly string[];
   readonly now?: () => Date;
   readonly mode?: "formal-paired" | "paw-seen-development";
-  readonly pawDevelopmentRuleVersion?: "paw-seen-dev-v1" | "paw-fresh-dev-v2";
+  readonly pawDevelopmentRuleVersion?:
+    | "paw-seen-dev-v1"
+    | "paw-fresh-dev-v2"
+    | "paw-fresh-qualification-v3";
   readonly excludedSeenIds?: readonly string[];
+  readonly pawMaxSteps?: number;
+  readonly sharedTimeoutMs?: number;
+  readonly verificationAuthority?: "local" | "external";
+  readonly verificationEnvironment?: "host" | "instance_image";
 }): SweCompareManifest {
   const pawSeenDevelopment = opts.mode === "paw-seen-development";
   const datasetPath = opts.datasetPath ?? defaultLiteJsonl(opts.repoRoot);
@@ -243,12 +277,17 @@ export function createSweCompareManifest(opts: {
       ...(dockerVersion ? { dockerServerVersion: dockerVersion } : {}),
     },
     budget: {
-      pawMaxSteps: 64,
-      sharedTimeoutMs: 1_500_000,
+      pawMaxSteps: opts.pawMaxSteps ?? 64,
+      sharedTimeoutMs: opts.sharedTimeoutMs ?? 1_500_000,
       codingPhaseBudget: false,
     },
     runners: {
-      paw: { memory: "off", runtimeProfile: model.runtimeProfile },
+      paw: {
+        memory: "off",
+        verificationAuthority: opts.verificationAuthority ?? "external",
+        verificationEnvironment: opts.verificationEnvironment ?? "host",
+        runtimeProfile: model.runtimeProfile,
+      },
       claudeCode: {
         version: commandText("claude", ["--version"], opts.repoRoot),
         mode: "bare",
@@ -283,9 +322,32 @@ export function selectPawFreshDevelopmentIds(opts: {
   readonly repoRoot: string;
   readonly datasetPath?: string;
 }): string[] {
+  return selectPawFreshIds({
+    ...opts,
+    excludedIds: PAW_PRE_V2_EXPOSED_IDS,
+    rule: PAW_FRESH_DEVELOPMENT_RULE,
+  });
+}
+
+interface PawFreshSelectionRule {
+  readonly version: string;
+  readonly seed: string;
+  readonly count: number;
+  readonly minFailToPass: number;
+  readonly maxFailToPass: number;
+  readonly minPassToPass: number;
+  readonly maxPassToPass: number;
+}
+
+function selectPawFreshIds(opts: {
+  readonly repoRoot: string;
+  readonly datasetPath?: string;
+  readonly excludedIds: readonly string[];
+  readonly rule: PawFreshSelectionRule;
+}): string[] {
   const datasetPath = opts.datasetPath ?? defaultLiteJsonl(opts.repoRoot);
-  const knownIds = new Set(PAW_KNOWN_EXPOSED_IDS);
-  const rule = PAW_FRESH_DEVELOPMENT_RULE;
+  const knownIds = new Set(opts.excludedIds);
+  const rule = opts.rule;
   const candidates = loadLiteInstances(datasetPath)
     .filter((instance) => {
       const failToPass = instance.FAIL_TO_PASS?.length ?? 0;
@@ -318,8 +380,19 @@ export function selectPawFreshDevelopmentIds(opts: {
     if (selected.length === rule.count) return selected;
   }
   throw new Error(
-    `only ${selected.length}/${rule.count} fresh cross-repository SWE-bench tasks satisfy paw-fresh-dev-v2`,
+    `only ${selected.length}/${rule.count} fresh cross-repository SWE-bench tasks satisfy ${rule.version}`,
   );
+}
+
+export function selectPawFreshQualificationIds(opts: {
+  readonly repoRoot: string;
+  readonly datasetPath?: string;
+}): string[] {
+  return selectPawFreshIds({
+    ...opts,
+    excludedIds: PAW_KNOWN_EXPOSED_IDS,
+    rule: PAW_FRESH_QUALIFICATION_RULE,
+  });
 }
 
 export function createPawFreshDevelopmentManifest(opts: {
@@ -332,7 +405,26 @@ export function createPawFreshDevelopmentManifest(opts: {
     instanceIds: selectPawFreshDevelopmentIds(opts),
     mode: "paw-seen-development",
     pawDevelopmentRuleVersion: PAW_FRESH_DEVELOPMENT_RULE.version,
+    excludedSeenIds: PAW_PRE_V2_EXPOSED_IDS,
+  });
+}
+
+export function createPawFreshQualificationManifest(opts: {
+  readonly repoRoot: string;
+  readonly datasetPath?: string;
+  readonly now?: () => Date;
+}): SweCompareManifest {
+  const rule = PAW_FRESH_QUALIFICATION_RULE;
+  return createSweCompareManifest({
+    ...opts,
+    instanceIds: selectPawFreshQualificationIds(opts),
+    mode: "paw-seen-development",
+    pawDevelopmentRuleVersion: rule.version,
     excludedSeenIds: PAW_KNOWN_EXPOSED_IDS,
+    pawMaxSteps: rule.pawMaxSteps,
+    sharedTimeoutMs: rule.sharedTimeoutMs,
+    verificationAuthority: rule.verificationAuthority,
+    verificationEnvironment: rule.verificationEnvironment,
   });
 }
 

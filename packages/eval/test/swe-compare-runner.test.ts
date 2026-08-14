@@ -16,6 +16,7 @@ import { FakeLanguageModel } from "@paw/models";
 
 import {
   allowSweCompareToolCall,
+  assertPawVerificationEnvironmentReady,
   auditClaudeTraceIntegrity,
   auditPawTraceIntegrity,
   auditSweCompareResult,
@@ -27,6 +28,7 @@ import {
   extractClaudePatchFromTrace,
   parseClaudeStream,
   pawTraceHasOnlyReplayableEdits,
+  pawVerificationPolicyFromManifest,
   recoverClaudeResultPatch,
   recoverPawResultPatch,
   recoverReplayablePawPatch,
@@ -36,6 +38,7 @@ import {
   sweCompareLocalGoldViolation,
   sweCompareNetworkViolation,
   validateCompareRun,
+  validatePawQualificationContract,
 } from "../src/swe-compare/runner.js";
 import type { SweCompareManifest } from "../src/swe-compare/types.js";
 import {
@@ -52,6 +55,54 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe("SWE compare runner", () => {
+  test("derives verification authority from versioned manifests", () => {
+    const legacy = {
+      runners: { paw: { memory: "off" } },
+    } as unknown as SweCompareManifest;
+    expect(pawVerificationPolicyFromManifest(legacy)).toEqual({
+      authority: "external",
+      requireMutation: true,
+    });
+
+    const local = {
+      runners: {
+        paw: { memory: "off", verificationAuthority: "local" },
+      },
+    } as unknown as SweCompareManifest;
+    expect(pawVerificationPolicyFromManifest(local)).toEqual({
+      authority: "local",
+      requireMutation: true,
+    });
+  });
+
+  test("fails closed when the frozen v3 contract drifts or its executor is absent", () => {
+    const manifest = {
+      selection: { ruleVersion: "paw-fresh-qualification-v3" },
+      budget: {
+        pawMaxSteps: 96,
+        sharedTimeoutMs: 2_700_000,
+        codingPhaseBudget: false,
+      },
+      runners: {
+        paw: {
+          memory: "off",
+          verificationAuthority: "local",
+          verificationEnvironment: "instance_image",
+        },
+      },
+    } as unknown as SweCompareManifest;
+    expect(() => validatePawQualificationContract(manifest)).not.toThrow();
+    expect(() => assertPawVerificationEnvironmentReady(manifest)).toThrow(
+      "instance_image verification is not implemented",
+    );
+    expect(() =>
+      validatePawQualificationContract({
+        ...manifest,
+        budget: { ...manifest.budget, pawMaxSteps: 95 },
+      }),
+    ).toThrow("contract drift");
+  });
+
   test("Paw metrics include independent candidate-review calls and usage", () => {
     const events = [
       {

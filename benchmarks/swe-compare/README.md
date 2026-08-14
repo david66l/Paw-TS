@@ -106,3 +106,30 @@ protocol must be frozen before task text is inspected and must:
 Do not implement this by silently changing `paw-fresh-dev-v2`. Introduce a new
 versioned manifest rule and deterministic tests, freeze it from a clean commit,
 run no-model preflight, then execute each selected task once in frozen order.
+
+### Paw-only fresh qualification v3 (protocol scaffold)
+
+`paw-fresh-qualification-v3` is a new rule; it does not mutate or reinterpret
+v2. The code freezes these constraints before any v3 task ID is generated:
+
+- five deterministic, repository-distinct tasks, excluding every permanently
+  exposed ID including all five v2 tasks;
+- public acceptance counts of 2–20 F2P and 20–500 P2P tests;
+- Paw memory off, 96 maximum steps, and a 45-minute wall-clock safety ceiling;
+- local completion authority inside an official SWE-bench instance image;
+- the official evaluator remains post-run scoring only.
+
+The tracked preparation entry point is
+`packages/eval/scripts/prepare-paw-fresh-qualification.ts`, but it must not be
+run yet. The current runner deliberately rejects `instance_image` manifests
+because the safe command executor is the next implementation step. This
+fail-closed state prevents a manifest from promising container-backed local
+verification while Paw actually runs tests on the Windows host.
+
+The distinction matters because the official evaluator's generated eval script
+contains and applies the benchmark `test_patch`. That script is valid for
+post-run scoring but is gold-bearing information and must never become an agent
+tool. The reusable part is the dependency-complete instance image and its clean
+`/testbed`; v3 may freeze IDs only after Paw can execute its own, agent-chosen
+verification commands there without receiving the official eval script,
+`test_patch`, gold patch, or grader result during the run.
