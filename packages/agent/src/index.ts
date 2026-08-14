@@ -152,3 +152,5 @@ export {
   type RepeatToolReminderResult,
   type RepeatToolState,
 } from "./lifecycle/repeat-tool-reminder.js";
+
+export * from "./loop-v2/index.js";

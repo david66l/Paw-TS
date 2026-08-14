@@ -16,6 +16,7 @@
     "@paw/workspace": "workspace:*"
   },
   "scripts": {
+    "loop-v2:replay": "bun run scripts/replay-loop-v2.ts",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "test": "bun test test"
   }
