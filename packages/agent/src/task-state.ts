@@ -21,6 +21,7 @@ export interface TestResultSummary {
   /** Machine-readable reason for a failed verification classification. */
   readonly failureKind?:
     | "missing_dependency"
+    | "environment_setup"
     | "runner_unavailable"
     | "test_discovery"
     | "invocation_error"
@@ -746,6 +747,19 @@ function classifyVerificationOutcome(
     return {
       outcome: "harness_failed",
       failureKind: "runner_unavailable",
+      retryability: "terminal",
+    };
+  }
+  if (
+    !mentionsChangedFile &&
+    /importerror while loading conftest/i.test(output) &&
+    /(?:broken installation|could not determine[^\n]{0,120}(?:package )?version|package[^\n]{0,80}(?:not|never) (?:built|installed)|(?:build|install) the package)/i.test(
+      output,
+    )
+  ) {
+    return {
+      outcome: "harness_failed",
+      failureKind: "environment_setup",
       retryability: "terminal",
     };
   }

@@ -132,6 +132,28 @@ describe("CompletionPolicy", () => {
       retryability: "terminal",
     });
   });
+
+  test("terminal environment setup evidence survives the run boundary", () => {
+    const evidence = evidenceFromTaskState(
+      baseState({
+        testResults: [
+          {
+            command: "python -m pytest tests/test_candidate.py",
+            passed: false,
+            outcome: "harness_failed",
+            failureKind: "environment_setup",
+            retryability: "terminal",
+            summary: "conftest could not load from a broken installation",
+          },
+        ],
+      }),
+    );
+    expect(evidence.testResults[0]).toMatchObject({
+      outcome: "harness_failed",
+      failureKind: "environment_setup",
+      retryability: "terminal",
+    });
+  });
 });
 
 describe("AcceptanceGate", () => {

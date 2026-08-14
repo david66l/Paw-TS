@@ -1605,6 +1605,106 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(5);
   });
 
+  test("external verification does not retry a terminal conftest environment failure", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-conftest-env-"));
+    writeFileSync(path.join(dir, "product.py"), "value = 1\n", "utf8");
+    writeFileSync(
+      path.join(dir, "broken-test.js"),
+      "console.error(\"ImportError while loading conftest 'tests/conftest.py'. package/version.py: UserWarning: could not determine package version; this indicates a broken installation\"); process.exit(4);\n",
+      "utf8",
+    );
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw-test@example.invalid"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "product.py", "broken-test.js"],
+      ["commit", "-m", "fixture"],
+    ]) {
+      const git = Bun.spawnSync(["git", ...args], {
+        cwd: dir,
+        stdout: "ignore",
+        stderr: "pipe",
+      });
+      expect(git.exitCode).toBe(0);
+    }
+
+    let calls = 0;
+    const events: RunEventEnvelope[] = [];
+    const orchestrator = new AgentOrchestrator({
+      model: {
+        label: "terminal-conftest-environment",
+        async complete() {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.edit_file",
+                args: {
+                  path: "product.py",
+                  old_string: "value = 1",
+                  new_string: "value = 2",
+                },
+              }),
+            };
+          }
+          if (calls === 2) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.run_shell",
+                args: { command: "node broken-test.js" },
+              }),
+            };
+          }
+          if (calls === 3) {
+            return {
+              text: JSON.stringify({
+                tool: "workspace.git_diff",
+                args: {},
+              }),
+            };
+          }
+          return {
+            text: JSON.stringify({
+              action: "final_answer",
+              summary:
+                "Changed product.py; local verification could not start because the installation is broken, so external verification remains pending.",
+            }),
+          };
+        },
+      },
+      auxiliaryModel: new FakeLanguageModel({
+        responses: [{ text: '{"keep":[],"drop":[],"add":[]}' }],
+      }),
+      verificationPolicy: { authority: "external", requireMutation: true },
+      retrySleep: async () => {},
+      onEvent: (event) => events.push(event),
+    });
+
+    const result = await orchestrator.run({
+      runId: "terminal-conftest-environment",
+      goal: "Fix the product value",
+      workspaceRoot: dir,
+      maxSteps: 6,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.completionReason).toBe("external_verification_pending");
+    expect(result.evidence?.testResults).toHaveLength(1);
+    expect(result.evidence?.testResults[0]).toMatchObject({
+      outcome: "harness_failed",
+      failureKind: "environment_setup",
+      retryability: "terminal",
+    });
+    expect(
+      events.some(
+        (event) =>
+          event.event.type === "tool.result" &&
+          event.event.summary.includes("simplify_verification_retry"),
+      ),
+    ).toBe(false);
+    expect(calls).toBe(4);
+  });
+
   test("abort after first tool stops before next model turn", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-ab2-"));
     writeFileSync(path.join(dir, "x.txt"), "x");

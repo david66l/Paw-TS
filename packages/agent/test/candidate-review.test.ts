@@ -92,6 +92,10 @@ describe("candidate solution review", () => {
         payload: { exit_code: 0, stdout: "1 passed in 0.09s" },
       },
     );
+    state.recordToolResult(
+      { type: "tool_call", tool: "workspace.git_diff", args: {} },
+      { ok: true, summary: "inspected final diff", payload: { diff: "patch" } },
+    );
 
     const input = candidateReviewInput(
       "evidence-map",
@@ -111,6 +115,48 @@ describe("candidate solution review", () => {
         evidence: "1 passed in 0.09s",
       }),
     ]);
+    expect(input.diffInspectedRevision).toBe(1);
+  });
+
+  test("keeps a host-confirmed current diff inspection when reviewer git capture falls back", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-candidate-host-diff-"));
+    writeFileSync(path.join(dir, "candidate.py"), "value = 2\n", "utf8");
+    const reviewer = new ModelCandidateReviewer({
+      model: {
+        label: "host-diff-grounding",
+        async complete(messages) {
+          const prompt = messages[1]?.content ?? "";
+          expect(prompt).toContain(
+            "final diff inspection: confirmed by the host for current candidate r1",
+          );
+          expect(prompt).toContain("git diff unavailable");
+          expect(prompt).toContain(
+            "capture status does not negate a confirmed host diff-inspection fact",
+          );
+          return {
+            text: "The final-diff claim is supported by the host completion ledger.\nREPORT_GROUNDING: PASS\nVERDICT: PASS",
+          };
+        },
+      },
+    });
+
+    const result = await reviewer.review({
+      runId: "host-diff-grounding",
+      workspaceRoot: dir,
+      goal: "Set the value to two.",
+      proposedSummary: "Implemented the change and inspected the final diff.",
+      mutationRevision: 1,
+      filesChanged: ["candidate.py"],
+      acceptanceCriteria: [],
+      verificationEvidence: [],
+      diffInspectedRevision: 1,
+      deliberation: [],
+    });
+
+    expect(result).toMatchObject({
+      verdict: "pass",
+      reportGrounding: "pass",
+    });
   });
 
   test("bounded model reviewer uses a fresh two-message context and records usage", async () => {

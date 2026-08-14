@@ -40,6 +40,7 @@ export interface RunTestEvidence {
   /** Why a failed verification was classified as code or harness failure. */
   readonly failureKind?:
     | "missing_dependency"
+    | "environment_setup"
     | "runner_unavailable"
     | "test_discovery"
     | "invocation_error"

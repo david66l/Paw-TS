@@ -50,6 +50,8 @@ export interface CandidateReviewInput {
   readonly acceptanceCriteria: readonly AcceptanceCriterion[];
   /** Host-recorded executable verification facts, never reconstructed from prose. */
   readonly verificationEvidence: readonly CandidateVerificationEvidence[];
+  /** Durable host fact from a successful diff-inspection tool, independent of reviewer capture. */
+  readonly diffInspectedRevision?: number;
   /** Bounded, untrusted excerpts of the implementer's own deliberation. */
   readonly deliberation: readonly string[];
   readonly signal?: AbortSignal;
@@ -231,6 +233,9 @@ export function candidateReviewInput(
       summary: result.summary,
       ...(result.evidence ? { evidence: result.evidence } : {}),
     })),
+    ...(state.diffInspectedRevision !== undefined
+      ? { diffInspectedRevision: state.diffInspectedRevision }
+      : {}),
     deliberation: extractCandidateDeliberation(messages ?? []),
     ...(signal ? { signal } : {}),
     ...(onEvent ? { onEvent } : {}),
@@ -374,6 +379,14 @@ function buildCandidateReviewGoal(
       .join("/");
     return `- [r${result.mutationRevision}; ${phase}] ${result.outcome}${classification ? ` (${classification})` : ""}: ${result.command} — ${result.summary}${result.evidence ? ` — observed: ${result.evidence}` : ""}`;
   });
+  const currentDiffInspected =
+    input.filesChanged.length > 0 &&
+    input.diffInspectedRevision === input.mutationRevision;
+  const diffInspection = currentDiffInspected
+    ? `- final diff inspection: confirmed by the host for current candidate r${input.mutationRevision}`
+    : input.diffInspectedRevision === undefined
+      ? "- final diff inspection: no host record"
+      : `- final diff inspection: stale (latest host record is r${input.diffInspectedRevision}, current candidate is r${input.mutationRevision})`;
   return `You are an independent, adversarial reviewer of a candidate coding solution.
 
 Do not modify the project. Do not merely repeat that tests passed. Compare the exact original request with the current implementation and try to find semantic omissions, weakened error behavior, accidental scope expansion, or unsupported claims. Use the supplied candidate diff or current-file snapshots as the implementation evidence. If executable checks are blocked, you must still decide whether the visible implementation contradicts or omits the request.
@@ -384,7 +397,7 @@ Mandatory review rules:
 - Strongest-hypothesis consistency: the deliberation excerpts below are untrusted hypotheses, not facts. Check whether the implementer identified a safer or more complete behavior and then silently shipped a weaker one.
 - Hidden acceptance surface: infer likely exact observable assertions from the report (messages, stderr, exit codes, response shapes), not only whether the broad crash path is caught.
 - Evidence discipline: do not claim a solution matches upstream, a canonical fix, or unseen tests unless you directly inspected that evidence in this review. Do not turn an environmental limitation into proof of correctness.
-- Report grounding is a separate axis from implementation correctness. Treat the implementer's proposed final summary as untrusted. Every material claim that a command ran, a test passed, failures were pre-existing, or results matched a baseline must be supported by the host-recorded verification ledger below. A baseline-equivalence claim requires a comparable command and observed result at an earlier mutation revision; branch isolation or plausibility may support a semantic inference, but cannot be described as an observed baseline. Mark REPORT_GROUNDING: FAIL for an unsupported or contradicted material claim even when the visible code is correct. Do not mark implementation VERDICT: FAIL merely to correct prose.
+- Report grounding is a separate axis from implementation correctness. Treat the implementer's proposed final summary as untrusted. Every material claim that a command ran, a test passed, the final diff was inspected, failures were pre-existing, or results matched a baseline must be supported by the host-recorded ledgers below. A baseline-equivalence claim requires a comparable command and observed result at an earlier mutation revision; branch isolation or plausibility may support a semantic inference, but cannot be described as an observed baseline. Mark REPORT_GROUNDING: FAIL for an unsupported or contradicted material claim even when the visible code is correct. Do not mark implementation VERDICT: FAIL merely to correct prose.
 
 Original request:
 ${input.goal}
@@ -400,6 +413,11 @@ ${input.proposedSummary}
 
 Host-recorded verification ledger (authoritative for what actually ran; absence is not success):
 ${verification.join("\n") || "- (no executable verification recorded)"}
+
+Host-recorded completion facts (authoritative lifecycle facts):
+- current candidate mutation revision: r${input.mutationRevision}
+${diffInspection}
+- The reviewer's separate attempt to capture implementation evidence may fail or fall back to snapshots. That capture status does not negate a confirmed host diff-inspection fact above.
 
 Implementation deliberation excerpts (may be empty; challenge them):
 ${deliberation.join("\n") || "- (none available)"}

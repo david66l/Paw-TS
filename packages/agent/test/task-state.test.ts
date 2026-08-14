@@ -550,6 +550,92 @@ describe("TaskStateManager", () => {
     });
   });
 
+  test("treats a conftest broken installation as terminal environment setup failure", () => {
+    const state = new TaskStateManager("fix Astropy mask propagation");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "astropy/nddata/mixins/ndarithmetic.py" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: {
+          path: "astropy/nddata/mixins/ndarithmetic.py",
+          linesAdded: 1,
+          linesRemoved: 1,
+        },
+      },
+    );
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: {
+          command:
+            "python -m pytest astropy/nddata/mixins/tests/test_ndarithmetic.py -q",
+        },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 4",
+        payload: {
+          exit_code: 4,
+          stderr:
+            "ImportError while loading conftest 'astropy/conftest.py'. astropy/version.py: UserWarning: could not determine astropy package version; this indicates a broken installation",
+        },
+      },
+    );
+
+    expect(state.snapshot().testResults.at(-1)).toMatchObject({
+      outcome: "harness_failed",
+      failureKind: "environment_setup",
+      retryability: "terminal",
+      mutationRevision: 1,
+    });
+    expect(hasVerificationRetryAvailable(state.snapshot())).toBe(false);
+
+    const candidateFault = new TaskStateManager("fix conftest initialization");
+    candidateFault.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "tests/conftest.py" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: {
+          path: "tests/conftest.py",
+          linesAdded: 1,
+          linesRemoved: 1,
+        },
+      },
+    );
+    candidateFault.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "python -m pytest tests -q" },
+      },
+      {
+        ok: false,
+        summary: "run_shell: exit 4",
+        payload: {
+          exit_code: 4,
+          stderr:
+            "ImportError while loading conftest 'tests/conftest.py'. tests/conftest.py: broken installation",
+        },
+      },
+    );
+    expect(candidateFault.snapshot().testResults.at(-1)).toMatchObject({
+      outcome: "harness_failed",
+      failureKind: "invocation_error",
+      retryability: "retryable",
+    });
+  });
+
   test("keeps a monotonic shell revision when retained command history rolls over", () => {
     const state = new TaskStateManager("fix bug");
     for (let index = 0; index < 25; index += 1) {
