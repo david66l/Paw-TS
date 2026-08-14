@@ -26,6 +26,16 @@ export {
   type LoopV2ReplayResult,
 } from "./replay.js";
 export {
+  executeToolBatchV2,
+  type CommittedToolCallV2,
+  type ScheduledToolCallV2,
+  type ToolExecutionModeV2,
+  type ToolPreparationV2,
+  type ToolSchedulerHooksV2,
+  type ToolSchedulerOptionsV2,
+  type ToolSchedulerResultV2,
+} from "./tool-scheduler.js";
+export {
   assertLoopV2Envelope,
   LOOP_V2_SCHEMA_VERSION,
   parseLoopV2EventLog,
