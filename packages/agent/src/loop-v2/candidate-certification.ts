@@ -141,7 +141,10 @@ export interface SemanticReviewRecordV2 {
   readonly reviewKey: string;
   readonly review: SemanticReviewV2;
   readonly completion: "completed" | "protocol_partial";
-  readonly reasonCode?: "reviewer_error" | "reviewer_protocol_invalid";
+  readonly reasonCode?:
+    | "reviewer_error"
+    | "reviewer_protocol_invalid"
+    | "reviewer_interrupted";
 }
 
 export interface SemanticReviewLedgerV2 {
@@ -612,7 +615,8 @@ export function validateSemanticReviewRecordV2(
   } else if (value.completion === "protocol_partial") {
     if (
       value.reasonCode !== "reviewer_error" &&
-      value.reasonCode !== "reviewer_protocol_invalid"
+      value.reasonCode !== "reviewer_protocol_invalid" &&
+      value.reasonCode !== "reviewer_interrupted"
     ) {
       throw new Error("Partial semantic review reason code is invalid");
     }
@@ -623,7 +627,9 @@ export function validateSemanticReviewRecordV2(
         payload.input.mutationRevision,
         value.reasonCode === "reviewer_protocol_invalid"
           ? "Reviewer returned an invalid structured verdict."
-          : "Reviewer did not complete.",
+          : value.reasonCode === "reviewer_interrupted"
+            ? "Reviewer invocation was interrupted before a durable result."
+            : "Reviewer did not complete.",
       ),
       completion: "protocol_partial",
       reasonCode: value.reasonCode,
@@ -635,6 +641,30 @@ export function validateSemanticReviewRecordV2(
     throw new Error("Semantic review record is not canonical");
   }
   return normalized;
+}
+
+/**
+ * Converts a durable invocation claim without a settled verdict into a
+ * deterministic partial record. The caller must not invoke the model again.
+ */
+export function createInterruptedSemanticReviewRecordV2(
+  payload: CandidateReviewPayloadV2,
+): SemanticReviewRecordV2 {
+  assertReviewPayloadIdentity(payload);
+  const reviewKey = semanticReviewKeyV2(
+    payload.input.mutationRevision,
+    payload.candidateInputHash,
+  );
+  return {
+    reviewKey,
+    review: partialReview(
+      payload.candidateInputHash,
+      payload.input.mutationRevision,
+      "Reviewer invocation was interrupted before a durable result.",
+    ),
+    completion: "protocol_partial",
+    reasonCode: "reviewer_interrupted",
+  };
 }
 
 class SemanticReviewProtocolError extends Error {}

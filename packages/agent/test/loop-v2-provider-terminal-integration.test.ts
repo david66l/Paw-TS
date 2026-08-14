@@ -10,15 +10,19 @@ import type { ToolEffectPolicy } from "../src/execution-policy.js";
 import {
   type LoopV2LiveCandidateAssessmentV1,
   buildLoopV2LiveReviewArtifactV1,
+  buildLoopV2LiveReviewClaimV1,
   buildLoopV2LiveReviewPayloadV1,
+  createInterruptedSemanticReviewRecordV2,
   createSemanticReviewLedgerV2,
   loopV2LiveArtifactPath,
   loopV2ProjectionCheckpointPath,
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2LiveReviewArtifactV1,
+  parseLoopV2LiveReviewClaimV1,
   parseLoopV2ProjectionCheckpointV1,
   reviewCandidateOnceV2,
   serializeLoopV2LiveReviewArtifactV1,
+  serializeLoopV2LiveReviewClaimV1,
 } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
@@ -559,6 +563,46 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           content: "after\n",
         }),
       ]);
+      const claim = buildLoopV2LiveReviewClaimV1(persisted);
+      const parsedClaim = parseLoopV2LiveReviewClaimV1(
+        serializeLoopV2LiveReviewClaimV1(claim, persisted),
+        persisted,
+      );
+      expect(parsedClaim.reviewKey).toBe(claim.reviewKey);
+      const interruptedRecord =
+        createInterruptedSemanticReviewRecordV2(reviewPayload);
+      const interruptedArtifact = parseLoopV2LiveReviewArtifactV1(
+        serializeLoopV2LiveReviewArtifactV1(
+          buildLoopV2LiveReviewArtifactV1(persisted, interruptedRecord),
+          persisted,
+        ),
+        persisted,
+      );
+      let interruptedReviewerCalls = 0;
+      const interruptedResume = await reviewCandidateOnceV2(
+        {
+          records: {
+            [interruptedArtifact.reviewKey]: interruptedArtifact.record,
+          },
+        },
+        reviewPayload,
+        async () => {
+          interruptedReviewerCalls += 1;
+          return {};
+        },
+      );
+      expect(interruptedResume.reused).toBe(true);
+      expect(interruptedResume.review.verdict).toBe("partial");
+      expect(interruptedReviewerCalls).toBe(0);
+
+      const tamperedClaim = JSON.parse(JSON.stringify(claim)) as {
+        status: string;
+      };
+      tamperedClaim.status = "settled";
+      expect(() =>
+        parseLoopV2LiveReviewClaimV1(JSON.stringify(tamperedClaim), persisted),
+      ).toThrow();
+
       let reviewerCalls = 0;
       const reviewed = await reviewCandidateOnceV2(
         createSemanticReviewLedgerV2(),

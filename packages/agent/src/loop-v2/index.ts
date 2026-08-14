@@ -17,6 +17,7 @@ export {
   candidateInputHashV2,
   candidateSnapshotHashV2,
   createSemanticReviewLedgerV2,
+  createInterruptedSemanticReviewRecordV2,
   evaluateCandidateReadinessV2,
   reviewCandidateOnceV2,
   semanticReviewKeyV2,
@@ -70,6 +71,15 @@ export {
   serializeLoopV2ProjectionCheckpointV1,
   type LoopV2ProjectionCheckpointV1,
 } from "./live-checkpoint.js";
+export {
+  LOOP_V2_LIVE_REVIEW_CLAIM_SCHEMA_VERSION,
+  assertLoopV2LiveReviewClaimV1,
+  buildLoopV2LiveReviewClaimV1,
+  loopV2LiveReviewClaimPath,
+  parseLoopV2LiveReviewClaimV1,
+  serializeLoopV2LiveReviewClaimV1,
+  type LoopV2LiveReviewClaimV1,
+} from "./live-review-claim.js";
 export {
   LOOP_V2_LIVE_REVIEW_ARTIFACT_SCHEMA_VERSION,
   assertLoopV2LiveReviewArtifactV1,
