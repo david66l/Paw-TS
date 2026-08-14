@@ -14,6 +14,8 @@ import {
   resolveLifecycleBudget,
 } from "@paw/agent";
 import type {
+  LoopV2ShadowAssessmentV1,
+  LoopV2ShadowReport,
   ToolEffectPolicy,
   ToolExecutionPolicy,
   VerificationPolicy,
@@ -47,6 +49,7 @@ import {
 } from "../swe-exp/repo-cache.js";
 import { buildSweCompareGoal } from "./goal.js";
 import { PAW_FRESH_QUALIFICATION_RULE } from "./manifest.js";
+import { persistOnlineLoopV2ShadowArtifact } from "./shadow-replay.js";
 import type { SweCompareManifest } from "./types.js";
 import { assertPawVerificationEnvironmentReady } from "./verification-environment.js";
 
@@ -83,6 +86,21 @@ export interface SweCompareRunResult {
   readonly terminalReason?: string;
   readonly verificationAuthority?: "local" | "external";
   readonly verificationEnvironment?: "host" | "instance_image";
+  /** Explicit Paw loop mode; absent historical results are authoritative v1. */
+  readonly loopKernelVersion?: "v1" | "v2-shadow";
+  readonly loopV2Shadow?: {
+    readonly persistence: "written" | "error";
+    readonly artifactPath?: string;
+    readonly artifactHash?: string;
+    readonly reportHash?: string;
+    readonly artifactStatus?: "valid" | "invalid" | "none";
+    readonly readinessDisposition?: NonNullable<
+      LoopV2ShadowAssessmentV1["readiness"]
+    >["disposition"];
+    readonly comparison?: string;
+    readonly coverage?: LoopV2ShadowAssessmentV1["coverage"];
+    readonly error?: string;
+  };
   readonly error?: string;
   readonly tracePath: string;
   readonly verifier?: {
@@ -106,6 +124,8 @@ interface SweCompareRunAttempt {
   readonly baseCommit: string;
   readonly workspaceRoot: string;
   readonly startedAt: string;
+  /** Absent in legacy attempts and interpreted as v1. */
+  readonly loopKernelVersion?: "v1" | "v2-shadow";
 }
 
 export interface PawResumeValidation {
@@ -850,6 +870,7 @@ export function validatePawResumeAttempt(input: {
   readonly instanceId: string;
   readonly baseCommit: string;
   readonly goal: string;
+  readonly loopKernelVersion?: "v1" | "v2-shadow";
 }): PawResumeValidation {
   if (!/^[a-zA-Z0-9_-]+$/.test(input.runId)) {
     throw new Error(`unsafe resume run id: ${input.runId}`);
@@ -963,6 +984,8 @@ export function validatePawResumeAttempt(input: {
       attempt.instanceId !== input.instanceId ||
       attempt.sourceCommit !== input.manifest.sourceTree.gitCommit ||
       attempt.baseCommit !== input.baseCommit ||
+      (attempt.loopKernelVersion ?? "v1") !==
+        (input.loopKernelVersion ?? "v1") ||
       path.resolve(attempt.workspaceRoot) !== workspaceRoot
     ) {
       throw new Error("resume attempt metadata does not match the frozen run");
@@ -993,6 +1016,7 @@ async function runPaw(opts: {
   readonly verificationPolicy: VerificationPolicy;
   readonly shellSandbox?: ShellSandboxConfig;
   readonly initialAcceptanceCriteria: readonly RunAcceptanceCriterionSeed[];
+  readonly loopKernelVersion: "v1" | "v2-shadow";
   readonly resume?: boolean;
 }): Promise<{
   status: "completed" | "failed" | "timeout";
@@ -1004,6 +1028,7 @@ async function runPaw(opts: {
   totalTokens: number;
   turns: number;
   trace: readonly RunEventEnvelope[];
+  loopV2ShadowReport?: LoopV2ShadowReport;
 }> {
   writeArmPawConfig({
     workspaceRoot: opts.workspaceRoot,
@@ -1040,6 +1065,7 @@ async function runPaw(opts: {
       budget,
       memoryExtraction: "off",
       collaborationMode: "coding",
+      loopKernelVersion: opts.loopKernelVersion,
       // Every shell call crosses the eval policy gate so network attempts are
       // rejected before the harness spawns a process. Non-shell tools stay free.
       approvalPolicy: (tool) => tool === "workspace.run_shell",
@@ -1090,6 +1116,7 @@ async function runPaw(opts: {
     const trace = runtime.sessionStore.loadRun(opts.runId) ?? events;
     const metrics = collectPawMetrics(trace);
     const timeout = abort.signal.aborted;
+    const loopV2ShadowReport = orch.getLastLoopV2ShadowReport();
     return {
       status: timeout
         ? "timeout"
@@ -1100,14 +1127,17 @@ async function runPaw(opts: {
       ...(result.status === "completed" ? {} : { error: result.message }),
       ...metrics,
       trace,
+      ...(loopV2ShadowReport ? { loopV2ShadowReport } : {}),
     };
   } catch (error) {
     const trace = runtime.sessionStore.loadRun(opts.runId) ?? events;
+    const loopV2ShadowReport = orch.getLastLoopV2ShadowReport();
     return {
       status: abort.signal.aborted ? "timeout" : "failed",
       error: error instanceof Error ? error.message : String(error),
       ...collectPawMetrics(trace),
       trace,
+      ...(loopV2ShadowReport ? { loopV2ShadowReport } : {}),
     };
   } finally {
     abort.clear();
@@ -1925,6 +1955,7 @@ export async function runSweCompareArm(opts: {
   readonly keep?: boolean;
   readonly skipVerifier?: boolean;
   readonly resumeRunId?: string;
+  readonly loopKernelVersion?: "v1" | "v2-shadow";
 }): Promise<SweCompareRunResult> {
   const manifest = JSON.parse(
     readFileSync(opts.manifestPath, "utf8"),
@@ -1939,6 +1970,10 @@ export async function runSweCompareArm(opts: {
   }
   if (opts.resumeRunId && opts.runner !== "paw") {
     throw new Error("only Paw runs support durable resume");
+  }
+  const loopKernelVersion = opts.loopKernelVersion ?? "v1";
+  if (opts.runner !== "paw" && loopKernelVersion !== "v1") {
+    throw new Error("loop v2 shadow is available only for Paw runs");
   }
   validateCompareRun(opts.repoRoot, manifest, opts.instanceId);
   const pawShellSandbox =
@@ -1967,6 +2002,7 @@ export async function runSweCompareArm(opts: {
         instanceId: opts.instanceId,
         baseCommit: probe.base_commit,
         goal,
+        loopKernelVersion,
       })
     : undefined;
   const workspace = resumed
@@ -1983,6 +2019,7 @@ export async function runSweCompareArm(opts: {
       baseCommit: probe.base_commit,
       workspaceRoot: workspace.root,
       startedAt: started.toISOString(),
+      ...(opts.runner === "paw" ? { loopKernelVersion } : {}),
     };
     writeJsonAtomic(
       path.join(
@@ -2009,6 +2046,7 @@ export async function runSweCompareArm(opts: {
             verificationPolicy: pawVerificationPolicyFromManifest(manifest),
             shellSandbox: pawShellSandbox,
             initialAcceptanceCriteria: buildSweAcceptanceCriteria(probe),
+            loopKernelVersion,
             resume: resumed !== undefined,
           })
         : await runClaude({
@@ -2027,6 +2065,53 @@ export async function runSweCompareArm(opts: {
     // A patch collection failure must remain an auditable infra-invalid sample
     // instead of deleting the model evidence in the surrounding finally block.
     writeJsonAtomic(path.join(opts.repoRoot, tracePath), execution.trace);
+    let loopV2Shadow: SweCompareRunResult["loopV2Shadow"];
+    if (opts.runner === "paw" && loopKernelVersion === "v2-shadow") {
+      const report =
+        "loopV2ShadowReport" in execution
+          ? execution.loopV2ShadowReport
+          : undefined;
+      if (!report) {
+        loopV2Shadow = {
+          persistence: "error",
+          error: "explicit v2-shadow run produced no terminal shadow report",
+        };
+      } else {
+        try {
+          const persisted = persistOnlineLoopV2ShadowArtifact({
+            repoRoot: opts.repoRoot,
+            runId,
+            report,
+            policy: {
+              requireProductMutation: true,
+              verificationAuthority:
+                manifest.runners.paw.verificationAuthority ?? "external",
+              requiredVerificationScopes: [],
+            },
+          });
+          const assessment = persisted.artifact.assessment;
+          loopV2Shadow = {
+            persistence: "written",
+            artifactPath: persisted.artifactPath,
+            artifactHash: persisted.artifact.artifactHash,
+            reportHash: persisted.artifact.report.reportHash,
+            artifactStatus: assessment.artifact.status,
+            ...(assessment.readiness
+              ? {
+                  readinessDisposition: assessment.readiness.disposition,
+                }
+              : {}),
+            comparison: assessment.comparison,
+            coverage: assessment.coverage,
+          };
+        } catch (error) {
+          loopV2Shadow = {
+            persistence: "error",
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+    }
     const mutationHints = Array.isArray(execution.trace)
       ? collectTraceMutationHints({
           trace: execution.trace,
@@ -2172,12 +2257,14 @@ export async function runSweCompareArm(opts: {
       resolvedSource,
       ...(opts.runner === "paw"
         ? {
+            loopKernelVersion,
             verificationAuthority:
               manifest.runners.paw.verificationAuthority ?? "external",
             verificationEnvironment:
               manifest.runners.paw.verificationEnvironment ?? "host",
           }
         : {}),
+      ...(loopV2Shadow ? { loopV2Shadow } : {}),
       tracePath: tracePath.replace(/\\/g, "/"),
       ...(verifier ? { verifier } : {}),
     };

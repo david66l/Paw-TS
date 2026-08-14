@@ -74,9 +74,11 @@ export {
 } from "./qualification.js";
 export {
   LOOP_V2_SHADOW_SUMMARY_SCHEMA_VERSION,
+  persistOnlineLoopV2ShadowArtifact,
   replayPawShadowTraces,
   type LoopV2ShadowReplayEntryV1,
   type LoopV2ShadowReplaySummaryV1,
+  type PersistOnlineLoopV2ShadowOptions,
   type ReplayPawShadowTracesOptions,
 } from "./shadow-replay.js";
 export type {

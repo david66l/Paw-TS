@@ -45,6 +45,7 @@ import {
   resolveLifecycleBudget,
 } from "./lifecycle/budget.js";
 import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
+import type { LoopKernelVersion, LoopV2ShadowReport } from "./loop-v2/index.js";
 import {
   AgentOrchestrator,
   type AskUserResolveInput,
@@ -92,6 +93,10 @@ export interface RunOrchestratorOptions {
   readonly planSnapshotMaxItems?: number;
   readonly memoryExtraction?: "background" | "await" | "off";
   readonly onEvent?: (envelope: RunEventEnvelope) => void;
+  /** Explicit loop migration mode. Omitted callers remain on authoritative v1. */
+  readonly loopKernelVersion?: LoopKernelVersion;
+  /** Diagnostic-only terminal report for an explicit v2-shadow run. */
+  readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
   /**
    * Collaboration mode (default coding = single long-run agent).
    * orchestrated = 狸花 + 花名册. Also readable from settings.agent_mode.
@@ -353,6 +358,8 @@ export function createRunOrchestrator(
         ? "background"
         : (rootSpec?.memoryExtraction ?? "background")),
     onEvent: opts.onEvent,
+    loopKernelVersion: opts.loopKernelVersion,
+    onLoopV2ShadowReport: opts.onLoopV2ShadowReport,
     allowedTools,
     agentCatalogText: collab.injectRoster
       ? agentRegistry.catalogText()

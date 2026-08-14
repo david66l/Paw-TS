@@ -4,7 +4,9 @@ import path from "node:path";
 
 import {
   type LoopV2ShadowArtifactPolicyV1,
+  type LoopV2ShadowArtifactV1,
   type LoopV2ShadowAssessmentV1,
+  type LoopV2ShadowReport,
   buildLoopV2ShadowArtifactV1,
   parseLoopV2ShadowArtifactV1,
   replayLegacyTraceToLoopV2ShadowV1,
@@ -55,6 +57,52 @@ export interface ReplayPawShadowTracesOptions {
   /** Basename only; written below benchmarks/swe-compare/shadow-reports. */
   readonly summaryName: string;
   readonly policy?: Parameters<typeof buildLoopV2ShadowArtifactV1>[1];
+}
+
+export interface PersistOnlineLoopV2ShadowOptions {
+  readonly repoRoot: string;
+  readonly runId: string;
+  readonly report: LoopV2ShadowReport;
+  readonly policy?: Parameters<typeof buildLoopV2ShadowArtifactV1>[1];
+}
+
+/**
+ * Persists one report captured by the live orchestrator and proves that the
+ * exact on-disk bytes still satisfy the strict artifact contract.
+ */
+export function persistOnlineLoopV2ShadowArtifact(
+  options: PersistOnlineLoopV2ShadowOptions,
+): Readonly<{
+  artifactPath: string;
+  artifact: LoopV2ShadowArtifactV1;
+}> {
+  const repoRoot = path.resolve(options.repoRoot);
+  const runsRoot = path.join(repoRoot, "benchmarks", "swe-compare", "runs");
+  if (
+    !options.runId.trim() ||
+    path.basename(options.runId) !== options.runId ||
+    !options.runId.startsWith("paw-") ||
+    options.runId.startsWith("paw-claude-")
+  ) {
+    throw new Error(`Invalid online Paw shadow run id: ${options.runId}`);
+  }
+  if (options.report.runId !== options.runId) {
+    throw new Error(
+      `Online Paw shadow report run mismatch: ${options.report.runId}`,
+    );
+  }
+  const runDir = path.join(runsRoot, options.runId);
+  assertWithin(runDir, runsRoot, "run output");
+  const artifactPath = path.join(runDir, "loop-v2-shadow-v1.json");
+  const artifact = buildLoopV2ShadowArtifactV1(options.report, options.policy);
+  writeJsonAtomic(artifactPath, artifact);
+  const persisted = parseLoopV2ShadowArtifactV1(
+    readFileSync(artifactPath, "utf8"),
+  );
+  return {
+    artifactPath: relativePortable(repoRoot, artifactPath),
+    artifact: persisted,
+  };
 }
 
 /**

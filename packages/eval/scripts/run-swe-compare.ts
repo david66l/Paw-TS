@@ -21,6 +21,7 @@ const verifyResult = value("--verify-result");
 const recoverResult = value("--recover-result-patch");
 const recoverPawResult = value("--recover-paw-result-patch");
 const manifestName = value("--manifest") ?? "formal-dev-v1.json";
+const loopKernel = value("--loop-kernel") ?? "v1";
 if (recoverPawResult) {
   const result = recoverPawResultPatch({
     repoRoot: process.cwd(),
@@ -77,8 +78,14 @@ if (verifyResult) {
 }
 if (!instanceId || (runner !== "paw" && runner !== "claude")) {
   throw new Error(
-    "Usage: --instance <id> --runner paw|claude [--manifest <name.json>] [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> [--replace-replayed-patch] OR --audit-result <result.json>",
+    "Usage: --instance <id> --runner paw|claude [--loop-kernel v1|v2-shadow] [--manifest <name.json>] [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> [--replace-replayed-patch] OR --audit-result <result.json>",
   );
+}
+if (loopKernel !== "v1" && loopKernel !== "v2-shadow") {
+  throw new Error("--loop-kernel must be v1 or v2-shadow");
+}
+if (runner !== "paw" && loopKernel !== "v1") {
+  throw new Error("--loop-kernel v2-shadow is available only for Paw");
 }
 if (manifestName === "paw-seen-dev-v1.json" && runner !== "paw") {
   throw new Error(
@@ -97,6 +104,7 @@ const result = await runSweCompareArm({
   ),
   instanceId,
   runner,
+  loopKernelVersion: loopKernel,
   keep: process.argv.includes("--keep"),
   skipVerifier: process.argv.includes("--skip-verifier"),
 });

@@ -9,9 +9,12 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { parseLoopV2ShadowArtifactV1 } from "@paw/agent";
+import { createRunOrchestrator, parseLoopV2ShadowArtifactV1 } from "@paw/agent";
 
-import { replayPawShadowTraces } from "../src/swe-compare/shadow-replay.js";
+import {
+  persistOnlineLoopV2ShadowArtifact,
+  replayPawShadowTraces,
+} from "../src/swe-compare/shadow-replay.js";
 
 function writeTrace(
   root: string,
@@ -39,6 +42,139 @@ function writeTrace(
 }
 
 describe("SWE compare loop v2 shadow replay", () => {
+  test("persists a live factory read-edit-verify-final report and strictly rereads it", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-shadow-online-"));
+    const workspace = path.join(root, "workspace");
+    mkdirSync(path.join(workspace, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspace, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    writeFileSync(path.join(workspace, "source.txt"), "before", "utf8");
+    writeFileSync(
+      path.join(workspace, "smoke-test.js"),
+      "process.exit(0);",
+      "utf8",
+    );
+    let modelCalls = 0;
+    const model = {
+      label: "online-shadow-fixture",
+      async complete() {
+        modelCalls += 1;
+        if (modelCalls === 1) {
+          return {
+            text: JSON.stringify({
+              tool: "workspace.read_file",
+              args: { path: "source.txt" },
+            }),
+          };
+        }
+        if (modelCalls === 2) {
+          return {
+            text: JSON.stringify({
+              tool: "workspace.edit_file",
+              args: {
+                path: "source.txt",
+                old_string: "before",
+                new_string: "after",
+              },
+            }),
+          };
+        }
+        if (modelCalls === 3) {
+          return {
+            text: JSON.stringify({
+              tool: "workspace.run_shell",
+              args: { command: "node smoke-test.js" },
+            }),
+          };
+        }
+        return {
+          text: JSON.stringify({
+            action: "final_answer",
+            summary: "Implemented and verified.",
+          }),
+        };
+      },
+    };
+    const runtime = createRunOrchestrator({
+      workspaceRoot: workspace,
+      mainModel: model,
+      subAgentModel: model,
+      skipAgentSeeds: true,
+      memoryExtraction: "off",
+      collaborationMode: "coding",
+      loopKernelVersion: "v2-shadow",
+      toolEffectPolicy: {
+        appliesTo: ({ tool }) => tool === "workspace.run_shell",
+        prepare: () => undefined,
+        settle: ({ result }) => ({
+          allowed: true,
+          result: {
+            ...result,
+            payload: {
+              ...(result.payload as Record<string, unknown>),
+              workspaceEffect: { changed: false, paths: [] },
+            },
+          },
+        }),
+      },
+    });
+    try {
+      const runId = "paw-online-shadow-fixture";
+      const result = await runtime.orch.run({
+        runId,
+        goal: "Read, fix, and verify source.txt.",
+        workspaceRoot: workspace,
+        maxSteps: 8,
+      });
+      expect(result.status).toBe("completed");
+      const report = runtime.orch.getLastLoopV2ShadowReport();
+      if (!report) throw new Error("Missing live shadow report");
+      const persisted = persistOnlineLoopV2ShadowArtifact({
+        repoRoot: root,
+        runId,
+        report,
+        policy: { verificationAuthority: "local" },
+      });
+      expect(persisted.artifact.assessment).toMatchObject({
+        artifact: { status: "valid" },
+        readiness: { disposition: "ready_for_review" },
+      });
+      const disk = parseLoopV2ShadowArtifactV1(
+        readFileSync(path.join(root, persisted.artifactPath), "utf8"),
+      );
+      expect(disk).toEqual(persisted.artifact);
+      expect(persisted.artifactPath).toBe(
+        "benchmarks/swe-compare/runs/paw-online-shadow-fixture/loop-v2-shadow-v1.json",
+      );
+    } finally {
+      runtime.watcher.stop();
+    }
+
+    const legacy = createRunOrchestrator({
+      workspaceRoot: workspace,
+      mainModel: model,
+      subAgentModel: model,
+      skipAgentSeeds: true,
+      memoryExtraction: "off",
+      collaborationMode: "coding",
+    });
+    try {
+      const result = await legacy.orch.run({
+        runId: "paw-default-v1-fixture",
+        goal: "Report the completed fixture.",
+        workspaceRoot: workspace,
+        maxSteps: 2,
+      });
+      expect(result.status).toBe("completed");
+      expect(legacy.orch.getLastLoopV2ShadowReport()).toBeUndefined();
+    } finally {
+      legacy.watcher.stop();
+    }
+  });
+
   test("writes verified per-run artifacts and a deterministic sorted summary", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-shadow-replay-"));
     const second = writeTrace(root, "paw-second", [

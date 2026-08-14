@@ -141,6 +141,17 @@ describe("SWE compare runner", () => {
       legacyInferredAttempt: false,
       state: { turn: 12 },
     });
+    expect(() =>
+      validatePawResumeAttempt({
+        repoRoot: root,
+        manifest,
+        runId,
+        instanceId,
+        baseCommit,
+        goal,
+        loopKernelVersion: "v2-shadow",
+      }),
+    ).toThrow("metadata does not match");
 
     writeFileSync(
       attemptPath,
@@ -359,6 +370,27 @@ describe("SWE compare runner", () => {
         runner: "claude",
       }),
     ).rejects.toThrow("cannot run Claude");
+  });
+  test("library rejects a Paw-only loop mode on the Claude runner", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-shadow-no-claude-"));
+    const manifestPath = path.join(root, "manifest.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        protocol: "paw-vs-claude-public-swe",
+      }),
+      "utf8",
+    );
+    await expect(
+      runSweCompareArm({
+        repoRoot: root,
+        manifestPath,
+        instanceId: "demo__repo-1",
+        runner: "claude",
+        loopKernelVersion: "v2-shadow",
+      }),
+    ).rejects.toThrow("available only for Paw");
   });
   test("trusted mutation policy allows tracked source but rejects helpers and tests", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-policy-"));
