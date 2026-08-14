@@ -67,6 +67,7 @@ export {
   createProviderTerminalStateV2,
   normalizeProviderResponseV2,
   type ProviderProtocolIssueV2,
+  type ProviderControlActionV2,
   type ProviderResponseV2,
   type ProviderTerminalDecisionV2,
   type ProviderTerminalResultV2,

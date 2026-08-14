@@ -31,8 +31,11 @@ import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
 import type { CompletionDecision } from "../lifecycle/completion-policy.js";
 import type { RepeatToolState } from "../lifecycle/repeat-tool-reminder.js";
 import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
-import type { LoopV2ShadowToolCommitPortInput } from "../loop-v2/index.js";
-import type { LoopKernelVersion } from "../loop-v2/index.js";
+import type {
+  LoopKernelVersion,
+  LoopV2ShadowToolCommitPortInput,
+  ProviderTerminalStateV2,
+} from "../loop-v2/index.js";
 import type { TaskStateManager } from "../task-state.js";
 
 // ═════════════════════════════════════════════════════════════
@@ -158,6 +161,8 @@ export interface TurnFlags {
   readonly codingPhaseViolationTurns?: number;
   /** Advisory chain for consecutive tool calls with identical arguments. */
   readonly repeatTool?: RepeatToolState;
+  /** Explicit-v2 provider response cursor and bounded protocol-recovery state. */
+  readonly providerTerminal?: ProviderTerminalStateV2;
 }
 
 // ═════════════════════════════════════════════════════════════

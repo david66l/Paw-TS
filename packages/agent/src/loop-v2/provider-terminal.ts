@@ -5,6 +5,14 @@ export type ProviderProtocolIssueV2 =
   | "truncated_response"
   | "missing_tool_calls";
 
+export type ProviderControlActionV2 =
+  | "abort"
+  | "acceptance_update"
+  | "ask_user"
+  | "native_tool_errors"
+  | "parse_recovery"
+  | "plan_update";
+
 export interface ProviderTerminalStateV2 {
   readonly runId: string;
   readonly lastTurn: number;
@@ -17,6 +25,7 @@ export interface ProviderResponseV2 {
   readonly finishReason?: string;
   readonly visibleText?: string;
   readonly toolCalls: readonly ScheduledToolCallV2[];
+  readonly controlAction?: ProviderControlActionV2;
   readonly legacyFinalAnswer?: Readonly<{
     readonly summary: string;
   }>;
@@ -31,6 +40,10 @@ export type ProviderTerminalDecisionV2 =
       readonly kind: "candidate_proposed";
       readonly source: "natural_stop" | "legacy_final_answer";
       readonly visibleText: string;
+    }
+  | {
+      readonly kind: "dispatch_control";
+      readonly control: ProviderControlActionV2;
     }
   | {
       readonly kind: "recover_protocol";
@@ -81,6 +94,22 @@ export function normalizeProviderResponseV2(
     return {
       state: base,
       decision: { kind: "dispatch_tools", calls: [...response.toolCalls] },
+    };
+  }
+
+  if (response.controlAction !== undefined) {
+    const preservesProtocolFault =
+      response.controlAction === "native_tool_errors" ||
+      response.controlAction === "parse_recovery";
+    return {
+      state:
+        preservesProtocolFault && prior.pendingProtocolIssue !== undefined
+          ? { ...base, pendingProtocolIssue: prior.pendingProtocolIssue }
+          : base,
+      decision: {
+        kind: "dispatch_control",
+        control: response.controlAction,
+      },
     };
   }
 

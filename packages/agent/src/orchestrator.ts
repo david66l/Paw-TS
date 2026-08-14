@@ -109,6 +109,8 @@ import {
   type LoopV2ShadowReport,
   type LoopV2ShadowToolCommitPortInput,
   createLoopV2ShadowObserver,
+  createProviderTerminalStateV2,
+  normalizeProviderResponseV2,
   resolveLoopKernelVersion,
 } from "./loop-v2/index.js";
 
@@ -198,11 +200,24 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[Memory refresh]",
   "[Context guard]",
   "[Loop reminder]",
+  "[ProviderProtocol:",
   "[Continue from where you were cut off",
   "Plan updated:",
   "Current plan:",
   "Note:",
 ];
+
+function providerProtocolRecoveryMessageV2(
+  issue: "empty_response" | "truncated_response" | "missing_tool_calls",
+): string {
+  if (issue === "truncated_response") {
+    return "[ProviderProtocol:truncated_response] The previous response was discarded before any tool execution because it was truncated. Retry the complete tool call or candidate response once; do not continue partial JSON.";
+  }
+  if (issue === "missing_tool_calls") {
+    return "[ProviderProtocol:missing_tool_calls] The provider declared tool calls but supplied none. Emit the complete structured calls once, or return a visible candidate response.";
+  }
+  return "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response.";
+}
 import {
   convergenceEvidenceKey,
   convergenceGuidance,
@@ -714,6 +729,14 @@ export class AgentOrchestrator {
         autoContinueNudges: 0,
         lastTurnHadToolCall: false,
         hasEverUsedTools: false,
+        ...(this.loopKernelVersion === "v2"
+          ? {
+              providerTerminal: {
+                ...createProviderTerminalStateV2(runId),
+                lastTurn: startTurn,
+              },
+            }
+          : {}),
       };
 
       // 捕获到闭包中，供 executeTurn 使用
@@ -1127,6 +1150,7 @@ export class AgentOrchestrator {
     toolCalls: AgentToolCallAction[];
     singleAction: import("@paw/core").AgentAction | null;
     reasoningText: string;
+    finishReason?: string;
     /** 解析诊断：无 action 时描述「为什么无法解析」（供格式反馈回灌） */
     diagnosis: ParseDiagnosis;
     /** 原生通道解析失败的调用（拒绝执行，需回灌给模型） */
@@ -1142,14 +1166,16 @@ export class AgentOrchestrator {
     const modelCallStart = Date.now();
 
     // 核心：调用模型（带熔断和重试）
-    const { text, thinking, nativeToolCalls } = await this.invokeModel(
-      model,
-      ctxMgr.buildMessages(),
-      signal,
-      emit,
-      toolDefs,
-      toolNameMap,
-    );
+    const { text, thinking, nativeToolCalls, finishReason } =
+      await this.invokeModel(
+        model,
+        ctxMgr.buildMessages(),
+        signal,
+        emit,
+        toolDefs,
+        toolNameMap,
+        ctx.loopKernelVersion !== "v2",
+      );
 
     emit({ type: "phase", name: "parse" });
 
@@ -1240,6 +1266,7 @@ export class AgentOrchestrator {
       singleAction,
       reasoningText,
       diagnosis,
+      ...(finishReason !== undefined ? { finishReason } : {}),
       ...(nativeErrors ? { nativeToolErrors: nativeErrors } : {}),
     };
   }
@@ -1951,16 +1978,95 @@ export class AgentOrchestrator {
       reasoningText,
       diagnosis,
       nativeToolErrors,
+      finishReason,
     } = modelResult;
+
+    let dispatchedAction = singleAction;
+    let dispatchedFlags = flags;
+    if (ctx.loopKernelVersion === "v2") {
+      const priorProviderState =
+        flags.providerTerminal ??
+        ({
+          ...createProviderTerminalStateV2(runId),
+          lastTurn: ctx.turn,
+        } as const);
+      const controlAction = nativeToolErrors?.length
+        ? ("native_tool_errors" as const)
+        : singleAction &&
+            singleAction.type !== "final_answer" &&
+            singleAction.type !== "tool_call"
+          ? singleAction.type
+          : diagnosis.kind !== "ok"
+            ? ("parse_recovery" as const)
+            : undefined;
+      const terminal = normalizeProviderResponseV2(priorProviderState, {
+        runId,
+        turn: ctx.turn + 1,
+        ...(finishReason !== undefined ? { finishReason } : {}),
+        visibleText: reasoningText || text,
+        toolCalls: toolCalls.map((call, sourceIndex) => ({
+          callId: `model:${runId}:turn:${ctx.turn}:call:${sourceIndex}`,
+          tool: call.tool,
+          args: call.args,
+        })),
+        ...(controlAction !== undefined ? { controlAction } : {}),
+        ...(singleAction?.type === "final_answer"
+          ? { legacyFinalAnswer: { summary: singleAction.summary } }
+          : {}),
+      });
+      dispatchedFlags = {
+        ...flags,
+        providerTerminal: terminal.state,
+      };
+
+      if (terminal.decision.kind === "recover_protocol") {
+        if (ctx.turn + 1 >= ctx.maxSteps) {
+          return {
+            type: "incomplete",
+            message: `Provider protocol recovery could not run before max steps: ${terminal.decision.issue}`,
+          };
+        }
+        ctx.ctxMgr.addAssistant(text, thinking);
+        ctx.ctxMgr.addUser(
+          providerProtocolRecoveryMessageV2(terminal.decision.issue),
+        );
+        this.saveState(
+          runId,
+          specGoal,
+          workspaceRoot,
+          ctx.turn + 1,
+          maxSteps,
+          ctxMgr,
+          planner,
+          ctx.taskState,
+        );
+        return { type: "continue", nextFlags: dispatchedFlags };
+      }
+      if (terminal.decision.kind === "incomplete") {
+        if (text.trim() || thinking?.trim()) {
+          ctx.ctxMgr.addAssistant(text, thinking);
+        }
+        return {
+          type: "incomplete",
+          message: `[ProviderProtocol:${terminal.decision.reasonCode}] ${terminal.decision.detail}`,
+        };
+      }
+      if (terminal.decision.kind === "candidate_proposed") {
+        dispatchedAction = {
+          type: "final_answer",
+          summary: terminal.decision.visibleText,
+        };
+      }
+    }
 
     // 步骤 6：通过 action 处理器分发执行
     // handleAction 在 orchestrator/action-handlers.ts 中实现，
     // 根据动作类型处理：tool_call / final / ask_user / plan / abort / run_agent
     const actionResult = await handleAction(
-      singleAction ? [singleAction] : [],
+      dispatchedAction ? [dispatchedAction] : [],
       toolCalls,
       ctx,
-      flags,
+      dispatchedFlags,
       reasoningText || text,
       thinking,
       {
@@ -2629,10 +2735,12 @@ export class AgentOrchestrator {
     emit: (event: RunEvent) => void,
     tools?: readonly import("@paw/models").ToolDefinition[],
     toolNameMap?: Map<string, string>,
+    autoContinueTruncation = true,
   ): Promise<{
     text: string;
     usage?: ModelTokenUsage;
     thinking?: string;
+    finishReason?: string;
     nativeToolCalls?: readonly NativeToolCall[];
     nativeToolErrors?: readonly NativeToolError[];
   }> {
@@ -2648,8 +2756,8 @@ export class AgentOrchestrator {
 
     // 检测截断：需要续写
     if (
-      result.finishReason === "length" ||
-      result.finishReason === "max_tokens"
+      autoContinueTruncation &&
+      (result.finishReason === "length" || result.finishReason === "max_tokens")
     ) {
       emit({ type: "model.truncated", finishReason: result.finishReason });
 
@@ -2695,6 +2803,9 @@ export class AgentOrchestrator {
         text: combinedText,
         thinking: combinedThinking,
         usage: combinedUsage,
+        ...(continued.finishReason !== undefined
+          ? { finishReason: continued.finishReason }
+          : {}),
         // 合并 tool calls：第一次调用可能在截断前已完成部分工具调用
         nativeToolCalls: [
           ...(result.nativeToolCalls ?? []),

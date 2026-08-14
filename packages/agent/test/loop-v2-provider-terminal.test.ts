@@ -54,6 +54,53 @@ describe("Loop Kernel v2 provider terminal normalization", () => {
     expect(result.decision).toEqual({ kind: "dispatch_tools", calls });
   });
 
+  test("explicit control actions advance the provider turn and reset recovery", () => {
+    const empty = normalizeProviderResponseV2(
+      createProviderTerminalStateV2(RUN_ID),
+      response(1),
+    );
+    const control = normalizeProviderResponseV2(
+      empty.state,
+      response(2, { controlAction: "ask_user" }),
+    );
+    const laterEmpty = normalizeProviderResponseV2(control.state, response(3));
+
+    expect(control.decision).toEqual({
+      kind: "dispatch_control",
+      control: "ask_user",
+    });
+    expect(control.state.pendingProtocolIssue).toBeUndefined();
+    expect(laterEmpty.decision).toMatchObject({
+      kind: "recover_protocol",
+      issue: "empty_response",
+    });
+  });
+
+  test("parse correction does not reopen an exhausted protocol budget", () => {
+    const empty = normalizeProviderResponseV2(
+      createProviderTerminalStateV2(RUN_ID),
+      response(1),
+    );
+    const malformed = normalizeProviderResponseV2(
+      empty.state,
+      response(2, { controlAction: "parse_recovery" }),
+    );
+    const laterEmpty = normalizeProviderResponseV2(
+      malformed.state,
+      response(3),
+    );
+
+    expect(malformed.decision).toEqual({
+      kind: "dispatch_control",
+      control: "parse_recovery",
+    });
+    expect(malformed.state.pendingProtocolIssue).toBe("empty_response");
+    expect(laterEmpty.decision).toMatchObject({
+      kind: "incomplete",
+      reasonCode: "empty_response",
+    });
+  });
+
   test("legacy final_answer maps to a candidate without completion authority", () => {
     const result = normalizeProviderResponseV2(
       createProviderTerminalStateV2(RUN_ID),
