@@ -292,7 +292,7 @@ function renderTransitionPatch(transition: PathTransitionV2): string {
     undefined,
     { context: 3 },
   );
-  return formatPatch(patch).trimEnd();
+  return formatPatch(patch);
 }
 
 function validateFullStepPatch(

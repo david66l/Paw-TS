@@ -160,13 +160,20 @@ describe("Loop Kernel v2 verification and artifact", () => {
       "        cleft = left",
       "    else:",
       "        cleft = np.zeros((left, left))",
-      "        cleft[-left:, -left:] = 1",
-      "    return cleft",
+      "",
+      "    if isinstance(data, Variable):",
+      "        return data.data",
+      "",
+      "    if isinstance(data, SUPPORTED_ARRAY_TYPES):",
+      "        return wrap(data)",
+      "",
+      "def next_function():",
+      "    return None",
       "",
     ].join("\r\n");
     const afterText = beforeText.replace(
-      "cleft[-left:, -left:] = 1",
-      "cleft[-left:, -left:] = right",
+      "    if isinstance(data, SUPPORTED_ARRAY_TYPES):",
+      "    if isinstance(data, DataArray):\r\n        return data.variable._data\r\n\r\n    if isinstance(data, SUPPORTED_ARRAY_TYPES):",
     );
     const before = createArtifactContentBlobV2(beforeText);
     const after = createArtifactContentBlobV2(afterText);
@@ -196,7 +203,7 @@ describe("Loop Kernel v2 verification and artifact", () => {
     });
 
     expect(artifact.status).toBe("valid");
-    expect(artifact.patch).toContain("+        cleft[-left:, -left:] = right");
+    expect(artifact.patch).toContain("+        return data.variable._data");
     expect(artifact.errors).toEqual([]);
   });
 

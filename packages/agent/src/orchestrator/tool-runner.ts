@@ -461,7 +461,7 @@ export async function executeToolCalls(
     // 被策略阻止 → 返回 block 结果
     if (blockedByPolicy[i]) {
       if (toolCtx.captureLoopV2Facts) {
-        mutationCaptures[i] = completeEmptyMutationCapture();
+        mutationCaptures[i] = createLoopV2NoMutationCapture();
       }
       const block = policyBlocks[i]!;
       return {
@@ -479,7 +479,7 @@ export async function executeToolCalls(
     const conflictPath = lockConflict[i];
     if (conflictPath !== undefined) {
       if (toolCtx.captureLoopV2Facts) {
-        mutationCaptures[i] = completeEmptyMutationCapture();
+        mutationCaptures[i] = createLoopV2NoMutationCapture();
       }
       return {
         ok: false,
@@ -490,7 +490,7 @@ export async function executeToolCalls(
     // 被用户拒绝 → 返回 deny 结果
     if (!approvals[i]) {
       if (toolCtx.captureLoopV2Facts) {
-        mutationCaptures[i] = completeEmptyMutationCapture();
+        mutationCaptures[i] = createLoopV2NoMutationCapture();
       }
       return {
         ok: false,
@@ -525,7 +525,7 @@ export async function executeToolCalls(
         });
       } catch (error) {
         if (toolCtx.captureLoopV2Facts) {
-          mutationCaptures[i] = completeEmptyMutationCapture();
+          mutationCaptures[i] = createLoopV2NoMutationCapture();
         }
         const message = error instanceof Error ? error.message : String(error);
         return {
@@ -941,7 +941,7 @@ function captureMutationBefore(
     : { status: "gap", reason: "capture_failed" };
 }
 
-function completeEmptyMutationCapture(): LoopV2ShadowMutationCapture {
+export function createLoopV2NoMutationCapture(): LoopV2ShadowMutationCapture {
   return {
     status: "complete",
     paths: [],

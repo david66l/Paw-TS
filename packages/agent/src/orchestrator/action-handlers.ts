@@ -72,7 +72,11 @@ import { formatTaskStateForContext } from "../task-state.js";
 import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
-import { executeToolCalls, finalizeToolExecution } from "./tool-runner.js";
+import {
+  createLoopV2NoMutationCapture,
+  executeToolCalls,
+  finalizeToolExecution,
+} from "./tool-runner.js";
 import type { PhaseContext, TurnFlags, TurnState } from "./types.js";
 
 /**
@@ -1160,7 +1164,11 @@ async function handleToolCalls(
   const results: ToolRunResult[] = calls.map((_, index) => {
     const blockReason = phaseBlockReasons[index];
     if (blockReason) {
-      mutationCaptures.push(undefined);
+      mutationCaptures.push(
+        ctx.observeLoopV2ToolCommit
+          ? createLoopV2NoMutationCapture()
+          : undefined,
+      );
       return {
         ok: false,
         payload: {
