@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  findPawResumeInstanceId,
   loadPawQualificationResults,
   runSweCompareArm,
   summarizePawQualification,
@@ -30,26 +31,45 @@ const manifest = JSON.parse(
 ) as SweCompareManifest;
 const existingResults = loadPawQualificationResults(repoRoot, manifest);
 const before = summarizePawQualification(manifest, existingResults);
+const resumeRunId = value("--resume-run");
+const runNext = process.argv.includes("--next");
 
-if (!process.argv.includes("--next") || before.complete) {
+if (resumeRunId && runNext) {
+  throw new Error("use either --next or --resume-run, not both");
+}
+if ((!runNext && !resumeRunId) || before.complete) {
   console.log(JSON.stringify(before, null, 2));
   process.exit(before.complete && !before.passed ? 1 : 0);
 }
 
-const instanceId = before.pendingInstanceIds[0];
+const instanceId = resumeRunId
+  ? findPawResumeInstanceId(manifest, resumeRunId)
+  : before.pendingInstanceIds[0];
 if (!instanceId) throw new Error("qualification batch has no pending instance");
+if (!before.pendingInstanceIds.includes(instanceId)) {
+  throw new Error(`resume instance is not pending: ${instanceId}`);
+}
 console.error(
   `[paw-qualification] ${before.samples + 1}/10 ${
-    before.verificationErrorInstanceIds.includes(instanceId)
-      ? "retry-verifier"
-      : "start"
-  } ${instanceId}`,
+    resumeRunId
+      ? "resume"
+      : before.verificationErrorInstanceIds.includes(instanceId)
+        ? "retry-verifier"
+        : "start"
+  } ${instanceId}${resumeRunId ? ` run=${resumeRunId}` : ""}`,
 );
 const retryResult = existingResults.find(
   (candidate) => candidate.instanceId === instanceId,
 );
-const result =
-  retryResult && before.verificationErrorInstanceIds.includes(instanceId)
+const result = resumeRunId
+  ? await runSweCompareArm({
+      repoRoot,
+      manifestPath,
+      instanceId,
+      runner: "paw",
+      resumeRunId,
+    })
+  : retryResult && before.verificationErrorInstanceIds.includes(instanceId)
     ? verifySweCompareResult({
         repoRoot,
         resultPath: path.join(

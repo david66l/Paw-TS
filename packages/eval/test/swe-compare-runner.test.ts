@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,6 +29,7 @@ import {
   createSweCompareToolEffectPolicy,
   createSweCompareToolExecutionPolicy,
   extractClaudePatchFromTrace,
+  findPawResumeInstanceId,
   parseClaudeStream,
   pawTraceHasOnlyReplayableEdits,
   pawVerificationPolicyFromManifest,
@@ -41,6 +43,7 @@ import {
   sweCompareNetworkViolation,
   validateCompareRun,
   validatePawQualificationContract,
+  validatePawResumeAttempt,
 } from "../src/swe-compare/runner.js";
 import type { SweCompareManifest } from "../src/swe-compare/types.js";
 import {
@@ -62,6 +65,130 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe("SWE compare runner", () => {
+  test("validates one exact unfinished Paw run before durable resume", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-resume-"));
+    const workspaceRoot = path.join(root, "workspace");
+    mkdirSync(workspaceRoot, { recursive: true });
+    git(workspaceRoot, ["init"]);
+    git(workspaceRoot, ["config", "user.email", "paw@example.test"]);
+    git(workspaceRoot, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(workspaceRoot, "app.py"), "value = 1\n", "utf8");
+    git(workspaceRoot, ["add", "app.py"]);
+    git(workspaceRoot, ["commit", "-m", "base"]);
+    const baseCommit = git(workspaceRoot, ["rev-parse", "HEAD"]);
+    const instanceId = "demo__repo-1";
+    const runId = "paw-demo__repo-1-resume123";
+    const goal = "Fix the frozen bug";
+    const manifest = {
+      selection: { ids: [instanceId] },
+      sourceTree: { gitCommit: "paw-source-commit", gitDirty: false },
+      budget: { pawMaxSteps: 96 },
+    } as unknown as SweCompareManifest;
+    const runRoot = path.join(root, "benchmarks", "swe-compare", "runs", runId);
+    const statesDir = path.join(runRoot, "runtime", ".paw", "states");
+    const sessionsDir = path.join(runRoot, "runtime", ".paw", "sessions");
+    mkdirSync(statesDir, { recursive: true });
+    mkdirSync(sessionsDir, { recursive: true });
+    const state = {
+      runId,
+      goal,
+      workspaceRoot,
+      turn: 12,
+      maxSteps: 96,
+      messages: [{ role: "user", content: goal }],
+      savedAt: Date.now(),
+    };
+    writeFileSync(
+      path.join(statesDir, `${runId}.json`),
+      JSON.stringify(state),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(sessionsDir, `${runId}.jsonl`),
+      `${JSON.stringify({
+        runId,
+        seq: 41,
+        ts: Date.parse("2026-08-14T01:02:03.000Z"),
+        event: { type: "model.done", text: "partial" },
+      })}\n`,
+      "utf8",
+    );
+    const attemptPath = path.join(runRoot, "attempt.json");
+    const attempt = {
+      schemaVersion: 1,
+      runId,
+      runner: "paw",
+      instanceId,
+      sourceCommit: manifest.sourceTree.gitCommit,
+      baseCommit,
+      workspaceRoot,
+      startedAt: "2026-08-14T01:02:03.000Z",
+    };
+    writeFileSync(attemptPath, JSON.stringify(attempt), "utf8");
+
+    expect(findPawResumeInstanceId(manifest, runId)).toBe(instanceId);
+    expect(
+      validatePawResumeAttempt({
+        repoRoot: root,
+        manifest,
+        runId,
+        instanceId,
+        baseCommit,
+        goal: `${goal}\n`,
+      }),
+    ).toMatchObject({
+      workspaceRoot,
+      legacyInferredAttempt: false,
+      state: { turn: 12 },
+    });
+
+    writeFileSync(
+      attemptPath,
+      JSON.stringify({ ...attempt, sourceCommit: "foreign-source" }),
+      "utf8",
+    );
+    expect(() =>
+      validatePawResumeAttempt({
+        repoRoot: root,
+        manifest,
+        runId,
+        instanceId,
+        baseCommit,
+        goal: `${goal}\n`,
+      }),
+    ).toThrow("metadata does not match");
+
+    rmSync(attemptPath);
+    expect(
+      validatePawResumeAttempt({
+        repoRoot: root,
+        manifest,
+        runId,
+        instanceId,
+        baseCommit,
+        goal: `${goal}\n`,
+      }).legacyInferredAttempt,
+    ).toBe(true);
+    writeFileSync(
+      path.join(statesDir, `${runId}.json`),
+      JSON.stringify({
+        ...state,
+        outcome: { status: "completed", message: "done" },
+      }),
+      "utf8",
+    );
+    expect(() =>
+      validatePawResumeAttempt({
+        repoRoot: root,
+        manifest,
+        runId,
+        instanceId,
+        baseCommit,
+        goal: `${goal}\n`,
+      }),
+    ).toThrow("terminal AppState");
+  });
+
   test("accepts the current v9 protocol metadata and rejects unknown versions", () => {
     const current = {
       protocol: "paw-only-seen-development",

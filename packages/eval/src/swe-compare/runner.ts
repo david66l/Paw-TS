@@ -18,8 +18,11 @@ import type {
   ToolExecutionPolicy,
   VerificationPolicy,
 } from "@paw/agent";
-import type { RunEventEnvelope } from "@paw/core";
-import type { RunAcceptanceCriterionSeed } from "@paw/core";
+import type {
+  AppState,
+  RunAcceptanceCriterionSeed,
+  RunEventEnvelope,
+} from "@paw/core";
 import type { ShellSandboxConfig } from "@paw/harness";
 import {
   createDeepSeekFlashModel,
@@ -92,6 +95,24 @@ export interface SweCompareRunResult {
 export interface SweCompareIntegrityAudit {
   readonly valid: boolean;
   readonly violations: readonly string[];
+}
+
+interface SweCompareRunAttempt {
+  readonly schemaVersion: 1;
+  readonly runId: string;
+  readonly runner: SweCompareRunnerName;
+  readonly instanceId: string;
+  readonly sourceCommit: string;
+  readonly baseCommit: string;
+  readonly workspaceRoot: string;
+  readonly startedAt: string;
+}
+
+export interface PawResumeValidation {
+  readonly workspaceRoot: string;
+  readonly state: AppState;
+  readonly startedAt: Date;
+  readonly legacyInferredAttempt: boolean;
 }
 
 interface TraceMutationHints {
@@ -802,6 +823,166 @@ export function collectPawMetrics(events: readonly RunEventEnvelope[]): {
   return { modelCalls, promptTokens, completionTokens, totalTokens, turns };
 }
 
+function pawRunIdPrefix(instanceId: string): string {
+  return `paw-${instanceId.replace(/[^a-zA-Z0-9_-]/g, "_")}-`;
+}
+
+export function findPawResumeInstanceId(
+  manifest: SweCompareManifest,
+  runId: string,
+): string {
+  const matches = manifest.selection.ids.filter((instanceId) =>
+    runId.startsWith(pawRunIdPrefix(instanceId)),
+  );
+  const match = matches[0];
+  if (matches.length !== 1 || !match) {
+    throw new Error(
+      `resume run does not identify exactly one frozen instance: ${runId}`,
+    );
+  }
+  return match;
+}
+
+export function validatePawResumeAttempt(input: {
+  readonly repoRoot: string;
+  readonly manifest: SweCompareManifest;
+  readonly runId: string;
+  readonly instanceId: string;
+  readonly baseCommit: string;
+  readonly goal: string;
+}): PawResumeValidation {
+  if (!/^[a-zA-Z0-9_-]+$/.test(input.runId)) {
+    throw new Error(`unsafe resume run id: ${input.runId}`);
+  }
+  if (!input.runId.startsWith(pawRunIdPrefix(input.instanceId))) {
+    throw new Error(
+      `resume run does not belong to ${input.instanceId}: ${input.runId}`,
+    );
+  }
+  const runRoot = path.join(
+    input.repoRoot,
+    "benchmarks",
+    "swe-compare",
+    "runs",
+    input.runId,
+  );
+  if (existsSync(path.join(runRoot, "result.json"))) {
+    throw new Error(`cannot resume a finalized run: ${input.runId}`);
+  }
+  const statePath = path.join(
+    runRoot,
+    "runtime",
+    ".paw",
+    "states",
+    `${input.runId}.json`,
+  );
+  const sessionPath = path.join(
+    runRoot,
+    "runtime",
+    ".paw",
+    "sessions",
+    `${input.runId}.jsonl`,
+  );
+  if (!existsSync(statePath) || !existsSync(sessionPath)) {
+    throw new Error(`resume state/session is incomplete: ${input.runId}`);
+  }
+  let state: AppState;
+  try {
+    state = JSON.parse(readFileSync(statePath, "utf8")) as AppState;
+  } catch (error) {
+    throw new Error(
+      `resume state is unreadable: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (state.runId !== input.runId) {
+    throw new Error(`resume state run id mismatch: ${state.runId}`);
+  }
+  if (state.outcome) {
+    throw new Error(`cannot resume a terminal AppState: ${input.runId}`);
+  }
+  if (state.goal.trimEnd() !== input.goal.trimEnd()) {
+    throw new Error("resume goal does not match the frozen instance");
+  }
+  if (state.maxSteps !== input.manifest.budget.pawMaxSteps) {
+    throw new Error("resume maxSteps does not match the frozen manifest");
+  }
+  const workspaceRoot = path.resolve(state.workspaceRoot);
+  if (!existsSync(workspaceRoot)) {
+    throw new Error(`resume workspace is missing: ${workspaceRoot}`);
+  }
+  const head = gitText(workspaceRoot, ["rev-parse", "HEAD"]);
+  if (head !== input.baseCommit) {
+    throw new Error("resume workspace HEAD does not match the frozen base");
+  }
+
+  const envelopes = readFileSync(sessionPath, "utf8")
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .map((line) => {
+      try {
+        return JSON.parse(line) as RunEventEnvelope;
+      } catch {
+        return undefined;
+      }
+    })
+    .filter((value): value is RunEventEnvelope => value !== undefined);
+  if (envelopes.length === 0) {
+    throw new Error(
+      `resume session contains no durable events: ${input.runId}`,
+    );
+  }
+  if (envelopes.some((envelope) => envelope.runId !== input.runId)) {
+    throw new Error("resume session contains a foreign run id");
+  }
+  if (
+    envelopes.some(
+      (envelope) =>
+        envelope.event.type === "run.completed" ||
+        envelope.event.type === "run.failed",
+    )
+  ) {
+    throw new Error("cannot resume a session with a terminal run event");
+  }
+
+  const attemptPath = path.join(runRoot, "attempt.json");
+  let attempt: SweCompareRunAttempt | undefined;
+  if (existsSync(attemptPath)) {
+    try {
+      attempt = JSON.parse(
+        readFileSync(attemptPath, "utf8"),
+      ) as SweCompareRunAttempt;
+    } catch (error) {
+      throw new Error(
+        `resume attempt metadata is unreadable: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    if (
+      attempt.schemaVersion !== 1 ||
+      attempt.runId !== input.runId ||
+      attempt.runner !== "paw" ||
+      attempt.instanceId !== input.instanceId ||
+      attempt.sourceCommit !== input.manifest.sourceTree.gitCommit ||
+      attempt.baseCommit !== input.baseCommit ||
+      path.resolve(attempt.workspaceRoot) !== workspaceRoot
+    ) {
+      throw new Error("resume attempt metadata does not match the frozen run");
+    }
+  }
+  const firstTimestamp = Math.min(...envelopes.map((envelope) => envelope.ts));
+  const startedAt = attempt
+    ? new Date(attempt.startedAt)
+    : new Date(firstTimestamp);
+  if (Number.isNaN(startedAt.getTime())) {
+    throw new Error("resume attempt has an invalid start time");
+  }
+  return {
+    workspaceRoot,
+    state,
+    startedAt,
+    legacyInferredAttempt: attempt === undefined,
+  };
+}
+
 async function runPaw(opts: {
   readonly repoRoot: string;
   readonly workspaceRoot: string;
@@ -812,6 +993,7 @@ async function runPaw(opts: {
   readonly verificationPolicy: VerificationPolicy;
   readonly shellSandbox?: ShellSandboxConfig;
   readonly initialAcceptanceCriteria: readonly RunAcceptanceCriterionSeed[];
+  readonly resume?: boolean;
 }): Promise<{
   status: "completed" | "failed" | "timeout";
   terminalReason?: string;
@@ -890,16 +1072,23 @@ async function runPaw(opts: {
   }
   const { orch, watcher } = runtime;
   try {
-    const result = await orch.run({
-      runId: opts.runId,
-      goal: opts.goal,
-      initialAcceptanceCriteria: opts.initialAcceptanceCriteria,
-      workspaceRoot: opts.workspaceRoot,
-      maxSteps: opts.maxSteps,
-      abortSignal: abort.signal,
-      conversationId: `${opts.runId}-session`,
-    });
-    const metrics = collectPawMetrics(events);
+    const result = opts.resume
+      ? await orch.resumeRun({
+          runId: opts.runId,
+          workspaceRoot: opts.workspaceRoot,
+          abortSignal: abort.signal,
+        })
+      : await orch.run({
+          runId: opts.runId,
+          goal: opts.goal,
+          initialAcceptanceCriteria: opts.initialAcceptanceCriteria,
+          workspaceRoot: opts.workspaceRoot,
+          maxSteps: opts.maxSteps,
+          abortSignal: abort.signal,
+          conversationId: `${opts.runId}-session`,
+        });
+    const trace = runtime.sessionStore.loadRun(opts.runId) ?? events;
+    const metrics = collectPawMetrics(trace);
     const timeout = abort.signal.aborted;
     return {
       status: timeout
@@ -910,14 +1099,15 @@ async function runPaw(opts: {
       terminalReason: result.completionReason ?? result.outcome,
       ...(result.status === "completed" ? {} : { error: result.message }),
       ...metrics,
-      trace: events,
+      trace,
     };
   } catch (error) {
+    const trace = runtime.sessionStore.loadRun(opts.runId) ?? events;
     return {
       status: abort.signal.aborted ? "timeout" : "failed",
       error: error instanceof Error ? error.message : String(error),
-      ...collectPawMetrics(events),
-      trace: events,
+      ...collectPawMetrics(trace),
+      trace,
     };
   } finally {
     abort.clear();
@@ -1734,6 +1924,7 @@ export async function runSweCompareArm(opts: {
   readonly runner: SweCompareRunnerName;
   readonly keep?: boolean;
   readonly skipVerifier?: boolean;
+  readonly resumeRunId?: string;
 }): Promise<SweCompareRunResult> {
   const manifest = JSON.parse(
     readFileSync(opts.manifestPath, "utf8"),
@@ -1746,6 +1937,9 @@ export async function runSweCompareArm(opts: {
       "paw-only-seen-development manifests cannot run Claude or produce paired scores",
     );
   }
+  if (opts.resumeRunId && opts.runner !== "paw") {
+    throw new Error("only Paw runs support durable resume");
+  }
   validateCompareRun(opts.repoRoot, manifest, opts.instanceId);
   const pawShellSandbox =
     opts.runner === "paw"
@@ -1757,18 +1951,51 @@ export async function runSweCompareArm(opts: {
   );
   if (!probe) throw new Error(`dataset instance missing: ${opts.instanceId}`);
   const goal = buildSweCompareGoal(probe);
-  const runId = `${opts.runner}-${opts.instanceId.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now().toString(36)}`;
+  const runId =
+    opts.resumeRunId ??
+    `${opts.runner}-${opts.instanceId.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now().toString(36)}`;
   const gitRoot = ensureRepoClone(
     probe.repo,
     path.join(opts.repoRoot, "benchmarks", "swe-exp"),
     { fetch: false },
   );
-  const workspace = createCommitWorktree(
-    gitRoot,
-    probe.base_commit,
-    runId.slice(0, 60),
-  );
-  const started = new Date();
+  const resumed = opts.resumeRunId
+    ? validatePawResumeAttempt({
+        repoRoot: opts.repoRoot,
+        manifest,
+        runId,
+        instanceId: opts.instanceId,
+        baseCommit: probe.base_commit,
+        goal,
+      })
+    : undefined;
+  const workspace = resumed
+    ? { root: resumed.workspaceRoot, cleanup: () => {} }
+    : createCommitWorktree(gitRoot, probe.base_commit, runId.slice(0, 60));
+  const started = resumed?.startedAt ?? new Date();
+  if (!resumed) {
+    const attempt: SweCompareRunAttempt = {
+      schemaVersion: 1,
+      runId,
+      runner: opts.runner,
+      instanceId: opts.instanceId,
+      sourceCommit: manifest.sourceTree.gitCommit,
+      baseCommit: probe.base_commit,
+      workspaceRoot: workspace.root,
+      startedAt: started.toISOString(),
+    };
+    writeJsonAtomic(
+      path.join(
+        opts.repoRoot,
+        "benchmarks",
+        "swe-compare",
+        "runs",
+        runId,
+        "attempt.json",
+      ),
+      attempt,
+    );
+  }
   try {
     const execution =
       opts.runner === "paw"
@@ -1782,6 +2009,7 @@ export async function runSweCompareArm(opts: {
             verificationPolicy: pawVerificationPolicyFromManifest(manifest),
             shellSandbox: pawShellSandbox,
             initialAcceptanceCriteria: buildSweAcceptanceCriteria(probe),
+            resume: resumed !== undefined,
           })
         : await runClaude({
             workspaceRoot: workspace.root,
@@ -1966,7 +2194,7 @@ export async function runSweCompareArm(opts: {
     );
     return result;
   } finally {
-    if (!opts.keep) workspace.cleanup();
+    if (!opts.keep && !resumed) workspace.cleanup();
   }
 }
 
