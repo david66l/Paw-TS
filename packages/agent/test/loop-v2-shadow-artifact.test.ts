@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  assessLoopV2AuthorityEligibilityV1,
   buildLoopV2LiveCandidateArtifactV1,
   buildLoopV2LiveReviewArtifactV1,
   buildLoopV2LiveReviewPayloadV1,
@@ -182,6 +183,20 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     expect(externalTerminal.comparison).toBe(
       "legacy_completed_v2_external_pending",
     );
+    expect(
+      assessLoopV2AuthorityEligibilityV1(
+        externalTerminal,
+        external.candidate,
+        external.review,
+      ),
+    ).toMatchObject({
+      eligible: false,
+      reasons: expect.arrayContaining([
+        "v2_not_completed",
+        "external_verification_not_closed",
+        "terminal_comparison_not_equal",
+      ]),
+    });
   });
 
   test("host incomplete is monotonic and terminal tampering fails closed", async () => {

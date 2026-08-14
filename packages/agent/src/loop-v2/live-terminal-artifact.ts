@@ -29,6 +29,24 @@ export type LoopV2TerminalComparisonV1 =
   | "v2_more_permissive"
   | "different_noncompletion";
 
+export type LoopV2AuthorityIneligibilityReasonV1 =
+  | "candidate_missing"
+  | "product_mutation_not_required"
+  | "mutation_missing"
+  | "review_missing"
+  | "semantic_review_not_passed"
+  | "legacy_not_completed"
+  | "v2_not_completed"
+  | "candidate_not_certified"
+  | "artifact_not_valid"
+  | "external_verification_not_closed"
+  | "terminal_comparison_not_equal";
+
+export interface LoopV2AuthorityEligibilityV1 {
+  readonly eligible: boolean;
+  readonly reasons: readonly LoopV2AuthorityIneligibilityReasonV1[];
+}
+
 /** Durable dual calculation. It is diagnostic until the explicit cutover. */
 export interface LoopV2LiveTerminalArtifactV1 {
   readonly schemaVersion: typeof LOOP_V2_LIVE_TERMINAL_ARTIFACT_SCHEMA_VERSION;
@@ -197,6 +215,53 @@ export function compareLoopV2TerminalV1(
     return "v2_more_permissive";
   }
   return "different_noncompletion";
+}
+
+/**
+ * Conservative authority guard for mutation-task cutover. This never grants
+ * eligibility to read-only, externally pending, or divergent terminals.
+ */
+export function assessLoopV2AuthorityEligibilityV1(
+  terminal: LoopV2LiveTerminalArtifactV1,
+  candidate?: LoopV2LiveCandidateArtifactV1,
+  review?: LoopV2LiveReviewArtifactV1,
+): LoopV2AuthorityEligibilityV1 {
+  assertLoopV2LiveTerminalArtifactV1(terminal, candidate, review);
+  const reasons: LoopV2AuthorityIneligibilityReasonV1[] = [];
+  if (!candidate) {
+    reasons.push("candidate_missing");
+  } else {
+    if (!candidate.policy.requireProductMutation) {
+      reasons.push("product_mutation_not_required");
+    }
+    if (candidate.assessment.mutationRevision < 1) {
+      reasons.push("mutation_missing");
+    }
+  }
+  if (!review) {
+    reasons.push("review_missing");
+  } else if (review.record.review.verdict !== "pass") {
+    reasons.push("semantic_review_not_passed");
+  }
+  if (terminal.legacyTerminal.status !== "completed") {
+    reasons.push("legacy_not_completed");
+  }
+  if (terminal.v2Outcome.executionStatus !== "completed") {
+    reasons.push("v2_not_completed");
+  }
+  if (terminal.v2Outcome.candidateStatus !== "certified") {
+    reasons.push("candidate_not_certified");
+  }
+  if (terminal.v2Outcome.artifactStatus !== "valid") {
+    reasons.push("artifact_not_valid");
+  }
+  if (terminal.v2Outcome.externalVerification !== "not_configured") {
+    reasons.push("external_verification_not_closed");
+  }
+  if (terminal.comparison !== "equal") {
+    reasons.push("terminal_comparison_not_equal");
+  }
+  return { eligible: reasons.length === 0, reasons };
 }
 
 function candidateArtifactEvidence(

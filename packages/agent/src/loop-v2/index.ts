@@ -96,6 +96,7 @@ export {
 } from "./live-review-runtime.js";
 export {
   assertLoopV2LiveTerminalArtifactV1,
+  assessLoopV2AuthorityEligibilityV1,
   buildLoopV2LiveTerminalArtifactV1,
   compareLoopV2TerminalV1,
   LOOP_V2_LIVE_TERMINAL_ARTIFACT_SCHEMA_VERSION,
@@ -105,6 +106,8 @@ export {
   type BuildLoopV2LiveTerminalArtifactInputV1,
   type LoopV2LegacyTerminalV1,
   type LoopV2LiveTerminalArtifactV1,
+  type LoopV2AuthorityEligibilityV1,
+  type LoopV2AuthorityIneligibilityReasonV1,
   type LoopV2TerminalComparisonV1,
 } from "./live-terminal-artifact.js";
 export {

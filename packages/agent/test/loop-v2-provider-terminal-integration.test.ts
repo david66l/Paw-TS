@@ -13,6 +13,7 @@ import { FakeLanguageModel, type LanguageModel } from "@paw/models";
 import type { ToolEffectPolicy } from "../src/execution-policy.js";
 import {
   type LoopV2LiveCandidateAssessmentV1,
+  assessLoopV2AuthorityEligibilityV1,
   buildLoopV2LiveReviewArtifactV1,
   buildLoopV2LiveReviewClaimV1,
   buildLoopV2LiveReviewPayloadV1,
@@ -93,18 +94,14 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           "utf8",
         ),
       );
-      expect(
-        parseLoopV2LiveTerminalArtifactV1(
-          fs.readFileSync(
-            loopV2LiveTerminalArtifactPath(
-              workspaceRoot,
-              "v2-provider-natural",
-            ),
-            "utf8",
-          ),
-          candidate,
+      const terminal = parseLoopV2LiveTerminalArtifactV1(
+        fs.readFileSync(
+          loopV2LiveTerminalArtifactPath(workspaceRoot, "v2-provider-natural"),
+          "utf8",
         ),
-      ).toMatchObject({
+        candidate,
+      );
+      expect(terminal).toMatchObject({
         legacyTerminal: { status: "completed" },
         v2Outcome: {
           executionStatus: "incomplete",
@@ -114,6 +111,20 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           reasonCode: "semantic_review_missing",
         },
         comparison: "legacy_more_permissive",
+      });
+      expect(
+        assessLoopV2AuthorityEligibilityV1(terminal, candidate),
+      ).toMatchObject({
+        eligible: false,
+        reasons: expect.arrayContaining([
+          "product_mutation_not_required",
+          "mutation_missing",
+          "review_missing",
+          "v2_not_completed",
+          "candidate_not_certified",
+          "artifact_not_valid",
+          "terminal_comparison_not_equal",
+        ]),
       });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
@@ -509,6 +520,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           };
         },
       },
+      verificationPolicy: { authority: "local", requireMutation: true },
       toolEffectPolicy: trustedNoEffectShellPolicy(),
       onEvent: (event) => events.push(event),
     });
@@ -537,16 +549,15 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         fs.existsSync(loopV2LiveReviewClaimPath(workspaceRoot, runId)),
       ).toBeTrue();
       expect(persistedReview.record.review.verdict).toBe("pass");
-      expect(
-        parseLoopV2LiveTerminalArtifactV1(
-          fs.readFileSync(
-            loopV2LiveTerminalArtifactPath(workspaceRoot, runId),
-            "utf8",
-          ),
-          candidate,
-          persistedReview,
+      const terminal = parseLoopV2LiveTerminalArtifactV1(
+        fs.readFileSync(
+          loopV2LiveTerminalArtifactPath(workspaceRoot, runId),
+          "utf8",
         ),
-      ).toMatchObject({
+        candidate,
+        persistedReview,
+      );
+      expect(terminal).toMatchObject({
         legacyTerminal: {
           status: "completed",
           outcome: "verified",
@@ -562,6 +573,13 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         },
         comparison: "equal",
       });
+      expect(
+        assessLoopV2AuthorityEligibilityV1(
+          terminal,
+          candidate,
+          persistedReview,
+        ),
+      ).toEqual({ eligible: true, reasons: [] });
       expect(
         events.find((event) => event.event.type === "candidate.review")?.event,
       ).toMatchObject({
