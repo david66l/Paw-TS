@@ -10,6 +10,12 @@ export interface ArtifactContentBlobV2 {
   readonly content: string;
 }
 
+export interface ArtifactTransitionInputV2 {
+  readonly path: string;
+  readonly beforeContent: string | null;
+  readonly afterContent: string | null;
+}
+
 export interface ArtifactCrossCheckV2 {
   readonly status: "matched" | "unavailable" | "mismatch";
   readonly detail?: string;
@@ -47,6 +53,45 @@ export function createArtifactContentBlobV2(
 
 export function artifactContentHashV2(content: string): string {
   return `sha256:${createHash("sha256").update(content, "utf8").digest("hex")}`;
+}
+
+/** Render one complete, source-ordered mutation step from captured contents. */
+export function renderMutationStepPatchV2(
+  transitions: readonly ArtifactTransitionInputV2[],
+): string {
+  const paths = new Set<string>();
+  const normalized: PathTransitionV2[] = [];
+  for (const transition of transitions) {
+    const path = normalizeArtifactPath(transition.path);
+    if (!path || paths.has(path)) {
+      throw new Error(
+        `Invalid or duplicate mutation transition: ${transition.path}`,
+      );
+    }
+    paths.add(path);
+    normalized.push({
+      path,
+      beforeHash:
+        transition.beforeContent === null
+          ? null
+          : artifactContentHashV2(transition.beforeContent),
+      beforeContent: transition.beforeContent,
+      afterHash:
+        transition.afterContent === null
+          ? null
+          : artifactContentHashV2(transition.afterContent),
+      afterContent: transition.afterContent,
+    });
+  }
+  const patch = normalized
+    .filter((transition) => transition.beforeHash !== transition.afterHash)
+    .sort((left, right) => left.path.localeCompare(right.path))
+    .map(renderTransitionPatch)
+    .filter(Boolean)
+    .join("\n");
+  if (!patch.trim())
+    throw new Error("Mutation transition has no content change");
+  return patch;
 }
 
 export function materializeCandidateArtifactV2(

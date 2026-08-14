@@ -4,8 +4,10 @@ export {
   artifactEvidenceV2,
   createArtifactContentBlobV2,
   materializeCandidateArtifactV2,
+  renderMutationStepPatchV2,
   type ArtifactContentBlobV2,
   type ArtifactCrossCheckV2,
+  type ArtifactTransitionInputV2,
   type MaterializedCandidateArtifactV2,
 } from "./artifact-materializer.js";
 export {
@@ -100,6 +102,7 @@ export {
   type LoopV2ShadowReport,
   type LoopV2ShadowToolCommitInput,
   type LoopV2ShadowToolCommitPortInput,
+  type LoopV2ShadowMutationCapture,
 } from "./shadow-runtime.js";
 export {
   executeToolBatchV2,

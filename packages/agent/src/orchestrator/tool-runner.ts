@@ -44,7 +44,10 @@ import type {
   ToolExecutionPolicy,
 } from "../execution-policy.js";
 import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
-import type { LoopV2ShadowToolCommitPortInput } from "../loop-v2/index.js";
+import type {
+  LoopV2ShadowMutationCapture,
+  LoopV2ShadowToolCommitPortInput,
+} from "../loop-v2/index.js";
 import type { TaskStateManager } from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
 import { SUB_AGENT_TOOL_NAME } from "./constants.js";
@@ -212,7 +215,25 @@ interface ToolExecutionContext {
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
   /** Trusted before/after audit for effects not derivable from tool args. */
   readonly toolEffectPolicy?: ToolEffectPolicy;
+  /** Capture immutable rich facts only for the diagnostic v2-shadow path. */
+  readonly captureLoopV2Facts?: boolean;
 }
+
+export interface ToolExecutionBatchResult {
+  readonly results: readonly ToolRunResult[];
+  readonly mutationCaptures: readonly (
+    | LoopV2ShadowMutationCapture
+    | undefined
+  )[];
+}
+
+type MutationBeforeCapture =
+  | Extract<LoopV2ShadowMutationCapture, { readonly status: "gap" }>
+  | Readonly<{
+      status: "before";
+      paths: readonly string[];
+      beforeContents: Readonly<Record<string, string | null>>;
+    }>;
 
 /** 审批上下文 */
 interface ApprovalContext {
@@ -268,7 +289,7 @@ export async function executeToolCalls(
   calls: readonly AgentToolCallAction[],
   toolCtx: ToolExecutionContext,
   approvalCtx: ApprovalContext,
-): Promise<ToolRunResult[]> {
+): Promise<ToolExecutionBatchResult> {
   // 步骤 1：策略前置检查（审批之前）
   // - read_only：拒绝修改性工具
   // - allowedTools：拒绝不在白名单的工具
@@ -417,6 +438,11 @@ export async function executeToolCalls(
     toolCtx.checkpointSeq.n += 1;
     return toolCtx.checkpointSeq.n;
   });
+  const mutationCallCount = calls.filter((call) =>
+    isMutatingTool(call.tool),
+  ).length;
+  const mutationCaptures: Array<LoopV2ShadowMutationCapture | undefined> =
+    calls.map(() => undefined);
 
   // 步骤 4：执行工具。注入 effect policy 时必须串行，确保每个 before/after
   // 快照只归因于一个工具；没有 effect policy 时保留原有并行语义。
@@ -469,6 +495,10 @@ export async function executeToolCalls(
         call.args,
       );
     }
+
+    const beforeCapture = toolCtx.captureLoopV2Facts
+      ? captureMutationBefore(toolCtx.workspaceRoot, call, mutationCallCount)
+      : undefined;
 
     let prepared: unknown;
     if (toolCtx.toolEffectPolicy && effectPolicyApplies[i]) {
@@ -546,50 +576,60 @@ export async function executeToolCalls(
       call.args,
     );
 
-    if (!toolCtx.toolEffectPolicy || !effectPolicyApplies[i]) return rawResult;
-    try {
-      const decision = await toolCtx.toolEffectPolicy.settle(
-        {
-          tool: call.tool,
-          args: call.args,
-          workspaceRoot: toolCtx.workspaceRoot,
-          result: rawResult,
-        },
-        prepared,
-      );
-      if (decision.allowed) return decision.result ?? rawResult;
-      return {
-        ok: false,
-        summary: `[ToolEffectPolicy:${decision.reason}] ${decision.message}`,
-        payload: {
-          rejected: true,
-          code: "E_TOOL_EFFECT_POLICY",
-          reason: decision.reason,
-          message: decision.message,
-          executed: true,
-          recovered: decision.recovered,
-          originalOk: rawResult.ok,
-          ...(decision.recovered
-            ? { workspaceEffect: { changed: false, paths: [] } }
-            : {}),
-        },
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        ok: false,
-        summary: `[ToolEffectPolicy:settle_failed] ${message}`,
-        payload: {
-          rejected: true,
-          code: "E_TOOL_EFFECT_POLICY",
-          reason: "settle_failed",
-          message,
-          executed: true,
-          recovered: false,
-          originalOk: rawResult.ok,
-        },
-      };
+    let settledResult = rawResult;
+    if (toolCtx.toolEffectPolicy && effectPolicyApplies[i]) {
+      try {
+        const decision = await toolCtx.toolEffectPolicy.settle(
+          {
+            tool: call.tool,
+            args: call.args,
+            workspaceRoot: toolCtx.workspaceRoot,
+            result: rawResult,
+          },
+          prepared,
+        );
+        settledResult = decision.allowed
+          ? (decision.result ?? rawResult)
+          : {
+              ok: false,
+              summary: `[ToolEffectPolicy:${decision.reason}] ${decision.message}`,
+              payload: {
+                rejected: true,
+                code: "E_TOOL_EFFECT_POLICY",
+                reason: decision.reason,
+                message: decision.message,
+                executed: true,
+                recovered: decision.recovered,
+                originalOk: rawResult.ok,
+                ...(decision.recovered
+                  ? { workspaceEffect: { changed: false, paths: [] } }
+                  : {}),
+              },
+            };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        settledResult = {
+          ok: false,
+          summary: `[ToolEffectPolicy:settle_failed] ${message}`,
+          payload: {
+            rejected: true,
+            code: "E_TOOL_EFFECT_POLICY",
+            reason: "settle_failed",
+            message,
+            executed: true,
+            recovered: false,
+            originalOk: rawResult.ok,
+          },
+        };
+      }
     }
+    if (beforeCapture) {
+      mutationCaptures[i] = captureMutationAfter(
+        toolCtx.workspaceRoot,
+        beforeCapture,
+      );
+    }
+    return settledResult;
   };
 
   const results: ToolRunResult[] = [];
@@ -604,7 +644,7 @@ export async function executeToolCalls(
     results.push(...(await Promise.all(calls.map(executeOne))));
   }
 
-  return results;
+  return { results, mutationCaptures };
 }
 
 /**
@@ -635,6 +675,10 @@ export function finalizeToolExecution(
     readonly text: string;
     readonly thinking?: string;
     readonly taskState?: TaskStateManager;
+    readonly mutationCaptures?: readonly (
+      | LoopV2ShadowMutationCapture
+      | undefined
+    )[];
     readonly observeLoopV2ToolCommit?: (
       input: LoopV2ShadowToolCommitPortInput,
     ) => void;
@@ -706,6 +750,9 @@ export function finalizeToolExecution(
       repositoryRevision,
       concurrentMutation: batchHasMutation,
       ...(sourceContentHash ? { sourceContentHash } : {}),
+      ...(ctx.mutationCaptures?.[i]
+        ? { mutationCapture: ctx.mutationCaptures[i] }
+        : {}),
     });
   }
 
@@ -838,4 +885,84 @@ function readSourceContentHash(
   } catch {
     return undefined;
   }
+}
+
+function captureMutationBefore(
+  workspaceRoot: string,
+  call: AgentToolCallAction,
+  mutationCallCount: number,
+): MutationBeforeCapture | undefined {
+  if (!isMutatingTool(call.tool)) return undefined;
+  if (mutationCallCount > 1) {
+    return { status: "gap", reason: "parallel_mutations" };
+  }
+  if (call.tool === "workspace.run_shell") {
+    return { status: "gap", reason: "unbounded_mutation_surface" };
+  }
+  const normalized = normalizeMutationTargets(
+    workspaceRoot,
+    extractCheckpointTargets(call.tool, call.args),
+  );
+  if (!normalized) {
+    return { status: "gap", reason: "unsafe_or_missing_target" };
+  }
+  const beforeContents = captureTargetContents(workspaceRoot, normalized);
+  return beforeContents
+    ? { status: "before", paths: normalized, beforeContents }
+    : { status: "gap", reason: "capture_failed" };
+}
+
+function captureMutationAfter(
+  workspaceRoot: string,
+  before: MutationBeforeCapture,
+): LoopV2ShadowMutationCapture {
+  if (before.status === "gap") return before;
+  const afterContents = captureTargetContents(workspaceRoot, before.paths);
+  return afterContents
+    ? {
+        status: "complete",
+        paths: before.paths,
+        beforeContents: before.beforeContents,
+        afterContents,
+      }
+    : { status: "gap", reason: "capture_failed" };
+}
+
+function normalizeMutationTargets(
+  workspaceRoot: string,
+  targets: readonly string[],
+): readonly string[] | undefined {
+  const root = path.resolve(workspaceRoot);
+  const normalized = new Set<string>();
+  for (const target of targets) {
+    if (!target || target === "__shell_cmd__") return undefined;
+    const resolved = path.resolve(root, target);
+    const relative = path.relative(root, resolved);
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      return undefined;
+    }
+    normalized.add(relative.replaceAll("\\", "/"));
+  }
+  return normalized.size > 0 ? [...normalized].sort() : undefined;
+}
+
+function captureTargetContents(
+  workspaceRoot: string,
+  targets: readonly string[],
+): Readonly<Record<string, string | null>> | undefined {
+  const contents: Record<string, string | null> = {};
+  for (const target of targets) {
+    const resolved = path.resolve(workspaceRoot, target);
+    try {
+      if (!fs.existsSync(resolved)) {
+        contents[target] = null;
+        continue;
+      }
+      if (!fs.statSync(resolved).isFile()) return undefined;
+      contents[target] = fs.readFileSync(resolved, "utf8");
+    } catch {
+      return undefined;
+    }
+  }
+  return contents;
 }

@@ -6,7 +6,10 @@ import path from "node:path";
 import type { RunEvent, RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
-import { createLoopV2ShadowObserver } from "../src/loop-v2/index.js";
+import {
+  createLoopV2ShadowObserver,
+  materializeCandidateArtifactV2,
+} from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
 function legacyEnvelope(
@@ -138,6 +141,98 @@ describe("Loop Kernel v2 shadow migration", () => {
     expect(report.diagnostics.at(-1)?.reason).toBe(
       "rich_concurrent_mutation_ambiguous",
     );
+  });
+
+  test("two captured file commits form a continuous, reconstructible mutation journal", () => {
+    const observer = createLoopV2ShadowObserver("shadow-r19");
+    observer.observe(
+      legacyEnvelope(1, {
+        type: "run.started",
+        goal: "Create then edit a file",
+      }),
+    );
+    const commits = [
+      { seq: 2, before: null, after: "value = 1\n" },
+      { seq: 3, before: "value = 1\n", after: "value = 2\n" },
+    ] as const;
+    for (const commit of commits) {
+      observer.observe(
+        legacyEnvelope(commit.seq, {
+          type: "tool.result",
+          tool: "workspace.write_file",
+          ok: true,
+          summary: "wrote src/value.py",
+          workspaceEffect: { changed: true, paths: ["src/value.py"] },
+        }),
+      );
+      observer.observeToolCommit({
+        sourceSeq: commit.seq,
+        callId: `write-${commit.seq}`,
+        tool: "workspace.write_file",
+        args: { path: "src/value.py" },
+        result: { ok: true, summary: "wrote", payload: { changed: true } },
+        repositoryRevision: `run:shadow-r19:mutation:${commit.seq - 2}`,
+        concurrentMutation: true,
+        mutationCapture: {
+          status: "complete",
+          paths: ["src/value.py"],
+          beforeContents: { "src/value.py": commit.before },
+          afterContents: { "src/value.py": commit.after },
+        },
+      });
+    }
+
+    const report = observer.snapshot();
+    const mutations = Object.values(report.state.mutations);
+    expect(mutations.map((mutation) => mutation.mutationRevision)).toEqual([
+      1, 2,
+    ]);
+    expect(report.diagnostics.slice(1).map((item) => item.reason)).toEqual([
+      "rich_mutation_projected",
+      "rich_mutation_projected",
+    ]);
+    const artifact = materializeCandidateArtifactV2(
+      mutations,
+      report.artifactBlobs,
+      { status: "unavailable", detail: "shadow does not require Git" },
+    );
+    expect(artifact.status).toBe("valid");
+    expect(artifact.changedPaths).toEqual(["src/value.py"]);
+    expect(artifact.patch).toContain("+value = 2");
+    expect(artifact.patch).not.toContain("+value = 1");
+  });
+
+  test("unbounded mutation captures stay explicit gaps", () => {
+    const observer = createLoopV2ShadowObserver("shadow-r19");
+    observer.observe(
+      legacyEnvelope(1, { type: "run.started", goal: "Change safely" }),
+    );
+    observer.observe(
+      legacyEnvelope(2, {
+        type: "tool.result",
+        tool: "workspace.run_shell",
+        ok: true,
+        summary: "shell completed",
+        workspaceEffect: { changed: true, paths: ["src/a.ts"] },
+      }),
+    );
+    observer.observeToolCommit({
+      sourceSeq: 2,
+      callId: "shell-2",
+      tool: "workspace.run_shell",
+      args: { command: "generate" },
+      result: { ok: true, summary: "shell completed", payload: {} },
+      repositoryRevision: "run:shadow-r19:mutation:0",
+      concurrentMutation: true,
+      mutationCapture: {
+        status: "gap",
+        reason: "unbounded_mutation_surface",
+      },
+    });
+
+    const report = observer.snapshot();
+    expect(Object.keys(report.state.mutations)).toHaveLength(0);
+    expect(report.diagnostics.at(-1)?.reason).toBe("rich_mutation_capture_gap");
   });
 
   test("R19 projects only facts proved by the legacy event contract", () => {
@@ -297,5 +392,34 @@ describe("Loop Kernel v2 shadow migration", () => {
       ),
     ).toBe(true);
     expect(terminalReports).toBe(1);
+  });
+
+  test("live v2-shadow captures a complete write without changing completion", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-shadow-write-"));
+    const shadow = new AgentOrchestrator({
+      model: new FakeLanguageModel(),
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      loopKernelVersion: "v2-shadow",
+    });
+    const result = await shadow.run({
+      runId: "shadow-live-write",
+      goal: "write file 'hello.txt' 'hello world'\n[allow_skip_verify]",
+      workspaceRoot: dir,
+      maxSteps: 8,
+    });
+
+    expect(result.status).toBe("completed");
+    const report = shadow.getLastLoopV2ShadowReport();
+    const mutations = Object.values(report?.state.mutations ?? {});
+    expect(mutations).toHaveLength(1);
+    expect(mutations[0]?.paths).toEqual(["hello.txt"]);
+    expect(mutations[0]?.beforeHashes["hello.txt"]).toBeNull();
+    expect(mutations[0]?.afterHashes["hello.txt"]).toMatch(/^sha256:/);
+    expect(
+      report?.diagnostics.some(
+        (item) => item.reason === "rich_mutation_projected",
+      ),
+    ).toBe(true);
   });
 });

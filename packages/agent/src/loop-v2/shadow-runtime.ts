@@ -2,6 +2,7 @@ import {
   type ArtifactContentBlobV2,
   artifactContentHashV2,
   createArtifactContentBlobV2,
+  renderMutationStepPatchV2,
 } from "./artifact-materializer.js";
 import { canonicalJson, sha256Canonical } from "./canonical.js";
 import {
@@ -31,6 +32,9 @@ export type LoopV2ShadowReason =
   | "rich_tool_failed"
   | "rich_observation_invalid"
   | "rich_concurrent_mutation_ambiguous"
+  | "rich_mutation_projected"
+  | "rich_mutation_no_effect"
+  | "rich_mutation_capture_gap"
   | "non_decision_event";
 
 export interface LoopV2ShadowDiagnostic {
@@ -88,7 +92,24 @@ export interface LoopV2ShadowToolCommitInput {
   readonly sourceContentHash?: string;
   /** A sibling mutation may race a read/search in the legacy parallel batch. */
   readonly concurrentMutation: boolean;
+  readonly mutationCapture?: LoopV2ShadowMutationCapture;
 }
+
+export type LoopV2ShadowMutationCapture =
+  | Readonly<{
+      status: "complete";
+      paths: readonly string[];
+      beforeContents: Readonly<Record<string, string | null>>;
+      afterContents: Readonly<Record<string, string | null>>;
+    }>
+  | Readonly<{
+      status: "gap";
+      reason:
+        | "parallel_mutations"
+        | "unbounded_mutation_surface"
+        | "unsafe_or_missing_target"
+        | "capture_failed";
+    }>;
 
 export type LoopV2ShadowToolCommitPortInput = Omit<
   LoopV2ShadowToolCommitInput,
@@ -201,6 +222,46 @@ export function createLoopV2ShadowObserver(
         );
       }
       consumedToolCommits.add(input.sourceSeq);
+
+      if (isMutationTool(input.tool)) {
+        const mutation = buildRichMutation(
+          input,
+          state.currentMutationRevision + 1,
+          projectedEvents.length + 1,
+        );
+        if (mutation.kind === "gap") {
+          diagnostics[diagnosticIndex] = {
+            ...diagnostic,
+            disposition: "gap",
+            reason: "rich_mutation_capture_gap",
+          };
+          return;
+        }
+        if (mutation.kind === "unchanged") {
+          diagnostics[diagnosticIndex] = {
+            ...diagnostic,
+            disposition: "ignored",
+            reason: "rich_mutation_no_effect",
+          };
+          return;
+        }
+        for (const blob of mutation.blobs) artifactBlobs.set(blob.ref, blob);
+        const projected: LoopV2Envelope = {
+          schemaVersion: LOOP_V2_SCHEMA_VERSION,
+          runId,
+          seq: projectedEvents.length + 1,
+          ts: sourceTimestamps.get(input.sourceSeq) ?? 0,
+          event: { type: "mutation.recorded", mutation: mutation.record },
+        };
+        state = projectLoopV2Event(state, projected).state;
+        projectedEvents.push(projected);
+        diagnostics[diagnosticIndex] = {
+          ...diagnostic,
+          disposition: "projected",
+          reason: "rich_mutation_projected",
+        };
+        return;
+      }
 
       if (!isRichEvidenceTool(input.tool)) return;
       if (!input.result.ok) {
@@ -357,6 +418,114 @@ function isRichEvidenceTool(tool: string): boolean {
     tool === "workspace.grep" ||
     tool === "workspace.glob"
   );
+}
+
+function isMutationTool(tool: string): boolean {
+  return (
+    tool === "workspace.write_file" ||
+    tool === "workspace.edit_file" ||
+    tool === "workspace.apply_patch" ||
+    tool === "workspace.notebook_edit" ||
+    tool === "workspace.run_shell"
+  );
+}
+
+function buildRichMutation(
+  input: LoopV2ShadowToolCommitInput,
+  mutationRevision: number,
+  projectedSeq: number,
+):
+  | Readonly<{ kind: "gap" }>
+  | Readonly<{ kind: "unchanged" }>
+  | Readonly<{
+      kind: "record";
+      record: import("./schema.js").MutationJournalEntryV2;
+      blobs: readonly ArtifactContentBlobV2[];
+    }> {
+  const capture = input.mutationCapture;
+  if (!capture || capture.status === "gap") return { kind: "gap" };
+  if (
+    capture.paths.length === 0 ||
+    new Set(capture.paths).size !== capture.paths.length ||
+    capture.paths.some(
+      (path) =>
+        !Object.hasOwn(capture.beforeContents, path) ||
+        !Object.hasOwn(capture.afterContents, path),
+    )
+  ) {
+    return { kind: "gap" };
+  }
+  const paths = [...new Set(capture.paths)].sort();
+  const changedPaths = paths.filter(
+    (path) => capture.beforeContents[path] !== capture.afterContents[path],
+  );
+  if (changedPaths.length === 0) return { kind: "unchanged" };
+
+  const blobs = new Map<string, ArtifactContentBlobV2>();
+  const beforeHashes: Record<string, string | null> = {};
+  const afterHashes: Record<string, string | null> = {};
+  const beforeContentRefs: Record<string, string | null> = {};
+  const afterContentRefs: Record<string, string | null> = {};
+  for (const path of changedPaths) {
+    const before = capture.beforeContents[path] ?? null;
+    const after = capture.afterContents[path] ?? null;
+    const beforeBlob =
+      before === null ? null : createArtifactContentBlobV2(before);
+    const afterBlob =
+      after === null ? null : createArtifactContentBlobV2(after);
+    if (beforeBlob) blobs.set(beforeBlob.ref, beforeBlob);
+    if (afterBlob) blobs.set(afterBlob.ref, afterBlob);
+    beforeHashes[path] = beforeBlob?.contentHash ?? null;
+    afterHashes[path] = afterBlob?.contentHash ?? null;
+    beforeContentRefs[path] = beforeBlob?.ref ?? null;
+    afterContentRefs[path] = afterBlob?.ref ?? null;
+  }
+  let patch: string;
+  try {
+    patch = renderMutationStepPatchV2(
+      changedPaths.map((path) => ({
+        path,
+        beforeContent: capture.beforeContents[path] ?? null,
+        afterContent: capture.afterContents[path] ?? null,
+      })),
+    );
+  } catch {
+    return { kind: "gap" };
+  }
+  return {
+    kind: "record",
+    blobs: [...blobs.values()],
+    record: {
+      seq: projectedSeq,
+      callId: input.callId,
+      mutationRevision,
+      paths: changedPaths,
+      beforeHashes,
+      afterHashes,
+      beforeContentRefs,
+      afterContentRefs,
+      patch,
+      workspaceEffect: classifyWorkspaceEffect(changedPaths),
+    },
+  };
+}
+
+function classifyWorkspaceEffect(
+  paths: readonly string[],
+): "product" | "test" | "control" | "unknown" {
+  if (
+    paths.every((path) =>
+      /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|(?:\.test|\.spec)\.[^/]+$/i.test(
+        path,
+      ),
+    )
+  ) {
+    return "test";
+  }
+  if (paths.every((path) => /(?:^|\/)\.paw(?:\/|$)/.test(path))) {
+    return "control";
+  }
+  return paths.length > 0 ? "product" : "unknown";
 }
 
 function buildRichEvidence(input: LoopV2ShadowToolCommitInput):

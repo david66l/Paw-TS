@@ -1118,7 +1118,7 @@ async function handleToolCalls(
       convergenceBlockReasons[index] ?? codingPhaseBlockReasons[index],
   );
   const allowedCalls = calls.filter((_, index) => !phaseBlockReasons[index]);
-  const allowedResults = await executeToolCalls(
+  const allowedBatch = await executeToolCalls(
     allowedCalls,
     {
       workspaceRoot: ctx.workspaceRoot,
@@ -1145,16 +1145,22 @@ async function handleToolCalls(
       artifactRegistry: ctx.artifactRegistry,
       toolExecutionPolicy: opts.toolExecutionPolicy,
       toolEffectPolicy: opts.toolEffectPolicy,
+      captureLoopV2Facts: Boolean(ctx.observeLoopV2ToolCommit),
     },
     {
       resolveToolApproval: opts.resolveToolApproval,
       approvalPolicy: opts.approvalPolicy,
     },
   );
+  const allowedResults = allowedBatch.results;
   let allowedIndex = 0;
+  const mutationCaptures: Array<
+    (typeof allowedBatch.mutationCaptures)[number]
+  > = [];
   const results: ToolRunResult[] = calls.map((_, index) => {
     const blockReason = phaseBlockReasons[index];
     if (blockReason) {
+      mutationCaptures.push(undefined);
       return {
         ok: false,
         payload: {
@@ -1166,7 +1172,10 @@ async function handleToolCalls(
         summary: blockReason,
       };
     }
-    return allowedResults[allowedIndex++]!;
+    const result = allowedResults[allowedIndex]!;
+    mutationCaptures.push(allowedBatch.mutationCaptures[allowedIndex]);
+    allowedIndex += 1;
+    return result;
   });
   const toolDuration = Date.now() - toolStartTime;
 
@@ -1228,6 +1237,7 @@ async function handleToolCalls(
     text,
     thinking,
     taskState: ctx.taskState,
+    mutationCaptures,
     observeLoopV2ToolCommit: ctx.observeLoopV2ToolCommit,
     saveStateFn: opts.saveStateFn,
     payloadDeduper: ctx.payloadDeduper,
