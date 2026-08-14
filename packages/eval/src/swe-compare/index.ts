@@ -51,6 +51,12 @@ export {
   pawInstanceImageSandbox,
   swebenchInstanceImageName,
 } from "./verification-environment.js";
+export {
+  PAW_QUALIFICATION_GATE,
+  loadPawQualificationResults,
+  summarizePawQualification,
+  type PawQualificationSummary,
+} from "./qualification.js";
 export type {
   SweCompareInstanceManifest,
   SweCompareManifest,

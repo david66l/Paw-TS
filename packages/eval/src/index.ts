@@ -95,6 +95,8 @@ export {
   recoverClaudeResultPatch,
   recoverPawResultPatch,
   runSweCompareArm,
+  loadPawQualificationResults,
+  summarizePawQualification,
   selectPawFreshDevelopmentIds,
   selectPawFreshQualificationIds,
   assertPawVerificationEnvironmentReady,
@@ -110,11 +112,13 @@ export {
   PAW_SEEN_DEVELOPMENT_IDS,
   PAW_FRESH_DEVELOPMENT_RULE,
   PAW_FRESH_QUALIFICATION_RULE,
+  PAW_QUALIFICATION_GATE,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   type SweCompareInstanceManifest,
   type SweCompareManifest,
   type SweCompareQualification,
+  type PawQualificationSummary,
 } from "./swe-compare/index.js";
 
 // ── M10 记忆对抗（先答→纠错 端到端） ──
