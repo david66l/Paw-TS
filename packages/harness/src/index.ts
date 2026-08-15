@@ -111,6 +111,17 @@ export {
   type PostEditFileDiagnosticV1,
 } from "./post-edit-diagnostics.js";
 export {
+  MANAGED_JOB_SCHEMA_V1,
+  ManagedJobRegistryV1,
+  type ManagedJobHooksV1,
+  type ManagedJobOutcomeV1,
+  type ManagedJobReadV1,
+  type ManagedJobSnapshotV1,
+  type ManagedJobStartV1,
+  type ManagedJobStatusV1,
+  type ManagedJobWaitV1,
+} from "./jobs/managed-job-registry.js";
+export {
   getDefaultPolicyConfig,
   setPolicyConfig,
   resetPolicyConfig,
