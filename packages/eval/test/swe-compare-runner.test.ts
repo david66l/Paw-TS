@@ -20,6 +20,7 @@ import type { RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel, type LanguageModel } from "@paw/models";
 
 import {
+  CLAUDE_PROXY_AUDIT_PATH,
   buildClaudeContainerPlan,
   claudeContainerNames,
   parseClaudeProxyAudit,
@@ -1029,6 +1030,9 @@ describe("SWE compare runner", () => {
     });
     expect(plan.networkCreateArgs).toContain("--internal");
     expect(plan.proxyRunArgs).toContain("bridge");
+    expect(plan.proxyRunArgs).toContain(
+      `PAW_CLAUDE_AUDIT_PATH=${CLAUDE_PROXY_AUDIT_PATH}`,
+    );
     expect(plan.proxyConnectArgs).toEqual([
       "network",
       "connect",

@@ -6,6 +6,7 @@ export const CLAUDE_CONTAINER_WORKSPACE = "/testbed";
 export const CLAUDE_CONTAINER_EXECUTABLE = "/usr/local/bin/claude";
 export const CLAUDE_MODEL_API_BASE_URL = "https://api.deepseek.com/anthropic";
 export const CLAUDE_MODEL_API_CONNECT_TARGET = "api.deepseek.com:443";
+export const CLAUDE_PROXY_AUDIT_PATH = "/tmp/paw-claude-egress-audit.jsonl";
 
 export interface ClaudeContainerNames {
   readonly network: string;
@@ -19,6 +20,7 @@ export interface ClaudeProxyAudit {
   readonly denied: number;
   readonly upstreamErrors: number;
   readonly malformedLines: number;
+  readonly collectionError?: string;
 }
 
 export interface ClaudeContainerPlan {
@@ -133,6 +135,8 @@ export function buildClaudeContainerPlan(input: {
       `type=bind,source=${proxyScript},target=/paw/claude-egress-proxy.py,readonly`,
       "-e",
       `PAW_CLAUDE_ALLOWED_CONNECT=${CLAUDE_MODEL_API_CONNECT_TARGET}`,
+      "-e",
+      `PAW_CLAUDE_AUDIT_PATH=${CLAUDE_PROXY_AUDIT_PATH}`,
       input.image,
       "python",
       "/paw/claude-egress-proxy.py",
@@ -257,6 +261,32 @@ function cleanupClaudeContainerPlan(plan: ClaudeContainerPlan): void {
   dockerSync(["network", "rm", plan.names.network], 15_000);
 }
 
+async function readClaudeProxyAuditLog(
+  plan: ClaudeContainerPlan,
+  attempts = 3,
+): Promise<{ readonly log: string; readonly error?: string }> {
+  const errors: string[] = [];
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const auditFile = dockerSync(
+      [
+        "exec",
+        plan.names.proxy,
+        "python",
+        "-c",
+        `import pathlib; print(pathlib.Path(${JSON.stringify(CLAUDE_PROXY_AUDIT_PATH)}).read_text(encoding='utf-8'), end='')`,
+      ],
+      10_000,
+    );
+    if (auditFile.ok && auditFile.stdout) return { log: auditFile.stdout };
+    errors.push(auditFile.ok ? "empty proxy audit file" : auditFile.error);
+    if (attempt + 1 < attempts) await Bun.sleep(100);
+  }
+  const logs = dockerSync(["logs", plan.names.proxy], 10_000);
+  if (logs.ok && logs.stdout) return { log: logs.stdout };
+  errors.push(logs.ok ? "empty proxy stdout log" : logs.error);
+  return { log: "", error: errors.join(" | ") };
+}
+
 async function waitForProxyReady(
   plan: ClaudeContainerPlan,
   timeoutMs = 10_000,
@@ -264,9 +294,9 @@ async function waitForProxyReady(
   const deadline = Date.now() + timeoutMs;
   let lastLog = "";
   while (Date.now() < deadline) {
-    const logs = dockerSync(["logs", plan.names.proxy], 5_000);
-    if (logs.ok) {
-      lastLog = logs.stdout;
+    const logs = await readClaudeProxyAuditLog(plan, 1);
+    if (logs.log) {
+      lastLog = logs.log;
       if (parseClaudeProxyAudit(lastLog).ready) return lastLog;
     }
     const running = dockerSync(
@@ -276,7 +306,7 @@ async function waitForProxyReady(
     if (!running.ok || running.stdout !== "true") {
       throw new Error(
         `Claude egress proxy exited before ready: ${
-          logs.ok ? logs.stdout : logs.error
+          logs.log || logs.error || "proxy audit unavailable"
         }`,
       );
     }
@@ -310,7 +340,7 @@ export async function runClaudeContainer(input: {
         `cannot attach Claude egress proxy to internal network: ${connected.error}`,
       );
     }
-    await waitForProxyReady(input.plan);
+    const readyProxyLog = await waitForProxyReady(input.plan);
 
     const child = Bun.spawn(["docker", ...input.plan.taskRunArgs], {
       stdout: "pipe",
@@ -333,15 +363,18 @@ export async function runClaudeContainer(input: {
       new Response(child.stderr).text(),
     ]);
     clearTimeout(timer);
-    const logs = dockerSync(["logs", input.plan.names.proxy], 10_000);
-    const proxyLog = logs.ok ? logs.stdout : "";
+    const logs = await readClaudeProxyAuditLog(input.plan);
+    const proxyLog = logs.log || readyProxyLog;
+    const proxyAudit = parseClaudeProxyAudit(proxyLog);
     return {
       exitCode,
       timedOut,
       stdout,
       stderr,
       proxyLog,
-      proxyAudit: parseClaudeProxyAudit(proxyLog),
+      proxyAudit: logs.error
+        ? { ...proxyAudit, collectionError: logs.error }
+        : proxyAudit,
     };
   } finally {
     cleanupClaudeContainerPlan(input.plan);

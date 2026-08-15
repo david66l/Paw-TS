@@ -15,10 +15,15 @@ import select
 import socket
 import socketserver
 import sys
+import threading
 
 
 MAX_HEADER_BYTES = 16 * 1024
 BUFFER_BYTES = 64 * 1024
+AUDIT_PATH = os.environ.get(
+    "PAW_CLAUDE_AUDIT_PATH", "/tmp/paw-claude-egress-audit.jsonl"
+)
+AUDIT_LOCK = threading.Lock()
 
 
 def allowed_targets() -> set[tuple[str, int]]:
@@ -44,7 +49,12 @@ ALLOWED_TARGETS = allowed_targets()
 
 
 def audit(event: str, **fields: object) -> None:
-    print(json.dumps({"event": event, **fields}, sort_keys=True), flush=True)
+    line = json.dumps({"event": event, **fields}, sort_keys=True)
+    with AUDIT_LOCK:
+        with open(AUDIT_PATH, "a", encoding="utf-8") as audit_file:
+            audit_file.write(line + "\n")
+            audit_file.flush()
+        print(line, flush=True)
 
 
 class ConnectHandler(socketserver.BaseRequestHandler):
