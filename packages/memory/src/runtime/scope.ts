@@ -2,6 +2,7 @@
  * workspaceRoot → Memory scope 映射。
  *
  * 规则（与 cutover plan §4.4 一致）：
+ * - tenantId: options / PAW_TENANT_ID / "local"
  * - userId: options / PAW_USER_ID / "local"
  * - repositoryId: options / git remote hash / sha256(workspaceRoot).slice(0,16)
  * - workspaceId: options / repositoryId
@@ -11,12 +12,13 @@ import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  createMemoryScopeKey,
+  type MemoryScopeKey,
+} from "../longterm/store/scope-key.js";
 import type { MemoryRuntimeOptions } from "./types.js";
 
-export interface ResolvedScope {
-  readonly userId: string;
-  readonly repositoryId: string;
-  readonly workspaceId: string;
+export interface ResolvedScope extends MemoryScopeKey {
   readonly workspaceRoot: string;
 }
 
@@ -40,12 +42,25 @@ function tryGitRemote(workspaceRoot: string): string | null {
 
 function readSettingsOverrides(
   workspaceRoot: string,
-): Partial<Pick<MemoryRuntimeOptions, "userId" | "repositoryId" | "workspaceId">> {
+): Partial<
+  Pick<
+    MemoryRuntimeOptions,
+    "tenantId" | "userId" | "repositoryId" | "workspaceId"
+  >
+> {
   try {
     const p = path.join(workspaceRoot, ".paw", "settings.local.json");
     if (!fs.existsSync(p)) return {};
     const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
     return {
+      tenantId:
+        typeof raw.tenant_id === "string"
+          ? raw.tenant_id
+          : typeof raw.tenantId === "string"
+            ? raw.tenantId
+            : typeof raw.organization_id === "string"
+              ? raw.organization_id
+              : undefined,
       userId:
         typeof raw.user_id === "string"
           ? raw.user_id
@@ -74,6 +89,12 @@ export function resolveScope(opts: MemoryRuntimeOptions): ResolvedScope {
   const workspaceRoot = path.resolve(opts.workspaceRoot);
   const file = readSettingsOverrides(workspaceRoot);
 
+  const tenantId =
+    opts.tenantId?.trim() ||
+    file.tenantId?.trim() ||
+    process.env.PAW_TENANT_ID?.trim() ||
+    "local";
+
   const userId =
     opts.userId?.trim() ||
     file.userId?.trim() ||
@@ -89,5 +110,13 @@ export function resolveScope(opts: MemoryRuntimeOptions): ResolvedScope {
   const workspaceId =
     opts.workspaceId?.trim() || file.workspaceId?.trim() || repositoryId;
 
-  return { userId, repositoryId, workspaceId, workspaceRoot };
+  return {
+    ...createMemoryScopeKey({
+      tenantId,
+      userId,
+      repositoryId,
+      workspaceId,
+    }),
+    workspaceRoot,
+  };
 }

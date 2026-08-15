@@ -27,6 +27,10 @@ import {
   type ScoredId,
 } from "./engine.js";
 import { deriveEntryId } from "./id.js";
+import {
+  createMemoryScopeKey,
+  type MemoryScopeKey,
+} from "./scope-key.js";
 
 /** memory_embeddings.embedding 列为 vector(1536)（V008），embedding 服务统一使用该维度 */
 const EMBEDDING_DIMENSIONS = MEMORY_EMBEDDING_DIMENSIONS;
@@ -120,11 +124,16 @@ function parseVector(raw: unknown): number[] {
 }
 
 export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
+  readonly scope?: MemoryScopeKey;
   private readonly embedder = new NGramEmbeddingService(EMBEDDING_DIMENSIONS);
+
+  constructor(scope?: MemoryScopeKey) {
+    this.scope = scope ? createMemoryScopeKey(scope) : undefined;
+  }
 
   async put(entry: MemoryEntry): Promise<void> {
     const sql = getSql();
-    const id = entry.id || deriveEntryId(entry);
+    const id = entry.id || deriveEntryId(entry, this.scope);
     const now = new Date().toISOString();
     const created = entry.created || now;
     const tValid = entry.tValid || created;
@@ -134,6 +143,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const history = entry.kind === "semantic" ? (entry.history ?? []) : [];
     // payload 存完整条目（kind 特有字段 + source/evidence 等），基础列字段在读出时以列为准
     const payload = { ...entry, id };
+    const storedScope =
+      this.scope ??
+      ({
+        tenantId: "legacy",
+        userId: "legacy",
+        workspaceId: entry.repo || "legacy",
+        repositoryId: entry.repo || "legacy",
+      } satisfies MemoryScopeKey);
     // verification_status 按条目推导（修复批次 A #2）：固化通道（可信 source）→ verified；
     // 降级条目（payload.degraded）与纯推断（agent_inferred）→ unverified
     const degraded = (entry as { degraded?: boolean }).degraded === true;
@@ -148,7 +165,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         ? "verified"
         : "unverified";
 
-    await sql`
+    const rows = await sql`
       INSERT INTO memory_items (
         id, schema_version, type, subject_key, subject_key_version,
         title, summary, status, scope, confidence, verification_status,
@@ -157,7 +174,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         t_valid, t_invalid, when_to_use, freq, utility, history
       ) VALUES (
         ${id}, 2, ${entry.kind}, ${id}, 1,
-        ${title}, ${summary}, 'active', ${sql.json({ repositoryId: entry.repo })}, ${entry.confidence}, ${verificationStatus},
+        ${title}, ${summary}, 'active', ${sql.json(storedScope as any)}, ${entry.confidence}, ${verificationStatus},
         ${sql.json(payload as any)}, ${textArrayLiteral(tags)}::text[],
         1, ${created}, ${now},
         ${tValid}, ${entry.tInvalid ?? null}, ${whenToUseCol}, ${entry.freq ?? 0}, ${entry.utility ?? 0}, ${sql.json(history as any)}
@@ -175,7 +192,18 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         history = EXCLUDED.history,
         version = memory_items.version + 1,
         updated_at = now()
+      WHERE ${this.scope == null}
+         OR (
+           memory_items.scope->>'tenantId' = ${this.scope?.tenantId ?? ""}
+           AND memory_items.scope->>'userId' = ${this.scope?.userId ?? ""}
+           AND memory_items.scope->>'workspaceId' = ${this.scope?.workspaceId ?? ""}
+           AND memory_items.scope->>'repositoryId' = ${this.scope?.repositoryId ?? ""}
+         )
+      RETURNING id
     `;
+    if (rows.length === 0) {
+      throw new Error("Memory ID collision outside the active scope");
+    }
     // 注意：upsert 不触碰 freq/utility/t_valid/created_at —— 账本与时间线不被同内容重写覆盖
 
     // 派生索引：embedding 失败不阻塞写入（spec §9.6 降级总则）
@@ -189,7 +217,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
 
   async get(id: string): Promise<MemoryEntry | null> {
     const sql = getSql();
-    const rows = await sql`SELECT * FROM memory_items WHERE id = ${id}`;
+    const rows = await sql`
+      SELECT * FROM memory_items
+      WHERE id = ${id}
+        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          AND scope->>'userId' = ${this.scope.userId}
+          AND scope->>'workspaceId' = ${this.scope.workspaceId}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+    `;
     return rows.length > 0 ? rowToEntry(rows[0] as Row) : null;
   }
 
@@ -198,19 +233,36 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     await sql`
       UPDATE memory_items SET t_invalid = ${tInvalid}, updated_at = now()
       WHERE id = ${id}
+        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          AND scope->>'userId' = ${this.scope.userId}
+          AND scope->>'workspaceId' = ${this.scope.workspaceId}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
     `;
   }
 
   async delete(id: string): Promise<void> {
     const sql = getSql();
     // memory_embeddings ON DELETE CASCADE（V008），无需显式清理
-    await sql`DELETE FROM memory_items WHERE id = ${id}`;
+    await sql`
+      DELETE FROM memory_items WHERE id = ${id}
+        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          AND scope->>'userId' = ${this.scope.userId}
+          AND scope->>'workspaceId' = ${this.scope.workspaceId}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+    `;
   }
 
   async query(filter: MemoryFilter): Promise<MemoryEntry[]> {
     const sql = getSql();
     const conds: string[] = ["1=1"];
     const params: unknown[] = [];
+
+    if (this.scope) {
+      for (const [key, value] of Object.entries(this.scope)) {
+        params.push(value);
+        conds.push(`scope->>'${key}' = $${params.length}`);
+      }
+    }
 
     if (!filter.includeInvalidated) {
       conds.push("t_invalid IS NULL");
@@ -254,6 +306,12 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     // 只检索活跃且未降级的条目（spec §6.3 硬默认）。
     // repo 可选：注入路径 repo 密封（A 仓库任务不注入 B 仓库记忆）。
     const repoCond = repo ? sql`AND scope->>'repositoryId' = ${repo}` : sql``;
+    const scopeCond = this.scope
+      ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          AND scope->>'userId' = ${this.scope.userId}
+          AND scope->>'workspaceId' = ${this.scope.workspaceId}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+      : sql``;
     const rows = await sql`
       SELECT id, GREATEST(
                ts_rank(search_tsv, plainto_tsquery('english', ${queryText})),
@@ -264,6 +322,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       WHERE t_invalid IS NULL
         AND verification_status != 'invalidated'
         AND COALESCE(payload->>'degraded', 'false') != 'true'
+        ${scopeCond}
         ${repoCond}
         AND (
           search_tsv @@ plainto_tsquery('english', ${queryText})
@@ -285,6 +344,12 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const formatted = `[${queryVec.join(",")}]`;
     // repo 可选：注入路径 repo 密封（否则共享库中同内容异仓库条目竞争 top-k）
     const repoCond = repo ? sql`AND m.scope->>'repositoryId' = ${repo}` : sql``;
+    const scopeCond = this.scope
+      ? sql`AND m.scope->>'tenantId' = ${this.scope.tenantId}
+          AND m.scope->>'userId' = ${this.scope.userId}
+          AND m.scope->>'workspaceId' = ${this.scope.workspaceId}
+          AND m.scope->>'repositoryId' = ${this.scope.repositoryId}`
+      : sql``;
 
     // 主路：pgvector 余弦距离（V008）
     try {
@@ -295,6 +360,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         WHERE m.t_invalid IS NULL
           AND m.verification_status != 'invalidated'
           AND COALESCE(m.payload->>'degraded', 'false') != 'true'
+          ${scopeCond}
           ${repoCond}
         ORDER BY e.embedding <=> ${formatted}::vector ASC
         LIMIT ${k}
@@ -312,6 +378,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         WHERE m.t_invalid IS NULL
           AND m.verification_status != 'invalidated'
           AND COALESCE(m.payload->>'degraded', 'false') != 'true'
+          ${scopeCond}
           ${repoCond}
       `;
       return (rows as unknown as { memory_id: string; embedding: unknown }[])
@@ -327,8 +394,13 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
 
   async ledger(id: string): Promise<LedgerEntry | null> {
     const sql = getSql();
-    const rows =
-      await sql`SELECT freq, utility FROM memory_items WHERE id = ${id}`;
+    const rows = await sql`
+      SELECT freq, utility FROM memory_items WHERE id = ${id}
+        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          AND scope->>'userId' = ${this.scope.userId}
+          AND scope->>'workspaceId' = ${this.scope.workspaceId}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+    `;
     if (rows.length === 0) return null;
     const row = rows[0] as { freq: number; utility: number };
     return { freq: row.freq, utility: row.utility };
@@ -337,11 +409,23 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
   async bumpLedger(id: string, field: "freq" | "utility"): Promise<void> {
     const sql = getSql();
     if (field === "freq") {
-      await sql`UPDATE memory_items SET freq = freq + 1 WHERE id = ${id}`;
+      await sql`
+        UPDATE memory_items SET freq = freq + 1 WHERE id = ${id}
+          ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+            AND scope->>'userId' = ${this.scope.userId}
+            AND scope->>'workspaceId' = ${this.scope.workspaceId}
+            AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+      `;
     } else {
       // utility 封顶（红队修复：utility farming 防御）——所有递增路径（含 settleRunOutcome/
       // recordTaskSuccess 聚合结算与 bumpLedger 直调）都汇聚到这一个 SQL，统一 clamp
-      await sql`UPDATE memory_items SET utility = LEAST(utility + 1, ${LEDGER_UTILITY_MAX}) WHERE id = ${id}`;
+      await sql`
+        UPDATE memory_items SET utility = LEAST(utility + 1, ${LEDGER_UTILITY_MAX}) WHERE id = ${id}
+          ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+            AND scope->>'userId' = ${this.scope.userId}
+            AND scope->>'workspaceId' = ${this.scope.workspaceId}
+            AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+      `;
     }
   }
 
@@ -352,6 +436,10 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       SELECT * FROM memory_items
       WHERE t_invalid IS NULL
         AND COALESCE(payload->>'degraded', 'false') != 'true'
+        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          AND scope->>'userId' = ${this.scope.userId}
+          AND scope->>'workspaceId' = ${this.scope.workspaceId}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
     `;
     let indexed = 0;
     let failed = 0;

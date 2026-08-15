@@ -45,6 +45,7 @@ export interface MemoryRuntimeLlm {
 
 export interface MemoryRuntimeOptions {
   readonly workspaceRoot: string;
+  readonly tenantId?: string;
   readonly userId?: string;
   readonly repositoryId?: string;
   readonly workspaceId?: string;
@@ -239,6 +240,7 @@ export interface MemoryRuntime {
   shutdown(): Promise<void>;
   /** 当前 scope（调试 / 事件用） */
   readonly scope: {
+    readonly tenantId: string;
     readonly userId: string;
     readonly repositoryId: string;
     readonly workspaceId: string;

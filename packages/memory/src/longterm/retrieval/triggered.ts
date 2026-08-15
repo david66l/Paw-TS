@@ -24,6 +24,7 @@ import { hybridRecall, RECALL_ALPHA, type ScoredEntry } from "./hybrid.js";
 import { appendOpLog } from "../observability/op-log.js";
 import { recordRetrievalHits } from "../observability/ledger.js";
 import { listTrialLessons, decrementTrialAttempts } from "../write/trial.js";
+import type { MemoryScopeKey } from "../store/scope-key.js";
 
 // ── 触发与配置（§9.1 / §9.4）──
 
@@ -35,6 +36,8 @@ export type MemoryTrigger =
 
 export interface RetrieverOptions {
   engine: MemoryStoreEngine;
+  /** Required on runtime retrieval; seals the independent trial pool too. */
+  scope?: MemoryScopeKey;
   /** 精排 LLM（缺省 → 召回分数直取 top-k） */
   reranker?: RerankerLlm;
   /**
@@ -261,6 +264,7 @@ const DEFAULT_TOPK = { taskStart: 1, actionFailed: 3, postCompact: 2, explicitQu
 
 export class TriggeredRetriever {
   private readonly engine: MemoryStoreEngine;
+  private readonly scope?: MemoryScopeKey;
   private readonly reranker?: RerankerLlm;
   private readonly queryRewriter?: RerankerLlm;
   private readonly topK: Required<NonNullable<RetrieverOptions["topK"]>>;
@@ -271,6 +275,7 @@ export class TriggeredRetriever {
 
   constructor(opts: RetrieverOptions) {
     this.engine = opts.engine;
+    this.scope = opts.scope ?? opts.engine.scope;
     this.reranker = opts.reranker;
     this.queryRewriter = opts.queryRewriter;
     this.topK = { ...DEFAULT_TOPK, ...opts.topK };
@@ -448,7 +453,7 @@ export class TriggeredRetriever {
     const injectedTrial = pkg.items.find((i) => i.kind === "trial");
     if (injectedTrial) {
       try {
-        await decrementTrialAttempts(injectedTrial.id);
+        await decrementTrialAttempts(injectedTrial.id, this.scope);
       } catch { /* 计数失败不影响注入 */ }
     }
     return pkg;
@@ -481,7 +486,7 @@ export class TriggeredRetriever {
     try {
       const terms = extractMatchTerms(query);
       if (terms.length === 0) return null;
-      const lessons = await listTrialLessons();
+      const lessons = await listTrialLessons(undefined, this.scope);
       let best: { lesson: (typeof lessons)[number]; hits: number } | null = null;
       for (const lesson of lessons) {
         // 蒸馏产物有检索键（whenToUse/keywords，V032）；原文切片只有 lesson 文本

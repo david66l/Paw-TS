@@ -11,21 +11,35 @@
  */
 
 import { createHash } from "node:crypto";
-import { getSql, textArrayLiteral } from "../../db/connection.js";
+import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
 import { appendOpLog } from "../observability/op-log.js";
 import type { EpisodicExperience, MemoryStoreEngine, TrialLesson } from "../store/engine.js";
 import { deriveEntryId } from "../store/id.js";
+import {
+  memoryScopeFingerprint,
+  type MemoryScopeKey,
+} from "../store/scope-key.js";
 import type { DistillerLlm, DistillInput } from "./distiller.js";
 
 export interface TrialLessonRow extends TrialLesson {
+  scope?: MemoryScopeKey;
   whenToUse?: string;
   keywords?: string[];
   /** false = 超预算/蒸馏失败的原文切片降级产物 */
   distilled: boolean;
 }
 
-function trialId(lesson: string, originTaskId: string): string {
-  const hex = createHash("sha256").update(`${originTaskId}\n${lesson}`).digest("hex").slice(0, 16);
+function trialId(
+  lesson: string,
+  originTaskId: string,
+  scope?: MemoryScopeKey,
+): string {
+  const hex = createHash("sha256")
+    .update(
+      `${originTaskId}\n${lesson}${scope ? `\n${memoryScopeFingerprint(scope)}` : ""}`,
+    )
+    .digest("hex")
+    .slice(0, 16);
   return `trial-${hex}`;
 }
 
@@ -39,6 +53,7 @@ function rowToLesson(r: Record<string, unknown>): TrialLessonRow {
     whenToUse: (r.when_to_use as string | null) ?? undefined,
     keywords: (r.keywords as string[] | null) ?? undefined,
     distilled: (r.distilled as boolean) ?? false,
+    scope: parseJson(r.scope) as MemoryScopeKey | undefined,
   };
 }
 
@@ -46,54 +61,106 @@ function rowToLesson(r: Record<string, unknown>): TrialLessonRow {
 export async function addTrialLesson(
   lesson: string,
   originTaskId: string,
-  extra: { whenToUse?: string; keywords?: string[]; distilled?: boolean } = {},
+  extra: {
+    whenToUse?: string;
+    keywords?: string[];
+    distilled?: boolean;
+    scope?: MemoryScopeKey;
+  } = {},
 ): Promise<TrialLessonRow> {
   const sql = getSql();
-  const id = trialId(lesson, originTaskId);
+  const id = trialId(lesson, originTaskId, extra.scope);
+  const storedScope =
+    extra.scope ??
+    ({
+      tenantId: "legacy",
+      userId: "legacy",
+      workspaceId: "legacy",
+      repositoryId: "legacy",
+    } satisfies MemoryScopeKey);
   const [row] = await sql`
-    INSERT INTO memory_trial_lessons (id, lesson, origin_task_id, created, attempts_left, when_to_use, keywords, distilled)
+    INSERT INTO memory_trial_lessons (id, lesson, origin_task_id, created, attempts_left, when_to_use, keywords, distilled, scope)
     VALUES (${id}, ${lesson}, ${originTaskId}, now(), 3,
-            ${extra.whenToUse ?? null}, ${textArrayLiteral(extra.keywords ?? [])}::text[], ${extra.distilled ?? false})
+            ${extra.whenToUse ?? null}, ${textArrayLiteral(extra.keywords ?? [])}::text[], ${extra.distilled ?? false}, ${sql.json(storedScope as any)})
     ON CONFLICT (id) DO UPDATE SET attempts_left = 3
+    WHERE memory_trial_lessons.scope = EXCLUDED.scope
     RETURNING *
   `;
+  if (!row) throw new Error("Trial lesson ID collision outside active scope");
   return rowToLesson(row as Record<string, unknown>);
 }
 
-export async function listTrialLessons(originTaskId?: string): Promise<TrialLessonRow[]> {
+export async function listTrialLessons(
+  originTaskId?: string,
+  scope?: MemoryScopeKey,
+): Promise<TrialLessonRow[]> {
   const sql = getSql();
+  const scopeCond = scope
+    ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+        AND scope->>'userId' = ${scope.userId}
+        AND scope->>'workspaceId' = ${scope.workspaceId}
+        AND scope->>'repositoryId' = ${scope.repositoryId}`
+    : sql``;
   const rows = originTaskId
-    ? await sql`SELECT * FROM memory_trial_lessons WHERE origin_task_id = ${originTaskId} ORDER BY created DESC`
-    : await sql`SELECT * FROM memory_trial_lessons ORDER BY created DESC LIMIT 100`;
+    ? await sql`SELECT * FROM memory_trial_lessons WHERE origin_task_id = ${originTaskId} ${scopeCond} ORDER BY created DESC`
+    : await sql`SELECT * FROM memory_trial_lessons WHERE true ${scopeCond} ORDER BY created DESC LIMIT 100`;
   return (rows as unknown as Record<string, unknown>[]).map(rowToLesson);
 }
 
 /** 按 id 取单条试用教训；不存在返回 null。 */
-export async function getTrialLesson(id: string): Promise<TrialLessonRow | null> {
+export async function getTrialLesson(
+  id: string,
+  scope?: MemoryScopeKey,
+): Promise<TrialLessonRow | null> {
   const sql = getSql();
-  const [row] = await sql`SELECT * FROM memory_trial_lessons WHERE id = ${id}`;
+  const [row] = await sql`
+    SELECT * FROM memory_trial_lessons WHERE id = ${id}
+      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+        AND scope->>'userId' = ${scope.userId}
+        AND scope->>'workspaceId' = ${scope.workspaceId}
+        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+  `;
   return row ? rowToLesson(row as Record<string, unknown>) : null;
 }
 
 /** 随行注入一次 → attemptsLeft-1（#8；耗尽由 janitor 物理丢弃）。返回剩余次数。 */
-export async function decrementTrialAttempts(id: string): Promise<number> {
+export async function decrementTrialAttempts(
+  id: string,
+  scope?: MemoryScopeKey,
+): Promise<number> {
   const sql = getSql();
   const [row] = await sql`
     UPDATE memory_trial_lessons SET attempts_left = GREATEST(attempts_left - 1, 0)
-    WHERE id = ${id} RETURNING attempts_left
+    WHERE id = ${id}
+      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+        AND scope->>'userId' = ${scope.userId}
+        AND scope->>'workspaceId' = ${scope.workspaceId}
+        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+    RETURNING attempts_left
   `;
   return row ? ((row as { attempts_left: number }).attempts_left) : 0;
 }
 
 /** 从 trial 池物理删除（转正成功后或调用方显式丢弃）。 */
-export async function removeTrialLesson(id: string): Promise<boolean> {
+export async function removeTrialLesson(
+  id: string,
+  scope?: MemoryScopeKey,
+): Promise<boolean> {
   const sql = getSql();
-  const rows = await sql`DELETE FROM memory_trial_lessons WHERE id = ${id} RETURNING id`;
+  const rows = await sql`
+    DELETE FROM memory_trial_lessons WHERE id = ${id}
+      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+        AND scope->>'userId' = ${scope.userId}
+        AND scope->>'workspaceId' = ${scope.workspaceId}
+        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+    RETURNING id
+  `;
   return rows.length > 0;
 }
 
 export interface GraduateTrialOptions {
   engine: MemoryStoreEngine;
+  scope?: MemoryScopeKey;
   /** 转正时写入的 repo（注入 run 的仓库） */
   repo: string;
   /** 验证成功的 runId（证据指针） */
@@ -115,7 +182,8 @@ export async function graduateTrialLesson(
   trialId: string,
   opts: GraduateTrialOptions,
 ): Promise<GraduateTrialResult | null> {
-  const lesson = await getTrialLesson(trialId);
+  const scope = opts.scope ?? opts.engine.scope;
+  const lesson = await getTrialLesson(trialId, scope);
   if (!lesson) return null;
 
   const nowIso = (opts.now?.() ?? new Date()).toISOString();
@@ -150,8 +218,8 @@ export async function graduateTrialLesson(
   };
 
   await opts.engine.put(entry);
-  const memoryId = deriveEntryId(entry);
-  await removeTrialLesson(trialId);
+  const memoryId = entry.id || deriveEntryId(entry, scope);
+  await removeTrialLesson(trialId, scope);
   await appendOpLog("write.graduated", {
     runId: opts.graduatingRunId,
     entryIds: [memoryId],

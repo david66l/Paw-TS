@@ -18,6 +18,10 @@ import { generateId } from "../../db/modules/platform/idGen.js";
 import type { MemoryEntry, MemoryStoreEngine, SemanticFact, EpisodicExperience } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import { deriveEntryId } from "../store/id.js";
+import {
+  sameMemoryScope,
+  type MemoryScopeKey,
+} from "../store/scope-key.js";
 import { appendOpLog, queryOpLog } from "../observability/op-log.js";
 import { recordTaskSuccess, recordAdoption, detectAdoption } from "../observability/ledger.js";
 import { hybridRecall } from "../retrieval/hybrid.js";
@@ -35,11 +39,14 @@ export type Verdict =
   | { kind: "user_accepted" }
   | { kind: "none" };
 
-export type MemoryWriteEvent =
+type MemoryWriteScope = { scope?: MemoryScopeKey };
+
+export type MemoryWriteEvent = (
   | { type: "task_succeeded"; runId: string; trajectoryRef: string; repo?: string; goal?: string; trajectory?: string; verdict?: Verdict }
   | { type: "task_failed"; runId: string; trajectoryRef: string; repo?: string; goal?: string; trajectory?: string; verdict?: Verdict }
   | { type: "user_correction"; text: string; messageRef: string; runId?: string; repo?: string }
-  | { type: "session_finalize"; conversationId: string; runId?: string; repo?: string; goal?: string; trajectory?: string };
+  | { type: "session_finalize"; conversationId: string; runId?: string; repo?: string; goal?: string; trajectory?: string }
+) & MemoryWriteScope;
 
 export type ProcessResult =
   | { status: "written"; memoryIds: string[] }
@@ -63,6 +70,8 @@ export interface GovernorHook {
 
 export interface WritePipelineOptions {
   engine?: MemoryStoreEngine;
+  /** Required on runtime pipelines; seals outbox claim and processing. */
+  scope?: MemoryScopeKey;
   /** 缺省时固化通道直接降级为原文摘要 */
   distiller?: MemoryDistiller;
   /** 显式注入 Governor（测试 mock 优先）；与 governorLlm 二选一 */
@@ -98,6 +107,7 @@ export function estimateTokens(text: string): number {
 
 export class MemoryWritePipeline {
   private readonly engine: MemoryStoreEngine;
+  private readonly scope?: MemoryScopeKey;
   private readonly distiller?: MemoryDistiller;
   private readonly governor?: GovernorHook;
   private readonly batchAdjudication: boolean;
@@ -111,7 +121,11 @@ export class MemoryWritePipeline {
   private processing = false;
 
   constructor(opts: WritePipelineOptions = {}) {
-    this.engine = opts.engine ?? new PostgresMemoryStoreEngine();
+    this.scope = opts.scope ?? opts.engine?.scope;
+    if (opts.scope && opts.engine?.scope && !sameMemoryScope(opts.scope, opts.engine.scope)) {
+      throw new Error("Memory pipeline scope does not match its store engine");
+    }
+    this.engine = opts.engine ?? new PostgresMemoryStoreEngine(this.scope);
     this.distiller = opts.distiller;
     this.governor = opts.governor
       ?? (opts.governorLlm ? new LongtermGovernor({ llm: opts.governorLlm, now: opts.now }) : undefined);
@@ -134,8 +148,11 @@ export class MemoryWritePipeline {
       });
       return;
     }
+    const scopedEvent: MemoryWriteEvent = this.scope
+      ? { ...event, repo: this.scope.repositoryId, scope: this.scope }
+      : event;
     const sql = getSql();
-    const estimated = estimateTokens("goal" in event ? `${event.goal ?? ""}\n${event.trajectory ?? ""}` : "text" in event ? event.text : "");
+    const estimated = estimateTokens("goal" in scopedEvent ? `${scopedEvent.goal ?? ""}\n${scopedEvent.trajectory ?? ""}` : "text" in scopedEvent ? scopedEvent.text : "");
     // sequence 用 V007 的 outbox_sequence_gen 发号：并发安全（nextval 不会冲突），
     // 配合 (aggregate_id, sequence) 唯一约束（V007）双保险
     await sql`
@@ -144,7 +161,7 @@ export class MemoryWritePipeline {
         sequence, transaction_id, status, created_at
       ) VALUES (
         ${generateId("outbox")}, ${event.type}, ${OUTBOX_TYPE}, ${OUTBOX_AGGREGATE},
-        ${sql.json(event as any)},
+        ${sql.json(scopedEvent as any)},
         (SELECT nextval('outbox_sequence_gen')),
         ${generateId("tx")}, 'pending', now()
       )
@@ -189,11 +206,18 @@ export class MemoryWritePipeline {
   /** 处理一条待处理事件（测试可直接调用）；无待处理返回 false */
   async processNext(): Promise<boolean> {
     const sql = getSql();
+    const scopeCond = this.scope
+      ? sql`AND payload->'scope'->>'tenantId' = ${this.scope.tenantId}
+          AND payload->'scope'->>'userId' = ${this.scope.userId}
+          AND payload->'scope'->>'workspaceId' = ${this.scope.workspaceId}
+          AND payload->'scope'->>'repositoryId' = ${this.scope.repositoryId}`
+      : sql`AND payload->'scope' IS NULL`;
     // 回收崩溃遗留的 processing 行（超 5 分钟，V030）
     await sql`
       UPDATE outbox_events SET status = 'pending', processing_at = NULL
       WHERE aggregate_type = ${OUTBOX_TYPE} AND status = 'processing'
         AND processing_at < now() - interval '5 minutes'
+        ${scopeCond}
     `;
     // 原子领取：SKIP LOCKED 保证多 worker 并发同一事件只被领取一次
     const rows = await sql`
@@ -202,6 +226,7 @@ export class MemoryWritePipeline {
         SELECT id FROM outbox_events
         WHERE aggregate_type = ${OUTBOX_TYPE} AND status = 'pending'
           AND (next_retry_at IS NULL OR next_retry_at <= now())
+          ${scopeCond}
         ORDER BY sequence ASC LIMIT 1
         FOR UPDATE SKIP LOCKED
       )
@@ -232,7 +257,10 @@ export class MemoryWritePipeline {
 
   /** 单事件处理主流程（五道关） */
   async processEvent(event: MemoryWriteEvent): Promise<ProcessResult> {
-    const repo = "repo" in event ? (event.repo ?? "") : "";
+    if (this.scope && (!event.scope || !sameMemoryScope(this.scope, event.scope))) {
+      throw new Error("Memory write event is outside the pipeline scope");
+    }
+    const repo = this.scope?.repositoryId ?? ("repo" in event ? (event.repo ?? "") : "");
     const runId = "runId" in event ? event.runId : undefined;
 
     // ── 第一道（双道之一）：密钥拦截——蒸馏前 ──
@@ -315,12 +343,16 @@ export class MemoryWritePipeline {
             whenToUse: draft.whenToUse,
             keywords: draft.keywords,
             distilled: true,
+            scope: this.scope,
           });
           return { status: "trialed", trialId: trial.id };
         }
       }
     }
-    const trial = await addTrialLesson(slice, originTaskId, { distilled: false });
+    const trial = await addTrialLesson(slice, originTaskId, {
+      distilled: false,
+      scope: this.scope,
+    });
     return { status: "trialed", trialId: trial.id };
   }
 
@@ -351,7 +383,7 @@ export class MemoryWritePipeline {
       embeddingKey: finalText,
     };
     await this.engine.put(entry);
-    const id = deriveEntryId(entry); // put 按内容哈希派生 id，确定性取回
+    const id = entry.id || deriveEntryId(entry, this.scope);
     await appendOpLog("governed", { runId: opts.runId, entryIds: [id], detail: { op: "ADD", by: "user_correction" } });
     this.emit?.({ type: "memory.governed", op: "ADD", entryId: id });
     return { status: "corrected", memoryId: id, undoHint: `paw-ts memory forget ${id}` };
@@ -468,7 +500,7 @@ export class MemoryWritePipeline {
         await appendOpLog("governed", { runId: opts.runId, entryIds: [decision.targetId], detail: { op: "INVALIDATE" } });
         this.emit?.({ type: "memory.governed", op: "INVALIDATE", entryId: decision.targetId });
         await this.engine.put(draft);
-        const newId = deriveEntryId(draft);
+        const newId = draft.id || deriveEntryId(draft, this.scope);
         memoryIds.push(newId);
         await appendOpLog("governed", { runId: opts.runId, entryIds: [newId], detail: { op: "ADD", replaces: decision.targetId } });
         this.emit?.({ type: "memory.governed", op: "ADD", entryId: newId });
@@ -483,7 +515,7 @@ export class MemoryWritePipeline {
         draft.id = decision.targetId;
       }
       await this.engine.put(draft);
-      const id = draft.id || deriveEntryId(draft);
+      const id = draft.id || deriveEntryId(draft, this.scope);
       memoryIds.push(id);
       await appendOpLog("governed", { runId: opts.runId, entryIds: [id], detail: { op: decision.op === "UPDATE" ? "UPDATE" : "ADD" } });
       this.emit?.({ type: "memory.governed", op: decision.op === "UPDATE" ? "UPDATE" : "ADD", entryId: id });
@@ -518,7 +550,7 @@ export class MemoryWritePipeline {
       degraded: true,
     } as SemanticFact;
     await this.engine.put(entry);
-    const id = deriveEntryId(entry);
+    const id = entry.id || deriveEntryId(entry, this.scope);
     await appendOpLog("write.rejected", { runId: opts.runId, entryIds: [id], detail: { reason: "schema", degraded: true, why: reason, errors: errors.slice(0, 5) } });
     this.emit?.({ type: "memory.write.rejected", reason: "schema", detail: reason });
     return { status: "degraded", memoryId: id };
@@ -558,6 +590,7 @@ export class MemoryWritePipeline {
         try {
           const graduated = await graduateTrialLesson(trialId, {
             engine: this.engine,
+            scope: this.scope,
             repo,
             graduatingRunId: runId,
             now: this.now,

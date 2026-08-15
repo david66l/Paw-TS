@@ -97,3 +97,10 @@ export {
   type AutoMemoryEntry,
   type MemoryPriority as AutoMemoryPriority,
 } from "./compat/auto-memory.js";
+
+export {
+  createMemoryScopeKey,
+  memoryScopeFingerprint,
+  sameMemoryScope,
+  type MemoryScopeKey,
+} from "./longterm/store/scope-key.js";

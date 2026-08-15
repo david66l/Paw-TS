@@ -14,12 +14,14 @@ import { join } from "node:path";
 import { getSql } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
 import { appendOpLog } from "../observability/op-log.js";
+import type { MemoryScopeKey } from "../store/scope-key.js";
 
 export interface GcOptions {
   dryRun?: boolean;
   /** 可选：额外导出 JSONL 到该目录（生成 archive-YYYYMM.jsonl） */
   exportDir?: string;
   repo?: string;
+  scope?: MemoryScopeKey;
   /** 单批上限（防误操作），默认 500 */
   limit?: number;
 }
@@ -40,9 +42,23 @@ interface DeadRow {
   entry: Record<string, unknown>;
 }
 
-async function loadDeadRows(repo: string | undefined, limit: number): Promise<DeadRow[]> {
+async function loadDeadRows(
+  repo: string | undefined,
+  scope: MemoryScopeKey | undefined,
+  limit: number,
+): Promise<DeadRow[]> {
   const sql = getSql();
-  const rows = repo
+  const rows = scope
+    ? await sql`
+        SELECT * FROM memory_items
+        WHERE t_invalid IS NOT NULL
+          AND scope->>'tenantId' = ${scope.tenantId}
+          AND scope->>'userId' = ${scope.userId}
+          AND scope->>'workspaceId' = ${scope.workspaceId}
+          AND scope->>'repositoryId' = ${scope.repositoryId}
+        ORDER BY t_invalid ASC LIMIT ${limit}
+      `
+    : repo
     ? await sql`
         SELECT * FROM memory_items
         WHERE t_invalid IS NOT NULL AND scope->>'repositoryId' = ${repo}
@@ -60,7 +76,7 @@ async function loadDeadRows(repo: string | undefined, limit: number): Promise<De
 
 export async function collectGarbage(opts: GcOptions = {}): Promise<GcReport> {
   const limit = opts.limit ?? 500;
-  const dead = await loadDeadRows(opts.repo, limit);
+  const dead = await loadDeadRows(opts.repo, opts.scope, limit);
   const report: GcReport = {
     eligible: dead.length,
     archived: 0,
@@ -95,7 +111,11 @@ export async function collectGarbage(opts: GcOptions = {}): Promise<GcReport> {
 
   // 3. 物理删除
   for (const d of dead) {
-    await sql`DELETE FROM memory_items WHERE id = ${d.id}`;
+    await sql`DELETE FROM memory_items WHERE id = ${d.id}
+      ${opts.scope ? sql`AND scope->>'tenantId' = ${opts.scope.tenantId}
+        AND scope->>'userId' = ${opts.scope.userId}
+        AND scope->>'workspaceId' = ${opts.scope.workspaceId}
+        AND scope->>'repositoryId' = ${opts.scope.repositoryId}` : sql``}`;
     report.deleted += 1;
   }
 
@@ -109,10 +129,18 @@ export async function collectGarbage(opts: GcOptions = {}): Promise<GcReport> {
 }
 
 /** 查归档（gc 后可查） */
-export async function queryArchive(entryId: string): Promise<Record<string, unknown> | null> {
+export async function queryArchive(
+  entryId: string,
+  scope?: MemoryScopeKey,
+): Promise<Record<string, unknown> | null> {
   const sql = getSql();
   const rows = await sql`
-    SELECT entry FROM memory_gc_archive WHERE entry_id = ${entryId} ORDER BY archived_at DESC LIMIT 1
+    SELECT entry FROM memory_gc_archive WHERE entry_id = ${entryId}
+      ${scope ? sql`AND entry->'scope'->>'tenantId' = ${scope.tenantId}
+        AND entry->'scope'->>'userId' = ${scope.userId}
+        AND entry->'scope'->>'workspaceId' = ${scope.workspaceId}
+        AND entry->'scope'->>'repositoryId' = ${scope.repositoryId}` : sql``}
+    ORDER BY archived_at DESC LIMIT 1
   `;
   if (rows.length === 0) return null;
   const raw = (rows[0] as { entry: unknown }).entry;

@@ -205,7 +205,7 @@ export async function admitProfile(
   }
 
   await opts.engine.put(candidate);
-  const memoryId = deriveEntryId(candidate);
+  const memoryId = candidate.id || deriveEntryId(candidate, opts.engine.scope);
   await appendOpLog("governed", {
     runId: opts.runId,
     entryIds: [memoryId],

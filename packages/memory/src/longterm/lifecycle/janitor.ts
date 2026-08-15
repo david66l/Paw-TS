@@ -24,6 +24,7 @@ import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
 import type { MemoryStoreEngine } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
+import type { MemoryScopeKey } from "../store/scope-key.js";
 import { appendOpLog } from "../observability/op-log.js";
 import { enforceProfileCapacity } from "../write/profile.js";
 
@@ -42,6 +43,8 @@ export interface LifecycleConfig {
   profileCap: number;
   /** 限定仓库；缺省全库 */
   repo?: string;
+  /** Runtime path uses the complete key; repo-only is legacy/admin mode. */
+  scope?: MemoryScopeKey;
 }
 
 export const DEFAULT_LIFECYCLE_CONFIG: LifecycleConfig = {
@@ -99,9 +102,24 @@ interface ActiveRow {
   tValid: string;
 }
 
-async function loadActiveRows(repo?: string): Promise<ActiveRow[]> {
+async function loadActiveRows(
+  repo?: string,
+  scope?: MemoryScopeKey,
+): Promise<ActiveRow[]> {
   const sql = getSql();
-  const rows = repo
+  const rows = scope
+    ? await sql`
+        SELECT id, type, freq, utility, payload->>'source' AS source,
+               (payload->>'supportCount')::int AS support_count, t_valid
+        FROM memory_items
+        WHERE t_invalid IS NULL
+          AND scope->>'tenantId' = ${scope.tenantId}
+          AND scope->>'userId' = ${scope.userId}
+          AND scope->>'workspaceId' = ${scope.workspaceId}
+          AND scope->>'repositoryId' = ${scope.repositoryId}
+          AND COALESCE(payload->>'degraded', 'false') != 'true'
+      `
+    : repo
     ? await sql`
         SELECT id, type, freq, utility, payload->>'source' AS source,
                (payload->>'supportCount')::int AS support_count, t_valid
@@ -160,7 +178,10 @@ export async function scanDeletionCandidates(
   config: Partial<LifecycleConfig> = {},
 ): Promise<DeletionCandidate[]> {
   const cfg = { ...DEFAULT_LIFECYCLE_CONFIG, ...config };
-  const [rows, adoption] = await Promise.all([loadActiveRows(cfg.repo), loadAdoptionRates()]);
+  const [rows, adoption] = await Promise.all([
+    loadActiveRows(cfg.repo, cfg.scope),
+    loadAdoptionRates(),
+  ]);
 
   const out: DeletionCandidate[] = [];
   for (const r of rows) {
@@ -193,7 +214,9 @@ export async function scanDeletionCandidates(
 
 // ── review 队列 ──
 
-async function reviewStats(): Promise<{ total: number; resolved: number; rejected: number; pending: number }> {
+async function reviewStats(
+  scope?: MemoryScopeKey,
+): Promise<{ total: number; resolved: number; rejected: number; pending: number }> {
   const sql = getSql();
   const [r] = await sql`
     SELECT count(*)::int AS total,
@@ -201,6 +224,11 @@ async function reviewStats(): Promise<{ total: number; resolved: number; rejecte
            count(*) FILTER (WHERE status = 'rejected')::int AS rejected,
            count(*) FILTER (WHERE status = 'pending')::int AS pending
     FROM memory_lifecycle_review
+    WHERE true
+      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+        AND scope->>'userId' = ${scope.userId}
+        AND scope->>'workspaceId' = ${scope.workspaceId}
+        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
   `;
   return r as { total: number; resolved: number; rejected: number; pending: number };
 }
@@ -215,18 +243,27 @@ export function isAutoMode(
   return stats.rejected / stats.resolved < cfg.autoApproveMaxRejectRate;
 }
 
-async function enqueueReview(c: DeletionCandidate, nowIso: string): Promise<boolean> {
+async function enqueueReview(
+  c: DeletionCandidate,
+  nowIso: string,
+  scope?: MemoryScopeKey,
+): Promise<boolean> {
   const sql = getSql();
   // rejected/pending 已存在的条目不再进队列
   const existing = await sql`
-    SELECT 1 FROM memory_lifecycle_review WHERE entry_id = ${c.id} LIMIT 1
+    SELECT 1 FROM memory_lifecycle_review WHERE entry_id = ${c.id}
+      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+        AND scope->>'userId' = ${scope.userId}
+        AND scope->>'workspaceId' = ${scope.workspaceId}
+        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+    LIMIT 1
   `;
   if (existing.length > 0) return false;
   await sql`
-    INSERT INTO memory_lifecycle_review (id, entry_id, reason, snapshot, status, created_at)
+    INSERT INTO memory_lifecycle_review (id, entry_id, reason, snapshot, status, created_at, scope)
     VALUES (${generateId("lcr")}, ${c.id}, ${c.reason},
             ${sql.json({ freq: c.freq, utility: c.utility, adoptionRate: c.adoptionRate } as any)},
-            'pending', ${nowIso})
+            'pending', ${nowIso}, ${sql.json((scope ?? { tenantId: "legacy", userId: "legacy", workspaceId: "legacy", repositoryId: "legacy" }) as any)})
   `;
   return true;
 }
@@ -264,8 +301,14 @@ export interface JanitorOptions {
 }
 
 export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<LifecycleReport> {
-  const engine = opts.engine ?? new PostgresMemoryStoreEngine();
-  const cfg = { ...DEFAULT_LIFECYCLE_CONFIG, ...opts.config };
+  const configuredScope = opts.config?.scope ?? opts.engine?.scope;
+  const engine =
+    opts.engine ?? new PostgresMemoryStoreEngine(configuredScope);
+  const cfg = {
+    ...DEFAULT_LIFECYCLE_CONFIG,
+    ...opts.config,
+    scope: configuredScope,
+  };
   const nowIso = (opts.now ?? (() => new Date()))().toISOString();
   const sql = getSql();
 
@@ -283,13 +326,17 @@ export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<Lifec
   const candidates = await scanDeletionCandidates(cfg);
   report.candidates = candidates;
 
-  const stats = await reviewStats();
+  const stats = await reviewStats(cfg.scope);
   report.autoMode = isAutoMode(stats, cfg);
   report.reviewQueuePending = stats.pending;
 
   // 人工 reject 的条目永不自动删（复核结论优先，含全自动模式）
   const rejectedRows = report.autoMode
-    ? await sql`SELECT entry_id FROM memory_lifecycle_review WHERE status = 'rejected'`
+    ? await sql`SELECT entry_id FROM memory_lifecycle_review WHERE status = 'rejected'
+        ${cfg.scope ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
+          AND scope->>'userId' = ${cfg.scope.userId}
+          AND scope->>'workspaceId' = ${cfg.scope.workspaceId}
+          AND scope->>'repositoryId' = ${cfg.scope.repositoryId}` : sql``}`
     : [];
   const rejectedIds = new Set((rejectedRows as unknown as { entry_id: string }[]).map((r) => r.entry_id));
 
@@ -302,7 +349,7 @@ export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<Lifec
       await engine.invalidate(c.id, nowIso);
       report.autoInvalidated.push(c.id);
     } else {
-      const enqueued = await enqueueReview(c, nowIso);
+      const enqueued = await enqueueReview(c, nowIso, cfg.scope);
       if (enqueued) report.enqueuedForReview.push(c.id);
       else report.alreadyInQueue.push(c.id);
     }
@@ -316,7 +363,7 @@ export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<Lifec
   }
 
   // ── 2. 容量管理（§7.3）──
-  const rows = await loadActiveRows(cfg.repo);
+  const rows = await loadActiveRows(cfg.repo, cfg.scope);
   const episodicCut = await trimKind(rows, "episodic", cfg.episodicCap, cfg.episodicTrimTo, engine, nowIso);
   const semanticCut = await trimKind(rows, "semantic", cfg.semanticCap, cfg.semanticTrimTo, engine, nowIso);
   report.capacity.episodicInvalidated = episodicCut;
@@ -330,15 +377,29 @@ export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<Lifec
   // trial：超 cap FIFO + attemptsLeft 耗尽丢弃（物理删 trial 行）
   const trialRows = await sql`
     SELECT id FROM memory_trial_lessons
+    WHERE true
+      ${cfg.scope ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
+        AND scope->>'userId' = ${cfg.scope.userId}
+        AND scope->>'workspaceId' = ${cfg.scope.workspaceId}
+        AND scope->>'repositoryId' = ${cfg.scope.repositoryId}` : sql``}
     ORDER BY created ASC
   `;
   const trialIds = (trialRows as unknown as { id: string }[]).map((r) => r.id);
   if (trialIds.length > cfg.trialCap) {
     const excess = trialIds.slice(0, trialIds.length - cfg.trialCap);
-    await sql`DELETE FROM memory_trial_lessons WHERE id = ANY(${textArrayLiteral(excess)}::text[])`;
+    await sql`DELETE FROM memory_trial_lessons WHERE id = ANY(${textArrayLiteral(excess)}::text[])
+      ${cfg.scope ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
+        AND scope->>'userId' = ${cfg.scope.userId}
+        AND scope->>'workspaceId' = ${cfg.scope.workspaceId}
+        AND scope->>'repositoryId' = ${cfg.scope.repositoryId}` : sql``}`;
     report.capacity.trialDropped.push(...excess);
   }
-  const exhausted = await sql`DELETE FROM memory_trial_lessons WHERE attempts_left <= 0 RETURNING id`;
+  const exhausted = await sql`DELETE FROM memory_trial_lessons WHERE attempts_left <= 0
+    ${cfg.scope ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
+      AND scope->>'userId' = ${cfg.scope.userId}
+      AND scope->>'workspaceId' = ${cfg.scope.workspaceId}
+      AND scope->>'repositoryId' = ${cfg.scope.repositoryId}` : sql``}
+    RETURNING id`;
   report.capacity.trialDropped.push(...(exhausted as unknown as { id: string }[]).map((r) => r.id));
 
   // profile 超限：按效用腾位软失效（user_statement 豁免；写入侧 ADD/EDIT 见 admitProfile）
@@ -374,10 +435,18 @@ export interface ReviewRow {
   createdAt: string;
 }
 
-export async function listReviewQueue(status = "pending"): Promise<ReviewRow[]> {
+export async function listReviewQueue(
+  status = "pending",
+  scope?: MemoryScopeKey,
+): Promise<ReviewRow[]> {
   const sql = getSql();
   const rows = await sql`
-    SELECT * FROM memory_lifecycle_review WHERE status = ${status} ORDER BY created_at ASC LIMIT 200
+    SELECT * FROM memory_lifecycle_review WHERE status = ${status}
+      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+        AND scope->>'userId' = ${scope.userId}
+        AND scope->>'workspaceId' = ${scope.workspaceId}
+        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+    ORDER BY created_at ASC LIMIT 200
   `;
   return (rows as unknown as Record<string, unknown>[]).map((r) => ({
     id: r.id as string,
@@ -398,7 +467,12 @@ export async function approveReview(
   const engine = opts.engine ?? new PostgresMemoryStoreEngine();
   const rows = await sql`
     UPDATE memory_lifecycle_review SET status = 'approved', resolved_at = now()
-    WHERE entry_id = ${entryId} AND status = 'pending' RETURNING id
+    WHERE entry_id = ${entryId} AND status = 'pending'
+      ${engine.scope ? sql`AND scope->>'tenantId' = ${engine.scope.tenantId}
+        AND scope->>'userId' = ${engine.scope.userId}
+        AND scope->>'workspaceId' = ${engine.scope.workspaceId}
+        AND scope->>'repositoryId' = ${engine.scope.repositoryId}` : sql``}
+    RETURNING id
   `;
   if (rows.length === 0) return false;
   const nowIso = new Date().toISOString();
@@ -409,11 +483,19 @@ export async function approveReview(
 }
 
 /** 拒绝：不删且不再进队列（§7.2 人工复核结论） */
-export async function rejectReview(entryId: string): Promise<boolean> {
+export async function rejectReview(
+  entryId: string,
+  scope?: MemoryScopeKey,
+): Promise<boolean> {
   const sql = getSql();
   const rows = await sql`
     UPDATE memory_lifecycle_review SET status = 'rejected', resolved_at = now()
-    WHERE entry_id = ${entryId} AND status = 'pending' RETURNING id
+    WHERE entry_id = ${entryId} AND status = 'pending'
+      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+        AND scope->>'userId' = ${scope.userId}
+        AND scope->>'workspaceId' = ${scope.workspaceId}
+        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+    RETURNING id
   `;
   return rows.length > 0;
 }

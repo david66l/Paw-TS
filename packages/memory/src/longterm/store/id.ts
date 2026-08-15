@@ -8,6 +8,10 @@
 
 import { createHash } from "node:crypto";
 import type { MemoryEntry, MemoryKind } from "./engine.js";
+import {
+  memoryScopeFingerprint,
+  type MemoryScopeKey,
+} from "./scope-key.js";
 
 /** 正文规范化：小写 + 折叠空白 + trim，消除无意义差异 */
 export function normalizeBody(text: string): string {
@@ -28,15 +32,25 @@ export function canonicalBody(entry: MemoryEntry): string {
   }
 }
 
-export function deriveMemoryId(kind: MemoryKind, body: string, repo: string): string {
+export function deriveMemoryId(
+  kind: MemoryKind,
+  body: string,
+  repo: string,
+  scope?: MemoryScopeKey,
+): string {
   const hex = createHash("sha256")
-    .update(`${kind}\n${normalizeBody(body)}\n${normalizeBody(repo)}`)
+    .update(
+      `${kind}\n${normalizeBody(body)}\n${normalizeBody(repo)}${scope ? `\n${memoryScopeFingerprint(scope)}` : ""}`,
+    )
     .digest("hex")
     .slice(0, 16);
   return `${kind}-${hex}`;
 }
 
 /** 从条目直接派生 id */
-export function deriveEntryId(entry: MemoryEntry): string {
-  return deriveMemoryId(entry.kind, canonicalBody(entry), entry.repo);
+export function deriveEntryId(
+  entry: MemoryEntry,
+  scope?: MemoryScopeKey,
+): string {
+  return deriveMemoryId(entry.kind, canonicalBody(entry), entry.repo, scope);
 }

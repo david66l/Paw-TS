@@ -34,6 +34,7 @@ import {
 } from "../longterm/index.js";
 import type { MemoryEntry, SemanticFact } from "../longterm/store/engine.js";
 import { deriveEntryId } from "../longterm/store/id.js";
+import { memoryScopeFingerprint } from "../longterm/store/scope-key.js";
 import { classifyMemoryCompletion } from "./outcome-contract.js";
 import { type ResolvedScope, resolveScope } from "./scope.js";
 import type {
@@ -60,9 +61,7 @@ interface V2Core {
   retriever: TriggeredRetriever;
 }
 
-let sharedCore: V2Core | null = null;
-/** 活动 runtime 实例数：最后一个 shutdown 时停 worker（否则单次 CLI 调用永不退出） */
-let coreRefs = 0;
+const sharedCores = new Map<string, { core: V2Core; refs: number }>();
 
 /** 从 settings.local.json / env 解析"强模型"（Governor 用，spec A10）；不可用返回 undefined */
 function resolveGovernModel(
@@ -84,7 +83,7 @@ function buildCore(opts: {
   dailyBudget?: number;
   emit?: (event: RunEvent) => void;
 }): V2Core {
-  const engine = new PostgresMemoryStoreEngine();
+  const engine = new PostgresMemoryStoreEngine(opts.scope);
   const { llm, emit } = opts;
   // llm === null（off 模式）：禁用全部 LLM（含 settings 解析）
   const governLlm: ((prompt: string) => Promise<string>) | undefined =
@@ -93,6 +92,8 @@ function buildCore(opts: {
       : (llm.govern ?? resolveGovernModel(opts.scope.workspaceRoot));
 
   const pipeline = new MemoryWritePipeline({
+    engine,
+    scope: opts.scope,
     distiller: llm?.distill
       ? new MemoryDistiller({ complete: llm.distill })
       : undefined,
@@ -107,6 +108,7 @@ function buildCore(opts: {
 
   const retriever = new TriggeredRetriever({
     engine,
+    scope: opts.scope,
     reranker: llm?.rerank ? { complete: llm.rerank } : undefined,
     queryRewriter: llm?.rerank ? { complete: llm.rerank } : undefined, // T1 query 改写复用同一快模型
     emit,
@@ -117,16 +119,18 @@ function buildCore(opts: {
 
 /** 测试/进程收尾用：停掉共享 worker 并清空单例 */
 export function resetMemoryV2Core(): void {
-  if (sharedCore) {
-    sharedCore.pipeline.stop();
-    sharedCore = null;
-  }
-  coreRefs = 0;
+  for (const { core } of sharedCores.values()) core.pipeline.stop();
+  sharedCores.clear();
 }
 
 /** 测试用：当前进程共享 core（pipeline.processNext 可确定性排空 outbox，免等 worker 间隔） */
-export function getMemoryV2CoreForTests(): V2Core | null {
-  return sharedCore;
+export function getMemoryV2CoreForTests(
+  scope?: import("../longterm/store/scope-key.js").MemoryScopeKey,
+): V2Core | null {
+  if (scope) {
+    return sharedCores.get(memoryScopeFingerprint(scope))?.core ?? null;
+  }
+  return sharedCores.values().next().value?.core ?? null;
 }
 
 function getSharedCore(opts: {
@@ -135,14 +139,16 @@ function getSharedCore(opts: {
   dailyBudget?: number;
   emit?: (event: RunEvent) => void;
 }): V2Core {
-  if (!sharedCore) {
-    sharedCore = buildCore(opts);
-    coreRefs = 0;
+  const key = memoryScopeFingerprint(opts.scope);
+  let shared = sharedCores.get(key);
+  if (!shared) {
+    shared = { core: buildCore(opts), refs: 0 };
+    sharedCores.set(key, shared);
   }
-  coreRefs += 1;
+  shared.refs += 1;
   // 幂等：worker 被上次 shutdown 停掉后，新实例恢复（start 有 timer 守卫）
-  sharedCore.pipeline.start();
-  return sharedCore;
+  shared.core.pipeline.start();
+  return shared.core;
 }
 
 // ── 任务轨迹（进程内，写入事件证据）──
@@ -265,6 +271,7 @@ function extractKeywords(...texts: string[]): string[] {
 export class MemoryRuntimeV2 implements MemoryRuntime {
   readonly scope: ResolvedScope;
   private readonly core: V2Core;
+  private readonly coreKey: string;
 
   /** runId → taskId（同进程多 run；desktop 多轮 resume 语义） */
   private readonly runTaskMap = new Map<string, string>();
@@ -273,6 +280,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
 
   constructor(opts: MemoryRuntimeOptions) {
     this.scope = resolveScope(opts);
+    this.coreKey = memoryScopeFingerprint(this.scope);
     this.core = getSharedCore({
       scope: this.scope,
       llm: opts.llm,
@@ -574,7 +582,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
     };
     try {
       await this.core.engine.put(entry);
-      const id = deriveEntryId(entry);
+      const id = entry.id || deriveEntryId(entry, this.scope);
       await appendOpLog("governed", {
         runId: input.taskId,
         entryIds: [id],
@@ -597,9 +605,9 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
   }
 
   async shutdown(): Promise<void> {
-    // 引用计数：最后一个实例 shutdown 时停 worker（否则单次 CLI 调用永不退出）。
-    // orchestrator 的 run 级 runtime 不调 shutdown（多轮会话 worker 需持续运行）。
-    coreRefs = Math.max(0, coreRefs - 1);
-    if (coreRefs === 0) this.core.pipeline.stop();
+    const shared = sharedCores.get(this.coreKey);
+    if (!shared) return;
+    shared.refs = Math.max(0, shared.refs - 1);
+    if (shared.refs === 0) shared.core.pipeline.stop();
   }
 }

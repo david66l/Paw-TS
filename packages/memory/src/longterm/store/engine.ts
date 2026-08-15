@@ -169,7 +169,9 @@ export interface ReindexReport {
 }
 
 export interface MemoryStoreEngine {
-  /** 新增/覆盖；entry.id 为空时按内容哈希派生（同内容幂等） */
+  /** Present on runtime engines; all operations are physically sealed to it. */
+  readonly scope?: import("./scope-key.js").MemoryScopeKey;
+  /** 新增/覆盖；entry.id 为空时按内容+scope 哈希派生（同 scope 幂等） */
   put(entry: MemoryEntry): Promise<void>;
   get(id: string): Promise<MemoryEntry | null>;
   /** 软失效：写 t_invalid */
