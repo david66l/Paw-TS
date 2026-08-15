@@ -216,6 +216,14 @@ export {
   type CapabilitySelectionObservationV1,
 } from "./capability-exposure.js";
 export {
+  CAPABILITY_EXPOSURE_SUMMARY_SCHEMA_V1,
+  parseCapabilityExposureTraceV1,
+  summarizeCapabilityExposureV1,
+  type CapabilityExposureRunObservationV1,
+  type CapabilityExposureScanFailureV1,
+  type CapabilityExposureSummaryV1,
+} from "./capability-exposure-summary.js";
+export {
   MANAGED_JOB_CONTROLLER_SCHEMA_V1,
   MANAGED_JOB_PROJECTION_SCHEMA_V1,
   ManagedJobControllerV1,

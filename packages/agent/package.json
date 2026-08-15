@@ -22,6 +22,7 @@
   "scripts": {
     "loop-v2:replay": "bun run scripts/replay-loop-v2.ts",
     "loop-v2:cutover-summary": "bun run scripts/summarize-loop-v2-cutover.ts",
+    "capability:summary": "bun run scripts/summarize-capability-exposure.ts",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "test": "bun test test"
   }
