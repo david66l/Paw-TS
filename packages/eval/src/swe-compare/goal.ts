@@ -20,7 +20,6 @@ export function buildSweCompareGoal(probe: SweBenchLiteInstance): string {
       : "No explicit FAIL_TO_PASS identifiers are available; locate the narrowest relevant existing test.",
     passToPass.length > 0
       ? `Regression tests that must remain passing (read-only):\n${passToPass
-          .slice(0, 20)
           .map((name) => `- ${name}`)
           .join("\n")}`
       : "",

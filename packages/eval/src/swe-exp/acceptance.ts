@@ -11,7 +11,7 @@ export function buildSweAcceptanceCriteria(
   probe: SweBenchLiteInstance,
 ): readonly RunAcceptanceCriterionSeed[] {
   const failToPass = probe.FAIL_TO_PASS?.filter(Boolean) ?? [];
-  const passToPass = probe.PASS_TO_PASS?.filter(Boolean).slice(0, 20) ?? [];
+  const passToPass = probe.PASS_TO_PASS?.filter(Boolean) ?? [];
   return [
     ...passToPass.map((ref) => ({
       text: `PASS_TO_PASS must remain passing: ${ref}`,

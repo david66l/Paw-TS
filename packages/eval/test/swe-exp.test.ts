@@ -9,6 +9,8 @@ import path from "node:path";
 
 import { closeSql } from "@paw/memory/db";
 
+import { buildSweCompareGoal } from "../src/swe-compare/goal.js";
+
 import {
   SWE_EXP_BUILTIN_PAIRS,
   type SweExpPairResult,
@@ -379,6 +381,30 @@ describe("agent control-plane preflight/checkpoint", () => {
     expect(
       criteria.every((item) => item.verificationAuthority === "external"),
     ).toBe(true);
+  });
+
+  test("does not hide PASS_TO_PASS regressions after the first twenty", () => {
+    const passToPass = Array.from(
+      { length: 88 },
+      (_, index) => `tests/test_i18n.py::test_regression_${index + 1}`,
+    );
+    const probe = {
+      instance_id: "demo__repo-88",
+      repo: "demo/repo",
+      base_commit: "deadbeef",
+      problem_statement: "fix every regression",
+      FAIL_TO_PASS: ["tests/test_i18n.py::test_new_behavior"],
+      PASS_TO_PASS: passToPass,
+    };
+    const criteria = buildSweAcceptanceCriteria(probe);
+    const goal = buildSweAgentGoal(probe);
+    const compareGoal = buildSweCompareGoal(probe);
+    const finalRegression = passToPass.at(-1) ?? "";
+    expect(criteria).toHaveLength(89);
+    expect(finalRegression).not.toBe("");
+    expect(criteria.map((item) => item.ref)).toContain(finalRegression);
+    expect(goal).toContain(finalRegression);
+    expect(compareGoal).toContain(finalRegression);
   });
 
   test("DB unavailable fails before either model arm runs", async () => {
