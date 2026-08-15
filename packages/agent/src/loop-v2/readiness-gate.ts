@@ -1,6 +1,7 @@
+import type { CandidateReadinessGapCodeV2 } from "./candidate-certification.js";
 import { sha256Canonical } from "./canonical.js";
 import type { LoopV2LiveCandidateAssessmentV1 } from "./live-candidate.js";
-import type { WorkingDecisionStateV2 } from "./schema.js";
+import type { VerificationRecordV2, WorkingDecisionStateV2 } from "./schema.js";
 
 export const LOOP_V2_READINESS_FEEDBACK_LIMIT = 1 as const;
 
@@ -26,6 +27,7 @@ export type LoopV2ReadinessGateDecisionV1 =
 export function evaluateLoopV2ReadinessGateV1(input: {
   readonly assessment: LoopV2LiveCandidateAssessmentV1;
   readonly progressKey: string;
+  readonly verificationRecords?: readonly VerificationRecordV2[];
   readonly priorKey?: string;
   readonly priorNudges?: number;
   readonly noRoomForAnotherTurn: boolean;
@@ -71,6 +73,7 @@ export function evaluateLoopV2ReadinessGateV1(input: {
     readiness.disposition,
     key,
     normalizedGaps,
+    input.verificationRecords ?? [],
   );
   const priorNudges = input.priorKey === key ? (input.priorNudges ?? 0) : 0;
   if (input.noRoomForAnotherTurn) {
@@ -84,7 +87,14 @@ export function evaluateLoopV2ReadinessGateV1(input: {
       reason: "feedback_exhausted",
     };
   }
-  return { type: "feedback", key, message };
+  return {
+    type: "feedback",
+    key,
+    message: [
+      message,
+      "Issue the necessary tool call(s) in your next response. Prose that only describes a future action does not execute it and does not count as repair progress.",
+    ].join("\n"),
+  };
 }
 
 /**
@@ -119,11 +129,12 @@ function formatLoopV2ReadinessFeedback(
   disposition: "needs_work" | "blocked",
   key: string,
   gaps: readonly {
-    readonly code: string;
+    readonly code: CandidateReadinessGapCodeV2;
     readonly message: string;
     readonly criterionId: string;
     readonly riskId: string;
   }[],
+  verificationRecords: readonly VerificationRecordV2[],
 ): string {
   const details = gaps.length
     ? gaps.slice(0, 20).map((gap) => {
@@ -132,8 +143,10 @@ function formatLoopV2ReadinessFeedback(
           : gap.riskId
             ? ` risk=${gap.riskId}`
             : "";
-        const detail =
-          gap.message.slice(0, 500) || "Required evidence is missing.";
+        const detail = actionableGapDetail(gap, verificationRecords).slice(
+          0,
+          900,
+        );
         return `- ${gap.code}${subject}: ${detail}`;
       })
     : ["- readiness_unknown: The candidate is not ready for semantic review."];
@@ -142,4 +155,80 @@ function formatLoopV2ReadinessFeedback(
     "The candidate was not sent to semantic review. Complete the concrete missing work below, then propose a new final answer:",
     ...details,
   ].join("\n");
+}
+
+function actionableGapDetail(
+  gap: Readonly<{
+    code: CandidateReadinessGapCodeV2;
+    message: string;
+  }>,
+  verificationRecords: readonly VerificationRecordV2[],
+): string {
+  if (gap.code === "verification_code_failed") {
+    const failures = verificationRecords.filter(
+      (verification) => verification.outcome === "code_failed",
+    );
+    return [
+      gap.message ||
+        "Current authoritative verification reports a code failure.",
+      failures.length
+        ? `Host facts: ${describeVerificationRecords(failures)}.`
+        : "",
+      "Treat observed current-revision failures as blockers; do not assume external or hidden tests supersede tracked assertions.",
+      "Fix the candidate, then run a direct authoritative verification again.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  if (gap.code === "verification_unavailable") {
+    const failures = verificationRecords.filter(
+      (verification) => verification.outcome === "harness_failed",
+    );
+    if (
+      failures.some(
+        (verification) => verification.failureClass === "untrusted_exit_status",
+      )
+    ) {
+      return [
+        gap.message || "Current authoritative verification is unavailable.",
+        failures.length
+          ? `Host facts: ${describeVerificationRecords(failures)}.`
+          : "",
+        "The test runner status was masked by shell control flow. Re-run the same test runner directly without pipes, redirections, fallbacks, or trailing commands; do not claim a pass from the masked exit code.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+    return [
+      gap.message || "Current authoritative verification is unavailable.",
+      failures.length
+        ? `Host facts: ${describeVerificationRecords(failures)}.`
+        : "",
+      "Repair or simplify the invocation and obtain a direct authoritative result.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  return gap.message || "Required evidence is missing.";
+}
+
+function describeVerificationRecords(
+  records: readonly VerificationRecordV2[],
+): string {
+  return records
+    .slice(-3)
+    .map((verification) => {
+      const failure = verification.failureClass
+        ? ` failure=${verification.failureClass}`
+        : "";
+      const scope = verification.scope.length
+        ? ` scope=${verification.scope.slice(0, 4).join(",")}`
+        : "";
+      const command = verification.argv.join(" ").replace(/\s+/g, " ").trim();
+      return `${verification.id}${failure}${scope} command=${command || "unknown"}`.slice(
+        0,
+        360,
+      );
+    })
+    .join("; ");
 }

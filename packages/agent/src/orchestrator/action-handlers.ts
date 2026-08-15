@@ -674,6 +674,7 @@ async function handleFinalAnswer(
       assessment,
       progressKey:
         ctx.getLoopV2ReadinessProgressKey?.() ?? assessment.candidateInputHash,
+      verificationRecords: ctx.getLoopV2ReadinessVerificationRecords?.(),
       priorKey: flags.loopV2ReadinessFeedbackKey,
       priorNudges: flags.loopV2ReadinessNudges,
       noRoomForAnotherTurn,

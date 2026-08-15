@@ -114,6 +114,7 @@ import {
   type LoopV2ShadowObserver,
   type LoopV2ShadowReport,
   type LoopV2ShadowToolCommitPortInput,
+  type VerificationRecordV2,
   buildLoopV2LiveCandidateArtifactV1,
   buildLoopV2ProjectionCheckpointV1,
   createLoopV2ShadowObserver,
@@ -574,6 +575,7 @@ export class AgentOrchestrator {
   private _lastLoopV2ShadowReport?: LoopV2ShadowReport;
   private _lastLoopV2CandidateAssessment?: LoopV2LiveCandidateAssessmentV1;
   private _lastLoopV2ReadinessProgressKey?: string;
+  private _lastLoopV2ReadinessVerificationRecords?: readonly VerificationRecordV2[];
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -1122,6 +1124,8 @@ export class AgentOrchestrator {
                   this._lastLoopV2CandidateAssessment,
                 getLoopV2ReadinessProgressKey: () =>
                   this._lastLoopV2ReadinessProgressKey,
+                getLoopV2ReadinessVerificationRecords: () =>
+                  this._lastLoopV2ReadinessVerificationRecords,
               }
             : {}),
           ...(init.reviewLoopV2Candidate
@@ -3425,6 +3429,7 @@ export class AgentOrchestrator {
     this._lastLoopV2ShadowReport = undefined;
     this._lastLoopV2CandidateAssessment = undefined;
     this._lastLoopV2ReadinessProgressKey = undefined;
+    this._lastLoopV2ReadinessVerificationRecords = undefined;
     if (spec.resumeFromState) {
       // A resumed run appends to the same durable event/checkpoint streams.
       // Restarting either counter at zero creates duplicate event identities
@@ -3601,6 +3606,15 @@ export class AgentOrchestrator {
             this._lastLoopV2ReadinessProgressKey = loopV2ReadinessProgressKeyV1(
               report.state,
             );
+            this._lastLoopV2ReadinessVerificationRecords = Object.values(
+              report.state.verification,
+            )
+              .filter(
+                (verification) =>
+                  verification.mutationRevision ===
+                  report.state.currentMutationRevision,
+              )
+              .sort((left, right) => left.id.localeCompare(right.id));
             const requireProductMutation =
               this.verificationPolicy?.requireMutation ??
               goalRequiresMutation(spec.goal);

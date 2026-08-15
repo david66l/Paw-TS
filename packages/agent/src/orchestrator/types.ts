@@ -40,6 +40,7 @@ import type {
   LoopV2ShadowToolCommitPortInput,
   ProviderTerminalStateV2,
   SemanticReviewOnceResultV2,
+  VerificationRecordV2,
 } from "../loop-v2/index.js";
 import type { ManagedJobControllerV1 } from "../managed-job-controller.js";
 import type { RunStatusTelemetryV1 } from "../status-snapshot.js";
@@ -236,6 +237,10 @@ export interface PhaseContext {
     | undefined;
   /** Live investigation-progress identity for bounded readiness repair. */
   readonly getLoopV2ReadinessProgressKey?: () => string | undefined;
+  /** Fresh current-revision verification facts for actionable repair text. */
+  readonly getLoopV2ReadinessVerificationRecords?: () =>
+    | readonly VerificationRecordV2[]
+    | undefined;
   /** Candidate-bound, durable, at-most-once explicit-v2 review transaction. */
   readonly reviewLoopV2Candidate?: () => Promise<
     SemanticReviewOnceResultV2 &

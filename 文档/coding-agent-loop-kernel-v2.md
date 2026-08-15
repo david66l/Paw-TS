@@ -198,6 +198,8 @@ stateDiagram-v2
 
 Not-ready candidate 的反馈预算由 `(candidateInputHash, readiness gaps, readinessProgressKey)` 共同定界。`candidateInputHash` 继续只表示 mutation / verification / criterion 等可审查候选事实，保证同一代码候选不会因调查措辞或新增只读观察而重复 semantic review；`readinessProgressKey` 则必须从**最新 Working Decision State** 的唯一 evidence fingerprints 计算，不能从可能按 candidate identity 复用的持久化 candidate artifact 读取。新的 read/search 证据允许重新进入一次有界 repair cycle；只改 final prose、重复同一观察或没有新增事实时 key 不变，直接 `feedback_exhausted`。这条分离使 discovery 阶段可以继续推进，同时不放宽 certification 的 at-most-once 约束。
 
+Candidate artifact 内的 readiness gap 文案属于可严格重放的持久化派生事实，运行时升级不得改写旧 schema 的文案，否则历史 artifact/resume 会因重算不一致失效。可执行 repair 指令属于 delivery 层：readiness gate 从 fresh projection 读取 current-revision `VerificationRecord`，在不改变 candidate assessment/hash 的前提下补充 `failureClass / argv / scope`。`untrusted_exit_status` 必须要求去掉 pipe/redirection/fallback/trailing command 后直接重跑；`code_failed` 必须声明当前 revision 的已观察失败不可由模型假定 hidden/external tests supersede。首次 repair 还必须明确要求实际发出 tool call，只有“接下来会做……”的 prose 不构成执行或 progress。
+
 ### 6.2 终局结果必须正交
 
 ```ts
@@ -575,6 +577,7 @@ PAW_LOOP_KERNEL_VERSION=v1|v2-shadow|v2
 | R17 | criterion staleness | criterion 在 r1 满足，r2 mutation | r1 证据变 stale，需 r2 evidence 或 blocker | 旧验收不能覆盖新代码 |
 | R18 | reviewer protocol | reviewer timeout/无结构化 verdict | 相同 candidate 记录一次 partial 并有界退出/交接 | reviewer 不能成为无限重试单点 |
 | R19 | Django 15098 post-N4Q | natural-stop 叙述 → readiness blocked → 新 read → natural-stop 叙述 | 新 evidence 后重开一次 repair；随后 edit/test/final 可完成 | candidate artifact 复用不得冻结 discovery progress；重复 prose/read 不得重置 |
+| R20 | Django 15098 post-N4V | masked `runtests.py ... \| tail` VerificationRecord + 历史 candidate artifact | repair 显示 failureClass/argv/scope、要求 direct rerun；旧 artifact 仍可严格解析 | runtime guidance 不得改写持久化 assessment；模型不得用 prose 或 hidden-test 猜测豁免失败 |
 
 ### 15.1 Replay 产物
 
@@ -610,7 +613,7 @@ PAW_LOOP_KERNEL_VERSION=v1|v2-shadow|v2
 
 ### 16.1 开发阶段
 
-- 使用 R01–R19 合成/冻结 replay；
+- 使用 R01–R20 合成/冻结 replay；
 - 使用已 exposed 的 fresh-v2、v7–v11 轨迹做离线 shadow；
 - 必要的真实模型 A/B 只在已 exposed 开发题运行；
 - 比较 resolved、inner close correctness、tool/model calls、token、wall time、stall、review count 和 artifact validity；
@@ -620,7 +623,7 @@ PAW_LOOP_KERNEL_VERSION=v1|v2-shadow|v2
 
 Loop Kernel v2 只有同时满足以下条件才可冻结：
 
-1. R01–R19 全部通过；
+1. R01–R20 全部通过；
 2. Agent/core 相关回归无产品断言失败；
 3. v2-shadow 对已通过轨迹不引入 artifact/verification 回退；
 4. 两类错判可被独立统计，不能再出现字段歧义；
