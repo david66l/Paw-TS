@@ -36,12 +36,30 @@ export function formatToolResultEventDetail(
     return tr.ok ? undefined : tr.summary;
   }
 
-  // 失败结果：提取错误信息
+  const payloadError =
+    "error" in p ? String((p as { error: unknown }).error) : undefined;
+
+  // Shell 失败同样必须保留 exit/stdout/stderr，不能只显示概括性 summary。
+  if (typeof (p as { exit_code?: unknown }).exit_code === "number") {
+    const ex = (p as { exit_code: number }).exit_code;
+    const out =
+      typeof (p as { stdout?: unknown }).stdout === "string"
+        ? (p as { stdout: string }).stdout
+        : "";
+    const err =
+      typeof (p as { stderr?: unknown }).stderr === "string"
+        ? (p as { stderr: string }).stderr
+        : "";
+    const parts = [`exit ${ex}`];
+    if (payloadError) parts.push(`error: ${payloadError}`);
+    if (out) parts.push(out);
+    if (err) parts.push(`stderr: ${err}`);
+    return parts.join("\n").slice(0, MAX_DETAIL_CHARS);
+  }
+
+  // 其他失败结果：提取错误信息
   if (!tr.ok) {
-    if ("error" in p) {
-      return String((p as { error: unknown }).error).slice(0, MAX_DETAIL_CHARS);
-    }
-    return tr.summary;
+    return payloadError?.slice(0, MAX_DETAIL_CHARS) ?? tr.summary;
   }
 
   // 文件内容结果（如 Read 工具）
@@ -61,27 +79,6 @@ export function formatToolResultEventDetail(
   if ("files" in p && Array.isArray((p as { files?: unknown }).files)) {
     const files = (p as { files: string[] }).files;
     return files.slice(0, MAX_LIST_FILES).join("\n").slice(0, MAX_DETAIL_CHARS);
-  }
-
-  // Shell 命令结果（如 Bash 工具）
-  if (typeof (p as { exit_code?: unknown }).exit_code === "number") {
-    const ex = (p as { exit_code: number }).exit_code;
-    const out =
-      typeof (p as { stdout?: unknown }).stdout === "string"
-        ? (p as { stdout: string }).stdout
-        : "";
-    const err =
-      typeof (p as { stderr?: unknown }).stderr === "string"
-        ? (p as { stderr: string }).stderr
-        : "";
-    const parts = [`exit ${ex}`];
-    if (out) {
-      parts.push(out);
-    }
-    if (err) {
-      parts.push(`stderr: ${err}`);
-    }
-    return parts.join("\n").slice(0, MAX_DETAIL_CHARS);
   }
 
   // 搜索匹配结果（如 Grep 工具）

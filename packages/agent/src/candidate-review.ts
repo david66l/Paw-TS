@@ -259,7 +259,15 @@ export function extractCandidateDeliberation(
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
     if (!message || message.role !== "assistant") continue;
-    const source = [message.thinking, message.content]
+    // Historical final reports are candidate outputs, not implementation
+    // deliberation. Feeding them back here makes a later review judge stale
+    // verification claims even when the current proposedSummary removed them.
+    const content = /["'](?:action|tool)["']\s*:\s*["']final_answer["']/i.test(
+      message.content,
+    )
+      ? undefined
+      : message.content;
+    const source = [message.thinking, content]
       .filter((value): value is string => !!value?.trim())
       .join("\n")
       .trim();

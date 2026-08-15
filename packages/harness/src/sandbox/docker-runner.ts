@@ -116,6 +116,46 @@ export function hostPathToContainerPath(
   return `${containerWorkspaceRoot}/${rel.split(path.sep).join("/")}`;
 }
 
+/**
+ * Maps a model-facing absolute container cwd back into the bind-mounted host
+ * workspace. Paths outside the configured container workspace are rejected;
+ * callers must not silently reinterpret them as host paths.
+ */
+export function containerPathToHostPath(
+  workspaceRoot: string,
+  containerPath: string,
+  containerWorkspaceRoot = "/workspace",
+): string | undefined {
+  const containerRoot = resolveContainerWorkspaceRoot(containerWorkspaceRoot);
+  if ("error" in containerRoot || containerPath.includes("\0"))
+    return undefined;
+
+  const normalized = path.posix.normalize(containerPath);
+  if (!path.posix.isAbsolute(containerPath)) return undefined;
+  const relative = path.posix.relative(containerRoot.root, normalized);
+  if (
+    relative === ".." ||
+    relative.startsWith("../") ||
+    path.posix.isAbsolute(relative)
+  ) {
+    return undefined;
+  }
+
+  const hostRoot = path.resolve(workspaceRoot);
+  const hostPath = relative
+    ? path.resolve(hostRoot, ...relative.split("/"))
+    : hostRoot;
+  const hostRelative = path.relative(hostRoot, hostPath);
+  if (
+    hostRelative === ".." ||
+    hostRelative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(hostRelative)
+  ) {
+    return undefined;
+  }
+  return hostPath;
+}
+
 function resolveContainerWorkspaceRoot(
   value: string | undefined,
 ): { readonly root: string } | { readonly error: string } {

@@ -23,6 +23,21 @@ describe("formatToolResultEventDetail", () => {
     expect(d).toContain("hi");
   });
 
+  test("preserves failed run_shell exit, stdout, and stderr", () => {
+    const d = formatToolResultEventDetail({
+      ok: false,
+      summary: "run_shell: exit 1",
+      payload: {
+        exit_code: 1,
+        stdout: "1 failed in 0.10s\n",
+        stderr: "assertion detail\n",
+      },
+    });
+    expect(d).toContain("exit 1");
+    expect(d).toContain("1 failed in 0.10s");
+    expect(d).toContain("stderr: assertion detail");
+  });
+
   test("formats search matches", () => {
     const d = formatToolResultEventDetail({
       ok: true,

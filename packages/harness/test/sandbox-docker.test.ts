@@ -5,6 +5,7 @@ import path from "node:path";
 
 import {
   buildDockerShellExecSpec,
+  containerPathToHostPath,
   detectContainerRuntime,
   hostPathToContainerPath,
 } from "../src/sandbox/index.js";
@@ -34,6 +35,24 @@ describe("hostPathToContainerPath", () => {
 
   test("falls back to /workspace for paths outside root", () => {
     expect(hostPathToContainerPath(root, "/etc/passwd")).toBe("/workspace");
+  });
+});
+
+describe("containerPathToHostPath", () => {
+  const root = path.resolve("C:/paw/workspace");
+
+  test("maps the configured container root and descendants to the host workspace", () => {
+    expect(containerPathToHostPath(root, "/testbed", "/testbed")).toBe(root);
+    expect(
+      containerPathToHostPath(root, "/testbed/pkg/tests", "/testbed"),
+    ).toBe(path.join(root, "pkg", "tests"));
+  });
+
+  test("rejects absolute container paths outside the mounted workspace", () => {
+    expect(containerPathToHostPath(root, "/tmp", "/testbed")).toBeUndefined();
+    expect(
+      containerPathToHostPath(root, "/testbed/../etc", "/testbed"),
+    ).toBeUndefined();
   });
 });
 

@@ -37,6 +37,7 @@
 
 export {
   buildDockerShellExecSpec,
+  containerPathToHostPath,
   hostPathToContainerPath,
   type DockerShellExecSpec,
 } from "./docker-runner.js";

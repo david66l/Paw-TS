@@ -54,6 +54,30 @@ describe("candidate solution review", () => {
     expect(excerpts[0]).toContain("preserve the exception position");
   });
 
+  test("excludes stale final-answer drafts while retaining their implementation reasoning", () => {
+    const excerpts = extractCandidateDeliberation([
+      {
+        role: "assistant",
+        thinking:
+          "The safer implementation preserves the original error position.",
+        content:
+          'Preparing report. {"action":"final_answer","summary":"Inline repro passed and upstream matched."}',
+      },
+      {
+        role: "assistant",
+        content: "An alternative risks dropping the structured error detail.",
+      },
+    ]);
+    expect(excerpts.join("\n")).toContain(
+      "preserves the original error position",
+    );
+    expect(excerpts.join("\n")).toContain(
+      "dropping the structured error detail",
+    );
+    expect(excerpts.join("\n")).not.toContain("Inline repro passed");
+    expect(excerpts.join("\n")).not.toContain("upstream matched");
+  });
+
   test("builds reviewer evidence from host test results across mutation revisions", () => {
     const state = new TaskStateManager("fix the behavior");
     state.recordToolResult(

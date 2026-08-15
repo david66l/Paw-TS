@@ -96,6 +96,7 @@ export {
 } from "./shell/index.js";
 export {
   buildDockerShellExecSpec,
+  containerPathToHostPath,
   detectContainerRuntime,
   DEFAULT_SANDBOX_IMAGE,
   OFF_SHELL_SANDBOX,

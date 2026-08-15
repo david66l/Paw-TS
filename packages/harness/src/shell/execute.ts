@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import path from "node:path";
 
 import { checkWorkspacePath } from "@paw/workspace";
 
@@ -9,6 +10,7 @@ import type {
 import {
   type ShellSandboxConfig,
   buildDockerShellExecSpec,
+  containerPathToHostPath,
   isShellSandboxEnabled,
 } from "../sandbox/index.js";
 import { validateShellCommand } from "../shell-guard.js";
@@ -120,11 +122,26 @@ function clampTimeoutMs(ms: number): number {
   return Math.min(Math.max(Math.floor(ms), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
 }
 
-function resolveCwd(
+export function resolveShellCwd(
   workspaceRoot: string,
   optionsCwd?: string,
+  shellSandbox?: ShellSandboxConfig,
 ): { cwdPath: string; error?: string } {
-  const relCwd = optionsCwd?.trim() ? optionsCwd : ".";
+  let relCwd = optionsCwd?.trim() ? optionsCwd : ".";
+  if (isShellSandboxEnabled(shellSandbox) && path.posix.isAbsolute(relCwd)) {
+    const mapped = containerPathToHostPath(
+      workspaceRoot,
+      relCwd,
+      shellSandbox.containerWorkspaceRoot,
+    );
+    if (!mapped) {
+      return {
+        cwdPath: "",
+        error: `cwd escapes container workspace: ${relCwd}`,
+      };
+    }
+    relCwd = mapped;
+  }
   const d = checkWorkspacePath(workspaceRoot, relCwd);
   if (!d.allowed) {
     return { cwdPath: "", error: d.reason ?? "cwd escapes workspace" };
@@ -154,7 +171,11 @@ export function runShellInWorkspace(
     };
   }
 
-  const cwdResult = resolveCwd(workspaceRoot, options.cwd);
+  const cwdResult = resolveShellCwd(
+    workspaceRoot,
+    options.cwd,
+    options.shellSandbox,
+  );
   if (cwdResult.error) {
     return { error: cwdResult.error };
   }
@@ -247,7 +268,11 @@ export function runShellInWorkspaceStreaming(
       return;
     }
 
-    const cwdResult = resolveCwd(workspaceRoot, options.cwd);
+    const cwdResult = resolveShellCwd(
+      workspaceRoot,
+      options.cwd,
+      options.shellSandbox,
+    );
     if (cwdResult.error) {
       resolve({ error: cwdResult.error });
       return;
@@ -418,7 +443,11 @@ export function startManagedShellInWorkspaceV1(
   if (guard.requiresApproval && !options.skipApprovalGate) {
     throw new Error(guard.reason ?? "command requires approval");
   }
-  const cwdResult = resolveCwd(workspaceRoot, options.cwd);
+  const cwdResult = resolveShellCwd(
+    workspaceRoot,
+    options.cwd,
+    options.shellSandbox,
+  );
   if (cwdResult.error) throw new Error(cwdResult.error);
   const cwdPath = cwdResult.cwdPath;
   const win = process.platform === "win32";
