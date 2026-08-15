@@ -5,11 +5,23 @@ import path from "node:path";
 
 import {
   executeTool,
+  listToolNames,
   toolDefinitions,
+  toolNameReverseMap,
   toolRequiresApproval,
 } from "../src/registry/index.js";
 
 describe("executeTool", () => {
+  test("every advertised builtin has a native schema", () => {
+    const reverse = toolNameReverseMap();
+    const names = new Set(
+      toolDefinitions().map((definition) =>
+        reverse.get(definition.function.name),
+      ),
+    );
+    const missing = listToolNames().filter((name) => !names.has(name));
+    expect(missing).toEqual([]);
+  });
   test("workspace.read_file reads a relative file", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-"));
     writeFileSync(path.join(root, "x.txt"), "hello");

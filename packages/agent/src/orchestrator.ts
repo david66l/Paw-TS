@@ -178,6 +178,7 @@ import {
 import { type MemoryRuntime, createMemoryRuntime } from "@paw/memory";
 import { loadMemoryConfigSync } from "@paw/memory/longterm";
 import type { CandidateReviewer } from "./candidate-review.js";
+import { CapabilityExposureShadowV1 } from "./capability-exposure.js";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
@@ -831,6 +832,7 @@ export class AgentOrchestrator {
         taskState,
         statusTelemetry,
         executionEnvironment,
+        capabilityExposure,
       } = init;
       emitRunMetrics = _emitRunMetrics;
       persistLoopV2Terminal = (result) => {
@@ -983,6 +985,7 @@ export class AgentOrchestrator {
           taskState,
           statusTelemetry,
           executionEnvironment,
+          capabilityExposure,
           emit,
           checkpointSeq,
           specGoal: spec.goal,
@@ -2146,6 +2149,14 @@ export class AgentOrchestrator {
       nativeToolErrors,
       finishReason,
     } = modelResult;
+    emit({
+      type: "capability.selection",
+      ...ctx.capabilityExposure.observe(
+        ctx.turn,
+        specGoal,
+        toolCalls.map((call) => call.tool),
+      ),
+    });
 
     let dispatchedAction = singleAction;
     let dispatchedFlags = flags;
@@ -3236,6 +3247,7 @@ export class AgentOrchestrator {
     taskState: TaskStateManager;
     statusTelemetry: RunStatusTelemetryV1;
     executionEnvironment: ExecutionEnvironmentRegistryV1;
+    capabilityExposure: CapabilityExposureShadowV1;
     sessionMemoryStore: SessionMemoryStore;
     compactor: ContextCompactor;
     artifactRegistry: ArtifactRegistry;
@@ -3670,6 +3682,16 @@ export class AgentOrchestrator {
       toolDefinitions(mcp, { shellSandbox }),
       toolNameMap,
     );
+    const capabilityExposure = new CapabilityExposureShadowV1({
+      definitions: toolDefs,
+      toolNameMap,
+      countTokens: (definitions) =>
+        AgentOrchestrator.estimateToolTokens(definitions, ctxMgr.estimator),
+    });
+    emit({
+      type: "capability.inventory",
+      ...capabilityExposure.snapshot(spec.goal),
+    });
 
     const contextWindow = model.capabilities?.contextWindow ?? 128_000;
 
@@ -3724,6 +3746,7 @@ export class AgentOrchestrator {
         taskState,
         statusTelemetry,
         executionEnvironment,
+        capabilityExposure,
         sessionMemoryStore,
         compactor,
         artifactRegistry,
@@ -4112,6 +4135,7 @@ export class AgentOrchestrator {
       taskState,
       statusTelemetry,
       executionEnvironment,
+      capabilityExposure,
       sessionMemoryStore,
       compactor,
       artifactRegistry,

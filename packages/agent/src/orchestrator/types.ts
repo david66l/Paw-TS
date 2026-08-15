@@ -28,6 +28,7 @@ import type { MemoryRuntime } from "@paw/memory";
 import type { LanguageModel, ToolDefinition } from "@paw/models";
 import type { TaskPlanner } from "@paw/store";
 import type { CandidateReviewer } from "../candidate-review.js";
+import type { CapabilityExposureShadowV1 } from "../capability-exposure.js";
 import type { ExecutionEnvironmentRegistryV1 } from "../execution-environment.js";
 import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
 import type { CompletionDecision } from "../lifecycle/completion-policy.js";
@@ -204,6 +205,8 @@ export interface PhaseContext {
   readonly statusTelemetry: RunStatusTelemetryV1;
   /** Durable host facts for the actual shell execution world. */
   readonly executionEnvironment: ExecutionEnvironmentRegistryV1;
+  /** Full-exposure shadow selector; measures a smaller set without applying it. */
+  readonly capabilityExposure: CapabilityExposureShadowV1;
   /** 事件发射器 */
   readonly emit: (event: RunEvent) => void;
   /** Checkpoint 序列号（可变引用，用于工具执行前后保存快照） */

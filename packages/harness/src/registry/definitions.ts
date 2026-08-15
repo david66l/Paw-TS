@@ -199,6 +199,23 @@ export function toolDefinitions(
       ["path"],
     ),
     fn(
+      SEARCH,
+      "Search workspace text with bounded literal or regular-expression matching.",
+      {
+        pattern: { type: "string", description: "Text or regex to find" },
+        path: { type: "string", description: "Directory or file to search" },
+        file_pattern: {
+          type: "string",
+          description: "Optional file glob such as *.ts",
+        },
+        max_results: { type: "integer", description: "Maximum matches" },
+        case_sensitive: { type: "boolean" },
+        regex: { type: "boolean" },
+        max_depth: { type: "integer" },
+      },
+      ["pattern"],
+    ),
+    fn(
       WRITE,
       "Create or overwrite a file in the workspace.",
       {
@@ -369,6 +386,25 @@ export function toolDefinitions(
       },
       ["add", "updates", "reason"],
     ),
+    fn(
+      NOTEBOOK_EDIT,
+      "Edit, insert, append, or delete a cell in a Jupyter notebook.",
+      {
+        path: { type: "string", description: "Notebook path" },
+        action: {
+          type: "string",
+          enum: ["edit", "append", "insert", "delete"],
+        },
+        cell_index: { type: "integer" },
+        source: { type: "string" },
+        cell_type: { type: "string", enum: ["code", "markdown"] },
+      },
+      ["path"],
+    ),
+    fn(BRIEF, "Generate a bounded structural brief of the workspace.", {
+      path: { type: "string", description: "Directory to summarize" },
+      max_files: { type: "integer", description: "Maximum files to scan" },
+    }),
     fn(GIT_STATUS, "Show the working tree status.", {}),
     fn(GIT_LOG, "Show recent commit history.", {
       max_count: { type: "integer", description: "Number of commits to show" },
@@ -456,6 +492,28 @@ export function toolDefinitions(
         args: { type: "object", description: "Arguments for the skill" },
       },
       ["skill_id"],
+    ),
+    fn(
+      LSP,
+      "Query a configured language server for precise code navigation.",
+      {
+        file: { type: "string", description: "Source file path" },
+        method: {
+          type: "string",
+          enum: ["hover", "definition", "references", "completion"],
+        },
+        line: { type: "integer", description: "Zero-based line" },
+        character: { type: "integer", description: "Zero-based character" },
+      },
+      ["file"],
+    ),
+    fn(
+      APPLY_PATCH,
+      "Apply a unified diff atomically inside the workspace.",
+      {
+        patch: { type: "string", description: "Unified diff text" },
+      },
+      ["patch"],
     ),
     fn(
       SYMBOL_SEARCH,

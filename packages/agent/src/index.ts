@@ -205,5 +205,15 @@ export {
   wrapCapabilityContentV1,
   wrapObservationContentV1,
 } from "./observation-provenance.js";
+export {
+  CAPABILITY_EXPOSURE_SCHEMA_V1,
+  CapabilityExposureShadowV1,
+  inventoryCapabilitiesV1,
+  searchCapabilitiesV1,
+  type CapabilityCategoryV1,
+  type CapabilityExposureSnapshotV1,
+  type CapabilityInventoryEntryV1,
+  type CapabilitySelectionObservationV1,
+} from "./capability-exposure.js";
 
 export * from "./loop-v2/index.js";

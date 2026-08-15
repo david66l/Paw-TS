@@ -172,6 +172,31 @@ export type RunEvent =
       /** 可选：子 Agent 调用（run_agent）的稳定 id，= child-{runId}-{idx}，与 agentId 一致 */
       readonly callId?: string;
     }
+  /** Shadow inventory for deferred-tool exposure. It never changes available tools. */
+  | {
+      readonly type: "capability.inventory";
+      readonly schemaVersion: "paw.capability-exposure.v1";
+      readonly mode: "shadow";
+      readonly fullToolCount: number;
+      readonly fullToolTokens: number;
+      readonly suggestedToolCount: number;
+      readonly suggestedToolTokens: number;
+      readonly estimatedSavingsTokens: number;
+      readonly suggestedTools: readonly string[];
+      readonly deferredTools: readonly string[];
+    }
+  /** Compares the model's real choice with the shadow suggestion. */
+  | {
+      readonly type: "capability.selection";
+      readonly schemaVersion: "paw.capability-exposure.v1";
+      readonly mode: "shadow";
+      readonly turn: number;
+      readonly actualTools: readonly string[];
+      readonly suggestedTools: readonly string[];
+      readonly outsideSuggestion: readonly string[];
+      readonly outcome: "hit" | "fallback" | "no_tool";
+      readonly exposedToolCount: number;
+    }
   /** 工具执行完成（成功或失败） */
   | {
       readonly type: "tool.result";
