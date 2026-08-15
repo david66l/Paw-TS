@@ -1,5 +1,12 @@
 export { canonicalJson, sha256Canonical } from "./canonical.js";
 export {
+  LOOP_V2_CUTOVER_SUMMARY_SCHEMA_VERSION,
+  summarizeLoopV2CutoverV1,
+  type LoopV2CutoverObservationV1,
+  type LoopV2CutoverScanFailureV1,
+  type LoopV2CutoverSummaryV1,
+} from "./cutover-summary.js";
+export {
   artifactContentHashV2,
   artifactEvidenceV2,
   createArtifactContentBlobV2,
