@@ -33,7 +33,9 @@ export interface SweCompareManifest {
   readonly protocol: "paw-vs-claude-public-swe" | "paw-only-seen-development";
   readonly createdAt: string;
   readonly dataset: {
-    readonly name: "princeton-nlp/SWE-bench_Lite";
+    readonly name:
+      | "princeton-nlp/SWE-bench_Lite"
+      | "SWE-bench/SWE-bench_Verified";
     readonly split: "test";
     readonly localPath: string;
     readonly rowCount: number;
@@ -55,7 +57,8 @@ export interface SweCompareManifest {
       | "paw-fresh-qualification-v11"
       | "paw-fresh-qualification-v12"
       | "paw-fresh-qualification-v13"
-      | "paw-fresh-qualification-v14";
+      | "paw-fresh-qualification-v14"
+      | "paw-fresh-qualification-v15";
     readonly purpose:
       | "frozen_paired_dev_diagnostic_not_headline_score"
       | "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score";

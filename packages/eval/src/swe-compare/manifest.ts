@@ -272,12 +272,52 @@ export const PAW_FRESH_QUALIFICATION_V13_RULE = {
   version: "paw-fresh-qualification-v13" as const,
 } as const;
 
-/** Current contract with a metadata-only regression-suite-size fallback. */
-export const PAW_FRESH_QUALIFICATION_RULE = {
+/** Frozen v14 contract with a metadata-only regression-suite-size fallback. */
+export const PAW_FRESH_QUALIFICATION_V14_RULE = {
   ...PAW_FRESH_QUALIFICATION_V13_RULE,
   version: "paw-fresh-qualification-v14" as const,
   fallbackMinPassToPass: 10,
 } as const;
+
+/** Every task frozen into v14 is exposed, including the nine not executed. */
+export const PAW_FRESH_QUALIFICATION_V14_IDS = [
+  "django__django-14997",
+  "sympy__sympy-14308",
+  "scikit-learn__scikit-learn-13142",
+  "pytest-dev__pytest-6116",
+  "matplotlib__matplotlib-23987",
+  "sphinx-doc__sphinx-7738",
+  "mwaskom__seaborn-2848",
+  "astropy__astropy-6938",
+  "pylint-dev__pylint-7993",
+  "pallets__flask-4992",
+] as const;
+
+const PAW_QUALIFICATION_V15_EXPOSED_IDS: readonly string[] = [
+  ...new Set([
+    ...PAW_QUALIFICATION_V13_EXPOSED_IDS,
+    ...PAW_FRESH_QUALIFICATION_V14_IDS,
+  ]),
+];
+
+/** Current contract moved to the larger official Verified public pool. */
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  ...PAW_FRESH_QUALIFICATION_V14_RULE,
+  version: "paw-fresh-qualification-v15" as const,
+  seed: "paw-fresh-qualification-v15-verified",
+} as const;
+
+const PAW_QUALIFICATION_VERIFIED_DATASET =
+  "SWE-bench/SWE-bench_Verified" as const;
+
+function defaultVerifiedJsonl(repoRoot: string): string {
+  return path.join(
+    repoRoot,
+    "benchmarks",
+    "swe-bench",
+    "swe-bench-verified.jsonl",
+  );
+}
 
 function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
@@ -336,6 +376,7 @@ export function findLocalTrajectoryHits(
     .filter(Boolean)
     .map((line) => line.replace(/\\/g, "/"))
     .filter((line) => line !== "benchmarks/swe-bench/swe-bench-lite.jsonl")
+    .filter((line) => line !== "benchmarks/swe-bench/swe-bench-verified.jsonl")
     .filter((line) => line !== "benchmarks/swe-compare/README.md")
     .filter((line) => !line.startsWith("benchmarks/swe-compare/manifests/"))
     .filter((line) => !line.startsWith("benchmarks/swe-compare/preflight/"))
@@ -359,6 +400,7 @@ function dockerServerVersion(repoRoot: string): string | undefined {
 export function createSweCompareManifest(opts: {
   readonly repoRoot: string;
   readonly datasetPath?: string;
+  readonly datasetName?: SweCompareManifest["dataset"]["name"];
   readonly instanceIds?: readonly string[];
   readonly now?: () => Date;
   readonly mode?: "formal-paired" | "paw-seen-development";
@@ -376,7 +418,8 @@ export function createSweCompareManifest(opts: {
     | "paw-fresh-qualification-v11"
     | "paw-fresh-qualification-v12"
     | "paw-fresh-qualification-v13"
-    | "paw-fresh-qualification-v14";
+    | "paw-fresh-qualification-v14"
+    | "paw-fresh-qualification-v15";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;
@@ -451,7 +494,7 @@ export function createSweCompareManifest(opts: {
       : "paw-vs-claude-public-swe",
     createdAt: (opts.now ?? (() => new Date()))().toISOString(),
     dataset: {
-      name: "princeton-nlp/SWE-bench_Lite",
+      name: opts.datasetName ?? "princeton-nlp/SWE-bench_Lite",
       split: "test",
       localPath: path.relative(opts.repoRoot, datasetPath).replace(/\\/g, "/"),
       rowCount: instances.length,
@@ -622,7 +665,8 @@ export function selectPawFreshQualificationIds(opts: {
 }): string[] {
   return selectPawFreshIds({
     ...opts,
-    excludedIds: PAW_QUALIFICATION_V13_EXPOSED_IDS,
+    datasetPath: opts.datasetPath ?? defaultVerifiedJsonl(opts.repoRoot),
+    excludedIds: PAW_QUALIFICATION_V15_EXPOSED_IDS,
     rule: PAW_FRESH_QUALIFICATION_RULE,
   });
 }
@@ -647,12 +691,15 @@ export function createPawFreshQualificationManifest(opts: {
   readonly now?: () => Date;
 }): SweCompareManifest {
   const rule = PAW_FRESH_QUALIFICATION_RULE;
+  const datasetPath = opts.datasetPath ?? defaultVerifiedJsonl(opts.repoRoot);
   return createSweCompareManifest({
     ...opts,
+    datasetPath,
+    datasetName: PAW_QUALIFICATION_VERIFIED_DATASET,
     instanceIds: selectPawFreshQualificationIds(opts),
     mode: "paw-seen-development",
     pawDevelopmentRuleVersion: rule.version,
-    excludedSeenIds: PAW_QUALIFICATION_V13_EXPOSED_IDS,
+    excludedSeenIds: PAW_QUALIFICATION_V15_EXPOSED_IDS,
     pawMaxSteps: rule.pawMaxSteps,
     sharedTimeoutMs: rule.sharedTimeoutMs,
     verificationAuthority: rule.verificationAuthority,

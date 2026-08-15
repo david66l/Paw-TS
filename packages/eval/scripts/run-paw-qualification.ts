@@ -18,7 +18,7 @@ function value(name: string): string | undefined {
 }
 
 const repoRoot = process.cwd();
-const manifestName = value("--manifest") ?? "paw-fresh-qualification-v14.json";
+const manifestName = value("--manifest") ?? "paw-fresh-qualification-v15.json";
 const manifestPath = path.join(
   repoRoot,
   "benchmarks",
@@ -72,6 +72,7 @@ const result = resumeRunId
   : retryResult && before.verificationErrorInstanceIds.includes(instanceId)
     ? verifySweCompareResult({
         repoRoot,
+        manifestPath,
         resultPath: path.join(
           repoRoot,
           "benchmarks",

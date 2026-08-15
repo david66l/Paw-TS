@@ -87,6 +87,7 @@ export function preflightSweCompareInstance(opts: {
   ]);
   const runId = `swecompare-preflight-${safeId}-${Date.now().toString(36)}`;
   const result = runSwebenchHarness({
+    datasetName: path.join(opts.repoRoot, manifest.dataset.localPath),
     predictionsPath: predictionPath,
     instanceIds: [opts.instanceId],
     runId,

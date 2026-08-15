@@ -71,6 +71,7 @@ benchmarks/memory-agent-bench/hf-dataset/
 benchmarks/memory-agent-bench/hf-cache/*
 !benchmarks/memory-agent-bench/hf-cache/.gitkeep
 benchmarks/swe-bench/swe-bench-lite.jsonl
+benchmarks/swe-bench/swe-bench-verified.jsonl
 benchmarks/swe-exp/repos/
 benchmarks/swe-exp/runs/
 benchmarks/swe-exp/last-run.json

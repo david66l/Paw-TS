@@ -2374,6 +2374,7 @@ export async function runSweCompareArm(opts: {
         },
       ]);
       const checked = runSwebenchHarness({
+        datasetName: path.join(opts.repoRoot, manifest.dataset.localPath),
         predictionsPath: predictionPath,
         instanceIds: [opts.instanceId],
         runId,
@@ -2811,6 +2812,7 @@ export function auditSweCompareResult(opts: {
 export function verifySweCompareResult(opts: {
   readonly repoRoot: string;
   readonly resultPath: string;
+  readonly manifestPath?: string;
   readonly timeoutSec?: number;
 }): SweCompareRunResult {
   const previous = JSON.parse(
@@ -2830,7 +2832,20 @@ export function verifySweCompareResult(opts: {
       model_patch: previous.patch,
     },
   ]);
+  const verificationManifest = opts.manifestPath
+    ? (JSON.parse(
+        readFileSync(opts.manifestPath, "utf8"),
+      ) as SweCompareManifest)
+    : undefined;
   const checked = runSwebenchHarness({
+    ...(verificationManifest
+      ? {
+          datasetName: path.join(
+            opts.repoRoot,
+            verificationManifest.dataset.localPath,
+          ),
+        }
+      : {}),
     predictionsPath: predictionPath,
     instanceIds: [previous.instanceId],
     runId: previous.runId,

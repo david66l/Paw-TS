@@ -26,6 +26,8 @@ import {
   PAW_FRESH_QUALIFICATION_V12_IDS,
   PAW_FRESH_QUALIFICATION_V12_RULE,
   PAW_FRESH_QUALIFICATION_V13_RULE,
+  PAW_FRESH_QUALIFICATION_V14_IDS,
+  PAW_FRESH_QUALIFICATION_V14_RULE,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
@@ -127,7 +129,7 @@ describe("SWE compare manifest", () => {
     }
   });
 
-  test("selects ten v14 repositories after excluding every frozen v12 task", () => {
+  test("selects ten v15 repositories after excluding every frozen v14 task", () => {
     expect(PAW_FRESH_QUALIFICATION_V3_RULE.count).toBe(5);
     expect(PAW_FRESH_QUALIFICATION_V4_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V5_RULE.count).toBe(10);
@@ -139,9 +141,10 @@ describe("SWE compare manifest", () => {
     expect(PAW_FRESH_QUALIFICATION_V11_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V12_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V13_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_V14_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.version).toBe(
-      "paw-fresh-qualification-v14",
+      "paw-fresh-qualification-v15",
     );
     expect(PAW_FRESH_QUALIFICATION_V5_RUN_IDS).toEqual(["sympy__sympy-14024"]);
     expect(PAW_FRESH_QUALIFICATION_V6_RUN_IDS).toEqual(["psf__requests-2317"]);
@@ -170,8 +173,11 @@ describe("SWE compare manifest", () => {
       false,
     );
     expect(PAW_FRESH_QUALIFICATION_RULE.fallbackMinPassToPass).toBe(10);
-    expect(PAW_FRESH_QUALIFICATION_RULE.seed).toBe(
+    expect(PAW_FRESH_QUALIFICATION_V14_RULE.seed).toBe(
       PAW_FRESH_QUALIFICATION_V3_RULE.seed,
+    );
+    expect(PAW_FRESH_QUALIFICATION_RULE.seed).toBe(
+      "paw-fresh-qualification-v15-verified",
     );
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-v3-selection-"));
     const datasetPath = path.join(root, "swe-bench-lite.jsonl");
@@ -266,6 +272,16 @@ describe("SWE compare manifest", () => {
     for (const [
       index,
       instanceId,
+    ] of PAW_FRESH_QUALIFICATION_V14_IDS.entries()) {
+      candidates.push({
+        ...qualifying,
+        instance_id: instanceId,
+        repo: `v14-frozen-${index}/repo`,
+      });
+    }
+    for (const [
+      index,
+      instanceId,
     ] of PAW_FRESH_QUALIFICATION_V8_RUN_IDS.entries()) {
       candidates.push({
         ...qualifying,
@@ -355,6 +371,9 @@ describe("SWE compare manifest", () => {
     for (const instanceId of PAW_FRESH_QUALIFICATION_V12_IDS) {
       expect(selected).not.toContain(instanceId);
     }
+    for (const instanceId of PAW_FRESH_QUALIFICATION_V14_IDS) {
+      expect(selected).not.toContain(instanceId);
+    }
     expect(selected).not.toContain("requests__networked-test");
     expect(selected).not.toContain("zero-f2p__repo");
     expect(selected).not.toContain("too-small-p2p__repo");
@@ -425,6 +444,11 @@ describe("SWE compare manifest", () => {
     });
     writeFileSync(
       path.join(root, "benchmarks", "swe-bench", "swe-bench-lite.jsonl"),
+      `${JSON.stringify(instance)}\n`,
+      "utf8",
+    );
+    writeFileSync(
+      path.join(root, "benchmarks", "swe-bench", "swe-bench-verified.jsonl"),
       `${JSON.stringify(instance)}\n`,
       "utf8",
     );
