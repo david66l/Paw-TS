@@ -266,10 +266,17 @@ const PAW_QUALIFICATION_V13_EXPOSED_IDS: readonly string[] = [
   ]),
 ];
 
-/** Current contract after the v12 canary exposed control-plane drift. */
-export const PAW_FRESH_QUALIFICATION_RULE = {
+/** Infeasible after every v12 frozen ID was excluded: only seven repositories. */
+export const PAW_FRESH_QUALIFICATION_V13_RULE = {
   ...PAW_FRESH_QUALIFICATION_V12_RULE,
   version: "paw-fresh-qualification-v13" as const,
+} as const;
+
+/** Current contract with a metadata-only regression-suite-size fallback. */
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  ...PAW_FRESH_QUALIFICATION_V13_RULE,
+  version: "paw-fresh-qualification-v14" as const,
+  fallbackMinPassToPass: 10,
 } as const;
 
 function sha256(value: string | Buffer): string {
@@ -368,7 +375,8 @@ export function createSweCompareManifest(opts: {
     | "paw-fresh-qualification-v10"
     | "paw-fresh-qualification-v11"
     | "paw-fresh-qualification-v12"
-    | "paw-fresh-qualification-v13";
+    | "paw-fresh-qualification-v13"
+    | "paw-fresh-qualification-v14";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;
@@ -531,6 +539,7 @@ interface PawFreshSelectionRule {
   readonly minPassToPass: number;
   readonly maxPassToPass: number;
   readonly fallbackMinFailToPass?: number;
+  readonly fallbackMinPassToPass?: number;
   readonly excludedRepos?: readonly string[];
 }
 
@@ -545,7 +554,7 @@ function selectPawFreshIds(opts: {
   const rule = opts.rule;
   const excludedRepos = new Set(rule.excludedRepos ?? []);
   const instances = loadLiteInstances(datasetPath);
-  const rankedCandidates = (minFailToPass: number) =>
+  const rankedCandidates = (minFailToPass: number, minPassToPass: number) =>
     instances
       .filter((instance) => {
         const failToPass = instance.FAIL_TO_PASS?.length ?? 0;
@@ -555,7 +564,7 @@ function selectPawFreshIds(opts: {
           !excludedRepos.has(instance.repo) &&
           failToPass >= minFailToPass &&
           failToPass <= rule.maxFailToPass &&
-          passToPass >= rule.minPassToPass &&
+          passToPass >= minPassToPass &&
           passToPass <= rule.maxPassToPass
         );
       })
@@ -570,8 +579,8 @@ function selectPawFreshIds(opts: {
       );
   const selected: string[] = [];
   const selectedRepos = new Set<string>();
-  const appendTier = (minFailToPass: number): void => {
-    for (const { instance } of rankedCandidates(minFailToPass)) {
+  const appendTier = (minFailToPass: number, minPassToPass: number): void => {
+    for (const { instance } of rankedCandidates(minFailToPass, minPassToPass)) {
       if (selectedRepos.has(instance.repo)) continue;
       if (
         findLocalTrajectoryHits(opts.repoRoot, instance.instance_id).length > 0
@@ -582,12 +591,24 @@ function selectPawFreshIds(opts: {
       if (selected.length === rule.count) return;
     }
   };
-  appendTier(rule.minFailToPass);
+  appendTier(rule.minFailToPass, rule.minPassToPass);
   if (
     selected.length < rule.count &&
     rule.fallbackMinFailToPass !== undefined
   ) {
-    appendTier(rule.fallbackMinFailToPass);
+    appendTier(rule.fallbackMinFailToPass, rule.minPassToPass);
+  }
+  if (
+    selected.length < rule.count &&
+    rule.fallbackMinPassToPass !== undefined
+  ) {
+    appendTier(rule.minFailToPass, rule.fallbackMinPassToPass);
+    if (
+      selected.length < rule.count &&
+      rule.fallbackMinFailToPass !== undefined
+    ) {
+      appendTier(rule.fallbackMinFailToPass, rule.fallbackMinPassToPass);
+    }
   }
   if (selected.length === rule.count) return selected;
   throw new Error(

@@ -25,6 +25,7 @@ import {
   PAW_FRESH_QUALIFICATION_V11_RULE,
   PAW_FRESH_QUALIFICATION_V12_IDS,
   PAW_FRESH_QUALIFICATION_V12_RULE,
+  PAW_FRESH_QUALIFICATION_V13_RULE,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
@@ -126,7 +127,7 @@ describe("SWE compare manifest", () => {
     }
   });
 
-  test("selects ten v13 repositories after excluding every frozen v12 task", () => {
+  test("selects ten v14 repositories after excluding every frozen v12 task", () => {
     expect(PAW_FRESH_QUALIFICATION_V3_RULE.count).toBe(5);
     expect(PAW_FRESH_QUALIFICATION_V4_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V5_RULE.count).toBe(10);
@@ -137,9 +138,10 @@ describe("SWE compare manifest", () => {
     expect(PAW_FRESH_QUALIFICATION_V10_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V11_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V12_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_V13_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.version).toBe(
-      "paw-fresh-qualification-v13",
+      "paw-fresh-qualification-v14",
     );
     expect(PAW_FRESH_QUALIFICATION_V5_RUN_IDS).toEqual(["sympy__sympy-14024"]);
     expect(PAW_FRESH_QUALIFICATION_V6_RUN_IDS).toEqual(["psf__requests-2317"]);
@@ -164,6 +166,10 @@ describe("SWE compare manifest", () => {
       "psf/requests",
     ]);
     expect(PAW_FRESH_QUALIFICATION_RULE.fallbackMinFailToPass).toBe(1);
+    expect("fallbackMinPassToPass" in PAW_FRESH_QUALIFICATION_V13_RULE).toBe(
+      false,
+    );
+    expect(PAW_FRESH_QUALIFICATION_RULE.fallbackMinPassToPass).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.seed).toBe(
       PAW_FRESH_QUALIFICATION_V3_RULE.seed,
     );
@@ -179,7 +185,7 @@ describe("SWE compare manifest", () => {
         (_, index) => `tests/test_regression.py::test_${index}`,
       ),
     );
-    const candidates = Array.from({ length: 9 }, (_, index) => ({
+    const candidates = Array.from({ length: 7 }, (_, index) => ({
       ...instance,
       instance_id: `qualification-${index}__repo-${index}`,
       repo: `qualification-${index}/repo`,
@@ -188,16 +194,33 @@ describe("SWE compare manifest", () => {
       FAIL_TO_PASS: failToPass,
       PASS_TO_PASS: passToPass,
     }));
-    const fallbackCandidates = Array.from({ length: 3 }, (_, index) => ({
+    const fallbackCandidates = Array.from({ length: 1 }, (_, index) => ({
       ...instance,
-      instance_id: `fallback-${index}__repo-${index}`,
-      repo: `fallback-${index}/repo`,
-      base_commit: `fallback-base-${index}`,
+      instance_id: `f2p-fallback-${index}__repo-${index}`,
+      repo: `f2p-fallback-${index}/repo`,
+      base_commit: `f2p-fallback-base-${index}`,
       problem_statement: "fallback task prose",
       FAIL_TO_PASS: JSON.stringify(["tests/test_fix.py::test_a"]),
       PASS_TO_PASS: passToPass,
     }));
-    candidates.push(...fallbackCandidates);
+    const passToPassFallbackCandidates = Array.from(
+      { length: 3 },
+      (_, index) => ({
+        ...instance,
+        instance_id: `p2p-fallback-${index}__repo-${index}`,
+        repo: `p2p-fallback-${index}/repo`,
+        base_commit: `p2p-fallback-base-${index}`,
+        problem_statement: "p2p fallback task prose",
+        FAIL_TO_PASS: failToPass,
+        PASS_TO_PASS: JSON.stringify(
+          Array.from(
+            { length: 10 },
+            (_, testIndex) => `tests/test_regression.py::test_${testIndex}`,
+          ),
+        ),
+      }),
+    );
+    candidates.push(...fallbackCandidates, ...passToPassFallbackCandidates);
     const qualifying = candidates[0];
     if (!qualifying) throw new Error("v3 fixture has no qualifying candidate");
     candidates.push({
@@ -292,7 +315,7 @@ describe("SWE compare manifest", () => {
       repo: "too-small-p2p/repo",
       PASS_TO_PASS: JSON.stringify(
         Array.from(
-          { length: 19 },
+          { length: 9 },
           (_, index) => `tests/test_regression.py::test_${index}`,
         ),
       ),
@@ -335,9 +358,14 @@ describe("SWE compare manifest", () => {
     expect(selected).not.toContain("requests__networked-test");
     expect(selected).not.toContain("zero-f2p__repo");
     expect(selected).not.toContain("too-small-p2p__repo");
-    expect(selected.filter((id) => id.startsWith("fallback-")).length).toBe(1);
+    expect(selected.filter((id) => id.startsWith("f2p-fallback-")).length).toBe(
+      1,
+    );
+    expect(selected.filter((id) => id.startsWith("p2p-fallback-")).length).toBe(
+      2,
+    );
     expect(
-      selected.slice(0, 9).every((id) => id.startsWith("qualification-")),
+      selected.slice(0, 7).every((id) => id.startsWith("qualification-")),
     ).toBe(true);
 
     writeFileSync(

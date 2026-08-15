@@ -206,7 +206,7 @@ describe("SWE compare runner", () => {
     ).toThrow("terminal AppState");
   });
 
-  test("accepts the current v13 protocol metadata and rejects unknown versions", () => {
+  test("accepts the current v14 protocol metadata and rejects unknown versions", () => {
     const current = {
       protocol: "paw-only-seen-development",
       selection: {
