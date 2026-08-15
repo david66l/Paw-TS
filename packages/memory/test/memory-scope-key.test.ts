@@ -149,6 +149,8 @@ describe("MemoryScopeKey", () => {
     );
     await runtimeA.shutdown();
     await runtimeB.shutdown();
+    expect(getMemoryV2CoreForTests(scopeA)).toBeNull();
+    expect(getMemoryV2CoreForTests(scopeB)).toBeNull();
     resetMemoryV2Core();
   });
 

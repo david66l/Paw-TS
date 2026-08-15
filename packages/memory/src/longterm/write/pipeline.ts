@@ -119,6 +119,8 @@ export class MemoryWritePipeline {
   private readonly now: () => Date;
   private timer: ReturnType<typeof setInterval> | null = null;
   private processing = false;
+  private stopRequested = true;
+  private activeTick: Promise<void> | null = null;
 
   constructor(opts: WritePipelineOptions = {}) {
     this.scope = opts.scope ?? opts.engine?.scope;
@@ -171,20 +173,42 @@ export class MemoryWritePipeline {
       detail: { eventType: event.type, estimatedTokens: estimated },
     });
     this.emit?.({ type: "memory.write.enqueued", eventType: event.type, runId: "runId" in event ? event.runId : undefined });
+    this.requestTick();
   }
 
   /** 启动 worker：串行轮询 db 队列（间隔默认 2s） */
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => void this.tick(), this.intervalMs);
-    void this.tick();
+    this.stopRequested = false;
+    this.timer = setInterval(() => this.requestTick(), this.intervalMs);
+    this.requestTick();
   }
 
   stop(): void {
+    this.stopRequested = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  /** Stop polling and wait until the currently claimed event is settled. */
+  async stopAndWait(): Promise<void> {
+    this.stop();
+    await this.activeTick;
+  }
+
+  isRunning(): boolean {
+    return this.timer !== null || this.activeTick !== null;
+  }
+
+  private requestTick(): void {
+    if (this.stopRequested || this.activeTick) return;
+    const active = this.tick().finally(() => {
+      if (this.activeTick === active) this.activeTick = null;
+    });
+    this.activeTick = active;
+    void active;
   }
 
   private async tick(): Promise<void> {
@@ -192,7 +216,8 @@ export class MemoryWritePipeline {
     this.processing = true;
     try {
       // 串行排空，任务间隔 intervalMs（spec §5.2 默认 2s，修复批次 C #19）
-      while (await this.processNext()) {
+      while (!this.stopRequested && (await this.processNext())) {
+        if (this.stopRequested) break;
         await new Promise((r) => setTimeout(r, this.intervalMs));
       }
     } catch {

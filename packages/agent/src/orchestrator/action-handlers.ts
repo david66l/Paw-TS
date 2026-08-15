@@ -65,6 +65,7 @@ import {
   goalRequiresMutation,
   resolveLifecycleBudget,
 } from "../lifecycle/task-lifecycle.js";
+import { resolveLoopAuthorityPolicyV1 } from "../loop-authority.js";
 import {
   type LoopV2ShadowMutationCapture,
   evaluateLoopV2ReadinessGateV1,
@@ -540,11 +541,14 @@ async function handleFinalAnswer(
   const hasPendingTodos = opts.todoStore?.items.some(
     (t) => t.status !== "done",
   );
+  const authority = resolveLoopAuthorityPolicyV1(ctx.loopKernelVersion);
+  const planningCanVeto = authority.planning === "legacy_completion_veto";
 
   // 有未完成的模型计划或 Todo 就不能宣告完成。还有预算时推动继续；
   // 没预算时 honest-incomplete，绝不能把 pending 项自动涂绿。
   const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
   if (
+    planningCanVeto &&
     (hasPendingPlan || hasPendingTodos) &&
     flags.autoContinueNudges < 3 &&
     !noRoomForAnotherTurn
@@ -583,7 +587,7 @@ async function handleFinalAnswer(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  if (hasPendingPlan || hasPendingTodos) {
+  if (planningCanVeto && (hasPendingPlan || hasPendingTodos)) {
     const pendingPlanCount =
       plan?.items.filter(
         (i) => i.status !== "completed" && i.status !== "skipped",
@@ -727,7 +731,13 @@ async function handleFinalAnswer(
 
   // 无 pending 工作 / 验证通过 → 真正完成。revision=0 的 bootstrap
   // 计划只是 UI 兜底，可随最终完成同步标绿；模型计划必须已自行完成。
-  if (plan && plan.items.length > 0) {
+  const shouldProjectPlanCompletion =
+    plan &&
+    plan.items.length > 0 &&
+    // A revision-0 bootstrap plan is a derived UI fallback. A model-authored
+    // v2 plan is only a projection and must not be silently painted green.
+    (planningCanVeto || plan.revision === 0);
+  if (shouldProjectPlanCompletion) {
     const completed = markPlanItemsCompleted(plan.items);
     plan.items.splice(0, plan.items.length, ...completed);
     plan.revision += 1;
@@ -1245,6 +1255,8 @@ async function handleToolCalls(
     lastTurnHadToolCall: true,
     hasEverUsedTools: true,
   };
+  const authority = resolveLoopAuthorityPolicyV1(ctx.loopKernelVersion);
+  const legacyBehaviorGuards = authority.behavior === "legacy_guarded";
 
   // 发出事件
   for (const action of calls) {
@@ -1266,19 +1278,22 @@ async function handleToolCalls(
 
   // 并行执行所有工具（审批门控 + 子 Agent 策略检查在内部处理）
   const codingPhaseEnabled =
+    legacyBehaviorGuards &&
     goalRequiresMutation(ctx.specGoal) &&
     goalUsesCodingPhaseBudget(ctx.specGoal);
   const priorCodingPhase = flags.codingPhase ?? EMPTY_CODING_PHASE_STATE;
   let projectedCodingPhase = priorCodingPhase;
   const taskState = ctx.taskState.snapshot();
   const convergenceBlockReasons = calls.map((call) =>
-    convergenceToolBlockReason(
-      call,
-      taskState,
-      ctx.turn + 1,
-      ctx.maxSteps,
-      ctx.verificationPolicy,
-    ),
+    legacyBehaviorGuards
+      ? convergenceToolBlockReason(
+          call,
+          taskState,
+          ctx.turn + 1,
+          ctx.maxSteps,
+          ctx.verificationPolicy,
+        )
+      : null,
   );
   const codingPhaseBlockReasons = calls.map((call, index) => {
     // A call rejected by the general loop policy never reaches the opt-in
@@ -1629,6 +1644,7 @@ async function handleToolCalls(
   // Idle fuse hard-stop：重复同一失败达到预算后诚实 incomplete
   const budget = resolveLifecycleBudget();
   if (
+    legacyBehaviorGuards &&
     final.idleFuseTripped &&
     (fusedFlags.idleFuseTrips ?? 0) >= budget.idleFuseHardStopTrips
   ) {

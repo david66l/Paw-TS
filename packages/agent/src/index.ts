@@ -152,5 +152,10 @@ export {
   type RepeatToolReminderResult,
   type RepeatToolState,
 } from "./lifecycle/repeat-tool-reminder.js";
+export {
+  LOOP_AUTHORITY_SCHEMA_V1,
+  resolveLoopAuthorityPolicyV1,
+  type LoopAuthorityPolicyV1,
+} from "./loop-authority.js";
 
 export * from "./loop-v2/index.js";

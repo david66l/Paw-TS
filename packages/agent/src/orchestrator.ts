@@ -1170,6 +1170,12 @@ export class AgentOrchestrator {
     } finally {
       // 无论如何都要断开 MCP 连接（避免资源泄漏）
       await init?.mcp?.disconnectAll();
+      // A run owns one scoped MemoryRuntime reference. Always release it;
+      // otherwise temporary workspaces accumulate independent DB workers.
+      const memoryRuntime = this._memoryRuntime;
+      this._memoryRuntime = null;
+      this._memoryTaskId = null;
+      await memoryRuntime?.shutdown().catch(() => {});
     }
   }
 
@@ -3635,8 +3641,13 @@ export class AgentOrchestrator {
           emit,
           ...buildMemoryLlmOptions(this.memoryLlm, model),
         });
+        // Own the runtime immediately so init failures are released by run's
+        // finally block instead of leaking a scoped outbox worker.
+        this._memoryRuntime = runtime;
         const ok = await runtime.ping();
         if (!ok) {
+          await runtime.shutdown().catch(() => {});
+          this._memoryRuntime = null;
           emit({
             type: "memory.retrieve.done",
             query: retrievalQuery,
@@ -3656,7 +3667,6 @@ export class AgentOrchestrator {
               ? { resumeTaskId: spec.resumeMemoryTaskId }
               : {}),
           });
-          this._memoryRuntime = runtime;
           this._memoryTaskId = begun.taskId;
           this._lastDynamicMemoryGoal = spec.goal;
           if (this._conversationId && begun.taskId) {

@@ -263,7 +263,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         legacyTerminal: { status: "failed" },
         v2Outcome: {
           executionStatus: "failed",
-          reasonCode: "runtime_failed",
+          reasonCode: "runtime_error",
         },
         comparison: "equal",
       });

@@ -608,6 +608,12 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
     const shared = sharedCores.get(this.coreKey);
     if (!shared) return;
     shared.refs = Math.max(0, shared.refs - 1);
-    if (shared.refs === 0) shared.core.pipeline.stop();
+    if (shared.refs !== 0) return;
+    await shared.core.pipeline.stopAndWait();
+    // Delete only if nobody reacquired this exact core while its final tick
+    // was settling. This keeps one serial worker per scope and bounds the map.
+    if (sharedCores.get(this.coreKey) === shared && shared.refs === 0) {
+      sharedCores.delete(this.coreKey);
+    }
   }
 }
