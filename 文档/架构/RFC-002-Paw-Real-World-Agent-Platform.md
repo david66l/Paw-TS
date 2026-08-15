@@ -222,9 +222,105 @@ Manage-Execute-Audit 是职责边界，不等于每步都必须调用三个 LLM�
 
 这样保留长任务可靠性，又避免把延迟和成本放大三倍。
 
-## 8. Durable Session 与 Task Service
+## 8. Context Plane 与 Memory Plane
 
-### 8.1 统一事实模型
+上下文和记忆不是普通插件功能，而是 Paw 的一级架构平面。当前已经实现的 ContextManager、ContextCompactor、budget allocation、protected constraints、archive/versioning、monitor、compression quality、system prompt、MemoryRuntimeV2、Memory Governor、outbox 和 utility lifecycle 都应保留并迁移到清晰边界；不重新实现第二套。
+
+### 8.1 三种状态不能混在一起
+
+| 状态 | 回答的问题 | 权威来源 | 生命周期 |
+|---|---|---|---|
+| Durable Task State | 当前任务真实做到哪里、还欠什么验证 | run event log + environment evidence | Task/RunAttempt |
+| Working Context | 下一次模型调用应该看到什么 | Context Builder 生成的 prompt snapshot | 每次 model request |
+| Long-term Memory | 跨会话值得保留什么事实、经验、偏好和 procedure | Memory Store + Governor | 跨 Task/Conversation |
+
+Task state 不能只存在 compaction summary 或长期记忆中；长期记忆不能替代当前 revision 的测试事实；上下文只是选择后的视图，不能成为唯一事实副本。这个分离是长任务不跑偏、记忆不污染当前任务、crash/resume 可重放的前提。
+
+### 8.2 Context Engine 的目标形态
+
+Context Engine 属于 Runtime 的稳定能力，可先保留在一个 package 内，只有独立版本或部署需求出现时才拆成 `@paw/context`。它只接受结构化 `ContextBlock`，不允许子系统直接向 message array 塞自由文本：
+
+```ts
+interface ContextBlock {
+  id: string;
+  kind:
+    | "identity"
+    | "authority"
+    | "task_state"
+    | "repository_instruction"
+    | "skill"
+    | "memory"
+    | "tool_observation"
+    | "conversation"
+    | "advisor";
+  sourceRef: string;
+  authority: "system" | "user" | "repository" | "host" | "learned";
+  content: readonly ContentPart[];
+  estimatedTokens: number;
+  priority: number;
+  freshness?: string;
+  scope?: string;
+  protected: boolean;
+}
+```
+
+Context Builder 是模型可见内容的唯一注入点。每次请求落一条 `prompt.snapshot` 事件，至少记录 block IDs、内容 hashes、顺序、预算、裁剪/降级原因和最终 tool schema hash。重放不必永久保存重复全文，但必须能通过 event/artifact refs 重建模型实际看到的内容。
+
+现有机制按下列方式保留：
+
+- ContextManager 迁移为 Context Engine 的 request-local assembler，不再拥有任务完成状态。
+- token budget allocation 继续负责各域配额，但输入改为 typed blocks；不能按消息来源隐式猜优先级。
+- protected constraints 扩展为 authority/task obligation/evidence pointer，不允许 compaction 删除。
+- ContextCompactor 只压缩 conversation/tool transcript 视图；不得重写 acceptance、current revision、repair obligation 或 verification matrix。
+- Archive/versioning 继续保存可寻址原始证据；summary 内使用 artifact/evidence refs，而不是复制后成为新事实源。
+- Context Monitor 继续按 token/事件触发 compact/recall，但只发 advisor/request，不拥有 loop terminal 权限。
+- memory retrieval 保持任务开始、失败、压缩后、用户纠正等事件触发，避免每轮全库检索和无差别注入。
+- stable identity/tool guidance、repository instructions、task state、retrieved memory 和 volatile observations 分层组装，保证 prompt cache 稳定且来源冲突可解释。
+
+### 8.3 当前 Memory v2 的去向
+
+MemoryRuntimeV2 及 `记忆机制spec-v2` 的核心决策继续有效：Store 是正式记忆权威、Governor 是统一变更入口、Context Builder 是唯一注入点、学习路径只产候选。大型架构迁移只改变它与 Runtime 的依赖方式：
+
+- `@paw/memory` 从 `@paw/core` 类型中解耦，改为实现 `@paw/protocol` 中的 MemoryProvider port。
+- Runtime 不 import MemoryRuntimeV2；composition root 选择具体 provider，并把只读 port 交给 Context Engine。
+- 检索返回 `MemoryInjectionPackage`，包含 memory id/revision/type/source/scope/applicability/score/content hash；实际注入结果写入 prompt snapshot，保证同一轨迹可解释。
+- 写入仍走异步 outbox。只有 verified outcome、用户明确陈述或受治理事件可产生 candidate；模型、compactor 和 evolution supervisor 都不能绕过 Governor 直接写正式记忆。
+- memory failure 保持 fail-open 到无记忆基线，但故障、降级和跳过原因必须可观测，不能静默把“没检索到”当“没有相关记忆”。
+- semantic、episodic、profile、procedural 四类继续分治；vault 只保存 secret reference，不保存 secret value。
+- 一次 RunAttempt 固定 memory policy 和 skill/plugin versions；允许检索内容随 query 变化，但每次实际注入的 revision 必须记录。新的 skill/prompt 版本只对新 run 生效。
+
+### 8.4 程序记忆与自进化只保留一条链
+
+现有 `08.程序记忆.md` 的 auto skill 计划不废弃，而是成为 Evolution Supervisor 的 E1 发布通道：
+
+```text
+verified successful trace
+  -> distill reusable procedure candidate
+  -> secret/schema/static guard
+  -> replay/dry-run/critic
+  -> staged skill diff
+  -> approve or evidence-based promotion
+  -> versioned skill registry
+  -> new runs may retrieve it
+  -> utility ledger observes use/outcome
+  -> retain, revise, deprecate or rollback
+```
+
+Memory Distiller 负责从轨迹提炼候选；Evolution Supervisor 负责数据集、实验、版本和发布；Plugin Host 负责加载已发布 skill；Context Engine 负责按需注入；Memory Governor/skill governor 负责正式状态变更。它们共享一份 skill identity/version/utility ledger，不创建 Hermes-copy 或第二套 `.paw/skills/auto` 数据库。
+
+### 8.5 上下文与记忆迁移验收
+
+1. 相同 event log + artifact refs + provider snapshot 能重建相同 prompt block manifest。
+2. compaction 前后 goal、criteria、current revision、repair obligation 和 verification matrix 完全一致。
+3. memory on/off 只改变明确记录的 memory blocks，不改变 authority、tool policy 或评分器。
+4. memory/provider 故障时主任务退化到 memory-off，且 trace 明确记录 failure class。
+5. 跨 session recall 能指出具体 memory id/revision/source；旧或冲突记忆可被 Governor 失效。
+6. 自动 skill 未通过 replay/approval 前不能进入任何新 run；发布后也不能改变已运行 session 的 tool/prompt snapshot。
+7. 用 MemoryAgentBench 继续测召回/生命周期增益，用 SWE-Exp/真实任务测 memory on-off resolved delta；不能用内部夹具 SF 抬高公共 coding 能力。
+
+## 9. Durable Session 与 Task Service
+
+### 9.1 统一事实模型
 
 区分三个概念：
 
@@ -234,7 +330,7 @@ Manage-Execute-Audit 是职责边界，不等于每步都必须调用三个 LLM�
 
 同一个 Task 可以有多个 attempt，但副作用重试策略必须明确。Session history 不等于 task state；对话可以产生多个 Task，一个自动化 Task 也可以附着到某个 Conversation。
 
-### 8.2 存储策略
+### 9.2 存储策略
 
 - 本地单机：SQLite event store + artifact directory，零运维可启动；
 - 商业/多 worker：Postgres event store + object store，按 tenant/project/conversation/task/run 分区；
@@ -243,9 +339,9 @@ Manage-Execute-Audit 是职责边界，不等于每步都必须调用三个 LLM�
 
 所有 append 使用 expected sequence/CAS；worker 使用 lease + heartbeat；任何 model/tool-visible 内容都必须可从 event log 重建。
 
-## 9. 插件系统
+## 10. 插件系统
 
-### 9.1 插件不是任意 hook
+### 10.1 插件不是任意 hook
 
 插件以 manifest 声明贡献点、权限和 API 版本：
 
@@ -275,7 +371,7 @@ interface PawPluginManifest {
 
 不要一开始提供“before everything/after everything 并可修改任意对象”的万能 hook。稳定域使用 registry contribution；运行时拦截使用少量 typed pipeline，返回明确 decision，顺序、timeout 和 error policy 固定。
 
-### 9.2 生命周期与回收
+### 10.2 生命周期与回收
 
 - `activate(ctx)` 返回 disposer；卸载后所有注册必须消失；
 - project、user、built-in 三层 discovery，优先级与冲突规则确定；
@@ -283,13 +379,13 @@ interface PawPluginManifest {
 - plugin upgrade 只影响新 run，不修改当前模型可见 prompt/tool schema；
 - 插件 API 做 semver/compatibility preflight；不兼容时 fail loud，不静默跳过。
 
-### 9.3 权限与隔离
+### 10.3 权限与隔离
 
 权限至少包括 filesystem scopes、network domains、secrets refs、process、channel send、task create、memory propose。第三方高风险插件默认 worker/external process；in-process 只留给受信 built-ins。MCP 是一种 tool provider transport，不等于完整 Paw plugin。
 
-## 10. Gateway 与飞书/微信
+## 11. Gateway 与飞书/微信
 
-### 10.1 Channel-neutral envelope
+### 11.1 Channel-neutral envelope
 
 每个平台先转换成统一入站事件：
 
@@ -310,7 +406,7 @@ interface InboundEnvelope {
 
 Gateway 负责：签名校验、用户/群授权、幂等、conversation mapping、附件归档、typing/streaming、审批卡片、outbound retry。Agent 只看到可信 user event 和 channel capability，不知道飞书 SDK 类型。
 
-### 10.2 接入顺序
+### 11.2 接入顺序
 
 1. Webhook/HTTP reference adapter：用来验证 gateway contract。
 2. 飞书/Lark：企业场景清晰，支持机器人、事件订阅、卡片审批；作为第一个正式 channel plugin。
@@ -319,9 +415,9 @@ Gateway 负责：签名校验、用户/群授权、幂等、conversation mapping
 
 飞书和微信不应同时硬编码进第一版。先让 capability negotiation、thread/session mapping、幂等和 delivery retry 通过 contract tests，再增加平台。
 
-## 11. 自动化任务
+## 12. 自动化任务
 
-### 11.1 Task Definition
+### 12.1 Task Definition
 
 自动化不是“定时执行一段 prompt”，而是版本化定义：
 
@@ -335,7 +431,7 @@ Gateway 负责：签名校验、用户/群授权、幂等、conversation mapping
 - timeout/retry/cancel policy；
 - success criteria/evaluator。
 
-### 11.2 Attempt 状态机
+### 12.2 Attempt 状态机
 
 ```text
 scheduled -> claimed -> running -> completed | failed | cancelled | unknown
@@ -343,7 +439,7 @@ scheduled -> claimed -> running -> completed | failed | cancelled | unknown
 
 必须先持久化 claimed attempt，再启动 runtime。进程失联后，无法证明结果的 attempt 进入 `unknown`，默认不自动重跑；只有声明幂等且策略允许的任务才能重新执行。Agent completion 和 outbound delivery 分开记录，因此发送失败只重试 delivery。
 
-### 11.3 进程边界
+### 12.3 进程边界
 
 - Scheduler 只决定何时创建 attempt；
 - Worker claim attempt 并运行 Paw runtime；
@@ -353,9 +449,9 @@ scheduled -> claimed -> running -> completed | failed | cancelled | unknown
 
 本地 all-in-one daemon 可以把它们放在一个进程，但模块和事务边界保持一致，生产环境再独立扩展。
 
-## 12. 受控自进化
+## 13. 受控自进化
 
-### 12.1 允许进化的层级
+### 13.1 允许进化的层级
 
 | 等级 | 对象 | 默认发布策略 |
 |---|---|---|
@@ -367,7 +463,7 @@ scheduled -> claimed -> running -> completed | failed | cancelled | unknown
 
 这比 Hermes 默认自由写 skill 更保守，符合 Paw 已有 Memory Governor 和失败试用制。
 
-### 12.2 Evolution pipeline
+### 13.2 Evolution pipeline
 
 ```text
 Production traces / failures / user corrections
@@ -385,7 +481,7 @@ Production traces / failures / user corrections
 
 每次 evolution change 必须记录：改了什么、为何认为会改善、目标失败簇、候选版本、数据版本、baseline/candidate 结果、回归、成本、批准者和 rollback target。没有可证伪预测的变化不进入自动优化队列。
 
-### 12.3 防止“越学越差”
+### 13.3 防止“越学越差”
 
 - task 轨迹按 repo/time 分割，避免同题泄漏；
 - public benchmark 不直接生成 task-specific rule；
@@ -395,13 +491,13 @@ Production traces / failures / user corrections
 - 所有自动生成 skill 默认 staged，失败 skill 永不正式生效；
 - core evolution 只能生成 PR，不能调用 git push/deploy 权限。
 
-## 13. 部署形态
+## 14. 部署形态
 
-### 13.1 本地开发版
+### 14.1 本地开发版
 
 `paw daemon` all-in-one：SQLite、local artifact store、local worker、gateway 可选；CLI/TUI/Desktop 作为客户端连接 daemon。无 daemon 时可以 embedded compatibility mode 启动相同 runtime composition。
 
-### 13.2 商业部署版
+### 14.2 商业部署版
 
 ```text
 API/Gateway replicas
@@ -416,7 +512,7 @@ API/Gateway replicas
 
 多租户 scope 从入口一路传播到 task、run、workspace、memory、artifact、secret 和 telemetry；不能在子系统里重新猜 tenant/project。
 
-## 14. 迁移路线：允许大改，但不 big-bang
+## 15. 迁移路线：允许大改，但不 big-bang
 
 ### Phase 0：冻结架构与基线
 
@@ -489,7 +585,7 @@ API/Gateway replicas
 
 放行条件：候选可重放、holdout 隔离、回归 gate、staged approval、新 run 生效和 rollback 全有证据。
 
-## 15. 第一实施切片
+## 16. 第一实施切片
 
 下一步不做飞书，也不立刻创建完整 daemon。第一切片固定为：
 
@@ -505,7 +601,7 @@ API/Gateway replicas
 
 第一切片完成后，再做 Loop v2 authority cutover。两者不能倒序：在循环权威仍混合时直接建插件 host，会把旧内部类型永久公开。
 
-## 16. 项目“做完”的定义
+## 17. 项目“做完”的定义
 
 本项目不是“功能列表都有按钮”就结束，至少满足五层验收：
 
@@ -548,7 +644,7 @@ API/Gateway replicas
 
 达到以上标准后，Paw 才能被称为“可服务真实商业场景、且架构可持续演进的 coding agent platform”。超过 Claude Code 不是靠一个平均分宣称，而是同模型、同题、同环境的公开 paired evidence，加上 Claude Code CLI 不覆盖的记忆、企业渠道和自动化可靠性证据。
 
-## 17. 明确否决的路线
+## 18. 明确否决的路线
 
 - 在 `orchestrator.ts` 里增加 `if (channel === "feishu")`。
 - 把 cron tick 放进 gateway，并用“上次时间”字段猜任务是否执行过。
@@ -560,7 +656,7 @@ API/Gateway replicas
 - 用更多 prompt nudge、更多预算或 benchmark 特判代替 loop authority 整改。
 - 未固定数据集与版本就自动“优化”，把 benchmark 泄漏误当自进化。
 
-## 18. 决策
+## 19. 决策
 
 若本 RFC 获得接受，Paw 的近期主线从“继续给现有 AgentOrchestrator 加能力”改为：
 
