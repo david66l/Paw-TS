@@ -152,7 +152,16 @@ export class FakeLanguageModel implements LanguageModel {
    */
   private async computeText(messages: readonly ChatMessage[]): Promise<string> {
     // 取最后一条用户消息
-    const last = [...messages].reverse().find((m) => m.role === "user");
+    // Host telemetry is a separate, dynamic user-role control block. A real
+    // model should read it, but this deterministic intent fixture must still
+    // classify the latest task/tool message instead of treating telemetry
+    // field names (for example "calls") as user intent.
+    const last = [...messages]
+      .reverse()
+      .find(
+        (m) =>
+          m.role === "user" && !m.content.startsWith("[Status Snapshot v1]"),
+      );
     const raw = last?.content ?? "";
     // 剥离自动注入的上下文块，确保启发式只看到用户的真实指令
     const text = raw

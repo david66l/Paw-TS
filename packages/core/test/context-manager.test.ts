@@ -43,6 +43,22 @@ describe("ContextManager", () => {
     expect(packages[0]?.content).toContain("two");
   });
 
+  test("upserts dynamic user control messages at the history tail", () => {
+    const cm = new ContextManager();
+    cm.addUser("Goal");
+    cm.upsertUserByPrefixAtTail("[Status]", "[Status]\none");
+    cm.addAssistant("work");
+    cm.addToolResult("read_file", true, "done");
+    cm.upsertUserByPrefixAtTail("[Status]", "[Status]\ntwo");
+
+    const messages = cm.buildMessages();
+    expect(
+      messages.filter((message) => message.content.startsWith("[Status]")),
+    ).toHaveLength(1);
+    expect(messages.at(-1)?.content).toBe("[Status]\ntwo");
+    expect(messages.at(-2)?.content).toContain("read_file");
+  });
+
   test("truncates by maxMessages", () => {
     const cm = new ContextManager({ maxMessages: 3 });
     cm.setSystem("Sys");

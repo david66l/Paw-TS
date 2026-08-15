@@ -123,6 +123,22 @@ export class ContextManager {
     this.maybeTruncate();
   }
 
+  /**
+   * Replace a dynamic host-control message and keep it at the history tail.
+   * This preserves the cacheable prefix before rapidly changing telemetry.
+   */
+  upsertUserByPrefixAtTail(prefix: string, content: string): void {
+    const sanitized = isSystemInjectedMessage(content)
+      ? content
+      : sanitizeUserInput(content).text;
+    this.history = this.history.filter(
+      (message) =>
+        message.role !== "user" || !message.content.startsWith(prefix),
+    );
+    this.history.push({ role: "user", content: sanitized });
+    this.maybeTruncate();
+  }
+
   /** 追加 assistant 消息（可选 thinking 内容）。 */
   addAssistant(content: string, thinking?: string): void {
     const msg: ChatMessage = thinking

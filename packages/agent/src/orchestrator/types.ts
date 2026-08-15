@@ -39,6 +39,7 @@ import type {
   ProviderTerminalStateV2,
   SemanticReviewOnceResultV2,
 } from "../loop-v2/index.js";
+import type { RunStatusTelemetryV1 } from "../status-snapshot.js";
 import type { TaskStateManager } from "../task-state.js";
 
 // ═════════════════════════════════════════════════════════════
@@ -198,6 +199,8 @@ export interface PhaseContext {
   readonly ctxMgr: ContextManager;
   readonly planner: TaskPlanner;
   readonly taskState: TaskStateManager;
+  /** Host-owned execution telemetry; advisory and never a completion authority. */
+  readonly statusTelemetry: RunStatusTelemetryV1;
   /** 事件发射器 */
   readonly emit: (event: RunEvent) => void;
   /** Checkpoint 序列号（可变引用，用于工具执行前后保存快照） */

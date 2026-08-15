@@ -1490,6 +1490,7 @@ async function handleToolCalls(
     });
   }
   const toolDuration = Date.now() - toolStartTime;
+  ctx.statusTelemetry.observeToolBatch(calls, results, toolDuration);
 
   // 评估钩子：逐个通知工具调用完成
   for (let i = 0; i < calls.length; i++) {

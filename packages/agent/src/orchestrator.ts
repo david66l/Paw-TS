@@ -213,6 +213,7 @@ const CONSTRAINT_TASK_PIVOT_PATTERN =
 /** 系统注入的 user 消息（约束调和候选必须排除——不是用户意图） */
 const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[Context Package]",
+  "[Status Snapshot v1]",
   "[Context Summary]",
   "[Previous session context]",
   "[You stopped",
@@ -285,6 +286,11 @@ import {
 } from "./resilience/circuit-breaker.js";
 import { resolveMaxSteps } from "./resolve-max-steps.js";
 import { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";
+import {
+  RunStatusTelemetryV1,
+  STATUS_SNAPSHOT_PREFIX,
+  formatStatusSnapshotV1,
+} from "./status-snapshot.js";
 import { TaskStateManager, formatTaskStateForContext } from "./task-state.js";
 
 // ═════════════════════════════════════════════════════════════
@@ -766,6 +772,7 @@ export class AgentOrchestrator {
         checkpointSeq,
         shellSandbox,
         taskState,
+        statusTelemetry,
       } = init;
       emitRunMetrics = _emitRunMetrics;
       persistLoopV2Terminal = (result) => {
@@ -916,6 +923,7 @@ export class AgentOrchestrator {
           ctxMgr,
           planner,
           taskState,
+          statusTelemetry,
           emit,
           checkpointSeq,
           specGoal: spec.goal,
@@ -2372,8 +2380,17 @@ export class AgentOrchestrator {
     const existing = ctx.ctxMgr
       .buildMessages()
       .find((m) => m.content.startsWith(CONTEXT_PACKAGE_PREFIX));
-    if (existing && existing.content === text) return;
-    ctx.ctxMgr.upsertUserByPrefix(CONTEXT_PACKAGE_PREFIX, text);
+    if (!existing || existing.content !== text) {
+      ctx.ctxMgr.upsertUserByPrefix(CONTEXT_PACKAGE_PREFIX, text);
+    }
+    const statusText = formatStatusSnapshotV1(
+      ctx.statusTelemetry.snapshot(
+        ctx.turn,
+        ctx.maxSteps,
+        ctx.taskState.snapshot(),
+      ),
+    );
+    ctx.ctxMgr.upsertUserByPrefixAtTail(STATUS_SNAPSHOT_PREFIX, statusText);
   }
 
   // ─────────────────────────────────────────────────────────
@@ -3094,6 +3111,7 @@ export class AgentOrchestrator {
     ctxMgr: ContextManager;
     planner: TaskPlanner;
     taskState: TaskStateManager;
+    statusTelemetry: RunStatusTelemetryV1;
     sessionMemoryStore: SessionMemoryStore;
     compactor: ContextCompactor;
     artifactRegistry: ArtifactRegistry;
@@ -3123,6 +3141,10 @@ export class AgentOrchestrator {
       return findPawRoot(cwd) ?? cwd;
     })();
     const maxSteps = resolveMaxSteps(workspaceRoot, spec.maxSteps);
+    const statusTelemetry = new RunStatusTelemetryV1({
+      runId,
+      workspaceRoot,
+    });
     const loopV2LiveReviewRuntime =
       this.loopKernelVersion === "v2"
         ? new LoopV2LiveReviewRuntimeV1({
@@ -3558,6 +3580,7 @@ export class AgentOrchestrator {
         ctxMgr,
         planner,
         taskState,
+        statusTelemetry,
         sessionMemoryStore,
         compactor,
         artifactRegistry,
@@ -3942,6 +3965,7 @@ export class AgentOrchestrator {
       ctxMgr,
       planner,
       taskState,
+      statusTelemetry,
       sessionMemoryStore,
       compactor,
       artifactRegistry,

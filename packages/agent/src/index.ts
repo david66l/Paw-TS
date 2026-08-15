@@ -157,5 +157,15 @@ export {
   resolveLoopAuthorityPolicyV1,
   type LoopAuthorityPolicyV1,
 } from "./loop-authority.js";
+export {
+  RunStatusTelemetryV1,
+  STATUS_SNAPSHOT_PREFIX,
+  STATUS_SNAPSHOT_SCHEMA_V1,
+  formatStatusSnapshotV1,
+  statusPaceV1,
+  type StatusEnvironmentV1,
+  type StatusPaceV1,
+  type StatusSnapshotV1,
+} from "./status-snapshot.js";
 
 export * from "./loop-v2/index.js";
