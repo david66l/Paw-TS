@@ -215,5 +215,11 @@ export {
   type CapabilityInventoryEntryV1,
   type CapabilitySelectionObservationV1,
 } from "./capability-exposure.js";
+export {
+  MANAGED_JOB_CONTROLLER_SCHEMA_V1,
+  ManagedJobControllerV1,
+  type ManagedShellSettlementV1,
+  type ManagedShellStartResultV1,
+} from "./managed-job-controller.js";
 
 export * from "./loop-v2/index.js";
