@@ -21,6 +21,8 @@ import {
   PAW_FRESH_QUALIFICATION_V9_RUN_IDS,
   PAW_FRESH_QUALIFICATION_V10_RULE,
   PAW_FRESH_QUALIFICATION_V10_RUN_IDS,
+  PAW_FRESH_QUALIFICATION_V11_IDS,
+  PAW_FRESH_QUALIFICATION_V11_RULE,
   PAW_FRESH_V2_IDS,
   PAW_KNOWN_EXPOSED_IDS,
   PAW_SEEN_DEVELOPMENT_IDS,
@@ -122,7 +124,7 @@ describe("SWE compare manifest", () => {
     }
   });
 
-  test("selects ten v11 repositories after excluding all prior trajectories", () => {
+  test("selects ten v12 repositories after excluding every frozen v11 task", () => {
     expect(PAW_FRESH_QUALIFICATION_V3_RULE.count).toBe(5);
     expect(PAW_FRESH_QUALIFICATION_V4_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V5_RULE.count).toBe(10);
@@ -131,9 +133,10 @@ describe("SWE compare manifest", () => {
     expect(PAW_FRESH_QUALIFICATION_V8_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V9_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_V10_RULE.count).toBe(10);
+    expect(PAW_FRESH_QUALIFICATION_V11_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.count).toBe(10);
     expect(PAW_FRESH_QUALIFICATION_RULE.version).toBe(
-      "paw-fresh-qualification-v11",
+      "paw-fresh-qualification-v12",
     );
     expect(PAW_FRESH_QUALIFICATION_V5_RUN_IDS).toEqual(["sympy__sympy-14024"]);
     expect(PAW_FRESH_QUALIFICATION_V6_RUN_IDS).toEqual(["psf__requests-2317"]);
@@ -212,6 +215,16 @@ describe("SWE compare manifest", () => {
         ...qualifying,
         instance_id: instanceId,
         repo: `v7-model-run-${index}/repo`,
+      });
+    }
+    for (const [
+      index,
+      instanceId,
+    ] of PAW_FRESH_QUALIFICATION_V11_IDS.entries()) {
+      candidates.push({
+        ...qualifying,
+        instance_id: instanceId,
+        repo: `v11-frozen-${index}/repo`,
       });
     }
     for (const [
@@ -298,6 +311,9 @@ describe("SWE compare manifest", () => {
       expect(selected).not.toContain(instanceId);
     }
     for (const instanceId of PAW_FRESH_QUALIFICATION_V10_RUN_IDS) {
+      expect(selected).not.toContain(instanceId);
+    }
+    for (const instanceId of PAW_FRESH_QUALIFICATION_V11_IDS) {
       expect(selected).not.toContain(instanceId);
     }
     expect(selected).not.toContain("requests__networked-test");

@@ -6,11 +6,12 @@ import {
 } from "../src/swe-compare/index.js";
 
 const repoRoot = process.cwd();
-const fileName = "paw-fresh-qualification-v11.json";
+const fileName = "paw-fresh-qualification-v12.json";
 const fresh = createPawFreshQualificationManifest({ repoRoot });
 let previous: typeof fresh | undefined;
 for (const candidate of [
   fileName,
+  "paw-fresh-qualification-v11.json",
   "paw-fresh-qualification-v10.json",
   "paw-fresh-qualification-v9.json",
   "paw-fresh-qualification-v8.json",
