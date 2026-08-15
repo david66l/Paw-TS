@@ -33,9 +33,12 @@ export type LoopV2AuthorityIneligibilityReasonV1 =
   | "candidate_missing"
   | "product_mutation_not_required"
   | "mutation_missing"
+  | "verification_authority_not_local"
+  | "local_verification_not_passed"
   | "review_missing"
   | "semantic_review_not_passed"
   | "legacy_not_completed"
+  | "legacy_outcome_not_verified"
   | "v2_not_completed"
   | "candidate_not_certified"
   | "artifact_not_valid"
@@ -237,6 +240,12 @@ export function assessLoopV2AuthorityEligibilityV1(
     if (candidate.assessment.mutationRevision < 1) {
       reasons.push("mutation_missing");
     }
+    if (candidate.policy.verificationAuthority !== "local") {
+      reasons.push("verification_authority_not_local");
+    }
+  }
+  if (terminal.v2Outcome.localVerification !== "passed") {
+    reasons.push("local_verification_not_passed");
   }
   if (!review) {
     reasons.push("review_missing");
@@ -245,6 +254,9 @@ export function assessLoopV2AuthorityEligibilityV1(
   }
   if (terminal.legacyTerminal.status !== "completed") {
     reasons.push("legacy_not_completed");
+  }
+  if (terminal.legacyTerminal.outcome !== "verified") {
+    reasons.push("legacy_outcome_not_verified");
   }
   if (terminal.v2Outcome.executionStatus !== "completed") {
     reasons.push("v2_not_completed");

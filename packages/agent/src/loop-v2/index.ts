@@ -111,6 +111,17 @@ export {
   type LoopV2TerminalComparisonV1,
 } from "./live-terminal-artifact.js";
 export {
+  LOOP_V2_RUN_RESULT_SHADOW_SCHEMA_VERSION,
+  assertLoopV2RunResultShadowArtifactV1,
+  buildLoopV2RunResultShadowArtifactV1,
+  loopV2RunResultShadowArtifactPath,
+  mapEligibleLoopV2RunResultV1,
+  parseLoopV2RunResultShadowArtifactV1,
+  serializeLoopV2RunResultShadowArtifactV1,
+  type LoopV2RunResultShadowArtifactV1,
+  type LoopV2RunResultShadowComparisonV1,
+} from "./run-result-shadow-artifact.js";
+export {
   evidenceFingerprint,
   extendReadCoverage,
   readCoverageKey,

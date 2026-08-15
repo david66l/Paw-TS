@@ -6,14 +6,17 @@ import {
   buildLoopV2LiveReviewArtifactV1,
   buildLoopV2LiveReviewPayloadV1,
   buildLoopV2LiveTerminalArtifactV1,
+  buildLoopV2RunResultShadowArtifactV1,
   buildLoopV2ShadowArtifactV1,
   createLoopV2ShadowObserver,
   createSemanticReviewLedgerV2,
   parseLoopV2LiveTerminalArtifactV1,
+  parseLoopV2RunResultShadowArtifactV1,
   parseLoopV2ShadowArtifactV1,
   replayLegacyTraceToLoopV2ShadowV1,
   reviewCandidateOnceV2,
   serializeLoopV2LiveTerminalArtifactV1,
+  serializeLoopV2RunResultShadowArtifactV1,
   serializeLoopV2ShadowArtifactV1,
 } from "../src/loop-v2/index.js";
 
@@ -107,7 +110,7 @@ function completeCandidateReport() {
 }
 
 async function reviewedCandidate(
-  verificationAuthority: "local" | "external" = "local",
+  verificationAuthority: "local" | "external" | "not_required" = "local",
 ) {
   const candidate = buildLoopV2LiveCandidateArtifactV1(
     completeCandidateReport(),
@@ -156,6 +159,80 @@ describe("Loop Kernel v2 shadow artifacts", () => {
       artifactStatus: "valid",
     });
     expect(localTerminal.comparison).toBe("equal");
+    const legacyResult = {
+      runId: localTerminal.runId,
+      status: "completed" as const,
+      message: "Legacy implementing-model summary.",
+      outcome: "verified" as const,
+      completionReason: "tests_passed",
+      evidence: {
+        filesChanged: ["src/value.ts"],
+        commandsRun: [
+          {
+            command: "bun test test/value.test.ts",
+            ok: true,
+            summary: "1 passed",
+          },
+        ],
+        testResults: [
+          {
+            command: "bun test test/value.test.ts",
+            passed: true,
+            outcome: "passed" as const,
+            summary: "1 passed",
+          },
+        ],
+      },
+    };
+    const resultShadow = buildLoopV2RunResultShadowArtifactV1(
+      legacyResult,
+      localTerminal,
+      local.candidate,
+      local.review,
+    );
+    expect(resultShadow).toMatchObject({
+      eligibility: { eligible: true, reasons: [] },
+      mappedResult: {
+        status: "completed",
+        outcome: "verified",
+        completionReason: "candidate_certified",
+        evidence: legacyResult.evidence,
+      },
+      comparison: {
+        authorityFieldsEqual: true,
+        evidencePreserved: true,
+        cutoverReady: true,
+      },
+    });
+    expect(resultShadow.mappedResult?.message).toContain("# Paw Run Report");
+    expect(resultShadow.mappedResult?.message).not.toContain(
+      "Legacy implementing-model summary.",
+    );
+    expect(
+      parseLoopV2RunResultShadowArtifactV1(
+        serializeLoopV2RunResultShadowArtifactV1(
+          resultShadow,
+          localTerminal,
+          local.candidate,
+          local.review,
+        ),
+        localTerminal,
+        local.candidate,
+        local.review,
+      ),
+    ).toEqual(resultShadow);
+    const tamperedShadow = structuredClone(resultShadow) as unknown as {
+      mappedResult: { evidence: { filesChanged: string[] } };
+    };
+    tamperedShadow.mappedResult.evidence.filesChanged.push("src/ghost.ts");
+    expect(() =>
+      parseLoopV2RunResultShadowArtifactV1(
+        JSON.stringify(tamperedShadow),
+        localTerminal,
+        local.candidate,
+        local.review,
+      ),
+    ).toThrow("does not match evidence");
     expect(
       parseLoopV2LiveTerminalArtifactV1(
         serializeLoopV2LiveTerminalArtifactV1(
@@ -197,6 +274,53 @@ describe("Loop Kernel v2 shadow artifacts", () => {
         "terminal_comparison_not_equal",
       ]),
     });
+  });
+
+  test("authority eligibility rejects trusted verification bypasses", async () => {
+    const fixture = await reviewedCandidate("not_required");
+    const terminal = buildLoopV2LiveTerminalArtifactV1({
+      runId: fixture.candidate.report.runId,
+      candidate: fixture.candidate,
+      review: fixture.review,
+      legacyTerminal: {
+        status: "completed",
+        outcome: "verified",
+        reasonCode: "skip_verify",
+      },
+    });
+    expect(terminal.comparison).toBe("equal");
+    expect(
+      assessLoopV2AuthorityEligibilityV1(
+        terminal,
+        fixture.candidate,
+        fixture.review,
+      ),
+    ).toMatchObject({
+      eligible: false,
+      reasons: [
+        "verification_authority_not_local",
+        "local_verification_not_passed",
+      ],
+    });
+
+    const local = await reviewedCandidate("local");
+    const modelDeclaredTerminal = buildLoopV2LiveTerminalArtifactV1({
+      runId: local.candidate.report.runId,
+      candidate: local.candidate,
+      review: local.review,
+      legacyTerminal: {
+        status: "completed",
+        outcome: "model_declared",
+        reasonCode: "skip_verify",
+      },
+    });
+    expect(
+      assessLoopV2AuthorityEligibilityV1(
+        modelDeclaredTerminal,
+        local.candidate,
+        local.review,
+      ).reasons,
+    ).toContain("legacy_outcome_not_verified");
   });
 
   test("host incomplete is monotonic and terminal tampering fails closed", async () => {

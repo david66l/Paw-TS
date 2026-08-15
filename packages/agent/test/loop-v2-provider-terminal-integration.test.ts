@@ -24,11 +24,13 @@ import {
   loopV2LiveReviewClaimPath,
   loopV2LiveTerminalArtifactPath,
   loopV2ProjectionCheckpointPath,
+  loopV2RunResultShadowArtifactPath,
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2LiveReviewArtifactV1,
   parseLoopV2LiveReviewClaimV1,
   parseLoopV2LiveTerminalArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
+  parseLoopV2RunResultShadowArtifactV1,
   reviewCandidateOnceV2,
   serializeLoopV2LiveReviewArtifactV1,
   serializeLoopV2LiveReviewClaimV1,
@@ -580,6 +582,31 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           persistedReview,
         ),
       ).toEqual({ eligible: true, reasons: [] });
+      const resultShadow = parseLoopV2RunResultShadowArtifactV1(
+        fs.readFileSync(
+          loopV2RunResultShadowArtifactPath(workspaceRoot, runId),
+          "utf8",
+        ),
+        terminal,
+        candidate,
+        persistedReview,
+      );
+      expect(resultShadow).toMatchObject({
+        legacyResult: result,
+        eligibility: { eligible: true, reasons: [] },
+        mappedResult: {
+          status: "completed",
+          outcome: "verified",
+          completionReason: "candidate_certified",
+          evidence: result.evidence,
+        },
+        comparison: {
+          authorityFieldsEqual: true,
+          evidencePreserved: true,
+          cutoverReady: true,
+        },
+      });
+      expect(resultShadow.mappedResult?.message).toContain("# Paw Run Report");
       expect(
         events.find((event) => event.event.type === "candidate.review")?.event,
       ).toMatchObject({

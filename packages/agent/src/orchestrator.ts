@@ -766,9 +766,7 @@ export class AgentOrchestrator {
       emitRunMetrics = _emitRunMetrics;
       persistLoopV2Terminal = (result) => {
         try {
-          init?.persistLoopV2Terminal?.(
-            loopV2LegacyTerminalFromRunResult(result),
-          );
+          init?.persistLoopV2Terminal?.(result);
         } catch {
           // Dual calculation remains diagnostic until the authority cutover.
         }
@@ -3053,7 +3051,7 @@ export class AgentOrchestrator {
     emit: (event: RunEvent) => void;
     observeLoopV2ToolCommit?: (input: LoopV2ShadowToolCommitPortInput) => void;
     reviewLoopV2Candidate?: NonNullable<PhaseContext["reviewLoopV2Candidate"]>;
-    persistLoopV2Terminal?: (legacy: LoopV2LegacyTerminalV1) => void;
+    persistLoopV2Terminal?: (result: RunResult) => void;
     emitRunMetrics: (status: "completed" | "failed" | "aborted") => void;
     seq: { n: number };
     checkpointSeq: { n: number };
@@ -3385,8 +3383,11 @@ export class AgentOrchestrator {
         }
       : undefined;
     const persistLoopV2Terminal = loopV2LiveReviewRuntime
-      ? (legacy: LoopV2LegacyTerminalV1) => {
-          loopV2LiveReviewRuntime.persistTerminal(legacy);
+      ? (result: RunResult) => {
+          const terminal = loopV2LiveReviewRuntime.persistTerminal(
+            loopV2LegacyTerminalFromRunResult(result),
+          );
+          loopV2LiveReviewRuntime.persistRunResultShadow(result, terminal);
         }
       : undefined;
 

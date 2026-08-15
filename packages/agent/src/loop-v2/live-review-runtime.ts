@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { atomicWrite } from "@paw/core";
+import { type RunResult, atomicWrite } from "@paw/core";
 
 import {
   type SemanticReviewOnceResultV2,
@@ -39,6 +39,13 @@ import {
   parseLoopV2LiveTerminalArtifactV1,
   serializeLoopV2LiveTerminalArtifactV1,
 } from "./live-terminal-artifact.js";
+import {
+  type LoopV2RunResultShadowArtifactV1,
+  buildLoopV2RunResultShadowArtifactV1,
+  loopV2RunResultShadowArtifactPath,
+  parseLoopV2RunResultShadowArtifactV1,
+  serializeLoopV2RunResultShadowArtifactV1,
+} from "./run-result-shadow-artifact.js";
 import {
   type SemanticReviewModelV2,
   type SemanticReviewUsageV2,
@@ -257,6 +264,42 @@ export class LoopV2LiveReviewRuntimeV1 {
       this.candidate,
       this.review,
     );
+  }
+
+  /** Persists the diagnostic public-result mapping and rereads it strictly. */
+  persistRunResultShadow(
+    legacyResult: RunResult,
+    terminal: LoopV2LiveTerminalArtifactV1,
+  ): LoopV2RunResultShadowArtifactV1 {
+    const artifact = buildLoopV2RunResultShadowArtifactV1(
+      legacyResult,
+      terminal,
+      this.candidate,
+      this.review,
+    );
+    const artifactPath = loopV2RunResultShadowArtifactPath(
+      this.workspaceRoot,
+      this.runId,
+    );
+    atomicWrite(
+      artifactPath,
+      serializeLoopV2RunResultShadowArtifactV1(
+        artifact,
+        terminal,
+        this.candidate,
+        this.review,
+      ),
+    );
+    const persisted = parseLoopV2RunResultShadowArtifactV1(
+      fs.readFileSync(artifactPath, "utf8"),
+      terminal,
+      this.candidate,
+      this.review,
+    );
+    if (persisted.eligibility.eligible && !persisted.comparison.cutoverReady) {
+      throw new Error("Eligible loop v2 RunResult shadow is not cutover-ready");
+    }
+    return persisted;
   }
 
   private persistClaim(
