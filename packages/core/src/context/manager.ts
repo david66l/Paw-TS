@@ -17,18 +17,22 @@
  * - 系统注入消息（[Tool ...]、Note: 等）不经过 sanitize
  */
 
+import { sanitizeUserInput } from "../input-sanitizer.js";
+import {
+  ApproximateEstimator,
+  type TokenEstimator,
+} from "../token-estimator.js";
+import {
+  type ObservationProvenanceV1,
+  formatToolResult,
+  formatToolResults,
+} from "../tool-result/format.js";
 import { truncateHistory } from "./policy.js";
 import {
   type PruneConfig,
   type PruneResult,
   pruneToolResults,
 } from "./pruner.js";
-import { sanitizeUserInput } from "../input-sanitizer.js";
-import { formatToolResult, formatToolResults } from "../tool-result/format.js";
-import {
-  ApproximateEstimator,
-  type TokenEstimator,
-} from "../token-estimator.js";
 
 export interface Attachment {
   readonly type: "image" | "file";
@@ -55,13 +59,7 @@ export interface ContextManagerOptions {
  * 这些消息由 orchestrator 生成（工具结果、nudge、警告等），
  * 不是用户输入，因此免于用户输入清洗。
  */
-const SYSTEM_INJECTED_PREFIXES = [
-  "[",
-  "Note:",
-  "CRITICAL",
-  "<",
-  "#",
-] as const;
+const SYSTEM_INJECTED_PREFIXES = ["[", "Note:", "CRITICAL", "<", "#"] as const;
 
 function isSystemInjectedMessage(content: string): boolean {
   return SYSTEM_INJECTED_PREFIXES.some((prefix) => content.startsWith(prefix));
@@ -155,10 +153,17 @@ export class ContextManager {
     ok: boolean,
     summary: string,
     payload?: unknown,
+    provenance?: ObservationProvenanceV1,
   ): void {
     this.history.push({
       role: "user",
-      content: formatToolResult({ tool, ok, summary, payload }),
+      content: formatToolResult({
+        tool,
+        ok,
+        summary,
+        ...(payload !== undefined ? { payload } : {}),
+        ...(provenance ? { provenance } : {}),
+      }),
     });
     this.maybeTruncate();
   }
@@ -170,6 +175,7 @@ export class ContextManager {
       ok: boolean;
       summary: string;
       payload?: unknown;
+      provenance?: ObservationProvenanceV1;
     }>,
   ): void {
     this.history.push({

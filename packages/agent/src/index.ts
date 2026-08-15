@@ -200,5 +200,10 @@ export {
   type ExecutionSandboxV1,
   type ShellExecutionObservedV1,
 } from "./execution-environment.js";
+export {
+  observationProvenanceForToolV1,
+  wrapCapabilityContentV1,
+  wrapObservationContentV1,
+} from "./observation-provenance.js";
 
 export * from "./loop-v2/index.js";

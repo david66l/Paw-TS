@@ -37,6 +37,8 @@
  * - RunEventEnvelope.seq 是单调递增的（每个 run 从 1 开始），不应出现重复
  */
 
+import type { ObservationProvenanceV1 } from "./tool-result/format.js";
+
 /**
  * Run lifecycle events — canonical stream for TUI / logs / replay (TS path).
  * Version conservatively; add fields as new phases land.
@@ -181,6 +183,7 @@ export type RunEvent =
       readonly summary: string;
       /** 详细结果，可选 */
       readonly detail?: string;
+      readonly provenance?: ObservationProvenanceV1;
       /** Audited durable workspace effect for this tool result, when available. */
       readonly workspaceEffect?: {
         readonly changed: boolean;
@@ -201,6 +204,7 @@ export type RunEvent =
       readonly chunk: string;
       /** 是否为 stderr（错误输出流） */
       readonly isStderr: boolean;
+      readonly provenance?: ObservationProvenanceV1;
     }
   /** 并行子 Agent 的文件锁等待/冲突（供 UI 展示锁竞争） */
   | {

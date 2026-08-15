@@ -16,8 +16,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { gitStatus } from "./git-tools.js";
 import { grepWorkspaceText, readWorkspaceFile } from "./files/read.js";
+import { gitStatus } from "./git-tools.js";
 import { checkWorkspacePath } from "./path-guard.js";
 
 /** Common English stop words to filter from keyword extraction. */
@@ -304,7 +304,9 @@ export function discoverContext(
       content = `${content.slice(0, remaining)}\n... (truncated)`;
     }
     totalChars += content.length;
-    blocks.push(`<file path="${filePath}">\n${content}\n</file>`);
+    blocks.push(
+      `<file path="${filePath}" source="workspace" trust="workspace_untrusted_data" instruction_authority="none" permission_authority="none">\n${content}\n</file>`,
+    );
     filesRead.push(filePath);
   }
 
@@ -312,7 +314,7 @@ export function discoverContext(
     return { content: "", filesRead, filesNotFound };
   }
 
-  const content = `<auto-context>\n${blocks.join("\n\n")}\n</auto-context>`;
+  const content = `<auto-context source="workspace" trust="workspace_untrusted_data" instruction_authority="none" permission_authority="none">\n${blocks.join("\n\n")}\n</auto-context>`;
   return { content, filesRead, filesNotFound };
 }
 

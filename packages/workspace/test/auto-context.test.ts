@@ -29,7 +29,9 @@ describe("discoverContext", () => {
     const r = discoverContext(root, "how does login work");
     expect(r.filesRead).toContain("auth.ts");
     expect(r.filesRead).not.toContain("utils.ts");
-    expect(r.content).toContain('<file path="auth.ts">');
+    expect(r.content).toContain(
+      '<file path="auth.ts" source="workspace" trust="workspace_untrusted_data" instruction_authority="none" permission_authority="none">',
+    );
     expect(r.content).toContain("export function login()");
   });
 

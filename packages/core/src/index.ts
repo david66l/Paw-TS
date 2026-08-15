@@ -185,8 +185,11 @@ export { isProtectedUserConstraint } from "./context/policy.js";
 // ============================================================
 export {
   isToolResultMessage,
+  OBSERVATION_PROVENANCE_PREFIX,
+  OBSERVATION_PROVENANCE_SCHEMA_V1,
   parseToolResult,
   splitToolBlocks,
+  type ObservationProvenanceV1,
 } from "./tool-result/format.js";
 export {
   DEFAULT_KEEP_RECENT_TOOLS,

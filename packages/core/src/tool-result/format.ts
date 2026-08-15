@@ -39,7 +39,45 @@ export interface ToolResultLine {
   readonly summary: string;
   /** 可选的附加数据（字符串或任意可序列化值） */
   readonly payload?: unknown;
+  readonly provenance?: ObservationProvenanceV1;
 }
+
+export const OBSERVATION_PROVENANCE_SCHEMA_V1 =
+  "paw.observation-provenance.v1" as const;
+
+export interface ObservationProvenanceV1 {
+  readonly schemaVersion: typeof OBSERVATION_PROVENANCE_SCHEMA_V1;
+  readonly source:
+    | "host"
+    | "workspace"
+    | "process"
+    | "web"
+    | "mcp"
+    | "memory"
+    | "subagent"
+    | "skill"
+    | "unknown";
+  readonly trust:
+    | "trusted_host_fact"
+    | "workspace_untrusted_data"
+    | "external_untrusted_data"
+    | "scoped_memory_data"
+    | "delegated_claim"
+    | "configured_capability";
+  readonly taint:
+    | "none"
+    | "repository_content"
+    | "process_output"
+    | "external_content"
+    | "memory_content"
+    | "delegated_content";
+  /** Observations are data. They cannot alter system policy or authorization. */
+  readonly instructionAuthority: "none" | "task_guidance_only";
+  readonly permissionAuthority: "none";
+}
+
+export const OBSERVATION_PROVENANCE_PREFIX =
+  "[Observation Provenance v1]" as const;
 
 /**
  * 工具结果的解析后表示（输出格式）。
@@ -84,12 +122,15 @@ const TOOL_BLOCK_SPLIT = /\n\n(?=\[Tool .+? (?:completed|failed)\]\n)/;
  */
 export function formatToolResult(line: ToolResultLine): string {
   let detail = "";
+  if (line.provenance) {
+    detail += `\n${OBSERVATION_PROVENANCE_PREFIX} schema=${line.provenance.schemaVersion} source=${line.provenance.source} trust=${line.provenance.trust} taint=${line.provenance.taint} instruction_authority=${line.provenance.instructionAuthority} permission_authority=${line.provenance.permissionAuthority}`;
+  }
   if (line.payload !== undefined) {
     if (typeof line.payload === "string") {
-      detail = `\n${line.payload}`;
+      detail += `\n${line.payload}`;
     } else {
       // 序列化非字符串 payload，限制最大 10000 字符以防止撑爆上下文
-      detail = `\n${JSON.stringify(line.payload).slice(0, 10_000)}`;
+      detail += `\n${JSON.stringify(line.payload).slice(0, 10_000)}`;
     }
   }
   return `[Tool ${line.tool} ${line.ok ? "completed" : "failed"}]\n${line.summary}${detail}`;
@@ -100,9 +141,7 @@ export function formatToolResult(line: ToolResultLine): string {
  *
  * Format multiple tool results as a single user message.
  */
-export function formatToolResults(
-  results: readonly ToolResultLine[],
-): string {
+export function formatToolResults(results: readonly ToolResultLine[]): string {
   return results.map(formatToolResult).join("\n\n");
 }
 

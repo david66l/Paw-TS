@@ -202,6 +202,7 @@ import {
   goalAllowsSkipVerification,
   goalRequiresMutation,
 } from "./lifecycle/verification-gate.js";
+import { wrapObservationContentV1 } from "./observation-provenance.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import type { NativeToolError } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
@@ -2061,10 +2062,12 @@ export class AgentOrchestrator {
             currentUserRequest: extractCleanMemoryQuery(specGoal) || specGoal,
             limit: 5,
           });
-          this._memoryContextSection = section.promptSection;
+          this._memoryContextSection = section.promptSection
+            ? wrapObservationContentV1("memory.read", section.promptSection)
+            : "";
           if (section.promptSection) {
             ctxMgr.addUser(
-              `[Memory refresh]\n${section.promptSection.slice(0, 2000)}`,
+              `[Memory refresh]\n${wrapObservationContentV1("memory.read", section.promptSection.slice(0, 2000))}`,
             );
             emit({
               type: "memory.turn.inject",
@@ -2534,7 +2537,10 @@ export class AgentOrchestrator {
     const imageAttachments = attachments.filter((a) => a.type === "image");
     const fileAttachments = attachments.filter((a) => a.type === "file");
     const fileBlocks = fileAttachments
-      .map((a) => `<file path="${a.name}">\n${a.content}\n</file>`)
+      .map(
+        (a) =>
+          `<file path="${a.name}" source="workspace" trust="workspace_untrusted_data" instruction_authority="none" permission_authority="none">\n${a.content}\n</file>`,
+      )
       .join("\n\n");
     let content = strippedText;
     if (fileAttachments.length > 0) {
@@ -3854,8 +3860,10 @@ export class AgentOrchestrator {
             currentUserRequest: cleanMemoryQuery || spec.goal,
             limit: 8,
           });
-          this._memoryContextSection = section.promptSection;
-          memoryContextSection = section.promptSection;
+          this._memoryContextSection = section.promptSection
+            ? wrapObservationContentV1("memory.read", section.promptSection)
+            : "";
+          memoryContextSection = this._memoryContextSection;
           selectedForEvent = section.items.map((item) => ({
             id: item.id,
             title: item.title,

@@ -52,6 +52,10 @@ import type {
   ToolExecutionModeV2,
 } from "../loop-v2/index.js";
 import { executeToolBatchV2 } from "../loop-v2/index.js";
+import {
+  observationProvenanceForToolV1,
+  wrapCapabilityContentV1,
+} from "../observation-provenance.js";
 import type {
   TaskState,
   TaskStateManager,
@@ -618,6 +622,7 @@ export async function executeToolCalls(
             tool,
             chunk,
             isStderr,
+            provenance: observationProvenanceForToolV1(tool),
           }),
         ...(toolCtx.shellSandbox ? { shellSandbox: toolCtx.shellSandbox } : {}),
         // Unified approval bus: tool gate approval covers shell "ask"
@@ -1024,6 +1029,7 @@ export function commitToolExecutionResult(
     ok: result.ok,
     summary: result.summary,
     detail: formatToolResultEventDetail(result),
+    provenance: observationProvenanceForToolV1(call.tool),
     ...(workspaceEffect ? { workspaceEffect } : {}),
     ...(fileChanges ? { fileChanges } : {}),
   });
@@ -1088,17 +1094,28 @@ export function finalizeToolExecutionContext(
           payload = `${String(payload)}\n${stub}`;
         }
       }
-      return { tool, ok: tr.ok, summary: tr.summary, payload };
+      return {
+        tool,
+        ok: tr.ok,
+        summary: tr.summary,
+        payload,
+        provenance: observationProvenanceForToolV1(tool),
+      };
     }),
   );
 
   // 步骤 4：处理工具产生的新消息
   // 某些工具（如子 Agent）会在结果中附带额外的 user/assistant 消息
-  for (const tr of results) {
+  for (let index = 0; index < results.length; index += 1) {
+    const tr = results[index];
+    if (!tr) continue;
+    const sourceTool = calls[index]?.tool ?? "unknown";
     if (tr.newMessages) {
       for (const msg of tr.newMessages) {
-        if (msg.role === "user") ctx.ctxMgr.addUser(msg.content);
-        else if (msg.role === "assistant") ctx.ctxMgr.addAssistant(msg.content);
+        if (msg.role === "user") {
+          ctx.ctxMgr.addUser(wrapCapabilityContentV1(sourceTool, msg.content));
+        } else if (msg.role === "assistant")
+          ctx.ctxMgr.addAssistant(msg.content);
       }
     }
   }
