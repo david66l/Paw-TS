@@ -19,6 +19,11 @@ import {
 import type { RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel, type LanguageModel } from "@paw/models";
 
+import {
+  buildClaudeContainerPlan,
+  claudeContainerNames,
+  parseClaudeProxyAudit,
+} from "../src/swe-compare/claude-container.js";
 import { PAW_FRESH_QUALIFICATION_RULE } from "../src/swe-compare/manifest.js";
 
 import {
@@ -1008,6 +1013,67 @@ describe("SWE compare runner", () => {
     expect(args.at(-1)).toBe(goal);
   });
 
+  test("Claude comparison runs in an internal container with model-only egress", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-claude-plan-"));
+    const binary = path.join(root, "claude");
+    writeFileSync(binary, "probe", "utf8");
+    const repoRoot = path.resolve(import.meta.dir, "../../..");
+    const plan = buildClaudeContainerPlan({
+      repoRoot,
+      workspaceRoot: root,
+      image: "swebench/example:latest",
+      runId: "claude-demo__repo-1-test",
+      claudeVersion: "2.1.224",
+      claudeBinaryPath: binary,
+      claudeArgs: ["-p", "goal"],
+    });
+    expect(plan.networkCreateArgs).toContain("--internal");
+    expect(plan.proxyRunArgs).toContain("bridge");
+    expect(plan.proxyConnectArgs).toEqual([
+      "network",
+      "connect",
+      plan.names.network,
+      plan.names.proxy,
+    ]);
+    expect(plan.taskRunArgs).toContain(plan.names.network);
+    expect(plan.taskRunArgs).not.toContain("bridge");
+    expect(plan.taskRunArgs).toContain("--read-only");
+    expect(plan.taskRunArgs).toContain("ANTHROPIC_AUTH_TOKEN");
+    expect(plan.taskRunArgs.join(" ")).not.toContain("DEEPSEEK_API_KEY");
+    expect(plan.taskRunArgs.join(" ")).toContain(
+      `HTTPS_PROXY=http://${plan.names.proxy}:3128`,
+    );
+    expect(plan.taskRunArgs.at(-2)).toBe("-p");
+    expect(plan.taskRunArgs.at(-1)).toBe("goal");
+  });
+
+  test("Claude container names and proxy audit are deterministic and bounded", () => {
+    const names = claudeContainerNames(
+      "CLAUDE-django__django-15098-with-a-very-long-untrusted-run-id",
+    );
+    expect(names).toEqual(
+      claudeContainerNames(
+        "CLAUDE-django__django-15098-with-a-very-long-untrusted-run-id",
+      ),
+    );
+    expect(Object.values(names).every((name) => name.length < 64)).toBe(true);
+    const auditLines = [
+      "not json",
+      JSON.stringify({ event: "ready" }),
+      JSON.stringify({ event: "allowed" }),
+      JSON.stringify({ event: "allowed" }),
+      JSON.stringify({ event: "denied" }),
+      JSON.stringify({ event: "upstream_error" }),
+    ];
+    expect(parseClaudeProxyAudit(auditLines.join("\n"))).toEqual({
+      ready: true,
+      allowed: 2,
+      denied: 1,
+      upstreamErrors: 1,
+      malformedLines: 1,
+    });
+  });
+
   test("Claude stream keeps tool events but never persists thinking", () => {
     const stdout = [
       JSON.stringify({ type: "system", subtype: "init", model: "deepseek" }),
@@ -1091,6 +1157,7 @@ describe("SWE compare runner", () => {
     mkdirSync(path.join(root, "src"), { recursive: true });
     writeFileSync(path.join(root, "src", "keep.py"), "old\n", "utf8");
     writeFileSync(path.join(root, "src", "reset.py"), "base\n", "utf8");
+    writeFileSync(path.join(root, "src", "container.py"), "before\n", "utf8");
     git(root, ["add", "."]);
     git(root, ["commit", "-m", "base"]);
     const toolUse = (
@@ -1133,6 +1200,25 @@ describe("SWE compare runner", () => {
           content: [
             {
               type: "tool_use",
+              id: "container",
+              name: "Edit",
+              input: {
+                file_path: "/testbed/src/container.py",
+                old_string: "before",
+                new_string: "after",
+                replace_all: false,
+              },
+            },
+          ],
+        },
+      },
+      result("container"),
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
               id: "checkout",
               name: "Bash",
               input: {
@@ -1148,6 +1234,7 @@ describe("SWE compare runner", () => {
     const replayed = replayClaudeTracePatch(trace, root);
     expect(replayed.error).toBeUndefined();
     expect(replayed.diff).toContain("src/keep.py");
+    expect(replayed.diff).toContain("src/container.py");
     expect(replayed.diff).not.toContain("src/reset.py");
     expect(
       readFileSync(path.join(root, "src", "reset.py"), "utf8").replace(
@@ -1200,6 +1287,62 @@ describe("SWE compare runner", () => {
         },
       ]),
     ).toEqual({ valid: true, violations: [] });
+  });
+
+  test("invalidates Claude changes that the outer workspace policy recovered", () => {
+    expect(
+      auditClaudeTraceIntegrity([
+        {
+          type: "paw_claude_workspace_audit",
+          allowed: false,
+          reason: "prohibited_workspace_effect_recovered",
+          recovered: true,
+        },
+      ]),
+    ).toEqual({
+      valid: false,
+      violations: ["workspace_effect_policy_failure"],
+    });
+  });
+
+  test("requires an attested model-only egress path for containerized Claude", () => {
+    expect(
+      auditClaudeTraceIntegrity([
+        {
+          type: "paw_claude_sandbox",
+          runtime: "docker",
+          filesystem: "instance_image",
+          network: "model_api_allowlist",
+          proxyAudit: {
+            ready: true,
+            allowed: 1,
+            denied: 0,
+            upstreamErrors: 0,
+            malformedLines: 0,
+          },
+        },
+      ]),
+    ).toEqual({ valid: true, violations: [] });
+    expect(
+      auditClaudeTraceIntegrity([
+        {
+          type: "paw_claude_sandbox",
+          runtime: "docker",
+          filesystem: "instance_image",
+          network: "model_api_allowlist",
+          proxyAudit: {
+            ready: true,
+            allowed: 0,
+            denied: 1,
+            upstreamErrors: 0,
+            malformedLines: 0,
+          },
+        },
+      ]),
+    ).toEqual({
+      valid: false,
+      violations: ["claude_sandbox_attestation_failure"],
+    });
   });
 
   test("audits Paw shell calls with the same no-network rule", () => {
@@ -1378,6 +1521,16 @@ describe("SWE compare runner", () => {
     expect(
       sweCompareNetworkViolation(
         "python -c \"import requests; requests.get('https://example.test')\"",
+      ),
+    ).toBe("outbound_network_command");
+    expect(
+      sweCompareNetworkViolation(
+        "python -c \"\nimport urllib.request\nprint(urllib.request.urlopen('https://api.github.com'))\n\"",
+      ),
+    ).toBe("outbound_network_command");
+    expect(
+      sweCompareNetworkViolation(
+        'pwsh -Command "$client = [System.Net.Http.HttpClient]::new()"',
       ),
     ).toBe("outbound_network_command");
     expect(
@@ -1715,6 +1868,29 @@ describe("SWE compare runner", () => {
         ],
       }),
     ).toEqual({ explicitPaths: ["src/a.py"], unknownWritePossible: false });
+    expect(
+      collectTraceMutationHints({
+        runner: "claude",
+        workspaceRoot: root,
+        trace: [
+          {
+            type: "assistant",
+            message: {
+              content: [
+                {
+                  type: "tool_use",
+                  name: "Edit",
+                  input: { file_path: "/testbed/src/container.py" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    ).toEqual({
+      explicitPaths: ["src/container.py"],
+      unknownWritePossible: false,
+    });
   });
 
   test("backfills an empty persisted Claude result without resampling", () => {
@@ -1901,7 +2077,7 @@ describe("SWE compare runner", () => {
     expect(updated.patchSource).toBe("paw_trace_edit_replay");
     expect(updated.artifactStatus).toBe("valid");
     expect(updated.patch).toContain("Sequence  # replay");
-  }, 15_000);
+  }, 30_000);
 
   test("auto replay requires every mutation path to be an exact Paw edit", () => {
     const editTrace = [

@@ -57,6 +57,11 @@ import {
   ensureRepoClone,
   writeArmPawConfig,
 } from "../swe-exp/repo-cache.js";
+import {
+  type ClaudeProxyAudit,
+  buildClaudeContainerPlan,
+  runClaudeContainer,
+} from "./claude-container.js";
 import { buildSweCompareGoal } from "./goal.js";
 import { PAW_FRESH_QUALIFICATION_RULE } from "./manifest.js";
 import { persistOnlineLoopV2ShadowArtifact } from "./shadow-replay.js";
@@ -71,6 +76,8 @@ export interface SweCompareRunResult {
   readonly runner: SweCompareRunnerName;
   readonly instanceId: string;
   readonly sourceCommit: string;
+  readonly manifestPath?: string;
+  readonly benchmarkDataset?: SweCompareManifest["dataset"];
   readonly startedAt: string;
   readonly finishedAt: string;
   readonly durationMs: number;
@@ -127,6 +134,14 @@ export interface SweCompareRunResult {
     readonly reportPath?: string;
     readonly detail?: string;
     readonly error?: string;
+  };
+  readonly claudeSandbox?: {
+    readonly runtime: "docker";
+    readonly filesystem: "instance_image";
+    readonly network: "model_api_allowlist";
+    readonly image: string;
+    readonly allowedConnect: "api.deepseek.com:443";
+    readonly proxyAudit: ClaudeProxyAudit;
   };
 }
 
@@ -1483,8 +1498,9 @@ function successfulClaudeTools(
 function tracePathToWorkspaceRelative(value: string): string | undefined {
   const normalized = value.replace(/\\/g, "/");
   const worktreeMarker = normalized.toLowerCase().lastIndexOf("/wt/");
-  const relative =
-    worktreeMarker >= 0
+  const relative = normalized.startsWith("/testbed/")
+    ? normalized.slice("/testbed/".length)
+    : worktreeMarker >= 0
       ? normalized.slice(worktreeMarker + 4)
       : path.isAbsolute(value)
         ? undefined
@@ -1728,9 +1744,15 @@ export function collectTraceMutationHints(opts: {
   let unknownWritePossible = false;
   const addPath = (value: unknown) => {
     if (typeof value !== "string" || !value.trim()) return;
-    const relative = path.isAbsolute(value)
-      ? path.relative(opts.workspaceRoot, value)
-      : value;
+    const containerRelative =
+      opts.runner === "claude"
+        ? tracePathToWorkspaceRelative(value)
+        : undefined;
+    const relative = containerRelative
+      ? containerRelative
+      : path.isAbsolute(value)
+        ? path.relative(opts.workspaceRoot, value)
+        : value;
     if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
       explicitPaths.add(relative.replace(/\\/g, "/"));
     }
@@ -1869,6 +1891,33 @@ export function auditClaudeTraceIntegrity(
 ): SweCompareIntegrityAudit {
   const shellAudit = auditShellCommands(shellCommandsFromClaudeTrace(trace));
   const violations = [...shellAudit.violations];
+  for (const item of trace) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    if (
+      record.type === "paw_claude_workspace_audit" &&
+      record.allowed === false
+    ) {
+      violations.push("workspace_effect_policy_failure");
+    }
+    if (record.type === "paw_claude_sandbox") {
+      const proxyAudit = record.proxyAudit;
+      if (
+        record.runtime !== "docker" ||
+        record.filesystem !== "instance_image" ||
+        record.network !== "model_api_allowlist" ||
+        !proxyAudit ||
+        typeof proxyAudit !== "object" ||
+        Array.isArray(proxyAudit) ||
+        (proxyAudit as Record<string, unknown>).ready !== true ||
+        typeof (proxyAudit as Record<string, unknown>).allowed !== "number" ||
+        ((proxyAudit as Record<string, unknown>).allowed as number) < 1 ||
+        (proxyAudit as Record<string, unknown>).malformedLines !== 0
+      ) {
+        violations.push("claude_sandbox_attestation_failure");
+      }
+    }
+  }
   for (const tool of successfulClaudeTools(trace)) {
     for (const value of Object.values(tool.input)) {
       if (typeof value !== "string") continue;
@@ -1979,10 +2028,15 @@ export function sweCompareNetworkViolation(
       command,
     ) ||
     /\bgh\s+(?:api|pr|issue|repo)\b/i.test(command) ||
-    /\bpython(?:\d+(?:\.\d+)?)?(?:\.exe)?\b[^\r\n]*(?:requests\.(?:get|post)|urllib\.request|urlopen\s*\(|httpx\.|aiohttp\.)/i.test(
+    /\bpython(?:\d+(?:\.\d+)?)?(?:\.exe)?\b[\s\S]{0,8192}(?:requests\.(?:get|post)|urllib\.request|urlopen\s*\(|httpx\.|aiohttp\.|http\.client|socket\.create_connection)/i.test(
       command,
     ) ||
-    /\bnode(?:\.exe)?\b[^\r\n]*\bfetch\s*\(/i.test(command)
+    /\bnode(?:\.exe)?\b[\s\S]{0,8192}(?:\bfetch\s*\(|https?\.request\s*\(|axios\.)/i.test(
+      command,
+    ) ||
+    /\b(?:pwsh|powershell)(?:\.exe)?\b[\s\S]{0,8192}(?:System\.Net|WebClient|HttpClient)/i.test(
+      command,
+    )
   ) {
     return "outbound_network_command";
   }
@@ -2018,9 +2072,13 @@ export function allowSweCompareToolCall(input: {
 }
 
 async function runClaude(opts: {
+  readonly repoRoot: string;
   readonly workspaceRoot: string;
   readonly goal: string;
   readonly timeoutMs: number;
+  readonly runId: string;
+  readonly image: string;
+  readonly version: string;
 }): Promise<{
   status: "completed" | "failed" | "timeout";
   terminalReason?: string;
@@ -2031,45 +2089,93 @@ async function runClaude(opts: {
   turns?: number;
   recoveredPatch?: string;
   trace: unknown;
+  claudeSandbox: NonNullable<SweCompareRunResult["claudeSandbox"]>;
 }> {
-  const executable = process.platform === "win32" ? "claude.cmd" : "claude";
-  const child = Bun.spawn([executable, ...claudeCodeArgs(opts.goal)], {
-    cwd: opts.workspaceRoot,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: process.env,
+  const plan = buildClaudeContainerPlan({
+    repoRoot: opts.repoRoot,
+    workspaceRoot: opts.workspaceRoot,
+    image: opts.image,
+    runId: opts.runId,
+    claudeVersion: opts.version,
+    claudeArgs: claudeCodeArgs(opts.goal),
   });
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    child.kill();
-  }, opts.timeoutMs);
-  timer.unref?.();
-  const [exitCode, stdout, stderr] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
-  clearTimeout(timer);
-  if (timedOut)
+  const authToken =
+    process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.DEEPSEEK_API_KEY ?? "";
+  let execution: Awaited<ReturnType<typeof runClaudeContainer>>;
+  try {
+    execution = await runClaudeContainer({
+      plan,
+      authToken,
+      timeoutMs: opts.timeoutMs,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      status: "failed",
+      error: `Claude container failed: ${message}`,
+      trace: { sandboxError: message },
+      claudeSandbox: {
+        runtime: "docker",
+        filesystem: "instance_image",
+        network: "model_api_allowlist",
+        image: opts.image,
+        allowedConnect: "api.deepseek.com:443",
+        proxyAudit: {
+          ready: false,
+          allowed: 0,
+          denied: 0,
+          upstreamErrors: 0,
+          malformedLines: 0,
+        },
+      },
+    };
+  }
+  const claudeSandbox = {
+    runtime: "docker" as const,
+    filesystem: "instance_image" as const,
+    network: "model_api_allowlist" as const,
+    image: opts.image,
+    allowedConnect: "api.deepseek.com:443" as const,
+    proxyAudit: execution.proxyAudit,
+  };
+  if (execution.timedOut)
     return {
       status: "timeout",
       error: "Claude Code timed out",
-      trace: { stderr: stderr.slice(0, 10_000) },
+      trace: {
+        stderr: execution.stderr.slice(0, 10_000),
+        claudeSandbox,
+      },
+      claudeSandbox,
     };
   let parsed: ClaudeJsonResult | undefined;
   let trace: readonly unknown[] = [];
   try {
-    const stream = parseClaudeStream(stdout);
+    const stream = parseClaudeStream(execution.stdout);
     parsed = stream.result;
-    trace = stream.trace;
+    trace = [
+      ...stream.trace,
+      {
+        type: "paw_claude_sandbox",
+        runtime: claudeSandbox.runtime,
+        filesystem: claudeSandbox.filesystem,
+        network: claudeSandbox.network,
+        image: claudeSandbox.image,
+        allowedConnect: claudeSandbox.allowedConnect,
+        proxyAudit: claudeSandbox.proxyAudit,
+      },
+    ];
   } catch {
     return {
       status: "failed",
-      error: `Claude Code returned invalid JSON (exit ${exitCode}): ${stderr.slice(0, 1000)}`,
+      error: `Claude Code returned invalid JSON (exit ${execution.exitCode}): ${execution.stderr.slice(0, 1000)}`,
       // stdout may contain reasoning blocks before a malformed line. Never
       // persist it on parser failure; stderr is sufficient for infra triage.
-      trace: { stderr: stderr.slice(0, 10_000) },
+      trace: {
+        stderr: execution.stderr.slice(0, 10_000),
+        claudeSandbox,
+      },
+      claudeSandbox,
     };
   }
   const input = parsed.usage?.input_tokens ?? 0;
@@ -2078,11 +2184,14 @@ async function runClaude(opts: {
     (parsed.usage?.cache_read_input_tokens ?? 0) +
     (parsed.usage?.cache_creation_input_tokens ?? 0);
   return {
-    status: exitCode === 0 && parsed.is_error !== true ? "completed" : "failed",
+    status:
+      execution.exitCode === 0 && parsed.is_error !== true
+        ? "completed"
+        : "failed",
     terminalReason: parsed.terminal_reason,
-    ...(exitCode === 0 && parsed.is_error !== true
+    ...(execution.exitCode === 0 && parsed.is_error !== true
       ? {}
-      : { error: parsed.result ?? stderr.slice(0, 1000) }),
+      : { error: parsed.result ?? execution.stderr.slice(0, 1000) }),
     promptTokens: input + cache,
     completionTokens: output,
     totalTokens: input + cache + output,
@@ -2091,6 +2200,7 @@ async function runClaude(opts: {
       ? { recoveredPatch: extractClaudePatchFromTrace(trace) }
       : {}),
     trace,
+    claudeSandbox,
   };
 }
 
@@ -2123,10 +2233,17 @@ export async function runSweCompareArm(opts: {
     throw new Error("loop v2 modes are available only for Paw runs");
   }
   validateCompareRun(opts.repoRoot, manifest, opts.instanceId);
+  const instanceImageSandbox = assertPawVerificationEnvironmentReady(
+    manifest,
+    opts.instanceId,
+  );
+  if (opts.runner === "claude" && !instanceImageSandbox) {
+    throw new Error(
+      "Claude comparison requires the frozen SWE instance-image environment",
+    );
+  }
   const pawShellSandbox =
-    opts.runner === "paw"
-      ? assertPawVerificationEnvironmentReady(manifest, opts.instanceId)
-      : undefined;
+    opts.runner === "paw" ? instanceImageSandbox : undefined;
   const datasetPath = path.join(opts.repoRoot, manifest.dataset.localPath);
   const probe = loadLiteInstances(datasetPath).find(
     (item) => item.instance_id === opts.instanceId,
@@ -2181,7 +2298,21 @@ export async function runSweCompareArm(opts: {
     );
   }
   try {
-    const execution =
+    const claudeEffectPolicy =
+      opts.runner === "claude"
+        ? createSweCompareToolEffectPolicy({
+            workspaceRoot: workspace.root,
+            trackedFiles: trackedFiles(workspace.root),
+          })
+        : undefined;
+    const claudeEffectPrepared = claudeEffectPolicy
+      ? await claudeEffectPolicy.prepare({
+          tool: "claude.container",
+          args: {},
+          workspaceRoot: workspace.root,
+        })
+      : undefined;
+    let execution =
       opts.runner === "paw"
         ? await runPaw({
             repoRoot: opts.repoRoot,
@@ -2197,10 +2328,49 @@ export async function runSweCompareArm(opts: {
             resume: resumed !== undefined,
           })
         : await runClaude({
+            repoRoot: opts.repoRoot,
             workspaceRoot: workspace.root,
             goal,
             timeoutMs: manifest.budget.sharedTimeoutMs,
+            runId,
+            image: instanceImageSandbox?.image ?? "",
+            version:
+              /^(\d+\.\d+\.\d+)\b/.exec(
+                manifest.runners.claudeCode.version,
+              )?.[1] ?? manifest.runners.claudeCode.version,
           });
+    if (claudeEffectPolicy) {
+      const decision = await claudeEffectPolicy.settle(
+        {
+          tool: "claude.container",
+          args: {},
+          workspaceRoot: workspace.root,
+          result: {
+            ok: execution.status === "completed",
+            payload: {},
+            summary: `Claude container ${execution.status}`,
+          },
+        },
+        claudeEffectPrepared,
+      );
+      const auditEvent = {
+        type: "paw_claude_workspace_audit",
+        allowed: decision.allowed,
+        ...(decision.allowed
+          ? { result: decision.result }
+          : {
+              reason: decision.reason,
+              message: decision.message,
+              recovered: decision.recovered,
+            }),
+      };
+      execution = {
+        ...execution,
+        trace: Array.isArray(execution.trace)
+          ? [...execution.trace, auditEvent]
+          : [execution.trace, auditEvent],
+      };
+    }
     const tracePath = path.join(
       "benchmarks",
       "swe-compare",
@@ -2400,6 +2570,10 @@ export async function runSweCompareArm(opts: {
       runner: opts.runner,
       instanceId: opts.instanceId,
       sourceCommit: manifest.sourceTree.gitCommit,
+      manifestPath: path
+        .relative(opts.repoRoot, opts.manifestPath)
+        .replace(/\\/g, "/"),
+      benchmarkDataset: manifest.dataset,
       startedAt: started.toISOString(),
       finishedAt: finished.toISOString(),
       durationMs: finished.getTime() - started.getTime(),
@@ -2429,6 +2603,9 @@ export async function runSweCompareArm(opts: {
         : {}),
       ...(loopV2Shadow ? { loopV2Shadow } : {}),
       ...(loopV2Live ? { loopV2Live } : {}),
+      ...("claudeSandbox" in execution
+        ? { claudeSandbox: execution.claudeSandbox }
+        : {}),
       tracePath: tracePath.replace(/\\/g, "/"),
       ...(verifier ? { verifier } : {}),
     };
@@ -2453,6 +2630,7 @@ export async function runSweCompareArm(opts: {
 export function recoverClaudeResultPatch(opts: {
   readonly repoRoot: string;
   readonly resultPath: string;
+  readonly manifestPath?: string;
 }): SweCompareRunResult {
   const previous = JSON.parse(
     readFileSync(opts.resultPath, "utf8"),
@@ -2477,11 +2655,18 @@ export function recoverClaudeResultPatch(opts: {
     (tool) => tool.name === "Edit" || tool.name === "Write",
   );
   if (hasStructuredMutation) {
+    const persistedManifestPath = previous.manifestPath
+      ? path.join(opts.repoRoot, previous.manifestPath)
+      : undefined;
+    const manifestPath = opts.manifestPath ?? persistedManifestPath;
+    const recoveryManifest = manifestPath
+      ? (JSON.parse(readFileSync(manifestPath, "utf8")) as SweCompareManifest)
+      : undefined;
     const datasetPath = path.join(
       opts.repoRoot,
-      "benchmarks",
-      "swe-bench",
-      "swe-bench-lite.jsonl",
+      previous.benchmarkDataset?.localPath ??
+        recoveryManifest?.dataset.localPath ??
+        path.join("benchmarks", "swe-bench", "swe-bench-lite.jsonl"),
     );
     const probe = loadLiteInstances(datasetPath).find(
       (item) => item.instance_id === previous.instanceId,
@@ -2832,9 +3017,13 @@ export function verifySweCompareResult(opts: {
       model_patch: previous.patch,
     },
   ]);
-  const verificationManifest = opts.manifestPath
+  const persistedManifestPath = previous.manifestPath
+    ? path.join(opts.repoRoot, previous.manifestPath)
+    : undefined;
+  const verificationManifestPath = opts.manifestPath ?? persistedManifestPath;
+  const verificationManifest = verificationManifestPath
     ? (JSON.parse(
-        readFileSync(opts.manifestPath, "utf8"),
+        readFileSync(verificationManifestPath, "utf8"),
       ) as SweCompareManifest)
     : undefined;
   const checked = runSwebenchHarness({
@@ -2845,7 +3034,14 @@ export function verifySweCompareResult(opts: {
             verificationManifest.dataset.localPath,
           ),
         }
-      : {}),
+      : previous.benchmarkDataset
+        ? {
+            datasetName: path.join(
+              opts.repoRoot,
+              previous.benchmarkDataset.localPath,
+            ),
+          }
+        : {}),
     predictionsPath: predictionPath,
     instanceIds: [previous.instanceId],
     runId: previous.runId,

@@ -82,6 +82,7 @@ benchmarks/swe-compare/capability-shadow-smoke/deterministic-*/
 benchmarks/swe-compare/shadow-reports/
 benchmarks/swe-compare/*.jsonl
 benchmarks/swe-compare/manifests/
+benchmarks/swe-compare/runtime/
 
 # Official SWE-bench writes schema-v2 summary JSON files at the repository root.
 /swe-compare-preflight-*.json

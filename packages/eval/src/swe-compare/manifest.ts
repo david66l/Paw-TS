@@ -528,8 +528,9 @@ export function createSweCompareManifest(opts: {
     runners: {
       paw: {
         memory: "off",
-        verificationAuthority: opts.verificationAuthority ?? "external",
-        verificationEnvironment: opts.verificationEnvironment ?? "host",
+        verificationAuthority: opts.verificationAuthority ?? "local",
+        verificationEnvironment:
+          opts.verificationEnvironment ?? "instance_image",
         runtimeProfile: model.runtimeProfile,
       },
       claudeCode: {

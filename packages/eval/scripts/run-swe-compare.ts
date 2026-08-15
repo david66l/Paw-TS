@@ -54,6 +54,17 @@ if (recoverResult) {
   const result = recoverClaudeResultPatch({
     repoRoot: process.cwd(),
     resultPath: path.resolve(recoverResult),
+    ...(process.argv.includes("--manifest")
+      ? {
+          manifestPath: path.join(
+            process.cwd(),
+            "benchmarks",
+            "swe-compare",
+            "manifests",
+            manifestName,
+          ),
+        }
+      : {}),
   });
   console.log(
     JSON.stringify(
@@ -72,6 +83,17 @@ if (verifyResult) {
   const result = verifySweCompareResult({
     repoRoot: process.cwd(),
     resultPath: path.resolve(verifyResult),
+    ...(process.argv.includes("--manifest")
+      ? {
+          manifestPath: path.join(
+            process.cwd(),
+            "benchmarks",
+            "swe-compare",
+            "manifests",
+            manifestName,
+          ),
+        }
+      : {}),
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(result.resolved ? 0 : 1);
