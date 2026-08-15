@@ -255,7 +255,7 @@ async function runTrialSuite(opts: {
     {
       const t0 = Date.now();
       const assertions: MechAssertion[] = [];
-      const writes: MechCaseResult["writes"] = [];
+      const writes: Array<MechCaseResult["writes"][number]> = [];
       const injectStatuses: string[] = [];
       const graduatedIds: string[] = [];
       const warnings: string[] = [];
@@ -661,7 +661,7 @@ async function runGateSuite(opts: {
       const assertions: MechAssertion[] = [];
       const runId = `${runPrefix}-rerank-ref`;
       const reranker: RerankerLlm = {
-        complete: async (prompt) => {
+        complete: async (_prompt) => {
           // 精排输出：把第一条标 reference
           return JSON.stringify({
             items: [{ seq: 1, why: "条件不匹配当前任务", label: "reference" }],
@@ -821,7 +821,7 @@ async function runProfileSuite(opts: { ts: string; keep?: boolean }): Promise<Me
     {
       const t0 = Date.now();
       const assertions: MechAssertion[] = [];
-      const writes: MechCaseResult["writes"] = [];
+      const writes: Array<MechCaseResult["writes"][number]> = [];
       const add = await admitProfile(
         {
           insight: "提交前必跑完整测试套件再合入主线",
@@ -927,7 +927,7 @@ async function runCapSuite(opts: { ts: string; keep?: boolean }): Promise<MechCa
     {
       const t0 = Date.now();
       const assertions: MechAssertion[] = [];
-      const writes: MechCaseResult["writes"] = [];
+      const writes: Array<MechCaseResult["writes"][number]> = [];
       const invalidatedIds: string[] = [];
 
       for (let i = 0; i < PROFILE_CAP; i++) {

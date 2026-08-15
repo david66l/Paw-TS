@@ -390,7 +390,7 @@ describe("Loop Kernel v2 shadow artifacts", () => {
 
   test("rejects content, assessment, and top-level hash tampering", () => {
     const original = buildLoopV2ShadowArtifactV1(completeCandidateReport());
-    const contentTampered = structuredClone(original) as {
+    const contentTampered = structuredClone(original) as unknown as {
       report: { artifactBlobs: Array<{ content: string }> };
     };
     const firstBlob = contentTampered.report.artifactBlobs[0];

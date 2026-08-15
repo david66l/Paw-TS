@@ -43,6 +43,8 @@ export interface AdmitProfileOptions {
   /** 画像容量上限，默认 15 */
   cap?: number;
   runId?: string;
+  /** Injectable best-effort observation sink; core decisions never depend on it. */
+  recordOp?: typeof appendOpLog;
 }
 
 /** 行为描述式检查（§7.6）：拒绝纯形容词空洞画像 */
@@ -116,9 +118,10 @@ export async function admitProfile(
   draft: ProfileDraft,
   opts: AdmitProfileOptions,
 ): Promise<AdmitProfileResult> {
+  const recordOp = opts.recordOp ?? appendOpLog;
   const checked = validateProfileDraft(draft);
   if (!checked.ok) {
-    await appendOpLog("write.rejected", {
+    await recordOp("write.rejected", {
       runId: opts.runId,
       detail: { reason: checked.reason, kind: "profile" },
     });
@@ -152,7 +155,7 @@ export async function admitProfile(
     // 强制沿用原 id，避免内容哈希漂移成 ADD
     const withId = { ...updated, id: best.entry.id };
     await opts.engine.put(withId);
-    await appendOpLog("governed", {
+    await recordOp("governed", {
       runId: opts.runId,
       entryIds: [best.entry.id],
       detail: { op: "EDIT", kind: "profile", supportCount: withId.supportCount },
@@ -189,7 +192,7 @@ export async function admitProfile(
       });
     const victim = removable[0];
     if (!victim) {
-      await appendOpLog("write.rejected", {
+      await recordOp("write.rejected", {
         runId: opts.runId,
         detail: { reason: "profile_cap_no_removable", kind: "profile", cap },
       });
@@ -197,7 +200,7 @@ export async function admitProfile(
     }
     await opts.engine.invalidate(victim.id, nowIso);
     removedId = victim.id;
-    await appendOpLog("governed", {
+    await recordOp("governed", {
       runId: opts.runId,
       entryIds: [victim.id],
       detail: { op: "REMOVE", kind: "profile", reason: "capacity" },
@@ -206,7 +209,7 @@ export async function admitProfile(
 
   await opts.engine.put(candidate);
   const memoryId = candidate.id || deriveEntryId(candidate, opts.engine.scope);
-  await appendOpLog("governed", {
+  await recordOp("governed", {
     runId: opts.runId,
     entryIds: [memoryId],
     detail: { op: "ADD", kind: "profile", supportCount: candidate.supportCount, removedId },
@@ -224,8 +227,15 @@ export async function admitProfile(
  */
 export async function enforceProfileCapacity(
   engine: MemoryStoreEngine,
-  opts: { repo?: string; cap?: number; now?: () => Date; runId?: string } = {},
+  opts: {
+    repo?: string;
+    cap?: number;
+    now?: () => Date;
+    runId?: string;
+    recordOp?: typeof appendOpLog;
+  } = {},
 ): Promise<string[]> {
+  const recordOp = opts.recordOp ?? appendOpLog;
   const cap = opts.cap ?? PROFILE_CAP;
   const nowIso = (opts.now?.() ?? new Date()).toISOString();
   const filter = opts.repo
@@ -251,7 +261,7 @@ export async function enforceProfileCapacity(
     await engine.invalidate(v.id, nowIso);
   }
   if (victims.length > 0) {
-    await appendOpLog("lifecycle.purge", {
+    await recordOp("lifecycle.purge", {
       runId: opts.runId,
       entryIds: victims.map((v) => v.id),
       detail: { reason: "profile_capacity", cap },

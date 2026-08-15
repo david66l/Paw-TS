@@ -321,7 +321,7 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
       expect(cached).toHaveLength(1);
       expect(cached[0]?.dimension).toBe("AR");
 
-      const fakeFetch: typeof fetch = async () =>
+      const fakeFetch = async () =>
         new Response(JSON.stringify({ error: "offline" }), { status: 503 });
       const loaded = await loadOrFetchMabHf({
         cacheDir: dir,

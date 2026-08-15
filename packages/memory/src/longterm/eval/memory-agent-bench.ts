@@ -577,7 +577,7 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
   // 已是我们的扁平格式（带 qa 数组）
   if (Array.isArray(o.qa) && o.qa.length > 0) {
     const qa = o.qa
-      .map((raw, i) => {
+      .map<MabQaPair | null>((raw, i) => {
         if (!raw || typeof raw !== "object") return null;
         const q = raw as Record<string, unknown>;
         const question = typeof q.question === "string" ? q.question : "";
@@ -793,7 +793,7 @@ export async function fetchMabHfSplit(
   opts?: {
     dimension?: MabDimension;
     cacheDir?: string;
-    fetchImpl?: typeof fetch;
+    fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
     baseUrl?: string;
     pageSize?: number;
   },
@@ -863,7 +863,7 @@ export async function loadOrFetchMabHf(opts: {
   parquetDir?: string;
   splits?: readonly string[];
   forceFetch?: boolean;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
   baseUrl?: string;
 }): Promise<MabHfLoadResult> {
   const splits = opts.splits?.length
@@ -1201,7 +1201,7 @@ export function shouldInvalidateForSf(
 /** 对 SF 样本：把「纯旧事实」chunk 软失效；返回失效 id 列表 */
 export async function invalidateSupersededForSf(
   engine: MemoryStoreEngine,
-  repo: string,
+  _repo: string,
   sample: MabSample,
   writtenIds: readonly string[],
 ): Promise<string[]> {

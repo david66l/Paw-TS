@@ -26,6 +26,8 @@ import {
   type ProfileDraft,
 } from "../src/longterm/write/profile.js";
 
+const NOOP_RECORD_OP = async () => true;
+
 /** 最小内存引擎：只实现 put/get/invalidate/query */
 function makeMemEngine(): MemoryStoreEngine & { store: Map<string, MemoryEntry> } {
   const store = new Map<string, MemoryEntry>();
@@ -118,7 +120,7 @@ describe("admitProfile", () => {
     const engine = makeMemEngine();
     const r = await admitProfile(
       draft({ insight: "提交前必跑完整测试套件再合入" }),
-      { engine, runId: "profile-add" },
+      { engine, runId: "profile-add", recordOp: NOOP_RECORD_OP },
     );
     expect(r.status).toBe("written");
     if (r.status === "written") {
@@ -139,7 +141,7 @@ describe("admitProfile", () => {
         insight: "提交前必跑完整测试套件再合入",
         evidence: ["e1", "e2", "e3"],
       }),
-      { engine },
+      { engine, recordOp: NOOP_RECORD_OP },
     );
     expect(first.status).toBe("written");
     const second = await admitProfile(
@@ -147,7 +149,7 @@ describe("admitProfile", () => {
         insight: "合入前必跑完整测试套件并看覆盖率",
         evidence: ["e4", "e5", "e6"],
       }),
-      { engine },
+      { engine, recordOp: NOOP_RECORD_OP },
     );
     expect(second.status).toBe("edited");
     if (second.status === "edited" && first.status === "written") {
@@ -163,7 +165,7 @@ describe("admitProfile", () => {
     const engine = makeMemEngine();
     const r = await admitProfile(
       draft({ insight: "提交前必跑完整测试", evidence: ["only-one"] }),
-      { engine },
+      { engine, recordOp: NOOP_RECORD_OP },
     );
     expect(r).toEqual({ status: "rejected", reason: "evidence_below_3" });
     expect(engine.store.size).toBe(0);
@@ -196,7 +198,7 @@ describe("admitProfile", () => {
           insight: insights[i]!,
           evidence: [`r${i}a`, `r${i}b`, `r${i}c`],
         }),
-        { engine, cap: PROFILE_CAP, now },
+        { engine, cap: PROFILE_CAP, now, recordOp: NOOP_RECORD_OP },
       );
       expect(r.status).toBe("written");
       if (r.status === "written") {
@@ -212,16 +214,17 @@ describe("admitProfile", () => {
         insight: "Inspect changelog and bump semver tags on every release",
         evidence: ["nx1", "nx2", "nx3"],
       }),
-      { engine, cap: PROFILE_CAP, now },
+      { engine, cap: PROFILE_CAP, now, recordOp: NOOP_RECORD_OP },
     );
     expect(r.status).toBe("written");
-    if (r.status === "written") {
-      expect(r.removedId).toBeTruthy();
-      const victim = await engine.get(r.removedId!);
+    if (r.status === "written" && "removedId" in r) {
+      const victim = await engine.get(r.removedId);
       expect(victim?.tInvalid).not.toBeNull();
       const active = await engine.query({ kind: "profile", repo: "repo-profile-test" });
       expect(active).toHaveLength(PROFILE_CAP);
       expect(active.some((e) => e.id === r.memoryId)).toBe(true);
+    } else {
+      throw new Error("Expected profile admission to evict a removable item");
     }
   });
 
@@ -237,7 +240,7 @@ describe("admitProfile", () => {
           evidence: [`u${i}a`, `u${i}b`, `u${i}c`],
           source: "user_statement",
         }),
-        { engine, cap: 2 },
+        { engine, cap: 2, recordOp: NOOP_RECORD_OP },
       );
       expect(r.status).toBe("written");
     }
@@ -247,7 +250,7 @@ describe("admitProfile", () => {
         evidence: ["v1", "v2", "v3"],
         source: "agent_inferred",
       }),
-      { engine, cap: 2 },
+      { engine, cap: 2, recordOp: NOOP_RECORD_OP },
     );
     expect(r).toEqual({ status: "rejected", reason: "profile_cap_no_removable" });
   });
@@ -271,7 +274,7 @@ describe("enforceProfileCapacity", () => {
           evidence: [`c${i}a`, `c${i}b`, `c${i}c`],
           source: i === 0 ? "user_statement" : "agent_inferred",
         }),
-        { engine, cap: 10, now },
+        { engine, cap: 10, now, recordOp: NOOP_RECORD_OP },
       );
       expect(r.status).toBe("written");
       if (r.status === "written") {
@@ -284,6 +287,7 @@ describe("enforceProfileCapacity", () => {
       repo: "repo-profile-test",
       cap: 2,
       now,
+      recordOp: NOOP_RECORD_OP,
     });
     expect(removed.length).toBe(2);
     expect(removed).not.toContain(ids[0]); // user_statement 豁免

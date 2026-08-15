@@ -21,6 +21,7 @@ import {
   distillHistoryLesson,
   harnessPythonArgs,
   lessonGoalOverlap,
+  lifecycleGatesOk,
   mergeExternalResolveResults,
   officialHarnessArgs,
   parseResolvedFromHarnessOutput,
@@ -158,6 +159,41 @@ describe("runSweExpBuiltin fake", () => {
 });
 
 describe("lifecycle observability", () => {
+  test("fake completed empty patch fails gate", () => {
+    const summary = summarizeLifecycleGates([
+      {
+        pairId: "p1",
+        repo: "r",
+        historyId: "h",
+        probeId: "p",
+        off: {
+          memoryOn: false,
+          resolved: false,
+          warnings: ["empty_patch", "fake_completed_empty_patch"],
+        },
+        on: { memoryOn: true, resolved: false, warnings: [] },
+        outcome: "tie",
+      },
+    ]);
+    expect(summary.fakeCompletedEmptyPatch).toBe(1);
+    expect(lifecycleGatesOk(summary)).toBe(false);
+  });
+
+  test("clean arms pass gate", () => {
+    const summary = summarizeLifecycleGates([
+      {
+        pairId: "p1",
+        repo: "r",
+        historyId: "h",
+        probeId: "p",
+        off: { memoryOn: false, resolved: true, warnings: [] },
+        on: { memoryOn: true, resolved: true, warnings: [] },
+        outcome: "tie",
+      },
+    ]);
+    expect(lifecycleGatesOk(summary)).toBe(true);
+  });
+
   test("rolls up coding phase errors", () => {
     const arm = {
       memoryOn: false,
