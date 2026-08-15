@@ -1,5 +1,6 @@
 import type { AgentToolCallAction } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
+import type { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import { toolCallDedupKey } from "./parse-agent-action.js";
 import {
   type TaskState,
@@ -27,8 +28,11 @@ export interface StatusEnvironmentV1 {
   readonly shell: string;
   readonly node: string;
   readonly bun: string;
-  /** Python is intentionally not guessed. ExecutionEnvironmentRegistry owns probing. */
-  readonly python: "unprobed";
+  readonly python: string;
+  readonly shellPersistence?: "fresh_process_per_call";
+  readonly sandboxMode?: "off" | "workspace" | "strict";
+  readonly recoveryCompatible?: boolean;
+  readonly recoveryIssues?: readonly string[];
 }
 
 export interface StatusSnapshotV1 {
@@ -54,8 +58,13 @@ export interface StatusSnapshotV1 {
     readonly timedOut: boolean;
   };
   readonly environment: StatusEnvironmentV1;
-  /** A later registry will replace this honest unknown with durable job state. */
-  readonly backgroundJobs: "untracked";
+  readonly backgroundJobs:
+    | "untracked"
+    | {
+        readonly capability: "not_available";
+        readonly managed: 0;
+        readonly running: 0;
+      };
 }
 
 export interface RunStatusTelemetryOptionsV1 {
@@ -63,6 +72,7 @@ export interface RunStatusTelemetryOptionsV1 {
   readonly workspaceRoot: string;
   readonly startedAt?: number;
   readonly environment?: StatusEnvironmentV1;
+  readonly executionEnvironment?: ExecutionEnvironmentRegistryV1;
 }
 
 const PACE_ADVICE: Readonly<Record<StatusPaceV1, string>> = Object.freeze({
@@ -119,6 +129,9 @@ export function statusPaceV1(
   if (consecutiveFailures >= 3 || consecutiveExactRepeats >= 3) {
     return "change_hypothesis";
   }
+  if ((state.executionEnvironmentIssues?.length ?? 0) > 0) {
+    return "stabilize_environment";
+  }
   const mutationRevision = state.mutationRevision ?? 0;
   if (mutationRevision === 0) {
     return state.filesRead.length === 0 && state.commandsRun.length === 0
@@ -127,7 +140,12 @@ export function statusPaceV1(
   }
   const latestCurrentTest = [...state.testResults]
     .reverse()
-    .find((result) => (result.mutationRevision ?? 0) === mutationRevision);
+    .find(
+      (result) =>
+        (result.mutationRevision ?? 0) === mutationRevision &&
+        (result.executionEnvironmentRevision ?? 0) ===
+          (state.executionEnvironmentRevision ?? 0),
+    );
   const substantive = latestSubstantiveVerification(state);
   if (substantive && verificationOutcome(substantive) === "code_failed") {
     return "repair";
@@ -204,6 +222,17 @@ export class RunStatusTelemetryV1 {
       this.consecutiveFailures,
       this.consecutiveExactRepeats,
     );
+    const execution = this.options.executionEnvironment?.snapshot();
+    const environment: StatusEnvironmentV1 = execution
+      ? Object.freeze({
+          cwd: execution.workspaceRoot,
+          ...execution.runtime,
+          shellPersistence: execution.shellPersistence,
+          sandboxMode: execution.sandbox.mode,
+          recoveryCompatible: execution.recovery.compatible,
+          recoveryIssues: execution.recovery.issues,
+        })
+      : this.environment;
     return Object.freeze({
       schemaVersion: STATUS_SNAPSHOT_SCHEMA_V1,
       authority: "advisory_only" as const,
@@ -221,8 +250,8 @@ export class RunStatusTelemetryV1 {
         consecutiveExactRepeats: this.consecutiveExactRepeats,
       }),
       ...(this.lastTool ? { lastTool: this.lastTool } : {}),
-      environment: this.environment,
-      backgroundJobs: "untracked" as const,
+      environment,
+      backgroundJobs: execution?.backgroundJobs ?? ("untracked" as const),
     });
   }
 }
@@ -231,6 +260,30 @@ export function formatStatusSnapshotV1(snapshot: StatusSnapshotV1): string {
   const lastTool = snapshot.lastTool
     ? `${snapshot.lastTool.tool} ok=${snapshot.lastTool.ok} duration_ms=${snapshot.lastTool.durationMs} timed_out=${snapshot.lastTool.timedOut}`
     : "none";
+  const environmentDetails = [
+    `cwd=${snapshot.environment.cwd}`,
+    `platform=${snapshot.environment.platform}/${snapshot.environment.arch}`,
+    `shell=${snapshot.environment.shell}`,
+    `node=${snapshot.environment.node}`,
+    `bun=${snapshot.environment.bun}`,
+    `python=${snapshot.environment.python}`,
+    ...(snapshot.environment.shellPersistence
+      ? [`shell_persistence=${snapshot.environment.shellPersistence}`]
+      : []),
+    ...(snapshot.environment.sandboxMode
+      ? [`sandbox=${snapshot.environment.sandboxMode}`]
+      : []),
+    ...(snapshot.environment.recoveryCompatible !== undefined
+      ? [
+          `recovery_compatible=${snapshot.environment.recoveryCompatible}`,
+          `recovery_issues=${snapshot.environment.recoveryIssues?.join(",") || "none"}`,
+        ]
+      : []),
+  ].join(" ");
+  const backgroundJobs =
+    snapshot.backgroundJobs === "untracked"
+      ? "untracked"
+      : `capability=${snapshot.backgroundJobs.capability} managed=${snapshot.backgroundJobs.managed} running=${snapshot.backgroundJobs.running}`;
   return [
     STATUS_SNAPSHOT_PREFIX,
     `schema=${snapshot.schemaVersion} authority=${snapshot.authority} completion_authority=${snapshot.completionAuthority}`,
@@ -238,7 +291,7 @@ export function formatStatusSnapshotV1(snapshot: StatusSnapshotV1): string {
     `pace=${snapshot.pace} advice=${snapshot.advice}`,
     `tools calls=${snapshot.tools.calls} failures=${snapshot.tools.failures} consecutive_failures=${snapshot.tools.consecutiveFailures} consecutive_exact_repeats=${snapshot.tools.consecutiveExactRepeats}`,
     `last_tool=${lastTool}`,
-    `environment cwd=${snapshot.environment.cwd} platform=${snapshot.environment.platform}/${snapshot.environment.arch} shell=${snapshot.environment.shell} node=${snapshot.environment.node} bun=${snapshot.environment.bun} python=${snapshot.environment.python}`,
-    `background_jobs=${snapshot.backgroundJobs}`,
+    `environment ${environmentDetails}`,
+    `background_jobs=${backgroundJobs}`,
   ].join("\n");
 }

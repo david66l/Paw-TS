@@ -190,5 +190,15 @@ export {
   prepareInteractionResumeV1,
   type PrepareInteractionResumeV1,
 } from "./durable-interaction.js";
+export {
+  currentExecutionRuntimeV1,
+  EXECUTION_ENVIRONMENT_SCHEMA_V1,
+  ExecutionEnvironmentRegistryV1,
+  parseExecutionEnvironmentSnapshotV1,
+  type ExecutionEnvironmentSnapshotV1,
+  type ExecutionRuntimeV1,
+  type ExecutionSandboxV1,
+  type ShellExecutionObservedV1,
+} from "./execution-environment.js";
 
 export * from "./loop-v2/index.js";

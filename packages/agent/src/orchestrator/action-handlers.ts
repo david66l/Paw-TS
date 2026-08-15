@@ -1576,6 +1576,7 @@ async function handleToolCalls(
     text,
     thinking,
     taskState: ctx.taskState,
+    executionEnvironment: ctx.executionEnvironment,
     mutationCaptures,
     observeLoopV2ToolCommit: ctx.observeLoopV2ToolCommit,
     saveStateFn: opts.saveStateFn,

@@ -39,6 +39,7 @@ import type {
 } from "@paw/harness";
 import { toolRequiresApproval } from "@paw/harness";
 import type { FileLockLike } from "@paw/harness";
+import type { ExecutionEnvironmentRegistryV1 } from "../execution-environment.js";
 import type {
   ToolEffectPolicy,
   ToolExecutionPolicy,
@@ -242,6 +243,7 @@ export interface ToolResultCommitContext {
   readonly workspaceRoot: string;
   readonly turn: number;
   readonly taskState?: TaskStateManager;
+  readonly executionEnvironment?: ExecutionEnvironmentRegistryV1;
   readonly observeLoopV2ToolCommit?: (
     input: LoopV2ShadowToolCommitPortInput,
   ) => void;
@@ -984,6 +986,7 @@ export function commitToolExecutionResult(
       ? readSourceContentHash(ctx.workspaceRoot, call.args, result.payload)
       : undefined;
   ctx.taskState?.recordToolResult(call, result);
+  ctx.executionEnvironment?.observeToolResult(ctx.turn, call, result);
   const taskStateAfter = ctx.taskState?.snapshot();
   const verificationCapture = buildShadowVerificationCapture(
     ctx.workspaceRoot,

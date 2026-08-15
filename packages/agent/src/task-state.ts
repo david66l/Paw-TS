@@ -54,6 +54,8 @@ export interface TestResultSummary {
   readonly shellCommandRevision?: number;
   /** 文件最近一次变更的版本；用于拒绝“改代码前跑过的旧绿测”。 */
   readonly mutationRevision?: number;
+  /** Execution environment revision in which this evidence was observed. */
+  readonly executionEnvironmentRevision?: number;
 }
 
 /**
@@ -128,6 +130,10 @@ export interface TaskState {
   readonly shellCommandRevision?: number;
   /** 每次成功写文件/应用 patch 单调递增；旧快照缺省为 0。 */
   readonly mutationRevision?: number;
+  /** Increments when resume detects an incompatible execution environment. */
+  readonly executionEnvironmentRevision?: number;
+  /** Current recovery mismatches; empty after a verification in this environment. */
+  readonly executionEnvironmentIssues?: readonly string[];
   /** Shell-command revision at the most recent successful source mutation. */
   readonly mutationShellCommandRevision?: number;
   /** Failed exact-edit target eligible for one policy-safe recovery read. */
@@ -178,6 +184,8 @@ export class TaskStateManager {
         testResults: [],
         shellCommandRevision: 0,
         mutationRevision: 0,
+        executionEnvironmentRevision: 0,
+        executionEnvironmentIssues: [],
         mutationShellCommandRevision: 0,
         diffInspectedRevision: 0,
         fileLockConflicts: [],
@@ -191,6 +199,20 @@ export class TaskStateManager {
 
   snapshot(): TaskState {
     return this.state;
+  }
+
+  recordExecutionEnvironmentChange(issues: readonly string[]): void {
+    const normalized = [...new Set(issues.map((issue) => issue.trim()))].filter(
+      Boolean,
+    );
+    if (normalized.length === 0) return;
+    this.state = {
+      ...this.state,
+      executionEnvironmentRevision:
+        (this.state.executionEnvironmentRevision ?? 0) + 1,
+      executionEnvironmentIssues: normalized,
+      updatedAt: Date.now(),
+    };
   }
 
   recordFileLockConflict(path: string): void {
@@ -390,10 +412,7 @@ export class TaskStateManager {
     this.state = {
       ...this.state,
       plan: items.map((item) => summarizePlanItem(item)),
-      taskGraphEvents: appendTaskGraphPlanV1(
-        this.state.taskGraphEvents,
-        items,
-      ),
+      taskGraphEvents: appendTaskGraphPlanV1(this.state.taskGraphEvents, items),
       updatedAt: Date.now(),
     };
   }
@@ -427,6 +446,9 @@ export class TaskStateManager {
       this.state.mutationShellCommandRevision ?? shellCommandRevision;
     let editRecoveryPath = this.state.editRecoveryPath;
     let diffInspectedRevision = this.state.diffInspectedRevision ?? 0;
+    let executionEnvironmentIssues = [
+      ...(this.state.executionEnvironmentIssues ?? []),
+    ];
 
     if (result.ok && call.tool === "workspace.read_file") {
       const readPath = stringArg(args.path);
@@ -536,7 +558,12 @@ export class TaskStateManager {
             ...(evidence ? { evidence } : {}),
             shellCommandRevision,
             mutationRevision,
+            executionEnvironmentRevision:
+              this.state.executionEnvironmentRevision ?? 0,
           });
+          if (classification.outcome !== "harness_failed") {
+            executionEnvironmentIssues = [];
+          }
         }
         if (result.ok && isGitDiffCommand(command)) {
           diffInspectedRevision = mutationRevision;
@@ -566,6 +593,7 @@ export class TaskStateManager {
         ? { editRecoveryPath }
         : { editRecoveryPath: undefined }),
       diffInspectedRevision,
+      executionEnvironmentIssues,
       pinnedFacts: pinnedFacts.slice(-20),
       updatedAt: Date.now(),
     };
@@ -738,11 +766,13 @@ export function latestSubstantiveVerification(
   state: TaskState,
 ): TestResultSummary | undefined {
   const revision = state.mutationRevision ?? 0;
+  const environmentRevision = state.executionEnvironmentRevision ?? 0;
   for (let index = state.testResults.length - 1; index >= 0; index -= 1) {
     const result = state.testResults[index];
     if (
       result &&
       (result.mutationRevision ?? 0) === revision &&
+      (result.executionEnvironmentRevision ?? 0) === environmentRevision &&
       verificationOutcome(result) !== "harness_failed"
     ) {
       return result;
@@ -754,8 +784,11 @@ export function latestSubstantiveVerification(
 /** True only for the first retryable harness failure on the current revision. */
 export function hasVerificationRetryAvailable(state: TaskState): boolean {
   const revision = state.mutationRevision ?? 0;
+  const environmentRevision = state.executionEnvironmentRevision ?? 0;
   const current = state.testResults.filter(
-    (result) => result.mutationRevision === revision,
+    (result) =>
+      (result.mutationRevision ?? 0) === revision &&
+      (result.executionEnvironmentRevision ?? 0) === environmentRevision,
   );
   const latest = current.at(-1);
   return (

@@ -271,6 +271,7 @@ function providerProtocolRecoveryMessageV2(
   }
   return "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response.";
 }
+import { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import {
   convergenceEvidenceKey,
   convergenceGuidance,
@@ -528,6 +529,7 @@ export class AgentOrchestrator {
   private _conversationId: string | null = null;
   private _interactionState: WaitingUserInteractionV1 | undefined;
   private _interactionInbox: readonly UserReplyInboxEventV1[] = [];
+  private _executionEnvironment: ExecutionEnvironmentRegistryV1 | undefined;
   private _contextPackageCode: readonly CodeContextBlock[] = [];
   /** 流式恢复文件路径：模型输出时实时写盘，崩了可用于恢复 */
   private _streamRecoveryPath?: string;
@@ -827,6 +829,7 @@ export class AgentOrchestrator {
         shellSandbox,
         taskState,
         statusTelemetry,
+        executionEnvironment,
       } = init;
       emitRunMetrics = _emitRunMetrics;
       persistLoopV2Terminal = (result) => {
@@ -978,6 +981,7 @@ export class AgentOrchestrator {
           planner,
           taskState,
           statusTelemetry,
+          executionEnvironment,
           emit,
           checkpointSeq,
           specGoal: spec.goal,
@@ -2598,6 +2602,9 @@ export class AgentOrchestrator {
       ...(this._interactionInbox.length > 0
         ? { interactionInbox: this._interactionInbox }
         : {}),
+      ...(this._executionEnvironment
+        ? { executionEnvironment: this._executionEnvironment.snapshot() }
+        : {}),
       ...(outcome ? { outcome } : {}),
       savedAt: Date.now(),
     };
@@ -3222,6 +3229,7 @@ export class AgentOrchestrator {
     planner: TaskPlanner;
     taskState: TaskStateManager;
     statusTelemetry: RunStatusTelemetryV1;
+    executionEnvironment: ExecutionEnvironmentRegistryV1;
     sessionMemoryStore: SessionMemoryStore;
     compactor: ContextCompactor;
     artifactRegistry: ArtifactRegistry;
@@ -3257,10 +3265,6 @@ export class AgentOrchestrator {
       return findPawRoot(cwd) ?? cwd;
     })();
     const maxSteps = resolveMaxSteps(workspaceRoot, spec.maxSteps);
-    const statusTelemetry = new RunStatusTelemetryV1({
-      runId,
-      workspaceRoot,
-    });
     const loopV2LiveReviewRuntime =
       this.loopKernelVersion === "v2"
         ? new LoopV2LiveReviewRuntimeV1({
@@ -3637,6 +3641,22 @@ export class AgentOrchestrator {
 
     const shellSandbox =
       this.shellSandbox ?? resolveShellSandboxConfig(workspaceRoot);
+    const executionEnvironment = new ExecutionEnvironmentRegistryV1({
+      runId,
+      workspaceRoot,
+      shellSandbox,
+      resumeSnapshot: spec.resumeFromState?.executionEnvironment,
+    });
+    this._executionEnvironment = executionEnvironment;
+    const environmentRecovery = executionEnvironment.snapshot().recovery;
+    if (!environmentRecovery.compatible) {
+      taskState.recordExecutionEnvironmentChange(environmentRecovery.issues);
+    }
+    const statusTelemetry = new RunStatusTelemetryV1({
+      runId,
+      workspaceRoot,
+      executionEnvironment,
+    });
     // Tool descriptions must reflect the actual execution world, not merely
     // the host OS (for example Windows hosting a Linux instance image).
     const toolNameMap = toolNameReverseMap(mcp);
@@ -3697,6 +3717,7 @@ export class AgentOrchestrator {
         planner,
         taskState,
         statusTelemetry,
+        executionEnvironment,
         sessionMemoryStore,
         compactor,
         artifactRegistry,
@@ -4082,6 +4103,7 @@ export class AgentOrchestrator {
       planner,
       taskState,
       statusTelemetry,
+      executionEnvironment,
       sessionMemoryStore,
       compactor,
       artifactRegistry,

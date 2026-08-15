@@ -94,6 +94,8 @@ export interface AppState {
   readonly interaction?: WaitingUserInteractionV1;
   /** Append-only replies submitted while the orchestrator process may be absent. */
   readonly interactionInbox?: readonly UserReplyInboxEventV1[];
+  /** Agent-owned, versioned execution environment ledger and recovery facts. */
+  readonly executionEnvironment?: unknown;
   /** 运行已完成时的最终结果 */
   readonly outcome?: {
     /** 完成状态：成功、失败、不完整或用户中止 */

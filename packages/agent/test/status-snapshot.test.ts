@@ -138,6 +138,16 @@ describe("StatusSnapshotV1", () => {
     expect(
       statusPaceV1(
         atRevision({
+          executionEnvironmentRevision: 1,
+          executionEnvironmentIssues: ["sandbox_image_changed"],
+        }),
+        0,
+        0,
+      ),
+    ).toBe("stabilize_environment");
+    expect(
+      statusPaceV1(
+        atRevision({
           testResults: [
             {
               command: "bun test",
@@ -287,6 +297,11 @@ describe("StatusSnapshotV1", () => {
     expect(snapshots[1]).toContain("tools calls=1 failures=0");
     expect(snapshots[1]).toContain(
       "last_tool=workspace.read_file ok=true duration_ms=",
+    );
+    expect(snapshots[1]).toContain("shell_persistence=fresh_process_per_call");
+    expect(snapshots[1]).toContain("recovery_compatible=true");
+    expect(snapshots[1]).toContain(
+      "background_jobs=capability=not_available managed=0 running=0",
     );
   });
 });
