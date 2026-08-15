@@ -61,6 +61,8 @@ export { buildSweAgentGoal } from "./agent-arm.js";
 export { buildSweAcceptanceCriteria } from "./acceptance.js";
 export {
   harnessPythonArgs,
+  resolveSwebenchPythonCommand,
+  swebenchPythonCandidates,
   officialHarnessArgs,
   parseResolvedFromHarnessOutput,
 } from "./evaluate.js";

@@ -25,12 +25,14 @@ import {
   mergeExternalResolveResults,
   officialHarnessArgs,
   parseResolvedFromHarnessOutput,
+  resolveSwebenchPythonCommand,
   runSweExpAgent,
   runSweExpBuiltin,
   statementSimilarity,
   summarizeLifecycleGates,
   summarizeSweExp,
   sweExpPassed,
+  swebenchPythonCandidates,
   writeJsonAtomic,
 } from "../src/swe-exp/index.js";
 
@@ -216,6 +218,36 @@ describe("lifecycle observability", () => {
 });
 
 describe("agent control-plane preflight/checkpoint", () => {
+  test("SWE-bench interpreter resolution prefers explicit and working environments", () => {
+    const env = {
+      SWE_BENCH_PYTHON: "D:\\tools\\swe-python.exe",
+      CONDA_PREFIX: "D:\\conda-env",
+      USERPROFILE: "C:\\Users\\tester",
+    };
+    expect(swebenchPythonCandidates("win32", env)).toEqual([
+      "D:\\tools\\swe-python.exe",
+      "D:\\conda-env\\python.exe",
+      "C:\\Users\\tester\\miniconda3\\python.exe",
+      "C:\\Users\\tester\\anaconda3\\python.exe",
+      "python",
+    ]);
+    const attempted: string[] = [];
+    expect(
+      resolveSwebenchPythonCommand("C:\\repo", {
+        platform: "win32",
+        env,
+        probe: (command) => {
+          attempted.push(command);
+          return command === "D:\\conda-env\\python.exe";
+        },
+      }),
+    ).toBe("D:\\conda-env\\python.exe");
+    expect(attempted).toEqual([
+      "D:\\tools\\swe-python.exe",
+      "D:\\conda-env\\python.exe",
+    ]);
+  });
+
   test("Windows harness uses the LF-normalizing launcher", () => {
     const args = harnessPythonArgs("C:\\repo", ["--run_id", "x"], "win32");
     expect(args[0]?.replaceAll("\\", "/")).toEndWith(

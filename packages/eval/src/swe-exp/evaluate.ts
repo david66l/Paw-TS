@@ -12,6 +12,64 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+export function swebenchPythonCandidates(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): readonly string[] {
+  const candidates = [env.SWE_BENCH_PYTHON];
+  if (platform === "win32") {
+    if (env.CONDA_PREFIX) {
+      candidates.push(path.join(env.CONDA_PREFIX, "python.exe"));
+    }
+    if (env.USERPROFILE) {
+      candidates.push(
+        path.join(env.USERPROFILE, "miniconda3", "python.exe"),
+        path.join(env.USERPROFILE, "anaconda3", "python.exe"),
+      );
+    }
+  }
+  candidates.push("python");
+  return [
+    ...new Set(candidates.filter((value): value is string => Boolean(value))),
+  ];
+}
+
+export function resolveSwebenchPythonCommand(
+  cwd: string,
+  options: {
+    readonly platform?: NodeJS.Platform;
+    readonly env?: NodeJS.ProcessEnv;
+    readonly probe?: (command: string, args: readonly string[]) => boolean;
+  } = {},
+): string {
+  const platform = options.platform ?? process.platform;
+  const probeArgs =
+    platform === "win32"
+      ? [path.join(cwd, "benchmarks", "swe-exp", "run_harness_lf.py"), "--help"]
+      : ["-c", "import swebench.harness.run_evaluation"];
+  const probe =
+    options.probe ??
+    ((command: string, args: readonly string[]) => {
+      const result = spawnSync(command, [...args], {
+        cwd,
+        encoding: "utf8",
+        timeout: 30_000,
+        windowsHide: true,
+      });
+      return result.status === 0 && !result.error;
+    });
+  const candidates = swebenchPythonCandidates(
+    platform,
+    options.env ?? process.env,
+  );
+  for (const candidate of candidates) {
+    if (probe(candidate, probeArgs)) return candidate;
+  }
+  throw new Error(
+    `No Python interpreter can import the SWE-bench harness; tried: ${candidates.join(", ")}. Set SWE_BENCH_PYTHON to the verified interpreter.`,
+  );
+}
+
 export interface SwePrediction {
   readonly instance_id: string;
   readonly model_name_or_path: string;
@@ -122,7 +180,18 @@ export function runSwebenchHarness(opts: {
     env.PYTHONPATH = env.PYTHONPATH ? `${shim};${env.PYTHONPATH}` : shim;
   }
 
-  const r = spawnSync("python", args, {
+  let pythonCommand: string;
+  try {
+    pythonCommand = resolveSwebenchPythonCommand(cwd);
+  } catch (error) {
+    return {
+      resolved: false,
+      source: "error",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const r = spawnSync(pythonCommand, args, {
     encoding: "utf8",
     cwd,
     env,
