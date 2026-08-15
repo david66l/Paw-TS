@@ -60,10 +60,12 @@ export interface StatusSnapshotV1 {
   readonly environment: StatusEnvironmentV1;
   readonly backgroundJobs:
     | "untracked"
-    | {
-        readonly capability: "not_available";
-        readonly managed: 0;
-        readonly running: 0;
+      | {
+        readonly capability: "not_available" | "managed";
+        readonly managed: number;
+        readonly running: number;
+        readonly stopping?: number;
+        readonly pendingSettlements?: number;
       };
 }
 
@@ -289,7 +291,7 @@ export function formatStatusSnapshotV1(snapshot: StatusSnapshotV1): string {
   const backgroundJobs =
     snapshot.backgroundJobs === "untracked"
       ? "untracked"
-      : `capability=${snapshot.backgroundJobs.capability} managed=${snapshot.backgroundJobs.managed} running=${snapshot.backgroundJobs.running}`;
+      : `capability=${snapshot.backgroundJobs.capability} managed=${snapshot.backgroundJobs.managed} running=${snapshot.backgroundJobs.running} stopping=${snapshot.backgroundJobs.stopping ?? 0} pending_settlements=${snapshot.backgroundJobs.pendingSettlements ?? 0}`;
   return [
     STATUS_SNAPSHOT_PREFIX,
     `schema=${snapshot.schemaVersion} authority=${snapshot.authority} completion_authority=${snapshot.completionAuthority}`,

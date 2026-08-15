@@ -109,6 +109,7 @@ describe("checkpoint", () => {
     expect(isMutatingTool("workspace.edit_file")).toBe(true);
     expect(isMutatingTool("workspace.apply_patch")).toBe(true);
     expect(isMutatingTool("workspace.run_shell")).toBe(true);
+    expect(isMutatingTool("workspace.job_start")).toBe(true);
     expect(isMutatingTool("workspace.notebook_edit")).toBe(true);
     expect(isMutatingTool("workspace.read_file")).toBe(false);
     expect(isMutatingTool("workspace.list_dir")).toBe(false);

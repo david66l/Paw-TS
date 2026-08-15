@@ -37,7 +37,14 @@ import type {
   ShellSandboxConfig,
   ToolRunResult,
 } from "@paw/harness";
-import { toolRequiresApproval } from "@paw/harness";
+import {
+  JOB_KILL,
+  JOB_LIST,
+  JOB_READ,
+  JOB_START,
+  JOB_WAIT,
+  toolRequiresApproval,
+} from "@paw/harness";
 import type { FileLockLike } from "@paw/harness";
 import type { ExecutionEnvironmentRegistryV1 } from "../execution-environment.js";
 import type {
@@ -70,6 +77,16 @@ import { truncatePayloadWithOutcome } from "./truncate-payload.js";
 
 /** 文件锁等待超时（毫秒）：超时后该工具调用按冲突失败返回 */
 const FILE_LOCK_TIMEOUT_MS = 20_000;
+
+function isManagedJobControlTool(tool: string): boolean {
+  return (
+    tool === JOB_START ||
+    tool === JOB_LIST ||
+    tool === JOB_READ ||
+    tool === JOB_WAIT ||
+    tool === JOB_KILL
+  );
+}
 
 /**
  * 从工具结果 payload 提取文件变更统计（供 tool.result 事件的 fileChanges 字段）。
@@ -231,6 +248,7 @@ export interface ToolExecutionContext {
   readonly toolEffectPolicy?: ToolEffectPolicy;
   /** Capture immutable rich facts only for the diagnostic v2-shadow path. */
   readonly captureLoopV2Facts?: boolean;
+  readonly managedJobs?: HarnessContext["managedJobs"];
 }
 
 export interface ToolExecutionBatchResult {
@@ -364,11 +382,16 @@ export async function executeToolCalls(
           message: `Tool ${call.tool} is not in this agent's tool allowlist.`,
         };
       }
-      const decision = await toolCtx.toolExecutionPolicy?.({
-        tool: call.tool,
-        args: call.args,
-        workspaceRoot: toolCtx.workspaceRoot,
-      });
+      // job_start delegates authorization to ManagedJobController under the
+      // canonical workspace.run_shell identity after the normal approval gate.
+      const decision =
+        call.tool === JOB_START
+          ? undefined
+          : await toolCtx.toolExecutionPolicy?.({
+              tool: call.tool,
+              args: call.args,
+              workspaceRoot: toolCtx.workspaceRoot,
+            });
       return decision && !decision.allowed
         ? { reason: decision.reason, message: decision.message }
         : undefined;
@@ -376,7 +399,7 @@ export async function executeToolCalls(
   );
   const blockedByPolicy = policyBlocks.map(Boolean);
   const effectPolicyApplies = calls.map((call) =>
-    toolCtx.toolEffectPolicy
+    toolCtx.toolEffectPolicy && !isManagedJobControlTool(call.tool)
       ? (toolCtx.toolEffectPolicy.appliesTo?.({
           tool: call.tool,
           args: call.args,
@@ -637,6 +660,7 @@ export async function executeToolCalls(
         ...(toolCtx.artifactRegistry
           ? { artifactRegistry: toolCtx.artifactRegistry }
           : {}),
+        ...(toolCtx.managedJobs ? { managedJobs: toolCtx.managedJobs } : {}),
       },
       call.tool,
       call.args,

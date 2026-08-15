@@ -76,6 +76,11 @@ export {
   toolRequiresApproval,
   CONTEXT_RECALL,
   ACCEPTANCE_UPDATE,
+  JOB_START,
+  JOB_LIST,
+  JOB_READ,
+  JOB_WAIT,
+  JOB_KILL,
   type ToolName,
   type ToolRunResult,
 } from "./registry/index.js";

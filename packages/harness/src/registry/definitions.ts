@@ -26,6 +26,11 @@ export const SEARCH = "workspace.search" as const;
 export const GLOB = "workspace.glob" as const;
 export const GREP = "workspace.grep" as const;
 export const SHELL = "workspace.run_shell" as const;
+export const JOB_START = "workspace.job_start" as const;
+export const JOB_LIST = "workspace.job_list" as const;
+export const JOB_READ = "workspace.job_read" as const;
+export const JOB_WAIT = "workspace.job_wait" as const;
+export const JOB_KILL = "workspace.job_kill" as const;
 export const WEBFETCH = "workspace.web_fetch" as const;
 export const WEBSEARCH = "workspace.web_search" as const;
 export const TODO_WRITE = "workspace.todo_write" as const;
@@ -55,6 +60,11 @@ const BUILTIN_TOOLS = [
   GLOB,
   GREP,
   SHELL,
+  JOB_START,
+  JOB_LIST,
+  JOB_READ,
+  JOB_WAIT,
+  JOB_KILL,
   WEBFETCH,
   WEBSEARCH,
   TODO_WRITE,
@@ -104,10 +114,14 @@ export function toolRequiresApproval(
     tool === MEMORY_LIST ||
     tool === MEMORY_READ ||
     tool === CONTEXT_RECALL ||
-    tool === ACCEPTANCE_UPDATE
+    tool === ACCEPTANCE_UPDATE ||
+    tool === JOB_LIST ||
+    tool === JOB_READ ||
+    tool === JOB_WAIT ||
+    tool === JOB_KILL
   )
     return false;
-  if (tool === SHELL && args) {
+  if ((tool === SHELL || tool === JOB_START) && args) {
     const cmd = typeof args.command === "string" ? args.command : "";
     if (cmd) {
       const classification = classifyShellCommand(cmd);
@@ -286,6 +300,57 @@ export function toolDefinitions(
         timeout_sec: { type: "integer", description: "Timeout in seconds" },
       },
       ["command"],
+    ),
+    fn(
+      JOB_START,
+      `Start a long-running shell command as a Paw-managed background job. ${shellDialect} Returns immediately with a job id. Use job_read for incremental output, job_wait for a bounded wait, and job_kill to stop the complete process tree. Final workspace effects and exit status are committed only after settlement.`,
+      {
+        command: {
+          type: "string",
+          description: `Shell command to run in the background. ${shellDialect}`,
+        },
+        cwd: {
+          type: "string",
+          description: "Working directory, relative to workspace root",
+        },
+        output_limit_bytes: {
+          type: "integer",
+          description: "Maximum unread output retained in memory",
+        },
+      },
+      ["command"],
+    ),
+    fn(
+      JOB_LIST,
+      "List this run's managed background jobs and lifecycle states.",
+      {},
+    ),
+    fn(
+      JOB_READ,
+      "Read and consume new output from one managed background job. Also returns its current lifecycle state.",
+      { id: { type: "string", description: "Managed job id" } },
+      ["id"],
+    ),
+    fn(
+      JOB_WAIT,
+      "Wait a bounded amount of time for one managed job to reach a terminal state. This never waits longer than 30 seconds; use it repeatedly for longer work.",
+      {
+        id: { type: "string", description: "Managed job id" },
+        timeout_sec: {
+          type: "number",
+          description: "Wait duration in seconds (0.1 to 30; default 10)",
+        },
+      },
+      ["id"],
+    ),
+    fn(
+      JOB_KILL,
+      "Request termination of a managed job and its descendant process tree.",
+      {
+        id: { type: "string", description: "Managed job id" },
+        reason: { type: "string", description: "Optional stop reason" },
+      },
+      ["id"],
     ),
     fn(
       WEBFETCH,
@@ -629,6 +694,11 @@ export function toolCatalogText(mcp?: McpClientManager): string {
     `{"tool":"${WRITE}","args":{"path":"<relative-path>","content":"<utf-8 text>","create_directories":true}}`,
     `{"tool":"${EDIT}","args":{"path":"<relative-path>","old_string":"<text to find>","new_string":"<replacement>"}}`,
     `{"tool":"${SHELL}","args":{"command":"<shell command>","cwd":".","timeout_sec":60}}`,
+    `{"tool":"${JOB_START}","args":{"command":"<long-running shell command>","cwd":".","output_limit_bytes":262144}}`,
+    `{"tool":"${JOB_LIST}","args":{}}`,
+    `{"tool":"${JOB_READ}","args":{"id":"shell-1"}}`,
+    `{"tool":"${JOB_WAIT}","args":{"id":"shell-1","timeout_sec":10}}`,
+    `{"tool":"${JOB_KILL}","args":{"id":"shell-1","reason":"no longer needed"}}`,
     `{"tool":"${WEBFETCH}","args":{"url":"<https://...>","max_length":50000}}`,
     `{"tool":"${WEBSEARCH}","args":{"query":"<search terms>","max_results":5}}`,
     `{"tool":"${TODO_WRITE}","args":{"todos":[{"id":"1","content":"<task description>","status":"pending","priority":"medium"}]}}`,

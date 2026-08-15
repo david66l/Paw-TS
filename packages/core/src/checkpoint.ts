@@ -33,8 +33,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { checkpointsDir, sanitizeFileName } from "./workspace-paths.js";
 import { atomicWrite } from "./utils/fs.js";
+import { checkpointsDir, sanitizeFileName } from "./workspace-paths.js";
 
 /** 单个检查点条目：记录一次工具调用的快照信息 */
 export interface CheckpointEntry {
@@ -91,7 +91,8 @@ export function extractCheckpointTargets(
       }
       return paths;
     }
-    case "workspace.run_shell": {
+    case "workspace.run_shell":
+    case "workspace.job_start": {
       // Shell 命令可能修改任意文件，无法预测目标文件。
       // 返回虚拟目标，检查点会存储命令元数据（命令、工作目录、时间戳）供审计/恢复参考。
       return ["__shell_cmd__"];
@@ -304,7 +305,11 @@ export function restoreCheckpoint(
 
   if (opts?.backup) {
     // 最佳尽力备份：将待删除的检查点复制到 .backup 目录
-    const backupDir = path.join(runCheckpointsDir, ".backup", String(Date.now()));
+    const backupDir = path.join(
+      runCheckpointsDir,
+      ".backup",
+      String(Date.now()),
+    );
     fs.mkdirSync(backupDir, { recursive: true });
     for (const s of dirs) {
       const src = path.join(runCheckpointsDir, String(s));
@@ -371,6 +376,7 @@ export function isMutatingTool(tool: string): boolean {
     tool === "workspace.edit_file" ||
     tool === "workspace.apply_patch" ||
     tool === "workspace.notebook_edit" ||
-    tool === "workspace.run_shell"
+    tool === "workspace.run_shell" ||
+    tool === "workspace.job_start"
   );
 }

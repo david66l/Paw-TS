@@ -203,12 +203,17 @@ import {
   goalAllowsSkipVerification,
   goalRequiresMutation,
 } from "./lifecycle/verification-gate.js";
-import { wrapObservationContentV1 } from "./observation-provenance.js";
+import { ManagedJobControllerV1 } from "./managed-job-controller.js";
+import {
+  observationProvenanceForToolV1,
+  wrapObservationContentV1,
+} from "./observation-provenance.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import type { NativeToolError } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
 import { CONTEXT_PACKAGE_PREFIX } from "./orchestrator/constants.js";
 import { fixMalformedToolArguments } from "./orchestrator/fix-malformed-args.js";
+import { commitToolExecutionResult } from "./orchestrator/tool-runner.js";
 import {
   type PayloadDeduper,
   createPayloadDeduper,
@@ -238,6 +243,7 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[ProviderProtocol:",
   "[LoopV2Readiness:",
   "[LoopV2SemanticReview:",
+  "[Managed jobs are unfinished:",
   "[Continue from where you were cut off",
   "Plan updated:",
   "Current plan:",
@@ -532,6 +538,7 @@ export class AgentOrchestrator {
   private _interactionState: WaitingUserInteractionV1 | undefined;
   private _interactionInbox: readonly UserReplyInboxEventV1[] = [];
   private _executionEnvironment: ExecutionEnvironmentRegistryV1 | undefined;
+  private _managedJobs: ManagedJobControllerV1 | undefined;
   private _contextPackageCode: readonly CodeContextBlock[] = [];
   /** 流式恢复文件路径：模型输出时实时写盘，崩了可用于恢复 */
   private _streamRecoveryPath?: string;
@@ -832,6 +839,7 @@ export class AgentOrchestrator {
         taskState,
         statusTelemetry,
         executionEnvironment,
+        managedJobs,
         capabilityExposure,
       } = init;
       emitRunMetrics = _emitRunMetrics;
@@ -942,6 +950,83 @@ export class AgentOrchestrator {
       // ═══ 主循环：ReAct 循环的核心 ═══
       // 每轮 = 一次完整的 model → parse → action → feedback 周期
       for (let turn = startTurn; turn < maxSteps; turn++) {
+        // Async producers never mutate loop state from their Promise callback.
+        // Pull terminal results into the canonical stream at this exact turn
+        // boundary before status/context/completion can observe the run.
+        const jobSettlements = managedJobs.takeSettlements();
+        if (jobSettlements.length > 0) {
+          for (const [sourceIndex, settlement] of jobSettlements.entries()) {
+            commitToolExecutionResult(
+              settlement.call,
+              settlement.result,
+              100_000 + sourceIndex,
+              {
+                emit,
+                runId,
+                workspaceRoot,
+                turn,
+                taskState,
+                executionEnvironment,
+                ...(init.observeLoopV2ToolCommit
+                  ? {
+                      observeLoopV2ToolCommit: init.observeLoopV2ToolCommit,
+                    }
+                  : {}),
+              },
+              {
+                concurrentMutation: false,
+                mutationCapture: {
+                  status: "gap",
+                  reason: "unbounded_mutation_surface",
+                },
+              },
+            );
+            emit({
+              type: "job.settled",
+              jobId: settlement.jobId,
+              turnStarted: settlement.turn,
+              turnCommitted: turn,
+              ok: settlement.result.ok,
+              summary: settlement.result.summary,
+            });
+            await this._memoryRuntime
+              ?.onToolResult({
+                taskId: this._memoryTaskId ?? runId,
+                toolName: settlement.call.tool,
+                args: settlement.call.args,
+                ok: settlement.result.ok,
+                summary: settlement.result.summary,
+                rawPayload: settlement.result.payload,
+                idempotencyKey: `${runId}-job-${settlement.jobId}-settled`,
+              })
+              .catch(() => undefined);
+          }
+          ctxMgr.addToolResults(
+            jobSettlements.map((settlement) => ({
+              tool: settlement.call.tool,
+              ok: settlement.result.ok,
+              summary: settlement.result.summary,
+              payload: settlement.result.payload,
+              provenance: observationProvenanceForToolV1(settlement.call.tool),
+            })),
+          );
+          statusTelemetry.observeToolBatch(
+            jobSettlements.map((settlement) => settlement.call),
+            jobSettlements.map((settlement) => settlement.result),
+            0,
+          );
+          this.saveState(
+            runId,
+            spec.goal,
+            workspaceRoot,
+            turn,
+            maxSteps,
+            ctxMgr,
+            planner,
+            taskState,
+          );
+        }
+
         // 检查外部 abort 信号（用户中断、超时等）
         if (signal?.aborted) {
           await agentGroup?.cancelAll();
@@ -985,6 +1070,7 @@ export class AgentOrchestrator {
           taskState,
           statusTelemetry,
           executionEnvironment,
+          managedJobs,
           capabilityExposure,
           emit,
           checkpointSeq,
@@ -1249,6 +1335,11 @@ export class AgentOrchestrator {
       }
       return { runId: spec.runId, status, message };
     } finally {
+      // Run ownership is the lifetime boundary for all background processes.
+      // close() requests full-tree termination and bounds noncompliant work.
+      const managedJobs = this._managedJobs;
+      this._managedJobs = undefined;
+      await managedJobs?.close().catch(() => {});
       // 无论如何都要断开 MCP 连接（避免资源泄漏）
       await init?.mcp?.disconnectAll();
       // A run owns one scoped MemoryRuntime reference. Always release it;
@@ -3247,6 +3338,7 @@ export class AgentOrchestrator {
     taskState: TaskStateManager;
     statusTelemetry: RunStatusTelemetryV1;
     executionEnvironment: ExecutionEnvironmentRegistryV1;
+    managedJobs: ManagedJobControllerV1;
     capabilityExposure: CapabilityExposureShadowV1;
     sessionMemoryStore: SessionMemoryStore;
     compactor: ContextCompactor;
@@ -3659,11 +3751,24 @@ export class AgentOrchestrator {
 
     const shellSandbox =
       this.shellSandbox ?? resolveShellSandboxConfig(workspaceRoot);
+    const managedJobs = new ManagedJobControllerV1({
+      ownerId: runId,
+      workspaceRoot,
+      shellSandbox,
+      ...(this.toolExecutionPolicy
+        ? { toolExecutionPolicy: this.toolExecutionPolicy }
+        : {}),
+      ...(this.toolEffectPolicy
+        ? { toolEffectPolicy: this.toolEffectPolicy }
+        : {}),
+    });
+    this._managedJobs = managedJobs;
     const executionEnvironment = new ExecutionEnvironmentRegistryV1({
       runId,
       workspaceRoot,
       shellSandbox,
       resumeSnapshot: spec.resumeFromState?.executionEnvironment,
+      backgroundJobs: () => managedJobs.readiness(),
     });
     this._executionEnvironment = executionEnvironment;
     const environmentRecovery = executionEnvironment.snapshot().recovery;
@@ -3746,6 +3851,7 @@ export class AgentOrchestrator {
         taskState,
         statusTelemetry,
         executionEnvironment,
+        managedJobs,
         capabilityExposure,
         sessionMemoryStore,
         compactor,
@@ -4135,6 +4241,7 @@ export class AgentOrchestrator {
       taskState,
       statusTelemetry,
       executionEnvironment,
+      managedJobs,
       capabilityExposure,
       sessionMemoryStore,
       compactor,

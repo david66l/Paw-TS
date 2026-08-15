@@ -26,6 +26,11 @@ import type {
 import type { ArtifactRegistry as CoreArtifactRegistry } from "@paw/core";
 import type { WorkspaceWatcher } from "@paw/workspace";
 
+import type {
+  ManagedJobReadV1,
+  ManagedJobSnapshotV1,
+  ManagedJobWaitV1,
+} from "./jobs/managed-job-registry.js";
 import type { McpClientManager } from "./mcp-client.js";
 import type { ShellSandboxConfig } from "./sandbox/index.js";
 
@@ -190,6 +195,27 @@ export interface HarnessContext {
    * at the tool-approval gate — execute must not re-block as a second gate.
    */
   readonly shellCommandPreApproved?: boolean;
+  /** Run-owned managed jobs. Agent supplies the controller through this port. */
+  readonly managedJobs?: {
+    startShell(input: {
+      readonly command: string;
+      readonly cwd?: string;
+      readonly outputLimitBytes?: number;
+    }): Promise<{
+      readonly jobId: string;
+      readonly pid: number;
+      readonly cwd: string;
+      readonly status: "running";
+    }>;
+    list(): readonly ManagedJobSnapshotV1[];
+    read(id: string): ManagedJobReadV1;
+    wait(
+      id: string,
+      timeoutMs: number,
+      signal?: AbortSignal,
+    ): Promise<ManagedJobWaitV1>;
+    kill(id: string, reason?: string): "requested" | "already_finished";
+  };
   /**
    * 记忆 Runtime 门面（duck-typed，避免 harness→memory 硬依赖）。
    * memory.list/read/save 唯一在线入口。

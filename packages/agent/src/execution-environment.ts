@@ -50,10 +50,11 @@ export interface ExecutionEnvironmentSnapshotV1 {
     readonly issues: readonly string[];
   };
   readonly backgroundJobs: {
-    /** No managed producer/controller pair exists yet; never imply otherwise. */
-    readonly capability: "not_available";
-    readonly managed: 0;
-    readonly running: 0;
+    readonly capability: "not_available" | "managed";
+    readonly managed: number;
+    readonly running: number;
+    readonly stopping?: number;
+    readonly pendingSettlements?: number;
   };
   readonly events: readonly ShellExecutionObservedV1[];
 }
@@ -64,6 +65,12 @@ export interface ExecutionEnvironmentRegistryOptionsV1 {
   readonly shellSandbox: ShellSandboxConfig;
   readonly resumeSnapshot?: unknown;
   readonly runtime?: ExecutionRuntimeV1;
+  readonly backgroundJobs?: () => {
+    readonly managed: number;
+    readonly running: number;
+    readonly stopping: number;
+    readonly pendingSettlements: number;
+  };
 }
 
 let cachedPythonVersion: string | undefined;
@@ -240,9 +247,17 @@ export function parseExecutionEnvironmentSnapshotV1(
     !Array.isArray(recovery.issues) ||
     !recovery.issues.every((item) => typeof item === "string") ||
     !jobs ||
-    jobs.capability !== "not_available" ||
-    jobs.managed !== 0 ||
-    jobs.running !== 0
+    !["not_available", "managed"].includes(String(jobs.capability)) ||
+    !Number.isSafeInteger(jobs.managed) ||
+    (jobs.managed as number) < 0 ||
+    !Number.isSafeInteger(jobs.running) ||
+    (jobs.running as number) < 0 ||
+    (jobs.stopping !== undefined &&
+      (!Number.isSafeInteger(jobs.stopping) ||
+        (jobs.stopping as number) < 0)) ||
+    (jobs.pendingSettlements !== undefined &&
+      (!Number.isSafeInteger(jobs.pendingSettlements) ||
+        (jobs.pendingSettlements as number) < 0))
   ) {
     throw new Error("Invalid execution environment recovery/job state");
   }
@@ -258,9 +273,13 @@ export function parseExecutionEnvironmentSnapshotV1(
       issues: Object.freeze([...(recovery.issues as string[])]),
     }),
     backgroundJobs: Object.freeze({
-      capability: "not_available" as const,
-      managed: 0 as const,
-      running: 0 as const,
+      capability: jobs.capability as "not_available" | "managed",
+      managed: jobs.managed as number,
+      running: jobs.running as number,
+      ...(typeof jobs.stopping === "number" ? { stopping: jobs.stopping } : {}),
+      ...(typeof jobs.pendingSettlements === "number"
+        ? { pendingSettlements: jobs.pendingSettlements }
+        : {}),
     }),
     events: Object.freeze(
       snapshot.events.map((event, index) => parseEvent(event, index)),
@@ -384,6 +403,7 @@ export class ExecutionEnvironmentRegistryV1 {
   }
 
   snapshot(): ExecutionEnvironmentSnapshotV1 {
+    const background = this.options.backgroundJobs?.();
     return Object.freeze({
       schemaVersion: EXECUTION_ENVIRONMENT_SCHEMA_V1,
       runId: this.options.runId,
@@ -395,11 +415,19 @@ export class ExecutionEnvironmentRegistryV1 {
         compatible: this.issues.length === 0,
         issues: this.issues,
       }),
-      backgroundJobs: Object.freeze({
-        capability: "not_available" as const,
-        managed: 0 as const,
-        running: 0 as const,
-      }),
+      backgroundJobs: background
+        ? Object.freeze({
+            capability: "managed" as const,
+            managed: background.managed,
+            running: background.running,
+            stopping: background.stopping,
+            pendingSettlements: background.pendingSettlements,
+          })
+        : Object.freeze({
+            capability: "not_available" as const,
+            managed: 0,
+            running: 0,
+          }),
       events: Object.freeze([...this.events]),
     });
   }

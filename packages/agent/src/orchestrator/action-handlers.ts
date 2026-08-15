@@ -550,10 +550,41 @@ async function handleFinalAnswer(
   );
   const authority = resolveLoopAuthorityPolicyV1(ctx.loopKernelVersion);
   const planningCanVeto = authority.planning === "legacy_completion_veto";
+  const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
+  const jobReadiness = ctx.managedJobs.readiness();
+
+  // A background command is part of the run's unfinished effects. Completion
+  // cannot race it, and a terminal result waiting at the settlement barrier
+  // must be committed before any final decision.
+  if (jobReadiness.blocksCompletion) {
+    const detail = `${jobReadiness.running} running, ${jobReadiness.stopping} stopping, ${jobReadiness.pendingSettlements} awaiting commit`;
+    if (noRoomForAnotherTurn) {
+      return {
+        state: {
+          type: "decided",
+          decision: decideIncomplete({
+            reason: "background_jobs_unsettled",
+            message: `Cannot complete while managed background work is unsettled (${detail}). Resume the run to read/wait/kill the job and consume its terminal result.`,
+            taskState: ctx.taskState.snapshot(),
+          }),
+        },
+        flags,
+      };
+    }
+    const nextFlags: TurnFlags = {
+      ...flags,
+      lastTurnHadToolCall: false,
+    };
+    ctx.ctxMgr.addAssistant(text, thinking);
+    ctx.ctxMgr.addUser(
+      `[Managed jobs are unfinished: ${detail}. Use workspace.job_list, job_read, job_wait, or job_kill. Do not output final_answer until every job has settled and its result has been committed.]`,
+    );
+    opts.saveStateFn();
+    return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  }
 
   // 有未完成的模型计划或 Todo 就不能宣告完成。还有预算时推动继续；
   // 没预算时 honest-incomplete，绝不能把 pending 项自动涂绿。
-  const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
   if (
     planningCanVeto &&
     (hasPendingPlan || hasPendingTodos) &&
@@ -1386,6 +1417,18 @@ async function handleToolCalls(
     toolExecutionPolicy: opts.toolExecutionPolicy,
     toolEffectPolicy: opts.toolEffectPolicy,
     captureLoopV2Facts: Boolean(ctx.observeLoopV2ToolCommit),
+    managedJobs: {
+      startShell: (input: {
+        readonly command: string;
+        readonly cwd?: string;
+        readonly outputLimitBytes?: number;
+      }) => ctx.managedJobs.startShell({ turn: ctx.turn, ...input }),
+      list: () => ctx.managedJobs.list(),
+      read: (id: string) => ctx.managedJobs.read(id),
+      wait: (id: string, timeoutMs: number, signal?: AbortSignal) =>
+        ctx.managedJobs.wait(id, timeoutMs, signal),
+      kill: (id: string, reason?: string) => ctx.managedJobs.kill(id, reason),
+    },
   };
   const approvalContext = {
     resolveToolApproval: opts.resolveToolApproval,

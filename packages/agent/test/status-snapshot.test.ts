@@ -322,7 +322,7 @@ describe("StatusSnapshotV1", () => {
     expect(snapshots[1]).toContain("shell_persistence=fresh_process_per_call");
     expect(snapshots[1]).toContain("recovery_compatible=true");
     expect(snapshots[1]).toContain(
-      "background_jobs=capability=not_available managed=0 running=0",
+      "background_jobs=capability=managed managed=0 running=0 stopping=0 pending_settlements=0",
     );
   });
 });

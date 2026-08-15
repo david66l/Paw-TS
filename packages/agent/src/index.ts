@@ -220,6 +220,7 @@ export {
   ManagedJobControllerV1,
   type ManagedShellSettlementV1,
   type ManagedShellStartResultV1,
+  type ManagedJobReadinessV1,
 } from "./managed-job-controller.js";
 
 export * from "./loop-v2/index.js";

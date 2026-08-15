@@ -56,7 +56,11 @@ export function observationProvenanceForToolV1(
       permissionAuthority: "none",
     });
   }
-  if (tool === "workspace.run_shell") {
+  if (
+    tool === "workspace.run_shell" ||
+    tool === "workspace.job_read" ||
+    tool === "workspace.job_wait"
+  ) {
     return provenance({
       source: "process",
       trust: "workspace_untrusted_data",
@@ -102,6 +106,19 @@ export function observationProvenanceForToolV1(
     });
   }
   if (HOST_FACT_TOOLS.has(tool)) {
+    return provenance({
+      source: "host",
+      trust: "trusted_host_fact",
+      taint: "none",
+      instructionAuthority: "none",
+      permissionAuthority: "none",
+    });
+  }
+  if (
+    tool === "workspace.job_start" ||
+    tool === "workspace.job_list" ||
+    tool === "workspace.job_kill"
+  ) {
     return provenance({
       source: "host",
       trust: "trusted_host_fact",

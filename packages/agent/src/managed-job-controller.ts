@@ -44,6 +44,14 @@ export interface ManagedShellStartResultV1 {
   readonly status: "running";
 }
 
+export interface ManagedJobReadinessV1 {
+  readonly managed: number;
+  readonly running: number;
+  readonly stopping: number;
+  readonly pendingSettlements: number;
+  readonly blocksCompletion: boolean;
+}
+
 function gitText(
   workspaceRoot: string,
   args: readonly string[],
@@ -308,11 +316,29 @@ export class ManagedJobControllerV1 {
     return this.registry.kill(this.options.ownerId, id, reason);
   }
 
+  readiness(): ManagedJobReadinessV1 {
+    const jobs = this.list();
+    const running = jobs.filter((job) => job.status === "running").length;
+    const stopping = jobs.filter((job) => job.status === "stopping").length;
+    const pendingSettlements = this.settlements.length;
+    return Object.freeze({
+      managed: jobs.length,
+      running,
+      stopping,
+      pendingSettlements,
+      blocksCompletion: running + stopping + pendingSettlements > 0,
+    });
+  }
+
+  takeSettlements(): readonly ManagedShellSettlementV1[] {
+    return Object.freeze(this.settlements.splice(0, this.settlements.length));
+  }
+
   drainSettlements(input: {
     readonly taskState: TaskStateManager;
     readonly executionEnvironment: ExecutionEnvironmentRegistryV1;
   }): readonly ManagedShellSettlementV1[] {
-    const drained = this.settlements.splice(0, this.settlements.length);
+    const drained = this.takeSettlements();
     for (const settlement of drained) {
       input.taskState.recordToolResult(settlement.call, settlement.result);
       input.executionEnvironment.observeToolResult(

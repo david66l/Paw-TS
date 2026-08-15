@@ -231,6 +231,15 @@ export type RunEvent =
       readonly isStderr: boolean;
       readonly provenance?: ObservationProvenanceV1;
     }
+  /** A managed background command reached terminal state and was committed at a turn boundary. */
+  | {
+      readonly type: "job.settled";
+      readonly jobId: string;
+      readonly turnStarted: number;
+      readonly turnCommitted: number;
+      readonly ok: boolean;
+      readonly summary: string;
+    }
   /** 并行子 Agent 的文件锁等待/冲突（供 UI 展示锁竞争） */
   | {
       readonly type: "agent.file_lock";

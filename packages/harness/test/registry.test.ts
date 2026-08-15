@@ -252,6 +252,97 @@ describe("executeTool", () => {
     expect(
       toolRequiresApproval("workspace.run_shell", undefined, { command: "" }),
     ).toBe(true);
+    expect(
+      toolRequiresApproval("workspace.job_start", undefined, {
+        command: "pwd && env",
+      }),
+    ).toBe(false);
+    expect(
+      toolRequiresApproval("workspace.job_start", undefined, {
+        command: "npm install",
+      }),
+    ).toBe(true);
+    expect(toolRequiresApproval("workspace.job_list")).toBe(false);
+    expect(toolRequiresApproval("workspace.job_read")).toBe(false);
+    expect(toolRequiresApproval("workspace.job_wait")).toBe(false);
+    expect(toolRequiresApproval("workspace.job_kill")).toBe(false);
+  });
+
+  test("managed job tools delegate through one injected run-owned controller", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-harness-jobs-"));
+    const calls: string[] = [];
+    const snapshot = {
+      schemaVersion: "paw.managed-job.v1" as const,
+      id: "shell-1",
+      ownerId: "run-1",
+      kind: "shell",
+      label: "long task",
+      status: "running" as const,
+      startedAt: 1,
+      reported: false,
+    };
+    const managedJobs = {
+      async startShell(input: { command: string }) {
+        calls.push(`start:${input.command}`);
+        return {
+          jobId: "shell-1",
+          pid: 42,
+          cwd: root,
+          status: "running" as const,
+        };
+      },
+      list() {
+        calls.push("list");
+        return [snapshot];
+      },
+      read(id: string) {
+        calls.push(`read:${id}`);
+        return { text: "progress", snapshot };
+      },
+      async wait(id: string, timeoutMs: number) {
+        calls.push(`wait:${id}:${timeoutMs}`);
+        return { timedOut: true, snapshot };
+      },
+      kill(id: string) {
+        calls.push(`kill:${id}`);
+        return "requested" as const;
+      },
+    };
+    const ctx = { workspaceRoot: root, managedJobs };
+
+    expect(
+      await executeTool(ctx, "workspace.job_start", { command: "build" }),
+    ).toMatchObject({ ok: true, payload: { jobId: "shell-1" } });
+    expect(await executeTool(ctx, "workspace.job_list", {})).toMatchObject({
+      ok: true,
+      payload: { jobs: [{ id: "shell-1" }] },
+    });
+    expect(
+      await executeTool(ctx, "workspace.job_read", { id: "shell-1" }),
+    ).toMatchObject({ ok: true, payload: { text: "progress" } });
+    expect(
+      await executeTool(ctx, "workspace.job_wait", {
+        id: "shell-1",
+        timeout_sec: 0.25,
+      }),
+    ).toMatchObject({ ok: true, payload: { timedOut: true } });
+    expect(
+      await executeTool(ctx, "workspace.job_kill", { id: "shell-1" }),
+    ).toMatchObject({ ok: true, payload: { status: "requested" } });
+    expect(calls).toEqual([
+      "start:build",
+      "list",
+      "read:shell-1",
+      "wait:shell-1:250",
+      "kill:shell-1",
+    ]);
+
+    const invalidWait = await executeTool(ctx, "workspace.job_wait", {
+      id: "shell-1",
+      timeout_sec: 31,
+    });
+    expect(invalidWait.ok).toBe(false);
+    expect(invalidWait.summary).toContain("between 0.1 and 30");
   });
 
   test("workspace.run_shell runs echo", async () => {

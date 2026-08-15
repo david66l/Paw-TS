@@ -41,6 +41,7 @@ import type {
   ProviderTerminalStateV2,
   SemanticReviewOnceResultV2,
 } from "../loop-v2/index.js";
+import type { ManagedJobControllerV1 } from "../managed-job-controller.js";
 import type { RunStatusTelemetryV1 } from "../status-snapshot.js";
 import type { TaskStateManager } from "../task-state.js";
 
@@ -205,6 +206,8 @@ export interface PhaseContext {
   readonly statusTelemetry: RunStatusTelemetryV1;
   /** Durable host facts for the actual shell execution world. */
   readonly executionEnvironment: ExecutionEnvironmentRegistryV1;
+  /** Run-owned background job lifecycle and settlement barrier. */
+  readonly managedJobs: ManagedJobControllerV1;
   /** Full-exposure shadow selector; measures a smaller set without applying it. */
   readonly capabilityExposure: CapabilityExposureShadowV1;
   /** 事件发射器 */
