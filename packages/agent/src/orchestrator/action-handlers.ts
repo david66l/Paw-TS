@@ -28,6 +28,7 @@ import type {
   EvalHooks,
   SkillRegistry,
   TodoStore,
+  WaitingUserInteractionV1,
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { TaskPlanner } from "@paw/store";
@@ -35,6 +36,7 @@ import {
   candidateReviewInput,
   candidateSummaryFingerprint,
 } from "../candidate-review.js";
+import { createWaitingUserInteractionV1 } from "../durable-interaction.js";
 import type {
   ToolEffectPolicy,
   ToolExecutionPolicy,
@@ -115,6 +117,11 @@ interface ActionHandlerContext {
   readonly planSnapshotMaxItems?: number;
   /** 保存断点续跑状态的函数 */
   readonly saveStateFn: () => void;
+  readonly saveWaitingStateFn?: (state: WaitingUserInteractionV1) => void;
+  readonly consumeWaitingStateFn?: (
+    state: WaitingUserInteractionV1,
+    reply: string,
+  ) => void;
   /** 子 Agent 管理器 */
   readonly agentGroup?: AgentGroup;
   /** 子 Agent 权限策略：read_only 或 read_write */
@@ -1051,28 +1058,47 @@ async function handleAskUser(
   flags: TurnFlags,
   text: string,
   thinking: string | undefined,
-  opts: Pick<ActionHandlerContext, "resolveAskUser" | "saveStateFn">,
+  opts: Pick<
+    ActionHandlerContext,
+    | "resolveAskUser"
+    | "saveStateFn"
+    | "saveWaitingStateFn"
+    | "consumeWaitingStateFn"
+  >,
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const nextFlags: TurnFlags = {
     ...flags,
     lastTurnHadToolCall: false,
   };
 
+  const waiting = createWaitingUserInteractionV1({
+    runId: ctx.runId,
+    turn: ctx.turn,
+    question: action.question,
+    context: action.context,
+    timeoutSec: action.timeoutSec,
+  });
+  // 通知外部等待用户回复
+  ctx.emit({
+    type: "user.reply.required",
+    requestId: waiting.requestId,
+    question: action.question,
+    timeoutSec: action.timeoutSec,
+  });
+  // Persist the question before an interactive resolver can block forever.
+  ctx.ctxMgr.addAssistant(text, thinking);
+  opts.saveWaitingStateFn?.(waiting);
+
   if (opts.resolveAskUser) {
-    // 通知外部等待用户回复
-    ctx.emit({
-      type: "user.reply.required",
-      question: action.question,
-      timeoutSec: action.timeoutSec,
-    });
     // 阻塞等待用户输入
     const reply = await opts.resolveAskUser({
       question: action.question,
       timeoutSec: action.timeoutSec,
     });
-    // 将模型的提问和用户的回答都注入上下文
-    ctx.ctxMgr.addAssistant(text, thinking);
+    // The question is already durable; append and consume the reply before
+    // the next model turn so a crash cannot replay the ask action.
     ctx.ctxMgr.addUser(reply);
+    opts.consumeWaitingStateFn?.(waiting, reply);
 
     // 检查是否达到最大轮数
     if (ctx.turn + 1 >= ctx.maxSteps) {

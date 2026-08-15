@@ -75,6 +75,8 @@ import {
   type SkillRegistry as SkillRegistryType,
   type TodoStore,
   type TokenEstimator,
+  type UserReplyInboxEventV1,
+  type WaitingUserInteractionV1,
   allocateContextBudget,
   atomicWrite,
   buildConversationAwareQuery,
@@ -179,6 +181,13 @@ import type { CandidateReviewer } from "./candidate-review.js";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
+import {
+  appendReplyToInboxV1,
+  appendUserReplyV1,
+  parseInteractionInboxV1,
+  parseWaitingUserInteractionV1,
+  prepareInteractionResumeV1,
+} from "./durable-interaction.js";
 import type {
   ToolEffectPolicy,
   ToolExecutionPolicy,
@@ -517,6 +526,8 @@ export class AgentOrchestrator {
   /** 多轮会话：本 run 结束时跳过 completeTask */
   private _deferMemoryComplete = false;
   private _conversationId: string | null = null;
+  private _interactionState: WaitingUserInteractionV1 | undefined;
+  private _interactionInbox: readonly UserReplyInboxEventV1[] = [];
   private _contextPackageCode: readonly CodeContextBlock[] = [];
   /** 流式恢复文件路径：模型输出时实时写盘，崩了可用于恢复 */
   private _streamRecoveryPath?: string;
@@ -647,6 +658,33 @@ export class AgentOrchestrator {
   // resumeRun：断点续跑
   // ─────────────────────────────────────────────────────────
 
+  async submitUserReply(input: {
+    readonly runId: string;
+    readonly requestId: string;
+    readonly reply: string;
+  }): Promise<{ readonly replyId: string; readonly appended: boolean }> {
+    if (!this.appStateStore) {
+      throw new Error("Cannot submit reply: no appStateStore configured");
+    }
+    const loaded = await Promise.resolve(this.appStateStore.load(input.runId));
+    if (!loaded) {
+      throw new Error(
+        `Cannot submit reply: run "${input.runId}" was not found`,
+      );
+    }
+    const before = loaded.interactionInbox?.length ?? 0;
+    const updated = appendUserReplyV1(loaded, input);
+    await Promise.resolve(this.appStateStore.save(updated));
+    const event = updated.interactionInbox?.find(
+      (item) => item.requestId === input.requestId,
+    );
+    if (!event) throw new Error("Submitted reply was not persisted");
+    return {
+      replyId: event.replyId,
+      appended: (updated.interactionInbox?.length ?? 0) > before,
+    };
+  }
+
   /**
    * 从之前保存的状态恢复运行。
    *
@@ -683,9 +721,24 @@ export class AgentOrchestrator {
       };
     }
 
+    const interactionResume = prepareInteractionResumeV1(loaded);
+    if (interactionResume.kind === "waiting_user") {
+      return {
+        runId: opts.runId,
+        status: "incomplete",
+        message: `[Ask user] ${interactionResume.interaction.question}`,
+        outcome: "incomplete",
+        completionReason: "user_input_required",
+      };
+    }
+    if (interactionResume.state !== loaded) {
+      await Promise.resolve(this.appStateStore.save(interactionResume.state));
+    }
+    const preparedState = interactionResume.state;
+
     const workspaceRoot = opts.workspaceRoot?.trim()
       ? path.resolve(opts.workspaceRoot)
-      : loaded.workspaceRoot;
+      : preparedState.workspaceRoot;
 
     // 清理上一次崩溃遗留的流式恢复文件
     const streamsDir = path.join(workspaceRoot, ".paw", "streams", opts.runId);
@@ -704,12 +757,12 @@ export class AgentOrchestrator {
     }
 
     // 如果指定了 fromTurn，恢复文件系统的 checkpoints（代码快照）
-    let resumeState = loaded;
+    let resumeState = preparedState;
     if (opts.fromTurn !== undefined && opts.fromTurn >= 0) {
       restoreCheckpoint(workspaceRoot, opts.runId, opts.fromTurn, {
         backup: true,
       });
-      resumeState = { ...loaded, turn: opts.fromTurn };
+      resumeState = { ...preparedState, turn: opts.fromTurn };
     }
 
     return this.run({
@@ -719,6 +772,9 @@ export class AgentOrchestrator {
       maxSteps: resumeState.maxSteps,
       abortSignal: opts.abortSignal,
       resumeFromState: resumeState,
+      ...(resumeState.memoryTaskId
+        ? { resumeMemoryTaskId: resumeState.memoryTaskId }
+        : {}),
     });
   }
 
@@ -746,9 +802,7 @@ export class AgentOrchestrator {
   async run(spec: RunSpec): Promise<RunResult> {
     let init: Awaited<ReturnType<typeof this.initializeRun>> | undefined;
     let agentGroup: AgentGroup | undefined;
-    let emitRunMetrics:
-      | ((status: "completed" | "failed" | "aborted") => void)
-      | undefined;
+    let emitRunMetrics: (() => void) | undefined;
     let persistLoopV2Terminal: ((result: RunResult) => void) | undefined;
 
     try {
@@ -903,7 +957,7 @@ export class AgentOrchestrator {
           const runResult = { runId, status: "aborted", message } as const;
           persistLoopV2Terminal(runResult);
           emit({ type: "run.completed", status: "aborted", message });
-          emitRunMetrics("aborted");
+          emitRunMetrics();
           return runResult;
         }
 
@@ -978,6 +1032,7 @@ export class AgentOrchestrator {
         if (state.type === "decided") {
           const terminalStatus = state.decision.status;
           const terminalMessage = state.decision.message;
+          const waitingUser = state.decision.reason === "user_input_required";
           // 保存断点续跑状态
           const appStatus =
             terminalStatus === "aborted" ? ("failed" as const) : terminalStatus;
@@ -990,34 +1045,44 @@ export class AgentOrchestrator {
             ctxMgr,
             planner,
             taskState,
-            {
-              status: appStatus,
-              message: terminalMessage,
-            },
+            waitingUser
+              ? undefined
+              : {
+                  status: appStatus,
+                  message: terminalMessage,
+                },
           );
           const { runResultFromDecision } = await import(
             "./lifecycle/task-lifecycle.js"
           );
           const runResult = runResultFromDecision(runId, state.decision);
 
-          persistLoopV2Terminal(runResult);
-          emit({
-            type: "run.completed",
-            status: runResult.status,
-            message: runResult.message,
-          });
-          emitRunMetrics(
-            runResult.status === "incomplete"
-              ? "failed"
-              : runResult.status === "completed"
-                ? "completed"
-                : "failed",
-          );
+          if (!waitingUser) persistLoopV2Terminal(runResult);
+          if (waitingUser && this._interactionState) {
+            emit({
+              type: "run.paused",
+              reason: "waiting_user",
+              requestId: this._interactionState.requestId,
+              question: this._interactionState.question,
+            });
+            // A pause ends this execution segment even though it does not end
+            // the logical run. Emit the segment metrics so latency/cost are not
+            // silently lost across a durable resume boundary.
+            emitRunMetrics();
+          } else {
+            emit({
+              type: "run.completed",
+              status: runResult.status,
+              message: runResult.message,
+            });
+            emitRunMetrics();
+          }
 
           if (
             this._memoryRuntime &&
             this._memoryTaskId &&
-            !this._deferMemoryComplete
+            !this._deferMemoryComplete &&
+            !waitingUser
           ) {
             try {
               const writeResult = await this._memoryRuntime.completeTask({
@@ -1077,7 +1142,7 @@ export class AgentOrchestrator {
         status: "incomplete",
         message: runResult.message,
       });
-      emitRunMetrics?.("failed");
+      emitRunMetrics?.();
       if (
         this._memoryRuntime &&
         this._memoryTaskId &&
@@ -1146,7 +1211,7 @@ export class AgentOrchestrator {
           emit({ type: "run.failed", message });
         }
         emit({ type: "run.completed", status, message });
-        emitRunMetrics?.(status);
+        emitRunMetrics?.();
         if (
           this._memoryRuntime &&
           this._memoryTaskId &&
@@ -2191,6 +2256,41 @@ export class AgentOrchestrator {
             planner,
             ctx.taskState,
           ),
+        saveWaitingStateFn: (state) => {
+          this._interactionState = state;
+          this.saveState(
+            runId,
+            specGoal,
+            workspaceRoot,
+            ctx.turn + 1,
+            maxSteps,
+            ctxMgr,
+            planner,
+            ctx.taskState,
+          );
+        },
+        consumeWaitingStateFn: (state, reply) => {
+          const appended = appendReplyToInboxV1(this._interactionInbox, state, {
+            requestId: state.requestId,
+            reply,
+          });
+          this._interactionInbox = appended.inbox;
+          this._interactionState = {
+            ...state,
+            status: "consumed",
+            consumedReplyId: appended.event.replyId,
+          };
+          this.saveState(
+            runId,
+            specGoal,
+            workspaceRoot,
+            ctx.turn + 1,
+            maxSteps,
+            ctxMgr,
+            planner,
+            ctx.taskState,
+          );
+        },
         agentGroup,
         childPolicy: this.childPolicy,
         subAgentLauncher: this.subAgentLauncher,
@@ -2491,6 +2591,13 @@ export class AgentOrchestrator {
         : {}),
       ...(this.todoStore ? { todos: this.todoStore.items } : {}),
       taskState: taskState.snapshot(),
+      ...(this._memoryTaskId ? { memoryTaskId: this._memoryTaskId } : {}),
+      ...(this._interactionState
+        ? { interaction: this._interactionState }
+        : {}),
+      ...(this._interactionInbox.length > 0
+        ? { interactionInbox: this._interactionInbox }
+        : {}),
       ...(outcome ? { outcome } : {}),
       savedAt: Date.now(),
     };
@@ -3122,12 +3229,18 @@ export class AgentOrchestrator {
     observeLoopV2ToolCommit?: (input: LoopV2ShadowToolCommitPortInput) => void;
     reviewLoopV2Candidate?: NonNullable<PhaseContext["reviewLoopV2Candidate"]>;
     persistLoopV2Terminal?: (result: RunResult) => void;
-    emitRunMetrics: (status: "completed" | "failed" | "aborted") => void;
+    emitRunMetrics: () => void;
     seq: { n: number };
     checkpointSeq: { n: number };
     shellSandbox: import("@paw/harness").ShellSandboxConfig;
   }> {
     const runId = spec.runId;
+    this._interactionState = parseWaitingUserInteractionV1(
+      spec.resumeFromState?.interaction,
+    );
+    this._interactionInbox = parseInteractionInboxV1(
+      spec.resumeFromState?.interactionInbox,
+    );
     // P4.3/P4.4 每 run 重置：硬守卫提示、块账本/预算事件去重、压缩提交序号
     this._budgetGuardWarned = false;
     this._lastBlocksKey = null;
@@ -3388,7 +3501,7 @@ export class AgentOrchestrator {
     };
 
     /** 运行结束时发出汇总指标事件 */
-    const emitRunMetrics = (_status: "completed" | "failed" | "aborted") => {
+    const emitRunMetrics = () => {
       emit({
         type: "run.metrics",
         durationMs: Date.now() - runStartTime,

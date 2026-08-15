@@ -86,6 +86,9 @@ export {
   isAppStateFinished,
   type AppState,
   type AppStateStore,
+  USER_INTERACTION_SCHEMA_V1,
+  type UserReplyInboxEventV1,
+  type WaitingUserInteractionV1,
 } from "./app-state.js";
 
 // ============================================================

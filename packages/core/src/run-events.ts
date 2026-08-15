@@ -83,6 +83,13 @@ export type RunEvent =
       /** 完成消息 */
       readonly message: string;
     }
+  /** Execution yielded durably and can resume after an external reply. */
+  | {
+      readonly type: "run.paused";
+      readonly reason: "waiting_user";
+      readonly requestId: string;
+      readonly question: string;
+    }
   /** 运行失败 */
   | { readonly type: "run.failed"; readonly message: string }
   /**
@@ -146,6 +153,8 @@ export type RunEvent =
   /** Orchestrator will await {@link AgentOrchestratorOptions.resolveAskUser}. */
   | {
       readonly type: "user.reply.required";
+      /** Stable id used by the durable interaction inbox. */
+      readonly requestId?: string;
       /** 向用户提问的内容 */
       readonly question: string;
       /** 等待超时秒数，null 表示无超时 */

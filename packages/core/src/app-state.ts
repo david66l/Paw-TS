@@ -34,6 +34,30 @@ import { atomicWrite } from "./utils/fs.js";
 import type { ChatMessage } from "./context/manager.js";
 import type { TodoItem } from "./todo.js";
 
+export const USER_INTERACTION_SCHEMA_V1 = "paw.user-interaction.v1" as const;
+
+export interface WaitingUserInteractionV1 {
+  readonly schemaVersion: typeof USER_INTERACTION_SCHEMA_V1;
+  readonly requestId: string;
+  readonly status: "waiting_user" | "consumed";
+  readonly question: string;
+  readonly context: Readonly<Record<string, unknown>>;
+  readonly timeoutSec: number | null;
+  readonly requestedTurn: number;
+  readonly requestedAt: number;
+  readonly consumedReplyId?: string;
+}
+
+export interface UserReplyInboxEventV1 {
+  readonly schemaVersion: typeof USER_INTERACTION_SCHEMA_V1;
+  readonly seq: number;
+  readonly type: "user.reply.submitted";
+  readonly replyId: string;
+  readonly requestId: string;
+  readonly reply: string;
+  readonly submittedAt: number;
+}
+
 /**
  * 正在运行中（或已完成）的 orchestrator 运行的状态快照。
  *
@@ -64,6 +88,12 @@ export interface AppState {
   readonly todos?: readonly TodoItem[];
   /** 短期任务状态。由 agent 层维护；core 只负责持久化。 */
   readonly taskState?: unknown;
+  /** Active memory TaskSession reused after crash/wait resume. */
+  readonly memoryTaskId?: string;
+  /** Durable human-interaction state; waiting is neither success nor failure. */
+  readonly interaction?: WaitingUserInteractionV1;
+  /** Append-only replies submitted while the orchestrator process may be absent. */
+  readonly interactionInbox?: readonly UserReplyInboxEventV1[];
   /** 运行已完成时的最终结果 */
   readonly outcome?: {
     /** 完成状态：成功、失败、不完整或用户中止 */

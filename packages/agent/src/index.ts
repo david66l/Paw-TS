@@ -181,5 +181,14 @@ export {
   type TaskGraphPlanProposalV1,
   type TaskGraphSnapshotV1,
 } from "./task-graph.js";
+export {
+  appendUserReplyV1,
+  appendReplyToInboxV1,
+  createWaitingUserInteractionV1,
+  parseInteractionInboxV1,
+  parseWaitingUserInteractionV1,
+  prepareInteractionResumeV1,
+  type PrepareInteractionResumeV1,
+} from "./durable-interaction.js";
 
 export * from "./loop-v2/index.js";
