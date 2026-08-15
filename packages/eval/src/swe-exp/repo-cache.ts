@@ -293,10 +293,10 @@ export function captureGitDiff(
     "--binary",
   ];
   const pathspec = filePaths.length > 0 ? ["--", ...filePaths] : [];
-  const r = runGit(workspaceRoot, [...diffArgs, ...pathspec], 60_000);
+  const r = runReadOnlyGit(workspaceRoot, [...diffArgs, ...pathspec], 60_000);
   if (!r.ok) return { error: r.error };
   // 也包含 staged；SWE 通常改已有 tracked 文件
-  const staged = runGit(
+  const staged = runReadOnlyGit(
     workspaceRoot,
     [...diffArgs, "--cached", ...pathspec],
     60_000,
