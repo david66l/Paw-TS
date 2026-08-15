@@ -32,6 +32,7 @@ import {
   summarizeLifecycleGates,
   summarizeSweExp,
   sweExpPassed,
+  swebenchHarnessEnv,
   swebenchPythonCandidates,
   writeJsonAtomic,
 } from "../src/swe-exp/index.js";
@@ -254,6 +255,18 @@ describe("agent control-plane preflight/checkpoint", () => {
       "benchmarks/swe-exp/run_harness_lf.py",
     );
     expect(args.slice(1)).toEqual(["--run_id", "x"]);
+  });
+
+  test("Windows harness forces UTF-8 for local official dataset files", () => {
+    const env = swebenchHarnessEnv("C:\\repo", "win32", {
+      PYTHONPATH: "C:\\existing",
+      KEEP_ME: "yes",
+    });
+    expect(env.PYTHONUTF8).toBe("1");
+    expect(env.PYTHONPATH?.replaceAll("\\", "/")).toBe(
+      "C:/repo/benchmarks/swe-exp/win_shim;C:/existing",
+    );
+    expect(env.KEEP_ME).toBe("yes");
   });
 
   test("official harness can retain an instance image for agent verification", () => {

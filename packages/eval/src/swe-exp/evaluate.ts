@@ -110,6 +110,22 @@ export function harnessPythonArgs(
   return ["-m", "swebench.harness.run_evaluation", ...officialArgs];
 }
 
+export function swebenchHarnessEnv(
+  cwd: string,
+  platform: NodeJS.Platform = process.platform,
+  source: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const env = { ...source };
+  if (platform === "win32") {
+    const shim = path.join(cwd, "benchmarks", "swe-exp", "win_shim");
+    env.PYTHONPATH = env.PYTHONPATH ? `${shim};${env.PYTHONPATH}` : shim;
+    // pathlib.Path.read_text() otherwise uses the host ANSI code page (GBK on
+    // zh-CN Windows) and cannot read the official UTF-8 dataset JSONL.
+    env.PYTHONUTF8 = "1";
+  }
+  return env;
+}
+
 export function officialHarnessArgs(opts: {
   readonly dataset: string;
   readonly predictionsPath: string;
@@ -174,11 +190,7 @@ export function runSwebenchHarness(opts: {
   });
   const args = harnessPythonArgs(cwd, officialArgs);
 
-  const env = { ...process.env };
-  if (process.platform === "win32") {
-    const shim = path.join(cwd, "benchmarks", "swe-exp", "win_shim");
-    env.PYTHONPATH = env.PYTHONPATH ? `${shim};${env.PYTHONPATH}` : shim;
-  }
+  const env = swebenchHarnessEnv(cwd);
 
   let pythonCommand: string;
   try {

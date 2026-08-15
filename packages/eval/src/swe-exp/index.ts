@@ -62,6 +62,7 @@ export { buildSweAcceptanceCriteria } from "./acceptance.js";
 export {
   harnessPythonArgs,
   resolveSwebenchPythonCommand,
+  swebenchHarnessEnv,
   swebenchPythonCandidates,
   officialHarnessArgs,
   parseResolvedFromHarnessOutput,
