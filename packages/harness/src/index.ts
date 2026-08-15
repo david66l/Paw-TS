@@ -82,9 +82,12 @@ export {
 export {
   runShellInWorkspace,
   runShellInWorkspaceStreaming,
+  startManagedShellInWorkspaceV1,
+  type ManagedShellJobV1,
   type RunShellOptions,
   type RunShellResult,
   type RunShellStreamingOptions,
+  type StartManagedShellOptions,
 } from "./shell/index.js";
 export {
   buildDockerShellExecSpec,

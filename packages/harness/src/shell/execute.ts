@@ -2,6 +2,10 @@ import { spawn, spawnSync } from "node:child_process";
 
 import { checkWorkspacePath } from "@paw/workspace";
 
+import type {
+  ManagedJobHooksV1,
+  ManagedJobOutcomeV1,
+} from "../jobs/managed-job-registry.js";
 import {
   type ShellSandboxConfig,
   buildDockerShellExecSpec,
@@ -30,6 +34,20 @@ export interface RunShellOptions {
 export interface RunShellStreamingOptions extends RunShellOptions {
   /** Called for each stdout/stderr chunk as it arrives. */
   readonly onChunk?: (chunk: string, isStderr: boolean) => void;
+}
+
+export interface StartManagedShellOptions extends RunShellOptions {
+  /** Maximum unread UTF-8 output retained in memory. Oldest bytes are dropped. */
+  readonly outputLimitBytes?: number;
+  /** Grace between tree TERM and force kill. */
+  readonly terminationGraceMs?: number;
+}
+
+export interface ManagedShellJobV1 {
+  readonly hooks: ManagedJobHooksV1;
+  readonly cwd: string;
+  readonly pid: number;
+  readonly sandbox?: RunShellResult["sandbox"];
 }
 
 interface ShellSpawnTarget {
@@ -327,4 +345,169 @@ export function runShellInWorkspaceStreaming(
       resolve(result);
     });
   });
+}
+
+class BoundedOutputCursorV1 {
+  private unread = Buffer.alloc(0);
+  private droppedBytes = 0;
+
+  constructor(private readonly limitBytes: number) {}
+
+  append(data: Buffer, isStderr: boolean): void {
+    const tagged = isStderr
+      ? Buffer.concat([Buffer.from("[stderr] "), data])
+      : data;
+    this.unread = Buffer.concat([this.unread, tagged]);
+    if (this.unread.length > this.limitBytes) {
+      const drop = this.unread.length - this.limitBytes;
+      this.unread = this.unread.subarray(drop);
+      this.droppedBytes += drop;
+    }
+  }
+
+  read(): string {
+    const notice =
+      this.droppedBytes > 0
+        ? `[managed output truncated: ${this.droppedBytes} oldest bytes dropped]\n`
+        : "";
+    const text = notice + this.unread.toString("utf8");
+    this.unread = Buffer.alloc(0);
+    this.droppedBytes = 0;
+    return text;
+  }
+}
+
+function terminateProcessTreeV1(pid: number, signal: "TERM" | "KILL"): void {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return;
+  if (process.platform === "win32") {
+    // Windows has no reliable process-group TERM equivalent. A non-forced
+    // taskkill can let cmd.exe exit before descendants, losing the only tree
+    // handle. Always force the complete tree while the root pid is live.
+    spawnSync(
+      process.env.ComSpec ?? "cmd.exe",
+      ["/d", "/s", "/c", `taskkill /PID ${pid} /T /F`],
+      { windowsHide: true, stdio: "ignore", timeout: 3_000 },
+    );
+    return;
+  }
+  try {
+    process.kill(-pid, signal === "KILL" ? "SIGKILL" : "SIGTERM");
+  } catch {
+    try {
+      process.kill(pid, signal === "KILL" ? "SIGKILL" : "SIGTERM");
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
+/**
+ * Starts an explicitly managed shell producer. It reuses the same guard,
+ * workspace cwd resolution, sandbox target, and approval semantics as the
+ * foreground shell, but exposes lifecycle hooks to ManagedJobRegistryV1.
+ */
+export function startManagedShellInWorkspaceV1(
+  workspaceRoot: string,
+  command: string,
+  options: StartManagedShellOptions = {},
+): ManagedShellJobV1 {
+  const guard = validateShellCommand(command);
+  if (!guard.allowed) {
+    throw new Error(guard.reason ?? "command rejected by shell guard");
+  }
+  if (guard.requiresApproval && !options.skipApprovalGate) {
+    throw new Error(guard.reason ?? "command requires approval");
+  }
+  const cwdResult = resolveCwd(workspaceRoot, options.cwd);
+  if (cwdResult.error) throw new Error(cwdResult.error);
+  const cwdPath = cwdResult.cwdPath;
+  const win = process.platform === "win32";
+  const spawnTarget = resolveShellSpawnTarget(
+    workspaceRoot,
+    cwdPath,
+    command,
+    options.shellSandbox,
+    win,
+  );
+  if ("error" in spawnTarget) throw new Error(spawnTarget.error);
+
+  const outputLimitBytes = options.outputLimitBytes ?? MAX_OUTPUT_BYTES;
+  if (!Number.isSafeInteger(outputLimitBytes) || outputLimitBytes <= 0) {
+    throw new Error("outputLimitBytes must be a positive integer");
+  }
+  const terminationGraceMs = options.terminationGraceMs ?? 1_000;
+  if (!Number.isFinite(terminationGraceMs) || terminationGraceMs < 0) {
+    throw new Error("terminationGraceMs must be a non-negative number");
+  }
+  const output = new BoundedOutputCursorV1(outputLimitBytes);
+  const proc = spawn(spawnTarget.command, [...spawnTarget.args], {
+    cwd: isShellSandboxEnabled(options.shellSandbox) ? undefined : cwdPath,
+    detached: !win && !spawnTarget.sandbox,
+    ...(win && !spawnTarget.sandbox
+      ? { windowsHide: true, windowsVerbatimArguments: true }
+      : {}),
+  });
+  if (!proc.pid) {
+    spawnTarget.cleanupSandbox?.();
+    throw new Error("managed shell failed to obtain a process id");
+  }
+
+  let cancelRequested = false;
+  let forceTimer: ReturnType<typeof setTimeout> | undefined;
+  let outcomeSettled = false;
+  let settleOutcome!: (outcome: ManagedJobOutcomeV1) => void;
+  const done = new Promise<ManagedJobOutcomeV1>((resolve) => {
+    settleOutcome = resolve;
+  });
+  const settle = (outcome: ManagedJobOutcomeV1): void => {
+    if (outcomeSettled) return;
+    outcomeSettled = true;
+    if (forceTimer) clearTimeout(forceTimer);
+    settleOutcome(outcome);
+  };
+
+  proc.stdout?.on("data", (data: Buffer) => output.append(data, false));
+  proc.stderr?.on("data", (data: Buffer) => output.append(data, true));
+  proc.once("error", (error) => {
+    spawnTarget.cleanupSandbox?.();
+    settle({ status: "failed", detail: error.message });
+  });
+  proc.once("close", (code, signal) => {
+    settle(
+      cancelRequested
+        ? {
+            status: "killed",
+            detail: `terminated${signal ? ` by ${signal}` : ""}`,
+          }
+        : code === 0
+          ? { status: "completed", detail: "exit code: 0" }
+          : {
+              status: "failed",
+              detail: `exit code: ${code ?? "unknown"}${signal ? `, signal: ${signal}` : ""}`,
+            },
+    );
+  });
+
+  const pid = proc.pid;
+  const cancel = (): void => {
+    if (cancelRequested || outcomeSettled) return;
+    cancelRequested = true;
+    spawnTarget.cleanupSandbox?.();
+    terminateProcessTreeV1(pid, "TERM");
+    if (terminationGraceMs === 0) {
+      terminateProcessTreeV1(pid, "KILL");
+      return;
+    }
+    forceTimer = setTimeout(
+      () => terminateProcessTreeV1(pid, "KILL"),
+      terminationGraceMs,
+    );
+  };
+
+  return {
+    hooks: { cancel, done, readOutput: () => output.read() },
+    cwd: cwdPath,
+    pid,
+    ...(spawnTarget.sandbox ? { sandbox: spawnTarget.sandbox } : {}),
+  };
 }
