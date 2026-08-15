@@ -11,9 +11,13 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { AgentOrchestrator, createRunOrchestrator } from "@paw/agent";
+import {
+  AgentOrchestrator,
+  type ToolEffectPolicy,
+  createRunOrchestrator,
+} from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
-import { FakeLanguageModel } from "@paw/models";
+import { FakeLanguageModel, type LanguageModel } from "@paw/models";
 
 import { PAW_FRESH_QUALIFICATION_RULE } from "../src/swe-compare/manifest.js";
 
@@ -33,6 +37,7 @@ import {
   parseClaudeStream,
   pawTraceHasOnlyReplayableEdits,
   pawVerificationPolicyFromManifest,
+  persistSweLoopV2LiveArtifacts,
   recoverClaudeResultPatch,
   recoverPawResultPatch,
   recoverReplayablePawPatch,
@@ -391,6 +396,105 @@ describe("SWE compare runner", () => {
         loopKernelVersion: "v2-shadow",
       }),
     ).rejects.toThrow("available only for Paw");
+  });
+  test("retains and strictly rereads explicit v2 cutover artifacts", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-v2-retain-"));
+    const workspaceRoot = path.join(root, "workspace");
+    mkdirSync(workspaceRoot, { recursive: true });
+    writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const runId = "swe-v2-retention";
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+        },
+        { text: "Implemented and verified." },
+      ],
+    });
+    const reviewModel: LanguageModel = {
+      label: "swe-v2-review-fixture",
+      async complete(messages) {
+        const material = messages.at(-1)?.content ?? "";
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
+          material,
+        )?.[1];
+        const mutationRevision = Number(
+          /"mutationRevision":(\d+)/.exec(material)?.[1],
+        );
+        if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
+          throw new Error("review fixture did not receive candidate identity");
+        }
+        return {
+          text: JSON.stringify({
+            candidateInputHash,
+            mutationRevision,
+            verdict: "pass",
+            findings: [],
+          }),
+        };
+      },
+    };
+    const shellNoEffect: ToolEffectPolicy = {
+      appliesTo: ({ tool }) => tool === "workspace.run_shell",
+      prepare: () => undefined,
+      settle: ({ result }) => ({
+        allowed: true,
+        result: {
+          ...result,
+          payload: {
+            ...(result.payload as Record<string, unknown>),
+            workspaceEffect: { changed: false, paths: [] },
+          },
+        },
+      }),
+    };
+    try {
+      const result = await new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model,
+        loopV2SemanticReviewModel: reviewModel,
+        verificationPolicy: { authority: "local", requireMutation: true },
+        toolEffectPolicy: shellNoEffect,
+      }).run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 6,
+      });
+      expect(result.status).toBe("completed");
+
+      const retained = persistSweLoopV2LiveArtifacts({
+        repoRoot: root,
+        workspaceRoot,
+        runId,
+      });
+      expect(retained).toMatchObject({
+        persistence: "written",
+        terminalComparison: "equal",
+        eligible: true,
+        cutoverReady: true,
+        ineligibilityReasons: [],
+      });
+      expect(
+        existsSync(path.join(root, retained.artifactRoot ?? "missing")),
+      ).toBe(true);
+      rmSync(workspaceRoot, { recursive: true, force: true });
+      expect(
+        existsSync(path.join(root, retained.artifactRoot ?? "missing")),
+      ).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
   test("trusted mutation policy allows tracked source but rejects helpers and tests", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-policy-"));

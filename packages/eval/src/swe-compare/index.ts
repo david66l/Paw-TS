@@ -48,6 +48,7 @@ export {
   extractClaudePatchFromTrace,
   findPawResumeInstanceId,
   parseClaudeStream,
+  persistSweLoopV2LiveArtifacts,
   recoverClaudeResultPatch,
   recoverPawResultPatch,
   sweCompareNetworkViolation,

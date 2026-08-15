@@ -78,14 +78,14 @@ if (verifyResult) {
 }
 if (!instanceId || (runner !== "paw" && runner !== "claude")) {
   throw new Error(
-    "Usage: --instance <id> --runner paw|claude [--loop-kernel v1|v2-shadow] [--manifest <name.json>] [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> [--replace-replayed-patch] OR --audit-result <result.json>",
+    "Usage: --instance <id> --runner paw|claude [--loop-kernel v1|v2-shadow|v2] [--manifest <name.json>] [--skip-verifier] [--keep] OR --verify-result <result.json> OR --recover-result-patch <result.json> OR --recover-paw-result-patch <result.json> [--replace-replayed-patch] OR --audit-result <result.json>",
   );
 }
-if (loopKernel !== "v1" && loopKernel !== "v2-shadow") {
-  throw new Error("--loop-kernel must be v1 or v2-shadow");
+if (loopKernel !== "v1" && loopKernel !== "v2-shadow" && loopKernel !== "v2") {
+  throw new Error("--loop-kernel must be v1, v2-shadow, or v2");
 }
 if (runner !== "paw" && loopKernel !== "v1") {
-  throw new Error("--loop-kernel v2-shadow is available only for Paw");
+  throw new Error("--loop-kernel v2 modes are available only for Paw");
 }
 if (manifestName === "paw-seen-dev-v1.json" && runner !== "paw") {
   throw new Error(

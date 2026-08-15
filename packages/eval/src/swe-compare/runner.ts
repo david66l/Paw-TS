@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -11,6 +13,14 @@ import path from "node:path";
 import {
   createBudgetAbort,
   createRunOrchestrator,
+  loopV2LiveArtifactPath,
+  loopV2LiveReviewArtifactPath,
+  loopV2LiveTerminalArtifactPath,
+  loopV2RunResultShadowArtifactPath,
+  parseLoopV2LiveCandidateArtifactV1,
+  parseLoopV2LiveReviewArtifactV1,
+  parseLoopV2LiveTerminalArtifactV1,
+  parseLoopV2RunResultShadowArtifactV1,
   resolveLifecycleBudget,
 } from "@paw/agent";
 import type {
@@ -87,7 +97,7 @@ export interface SweCompareRunResult {
   readonly verificationAuthority?: "local" | "external";
   readonly verificationEnvironment?: "host" | "instance_image";
   /** Explicit Paw loop mode; absent historical results are authoritative v1. */
-  readonly loopKernelVersion?: "v1" | "v2-shadow";
+  readonly loopKernelVersion?: "v1" | "v2-shadow" | "v2";
   readonly loopV2Shadow?: {
     readonly persistence: "written" | "error";
     readonly artifactPath?: string;
@@ -99,6 +109,16 @@ export interface SweCompareRunResult {
     >["disposition"];
     readonly comparison?: string;
     readonly coverage?: LoopV2ShadowAssessmentV1["coverage"];
+    readonly error?: string;
+  };
+  readonly loopV2Live?: {
+    readonly persistence: "written" | "error";
+    readonly artifactRoot?: string;
+    readonly terminalArtifactHash?: string;
+    readonly terminalComparison?: string;
+    readonly eligible?: boolean;
+    readonly cutoverReady?: boolean;
+    readonly ineligibilityReasons?: readonly string[];
     readonly error?: string;
   };
   readonly error?: string;
@@ -125,7 +145,7 @@ interface SweCompareRunAttempt {
   readonly workspaceRoot: string;
   readonly startedAt: string;
   /** Absent in legacy attempts and interpreted as v1. */
-  readonly loopKernelVersion?: "v1" | "v2-shadow";
+  readonly loopKernelVersion?: "v1" | "v2-shadow" | "v2";
 }
 
 export interface PawResumeValidation {
@@ -870,7 +890,7 @@ export function validatePawResumeAttempt(input: {
   readonly instanceId: string;
   readonly baseCommit: string;
   readonly goal: string;
-  readonly loopKernelVersion?: "v1" | "v2-shadow";
+  readonly loopKernelVersion?: "v1" | "v2-shadow" | "v2";
 }): PawResumeValidation {
   if (!/^[a-zA-Z0-9_-]+$/.test(input.runId)) {
     throw new Error(`unsafe resume run id: ${input.runId}`);
@@ -1006,6 +1026,92 @@ export function validatePawResumeAttempt(input: {
   };
 }
 
+export function persistSweLoopV2LiveArtifacts(opts: {
+  readonly repoRoot: string;
+  readonly workspaceRoot: string;
+  readonly runId: string;
+}): NonNullable<SweCompareRunResult["loopV2Live"]> {
+  const sourceTerminalPath = loopV2LiveTerminalArtifactPath(
+    opts.workspaceRoot,
+    opts.runId,
+  );
+  if (!existsSync(sourceTerminalPath)) {
+    throw new Error("explicit v2 run produced no terminal-v1.json");
+  }
+  const sourceRunDirectory = path.dirname(sourceTerminalPath);
+  // Parse before copying so malformed workspace output never enters the
+  // benchmark evidence directory.
+  readStrictLoopV2LiveArtifacts(opts.workspaceRoot, opts.runId);
+
+  const relativeArtifactRoot = path.join(
+    "benchmarks",
+    "swe-compare",
+    "runs",
+    opts.runId,
+    "loop-v2-live-workspace",
+  );
+  const destinationRoot = path.join(opts.repoRoot, relativeArtifactRoot);
+  const temporaryRoot = `${destinationRoot}.tmp-${process.pid}-${Date.now()}`;
+  rmSync(temporaryRoot, { recursive: true, force: true });
+  try {
+    const temporaryRunDirectory = path.dirname(
+      loopV2LiveTerminalArtifactPath(temporaryRoot, opts.runId),
+    );
+    mkdirSync(path.dirname(temporaryRunDirectory), { recursive: true });
+    cpSync(sourceRunDirectory, temporaryRunDirectory, { recursive: true });
+    const persisted = readStrictLoopV2LiveArtifacts(temporaryRoot, opts.runId);
+    rmSync(destinationRoot, { recursive: true, force: true });
+    mkdirSync(path.dirname(destinationRoot), { recursive: true });
+    renameSync(temporaryRoot, destinationRoot);
+    return {
+      persistence: "written",
+      artifactRoot: relativeArtifactRoot.replace(/\\/g, "/"),
+      terminalArtifactHash: persisted.terminal.artifactHash,
+      terminalComparison: persisted.terminal.comparison,
+      eligible: persisted.shadow.eligibility.eligible,
+      cutoverReady: persisted.shadow.comparison.cutoverReady,
+      ineligibilityReasons: persisted.shadow.eligibility.reasons,
+    };
+  } catch (error) {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function readStrictLoopV2LiveArtifacts(workspaceRoot: string, runId: string) {
+  const candidatePath = loopV2LiveArtifactPath(workspaceRoot, runId);
+  const candidate = existsSync(candidatePath)
+    ? parseLoopV2LiveCandidateArtifactV1(readFileSync(candidatePath, "utf8"))
+    : undefined;
+  const reviewPath = loopV2LiveReviewArtifactPath(workspaceRoot, runId);
+  const review = existsSync(reviewPath)
+    ? candidate
+      ? parseLoopV2LiveReviewArtifactV1(
+          readFileSync(reviewPath, "utf8"),
+          candidate,
+        )
+      : (() => {
+          throw new Error("explicit v2 review exists without a candidate");
+        })()
+    : undefined;
+  const terminal = parseLoopV2LiveTerminalArtifactV1(
+    readFileSync(loopV2LiveTerminalArtifactPath(workspaceRoot, runId), "utf8"),
+    candidate,
+    review,
+  );
+  const shadowPath = loopV2RunResultShadowArtifactPath(workspaceRoot, runId);
+  if (!existsSync(shadowPath)) {
+    throw new Error("explicit v2 run produced no run-result-shadow-v1.json");
+  }
+  const shadow = parseLoopV2RunResultShadowArtifactV1(
+    readFileSync(shadowPath, "utf8"),
+    terminal,
+    candidate,
+    review,
+  );
+  return { terminal, shadow };
+}
+
 async function runPaw(opts: {
   readonly repoRoot: string;
   readonly workspaceRoot: string;
@@ -1016,7 +1122,7 @@ async function runPaw(opts: {
   readonly verificationPolicy: VerificationPolicy;
   readonly shellSandbox?: ShellSandboxConfig;
   readonly initialAcceptanceCriteria: readonly RunAcceptanceCriterionSeed[];
-  readonly loopKernelVersion: "v1" | "v2-shadow";
+  readonly loopKernelVersion: "v1" | "v2-shadow" | "v2";
   readonly resume?: boolean;
 }): Promise<{
   status: "completed" | "failed" | "timeout";
@@ -1955,7 +2061,7 @@ export async function runSweCompareArm(opts: {
   readonly keep?: boolean;
   readonly skipVerifier?: boolean;
   readonly resumeRunId?: string;
-  readonly loopKernelVersion?: "v1" | "v2-shadow";
+  readonly loopKernelVersion?: "v1" | "v2-shadow" | "v2";
 }): Promise<SweCompareRunResult> {
   const manifest = JSON.parse(
     readFileSync(opts.manifestPath, "utf8"),
@@ -1973,7 +2079,7 @@ export async function runSweCompareArm(opts: {
   }
   const loopKernelVersion = opts.loopKernelVersion ?? "v1";
   if (opts.runner !== "paw" && loopKernelVersion !== "v1") {
-    throw new Error("loop v2 shadow is available only for Paw runs");
+    throw new Error("loop v2 modes are available only for Paw runs");
   }
   validateCompareRun(opts.repoRoot, manifest, opts.instanceId);
   const pawShellSandbox =
@@ -2110,6 +2216,21 @@ export async function runSweCompareArm(opts: {
             error: error instanceof Error ? error.message : String(error),
           };
         }
+      }
+    }
+    let loopV2Live: SweCompareRunResult["loopV2Live"];
+    if (opts.runner === "paw" && loopKernelVersion === "v2") {
+      try {
+        loopV2Live = persistSweLoopV2LiveArtifacts({
+          repoRoot: opts.repoRoot,
+          workspaceRoot: workspace.root,
+          runId,
+        });
+      } catch (error) {
+        loopV2Live = {
+          persistence: "error",
+          error: error instanceof Error ? error.message : String(error),
+        };
       }
     }
     const mutationHints = Array.isArray(execution.trace)
@@ -2265,6 +2386,7 @@ export async function runSweCompareArm(opts: {
           }
         : {}),
       ...(loopV2Shadow ? { loopV2Shadow } : {}),
+      ...(loopV2Live ? { loopV2Live } : {}),
       tracePath: tracePath.replace(/\\/g, "/"),
       ...(verifier ? { verifier } : {}),
     };
