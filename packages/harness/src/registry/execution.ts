@@ -27,6 +27,7 @@ import {
 } from "@paw/workspace";
 
 import type { HarnessContext } from "../context.js";
+import { diagnoseEditedFilesV1 } from "../post-edit-diagnostics.js";
 import {
   type RunShellResult,
   interpretShellExitCode,
@@ -185,6 +186,17 @@ function toolErrorResult(
     payload: makeToolError(code, message, detail),
     summary: `${tool}: ${code} ${message}`,
   };
+}
+
+function diagnosticSummarySuffix(diagnostics: {
+  readonly status: string;
+  readonly issueCount: number;
+}): string {
+  return diagnostics.status === "issues"
+    ? `; syntax diagnostics: ${diagnostics.issueCount} error(s)`
+    : diagnostics.status === "clean"
+      ? "; syntax diagnostics: clean"
+      : "; syntax diagnostics: unavailable";
 }
 
 function parseAcceptanceUpdate(
@@ -546,10 +558,11 @@ export async function executeTool(
       );
     }
     ctx.watcher?.markAgentWritten(filePath);
+    const diagnostics = diagnoseEditedFilesV1(ctx.workspaceRoot, [filePath]);
     return {
       ok: true,
-      payload: r,
-      summary: `write_file: ${filePath} (${r.bytes_written ?? 0} bytes)`,
+      payload: { ...r, diagnostics },
+      summary: `write_file: ${filePath} (${r.bytes_written ?? 0} bytes)${diagnosticSummarySuffix(diagnostics)}`,
     };
   }
   if (tool === EDIT) {
@@ -615,10 +628,11 @@ export async function executeTool(
         ? ` +${r.linesAdded}/-${r.linesRemoved}`
         : "";
     ctx.watcher?.markAgentWritten(filePath);
+    const diagnostics = diagnoseEditedFilesV1(ctx.workspaceRoot, [filePath]);
     return {
       ok: true,
-      payload: r,
-      summary: `edit_file: ${filePath}${diffHint}`,
+      payload: { ...r, diagnostics },
+      summary: `edit_file: ${filePath}${diffHint}${diagnosticSummarySuffix(diagnostics)}`,
     };
   }
   if (tool === SHELL) {
@@ -1156,10 +1170,20 @@ export async function executeTool(
         ctx.watcher?.markAgentWritten(f);
       }
     }
+    const changedPaths = r.ok
+      ? r.results
+          .filter((result) => result.ok && result.changed === true)
+          .map((result) => result.path)
+      : [];
+    const diagnostics = r.ok
+      ? diagnoseEditedFilesV1(ctx.workspaceRoot, changedPaths)
+      : undefined;
     return {
       ok: r.ok,
-      payload: r,
-      summary: r.summary,
+      payload: diagnostics ? { ...r, diagnostics } : r,
+      summary: diagnostics
+        ? `${r.summary}${diagnosticSummarySuffix(diagnostics)}`
+        : r.summary,
     };
   }
   if (tool === SYMBOL_SEARCH) {

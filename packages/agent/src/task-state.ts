@@ -58,6 +58,18 @@ export interface TestResultSummary {
   readonly executionEnvironmentRevision?: number;
 }
 
+export interface PostEditDiagnosticStateV1 {
+  readonly schemaVersion: "paw.post-edit-diagnostics.v1";
+  readonly mutationRevision: number;
+  readonly status: "clean" | "issues" | "unavailable";
+  readonly issueCount: number;
+  readonly files: readonly {
+    readonly path: string;
+    readonly status: "clean" | "issues" | "unavailable" | "skipped";
+    readonly issues: readonly string[];
+  }[];
+}
+
 /**
  * 约束生命周期记录（Constraint Lifecycle）：
  * - active：当前有效（注入 [Constraints] 段，摘要逐字校验）
@@ -126,6 +138,8 @@ export interface TaskState {
   readonly filesChanged: readonly string[];
   readonly commandsRun: readonly CommandSummary[];
   readonly testResults: readonly TestResultSummary[];
+  /** Cheap syntax feedback from the latest edit; never counts as a test pass. */
+  readonly postEditDiagnostics?: PostEditDiagnosticStateV1;
   /** Monotonic count of recorded shell commands; unlike commandsRun it is never truncated. */
   readonly shellCommandRevision?: number;
   /** 每次成功写文件/应用 patch 单调递增；旧快照缺省为 0。 */
@@ -449,6 +463,7 @@ export class TaskStateManager {
     let executionEnvironmentIssues = [
       ...(this.state.executionEnvironmentIssues ?? []),
     ];
+    let postEditDiagnostics = this.state.postEditDiagnostics;
 
     if (result.ok && call.tool === "workspace.read_file") {
       const readPath = stringArg(args.path);
@@ -575,6 +590,12 @@ export class TaskStateManager {
       diffInspectedRevision = mutationRevision;
     }
 
+    const settledDiagnostics = parsePostEditDiagnostics(
+      isRecord(result.payload) ? result.payload.diagnostics : undefined,
+      mutationRevision,
+    );
+    if (settledDiagnostics) postEditDiagnostics = settledDiagnostics;
+
     if (!result.ok) {
       pushUnique(pinnedFacts, `${call.tool} failed: ${result.summary}`);
     }
@@ -586,6 +607,7 @@ export class TaskStateManager {
       filesChanged,
       commandsRun: commandsRun.slice(-20),
       testResults: testResults.slice(-20),
+      ...(postEditDiagnostics ? { postEditDiagnostics } : {}),
       shellCommandRevision,
       mutationRevision,
       mutationShellCommandRevision,
@@ -605,6 +627,60 @@ export class TaskStateManager {
       ),
     };
   }
+}
+
+function parsePostEditDiagnostics(
+  value: unknown,
+  mutationRevision: number,
+): PostEditDiagnosticStateV1 | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    value.schemaVersion !== "paw.post-edit-diagnostics.v1" ||
+    !["clean", "issues", "unavailable"].includes(String(value.status)) ||
+    typeof value.issueCount !== "number" ||
+    !Number.isSafeInteger(value.issueCount) ||
+    value.issueCount < 0 ||
+    !Array.isArray(value.files)
+  ) {
+    return undefined;
+  }
+  const files: PostEditDiagnosticStateV1["files"] = value.files
+    .filter(isRecord)
+    .slice(0, 50)
+    .flatMap((file) => {
+      if (
+        typeof file.path !== "string" ||
+        !["clean", "issues", "unavailable", "skipped"].includes(
+          String(file.status),
+        ) ||
+        !Array.isArray(file.issues)
+      ) {
+        return [];
+      }
+      return [
+        Object.freeze({
+          path: file.path,
+          status:
+            file.status as PostEditDiagnosticStateV1["files"][number]["status"],
+          issues: Object.freeze(
+            file.issues
+              .filter(isRecord)
+              .map((item) =>
+                typeof item.message === "string" ? item.message : "",
+              )
+              .filter(Boolean)
+              .slice(0, 20),
+          ),
+        }),
+      ];
+    });
+  return Object.freeze({
+    schemaVersion: "paw.post-edit-diagnostics.v1" as const,
+    mutationRevision,
+    status: value.status as PostEditDiagnosticStateV1["status"],
+    issueCount: value.issueCount,
+    files: Object.freeze(files),
+  });
 }
 
 function hasMaterialFileChange(result: ToolRunResult): boolean {
@@ -665,6 +741,15 @@ export function formatTaskStateForContext(state: TaskState): string {
         `${verificationOutcome(t)}${t.failureKind ? ` [${t.failureKind}${t.retryability ? `/${t.retryability}` : ""}]` : ""}: ${t.command}${t.evidence ? ` — ${t.evidence}` : ""}`,
     ),
   );
+  if (state.postEditDiagnostics) {
+    const freshness =
+      state.postEditDiagnostics.mutationRevision === state.mutationRevision
+        ? "current"
+        : "stale";
+    lines.push(
+      `Post-edit syntax diagnostics: ${state.postEditDiagnostics.status} (${state.postEditDiagnostics.issueCount} errors, ${freshness} for r${state.postEditDiagnostics.mutationRevision}; not verification)`,
+    );
+  }
   appendList(lines, "Plan", state.plan);
   lines.push(formatTaskGraphV1(replayTaskGraphV1(state.taskGraphEvents)));
   if ((state.mutationRevision ?? 0) > 0) {

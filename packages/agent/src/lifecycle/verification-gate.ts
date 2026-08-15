@@ -77,6 +77,22 @@ export function checkVerification(
     return { ok: true, mode: "no_mutation" };
   }
 
+  const currentRevision = state.mutationRevision ?? 0;
+  const diagnostics = state.postEditDiagnostics;
+  if (
+    diagnostics?.mutationRevision === currentRevision &&
+    diagnostics.status === "issues"
+  ) {
+    const first = diagnostics.files
+      .flatMap((file) =>
+        file.issues.map((message) => `${file.path}: ${message}`),
+      )
+      .at(0);
+    return {
+      ok: false,
+      nudge: `The current edit introduced ${diagnostics.issueCount} syntax diagnostic error(s)${first ? ` (${first})` : ""}. Fix the syntax error before final_answer. This immediate diagnostic is not a substitute for the required test verification.`,
+    };
+  }
   if (
     opts?.skipVerifyReason?.trim() &&
     goalAllowsSkipVerification(state.goal)
@@ -88,7 +104,6 @@ export function checkVerification(
     };
   }
 
-  const currentRevision = state.mutationRevision ?? 0;
   const latest = state.testResults[state.testResults.length - 1];
   const substantive = latestSubstantiveVerification(state);
   const latestRevision = latest?.mutationRevision ?? 0;

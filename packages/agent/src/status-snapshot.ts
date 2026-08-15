@@ -138,6 +138,12 @@ export function statusPaceV1(
       ? "investigate"
       : "implement";
   }
+  if (
+    state.postEditDiagnostics?.mutationRevision === mutationRevision &&
+    state.postEditDiagnostics.status === "issues"
+  ) {
+    return "repair";
+  }
   const latestCurrentTest = [...state.testResults]
     .reverse()
     .find(

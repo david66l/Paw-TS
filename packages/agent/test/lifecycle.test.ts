@@ -367,6 +367,47 @@ describe("VerificationGate", () => {
     expect(v.ok).toBe(false);
   });
 
+  test("current syntax diagnostics block completion even after a green test", () => {
+    const brokenState = baseState({
+      filesChanged: ["x.ts"],
+      mutationRevision: 1,
+      postEditDiagnostics: {
+        schemaVersion: "paw.post-edit-diagnostics.v1",
+        mutationRevision: 1,
+        status: "issues",
+        issueCount: 1,
+        files: [
+          {
+            path: "x.ts",
+            status: "issues",
+            issues: ["Expected identifier"],
+          },
+        ],
+      },
+      testResults: [
+        {
+          command: "bun test unrelated.test.ts",
+          passed: true,
+          outcome: "passed",
+          summary: "1 pass",
+          mutationRevision: 1,
+        },
+      ],
+    });
+    const v = checkVerification(brokenState);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      expect(v.nudge).toContain("syntax diagnostic");
+      expect(v.nudge).toContain("x.ts: Expected identifier");
+      expect(v.nudge).toContain("not a substitute");
+    }
+    const skipped = checkVerification(
+      { ...brokenState, goal: "fix\n[allow_skip_verify]" },
+      { skipVerifyReason: "no harness" },
+    );
+    expect(skipped.ok).toBe(false);
+  });
+
   test("trusted task can allow skip_verify", () => {
     const v = checkVerification(
       baseState({

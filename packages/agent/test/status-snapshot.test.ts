@@ -138,6 +138,27 @@ describe("StatusSnapshotV1", () => {
     expect(
       statusPaceV1(
         atRevision({
+          postEditDiagnostics: {
+            schemaVersion: "paw.post-edit-diagnostics.v1",
+            mutationRevision: 2,
+            status: "issues",
+            issueCount: 1,
+            files: [
+              {
+                path: "source.ts",
+                status: "issues",
+                issues: ["Expected identifier"],
+              },
+            ],
+          },
+        }),
+        0,
+        0,
+      ),
+    ).toBe("repair");
+    expect(
+      statusPaceV1(
+        atRevision({
           executionEnvironmentRevision: 1,
           executionEnvironmentIssues: ["sandbox_image_changed"],
         }),

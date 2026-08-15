@@ -252,7 +252,25 @@ describe("TaskStateManager", () => {
       {
         ok: true,
         summary: "edit_file: src/a.ts +1/-1",
-        payload: { path: "src/a.ts", linesAdded: 1, linesRemoved: 1 },
+        payload: {
+          path: "src/a.ts",
+          linesAdded: 1,
+          linesRemoved: 1,
+          diagnostics: {
+            schemaVersion: "paw.post-edit-diagnostics.v1",
+            authority: "syntax_only_not_verification",
+            status: "clean",
+            issueCount: 0,
+            files: [
+              {
+                path: "src/a.ts",
+                engine: "bun_syntax",
+                status: "clean",
+                issues: [],
+              },
+            ],
+          },
+        },
       },
     );
     state.recordToolResult(
@@ -285,6 +303,11 @@ describe("TaskStateManager", () => {
     expect(snapshot.shellCommandRevision).toBe(2);
     expect(snapshot.mutationShellCommandRevision).toBe(0);
     expect(snapshot.testResults[0]?.passed).toBe(true);
+    expect(snapshot.postEditDiagnostics).toMatchObject({
+      mutationRevision: 1,
+      status: "clean",
+      issueCount: 0,
+    });
     expect(snapshot.pinnedFacts[0]).toContain("workspace.run_shell failed");
 
     const restored = new TaskStateManager("ignored", snapshot);

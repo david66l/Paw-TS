@@ -104,6 +104,13 @@ export {
   type McpToolRef,
 } from "./mcp-client.js";
 export {
+  diagnoseEditedFilesV1,
+  POST_EDIT_DIAGNOSTICS_SCHEMA_V1,
+  type PostEditDiagnosticIssueV1,
+  type PostEditDiagnosticsV1,
+  type PostEditFileDiagnosticV1,
+} from "./post-edit-diagnostics.js";
+export {
   getDefaultPolicyConfig,
   setPolicyConfig,
   resetPolicyConfig,
