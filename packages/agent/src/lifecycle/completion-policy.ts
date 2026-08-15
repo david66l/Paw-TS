@@ -72,6 +72,12 @@ export interface DecideIncompleteInput {
   >;
 }
 
+export interface DecideFailedInput {
+  readonly reason: string;
+  readonly message: string;
+  readonly taskState: TaskState;
+}
+
 /** Creates one authoritative incomplete decision without parsing its prose. */
 export function decideIncomplete(
   input: DecideIncompleteInput,
@@ -81,6 +87,19 @@ export function decideIncomplete(
   return {
     status: "incomplete",
     outcome: input.outcome ?? "incomplete",
+    reason,
+    message: input.message.trim() || "(empty)",
+    evidence: evidenceFromTaskState(input.taskState),
+  };
+}
+
+/** Creates one authoritative failed decision without collapsing its cause. */
+export function decideFailed(input: DecideFailedInput): CompletionDecision {
+  const reason = input.reason.trim();
+  if (!reason) throw new Error("Failed completion reason is required");
+  return {
+    status: "failed",
+    outcome: "failed",
     reason,
     message: input.message.trim() || "(empty)",
     evidence: evidenceFromTaskState(input.taskState),

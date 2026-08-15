@@ -1,5 +1,6 @@
 export {
   decideCompletion,
+  decideFailed,
   decideIncomplete,
   evidenceFromTaskState,
   toRunResult,
@@ -32,6 +33,7 @@ export {
 
 export type {
   DecideCompletionInput,
+  DecideFailedInput,
   DecideIncompleteInput,
 } from "./completion-policy.js";
 export {

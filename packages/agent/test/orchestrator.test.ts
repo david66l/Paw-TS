@@ -1162,6 +1162,58 @@ describe("AgentOrchestrator", () => {
     expect(n).toBe(2);
   });
 
+  test("ask_user on the last turn is incomplete after receiving the reply", async () => {
+    const o = new AgentOrchestrator({
+      resolveAskUser: async () => "blue",
+      model: {
+        label: "ask-last-turn",
+        async complete() {
+          return {
+            text: '{"action":"ask_user","question":"color?","context":{},"timeoutSec":null}',
+          };
+        },
+      },
+    });
+    const result = await o.run({
+      runId: "ask-last-turn",
+      goal: "x",
+      workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-ask-last-")),
+      maxSteps: 1,
+    });
+    expect(result).toMatchObject({
+      status: "incomplete",
+      outcome: "budget_exhausted",
+      completionReason: "max_steps_reached_after_ask_user",
+    });
+  });
+
+  test("ask_user without an interactive resolver cannot report completion", async () => {
+    const o = new AgentOrchestrator({
+      model: {
+        label: "ask-unresolved",
+        async complete() {
+          return {
+            text: '{"action":"ask_user","question":"color?","context":{},"timeoutSec":null}',
+          };
+        },
+      },
+    });
+    const result = await o.run({
+      runId: "ask-unresolved",
+      goal: "x",
+      workspaceRoot: mkdtempSync(
+        path.join(tmpdir(), "paw-orch-ask-unresolved-"),
+      ),
+      maxSteps: 2,
+    });
+    expect(result).toMatchObject({
+      status: "incomplete",
+      outcome: "incomplete",
+      completionReason: "user_input_required",
+      message: "[Ask user] color?",
+    });
+  });
+
   test("fake model streams multiple chunks and usage on model.done", async () => {
     const chunks: number[] = [];
     const usages: unknown[] = [];

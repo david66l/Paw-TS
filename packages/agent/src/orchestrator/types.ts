@@ -53,11 +53,11 @@ import type { TaskStateManager } from "../task-state.js";
  *
  * 状态转移：
  * model_calling → action_dispatch | tool_executing | waiting_children | ...
- * action_dispatch → user_waiting | plan_updating | completed | failed | continue
- * tool_executing → continue | completed
- * waiting_children → merging_results → continue | completed
+ * action_dispatch → user_waiting | plan_updating | decided | continue
+ * tool_executing → continue | decided
+ * waiting_children → merging_results → continue | decided
  * continue → model_calling（下一轮循环）
- * completed / failed → 循环终止
+ * decided → 循环终止；status/outcome/reason 由 CompletionPolicy 唯一产生
  */
 export type TurnState =
   /** 正在调用模型 */
@@ -104,12 +104,6 @@ export type TurnState =
       readonly text: string;
       readonly thinking?: string;
     }
-  /** 任务完成 */
-  | { readonly type: "completed"; readonly message: string }
-  /** 任务失败 */
-  | { readonly type: "failed"; readonly message: string }
-  /** 预算耗尽 / 未达完成契约（诚实不完整） */
-  | { readonly type: "incomplete"; readonly message: string }
   /** CompletionPolicy 已作出唯一裁决；外层只能持久化/映射，不得重算。 */
   | { readonly type: "decided"; readonly decision: CompletionDecision }
   /** 继续下一轮（携带更新后的 flags）*/

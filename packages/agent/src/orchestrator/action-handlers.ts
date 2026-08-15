@@ -58,6 +58,7 @@ import {
   IDLE_FUSE_ESCALATION,
   checkAcceptanceCriteria,
   decideCompletion,
+  decideFailed,
   decideIncomplete,
   evaluateBudgetExhaustion,
   evaluateFinalAnswer,
@@ -257,7 +258,7 @@ export async function handleAction(
         opts,
       );
     case "abort":
-      return handleAbort(action);
+      return handleAbort(action, ctx, recoveredFlags);
     case "ask_user":
       return handleAskUser(action, ctx, recoveredFlags, text, thinking, opts);
     case "plan_update":
@@ -422,11 +423,14 @@ function handleNoAction(
   // 真正完成：纯对话式回复（未使用工具）
   ctx.ctxMgr.addAssistant(displayText, thinking);
   ctx.emit({ type: "model.done", text: displayText });
+  const decision = decideCompletion({
+    intent: "final_answer",
+    message: displayText,
+    taskState: ctx.taskState.snapshot(),
+    hasEverUsedTools: false,
+  });
   return {
-    state: {
-      type: "completed",
-      message: displayText,
-    },
+    state: { type: "decided", decision },
     flags,
   };
 }
@@ -882,11 +886,13 @@ async function checkCandidateReviewGate(
     return undefined;
   }
   if (review.verdict === "partial" && reportGrounding !== "pass") {
+    const decision = decideIncomplete({
+      reason: "candidate_review_protocol_incomplete",
+      message: `[IndependentReview:PROTOCOL_INCOMPLETE r${revision}] ${review.summary}\nThe independent reviewer did not establish report grounding after protocol recovery, so completion is fail-closed.`,
+      taskState: ctx.taskState.snapshot(),
+    });
     return {
-      state: {
-        type: "incomplete",
-        message: `[IndependentReview:PROTOCOL_INCOMPLETE r${revision}] ${review.summary}\nThe independent reviewer did not establish report grounding after protocol recovery, so completion is fail-closed.`,
-      },
+      state: { type: "decided", decision },
       flags,
     };
   }
@@ -920,9 +926,21 @@ async function checkCandidateReviewGate(
     opts.saveStateFn();
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
-  if (reportIssue) return { state: { type: "incomplete", message }, flags };
+  if (reportIssue) {
+    const decision = decideIncomplete({
+      reason: "candidate_report_grounding_failed",
+      message,
+      taskState: ctx.taskState.snapshot(),
+    });
+    return { state: { type: "decided", decision }, flags };
+  }
   if (review.verdict === "partial" && !noRoomForAnotherTurn) return undefined;
-  return { state: { type: "incomplete", message }, flags };
+  const decision = decideIncomplete({
+    reason: `candidate_review_${review.verdict}`,
+    message,
+    taskState: ctx.taskState.snapshot(),
+  });
+  return { state: { type: "decided", decision }, flags };
 }
 
 function boundCandidateReviewSummary(summary: string): string {
@@ -985,17 +1003,22 @@ function handleAcceptanceGateFailure(
  * 处理 abort 动作。
  * 模型判断任务无法完成（如权限不足、信息不可获取等）时主动中止。
  */
-function handleAbort(action: Extract<AgentAction, { type: "abort" }>): {
+function handleAbort(
+  action: Extract<AgentAction, { type: "abort" }>,
+  ctx: PhaseContext,
+  flags: TurnFlags,
+): {
   readonly state: TurnState;
   readonly flags: TurnFlags;
 } {
+  const decision = decideFailed({
+    reason: "model_abort",
+    message: action.reason.trim() || "Aborted.",
+    taskState: ctx.taskState.snapshot(),
+  });
   return {
-    state: { type: "failed", message: action.reason.trim() || "Aborted." },
-    flags: {
-      autoContinueNudges: 0,
-      lastTurnHadToolCall: false,
-      hasEverUsedTools: false,
-    },
+    state: { type: "decided", decision },
+    flags: { ...flags, lastTurnHadToolCall: false },
   };
 }
 
@@ -1009,7 +1032,8 @@ function handleAbort(action: Extract<AgentAction, { type: "abort" }>): {
  * 模型需要用户输入时（如选择方案、澄清需求），通过此处理器暂停执行
  * 等待用户回复。回复会作为 user 消息注入到上下文中，下一轮继续执行。
  *
- * 如果没有配置 resolveAskUser 回调（非交互模式），则直接完成。
+ * 如果没有配置 resolveAskUser 回调（非交互模式），则诚实返回等待输入，
+ * 不能把尚未获得的用户答案计作任务完成。
  */
 async function handleAskUser(
   action: Extract<AgentAction, { type: "ask_user" }>,
@@ -1042,11 +1066,14 @@ async function handleAskUser(
 
     // 检查是否达到最大轮数
     if (ctx.turn + 1 >= ctx.maxSteps) {
+      const decision = decideIncomplete({
+        reason: "max_steps_reached_after_ask_user",
+        message: `Max steps (${ctx.maxSteps}) reached after ask_user`,
+        taskState: ctx.taskState.snapshot(),
+        outcome: "budget_exhausted",
+      });
       return {
-        state: {
-          type: "completed",
-          message: `Max steps (${ctx.maxSteps}) reached after ask_user`,
-        },
+        state: { type: "decided", decision },
         flags: nextFlags,
       };
     }
@@ -1055,9 +1082,14 @@ async function handleAskUser(
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
-  // 无 resolver（非交互模式）→ 直接作为完成返回
+  // 无 resolver（非交互模式）→ 暂停等待输入，禁止假完成。
+  const decision = decideIncomplete({
+    reason: "user_input_required",
+    message: `[Ask user] ${action.question}`,
+    taskState: ctx.taskState.snapshot(),
+  });
   return {
-    state: { type: "completed", message: `[Ask user] ${action.question}` },
+    state: { type: "decided", decision },
     flags: nextFlags,
   };
 }
@@ -1108,7 +1140,12 @@ async function handlePlanUpdate(
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return { state: { type: "failed", message: msg }, flags: nextFlags };
+    const decision = decideFailed({
+      reason: "plan_update_failed",
+      message: msg,
+      taskState: ctx.taskState.snapshot(),
+    });
+    return { state: { type: "decided", decision }, flags: nextFlags };
   }
 
   const p = opts.planner.plan;
@@ -1667,8 +1704,13 @@ async function handleRunAgent(
 
   // 没有子 Agent 启动器就无法执行
   if (!opts.agentGroup) {
+    const decision = decideFailed({
+      reason: "subagent_launcher_missing",
+      message: "Sub-agent launcher not configured",
+      taskState: ctx.taskState.snapshot(),
+    });
     return {
-      state: { type: "failed", message: "Sub-agent launcher not configured" },
+      state: { type: "decided", decision },
       flags: nextFlags,
     };
   }

@@ -21,6 +21,7 @@ import {
   type CompletionDecision,
   type DecideCompletionInput,
   decideCompletion,
+  decideFailed,
   decideIncomplete,
   evidenceFromTaskState,
   toRunResult,
@@ -46,6 +47,7 @@ import {
 
 export {
   decideCompletion,
+  decideFailed,
   decideIncomplete,
   evidenceFromTaskState,
   toRunResult,

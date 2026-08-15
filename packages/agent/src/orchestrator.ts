@@ -959,23 +959,15 @@ export class AgentOrchestrator {
 
         // 状态机判断：
         // - "continue"：模型返回了工具调用，继续下一轮
-        // - "completed"：模型返回了 final 动作，任务完成
-        // - "failed"：发生了不可恢复的错误
+        // - "decided"：CompletionPolicy 已给出唯一终局裁决
         if (state.type === "continue") {
           flags = state.nextFlags;
           continue;
         }
 
-        if (
-          state.type === "decided" ||
-          state.type === "completed" ||
-          state.type === "failed" ||
-          state.type === "incomplete"
-        ) {
-          const terminalStatus =
-            state.type === "decided" ? state.decision.status : state.type;
-          const terminalMessage =
-            state.type === "decided" ? state.decision.message : state.message;
+        if (state.type === "decided") {
+          const terminalStatus = state.decision.status;
+          const terminalMessage = state.decision.message;
           // 保存断点续跑状态
           const appStatus =
             terminalStatus === "aborted" ? ("failed" as const) : terminalStatus;
@@ -993,77 +985,10 @@ export class AgentOrchestrator {
               message: terminalMessage,
             },
           );
-          const {
-            evaluateBudgetExhaustion,
-            evaluateFinalAnswer,
-            runResultFromDecision,
-            evidenceFromTaskState,
-          } = await import("./lifecycle/task-lifecycle.js");
-          let runResult: import("@paw/core").RunResult;
-          if (state.type === "decided") {
-            runResult = runResultFromDecision(runId, state.decision);
-          } else if (state.type === "completed") {
-            runResult = {
-              runId,
-              status: state.type,
-              message: state.message,
-              evidence: evidenceFromTaskState(taskState.snapshot()),
-            };
-            const ev = evaluateFinalAnswer(
-              state.message,
-              taskState.snapshot(),
-              flags.hasEverUsedTools,
-            );
-            if (ev.decision) {
-              runResult = runResultFromDecision(runId, ev.decision);
-            } else {
-              runResult = {
-                ...runResult,
-                outcome: "model_declared",
-                completionReason: "final_answer",
-              };
-            }
-          } else if (state.type === "incomplete") {
-            runResult = {
-              runId,
-              status: state.type,
-              message: state.message,
-              evidence: evidenceFromTaskState(taskState.snapshot()),
-            };
-            const snap = taskState.snapshot();
-            const looksLikeVerify =
-              /verification|skip_verify|no passing test/i.test(state.message);
-            const decision = looksLikeVerify
-              ? (evaluateFinalAnswer(
-                  state.message,
-                  snap,
-                  flags.hasEverUsedTools,
-                ).decision ??
-                evaluateBudgetExhaustion(
-                  state.message,
-                  snap,
-                  "budget_exhausted",
-                ))
-              : evaluateBudgetExhaustion(
-                  state.message,
-                  snap,
-                  "budget_exhausted",
-                );
-            runResult = {
-              ...runResultFromDecision(runId, decision),
-              message: state.message,
-              status: "incomplete",
-            };
-          } else {
-            runResult = {
-              runId,
-              status: state.type,
-              message: state.message,
-              evidence: evidenceFromTaskState(taskState.snapshot()),
-              outcome: "failed",
-              completionReason: "failed",
-            };
-          }
+          const { runResultFromDecision } = await import(
+            "./lifecycle/task-lifecycle.js"
+          );
+          const runResult = runResultFromDecision(runId, state.decision);
 
           persistLoopV2Terminal(runResult);
           emit({
@@ -1847,8 +1772,7 @@ export class AgentOrchestrator {
    *
    * 返回值 TurnState：
    * - { type: "continue", nextFlags }：继续下一轮
-   * - { type: "completed", message }：任务完成
-   * - { type: "failed", message }：任务失败
+   * - { type: "decided", decision }：CompletionPolicy 给出的唯一终局裁决
    */
   private async executeTurn(
     ctx: PhaseContext,

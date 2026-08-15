@@ -16,6 +16,7 @@ import {
 } from "../src/lifecycle/coding-phase.js";
 import {
   decideCompletion,
+  decideFailed,
   decideIncomplete,
   evidenceFromTaskState,
 } from "../src/lifecycle/completion-policy.js";
@@ -76,6 +77,28 @@ describe("CompletionPolicy", () => {
     });
     expect(() =>
       decideIncomplete({
+        reason: " ",
+        message: "missing reason",
+        taskState: baseState(),
+      }),
+    ).toThrow("reason is required");
+  });
+
+  test("structured failure preserves its producer-owned reason and evidence", () => {
+    const decision = decideFailed({
+      reason: "plan_update_failed",
+      message: "invalid dependency",
+      taskState: baseState({ filesChanged: ["plan.json"] }),
+    });
+    expect(decision).toMatchObject({
+      status: "failed",
+      outcome: "failed",
+      reason: "plan_update_failed",
+      message: "invalid dependency",
+      evidence: { filesChanged: ["plan.json"] },
+    });
+    expect(() =>
+      decideFailed({
         reason: " ",
         message: "missing reason",
         taskState: baseState(),

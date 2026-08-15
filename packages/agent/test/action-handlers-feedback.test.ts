@@ -127,7 +127,7 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
     expect(feedback!.content).toContain("unknown tool");
   });
 
-  test("纯对话 + 诊断 ok：维持原行为（completed）", async () => {
+  test("纯对话 + 诊断 ok：由 CompletionPolicy 裁决为 completed", async () => {
     const { ctx, events } = makeCtx();
     const result = await handleAction(
       [],
@@ -140,7 +140,14 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
       { diagnosis: { kind: "ok" } },
     );
 
-    expect(result.state.type).toBe("completed");
+    expect(result.state.type).toBe("decided");
+    if (result.state.type === "decided") {
+      expect(result.state.decision).toMatchObject({
+        status: "completed",
+        outcome: "model_declared",
+        reason: "final_answer_dialogue",
+      });
+    }
     expect(
       events.some((e) => (e as { type?: string }).type === "model.done"),
     ).toBe(true);
