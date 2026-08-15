@@ -120,6 +120,7 @@ import {
   createProviderTerminalStateV2,
   loopV2LiveArtifactPath,
   loopV2ProjectionCheckpointPath,
+  loopV2ReadinessProgressKeyV1,
   normalizeProviderResponseV2,
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
@@ -572,6 +573,7 @@ export class AgentOrchestrator {
   ) => void;
   private _lastLoopV2ShadowReport?: LoopV2ShadowReport;
   private _lastLoopV2CandidateAssessment?: LoopV2LiveCandidateAssessmentV1;
+  private _lastLoopV2ReadinessProgressKey?: string;
 
   constructor(opts?: AgentOrchestratorOptions) {
     this.overrideModel = opts?.model;
@@ -1118,6 +1120,8 @@ export class AgentOrchestrator {
             ? {
                 getLoopV2CandidateAssessment: () =>
                   this._lastLoopV2CandidateAssessment,
+                getLoopV2ReadinessProgressKey: () =>
+                  this._lastLoopV2ReadinessProgressKey,
               }
             : {}),
           ...(init.reviewLoopV2Candidate
@@ -3420,6 +3424,7 @@ export class AgentOrchestrator {
     let loopV2Projection: LoopV2ShadowObserver | undefined;
     this._lastLoopV2ShadowReport = undefined;
     this._lastLoopV2CandidateAssessment = undefined;
+    this._lastLoopV2ReadinessProgressKey = undefined;
     if (spec.resumeFromState) {
       // A resumed run appends to the same durable event/checkpoint streams.
       // Restarting either counter at zero creates duplicate event identities
@@ -3593,6 +3598,9 @@ export class AgentOrchestrator {
             event.action.type === "final_answer"
           ) {
             const report = loopV2Projection.snapshot();
+            this._lastLoopV2ReadinessProgressKey = loopV2ReadinessProgressKeyV1(
+              report.state,
+            );
             const requireProductMutation =
               this.verificationPolicy?.requireMutation ??
               goalRequiresMutation(spec.goal);

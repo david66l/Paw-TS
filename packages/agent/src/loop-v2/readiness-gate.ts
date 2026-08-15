@@ -1,5 +1,6 @@
 import { sha256Canonical } from "./canonical.js";
 import type { LoopV2LiveCandidateAssessmentV1 } from "./live-candidate.js";
+import type { WorkingDecisionStateV2 } from "./schema.js";
 
 export const LOOP_V2_READINESS_FEEDBACK_LIMIT = 1 as const;
 
@@ -24,6 +25,7 @@ export type LoopV2ReadinessGateDecisionV1 =
 
 export function evaluateLoopV2ReadinessGateV1(input: {
   readonly assessment: LoopV2LiveCandidateAssessmentV1;
+  readonly progressKey: string;
   readonly priorKey?: string;
   readonly priorNudges?: number;
   readonly noRoomForAnotherTurn: boolean;
@@ -56,8 +58,9 @@ export function evaluateLoopV2ReadinessGateV1(input: {
         left.message.localeCompare(right.message),
     );
   const key = sha256Canonical({
-    policy: "loop-v2-readiness-feedback-v1",
+    policy: "loop-v2-readiness-feedback-v2",
     candidateInputHash: input.assessment.candidateInputHash,
+    progressKey: input.progressKey,
     gaps: normalizedGaps.map(({ code, criterionId, riskId }) => ({
       code,
       criterionId,
@@ -82,6 +85,24 @@ export function evaluateLoopV2ReadinessGateV1(input: {
     };
   }
   return { type: "feedback", key, message };
+}
+
+/**
+ * Identity of meaningful investigation progress made before certification.
+ *
+ * Persisted candidate artifacts intentionally deduplicate on mutation and
+ * verification facts, so their assessment may be reused after later reads.
+ * Readiness repair instead reads the live projection. Unique evidence keys are
+ * monotonic: a new read/search changes this key, while report rewording and an
+ * exact repeated observation do not.
+ */
+export function loopV2ReadinessProgressKeyV1(
+  state: WorkingDecisionStateV2,
+): string {
+  return sha256Canonical({
+    policy: "loop-v2-readiness-progress-v1",
+    evidenceFingerprints: Object.keys(state.evidence).sort(),
+  });
 }
 
 export function parseLoopV2ReadinessFeedbackMarker(

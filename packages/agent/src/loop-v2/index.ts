@@ -160,6 +160,7 @@ export {
 export {
   LOOP_V2_READINESS_FEEDBACK_LIMIT,
   evaluateLoopV2ReadinessGateV1,
+  loopV2ReadinessProgressKeyV1,
   parseLoopV2ReadinessFeedbackMarker,
   type LoopV2ReadinessFeedbackStateV1,
   type LoopV2ReadinessGateDecisionV1,

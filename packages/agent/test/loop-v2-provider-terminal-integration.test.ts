@@ -446,6 +446,79 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     }
   });
 
+  test("novel investigation evidence reopens readiness repair without allowing prose-only loops", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-readiness-investigate-");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "notes.txt"),
+      "implementation clue\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.read_file","args":{"path":"source.txt"}}',
+          finishReason: "stop",
+        },
+        {
+          text: "Let me inspect one more relevant file.",
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.read_file","args":{"path":"notes.txt"}}',
+          finishReason: "stop",
+        },
+        { text: "Now I will implement the fix.", finishReason: "stop" },
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+          finishReason: "stop",
+        },
+        { text: "Implemented and verified.", finishReason: "stop" },
+      ],
+    });
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-readiness-investigate",
+        goal: "[require_mutation] Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 10,
+      });
+      expect(result.status).toBe("completed");
+      expect(model.callCount).toBe(7);
+      expect(orchestrator.getLastLoopV2CandidateAssessment()).toMatchObject({
+        facts: { evidence: 2, mutations: 1, verification: 1 },
+        readiness: {
+          disposition: "ready_for_review",
+          readyForSemanticReview: true,
+          gaps: [],
+        },
+      });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("explicit v2 persists and accounts one semantic review before completion", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-semantic-pass-");
     const runId = "v2-semantic-pass";

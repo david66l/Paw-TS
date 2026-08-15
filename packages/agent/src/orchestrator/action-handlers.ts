@@ -672,6 +672,8 @@ async function handleFinalAnswer(
     }
     const readinessGate = evaluateLoopV2ReadinessGateV1({
       assessment,
+      progressKey:
+        ctx.getLoopV2ReadinessProgressKey?.() ?? assessment.candidateInputHash,
       priorKey: flags.loopV2ReadinessFeedbackKey,
       priorNudges: flags.loopV2ReadinessNudges,
       noRoomForAnotherTurn,
