@@ -22,7 +22,7 @@ for (const tracePath of findFiles(runsRoot, "trace.json")) {
     const resultPath = path.join(path.dirname(tracePath), "result.json");
     observations.push(
       parseCapabilityExposureTraceV1({
-        tracePath,
+        tracePath: relativePortable(workspaceRoot, tracePath),
         traceRaw: fs.readFileSync(tracePath, "utf8"),
         resultRaw: fs.existsSync(resultPath)
           ? fs.readFileSync(resultPath, "utf8")
@@ -31,7 +31,7 @@ for (const tracePath of findFiles(runsRoot, "trace.json")) {
     );
   } catch (error) {
     failures.push({
-      tracePath,
+      tracePath: relativePortable(workspaceRoot, tracePath),
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -45,6 +45,10 @@ if (outputPath) {
 }
 process.stdout.write(serialized);
 if (!summary.shadowCoverageReady) process.exitCode = 2;
+
+function relativePortable(root: string, target: string): string {
+  return path.relative(root, target).replace(/\\/g, "/");
+}
 
 function findFiles(root: string, name: string): readonly string[] {
   if (!fs.existsSync(root)) return [];

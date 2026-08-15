@@ -18,6 +18,9 @@ export interface CapabilityExposureRunObservationV1 {
   readonly noToolSelections: number;
   readonly outsideSuggestion: readonly string[];
   readonly linkedResult: boolean;
+  readonly evidenceClass: "public_benchmark" | "diagnostic";
+  readonly instanceId?: string;
+  readonly sourceCommit?: string;
   readonly resolved?: boolean;
   readonly resolvedSource?: string;
   readonly valid: boolean;
@@ -33,6 +36,8 @@ export interface CapabilityExposureSummaryV1 {
   readonly schemaVersion: typeof CAPABILITY_EXPOSURE_SUMMARY_SCHEMA_V1;
   readonly minimumQualifyingRuns: number;
   readonly scannedRuns: number;
+  readonly structurallyValidRuns: number;
+  readonly diagnosticRuns: number;
   readonly qualifyingRuns: number;
   readonly invalidRuns: number;
   readonly scanFailures: readonly CapabilityExposureScanFailureV1[];
@@ -43,10 +48,17 @@ export interface CapabilityExposureSummaryV1 {
   readonly fallbackSelections: number;
   readonly noToolSelections: number;
   readonly fallbackRate: number | null;
+  readonly qualifyingToolSelections: number;
+  readonly qualifyingFallbackSelections: number;
+  readonly qualifyingFallbackRate: number | null;
   readonly meanFullToolCount: number | null;
   readonly meanSuggestedToolCount: number | null;
   readonly meanEstimatedSavingsTokens: number | null;
   readonly outsideSuggestion: readonly {
+    readonly tool: string;
+    readonly count: number;
+  }[];
+  readonly qualifyingOutsideSuggestion: readonly {
     readonly tool: string;
     readonly count: number;
   }[];
@@ -224,6 +236,9 @@ export function parseCapabilityExposureTraceV1(input: {
   }
 
   let linkedResult = false;
+  let evidenceClass: "public_benchmark" | "diagnostic" = "diagnostic";
+  let instanceId: string | undefined;
+  let sourceCommit: string | undefined;
   let resolved: boolean | undefined;
   let resolvedSource: string | undefined;
   if (input.resultRaw !== undefined) {
@@ -231,6 +246,26 @@ export function parseCapabilityExposureTraceV1(input: {
     if (!isRecord(result)) throw new Error("Result root must be an object");
     linkedResult = result.runId === runId;
     if (!linkedResult) issues.push("result runId does not match trace runId");
+    if (typeof result.instanceId === "string" && result.instanceId.length > 0) {
+      instanceId = result.instanceId;
+    }
+    if (
+      typeof result.sourceCommit === "string" &&
+      /^[0-9a-f]{40}$/i.test(result.sourceCommit)
+    ) {
+      sourceCommit = result.sourceCommit;
+    }
+    const integrity = isRecord(result.integrity) ? result.integrity : undefined;
+    if (
+      linkedResult &&
+      result.runner === "paw" &&
+      instanceId !== undefined &&
+      sourceCommit !== undefined &&
+      result.artifactStatus === "valid" &&
+      integrity?.valid === true
+    ) {
+      evidenceClass = "public_benchmark";
+    }
     if (typeof result.resolved === "boolean") resolved = result.resolved;
     if (typeof result.resolvedSource === "string") {
       resolvedSource = result.resolvedSource;
@@ -252,6 +287,9 @@ export function parseCapabilityExposureTraceV1(input: {
     noToolSelections,
     outsideSuggestion: Object.freeze([...outsideSuggestion].sort()),
     linkedResult,
+    evidenceClass,
+    instanceId,
+    sourceCommit,
     resolved,
     resolvedSource,
     valid: issues.length === 0,
@@ -265,30 +303,48 @@ export function summarizeCapabilityExposureV1(
   minimumQualifyingRuns = 10,
 ): CapabilityExposureSummaryV1 {
   const minimum = Math.max(1, Math.floor(minimumQualifyingRuns));
-  const qualifying = runs.filter((run) => run.valid);
-  const hitSelections = qualifying.reduce(
+  const structurallyValid = runs.filter((run) => run.valid);
+  const qualifying = structurallyValid.filter(
+    (run) => run.evidenceClass === "public_benchmark",
+  );
+  const hitSelections = structurallyValid.reduce(
     (sum, run) => sum + run.hitSelections,
     0,
   );
-  const fallbackSelections = qualifying.reduce(
+  const fallbackSelections = structurallyValid.reduce(
     (sum, run) => sum + run.fallbackSelections,
     0,
   );
-  const noToolSelections = qualifying.reduce(
+  const noToolSelections = structurallyValid.reduce(
     (sum, run) => sum + run.noToolSelections,
     0,
   );
   const toolSelections = hitSelections + fallbackSelections;
+  const qualifyingToolSelections = qualifying.reduce(
+    (sum, run) => sum + run.hitSelections + run.fallbackSelections,
+    0,
+  );
+  const qualifyingFallbackSelections = qualifying.reduce(
+    (sum, run) => sum + run.fallbackSelections,
+    0,
+  );
   const outsideCounts = new Map<string, number>();
-  for (const run of qualifying) {
+  const qualifyingOutsideCounts = new Map<string, number>();
+  for (const run of structurallyValid) {
     for (const tool of run.outsideSuggestion) {
       outsideCounts.set(tool, (outsideCounts.get(tool) ?? 0) + 1);
+      if (run.evidenceClass === "public_benchmark") {
+        qualifyingOutsideCounts.set(
+          tool,
+          (qualifyingOutsideCounts.get(tool) ?? 0) + 1,
+        );
+      }
     }
   }
 
   const enoughRuns = qualifying.length >= minimum;
   const cleanScan = scanFailures.length === 0 && runs.every((run) => run.valid);
-  const noFallbacks = fallbackSelections === 0;
+  const noFallbacks = qualifyingFallbackSelections === 0;
   const shadowCoverageReady = enoughRuns && cleanScan && noFallbacks;
   const blockers: string[] = [];
   if (!enoughRuns) {
@@ -311,14 +367,16 @@ export function summarizeCapabilityExposureV1(
     schemaVersion: CAPABILITY_EXPOSURE_SUMMARY_SCHEMA_V1,
     minimumQualifyingRuns: minimum,
     scannedRuns: runs.length,
+    structurallyValidRuns: structurallyValid.length,
+    diagnosticRuns: structurallyValid.length - qualifying.length,
     qualifyingRuns: qualifying.length,
-    invalidRuns: runs.length - qualifying.length,
+    invalidRuns: runs.length - structurallyValid.length,
     scanFailures: Object.freeze([...scanFailures]),
-    inventoryEvents: qualifying.reduce(
+    inventoryEvents: structurallyValid.reduce(
       (sum, run) => sum + run.inventoryEvents,
       0,
     ),
-    selectionEvents: qualifying.reduce(
+    selectionEvents: structurallyValid.reduce(
       (sum, run) => sum + run.selectionEvents,
       0,
     ),
@@ -328,18 +386,24 @@ export function summarizeCapabilityExposureV1(
     noToolSelections,
     fallbackRate:
       toolSelections > 0 ? fallbackSelections / toolSelections : null,
+    qualifyingToolSelections,
+    qualifyingFallbackSelections,
+    qualifyingFallbackRate:
+      qualifyingToolSelections > 0
+        ? qualifyingFallbackSelections / qualifyingToolSelections
+        : null,
     meanFullToolCount: mean(
-      qualifying.flatMap((run) =>
+      structurallyValid.flatMap((run) =>
         run.fullToolCount === undefined ? [] : [run.fullToolCount],
       ),
     ),
     meanSuggestedToolCount: mean(
-      qualifying.flatMap((run) =>
+      structurallyValid.flatMap((run) =>
         run.suggestedToolCount === undefined ? [] : [run.suggestedToolCount],
       ),
     ),
     meanEstimatedSavingsTokens: mean(
-      qualifying.flatMap((run) =>
+      structurallyValid.flatMap((run) =>
         run.estimatedSavingsTokens === undefined
           ? []
           : [run.estimatedSavingsTokens],
@@ -347,6 +411,14 @@ export function summarizeCapabilityExposureV1(
     ),
     outsideSuggestion: Object.freeze(
       [...outsideCounts]
+        .map(([tool, count]) => Object.freeze({ tool, count }))
+        .sort(
+          (left, right) =>
+            right.count - left.count || left.tool.localeCompare(right.tool),
+        ),
+    ),
+    qualifyingOutsideSuggestion: Object.freeze(
+      [...qualifyingOutsideCounts]
         .map(([tool, count]) => Object.freeze({ tool, count }))
         .sort(
           (left, right) =>

@@ -25,6 +25,9 @@ describe("capability exposure shadow v1", () => {
       inventory.find((entry) => entry.name === "workspace.web_search")
         ?.category,
     ).toBe("external");
+    expect(
+      inventory.find((entry) => entry.name === "workspace.list_dir")?.core,
+    ).toBe(true);
   });
 
   test("supports exact selection and keyword discovery", () => {

@@ -50,6 +50,7 @@ const CORE_TOOLS = new Set([
   "workspace.apply_patch",
   "workspace.glob",
   "workspace.grep",
+  "workspace.list_dir",
   "workspace.run_shell",
   "workspace.job_start",
   "workspace.job_list",

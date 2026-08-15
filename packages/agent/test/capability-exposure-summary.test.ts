@@ -46,19 +46,29 @@ function trace(runId: string, outcome: "hit" | "fallback" | "no_tool") {
   ]);
 }
 
+function publicResult(runId: string, resolved = true): string {
+  return JSON.stringify({
+    runId,
+    runner: "paw",
+    instanceId: "owner__repo-123",
+    sourceCommit: "0123456789abcdef0123456789abcdef01234567",
+    artifactStatus: "valid",
+    integrity: { valid: true, violations: [] },
+    resolved,
+    resolvedSource: resolved ? "swebench_harness" : "none",
+  });
+}
+
 describe("capability exposure evidence summary", () => {
   test("parses a valid trace and links its external result", () => {
     const run = parseCapabilityExposureTraceV1({
       tracePath: "run/trace.json",
       traceRaw: trace("run-1", "hit"),
-      resultRaw: JSON.stringify({
-        runId: "run-1",
-        resolved: true,
-        resolvedSource: "swebench",
-      }),
+      resultRaw: publicResult("run-1"),
     });
     expect(run.valid).toBe(true);
     expect(run.linkedResult).toBe(true);
+    expect(run.evidenceClass).toBe("public_benchmark");
     expect(run.resolved).toBe(true);
     expect(run.estimatedSavingsTokens).toBe(1_200);
   });
@@ -81,6 +91,7 @@ describe("capability exposure evidence summary", () => {
       parseCapabilityExposureTraceV1({
         tracePath: `run-${index}/trace.json`,
         traceRaw: trace(`run-${index}`, "hit"),
+        resultRaw: publicResult(`run-${index}`),
       }),
     );
     const ready = summarizeCapabilityExposureV1(hits);
@@ -93,6 +104,7 @@ describe("capability exposure evidence summary", () => {
     const fallback = parseCapabilityExposureTraceV1({
       tracePath: "fallback/trace.json",
       traceRaw: trace("fallback", "fallback"),
+      resultRaw: publicResult("fallback"),
     });
     const blocked = summarizeCapabilityExposureV1([...hits, fallback]);
     expect(blocked.shadowCoverageReady).toBe(false);
@@ -100,5 +112,26 @@ describe("capability exposure evidence summary", () => {
     expect(blocked.outsideSuggestion).toEqual([
       { tool: "workspace.read_file", count: 1 },
     ]);
+  });
+
+  test("never counts deterministic diagnostics as public evidence", () => {
+    const diagnostics = Array.from({ length: 10 }, (_, index) =>
+      parseCapabilityExposureTraceV1({
+        tracePath: `diagnostic-${index}/trace.json`,
+        traceRaw: trace(`diagnostic-${index}`, "hit"),
+        resultRaw: JSON.stringify({
+          runId: `diagnostic-${index}`,
+          runner: "paw-diagnostic",
+          resolved: true,
+        }),
+      }),
+    );
+    const summary = summarizeCapabilityExposureV1(diagnostics);
+    expect(summary.structurallyValidRuns).toBe(10);
+    expect(summary.diagnosticRuns).toBe(10);
+    expect(summary.qualifyingRuns).toBe(0);
+    expect(summary.hitSelections).toBe(10);
+    expect(summary.qualifyingToolSelections).toBe(0);
+    expect(summary.shadowCoverageReady).toBe(false);
   });
 });
