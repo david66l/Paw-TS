@@ -240,6 +240,12 @@ export type RunEvent =
       readonly ok: boolean;
       readonly summary: string;
     }
+  /** Persisted live work from a prior Paw process could not be safely reattached. */
+  | {
+      readonly type: "job.recovery";
+      readonly issue: "managed_job_interrupted_orphaned";
+      readonly notices: readonly string[];
+    }
   /** 并行子 Agent 的文件锁等待/冲突（供 UI 展示锁竞争） */
   | {
       readonly type: "agent.file_lock";

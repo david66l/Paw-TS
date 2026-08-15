@@ -71,6 +71,7 @@ export interface ExecutionEnvironmentRegistryOptionsV1 {
     readonly stopping: number;
     readonly pendingSettlements: number;
   };
+  readonly additionalRecoveryIssues?: readonly string[];
 }
 
 let cachedPythonVersion: string | undefined;
@@ -356,12 +357,17 @@ export class ExecutionEnvironmentRegistryV1 {
       options.runtime ?? currentExecutionRuntimeV1(),
     );
     this.sandbox = sandboxSnapshot(options.shellSandbox);
-    this.issues = reconciliationIssues(
-      prior,
-      options.workspaceRoot,
-      this.runtime,
-      this.sandbox,
-    );
+    this.issues = Object.freeze([
+      ...new Set([
+        ...reconciliationIssues(
+          prior,
+          options.workspaceRoot,
+          this.runtime,
+          this.sandbox,
+        ),
+        ...(options.additionalRecoveryIssues ?? []),
+      ]),
+    ]);
     this.events = prior ? [...prior.events] : [];
   }
 

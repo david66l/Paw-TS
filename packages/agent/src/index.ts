@@ -217,10 +217,14 @@ export {
 } from "./capability-exposure.js";
 export {
   MANAGED_JOB_CONTROLLER_SCHEMA_V1,
+  MANAGED_JOB_PROJECTION_SCHEMA_V1,
   ManagedJobControllerV1,
+  parseManagedJobProjectionV1,
   type ManagedShellSettlementV1,
   type ManagedShellStartResultV1,
   type ManagedJobReadinessV1,
+  type ManagedJobProjectionEntryV1,
+  type ManagedJobProjectionV1,
 } from "./managed-job-controller.js";
 
 export * from "./loop-v2/index.js";

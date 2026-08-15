@@ -96,6 +96,8 @@ export interface AppState {
   readonly interactionInbox?: readonly UserReplyInboxEventV1[];
   /** Agent-owned, versioned execution environment ledger and recovery facts. */
   readonly executionEnvironment?: unknown;
+  /** Agent-owned managed-job lifecycle projection for honest crash recovery. */
+  readonly managedJobs?: unknown;
   /** 运行已完成时的最终结果 */
   readonly outcome?: {
     /** 完成状态：成功、失败、不完整或用户中止 */

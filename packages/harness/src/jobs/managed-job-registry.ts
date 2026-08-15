@@ -5,7 +5,8 @@ export type ManagedJobStatusV1 =
   | "stopping"
   | "completed"
   | "killed"
-  | "failed";
+  | "failed"
+  | "interrupted_orphaned";
 
 export interface ManagedJobOutcomeV1 {
   readonly status: "completed" | "killed" | "failed";
@@ -76,7 +77,12 @@ interface TrackedJobV1 {
 }
 
 function isTerminal(status: ManagedJobStatusV1): boolean {
-  return status === "completed" || status === "killed" || status === "failed";
+  return (
+    status === "completed" ||
+    status === "killed" ||
+    status === "failed" ||
+    status === "interrupted_orphaned"
+  );
 }
 
 function assertNonEmpty(name: string, value: string): void {
@@ -91,12 +97,26 @@ export class ManagedJobRegistryV1 {
   private readonly listeners = new Set<DoneListenerV1>();
   private closed = false;
 
-  constructor(options?: { readonly maxConcurrentJobsPerOwner?: number }) {
+  constructor(options?: {
+    readonly maxConcurrentJobsPerOwner?: number;
+    readonly initialKindCounters?: Readonly<Record<string, number>>;
+  }) {
     const limit = options?.maxConcurrentJobsPerOwner ?? 4;
     if (!Number.isSafeInteger(limit) || limit <= 0) {
       throw new Error("maxConcurrentJobsPerOwner must be a positive integer");
     }
     this.maxConcurrentJobsPerOwner = limit;
+    for (const [kind, count] of Object.entries(
+      options?.initialKindCounters ?? {},
+    )) {
+      assertNonEmpty("initialKindCounters kind", kind);
+      if (!Number.isSafeInteger(count) || count < 0) {
+        throw new Error(
+          "initialKindCounters values must be non-negative integers",
+        );
+      }
+      this.counters.set(kind, count);
+    }
   }
 
   attachController(ownerId: string): () => void {

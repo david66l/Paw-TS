@@ -244,6 +244,7 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[LoopV2Readiness:",
   "[LoopV2SemanticReview:",
   "[Managed jobs are unfinished:",
+  "[Managed job recovery v1]",
   "[Continue from where you were cut off",
   "Plan updated:",
   "Current plan:",
@@ -950,6 +951,21 @@ export class AgentOrchestrator {
       // ═══ 主循环：ReAct 循环的核心 ═══
       // 每轮 = 一次完整的 model → parse → action → feedback 周期
       for (let turn = startTurn; turn < maxSteps; turn++) {
+        const jobRecoveryNotices = managedJobs.takeRecoveryNotices();
+        if (jobRecoveryNotices.length > 0) {
+          ctxMgr.addUser(
+            [
+              "[Managed job recovery v1]",
+              "A previous Paw process ended with background work whose terminal effects were not durably committed. Old PIDs were not reattached because PID identity can be reused. Treat every listed outcome as unknown; inspect the workspace and rerun required verification.",
+              ...jobRecoveryNotices.map((notice) => `- ${notice}`),
+            ].join("\n"),
+          );
+          emit({
+            type: "job.recovery",
+            issue: "managed_job_interrupted_orphaned",
+            notices: jobRecoveryNotices,
+          });
+        }
         // Async producers never mutate loop state from their Promise callback.
         // Pull terminal results into the canonical stream at this exact turn
         // boundary before status/context/completion can observe the run.
@@ -1014,6 +1030,9 @@ export class AgentOrchestrator {
             jobSettlements.map((settlement) => settlement.call),
             jobSettlements.map((settlement) => settlement.result),
             0,
+          );
+          managedJobs.acknowledgeSettlements(
+            jobSettlements.map((settlement) => settlement.jobId),
           );
           this.saveState(
             runId,
@@ -2713,6 +2732,9 @@ export class AgentOrchestrator {
       ...(this._executionEnvironment
         ? { executionEnvironment: this._executionEnvironment.snapshot() }
         : {}),
+      ...(this._managedJobs
+        ? { managedJobs: this._managedJobs.projection() }
+        : {}),
       ...(outcome ? { outcome } : {}),
       savedAt: Date.now(),
     };
@@ -3761,6 +3783,9 @@ export class AgentOrchestrator {
       ...(this.toolEffectPolicy
         ? { toolEffectPolicy: this.toolEffectPolicy }
         : {}),
+      ...(spec.resumeFromState?.managedJobs !== undefined
+        ? { resumeProjection: spec.resumeFromState.managedJobs }
+        : {}),
     });
     this._managedJobs = managedJobs;
     const executionEnvironment = new ExecutionEnvironmentRegistryV1({
@@ -3769,6 +3794,7 @@ export class AgentOrchestrator {
       shellSandbox,
       resumeSnapshot: spec.resumeFromState?.executionEnvironment,
       backgroundJobs: () => managedJobs.readiness(),
+      additionalRecoveryIssues: managedJobs.recoveryIssues(),
     });
     this._executionEnvironment = executionEnvironment;
     const environmentRecovery = executionEnvironment.snapshot().recovery;

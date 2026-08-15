@@ -193,4 +193,109 @@ describe("managed jobs in the real agent loop", () => {
       true,
     );
   });
+
+  test("persists live jobs and resumes them as interrupted_orphaned instead of reattaching a pid", async () => {
+    const root = fixture("resume", 30_000);
+    const stateStore = new InMemoryAppStateStore();
+    let firstCalls = 0;
+    const first = new AgentOrchestrator({
+      appStateStore: stateStore,
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      retrySleep: async () => {},
+      model: {
+        label: "managed-job-before-crash-fixture",
+        async complete() {
+          firstCalls += 1;
+          return firstCalls === 1
+            ? {
+                text: JSON.stringify({
+                  tool: "workspace.job_start",
+                  args: { command: command() },
+                }),
+              }
+            : {
+                text: '{"action":"final_answer","summary":"Pretend the live job finished."}',
+              };
+        },
+      },
+    });
+    const firstResult = await first.run({
+      runId: "managed-job-resume",
+      goal: "Start a long background command and only finish after its trustworthy result is available.",
+      workspaceRoot: root,
+      maxSteps: 4,
+    });
+    expect(firstResult).toMatchObject({
+      status: "incomplete",
+      completionReason: "background_jobs_unsettled",
+    });
+    const interruptedState = stateStore.load("managed-job-resume");
+    expect(interruptedState?.managedJobs).toMatchObject({
+      schemaVersion: "paw.managed-job-projection.v1",
+      jobs: [{ id: "shell-1", status: "running" }],
+    });
+
+    const events: RunEventEnvelope[] = [];
+    let resumedCalls = 0;
+    let sawRecoveryNotice = false;
+    let sawOrphanedList = false;
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      retrySleep: async () => {},
+      onEvent: (event) => events.push(event),
+      model: {
+        label: "managed-job-after-crash-fixture",
+        async complete(messages) {
+          resumedCalls += 1;
+          sawRecoveryNotice ||= messages.some(
+            (message) =>
+              message.role === "user" &&
+              message.content.includes("Managed job recovery v1") &&
+              message.content
+                .toLowerCase()
+                .includes("old pids were not reattached"),
+          );
+          sawOrphanedList ||= messages.some(
+            (message) =>
+              message.role === "user" &&
+              message.content.includes("interrupted_orphaned"),
+          );
+          return resumedCalls === 1
+            ? { text: '{"tool":"workspace.job_list","args":{}}' }
+            : {
+                text: '{"action":"final_answer","summary":"The prior job was interrupted; no result was trusted and verification must be rerun."}',
+              };
+        },
+      },
+    });
+    const resumedResult = await resumed.run({
+      runId: "managed-job-resume",
+      goal: interruptedState?.goal ?? "Inspect the interrupted job.",
+      workspaceRoot: root,
+      maxSteps: 12,
+      ...(interruptedState ? { resumeFromState: interruptedState } : {}),
+    });
+
+    expect(resumedResult.status).toBe("completed");
+    expect(sawRecoveryNotice).toBe(true);
+    expect(sawOrphanedList).toBe(true);
+    expect(events.some((event) => event.event.type === "job.recovery")).toBe(
+      true,
+    );
+    const saved = stateStore.load("managed-job-resume");
+    expect(saved?.executionEnvironment).toMatchObject({
+      recovery: {
+        compatible: false,
+        issues: ["managed_job_interrupted_orphaned"],
+      },
+      backgroundJobs: { running: 0 },
+    });
+    expect(saved?.taskState).toMatchObject({
+      executionEnvironmentRevision: 1,
+      executionEnvironmentIssues: ["managed_job_interrupted_orphaned"],
+    });
+  });
 });

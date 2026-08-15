@@ -213,4 +213,64 @@ describe("ManagedJobControllerV1", () => {
     expect(existsSync(path.join(root, "forbidden.txt"))).toBe(false);
     await controller.close();
   });
+
+  test("restores unresolved jobs as orphaned metadata and never reuses their ids", async () => {
+    const root = gitFixture("recovery");
+    writeFileSync(
+      path.join(root, "quick.mjs"),
+      "process.stdout.write('ok\\n');\n",
+      "utf8",
+    );
+    const controller = new ManagedJobControllerV1({
+      ownerId: "run-recovery",
+      workspaceRoot: root,
+      resumeProjection: {
+        schemaVersion: "paw.managed-job-projection.v1",
+        runId: "run-recovery",
+        jobs: [
+          {
+            id: "shell-3",
+            kind: "shell",
+            label: "old verification",
+            status: "running",
+            startedAt: 10,
+            reported: false,
+          },
+        ],
+        savedAt: 20,
+      },
+    });
+
+    expect(controller.list()[0]).toMatchObject({
+      id: "shell-3",
+      status: "interrupted_orphaned",
+      reported: false,
+    });
+    expect(controller.read("shell-3")).toMatchObject({
+      text: expect.stringContaining("old PID was not reattached"),
+      snapshot: { status: "interrupted_orphaned", reported: true },
+    });
+    expect(controller.kill("shell-3")).toBe("already_finished");
+    expect(controller.readiness().blocksCompletion).toBe(false);
+    expect(controller.recoveryIssues()).toEqual([
+      "managed_job_interrupted_orphaned",
+    ]);
+
+    const started = await controller.startShell({
+      turn: 1,
+      command: runtimeCommand("quick.mjs"),
+    });
+    expect(started.jobId).toBe("shell-4");
+    await controller.wait(started.jobId, 5_000);
+    const projection = controller.projection();
+    expect(projection.jobs.find((job) => job.id === "shell-3")).toMatchObject({
+      status: "interrupted_orphaned",
+      settlementState: "pending",
+    });
+    expect(projection.jobs.find((job) => job.id === "shell-4")).toMatchObject({
+      status: "completed",
+      settlementState: "pending",
+    });
+    await controller.close();
+  });
 });
