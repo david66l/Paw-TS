@@ -43,20 +43,20 @@ describe("ContextManager", () => {
     expect(packages[0]?.content).toContain("two");
   });
 
-  test("upserts dynamic user control messages at the history tail", () => {
+  test("upserts dynamic control state immediately before the latest message", () => {
     const cm = new ContextManager();
     cm.addUser("Goal");
-    cm.upsertUserByPrefixAtTail("[Status]", "[Status]\none");
+    cm.upsertUserByPrefixBeforeLatest("[Status]", "[Status]\none");
     cm.addAssistant("work");
     cm.addToolResult("read_file", true, "done");
-    cm.upsertUserByPrefixAtTail("[Status]", "[Status]\ntwo");
+    cm.upsertUserByPrefixBeforeLatest("[Status]", "[Status]\ntwo");
 
     const messages = cm.buildMessages();
     expect(
       messages.filter((message) => message.content.startsWith("[Status]")),
     ).toHaveLength(1);
-    expect(messages.at(-1)?.content).toBe("[Status]\ntwo");
-    expect(messages.at(-2)?.content).toContain("read_file");
+    expect(messages.at(-2)?.content).toBe("[Status]\ntwo");
+    expect(messages.at(-1)?.content).toContain("read_file");
   });
 
   test("truncates by maxMessages", () => {

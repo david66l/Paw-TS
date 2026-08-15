@@ -2390,7 +2390,10 @@ export class AgentOrchestrator {
         ctx.taskState.snapshot(),
       ),
     );
-    ctx.ctxMgr.upsertUserByPrefixAtTail(STATUS_SNAPSHOT_PREFIX, statusText);
+    ctx.ctxMgr.upsertUserByPrefixBeforeLatest(
+      STATUS_SNAPSHOT_PREFIX,
+      statusText,
+    );
   }
 
   // ─────────────────────────────────────────────────────────

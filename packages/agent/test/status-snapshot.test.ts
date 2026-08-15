@@ -217,7 +217,7 @@ describe("StatusSnapshotV1", () => {
     );
     writeFileSync(path.join(workspaceRoot, "source.txt"), "evidence\n", "utf8");
     const snapshots: string[] = [];
-    const statusWasTail: boolean[] = [];
+    const statusWasTailAdjacent: boolean[] = [];
     let modelCalls = 0;
     const orchestrator = new AgentOrchestrator({
       memoryExtraction: "off",
@@ -232,8 +232,8 @@ describe("StatusSnapshotV1", () => {
               message.content.startsWith(STATUS_SNAPSHOT_PREFIX),
             );
           if (snapshot) snapshots.push(snapshot.content);
-          statusWasTail.push(
-            messages.at(-1)?.content.startsWith(STATUS_SNAPSHOT_PREFIX) ??
+          statusWasTailAdjacent.push(
+            messages.at(-2)?.content.startsWith(STATUS_SNAPSHOT_PREFIX) ??
               false,
           );
           if (modelCalls === 1) {
@@ -257,7 +257,7 @@ describe("StatusSnapshotV1", () => {
 
     expect(result.status).toBe("completed");
     expect(snapshots).toHaveLength(2);
-    expect(statusWasTail).toEqual([true, true]);
+    expect(statusWasTailAdjacent).toEqual([true, true]);
     expect(snapshots[0]).toContain("tools calls=0 failures=0");
     expect(snapshots[1]).toContain("tools calls=1 failures=0");
     expect(snapshots[1]).toContain(

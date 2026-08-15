@@ -127,7 +127,7 @@ export class ContextManager {
    * Replace a dynamic host-control message and keep it at the history tail.
    * This preserves the cacheable prefix before rapidly changing telemetry.
    */
-  upsertUserByPrefixAtTail(prefix: string, content: string): void {
+  upsertUserByPrefixBeforeLatest(prefix: string, content: string): void {
     const sanitized = isSystemInjectedMessage(content)
       ? content
       : sanitizeUserInput(content).text;
@@ -135,7 +135,8 @@ export class ContextManager {
       (message) =>
         message.role !== "user" || !message.content.startsWith(prefix),
     );
-    this.history.push({ role: "user", content: sanitized });
+    const insertAt = Math.max(0, this.history.length - 1);
+    this.history.splice(insertAt, 0, { role: "user", content: sanitized });
     this.maybeTruncate();
   }
 
