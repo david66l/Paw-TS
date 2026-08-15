@@ -205,6 +205,31 @@ describe("StatusSnapshotV1", () => {
         0,
       ),
     ).toBe("finish");
+    expect(
+      statusPaceV1(
+        atRevision({
+          testResults: [
+            {
+              command: "bun test",
+              passed: true,
+              outcome: "passed",
+              summary: "passed",
+              mutationRevision: 2,
+            },
+            {
+              command: "missing optional diagnostic",
+              passed: false,
+              outcome: "harness_failed",
+              summary: "runner missing",
+              mutationRevision: 2,
+            },
+          ],
+          diffInspectedRevision: 2,
+        }),
+        0,
+        0,
+      ),
+    ).toBe("finish");
   });
 
   test("injects settled tool telemetry into the next real agent turn", async () => {

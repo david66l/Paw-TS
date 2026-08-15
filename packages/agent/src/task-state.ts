@@ -6,6 +6,15 @@ import type { ToolRunResult } from "@paw/harness";
 import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
 import { isGitDiffCommand } from "./shell-command.js";
 import {
+  type TaskGraphEventV1,
+  appendTaskGraphFactsV1,
+  appendTaskGraphPlanV1,
+  formatTaskGraphV1,
+  hostFactsFromTaskStateV1,
+  parseTaskGraphEventsV1,
+  replayTaskGraphV1,
+} from "./task-graph.js";
+import {
   type VerificationCommandIntent,
   analyzeVerificationCommand,
   isVerificationCommand,
@@ -107,6 +116,8 @@ export interface TaskState {
   /** Durable acceptance ledger; absent in legacy snapshots and restored as empty. */
   readonly acceptanceCriteria?: readonly AcceptanceCriterion[];
   readonly plan: readonly string[];
+  /** Append-only, host-validated source for the advisory task graph. */
+  readonly taskGraphEvents?: readonly TaskGraphEventV1[];
   readonly filesRead: readonly string[];
   /** Successful exact reads by normalized path; absent in legacy snapshots. */
   readonly fileReadCounts?: Readonly<Record<string, number>>;
@@ -147,6 +158,7 @@ export class TaskStateManager {
         fileLockConflicts: Array.isArray(restored.fileLockConflicts)
           ? restored.fileLockConflicts
           : [],
+        taskGraphEvents: parseTaskGraphEventsV1(restored.taskGraphEvents),
       };
     } else {
       this.state = {
@@ -158,6 +170,7 @@ export class TaskStateManager {
         })),
         acceptanceCriteria: [],
         plan: [],
+        taskGraphEvents: [],
         filesRead: [],
         fileReadCounts: {},
         filesChanged: [],
@@ -377,6 +390,10 @@ export class TaskStateManager {
     this.state = {
       ...this.state,
       plan: items.map((item) => summarizePlanItem(item)),
+      taskGraphEvents: appendTaskGraphPlanV1(
+        this.state.taskGraphEvents,
+        items,
+      ),
       updatedAt: Date.now(),
     };
   }
@@ -535,7 +552,7 @@ export class TaskStateManager {
       pushUnique(pinnedFacts, `${call.tool} failed: ${result.summary}`);
     }
 
-    this.state = {
+    const nextState: TaskState = {
       ...this.state,
       filesRead,
       fileReadCounts,
@@ -551,6 +568,13 @@ export class TaskStateManager {
       diffInspectedRevision,
       pinnedFacts: pinnedFacts.slice(-20),
       updatedAt: Date.now(),
+    };
+    this.state = {
+      ...nextState,
+      taskGraphEvents: appendTaskGraphFactsV1(
+        nextState.taskGraphEvents,
+        hostFactsFromTaskStateV1(nextState, call, result),
+      ),
     };
   }
 }
@@ -614,6 +638,7 @@ export function formatTaskStateForContext(state: TaskState): string {
     ),
   );
   appendList(lines, "Plan", state.plan);
+  lines.push(formatTaskGraphV1(replayTaskGraphV1(state.taskGraphEvents)));
   if ((state.mutationRevision ?? 0) > 0) {
     lines.push(`Mutation revision: ${state.mutationRevision}`);
     lines.push(...formatCompletionReadiness(state));

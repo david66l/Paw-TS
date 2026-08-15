@@ -1,7 +1,11 @@
 import type { AgentToolCallAction } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import { toolCallDedupKey } from "./parse-agent-action.js";
-import type { TaskState } from "./task-state.js";
+import {
+  type TaskState,
+  latestSubstantiveVerification,
+  verificationOutcome,
+} from "./task-state.js";
 
 export const STATUS_SNAPSHOT_SCHEMA_V1 = "paw.status-snapshot.v1" as const;
 export const STATUS_SNAPSHOT_PREFIX = "[Status Snapshot v1]" as const;
@@ -121,19 +125,17 @@ export function statusPaceV1(
       ? "investigate"
       : "implement";
   }
-  const currentTest = [...state.testResults]
+  const latestCurrentTest = [...state.testResults]
     .reverse()
     .find((result) => (result.mutationRevision ?? 0) === mutationRevision);
-  if (
-    currentTest?.outcome === "code_failed" ||
-    (currentTest?.outcome === undefined && currentTest?.passed === false)
-  ) {
+  const substantive = latestSubstantiveVerification(state);
+  if (substantive && verificationOutcome(substantive) === "code_failed") {
     return "repair";
   }
-  if (currentTest?.outcome === "harness_failed") {
+  if (!substantive && latestCurrentTest?.outcome === "harness_failed") {
     return "stabilize_environment";
   }
-  if (!currentTest?.passed) return "verify";
+  if (!substantive?.passed) return "verify";
   if ((state.diffInspectedRevision ?? 0) < mutationRevision) {
     return "inspect_diff";
   }

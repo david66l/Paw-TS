@@ -167,5 +167,19 @@ export {
   type StatusPaceV1,
   type StatusSnapshotV1,
 } from "./status-snapshot.js";
+export {
+  TASK_GRAPH_SCHEMA_V1,
+  appendTaskGraphFactsV1,
+  appendTaskGraphPlanV1,
+  formatTaskGraphV1,
+  hostFactsFromTaskStateV1,
+  parseTaskGraphEventsV1,
+  replayTaskGraphV1,
+  type TaskGraphEventV1,
+  type TaskGraphHostFactsV1,
+  type TaskGraphNodeV1,
+  type TaskGraphPlanProposalV1,
+  type TaskGraphSnapshotV1,
+} from "./task-graph.js";
 
 export * from "./loop-v2/index.js";
