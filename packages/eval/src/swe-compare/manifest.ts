@@ -239,10 +239,37 @@ const PAW_QUALIFICATION_V12_EXPOSED_IDS: readonly string[] = [
   ]),
 ];
 
-/** Current contract after v11 was frozen and partially executed. */
-export const PAW_FRESH_QUALIFICATION_RULE = {
+/** Frozen v12 contract; one valid run and one interrupted diagnostic exist. */
+export const PAW_FRESH_QUALIFICATION_V12_RULE = {
   ...PAW_FRESH_QUALIFICATION_V11_RULE,
   version: "paw-fresh-qualification-v12" as const,
+} as const;
+
+/** Every task frozen into v12 is exposed, including the eight not executed. */
+export const PAW_FRESH_QUALIFICATION_V12_IDS = [
+  "django__django-13551",
+  "sympy__sympy-16281",
+  "scikit-learn__scikit-learn-11281",
+  "pytest-dev__pytest-5495",
+  "pydata__xarray-3364",
+  "matplotlib__matplotlib-23913",
+  "sphinx-doc__sphinx-8474",
+  "pylint-dev__pylint-7114",
+  "mwaskom__seaborn-3190",
+  "astropy__astropy-7746",
+] as const;
+
+const PAW_QUALIFICATION_V13_EXPOSED_IDS: readonly string[] = [
+  ...new Set([
+    ...PAW_QUALIFICATION_V12_EXPOSED_IDS,
+    ...PAW_FRESH_QUALIFICATION_V12_IDS,
+  ]),
+];
+
+/** Current contract after the v12 canary exposed control-plane drift. */
+export const PAW_FRESH_QUALIFICATION_RULE = {
+  ...PAW_FRESH_QUALIFICATION_V12_RULE,
+  version: "paw-fresh-qualification-v13" as const,
 } as const;
 
 function sha256(value: string | Buffer): string {
@@ -340,7 +367,8 @@ export function createSweCompareManifest(opts: {
     | "paw-fresh-qualification-v9"
     | "paw-fresh-qualification-v10"
     | "paw-fresh-qualification-v11"
-    | "paw-fresh-qualification-v12";
+    | "paw-fresh-qualification-v12"
+    | "paw-fresh-qualification-v13";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;
@@ -573,7 +601,7 @@ export function selectPawFreshQualificationIds(opts: {
 }): string[] {
   return selectPawFreshIds({
     ...opts,
-    excludedIds: PAW_QUALIFICATION_V12_EXPOSED_IDS,
+    excludedIds: PAW_QUALIFICATION_V13_EXPOSED_IDS,
     rule: PAW_FRESH_QUALIFICATION_RULE,
   });
 }
@@ -603,7 +631,7 @@ export function createPawFreshQualificationManifest(opts: {
     instanceIds: selectPawFreshQualificationIds(opts),
     mode: "paw-seen-development",
     pawDevelopmentRuleVersion: rule.version,
-    excludedSeenIds: PAW_QUALIFICATION_V12_EXPOSED_IDS,
+    excludedSeenIds: PAW_QUALIFICATION_V13_EXPOSED_IDS,
     pawMaxSteps: rule.pawMaxSteps,
     sharedTimeoutMs: rule.sharedTimeoutMs,
     verificationAuthority: rule.verificationAuthority,

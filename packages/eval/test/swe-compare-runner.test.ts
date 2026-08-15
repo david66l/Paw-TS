@@ -206,7 +206,7 @@ describe("SWE compare runner", () => {
     ).toThrow("terminal AppState");
   });
 
-  test("accepts the current v12 protocol metadata and rejects unknown versions", () => {
+  test("accepts the current v13 protocol metadata and rejects unknown versions", () => {
     const current = {
       protocol: "paw-only-seen-development",
       selection: {
@@ -219,7 +219,7 @@ describe("SWE compare runner", () => {
     expect(
       compareProtocolMetadataIsValid({
         ...current,
-        selection: { ...current.selection, ruleVersion: "unknown-v12" },
+        selection: { ...current.selection, ruleVersion: "unknown-v13" },
       } as unknown as SweCompareManifest),
     ).toBe(false);
     expect(
