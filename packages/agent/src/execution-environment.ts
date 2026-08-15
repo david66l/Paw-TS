@@ -21,6 +21,8 @@ export interface ExecutionSandboxV1 {
   readonly network: "deny" | "full";
   readonly runtime?: string;
   readonly image?: string;
+  /** Model-visible filesystem identity used by the sandboxed shell. */
+  readonly containerWorkspaceRoot?: string;
   readonly commandShell?: string;
 }
 
@@ -29,7 +31,10 @@ export interface ShellExecutionObservedV1 {
   readonly type: "shell.completed";
   readonly turn: number;
   readonly command: string;
+  /** Effective cwd as seen by the process that executed the command. */
   readonly cwd: string;
+  /** Host-side bind source, retained only for recovery/audit. */
+  readonly hostCwd?: string;
   readonly timeoutSec: number | null;
   readonly ok: boolean;
   readonly exitCode: number | null;
@@ -126,6 +131,9 @@ function sandboxSnapshot(config: ShellSandboxConfig): ExecutionSandboxV1 {
     network: config.network,
     ...(config.runtime ? { runtime: config.runtime } : {}),
     ...(config.image ? { image: config.image } : {}),
+    ...(config.containerWorkspaceRoot
+      ? { containerWorkspaceRoot: config.containerWorkspaceRoot }
+      : {}),
     ...(config.commandShell ? { commandShell: config.commandShell } : {}),
   });
 }
@@ -169,7 +177,12 @@ function parseSandbox(value: unknown): ExecutionSandboxV1 {
   ) {
     throw new Error("Invalid execution environment sandbox policy");
   }
-  for (const key of ["runtime", "image", "commandShell"] as const) {
+  for (const key of [
+    "runtime",
+    "image",
+    "containerWorkspaceRoot",
+    "commandShell",
+  ] as const) {
     if (sandbox[key] !== undefined && typeof sandbox[key] !== "string") {
       throw new Error(`Invalid execution environment sandbox.${key}`);
     }
@@ -181,6 +194,9 @@ function parseSandbox(value: unknown): ExecutionSandboxV1 {
       ? { runtime: sandbox.runtime }
       : {}),
     ...(typeof sandbox.image === "string" ? { image: sandbox.image } : {}),
+    ...(typeof sandbox.containerWorkspaceRoot === "string"
+      ? { containerWorkspaceRoot: sandbox.containerWorkspaceRoot }
+      : {}),
     ...(typeof sandbox.commandShell === "string"
       ? { commandShell: sandbox.commandShell }
       : {}),
@@ -199,6 +215,7 @@ function parseEvent(value: unknown, index: number): ShellExecutionObservedV1 {
     (event.turn as number) < 0 ||
     typeof event.command !== "string" ||
     typeof event.cwd !== "string" ||
+    (event.hostCwd !== undefined && typeof event.hostCwd !== "string") ||
     (event.timeoutSec !== null && typeof event.timeoutSec !== "number") ||
     typeof event.ok !== "boolean" ||
     (event.exitCode !== null && typeof event.exitCode !== "number") ||
@@ -215,6 +232,7 @@ function parseEvent(value: unknown, index: number): ShellExecutionObservedV1 {
     turn: event.turn as number,
     command: event.command,
     cwd: event.cwd,
+    ...(typeof event.hostCwd === "string" ? { hostCwd: event.hostCwd } : {}),
     timeoutSec: event.timeoutSec as number | null,
     ok: event.ok,
     exitCode: event.exitCode as number | null,
@@ -309,6 +327,12 @@ function reconciliationIssues(
   }
   if (prior.sandbox.image !== sandbox.image)
     issues.push("sandbox_image_changed");
+  if (prior.sandbox.containerWorkspaceRoot !== sandbox.containerWorkspaceRoot) {
+    issues.push("sandbox_container_workspace_root_changed");
+  }
+  if (prior.sandbox.commandShell !== sandbox.commandShell) {
+    issues.push("sandbox_command_shell_changed");
+  }
   return Object.freeze(issues);
 }
 
@@ -317,6 +341,7 @@ function resultFacts(result: ToolRunResult): {
   readonly timedOut: boolean;
   readonly failureKind: ShellExecutionObservedV1["failureKind"];
   readonly cwd?: string;
+  readonly containerWorkspaceRoot?: string;
 } {
   const payload =
     result.payload && typeof result.payload === "object"
@@ -327,6 +352,12 @@ function resultFacts(result: ToolRunResult): {
   const timedOut =
     payload.timed_out === true || /(?:timeout|timed out)/i.test(result.summary);
   const code = typeof payload.code === "string" ? payload.code : "";
+  const sandbox =
+    payload.sandbox &&
+    typeof payload.sandbox === "object" &&
+    !Array.isArray(payload.sandbox)
+      ? (payload.sandbox as Record<string, unknown>)
+      : undefined;
   const failureKind = result.ok
     ? "none"
     : code === "E_POLICY_DENIED"
@@ -339,7 +370,28 @@ function resultFacts(result: ToolRunResult): {
     timedOut,
     failureKind,
     ...(typeof payload.cwd === "string" ? { cwd: payload.cwd } : {}),
+    ...(typeof sandbox?.containerWorkspaceRoot === "string"
+      ? { containerWorkspaceRoot: sandbox.containerWorkspaceRoot }
+      : {}),
   };
+}
+
+function effectiveShellCwd(
+  hostWorkspaceRoot: string,
+  requestedCwd: string,
+  facts: ReturnType<typeof resultFacts>,
+  configuredContainerWorkspaceRoot?: string,
+): { readonly cwd: string; readonly hostCwd?: string } {
+  const hostCwd = facts.cwd ?? path.resolve(hostWorkspaceRoot, requestedCwd);
+  const containerWorkspaceRoot =
+    facts.containerWorkspaceRoot ?? configuredContainerWorkspaceRoot;
+  if (!containerWorkspaceRoot) return { cwd: hostCwd };
+  const normalizedRelative = requestedCwd.replace(/\\/g, "/");
+  const containerCwd =
+    !normalizedRelative || normalizedRelative === "."
+      ? containerWorkspaceRoot
+      : path.posix.join(containerWorkspaceRoot, normalizedRelative);
+  return { cwd: containerCwd, hostCwd };
 }
 
 export class ExecutionEnvironmentRegistryV1 {
@@ -391,14 +443,20 @@ export class ExecutionEnvironmentRegistryV1 {
         : typeof args.timeoutSec === "number"
           ? args.timeoutSec
           : null;
+    const cwd = effectiveShellCwd(
+      this.options.workspaceRoot,
+      requestedCwd,
+      facts,
+      this.sandbox.containerWorkspaceRoot,
+    );
     this.events.push(
       Object.freeze({
         seq: this.events.length + 1,
         type: "shell.completed" as const,
         turn,
         command,
-        cwd:
-          facts.cwd ?? path.resolve(this.options.workspaceRoot, requestedCwd),
+        cwd: cwd.cwd,
+        ...(cwd.hostCwd ? { hostCwd: cwd.hostCwd } : {}),
         timeoutSec: timeout,
         ok: result.ok,
         exitCode: facts.exitCode,

@@ -178,7 +178,10 @@ import {
 import { type MemoryRuntime, createMemoryRuntime } from "@paw/memory";
 import { loadMemoryConfigSync } from "@paw/memory/longterm";
 import type { CandidateReviewer } from "./candidate-review.js";
-import { CapabilityExposureShadowV1 } from "./capability-exposure.js";
+import {
+  CapabilityExposureShadowV1,
+  capabilityPhaseToolsV1,
+} from "./capability-exposure.js";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
@@ -2265,6 +2268,7 @@ export class AgentOrchestrator {
         ctx.turn,
         specGoal,
         toolCalls.map((call) => call.tool),
+        capabilityPhaseToolsV1(taskSnapshot),
       ),
     });
 
@@ -3821,7 +3825,10 @@ export class AgentOrchestrator {
     });
     emit({
       type: "capability.inventory",
-      ...capabilityExposure.snapshot(spec.goal),
+      ...capabilityExposure.snapshot(
+        spec.goal,
+        capabilityPhaseToolsV1(taskState.snapshot()),
+      ),
     });
 
     const contextWindow = model.capabilities?.contextWindow ?? 128_000;

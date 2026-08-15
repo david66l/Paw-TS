@@ -337,6 +337,28 @@ export function createSweCompareToolExecutionPolicy(input: {
     ),
   );
   return ({ tool, args }) => {
+    if (tool === "workspace.run_shell") {
+      const command =
+        args && typeof args === "object" && !Array.isArray(args)
+          ? (args as Record<string, unknown>).command
+          : undefined;
+      if (typeof command === "string") {
+        const violation =
+          sweCompareNetworkViolation(command) ??
+          sweCompareLocalGoldViolation(command) ??
+          sweCompareFilesystemScopeViolation(command);
+        if (violation) {
+          return {
+            allowed: false,
+            reason: violation,
+            message:
+              violation === "outside_workspace_filesystem_probe"
+                ? "Public benchmark shell commands must stay inside the mounted task workspace. Do not enumerate the container root, installed packages, caches, harness data, or possible answer artifacts; reason from the checked-out repository and its existing tests."
+                : "This public benchmark forbids network, installed future source, and benchmark answer data. Work only from the frozen repository and its existing tests.",
+          };
+        }
+      }
+    }
     const targets = mutationTargets(tool, args);
     if (targets.length === 0) return { allowed: true };
     for (const target of targets) {
@@ -1891,6 +1913,8 @@ function auditShellCommands(
     if (outbound) violations.push(outbound);
     const localGold = sweCompareLocalGoldViolation(command);
     if (localGold) violations.push(localGold);
+    const filesystemScope = sweCompareFilesystemScopeViolation(command);
+    if (filesystemScope) violations.push(filesystemScope);
     if (
       /\bgit\s+(?:show|log|diff)\b[^\r\n]*(?:origin\/|upstream\/)/i.test(
         command,
@@ -1907,17 +1931,33 @@ function auditShellCommands(
 export function sweCompareLocalGoldViolation(
   value: string,
 ): "installed_future_source_access" | "benchmark_gold_data_access" | undefined {
-  if (/(?:site-packages|dist-packages)[\\/]/i.test(value)) {
+  if (
+    /(?:site-packages|dist-packages)(?:[\\/]|(?=$|[\s"'*;|]))/i.test(value) ||
+    /\bsite\.get(?:user)?sitepackages\s*\(/i.test(value)
+  ) {
     return "installed_future_source_access";
   }
   if (
-    /(?:[\\/]\.cache[\\/]huggingface[\\/]|swe[_-]?bench[^\s"']*\.(?:arrow|parquet|jsonl)|\btest_patch\b|\bgold_patch\b)/i.test(
+    /(?:[\\/]\.cache[\\/]huggingface(?:[\\/]|\b)|swe[_ -]?bench[^\s"']*\.(?:arrow|parquet|jsonl)|\b(?:test|gold|reference|evaluation)[_ -]?patch\b)/i.test(
       value,
     )
   ) {
     return "benchmark_gold_data_access";
   }
   return undefined;
+}
+
+/** Keep benchmark shell discovery inside the mounted repository identity. */
+export function sweCompareFilesystemScopeViolation(
+  command: string,
+): "outside_workspace_filesystem_probe" | undefined {
+  const broadFind =
+    /\b(?:find|fd)\s+(?:["']?\/(?:opt|root|tmp|usr|var|home|etc|proc|sys)(?:[\\/"'\s]|$)|["']?\/["']?(?:\s|$))/i;
+  const broadRead =
+    /\b(?:ls|dir|rg|grep|cat|sed|head|tail)\b[^\r\n]*(?:^|[\s"'])(?:\/(?:opt|root|tmp|usr|var|home|etc)(?:[\\/\s"']|$))/i;
+  return broadFind.test(command) || broadRead.test(command)
+    ? "outside_workspace_filesystem_probe"
+    : undefined;
 }
 
 /**
@@ -1972,7 +2012,8 @@ export function allowSweCompareToolCall(input: {
   return (
     typeof args.command !== "string" ||
     (sweCompareNetworkViolation(args.command) === undefined &&
-      sweCompareLocalGoldViolation(args.command) === undefined)
+      sweCompareLocalGoldViolation(args.command) === undefined &&
+      sweCompareFilesystemScopeViolation(args.command) === undefined)
   );
 }
 

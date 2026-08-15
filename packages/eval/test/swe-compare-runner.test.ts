@@ -44,6 +44,7 @@ import {
   replayClaudeTracePatch,
   replayPawTracePatch,
   runSweCompareArm,
+  sweCompareFilesystemScopeViolation,
   sweCompareLocalGoldViolation,
   sweCompareNetworkViolation,
   validateCompareRun,
@@ -529,6 +530,25 @@ describe("SWE compare runner", () => {
     expect(testEdit.allowed).toBe(false);
     if (!testEdit.allowed)
       expect(testEdit.reason).toBe("test_mutation_forbidden");
+
+    const rootProbe = await policy({
+      tool: "workspace.run_shell",
+      args: {
+        command: 'find / -iname "*patch*" -o -iname "*16281*" | head -30',
+      },
+      workspaceRoot: root,
+    });
+    expect(rootProbe.allowed).toBe(false);
+    if (!rootProbe.allowed) {
+      expect(rootProbe.reason).toBe("outside_workspace_filesystem_probe");
+    }
+
+    const repositoryTest = await policy({
+      tool: "workspace.run_shell",
+      args: { command: "python -m pytest tests/test_app.py" },
+      workspaceRoot: root,
+    });
+    expect(repositoryTest).toEqual({ allowed: true });
   });
 
   test("shell effect audit keeps product edits and reports them", async () => {
@@ -1386,6 +1406,14 @@ describe("SWE compare runner", () => {
       ),
     ).toBe("installed_future_source_access");
     expect(
+      sweCompareLocalGoldViolation("ls /usr/lib/python/site-packages"),
+    ).toBe("installed_future_source_access");
+    expect(
+      sweCompareLocalGoldViolation(
+        'python -c "import site; print(site.getsitepackages())"',
+      ),
+    ).toBe("installed_future_source_access");
+    expect(
       sweCompareLocalGoldViolation(
         "pyarrow.ipc.open_stream('C:/Users/me/.cache/huggingface/swe-bench_lite-test.arrow'); row['test_patch']",
       ),
@@ -1394,6 +1422,25 @@ describe("SWE compare runner", () => {
       allowSweCompareToolCall({
         tool: "workspace.run_shell",
         args: { command: "grep -R fix /usr/lib/python/site-packages/project" },
+      }),
+    ).toBe(false);
+    expect(
+      sweCompareFilesystemScopeViolation(
+        'find / -iname "*patch*" -o -iname "*16281*"',
+      ),
+    ).toBe("outside_workspace_filesystem_probe");
+    expect(
+      sweCompareFilesystemScopeViolation("find /opt /root /tmp -iname sympy"),
+    ).toBe("outside_workspace_filesystem_probe");
+    expect(
+      sweCompareFilesystemScopeViolation(
+        "find /testbed/sympy -name '*.py' -maxdepth 3",
+      ),
+    ).toBeUndefined();
+    expect(
+      allowSweCompareToolCall({
+        tool: "workspace.run_shell",
+        args: { command: 'find / -name "*.json" -path "*swe*"' },
       }),
     ).toBe(false);
     expect(

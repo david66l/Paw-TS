@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type { ChatMessage } from "@paw/models";
 
+import { ExecutionEnvironmentRegistryV1 } from "../src/execution-environment.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 import {
   RunStatusTelemetryV1,
@@ -48,6 +49,45 @@ describe("StatusSnapshotV1", () => {
     expect(text).toContain("last_tool=none");
     expect(text).toContain("python=unprobed");
     expect(text).toContain("background_jobs=untracked");
+  });
+
+  test("renders the sandbox shell as the sole model-visible execution identity", () => {
+    const taskState = new TaskStateManager("Fix the repository.");
+    const executionEnvironment = new ExecutionEnvironmentRegistryV1({
+      runId: "status-container",
+      workspaceRoot: "C:\\workspace",
+      runtime: {
+        platform: "win32",
+        arch: "x64",
+        shell: "cmd.exe",
+        node: "v24.0.0",
+        bun: "1.3.0",
+        python: "Python 3.10.0",
+      },
+      shellSandbox: {
+        mode: "workspace",
+        network: "deny",
+        runtime: "docker",
+        image: "swebench/example:latest",
+        containerWorkspaceRoot: "/testbed",
+        commandShell: "bash",
+      },
+    });
+    const telemetry = new RunStatusTelemetryV1({
+      runId: "status-container",
+      workspaceRoot: "C:\\workspace",
+      executionEnvironment,
+    });
+
+    const text = formatStatusSnapshotV1(
+      telemetry.snapshot(0, 20, taskState.snapshot()),
+    );
+
+    expect(text).toContain("scope=container cwd=/testbed");
+    expect(text).toContain("host_workspace=C:\\workspace");
+    expect(text).toContain("platform=container-posix/x64 shell=/bin/bash");
+    expect(text).toContain("python=unprobed-in-container");
+    expect(text).not.toContain("shell=cmd.exe");
   });
 
   test("detects exact repetition and tells the model to change hypothesis", () => {

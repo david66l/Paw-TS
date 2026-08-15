@@ -22,7 +22,9 @@ export type StatusPaceV1 =
   | "change_hypothesis";
 
 export interface StatusEnvironmentV1 {
+  readonly scope?: "host" | "container";
   readonly cwd: string;
+  readonly hostWorkspaceRoot?: string;
   readonly platform: string;
   readonly arch: string;
   readonly shell: string;
@@ -31,8 +33,48 @@ export interface StatusEnvironmentV1 {
   readonly python: string;
   readonly shellPersistence?: "fresh_process_per_call";
   readonly sandboxMode?: "off" | "workspace" | "strict";
+  readonly sandboxImage?: string;
   readonly recoveryCompatible?: boolean;
   readonly recoveryIssues?: readonly string[];
+}
+
+function statusEnvironmentFromExecution(
+  execution: ReturnType<ExecutionEnvironmentRegistryV1["snapshot"]>,
+): StatusEnvironmentV1 {
+  const containerRoot = execution.sandbox.containerWorkspaceRoot;
+  const commandShell = execution.sandbox.commandShell;
+  if (execution.sandbox.mode !== "off" && containerRoot && commandShell) {
+    return Object.freeze({
+      scope: "container" as const,
+      cwd: containerRoot,
+      hostWorkspaceRoot: execution.workspaceRoot,
+      platform: "container-posix",
+      arch: execution.runtime.arch,
+      shell: `/bin/${commandShell}`,
+      node: "unprobed-in-container",
+      bun: "unprobed-in-container",
+      python: "unprobed-in-container",
+      shellPersistence: execution.shellPersistence,
+      sandboxMode: execution.sandbox.mode,
+      ...(execution.sandbox.image
+        ? { sandboxImage: execution.sandbox.image }
+        : {}),
+      recoveryCompatible: execution.recovery.compatible,
+      recoveryIssues: execution.recovery.issues,
+    });
+  }
+  return Object.freeze({
+    scope: "host" as const,
+    cwd: execution.workspaceRoot,
+    ...execution.runtime,
+    shellPersistence: execution.shellPersistence,
+    sandboxMode: execution.sandbox.mode,
+    ...(execution.sandbox.image
+      ? { sandboxImage: execution.sandbox.image }
+      : {}),
+    recoveryCompatible: execution.recovery.compatible,
+    recoveryIssues: execution.recovery.issues,
+  });
 }
 
 export interface StatusSnapshotV1 {
@@ -60,7 +102,7 @@ export interface StatusSnapshotV1 {
   readonly environment: StatusEnvironmentV1;
   readonly backgroundJobs:
     | "untracked"
-      | {
+    | {
         readonly capability: "not_available" | "managed";
         readonly managed: number;
         readonly running: number;
@@ -232,14 +274,7 @@ export class RunStatusTelemetryV1 {
     );
     const execution = this.options.executionEnvironment?.snapshot();
     const environment: StatusEnvironmentV1 = execution
-      ? Object.freeze({
-          cwd: execution.workspaceRoot,
-          ...execution.runtime,
-          shellPersistence: execution.shellPersistence,
-          sandboxMode: execution.sandbox.mode,
-          recoveryCompatible: execution.recovery.compatible,
-          recoveryIssues: execution.recovery.issues,
-        })
+      ? statusEnvironmentFromExecution(execution)
       : this.environment;
     return Object.freeze({
       schemaVersion: STATUS_SNAPSHOT_SCHEMA_V1,
@@ -269,7 +304,13 @@ export function formatStatusSnapshotV1(snapshot: StatusSnapshotV1): string {
     ? `${snapshot.lastTool.tool} ok=${snapshot.lastTool.ok} duration_ms=${snapshot.lastTool.durationMs} timed_out=${snapshot.lastTool.timedOut}`
     : "none";
   const environmentDetails = [
+    ...(snapshot.environment.scope
+      ? [`scope=${snapshot.environment.scope}`]
+      : []),
     `cwd=${snapshot.environment.cwd}`,
+    ...(snapshot.environment.hostWorkspaceRoot
+      ? [`host_workspace=${snapshot.environment.hostWorkspaceRoot}`]
+      : []),
     `platform=${snapshot.environment.platform}/${snapshot.environment.arch}`,
     `shell=${snapshot.environment.shell}`,
     `node=${snapshot.environment.node}`,
@@ -280,6 +321,9 @@ export function formatStatusSnapshotV1(snapshot: StatusSnapshotV1): string {
       : []),
     ...(snapshot.environment.sandboxMode
       ? [`sandbox=${snapshot.environment.sandboxMode}`]
+      : []),
+    ...(snapshot.environment.sandboxImage
+      ? [`sandbox_image=${snapshot.environment.sandboxImage}`]
       : []),
     ...(snapshot.environment.recoveryCompatible !== undefined
       ? [

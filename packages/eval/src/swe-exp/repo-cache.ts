@@ -46,6 +46,18 @@ function runGit(
   return { ok: true, stdout: r.stdout ?? "" };
 }
 
+function runReadOnlyGit(
+  cwd: string,
+  args: string[],
+  timeoutMs: number,
+): ReturnType<typeof runGit> {
+  const first = runGit(cwd, args, timeoutMs);
+  if (first.ok || !/ETIMEDOUT|timed? out/i.test(first.error)) return first;
+  // A transient Git-for-Windows process stall must not invalidate an otherwise
+  // replayable benchmark artifact. Retrying is safe for these read-only calls.
+  return runGit(cwd, args, Math.min(timeoutMs * 2, 180_000));
+}
+
 export function repoCachePath(cacheDir: string, repo: string): string {
   const slug = repo.replace(/[\\/]/g, "__");
   return path.join(cacheDir, "repos", slug);
@@ -323,13 +335,13 @@ function captureExplicitFileDiff(
         };
       }
     }
-    const baseline = runGit(
+    const baseline = runReadOnlyGit(
       workspaceRoot,
       ["show", `HEAD:${normalized}`],
       60_000,
     );
     if (!baseline.ok) {
-      const tracked = runGit(
+      const tracked = runReadOnlyGit(
         workspaceRoot,
         ["ls-files", "--error-unmatch", "--", normalized],
         60_000,

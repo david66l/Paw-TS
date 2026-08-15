@@ -44,6 +44,22 @@ export interface CapabilitySelectionObservationV1 {
   readonly exposedToolCount: number;
 }
 
+export interface CapabilityTaskPhaseFactsV1 {
+  readonly mutationRevision?: number;
+  readonly diffInspectedRevision?: number;
+}
+
+/** Add temporal tools without turning them into permanently exposed core. */
+export function capabilityPhaseToolsV1(
+  state: CapabilityTaskPhaseFactsV1,
+): readonly string[] {
+  const revision = state.mutationRevision ?? 0;
+  if (revision === 0 || (state.diffInspectedRevision ?? 0) >= revision) {
+    return Object.freeze(["workspace.git_status"]);
+  }
+  return Object.freeze([]);
+}
+
 const CORE_TOOLS = new Set([
   "workspace.read_file",
   "workspace.edit_file",
@@ -225,18 +241,27 @@ export class CapabilityExposureShadowV1 {
     this.fullToolTokens = input.countTokens(input.definitions);
   }
 
-  suggestedTools(query: string): readonly string[] {
+  suggestedTools(
+    query: string,
+    phaseTools: readonly string[] = [],
+  ): readonly string[] {
     const selected = new Set(
       this.inventory.filter((entry) => entry.core).map((entry) => entry.name),
     );
+    for (const name of phaseTools) {
+      if (this.definitionsByName.has(name)) selected.add(name);
+    }
     for (const entry of searchCapabilitiesV1(this.inventory, query, 6)) {
       selected.add(entry.name);
     }
     return Object.freeze([...selected].sort());
   }
 
-  snapshot(query: string): CapabilityExposureSnapshotV1 {
-    const suggestedTools = this.suggestedTools(query);
+  snapshot(
+    query: string,
+    phaseTools: readonly string[] = [],
+  ): CapabilityExposureSnapshotV1 {
+    const suggestedTools = this.suggestedTools(query, phaseTools);
     const suggestedDefinitions = suggestedTools
       .map((name) => this.definitionsByName.get(name))
       .filter((definition): definition is ToolDefinition =>
@@ -268,8 +293,9 @@ export class CapabilityExposureShadowV1 {
     turn: number,
     query: string,
     actualTools: readonly string[],
+    phaseTools: readonly string[] = [],
   ): CapabilitySelectionObservationV1 {
-    const suggestedTools = this.suggestedTools(query);
+    const suggestedTools = this.suggestedTools(query, phaseTools);
     const suggestedSet = new Set(suggestedTools);
     const uniqueActual = Object.freeze([...new Set(actualTools)].sort());
     const outsideSuggestion = Object.freeze(

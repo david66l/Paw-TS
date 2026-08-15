@@ -84,6 +84,72 @@ describe("ExecutionEnvironmentRegistryV1", () => {
     ]);
   });
 
+  test("records the effective container cwd instead of leaking the host cwd", () => {
+    const registry = new ExecutionEnvironmentRegistryV1({
+      runId: "env-container",
+      workspaceRoot: "C:\\workspace",
+      shellSandbox: {
+        mode: "workspace",
+        network: "deny",
+        runtime: "docker",
+        image: "swebench/example:latest",
+        containerWorkspaceRoot: "/testbed",
+        commandShell: "bash",
+      },
+      runtime: RUNTIME,
+    });
+    registry.observeToolResult(
+      1,
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "pwd", cwd: "tests" },
+      },
+      {
+        ok: true,
+        summary: "run_shell: exit 0",
+        payload: {
+          exit_code: 0,
+          cwd: "C:\\workspace\\tests",
+          sandbox: {
+            containerWorkspaceRoot: "/testbed",
+            commandShell: "bash",
+          },
+        },
+      },
+    );
+    registry.observeToolResult(
+      2,
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "find /", cwd: "." },
+      },
+      {
+        ok: false,
+        summary: "[ToolPolicy:outside_workspace_filesystem_probe] blocked",
+        payload: { blocked: true, code: "E_TOOL_POLICY" },
+      },
+    );
+
+    const snapshot = registry.snapshot();
+    expect(snapshot).toMatchObject({
+      sandbox: {
+        containerWorkspaceRoot: "/testbed",
+        commandShell: "bash",
+      },
+    });
+    expect(snapshot.events[0]).toMatchObject({
+      cwd: "/testbed/tests",
+      hostCwd: "C:\\workspace\\tests",
+    });
+    expect(snapshot.events[1]).toMatchObject({
+      cwd: "/testbed",
+      hostCwd: "C:\\workspace",
+      ok: false,
+    });
+  });
+
   test("replays exactly and exposes incompatible resume environments", () => {
     const first = new ExecutionEnvironmentRegistryV1({
       runId: "env-resume",
@@ -117,6 +183,8 @@ describe("ExecutionEnvironmentRegistryV1", () => {
         mode: "strict",
         network: "full",
         image: "node:24",
+        containerWorkspaceRoot: "/testbed",
+        commandShell: "bash",
       },
       runtime: { ...RUNTIME, shell: "pwsh.exe" },
       resumeSnapshot: serialized,
@@ -129,6 +197,8 @@ describe("ExecutionEnvironmentRegistryV1", () => {
       "sandbox_mode_changed",
       "sandbox_network_changed",
       "sandbox_image_changed",
+      "sandbox_container_workspace_root_changed",
+      "sandbox_command_shell_changed",
     ]);
   });
 
