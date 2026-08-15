@@ -20,6 +20,7 @@ import {
   decideIncomplete,
   evidenceFromTaskState,
 } from "../src/lifecycle/completion-policy.js";
+import { memoryOutcomeFromDecision } from "../src/lifecycle/memory-outcome.js";
 import { collectToolRecoveryMessage } from "../src/lifecycle/task-lifecycle.js";
 import {
   idleFuseTripped,
@@ -179,6 +180,63 @@ describe("CompletionPolicy", () => {
       outcome: "harness_failed",
       failureKind: "missing_dependency",
       retryability: "terminal",
+    });
+  });
+
+  test("verification provenance survives the agent-to-memory evidence boundary", () => {
+    const evidence = evidenceFromTaskState(
+      baseState({
+        mutationRevision: 3,
+        testResults: [
+          {
+            command: "bun test packages/agent/test/lifecycle.test.ts",
+            family: "javascript",
+            passed: true,
+            outcome: "passed",
+            summary: "pass",
+            evidence: "12 pass",
+            shellCommandRevision: 8,
+            mutationRevision: 3,
+          },
+        ],
+      }),
+    );
+    expect(evidence.mutationRevision).toBe(3);
+    expect(evidence.testResults[0]).toMatchObject({
+      family: "javascript",
+      evidence: "12 pass",
+      shellCommandRevision: 8,
+      mutationRevision: 3,
+    });
+  });
+
+  test("completion authority is frozen into the memory outcome contract", () => {
+    const state = baseState({
+      filesChanged: ["src/a.ts"],
+      mutationRevision: 4,
+      testResults: [
+        {
+          command: "bun test",
+          family: "javascript",
+          passed: true,
+          outcome: "passed",
+          summary: "pass",
+          mutationRevision: 4,
+        },
+      ],
+    });
+    const decision = decideCompletion({
+      intent: "final_answer",
+      message: "done",
+      taskState: state,
+      verification: { ok: true, mode: "tests_passed" },
+    });
+    expect(memoryOutcomeFromDecision(decision, state)).toMatchObject({
+      schemaVersion: 1,
+      runStatus: "completed",
+      completionOutcome: "verified",
+      verificationAuthority: "local",
+      mutationRevision: 4,
     });
   });
 

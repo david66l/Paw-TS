@@ -35,12 +35,21 @@ export function evidenceFromTaskState(
     })),
     testResults: state.testResults.map((t) => ({
       command: t.command,
+      ...(t.family ? { family: t.family } : {}),
       passed: t.passed,
       ...(t.outcome ? { outcome: t.outcome } : {}),
       ...(t.failureKind ? { failureKind: t.failureKind } : {}),
       ...(t.retryability ? { retryability: t.retryability } : {}),
       summary: t.summary,
+      ...(t.evidence ? { evidence: t.evidence } : {}),
+      ...(t.shellCommandRevision != null
+        ? { shellCommandRevision: t.shellCommandRevision }
+        : {}),
+      ...(t.mutationRevision != null
+        ? { mutationRevision: t.mutationRevision }
+        : {}),
     })),
+    mutationRevision: state.mutationRevision ?? 0,
     ...(skipVerifyReason ? { skipVerifyReason } : {}),
     ...((state.fileLockConflicts?.length ?? 0) > 0
       ? { fileLockConflicts: [...state.fileLockConflicts] }

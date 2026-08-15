@@ -183,7 +183,11 @@ import type {
   ToolEffectPolicy,
   ToolExecutionPolicy,
 } from "./execution-policy.js";
-import { decideIncomplete } from "./lifecycle/completion-policy.js";
+import {
+  decideCompletion,
+  decideIncomplete,
+} from "./lifecycle/completion-policy.js";
+import { memoryOutcomeFromDecision } from "./lifecycle/memory-outcome.js";
 import {
   type VerificationPolicy,
   goalAllowsSkipVerification,
@@ -1013,6 +1017,10 @@ export class AgentOrchestrator {
                 status:
                   runResult.status === "completed" ? "completed" : "failed",
                 finalMessage: runResult.message,
+                outcome: memoryOutcomeFromDecision(
+                  state.decision,
+                  taskState.snapshot(),
+                ),
               });
               emit({
                 type: "memory.extracted",
@@ -1072,6 +1080,7 @@ export class AgentOrchestrator {
             taskId: this._memoryTaskId,
             status: "failed",
             finalMessage: runResult.message,
+            outcome: memoryOutcomeFromDecision(decision, taskState.snapshot()),
           });
           emit({
             type: "memory.extracted",
@@ -1114,13 +1123,47 @@ export class AgentOrchestrator {
             message,
           },
         );
-        const runResult: RunResult = { runId, status, message };
+        const decision = decideCompletion({
+          intent: aborted ? "abort" : "error",
+          message,
+          taskState: taskState.snapshot(),
+          hasEverUsedTools: taskState.snapshot().commandsRun.length > 0,
+        });
+        const { runResultFromDecision } = await import(
+          "./lifecycle/task-lifecycle.js"
+        );
+        const runResult = runResultFromDecision(runId, decision);
         persistLoopV2Terminal?.(runResult);
         if (!aborted) {
           emit({ type: "run.failed", message });
         }
         emit({ type: "run.completed", status, message });
         emitRunMetrics?.(status);
+        if (
+          this._memoryRuntime &&
+          this._memoryTaskId &&
+          !this._deferMemoryComplete
+        ) {
+          try {
+            const writeResult = await this._memoryRuntime.completeTask({
+              taskId: this._memoryTaskId,
+              status: "failed",
+              finalMessage: runResult.message,
+              outcome: memoryOutcomeFromDecision(
+                decision,
+                taskState.snapshot(),
+              ),
+            });
+            emit({
+              type: "memory.extracted",
+              runId,
+              entries: writeResult.candidates,
+              rejected: writeResult.rejected + writeResult.pendingReview,
+            });
+          } catch {
+            /* best-effort */
+          }
+        }
         return runResult;
       }
       return { runId: spec.runId, status, message };

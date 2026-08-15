@@ -34,6 +34,7 @@ import {
 } from "../longterm/index.js";
 import type { MemoryEntry, SemanticFact } from "../longterm/store/engine.js";
 import { deriveEntryId } from "../longterm/store/id.js";
+import { classifyMemoryCompletion } from "./outcome-contract.js";
 import { type ResolvedScope, resolveScope } from "./scope.js";
 import type {
   BeginTaskInput,
@@ -92,17 +93,15 @@ function buildCore(opts: {
       : (llm.govern ?? resolveGovernModel(opts.scope.workspaceRoot));
 
   const pipeline = new MemoryWritePipeline({
-    distiller:
-      llm?.distill
-        ? new MemoryDistiller({ complete: llm.distill })
-        : undefined,
+    distiller: llm?.distill
+      ? new MemoryDistiller({ complete: llm.distill })
+      : undefined,
     ...(governLlm ? { governorLlm: { complete: governLlm } } : {}),
     ...(llm?.confirm ? { correctionConfirmer: { confirm: llm.confirm } } : {}),
     dailyBudget: opts.dailyBudget ?? 50,
     emit,
     // readonly 回调是同步签名；config 文件读取用同步版（文件极小、变化低频）
-    readonly: () =>
-      loadMemoryConfigSync(opts.scope.workspaceRoot).readonly,
+    readonly: () => loadMemoryConfigSync(opts.scope.workspaceRoot).readonly,
   });
   pipeline.start();
 
@@ -159,7 +158,7 @@ interface TaskTrace {
     exitCode?: number;
   }[];
   /** 测试结果跟踪：供 completeTask 的 verdict 门控 */
-  tests: { ran: boolean; failed: boolean };
+  tests: { ran: boolean; lastPassed?: boolean };
   startedAt: string;
 }
 
@@ -173,6 +172,14 @@ function summarizeArgs(args: unknown): string {
   } catch {
     return String(args).slice(0, 100);
   }
+}
+
+function commandFromArgs(args: unknown): string {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) {
+    return "";
+  }
+  const command = (args as Record<string, unknown>).command;
+  return typeof command === "string" ? command.slice(0, 1000) : "";
 }
 
 /** 轨迹摘要（蒸馏输入，≤4000 字符）：工具调用行 + 最终消息 */
@@ -290,7 +297,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
         branch: input.branch,
         repo: this.scope.repositoryId,
         tools: [],
-        tests: { ran: false, failed: false },
+        tests: { ran: false },
         startedAt: new Date().toISOString(),
       });
     }
@@ -350,9 +357,12 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
       });
       if (trace.tools.length > MAX_TRACE_TOOLS)
         trace.tools.splice(0, trace.tools.length - MAX_TRACE_TOOLS);
-      if (TEST_TOOL_RE.test(`${input.toolName} ${input.summary}`)) {
+      const testSignal = `${input.toolName} ${input.summary} ${commandFromArgs(input.args)} ${summarizeArgs(input.args)}`;
+      if (TEST_TOOL_RE.test(testSignal)) {
         trace.tests.ran = true;
-        if (!input.ok) trace.tests.failed = true;
+        // Legacy callers lack the authoritative outcome contract. Keep only
+        // the latest result so a repaired failure can be superseded by green.
+        trace.tests.lastPassed = input.ok;
       }
     }
 
@@ -439,8 +449,9 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
     }
 
     const digest = buildTrajectoryDigest(trace, input.finalMessage);
+    const disposition = classifyMemoryCompletion(input);
     let event: MemoryWriteEvent;
-    if (input.status === "failed") {
+    if (disposition === "failed") {
       // 失败 → 试用通道（不直接入库，spec §5.3）
       event = {
         type: "task_failed",
@@ -450,8 +461,12 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
         goal: trace.goal,
         trajectory: digest,
       };
-    } else if (trace.tests.ran) {
-      // 有测试结果 → test verdict：全过=固化 / 有失败=试用通道
+    } else if (
+      disposition === "verified_success" ||
+      (!input.outcome && trace.tests.ran)
+    ) {
+      // 新路径只接受 CompletionPolicy 的当前版本权威绿测；旧调用方
+      // 保留最后一次测试结果兼容语义，不再让早期失败永久污染成功。
       event = {
         type: "task_succeeded",
         runId: input.taskId,
@@ -459,7 +474,12 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
         repo: trace.repo,
         goal: trace.goal,
         trajectory: digest,
-        verdict: { kind: "test", passed: !trace.tests.failed },
+        verdict: {
+          kind: "test",
+          passed:
+            disposition === "verified_success" ||
+            trace.tests.lastPassed === true,
+        },
       };
     } else {
       // 务实模式：无测试信号 → session_finalize 兜底蒸馏（conf ≤0.6），不违反"禁止盲改"

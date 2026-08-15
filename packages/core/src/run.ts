@@ -34,6 +34,16 @@ export interface RunCommandEvidence {
 
 export interface RunTestEvidence {
   readonly command: string;
+  /** Parsed runner family retained across the run/memory boundary. */
+  readonly family?:
+    | "pytest"
+    | "unittest"
+    | "python-runner"
+    | "django"
+    | "javascript"
+    | "node"
+    | "go"
+    | "cargo";
   readonly passed: boolean;
   /** Structured verification result; optional for backwards compatibility. */
   readonly outcome?: "passed" | "code_failed" | "harness_failed";
@@ -49,6 +59,12 @@ export interface RunTestEvidence {
   /** Whether one bounded command-level recovery may still produce evidence. */
   readonly retryability?: "retryable" | "terminal";
   readonly summary: string;
+  /** Short redacted diagnostic retained after full tool output pruning. */
+  readonly evidence?: string;
+  /** Shell command sequence number that produced this result. */
+  readonly shellCommandRevision?: number;
+  /** Source mutation revision verified by this result. */
+  readonly mutationRevision?: number;
 }
 
 /** Structured evidence attached to RunResult for eval / resume / memory. */
@@ -56,6 +72,8 @@ export interface RunEvidence {
   readonly filesChanged: readonly string[];
   readonly commandsRun: readonly RunCommandEvidence[];
   readonly testResults: readonly RunTestEvidence[];
+  /** Source revision at the exact completion decision boundary. */
+  readonly mutationRevision?: number;
   readonly skipVerifyReason?: string;
   /** Paths that hit parallel file-lock conflicts during the run. */
   readonly fileLockConflicts?: readonly string[];

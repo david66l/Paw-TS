@@ -38,6 +38,10 @@ export {
   type MigrateLegacyResult,
 } from "./migrate-legacy.js";
 export { resolveScope, type ResolvedScope } from "./scope.js";
+export {
+  classifyMemoryCompletion,
+  type MemoryCompletionDisposition,
+} from "./outcome-contract.js";
 export type {
   BeginTaskInput,
   BeginTaskResult,
@@ -49,9 +53,11 @@ export type {
   MemoryCandidateEnricher,
   MemoryCandidateEnrichmentDraft,
   MemoryListItem,
+  MemoryOutcomeContractV1,
   MemoryRuntime,
   MemoryRuntimeLlm,
   MemoryRuntimeOptions,
+  MemoryVerificationAuthority,
   OnToolResultInput,
   PatchWorkingMemoryInput,
   SaveMemoryInput,

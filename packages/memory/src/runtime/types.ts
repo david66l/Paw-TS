@@ -3,7 +3,12 @@
  * Agent / harness 只依赖这些类型，不直接依赖 db 内部实体。
  */
 
-import type { RunEvent } from "@paw/core";
+import type {
+  CompletionOutcome,
+  RunEvent,
+  RunEvidence,
+  RunStatus,
+} from "@paw/core";
 
 /** completeTask 可选 enricher 产出的候选草稿（仍须经 Governance） */
 export type MemoryCandidateEnrichmentDraft = {
@@ -137,6 +142,27 @@ export interface CompleteTaskInput {
   readonly taskId: string;
   readonly finalMessage?: string;
   readonly status: "completed" | "failed" | "cancelled";
+  /**
+   * Versioned, authoritative completion evidence produced by CompletionPolicy.
+   * When present, MemoryRuntime must not infer success by parsing tool prose.
+   * Optional only for legacy runtimes and non-agent conversation finalization.
+   */
+  readonly outcome?: MemoryOutcomeContractV1;
+}
+
+export type MemoryVerificationAuthority = "local" | "external" | "not_required";
+
+export interface MemoryOutcomeContractV1 {
+  readonly schemaVersion: 1;
+  readonly runStatus: Extract<
+    RunStatus,
+    "completed" | "failed" | "aborted" | "incomplete"
+  >;
+  readonly completionOutcome: CompletionOutcome;
+  readonly completionReason: string;
+  readonly verificationAuthority: MemoryVerificationAuthority;
+  readonly mutationRevision: number;
+  readonly evidence: RunEvidence;
 }
 
 export interface CompleteTaskResult {
