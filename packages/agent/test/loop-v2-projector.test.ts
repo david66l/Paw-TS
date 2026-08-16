@@ -324,6 +324,27 @@ describe("Loop Kernel v2 event projector", () => {
         JSON.stringify([{ ...started(), event: { type: "invented" } }]),
       ),
     ).toThrow("Unsupported loop v2 event type");
+    expect(() =>
+      parseLoopV2EventLog(
+        JSON.stringify([
+          started(),
+          envelope(2, {
+            type: "readiness.evaluated",
+            candidateId: "candidate-1",
+            mutationRevision: 0,
+            result: {
+              kind: "repair_required",
+              requirement: {
+                kind: "direct_verification",
+                revision: 0,
+                runnerFamily: "any",
+                scope: "not-an-array" as unknown as string[],
+              },
+            },
+          }),
+        ]),
+      ),
+    ).toThrow("event.result.requirement.scope must be an array");
   });
 
   test("kernel version is explicit and defaults to v1", () => {

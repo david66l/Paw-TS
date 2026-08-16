@@ -103,6 +103,7 @@ import {
   validateCompressionSummary,
 } from "@paw/core";
 import {
+  type ControlReductionV1,
   type LoopKernelVersion,
   type LoopV2LegacyTerminalV1,
   type LoopV2LiveCandidateAssessmentV1,
@@ -113,6 +114,7 @@ import {
   type VerificationRecordV2,
   buildLoopV2LiveCandidateArtifactV1,
   buildLoopV2ProjectionCheckpointV1,
+  canonicalJson,
   createLoopV2ShadowObserver,
   createProviderTerminalStateV2,
   loopV2LiveArtifactPath,
@@ -291,8 +293,37 @@ function providerProtocolRecoveryMessageV2(
   return "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response.";
 }
 
-function providerTurnBoundaryMessageV2(): string {
+function providerTurnBoundaryMessageV2(reduction: ControlReductionV1): string {
+  if (
+    reduction.effects[0]?.type === "call_model" &&
+    reduction.effects[0].reason === "repair_required" &&
+    reduction.state.openRepairObligation
+  ) {
+    const obligation = reduction.state.openRepairObligation;
+    return `[LoopControl:repair_required id=${obligation.id}] The durable ${obligation.kind} obligation remains open. Execute the matching tool action now. Prose, repeated reads, unrelated successful tools, and another final_answer do not satisfy it.`;
+  }
   return "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly.";
+}
+
+function isControlOnlyCandidateExtension(
+  candidateReport: LoopV2ShadowReport,
+  restoredReport: LoopV2ShadowReport,
+): boolean {
+  if (candidateReport.reportHash === restoredReport.reportHash) return true;
+  const candidateEvents = candidateReport.projectedEvents;
+  const restoredEvents = restoredReport.projectedEvents;
+  if (restoredEvents.length <= candidateEvents.length) return false;
+  for (let index = 0; index < candidateEvents.length; index += 1) {
+    if (
+      canonicalJson(candidateEvents[index]) !==
+      canonicalJson(restoredEvents[index])
+    ) {
+      return false;
+    }
+  }
+  return restoredEvents
+    .slice(candidateEvents.length)
+    .every((envelope) => envelope.event.type === "readiness.evaluated");
 }
 import { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import {
@@ -2400,7 +2431,7 @@ export class AgentOrchestrator {
           );
         }
         ctx.ctxMgr.addAssistant(text, thinking);
-        ctx.ctxMgr.addUser(providerTurnBoundaryMessageV2());
+        ctx.ctxMgr.addUser(providerTurnBoundaryMessageV2(reduction));
         this.saveState(
           runId,
           specGoal,
@@ -3570,7 +3601,11 @@ export class AgentOrchestrator {
           : createLoopV2ShadowObserver(runId);
         if (
           restoredReport &&
-          candidateArtifact?.report.reportHash === restoredReport.reportHash
+          candidateArtifact &&
+          isControlOnlyCandidateExtension(
+            candidateArtifact.report,
+            restoredReport,
+          )
         ) {
           this._lastLoopV2CandidateAssessment = candidateArtifact.assessment;
           loopV2LiveReviewRuntime?.restoreCandidate(candidateArtifact);
@@ -3675,7 +3710,10 @@ export class AgentOrchestrator {
       if (loopV2Projection) {
         try {
           loopV2Projection.observe(envelope);
-          if (event.type === "provider.turn_stopped") {
+          if (
+            event.type === "provider.turn_stopped" ||
+            event.type === "candidate.readiness"
+          ) {
             persistLoopV2ProjectionCheckpoint();
           }
           if (
@@ -3683,6 +3721,24 @@ export class AgentOrchestrator {
             event.type === "agent.action" &&
             event.action.type === "final_answer"
           ) {
+            const reduction = loopV2Projection.latestControlReduction();
+            const requestedReadiness = reduction?.effects.some(
+              (effect) => effect.type === "request_readiness",
+            );
+            if (!requestedReadiness) {
+              if (
+                !reduction?.effects.some(
+                  (effect) =>
+                    effect.type === "call_model" &&
+                    effect.reason === "repair_required",
+                )
+              ) {
+                throw new Error(
+                  "Loop v2 candidate submission is missing its reducer decision",
+                );
+              }
+              return;
+            }
             const report = loopV2Projection.snapshot();
             this._lastLoopV2ReadinessProgressKey = loopV2ReadinessProgressKeyV1(
               report.state,

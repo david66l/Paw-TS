@@ -64,6 +64,10 @@ describe("Loop Kernel v2 readiness repair identity", () => {
     if (first.type !== "feedback") throw new Error("expected feedback");
     expect(first.message).toContain("Issue the necessary tool call(s)");
     expect(first.message).toContain("does not count as repair progress");
+    expect(first.requirement).toEqual({
+      kind: "material_change",
+      afterRevision: 0,
+    });
 
     expect(
       evaluateLoopV2ReadinessGateV1({
@@ -120,11 +124,14 @@ describe("Loop Kernel v2 readiness repair identity", () => {
   });
 
   test("fresh verification records make masked and code failures actionable", () => {
-    const maskedAssessment = blockedAssessment({
-      evidence: 1,
-      mutations: 1,
-      verification: 1,
-    });
+    const maskedAssessment = {
+      ...blockedAssessment({
+        evidence: 1,
+        mutations: 1,
+        verification: 1,
+      }),
+      mutationRevision: 1,
+    };
     const masked = evaluateLoopV2ReadinessGateV1({
       assessment: {
         ...maskedAssessment,
@@ -163,6 +170,12 @@ describe("Loop Kernel v2 readiness repair identity", () => {
     expect(masked.message).toContain("python tests/runtests.py target.case");
     expect(masked.message).toContain("without pipes");
     expect(masked.message).toContain("masked exit code");
+    expect(masked.requirement).toEqual({
+      kind: "direct_verification",
+      revision: 1,
+      runnerFamily: "custom",
+      scope: ["target.case"],
+    });
 
     const codeFailed = evaluateLoopV2ReadinessGateV1({
       assessment: {
@@ -203,5 +216,9 @@ describe("Loop Kernel v2 readiness repair identity", () => {
     expect(codeFailed.message).toContain(
       "do not assume external or hidden tests",
     );
+    expect(codeFailed.requirement).toEqual({
+      kind: "material_change",
+      afterRevision: 1,
+    });
   });
 });

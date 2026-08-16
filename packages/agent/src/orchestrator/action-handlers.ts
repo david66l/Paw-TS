@@ -69,7 +69,9 @@ import {
 } from "../lifecycle/task-lifecycle.js";
 import { resolveLoopAuthorityPolicyV1 } from "../loop-authority.js";
 import {
+  type ControlReductionV1,
   type LoopV2ShadowMutationCapture,
+  type RepairObligationV1,
   evaluateLoopV2ReadinessGateV1,
   evaluateLoopV2SemanticReviewGateV1,
 } from "../loop-v2/index.js";
@@ -553,6 +555,19 @@ async function handleFinalAnswer(
   const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
   const jobReadiness = ctx.managedJobs.readiness();
 
+  if (ctx.loopKernelVersion === "v2") {
+    const controlGate = enforceControlCandidateDecision(
+      ctx.getLoopV2ControlReduction?.(),
+      ctx,
+      flags,
+      text,
+      thinking,
+      opts,
+      noRoomForAnotherTurn,
+    );
+    if (controlGate) return controlGate;
+  }
+
   // A background command is part of the run's unfinished effects. Completion
   // cannot race it, and a terminal result waiting at the settlement barrier
   // must be committed before any final decision.
@@ -679,6 +694,22 @@ async function handleFinalAnswer(
       priorNudges: flags.loopV2ReadinessNudges,
       noRoomForAnotherTurn,
     });
+    const readinessEvent = {
+      type: "candidate.readiness" as const,
+      candidateId: assessment.candidateId,
+      mutationRevision: assessment.mutationRevision,
+    };
+    if (readinessGate.type === "ready") {
+      ctx.emit({ ...readinessEvent, result: { kind: "ready" } });
+    } else if (readinessGate.requirement) {
+      ctx.emit({
+        ...readinessEvent,
+        result: {
+          kind: "repair_required",
+          requirement: readinessGate.requirement,
+        },
+      });
+    }
     if (readinessGate.type === "feedback") {
       const nextFlags: TurnFlags = {
         ...flags,
@@ -799,6 +830,71 @@ async function handleFinalAnswer(
     },
     flags,
   };
+}
+
+function enforceControlCandidateDecision(
+  reduction: ControlReductionV1 | undefined,
+  ctx: PhaseContext,
+  flags: TurnFlags,
+  text: string,
+  thinking: string | undefined,
+  opts: Pick<ActionHandlerContext, "saveStateFn">,
+  noRoomForAnotherTurn: boolean,
+): { readonly state: TurnState; readonly flags: TurnFlags } | undefined {
+  const requestsReadiness = reduction?.effects.some(
+    (effect) => effect.type === "request_readiness",
+  );
+  if (requestsReadiness) return undefined;
+  if (!reduction) {
+    throw new Error(
+      "Loop v2 final_answer is missing a reducer candidate decision",
+    );
+  }
+  const repairRequired = reduction.effects.some(
+    (effect) =>
+      effect.type === "call_model" && effect.reason === "repair_required",
+  );
+  if (!repairRequired || !reduction.state.openRepairObligation) {
+    throw new Error(
+      "Loop v2 final_answer is missing a valid reducer candidate decision",
+    );
+  }
+  const message = formatRepairObligation(reduction.state.openRepairObligation);
+  if (noRoomForAnotherTurn) {
+    return {
+      state: {
+        type: "decided",
+        decision: decideIncomplete({
+          reason: "loop_v2_repair_obligation_open",
+          message: `${message}\nThe run has no remaining model turn to satisfy this obligation.`,
+          taskState: ctx.taskState.snapshot(),
+        }),
+      },
+      flags,
+    };
+  }
+  const nextFlags: TurnFlags = { ...flags, lastTurnHadToolCall: false };
+  ctx.ctxMgr.addAssistant(text, thinking);
+  ctx.ctxMgr.addUser(message);
+  opts.saveStateFn();
+  return { state: { type: "continue", nextFlags }, flags: nextFlags };
+}
+
+function formatRepairObligation(obligation: RepairObligationV1): string {
+  if (obligation.kind === "direct_verification") {
+    const scope = obligation.scope.length
+      ? obligation.scope.join(", ")
+      : "the current candidate";
+    const runner =
+      obligation.runnerFamily === "any"
+        ? "authoritative"
+        : obligation.runnerFamily;
+    return `[LoopControl:repair_required id=${obligation.id}] Run a direct ${runner} verification for revision ${obligation.revision}, covering ${scope}. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation.`;
+  }
+  const scope = obligation.scope?.length
+    ? ` covering ${obligation.scope.join(", ")}`
+    : "";
+  return `[LoopControl:repair_required id=${obligation.id}] Commit a material source change after revision ${obligation.afterRevision}${scope}. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation.`;
 }
 
 async function checkLoopV2SemanticReviewGate(

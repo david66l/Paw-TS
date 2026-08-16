@@ -66,6 +66,28 @@ export type LoopV2Event =
       readonly candidate: CandidateRecordV2;
     }
   | {
+      readonly type: "readiness.evaluated";
+      readonly candidateId: string;
+      readonly mutationRevision: number;
+      readonly result:
+        | { readonly kind: "ready" }
+        | {
+            readonly kind: "repair_required";
+            readonly requirement:
+              | {
+                  readonly kind: "direct_verification";
+                  readonly revision: number;
+                  readonly runnerFamily: string;
+                  readonly scope: readonly string[];
+                }
+              | {
+                  readonly kind: "material_change";
+                  readonly afterRevision: number;
+                  readonly scope?: readonly string[];
+                };
+          };
+    }
+  | {
       readonly type: "context.compacted";
       readonly summarizedSeqThrough: number;
       readonly artifactRefs: readonly string[];
@@ -390,6 +412,9 @@ export function assertLoopV2Envelope(
     case "candidate.proposed":
       assertCandidate(value.event.candidate);
       return;
+    case "readiness.evaluated":
+      assertReadiness(value.event);
+      return;
     case "context.compacted":
       assertSafeInteger(
         value.event.summarizedSeqThrough,
@@ -576,6 +601,47 @@ function assertCandidate(value: unknown): void {
       ["legacy_final_answer", "natural_stop_adapter"],
       `${label}.source`,
     );
+  }
+}
+
+function assertReadiness(value: Record<string, unknown>): void {
+  const label = "event";
+  assertNonEmptyString(value.candidateId, `${label}.candidateId`);
+  assertSafeInteger(value.mutationRevision, `${label}.mutationRevision`, 0);
+  assertRecord(value.result, `${label}.result`);
+  assertOneOf(
+    value.result.kind,
+    ["ready", "repair_required"],
+    `${label}.result.kind`,
+  );
+  if (value.result.kind === "ready") return;
+  assertRecord(value.result.requirement, `${label}.result.requirement`);
+  const requirement = value.result.requirement;
+  assertOneOf(
+    requirement.kind,
+    ["direct_verification", "material_change"],
+    `${label}.result.requirement.kind`,
+  );
+  if (requirement.kind === "direct_verification") {
+    assertSafeInteger(
+      requirement.revision,
+      `${label}.result.requirement.revision`,
+      0,
+    );
+    assertNonEmptyString(
+      requirement.runnerFamily,
+      `${label}.result.requirement.runnerFamily`,
+    );
+    assertStringArray(requirement.scope, `${label}.result.requirement.scope`);
+    return;
+  }
+  assertSafeInteger(
+    requirement.afterRevision,
+    `${label}.result.requirement.afterRevision`,
+    0,
+  );
+  if (requirement.scope !== undefined) {
+    assertStringArray(requirement.scope, `${label}.result.requirement.scope`);
   }
 }
 

@@ -144,10 +144,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         ),
       );
       expect(boundaryCheckpoint.report.controlState).toMatchObject({
-        status: "running",
+        status: "candidate",
         turn: 2,
       });
-      expect(boundaryCheckpoint.report.controlState?.candidate).toBeUndefined();
+      expect(boundaryCheckpoint.report.controlState?.candidate).toBeDefined();
       const terminal = parseLoopV2LiveTerminalArtifactV1(
         fs.readFileSync(
           loopV2LiveTerminalArtifactPath(workspaceRoot, "v2-provider-natural"),
@@ -230,6 +230,20 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           loopV2LiveArtifactPath(workspaceRoot, "v2-provider-boundary-loop"),
         ),
       ).toBeFalse();
+      const checkpoint = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(
+            workspaceRoot,
+            "v2-provider-boundary-loop",
+          ),
+          "utf8",
+        ),
+      );
+      expect(checkpoint.report.controlState).toMatchObject({
+        status: "running",
+        turn: 3,
+      });
+      expect(checkpoint.report.controlState?.candidate).toBeUndefined();
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -1051,7 +1065,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     }
   });
 
-  test("v2 readiness rejects an unchanged not-ready candidate after one feedback", async () => {
+  test("v2 readiness opens a durable obligation that rejects repeated final answers", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-readiness-bounded-");
     fs.writeFileSync(
       path.join(workspaceRoot, "source.txt"),
@@ -1068,6 +1082,11 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           text: finalAnswer("Done without verification."),
           finishReason: "stop",
         },
+        { text: "I will verify it next.", finishReason: "stop" },
+        {
+          text: '{"tool":"workspace.read_file","args":{"path":"source.txt"}}',
+          finishReason: "stop",
+        },
         {
           text: finalAnswer("Still done without new evidence."),
           finishReason: "stop",
@@ -1075,6 +1094,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       ],
     });
     let reviewerCalls = 0;
+    const events: RunEventEnvelope[] = [];
     const orchestrator = new AgentOrchestrator({
       loopKernelVersion: "v2",
       memoryExtraction: "off",
@@ -1090,6 +1110,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           };
         },
       },
+      onEvent: (event) => events.push(event),
     });
 
     try {
@@ -1097,20 +1118,128 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         runId: "v2-readiness-bounded",
         goal: "Change source.txt from before to after and verify it.",
         workspaceRoot,
-        maxSteps: 6,
+        maxSteps: 5,
       });
       expect(result.status).toBe("incomplete");
-      expect(result.message).toContain("LoopV2Readiness:needs_work");
-      expect(result.message).toContain("verification_missing");
-      expect(result.message).toContain("feedback_exhausted");
-      expect(model.callCount).toBe(3);
+      expect(result.message).toContain("LoopControl:repair_required");
+      expect(result.message).toContain("direct authoritative verification");
+      expect(result.message).toContain("another final_answer do not satisfy");
+      expect(model.callCount).toBe(5);
       expect(reviewerCalls).toBe(0);
+      expect(
+        events.filter((event) => event.event.type === "candidate.readiness"),
+      ).toHaveLength(1);
+      expect(
+        events.filter((event) => event.event.type === "provider.turn_stopped"),
+      ).toHaveLength(1);
+      const checkpoint = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, "v2-readiness-bounded"),
+          "utf8",
+        ),
+      );
+      expect(
+        checkpoint.report.controlState?.openRepairObligation,
+      ).toMatchObject({
+        kind: "direct_verification",
+        revision: 1,
+        runnerFamily: "any",
+      });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
   });
 
-  test("resume restores the durable readiness feedback marker without opening a second retry", async () => {
+  test("a material-change obligation survives reads and clears only after a committed mutation", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-material-repair-");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const events: RunEventEnvelope[] = [];
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: finalAnswer("Done without making the required change."),
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.read_file","args":{"path":"source.txt"}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+          finishReason: "stop",
+        },
+        {
+          text: finalAnswer("Implemented and verified."),
+          finishReason: "stop",
+        },
+      ],
+    });
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+      onEvent: (event) => events.push(event),
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-material-repair",
+        goal: "[require_mutation] Change source.txt and verify it.",
+        workspaceRoot,
+        maxSteps: 7,
+      });
+
+      expect(result.status).toBe("completed");
+      expect(model.callCount).toBe(5);
+      const readinessFacts = events.filter(
+        (event) => event.event.type === "candidate.readiness",
+      );
+      expect(readinessFacts).toHaveLength(2);
+      expect(readinessFacts[0]?.event).toMatchObject({
+        type: "candidate.readiness",
+        result: {
+          kind: "repair_required",
+          requirement: { kind: "material_change", afterRevision: 0 },
+        },
+      });
+      expect(readinessFacts[1]?.event).toMatchObject({
+        type: "candidate.readiness",
+        result: { kind: "ready" },
+      });
+      const checkpoint = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, "v2-material-repair"),
+          "utf8",
+        ),
+      );
+      expect(checkpoint.report.controlState).toMatchObject({
+        status: "candidate",
+        mutationRevision: 1,
+      });
+      expect(
+        checkpoint.report.controlState?.openRepairObligation,
+      ).toBeUndefined();
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("resume preserves the durable repair obligation identity", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-readiness-resume-");
     const runId = "v2-readiness-resume";
     fs.writeFileSync(
@@ -1157,7 +1286,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         runId,
         goal: "Change source.txt from before to after and verify it.",
         workspaceRoot,
-        maxSteps: 6,
+        maxSteps: 3,
         abortSignal: abort.signal,
       });
       expect(interrupted.status).toBe("aborted");
@@ -1169,6 +1298,18 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
             typeof message.content === "string" &&
             message.content.startsWith("[LoopV2Readiness:needs_work"),
         ),
+      ).toBeTrue();
+      const beforeResume = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
+          "utf8",
+        ),
+      ).report.controlState?.openRepairObligation;
+      expect(beforeResume?.kind).toBe("direct_verification");
+      expect(
+        sessionStore
+          .loadRun(runId)
+          ?.some((event) => event.event.type === "candidate.readiness"),
       ).toBeTrue();
 
       const resumedModel = new FakeLanguageModel({
@@ -1189,8 +1330,15 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       const result = await resumed.resumeRun({ runId, workspaceRoot });
       expect(result.status).toBe("incomplete");
-      expect(result.message).toContain("feedback_exhausted");
+      expect(result.message).toContain("LoopControl:repair_required");
       expect(resumedModel.callCount).toBe(1);
+      const afterResume = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
+          "utf8",
+        ),
+      ).report.controlState?.openRepairObligation;
+      expect(afterResume).toEqual(beforeResume);
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }

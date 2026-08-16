@@ -1,5 +1,6 @@
 import type { CandidateReadinessGapCodeV2 } from "./candidate-certification.js";
 import { sha256Canonical } from "./canonical.js";
+import type { RepairRequirementV1 } from "./control-reducer.js";
 import type { LoopV2LiveCandidateAssessmentV1 } from "./live-candidate.js";
 import type { VerificationRecordV2, WorkingDecisionStateV2 } from "./schema.js";
 
@@ -16,12 +17,14 @@ export type LoopV2ReadinessGateDecisionV1 =
       readonly type: "feedback";
       readonly key: string;
       readonly message: string;
+      readonly requirement?: RepairRequirementV1;
     }
   | {
       readonly type: "incomplete";
       readonly key: string;
       readonly message: string;
       readonly reason: "no_turn_budget" | "feedback_exhausted";
+      readonly requirement?: RepairRequirementV1;
     };
 
 export function evaluateLoopV2ReadinessGateV1(input: {
@@ -75,9 +78,19 @@ export function evaluateLoopV2ReadinessGateV1(input: {
     normalizedGaps,
     input.verificationRecords ?? [],
   );
+  const requirement = deriveRepairRequirement(
+    input.assessment,
+    input.verificationRecords ?? [],
+  );
   const priorNudges = input.priorKey === key ? (input.priorNudges ?? 0) : 0;
   if (input.noRoomForAnotherTurn) {
-    return { type: "incomplete", key, message, reason: "no_turn_budget" };
+    return {
+      type: "incomplete",
+      key,
+      message,
+      reason: "no_turn_budget",
+      ...(requirement ? { requirement } : {}),
+    };
   }
   if (priorNudges >= LOOP_V2_READINESS_FEEDBACK_LIMIT) {
     return {
@@ -85,6 +98,7 @@ export function evaluateLoopV2ReadinessGateV1(input: {
       key,
       message,
       reason: "feedback_exhausted",
+      ...(requirement ? { requirement } : {}),
     };
   }
   return {
@@ -94,6 +108,57 @@ export function evaluateLoopV2ReadinessGateV1(input: {
       message,
       "Issue the necessary tool call(s) in your next response. Prose that only describes a future action does not execute it and does not count as repair progress.",
     ].join("\n"),
+    ...(requirement ? { requirement } : {}),
+  };
+}
+
+function deriveRepairRequirement(
+  assessment: LoopV2LiveCandidateAssessmentV1,
+  verificationRecords: readonly VerificationRecordV2[],
+): RepairRequirementV1 | undefined {
+  const gapCodes = new Set(assessment.readiness.gaps.map((gap) => gap.code));
+  const current = verificationRecords.filter(
+    (record) => record.mutationRevision === assessment.mutationRevision,
+  );
+  const codeFailure = [...current]
+    .reverse()
+    .find((record) => record.outcome === "code_failed");
+  if (
+    codeFailure ||
+    [
+      "product_mutation_missing",
+      "journal_incomplete",
+      "artifact_unreconstructible",
+      "artifact_cross_check_mismatch",
+    ].some((code) => gapCodes.has(code as CandidateReadinessGapCodeV2))
+  ) {
+    return {
+      kind: "material_change",
+      afterRevision: assessment.mutationRevision,
+    };
+  }
+
+  if (
+    ![
+      "verification_missing",
+      "verification_scope_missing",
+      "verification_unavailable",
+    ].some((code) => gapCodes.has(code as CandidateReadinessGapCodeV2))
+  ) {
+    return undefined;
+  }
+  const latest = current.at(-1);
+  const requiredScopes = assessment.policy.requiredVerificationScopes ?? [];
+  const scope = [
+    ...new Set(latest?.scope.length ? latest.scope : requiredScopes),
+  ]
+    .filter(Boolean)
+    .sort();
+  return {
+    kind: "direct_verification",
+    revision: assessment.mutationRevision,
+    runnerFamily: latest?.runner ?? "any",
+    scope,
   };
 }
 

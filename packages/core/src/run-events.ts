@@ -127,6 +127,29 @@ export type RunEvent =
       readonly modelCalls: number;
       readonly usage?: ModelTokenUsage;
     }
+  /** Deterministic candidate readiness fact; the reducer owns repair state. */
+  | {
+      readonly type: "candidate.readiness";
+      readonly candidateId: string;
+      readonly mutationRevision: number;
+      readonly result:
+        | { readonly kind: "ready" }
+        | {
+            readonly kind: "repair_required";
+            readonly requirement:
+              | {
+                  readonly kind: "direct_verification";
+                  readonly revision: number;
+                  readonly runnerFamily: string;
+                  readonly scope: readonly string[];
+                }
+              | {
+                  readonly kind: "material_change";
+                  readonly afterRevision: number;
+                  readonly scope?: readonly string[];
+                };
+          };
+    }
   /** 开始发送模型请求 */
   | {
       readonly type: "model.request";

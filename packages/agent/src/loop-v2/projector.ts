@@ -70,6 +70,8 @@ export function projectLoopV2Event(
     }
     case "provider.turn_stopped":
       return { state: base, delta: EMPTY_DELTA };
+    case "readiness.evaluated":
+      return { state: base, delta: EMPTY_DELTA };
     case "evidence.observed": {
       const fingerprint = evidenceFingerprint(event.observation);
       const existing = prior.evidence[fingerprint];

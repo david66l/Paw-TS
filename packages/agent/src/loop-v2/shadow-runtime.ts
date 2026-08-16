@@ -52,6 +52,7 @@ export type LoopV2ShadowReason =
   | "rich_verification_effect_ambiguous"
   | "rich_candidate_projected"
   | "provider_turn_stopped_projected"
+  | "readiness_evaluated_projected"
   | "non_decision_event";
 
 export interface LoopV2ShadowDiagnostic {
@@ -356,6 +357,32 @@ export function createLoopV2ShadowObserver(
           );
         }
         record(envelope, "projected", "rich_candidate_projected");
+        return;
+      }
+
+      if (envelope.event.type === "candidate.readiness") {
+        const readiness = envelope.event as unknown as Readonly<{
+          candidateId: string;
+          mutationRevision: number;
+          result: Extract<
+            LoopV2Envelope["event"],
+            { type: "readiness.evaluated" }
+          >["result"];
+        }>;
+        const projected: LoopV2Envelope = {
+          schemaVersion: LOOP_V2_SCHEMA_VERSION,
+          runId,
+          seq: projectedEvents.length + 1,
+          ts: envelope.ts,
+          event: {
+            type: "readiness.evaluated",
+            candidateId: readiness.candidateId,
+            mutationRevision: readiness.mutationRevision,
+            result: readiness.result,
+          },
+        };
+        appendProjected(projected);
+        record(envelope, "projected", "readiness_evaluated_projected");
         return;
       }
 

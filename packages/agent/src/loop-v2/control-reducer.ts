@@ -329,6 +329,14 @@ export function controlInputFromLoopV2EnvelopeV1(
         },
       };
       break;
+    case "readiness.evaluated":
+      fact = {
+        type: "readiness.evaluated",
+        candidateId: event.candidateId,
+        mutationRevision: event.mutationRevision,
+        result: event.result,
+      };
+      break;
     default:
       return undefined;
   }
@@ -349,8 +357,9 @@ function reduceVerification(
     !obligation ||
     obligation.kind !== "direct_verification" ||
     obligation.revision !== verification.revision ||
-    obligation.runnerFamily !== verification.runnerFamily ||
-    !sameScope(obligation.scope, verification.scope)
+    (obligation.runnerFamily !== "any" &&
+      obligation.runnerFamily !== verification.runnerFamily) ||
+    !scopeCovered(obligation.scope, verification.scope)
   ) {
     return { state: base, effects: [] };
   }
@@ -365,7 +374,6 @@ function reduceVerification(
     const material = openRepairObligation(prior.runId, seq, {
       kind: "material_change",
       afterRevision: verification.revision,
-      ...(obligation.scope.length > 0 ? { scope: obligation.scope } : {}),
     });
     return {
       state: {
@@ -486,12 +494,6 @@ function verificationFact(
     scope: verification.scope,
     outcome: verification.outcome,
   };
-}
-
-function sameScope(left: readonly string[], right: readonly string[]): boolean {
-  const a = [...new Set(left)].sort();
-  const b = [...new Set(right)].sort();
-  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 function scopeCovered(

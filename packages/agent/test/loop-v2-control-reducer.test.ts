@@ -139,7 +139,7 @@ describe("Loop v2 pure control reducer", () => {
     expect(unrelatedVerification.state.status).toBe("repair_required");
   });
 
-  test("R23 code failure opens material repair and only matching change clears it", () => {
+  test("R23 code failure opens material repair and a later product change clears it", () => {
     const failed = reduceControlStateV1(
       directRepairState(),
       input(5, {
@@ -155,7 +155,6 @@ describe("Loop v2 pure control reducer", () => {
     expect(failed.state.openRepairObligation).toMatchObject({
       kind: "material_change",
       afterRevision: 1,
-      scope: ["src/value.ts"],
     });
     expect(failed.state.status).toBe("repair_required");
 
@@ -167,22 +166,46 @@ describe("Loop v2 pure control reducer", () => {
         paths: ["README.md"],
       }),
     );
-    expect(unrelated.state.openRepairObligation).toEqual(
-      failed.state.openRepairObligation,
-    );
-    expect(unrelated.state.status).toBe("repair_required");
+    expect(unrelated.state.openRepairObligation).toBeUndefined();
+    expect(unrelated.state.status).toBe("running");
+    expect(unrelated.state.candidate).toBeUndefined();
+  });
 
-    const matching = reduceControlStateV1(
-      unrelated.state,
-      input(7, {
-        type: "mutation.committed",
-        revision: 3,
-        paths: ["src/value.ts"],
+  test("an unbound direct-verification runner accepts any authoritative family", () => {
+    const repair = reduceControlStateV1(
+      candidateState(),
+      input(4, {
+        type: "readiness.evaluated",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        result: {
+          kind: "repair_required",
+          requirement: {
+            kind: "direct_verification",
+            revision: 1,
+            runnerFamily: "any",
+            scope: [],
+          },
+        },
       }),
     );
-    expect(matching.state.openRepairObligation).toBeUndefined();
-    expect(matching.state.status).toBe("running");
-    expect(matching.state.candidate).toBeUndefined();
+    const verified = reduceControlStateV1(
+      repair.state,
+      input(5, {
+        type: "verification.observed",
+        verification: {
+          revision: 1,
+          runnerFamily: "pytest",
+          scope: ["tests/test_value.py"],
+          outcome: "passed",
+        },
+      }),
+    );
+
+    expect(verified.state.openRepairObligation).toBeUndefined();
+    expect(verified.effects).toEqual([
+      { type: "request_readiness", candidateId: "candidate-1" },
+    ]);
   });
 
   test("R24 split replay preserves durable obligation identity", () => {
@@ -281,11 +304,40 @@ describe("Loop v2 pure control reducer", () => {
       ts: 2,
       event: { type: "phase.changed", phase: "discover" },
     });
+    const readiness = controlInputFromLoopV2EnvelopeV1({
+      schemaVersion: 2,
+      runId: RUN_ID,
+      seq: 4,
+      ts: 4,
+      event: {
+        type: "readiness.evaluated",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        result: {
+          kind: "repair_required",
+          requirement: {
+            kind: "material_change",
+            afterRevision: 1,
+          },
+        },
+      },
+    });
 
     expect(adapted).toEqual(
       input(1, { type: "run.started", goalHash: "goal-hash" }),
     );
     expect(advisorOnly).toBeUndefined();
+    expect(readiness).toEqual(
+      input(4, {
+        type: "readiness.evaluated",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        result: {
+          kind: "repair_required",
+          requirement: { kind: "material_change", afterRevision: 1 },
+        },
+      }),
+    );
 
     const mutation = controlInputFromLoopV2EnvelopeV1({
       schemaVersion: 2,
