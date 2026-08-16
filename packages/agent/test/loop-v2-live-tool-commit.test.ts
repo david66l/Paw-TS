@@ -3,19 +3,22 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type {
-  AgentToolCallAction,
-  RunEvent,
-  RunEventEnvelope,
+import {
+  type AgentToolCallAction,
+  ContextManager,
+  type RunEvent,
+  type RunEventEnvelope,
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 
 import { executeToolBatchV2 } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 import {
+  annotateUntrustedShellExitSummary,
   classifyToolExecutionV2,
   commitToolExecutionResult,
   executeToolCallsV2,
+  finalizeToolExecutionContext,
 } from "../src/orchestrator/tool-runner.js";
 import { DefaultSubAgentLauncher } from "../src/sub-agent-launcher.js";
 import { TaskStateManager } from "../src/task-state.js";
@@ -641,5 +644,126 @@ describe("Loop Kernel v2 live tool commit seam", () => {
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
+  const pipedCommand = "python tests/runtests.py i18n -v 1 2>&1 | tail -60";
+
+  function shellResult(summary: string): ToolRunResult {
+    return {
+      ok: true,
+      summary,
+      payload: {
+        exit_code: 0,
+        stdout: "Ran 214 tests\n\nFAILED (failures=2, errors=1)\n",
+        stderr: "",
+      },
+    };
+  }
+
+  test("piped verification command annotates the durable fact, the v2 port, and the model-visible summary", () => {
+    const workspaceRoot = path.join(os.tmpdir(), "paw-untrusted-exit-ws");
+    const call = toolCall("workspace.run_shell", { command: pipedCommand });
+    const result = shellResult("run_shell: exit 0");
+    const taskState = new TaskStateManager("fix django i18n prefix");
+    const events: RunEvent[] = [];
+    const portResults: ToolRunResult[] = [];
+
+    commitToolExecutionResult(
+      call,
+      result,
+      0,
+      {
+        emit(event: RunEvent) {
+          events.push(event);
+        },
+        runId: "untrusted-exit",
+        workspaceRoot,
+        turn: 30,
+        taskState,
+        observeLoopV2ToolCommit(input) {
+          portResults.push(input.result);
+        },
+      },
+      { concurrentMutation: false },
+    );
+
+    // 1) durable tool.result 事实带内联标注与直接重跑指令
+    const emitted = events.find(
+      (event): event is Extract<RunEvent, { type: "tool.result" }> =>
+        event.type === "tool.result",
+    );
+    expect(emitted).toBeDefined();
+    expect(emitted?.summary).toContain("run_shell: exit 0");
+    expect(emitted?.summary).toContain("[UntrustedExitStatus]");
+    expect(emitted?.summary).toContain(
+      "re-run the same runner directly without pipes",
+    );
+
+    // 2) 同一判定源：TaskState 验证分类仍为 harness_failed/untrusted_exit_status
+    const verification = taskState.snapshot().testResults.at(-1);
+    expect(verification?.outcome).toBe("harness_failed");
+    expect(verification?.failureKind).toBe("untrusted_exit_status");
+
+    // 3) v2 observation port 收到同一份标注后的结果
+    expect(portResults[0]?.summary).toContain("[UntrustedExitStatus]");
+
+    // 4) 模型可见上下文（下一轮 user 消息）包含标注
+    const ctxMgr = new ContextManager();
+    let saved = 0;
+    const final = finalizeToolExecutionContext([call], [result], {
+      ctxMgr,
+      emit() {},
+      runId: "untrusted-exit",
+      workspaceRoot,
+      turn: 30,
+      maxSteps: 96,
+      specGoal: "fix django i18n prefix",
+      text: "running the full suite",
+      saveStateFn() {
+        saved += 1;
+      },
+      taskState,
+    });
+    expect(final.type).toBe("continue");
+    expect(saved).toBe(1);
+    const lastUser = ctxMgr.buildMessages().at(-1);
+    expect(lastUser?.role).toBe("user");
+    expect(lastUser?.content).toContain("[Tool workspace.run_shell completed]");
+    expect(lastUser?.content).toContain("[UntrustedExitStatus]");
+  });
+
+  test("direct verification runs and piped non-verification commands stay unannotated", () => {
+    const direct = annotateUntrustedShellExitSummary(
+      toolCall("workspace.run_shell", {
+        command: "python tests/runtests.py i18n -v 1",
+      }),
+      shellResult("run_shell: exit 0"),
+    );
+    expect(direct.summary).not.toContain("[UntrustedExitStatus]");
+
+    const pipedNonVerification = annotateUntrustedShellExitSummary(
+      toolCall("workspace.run_shell", {
+        command: "ls django/conf/locale/ | grep -i sr",
+      }),
+      shellResult("run_shell: exit 0"),
+    );
+    expect(pipedNonVerification.summary).not.toContain("[UntrustedExitStatus]");
+
+    // 非 shell 工具与重复标注不产生第二份事实
+    const read = annotateUntrustedShellExitSummary(
+      toolCall("workspace.read_file", { path: "a.ts" }),
+      { ok: true, summary: "read a.ts", payload: {} },
+    );
+    expect(read.summary).toBe("read a.ts");
+
+    const call = toolCall("workspace.run_shell", { command: pipedCommand });
+    const once = annotateUntrustedShellExitSummary(
+      call,
+      shellResult("run_shell: exit 0"),
+    );
+    const twice = annotateUntrustedShellExitSummary(call, once);
+    expect(twice.summary.match(/\[UntrustedExitStatus\]/g)?.length).toBe(1);
   });
 });

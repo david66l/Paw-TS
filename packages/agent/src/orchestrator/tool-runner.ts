@@ -990,6 +990,35 @@ export function finalizeToolExecution(
   return finalizeToolExecutionContext(calls, results, ctx);
 }
 
+const UNTRUSTED_EXIT_TAG = "[UntrustedExitStatus]";
+
+/**
+ * Loop v2.1 §6.1/K3：验证命令若运行在 shell 控制流（pipe/重定向/fallback/
+ * 尾随命令）中，最终退出码不能证明测试通过。判定复用
+ * analyzeVerificationInvocation 的 exitStatusReliable——与 task-state 的
+ * untrusted_exit_status 分类同一事实源——在工具结果落 journal 与进入模型
+ * 上下文时内联标注，模型无需等到 readiness 阶段才知道退出码不可信。
+ */
+export function annotateUntrustedShellExitSummary(
+  call: AgentToolCallAction,
+  result: ToolRunResult,
+): ToolRunResult {
+  if (call.tool !== "workspace.run_shell") return result;
+  const args =
+    call.args && typeof call.args === "object" && !Array.isArray(call.args)
+      ? (call.args as Readonly<Record<string, unknown>>)
+      : {};
+  const command = typeof args.command === "string" ? args.command : undefined;
+  if (!command) return result;
+  const invocation = analyzeVerificationInvocation(command);
+  if (!invocation || invocation.exitStatusReliable) return result;
+  if (result.summary.includes(UNTRUSTED_EXIT_TAG)) return result;
+  return {
+    ...result,
+    summary: `${result.summary} — ${UNTRUSTED_EXIT_TAG} the test runner's exit status is masked by shell control flow; do not claim a pass from this exit code — re-run the same runner directly without pipes, redirections, fallbacks, or trailing commands`,
+  };
+}
+
 /**
  * Commit one tool result to TaskState, the durable legacy event stream, and
  * the v2 observation port. A v2 exclusive scheduler must keep its barrier
@@ -1005,28 +1034,29 @@ export function commitToolExecutionResult(
     readonly mutationCapture?: LoopV2ShadowMutationCapture;
   },
 ): void {
+  const observed = annotateUntrustedShellExitSummary(call, result);
   const taskStateBefore = ctx.taskState?.snapshot();
   const repositoryRevision = `run:${ctx.runId}:mutation:${taskStateBefore?.mutationRevision ?? 0}`;
   const sourceContentHash =
     ctx.observeLoopV2ToolCommit &&
-    result.ok &&
+    observed.ok &&
     call.tool === "workspace.read_file" &&
     !options.concurrentMutation
-      ? readSourceContentHash(ctx.workspaceRoot, call.args, result.payload)
+      ? readSourceContentHash(ctx.workspaceRoot, call.args, observed.payload)
       : undefined;
-  ctx.taskState?.recordToolResult(call, result);
-  ctx.executionEnvironment?.observeToolResult(ctx.turn, call, result);
+  ctx.taskState?.recordToolResult(call, observed);
+  ctx.executionEnvironment?.observeToolResult(ctx.turn, call, observed);
   const taskStateAfter = ctx.taskState?.snapshot();
   const verificationCapture = buildShadowVerificationCapture(
     ctx.workspaceRoot,
     call,
-    result,
+    observed,
     taskStateBefore,
     taskStateAfter,
   );
   const conflictPayload =
-    result.payload && typeof result.payload === "object"
-      ? (result.payload as Record<string, unknown>)
+    observed.payload && typeof observed.payload === "object"
+      ? (observed.payload as Record<string, unknown>)
       : null;
   if (
     conflictPayload?.conflict === true &&
@@ -1034,8 +1064,8 @@ export function commitToolExecutionResult(
   ) {
     ctx.taskState?.recordFileLockConflict(conflictPayload.path);
   }
-  let fileChanges = result.ok
-    ? fileChangesFromPayload(result.payload, ctx.workspaceRoot)
+  let fileChanges = observed.ok
+    ? fileChangesFromPayload(observed.payload, ctx.workspaceRoot)
     : undefined;
   // apply_patch：payload 只有 +/− 统计，从调用参数里抽取 per-file diff 文本补齐
   const patchText = patchTextFromArgs(call.args);
@@ -1050,9 +1080,9 @@ export function commitToolExecutionResult(
   ctx.emit({
     type: "tool.result",
     tool: call.tool,
-    ok: result.ok,
-    summary: result.summary,
-    detail: formatToolResultEventDetail(result),
+    ok: observed.ok,
+    summary: observed.summary,
+    detail: formatToolResultEventDetail(observed),
     provenance: observationProvenanceForToolV1(call.tool),
     ...(workspaceEffect ? { workspaceEffect } : {}),
     ...(fileChanges ? { fileChanges } : {}),
@@ -1061,7 +1091,7 @@ export function commitToolExecutionResult(
     callId: `legacy:${ctx.runId}:turn:${ctx.turn}:call:${sourceIndex}`,
     tool: call.tool,
     args: call.args,
-    result,
+    result: observed,
     repositoryRevision,
     concurrentMutation: options.concurrentMutation,
     ...(sourceContentHash ? { sourceContentHash } : {}),
@@ -1091,6 +1121,8 @@ export function finalizeToolExecutionContext(
     results.map((tr, i) => {
       const tool = calls[i]!.tool;
       const callerText = ctx.text;
+      // 模型可见 summary 内联 untrusted 退出码标注（与 journal 事实同一判定）
+      const annotated = annotateUntrustedShellExitSummary(calls[i]!, tr);
       let payload: unknown = tr.payload;
       // 去重：同一内容重复出现 → 预览引用（重复读文件/重复跑命令的浪费源）
       const dup = ctx.payloadDeduper?.check(payload);
@@ -1120,8 +1152,8 @@ export function finalizeToolExecutionContext(
       }
       return {
         tool,
-        ok: tr.ok,
-        summary: tr.summary,
+        ok: annotated.ok,
+        summary: annotated.summary,
         payload,
         provenance: observationProvenanceForToolV1(tool),
       };

@@ -224,7 +224,10 @@ import type { NativeToolError } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
 import { CONTEXT_PACKAGE_PREFIX } from "./orchestrator/constants.js";
 import { fixMalformedToolArguments } from "./orchestrator/fix-malformed-args.js";
-import { commitToolExecutionResult } from "./orchestrator/tool-runner.js";
+import {
+  annotateUntrustedShellExitSummary,
+  commitToolExecutionResult,
+} from "./orchestrator/tool-runner.js";
 import {
   type PayloadDeduper,
   createPayloadDeduper,
@@ -1017,7 +1020,17 @@ export class AgentOrchestrator {
         // Async producers never mutate loop state from their Promise callback.
         // Pull terminal results into the canonical stream at this exact turn
         // boundary before status/context/completion can observe the run.
-        const jobSettlements = managedJobs.takeSettlements();
+        // 后台 shell 结算同样内联 untrusted 退出码标注，保持 journal、
+        // job.settled 事件与模型可见消息一致。
+        const jobSettlements = managedJobs
+          .takeSettlements()
+          .map((settlement) => ({
+            ...settlement,
+            result: annotateUntrustedShellExitSummary(
+              settlement.call,
+              settlement.result,
+            ),
+          }));
         if (jobSettlements.length > 0) {
           for (const [sourceIndex, settlement] of jobSettlements.entries()) {
             commitToolExecutionResult(
