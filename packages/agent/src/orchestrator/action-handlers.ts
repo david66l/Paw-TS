@@ -76,6 +76,7 @@ import {
   type LoopV2ShadowMutationCapture,
   evaluateLoopV2ReadinessGateV1,
   evaluateLoopV2SemanticReviewGateV1,
+  evaluateVerificationProbeGateV1,
   formatRepairObligationV1,
 } from "../loop-v2/index.js";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
@@ -808,6 +809,18 @@ async function handleFinalAnswer(
   );
   if (loopV2SemanticGate) return loopV2SemanticGate;
 
+  // 对抗式验证探针：语义评审通过后、终局投影前执行；
+  // 失败进入修复反馈（模型修复产生新候选后探针自动重跑）。
+  const loopV2ProbeGate = await checkLoopV2VerificationProbeGate(
+    ctx,
+    flags,
+    text,
+    thinking,
+    opts,
+    noRoomForAnotherTurn,
+  );
+  if (loopV2ProbeGate) return loopV2ProbeGate;
+
   const terminalDecision = v2ReadyAssessment
     ? projectLoopV2ReducerTerminalToLegacyDecision(
         summary,
@@ -986,6 +999,54 @@ async function checkLoopV2SemanticReviewGate(
       decision: decideIncomplete({
         reason: `loop_v2_semantic_review_${gate.reason}`,
         message: `${gate.message}\nNo additional semantic review retry was opened (${gate.reason}).`,
+        taskState: ctx.taskState.snapshot(),
+      }),
+    },
+    flags,
+  };
+}
+
+async function checkLoopV2VerificationProbeGate(
+  ctx: PhaseContext,
+  flags: TurnFlags,
+  text: string,
+  thinking: string | undefined,
+  opts: Pick<ActionHandlerContext, "saveStateFn">,
+  noRoomForAnotherTurn: boolean,
+): Promise<
+  { readonly state: TurnState; readonly flags: TurnFlags } | undefined
+> {
+  if (!ctx.probeLoopV2Candidate) return undefined;
+  const revision = ctx.taskState.snapshot().mutationRevision ?? 0;
+  if (revision === 0) return undefined;
+
+  const result = await ctx.probeLoopV2Candidate();
+  const gate = evaluateVerificationProbeGateV1({
+    result,
+    priorKey: flags.loopV2ProbeFeedbackKey,
+    priorNudges: flags.loopV2ProbeNudges,
+    noRoomForAnotherTurn,
+  });
+  if (gate.type === "accept") return undefined;
+  if (gate.type === "feedback") {
+    const nextFlags: TurnFlags = {
+      ...flags,
+      loopV2ProbeFeedbackKey: gate.key,
+      loopV2ProbeNudges: 1,
+      lastTurnHadToolCall: false,
+    };
+    ctx.ctxMgr.addAssistant(text, thinking);
+    ctx.ctxMgr.addUser(gate.message);
+    opts.saveStateFn();
+    return { state: { type: "continue", nextFlags }, flags: nextFlags };
+  }
+  return {
+    state: {
+      type: "decided",
+      decision: decideIncomplete({
+        reason: `loop_v2_verification_probe_${gate.reason}`,
+        message: `${gate.message}
+No additional probe retry was opened (${gate.reason}).`,
         taskState: ctx.taskState.snapshot(),
       }),
     },

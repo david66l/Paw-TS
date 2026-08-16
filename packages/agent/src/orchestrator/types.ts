@@ -41,6 +41,7 @@ import type {
   LoopV2ShadowToolCommitPortInput,
   ProviderTerminalStateV2,
   SemanticReviewOnceResultV2,
+  VerificationProbeOnceResultV2,
   VerificationRecordV2,
 } from "../loop-v2/index.js";
 import type { ManagedJobControllerV1 } from "../managed-job-controller.js";
@@ -174,6 +175,10 @@ export interface TurnFlags {
   readonly loopV2SemanticReviewFeedbackKey?: string;
   /** Feedback count for the matching semantic review identity (0 or 1). */
   readonly loopV2SemanticReviewNudges?: number;
+  /** Stable verification-probe identity that already received repair feedback. */
+  readonly loopV2ProbeFeedbackKey?: string;
+  /** Feedback count for the matching probe identity (0 or 1). */
+  readonly loopV2ProbeNudges?: number;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -252,6 +257,11 @@ export interface PhaseContext {
         readonly usage?: ModelTokenUsage;
       }>
   >;
+  /**
+   * Candidate-bound adversarial verification probe (fresh context, host
+   * executed, at-most-once per candidateInputHash). Absent disables the gate.
+   */
+  readonly probeLoopV2Candidate?: () => Promise<VerificationProbeOnceResultV2>;
   /** Read-only shadow observation after the matching legacy tool.result. */
   readonly observeLoopV2ToolCommit?: (
     input: LoopV2ShadowToolCommitPortInput,

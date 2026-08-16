@@ -128,6 +128,7 @@ import {
   parseLoopV2SemanticReviewFeedbackMarker,
   resolveLoopKernelVersion,
   restoreLoopV2ProjectionObserver,
+  runVerificationProbeOnceV2,
   serializeLoopV2ProjectionCheckpointV1,
 } from "./loop-v2/index.js";
 
@@ -138,6 +139,7 @@ import {
   McpClientManager,
   type McpServerConfig,
   type SubAgentLauncher,
+  runShellInWorkspace,
   toolCatalogText,
   toolDefinitions,
   toolNameReverseMap,
@@ -480,6 +482,11 @@ export interface AgentOrchestratorOptions {
   readonly candidateReviewer?: CandidateReviewer;
   /** Independent one-call review model used only by explicit loop v2. */
   readonly loopV2SemanticReviewModel?: LanguageModel;
+  /**
+   * Adversarial verification-probe model (fresh context, host-executed
+   * boundary probes before certification). Absent disables the probe gate.
+   */
+  readonly loopV2VerificationProbeModel?: LanguageModel;
   /** Loop kernel selection; defaults to PAW_LOOP_KERNEL_VERSION, then v1. */
   readonly loopKernelVersion?: LoopKernelVersion;
   /** Terminal v2-shadow diagnostics. Observer failures never affect the run. */
@@ -611,6 +618,7 @@ export class AgentOrchestrator {
   private readonly shellSandbox?: AgentOrchestratorOptions["shellSandbox"];
   private readonly candidateReviewer?: CandidateReviewer;
   private readonly loopV2SemanticReviewModel?: LanguageModel;
+  private readonly loopV2VerificationProbeModel?: LanguageModel;
   private readonly loopKernelVersion: LoopKernelVersion;
   private readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
   private readonly onLoopV2CandidateAssessment?: (
@@ -634,6 +642,7 @@ export class AgentOrchestrator {
     this.shellSandbox = opts?.shellSandbox;
     this.candidateReviewer = opts?.candidateReviewer;
     this.loopV2SemanticReviewModel = opts?.loopV2SemanticReviewModel;
+    this.loopV2VerificationProbeModel = opts?.loopV2VerificationProbeModel;
     this.loopKernelVersion =
       opts?.loopKernelVersion ?? resolveLoopKernelVersion();
     this.onLoopV2ShadowReport = opts?.onLoopV2ShadowReport;
@@ -1189,6 +1198,9 @@ export class AgentOrchestrator {
             : {}),
           ...(init.reviewLoopV2Candidate
             ? { reviewLoopV2Candidate: init.reviewLoopV2Candidate }
+            : {}),
+          ...(init.probeLoopV2Candidate
+            ? { probeLoopV2Candidate: init.probeLoopV2Candidate }
             : {}),
           ...(init.observeLoopV2ToolCommit
             ? { observeLoopV2ToolCommit: init.observeLoopV2ToolCommit }
@@ -3490,6 +3502,7 @@ export class AgentOrchestrator {
       PhaseContext["getLoopV2ControlReduction"]
     >;
     reviewLoopV2Candidate?: NonNullable<PhaseContext["reviewLoopV2Candidate"]>;
+    probeLoopV2Candidate?: NonNullable<PhaseContext["probeLoopV2Candidate"]>;
     persistLoopV2Terminal?: (result: RunResult) => void;
     emitRunMetrics: () => void;
     seq: { n: number };
@@ -3934,6 +3947,68 @@ export class AgentOrchestrator {
     const compactor = new ContextCompactor({}, ctxMgr.estimator);
     // P3 冷库：会话级可寻址归档（截断/驱逐的工具输出全文 + context.recall）
     const artifactRegistry = new ArtifactRegistry();
+
+    // 对抗式验证探针：认证前由 host 执行的新鲜上下文边界测试。
+    // 只在配置了探针模型且存在候选时生效；结果按 candidateInputHash
+    // at-most-once 持久化，失败走修复反馈，不拥有终局。
+    const probeLoopV2Candidate =
+      this.loopKernelVersion === "v2" && this.loopV2VerificationProbeModel
+        ? async () => {
+            const assessment = this._lastLoopV2CandidateAssessment;
+            if (!assessment) {
+              throw new Error(
+                "Loop v2 verification probe requires a candidate assessment",
+              );
+            }
+            const diffShell = runShellInWorkspace(
+              workspaceRoot,
+              "git --no-pager diff HEAD",
+              {
+                timeoutMs: 30_000,
+                ...(this.shellSandbox
+                  ? { shellSandbox: this.shellSandbox }
+                  : {}),
+                skipApprovalGate: true,
+              },
+            );
+            const diff =
+              typeof diffShell.stdout === "string" ? diffShell.stdout : "";
+            const result = await runVerificationProbeOnceV2({
+              model: this.loopV2VerificationProbeModel!,
+              runId,
+              workspaceRoot,
+              goal: spec.goal,
+              diff,
+              changedFiles: taskState.snapshot().filesChanged,
+              candidateInputHash: assessment.candidateInputHash,
+              mutationRevision: assessment.mutationRevision,
+              ...(this.shellSandbox ? { shellSandbox: this.shellSandbox } : {}),
+              ...(spec.abortSignal ? { signal: spec.abortSignal } : {}),
+              onUsage: (modelLabel, usage) =>
+                this.costTracker?.record(modelLabel, usage),
+            });
+            const summary = result.probes.length
+              ? result.probes
+                  .map(
+                    (probe) =>
+                      `${probe.ok ? "PASS" : "FAIL"} exit=${probe.exitCode ?? "?"} ${probe.command.slice(0, 200)}`,
+                  )
+                  .join("\n")
+                  .slice(0, 4_000)
+              : (result.note ?? "no probes");
+            emit({
+              type: "candidate.probe",
+              candidateId: assessment.candidateId,
+              mutationRevision: assessment.mutationRevision,
+              probeKey: `probe:${assessment.candidateInputHash}`,
+              verdict: result.verdict,
+              summary,
+              modelCalls: result.modelCalls,
+              ...(result.usage ? { usage: result.usage } : {}),
+            });
+            return result;
+          }
+        : undefined;
 
     // ── MCP 连接 ──
     // MCP（Model Context Protocol）允许模型通过标准协议访问外部工具和数据源
@@ -4462,6 +4537,7 @@ export class AgentOrchestrator {
       ...(observeLoopV2ToolCommit ? { observeLoopV2ToolCommit } : {}),
       ...(getLoopV2ControlReduction ? { getLoopV2ControlReduction } : {}),
       ...(reviewLoopV2Candidate ? { reviewLoopV2Candidate } : {}),
+      ...(probeLoopV2Candidate ? { probeLoopV2Candidate } : {}),
       ...(persistLoopV2Terminal ? { persistLoopV2Terminal } : {}),
       emitRunMetrics,
       seq,

@@ -131,6 +131,17 @@ export type RunEvent =
       readonly modelCalls: number;
       readonly usage?: ModelTokenUsage;
     }
+  /** Adversarial boundary probes executed by the host before certification. */
+  | {
+      readonly type: "candidate.probe";
+      readonly candidateId: string;
+      readonly mutationRevision: number;
+      readonly probeKey: string;
+      readonly verdict: "pass" | "fail";
+      readonly summary: string;
+      readonly modelCalls: number;
+      readonly usage?: ModelTokenUsage;
+    }
   /** Deterministic candidate readiness fact; the reducer owns repair state. */
   | {
       readonly type: "candidate.readiness";

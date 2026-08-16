@@ -284,6 +284,11 @@ export function createRunOrchestrator(
     loopKernelVersion === "v2" && mainModel.runtimeProfile
       ? subAgentModel
       : undefined;
+  // 对抗式验证探针与语义评审同一接入位：v2 且有子代理模型才启用。
+  const loopV2VerificationProbeModel =
+    loopKernelVersion === "v2" && mainModel.runtimeProfile
+      ? subAgentModel
+      : undefined;
 
   const createAgent = (input: {
     readonly id: string;
@@ -356,6 +361,7 @@ export function createRunOrchestrator(
     shellSandbox: opts.shellSandbox,
     candidateReviewer,
     loopV2SemanticReviewModel,
+    loopV2VerificationProbeModel,
     subAgentLauncher: collab.canSpawn ? subAgentLauncher : undefined,
     appStateStore,
     sessionStore,

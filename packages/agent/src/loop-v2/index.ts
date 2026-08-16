@@ -213,6 +213,18 @@ export {
   type LoopV2SemanticReviewGateDecisionV1,
 } from "./semantic-review-gate.js";
 export {
+  LOOP_V2_VERIFICATION_PROBE_FEEDBACK_LIMIT,
+  buildVerificationProbePromptV1,
+  evaluateVerificationProbeGateV1,
+  executeVerificationProbesV1,
+  parseVerificationProbePlanV1,
+  runVerificationProbeOnceV2,
+  type VerificationProbeGateDecisionV1,
+  type VerificationProbeOnceResultV2,
+  type VerificationProbePlanItemV1,
+  type VerificationProbeResultV1,
+} from "./verification-probe.js";
+export {
   createLoopV2ShadowObserver,
   restoreLoopV2ProjectionObserver,
   type LegacyRunEventEnvelopeV1,
