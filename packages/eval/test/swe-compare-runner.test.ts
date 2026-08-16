@@ -600,6 +600,109 @@ describe("SWE compare runner", () => {
     );
   });
 
+  test("shell effect audit tolerates pytest build artifacts and keeps the product edit", async () => {
+    // msvprtn2 回归：`python -m pytest` 在源码 checkout 内运行时，
+    // setuptools 生成 .eggs/ 与 src/_pytest/_version.py；它们是测试副作用，
+    // 不是模型违规建文件，更不能因此触发 tracked snapshot 全量还原。
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-build-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    mkdirSync(path.join(root, "src", "_pytest"), { recursive: true });
+    writeFileSync(
+      path.join(root, "src", "_pytest", "capture.py"),
+      "a\n",
+      "utf8",
+    );
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["src/_pytest/capture.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "python -m pytest testing/test_capture.py" },
+      workspaceRoot: root,
+    });
+    // 合法的 tracked 修改（真实修复）+ 测试运行产生的构建产物
+    writeFileSync(
+      path.join(root, "src", "_pytest", "capture.py"),
+      "a\nb\n",
+      "utf8",
+    );
+    mkdirSync(path.join(root, ".eggs"), { recursive: true });
+    writeFileSync(path.join(root, ".eggs", "README.txt"), "egg\n", "utf8");
+    writeFileSync(
+      path.join(root, "src", "_pytest", "_version.py"),
+      "version = '8.0.0.dev1'\n",
+      "utf8",
+    );
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "python -m pytest testing/test_capture.py" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "exit 0", payload: {} },
+      },
+      prepared,
+    );
+    expect(decision.allowed).toBe(true);
+    // 构建产物被清理，真实修改被保留
+    expect(existsSync(path.join(root, ".eggs", "README.txt"))).toBe(false);
+    expect(existsSync(path.join(root, "src", "_pytest", "_version.py"))).toBe(
+      false,
+    );
+    expect(
+      readFileSync(path.join(root, "src", "_pytest", "capture.py"), "utf8"),
+    ).toBe("a\nb\n");
+  });
+
+  test("new-file shell violations no longer erase legitimate tracked edits", async () => {
+    // msvprtn2 根因回归：Claude 臂（container-run scope）中即使容器内出现
+    // 违规新建文件，恢复也只删除该文件本身；不得 git reset --hard 抹掉
+    // Edit 工具产生的合法候选补丁。Paw 运行时（shell-command scope）的
+    // 原子回滚语义由既有 "restores helper and test writes atomically" 覆盖。
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-newfile-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    writeFileSync(path.join(root, "src", "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["src/app.py"]),
+      scope: "container-run",
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "cat > helper.py" },
+      workspaceRoot: root,
+    });
+    writeFileSync(path.join(root, "src", "app.py"), "x = 2\n", "utf8");
+    writeFileSync(path.join(root, "helper.py"), "print('helper')\n", "utf8");
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "cat > helper.py" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "exit 0", payload: {} },
+      },
+      prepared,
+    );
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed !== false) throw new Error("expected rejection");
+    expect(decision.reason).toBe("prohibited_workspace_effect_recovered");
+    expect(decision.message).toContain("new file: helper.py");
+    expect(existsSync(path.join(root, "helper.py"))).toBe(false);
+    // 关键断言：违规新建文件被删，但合法 tracked 修改原样保留
+    expect(readFileSync(path.join(root, "src", "app.py"), "utf8")).toBe(
+      "x = 2\n",
+    );
+  });
+
   test("shell effect audit restores a material candidate erased by checkout", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-candidate-"));
     mkdirSync(path.join(root, "src"), { recursive: true });

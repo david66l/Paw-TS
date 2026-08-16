@@ -450,15 +450,20 @@ function normalizeFrozenPath(file: string): string {
 
 function isEphemeralGeneratedPath(file: string): boolean {
   const parts = file.replace(/\\/g, "/").toLowerCase().split("/");
-  return parts.some((part) =>
-    [
-      "__pycache__",
-      ".pytest_cache",
-      ".mypy_cache",
-      ".ruff_cache",
-      ".coverage",
-    ].includes(part),
-  );
+  const ephemeral = [
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".coverage",
+    // setuptools egg cache: running a test suite from a source checkout
+    // (e.g. `python -m pytest` inside pytest-dev/pytest) populates .eggs.
+    ".eggs",
+  ];
+  if (parts.some((part) => ephemeral.includes(part))) return true;
+  // setuptools/setuptools-scm writes the resolved version module next to the
+  // package when tests execute from a checkout (e.g. src/_pytest/_version.py).
+  return parts.includes("_version.py");
 }
 
 function snapshotUntrackedFiles(
@@ -559,7 +564,16 @@ function withWorkspaceEffect(
 export function createSweCompareToolEffectPolicy(input: {
   readonly workspaceRoot: string;
   readonly trackedFiles: ReadonlySet<string>;
+  /**
+   * "shell-command"（默认，Paw 运行时逐命令审计）：prepare/settle 之间的
+   * tracked 差异全部视为该 shell 的副作用，出现任何违规即原子回滚。
+   * "container-run"（Claude 臂整run审计）：tracked 差异是容器内 Edit 工具
+   * 产生的合法候选补丁，只对 history/index/test/untracked/new-file 违规做
+   * 定向恢复，绝不因此整体还原 tracked 状态（msvprtn2 曾因此抹掉有效补丁）。
+   */
+  readonly scope?: "shell-command" | "container-run";
 }): ToolEffectPolicy {
+  const commandScoped = (input.scope ?? "shell-command") === "shell-command";
   const frozenTracked = new Set(
     [...input.trackedFiles].map(normalizeFrozenPath),
   );
@@ -595,10 +609,15 @@ export function createSweCompareToolEffectPolicy(input: {
       const before = prepared as SweWorkspaceEffectSnapshot;
       const reasons: string[] = [];
       let recovered = true;
+      // history 移动与 tracked 候选回滚会破坏 tracked 基线本身，单独足以
+      // 证明需要 snapshot 还原；其余违规各有定向恢复。shell-command scope
+      // 额外保持原子回滚语义；container-run scope 绝不还原 tracked 候选。
+      let needsTrackedRestore = false;
       try {
         const currentHead = gitText(input.workspaceRoot, ["rev-parse", "HEAD"]);
         if (currentHead !== before.head) {
           reasons.push("history mutation");
+          needsTrackedRestore = true;
           // Restore first: files introduced by a new commit become untracked
           // only after HEAD returns to the frozen baseline.
           restoreTrackedSnapshot(input.workspaceRoot, before);
@@ -688,8 +707,12 @@ export function createSweCompareToolEffectPolicy(input: {
           reasons.push(
             `material candidate rollback: ${lostCandidatePaths.join(", ")}`,
           );
+          needsTrackedRestore = true;
         }
-        if (reasons.length > 0 && currentHead === before.head) {
+        if (
+          (needsTrackedRestore || (commandScoped && reasons.length > 0)) &&
+          currentHead === before.head
+        ) {
           restoreTrackedSnapshot(input.workspaceRoot, before);
         }
       } catch (error) {
@@ -2313,6 +2336,7 @@ export async function runSweCompareArm(opts: {
         ? createSweCompareToolEffectPolicy({
             workspaceRoot: workspace.root,
             trackedFiles: trackedFiles(workspace.root),
+            scope: "container-run",
           })
         : undefined;
     const claudeEffectPrepared = claudeEffectPolicy
