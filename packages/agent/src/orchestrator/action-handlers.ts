@@ -57,7 +57,9 @@ import {
 import { advanceRepeatToolReminder } from "../lifecycle/repeat-tool-reminder.js";
 import {
   type AcceptanceGateDecision,
+  type CompletionDecision,
   IDLE_FUSE_ESCALATION,
+  type VerificationDecision,
   checkAcceptanceCriteria,
   decideCompletion,
   decideFailed,
@@ -70,6 +72,7 @@ import {
 import { resolveLoopAuthorityPolicyV1 } from "../loop-authority.js";
 import {
   type ControlReductionV1,
+  type LoopV2LiveCandidateAssessmentV1,
   type LoopV2ShadowMutationCapture,
   type RepairObligationV1,
   evaluateLoopV2ReadinessGateV1,
@@ -671,6 +674,7 @@ async function handleFinalAnswer(
     );
   }
 
+  let v2ReadyAssessment: LoopV2LiveCandidateAssessmentV1 | undefined;
   if (ctx.loopKernelVersion === "v2") {
     const assessment = ctx.getLoopV2CandidateAssessment?.();
     if (!assessment) {
@@ -733,15 +737,23 @@ async function handleFinalAnswer(
         flags,
       };
     }
+    v2ReadyAssessment = assessment;
   }
 
   const summary = action.summary.trim() || "(empty summary)";
-  const evaluated = evaluateFinalAnswer(
-    summary,
-    ctx.taskState.snapshot(),
-    flags.hasEverUsedTools,
-    ctx.verificationPolicy,
-  );
+  const evaluated = v2ReadyAssessment
+    ? projectReadyV2CandidateToLegacyDecision(
+        summary,
+        v2ReadyAssessment,
+        ctx,
+        flags,
+      )
+    : evaluateFinalAnswer(
+        summary,
+        ctx.taskState.snapshot(),
+        flags.hasEverUsedTools,
+        ctx.verificationPolicy,
+      );
   const verifyNudges = flags.verifyNudges ?? 0;
   if (
     evaluated.shouldNudge &&
@@ -829,6 +841,45 @@ async function handleFinalAnswer(
       decision: evaluated.decision,
     },
     flags,
+  };
+}
+
+function projectReadyV2CandidateToLegacyDecision(
+  summary: string,
+  assessment: LoopV2LiveCandidateAssessmentV1,
+  ctx: PhaseContext,
+  flags: TurnFlags,
+): {
+  readonly verification: VerificationDecision;
+  readonly decision: CompletionDecision;
+  readonly shouldNudge: false;
+} {
+  if (!assessment.readiness.readyForSemanticReview) {
+    throw new Error("Loop v2 completion projection requires ready assessment");
+  }
+  const verification: VerificationDecision =
+    assessment.readiness.localVerification === "passed"
+      ? { ok: true, mode: "tests_passed" }
+      : assessment.readiness.localVerification === "not_required"
+        ? { ok: true, mode: "no_mutation" }
+        : assessment.readiness.localVerification === "harness_failed" &&
+            assessment.policy.verificationAuthority === "external"
+          ? { ok: true, mode: "external_pending" }
+          : (() => {
+              throw new Error(
+                `Loop v2 ready assessment has invalid local verification: ${assessment.readiness.localVerification}`,
+              );
+            })();
+  return {
+    verification,
+    decision: decideCompletion({
+      intent: "final_answer",
+      message: summary,
+      taskState: ctx.taskState.snapshot(),
+      verification,
+      hasEverUsedTools: flags.hasEverUsedTools,
+    }),
+    shouldNudge: false,
   };
 }
 

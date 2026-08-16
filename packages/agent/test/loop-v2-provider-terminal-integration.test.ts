@@ -824,6 +824,70 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     }
   });
 
+  test("v2 readiness does not run the old verification gate again", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-no-double-verification-");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js | more"}}',
+          finishReason: "stop",
+        },
+        {
+          text: finalAnswer("Ready for the trusted external verifier."),
+          finishReason: "stop",
+        },
+      ],
+    });
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      verificationPolicy: { authority: "external", requireMutation: true },
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-no-double-verification",
+        goal: "Change source.txt; final acceptance belongs to the external verifier.",
+        workspaceRoot,
+        maxSteps: 5,
+      });
+
+      expect(result).toMatchObject({
+        status: "completed",
+        outcome: "model_declared",
+        completionReason: "external_verification_pending",
+      });
+      expect(model.callCount).toBe(3);
+      expect(orchestrator.getLastLoopV2CandidateAssessment()).toMatchObject({
+        readiness: {
+          disposition: "ready_for_review",
+          readyForSemanticReview: true,
+          localVerification: "harness_failed",
+          gaps: [],
+        },
+      });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("resume reuses the same semantic candidate and does not review revised prose", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-semantic-resume-");
     const runId = "v2-semantic-resume";
