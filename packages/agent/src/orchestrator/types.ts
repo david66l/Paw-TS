@@ -171,14 +171,6 @@ export interface TurnFlags {
   readonly loopV2ReadinessFeedbackKey?: string;
   /** Feedback count for the matching v2 readiness identity (currently 0 or 1). */
   readonly loopV2ReadinessNudges?: number;
-  /** Stable semantic review identity that already received repair feedback. */
-  readonly loopV2SemanticReviewFeedbackKey?: string;
-  /** Feedback count for the matching semantic review identity (0 or 1). */
-  readonly loopV2SemanticReviewNudges?: number;
-  /** Stable verification-probe identity that already received repair feedback. */
-  readonly loopV2ProbeFeedbackKey?: string;
-  /** Feedback count for the matching probe identity (0 or 1). */
-  readonly loopV2ProbeNudges?: number;
 }
 
 // ═════════════════════════════════════════════════════════════

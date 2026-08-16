@@ -206,14 +206,10 @@ export {
   type SemanticReviewUsageV2,
 } from "./semantic-reviewer.js";
 export {
-  LOOP_V2_SEMANTIC_REVIEW_FEEDBACK_LIMIT,
   evaluateLoopV2SemanticReviewGateV1,
-  parseLoopV2SemanticReviewFeedbackMarker,
-  type LoopV2SemanticReviewFeedbackStateV1,
   type LoopV2SemanticReviewGateDecisionV1,
 } from "./semantic-review-gate.js";
 export {
-  LOOP_V2_VERIFICATION_PROBE_FEEDBACK_LIMIT,
   buildVerificationProbePromptV1,
   evaluateVerificationProbeGateV1,
   executeVerificationProbesV1,
@@ -221,6 +217,7 @@ export {
   runVerificationProbeOnceV2,
   type VerificationProbeGateDecisionV1,
   type VerificationProbeOnceResultV2,
+  type VerificationProbeStatusV1,
   type VerificationProbePlanItemV1,
   type VerificationProbeResultV1,
 } from "./verification-probe.js";

@@ -137,7 +137,7 @@ export type RunEvent =
       readonly candidateId: string;
       readonly mutationRevision: number;
       readonly probeKey: string;
-      readonly verdict: "pass" | "fail";
+      readonly verdict: "pass" | "fail" | "error";
       readonly summary: string;
       readonly modelCalls: number;
       readonly usage?: ModelTokenUsage;

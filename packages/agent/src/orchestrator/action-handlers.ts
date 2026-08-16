@@ -976,16 +976,14 @@ async function checkLoopV2SemanticReviewGate(
   const result = await ctx.reviewLoopV2Candidate();
   const gate = evaluateLoopV2SemanticReviewGateV1({
     result,
-    priorKey: flags.loopV2SemanticReviewFeedbackKey,
-    priorNudges: flags.loopV2SemanticReviewNudges,
     noRoomForAnotherTurn,
   });
   if (gate.type === "accept") return undefined;
   if (gate.type === "feedback") {
+    // 统一不变量：失败评审绑定候选身份，重交相同候选回弹同一事实；
+    // 无计数名额，退出仅由运行预算决定。
     const nextFlags: TurnFlags = {
       ...flags,
-      loopV2SemanticReviewFeedbackKey: gate.key,
-      loopV2SemanticReviewNudges: 1,
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
@@ -1023,16 +1021,12 @@ async function checkLoopV2VerificationProbeGate(
   const result = await ctx.probeLoopV2Candidate();
   const gate = evaluateVerificationProbeGateV1({
     result,
-    priorKey: flags.loopV2ProbeFeedbackKey,
-    priorNudges: flags.loopV2ProbeNudges,
     noRoomForAnotherTurn,
   });
   if (gate.type === "accept") return undefined;
   if (gate.type === "feedback") {
     const nextFlags: TurnFlags = {
       ...flags,
-      loopV2ProbeFeedbackKey: gate.key,
-      loopV2ProbeNudges: 1,
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);

@@ -125,7 +125,6 @@ import {
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
   parseLoopV2ReadinessFeedbackMarker,
-  parseLoopV2SemanticReviewFeedbackMarker,
   resolveLoopKernelVersion,
   restoreLoopV2ProjectionObserver,
   runVerificationProbeOnceV2,
@@ -941,15 +940,6 @@ export class AgentOrchestrator {
               )
               .find((state) => state !== undefined)
           : undefined;
-      const restoredSemanticReviewFeedback =
-        this.loopKernelVersion === "v2" && spec.resumeFromState
-          ? [...spec.resumeFromState.messages]
-              .reverse()
-              .map((message) =>
-                parseLoopV2SemanticReviewFeedbackMarker(message.content),
-              )
-              .find((state) => state !== undefined)
-          : undefined;
       let flags: TurnFlags = {
         autoContinueNudges: 0,
         lastTurnHadToolCall: false,
@@ -958,13 +948,6 @@ export class AgentOrchestrator {
           ? {
               loopV2ReadinessFeedbackKey: restoredReadinessFeedback.key,
               loopV2ReadinessNudges: restoredReadinessFeedback.nudges,
-            }
-          : {}),
-        ...(restoredSemanticReviewFeedback
-          ? {
-              loopV2SemanticReviewFeedbackKey:
-                restoredSemanticReviewFeedback.key,
-              loopV2SemanticReviewNudges: restoredSemanticReviewFeedback.nudges,
             }
           : {}),
         ...(this.loopKernelVersion === "v2"
@@ -3991,7 +3974,7 @@ export class AgentOrchestrator {
               ? result.probes
                   .map(
                     (probe) =>
-                      `${probe.ok ? "PASS" : "FAIL"} exit=${probe.exitCode ?? "?"} ${probe.command.slice(0, 200)}`,
+                      `${probe.status.toUpperCase()} exit=${probe.exitCode ?? "?"} ${probe.command.slice(0, 200)}`,
                   )
                   .join("\n")
                   .slice(0, 4_000)

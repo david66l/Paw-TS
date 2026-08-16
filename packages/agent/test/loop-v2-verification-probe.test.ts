@@ -30,13 +30,21 @@ function fakeModel(responses: readonly string[]): LanguageModel & {
 }
 
 function probeResult(
-  verdict: "pass" | "fail",
+  verdict: "pass" | "fail" | "error",
   command = "python -c 'assert True'",
 ): VerificationProbeOnceResultV2 {
   return {
     candidateInputHash: "hash-a",
     mutationRevision: 1,
-    probes: [{ command, ok: verdict === "pass", exitCode: 0, output: "ok" }],
+    probes: [
+      {
+        command,
+        status:
+          verdict === "pass" ? "pass" : verdict === "fail" ? "fail" : "error",
+        exitCode: 0,
+        output: "ok",
+      },
+    ],
     verdict,
     modelCalls: 1,
   };
@@ -88,9 +96,9 @@ describe("Loop v2 adversarial verification probe", () => {
           },
         ],
       });
-      expect(results[0]?.ok).toBeTrue();
+      expect(results[0]?.status).toBe("pass");
       expect(results[0]?.output).toContain("boundary-ok");
-      expect(results[1]?.ok).toBeFalse();
+      expect(results[1]?.status).toBe("fail");
       expect(results[1]?.exitCode).not.toBe(0);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -106,6 +114,8 @@ describe("Loop v2 adversarial verification probe", () => {
     expect(fail.message).toContain("[LoopV2Probe:fail");
     expect(fail.message).toContain("sel.transform(empty)");
     expect(fail.message).toContain("not certified");
+    // 统一不变量：回弹消息必须说明相同候选重交无效
+    expect(fail.message).toContain("identical resubmission");
 
     const pass = evaluateVerificationProbeGateV1({
       result: probeResult("pass"),
@@ -113,14 +123,27 @@ describe("Loop v2 adversarial verification probe", () => {
     });
     expect(pass.type).toBe("accept");
 
-    const exhausted = evaluateVerificationProbeGateV1({
-      result: probeResult("fail"),
-      priorKey: "probe:hash-a",
-      priorNudges: 1,
+    // 环境类失败不冒充代码缺陷：不拦截
+    const errored = evaluateVerificationProbeGateV1({
+      result: probeResult("error", "python -c 'anything'"),
       noRoomForAnotherTurn: false,
     });
-    expect(exhausted.type).toBe("incomplete");
-    expect(exhausted.reason).toBe("feedback_exhausted");
+    expect(errored.type).toBe("accept");
+
+    // 唯一退出边界：运行预算耗尽
+    const noBudget = evaluateVerificationProbeGateV1({
+      result: probeResult("fail"),
+      noRoomForAnotherTurn: true,
+    });
+    expect(noBudget.type).toBe("incomplete");
+    expect(noBudget.reason).toBe("no_turn_budget");
+
+    // 相同候选重交：不再有任何计数语义，仍然回弹（at-most-once 记录使重放免费）
+    const resubmitted = evaluateVerificationProbeGateV1({
+      result: probeResult("fail"),
+      noRoomForAnotherTurn: false,
+    });
+    expect(resubmitted.type).toBe("feedback");
   });
 
   test("at-most-once per candidateInputHash: replayed record makes no new model call", async () => {
@@ -213,8 +236,8 @@ describe("Loop v2 adversarial verification probe", () => {
         ],
       });
       // 快乐路径通过、零特征边界失败：正是自测盲区的形状
-      expect(results[1]?.ok).toBeTrue();
-      expect(results[0]?.ok).toBeFalse();
+      expect(results[1]?.status).toBe("pass");
+      expect(results[0]?.status).toBe("fail");
       expect(results[0]?.output).toContain("dtype");
       const gate = evaluateVerificationProbeGateV1({
         result: {
