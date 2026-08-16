@@ -40,6 +40,7 @@ export type LoopV2ShadowReason =
   | "legacy_verification_missing_authority_scope"
   | "legacy_compaction_missing_artifact_refs"
   | "rich_read_projected"
+  | "rich_empty_read"
   | "rich_search_projected"
   | "rich_tool_failed"
   | "rich_observation_invalid"
@@ -569,6 +570,18 @@ export function createLoopV2ShadowObserver(
         return;
       }
 
+      if (
+        input.tool === "workspace.read_file" &&
+        asRecord(input.result.payload)?.line_count === 0
+      ) {
+        diagnostics[diagnosticIndex] = {
+          ...diagnostic,
+          disposition: "ignored",
+          reason: "rich_empty_read",
+        };
+        return;
+      }
+
       const rich = buildRichEvidence(input);
       if (!rich) {
         diagnostics[diagnosticIndex] = {
@@ -877,7 +890,7 @@ function buildRichEvidence(input: LoopV2ShadowToolCommitInput):
     const lineCount =
       typeof rawLineCount === "number" &&
       Number.isSafeInteger(rawLineCount) &&
-      rawLineCount >= 0
+      rawLineCount > 0
         ? rawLineCount
         : undefined;
     if (

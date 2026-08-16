@@ -232,6 +232,60 @@ describe("Loop Kernel v2 shadow migration", () => {
     ]);
   });
 
+  test("a successful read beyond EOF stays logged without inventing an empty span", () => {
+    const observer = createLoopV2ShadowObserver("shadow-empty-read");
+    observer.observe(
+      legacyEnvelope(1, {
+        type: "run.started",
+        goal: "Read beyond the end of src/a.ts",
+      }, "shadow-empty-read"),
+    );
+    observer.observe(
+      legacyEnvelope(
+        2,
+        {
+          type: "tool.result",
+          tool: "workspace.read_file",
+          ok: true,
+          summary: "Read zero lines",
+        },
+        "shadow-empty-read",
+      ),
+    );
+
+    expect(() =>
+      observer.observeToolCommit({
+        sourceSeq: 2,
+        callId: "read-empty",
+        tool: "workspace.read_file",
+        args: { path: "src/a.ts", offset: 110, limit: 30 },
+        result: {
+          ok: true,
+          summary: "Read zero lines",
+          payload: { content: "", line_count: 0 },
+        },
+        repositoryRevision: "run:shadow-empty-read:mutation:0",
+        sourceContentHash: "sha256:full-file-r0",
+        concurrentMutation: false,
+      }),
+    ).not.toThrow();
+
+    const report = observer.snapshot();
+    expect(report.projectedEvents).toHaveLength(1);
+    expect(report.state.evidence).toEqual({});
+    expect(report.coverage).toEqual({
+      observed: 2,
+      projected: 1,
+      gaps: 0,
+      ignored: 1,
+    });
+    expect(report.diagnostics.at(-1)).toMatchObject({
+      sourceEventType: "tool.result",
+      disposition: "ignored",
+      reason: "rich_empty_read",
+    });
+  });
+
   test("rich search is hashed from raw results and a racing mutation stays a gap", () => {
     const observer = createLoopV2ShadowObserver("shadow-r19");
     observer.observe(
