@@ -1,5 +1,25 @@
 export { canonicalJson, sha256Canonical } from "./canonical.js";
 export {
+  CONTROL_STATE_SCHEMA_VERSION,
+  controlInputFromLoopV2EnvelopeV1,
+  controlStateHashV1,
+  createControlStateV1,
+  reduceControlStateV1,
+  replayControlFactsV1,
+  restoreControlStateV1,
+  type ControlCandidateV1,
+  type ControlEffectV1,
+  type ControlFactV1,
+  type ControlReducerInputV1,
+  type ControlReductionV1,
+  type ControlReplayResultV1,
+  type ControlReplayStepV1,
+  type ControlStateV1,
+  type ControlStatusV1,
+  type RepairObligationV1,
+  type RepairRequirementV1,
+} from "./control-reducer.js";
+export {
   LOOP_V2_CUTOVER_SUMMARY_SCHEMA_VERSION,
   summarizeLoopV2CutoverV1,
   type LoopV2CutoverObservationV1,
