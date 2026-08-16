@@ -1,3 +1,5 @@
+import type { VerificationFailureRecordV2 } from "./failure-records.js";
+
 export const LOOP_V2_SCHEMA_VERSION = 2 as const;
 
 export type LoopKernelVersion = "v1" | "v2-shadow" | "v2";
@@ -235,9 +237,7 @@ export interface VerificationRecordV2 {
   }>;
   readonly failureClass?: string;
   /** 失败记录分解（Loop v2.1 §10）：owned/environment 划分供 readiness 复用。 */
-  readonly failureRecords?: readonly import(
-    "./failure-records.js",
-  ).VerificationFailureRecordV2[];
+  readonly failureRecords?: readonly VerificationFailureRecordV2[];
   readonly outputArtifactRef: string;
   readonly authoritative: boolean;
 }
