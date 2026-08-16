@@ -57,20 +57,6 @@ export function assertPawVerificationEnvironmentReady(
   return sandbox;
 }
 
-function dockerCli(args: readonly string[]): string {
-  const result = spawnSync("docker", args, {
-    encoding: "utf8",
-    timeout: 600_000,
-    windowsHide: true,
-  });
-  if (result.status !== 0 || result.error) {
-    throw new Error(
-      `docker ${args[0]} failed: ${result.error?.message ?? result.stderr?.trim() ?? "unknown error"}`,
-    );
-  }
-  return result.stdout.trim();
-}
-
 function gitRun(cwd: string, args: readonly string[]): void {
   const result = spawnSync("git", args, {
     cwd,
@@ -146,23 +132,62 @@ export function seedWorkspaceFromInstanceImage(opts: {
   readonly label: string;
 }): void {
   if (!localDockerImageExists(opts.image)) return;
-  const containerId = dockerCli(["create", "--entrypoint", "true", opts.image]);
   const staging = fs.mkdtempSync(
     path.join(os.tmpdir(), `paw-swe-seed-${opts.label}-`),
   );
   try {
-    dockerCli(["cp", `${containerId}:/testbed`, path.join(staging, "testbed")]);
+    // 用 tar -h（解引用符号链接）在容器内打包并经卷挂载直接落盘，而不是
+    // docker cp：Windows 客户端创建 symlink 需要特权，django 镜像 docs 主题
+    // 内的相对链接会让 docker cp 直接失败；而宿主侧 spawnSync 的 stdout
+    // 缓冲也有上限（Bun 不支持 fd 直写）。卷挂载两条都绕开。-h 把链接
+    // 物化为普通文件，对 seeding 语义无损（tracked 状态随后重置）。
     const staged = path.join(staging, "testbed");
+    fs.mkdirSync(staged, { recursive: true });
+    const tarPath = path.join(staging, "testbed.tar");
+    const mountSource = staging.replaceAll("\\", "/");
+    const run = spawnSync(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "-v",
+        `${mountSource}:/paw-seed`,
+        "--entrypoint",
+        "tar",
+        opts.image,
+        "-c",
+        "-h",
+        "-f",
+        "/paw-seed/testbed.tar",
+        "--exclude=./.git",
+        "-C",
+        "/testbed",
+        ".",
+      ],
+      { encoding: "utf8", timeout: 600_000, windowsHide: true },
+    );
+    if (run.status !== 0 || run.error) {
+      throw new Error(
+        `seed tar extraction failed: ${run.error?.message ?? run.stderr?.trim() ?? "unknown error"}`,
+      );
+    }
+    const extract = spawnSync(
+      "tar",
+      // 相对路径 + cwd：GNU tar 会把 `C:\...` 当远程主机语法
+      ["-xf", "testbed.tar", "-C", "testbed"],
+      { cwd: staging, encoding: "utf8", timeout: 600_000, windowsHide: true },
+    );
+    fs.rmSync(tarPath, { force: true });
+    if (extract.status !== 0 || extract.error) {
+      throw new Error(
+        `seed tar unpack failed: ${extract.error?.message ?? extract.stderr?.trim() ?? "unknown error"}`,
+      );
+    }
     if (!fs.existsSync(staged)) {
       throw new Error(`instance image has no /testbed to seed: ${opts.image}`);
     }
     mergeInstanceGeneratedFiles(staged, opts.workspaceRoot);
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
-    try {
-      dockerCli(["rm", "-f", containerId]);
-    } catch {
-      /* best-effort container cleanup */
-    }
   }
 }
