@@ -144,7 +144,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         ),
       );
       expect(boundaryCheckpoint.report.controlState).toMatchObject({
-        status: "candidate",
+        status: "completed",
         turn: 2,
       });
       expect(boundaryCheckpoint.report.controlState?.candidate).toBeDefined();
@@ -767,7 +767,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         legacyTerminal: {
           status: "completed",
           outcome: "verified",
-          reasonCode: "tests_passed",
+          reasonCode: "candidate_certified",
         },
         v2Outcome: {
           executionStatus: "completed",
@@ -815,9 +815,26 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         events.find((event) => event.event.type === "candidate.review")?.event,
       ).toMatchObject({
         type: "candidate.review",
+        candidateId: candidate.assessment.candidateId,
+        reviewKey: persistedReview.reviewKey,
         verdict: "pass",
+        externalVerification: "not_configured",
         modelCalls: 1,
         usage: { promptTokens: 11, completionTokens: 3, totalTokens: 14 },
+      });
+      const controlCheckpoint = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
+          "utf8",
+        ),
+      );
+      expect(controlCheckpoint.report.controlState).toMatchObject({
+        status: "completed",
+        semanticReview: {
+          candidateId: candidate.assessment.candidateId,
+          reviewKey: persistedReview.reviewKey,
+          verdict: "pass",
+        },
       });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
@@ -1000,7 +1017,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       const result = await resumed.resumeRun({ runId, workspaceRoot });
       expect(result.status).toBe("incomplete");
-      expect(result.message).toContain("feedback_exhausted");
+      expect(result.message).toContain("LoopControl:repair_required");
       expect(reviewCalls).toBe(1);
       const resumedCandidate = parseLoopV2LiveCandidateArtifactV1(
         fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
@@ -1009,11 +1026,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(
         resumedEvents.find((event) => event.event.type === "candidate.review")
           ?.event,
-      ).toMatchObject({
-        type: "candidate.review",
-        verdict: "partial",
-        modelCalls: 0,
-      });
+      ).toBeUndefined();
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -1110,7 +1123,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       const result = await resumed.resumeRun({ runId, workspaceRoot });
       expect(result.status).toBe("incomplete");
-      expect(result.message).toContain("feedback_exhausted");
+      expect(result.message).toContain("LoopControl:repair_required");
       expect(reviewCalls).toBe(0);
       const interruptedReview = parseLoopV2LiveReviewArtifactV1(
         fs.readFileSync(
@@ -1292,7 +1305,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         ),
       );
       expect(checkpoint.report.controlState).toMatchObject({
-        status: "candidate",
+        status: "completed",
         mutationRevision: 1,
       });
       expect(

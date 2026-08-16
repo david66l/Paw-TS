@@ -4,6 +4,7 @@ export {
   controlInputFromLoopV2EnvelopeV1,
   controlStateHashV1,
   createControlStateV1,
+  formatRepairObligationV1,
   reduceControlStateV1,
   replayControlFactsV1,
   restoreControlStateV1,

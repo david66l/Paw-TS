@@ -59,13 +59,13 @@ import {
   type AcceptanceGateDecision,
   type CompletionDecision,
   IDLE_FUSE_ESCALATION,
-  type VerificationDecision,
   checkAcceptanceCriteria,
   decideCompletion,
   decideFailed,
   decideIncomplete,
   evaluateBudgetExhaustion,
   evaluateFinalAnswer,
+  evidenceFromTaskState,
   goalRequiresMutation,
   resolveLifecycleBudget,
 } from "../lifecycle/task-lifecycle.js";
@@ -74,9 +74,9 @@ import {
   type ControlReductionV1,
   type LoopV2LiveCandidateAssessmentV1,
   type LoopV2ShadowMutationCapture,
-  type RepairObligationV1,
   evaluateLoopV2ReadinessGateV1,
   evaluateLoopV2SemanticReviewGateV1,
+  formatRepairObligationV1,
 } from "../loop-v2/index.js";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
 import {
@@ -704,7 +704,20 @@ async function handleFinalAnswer(
       mutationRevision: assessment.mutationRevision,
     };
     if (readinessGate.type === "ready") {
-      ctx.emit({ ...readinessEvent, result: { kind: "ready" } });
+      ctx.emit({
+        ...readinessEvent,
+        result: {
+          kind: "ready",
+          semanticReview:
+            assessment.mutationRevision > 0 && ctx.reviewLoopV2Candidate
+              ? "required"
+              : "not_required",
+          externalVerification:
+            assessment.policy.verificationAuthority === "external"
+              ? "pending"
+              : "not_configured",
+        },
+      });
     } else if (readinessGate.requirement) {
       ctx.emit({
         ...readinessEvent,
@@ -742,12 +755,7 @@ async function handleFinalAnswer(
 
   const summary = action.summary.trim() || "(empty summary)";
   const evaluated = v2ReadyAssessment
-    ? projectReadyV2CandidateToLegacyDecision(
-        summary,
-        v2ReadyAssessment,
-        ctx,
-        flags,
-      )
+    ? undefined
     : evaluateFinalAnswer(
         summary,
         ctx.taskState.snapshot(),
@@ -756,7 +764,7 @@ async function handleFinalAnswer(
       );
   const verifyNudges = flags.verifyNudges ?? 0;
   if (
-    evaluated.shouldNudge &&
+    evaluated?.shouldNudge &&
     evaluated.nudgeMessage &&
     verifyNudges < 2 &&
     !noRoomForAnotherTurn
@@ -773,7 +781,7 @@ async function handleFinalAnswer(
   }
 
   // Verification failed and no nudge budget → incomplete via CompletionPolicy
-  if (evaluated.shouldNudge || !evaluated.decision) {
+  if (evaluated && (evaluated.shouldNudge || !evaluated.decision)) {
     const decision = decideCompletion({
       intent: "final_answer",
       message: summary,
@@ -799,6 +807,18 @@ async function handleFinalAnswer(
     noRoomForAnotherTurn,
   );
   if (loopV2SemanticGate) return loopV2SemanticGate;
+
+  const terminalDecision = v2ReadyAssessment
+    ? projectLoopV2ReducerTerminalToLegacyDecision(
+        summary,
+        v2ReadyAssessment,
+        ctx.getLoopV2ControlReduction?.(),
+        ctx,
+      )
+    : evaluated?.decision;
+  if (!terminalDecision) {
+    throw new Error("Completion gate did not produce a terminal decision");
+  }
 
   const candidateGate = ctx.reviewLoopV2Candidate
     ? undefined
@@ -838,48 +858,41 @@ async function handleFinalAnswer(
   return {
     state: {
       type: "decided",
-      decision: evaluated.decision,
+      decision: terminalDecision,
     },
     flags,
   };
 }
 
-function projectReadyV2CandidateToLegacyDecision(
+function projectLoopV2ReducerTerminalToLegacyDecision(
   summary: string,
   assessment: LoopV2LiveCandidateAssessmentV1,
+  reduction: ControlReductionV1 | undefined,
   ctx: PhaseContext,
-  flags: TurnFlags,
-): {
-  readonly verification: VerificationDecision;
-  readonly decision: CompletionDecision;
-  readonly shouldNudge: false;
-} {
-  if (!assessment.readiness.readyForSemanticReview) {
-    throw new Error("Loop v2 completion projection requires ready assessment");
+): CompletionDecision {
+  const terminal = reduction?.effects.find(
+    (effect) => effect.type === "commit_terminal",
+  );
+  if (
+    !terminal ||
+    reduction?.state.candidate?.id !== assessment.candidateId ||
+    (reduction.state.semanticReview !== undefined &&
+      reduction.state.semanticReview.verdict !== "pass")
+  ) {
+    throw new Error(
+      "Loop v2 completion is missing a reducer-owned certified terminal",
+    );
   }
-  const verification: VerificationDecision =
-    assessment.readiness.localVerification === "passed"
-      ? { ok: true, mode: "tests_passed" }
-      : assessment.readiness.localVerification === "not_required"
-        ? { ok: true, mode: "no_mutation" }
-        : assessment.readiness.localVerification === "harness_failed" &&
-            assessment.policy.verificationAuthority === "external"
-          ? { ok: true, mode: "external_pending" }
-          : (() => {
-              throw new Error(
-                `Loop v2 ready assessment has invalid local verification: ${assessment.readiness.localVerification}`,
-              );
-            })();
   return {
-    verification,
-    decision: decideCompletion({
-      intent: "final_answer",
-      message: summary,
-      taskState: ctx.taskState.snapshot(),
-      verification,
-      hasEverUsedTools: flags.hasEverUsedTools,
-    }),
-    shouldNudge: false,
+    status: "completed",
+    outcome:
+      terminal.status === "completed" &&
+      assessment.readiness.localVerification === "passed"
+        ? "verified"
+        : "model_declared",
+    reason: terminal.reason,
+    message: summary.trim() || "(empty summary)",
+    evidence: evidenceFromTaskState(ctx.taskState.snapshot()),
   };
 }
 
@@ -910,7 +923,9 @@ function enforceControlCandidateDecision(
       "Loop v2 final_answer is missing a valid reducer candidate decision",
     );
   }
-  const message = formatRepairObligation(reduction.state.openRepairObligation);
+  const message = formatRepairObligationV1(
+    reduction.state.openRepairObligation,
+  );
   if (noRoomForAnotherTurn) {
     return {
       state: {
@@ -929,23 +944,6 @@ function enforceControlCandidateDecision(
   ctx.ctxMgr.addUser(message);
   opts.saveStateFn();
   return { state: { type: "continue", nextFlags }, flags: nextFlags };
-}
-
-function formatRepairObligation(obligation: RepairObligationV1): string {
-  if (obligation.kind === "direct_verification") {
-    const scope = obligation.scope.length
-      ? obligation.scope.join(", ")
-      : "the current candidate";
-    const runner =
-      obligation.runnerFamily === "any"
-        ? "authoritative"
-        : obligation.runnerFamily;
-    return `[LoopControl:repair_required id=${obligation.id}] Run a direct ${runner} verification for revision ${obligation.revision}, covering ${scope}. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation.`;
-  }
-  const scope = obligation.scope?.length
-    ? ` covering ${obligation.scope.join(", ")}`
-    : "";
-  return `[LoopControl:repair_required id=${obligation.id}] Commit a material source change after revision ${obligation.afterRevision}${scope}. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation.`;
 }
 
 async function checkLoopV2SemanticReviewGate(
@@ -1884,8 +1882,14 @@ async function handleToolCalls(
 
   // Max steps after tools → incomplete（CompletionPolicy）
   if (final.type === "incomplete") {
+    const openRepair =
+      ctx.loopKernelVersion === "v2"
+        ? ctx.getLoopV2ControlReduction?.()?.state.openRepairObligation
+        : undefined;
     const decision = evaluateBudgetExhaustion(
-      final.message ?? "Max steps reached after tools",
+      openRepair
+        ? `${formatRepairObligationV1(openRepair)}\nThe run exhausted its model-turn budget before satisfying this obligation.`
+        : (final.message ?? "Max steps reached after tools"),
       ctx.taskState.snapshot(),
       "max_steps_after_tools",
     );

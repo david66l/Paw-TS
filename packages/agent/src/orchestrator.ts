@@ -117,6 +117,7 @@ import {
   canonicalJson,
   createLoopV2ShadowObserver,
   createProviderTerminalStateV2,
+  formatRepairObligationV1,
   loopV2LiveArtifactPath,
   loopV2ProjectionCheckpointPath,
   loopV2ReadinessProgressKeyV1,
@@ -1282,9 +1283,14 @@ export class AgentOrchestrator {
       const lastAssistant = [...ctxMgr.buildMessages()]
         .reverse()
         .find((m) => m.role === "assistant" && m.content.trim().length > 0);
-      const softMessage =
-        lastAssistant?.content.trim() ||
-        "internal: model loop exhausted without return";
+      const openRepair =
+        this.loopKernelVersion === "v2"
+          ? init.getLoopV2ControlReduction?.()?.state.openRepairObligation
+          : undefined;
+      const softMessage = openRepair
+        ? `${formatRepairObligationV1(openRepair)}\nThe run exhausted its model-turn budget before satisfying this obligation.`
+        : lastAssistant?.content.trim() ||
+          "internal: model loop exhausted without return";
       const { evaluateBudgetExhaustion, runResultFromDecision } = await import(
         "./lifecycle/task-lifecycle.js"
       );
@@ -3712,7 +3718,8 @@ export class AgentOrchestrator {
           loopV2Projection.observe(envelope);
           if (
             event.type === "provider.turn_stopped" ||
-            event.type === "candidate.readiness"
+            event.type === "candidate.readiness" ||
+            (event.type === "candidate.review" && event.candidateId)
           ) {
             persistLoopV2ProjectionCheckpoint();
           }
@@ -3834,6 +3841,12 @@ export class AgentOrchestrator {
     const reviewLoopV2Candidate = loopV2LiveReviewRuntime?.canReview
       ? async () => {
           const result = await loopV2LiveReviewRuntime.reviewCandidate();
+          const assessment = this._lastLoopV2CandidateAssessment;
+          if (!assessment) {
+            throw new Error(
+              "Loop v2 semantic review completed without a candidate assessment",
+            );
+          }
 
           const summary = result.review.findings.length
             ? result.review.findings
@@ -3847,8 +3860,14 @@ export class AgentOrchestrator {
             : `Loop v2 semantic review ${result.review.verdict}.`;
           emit({
             type: "candidate.review",
+            candidateId: assessment.candidateId,
             mutationRevision: result.review.mutationRevision,
+            reviewKey: result.reviewKey,
             verdict: result.review.verdict,
+            externalVerification:
+              assessment.policy.verificationAuthority === "external"
+                ? "pending"
+                : "not_configured",
             summary,
             modelCalls: result.modelCalls,
             ...(result.usage ? { usage: result.usage } : {}),

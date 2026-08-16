@@ -3,7 +3,12 @@ import type { LoopV2Envelope, VerificationRecordV2 } from "./schema.js";
 
 export const CONTROL_STATE_SCHEMA_VERSION = 1 as const;
 
-export type ControlStatusV1 = "running" | "candidate" | "repair_required";
+export type ControlStatusV1 =
+  | "running"
+  | "candidate"
+  | "repair_required"
+  | "completed"
+  | "external_pending";
 
 export type RepairRequirementV1 =
   | Readonly<{
@@ -41,7 +46,14 @@ export interface ControlStateV1 {
   readonly consecutiveNoActionStops: number;
   readonly mutationRevision: number;
   readonly candidate?: ControlCandidateV1;
+  readonly readyCandidateId?: string;
   readonly openRepairObligation?: RepairObligationV1;
+  readonly semanticReview?: Readonly<{
+    candidateId: string;
+    mutationRevision: number;
+    reviewKey: string;
+    verdict: "pass" | "fail" | "partial";
+  }>;
 }
 
 export type ControlFactV1 =
@@ -60,7 +72,11 @@ export type ControlFactV1 =
       candidateId: string;
       mutationRevision: number;
       result:
-        | Readonly<{ kind: "ready" }>
+        | Readonly<{
+            kind: "ready";
+            semanticReview?: "required" | "not_required";
+            externalVerification?: "not_configured" | "pending";
+          }>
         | Readonly<{
             kind: "repair_required";
             requirement: RepairRequirementV1;
@@ -74,6 +90,14 @@ export type ControlFactV1 =
         scope: readonly string[];
         outcome: "passed" | "code_failed" | "harness_failed";
       }>;
+    }>
+  | Readonly<{
+      type: "semantic_review.observed";
+      candidateId: string;
+      mutationRevision: number;
+      reviewKey: string;
+      verdict: "pass" | "fail" | "partial";
+      externalVerification: "not_configured" | "pending";
     }>
   | Readonly<{
       type: "mutation.committed";
@@ -104,6 +128,11 @@ export type ControlEffectV1 =
   | Readonly<{
       type: "request_readiness";
       candidateId: string;
+    }>
+  | Readonly<{
+      type: "commit_terminal";
+      status: "completed" | "external_pending";
+      reason: "candidate_certified" | "external_verification_pending";
     }>;
 
 export interface ControlReductionV1 {
@@ -205,6 +234,7 @@ export function reduceControlStateV1(
           ...base,
           status: "candidate",
           candidate: fact.candidate,
+          readyCandidateId: undefined,
           consecutiveNoActionStops: 0,
         },
         effects: [
@@ -215,7 +245,33 @@ export function reduceControlStateV1(
     case "readiness.evaluated": {
       assertCurrentCandidate(prior, fact.candidateId, fact.mutationRevision);
       if (fact.result.kind === "ready") {
-        return { state: base, effects: [] };
+        if (fact.result.semanticReview === "not_required") {
+          const status =
+            fact.result.externalVerification === "pending"
+              ? "external_pending"
+              : "completed";
+          return {
+            state: {
+              ...base,
+              status,
+              readyCandidateId: fact.candidateId,
+            },
+            effects: [
+              {
+                type: "commit_terminal",
+                status,
+                reason:
+                  status === "external_pending"
+                    ? "external_verification_pending"
+                    : "candidate_certified",
+              },
+            ],
+          };
+        }
+        return {
+          state: { ...base, readyCandidateId: fact.candidateId },
+          effects: [],
+        };
       }
       const obligation = openRepairObligation(
         prior.runId,
@@ -226,9 +282,54 @@ export function reduceControlStateV1(
         state: {
           ...base,
           status: "repair_required",
+          readyCandidateId: undefined,
           openRepairObligation: obligation,
         },
         effects: [{ type: "call_model", reason: "repair_required" }],
+      };
+    }
+    case "semantic_review.observed": {
+      assertCurrentCandidate(prior, fact.candidateId, fact.mutationRevision);
+      if (prior.readyCandidateId !== fact.candidateId) {
+        throw new Error("Semantic review fact requires a ready candidate");
+      }
+      const semanticReview = {
+        candidateId: fact.candidateId,
+        mutationRevision: fact.mutationRevision,
+        reviewKey: fact.reviewKey,
+        verdict: fact.verdict,
+      } as const;
+      if (fact.verdict !== "pass") {
+        const obligation = openRepairObligation(prior.runId, input.seq, {
+          kind: "material_change",
+          afterRevision: fact.mutationRevision,
+        });
+        return {
+          state: {
+            ...base,
+            status: "repair_required",
+            semanticReview,
+            openRepairObligation: obligation,
+          },
+          effects: [{ type: "call_model", reason: "repair_required" }],
+        };
+      }
+      const status =
+        fact.externalVerification === "pending"
+          ? "external_pending"
+          : "completed";
+      return {
+        state: { ...base, status, semanticReview },
+        effects: [
+          {
+            type: "commit_terminal",
+            status,
+            reason:
+              status === "external_pending"
+                ? "external_verification_pending"
+                : "candidate_certified",
+          },
+        ],
       };
     }
     case "verification.observed":
@@ -283,6 +384,25 @@ export function controlStateHashV1(state: ControlStateV1): string {
   return sha256Canonical(state);
 }
 
+export function formatRepairObligationV1(
+  obligation: RepairObligationV1,
+): string {
+  if (obligation.kind === "direct_verification") {
+    const scope = obligation.scope.length
+      ? obligation.scope.join(", ")
+      : "the current candidate";
+    const runner =
+      obligation.runnerFamily === "any"
+        ? "authoritative"
+        : obligation.runnerFamily;
+    return `[LoopControl:repair_required id=${obligation.id}] Run a direct ${runner} verification for revision ${obligation.revision}, covering ${scope}. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation.`;
+  }
+  const scope = obligation.scope?.length
+    ? ` covering ${obligation.scope.join(", ")}`
+    : "";
+  return `[LoopControl:repair_required id=${obligation.id}] Commit a material source change after revision ${obligation.afterRevision}${scope}. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation.`;
+}
+
 /**
  * Projects control-relevant facts from the existing Loop v2 journal. Events
  * that belong only to the evidence/advisor projection intentionally return
@@ -335,6 +455,16 @@ export function controlInputFromLoopV2EnvelopeV1(
         candidateId: event.candidateId,
         mutationRevision: event.mutationRevision,
         result: event.result,
+      };
+      break;
+    case "semantic_review.recorded":
+      fact = {
+        type: "semantic_review.observed",
+        candidateId: event.candidateId,
+        mutationRevision: event.mutationRevision,
+        reviewKey: event.reviewKey,
+        verdict: event.verdict,
+        externalVerification: event.externalVerification,
       };
       break;
     default:
@@ -415,6 +545,8 @@ function reduceMutation(
         status: "repair_required",
         mutationRevision: revision,
         candidate: undefined,
+        readyCandidateId: undefined,
+        semanticReview: undefined,
         openRepairObligation: { ...obligation, revision },
       },
       effects: [{ type: "call_model", reason: "repair_required" }],
@@ -430,6 +562,8 @@ function reduceMutation(
       status: clearsMaterial ? "running" : prior.status,
       mutationRevision: revision,
       candidate: undefined,
+      readyCandidateId: undefined,
+      semanticReview: undefined,
       ...(clearsMaterial ? { openRepairObligation: undefined } : {}),
     },
     effects: [],

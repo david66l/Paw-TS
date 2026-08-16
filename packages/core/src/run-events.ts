@@ -122,6 +122,10 @@ export type RunEvent =
       readonly type: "candidate.review";
       readonly mutationRevision: number;
       readonly verdict: "pass" | "fail" | "partial";
+      /** Present for Loop v2 so the journal fact is bound to one candidate. */
+      readonly candidateId?: string;
+      readonly reviewKey?: string;
+      readonly externalVerification?: "not_configured" | "pending";
       readonly reportGrounding?: "pass" | "fail" | "unknown";
       readonly summary: string;
       readonly modelCalls: number;
@@ -133,7 +137,11 @@ export type RunEvent =
       readonly candidateId: string;
       readonly mutationRevision: number;
       readonly result:
-        | { readonly kind: "ready" }
+        | {
+            readonly kind: "ready";
+            readonly semanticReview?: "required" | "not_required";
+            readonly externalVerification?: "not_configured" | "pending";
+          }
         | {
             readonly kind: "repair_required";
             readonly requirement:

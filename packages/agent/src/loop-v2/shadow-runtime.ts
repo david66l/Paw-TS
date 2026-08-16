@@ -53,6 +53,7 @@ export type LoopV2ShadowReason =
   | "rich_candidate_projected"
   | "provider_turn_stopped_projected"
   | "readiness_evaluated_projected"
+  | "semantic_review_projected"
   | "non_decision_event";
 
 export interface LoopV2ShadowDiagnostic {
@@ -384,6 +385,39 @@ export function createLoopV2ShadowObserver(
         appendProjected(projected);
         record(envelope, "projected", "readiness_evaluated_projected");
         return;
+      }
+
+      if (envelope.event.type === "candidate.review") {
+        const review = envelope.event as unknown as Readonly<{
+          candidateId?: string;
+          mutationRevision: number;
+          reviewKey?: string;
+          verdict: "pass" | "fail" | "partial";
+          externalVerification?: "not_configured" | "pending";
+        }>;
+        if (
+          review.candidateId &&
+          review.reviewKey &&
+          review.externalVerification
+        ) {
+          const projected: LoopV2Envelope = {
+            schemaVersion: LOOP_V2_SCHEMA_VERSION,
+            runId,
+            seq: projectedEvents.length + 1,
+            ts: envelope.ts,
+            event: {
+              type: "semantic_review.recorded",
+              candidateId: review.candidateId,
+              mutationRevision: review.mutationRevision,
+              reviewKey: review.reviewKey,
+              verdict: review.verdict,
+              externalVerification: review.externalVerification,
+            },
+          };
+          appendProjected(projected);
+          record(envelope, "projected", "semantic_review_projected");
+          return;
+        }
       }
 
       const classification = classifyLegacyEvent(envelope.event);

@@ -70,7 +70,11 @@ export type LoopV2Event =
       readonly candidateId: string;
       readonly mutationRevision: number;
       readonly result:
-        | { readonly kind: "ready" }
+        | {
+            readonly kind: "ready";
+            readonly semanticReview?: "required" | "not_required";
+            readonly externalVerification?: "not_configured" | "pending";
+          }
         | {
             readonly kind: "repair_required";
             readonly requirement:
@@ -86,6 +90,14 @@ export type LoopV2Event =
                   readonly scope?: readonly string[];
                 };
           };
+    }
+  | {
+      readonly type: "semantic_review.recorded";
+      readonly candidateId: string;
+      readonly mutationRevision: number;
+      readonly reviewKey: string;
+      readonly verdict: "pass" | "fail" | "partial";
+      readonly externalVerification: "not_configured" | "pending";
     }
   | {
       readonly type: "context.compacted";
@@ -415,6 +427,25 @@ export function assertLoopV2Envelope(
     case "readiness.evaluated":
       assertReadiness(value.event);
       return;
+    case "semantic_review.recorded":
+      assertNonEmptyString(value.event.candidateId, "event.candidateId");
+      assertSafeInteger(
+        value.event.mutationRevision,
+        "event.mutationRevision",
+        0,
+      );
+      assertNonEmptyString(value.event.reviewKey, "event.reviewKey");
+      assertOneOf(
+        value.event.verdict,
+        ["pass", "fail", "partial"],
+        "event.verdict",
+      );
+      assertOneOf(
+        value.event.externalVerification,
+        ["not_configured", "pending"],
+        "event.externalVerification",
+      );
+      return;
     case "context.compacted":
       assertSafeInteger(
         value.event.summarizedSeqThrough,
@@ -614,7 +645,23 @@ function assertReadiness(value: Record<string, unknown>): void {
     ["ready", "repair_required"],
     `${label}.result.kind`,
   );
-  if (value.result.kind === "ready") return;
+  if (value.result.kind === "ready") {
+    if (value.result.semanticReview !== undefined) {
+      assertOneOf(
+        value.result.semanticReview,
+        ["required", "not_required"],
+        `${label}.result.semanticReview`,
+      );
+    }
+    if (value.result.externalVerification !== undefined) {
+      assertOneOf(
+        value.result.externalVerification,
+        ["not_configured", "pending"],
+        `${label}.result.externalVerification`,
+      );
+    }
+    return;
+  }
   assertRecord(value.result.requirement, `${label}.result.requirement`);
   const requirement = value.result.requirement;
   assertOneOf(

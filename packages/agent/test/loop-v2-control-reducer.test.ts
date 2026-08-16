@@ -69,6 +69,18 @@ function directRepairState(): ControlStateV1 {
   ).state;
 }
 
+function readyCandidateState(): ControlStateV1 {
+  return reduceControlStateV1(
+    candidateState(),
+    input(4, {
+      type: "readiness.evaluated",
+      candidateId: "candidate-1",
+      mutationRevision: 1,
+      result: { kind: "ready" },
+    }),
+  ).state;
+}
+
 describe("Loop v2 pure control reducer", () => {
   test("R11 natural stop is only a turn boundary", () => {
     const reduced = reduceControlStateV1(
@@ -110,6 +122,100 @@ describe("Loop v2 pure control reducer", () => {
     expect(reduced.effects).toEqual([
       { type: "request_readiness", candidateId: "candidate-0" },
     ]);
+  });
+
+  test("only a passing semantic review lets the reducer finish the run", () => {
+    const ready = { state: readyCandidateState(), effects: [] } as const;
+    const completed = reduceControlStateV1(
+      ready.state,
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-1",
+        verdict: "pass",
+        externalVerification: "not_configured",
+      }),
+    );
+
+    expect(ready.state.status).toBe("candidate");
+    expect(ready.effects).toEqual([]);
+    expect(completed.state.status).toBe("completed");
+    expect(completed.effects).toEqual([
+      {
+        type: "commit_terminal",
+        status: "completed",
+        reason: "candidate_certified",
+      },
+    ]);
+  });
+
+  test("external verification stays pending even after semantic review passes", () => {
+    const reduced = reduceControlStateV1(
+      readyCandidateState(),
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-external",
+        verdict: "pass",
+        externalVerification: "pending",
+      }),
+    );
+
+    expect(reduced.state.status).toBe("external_pending");
+    expect(reduced.effects).toEqual([
+      {
+        type: "commit_terminal",
+        status: "external_pending",
+        reason: "external_verification_pending",
+      },
+    ]);
+  });
+
+  test("failed semantic review opens a repair that only a later mutation clears", () => {
+    const failed = reduceControlStateV1(
+      readyCandidateState(),
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-failed",
+        verdict: "fail",
+        externalVerification: "not_configured",
+      }),
+    );
+    const repeatedCandidate = reduceControlStateV1(
+      failed.state,
+      input(6, {
+        type: "candidate.submitted",
+        candidate: {
+          id: "candidate-1",
+          mutationRevision: 1,
+          candidateInputHash: "candidate-hash",
+        },
+      }),
+    );
+    const changed = reduceControlStateV1(
+      repeatedCandidate.state,
+      input(7, {
+        type: "mutation.committed",
+        revision: 2,
+        paths: ["src/value.ts"],
+      }),
+    );
+
+    expect(failed.state.openRepairObligation).toMatchObject({
+      kind: "material_change",
+      afterRevision: 1,
+    });
+    expect(repeatedCandidate.state.status).toBe("repair_required");
+    expect(repeatedCandidate.effects).toEqual([
+      { type: "call_model", reason: "repair_required" },
+    ]);
+    expect(changed.state.status).toBe("running");
+    expect(changed.state.openRepairObligation).toBeUndefined();
+    expect(changed.state.semanticReview).toBeUndefined();
   });
 
   test("R21/R22 wrong or unrelated successful actions do not clear repair", () => {
@@ -322,6 +428,20 @@ describe("Loop v2 pure control reducer", () => {
         },
       },
     });
+    const review = controlInputFromLoopV2EnvelopeV1({
+      schemaVersion: 2,
+      runId: RUN_ID,
+      seq: 5,
+      ts: 5,
+      event: {
+        type: "semantic_review.recorded",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-1",
+        verdict: "pass",
+        externalVerification: "not_configured",
+      },
+    });
 
     expect(adapted).toEqual(
       input(1, { type: "run.started", goalHash: "goal-hash" }),
@@ -336,6 +456,16 @@ describe("Loop v2 pure control reducer", () => {
           kind: "repair_required",
           requirement: { kind: "material_change", afterRevision: 1 },
         },
+      }),
+    );
+    expect(review).toEqual(
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-1",
+        verdict: "pass",
+        externalVerification: "not_configured",
       }),
     );
 
