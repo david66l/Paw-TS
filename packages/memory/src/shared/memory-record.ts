@@ -28,51 +28,27 @@
  * - linkedMemories 支持记忆间的双向链接，构建知识图谱
  */
 
+import type { LegacyMemoryRecordV1, MemoryPriority } from "@paw/protocol";
 import type { AutoMemoryEntry } from "../compat/auto-memory.js";
+import type { SessionMemory } from "../session/session-memory.js";
 import { EmbeddingCache } from "./embedding-cache.js";
-import {
-  kindFromLegacyType,
-  type MemoryKind,
-  type MemoryStatus,
-} from "./memory-types.js";
 import {
   extractErrorSignatures,
   extractFilePaths,
   inferTags,
-  type TaskProfile,
 } from "./memory-query.js";
-import type { SessionMemory } from "../session/session-memory.js";
+import { kindFromLegacyType } from "./memory-types.js";
 
-/**
- * 记忆来源类型。
- *
- * - session: 会话记忆（一次对话中自动生成）
- * - auto: 自动记忆（从 .md 文件的 YAML frontmatter 解析）
- * - project: 项目级别的显式记忆
- * - user_explicit: 用户手动创建的记忆
- */
-export type MemorySource = "session" | "auto" | "project" | "user_explicit";
+export type {
+  LegacyMemoryRecordV1,
+  MemoryPriority,
+  MemoryScope,
+  MemorySource,
+  TaskProfile,
+} from "@paw/protocol";
 
-/**
- * 记忆作用域。
- *
- * - project: 仅当前项目可见
- * - workspace: 当前工作区可见
- * - global: 全局可见（跨项目/工作区）
- */
-export type MemoryScope = "project" | "workspace" | "global";
-
-/**
- * 记忆优先级。
- *
- * 影响检索打分时的乘法系数：
- * - high: ×1.3（高优先级记忆在检索中更有优势）
- * - mid: ×1.0（默认优先级，不增不减）
- * - low: ×0.7（低优先级记忆在检索中会被降权）
- */
-export type MemoryPriority = "high" | "mid" | "low";
-
-export type { TaskProfile };
+/** @deprecated WP1a compatibility alias. */
+export type MemoryRecord = LegacyMemoryRecordV1;
 
 /**
  * 优先级乘法系数映射表。
@@ -86,51 +62,6 @@ export const PRIORITY_COEFFICIENTS: Record<MemoryPriority, number> = {
   mid: 1.0,
   low: 0.7,
 };
-
-/**
- * 统一记忆记录 —— 所有记忆类型映射后的通用数据结构。
- *
- * 字段设计原则：
- * - id: 唯一标识，对于 session 记忆是 session ID，对于 auto 记忆是文件名
- * - content: 完整内容，用于注入到 LLM 上下文
- * - summary: 简短摘要，用于清单展示和快速匹配
- * - tags: 标签列表，用于分类检索
- * - relatedFiles: 关联文件路径，用于路径相关性打分
- * - relatedErrors: 关联的错误签名，用于错误匹配检索
- */
-export interface MemoryRecord {
-  readonly id: string;
-  readonly source: MemorySource;
-  readonly scope: MemoryScope;
-  readonly createdAt: number;
-  readonly updatedAt: number;
-  readonly title: string;
-  readonly summary: string;
-  readonly content: string;
-  readonly tags: readonly string[];
-  readonly relatedFiles: readonly string[];
-  /** 错误签名（错误码、异常类名、关键行）——非完整描述，用于精确匹配 */
-  readonly relatedErrors: readonly string[];
-  /** 解码后的 embedding 向量，用于语义相似度加权（来自 AutoMemory 的 YAML frontmatter）。 */
-  readonly embedding?: number[];
-  /** 优先级等级 —— 影响检索打分（high×1.3, mid×1.0, low×0.7）。 */
-  readonly priority: MemoryPriority;
-  readonly kind?: MemoryKind;
-  readonly confidence?: number;
-  readonly status?: MemoryStatus;
-  readonly evidence?: readonly string[];
-  readonly gitCommit?: string;
-  readonly branch?: string;
-  readonly symbols?: readonly string[];
-  readonly tests?: readonly string[];
-  readonly supersedes?: readonly string[];
-  /** 创建此记忆时使用的工具列表（用于检索过滤）。 */
-  readonly toolsUsed: readonly string[];
-  /** 记忆的过期时间戳（Unix 毫秒），0 表示永不过期。 */
-  readonly validUntil: number;
-  /** 双向链接到其他记忆的名称列表。 */
-  readonly linkedMemories: readonly string[];
-}
 
 // ── 映射函数（Mappers）──
 // 以下两个函数分别将 SessionMemory 和 AutoMemoryEntry 映射为统一的 MemoryRecord
@@ -146,7 +77,7 @@ export interface MemoryRecord {
  * - relatedErrors 从 errorsAndFixes 中提取错误签名而非完整描述
  * - priority 固定为 "mid"（会话记忆默认中等优先级）
  */
-export function sessionMemoryToRecord(sm: SessionMemory): MemoryRecord {
+export function sessionMemoryToRecord(sm: SessionMemory): LegacyMemoryRecordV1 {
   return {
     id: sm.session,
     source: "session",
@@ -193,7 +124,7 @@ export function sessionMemoryToRecord(sm: SessionMemory): MemoryRecord {
 export function autoMemoryToRecord(
   entry: AutoMemoryEntry,
   mtime?: number,
-): MemoryRecord {
+): LegacyMemoryRecordV1 {
   // 基准时间戳：优先使用 mtime，回退到当前时间
   const ts = mtime ?? Date.now();
 

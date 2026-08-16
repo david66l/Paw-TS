@@ -2,9 +2,11 @@
  * Shared test fixtures for `@paw/core`.
  */
 
-import type { MemoryRecord } from "@paw/memory";
+import type { LegacyMemoryRecordV1 } from "@paw/protocol";
 
-export function makeRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
+export function makeRecord(
+  overrides: Partial<LegacyMemoryRecordV1> = {},
+): LegacyMemoryRecordV1 {
   return {
     id: "test",
     source: "auto",

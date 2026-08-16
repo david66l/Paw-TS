@@ -69,7 +69,6 @@ import {
   type RunEventEnvelope,
   type RunResult,
   type RunSpec,
-  SessionMemoryStore,
   type SessionStore,
   SkillRegistry,
   type SkillRegistry as SkillRegistryType,
@@ -79,14 +78,12 @@ import {
   type WaitingUserInteractionV1,
   allocateContextBudget,
   atomicWrite,
-  buildConversationAwareQuery,
   buildSystemPromptWithBudget,
   compressionSavingsRatio,
   computeCompactThreshold,
   costAdjustedCompactThreshold,
   detectDuplicateAccess,
   evaluateTrigger,
-  extractCleanMemoryQuery,
   findPawRoot,
   formatTodosForPrompt,
   getToolResultsDir,
@@ -94,7 +91,6 @@ import {
   isProtectedUserConstraint,
   isToolResultMessage,
   listCheckpoints,
-  loadProjectMemory,
   loadSkillsFromDirectory,
   measureContextBudget,
   prewarmEncoding,
@@ -177,7 +173,14 @@ import {
   selectCodeContext,
 } from "@paw/workspace";
 
-import { type MemoryRuntime, createMemoryRuntime } from "@paw/memory";
+import {
+  type MemoryRuntime,
+  SessionMemoryStore,
+  buildConversationAwareQuery,
+  createMemoryRuntime,
+  extractCleanMemoryQuery,
+  loadProjectMemory,
+} from "@paw/memory";
 import { loadMemoryConfigSync } from "@paw/memory/longterm";
 import type { CandidateReviewer } from "./candidate-review.js";
 import {

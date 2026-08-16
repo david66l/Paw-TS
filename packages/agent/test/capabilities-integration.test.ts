@@ -13,13 +13,13 @@ import { AgentOrchestrator } from "@paw/agent";
 import type { ChatMessage, RunEventEnvelope } from "@paw/core";
 import {
   ContextCompactor,
-  SessionMemoryStore,
   estimateMessagesTokens,
   measureContextBudget,
   pruneToolResults,
   shouldCompactHistory,
 } from "@paw/core";
 import { resetPolicyConfig } from "@paw/harness";
+import { SessionMemoryStore } from "@paw/memory";
 import { FakeLanguageModel } from "@paw/models";
 import { runCompressionAgent } from "../src/compression-agent.js";
 import { cleanup, tmpDir } from "./fixtures.js";

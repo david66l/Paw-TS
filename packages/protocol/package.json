@@ -1,11 +1,8 @@
 {
-  "name": "@paw/core",
+  "name": "@paw/protocol",
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "@paw/protocol": "workspace:*"
-  },
   "exports": {
     ".": "./src/index.ts"
   },

@@ -97,7 +97,7 @@
       "name": "@paw/core",
       "version": "0.0.1",
       "dependencies": {
-        "@paw/memory": "workspace:*",
+        "@paw/protocol": "workspace:*",
       },
     },
     "packages/eval": {
@@ -133,6 +133,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/core": "workspace:*",
+        "@paw/protocol": "workspace:*",
         "hyparquet": "^1.28.1",
         "postgres": "^3.4.5",
       },
@@ -147,6 +148,10 @@
         "@paw/core": "workspace:*",
         "@paw/settings": "workspace:*",
       },
+    },
+    "packages/protocol": {
+      "name": "@paw/protocol",
+      "version": "0.0.1",
     },
     "packages/settings": {
       "name": "@paw/settings",
@@ -363,6 +368,8 @@
     "@paw/memory": ["@paw/memory@workspace:packages/memory"],
 
     "@paw/models": ["@paw/models@workspace:packages/models"],
+
+    "@paw/protocol": ["@paw/protocol@workspace:packages/protocol"],
 
     "@paw/settings": ["@paw/settings@workspace:packages/settings"],
 

@@ -21,8 +21,10 @@
  *    这让上层（UI/日志）可以展示 token 预算消耗的完整 audit trail。
  */
 
-import type { MemoryRecord } from "@paw/memory";
-import type { ProjectMemory } from "@paw/memory";
+import type {
+  LegacyMemoryRecordV1,
+  LegacyProjectMemoryV1,
+} from "@paw/protocol";
 
 /**
  * 构建系统提示词的配置选项
@@ -42,9 +44,9 @@ export interface SystemPromptOptions {
   /** PAW.md（用户/项目指令）的内容，可选 */
   readonly pawMd?: string;
   /** 项目记忆（分层的本地记忆数据），可选 */
-  readonly projectMemory?: ProjectMemory;
+  readonly projectMemory?: LegacyProjectMemoryV1;
   /** 当前上下文最相关的记忆记录列表，可选（旧 file 路径） */
-  readonly relevantMemories?: readonly MemoryRecord[];
+  readonly relevantMemories?: readonly LegacyMemoryRecordV1[];
   /**
    * 新记忆 Runtime 预渲染的上下文段（ContextBuilder 输出）。
    * 若提供，优先于 relevantMemories 注入 system prompt。

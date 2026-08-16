@@ -65,6 +65,7 @@ export {
   isWorthWritingLongTermMemory,
   shouldWriteTaskSummary,
   tokenizeForMemoryScore,
+  type LegacyMemoryRecordV1,
   type MemoryRecord,
   type MemorySource,
   type MemoryScope,
@@ -84,6 +85,7 @@ export {
 
 export {
   loadProjectMemory,
+  type LegacyProjectMemoryV1,
   type ProjectMemory,
 } from "./project/project-memory.js";
 

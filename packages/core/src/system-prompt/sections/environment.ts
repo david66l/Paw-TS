@@ -1,5 +1,7 @@
-import type { MemoryRecord } from "@paw/memory";
-import type { ProjectMemory } from "@paw/memory";
+import type {
+  LegacyMemoryRecordV1,
+  LegacyProjectMemoryV1,
+} from "@paw/protocol";
 /**
  * 系统提示词章节：运行环境
  *
@@ -35,9 +37,9 @@ export function getEnvironmentSection(opts: {
   /** PAW.md 文件内容（项目级别指令） */
   pawMd?: string;
   /** 项目记忆（已提交 + 本地偏好） */
-  projectMemory?: ProjectMemory;
+  projectMemory?: LegacyProjectMemoryV1;
   /** 与当前上下文相关的历史记忆记录 */
-  relevantMemories?: readonly MemoryRecord[];
+  relevantMemories?: readonly LegacyMemoryRecordV1[];
   /** 新记忆 Runtime 预渲染段（优先于 relevantMemories） */
   memoryContextSection?: string;
   /** 待办事项文本 */

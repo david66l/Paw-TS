@@ -1,28 +1,7 @@
+import type { MemoryKind, MemoryStatus } from "@paw/protocol";
 import type { AutoMemoryEntry } from "../compat/auto-memory.js";
 
-export type MemoryKind =
-  | "project_rule"
-  | "user_preference"
-  | "task_episode"
-  | "failure_pattern"
-  | "module_summary"
-  | "procedure"
-  | "reference";
-
-export type MemoryStatus = "active" | "deprecated" | "superseded";
-
-export interface MemoryMetadata {
-  readonly kind: MemoryKind;
-  readonly confidence: number;
-  readonly status: MemoryStatus;
-  readonly evidence: readonly string[];
-  readonly validUntil?: number;
-  readonly gitCommit?: string;
-  readonly branch?: string;
-  readonly symbols?: readonly string[];
-  readonly tests?: readonly string[];
-  readonly supersedes?: readonly string[];
-}
+export type { MemoryKind, MemoryMetadata, MemoryStatus } from "@paw/protocol";
 
 export function kindFromLegacyType(type: AutoMemoryEntry["type"]): MemoryKind {
   switch (type) {

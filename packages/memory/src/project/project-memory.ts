@@ -30,19 +30,12 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import type { LegacyProjectMemoryV1 } from "@paw/protocol";
 
-/**
- * 项目记忆数据结构。
- *
- * 包含两个独立的规则文件内容：共享规则（committed）和本地规则（local）。
- * 任一文件不存在时对应字段为 null。
- */
-export interface ProjectMemory {
-  /** `.paw/CLAUDE.md` 的内容（纳入版本控制，团队共享） */
-  readonly committed: string | null;
-  /** `.paw/CLAUDE.local.md` 的内容（不纳入版本控制，本地个人配置） */
-  readonly local: string | null;
-}
+export type { LegacyProjectMemoryV1 } from "@paw/protocol";
+
+/** @deprecated WP1a compatibility alias. */
+export type ProjectMemory = LegacyProjectMemoryV1;
 
 /**
  * 从工作区根目录加载项目记忆文件。
@@ -53,7 +46,9 @@ export interface ProjectMemory {
  * @param workspaceRoot - 工作区根目录的绝对路径
  * @returns 包含共享规则和本地规则内容的 ProjectMemory 对象
  */
-export function loadProjectMemory(workspaceRoot: string): ProjectMemory {
+export function loadProjectMemory(
+  workspaceRoot: string,
+): LegacyProjectMemoryV1 {
   const committedPath = path.join(workspaceRoot, ".paw", "CLAUDE.md");
   const localPath = path.join(workspaceRoot, ".paw", "CLAUDE.local.md");
 

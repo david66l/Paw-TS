@@ -22,8 +22,8 @@
  * - Pending Questions：待解决问题
  */
 
-import type { SessionMemory } from "@paw/core";
 import { parseMarkdownSections } from "@paw/core";
+import type { SessionMemory } from "@paw/memory";
 import type { LanguageModel } from "@paw/models";
 
 import { completeAuxiliaryTask } from "./auxiliary-complete.js";

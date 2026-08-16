@@ -7,8 +7,8 @@
  *
  * 1. **封装内部实现**：各子模块的内部实现细节（如私有辅助函数、内部类型）
  *    不会出现在此导出列表中，外部使用者只能访问经过筛选的公共 API。
- * 2. **统一导入路径**：所有外部消费者只需从 `@paw-ts/core` 这一个入口导入，
- *    无需关心内部文件结构。这降低了耦合度，使得内部重构不影响外部使用者。
+ * 2. **统一核心导入路径**：核心能力从 `@paw/core` 导入；具体记忆实现从
+ *    `@paw/memory` 导入，跨包纯协议由 `@paw/protocol` 定义。
  * 3. **文档即接口**：此文件本身就是公共 API 的目录，配合 JSDoc 注释，
  *    开发者只需阅读此文件就能了解核心包提供的全部能力。
  *
@@ -29,7 +29,6 @@
  * | Token 估算           | token-estimate.js / token-estimator.js | Token 数量预估 API   |
  * | 上下文裁剪           | context-pruner.js            | 历史消息智能裁剪             |
  * | 工具结果存储         | tool-result-storage.js       | 大工具结果持久化             |
- * | 会话记忆             | session-memory.js            | 会话级别记忆管理             |
  * | 上下文压缩           | context-compactor.js         | 对话历史摘要压缩             |
  * | 上下文预算           | context-budget.js            | 上下文窗口配额管理           |
  * | 压缩质量验证         | compression-summary.js       | 压缩结果质量检查             |
@@ -40,17 +39,9 @@
  * | 待办事项             | todo.js                      | Agent 任务跟踪               |
  * | 技能系统             | skills.js                    | 技能加载与注册               |
  * | 检查点               | checkpoint.js                | 文件状态快照与回滚           |
- * | 项目记忆             | project-memory.js            | 项目级持久记忆               |
- * | 自动记忆             | auto-memory.js               | 自动提取的学习记忆           |
- * | 嵌入缓存             | embedding-cache.js           | 嵌入向量缓存                 |
+ * | 记忆协议兼容导出      | @paw/protocol                | 无实现的共享记忆类型         |
  * | 根目录查找           | find-root.js                 | paw-ts 项目根目录定位        |
  * | 系统提示词构建       | system-prompt.js             | 完整系统提示词组装           |
- * | 记忆检索级联         | memory-retrieval-cascade.js  | 多级记忆检索降级策略         |
- * | 记忆检索             | memory-retrieve.js           | 统一记忆检索入口             |
- * | 统一记忆存储         | unified-memory-store.js      | 多源记忆融合存储             |
- * | 关键词记忆检索       | memory-retriever.js          | BM25 关键词检索              |
- * | 记忆记录             | memory-record.js             | 记忆索引与检索信号           |
- * | 记忆反思             | memory-reflector.js          | 记忆质量反思与归档           |
  */
 
 // ============================================================
@@ -388,35 +379,24 @@ export {
 } from "./checkpoint.js";
 
 // ============================================================
-// 记忆相关 — 薄 re-export（实现在 @paw/memory）
-// 在线 Runtime 请直接 import from "@paw/memory"
+// 记忆协议兼容导出。具体实现只从 @paw/memory 导入。
 // ============================================================
-export {
-  loadProjectMemory,
-  type ProjectMemory,
-  extractCleanMemoryQuery,
-  extractFilePaths,
-  buildConversationAwareQuery,
-  isLowValueChitchat,
-  isWorthWritingLongTermMemory,
-  type MemoryRecord,
-  type MemorySource,
-  type MemoryScope,
-  type MemoryPriority,
-  type MemoryKind,
-  type MemoryMetadata,
-  type MemoryStatus,
-  type TaskProfile,
-  kindFromLegacyType,
-  isMemoryKind,
-  isMemoryStatus,
-  SessionMemoryStore,
-  type SessionMemory,
-  // 仅迁移/遗留脚本可能用到
-  AutoMemoryStore,
-  type AutoMemoryEntry,
-  type MemoryPriority as AutoMemoryPriority,
-} from "@paw/memory";
+export type {
+  LegacyProjectMemoryV1,
+  LegacyMemoryRecordV1,
+  MemorySource,
+  MemoryScope,
+  MemoryPriority,
+  MemoryKind,
+  MemoryMetadata,
+  MemoryStatus,
+  TaskProfile,
+} from "@paw/protocol";
+
+/** @deprecated WP1a compatibility alias. Import LegacyProjectMemoryV1 instead. */
+export type ProjectMemory = import("@paw/protocol").LegacyProjectMemoryV1;
+/** @deprecated WP1a compatibility alias. Import LegacyMemoryRecordV1 instead. */
+export type MemoryRecord = import("@paw/protocol").LegacyMemoryRecordV1;
 
 // ============================================================
 // 项目根目录查找

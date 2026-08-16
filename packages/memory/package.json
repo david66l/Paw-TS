@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@paw/core": "workspace:*",
+    "@paw/protocol": "workspace:*",
     "hyparquet": "^1.28.1",
     "postgres": "^3.4.5"
   },

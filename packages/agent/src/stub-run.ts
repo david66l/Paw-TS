@@ -1,12 +1,12 @@
 import path from "node:path";
 import {
   FileSystemAppStateStore,
-  SessionMemoryStore,
   findPawRoot,
   isAppStateFinished,
 } from "@paw/core";
 import type { RunEventEnvelope, RunResult } from "@paw/core";
 import type { McpServerConfig } from "@paw/harness";
+import { SessionMemoryStore } from "@paw/memory";
 import {
   defaultSettingsPath,
   loadPawSettingsLocal,
