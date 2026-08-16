@@ -1,9 +1,9 @@
 # SPEC-001：Paw Coding Agent Platform 渐进式改造规格
 
 > 状态：Active（第 3–7 节约束当前 P0–P2；第 8–12 节为 Future）
-> 版本：1.1.0
+> 版本：1.1.1
 > 日期：2026-08-16
-> 代码基线：`main@07e92bf` 加未提交 WP1a 工作树
+> 代码基线：`e935feb`（WP1a 已完成；进度日志提交为 `3009665`）
 > 上位蓝图：`RFC-002-Paw-Real-World-Agent-Platform.md`
 > Loop 契约：`coding-agent-loop-kernel-v2.md`（v2.1）
 > 权威决策：`ADR-002-Run-Completion-and-Certification-Authority.md`
@@ -60,7 +60,7 @@ RunAttempt、Candidate 和 terminal 状态只能由纯 `ControlReducer` 转换�
 
 ### I2：provider stop 只是回合边界
 
-普通 `provider.stop` 且无 pending tool 只产生 `turn.boundary`。停止文本保存为 assistant message，不得从 “done / let me / next” 等 prose 猜 candidate。Candidate 只能由结构化 `candidate.submit` 控制动作提出；迁移期 legacy `final_answer` 只能单向适配为该动作。
+普通 `provider.stop` 且无 pending tool 只产生 `turn.boundary`。停止文本保存为 assistant message，不得从 “done / let me / next” 等 prose 猜 candidate。Candidate 只能来自显式、结构化的候选意图并归一化为 `candidate.submitted` fact；首个切片只保留 legacy `final_answer` 的单向适配，native `candidate.submit` 工具等出现第二个真实入口后再引入。
 
 ### I3：单一事实流
 
@@ -72,7 +72,7 @@ RunAttempt、Candidate 和 terminal 状态只能由纯 `ControlReducer` 转换�
 
 ### I5：repair obligation 是 durable state
 
-Repair obligation 不是 prompt nudge 或内存 flag。它必须绑定创建 revision、gap、期望动作、runner/scope 和满足谓词；只有匹配且已 committed/settled 的事实能解除。prose、重复 read、无关成功命令不能解除。
+Repair obligation 不是 prompt nudge 或内存 flag。首版只支持 `direct_verification` 与 `material_change` 两类，并绑定创建 revision 及必要的 runner/scope；只有匹配且已 committed/settled 的事实能解除。prose、重复 read、无关成功命令不能解除。
 
 ### I6：当前 revision 的证据才有效
 
@@ -84,7 +84,7 @@ Mutation revision、execution-environment revision、verification 和 candidate 
 
 ### I8：model-visible means reproducible
 
-每次模型调用必须保存或可寻址重建最终 rendered request，包括：role/message 序列、system/context blocks、完整 tool schemas、response format、模型精确 revision、temperature/top_p/max tokens/reasoning 参数，以及 adapter 名称、版本/hash。只保存若干 block hash 不够。
+当前 reducer 垂直切片只要求保存稳定的 prompt、model、tool schema 与 adapter 版本引用/hash，使同一事实流可定位到同一调用配置。最终 rendered request、完整 tool schemas、response format 和全部模型参数在 P2 的 Context/Model Adapter 切片补齐；不得为此阻塞第一版 reducer。
 
 ### I9：安全权威不下放
 
@@ -92,7 +92,7 @@ Tool Safety/Authority 可以拒绝工具，但不能伪造完成；插件、渠�
 
 ### I10：live run 不热变更
 
-一个 RunAttempt 固定 model、prompt、tools、skills、memory policy、adapter 和 evaluator 版本。更新只影响新 attempt。
+一个 RunAttempt 当前固定 loop authority、model adapter/profile、tool schema、memory mode 与 evaluator/scorer 版本。更新只影响新 attempt。Plugin/skill version lease 属于 Future，不进入当前 ControlState。
 
 ## 4. Active Coding Core 契约
 
@@ -131,7 +131,7 @@ Goal/acceptance 原文、假设、证据、diff 和大体积 artifact 通过稳�
 
 `external_pending` 是可恢复的非终态：此时 `terminal` 必须为空，可以等待 `external.verification_settled`。只有 `completed | incomplete | failed | aborted` 会产生唯一 `terminal.emitted` 和 `RunOutcomeV2`。
 
-### 4.2 Fact、Decision 与 Effect
+### 4.2 Fact、State 与 Effect
 
 首批输入事实至少包括：
 
@@ -142,22 +142,21 @@ Goal/acceptance 原文、假设、证据、diff 和大体积 artifact 通过稳�
 - `user.replied`；
 - `budget.reached`、`cancel.requested`。
 
-Reducer 形态固定为纯函数。`decisionEvents` 是 reducer 对该输入事实所作转换的审计记录，例如 `repair.opened`、`repair.satisfied`、`candidate.accepted` 和 `terminal.emitted`：
+Reducer 形态固定为纯函数。第一版只返回下一状态与 effect intents，不再把 input facts、decision events 和 ControlState 持久化成三套真相：
 
 ```ts
 reduce(state: ControlStateV1, fact: ControlFactV1): {
   readonly state: ControlStateV1;
-  readonly decisionEvents: readonly ControlDecisionEventV1[];
   readonly effects: readonly ControlEffectV1[];
 }
 ```
 
-Runtime 先追加输入 fact，调用 reducer，再原子/同提交边界追加 `decisionEvents` 并发布 state/checkpoint，最后执行 effects。Decision events 不作为新的 reducer 输入；replay 必须重算并校验它们，矛盾即 corruption。Effect 只表达意图，如 `CallModel`、`ExecuteTools`、`RequestUserInput`、`RequestCertification`、`EmitTerminal`。Runtime 执行后必须把结果作为新 input fact 写回，不得直接改 state。
+Runtime 先追加输入 fact，再调用 reducer 并发布 state/checkpoint，最后执行 effects。若 effect 会产生不可逆外部副作用，runtime 必须先把对应 intent/dispatch 事实写入同一 journal；这属于 effect 交付协议，不是第二套 reducer 决策日志。`repair opened/satisfied` 等可由 state transition 重放得到，只能作为 trace/projection。Effect 只表达意图，如 `CallModel`、`ExecuteTools`、`RequestUserInput`、`RequestCertification`、`EmitTerminal`。Runtime 执行后必须把结果作为新 input fact 写回，不得直接改 state。
 
 ### 4.3 Candidate 与 Certification
 
 1. `provider.stop` → `provider.turn_stopped` → reducer 决定继续、等待、incomplete 或处理显式 candidate；不会自动创建 candidate。
-2. `candidate.submit` 只表达模型完成意图，不证明已完成。
+2. `candidate.submitted` 只表达模型完成意图，不证明已完成；首版事实由 legacy `final_answer` 单向适配产生。
 3. deterministic readiness 产事实：pending effects、open obligation、artifact、current verification、acceptance gap。
 4. semantic reviewer 产结构化 finding，不能把测试标绿。
 5. external verifier 只产 settled fact。
@@ -170,47 +169,22 @@ Runtime 先追加输入 fact，调用 reducer，再原子/同提交边界追加 
 ### 4.4 Repair obligation 转换
 
 ```ts
-interface RepairObligationV1 {
-  readonly id: string;
-  readonly openedAtSeq: number;
-  readonly createdAtMutationRevision: number;
-  readonly gapCode: string;
-  readonly expectedAction:
-    | "inspect"
-    | "material_change"
-    | "direct_verification"
-    | "settle_effect"
-    | "request_user";
-  readonly runnerFamily?: string;
-  readonly scope?: readonly string[];
-  readonly satisfaction: RepairSatisfactionV1;
-}
-
-type RepairSatisfactionV1 =
+type RepairObligationV1 =
   | {
-      readonly kind: "direct_verification_settled";
-      readonly mutationRevision: number;
+      readonly kind: "direct_verification";
+      readonly id: string;
+      readonly openedAtSeq: number;
+      readonly revision: number;
       readonly runnerFamily: string;
       readonly scope: readonly string[];
-      readonly acceptedOutcomes: readonly ("passed" | "code_failed" | "harness_failed")[];
     }
   | {
-      readonly kind: "mutation_committed";
-      readonly afterRevisionGreaterThan: number;
+      readonly kind: "material_change";
+      readonly id: string;
+      readonly openedAtSeq: number;
+      readonly afterRevision: number;
       readonly scope?: readonly string[];
-    }
-  | {
-      readonly kind: "evidence_observed";
-      readonly mutationRevision: number;
-      readonly evidenceKind:
-        | "source_read"
-        | "symbol_observed"
-        | "artifact_inspected"
-        | "environment_observed";
-      readonly scope?: readonly string[];
-    }
-  | { readonly kind: "effect_settled"; readonly effectId: string }
-  | { readonly kind: "user_replied"; readonly requestId: string };
+    };
 ```
 
 - 错误动作或无关成功：obligation 保持 open。
@@ -269,8 +243,8 @@ Dependency gate 必须同时检查：
 - R26：terminal transition 恰一次；
 - R27：v2 readiness 后 legacy VerificationGate/CompletionPolicy terminal 调用均为 0；
 - R28：legacy adapter 失败或冲突不能反向改变 outcome；
-- R29：同批前序 edit/test 全部 settle/commit 后，barrier `candidate.submit` 才生效；
-- R30：`candidate.submit` 非批末时只拒绝 candidate，其他合法调用不消失。
+
+R29/R30（native `candidate.submit` 的 mixed-batch/barrier 语义）保留为 Future 测试，等第二个真实 candidate 入口出现后再激活，当前 reducer 切片不得为它预建工具协议。
 
 测试必须断言 state、fact、effect、调用次数、顺序和 outcome，不能只断言 prompt 文案。
 
@@ -320,11 +294,12 @@ Dependency gate 必须同时检查：
 1. journal schema + pure reducer + replay；
 2. natural turn boundary；
 3. durable repair obligation；
-4. candidate.submit + readiness facts；
+4. legacy `final_answer` 单向归一化为 `candidate.submitted` + readiness facts；
 5. certification facts + reducer terminal；
 6. legacy one-way projection；
 7. 旁路旧 VerificationGate/CompletionPolicy；
-8. 固定十题反复验证，不换题。
+8. 固定十题反复验证，不换题；
+9. 第二个真实 candidate 入口出现后，再设计 native `candidate.submit` 与 mixed-batch barrier。
 
 完成条件：第 6.1 节全绿；同 journal replay hash 一致；v2 调用旧终局 Gate 为 0；false completed=0；invalid artifact=0；固定十题达到预注册绝对门槛。
 

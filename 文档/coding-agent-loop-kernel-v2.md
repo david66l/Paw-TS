@@ -80,7 +80,7 @@ Durable event log、Mutation Journal 和 Verification Evidence 是事实源。Cu
 
 ### K5：回合边界、候选、认证、交付是不同状态
 
-Provider natural stop 只意味着本次模型回合结束，既不提出候选，也不证明完成。候选只能由结构化 `candidate.submit` 提出；语义 review、readiness、外部待验和最终报告各有独立事实，禁止再压成一个 `completed/tests_passed`。
+Provider natural stop 只意味着本次模型回合结束，既不提出候选，也不证明完成。候选只能由显式、结构化意图归一化为 `candidate.submitted` fact；首个切片沿用 legacy `final_answer` 单向适配，不预建 native candidate 工具。语义 review、readiness、外部待验和最终报告各有独立事实，禁止再压成一个 `completed/tests_passed`。
 
 ### K6：每个 mutation revision 的语义评审有界
 
@@ -108,7 +108,7 @@ flowchart TD
     C --> K
     W --> D["Policy Advisors"]
     D --> C
-    K --> Q["Explicit candidate.submit"]
+    K --> Q["Explicit candidate intent"]
     Q --> R["Candidate Certification fact producers"]
     R --> E
     E --> P
@@ -126,7 +126,7 @@ flowchart TD
 - 将所有工具调用提交给 Tool Scheduler；
 - 按模型顺序持久化 tool result；
 - 将 provider stop/no-tool response 记录为 `provider.turn_stopped` 回合边界；
-- 将结构化 `candidate.submit` 记录为候选意图；
+- 将显式候选意图归一化为 `candidate.submitted`；
 - 处理 abort、timeout、cancel、provider error 和 terminal transition；
 - 保证每个状态变化先落事件、再更新派生投影。
 
@@ -173,7 +173,7 @@ stateDiagram-v2
     [*] --> running
     running --> running: tool calls committed
     running --> running: provider stop / turn boundary
-    running --> candidate: explicit candidate.submit
+    running --> candidate: explicit candidate.submitted fact
     running --> awaiting_user: explicit user input required
     running --> incomplete: safety line exhausted with unfinished work
     running --> failed: non-recoverable infrastructure error
@@ -198,12 +198,12 @@ stateDiagram-v2
 | length + 可能截断 tool args | 不执行这些调用；返回结构化截断错误并允许一次重发 |
 | provider retryable error | 按 Model Adapter retry policy 重试，不丢当前 durable turn |
 | provider terminal error | 追加 `provider.failed`；reducer 决定 `failed/provider_error` 并保留可恢复状态 |
-| structured `candidate.submit` | 追加 `candidate.submitted`，由 reducer 决定是否进入 readiness |
-| legacy `final_answer` | 兼容层单向映射为 `candidate.submit`，不再拥有特殊完成权限 |
+| explicit candidate intent | 追加 `candidate.submitted`，由 reducer 决定是否进入 readiness |
+| legacy `final_answer` | 首版兼容层单向映射为 `candidate.submitted`，不再拥有特殊完成权限 |
 
 `ask_user` 和 `abort` 可继续作为明确控制动作；长期应迁移为 native control tools，避免从自由文本猜测。
 
-`candidate.submit` 是 barrier control action，必须是同一模型响应中的最后一个调用。同批排在它之前的工具按原顺序全部 settle，且 journal append/projector commit 完成后，才追加 `candidate.submitted`。若它后面还有调用，则只拒绝该 candidate 并返回模型可见的 `candidate_must_be_last` settlement；其他合法调用不得因该错误消失。
+Native `candidate.submit` 及其 mixed-batch/barrier 语义暂不进入 Active 实现。当前只有 legacy `final_answer` 这一条真实入口；出现第二个入口后，再以实际 provider/tool batching 约束设计统一协议，不能为假想扩展预建工具生命周期。
 
 连续 empty/no-action stop 的次数保存在 canonical `ControlState.consecutiveNoActionStops`，任何 resume/replay 必须一致；不得继续依赖未持久化的 TurnFlags。
 
@@ -213,7 +213,7 @@ Candidate artifact 内的 readiness gap 文案属于可严格重放的持久化�
 
 ### 6.2 Durable repair obligation
 
-Readiness 或 certification 发现可修复 gap 时，reducer 必须创建持久化 `RepairObligationV1`，至少记录 obligation id、创建 event seq、mutation revision、gap code、期望动作、runner/scope 与满足谓词。它是 canonical control state，不是 prompt 文案、memory 或临时 flag。
+Readiness 或 certification 发现可修复 gap 时，reducer 必须创建持久化 `RepairObligationV1`。首版只允许 `direct_verification { revision, runner, scope }` 与 `material_change { afterRevision, scope? }`；它是 canonical control state，不是 prompt 文案、memory 或临时 flag。
 
 - 只有匹配 scope/revision 且已经 committed/settled 的事实可以解除 obligation；
 - prose、重复 read、无关成功命令和错误 runner 均不得解除；
@@ -246,6 +246,8 @@ interface RunOutcomeV2 {
 `external_pending` 只存在于可恢复 ControlState/StatusSnapshot，不是 RunOutcome，也不触发 `terminal.emitted`。外部 resolved/rejected fact 到达后，reducer 才生成唯一 terminal outcome。这使“官方通过但 Paw 没收口”和“Paw 收口但官方失败”成为两项可独立计量的指标，不再靠 `status` 猜测。
 
 ## 7. Working Decision State v2
+
+Working Decision State 是由 journal facts 派生的 evidence/advisor projection，不是第二个 canonical control state。它的 phase、current candidate、mutation revision 与 verification 只能引用 `ControlState` 或其权威事实，不能自行推进 Run 状态或写 terminal；需要双写的同名字段应逐步改成稳定引用。
 
 ```ts
 interface WorkingDecisionStateV2 {
@@ -303,7 +305,7 @@ interface HypothesisRecord {
 }
 ```
 
-进入实现阶段前至少要有一个 active hypothesis 和一个可证伪动作。对改变公共行为的候选，必须记录至少一个更小 change-surface 的替代假设；如果没有替代方案，需记录为什么不可能。
+“进入实现阶段前形成 active hypothesis 与可证伪动作”是 Working Decision advisor 的强建议，不是 ControlReducer 的硬 veto。对改变公共行为的候选，advisor 应建议比较更小 change-surface 的替代假设；缺失时记录风险，但不得因此阻止安全、明确的工具动作。
 
 ### 7.3 BehavioralInvariant 与 ChangeSurface
 
@@ -569,7 +571,7 @@ PAW_LOOP_KERNEL_VERSION=v1|v2-shadow|v2
 3. 替换 tool scheduler，保持模型协议与完成门不变；
 4. 将 natural stop 切为 `provider.turn_stopped`，由 reducer 决定下一步；
 5. 引入 durable repair obligation 与错误/无关动作、resume、revision 夹具；
-6. 以结构化 `candidate.submit` 替代自然停止猜测，并接入 readiness facts；
+6. 将 legacy `final_answer` 单向归一化为 `candidate.submitted`，并接入 readiness facts；
 7. certification 仅产事实，由 reducer 唯一决定 terminal，legacy 只做单向投影；
 8. v2 路径旧 VerificationGate/CompletionPolicy terminal 调用降为 0；
 9. v2 deterministic gate 全绿后，删除 convergence 的非安全 veto；
@@ -593,7 +595,7 @@ PAW_LOOP_KERNEL_VERSION=v1|v2-shadow|v2
 | R08 | v9/v11 内部完成官方失败簇 | internal certified + external rejected | reducer 输出 `incomplete/external_rejected`，并保留正交 external 字段 | 不用 `completed` 冒充 resolved |
 | R09 | 合成 scheduler | read A、edit B、read B、test | read A 可先行；edit exclusive；后续 read/test 等 barrier；结果按 call order | 禁止 read/edit/test 盲目 Promise.all |
 | R10 | 合成 mixed calls | read-only sub-agent + normal grep + exclusive edit | 三个调用均执行或明确拒绝，无调用消失 | `run_agent` 分支不得吞普通工具 |
-| R11 | 合成 provider stop | 工具后自然文本 stop，无 `candidate.submit` | 只形成 turn boundary；不调用 readiness/certification | 不从自然语言猜候选 |
+| R11 | 合成 provider stop | 工具后自然文本 stop，无 `candidate.submitted` fact | 只形成 turn boundary；不调用 readiness/certification | 不从自然语言猜候选 |
 | R12 | 合成 empty response | 连续两次 stop+empty | 一次 recovery 后 `incomplete/empty_response` | no-action nudge 有硬界限 |
 | R13 | 压缩夹具 | active hypothesis、rejected hypothesis、current test、旧大工具输出 | 压缩后关键 decision/verification hash 不变，旧原文可 recall | 摘要不能擦除决策状态 |
 | R14 | Git timeout 夹具 | 两次 mutation journal + `git diff` 超时 | 仍生成完整候选 patch并记录 cross-check error | Git 不是产物单点 |
@@ -607,12 +609,12 @@ PAW_LOOP_KERNEL_VERSION=v1|v2-shadow|v2
 | R22 | obligation unrelated success | 期望指定 scope test，无关成功命令 | obligation 保持 open | `ok=true` 不得越权 |
 | R23 | direct verification failure | 匹配 runner/scope/revision，结果 `code_failed` | 关闭 direct-verification obligation，同时打开 material-repair obligation | 失败不能伪装修复完成 |
 | R24 | obligation resume | checkpoint + open obligation + 后续 journal | id/revision/scope/satisfaction 与中断前一致 | 不依赖 TurnFlags/prompt marker |
-| R25 | duplicate input fact | 同 idempotency key 重放两次 | state/effect/decision event 只生效一次 | 重试不重复副作用 |
+| R25 | duplicate input fact | 同 idempotency key 重放两次 | state transition/effect 只生效一次 | 重试不重复副作用 |
 | R26 | terminal exactly once | 可触发 terminal 的 settled fact 重复/乱序到达 | terminal transition 恰一次 | 不重复 delivery/cleanup |
 | R27 | legacy gate bypass | explicit candidate readiness + certification | legacy VerificationGate/CompletionPolicy terminal 调用均为 0 | 新路径不二次裁决 |
 | R28 | legacy projection failure | canonical completed + adapter throw/旧状态冲突 | canonical outcome 不变 | compatibility 不得反写 |
-| R29 | mixed candidate batch | edit、test、candidate.submit 同批 | 前序调用全部 settle/commit 后才处理 candidate | 控制动作不得吞工具 |
-| R30 | invalid candidate order | candidate.submit 后仍有普通调用 | candidate 得到 `candidate_must_be_last`；其他调用全部 settle | 拒绝必须模型可见且无调用消失 |
+| R29（Future） | mixed candidate batch | 第二个真实 candidate 入口及 native tool 已存在 | 冻结前序 settle/commit 与 candidate barrier 语义 | 当前不为假想入口预建协议 |
+| R30（Future） | invalid candidate order | native candidate tool 与普通调用混批 | 冻结拒绝语义且所有合法调用不消失 | 当前不激活 |
 
 ### 15.1 Replay 产物
 
@@ -648,7 +650,7 @@ PAW_LOOP_KERNEL_VERSION=v1|v2-shadow|v2
 
 ### 16.1 开发阶段
 
-- 使用 R01–R30 合成/冻结 replay；
+- 当前使用 R01–R28 合成/冻结 replay；R29/R30 待 native candidate 入口激活；
 - 使用已 exposed 的 fresh-v2、v7–v11 轨迹做离线 shadow；
 - 必要的真实模型 A/B 只在已 exposed 开发题运行；
 - 比较 resolved、inner close correctness、tool/model calls、token、wall time、stall、review count 和 artifact validity；
@@ -658,7 +660,7 @@ PAW_LOOP_KERNEL_VERSION=v1|v2-shadow|v2
 
 Loop Kernel v2 只有同时满足以下条件才可冻结：
 
-1. R01–R30 全部通过；
+1. 当前 Active 的 R01–R28 全部通过；native candidate 入口启用前再激活 R29/R30；
 2. Agent/core 相关回归无产品断言失败；
 3. v2-shadow 对已通过轨迹不引入 artifact/verification 回退；
 4. 两类错判可被独立统计，不能再出现字段歧义；
@@ -679,18 +681,8 @@ Loop Kernel v2 只有同时满足以下条件才可冻结：
 
 ## 17. 实施顺序
 
-建议按以下独立提交推进：
+当前实施顺序以 `SPEC-001` 第 7 节 P2 为唯一清单。本仓库已经有 event/projector、scheduler、certification、verification、artifact 与 checkpoint/resume 能力；实施时必须先复用或加 adapter，只补 ControlReducer 的最小缺口，不能按本文概念列表重新建设一遍。
 
-1. `v2-events-projector`：schema、event、projector、replay CLI 与 R01–R03/R13/R15；
-2. `v2-progress-advisor`：evidence novelty、progress delta、bounded stall，移除 `ok=true` 进度语义；
-3. `v2-tool-scheduler`：parallel/exclusive barrier 与 R09/R10；
-4. `v2-natural-boundary-control`：natural stop 只产 turn boundary、bounded empty recovery 与 R11/R12；
-5. `v2-repair-obligation`：durable obligation、错误/无关动作、resume 与 revision 转换；
-6. `v2-explicit-candidate`：`candidate.submit`、legacy final 单向兼容与 deterministic readiness；
-7. `v2-certification-facts`：semantic criteria/change surface、review key、external facts、host report 与 R04–R08/R17/R18；
-8. `v2-reducer-terminal`：唯一 RunOutcome、legacy 单向投影、旧 Gate 调用 0；
-9. `v2-verification-artifact`：typed evidence、mutation journal primary、Git cross-check 与 R07/R14/R16；
-10. `v2-shadow-ab`：全量已有回归、exposed 开发集、指标比较；
-11. `v2-default`：删除非安全 veto，冻结产品版本和最终 holdout 协议。
+第一切片是 shadow pure reducer + replay：不改变 v1 动作，不增加新 event store，不增加 native candidate tool。随后依次切 natural boundary、两类 durable repair、legacy candidate 归一化、certification facts、terminal authority 与 legacy 单向投影。每个切片满足删除条件后才旁路旧权威。
 
 每一步必须记录：完成内容、设计不变量、测试、遇到的问题、解决方式、已知限制、commit 和下一步。任何实现如果需要违反本设计的不变量，必须先在独立设计提交中说明新证据并修改版本，不能在代码里静默偏离。

@@ -15,7 +15,7 @@ Paw 当前存在三种相互冲突的完成语义：旧 `CompletionPolicy` 汇�
 
 ### 1. ControlReducer 是唯一状态转换者
 
-`ControlReducer` 是纯函数，只消费已经进入 Run Journal 的版本化 input fact，并产生新的 canonical `ControlState`、可审计 `decisionEvents` 与 effect intents。只有它可以转换 RunAttempt、Candidate、repair obligation 和 terminal 状态。Decision events 由 runtime 追加但不回馈成新输入；replay 必须重算并核对，避免产生第二个写入者。
+`ControlReducer` 是纯函数，只消费已经进入 Run Journal 的版本化 input fact，并产生新的 canonical `ControlState` 与 effect intents。只有它可以转换 RunAttempt、Candidate、repair obligation 和 terminal 状态。`repair opened/satisfied` 等审计信息由转换过程重放或投影，不另建一套 decision event 事实源。
 
 ```text
 producer / executor ── fact ──► Run Journal ──► ControlReducer
@@ -31,7 +31,7 @@ Runtime 执行 effect 后必须把 settled 结果追加成新 fact；不得绕�
 | 组件 | 可以做什么 | 明确禁止 |
 |---|---|---|
 | Provider adapter | 产 turn stopped / failed fact | natural stop 创建 candidate 或 terminal |
-| Candidate adapter | 将结构化 `candidate.submit` 产成 fact | 宣告完成 |
+| Candidate adapter | 将显式候选意图归一化成 `candidate.submitted` fact | 宣告完成 |
 | Readiness evaluator | 产 pending effect、artifact、verification、acceptance gap facts | 写 terminal |
 | Semantic reviewer | 产结构化 finding | 伪造测试通过或 terminal |
 | External verifier | 产 pending/resolved/rejected fact | 直接改 RunResult |
@@ -45,11 +45,11 @@ Certification 是事实生产流水线，不是第二个状态机。`certified` 
 
 Provider 返回普通 stop 且没有 pending tool 时：保存 assistant message，追加 `provider.turn_stopped`。它不隐式创建 candidate。Reducer 可根据预算、open obligation、用户等待和最近进展发出 `CallModel`、`RequestUserInput` 或有界 `EmitIncomplete`。
 
-Candidate 只能由结构化 `candidate.submit` 提出。迁移期 legacy `final_answer` 只能单向适配成这个控制动作，不能保留特殊完成权威。
+Candidate 只能由显式、结构化候选意图提出。首个迁移切片只让 legacy `final_answer` 单向适配成 `candidate.submitted` fact，不能保留特殊完成权威；native `candidate.submit` 等第二个真实入口出现后再设计。
 
 ### 4. Repair obligation 是 canonical durable state
 
-Readiness/certification gap 由 reducer 打开 `RepairObligationV1`。只有匹配 revision、scope、runner 和满足谓词的 settled fact 可以解除。Prose、无关操作、重复只读结果和错误 runner 不构成修复。Resume/replay 必须保持 obligation identity 与状态。
+Readiness/certification gap 由 reducer 打开 `RepairObligationV1`。首版仅有 `direct_verification { revision, runner, scope }` 和 `material_change { afterRevision, scope? }` 两类。只有匹配的 settled fact 可以解除；direct verification 的 `code_failed` 只说明验证动作已发生，随后必须打开 material-change obligation，并不表示验收通过。Prose、无关操作、重复只读结果和错误 runner 不构成修复。Resume/replay 必须保持 obligation identity 与状态。
 
 ### 5. Legacy 只能单向投影
 
@@ -73,7 +73,7 @@ canonical state ──► RunOutcomeV2 ──► legacy RunResult / UI / telemet
 2. 引入 journal schema、纯 reducer 和 shadow replay，不改变 v1 行为。
 3. explicit-v2 将 natural stop 切为 turn boundary。
 4. 引入 durable repair obligation，并用错误动作/无关成功/resume/revision 夹具验证。
-5. 接入 explicit `candidate.submit` 与 deterministic readiness facts；legacy `final_answer` 在此处单向映射为该动作。
+5. 将 legacy `final_answer` 单向归一化为 `candidate.submitted` fact，并接入 deterministic readiness facts；第二个真实入口出现后再决定是否引入 native `candidate.submit`。
 6. 将 semantic review、external verification 改成 fact producer。
 7. Reducer 生成唯一 `RunOutcomeV2`；legacy 单向投影。
 8. v2 readiness 后旧 `VerificationGate` 调用必须为 0；旧 CompletionPolicy 的 terminal 写入必须为 0。
