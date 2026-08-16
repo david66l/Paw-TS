@@ -100,17 +100,41 @@ function gitRun(cwd: string, args: readonly string[]): void {
  * survive, so the agent starts from the same runnable environment the
  * official verifier uses.
  */
+/**
+ * Pure caches regenerate automatically whenever code executes; seeding them
+ * only pollutes the untracked baseline (Claude/pytest recompiling .pyc then
+ * reads as "untracked baseline mutation", observed on sklearn-25102). Keep
+ * the meaningful artifacts: editable-install version modules, compiled
+ * extensions, .eggs.
+ */
+function isPureCachePath(file: string): boolean {
+  const parts = file.replace(/\\/g, "/").toLowerCase().split("/");
+  return parts.some((part) =>
+    ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"].includes(
+      part,
+    ),
+  );
+}
+
+function copySeedTree(from: string, to: string): void {
+  fs.mkdirSync(to, { recursive: true });
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    if (entry.name === ".git") continue;
+    const src = path.join(from, entry.name);
+    const dst = path.join(to, entry.name);
+    if (entry.isDirectory()) {
+      copySeedTree(src, dst);
+    } else if (entry.isFile() && !isPureCachePath(src)) {
+      fs.copyFileSync(src, dst);
+    }
+  }
+}
+
 export function mergeInstanceGeneratedFiles(
   stagingRoot: string,
   workspaceRoot: string,
 ): void {
-  for (const entry of fs.readdirSync(stagingRoot)) {
-    if (entry === ".git") continue;
-    fs.cpSync(path.join(stagingRoot, entry), path.join(workspaceRoot, entry), {
-      recursive: true,
-      force: true,
-    });
-  }
+  copySeedTree(stagingRoot, workspaceRoot);
   gitRun(workspaceRoot, ["reset", "--hard", "HEAD"]);
   gitRun(workspaceRoot, ["clean", "-fd"]);
 }

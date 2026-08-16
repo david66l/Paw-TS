@@ -47,6 +47,11 @@ describe("instance image workspace seeding", () => {
         "version = '1'\n",
       );
       fs.writeFileSync(path.join(staging, "stray.txt"), "stray\n");
+      fs.mkdirSync(path.join(staging, "src", "__pycache__"), { recursive: true });
+      fs.writeFileSync(
+        path.join(staging, "src", "__pycache__", "app.cpython-39.pyc"),
+        "bytecode",
+      );
 
       mergeInstanceGeneratedFiles(staging, base);
 
@@ -58,6 +63,12 @@ describe("instance image workspace seeding", () => {
       expect(fs.existsSync(path.join(base, "gen", "_version.py"))).toBeTrue();
       // untracked 非 ignored 杂物被清掉
       expect(fs.existsSync(path.join(base, "stray.txt"))).toBeFalse();
+      // 纯缓存不回填：pyc 重编译会污染 untracked 基线（sklearn-25102 教训）
+      expect(
+        fs.existsSync(
+          path.join(base, "src", "__pycache__", "app.cpython-39.pyc"),
+        ),
+      ).toBeFalse();
       // staging 的 .git 没有覆盖工作区仓库
       const dotGit = fs.statSync(path.join(base, ".git"));
       expect(dotGit.isDirectory()).toBeTrue();
