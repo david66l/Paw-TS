@@ -766,4 +766,28 @@ describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
     const twice = annotateUntrustedShellExitSummary(call, once);
     expect(twice.summary.match(/\[UntrustedExitStatus\]/g)?.length).toBe(1);
   });
+
+  test("denied or never-executed piped commands carry no exit-status annotation", () => {
+    // 沙箱拒绝（E_FATAL）：命令未执行，不存在可被遮蔽的退出码，
+    // 标注只会稀释拒绝原因（真实轨迹 msvhlvzc seq=15028/15031）。
+    const denied = annotateUntrustedShellExitSummary(
+      toolCall("workspace.run_shell", { command: pipedCommand }),
+      {
+        ok: false,
+        summary: "run_shell: E_FATAL privilege escalation",
+        payload: { code: "E_FATAL", error: "privilege escalation" },
+      },
+    );
+    expect(denied.summary).toBe("run_shell: E_FATAL privilege escalation");
+
+    const noPayload = annotateUntrustedShellExitSummary(
+      toolCall("workspace.run_shell", { command: pipedCommand }),
+      {
+        ok: false,
+        summary: "run_shell: E_FATAL privilege escalation",
+        payload: undefined,
+      },
+    );
+    expect(noPayload.summary).not.toContain("[UntrustedExitStatus]");
+  });
 });

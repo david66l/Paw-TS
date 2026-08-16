@@ -998,12 +998,20 @@ const UNTRUSTED_EXIT_TAG = "[UntrustedExitStatus]";
  * analyzeVerificationInvocation 的 exitStatusReliable——与 task-state 的
  * untrusted_exit_status 分类同一事实源——在工具结果落 journal 与进入模型
  * 上下文时内联标注，模型无需等到 readiness 阶段才知道退出码不可信。
+ *
+ * 只标注真实产生了 shell 退出码的结果：被沙箱/审批拒绝（E_FATAL 等）或
+ * 未执行的结果没有退出码可言，“被遮蔽”的表述会失真，也会稀释拒绝原因。
  */
 export function annotateUntrustedShellExitSummary(
   call: AgentToolCallAction,
   result: ToolRunResult,
 ): ToolRunResult {
   if (call.tool !== "workspace.run_shell") return result;
+  const payload =
+    result.payload && typeof result.payload === "object"
+      ? (result.payload as Readonly<Record<string, unknown>>)
+      : undefined;
+  if (typeof payload?.exit_code !== "number") return result;
   const args =
     call.args && typeof call.args === "object" && !Array.isArray(call.args)
       ? (call.args as Readonly<Record<string, unknown>>)
