@@ -248,7 +248,9 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[Memory refresh]",
   "[Context guard]",
   "[Loop reminder]",
+  "[Convergence checkpoint]",
   "[ProviderProtocol:",
+  "[LoopControl:",
   "[LoopV2Readiness:",
   "[LoopV2SemanticReview:",
   "[Managed jobs are unfinished:",
@@ -287,6 +289,10 @@ function providerProtocolRecoveryMessageV2(
     return "[ProviderProtocol:missing_tool_calls] The provider declared tool calls but supplied none. Emit the complete structured calls once, or return a visible candidate response.";
   }
   return "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response.";
+}
+
+function providerTurnBoundaryMessageV2(): string {
+  return "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly.";
 }
 import { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import {
@@ -1129,6 +1135,11 @@ export class AgentOrchestrator {
                   this._lastLoopV2ReadinessProgressKey,
                 getLoopV2ReadinessVerificationRecords: () =>
                   this._lastLoopV2ReadinessVerificationRecords,
+                ...(init.getLoopV2ControlReduction
+                  ? {
+                      getLoopV2ControlReduction: init.getLoopV2ControlReduction,
+                    }
+                  : {}),
               }
             : {}),
           ...(init.reviewLoopV2Candidate
@@ -2377,6 +2388,34 @@ export class AgentOrchestrator {
           }),
         };
       }
+      if (terminal.decision.kind === "turn_boundary") {
+        const reduction = ctx.getLoopV2ControlReduction?.();
+        if (
+          reduction?.state.turn !== ctx.turn + 1 ||
+          reduction.effects.length !== 1 ||
+          reduction.effects[0]?.type !== "call_model"
+        ) {
+          throw new Error(
+            "Loop v2 provider turn boundary is missing its reducer decision",
+          );
+        }
+        ctx.ctxMgr.addAssistant(text, thinking);
+        ctx.ctxMgr.addUser(providerTurnBoundaryMessageV2());
+        this.saveState(
+          runId,
+          specGoal,
+          workspaceRoot,
+          ctx.turn + 1,
+          maxSteps,
+          ctxMgr,
+          planner,
+          ctx.taskState,
+        );
+        return {
+          type: "continue",
+          nextFlags: { ...dispatchedFlags, lastTurnHadToolCall: false },
+        };
+      }
       if (terminal.decision.kind === "candidate_proposed") {
         dispatchedAction = {
           type: "final_answer",
@@ -3397,6 +3436,9 @@ export class AgentOrchestrator {
     artifactRegistry: ArtifactRegistry;
     emit: (event: RunEvent) => void;
     observeLoopV2ToolCommit?: (input: LoopV2ShadowToolCommitPortInput) => void;
+    getLoopV2ControlReduction?: NonNullable<
+      PhaseContext["getLoopV2ControlReduction"]
+    >;
     reviewLoopV2Candidate?: NonNullable<PhaseContext["reviewLoopV2Candidate"]>;
     persistLoopV2Terminal?: (result: RunResult) => void;
     emitRunMetrics: () => void;
@@ -3554,6 +3596,24 @@ export class AgentOrchestrator {
     let modelCallStartTime = 0;
     let runStartTime = 0;
 
+    const persistLoopV2ProjectionCheckpoint = () => {
+      if (!loopV2Projection || this.loopKernelVersion !== "v2") return;
+      const checkpoint = buildLoopV2ProjectionCheckpointV1(
+        loopV2Projection.snapshot(),
+      );
+      const checkpointPath = loopV2ProjectionCheckpointPath(
+        workspaceRoot,
+        runId,
+      );
+      atomicWrite(
+        checkpointPath,
+        serializeLoopV2ProjectionCheckpointV1(checkpoint),
+      );
+      parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(checkpointPath, "utf8"),
+      );
+    };
+
     /**
      * 核心事件发射器。
      *
@@ -3615,6 +3675,9 @@ export class AgentOrchestrator {
       if (loopV2Projection) {
         try {
           loopV2Projection.observe(envelope);
+          if (event.type === "provider.turn_stopped") {
+            persistLoopV2ProjectionCheckpoint();
+          }
           if (
             this.loopKernelVersion === "v2" &&
             event.type === "agent.action" &&
@@ -3701,27 +3764,15 @@ export class AgentOrchestrator {
       ? (input: LoopV2ShadowToolCommitPortInput) => {
           try {
             loopV2Projection.observeToolCommit({ ...input, sourceSeq: seq.n });
-            if (this.loopKernelVersion === "v2") {
-              const checkpoint = buildLoopV2ProjectionCheckpointV1(
-                loopV2Projection.snapshot(),
-              );
-              const checkpointPath = loopV2ProjectionCheckpointPath(
-                workspaceRoot,
-                runId,
-              );
-              atomicWrite(
-                checkpointPath,
-                serializeLoopV2ProjectionCheckpointV1(checkpoint),
-              );
-              parseLoopV2ProjectionCheckpointV1(
-                fs.readFileSync(checkpointPath, "utf8"),
-              );
-            }
+            persistLoopV2ProjectionCheckpoint();
           } catch (error) {
             if (this.loopKernelVersion === "v2") throw error;
             // Rich shadow capture is diagnostic-only while v1 is authoritative.
           }
         }
+      : undefined;
+    const getLoopV2ControlReduction = loopV2Projection
+      ? () => loopV2Projection.latestControlReduction()
       : undefined;
 
     const reviewLoopV2Candidate = loopV2LiveReviewRuntime?.canReview
@@ -4321,6 +4372,7 @@ export class AgentOrchestrator {
       artifactRegistry,
       emit,
       ...(observeLoopV2ToolCommit ? { observeLoopV2ToolCommit } : {}),
+      ...(getLoopV2ControlReduction ? { getLoopV2ControlReduction } : {}),
       ...(reviewLoopV2Candidate ? { reviewLoopV2Candidate } : {}),
       ...(persistLoopV2Terminal ? { persistLoopV2Terminal } : {}),
       emitRunMetrics,

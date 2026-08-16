@@ -41,6 +41,10 @@ function tempWorkspace(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
+function finalAnswer(summary: string): string {
+  return JSON.stringify({ action: "final_answer", summary });
+}
+
 function trustedNoEffectShellPolicy(): ToolEffectPolicy {
   return {
     appliesTo: ({ tool }) => tool === "workspace.run_shell",
@@ -59,7 +63,7 @@ function trustedNoEffectShellPolicy(): ToolEffectPolicy {
 }
 
 describe("Loop Kernel v2 provider terminal production seam", () => {
-  test("R11 natural stop after a tool becomes a candidate without a tail nudge", async () => {
+  test("R11 natural stop is a boundary and only explicit final becomes a candidate", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-provider-natural-");
     fs.writeFileSync(path.join(workspaceRoot, "note.txt"), "hello\n", "utf8");
     const model = new FakeLanguageModel({
@@ -72,12 +76,18 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           text: "The file contains hello.",
           finishReason: "stop",
         },
+        {
+          text: finalAnswer("The file contains hello."),
+          finishReason: "stop",
+        },
       ],
     });
     const events: RunEventEnvelope[] = [];
     const sessionStore = new FileSystemSessionStore({ workspaceRoot });
     const orchestrator = new AgentOrchestrator({
       loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
       model,
       sessionStore,
       onEvent: (event) => events.push(event),
@@ -90,10 +100,9 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         workspaceRoot,
         maxSteps: 5,
       });
-
       expect(result.status).toBe("completed");
       expect(result.message).toBe("The file contains hello.");
-      expect(model.callCount).toBe(2);
+      expect(model.callCount).toBe(3);
       const boundaryIndex = events.findIndex(
         (event) => event.event.type === "provider.turn_stopped",
       );
@@ -121,13 +130,24 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         ),
       );
       expect(candidate.report.state.currentCandidate?.source).toBe(
-        "natural_stop_adapter",
+        "legacy_final_answer",
       );
       expect(candidate.report.controlState).toMatchObject({
+        status: "candidate",
+        turn: 2,
+      });
+      expect(candidate.report.controlState?.candidate).toBeDefined();
+      const boundaryCheckpoint = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, "v2-provider-natural"),
+          "utf8",
+        ),
+      );
+      expect(boundaryCheckpoint.report.controlState).toMatchObject({
         status: "running",
         turn: 2,
       });
-      expect(candidate.report.controlState?.candidate).toBeUndefined();
+      expect(boundaryCheckpoint.report.controlState?.candidate).toBeUndefined();
       const terminal = parseLoopV2LiveTerminalArtifactV1(
         fs.readFileSync(
           loopV2LiveTerminalArtifactPath(workspaceRoot, "v2-provider-natural"),
@@ -160,6 +180,56 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           "terminal_comparison_not_equal",
         ]),
       });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("R11 repeated natural stops exhaust the run without creating a candidate", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-provider-boundary-loop-");
+    const model = new FakeLanguageModel({
+      responses: [
+        { text: "I am still thinking.", finishReason: "stop" },
+        { text: "I have not submitted a candidate.", finishReason: "stop" },
+        { text: "Another ordinary response.", finishReason: "stop" },
+      ],
+    });
+    const events: RunEventEnvelope[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      onEvent: (event) => events.push(event),
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-provider-boundary-loop",
+        goal: "Return a status only after explicitly proposing completion.",
+        workspaceRoot,
+        maxSteps: 3,
+      });
+
+      expect(result.status).toBe("incomplete");
+      expect(
+        events.filter((event) => event.event.type === "model.request"),
+      ).toHaveLength(3);
+      expect(
+        events.filter((event) => event.event.type === "provider.turn_stopped"),
+      ).toHaveLength(3);
+      expect(
+        events.some(
+          (event) =>
+            event.event.type === "agent.action" &&
+            event.event.action.type === "final_answer",
+        ),
+      ).toBeFalse();
+      expect(
+        fs.existsSync(
+          loopV2LiveArtifactPath(workspaceRoot, "v2-provider-boundary-loop"),
+        ),
+      ).toBeFalse();
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -400,7 +470,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
               text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
               finishReason: "stop",
             },
-            { text: "The resumed change is verified.", finishReason: "stop" },
+            {
+              text: finalAnswer("The resumed change is verified."),
+              finishReason: "stop",
+            },
           ],
         }),
         appStateStore,
@@ -440,12 +513,18 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
           finishReason: "stop",
         },
-        { text: "Done without verification.", finishReason: "stop" },
+        {
+          text: finalAnswer("Done without verification."),
+          finishReason: "stop",
+        },
         {
           text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
           finishReason: "stop",
         },
-        { text: "Implemented and verified.", finishReason: "stop" },
+        {
+          text: finalAnswer("Implemented and verified."),
+          finishReason: "stop",
+        },
       ],
     });
     const orchestrator = new AgentOrchestrator({
@@ -518,7 +597,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
           finishReason: "stop",
         },
-        { text: "Implemented and verified.", finishReason: "stop" },
+        {
+          text: finalAnswer("Implemented and verified."),
+          finishReason: "stop",
+        },
       ],
     });
     const orchestrator = new AgentOrchestrator({
@@ -574,7 +656,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
           finishReason: "stop",
         },
-        { text: "Implemented and verified.", finishReason: "stop" },
+        {
+          text: finalAnswer("Implemented and verified."),
+          finishReason: "stop",
+        },
       ],
     });
     let reviewCalls = 0;
@@ -787,7 +872,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
             text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
             finishReason: "stop",
           },
-          { text: "First proposed report.", finishReason: "stop" },
+          {
+            text: finalAnswer("First proposed report."),
+            finishReason: "stop",
+          },
         ],
       }),
       loopV2SemanticReviewModel: reviewModel,
@@ -820,7 +908,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         memoryLlm: "off",
         model: new FakeLanguageModel({
           responses: [
-            { text: "Reworded report, no fact change.", finishReason: "stop" },
+            {
+              text: finalAnswer("Reworded report, no fact change."),
+              finishReason: "stop",
+            },
           ],
         }),
         loopV2SemanticReviewModel: reviewModel,
@@ -881,7 +972,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
             text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
             finishReason: "stop",
           },
-          { text: "Candidate before reviewer dispatch.", finishReason: "stop" },
+          {
+            text: finalAnswer("Candidate before reviewer dispatch."),
+            finishReason: "stop",
+          },
         ],
       }),
       appStateStore,
@@ -921,8 +1015,14 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         memoryLlm: "off",
         model: new FakeLanguageModel({
           responses: [
-            { text: "Resume the same candidate.", finishReason: "stop" },
-            { text: "Still the same candidate.", finishReason: "stop" },
+            {
+              text: finalAnswer("Resume the same candidate."),
+              finishReason: "stop",
+            },
+            {
+              text: finalAnswer("Still the same candidate."),
+              finishReason: "stop",
+            },
           ],
         }),
         loopV2SemanticReviewModel: reviewModel,
@@ -964,8 +1064,14 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
           finishReason: "stop",
         },
-        { text: "Done without verification.", finishReason: "stop" },
-        { text: "Still done without new evidence.", finishReason: "stop" },
+        {
+          text: finalAnswer("Done without verification."),
+          finishReason: "stop",
+        },
+        {
+          text: finalAnswer("Still done without new evidence."),
+          finishReason: "stop",
+        },
       ],
     });
     let reviewerCalls = 0;
@@ -1023,7 +1129,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
           finishReason: "stop",
         },
-        { text: "Done without verification.", finishReason: "stop" },
+        {
+          text: finalAnswer("Done without verification."),
+          finishReason: "stop",
+        },
       ],
     });
     const first = new AgentOrchestrator({
@@ -1064,7 +1173,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
 
       const resumedModel = new FakeLanguageModel({
         responses: [
-          { text: "Still done without new evidence.", finishReason: "stop" },
+          {
+            text: finalAnswer("Still done without new evidence."),
+            finishReason: "stop",
+          },
         ],
       });
       const resumed = new AgentOrchestrator({
@@ -1093,7 +1205,9 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           finishReason: "length",
         },
         {
-          text: "The truncated request was discarded; no change was applied.",
+          text: finalAnswer(
+            "The truncated request was discarded; no change was applied.",
+          ),
           finishReason: "stop",
         },
       ],
@@ -1149,7 +1263,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     }
   });
 
-  test("live candidate identity ignores natural-stop versus legacy-final wording", async () => {
+  test("live candidate identity ignores explicit final-answer wording", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-live-candidate-");
     const sourcePath = path.join(workspaceRoot, "source.txt");
     fs.writeFileSync(sourcePath, "before\n", "utf8");
@@ -1190,7 +1304,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
                 finishReason: "stop",
               };
             }
-            return { text: terminalText, finishReason: "stop" };
+            return { text: finalAnswer(terminalText), finishReason: "stop" };
           },
         },
         toolEffectPolicy: {
@@ -1325,7 +1439,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     };
 
     try {
-      const natural = await runTrajectory("Implemented through natural stop.");
+      const first = await runTrajectory("First explicit wording.");
       const artifactPath = loopV2LiveArtifactPath(
         workspaceRoot,
         "v2-live-candidate-identity",
@@ -1338,20 +1452,18 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         parseLoopV2LiveCandidateArtifactV1(JSON.stringify(tampered)),
       ).toThrow("assessment does not match");
       fs.writeFileSync(sourcePath, "before\n", "utf8");
-      const legacy = await runTrajectory(
-        '{"action":"final_answer","summary":"Different legacy wording."}',
-      );
+      const second = await runTrajectory("Different explicit wording.");
 
-      expect(natural.candidateInputHash).toBe(legacy.candidateInputHash);
-      expect(natural.artifact.patchHash).toBe(legacy.artifact.patchHash);
-      expect(natural.readiness).toMatchObject({
+      expect(first.candidateInputHash).toBe(second.candidateInputHash);
+      expect(first.artifact.patchHash).toBe(second.artifact.patchHash);
+      expect(first.readiness).toMatchObject({
         disposition: "ready_for_review",
         readyForSemanticReview: true,
         localVerification: "passed",
         gaps: [],
       });
-      expect(legacy.readiness).toEqual(natural.readiness);
-      expect(natural.facts).toEqual({
+      expect(second.readiness).toEqual(first.readiness);
+      expect(first.facts).toEqual({
         evidence: 1,
         mutations: 1,
         verification: 1,

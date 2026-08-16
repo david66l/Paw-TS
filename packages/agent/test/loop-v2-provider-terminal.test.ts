@@ -22,15 +22,14 @@ function response(
 }
 
 describe("Loop Kernel v2 provider terminal normalization", () => {
-  test("R11 natural stop with visible text creates a candidate, never completed", () => {
+  test("R11 natural stop with visible text is only a turn boundary", () => {
     const result = normalizeProviderResponseV2(
       createProviderTerminalStateV2(RUN_ID),
       response(1, { visibleText: "Implemented and verified the minimal fix." }),
     );
 
     expect(result.decision).toEqual({
-      kind: "candidate_proposed",
-      source: "natural_stop",
+      kind: "turn_boundary",
       visibleText: "Implemented and verified the minimal fix.",
     });
     expect("completed" in result.decision).toBeFalse();

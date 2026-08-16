@@ -38,7 +38,11 @@ export type ProviderTerminalDecisionV2 =
     }
   | {
       readonly kind: "candidate_proposed";
-      readonly source: "natural_stop" | "legacy_final_answer";
+      readonly source: "legacy_final_answer";
+      readonly visibleText: string;
+    }
+  | {
+      readonly kind: "turn_boundary";
       readonly visibleText: string;
     }
   | {
@@ -130,8 +134,7 @@ export function normalizeProviderResponseV2(
     return {
       state: base,
       decision: {
-        kind: "candidate_proposed",
-        source: "natural_stop",
+        kind: "turn_boundary",
         visibleText,
       },
     };

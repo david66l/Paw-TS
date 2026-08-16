@@ -11,6 +11,7 @@ import {
 import { materializeTerminalCandidateSnapshotsV2 } from "./candidate-snapshots.js";
 import { canonicalJson, sha256Canonical } from "./canonical.js";
 import {
+  type ControlReductionV1,
   type ControlStateV1,
   controlInputFromLoopV2EnvelopeV1,
   controlStateHashV1,
@@ -99,6 +100,7 @@ export interface LoopV2ShadowObserver {
   observe(envelope: LegacyRunEventEnvelopeV1): void;
   observeToolCommit(input: LoopV2ShadowToolCommitInput): void;
   snapshot(): LoopV2ShadowReport;
+  latestControlReduction(): ControlReductionV1 | undefined;
 }
 
 /** Minimal structural boundary; avoids coupling the v2 kernel to core's barrel. */
@@ -184,6 +186,7 @@ export function createLoopV2ShadowObserver(
     ? [...seed.projectedEvents]
     : [];
   let controlState = replayProjectedControlState(runId, projectedEvents);
+  let latestControlReduction: ControlReductionV1 | undefined;
   const diagnostics: LoopV2ShadowDiagnostic[] = seed
     ? [...seed.diagnostics]
     : [];
@@ -200,7 +203,8 @@ export function createLoopV2ShadowObserver(
     state = projectLoopV2Event(state, projected).state;
     const controlInput = controlInputFromLoopV2EnvelopeV1(projected);
     if (controlInput) {
-      controlState = reduceControlStateV1(controlState, controlInput).state;
+      latestControlReduction = reduceControlStateV1(controlState, controlInput);
+      controlState = latestControlReduction.state;
     }
     projectedEvents.push(projected);
   };
@@ -567,6 +571,10 @@ export function createLoopV2ShadowObserver(
         ...reportWithoutHash,
         reportHash: sha256Canonical(reportWithoutHash),
       };
+    },
+
+    latestControlReduction() {
+      return latestControlReduction;
     },
   };
   if (

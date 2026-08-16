@@ -35,6 +35,7 @@ import type { CompletionDecision } from "../lifecycle/completion-policy.js";
 import type { RepeatToolState } from "../lifecycle/repeat-tool-reminder.js";
 import type { VerificationPolicy } from "../lifecycle/verification-gate.js";
 import type {
+  ControlReductionV1,
   LoopKernelVersion,
   LoopV2LiveCandidateAssessmentV1,
   LoopV2ShadowToolCommitPortInput,
@@ -241,6 +242,8 @@ export interface PhaseContext {
   readonly getLoopV2ReadinessVerificationRecords?: () =>
     | readonly VerificationRecordV2[]
     | undefined;
+  /** Latest pure-reducer result after a control fact was journaled. */
+  readonly getLoopV2ControlReduction?: () => ControlReductionV1 | undefined;
   /** Candidate-bound, durable, at-most-once explicit-v2 review transaction. */
   readonly reviewLoopV2Candidate?: () => Promise<
     SemanticReviewOnceResultV2 &
