@@ -222,6 +222,15 @@ export {
   type VerificationProbeResultV1,
 } from "./verification-probe.js";
 export {
+  decomposeVerificationFailuresV2,
+  isEnvironmentFailure,
+  isOwnedFailure,
+  renderVerificationFailureRecordsV2,
+  verificationRunHasOwnedFailures,
+  type VerificationFailureKindV2,
+  type VerificationFailureRecordV2,
+} from "./failure-records.js";
+export {
   createLoopV2ShadowObserver,
   restoreLoopV2ProjectionObserver,
   type LegacyRunEventEnvelopeV1,

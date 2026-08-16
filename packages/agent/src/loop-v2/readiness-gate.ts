@@ -1,6 +1,7 @@
 import type { CandidateReadinessGapCodeV2 } from "./candidate-certification.js";
 import { sha256Canonical } from "./canonical.js";
 import type { RepairRequirementV1 } from "./control-reducer.js";
+import { renderVerificationFailureRecordsV2 } from "./failure-records.js";
 import type { LoopV2LiveCandidateAssessmentV1 } from "./live-candidate.js";
 import type { VerificationRecordV2, WorkingDecisionStateV2 } from "./schema.js";
 
@@ -290,9 +291,12 @@ function describeVerificationRecords(
         ? ` scope=${verification.scope.slice(0, 4).join(",")}`
         : "";
       const command = verification.argv.join(" ").replace(/\s+/g, " ").trim();
-      return `${verification.id}${failure}${scope} command=${command || "unknown"}`.slice(
+      const records = renderVerificationFailureRecordsV2(
+        verification.failureRecords ?? [],
+      );
+      return `${verification.id}${failure}${scope} command=${command || "unknown"}${records ? ` ${records}` : ""}`.slice(
         0,
-        360,
+        720,
       );
     })
     .join("; ");

@@ -52,6 +52,10 @@ import type {
   ToolExecutionPolicy,
 } from "../execution-policy.js";
 import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
+import {
+  decomposeVerificationFailuresV2,
+  renderVerificationFailureRecordsV2,
+} from "../loop-v2/failure-records.js";
 import type {
   LoopV2ShadowMutationCapture,
   LoopV2ShadowToolCommitPortInput,
@@ -993,6 +997,38 @@ export function finalizeToolExecution(
 const UNTRUSTED_EXIT_TAG = "[UntrustedExitStatus]";
 
 /**
+ * Loop v2.1 §10：失败的验证输出在结果时刻即附带失败记录的结构化分区
+ * （owned/environment），这是分解层事实的渲染，不含任何行为命令——
+ * 模型从看到输出的第一眼起就拿到同一份分类事实，而不是原始日志加
+ * 事后评语。与 untrusted 退出码标注同一接入位（journal + 模型上下文）。
+ */
+export function annotateVerificationFailureRecords(
+  call: AgentToolCallAction,
+  result: ToolRunResult,
+  filesChanged: readonly string[],
+): ToolRunResult {
+  if (call.tool !== "workspace.run_shell" || result.ok) return result;
+  const payload =
+    result.payload && typeof result.payload === "object"
+      ? (result.payload as Readonly<Record<string, unknown>>)
+      : undefined;
+  const output = [payload?.stdout, payload?.stderr, result.summary]
+    .filter((value): value is string => typeof value === "string")
+    .join("\n");
+  const records = decomposeVerificationFailuresV2({
+    output,
+    filesChanged,
+  });
+  const rendered = renderVerificationFailureRecordsV2(records);
+  if (!rendered) return result;
+  if (result.summary.includes("[VerificationFailureRecords]")) return result;
+  return {
+    ...result,
+    summary: `${result.summary}\n${rendered}`,
+  };
+}
+
+/**
  * Loop v2.1 §6.1/K3：验证命令若运行在 shell 控制流（pipe/重定向/fallback/
  * 尾随命令）中，最终退出码不能证明测试通过。判定复用
  * analyzeVerificationInvocation 的 exitStatusReliable——与 task-state 的
@@ -1042,7 +1078,12 @@ export function commitToolExecutionResult(
     readonly mutationCapture?: LoopV2ShadowMutationCapture;
   },
 ): void {
-  const observed = annotateUntrustedShellExitSummary(call, result);
+  const annotatedExit = annotateUntrustedShellExitSummary(call, result);
+  const observed = annotateVerificationFailureRecords(
+    call,
+    annotatedExit,
+    ctx.taskState?.snapshot().filesChanged ?? [],
+  );
   const taskStateBefore = ctx.taskState?.snapshot();
   const repositoryRevision = `run:${ctx.runId}:mutation:${taskStateBefore?.mutationRevision ?? 0}`;
   const sourceContentHash =
@@ -1130,7 +1171,11 @@ export function finalizeToolExecutionContext(
       const tool = calls[i]!.tool;
       const callerText = ctx.text;
       // 模型可见 summary 内联 untrusted 退出码标注（与 journal 事实同一判定）
-      const annotated = annotateUntrustedShellExitSummary(calls[i]!, tr);
+      const annotated = annotateVerificationFailureRecords(
+        calls[i]!,
+        annotateUntrustedShellExitSummary(calls[i]!, tr),
+        ctx.taskState?.snapshot().filesChanged ?? [],
+      );
       let payload: unknown = tr.payload;
       // 去重：同一内容重复出现 → 预览引用（重复读文件/重复跑命令的浪费源）
       const dup = ctx.payloadDeduper?.check(payload);
@@ -1373,6 +1418,9 @@ function buildShadowVerificationCapture(
       ? { exitCode }
       : {}),
     ...(testResult.failureKind ? { failureClass: testResult.failureKind } : {}),
+    ...(testResult.failureRecords
+      ? { failureRecords: testResult.failureRecords }
+      : {}),
     output: [payload.stdout, payload.stderr, result.summary]
       .filter((value): value is string => typeof value === "string" && !!value)
       .join("\n"),

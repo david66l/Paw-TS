@@ -227,6 +227,7 @@ import { CONTEXT_PACKAGE_PREFIX } from "./orchestrator/constants.js";
 import { fixMalformedToolArguments } from "./orchestrator/fix-malformed-args.js";
 import {
   annotateUntrustedShellExitSummary,
+  annotateVerificationFailureRecords,
   commitToolExecutionResult,
 } from "./orchestrator/tool-runner.js";
 import {
@@ -1018,9 +1019,13 @@ export class AgentOrchestrator {
           .takeSettlements()
           .map((settlement) => ({
             ...settlement,
-            result: annotateUntrustedShellExitSummary(
+            result: annotateVerificationFailureRecords(
               settlement.call,
-              settlement.result,
+              annotateUntrustedShellExitSummary(
+                settlement.call,
+                settlement.result,
+              ),
+              taskState.snapshot().filesChanged,
             ),
           }));
         if (jobSettlements.length > 0) {

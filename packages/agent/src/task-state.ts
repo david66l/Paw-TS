@@ -4,6 +4,11 @@ import type {
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
+import type { VerificationFailureRecordV2 } from "./loop-v2/failure-records.js";
+import {
+  decomposeVerificationFailuresV2,
+  verificationRunHasOwnedFailures,
+} from "./loop-v2/failure-records.js";
 import { isGitDiffCommand } from "./shell-command.js";
 import {
   type TaskGraphEventV1,
@@ -56,6 +61,12 @@ export interface TestResultSummary {
   readonly mutationRevision?: number;
   /** Execution environment revision in which this evidence was observed. */
   readonly executionEnvironmentRevision?: number;
+  /**
+   * 失败记录分解（Loop v2.1 §10）：本次运行输出分解出的带类型失败记录。
+   * owned/environment 的划分是记录属性，模型上下文、readiness、修复反馈
+   * 消费同一份结构化事实，替代对原始日志的事后评语。
+   */
+  readonly failureRecords?: readonly VerificationFailureRecordV2[];
 }
 
 export interface PostEditDiagnosticStateV1 {
@@ -558,25 +569,54 @@ export class TaskStateManager {
             verificationIntent,
           );
           const evidence = verificationEvidence(result);
+          // 失败记录分解：一次计算，分类精修与持久化共用同一份事实。
+          const failureRecords =
+            classification.outcome === "code_failed"
+              ? decomposeVerificationFailuresV2({
+                  output: [
+                    (isRecord(result.payload) ? result.payload.stdout : "") ??
+                      "",
+                    (isRecord(result.payload) ? result.payload.stderr : "") ??
+                      "",
+                    result.summary,
+                  ]
+                    .filter(
+                      (value): value is string => typeof value === "string",
+                    )
+                    .join("\n"),
+                  filesChanged,
+                })
+              : [];
+          const refined =
+            classification.outcome === "code_failed" &&
+            failureRecords.length > 0 &&
+            !verificationRunHasOwnedFailures(failureRecords)
+              ? {
+                  outcome: "harness_failed" as const,
+                  failureKind: "environment_setup" as const,
+                  retryability: "terminal" as const,
+                }
+              : classification;
           testResults.push({
             command,
             family: verificationIntent.family,
-            passed: classification.outcome === "passed",
-            outcome: classification.outcome,
-            ...(classification.failureKind
-              ? { failureKind: classification.failureKind }
+            passed: refined.outcome === "passed",
+            outcome: refined.outcome,
+            ...(refined.failureKind
+              ? { failureKind: refined.failureKind }
               : {}),
-            ...(classification.retryability
-              ? { retryability: classification.retryability }
+            ...(refined.retryability
+              ? { retryability: refined.retryability }
               : {}),
-            summary: classification.summary ?? result.summary,
+            summary: refined.summary ?? result.summary,
             ...(evidence ? { evidence } : {}),
+            ...(failureRecords.length > 0 ? { failureRecords } : {}),
             shellCommandRevision,
             mutationRevision,
             executionEnvironmentRevision:
               this.state.executionEnvironmentRevision ?? 0,
           });
-          if (classification.outcome !== "harness_failed") {
+          if (refined.outcome !== "harness_failed") {
             executionEnvironmentIssues = [];
           }
         }
