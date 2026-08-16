@@ -11,6 +11,11 @@ import {
   evaluateCandidateReadinessV2,
 } from "./candidate-certification.js";
 import { canonicalJson, sha256Canonical } from "./canonical.js";
+import {
+  controlInputFromLoopV2EnvelopeV1,
+  controlStateHashV1,
+  replayControlFactsV1,
+} from "./control-reducer.js";
 import { decisionStateHash } from "./projector.js";
 import { replayLoopV2 } from "./replay.js";
 import { type RunOutcomeV2, deriveRunOutcomeV2 } from "./run-outcome.js";
@@ -309,6 +314,27 @@ export function assertLoopV2ShadowReportIntegrity(
   }
   if (decisionStateHash(report.state) !== report.stateHash) {
     throw new Error("Loop v2 shadow state hash mismatch");
+  }
+  if (
+    (report.controlState === undefined) !==
+    (report.controlStateHash === undefined)
+  ) {
+    throw new Error("Loop v2 shadow control state is incomplete");
+  }
+  if (report.controlState && report.controlStateHash) {
+    const inputs = report.projectedEvents.flatMap((event) => {
+      const input = controlInputFromLoopV2EnvelopeV1(event);
+      return input ? [input] : [];
+    });
+    const controlReplay = replayControlFactsV1(record.runId, inputs);
+    if (
+      canonicalJson(controlReplay.state) !== canonicalJson(report.controlState)
+    ) {
+      throw new Error("Loop v2 shadow control state mismatch");
+    }
+    if (controlStateHashV1(report.controlState) !== report.controlStateHash) {
+      throw new Error("Loop v2 shadow control state hash mismatch");
+    }
   }
   if (!Array.isArray(report.artifactBlobs)) {
     throw new Error("Loop v2 shadow artifactBlobs must be an array");

@@ -2285,6 +2285,30 @@ export class AgentOrchestrator {
 
     let dispatchedAction = singleAction;
     let dispatchedFlags = flags;
+    const controlAction = nativeToolErrors?.length
+      ? ("native_tool_errors" as const)
+      : singleAction &&
+          singleAction.type !== "final_answer" &&
+          singleAction.type !== "tool_call"
+        ? singleAction.type
+        : diagnosis.kind !== "ok"
+          ? ("parse_recovery" as const)
+          : undefined;
+    const normalizedFinishReason = finishReason?.trim().toLowerCase();
+    if (
+      ctx.loopKernelVersion !== "v1" &&
+      toolCalls.length === 0 &&
+      controlAction === undefined &&
+      singleAction?.type !== "final_answer" &&
+      (normalizedFinishReason === undefined ||
+        normalizedFinishReason === "stop")
+    ) {
+      emit({
+        type: "provider.turn_stopped",
+        turn: ctx.turn + 1,
+        empty: !(reasoningText || text).trim(),
+      });
+    }
     if (ctx.loopKernelVersion === "v2") {
       const priorProviderState =
         flags.providerTerminal ??
@@ -2292,15 +2316,6 @@ export class AgentOrchestrator {
           ...createProviderTerminalStateV2(runId),
           lastTurn: ctx.turn,
         } as const);
-      const controlAction = nativeToolErrors?.length
-        ? ("native_tool_errors" as const)
-        : singleAction &&
-            singleAction.type !== "final_answer" &&
-            singleAction.type !== "tool_call"
-          ? singleAction.type
-          : diagnosis.kind !== "ok"
-            ? ("parse_recovery" as const)
-            : undefined;
       const terminal = normalizeProviderResponseV2(priorProviderState, {
         runId,
         turn: ctx.turn + 1,

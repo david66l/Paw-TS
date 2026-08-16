@@ -11,6 +11,13 @@ import {
 import { materializeTerminalCandidateSnapshotsV2 } from "./candidate-snapshots.js";
 import { canonicalJson, sha256Canonical } from "./canonical.js";
 import {
+  type ControlStateV1,
+  controlInputFromLoopV2EnvelopeV1,
+  controlStateHashV1,
+  createControlStateV1,
+  reduceControlStateV1,
+} from "./control-reducer.js";
+import {
   createWorkingDecisionStateV2,
   decisionStateHash,
   projectLoopV2Event,
@@ -43,6 +50,7 @@ export type LoopV2ShadowReason =
   | "rich_verification_revision_gap"
   | "rich_verification_effect_ambiguous"
   | "rich_candidate_projected"
+  | "provider_turn_stopped_projected"
   | "non_decision_event";
 
 export interface LoopV2ShadowDiagnostic {
@@ -81,6 +89,9 @@ export interface LoopV2ShadowReport {
   readonly legacyTerminal?: LoopV2ShadowLegacyTerminal;
   readonly state: WorkingDecisionStateV2;
   readonly stateHash: string;
+  /** Added additively so pre-control shadow artifacts remain readable. */
+  readonly controlState?: ControlStateV1;
+  readonly controlStateHash?: string;
   readonly reportHash: string;
 }
 
@@ -172,6 +183,7 @@ export function createLoopV2ShadowObserver(
   const projectedEvents: LoopV2Envelope[] = seed
     ? [...seed.projectedEvents]
     : [];
+  let controlState = replayProjectedControlState(runId, projectedEvents);
   const diagnostics: LoopV2ShadowDiagnostic[] = seed
     ? [...seed.diagnostics]
     : [];
@@ -182,6 +194,16 @@ export function createLoopV2ShadowObserver(
   const consumedToolCommits = new Set<number>();
   let legacyTerminal: LoopV2ShadowLegacyTerminal | undefined =
     seed?.legacyTerminal;
+  let pendingNaturalStopAdapter = false;
+
+  const appendProjected = (projected: LoopV2Envelope): void => {
+    state = projectLoopV2Event(state, projected).state;
+    const controlInput = controlInputFromLoopV2EnvelopeV1(projected);
+    if (controlInput) {
+      controlState = reduceControlStateV1(controlState, controlInput).state;
+    }
+    projectedEvents.push(projected);
+  };
 
   const record = (
     envelope: LegacyRunEventEnvelopeV1,
@@ -213,6 +235,13 @@ export function createLoopV2ShadowObserver(
       }
       sourceThroughSeq = envelope.seq;
       sourceTimestamps.set(envelope.seq, envelope.ts);
+      const isFinalAnswer =
+        envelope.event.type === "agent.action" &&
+        readString(readRecord(envelope.event, "action"), "type") ===
+          "final_answer";
+      if (envelope.event.type !== "provider.turn_stopped" && !isFinalAnswer) {
+        pendingNaturalStopAdapter = false;
+      }
 
       if (
         envelope.event.type === "run.completed" ||
@@ -250,18 +279,41 @@ export function createLoopV2ShadowObserver(
             sourceHash: sha256Canonical(goal),
           },
         };
-        state = projectLoopV2Event(state, projected).state;
-        projectedEvents.push(projected);
+        appendProjected(projected);
         record(envelope, "projected", "task_started_projected");
         return;
       }
 
-      if (
-        envelope.event.type === "agent.action" &&
-        readString(readRecord(envelope.event, "action"), "type") ===
-          "final_answer"
-      ) {
+      if (envelope.event.type === "provider.turn_stopped") {
+        const turn = readNumber(envelope.event, "turn");
+        const empty = readBoolean(envelope.event, "empty");
+        if (
+          turn === undefined ||
+          !Number.isSafeInteger(turn) ||
+          turn < 1 ||
+          empty === undefined
+        ) {
+          throw new Error("Legacy provider.turn_stopped event is invalid");
+        }
+        const projected: LoopV2Envelope = {
+          schemaVersion: LOOP_V2_SCHEMA_VERSION,
+          runId,
+          seq: projectedEvents.length + 1,
+          ts: envelope.ts,
+          event: { type: "provider.turn_stopped", turn, empty },
+        };
+        appendProjected(projected);
+        pendingNaturalStopAdapter = true;
+        record(envelope, "projected", "provider_turn_stopped_projected");
+        return;
+      }
+
+      if (isFinalAnswer) {
         const proposedAtSeq = projectedEvents.length + 1;
+        const source = pendingNaturalStopAdapter
+          ? "natural_stop_adapter"
+          : "legacy_final_answer";
+        pendingNaturalStopAdapter = false;
         const input = buildCandidateInputV2(
           state,
           materializeTerminalCandidateSnapshotsV2(state, [
@@ -281,10 +333,11 @@ export function createLoopV2ShadowObserver(
               mutationRevision: state.currentMutationRevision,
               candidateInputHash,
               proposedAtSeq,
+              source,
             },
           },
         };
-        state = projectLoopV2Event(state, projected).state;
+        appendProjected(projected);
         const projectedIdentity = candidateInputHashV2(
           buildCandidateInputV2(
             state,
@@ -298,7 +351,6 @@ export function createLoopV2ShadowObserver(
             `Loop v2 candidate identity changed during projection: ${candidateInputHash} != ${projectedIdentity}`,
           );
         }
-        projectedEvents.push(projected);
         record(envelope, "projected", "rich_candidate_projected");
         return;
       }
@@ -386,8 +438,7 @@ export function createLoopV2ShadowObserver(
             },
           },
         };
-        state = projectLoopV2Event(state, projected).state;
-        projectedEvents.push(projected);
+        appendProjected(projected);
         diagnostics[diagnosticIndex] = {
           ...diagnostic,
           disposition: "projected",
@@ -426,8 +477,7 @@ export function createLoopV2ShadowObserver(
           ts: sourceTimestamps.get(input.sourceSeq) ?? 0,
           event: { type: "mutation.recorded", mutation: mutation.record },
         };
-        state = projectLoopV2Event(state, projected).state;
-        projectedEvents.push(projected);
+        appendProjected(projected);
         diagnostics[diagnosticIndex] = {
           ...diagnostic,
           disposition: "projected",
@@ -474,8 +524,7 @@ export function createLoopV2ShadowObserver(
           observation: rich.observation,
         },
       };
-      state = projectLoopV2Event(state, projected).state;
-      projectedEvents.push(projected);
+      appendProjected(projected);
       diagnostics[diagnosticIndex] = {
         ...diagnostic,
         disposition: "projected",
@@ -511,6 +560,8 @@ export function createLoopV2ShadowObserver(
         ...(legacyTerminal ? { legacyTerminal } : {}),
         state,
         stateHash: decisionStateHash(state),
+        controlState,
+        controlStateHash: controlStateHashV1(controlState),
       };
       return {
         ...reportWithoutHash,
@@ -518,7 +569,10 @@ export function createLoopV2ShadowObserver(
       };
     },
   };
-  if (seed && observer.snapshot().reportHash !== seed.reportHash) {
+  if (
+    seed?.controlState !== undefined &&
+    observer.snapshot().reportHash !== seed.reportHash
+  ) {
     throw new Error("Loop v2 restored observer does not match seed report");
   }
   return observer;
@@ -540,6 +594,18 @@ function normalizeLegacyRunStatus(
     value === "incomplete"
     ? value
     : "unknown";
+}
+
+function replayProjectedControlState(
+  runId: string,
+  events: readonly LoopV2Envelope[],
+): ControlStateV1 {
+  let state = createControlStateV1(runId);
+  for (const event of events) {
+    const input = controlInputFromLoopV2EnvelopeV1(event);
+    if (input) state = reduceControlStateV1(state, input).state;
+  }
+  return state;
 }
 
 function classifyLegacyEvent(
@@ -823,6 +889,24 @@ function readString(
   if (!value) return undefined;
   const candidate = (value as Readonly<Record<string, unknown>>)[key];
   return typeof candidate === "string" ? candidate : undefined;
+}
+
+function readNumber(
+  value: object | undefined,
+  key: string,
+): number | undefined {
+  if (!value) return undefined;
+  const candidate = (value as Readonly<Record<string, unknown>>)[key];
+  return typeof candidate === "number" ? candidate : undefined;
+}
+
+function readBoolean(
+  value: object | undefined,
+  key: string,
+): boolean | undefined {
+  if (!value) return undefined;
+  const candidate = (value as Readonly<Record<string, unknown>>)[key];
+  return typeof candidate === "boolean" ? candidate : undefined;
 }
 
 function readArray(

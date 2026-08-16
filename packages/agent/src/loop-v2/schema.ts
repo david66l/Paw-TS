@@ -17,6 +17,11 @@ export type LoopV2Event =
       readonly sourceHash: string;
     }
   | {
+      readonly type: "provider.turn_stopped";
+      readonly turn: number;
+      readonly empty: boolean;
+    }
+  | {
       readonly type: "evidence.observed";
       readonly observation: EvidenceObservation;
     }
@@ -204,6 +209,8 @@ export interface CandidateRecordV2 {
   readonly mutationRevision: number;
   readonly candidateInputHash: string;
   readonly proposedAtSeq: number;
+  /** Migration provenance; natural_stop_adapter is never explicit intent. */
+  readonly source?: "legacy_final_answer" | "natural_stop_adapter";
 }
 
 export interface EvidenceRecordV2 {
@@ -343,6 +350,10 @@ export function assertLoopV2Envelope(
     case "task.started":
       assertNonEmptyString(value.event.goal, "event.goal");
       assertNonEmptyString(value.event.sourceHash, "event.sourceHash");
+      return;
+    case "provider.turn_stopped":
+      assertSafeInteger(value.event.turn, "event.turn", 1);
+      assertBoolean(value.event.empty, "event.empty");
       return;
     case "evidence.observed":
       assertEvidenceObservation(value.event.observation);
@@ -559,6 +570,13 @@ function assertCandidate(value: unknown): void {
   assertSafeInteger(value.mutationRevision, `${label}.mutationRevision`, 0);
   assertNonEmptyString(value.candidateInputHash, `${label}.candidateInputHash`);
   assertSafeInteger(value.proposedAtSeq, `${label}.proposedAtSeq`, 1);
+  if (value.source !== undefined) {
+    assertOneOf(
+      value.source,
+      ["legacy_final_answer", "natural_stop_adapter"],
+      `${label}.source`,
+    );
+  }
 }
 
 export function parseLoopV2EventLog(

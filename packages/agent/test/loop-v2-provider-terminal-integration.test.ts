@@ -74,9 +74,13 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         },
       ],
     });
+    const events: RunEventEnvelope[] = [];
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot });
     const orchestrator = new AgentOrchestrator({
       loopKernelVersion: "v2",
       model,
+      sessionStore,
+      onEvent: (event) => events.push(event),
     });
 
     try {
@@ -90,12 +94,40 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.status).toBe("completed");
       expect(result.message).toBe("The file contains hello.");
       expect(model.callCount).toBe(2);
+      const boundaryIndex = events.findIndex(
+        (event) => event.event.type === "provider.turn_stopped",
+      );
+      const candidateIndex = events.findIndex(
+        (event) =>
+          event.event.type === "agent.action" &&
+          event.event.action.type === "final_answer",
+      );
+      expect(boundaryIndex).toBeGreaterThanOrEqual(0);
+      expect(candidateIndex).toBeGreaterThan(boundaryIndex);
+      expect(events[boundaryIndex]?.event).toEqual({
+        type: "provider.turn_stopped",
+        turn: 2,
+        empty: false,
+      });
+      expect(
+        sessionStore
+          .loadRun("v2-provider-natural")
+          ?.some((event) => event.event.type === "provider.turn_stopped"),
+      ).toBeTrue();
       const candidate = parseLoopV2LiveCandidateArtifactV1(
         fs.readFileSync(
           loopV2LiveArtifactPath(workspaceRoot, "v2-provider-natural"),
           "utf8",
         ),
       );
+      expect(candidate.report.state.currentCandidate?.source).toBe(
+        "natural_stop_adapter",
+      );
+      expect(candidate.report.controlState).toMatchObject({
+        status: "running",
+        turn: 2,
+      });
+      expect(candidate.report.controlState?.candidate).toBeUndefined();
       const terminal = parseLoopV2LiveTerminalArtifactV1(
         fs.readFileSync(
           loopV2LiveTerminalArtifactPath(workspaceRoot, "v2-provider-natural"),

@@ -151,6 +151,12 @@ export type RunEvent =
       /** 完整的思考/推理文本 */
       readonly thinking?: string;
     }
+  /** Provider ended a no-tool turn. This is a boundary fact, not completion. */
+  | {
+      readonly type: "provider.turn_stopped";
+      readonly turn: number;
+      readonly empty: boolean;
+    }
   /** 编排器需要等待用户回复（向用户提问），例如请求权限确认或澄清问题 */
   /** Orchestrator will await {@link AgentOrchestratorOptions.resolveAskUser}. */
   | {

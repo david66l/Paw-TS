@@ -298,6 +298,13 @@ export function controlInputFromLoopV2EnvelopeV1(
     case "task.started":
       fact = { type: "run.started", goalHash: event.sourceHash };
       break;
+    case "provider.turn_stopped":
+      fact = {
+        type: "provider.turn_stopped",
+        turn: event.turn,
+        empty: event.empty,
+      };
+      break;
     case "mutation.recorded":
       fact = {
         type: "mutation.committed",
@@ -312,6 +319,7 @@ export function controlInputFromLoopV2EnvelopeV1(
       };
       break;
     case "candidate.proposed":
+      if (event.candidate.source === "natural_stop_adapter") return undefined;
       fact = {
         type: "candidate.submitted",
         candidate: {

@@ -8,6 +8,7 @@ import { FakeLanguageModel } from "@paw/models";
 
 import {
   artifactEvidenceV2,
+  assertLoopV2ShadowReportIntegrity,
   createLoopV2ShadowObserver,
   evaluateCandidateReadinessV2,
   materializeCandidateArtifactV2,
@@ -24,6 +25,124 @@ function legacyEnvelope(
 }
 
 describe("Loop Kernel v2 shadow migration", () => {
+  test("natural stop remains a legacy candidate but not a control candidate", () => {
+    const observer = createLoopV2ShadowObserver("shadow-natural-boundary");
+    observer.observe(
+      legacyEnvelope(
+        1,
+        { type: "run.started", goal: "Inspect the result" },
+        "shadow-natural-boundary",
+      ),
+    );
+    observer.observe(
+      legacyEnvelope(
+        2,
+        { type: "provider.turn_stopped", turn: 1, empty: false },
+        "shadow-natural-boundary",
+      ),
+    );
+    observer.observe(
+      legacyEnvelope(
+        3,
+        {
+          type: "agent.action",
+          action: { type: "final_answer", summary: "Legacy synthesized final" },
+        },
+        "shadow-natural-boundary",
+      ),
+    );
+
+    const report = observer.snapshot();
+    expect(report.state.currentCandidate?.source).toBe("natural_stop_adapter");
+    expect(report.controlState).toMatchObject({
+      status: "running",
+      turn: 1,
+      consecutiveNoActionStops: 1,
+    });
+    expect(report.controlState?.candidate).toBeUndefined();
+    expect(report.diagnostics.map((item) => item.reason)).toEqual([
+      "task_started_projected",
+      "provider_turn_stopped_projected",
+      "rich_candidate_projected",
+    ]);
+    expect(() => assertLoopV2ShadowReportIntegrity(report)).not.toThrow();
+
+    const tampered = structuredClone(report) as typeof report & {
+      controlState: { turn: number };
+    };
+    tampered.controlState.turn = 2;
+    expect(() => assertLoopV2ShadowReportIntegrity(tampered)).toThrow(
+      "control state mismatch",
+    );
+  });
+
+  test("legacy final_answer without a natural boundary is explicit control intent", () => {
+    const observer = createLoopV2ShadowObserver("shadow-legacy-candidate");
+    observer.observe(
+      legacyEnvelope(
+        1,
+        { type: "run.started", goal: "Return status" },
+        "shadow-legacy-candidate",
+      ),
+    );
+    observer.observe(
+      legacyEnvelope(
+        2,
+        {
+          type: "agent.action",
+          action: { type: "final_answer", summary: "Explicit final" },
+        },
+        "shadow-legacy-candidate",
+      ),
+    );
+
+    const report = observer.snapshot();
+    expect(report.state.currentCandidate?.source).toBe("legacy_final_answer");
+    expect(report.controlState).toMatchObject({
+      status: "candidate",
+      candidate: { id: report.state.currentCandidate?.id },
+    });
+  });
+
+  test("a later turn does not inherit natural-stop adapter provenance", () => {
+    const observer = createLoopV2ShadowObserver("shadow-next-turn-candidate");
+    observer.observe(
+      legacyEnvelope(
+        1,
+        { type: "run.started", goal: "Continue then submit" },
+        "shadow-next-turn-candidate",
+      ),
+    );
+    observer.observe(
+      legacyEnvelope(
+        2,
+        { type: "provider.turn_stopped", turn: 1, empty: false },
+        "shadow-next-turn-candidate",
+      ),
+    );
+    observer.observe(
+      legacyEnvelope(
+        3,
+        { type: "loop.tick", turn: 2, maxSteps: 5, estimatedTokens: 10 },
+        "shadow-next-turn-candidate",
+      ),
+    );
+    observer.observe(
+      legacyEnvelope(
+        4,
+        {
+          type: "agent.action",
+          action: { type: "final_answer", summary: "Explicit next-turn final" },
+        },
+        "shadow-next-turn-candidate",
+      ),
+    );
+
+    const report = observer.snapshot();
+    expect(report.state.currentCandidate?.source).toBe("legacy_final_answer");
+    expect(report.controlState?.status).toBe("candidate");
+  });
+
   test("strict projection restore preserves the report and accepts later source seq", () => {
     const original = createLoopV2ShadowObserver("shadow-restore");
     original.observe(
@@ -530,6 +649,52 @@ describe("Loop Kernel v2 shadow migration", () => {
       ),
     ).toBe(true);
     expect(terminalReports).toBe(1);
+  });
+
+  test("live v2-shadow journals a natural boundary without claiming a candidate", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-shadow-boundary-"));
+    let calls = 0;
+    const events: RunEventEnvelope[] = [];
+    const shadow = new AgentOrchestrator({
+      model: {
+        label: "shadow-natural-boundary",
+        async complete() {
+          calls += 1;
+          return calls === 1
+            ? { text: "I should continue explicitly.", finishReason: "stop" }
+            : {
+                text: '{"action":"final_answer","summary":"Explicitly submitted."}',
+                finishReason: "stop",
+              };
+        },
+      },
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      loopKernelVersion: "v2-shadow",
+      onEvent: (event) => events.push(event),
+    });
+
+    const result = await shadow.run({
+      runId: "shadow-natural-boundary-live",
+      goal: "Return an explicit status.",
+      workspaceRoot: dir,
+      maxSteps: 4,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(calls).toBe(1);
+    expect(
+      events.filter((event) => event.event.type === "provider.turn_stopped"),
+    ).toHaveLength(1);
+    const report = shadow.getLastLoopV2ShadowReport();
+    expect(report?.controlState).toMatchObject({
+      status: "running",
+      turn: 1,
+      consecutiveNoActionStops: 1,
+    });
+    expect(report?.controlState?.candidate).toBeUndefined();
+    expect(report?.state.currentCandidate).toBeUndefined();
+    expect(report?.legacyTerminal?.status).toBe("completed");
   });
 
   test("live v2-shadow captures a complete write without changing completion", async () => {
