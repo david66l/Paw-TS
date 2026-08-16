@@ -1,531 +1,426 @@
-# SPEC-001：Paw Platform Refactor 实施规格
+# SPEC-001：Paw Coding Agent Platform 渐进式改造规格
 
-> 状态：Active
-> 版本：1.0.0
+> 状态：Active（第 3–7 节约束当前 P0–P2；第 8–12 节为 Future）
+> 版本：1.1.0
 > 日期：2026-08-16
-> 目标：将 Paw 改造为可服务真实场景、可长期执行、可插件化、可自动化、可接入企业渠道、可受控自进化的 coding agent platform，并在相同模型与环境下以公开、可复现实验证明任务能力达到或超过 Claude Code CLI。
-> 上位设计：`RFC-002-Paw-Real-World-Agent-Platform.md`
-> Loop 契约：`coding-agent-loop-kernel-v2.md`
-> 当前实现基线：`d140a24`
+> 代码基线：`main@07e92bf` 加未提交 WP1a 工作树
+> 上位蓝图：`RFC-002-Paw-Real-World-Agent-Platform.md`
+> Loop 契约：`coding-agent-loop-kernel-v2.md`（v2.1）
+> 权威决策：`ADR-002-Run-Completion-and-Certification-Authority.md`
 
-## 1. 规格语义
+## 1. 本规格解决什么
 
-本文中的“必须”是放行条件，“应该”是默认决策，偏离时必须新增 ADR，“可以”是实现选择。任何阶段不得用以下手段宣告完成：只通过 mock、不记录真实 provider/tool 轨迹、改 benchmark 特判、扩大预算掩盖停止错误、只报告总体平均而隐藏单题失败、使用不同模型或不同题目比较 Paw 与 Claude Code。
+Paw 的长期目标不变：成为能服务真实场景的 coding agent，具备可靠 harness、长任务 loop engineering、受控自进化、自动化任务、飞书/微信等渠道，并尽量插件化。
 
-本规格同时约束：
+当前阻碍不是缺少平台功能，而是现有 `AgentOrchestrator` 同时承担模型调用、上下文、记忆、工具、安全、恢复、候选认证和终局，Loop v2 又嵌在旧 `final_answer → VerificationGate → CompletionPolicy` 外壳里。继续直接增加 Gateway、Scheduler 或 Plugin Host，只会扩大双重状态和权威混杂。
 
-- 包和依赖方向；
-- Run Kernel、Context、Memory、Plugin、Automation、Gateway、Evolution 的接口；
-- durable event、状态机与事务语义；
-- legacy 迁移和删除条件；
-- 测试、benchmark、同模型竞品对比和商业可靠性验收。
+因此本规格采用两层语义：
 
-## 2. 可证伪的总目标
+- **Active**：只约束当前 Coding Core 收权和 WP1a；其中“必须”是当前放行条件。
+- **Future**：约束长期平台演进的边界，但不阻塞当前 Coding Core，也不授权提前冻结公共插件 API。
 
-“超过 Claude Code CLI”不能是主观体验，必须拆成四组指标。
+RFC-002 是长期方向，不是当前所有模块同时开工的命令。若 Active 范围要扩大，必须先满足上一阶段完成定义并修改本规格版本。
 
-### 2.1 Coding task effectiveness
+## 2. 代码事实与保留策略
 
-在同一机器、同一 repo/base commit、同一任务文本、同一 DeepSeek V4 Flash 版本、相同 reasoning 配置、相同外部网络和时间上限下：
+### 2.1 必须保留的资产
 
-- Paw 在冻结的 memory-off 复杂题集上先达到预设绝对通过门槛；
-- Paw 与 Claude Code CLI 做 paired comparison，报告 resolved win/loss/tie；
-- 主张“超过”至少要求 Paw 的 resolved wins 多于 losses，且不能以显著更高的 invalid patch、未验证完成或 harness failure 换取；
-- 报告每题 wall time、model calls、tokens、tool calls、mutation、verification、stop reason 和 official scorer；
-- 小样本只形成工程信号，不形成统计性产品宣传。
+- `@paw/models`：多 provider、流式响应、native tool call、重试和熔断。
+- `@paw/harness` 与 `@paw/workspace`：工具、MCP、审批、Shell guard、sandbox、effect audit、managed jobs、文件/Git/LSP/code-index。
+- `@paw/core`：Run events、SessionStore、AppState、checkpoint、context prune/compact/archive、system prompt。
+- `@paw/memory`：MemoryRuntimeV2、Postgres store、outbox、governor、retrieval、lifecycle 和评测。
+- `@paw/eval`：SWE/Claude 对比、trace、artifact、memory adversarial。
+- CLI、TUI、Desktop 三个入口及现有产品能力。
 
-### 2.2 Long-horizon control
+### 2.2 必须替换的控制中心
 
-- crash/resume 后 task state、candidate、repair obligation 和 verification matrix 一致；
-- 已完成 development unit 保持 regression obligation；
-- provider 的普通 natural stop 不会把 discovery prose 伪装成已完成；
-- 无新证据循环可诚实 `incomplete/stalled`，不会无限烧 token，也不会错误成功；
-- 外部 verifier pending 与本地失败分开表达。
-
-### 2.3 Context and memory advantage
-
-- Context compaction 前后 protected task facts 零丢失；
-- Prompt snapshot 能解释每轮模型看到了什么以及为何裁剪；
-- MemoryAgentBench 继续报告官方维度，不把内部 SF 夹具混入平均；
-- SWE-Exp/真实跨 session 任务报告 memory on − off resolved delta；
-- 错误记忆、旧 skill 和 provider 故障不会破坏 memory-off 基线。
-
-### 2.4 Platform reliability
-
-- 自动化 attempt 具备 claim/lease/idempotency/unknown 语义；
-- channel delivery 与 agent completion 分离；
-- 24h/72h unattended soak 中可恢复 provider、network、worker、gateway 和重启故障；
-- 插件不能绕过 filesystem/network/process/secret/channel authority；
-- 自进化候选不过 holdout/regression 时不得发布。
-
-## 3. 架构不变量
-
-### I1：单向依赖
-
-目标依赖图：
+`packages/agent/src/orchestrator.ts` 是约 4,600 行的 god object，`PhaseContext` 是 service locator，`TurnFlags` 保存了影响行为的隐式状态。改造只替换 Agent 内部控制中心，不推倒上述资产：
 
 ```text
-@paw/protocol
-  ↑
-@paw/kernel
-  ↑
-@paw/runtime
-  ↑
-@paw/coding
-  ↑
-composition roots / apps / services
-
-@paw/plugin-sdk -> @paw/protocol
-provider/plugin implementations -> protocol + plugin-sdk
+Model / User / Tool / Verifier
+            │ facts
+            ▼
+Append-only Run Journal
+            │
+            ▼
+Pure Control Reducer ── effect intents ──► Thin Runtime
+            │                                  │
+            └──── canonical ControlState ◄─────┘
+                         │
+          projections / adapters / UI / memory
 ```
 
-禁止 package cycle。`@paw/protocol` 不得依赖任何 `@paw/*` 包、Node/Bun 特有运行时、数据库或具体 SDK。
+初期这些是 `@paw/agent` 内部模块，不要求立即拆成 `@paw/kernel`、`@paw/runtime`、`@paw/coding` 三个包。逻辑边界先成立，只有出现独立消费者和稳定接口后才拆包。
 
-### I2：唯一事实源
+## 3. 当前架构不变量
 
-- Run/Task 事实源：append-only event store；
-- 正式长期记忆事实源：Memory Store，经 Governor 变更；
-- artifact 内容事实源：content-addressed artifact store；
-- prompt、UI、summary、status、metrics 都是 projection。
+### I1：唯一状态转换者
 
-### I3：唯一权威
+RunAttempt、Candidate 和 terminal 状态只能由纯 `ControlReducer` 转换。Certification、Verification、Safety、Tool Executor、Model Adapter、Memory 和 UI 都只产事实或消费投影，不能直接写终局。
 
-- Run completion/candidate transition 只能由 Kernel + Coding Certification 决定；
-- tool allow/deny 只能由 Authority Pipeline 决定；
-- Memory 正式写入只能由 Governor 决定；
-- plugin activation 只能由 Plugin Host 决定；
-- evolution promotion 只能由 Release Policy 决定。
+### I2：provider stop 只是回合边界
 
-### I4：model-visible means logged
+普通 `provider.stop` 且无 pending tool 只产生 `turn.boundary`。停止文本保存为 assistant message，不得从 “done / let me / next” 等 prose 猜 candidate。Candidate 只能由结构化 `candidate.submit` 控制动作提出；迁移期 legacy `final_answer` 只能单向适配为该动作。
 
-任何进入模型的 message、context block、tool schema、memory、skill、repair instruction 和 user/channel input 都必须能从 event/artifact refs 重建。任何模型调用必须绑定 immutable `PromptSnapshotId`。
+### I3：单一事实流
 
-### I5：版本固定
+影响控制行为的事实先追加到 Run Journal，再由 reducer/projector 消费。AppState 是 checkpoint/projection，不是第二事实源；丢失后必须能由 checkpoint + journal 重建。相同 journal 重放必须得到相同 state、effects 和 outcome。
 
-一个 RunAttempt 创建时固定 model profile、kernel version、plugin registry snapshot、tool schema snapshot、context policy、memory policy、skill versions 和 evaluator version。升级只影响新 attempt，不能改变正在运行的上下文。
+### I4：工具必须完整结算
 
-## 4. `@paw/protocol` 规格
+每个模型工具调用必须得到 `completed | failed | rejected | cancelled`。只读调用可并行；mutation、Shell、未知 effect 和需要审批的调用默认 exclusive；barrier 覆盖 effect settle、journal append 和 projector commit。结果按模型 call order 进入上下文。
 
-### 4.1 允许内容
+### I5：repair obligation 是 durable state
 
-- branded scalar IDs；
-- JSON-safe wire interfaces 和 closed enums；
-- event envelope 与 version fields；
-- ports 的输入/输出 DTO；
-- schema-independent type guards；
-- 不访问 IO 的 deterministic normalization/hash input contracts。
+Repair obligation 不是 prompt nudge 或内存 flag。它必须绑定创建 revision、gap、期望动作、runner/scope 和满足谓词；只有匹配且已 committed/settled 的事实能解除。prose、重复 read、无关成功命令不能解除。
 
-### 4.2 禁止内容
+### I6：当前 revision 的证据才有效
 
-- filesystem、process、network、DB；
-- tokenization、prompt rendering、memory ranking；
-- provider SDK objects；
-- runtime singleton、registry 或 service locator；
-- re-export 具体实现。
+Mutation revision、execution-environment revision、verification 和 candidate identity 必须关联。源码或执行环境变化后，旧证据按明确规则 stale/superseded，不能覆盖新状态。
 
-### 4.3 ID 类型
+### I7：协议层保持极小
+
+`@paw/protocol` 只放跨进程、JSON-safe、版本化 DTO/ID/event envelope。它不得依赖任何 `@paw/*`、Node/Bun、DB 或 provider SDK，也不得承载 Agent 内部 service object。
+
+### I8：model-visible means reproducible
+
+每次模型调用必须保存或可寻址重建最终 rendered request，包括：role/message 序列、system/context blocks、完整 tool schemas、response format、模型精确 revision、temperature/top_p/max tokens/reasoning 参数，以及 adapter 名称、版本/hash。只保存若干 block hash 不够。
+
+### I9：安全权威不下放
+
+Tool Safety/Authority 可以拒绝工具，但不能伪造完成；插件、渠道或模型不得绕过 executor 的 filesystem/network/process/secret/sandbox/approval 决策。
+
+### I10：live run 不热变更
+
+一个 RunAttempt 固定 model、prompt、tools、skills、memory policy、adapter 和 evaluator 版本。更新只影响新 attempt。
+
+## 4. Active Coding Core 契约
+
+### 4.1 最小 ControlState
 
 ```ts
-declare const brand: unique symbol;
-type Brand<T, Name extends string> = T & { readonly [brand]: Name };
-
-type TenantId = Brand<string, "TenantId">;
-type ConversationId = Brand<string, "ConversationId">;
-type TaskId = Brand<string, "TaskId">;
-type RunAttemptId = Brand<string, "RunAttemptId">;
-type EventId = Brand<string, "EventId">;
-type ArtifactId = Brand<string, "ArtifactId">;
-type PromptSnapshotId = Brand<string, "PromptSnapshotId">;
-type PluginSnapshotId = Brand<string, "PluginSnapshotId">;
+interface ControlStateV1 {
+  readonly schemaVersion: 1;
+  readonly runId: string;
+  readonly status:
+    | "running"
+    | "awaiting_user"
+    | "candidate"
+    | "certifying"
+    | "repair_required"
+    | "completed"
+    | "external_pending"
+    | "incomplete"
+    | "failed"
+    | "aborted";
+  readonly turn: number;
+  readonly consecutiveNoActionStops: number;
+  readonly phase: "discover" | "implement" | "verify" | "repair" | "candidate";
+  readonly goalHash: string;
+  readonly mutationRevision: number;
+  readonly environmentRevision: number;
+  readonly pendingEffects: readonly string[];
+  readonly openRepairObligation?: RepairObligationV1;
+  readonly currentVerificationRefs: readonly string[];
+  readonly candidate?: CandidateIdentityV1;
+  readonly terminal?: RunOutcomeV2;
+}
 ```
 
-解析器只在 wire/DB/config 边界运行；同进程 typed API 不重复验证。
+Goal/acceptance 原文、假设、证据、diff 和大体积 artifact 通过稳定引用关联，不全部复制进 ControlState。
 
-### 4.4 Event envelope
+`external_pending` 是可恢复的非终态：此时 `terminal` 必须为空，可以等待 `external.verification_settled`。只有 `completed | incomplete | failed | aborted` 会产生唯一 `terminal.emitted` 和 `RunOutcomeV2`。
+
+### 4.2 Fact、Decision 与 Effect
+
+首批输入事实至少包括：
+
+- `turn.started`、`provider.turn_stopped`、`provider.failed`；
+- `tool.scheduled`、`tool.settled`、`mutation.committed`；
+- `verification.observed`、`candidate.submitted`；
+- `readiness.evaluated`、`review.completed`、`external.verification_settled`；
+- `user.replied`；
+- `budget.reached`、`cancel.requested`。
+
+Reducer 形态固定为纯函数。`decisionEvents` 是 reducer 对该输入事实所作转换的审计记录，例如 `repair.opened`、`repair.satisfied`、`candidate.accepted` 和 `terminal.emitted`：
 
 ```ts
-interface EventEnvelope<TType extends string, TPayload> {
-  schemaVersion: number;
-  eventId: EventId;
-  tenantId: TenantId;
-  conversationId?: ConversationId;
-  taskId?: TaskId;
-  runAttemptId?: RunAttemptId;
-  sequence: number;
-  occurredAt: string;
-  causationId?: EventId;
-  correlationId?: string;
-  type: TType;
-  payload: TPayload;
+reduce(state: ControlStateV1, fact: ControlFactV1): {
+  readonly state: ControlStateV1;
+  readonly decisionEvents: readonly ControlDecisionEventV1[];
+  readonly effects: readonly ControlEffectV1[];
 }
 ```
 
-同一 RunAttempt 的 sequence 必须单调且 CAS append。未知 required event 使 replay fail loud；明确标记 `ignorable` 的扩展事件可以跳过。
+Runtime 先追加输入 fact，调用 reducer，再原子/同提交边界追加 `decisionEvents` 并发布 state/checkpoint，最后执行 effects。Decision events 不作为新的 reducer 输入；replay 必须重算并校验它们，矛盾即 corruption。Effect 只表达意图，如 `CallModel`、`ExecuteTools`、`RequestUserInput`、`RequestCertification`、`EmitTerminal`。Runtime 执行后必须把结果作为新 input fact 写回，不得直接改 state。
 
-## 5. Run、Task 与 Session 协议
+### 4.3 Candidate 与 Certification
 
-### 5.1 实体
+1. `provider.stop` → `provider.turn_stopped` → reducer 决定继续、等待、incomplete 或处理显式 candidate；不会自动创建 candidate。
+2. `candidate.submit` 只表达模型完成意图，不证明已完成。
+3. deterministic readiness 产事实：pending effects、open obligation、artifact、current verification、acceptance gap。
+4. semantic reviewer 产结构化 finding，不能把测试标绿。
+5. external verifier 只产 settled fact。
+6. reducer 消费事实并转换到 repair/completed/external_pending/incomplete；进入 `external_pending` 时不生成 terminal。
+7. v2 路径 readiness 后调用 legacy `VerificationGate` 的次数必须为 0。
+8. 每个 attempt 最多一次 terminal transition；external resolved/rejected 后才可能产生该 transition，重复事件/replay 幂等。
+
+`external.rejected` 统一由 reducer 转成 `incomplete/external_rejected`；不再同时维护 `rejected` 和 `incomplete` 两套终态词汇。
+
+### 4.4 Repair obligation 转换
 
 ```ts
-interface Conversation {
-  id: ConversationId;
-  tenantId: TenantId;
-  channelBinding?: ChannelConversationBinding;
+interface RepairObligationV1 {
+  readonly id: string;
+  readonly openedAtSeq: number;
+  readonly createdAtMutationRevision: number;
+  readonly gapCode: string;
+  readonly expectedAction:
+    | "inspect"
+    | "material_change"
+    | "direct_verification"
+    | "settle_effect"
+    | "request_user";
+  readonly runnerFamily?: string;
+  readonly scope?: readonly string[];
+  readonly satisfaction: RepairSatisfactionV1;
 }
 
-interface TaskDefinition {
-  id: TaskId;
-  conversationId?: ConversationId;
-  goal: string;
-  acceptance: readonly AcceptanceCriterionSeed[];
-  workspace: WorkspaceTarget;
-  agentProfile: string;
-  policySnapshot: TaskPolicySnapshot;
-}
-
-interface RunAttempt {
-  id: RunAttemptId;
-  taskId: TaskId;
-  attempt: number;
-  immutableInputHash: string;
-  ownerLease?: OwnerLease;
-  status: RunAttemptStatus;
-}
+type RepairSatisfactionV1 =
+  | {
+      readonly kind: "direct_verification_settled";
+      readonly mutationRevision: number;
+      readonly runnerFamily: string;
+      readonly scope: readonly string[];
+      readonly acceptedOutcomes: readonly ("passed" | "code_failed" | "harness_failed")[];
+    }
+  | {
+      readonly kind: "mutation_committed";
+      readonly afterRevisionGreaterThan: number;
+      readonly scope?: readonly string[];
+    }
+  | {
+      readonly kind: "evidence_observed";
+      readonly mutationRevision: number;
+      readonly evidenceKind:
+        | "source_read"
+        | "symbol_observed"
+        | "artifact_inspected"
+        | "environment_observed";
+      readonly scope?: readonly string[];
+    }
+  | { readonly kind: "effect_settled"; readonly effectId: string }
+  | { readonly kind: "user_replied"; readonly requestId: string };
 ```
 
-Conversation 负责交互连续性；Task 负责目标与策略；RunAttempt 负责一次真实执行。不得用 conversation ID 充当 workspace、memory scope 或 attempt identity。
+- 错误动作或无关成功：obligation 保持 open。
+- 匹配的直接验证执行但 `code_failed`：可以关闭“需直接验证”，同时打开“需 material repair”。
+- 新 mutation 使旧验证 stale；obligation 由 reducer 明确 supersede 或迁移，不能静默消失。
+- resume 后 obligation id、revision、scope 和满足状态必须一致。
 
-### 5.2 RunAttempt 状态
+### 4.5 Context 与 Memory
+
+Context Assembler 是模型输入唯一入口；MemoryAdapter 只能提供候选块。Memory 不拥有当前任务真相，不保存 repair/completion authority。Memory provider 故障必须可降级为 memory-off，并记录 failure class。
+
+Compaction 不得重写 goal、acceptance、当前 revision、open obligation、current verification 或安全约束；大输出存 artifact，summary 只引用。
+
+### 4.6 Journal、Checkpoint 与 legacy
+
+- Journal append 与 reducer transition 有稳定 seq/idempotency key。
+- Checkpoint 只缓存 projection；恢复先验证 schema/hash，再重放 journal。
+- 未知 Shell/后台副作用不能猜已完成；Active Run 统一进入 `incomplete/side_effect_unknown` 并要求人工 reconciliation。Future Automation Attempt 的 `unknown` 是另一层状态，不混入 RunOutcome。
+- `RunOutcomeV2` 是 canonical outcome。
+- legacy `RunResult`、TaskState、Plan/Todo 和 UI status 只能从 canonical state 单向投影。
+- legacy adapter 失败只影响兼容展示，不能反向改变 outcome。
+
+## 5. WP1a Protocol 解环契约
+
+WP1a 只做小型兼容解环：
+
+- 创建 `@paw/protocol`；
+- `core → memory` 消失，manifest 图无环；
+- Core 不再 re-export Memory 具体实现；
+- Agent 直接依赖 Memory 实现；
+- 当前共享结构改名 `LegacyMemoryRecordV1` 与 `LegacyProjectMemoryV1`，标记 `compat/internal`；
+- `memory → core` 可暂存，完整 WP1 才负责消除；
+- 不把 Run、Plugin、Gateway、DB、filesystem 或 runtime service 类型顺势塞入 protocol。
+
+Dependency gate 必须同时检查：
+
+1. workspace manifest runtime graph 无环；
+2. production source import 与 manifest 一致，禁止 barrel/re-export 绕过；
+3. `@paw/protocol` 无 `@paw/*`、Node/Bun、DB、SDK import；
+4. Core production source 无 `@paw/memory` import；
+5. fixtures 能证明每条规则会失败。
+
+完整 WP1 只有在 `memory → core` 也消除后才完成；WP1a 不得被表述为完整 Protocol foundation。
+
+## 6. 测试与证据纪律
+
+### 6.1 Deterministic gate
+
+已有门继续覆盖：R11 验证 plain natural stop 只形成 turn boundary；R17 验证旧 verification 不覆盖新 revision；R19 验证只有 explicit candidate 才进入 readiness。新增门与 Loop v2.1 一一对应：
+
+- R21：wrong action 不清 obligation；
+- R22：unrelated successful tool 不清 obligation；
+- R23：direct test `code_failed` 关闭 direct-verification obligation，同时打开 material-repair obligation；
+- R24：resume 保持 obligation identity/revision/scope/satisfaction；
+- R25：duplicate input fact/replay 幂等；
+- R26：terminal transition 恰一次；
+- R27：v2 readiness 后 legacy VerificationGate/CompletionPolicy terminal 调用均为 0；
+- R28：legacy adapter 失败或冲突不能反向改变 outcome；
+- R29：同批前序 edit/test 全部 settle/commit 后，barrier `candidate.submit` 才生效；
+- R30：`candidate.submit` 非批末时只拒绝 candidate，其他合法调用不消失。
+
+测试必须断言 state、fact、effect、调用次数、顺序和 outcome，不能只断言 prompt 文案。
+
+### 6.2 开发十题
+
+现有固定十道 memory-off 复杂题只用于开发烟测和回归定位：
+
+- 不因失败换题；
+- 报 official resolved、false completion、invalid artifact、crash、token、调用数和时延；
+- 题集 identity 使用 `PAW_FRESH_QUALIFICATION_RULE`（`paw-fresh-qualification-v15`）；绝对门槛使用 `packages/eval/src/swe-compare/qualification.ts` 的 `PAW_QUALIFICATION_GATE`（10 个完整样本、official resolved ≥ 7、integrity violation = 0、invalid artifact = 0）；
+- P2 资格运行必须从完成代码切换后的 clean commit 重新生成同一规则 manifest，并把 manifest hash/source commit 写入结果；不得在看到成绩后修改 gate；
+- 达到上述绝对门槛前，不启动平台扩张；
+- 十题结果不得用于公开宣称“超过 Claude Code”。
+
+### 6.3 正式 Claude Code 比较
+
+正式比较必须预注册并冻结：
+
+- 更大的公共题集和样本量/效应假设；
+- 精确模型 revision、endpoint、adapter 代码/hash、全部生成参数；
+- Claude CLI 版本、可执行文件 hash、flags、settings/system config；
+- base image digest、repo commit、题面、egress、CPU/RAM、timeout、scorer；
+- `harness-isolated`（memory-off、同资源）与 `product-default` 两条赛道；
+- 每题多次独立运行，按 task/provider time block 随机化顺序；
+- timeout、crash、provider failure、invalid patch 按 ITT 进入分母；
+- primary endpoint 为 official resolved；资源与 false completion 为安全门；
+- task-clustered paired bootstrap 或匹配二项/McNemar 置信区间。
+
+公开“超过”要求 paired resolved delta 的 95% CI 下界大于 0，且 invalid/crash/false-completion 不超过预注册劣化界。wins > losses 但 CI 跨 0 只能称工程信号。
+
+## 7. 当前生效工作包
+
+### P0：文档权威收敛
+
+产出：SPEC-001 v1.1、Loop v2.1、ADR-002。
+
+完成条件：natural stop、completion authority、external rejection、WP1a 名称和执行顺序在全部现行文档中一致；ADR-002 明确 supersede ADR-001 的旧终局条款。
+
+### P1：完成并提交 WP1a
+
+按第 5 节收口 compat DTO 和更强 dependency gates，跑 protocol/core/memory/agent typecheck、cycle/import gates 和受影响 tests。单独提交，不混入 Loop 行为修改。
+
+### P2：Coding Core authority cutover
+
+按垂直切片推进：
+
+1. journal schema + pure reducer + replay；
+2. natural turn boundary；
+3. durable repair obligation；
+4. candidate.submit + readiness facts；
+5. certification facts + reducer terminal；
+6. legacy one-way projection；
+7. 旁路旧 VerificationGate/CompletionPolicy；
+8. 固定十题反复验证，不换题。
+
+完成条件：第 6.1 节全绿；同 journal replay hash 一致；v2 调用旧终局 Gate 为 0；false completed=0；invalid artifact=0；固定十题达到预注册绝对门槛。
+
+## 8. Future：统一 Task Runtime
+
+P2 达标后，提供单一 `TaskRuntime`，让 CLI/TUI/Desktop/Eval 使用相同 task/run/session/resume/approval/event contract。Desktop 不再调用 `runStubRun()` 并解析文本；CLI 提供正式 `paw run`；`stub-run` 降为测试兼容层。
+
+先实现单进程、单 worker、单 durable store。只有观测证明吞吐或并发不足，才引入多 worker、lease/CAS、Postgres event store 和 object store。
+
+## 9. Future：Automation 与渠道
+
+Automation 是 Runtime 之外的 control plane：
 
 ```text
-created -> claimed -> running
-running -> awaiting_user | candidate | incomplete | failed | aborted
-candidate -> certifying -> completed | external_pending | repair_required
-repair_required -> running
-external_pending -> completed | rejected
-claimed/running --owner lost--> unknown
+Trigger → durable Attempt → Worker → TaskRuntime → Delivery
 ```
 
-`unknown` 表示无法证明副作用是否完成，默认禁止自动重跑。只有 TaskDefinition 显式声明幂等且 RetryPolicy 允许，scheduler 才能创建新 attempt。
+- attempt 必须先落盘再 dispatch；
+- `unknown` 表示无法证明副作用，不默认自动重跑；
+- 周期任务显式选择 `pinned(version)` 或 `track_release_channel(stable|canary)`；每次 attempt 保存解析后的不可变版本；
+- delivery 与 coding completion 分事务，发送失败只重试 delivery；
+- cron-run 不得递归创建无界 cron；
+- 先 reference webhook，再飞书，再企业微信/微信。
 
-## 6. Run Kernel 规格
+平台 verifier 负责校验原始 bytes/signature 并产 `VerifiedInboundEnvelope`；Gateway 只执行“未验证不得准入”、auth、幂等、canonical actor/conversation mapping 和 routing，不实现各平台私有密码学。
 
-### 6.1 Port
+## 10. Future：插件化
 
-```ts
-interface RunKernelPorts {
-  events: EventAppendPort;
-  model: ModelPort;
-  context: ContextBuildPort;
-  tools: ToolSchedulePort;
-  control: ControlStatePort;
-  clock: ClockPort;
-}
+先以普通 TypeScript port 验证真实消费者：`ModelAdapter`、`ToolProvider`、`MemoryAdapter`，之后增加 `ChannelVerifier`、`ChannelAdapter`、`TriggerProvider`、`DeliveryAdapter`、`Evaluator`。至少有两个真实实现后才冻结 public Plugin SDK。
+
+插件必须有：
+
+- 版本化 manifest/API；
+- capabilities/permissions；
+- `activate() → disposer`；
+- run snapshot 的 acquire/release lease/ref-count；
+- draining 状态；最后 lease 释放后才能 dispose/uninstall；
+- timeout/crash/isolation/secret/sandbox contract tests。
+
+插件只能提供能力，不能获得 mutable Runtime 或 reducer 写权限。MCP 是 ToolProvider transport，不等于完整插件系统。
+
+## 11. Future：受控自进化
+
+自进化必须运行在 Paw 主 Run 之外：
+
+```text
+verified trajectories / feedback
+  → candidate
+  → redaction + provenance + license checks
+  → train/development replay
+  → untouched holdout
+  → staged diff / PR
+  → approval
+  → canary release
+  → stable or rollback
 ```
 
-Kernel 不接收 MemoryRuntime、MCPClient、filesystem、UI、channel 或 DB handle。
+复用现有 Memory governor、trace/eval 和程序记忆，不复制第二套 skill/evolution store。Hermes 式“任务后提炼 skill”可采用，但商业默认不允许 live agent 直接改生产 skill/prompt/core 并立即加载。
 
-### 6.2 单步算法
+风险级别：
 
-1. 从 durable inbox claim 一个 input；
-2. append `turn.started`；
-3. Context Port 生成 PromptSnapshot；
-4. append `model.requested`，调用 Model Port；
-5. 持久化 stream/final response；
-6. 若含工具调用，全部进入 scheduler；
-7. 每个调用必须得到 completed/failed/rejected/cancelled result；
-8. result 按模型 call order 进入 history；
-9. projector 更新 progress/task state；
-10. provider stop 且无 pending tool 时形成 turn boundary；只有明确 candidate action/readiness 才进入 candidate；
-11. terminal transition 先落事件，再向订阅者发布。
+- E0：事实/profile memory，经 Governor；
+- E1：skill/SOP，staged + replay + approval；
+- E2：tool description/prompt/context 参数，离线 holdout + canary；
+- E3：plugin/tool code，只生成 PR 并完整测试；
+- E4：kernel/authority/security，永不自动部署。
 
-### 6.3 Tool settlement
+Evolution 规格还必须定义 tenant opt-out、保留期、许可来源、删除传播、污染审计、版本固定和回滚。没有冻结 eval、artifact 和回滚点的自修改路径一律禁止。
 
-- 截断 tool arguments 不执行，返回模型可见 structured error；
-- unknown tool、schema invalid、permission denied 都必须结算；
-- parallel 调用可以并发执行，结果按原 call order commit；
-- mutation/unknown effect 默认 exclusive；
-- batch 中一个拒绝不能让其他调用静默消失；
-- `afterTool` 不能把失败改写成成功，也不能绕过 authority。
+## 12. Future：商业化与多租户
 
-### 6.4 Completion authority cutover
+多租户只在单机真实服务稳定后引入。tenant/project/user scope 必须从入口传播到 task、run、workspace、memory、artifact、secret、plugin 和 telemetry；禁止子系统重新猜 scope。目标包含 24h/72h soak、单 owner、重复事件幂等、secret 不进 prompt/memory/普通 event、越权 fail-closed 和完整 audit chain。
 
-切换完成后：
+## 13. 推荐参考与明确不照搬
 
-- provider natural stop 是 turn boundary，不自动合成 legacy `final_answer`；
-- Candidate Readiness 是 deterministic gate；
-- semantic reviewer 只负责语义发现，不拥有 tool authority；
-- v2 readiness 后不再调用 legacy VerificationGate；
-- `RunOutcomeV2` 是唯一终局 DTO；
-- legacy RunResult 只允许由 adapter 从 v2 outcome 投影，不能反向影响 v2。
+- DeepSeek Harness：借 durable event、capability seam 和 model-visible logging；不照搬 “everything is plugin” 的包规模。
+- Pi：借小 loop、顺序 tool settlement 和 pure reducer vocabulary；不把未完成的新 Harness API 当成熟实现。
+- OpenHands：借 automation sidecar/API 边界；不把 UI client 当 Agent core。
+- OpenCode：借 provider/tool adapter 经验；不采用 arbitrary mutable hooks 作为 authority。
+- Hermes：借 skills、cron、跨渠道会话和运行外 self-evolution；不采用默认自由写 skill 或 Gateway 会话拥有宿主全权限的边界。
+- EvoAgent：借 candidate、validation、holdout、fingerprint、activation/rollback gate；不照搬其窄任务指标。
 
-## 7. Durable Task State 规格
+## 14. 冻结的下一步
 
-Working Decision State 必须包含：goal、criteria、task graph、ready frontier、hypotheses、evidence、invariants、change surface、mutation revision、verification matrix、regression obligations、risks、repair obligation 和 candidate。
+严格顺序如下：
 
-Host 独占写入：tool facts、file mutation、test result、diff、external result、cost。模型只能通过 versioned decision proposal 提议 hypothesis、plan 和 next action，不能把 criterion 或 test 自行标绿。
+1. 合并本次 P0 文档契约；
+2. 收口并提交 WP1a；
+3. 在 `@paw/agent` 内实现 journal + pure ControlReducer 的最小 vertical slice；
+4. 让 provider stop 只形成 turn boundary；
+5. 持久化 repair obligation，并用 adversarial fixtures 证明无关动作不能清除；
+6. Candidate/Certification 只产事实，由 reducer 唯一终结；
+7. 旁路旧 VerificationGate/CompletionPolicy，legacy 单向投影；
+8. 固定十题达到绝对门槛；
+9. 再建设统一 TaskRuntime、Automation、reference webhook/飞书；
+10. 以真实消费者收敛 Plugin Host；
+11. 最后建设外部 Evolution Supervisor 和多租户商业化。
 
-Repair Obligation 至少绑定：
-
-```ts
-interface RepairObligation {
-  id: string;
-  createdAtRevision: number;
-  gapCode: string;
-  expectedAction:
-    | { kind: "direct_verification"; runnerFamily: string; scope: readonly string[] }
-    | { kind: "material_mutation"; affectedCriteria: readonly string[] }
-    | { kind: "evidence"; evidenceKind: string; target: string };
-  status: "open" | "satisfied" | "superseded";
-  satisfiedByEventId?: EventId;
-}
-```
-
-纯 prose、重复 read、无关成功命令不能关闭 obligation。
-
-## 8. Context Plane 规格
-
-### 8.1 ContextBlock
-
-每个 block 必须有 id、kind、sourceRef、authority、content/artifactRef、estimatedTokens、priority、protected、freshness/scope。Block content 不能混入未标来源的多域文本。
-
-### 8.2 PromptSnapshot
-
-```ts
-interface PromptSnapshot {
-  id: PromptSnapshotId;
-  runAttemptId: RunAttemptId;
-  sequence: number;
-  modelProfileHash: string;
-  contextPolicyVersion: string;
-  blocks: readonly {
-    id: string;
-    contentHash: string;
-    sourceRef: string;
-    includedTokens: number;
-    disposition: "included" | "trimmed" | "archived" | "dropped";
-    reason?: string;
-  }[];
-  toolSchemaHash: string;
-  totalEstimatedTokens: number;
-}
-```
-
-### 8.3 组装顺序
-
-1. system identity 与 immutable security/authority；
-2. user/repository instructions；
-3. durable task state 与 open obligations；
-4. selected skills；
-5. retrieved memories；
-6. relevant conversation/tool evidence；
-7. advisor hints。
-
-低 authority block 不能覆盖高 authority block。冲突必须保留来源并由 Context Policy 明确排序。
-
-### 8.4 压缩
-
-- compaction 输出是 cache/projection；
-- goal、原始用户约束、criteria、open obligation、current revision、verification facts 只能引用权威 state，不由摘要改写；
-- archive stub 必须可寻址；
-- compaction 失败退化为 prune/archive，不得使 Task 事实丢失；
-- resume 时 prompt snapshot 可重建。
-
-## 9. Memory Plane 规格
-
-### 9.1 MemoryProvider port
-
-```ts
-interface MemoryProvider {
-  retrieve(request: MemoryRetrieveRequest): Promise<MemoryInjectionPackage>;
-  proposeWrite(request: MemoryWriteProposal): Promise<MemoryProposalReceipt>;
-  recordOutcome(request: MemoryOutcome): Promise<void>;
-  health(): Promise<MemoryProviderHealth>;
-}
-```
-
-Runtime 只依赖 port。MemoryRuntimeV2 继续是默认生产 provider。
-
-### 9.2 读取
-
-检索结果必须包含 id、revision、kind、scope、source、content hash、applicability、rank evidence 和 token estimate。Context Builder 决定是否注入；Memory Provider 不直接改 message history。
-
-### 9.3 写入
-
-- foreground loop 只投递 proposal，不等待蒸馏；
-- verified success、用户明确陈述和受治理纠正可进入正式候选；
-- failed task 只能形成 trial lesson；
-- secret interception 在 proposal 和 commit 两处运行；
-- Governor 统一决定 ADD/UPDATE/INVALIDATE/NOOP；
-- provider 故障不使 coding task 失败，但必须发 health/operation event。
-
-### 9.4 程序记忆
-
-Skill 是版本化 procedure artifact，不是普通 fact。自动 skill 的发布链固定为 candidate → guard → replay/critic → staged diff → approval/promotion → registry。当前 run 固定 skill version；utility ledger 决定后续 retain/revise/deprecate，但不能静默删除用户手写 skill。
-
-## 10. Plugin SDK 规格
-
-### 10.1 Manifest
-
-manifest 必须声明 id、version、apiVersion、runtime isolation、contributions、permissions、config schema。未经声明的 contribution/permission 在 executor 处拒绝。
-
-### 10.2 Contribution types
-
-首版只允许 model_provider、tool_provider、runtime_backend、context_provider、memory_provider、channel_adapter、trigger_provider、evaluator、delivery_renderer。
-
-### 10.3 Lifecycle
-
-- activation 返回 disposer；
-- registration 归 plugin scope 所有；
-- unload 后 registry 不得残留；
-- registry rebuild 从 clean state 按确定顺序重放 contributions；
-- 一个 run 固定 PluginSnapshotId；
-- hook timeout/error policy 明确；
-- 禁止暴露任意 mutable orchestrator/context 对象。
-
-### 10.4 Isolation
-
-built-in trusted plugin 可以 in-process；第三方 filesystem/network/process/secrets 插件默认 worker/external。MCP 仅是 tool provider transport，仍受 Paw executor authority 和审计约束。
-
-## 11. Automation 规格
-
-TaskDefinition 必须包含 trigger、input template、workspace、agent/plugin snapshot、concurrency、idempotency、approval、timeout、retry、delivery、success criteria。
-
-Scheduler 只创建/claim attempt；Worker 运行 agent；Executor 执行副作用；Delivery Worker 发送结果。执行状态与发送状态分别持久化。
-
-重复 cron tick/webhook 使用 idempotency key 去重。Attempt 在 dispatch 前进入 claimed。Owner 丢失且无法证明终局时进入 unknown，默认不重跑。
-
-## 12. Gateway 与 Channel Adapter 规格
-
-Channel adapter 只负责平台事件与统一 envelope 转换。Gateway 负责签名、auth、pairing/allowlist、idempotency、conversation/thread mapping、attachment、typing/streaming 和 outbound retry。
-
-接入顺序固定：reference webhook → 飞书/Lark → 企业微信 WeCom → 可替换微信 bridge。个人微信非官方协议不得成为 core 依赖或商业默认 SLA。
-
-任务完成和消息发送分别落事件：`run.completed` 不因 `delivery.failed` 回滚；delivery retry 不创建新 coding attempt。
-
-## 13. Evolution Supervisor 规格
-
-### 13.1 数据与候选
-
-输入轨迹先做 secret/PII redaction、失败分类、repo/time split。每次 experiment 固定 dataset version、baseline artifact、target component、hypothesis、metric 和 budget。
-
-### 13.2 发布级别
-
-- E0 memory/profile：Governor；
-- E1 skill：staged + replay/test；
-- E2 tool description/prompt/context policy：offline train/dev/holdout + canary；
-- E3 plugin/tool code：PR + full tests + benchmark + human review；
-- E4 kernel/security/authority：只生成 PR，永不自动 deploy。
-
-### 13.3 Promotion
-
-候选必须通过 component constraints、deterministic replay、目标任务 eval、固定 holdout、关键回归、成本上限和安全检查。发布只影响新 run。监控触发阈值后原子回滚到已知版本。
-
-## 14. 存储、事务与恢复
-
-本地默认 SQLite event store + artifact directory；商业部署 Postgres + object store。Memory 可继续独立 Postgres，但共享 tenant/project/run IDs。
-
-Tool side effect 无法与 DB append 做全局事务，因此使用 intent/settlement：先落 `tool.call.accepted`，执行后落唯一 settlement；恢复时未 settlement 的调用进入 reconciliation，不得盲目重执行 mutation。
-
-所有 projector 带 schema version。升级失败不修改原始 log。Checkpoint 是加速缓存，删除后必须能从 event replay 恢复。
-
-## 15. 安全与多租户
-
-- tenant、project、workspace、conversation、task、run scope 从入口显式传播；
-- secret 只通过引用解析，禁止进入 prompt snapshot、memory content 和普通 event payload；
-- tool/plugin/channel/evolution 使用同一 capability decision vocabulary；
-- sandbox enforcement 在 executor，不依赖 prompt 或 UI 隐藏；
-- audit 能关联 user/channel input → task → run → model request → tool side effect → artifact/delivery；
-- benchmark gold、外部测试和未授权路径继续 fail-closed。
-
-## 16. 迁移工作包
-
-### WP0：规格与基线
-
-产出 RFC/SPEC、dependency/authority matrix、关键 deterministic trajectories。完成条件：文档与 current code 差异明确，后续每个 work package 有删除条件。
-
-### WP1：Protocol foundation
-
-1. 创建 `@paw/protocol`；
-2. 先移动 Core 与 Memory 共享的纯类型；
-3. Core 移除对具体 Memory 的 dependency/re-export；
-4. Agent 直接依赖 Memory 实现；
-5. 增加 workspace dependency-cycle gate；
-6. 保持兼容 type re-export，但不得兼容具体实现 re-export；
-7. typecheck + core/memory/agent 定向 tests。
-
-完成条件：workspace `@paw/*` 依赖图无环；Core production code 无 `@paw/memory` import；行为不变。
-
-### WP2：Kernel authority cutover
-
-实现 natural turn boundary、durable repair obligation、v2-only readiness/terminal、legacy result adapter，删除双 VerificationGate 权威。完成条件见 ADR-001 与 loop v2 deterministic/resume trajectories。
-
-### WP3：Context/Memory contract migration
-
-引入 ContextBlock/PromptSnapshot/MemoryProvider adapter；先包住现有实现，再逐步去除直接 message injection。完成条件：model-visible logged、compaction invariants、memory fail-open、on/off attribution。
-
-### WP4：Durable Task Runtime
-
-引入 Conversation/Task/RunAttempt、event store port、SQLite/Postgres implementations、lease/reconciliation；CLI/TUI/Desktop 逐步客户端化。
-
-### WP5：Plugin Host
-
-内部能力先迁移到 contribution API，再开放 project/user plugins；第三方隔离和 permission tests 同步完成。
-
-### WP6：Automation 与 Gateway
-
-先 attempt ledger/scheduler/worker/delivery，再 reference channel、飞书、企业微信。
-
-### WP7：Evolution
-
-先接现有 auto skill 计划，再做 tool description/prompt experiments；core evolution 最后。
-
-### WP8：Legacy deletion
-
-删除条件满足后移除 `@paw/core` compatibility re-exports、legacy TaskState completion owner、orchestrator memory/context direct wiring 和旧 AppState truth。不得按文件年龄批量删除。
-
-## 17. 测试与放行矩阵
-
-| 层 | 必须测试 |
-|---|---|
-| Protocol | typecheck、JSON round-trip、schema/version compatibility、dependency cycle |
-| Kernel | deterministic trajectories、tool ordering、terminal、abort、resume、repair obligation |
-| Context | prompt snapshot、budget exact edge、protected facts、compaction/replay、provider failure |
-| Memory | store/governor/outbox/retrieval/lifecycle、MemoryAgentBench、on/off attribution |
-| Plugin | load/unload/reload、snapshot pinning、permission denial、timeout/isolation |
-| Automation | duplicate trigger、claim race、worker death、unknown、idempotent retry、cancel |
-| Gateway | auth/signature、idempotency、thread mapping、attachment、delivery retry |
-| Evolution | split leakage、candidate constraints、holdout、regression reject、canary rollback |
-| Product | fixed complex tasks、SWE-bench、LoopsBench、Terminal-Bench、Claude paired comparison |
-
-CI 全量失败可以按用户要求不阻塞下一研究步骤，但任何与当前改动相关的失败必须定位并记录，不能把它当无关 CI 忽略。每次提交列出实际运行命令和未运行项。
-
-## 18. Claude Code 对比协议
-
-1. 先冻结 Paw 自身的 10 道全新 memory-off 复杂题；开发期间不更换失败题。
-2. Paw 达到绝对完成门槛后冻结 source commit、config、model endpoint/version、reasoning、timeout、network 和 scorer。
-3. Claude Code CLI 使用同一 DeepSeek V4 Flash endpoint/version；若 provider 协议能力不同，记录 adapter 差异，不暗中更换模型。
-4. 两臂从相同 base image/commit 启动，互不共享工作目录、历史或记忆。
-5. 使用 official tests/scorer；Paw 内部 completed 不算 resolved。
-6. 报每题 paired outcome、失败分类和资源，不只报平均。
-7. 调优只使用 exposed development traces；最终 holdout 一次性运行。
-8. 若 Paw 落后，先用轨迹定位 harness/kernel/context/tool 问题，提出可证伪架构假设，再改动；禁止 task-specific patch。
-
-## 19. WP1 第一切片的精确范围
-
-本次开始实施的切片只做：
-
-- 新建 `packages/protocol`；
-- 将 `MemoryRecord` 与 `ProjectMemory` 的纯 contract 移入 protocol，Memory 包 re-export 同一类型；
-- Core system prompt 改依赖 protocol 类型；
-- Agent 的 `SessionMemoryStore/loadProjectMemory/SessionMemory` 改为直接从 `@paw/memory` 导入；
-- Core 移除 Memory 具体实现 re-export 与 `@paw/memory` dependency；
-- 新增 workspace dependency cycle 检查脚本并接入一个显式命令；
-- 更新 root typecheck 以包含 protocol；
-- 不移动 Memory 当前使用的 Core token/fs/run-event utilities，不改变 runtime 行为。
-
-本切片完成时 `memory -> core` 暂时仍存在，但 `core -> memory` 已消失，因此 package cycle 被打断。后续切片再按职责把 RunEvent 移到 protocol、token 能力移到 port、fs/threat/path 工具移到 runtime/util；不能把有 IO 的实现塞进 protocol 只为追求一次性“零依赖”。
-
-## 20. 完成定义
-
-SPEC 的实现完成不等于所有文件改名，而是：目标不变量在代码、测试、运行轨迹和部署中同时成立；旧权威与兼容层按删除条件消失；Paw 在固定公共和真实任务上先独立可靠，再在同一 DeepSeek V4 Flash 下对 Claude Code CLI 取得可复现的 paired 优势；记忆、企业渠道、自动化和受控自进化在长时间运行中不牺牲正确性、安全和可恢复性。
+任何阶段都不得用增加 prompt nudge、扩大 token/step 预算、换失败题、benchmark 特判或提前搭建大平台来代替当前阶段的可证伪完成条件。

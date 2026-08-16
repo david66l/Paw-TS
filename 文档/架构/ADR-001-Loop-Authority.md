@@ -1,8 +1,10 @@
-# ADR-001：Agent Loop 单一权威边界
+# ADR-001：Agent Loop 行为与安全权威边界
 
-- 状态：Accepted，按 `v1 → v2-shadow → explicit-v2` 渐进迁移
+- 状态：Accepted（Completion/terminal 条款已由 ADR-002 取代）
 - 日期：2026-08-15
 - 代码契约：`packages/agent/src/loop-authority.ts`
+
+> 本 ADR 继续约束 Safety、Effect、Evidence 与 Behavior Advisor 的权限；关于 candidate、certification、natural stop 和最终状态转换，以 `ADR-002-Run-Completion-and-Certification-Authority.md` 为唯一准则。
 
 ## 背景
 
@@ -20,8 +22,8 @@ Loop 中每类判断只有一个权限域：
 | Effect executor | 执行工具并结算真实结果/副作用 | 仅执行既有 safety 决策 | 否 |
 | Evidence projector | 从宿主事件投影 mutation、test、acceptance、artifact 等事实 | 否 | 否 |
 | Behavior advisor | 重复调用、调查过久、建议编辑/验证/收尾 | 否 | 否 |
-| Semantic reviewer | 对绑定当前 candidate/diff/evidence 的语义风险作 veto/feedback | 否 | 只能拒绝候选，不能证明测试通过 |
-| Completion policy | 汇总当前 evidence、acceptance、verification、review 与 lifecycle terminal | 否 | 是，唯一终局权威 |
+| Semantic reviewer | 产绑定 candidate/revision/diff/evidence 的 blocking/warning finding | 否 | 否；不得拒绝候选或写 terminal，Reducer 按 finding 转换状态 |
+| Legacy CompletionPolicy | 迁移期把 canonical outcome 投影为旧 `RunResult` | 否 | 否；终局权威见 ADR-002 |
 
 `Plan`、`Todo` 是工作组织投影，不是完成事实；`Acceptance` 是由用户/仓库/外部验收来源建立、并绑定当前 revision 证据的事实门。两者不得混同。maxSteps、用户中断和 runtime failure 属于宿主 lifecycle terminal，不属于行为 advisor。
 
@@ -35,7 +37,7 @@ Loop 中每类判断只有一个权限域：
    - idle fuse 可生成恢复建议和计数，但不得提前终止；
    - 模型维护的 Plan/Todo 即使陈旧，也不得否决由事实门认证的 completion；同时不得为了让 UI 好看而把 model-authored pending plan 自动涂绿；
    - safety/effect/approval、Acceptance、当前 revision Verification、candidate readiness/semantic review 和 maxSteps 继续 fail closed。
-4. explicit-v2 的终局仍由现有 `CompletionPolicy` 映射公共 `RunResult`。loop-v2 terminal/cutover artifact 是严格证据和迁移对照，不允许另一组件从自然语言重新计算终局。
+4. explicit-v2 的终局由 ADR-002 的纯 `ControlReducer` 唯一生成；现有 `CompletionPolicy` 只能单向映射公共 `RunResult`，不允许从自然语言或 legacy state 重新计算并反写终局。
 
 代码中的版本化 `LoopAuthorityPolicyV1` 是上述表格的机器可检查入口。生产分支只能根据该策略启停 legacy 行为控制，不能再散落 `kernel === v2` 的例外补丁。
 
@@ -53,6 +55,6 @@ Loop 中每类判断只有一个权限域：
 1. v1/v2-shadow 行为不变；
 2. explicit-v2 在 edit 后的普通 read 不被 legacy convergence 拒绝；
 3. explicit-v2 的 model-authored pending plan 不阻断只读完成，也不被自动标绿；
-4. 既有 convergence、CompletionPolicy、explicit-v2 ordered tool commit 回归全绿。
+4. 既有 convergence characterization、CompletionPolicy 单向兼容投影、explicit-v2 ordered tool commit 回归全绿。
 
-后续 StatusSnapshot/TaskGraph/durable waiting 都必须服从本 ADR：新增状态只投影事实或提供建议，不能悄悄成为第二套 completion authority。冻结开发题和公开 benchmark 恢复后，必须分别统计 legacy tool-block 次数、无增量轮次、resolved、token 和时间；只有 explicit-v2 没有能力回退才逐项删除 v1 guard。
+后续 StatusSnapshot/TaskGraph/durable waiting 都必须同时服从本 ADR 与 ADR-002：新增状态只投影事实或提供建议，不能悄悄成为第二套 completion authority。冻结开发题和公开 benchmark 恢复后，必须分别统计 legacy tool-block 次数、无增量轮次、resolved、token 和时间；只有 explicit-v2 没有能力回退才逐项删除 v1 guard。

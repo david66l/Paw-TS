@@ -1,10 +1,14 @@
 # RFC-002：Paw 真实场景 Coding Agent Platform 目标架构
 
-> 状态：Proposed
+> 状态：Proposed Long-term Blueprint（非当前实施清单）
 > 日期：2026-08-16
 > 决策范围：Paw 从单机 coding agent 演进为可长期运行、可自动化、可接入企业渠道、可受控自进化的 agent platform
-> 前置决策：`ADR-001-Loop-Authority.md`、`coding-agent-loop-kernel-v2.md`
-> 当前代码基线：`paw-ts@8f185c65f21fe92597d4bb1b11e46d4c0880b3a4`
+> 当前生效范围：以 `SPEC-001-Paw-Platform-Refactor.md` v1.1 的 Active 工作包为准
+> 权威决策：`ADR-001-Loop-Authority.md`、`ADR-002-Run-Completion-and-Certification-Authority.md`
+> Loop 契约：`coding-agent-loop-kernel-v2.md` v2.1
+> 当前代码基线：`main@07e92bf` 加未提交 WP1a 工作树
+
+本 RFC 只定义终局方向与长期边界。它不把 Plugin Host、Automation、Gateway、多租户或 Evolution 同时设为当前 `MUST`，也不取代 SPEC 的阶段放行条件。
 
 ## 1. 一句话结论
 
@@ -264,7 +268,7 @@ interface ContextBlock {
 }
 ```
 
-Context Builder 是模型可见内容的唯一注入点。每次请求落一条 `prompt.snapshot` 事件，至少记录 block IDs、内容 hashes、顺序、预算、裁剪/降级原因和最终 tool schema hash。重放不必永久保存重复全文，但必须能通过 event/artifact refs 重建模型实际看到的内容。
+Context Builder 是模型可见内容的唯一注入点。每次请求落一条 `prompt.snapshot` 事件，保存或以内容寻址 artifact 引用最终 rendered request、完整 tool schemas、response format、模型精确 revision 与全部生成/reasoning 参数，以及 adapter 名称、版本/hash；同时记录 block IDs、内容 hashes、顺序、预算和裁剪/降级原因。只保存 tool schema hash 或若干 context block hash 不足以重建模型实际看到的请求。
 
 现有机制按下列方式保留：
 
@@ -376,6 +380,7 @@ interface PawPluginManifest {
 - `activate(ctx)` 返回 disposer；卸载后所有注册必须消失；
 - project、user、built-in 三层 discovery，优先级与冲突规则确定；
 - 配置变更构建新 registry snapshot，当前 run 固定使用创建时 snapshot；
+- 每个 live run 对 snapshot/plugin version 持有 lease/ref-count；卸载先进入 draining、拒绝新 run，最后一个 lease 释放后才可 dispose 和删除；
 - plugin upgrade 只影响新 run，不修改当前模型可见 prompt/tool schema；
 - 插件 API 做 semver/compatibility preflight；不兼容时 fail loud，不静默跳过。
 
@@ -390,7 +395,7 @@ interface PawPluginManifest {
 每个平台先转换成统一入站事件：
 
 ```ts
-interface InboundEnvelope {
+interface VerifiedInboundEnvelope {
   tenantId: string;
   channel: string;
   accountId: string;
@@ -404,7 +409,7 @@ interface InboundEnvelope {
 }
 ```
 
-Gateway 负责：签名校验、用户/群授权、幂等、conversation mapping、附件归档、typing/streaming、审批卡片、outbound retry。Agent 只看到可信 user event 和 channel capability，不知道飞书 SDK 类型。
+平台专用 verifier 负责对原始 bytes、headers、timestamp/nonce 和 signature 做校验，成功后才生成 `VerifiedInboundEnvelope`。Gateway 不实现飞书/微信私有密码学，只执行“未验证不得准入”、用户/群授权、幂等、canonical actor/conversation mapping、附件归档、typing/streaming、审批卡片和 outbound retry。Agent 只看到可信 user event 和 channel capability，不知道平台 SDK 类型。
 
 ### 11.2 接入顺序
 
@@ -423,6 +428,7 @@ Gateway 负责：签名校验、用户/群授权、幂等、conversation mapping
 
 - trigger：cron、webhook、manual、repository event；
 - agent profile 与 plugin snapshot；
+- 更新策略：`pinned(version)` 或 `track_release_channel(stable|canary)`；每个 attempt 保存解析后的不可变版本；
 - workspace/runtime target；
 - input template 与 secrets refs；
 - concurrency/idempotency policy；
@@ -520,14 +526,15 @@ API/Gateway replicas
 
 放行条件：目标依赖图和 legacy 删除条件明确；当前关键 loop tests/trace 可复现。
 
-### Phase 1：抽取 `@paw/protocol`，打断 `core ↔ memory`
+### Phase 1：小步解除 `core ↔ memory` 包环
 
-- 移出 RunSpec/Outcome、events、IDs、scope、tool/model/provider port types；
-- `memory` 只依赖 protocol/自身接口；
-- `core` 通过 MemoryProvider port 使用记忆，不再 re-export 具体实现；
-- 加 workspace dependency cycle gate。
+- WP1a 只创建极小 `@paw/protocol` compat DTO，先消除 `core → memory`；
+- compat 类型命名为 `LegacyMemoryRecordV1` / `LegacyProjectMemoryV1`，不冻结成公共平台协议；
+- dependency gate 同时检查 manifest cycle、production source import 和 protocol 零依赖；
+- WP1b 再通过 Memory port 消除 `memory → core`，此时才算完整解环；
+- RunSpec/Outcome、events、tool/model/provider ports 只在真实跨进程消费者出现且契约稳定后逐项进入 protocol。
 
-放行条件：依赖图无环；运行行为不变；memory/agent/core 定向测试全绿。
+WP1a 放行条件：manifest 图无环、Core source 无 Memory import、Protocol 零生产依赖、运行行为不变、protocol/memory/agent/core 定向测试全绿。完整 Phase 1 还要求 `memory → core` 消失。
 
 ### Phase 2：Loop v2 成为唯一 Run Kernel
 
@@ -537,44 +544,45 @@ API/Gateway replicas
 - TaskState/CompletionPolicy 变为兼容 projector，随后删除；
 - tool settlement、resume 与 terminal 全从单一 event stream 重放。
 
-放行条件：ADR-001 authority matrix 与生产一致；crash/resume deterministic；固定复杂题能自然 mutation → verify → candidate。
+放行条件：ADR-001/ADR-002 authority matrix 与生产一致；crash/resume deterministic；固定复杂题能自然 mutation → verify → explicit candidate；v2 路径旧 VerificationGate/CompletionPolicy terminal 调用为 0。
 
 ### Phase 3：Runtime service 与 durable task model
 
 - 引入 Conversation/Task/RunAttempt；
-- event store abstraction，SQLite local/Postgres production；
-- lease/CAS/attempt/unknown 语义；
+- 先落一个单进程、单 worker、单 durable store 的本地实现；
+- event store port 只覆盖当前消费者，不同时实现 SQLite/Postgres 双栈；
+- attempt/unknown 语义先成立；只有观测证明并发需求后才增加 lease/CAS、多 worker、Postgres/object store；
 - CLI/TUI/Desktop 逐步改为 runtime client；
 - orchestrator 拆成 composition root 和独立 services。
 
-放行条件：同一 run 可在进程重启后续跑；两个 worker 不会重复拥有 attempt；delivery 与 completion 可独立恢复。
+放行条件：同一 run 可在进程重启后续跑；单 worker 不重复执行 attempt；delivery 与 completion 可独立恢复。多 worker owner/lease 是条件性后续 gate，不阻塞本阶段。
 
-### Phase 4：Plugin SDK 与 Host
-
-- manifest、permissions、lifecycle、registry snapshot、compatibility preflight；
-- 先把 built-in model/tool/MCP/context/memory 通过内部 adapter 接到相同贡献点；
-- project/user plugin discovery；
-- third-party isolation。
-
-放行条件：插件加载/卸载无残留；当前 run snapshot 不受热更新影响；越权被 executor 拒绝。
-
-### Phase 5：Automation
+### Phase 4：Automation 与 reference webhook
 
 - Task Definition、scheduler、attempt ledger、worker、delivery；
 - manual/webhook/cron 三种 trigger；
 - cancel/resume/retry/idempotency；
+- reference webhook 只使用普通内部 adapter，先验证 verifier/envelope/delivery contract；
 - 自动化 UI/API 后接。
 
 放行条件：crash、重复 tick、重复 webhook、delivery failure 和 unknown attempt 夹具全绿。
 
-### Phase 6：Gateway 与渠道
+### Phase 5：正式 Gateway 渠道
 
-- reference webhook adapter；
-- 飞书插件；
-- 企业微信插件；
+- 飞书 adapter/verifier；
+- 企业微信/微信 adapter/verifier；
 - approval card、attachment、thread、streaming capability tests。
 
-放行条件：channel contract tests、幂等、安全和 session isolation 全绿；平台故障不影响 task truth。
+放行条件：channel contract tests、验签、幂等、安全和 session isolation 全绿；平台故障不影响 task truth。
+
+### Phase 6：从真实消费者收敛 Plugin SDK 与 Host
+
+- 把已投入使用的 model/tool/memory/verifier/channel/trigger/delivery adapter 收敛为 typed ports；
+- 至少两个真实实现后再冻结 manifest、permissions、lifecycle、registry snapshot 与 compatibility preflight；
+- project/user plugin discovery；
+- snapshot lease/ref-count 和 third-party isolation。
+
+放行条件：插件加载/卸载无残留；当前 run snapshot 不受热更新影响；越权被 executor 拒绝。
 
 ### Phase 7：Evolution Supervisor
 
@@ -589,11 +597,11 @@ API/Gateway replicas
 
 下一步不做飞书，也不立刻创建完整 daemon。第一切片固定为：
 
-> **建立 `@paw/protocol`，打断 `@paw/core ↔ @paw/memory` 包环，并增加 dependency-cycle gate；不改变用户可见行为。**
+> **完成 WP1a：建立极小 `@paw/protocol` compat 层，先消除 `@paw/core → @paw/memory`，并增加 manifest/source/protocol dependency gates；不改变用户可见行为。**
 
 选择它的原因：
 
-- 它是后续 kernel/runtime/plugin/gateway 都需要的零依赖地基；
+- 它先提供解环所需的零依赖 compat 地基，但不预先承诺未来全部公共协议；
 - 风险可通过 typecheck 和现有测试完整约束；
 - 不会把新架构继续绑在旧 core/memory 环上；
 - 失败时可单 commit 回滚，不影响当前 benchmark 基线；
@@ -660,12 +668,12 @@ API/Gateway replicas
 
 若本 RFC 获得接受，Paw 的近期主线从“继续给现有 AgentOrchestrator 加能力”改为：
 
-1. 协议与依赖解环；
-2. Loop v2 单一权威切换；
-3. durable runtime/task service；
-4. plugin host；
-5. automation；
-6. gateway/channel；
+1. 先合并 SPEC v1.1、Loop v2.1 与 ADR-002 的 P0 契约；
+2. 完成 WP1a compat 解环和更强 dependency gates；
+3. Loop v2.1 单一权威切换；
+4. durable runtime/task service；
+5. automation 与 reference channel；
+6. 由真实消费者收敛 plugin host；
 7. controlled evolution。
 
 每阶段都保持可运行产品、记录详细日志、完成定向验证、单独提交并推送。任何大型删除只在替代路径已经运行并通过同一 contract tests 后进行。
