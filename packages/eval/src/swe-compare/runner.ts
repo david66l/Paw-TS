@@ -66,7 +66,10 @@ import { buildSweCompareGoal } from "./goal.js";
 import { PAW_FRESH_QUALIFICATION_RULE } from "./manifest.js";
 import { persistOnlineLoopV2ShadowArtifact } from "./shadow-replay.js";
 import type { SweCompareManifest } from "./types.js";
-import { assertPawVerificationEnvironmentReady } from "./verification-environment.js";
+import {
+  assertPawVerificationEnvironmentReady,
+  seedWorkspaceFromInstanceImage,
+} from "./verification-environment.js";
 
 export type SweCompareRunnerName = "paw" | "claude";
 
@@ -2305,6 +2308,16 @@ export async function runSweCompareArm(opts: {
   const workspace = resumed
     ? { root: resumed.workspaceRoot, cleanup: () => {} }
     : createCommitWorktree(gitRoot, probe.base_commit, runId.slice(0, 60));
+  if (!resumed && instanceImageSandbox) {
+    // 官方镜像 /testbed 含 build 期生成文件（editable 安装产物、编译扩展），
+    // 新鲜 git checkout 没有；不回填则测试 runner 可能根本无法 import，
+    // 直接验证在环境上不可满足（见 paw-pytest-dev__pytest-7521）。
+    seedWorkspaceFromInstanceImage({
+      image: instanceImageSandbox.image,
+      workspaceRoot: workspace.root,
+      label: runId.slice(0, 40),
+    });
+  }
   const started = resumed?.startedAt ?? new Date();
   if (!resumed) {
     const attempt: SweCompareRunAttempt = {
