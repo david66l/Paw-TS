@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  PAW_QUALIFICATION_LOOP_KERNEL,
   findPawResumeInstanceId,
   loadPawQualificationResults,
   runSweCompareArm,
@@ -67,6 +68,7 @@ const result = resumeRunId
       manifestPath,
       instanceId,
       runner: "paw",
+      loopKernelVersion: PAW_QUALIFICATION_LOOP_KERNEL,
       resumeRunId,
     })
   : retryResult && before.verificationErrorInstanceIds.includes(instanceId)
@@ -91,6 +93,7 @@ const result = resumeRunId
         manifestPath,
         instanceId,
         runner: "paw",
+        loopKernelVersion: PAW_QUALIFICATION_LOOP_KERNEL,
       });
 const after = summarizePawQualification(
   manifest,

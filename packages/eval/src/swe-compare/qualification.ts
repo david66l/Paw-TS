@@ -14,6 +14,9 @@ export const PAW_QUALIFICATION_GATE = {
   maxInvalidArtifacts: 0,
 } as const;
 
+/** The frozen Paw qualification measures the authoritative Loop v2 path. */
+export const PAW_QUALIFICATION_LOOP_KERNEL = "v2" as const;
+
 export interface PawQualificationSummary {
   readonly gateVersion: typeof PAW_QUALIFICATION_GATE.version;
   readonly state: "in_progress" | "passed" | "failed";
@@ -46,6 +49,7 @@ export function summarizePawQualification(
   for (const result of results) {
     if (
       result.runner !== "paw" ||
+      result.loopKernelVersion !== PAW_QUALIFICATION_LOOP_KERNEL ||
       result.sourceCommit !== manifest.sourceTree.gitCommit ||
       !selected.has(result.instanceId)
     ) {
@@ -138,6 +142,7 @@ export function loadPawQualificationResults(
     }
     if (
       result.runner === "paw" &&
+      result.loopKernelVersion === PAW_QUALIFICATION_LOOP_KERNEL &&
       result.sourceCommit === manifest.sourceTree.gitCommit &&
       selected.has(result.instanceId)
     ) {

@@ -76,6 +76,7 @@ export {
 } from "./verification-environment.js";
 export {
   PAW_QUALIFICATION_GATE,
+  PAW_QUALIFICATION_LOOP_KERNEL,
   loadPawQualificationResults,
   summarizePawQualification,
   type PawQualificationSummary,

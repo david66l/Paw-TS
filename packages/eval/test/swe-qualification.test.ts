@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { PAW_FRESH_QUALIFICATION_RULE } from "../src/swe-compare/manifest.js";
 import {
   PAW_QUALIFICATION_GATE,
+  PAW_QUALIFICATION_LOOP_KERNEL,
   summarizePawQualification,
 } from "../src/swe-compare/qualification.js";
 import type { SweCompareRunResult } from "../src/swe-compare/runner.js";
@@ -27,6 +28,7 @@ function result(index: number, resolved: boolean): SweCompareRunResult {
     schemaVersion: 1,
     runId: `run-${index}`,
     runner: "paw",
+    loopKernelVersion: PAW_QUALIFICATION_LOOP_KERNEL,
     instanceId: ids[index] ?? `missing-${index}`,
     sourceCommit: "frozen-commit",
     startedAt: "2026-08-14T00:00:00.000Z",
@@ -80,6 +82,14 @@ describe("Paw qualification batch gate", () => {
     expect(() =>
       summarizePawQualification(manifest, [result(0, true), result(0, false)]),
     ).toThrow("duplicate qualification sample");
+  });
+
+  test("rejects old-loop results instead of mixing them into the v2 batch", () => {
+    expect(() =>
+      summarizePawQualification(manifest, [
+        { ...result(0, true), loopKernelVersion: "v1" },
+      ]),
+    ).toThrow("result is outside the frozen batch");
   });
 
   test("keeps a harness error pending so the persisted patch can be reverified", () => {
