@@ -368,7 +368,7 @@ export function createSweCompareToolExecutionPolicy(input: {
             reason: violation,
             message:
               violation === "outside_workspace_filesystem_probe"
-                ? "Public benchmark shell commands must stay inside the mounted task workspace. Do not enumerate the container root, installed packages, caches, harness data, or possible answer artifacts; reason from the checked-out repository and its existing tests."
+                ? "Public benchmark shell commands must not run broad recursive scans (find/fd) over the container root or system directories hunting for answer artifacts; reason from the checked-out repository and its existing tests."
                 : "This public benchmark forbids network, installed future source, and benchmark answer data. Work only from the frozen repository and its existing tests.",
           };
         }
@@ -1996,15 +1996,25 @@ export function sweCompareLocalGoldViolation(
   return undefined;
 }
 
-/** Keep benchmark shell discovery inside the mounted repository identity. */
+/**
+ * Keep benchmark shell discovery inside the mounted repository identity.
+ *
+ * Only broad recursive scans (find/fd rooted at the container root or system
+ * directories) are treated as answer hunting. Targeted reads or scratch files
+ * under system paths cannot reach benchmark answers in this sandbox: only the
+ * task workspace is mounted, /tmp is a private tmpfs per run, and answer data
+ * is matched by name anywhere via sweCompareLocalGoldViolation. Official
+ * SWE-bench imposes no agent-behavior rules of its own; the network allowlist
+ * remains the hard exfiltration boundary. Refined 2026-08-16 after run
+ * claude-pydata__xarray-4966-msvmxevv was fail-closed for benign `ls
+ * /opt/miniconda3/envs` and /tmp scratch-test writes.
+ */
 export function sweCompareFilesystemScopeViolation(
   command: string,
 ): "outside_workspace_filesystem_probe" | undefined {
   const broadFind =
     /\b(?:find|fd)\s+(?:["']?\/(?:opt|root|tmp|usr|var|home|etc|proc|sys)(?:[\\/"'\s]|$)|["']?\/["']?(?:\s|$))/i;
-  const broadRead =
-    /\b(?:ls|dir|rg|grep|cat|sed|head|tail)\b[^\r\n]*(?:^|[\s"'])(?:\/(?:opt|root|tmp|usr|var|home|etc)(?:[\\/\s"']|$))/i;
-  return broadFind.test(command) || broadRead.test(command)
+  return broadFind.test(command)
     ? "outside_workspace_filesystem_probe"
     : undefined;
 }

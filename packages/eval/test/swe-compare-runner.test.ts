@@ -423,7 +423,11 @@ describe("SWE compare runner", () => {
         {
           text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
         },
-        { text: "Implemented and verified." },
+        // 36I natural-stop 收权后，自由文本不再构成完成；fixture 改为显式
+        // final_answer（与 agent 侧迁移一致，此前漏改导致本测试失配）。
+        {
+          text: '{"action":"final_answer","summary":"Implemented and verified."}',
+        },
       ],
     });
     const reviewModel: LanguageModel = {
@@ -1592,6 +1596,23 @@ describe("SWE compare runner", () => {
     expect(
       sweCompareFilesystemScopeViolation(
         "find /testbed/sympy -name '*.py' -maxdepth 3",
+      ),
+    ).toBeUndefined();
+    // 2026-08-16 收窄：定向读取系统目录与 /tmp 草稿写入不再作废样本
+    // （msvmxevv 真实轨迹：conda 环境枚举、容器内私有 tmpfs 草稿测试）
+    expect(
+      sweCompareFilesystemScopeViolation(
+        "conda env list 2>/dev/null; ls /opt/miniconda3/envs 2>/dev/null",
+      ),
+    ).toBeUndefined();
+    expect(
+      sweCompareFilesystemScopeViolation(
+        "cat > /tmp/test_ext_sim.py <<'EOF'\nprint('scratch')\nEOF",
+      ),
+    ).toBeUndefined();
+    expect(
+      sweCompareFilesystemScopeViolation(
+        "sed -i 's/a/b/' /tmp/test_ext_sim.py",
       ),
     ).toBeUndefined();
     expect(
