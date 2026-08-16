@@ -362,9 +362,12 @@ function captureExplicitFileDiff(
     }
     const oldName = baseline.ok ? `a/${normalized}` : "/dev/null";
     const newName = currentExists ? `b/${normalized}` : "/dev/null";
+    // 不得 trim：hunk 尾部的空上下文行是单个空格行，trim 会吞掉它并使
+    // hunk 头声明的行数与正文不符——GNU patch 严格解析即 malformed
+    // （paw-sympy__sympy-20438-msw0l7uj 官方 Patch Apply Failed 根因）。
     const patch = formatPatch(
       structuredPatch(oldName, newName, original, normalizedCurrent, "", ""),
-    ).trim();
+    );
     parts.push(`diff --git a/${normalized} b/${normalized}\n${patch}`);
   }
   return { diff: parts.join("\n") };

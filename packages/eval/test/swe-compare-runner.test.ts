@@ -1835,6 +1835,58 @@ describe("SWE compare runner", () => {
     expect(captured.diff).toContain("+value = 2");
   });
 
+  test("explicit patch with trailing blank context stays applicable (sympy-20438 regression)", () => {
+    // msw0l7uj 根因：编辑区紧邻空行时，hunk 尾部上下文是单个空格行；
+    // 生成后 trim 会吞掉它，hunk 头行数与正文不符 → GNU patch malformed。
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-blank-ctx-diff-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "eval@example.test"]);
+    git(root, ["config", "user.name", "Eval"]);
+    mkdirSync(path.join(root, "sympy"), { recursive: true });
+    // 复刻 comparison.py 的形状：修改区后面紧跟空行 + 后续代码 + 文件尾空行
+    const baseLines = ["def a():", "    return 1", "", "", "def b():", "    return 2", ""];
+    const newLines = [
+      "def a():",
+      "    return 1",
+      "",
+      "",
+      "@new_decorator",
+      "def extra():",
+      "    return 3",
+      "",
+      "",
+      "def b():",
+      "    return 2",
+      "",
+    ];
+    writeFileSync(
+      path.join(root, "sympy", "handlers.py"),
+      `${baseLines.join("\n")}\n`,
+      "utf8",
+    );
+    git(root, ["add", "sympy/handlers.py"]);
+    git(root, ["commit", "-m", "base"]);
+    writeFileSync(
+      path.join(root, "sympy", "handlers.py"),
+      `${newLines.join("\n")}\n`,
+      "utf8",
+    );
+    const captured = captureGitDiff(root, ["sympy/handlers.py"]);
+    expect(captured.error).toBeUndefined();
+    // 终极判定：git apply --check 必须接受这份补丁（trim 版会 malformed）
+    git(root, ["checkout", "--", "sympy/handlers.py"]);
+    const apply = spawnSync(
+      "git",
+      ["apply", "--check", "--whitespace=nowarn", "-"],
+      {
+        cwd: root,
+        input: Buffer.from(captured.diff ?? "", "utf8"),
+        encoding: "utf8",
+      },
+    );
+    expect(apply.status).toBe(0);
+  });
+
   test("explicit patch capture ignores checkout-only CRLF conversion", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-crlf-diff-"));
     git(root, ["init"]);
