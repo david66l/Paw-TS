@@ -220,6 +220,12 @@ import {
   goalAllowsSkipVerification,
   goalRequiresMutation,
 } from "./lifecycle/verification-gate.js";
+import type { TestMapV1 } from "./loop-v2/test-map.js";
+import { buildTestMapV1, findImpactedTests } from "./loop-v2/test-map.js";
+import {
+  preFlightTestInfrastructure,
+  verifyImpactedTests,
+} from "./loop-v2/test-warden.js";
 import { ManagedJobControllerV1 } from "./managed-job-controller.js";
 import {
   observationProvenanceForToolV1,
@@ -267,6 +273,8 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[LoopV2Readiness:",
   "[LoopV2SemanticReview:",
   "[ProgressAdvice:",
+  "[TestWarden]",
+  "[ImpactedTests]",
   "[Managed jobs are unfinished:",
   "[Managed job recovery v1]",
   "[Continue from where you were cut off",
@@ -1001,6 +1009,26 @@ export class AgentOrchestrator {
       // ═══ 主循环：ReAct 循环的核心 ═══
       // 每轮 = 一次完整的 model → parse → action → feedback 周期
       let progressBaseline: ProgressBaselineV1 | undefined;
+      // 测试守卫：惰性构建的代码-测试依赖图 + 上次验证的 revision
+      let testWardenMap: TestMapV1 | undefined;
+      let lastVerifiedRevision = -1;
+      // Layer 1：开工安检（基线验证测试基础设施可执行）
+      if (this.loopKernelVersion === "v2") {
+        try {
+          const preFlight = preFlightTestInfrastructure({
+            workspaceRoot,
+            ...(this.shellSandbox ? { shellSandbox: this.shellSandbox } : {}),
+          });
+          if (preFlight.note) {
+            ctxMgr.addUser(preFlight.note);
+          }
+          if (preFlight.runnerExecutable) {
+            testWardenMap = buildTestMapV1(workspaceRoot);
+          }
+        } catch {
+          // 测试守卫 best-effort；构建失败不阻塞运行。
+        }
+      }
       for (let turn = startTurn; turn < maxSteps; turn++) {
         // Loop v2.1 §8.3 停滞阶梯：无产品级进展的回合差达到版本化阈值时注入
         // 事实建议（含可并行派发只读调查员的接口事实）。advice-only，不拦截。
@@ -1015,6 +1043,26 @@ export class AgentOrchestrator {
           progressBaseline = stall.baseline;
           if (stall.message) {
             ctxMgr.addUser(stall.message);
+          }
+        }
+        // 测试守卫 Layer 2：mutation revision 增长时确定性执行受影响测试
+        if (this.loopKernelVersion === "v2" && testWardenMap) {
+          const snap = taskState.snapshot();
+          const currentRevision = snap.mutationRevision ?? 0;
+          if (currentRevision > lastVerifiedRevision) {
+            const changed = snap.filesChanged;
+            if (changed.length > 0) {
+              const wardenResult = verifyImpactedTests({
+                workspaceRoot,
+                changedFiles: changed,
+                ...(this.shellSandbox
+                  ? { shellSandbox: this.shellSandbox }
+                  : {}),
+                testMap: testWardenMap,
+              });
+              ctxMgr.addUser(wardenResult.renderedSummary);
+            }
+            lastVerifiedRevision = currentRevision;
           }
         }
         const jobRecoveryNotices = managedJobs.takeRecoveryNotices();
@@ -3983,13 +4031,22 @@ export class AgentOrchestrator {
             );
             const diff =
               typeof diffShell.stdout === "string" ? diffShell.stdout : "";
+            // Layer 3：探针地图增强——受影响测试清单喂入对抗探针
+            // （闭包内就地构建；文件扫描 <1s，与主循环的实例独立）
+            const changedFilesForProbe = taskState.snapshot().filesChanged;
+            const probeTestMap = buildTestMapV1(workspaceRoot);
+            const impactedForProbe = findImpactedTests(
+              probeTestMap,
+              changedFilesForProbe,
+            ).map((t) => t.testFile);
             const result = await runVerificationProbeOnceV2({
               model: this.loopV2VerificationProbeModel!,
               runId,
               workspaceRoot,
               goal: spec.goal,
               diff,
-              changedFiles: taskState.snapshot().filesChanged,
+              changedFiles: changedFilesForProbe,
+              ...(impactedForProbe ? { impactedTests: impactedForProbe } : {}),
               candidateInputHash: assessment.candidateInputHash,
               mutationRevision: assessment.mutationRevision,
               ...(this.shellSandbox ? { shellSandbox: this.shellSandbox } : {}),

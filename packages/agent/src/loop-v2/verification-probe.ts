@@ -72,8 +72,10 @@ export function buildVerificationProbePromptV1(input: {
   readonly goal: string;
   readonly diff: string;
   readonly changedFiles: readonly string[];
+  /** Layer 3 增强：受影响的既有测试清单（来自代码-测试依赖图）。 */
+  readonly impactedTests?: readonly string[];
 }): string {
-  const diff =
+  const diffText =
     input.diff.length > DIFF_BUDGET_CHARS
       ? `${input.diff.slice(0, DIFF_BUDGET_CHARS)}\n... (diff truncated)`
       : input.diff;
@@ -85,10 +87,21 @@ export function buildVerificationProbePromptV1(input: {
     "",
     "## Changed files",
     input.changedFiles.slice(0, 40).join(", ") || "(none)",
+    ...(input.impactedTests && input.impactedTests.length > 0
+      ? [
+          "",
+          "## Existing tests linked to the change surface (from the code-test dependency map)",
+          "These tests already exist in the repository and are linked to the files you changed. They represent known behavioral contracts — probe whether the change breaks them:",
+          ...input.impactedTests.slice(0, 8).map((t) => `- ${t}`),
+          ...(input.impactedTests.length > 8
+            ? [`(and ${input.impactedTests.length - 8} more)`]
+            : []),
+        ]
+      : []),
     "",
     "## Candidate diff",
     "```diff",
-    diff,
+    diffText,
     "```",
     "",
     "## Your mission",
@@ -258,6 +271,8 @@ export async function runVerificationProbeOnceV2(input: {
   readonly goal: string;
   readonly diff: string;
   readonly changedFiles: readonly string[];
+  /** Layer 3: impacted existing tests from the code-test dependency map. */
+  readonly impactedTests?: readonly string[];
   readonly candidateInputHash: string;
   readonly mutationRevision: number;
   readonly shellSandbox?: ShellSandboxConfig;
@@ -287,6 +302,9 @@ export async function runVerificationProbeOnceV2(input: {
           goal: input.goal,
           diff: input.diff,
           changedFiles: input.changedFiles,
+          ...(input.impactedTests
+            ? { impactedTests: input.impactedTests }
+            : {}),
         }),
       },
     ],

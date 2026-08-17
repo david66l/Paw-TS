@@ -231,6 +231,20 @@ export {
   type VerificationFailureRecordV2,
 } from "./failure-records.js";
 export {
+  buildTestMapV1,
+  extractPythonImports,
+  findImpactedTests,
+  renderImpactedTests,
+  type TestMapEntryV1,
+  type TestMapV1,
+} from "./test-map.js";
+export {
+  preFlightTestInfrastructure,
+  verifyImpactedTests,
+  type MutationVerificationResultV1,
+  type PreFlightResultV1,
+} from "./test-warden.js";
+export {
   createLoopV2ShadowObserver,
   restoreLoopV2ProjectionObserver,
   type LegacyRunEventEnvelopeV1,
