@@ -51,6 +51,29 @@ export const MEMORY_READ = "memory.read" as const;
 export const MEMORY_SAVE = "memory.save" as const;
 export const CONTEXT_RECALL = "context.recall" as const;
 
+/**
+ * 模型直接可见的核心工具集（5 个）。
+ *
+ * 参考 mini-SWE-agent 的实验证据（100 行 + bash = 74% on SWE-bench
+ * Verified vs 全功能 harness ~30%）：模型认知负担与系统提示体积是
+ * 主要瓶颈，不是工具数量本身。32 个工具的 schema 描述 + 系统提示
+ * 占 ~5,100 token，挤占实际解题空间。
+ *
+ * bash 替代 run_shell、grep、glob、search、symbol_search、lsp、
+ * git 命令、job 管理、web 工具；edit_file 合并 write_file 与
+ * apply_patch 的核心场景。其余 27 个工具保留为内部能力（子 agent、
+ * 桌面 UI、认证链直接调用），不进模型 schema。
+ *
+ * 桌面端传 allowedTools: null 可恢复全量工具 schema。
+ */
+export const CORE_MODEL_TOOLS = [
+  SHELL,
+  READ,
+  EDIT,
+  "action.final_answer",
+  "action.ask_user",
+] as const;
+
 const BUILTIN_TOOLS = [
   READ,
   LIST,

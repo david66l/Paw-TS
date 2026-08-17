@@ -4,6 +4,7 @@ export {
   toolNameReverseMap,
   toolDefinitions,
   toolCatalogText,
+  CORE_MODEL_TOOLS,
   CONTEXT_RECALL,
   ACCEPTANCE_UPDATE,
   JOB_START,

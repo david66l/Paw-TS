@@ -135,6 +135,7 @@ import {
 // @paw/harness：执行层 — MCP 客户端、工具定义、Shell 沙箱
 // ─────────────────────────────────────────────────────────────
 import {
+  CORE_MODEL_TOOLS,
   McpClientManager,
   type McpServerConfig,
   type SubAgentLauncher,
@@ -724,9 +725,16 @@ export class AgentOrchestrator {
     toolNameMap: Map<string, string>,
   ): readonly import("@paw/models").ToolDefinition[] {
     if (!this.allowedTools || this.allowedTools.length === 0) {
-      // null = inherit 全量；空数组不合法，当全量
+      // null = inherit 全量（桌面端/子 agent 明确指定）
       if (this.allowedTools === null) return toolDefs;
-      if (this.allowedTools === undefined) return toolDefs;
+      // undefined = 未指定 → 默认核心 5 工具（v2 优化：降低模型认知负担）
+      if (this.allowedTools === undefined) {
+        const core = new Set<string>(CORE_MODEL_TOOLS);
+        return toolDefs.filter((d) => {
+          const orig = toolNameMap.get(d.function.name) ?? d.function.name;
+          return core.has(orig);
+        });
+      }
     }
     const allow = new Set(this.allowedTools);
     return toolDefs.filter((d) => {

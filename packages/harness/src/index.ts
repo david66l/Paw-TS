@@ -74,6 +74,7 @@ export {
   toolDefinitions,
   toolNameReverseMap,
   toolRequiresApproval,
+  CORE_MODEL_TOOLS,
   CONTEXT_RECALL,
   ACCEPTANCE_UPDATE,
   JOB_START,

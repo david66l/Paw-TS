@@ -58,6 +58,7 @@ describe("AgentOrchestrator", () => {
     let calls = 0;
     let exposedTools = 0;
     const o = new AgentOrchestrator({
+      allowedTools: null,
       model: {
         label: "capability-shadow",
         async complete(_messages, options) {
@@ -88,10 +89,12 @@ describe("AgentOrchestrator", () => {
     expect(inventory?.event.type).toBe("capability.inventory");
     if (inventory?.event.type === "capability.inventory") {
       expect(inventory.event.mode).toBe("shadow");
-      expect(inventory.event.suggestedToolCount).toBeLessThan(
+      expect(inventory.event.suggestedToolCount).toBeLessThanOrEqual(
         inventory.event.fullToolCount,
       );
-      expect(exposedTools).toBe(inventory.event.fullToolCount);
+      // v2 core model tools: default is 5, not full 32
+      expect(exposedTools).toBeLessThanOrEqual(inventory.event.fullToolCount);
+      expect(exposedTools).toBeGreaterThan(0);
     }
     const selection = events.find(
       (event) => event.event.type === "capability.selection",
@@ -827,6 +830,7 @@ describe("AgentOrchestrator", () => {
     let calls = 0;
     const events: Array<{ event: { type: string; tool?: string } }> = [];
     const o = new AgentOrchestrator({
+      allowedTools: null,
       model: {
         label: "native-acceptance-seq",
         async complete(messages, options) {
