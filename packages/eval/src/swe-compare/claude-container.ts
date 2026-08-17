@@ -90,6 +90,8 @@ export function buildClaudeContainerPlan(input: {
   readonly claudeVersion: string;
   readonly claudeArgs: readonly string[];
   readonly claudeBinaryPath?: string;
+  /** 超长 goal 的宿主文件：挂载为 /paw-goal.txt，容器内 sh -c 展开。 */
+  readonly goalFile?: string;
 }): ClaudeContainerPlan {
   const names = claudeContainerNames(input.runId);
   const binary = input.claudeBinaryPath
@@ -200,11 +202,26 @@ export function buildClaudeContainerPlan(input: {
       "NO_PROXY=localhost,127.0.0.1",
       "-e",
       "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
+      ...(input.goalFile
+        ? [
+            "-v",
+            `${path.resolve(input.goalFile).replaceAll("\\", "/")}:/paw-goal.txt:ro`,
+          ]
+        : []),
       input.image,
-      CLAUDE_CONTAINER_EXECUTABLE,
-      ...input.claudeArgs,
+      ...(input.goalFile
+        ? [
+            "sh",
+            "-c",
+            `${shellQuote(CLAUDE_CONTAINER_EXECUTABLE)} ${input.claudeArgs.map(shellQuote).join(" ")} "$(cat /paw-goal.txt)"`,
+          ]
+        : [CLAUDE_CONTAINER_EXECUTABLE, ...input.claudeArgs]),
     ],
   };
+}
+
+function shellQuote(value: string): string {
+  return /[^A-Za-z0-9_@%+=:,./-]/.test(value) ? `'${value.replaceAll("'", `'\''`)}'` : value;
 }
 
 export function parseClaudeProxyAudit(log: string): ClaudeProxyAudit {

@@ -178,7 +178,7 @@ interface TraceMutationHints {
   readonly unknownWritePossible: boolean;
 }
 
-export function claudeCodeArgs(goal: string): string[] {
+export function claudeCodeArgs(goal?: string): string[] {
   return [
     "-p",
     "--bare",
@@ -249,7 +249,7 @@ export function claudeCodeArgs(goal: string): string[] {
     "--permission-mode",
     "bypassPermissions",
     "--dangerously-skip-permissions",
-    goal,
+    ...(goal ? [goal] : []),
   ];
 }
 
@@ -2127,13 +2127,28 @@ async function runClaude(opts: {
   trace: unknown;
   claudeSandbox: NonNullable<SweCompareRunResult["claudeSandbox"]>;
 }> {
+  // Windows docker 客户端 argv 有长度上限：超长 goal（如 astropy 的
+  // 20 F2P/322 P2P 清单）写入挂载文件，容器内经 sh -c 展开（Linux 上限
+  // ~2MB，瓶颈只在宿主客户端）。
+  const LONG_GOAL_THRESHOLD = 6_000;
+  let claudeGoalFile: string | undefined;
+  let goalForArgs: string | undefined = opts.goal;
+  if (opts.goal.length > LONG_GOAL_THRESHOLD) {
+    claudeGoalFile = path.join(
+      path.dirname(path.resolve(opts.workspaceRoot)),
+      "claude-goal.txt",
+    );
+    writeFileSync(claudeGoalFile, opts.goal, "utf8");
+    goalForArgs = undefined;
+  }
   const plan = buildClaudeContainerPlan({
     repoRoot: opts.repoRoot,
     workspaceRoot: opts.workspaceRoot,
     image: opts.image,
     runId: opts.runId,
     claudeVersion: opts.version,
-    claudeArgs: claudeCodeArgs(opts.goal),
+    claudeArgs: claudeCodeArgs(goalForArgs),
+    ...(claudeGoalFile ? { goalFile: claudeGoalFile } : {}),
   });
   const authToken =
     process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.DEEPSEEK_API_KEY ?? "";
