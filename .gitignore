@@ -103,3 +103,8 @@ __pycache__/
 *.pyc
 /.cursor-tasklifecycle-plan-extract.md
 /hello.txt
+# success-laundering WIP
+benchmarks/success-laundering/
+packages/memory/scripts/run-success-laundering.ts
+packages/memory/src/longterm/eval/success-laundering.ts
+packages/memory/test/success-laundering.test.ts
