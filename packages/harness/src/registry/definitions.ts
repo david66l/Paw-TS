@@ -479,7 +479,7 @@ export function toolDefinitions(
     }),
     fn(
       RUN_AGENT,
-      "Launch a registered sub-agent (prefer agent_id from the agent roster). Falls back to agent_type if no id.",
+      "Dispatch a sub-agent for an independent, context-heavy thread such as codebase investigation, tracing call chains, or verifying a hypothesis. Read-only sub-agents run in parallel with other read-only calls, consume their own context window, and return only a summary plus changed-file list, keeping your context clean. Prefer a specific agent_id from the roster (e.g. bige for read-only code investigation); child_policy read_only is the safe default and is required unless the child must write.",
       {
         goal: { type: "string", description: "Goal for the sub-agent" },
         agent_id: {

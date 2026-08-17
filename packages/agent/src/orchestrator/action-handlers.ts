@@ -1462,8 +1462,17 @@ async function handlePlanUpdate(
       ? { maxItems: opts.planSnapshotMaxItems }
       : undefined;
   const planSnap = p ? planToSnapshotPayload(p, snapshotOpts) : null;
+  // 事实陈述（非指令）：互不依赖的待办项可并行调查——配合 run_agent 的
+  // 接口事实，让模型知道批量派发是可用选项。
+  const pendingCount = planSnap
+    ? (planSnap.items ?? []).filter((item) => item.status !== "done").length
+    : 0;
+  const parallelNote =
+    pendingCount > 1
+      ? "\nPending items that do not depend on each other can be investigated in parallel via workspace.run_agent (read-only sub-agents return one-page summaries)."
+      : "";
   const planBlock = planSnap
-    ? `Current plan (JSON):\n${JSON.stringify(planSnap)}`
+    ? `${parallelNote}${parallelNote ? "\n" : ""}Current plan (JSON):\n${JSON.stringify(planSnap)}`
     : "Current plan: (empty)";
   ctx.ctxMgr.addUser(`Plan updated: ${action.reason}.\n\n${planBlock}`);
 

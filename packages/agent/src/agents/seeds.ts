@@ -18,8 +18,7 @@ export const SEED_LIHUA: CreateAgentInput = {
   maxSteps: 32,
   memoryExtraction: "background",
   tools: "inherit",
-  outputFormat:
-    "用简洁中文汇报：做了什么、调度了谁、结果摘要、未完成项。",
+  outputFormat: "用简洁中文汇报：做了什么、调度了谁、结果摘要、未完成项。",
   prompt: `你是狸花，Paw 的总控 Agent（Root）。
 
 职责：
@@ -129,8 +128,7 @@ export const SEED_XIANLUO: CreateAgentInput = {
   memoryExtraction: "off",
   tools:
     "read_file, list_dir, search, glob, grep, web_fetch, web_search, git_status",
-  outputFormat:
-    "Return a concise research note: packages, key APIs, pitfalls.",
+  outputFormat: "Return a concise research note: packages, key APIs, pitfalls.",
   prompt: `你是暹罗，技术调研员。
 只读检索，不写代码。关注包名、API 模式、已知坑与最佳实践。`,
 };
@@ -167,20 +165,42 @@ export const SEED_JINMAO: CreateAgentInput = {
   model: "flash",
   maxSteps: 12,
   memoryExtraction: "off",
-  tools:
-    "read_file, list_dir, write_file, edit_file, search, glob, grep",
+  tools: "read_file, list_dir, write_file, edit_file, search, glob, grep",
   outputFormat: "Return a summary of documentation added or updated.",
   prompt: `你是金毛，技术文档作者。
 只写文档（README、docs、JSDoc），不改业务实现逻辑。简洁有用。`,
 };
 
+export const SEED_BIGE: CreateAgentInput = {
+  id: "bige",
+  name: "比格",
+  role: "代码调查",
+  emoji: "hound",
+  description: "只读代码调查：追踪调用链、验证单个假设、定位相关测试与契约",
+  kind: "worker",
+  canSpawn: false,
+  childPolicy: "read_only",
+  model: "flash",
+  maxSteps: 16,
+  memoryExtraction: "off",
+  tools:
+    "read_file, list_dir, search, glob, grep, symbol_search, git_status, git_diff, git_log, lsp",
+  outputFormat:
+    "Return: hypothesis verdict (supported/rejected/unknown), key evidence as file:line refs, and the single most useful next investigation step.",
+  prompt: `你是比格，代码调查员（只读）。
+每次只验证一个明确假设：给出 verdict（supported/rejected/unknown），
+证据必须带 file:line 引用，禁止猜测。不改任何文件。
+适合被并行派发：多个比格各带不同假设同时调查，互不干扰。`,
+};
+
 /**
  * 默认种子 + 花名册展示顺序：
- * 狸花 → 暹罗 → 边牧 → 德牧 → 萨摩 → 柯基 → 布偶 → 金毛
+ * 狸花 → 暹罗 → 比格 → 边牧 → 德牧 → 萨摩 → 柯基 → 布偶 → 金毛
  */
 export const DEFAULT_AGENT_SEEDS: readonly CreateAgentInput[] = [
   SEED_LIHUA,
   SEED_XIANLUO,
+  SEED_BIGE,
   SEED_BIANMU,
   SEED_DEMU,
   SEED_SAMO,

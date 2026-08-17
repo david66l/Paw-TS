@@ -209,6 +209,11 @@ import {
   decideCompletion,
   decideIncomplete,
 } from "./lifecycle/completion-policy.js";
+import {
+  type ProgressBaselineV1,
+  computeProgressBaselineV1,
+  evaluateInvestigationStallV1,
+} from "./lifecycle/investigation-stall.js";
 import { memoryOutcomeFromDecision } from "./lifecycle/memory-outcome.js";
 import {
   type VerificationPolicy,
@@ -261,6 +266,7 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "[LoopControl:",
   "[LoopV2Readiness:",
   "[LoopV2SemanticReview:",
+  "[ProgressAdvice:",
   "[Managed jobs are unfinished:",
   "[Managed job recovery v1]",
   "[Continue from where you were cut off",
@@ -994,7 +1000,23 @@ export class AgentOrchestrator {
 
       // ═══ 主循环：ReAct 循环的核心 ═══
       // 每轮 = 一次完整的 model → parse → action → feedback 周期
+      let progressBaseline: ProgressBaselineV1 | undefined;
       for (let turn = startTurn; turn < maxSteps; turn++) {
+        // Loop v2.1 §8.3 停滞阶梯：无产品级进展的回合差达到版本化阈值时注入
+        // 事实建议（含可并行派发只读调查员的接口事实）。advice-only，不拦截。
+        if (this.loopKernelVersion === "v2") {
+          const stall = evaluateInvestigationStallV1({
+            state: taskState.snapshot(),
+            baseline:
+              progressBaseline ??
+              computeProgressBaselineV1(taskState.snapshot(), turn),
+            turn,
+          });
+          progressBaseline = stall.baseline;
+          if (stall.message) {
+            ctxMgr.addUser(stall.message);
+          }
+        }
         const jobRecoveryNotices = managedJobs.takeRecoveryNotices();
         if (jobRecoveryNotices.length > 0) {
           ctxMgr.addUser(
