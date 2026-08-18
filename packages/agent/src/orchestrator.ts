@@ -163,7 +163,7 @@ import {
 // ─────────────────────────────────────────────────────────────
 // @paw/store：计划/任务持久化
 // ─────────────────────────────────────────────────────────────
-import { type PlanItem, TaskPlanner } from "@paw/store";
+import { type PlanItem, TaskPlanner, planToSnapshotPayload } from "@paw/store";
 
 // ─────────────────────────────────────────────────────────────
 // orchestrator 内部模块 — 从单体拆分出的职责单元
@@ -989,8 +989,9 @@ export class AgentOrchestrator {
       const turnCompactor = compactor;
       const turnSessionMemoryStore = sessionMemoryStore;
 
-      // 初始化计划：能从 goal 抽出 ≥2 步则直接建可见 plan（桌面右栏兜底）
-      {
+      // Fresh run only: resume has already restored the exact durable plan and
+      // revision in initializeRun. Re-bootstrap here would overwrite it.
+      if (!spec.resumeFromState?.plan) {
         const { extractPlanStepsFromGoal, planItemsToEventSnapshot } =
           await import("./plan-bootstrap.js");
         const goalForPlan = extractCleanMemoryQuery(spec.goal) || spec.goal;
@@ -3047,6 +3048,21 @@ export class AgentOrchestrator {
       ctx.maxSteps,
       taskSnap,
     );
+    const plan = ctx.planner.plan;
+    const planSnapshot = plan
+      ? planToSnapshotPayload(
+          plan,
+          this.planSnapshotMaxItems !== undefined
+            ? { maxItems: this.planSnapshotMaxItems }
+            : undefined,
+        )
+      : undefined;
+    const parallelismAvailable = Boolean(
+      planSnapshot &&
+        planSnapshot.items.filter((item) => item.status === "pending").length >
+          1 &&
+        ctx.capabilitySet.executableToolNames.includes("workspace.run_agent"),
+    );
     return {
       ...(taskSnap.nextStep
         ? { taskBrief: { currentObjective: taskSnap.nextStep } }
@@ -3063,6 +3079,16 @@ export class AgentOrchestrator {
             `${constraint.text} (stated at turn ${constraint.sourceTurn})`,
         ),
       taskProgress: formatTaskProgressForContext(taskSnap),
+      ...(planSnapshot
+        ? {
+            planSnapshot: {
+              json: JSON.stringify(planSnapshot),
+              ...(parallelismAvailable
+                ? { parallelismAvailable: true as const }
+                : {}),
+            },
+          }
+        : {}),
       ...(this._memoryContextSection
         ? { relevantMemory: this._memoryContextSection }
         : {}),
@@ -4891,12 +4917,11 @@ export class AgentOrchestrator {
       }
 
       if (s.plan) {
-        planner.createPlan(runId, []);
         try {
-          planner.applyUpdate(
+          planner.restorePlan(
+            runId,
             s.plan.items as readonly PlanItem[],
-            [],
-            "resume",
+            s.plan.revision,
           );
           taskState.setPlan(s.plan.items);
         } catch {

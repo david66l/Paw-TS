@@ -67,4 +67,47 @@ describe("TaskPlanner", () => {
     expect(p.items[0]?.status).toBe(PlanItemStatus.COMPLETED);
     expect(p.allComplete).toBe(true);
   });
+
+  test("restores the exact durable revision without manufacturing an update", () => {
+    const source = new TaskPlanner();
+    const current = source.createPlan("wf", [{ id: "step-a" }]).items[0];
+    expect(current).toBeDefined();
+    if (!current) throw new Error("expected seeded plan item");
+    source.applyUpdate(
+      [
+        createPlanItem({
+          id: current.id,
+          task_id: current.task_id,
+          status: PlanItemStatus.COMPLETED,
+        }),
+      ],
+      [],
+      "done",
+    );
+    const revised = source.applyUpdate([], [], "checkpoint");
+
+    const restored = new TaskPlanner().restorePlan(
+      revised.workflow_id,
+      revised.items,
+      revised.revision,
+    );
+    expect(restored.revision).toBe(2);
+    expect(restored.items).toEqual(revised.items);
+    expect(restored.items).not.toBe(revised.items);
+  });
+
+  test("rejects malformed durable plan snapshots", () => {
+    const planner = new TaskPlanner();
+    expect(() => planner.restorePlan("wf", [], -1)).toThrow(/plan revision/);
+    expect(() =>
+      planner.restorePlan(
+        "wf",
+        [
+          createPlanItem({ id: "same", task_id: "one" }),
+          createPlanItem({ id: "same", task_id: "two" }),
+        ],
+        2,
+      ),
+    ).toThrow(/plan item/);
+  });
 });

@@ -50,6 +50,45 @@ export class TaskPlanner {
     return plan;
   }
 
+  /** Restore an already-versioned durable plan without manufacturing updates. */
+  restorePlan(
+    workflowId: string,
+    items: readonly PlanItem[],
+    revision: number,
+  ): Plan {
+    if (!workflowId.trim()) throw new Error("Invalid plan workflow id");
+    if (!Number.isSafeInteger(revision) || revision < 0) {
+      throw new Error("Invalid plan revision");
+    }
+    const statuses = new Set<string>(Object.values(PlanItemStatus));
+    const seen = new Set<string>();
+    const restored = items.map((item) => {
+      if (
+        !item ||
+        typeof item.id !== "string" ||
+        !item.id.trim() ||
+        seen.has(item.id) ||
+        typeof item.task_id !== "string" ||
+        !item.task_id.trim() ||
+        !statuses.has(item.status) ||
+        !Array.isArray(item.depends_on) ||
+        !item.depends_on.every(
+          (dependency) => typeof dependency === "string",
+        ) ||
+        (item.assigned_run_id !== null &&
+          typeof item.assigned_run_id !== "string") ||
+        (item.note !== null && typeof item.note !== "string")
+      ) {
+        throw new Error("Invalid restored plan item");
+      }
+      seen.add(item.id);
+      return createPlanItem(item);
+    });
+    const plan = new Plan(workflowId, restored, revision);
+    this._plan = plan;
+    return plan;
+  }
+
   /**
    * Apply a PlanUpdateAction. Completed items are annotated; deprecating FAILED
    * items without resolution throws (Python parity).

@@ -11,6 +11,10 @@ import {
   selectEphemeralControlV1,
 } from "../src/context-assembler.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
+import {
+  TaskStateManager,
+  formatTaskStateForContext,
+} from "../src/task-state.js";
 
 describe("ContextAssembler v1", () => {
   test("returns a request snapshot without mutating durable transcript", () => {
@@ -149,6 +153,27 @@ describe("ContextAssembler v1", () => {
   });
 
   test("uses canonical host order and removes only exact legacy projections", () => {
+    const legacyAcceptance = `Acceptance ledger updated: direct check.\n\n${formatTaskStateForContext(new TaskStateManager("goal").snapshot())}`;
+    const legacyPlan =
+      'Plan updated: bootstrap.\n\nCurrent plan (JSON):\n{"workflow_id":"run-1","revision":1,"items":[],"items_total":0,"truncated":false,"next_pending":null,"all_complete":true}';
+    const legacyEmptyReasonPlan =
+      'Plan updated: .\n\nCurrent plan (JSON):\n{"workflow_id":"run-1","revision":1,"items":[],"items_total":0,"truncated":false,"next_pending":null,"all_complete":true}';
+    const legacyParallelPlan =
+      'Plan updated: parallel.\n\n\nPending items that do not depend on each other can be investigated in parallel via workspace.run_agent (read-only sub-agents return one-page summaries).\nCurrent plan (JSON):\n{"workflow_id":"run-1","revision":1,"items":[],"items_total":0,"truncated":false,"next_pending":null,"all_complete":true}';
+    const nearCollisionParallelPlan = legacyParallelPlan.replace(
+      "summaries).\nCurrent",
+      "summaries).\n\nCurrent",
+    );
+    const largeTaskState = new TaskStateManager("large plan");
+    largeTaskState.setPlan(
+      Array.from({ length: 30 }, (_, index) => ({
+        id: `plan-${index + 1}`,
+        task_id: `step ${index + 1}`,
+        status: index < 24 ? "completed" : "pending",
+        depends_on: [],
+      })),
+    );
+    const legacyLargeAcceptance = `Acceptance ledger updated: direct check.\n\n${formatTaskStateForContext(largeTaskState.snapshot())}`;
     const assembled = assembleModelContextV1({
       durable: {
         messages: [
@@ -156,12 +181,24 @@ describe("ContextAssembler v1", () => {
           { role: "user", content: "[Status Snapshot v1]\nold status" },
           { role: "user", content: "[Context Package] is my requested title" },
           { role: "user", content: "[My bracketed request] keep this" },
+          { role: "user", content: legacyAcceptance },
+          { role: "user", content: legacyPlan },
+          { role: "user", content: legacyEmptyReasonPlan },
+          { role: "user", content: legacyParallelPlan },
+          { role: "user", content: legacyLargeAcceptance },
+          { role: "user", content: `${legacyAcceptance} please explain` },
+          { role: "user", content: `${legacyPlan} please explain` },
+          { role: "user", content: nearCollisionParallelPlan },
           { role: "assistant", content: "working" },
         ],
       },
       hostState: {
         status: "[Status Snapshot v1]\nfresh status",
         taskProgress: "[Current State]\nNext step: test",
+        planSnapshot: {
+          json: '{"workflow_id":"run-1","items":[]}',
+          parallelismAvailable: true,
+        },
         constraints: ["keep API stable"],
         taskBrief: { stage: "verify" },
       },
@@ -170,7 +207,10 @@ describe("ContextAssembler v1", () => {
     expect(assembled.map((message) => message.content)).toEqual([
       "[Context Package] is my requested title",
       "[My bracketed request] keep this",
-      "[Host State v1]\n[Task Brief]\nstage: verify\n[Constraints]\n- keep API stable\n[Current State]\nNext step: test\n[Status Snapshot v1]\nfresh status",
+      `${legacyAcceptance} please explain`,
+      `${legacyPlan} please explain`,
+      nearCollisionParallelPlan,
+      '[Host State v1]\n[Task Brief]\nstage: verify\n[Constraints]\n- keep API stable\n[Current State]\nNext step: test\n[Plan Snapshot]\nPending items that do not depend on each other can be investigated in parallel via workspace.run_agent (read-only sub-agents return one-page summaries).\nCurrent plan (JSON):\n{"workflow_id":"run-1","items":[]}\n[Status Snapshot v1]\nfresh status',
       "working",
     ]);
   });

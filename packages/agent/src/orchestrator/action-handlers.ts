@@ -85,7 +85,6 @@ import {
   markPlanItemsCompleted,
   planItemsToEventSnapshot,
 } from "../plan-bootstrap.js";
-import { formatTaskStateForContext } from "../task-state.js";
 import { parseChildPolicy } from "./agent-args.js";
 import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
@@ -333,10 +332,6 @@ function handleAcceptanceUpdate(
   const applied = ctx.taskState.applyAcceptanceUpdate(action, ctx.turn);
   if (!applied.ok) {
     ctx.ctxMgr.addUser(`[AcceptanceLedger] ${applied.error}`);
-  } else {
-    ctx.ctxMgr.addUser(
-      `Acceptance ledger updated: ${action.reason || "explicit model update"}.\n\n${formatTaskStateForContext(ctx.taskState.snapshot())}`,
-    );
   }
   const nextFlags: TurnFlags = {
     ...flags,
@@ -1465,9 +1460,8 @@ async function handleAskUser(
  * 处理 plan_update 动作。
  *
  * 模型可以动态更新执行计划：添加新项、标记废弃项。
- * 更新后的计划以 JSON 格式注入到上下文，供模型下一轮参考。
- *
- * 使用动态 import（`await import("@paw/store")`）避免循环依赖。
+ * 更新后的计划由 TaskState/TaskPlanner 持久化；下一请求通过 HostState
+ * 获取当前有界 JSON，而不是在 durable transcript 追加一条 user echo。
  */
 async function handlePlanUpdate(
   action: Extract<AgentAction, { type: "plan_update" }>,
@@ -1477,11 +1471,7 @@ async function handlePlanUpdate(
   thinking: string | undefined,
   opts: Pick<
     ActionHandlerContext,
-    | "planner"
-    | "planSnapshotMaxItems"
-    | "saveStateFn"
-    | "memoryRuntime"
-    | "memoryTaskId"
+    "planner" | "saveStateFn" | "memoryRuntime" | "memoryTaskId"
   >,
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const nextFlags: TurnFlags = {
@@ -1490,9 +1480,7 @@ async function handlePlanUpdate(
   };
 
   // 动态 import 避免循环依赖
-  const { planItemsFromUnknown, planToSnapshotPayload } = await import(
-    "@paw/store"
-  );
+  const { planItemsFromUnknown } = await import("@paw/store");
   const parsedItems = planItemsFromUnknown(action.newItems);
 
   try {
@@ -1548,26 +1536,6 @@ async function handlePlanUpdate(
   }
 
   ctx.ctxMgr.addAssistant(text, thinking);
-
-  // 将更新后的计划注入到上下文供模型参考
-  const snapshotOpts =
-    opts.planSnapshotMaxItems !== undefined
-      ? { maxItems: opts.planSnapshotMaxItems }
-      : undefined;
-  const planSnap = p ? planToSnapshotPayload(p, snapshotOpts) : null;
-  // 只有模型实际拥有 run_agent 时才提示并行委派，避免 prompt/schema 冲突。
-  const pendingCount = planSnap
-    ? (planSnap.items ?? []).filter((item) => item.status !== "done").length
-    : 0;
-  const parallelNote =
-    pendingCount > 1 &&
-    ctx.capabilitySet.executableToolNames.includes("workspace.run_agent")
-      ? "\nPending items that do not depend on each other can be investigated in parallel via workspace.run_agent (read-only sub-agents return one-page summaries)."
-      : "";
-  const planBlock = planSnap
-    ? `${parallelNote}${parallelNote ? "\n" : ""}Current plan (JSON):\n${JSON.stringify(planSnap)}`
-    : "Current plan: (empty)";
-  ctx.ctxMgr.addUser(`Plan updated: ${action.reason}.\n\n${planBlock}`);
 
   if (ctx.turn + 1 >= ctx.maxSteps) {
     const decision = evaluateBudgetExhaustion(

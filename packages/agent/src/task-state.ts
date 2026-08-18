@@ -750,17 +750,18 @@ function hasMaterialFileChange(result: ToolRunResult): boolean {
 }
 
 export function formatTaskStateForContext(state: TaskState): string {
-  return formatTaskStateBlock(state, true);
+  return formatTaskStateBlock(state, true, true);
 }
 
 /** One-request host projection; the durable user request owns goal/constraints. */
 export function formatTaskProgressForContext(state: TaskState): string {
-  return formatTaskStateBlock(state, false);
+  return formatTaskStateBlock(state, false, false);
 }
 
 function formatTaskStateBlock(
   state: TaskState,
   includeGoalAndConstraints: boolean,
+  includePlan: boolean,
 ): string {
   const lines = ["[Current State]"];
   if (includeGoalAndConstraints) {
@@ -805,7 +806,7 @@ function formatTaskStateBlock(
       `Post-edit syntax diagnostics: ${state.postEditDiagnostics.status} (${state.postEditDiagnostics.issueCount} errors, ${freshness} for r${state.postEditDiagnostics.mutationRevision}; not verification)`,
     );
   }
-  appendList(lines, "Plan", state.plan);
+  if (includePlan) appendList(lines, "Plan", state.plan);
   lines.push(formatTaskGraphV1(replayTaskGraphV1(state.taskGraphEvents)));
   if ((state.mutationRevision ?? 0) > 0) {
     lines.push(`Mutation revision: ${state.mutationRevision}`);

@@ -21,6 +21,10 @@ export interface HostStateV1 {
   };
   readonly constraints?: readonly string[];
   readonly taskProgress?: string;
+  readonly planSnapshot?: {
+    readonly json: string;
+    readonly parallelismAvailable?: true;
+  };
   readonly relevantMemory?: string;
   readonly relevantCode?: readonly {
     readonly path: string;
@@ -99,6 +103,8 @@ const LEGACY_NO_ACTION_SECOND_PATTERN =
   /^\[Your previous response again contained no executable action\. Continue by emitting exactly one valid tool call, or emit \{"action":"final_answer","summary":"<complete result>"\} only if the task is actually done\.\]$/;
 const LEGACY_NO_ACTION_LATER_PATTERN =
   /^\[Protocol recovery attempt ((?:[3-9]|[1-9]\d+)): do not narrate the action you intend to take\. Emit the valid tool-call JSON now\. If and only if the task is complete, emit \{"action":"final_answer","summary":"<complete result>"\}\.\]$/;
+const LEGACY_PLAN_PARALLEL_NOTE =
+  "Pending items that do not depend on each other can be investigated in parallel via workspace.run_agent (read-only sub-agents return one-page summaries).";
 const LEGACY_VERIFICATION_GATE_PATTERNS = [
   /^\[VerificationGate\] This task requires file changes \(\[require_mutation\]\) but none were recorded\. Use an available workspace mutation tool, then continue — do not final_answer yet\.$/,
   /^\[VerificationGate\] The current edit introduced \d+ syntax diagnostic error\(s\)(?: \([\s\S]{1,2000}\))?\. Fix the syntax error before final_answer\. This immediate diagnostic is not a substitute for the required test verification\.$/,
@@ -351,8 +357,112 @@ function isLegacyContextProjection(message: ChatMessage): boolean {
     ) ||
     LEGACY_CONTROL_PROJECTION_PATTERNS.some((pattern) =>
       pattern.test(message.content),
-    )
+    ) ||
+    isLegacyAcceptanceSuccessEcho(message.content) ||
+    isLegacyPlanUpdateEcho(message.content)
   );
+}
+
+function isLegacyAcceptanceSuccessEcho(content: string): boolean {
+  if (
+    !content.startsWith("Acceptance ledger updated:") ||
+    content.length > 50_000
+  ) {
+    return false;
+  }
+  const graphMarker = "\n[Task Graph v1]\n";
+  const graphIndex = content.lastIndexOf(graphMarker);
+  if (graphIndex < 0) return false;
+  const prefix = content.slice(0, graphIndex);
+  const stateDelimiter = ".\n\n[Current State]";
+  const stateIndex = prefix.lastIndexOf(stateDelimiter);
+  const reason = prefix.slice("Acceptance ledger updated: ".length, stateIndex);
+  if (
+    stateIndex < "Acceptance ledger updated: ".length ||
+    !reason.trim() ||
+    !prefix.slice(stateIndex).startsWith(stateDelimiter)
+  ) {
+    return false;
+  }
+  const graphLines = content.slice(graphIndex + graphMarker.length).split("\n");
+  if (
+    !/^schema=paw\.task-graph\.v1 authority=advisory_projection completion_authority=CompletionPolicy source_seq=\d+$/.test(
+      graphLines[0] ?? "",
+    )
+  ) {
+    return false;
+  }
+  const currentLine = graphLines[1] ?? "";
+  if (!currentLine.startsWith("current=")) return false;
+  const current = currentLine.slice("current=".length);
+  const nodeLines = graphLines.slice(2);
+  const truncationLine = nodeLines.at(-1);
+  const hasTruncatedNodes = /^- \.\.\. [1-9]\d* more nodes$/.test(
+    truncationLine ?? "",
+  );
+  const visibleNodeLines = hasTruncatedNodes
+    ? nodeLines.slice(0, -1)
+    : nodeLines;
+  if (
+    visibleNodeLines.some(
+      (line) =>
+        !/^- [^\r\n]{1,500} \[[^\]/\r\n]+\/[^\]/\r\n]+\/[^\]\r\n]+\] deps=[^\r\n]{1,2000}: [^\r\n]{1,4000}$/.test(
+          line,
+        ),
+    )
+  ) {
+    return false;
+  }
+  return (
+    current === "none" ||
+    (hasTruncatedNodes && current.trim().length > 0) ||
+    (current.length > 0 &&
+      visibleNodeLines.some((line) => line.startsWith(`- ${current} [`)))
+  );
+}
+
+function isLegacyPlanUpdateEcho(content: string): boolean {
+  if (!content.startsWith("Plan updated:") || content.length > 50_000) {
+    return false;
+  }
+  const marker = "Current plan (JSON):\n";
+  const markerIndex = content.lastIndexOf(marker);
+  if (markerIndex < 0) return false;
+  const prefix = content.slice(0, markerIndex);
+  const plainSuffix = ".\n\n";
+  const parallelSuffix = `.\n\n\n${LEGACY_PLAN_PARALLEL_NOTE}\n`;
+  const mentionsParallelNote = prefix.includes(LEGACY_PLAN_PARALLEL_NOTE);
+  const matchedSuffix = mentionsParallelNote
+    ? prefix.endsWith(parallelSuffix)
+      ? parallelSuffix
+      : undefined
+    : prefix.endsWith(plainSuffix)
+      ? plainSuffix
+      : undefined;
+  if (!matchedSuffix) {
+    return false;
+  }
+  const reason = prefix.slice("Plan updated: ".length, -matchedSuffix.length);
+  if (reason.includes("\u0000")) return false;
+  const raw = content.slice(markerIndex + marker.length);
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return false;
+    }
+    const value = parsed as Record<string, unknown>;
+    return (
+      typeof value.workflow_id === "string" &&
+      Number.isSafeInteger(value.revision) &&
+      Array.isArray(value.items) &&
+      Number.isSafeInteger(value.items_total) &&
+      typeof value.truncated === "boolean" &&
+      "next_pending" in value &&
+      typeof value.all_complete === "boolean"
+    );
+  } catch {
+    return false;
+  }
 }
 
 function hasHostStateV1(state: HostStateV1): boolean {
@@ -360,6 +470,7 @@ function hasHostStateV1(state: HostStateV1): boolean {
     state.taskBrief ||
       state.constraints?.length ||
       state.taskProgress?.trim() ||
+      state.planSnapshot?.json.trim() ||
       state.relevantMemory?.trim() ||
       state.relevantCode?.length ||
       state.status?.trim(),
@@ -386,6 +497,16 @@ function renderHostStateV1(state: HostStateV1): string {
   }
   if (state.taskProgress?.trim()) {
     lines.push(state.taskProgress.trim());
+  }
+  if (state.planSnapshot?.json.trim()) {
+    lines.push("[Plan Snapshot]");
+    if (state.planSnapshot.parallelismAvailable) {
+      lines.push(
+        "Pending items that do not depend on each other can be investigated in parallel via workspace.run_agent (read-only sub-agents return one-page summaries).",
+      );
+    }
+    lines.push("Current plan (JSON):");
+    lines.push(state.planSnapshot.json.trim());
   }
   if (state.relevantMemory?.trim()) {
     lines.push("[Relevant Memory]");

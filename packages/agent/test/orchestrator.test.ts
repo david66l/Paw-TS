@@ -9,7 +9,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { RunEventEnvelope, SessionStore } from "@paw/core";
+import {
+  InMemoryAppStateStore,
+  type RunEventEnvelope,
+  type SessionStore,
+} from "@paw/core";
 import { CORE_MODEL_EXECUTABLE_TOOLS, resetPolicyConfig } from "@paw/harness";
 import { FakeLanguageModel } from "@paw/models";
 
@@ -1275,6 +1279,13 @@ describe("AgentOrchestrator", () => {
           const lastUser = messages
             .filter((message) => message.role === "user")
             .at(-1);
+          expect(
+            messages.filter(
+              (message) =>
+                message.role === "user" &&
+                message.content.startsWith("Acceptance ledger updated:"),
+            ),
+          ).toHaveLength(0);
           if (calls === 2) {
             expect(lastUser?.content).toContain("acceptance-001 [pending]");
             return {
@@ -1548,7 +1559,7 @@ describe("AgentOrchestrator", () => {
     expect(calls).toBe(4);
   });
 
-  test("plan_update follow-up user message includes plan snapshot JSON", async () => {
+  test("plan_update projects the current plan through HostState without a durable echo", async () => {
     let calls = 0;
     const o = new AgentOrchestrator({
       model: {
@@ -1558,9 +1569,15 @@ describe("AgentOrchestrator", () => {
           if (calls === 2) {
             const userMsgs = messages.filter((m) => m.role === "user");
             const lastUser = userMsgs[userMsgs.length - 1];
+            expect(lastUser?.content).toContain("[Host State v1]");
             expect(lastUser?.content).toContain("Current plan (JSON):");
             expect(lastUser?.content).toContain('"workflow_id":"snap-run"');
             expect(lastUser?.content).toContain("plan-001");
+            expect(
+              userMsgs.filter((message) =>
+                message.content.startsWith("Plan updated:"),
+              ),
+            ).toHaveLength(0);
           }
           if (calls === 1) {
             return {
@@ -1610,9 +1627,9 @@ describe("AgentOrchestrator", () => {
           if (calls === 2) {
             const userMsgs = messages.filter((m) => m.role === "user");
             const lastUser = userMsgs[userMsgs.length - 1]?.content ?? "";
-            const brace = lastUser.indexOf("{");
-            expect(brace).toBeGreaterThan(-1);
-            const parsed = JSON.parse(lastUser.slice(brace)) as {
+            const json = /Current plan \(JSON\):\n([^\n]+)/.exec(lastUser)?.[1];
+            expect(json).toBeDefined();
+            const parsed = JSON.parse(json ?? "{}") as {
               items: unknown[];
               truncated: boolean;
               items_total: number;
@@ -1656,6 +1673,68 @@ describe("AgentOrchestrator", () => {
     });
     expect(r.status).toBe("completed");
     expect(calls).toBe(3);
+  });
+
+  test("resume rebuilds plan HostState from persisted planner state", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-plan-resume-"));
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const stateStore = new InMemoryAppStateStore();
+    let firstCalls = 0;
+    const first = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "plan-resume-first",
+        async complete() {
+          firstCalls += 1;
+          if (firstCalls === 1) {
+            return {
+              text: '{"action":"plan_update","reason":"persist","new_items":[{"id":"plan-001","task_id":"resume-step","status":"pending","depends_on":[]}],"deprecated_items":[]}',
+            };
+          }
+          if (firstCalls === 2) {
+            return {
+              text: '{"action":"plan_update","reason":"finish","new_items":[{"id":"plan-001","task_id":"resume-step","status":"completed","depends_on":[]}],"deprecated_items":[]}',
+            };
+          }
+          throw new Error("provider unavailable after plan checkpoint");
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await first.run({
+      runId: "plan-resume",
+      goal: "complete the persisted plan",
+      workspaceRoot,
+      maxSteps: 3,
+    });
+    expect(stateStore.load("plan-resume")?.plan?.items).toHaveLength(1);
+    expect(stateStore.load("plan-resume")?.plan?.revision).toBe(2);
+
+    let resumedRequest = "";
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "plan-resume-second",
+        async complete(messages) {
+          resumedRequest =
+            messages.find((message) =>
+              message.content.includes("[Plan Snapshot]"),
+            )?.content ?? "";
+          return { text: '{"action":"final_answer","summary":"done"}' };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await resumed.resumeRun({ runId: "plan-resume", workspaceRoot });
+    expect(resumedRequest).toContain('"workflow_id":"plan-resume"');
+    expect(resumedRequest).toContain('"revision":2');
+    expect(resumedRequest).toContain("resume-step");
+    expect(resumedRequest).not.toContain("Plan updated:");
   });
 
   test("tool call then plan_update then final_answer", async () => {
