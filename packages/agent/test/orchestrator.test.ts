@@ -18,6 +18,7 @@ import { CORE_MODEL_EXECUTABLE_TOOLS, resetPolicyConfig } from "@paw/harness";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
+import type { LoopV2ShadowReport } from "../src/loop-v2/index.js";
 
 describe("AgentOrchestrator", () => {
   beforeEach(() => {
@@ -1926,6 +1927,8 @@ describe("AgentOrchestrator", () => {
 
   test("streaming snapshots stay live-only while model.done is persisted", async () => {
     const saved: RunEventEnvelope[] = [];
+    const live: RunEventEnvelope[] = [];
+    let report: LoopV2ShadowReport | undefined;
     const sessionStore = {
       saveEvent(_runId: string, envelope: RunEventEnvelope) {
         saved.push(envelope);
@@ -1935,6 +1938,11 @@ describe("AgentOrchestrator", () => {
     const o = new AgentOrchestrator({
       model: new FakeLanguageModel(),
       sessionStore,
+      loopKernelVersion: "v2-shadow",
+      onEvent: (envelope) => live.push(envelope),
+      onLoopV2ShadowReport: (value) => {
+        report = value;
+      },
     });
     await o.run({
       runId: "stream-store",
@@ -1945,6 +1953,68 @@ describe("AgentOrchestrator", () => {
     expect(saved.some((e) => e.event.type === "model.done")).toBe(true);
     expect(saved.some((e) => e.event.type === "model.chunk")).toBe(false);
     expect(saved.some((e) => e.event.type === "model.thinking")).toBe(false);
+    expect(live.some((e) => e.event.type === "model.chunk")).toBe(true);
+    expect(
+      report?.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.sourceEventType === "model.chunk" ||
+          diagnostic.sourceEventType === "model.thinking",
+      ),
+    ).toBe(false);
+  });
+
+  test("projection size is independent of high-volume thinking snapshots", async () => {
+    let liveThinking = 0;
+    let report: LoopV2ShadowReport | undefined;
+    const saved: RunEventEnvelope[] = [];
+    const o = new AgentOrchestrator({
+      loopKernelVersion: "v2-shadow",
+      sessionStore: {
+        saveEvent(_runId: string, envelope: RunEventEnvelope) {
+          saved.push(envelope);
+        },
+      } as SessionStore,
+      model: {
+        label: "high-volume-thinking",
+        async complete() {
+          return { text: '{"action":"final_answer","summary":"done"}' };
+        },
+        async *completeStream() {
+          for (let index = 0; index < 2_000; index += 1) {
+            yield { type: "thinking" as const, delta: "x" };
+          }
+          yield {
+            type: "text" as const,
+            delta: '{"action":"final_answer","summary":"done"}',
+          };
+          yield { type: "done" as const };
+        },
+      },
+      onEvent: (envelope) => {
+        if (envelope.event.type === "model.thinking") liveThinking += 1;
+      },
+      onLoopV2ShadowReport: (value) => {
+        report = value;
+      },
+    });
+    const result = await o.run({
+      runId: "projection-stream-volume",
+      goal: "answer briefly",
+      workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-projection-stream-")),
+      maxSteps: 1,
+    });
+    expect(result.status).toBe("completed");
+    expect(liveThinking).toBe(2_000);
+    expect(saved.some((event) => event.event.type === "model.thinking")).toBe(
+      false,
+    );
+    const done = saved.filter((event) => event.event.type === "model.done");
+    expect(done).toHaveLength(1);
+    expect(done[0]?.event.type === "model.done" && done[0].event.thinking).toHaveLength(
+      2_000,
+    );
+    expect(report?.diagnostics.length).toBeLessThan(100);
+    expect(JSON.stringify(report).length).toBeLessThan(100_000);
   });
 
   test("keeps thinking in model.done audit but out of the next model request", async () => {

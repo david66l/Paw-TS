@@ -4175,18 +4175,20 @@ export class AgentOrchestrator {
         event,
       };
       this.onEvent?.(envelope);
+      const liveOnly =
+        event.type === "model.chunk" || event.type === "model.thinking";
       // Streaming chunk events contain the full accumulated text, not a delta.
       // Persisting every token therefore grows a session quadratically (a
       // modest long reasoning turn produced a 188 MB JSONL file). The final
       // model.done event is complete, while the separate recovery stream
       // protects an in-flight response, so partial snapshots stay live-only.
-      if (event.type !== "model.chunk" && event.type !== "model.thinking") {
+      if (!liveOnly) {
         this.sessionStore?.saveEvent(runId, envelope);
       }
       // Projection happens after the legacy delivery/persistence path. Shadow
       // remains fail-open; explicit v2 treats projection integrity as runtime
       // authority and therefore fails closed before continuing the loop.
-      if (loopV2Projection) {
+      if (loopV2Projection && !liveOnly) {
         try {
           loopV2Projection.observe(envelope);
           if (
