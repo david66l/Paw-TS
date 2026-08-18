@@ -65,6 +65,42 @@ export interface VerificationProbeGateDecisionV1 {
 }
 
 /** Commands the probe may never issue: network, installs, or product writes. */
+interface RegexNarrowingRisk {
+  readonly oldPattern: string;
+  readonly newPattern: string;
+}
+
+/**
+ * 检测 diff 中的正则/模式改动是否可能收窄行为（拒绝旧实现接受的输入）。
+ * 这不是精确的语义比较——是给对抗探针的风险提示，让它重点测试
+ * 旧模式接受但新模式可能拒绝的边界输入。
+ *
+ * 动机（django-15098）：模型把宽松的 \w+ 正则改为严格的 BCP 47
+ * 结构，导致 i-mingo、de-1996 等旧实现接受的标签被拒绝。
+ */
+export function detectRegexNarrowing(
+  diff: string,
+): RegexNarrowingRisk | undefined {
+  // 匹配 diff 中的 - 行（旧正则）和 + 行（新正则）
+  // 常见模式：r'...' 或 r"..." 或 re.compile(...)
+  const regexRe =
+    /-\s*(?:language_code_prefix_re\s*=\s*)?_?lazy_re_compile\(\s*\n?\s*(r['"`][^'"`]+['"`])/;
+  const oldMatch = regexRe.exec(diff);
+  const newRegexRe =
+    /\+\s*(?:language_code_prefix_re\s*=\s*)?_?lazy_re_compile\(\s*\n?\s*(r['"`][^'"`]+['"`])/;
+  const newMatch = newRegexRe.exec(diff);
+  if (oldMatch?.[1] && newMatch?.[1] && oldMatch[1] !== newMatch[1]) {
+    return { oldPattern: oldMatch[1], newPattern: newMatch[1] };
+  }
+  // 通用模式：任何 - 行包含 r'...' 且 + 行包含不同的 r'...'
+  const genericOld = /^-\s+.*?(r['"`][^'"`\n]{5,}['"`])/m.exec(diff);
+  const genericNew = /^\+\s+.*?(r['"`][^'"`\n]{5,}['"`])/m.exec(diff);
+  if (genericOld?.[1] && genericNew?.[1] && genericOld[1] !== genericNew[1]) {
+    return { oldPattern: genericOld[1], newPattern: genericNew[1] };
+  }
+  return undefined;
+}
+
 const PROBE_COMMAND_DENYLIST =
   /\b(?:curl|wget|nc|netcat|ssh|scp|pip3?|npm|pnpm|yarn|conda|apt|apt-get|brew|git\s+(?:push|fetch|pull|clone))\b/i;
 
@@ -79,6 +115,8 @@ export function buildVerificationProbePromptV1(input: {
     input.diff.length > DIFF_BUDGET_CHARS
       ? `${input.diff.slice(0, DIFF_BUDGET_CHARS)}\n... (diff truncated)`
       : input.diff;
+  // 检测 diff 中的正则/模式改动，提取行为收窄风险
+  const narrowingRisk = detectRegexNarrowing(input.diff);
   return [
     "You are an adversarial verification engineer. Another engineer claims the change below completes the stated task. Your ONLY job is to try to BREAK the candidate change before it ships.",
     "",
@@ -96,6 +134,17 @@ export function buildVerificationProbePromptV1(input: {
           ...(input.impactedTests.length > 8
             ? [`(and ${input.impactedTests.length - 8} more)`]
             : []),
+        ]
+      : []),
+    ...(narrowingRisk
+      ? [
+          "",
+          "## ⚠ Behavioral narrowing risk detected",
+          `The diff modifies a pattern/regex. The OLD pattern accepted inputs that the NEW pattern might reject:`,
+          `  OLD: ${narrowingRisk.oldPattern}`,
+          `  NEW: ${narrowingRisk.newPattern}`,
+          "",
+          "Generate probe commands that test inputs the OLD pattern accepted. If the NEW pattern rejects any previously-accepted input without the task explicitly requiring it, that is a blocking defect.",
         ]
       : []),
     "",
