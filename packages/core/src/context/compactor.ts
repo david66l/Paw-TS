@@ -24,13 +24,14 @@ import {
   ApproximateEstimator,
   type TokenEstimator,
 } from "../token-estimator.js";
+import { isToolResultMessage } from "../tool-result/format.js";
 import {
   allocateContextBudget,
   computeCompactThreshold,
 } from "./budget.js";
-import { isToolResultMessage } from "../tool-result/format.js";
 import type { ChatMessage } from "./manager.js";
 import { isProtectedUserConstraint } from "./policy.js";
+import { groupContextTurnsV1 } from "./turns.js";
 
 /**
  * v3 P2.2 内容驱动保护：消息是否命中「pinned」信号。
@@ -205,6 +206,9 @@ export class ContextCompactor {
    *   信号的消息按原文保留（不进摘要）
    */
   determineBoundaries(messages: readonly ChatMessage[]): CompactBoundaries {
+    if (messages.length === 0) {
+      return { headEnd: -1, tailStart: 0, pinned: [] };
+    }
     const totalTokens = this.estimator.countMessages(messages);
 
     // Head：前 N 条且 ≤ headMaxTokens（至少保 1 条）。
@@ -289,14 +293,25 @@ export class ContextCompactor {
       tailStart = headEnd + 1;
     }
 
-    // P2.2：middle 中内容驱动保护的消息（pinned 区）
+    const turns = groupContextTurnsV1(messages);
+    const headTurn = turns.find(
+      (turn) => headEnd >= turn.start && headEnd < turn.endExclusive,
+    );
+    if (headTurn) headEnd = headTurn.endExclusive - 1;
+    const tailTurn = turns.find(
+      (turn) => tailStart >= turn.start && tailStart < turn.endExclusive,
+    );
+    if (tailTurn) tailStart = tailTurn.start;
+    // Snapping can make head and tail meet inside the same unit. In that case
+    // keep the unit in head and start tail at the next unit boundary.
+    if (tailStart <= headEnd) tailStart = headEnd + 1;
+
+    // P2.2：任一消息命中 pinned，提升其整个 action-observation 单元。
     const pinned: number[] = [];
-    for (let i = headEnd + 1; i < tailStart; i++) {
-      const msg = messages[i];
-      if (!msg) continue;
-      if (isPinnedMessage(msg)) {
-        pinned.push(i);
-      }
+    for (const turn of turns) {
+      if (turn.start <= headEnd || turn.endExclusive > tailStart) continue;
+      if (!turn.messages.some(isPinnedMessage)) continue;
+      for (let i = turn.start; i < turn.endExclusive; i += 1) pinned.push(i);
     }
 
     return { headEnd, tailStart, pinned };
@@ -421,4 +436,49 @@ export function stripContextSummaryMessages(
   messages: readonly ChatMessage[],
 ): ChatMessage[] {
   return messages.filter((m) => !isContextSummaryMessage(m));
+}
+
+/** Select the chronological middle facts that the compression model may summarize. */
+export function compactionMiddleMessagesV1(
+  messages: readonly ChatMessage[],
+  boundaries: CompactBoundaries,
+): ChatMessage[] {
+  const pinned = new Set(boundaries.pinned);
+  return messages
+    .slice(boundaries.headEnd + 1, boundaries.tailStart)
+    .filter(
+      (message, offset) =>
+        !pinned.has(boundaries.headEnd + 1 + offset) &&
+        !isContextSummaryMessage(message),
+    );
+}
+
+/**
+ * Replace all summarizable middle units with one summary without relocating
+ * pinned units. The summary occupies the first removed unit's position;
+ * pinned units retain their original relative order.
+ */
+export function projectCompactedHistoryV1(
+  messages: readonly ChatMessage[],
+  boundaries: CompactBoundaries,
+  summaryMessage: ChatMessage,
+): ChatMessage[] {
+  const pinned = new Set(boundaries.pinned);
+  const projected: ChatMessage[] = [];
+  let insertedSummary = false;
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (!message || isContextSummaryMessage(message)) continue;
+    const inMiddle =
+      index > boundaries.headEnd && index < boundaries.tailStart;
+    if (!inMiddle || pinned.has(index)) {
+      projected.push(message);
+      continue;
+    }
+    if (!insertedSummary) {
+      projected.push(summaryMessage);
+      insertedSummary = true;
+    }
+  }
+  return projected;
 }

@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import {
   CONTEXT_SUMMARY_PREFIX,
   ContextCompactor,
+  compactionMiddleMessagesV1,
+  projectCompactedHistoryV1,
   stripContextSummaryMessages,
 } from "../src/context/compactor.js";
 import type { ChatMessage } from "../src/context/manager.js";
@@ -45,11 +47,76 @@ describe("ContextCompactor", () => {
   });
 
   describe("determineBoundaries", () => {
+    const unitEstimator = {
+      count: (text: string) => text.length,
+      countMessages: (messages: readonly ChatMessage[]) => messages.length,
+    };
+
+    it("snaps a head cut to the end of an assistant-observation unit", () => {
+      const compactor = new ContextCompactor(
+        { protectFirstN: 2, headMaxTokens: 100 },
+        unitEstimator,
+      );
+      const messages: ChatMessage[] = [
+        { role: "user", content: "goal" },
+        { role: "assistant", content: "action one" },
+        { role: "user", content: "observation one" },
+        { role: "assistant", content: "action two" },
+        { role: "user", content: "observation two" },
+      ];
+      expect(compactor.determineBoundaries(messages).headEnd).toBe(2);
+    });
+
+    it("snaps a tail cut to the start of an assistant-observation unit", () => {
+      const compactor = new ContextCompactor(
+        {
+          protectFirstN: 1,
+          headMaxTokens: 100,
+          tailTokenBudget: 0.2,
+          tailMinMessages: 1,
+          tailMinTokens: 0,
+        },
+        unitEstimator,
+      );
+      const messages: ChatMessage[] = [
+        { role: "user", content: "goal" },
+        { role: "assistant", content: "action one" },
+        { role: "user", content: "observation one" },
+        { role: "assistant", content: "action two" },
+        { role: "user", content: "observation two" },
+      ];
+      expect(compactor.determineBoundaries(messages).tailStart).toBe(3);
+    });
+
+    it("promotes a pinned member to its complete unit", () => {
+      const compactor = new ContextCompactor(
+        {
+          protectFirstN: 1,
+          headMaxTokens: 100,
+          tailTokenBudget: 0,
+          tailMinMessages: 1,
+          tailMinTokens: 0,
+        },
+        unitEstimator,
+      );
+      const messages: ChatMessage[] = [
+        { role: "user", content: "goal" },
+        { role: "assistant", content: "decided to keep this action" },
+        { role: "user", content: "observation for decision" },
+        { role: "assistant", content: "ordinary old action" },
+        { role: "user", content: "ordinary old observation" },
+        { role: "assistant", content: "latest action" },
+        { role: "user", content: "latest observation" },
+      ];
+      expect(compactor.determineBoundaries(messages).pinned).toEqual([1, 2]);
+    });
+
     it("protects first N messages as head", () => {
       const compactor = new ContextCompactor({ protectFirstN: 2 });
       const messages = makeMessages(10, 1000);
       const boundaries = compactor.determineBoundaries(messages);
-      expect(boundaries.headEnd).toBe(1);
+      // Message 1 is an assistant action, so its observation at 2 is also head.
+      expect(boundaries.headEnd).toBe(2);
     });
 
     it("protects tail messages within budget", () => {
@@ -89,6 +156,79 @@ describe("ContextCompactor", () => {
       expect(smallBoundaries.tailStart).toBeGreaterThan(
         smallBoundaries.headEnd,
       );
+    });
+  });
+
+  describe("atomic compaction projection", () => {
+    it("keeps pinned units in chronology and inserts summary at the first compacted unit", () => {
+      const messages: ChatMessage[] = [
+        { role: "user", content: "goal" },
+        { role: "assistant", content: "old action" },
+        { role: "user", content: "old observation" },
+        { role: "assistant", content: "decided pinned action" },
+        { role: "user", content: "pinned observation" },
+        { role: "assistant", content: "another old action" },
+        { role: "user", content: "another old observation" },
+        { role: "assistant", content: "latest action" },
+        { role: "user", content: "latest observation" },
+      ];
+      const boundaries = { headEnd: 0, tailStart: 7, pinned: [3, 4] };
+      expect(
+        compactionMiddleMessagesV1(messages, boundaries).map(
+          (message) => message.content,
+        ),
+      ).toEqual([
+        "old action",
+        "old observation",
+        "another old action",
+        "another old observation",
+      ]);
+      const summary = {
+        role: "user" as const,
+        content: `${CONTEXT_SUMMARY_PREFIX}\nsummary`,
+      };
+      expect(
+        projectCompactedHistoryV1(messages, boundaries, summary).map(
+          (message) => message.content,
+        ),
+      ).toEqual([
+        "goal",
+        `${CONTEXT_SUMMARY_PREFIX}\nsummary`,
+        "decided pinned action",
+        "pinned observation",
+        "latest action",
+        "latest observation",
+      ]);
+    });
+
+    it("keeps a leading pinned unit before the replacement summary and strips old summaries", () => {
+      const messages: ChatMessage[] = [
+        { role: "user", content: "goal" },
+        { role: "assistant", content: "decided pinned action" },
+        { role: "user", content: "pinned observation" },
+        { role: "user", content: `${CONTEXT_SUMMARY_PREFIX}\nold` },
+        { role: "assistant", content: "old action" },
+        { role: "user", content: "old observation" },
+        { role: "assistant", content: "latest action" },
+        { role: "user", content: "latest observation" },
+      ];
+      const summary = {
+        role: "user" as const,
+        content: `${CONTEXT_SUMMARY_PREFIX}\nnew`,
+      };
+      const projected = projectCompactedHistoryV1(
+        messages,
+        { headEnd: 0, tailStart: 6, pinned: [1, 2] },
+        summary,
+      );
+      expect(projected.map((message) => message.content)).toEqual([
+        "goal",
+        "decided pinned action",
+        "pinned observation",
+        `${CONTEXT_SUMMARY_PREFIX}\nnew`,
+        "latest action",
+        "latest observation",
+      ]);
     });
   });
 

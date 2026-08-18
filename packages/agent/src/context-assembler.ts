@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@paw/core";
+import { type ChatMessage, groupContextTurnsV1 } from "@paw/core";
 
 /** Durable transcript is the only portion allowed to survive save/resume. */
 export interface DurableContextV1 {
@@ -444,14 +444,15 @@ export function assembleModelContextV1(
       role: "user",
       content: renderHostStateV1(input.hostState),
     };
-    // Keep the latest real input/observation as the attention tail. This also
-    // preserves an atomic native tool-turn envelope because insertion happens
-    // between messages, never inside one. Explicit control is appended below.
+    // Keep the latest complete action-observation unit as the attention tail.
+    // Explicit control is appended below after that durable unit.
     let leadingSystemMessages = 0;
     while (messages[leadingSystemMessages]?.role === "system") {
       leadingSystemMessages += 1;
     }
-    const insertionIndex = Math.max(leadingSystemMessages, messages.length - 1);
+    const turns = groupContextTurnsV1(messages);
+    const latestTurnStart = turns[turns.length - 1]?.start ?? messages.length;
+    const insertionIndex = Math.max(leadingSystemMessages, latestTurnStart);
     messages.splice(insertionIndex, 0, hostMessage);
   }
   if (input.control) {

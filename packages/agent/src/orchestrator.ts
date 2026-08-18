@@ -78,6 +78,7 @@ import {
   allocateContextBudget,
   atomicWrite,
   buildSystemPromptWithBudget,
+  compactionMiddleMessagesV1,
   compressionSavingsRatio,
   computeCompactThreshold,
   costAdjustedCompactThreshold,
@@ -93,12 +94,12 @@ import {
   loadSkillsFromDirectory,
   measureContextBudget,
   prewarmEncoding,
+  projectCompactedHistoryV1,
   resolveEstimatorForModel,
   restoreCheckpoint,
   saveCompactionCommit,
   shouldCompactHistory,
   skillsFromProjectMemory,
-  stripContextSummaryMessages,
   validateCompressionSummary,
 } from "@paw/core";
 import {
@@ -1966,23 +1967,7 @@ export class AgentOrchestrator {
       // 确定三段边界：head（开头保留）、middle（待压缩）、tail（结尾保留）
       const boundaries = compactor.determineBoundaries(messages);
 
-      // 剥离已有的摘要前缀，避免摘要套摘要
-      const headMessages = stripContextSummaryMessages(
-        messages.slice(0, boundaries.headEnd + 1),
-      );
-      // v3 P2.2：pinned 消息按原文保留在摘要前（内容驱动保护，
-      // 约束/需求变更/关键决策绝不进 middle 摘要）
-      const pinnedMessages = boundaries.pinned
-        .map((i) => messages[i])
-        .filter((m): m is NonNullable<typeof m> => m !== undefined);
-      const middleMessages = stripContextSummaryMessages(
-        messages.slice(boundaries.headEnd + 1, boundaries.tailStart),
-      ).filter(
-        (_m, i) => !boundaries.pinned.includes(boundaries.headEnd + 1 + i),
-      );
-      const tailMessages = stripContextSummaryMessages(
-        messages.slice(boundaries.tailStart),
-      );
+      const middleMessages = compactionMiddleMessagesV1(messages, boundaries);
 
       // 没有中间段就不需要压缩
       if (middleMessages.length === 0) {
@@ -2044,12 +2029,11 @@ export class AgentOrchestrator {
         role: "user",
         content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}`,
       };
-      const newMessages = [
-        ...headMessages,
-        ...pinnedMessages,
+      const newMessages = projectCompactedHistoryV1(
+        messages,
+        boundaries,
         summaryMsg,
-        ...tailMessages,
-      ];
+      );
       const newHistory = newMessages.filter((m) => m.role !== "system");
       const afterHistoryTokens = ctxMgr.estimator.countMessages(newHistory);
 
@@ -2196,21 +2180,7 @@ export class AgentOrchestrator {
     try {
       const messages = ctxMgr.buildMessages();
       const boundaries = compactor.determineBoundaries(messages);
-      const headMessages = stripContextSummaryMessages(
-        messages.slice(0, boundaries.headEnd + 1),
-      );
-      // v3 P2.2：pinned 消息按原文保留（恢复路径同样适用）
-      const pinnedMessages = boundaries.pinned
-        .map((i) => messages[i])
-        .filter((m): m is NonNullable<typeof m> => m !== undefined);
-      const middleMessages = stripContextSummaryMessages(
-        messages.slice(boundaries.headEnd + 1, boundaries.tailStart),
-      ).filter(
-        (_m, i) => !boundaries.pinned.includes(boundaries.headEnd + 1 + i),
-      );
-      const tailMessages = stripContextSummaryMessages(
-        messages.slice(boundaries.tailStart),
-      );
+      const middleMessages = compactionMiddleMessagesV1(messages, boundaries);
 
       if (middleMessages.length === 0) {
         emit({
@@ -2234,7 +2204,9 @@ export class AgentOrchestrator {
         signal,
       );
 
-      const quality = validateCompressionSummary(summary);
+      const quality = validateCompressionSummary(summary, {
+        originalMessages: middleMessages,
+      });
       if (!quality.ok) {
         emit({
           type: "compression.skipped",
@@ -2250,12 +2222,11 @@ export class AgentOrchestrator {
         role: "user",
         content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}${remainingWork}`,
       };
-      const newMessages = [
-        ...headMessages,
-        ...pinnedMessages,
+      const newMessages = projectCompactedHistoryV1(
+        messages,
+        boundaries,
         summaryMsg,
-        ...tailMessages,
-      ];
+      );
       const afterTokens = ctxMgr.estimator.countMessages(
         newMessages.filter((m) => m.role !== "system"),
       );

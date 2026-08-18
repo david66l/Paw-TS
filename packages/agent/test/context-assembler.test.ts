@@ -80,6 +80,25 @@ describe("ContextAssembler v1", () => {
     expect(assembled[2]?.nativeToolTurn).toBe(nativeToolTurn);
   });
 
+  test("never inserts Host State between a standard assistant action and observation", () => {
+    const assembled = assembleModelContextV1({
+      durable: {
+        messages: [
+          { role: "user", content: "goal" },
+          { role: "assistant", content: "tool action" },
+          { role: "user", content: "tool observation" },
+        ],
+      },
+      hostState: { status: "fresh status" },
+    });
+    expect(assembled.map((message) => message.content)).toEqual([
+      "goal",
+      "[Host State v1]\nfresh status",
+      "tool action",
+      "tool observation",
+    ]);
+  });
+
   test("never inserts host state before leading system messages", () => {
     const assembled = assembleModelContextV1({
       durable: { messages: [{ role: "system", content: "system" }] },

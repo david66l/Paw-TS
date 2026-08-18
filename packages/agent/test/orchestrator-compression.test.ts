@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { ChatMessage, RunEventEnvelope } from "@paw/core";
-import { ContextManager } from "@paw/core";
+import {
+  CONTEXT_SUMMARY_PREFIX,
+  ContextManager,
+  listCompactionCommits,
+} from "@paw/core";
 import type { LanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
@@ -78,11 +82,33 @@ describe("AgentOrchestrator compression & budget", () => {
   test("skips compaction when summary fails quality gate", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-quality-"));
     const events: RunEventEnvelope[] = [];
+    const history = buildHugeHistory();
+    history[20] = {
+      role: history[20]?.role ?? "user",
+      content: `${history[20]?.content ?? ""}\ncritical path: src/unique-anchor.ts`,
+    };
     const o = new AgentOrchestrator({
       model: finalAnswerModel,
       auxiliaryModel: auxiliaryModel((user) => {
         if (user.includes("Summarize the following conversation")) {
-          return "not a valid structured summary";
+          return [
+            "## Active Task",
+            "Continue the work",
+            "## Goal",
+            "Finish safely",
+            "## Progress",
+            "- Work is ongoing",
+            "## Key Decisions",
+            "- Keep current approach",
+            "## Relevant Files",
+            "- none recorded",
+            "## Errors & Fixes",
+            "- None",
+            "## Next Steps",
+            "1. Continue",
+            "## Pending Questions",
+            "- None",
+          ].join("\n");
         }
         return "";
       }),
@@ -102,7 +128,7 @@ describe("AgentOrchestrator compression & budget", () => {
         turn: 1,
         maxSteps: 2,
         savedAt: Date.now(),
-        messages: buildHugeHistory(),
+        messages: history,
       },
     });
     expect(r.status).toBe("completed");
@@ -164,8 +190,27 @@ describe("AgentOrchestrator compression & budget", () => {
   test("P4.4 successful compaction emits compression.commit (snapshot 落盘)", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-commit-"));
     const events: RunEventEnvelope[] = [];
+    const history = buildHugeHistory();
+    const pinnedActionIndex = 41;
+    const pinnedObservationIndex = 42;
+    history[pinnedActionIndex] = {
+      role: "assistant",
+      content: `decided pinned action\n${history[pinnedActionIndex]?.content ?? ""}`,
+    };
+    history[pinnedObservationIndex] = {
+      role: "user",
+      content: `pinned observation\n${history[pinnedObservationIndex]?.content ?? ""}`,
+    };
+    let providerMessages: readonly ChatMessage[] = [];
     const o = new AgentOrchestrator({
-      model: finalAnswerModel,
+      model: {
+        label: "capture-compacted-history",
+        capabilities: { contextWindow: 128_000 },
+        async complete(messages) {
+          providerMessages = messages;
+          return { text: '{"action":"final_answer","summary":"Done."}' };
+        },
+      },
       auxiliaryModel: auxiliaryModel((user) => {
         // 兼容全新摘要（"Summarize..."）与增量更新（"Update the summary"）两种 prompt
         if (
@@ -211,7 +256,7 @@ describe("AgentOrchestrator compression & budget", () => {
         turn: 1,
         maxSteps: 2,
         savedAt: Date.now(),
-        messages: buildHugeHistory(),
+        messages: history,
       },
     });
     expect(r.status).toBe("completed");
@@ -231,6 +276,33 @@ describe("AgentOrchestrator compression & budget", () => {
       const { existsSync } = await import("node:fs");
       expect(existsSync(commit.event.snapshotPath)).toBe(true);
     }
+    const providerContents = providerMessages.map((message) => message.content);
+    const summaryIndex = providerContents.findIndex((content) =>
+      content.startsWith(CONTEXT_SUMMARY_PREFIX),
+    );
+    const pinnedAction = providerContents.findIndex((content) =>
+      content.startsWith("decided pinned action"),
+    );
+    const pinnedObservation = providerContents.findIndex((content) =>
+      content.startsWith("pinned observation"),
+    );
+    expect(summaryIndex).toBeGreaterThanOrEqual(0);
+    expect(summaryIndex).toBeLessThan(pinnedAction);
+    expect(pinnedObservation).toBe(pinnedAction + 1);
+
+    const savedCommit = listCompactionCommits(dir, "commit1")[0];
+    const savedContents = savedCommit?.afterMessages.map(
+      (message) => message.content,
+    );
+    expect(
+      savedContents?.findIndex((content) =>
+        content.startsWith("pinned observation"),
+      ),
+    ).toBe(
+      (savedContents?.findIndex((content) =>
+        content.startsWith("decided pinned action"),
+      ) ?? -2) + 1,
+    );
   });
 
   test("pending acceptance survives successful compaction and blocks final_answer", async () => {

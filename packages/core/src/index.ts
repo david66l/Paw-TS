@@ -202,11 +202,13 @@ export {
 // 上下文压缩
 // ============================================================
 export {
+  compactionMiddleMessagesV1,
   ContextCompactor,
   CONTEXT_SUMMARY_PREFIX,
   DEFAULT_COMPACTOR_CONFIG,
   stripContextSummaryMessages,
   isContextSummaryMessage,
+  projectCompactedHistoryV1,
   type CompactionFailureReason,
   type CompactorConfig,
   type CompactBoundaries,
