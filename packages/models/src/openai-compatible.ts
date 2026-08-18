@@ -17,7 +17,7 @@
  *   需要在客户端拼接完整 JSON 后才 yield
  */
 
-import type { ModelTokenUsage } from "@paw/core";
+import { isNativeToolTurnV1, type ModelTokenUsage } from "@paw/core";
 
 import type { LanguageModel, ModelCapabilities } from "./language-model.js";
 import { buildOpenAiMessageContent } from "./message-content.js";
@@ -104,12 +104,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     const url = `${this.baseUrl}/chat/completions`;
     const body: Record<string, unknown> = {
       model: this.model,
-      // Historical thinking is audit data, not generic request state. Native
-      // tool-turn passback will be added only once tool_call_id is preserved.
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: buildOpenAiMessageContent(m),
-      })),
+      messages: serializeOpenAiMessages(messages),
       ...(this.runtimeProfile.thinkingEnabled === true ||
       this.runtimeProfile.reasoningEffort !== undefined
         ? {}
@@ -170,6 +165,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     let text = typeof content === "string" ? content : "";
     const extracted = extractThinkBlocks(text);
     text = extracted.text;
+    const nativeAssistantContent = text;
 
     const reasoningContent =
       first !== null && typeof first === "object"
@@ -190,15 +186,27 @@ export class OpenAICompatibleModel implements LanguageModel {
       const toolLines = rawToolCalls
         .map((tc, i) => {
           let args: Record<string, unknown> = {};
+          let argumentsValid = false;
           try {
-            args = JSON.parse(tc.arguments) as Record<string, unknown>;
+            const parsedArgs = JSON.parse(tc.arguments) as unknown;
+            if (
+              parsedArgs !== null &&
+              typeof parsedArgs === "object" &&
+              !Array.isArray(parsedArgs)
+            ) {
+              args = parsedArgs as Record<string, unknown>;
+              argumentsValid = true;
+            }
           } catch {
             /* ignore parse errors */
           }
           nativeToolCalls.push({
-            id: `call_${i}`,
+            id: tc.id,
             name: tc.name,
             arguments: args,
+            rawArguments: tc.arguments,
+            sourceIndex: i,
+            argumentsValid,
           });
           return JSON.stringify({ tool: tc.name, args });
         })
@@ -209,7 +217,11 @@ export class OpenAICompatibleModel implements LanguageModel {
     const usage = parseOpenAiUsageJson(root?.usage);
     return {
       text,
+      ...(nativeToolCalls.length > 0 ? { nativeAssistantContent } : {}),
       ...(thinking !== undefined ? { thinking } : {}),
+      ...(reasoningThinking !== undefined
+        ? { reasoningPassback: reasoningThinking }
+        : {}),
       ...(usage !== undefined ? { usage } : {}),
       ...(finishReason ? { finishReason } : {}),
       ...(nativeToolCalls.length > 0 ? { toolCalls: nativeToolCalls } : {}),
@@ -224,10 +236,7 @@ export class OpenAICompatibleModel implements LanguageModel {
       throw abortError();
     }
     const url = `${this.baseUrl}/chat/completions`;
-    const messagesPayload = messages.map((m) => ({
-      role: m.role,
-      content: buildOpenAiMessageContent(m),
-    }));
+    const messagesPayload = serializeOpenAiMessages(messages);
     const baseStreamBody: Record<string, unknown> = {
       model: this.model,
       messages: messagesPayload,
@@ -296,7 +305,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     // Accumulate tool calls by index
     const toolCallAcc: Map<
       number,
-      { id: string; name: string; arguments: string }
+      { id: string; name: string; arguments: string; invalid: boolean }
     > = new Map();
     try {
       while (true) {
@@ -324,37 +333,40 @@ export class OpenAICompatibleModel implements LanguageModel {
           if (part.thinkingDelta && part.thinkingDelta.length > 0) {
             yield { type: "thinking", delta: part.thinkingDelta };
           }
-          if (part.toolCallDelta) {
-            const delta = part.toolCallDelta;
+          if (
+            part.reasoningPassbackDelta &&
+            part.reasoningPassbackDelta.length > 0
+          ) {
+            yield {
+              type: "reasoning_passback",
+              delta: part.reasoningPassbackDelta,
+            };
+          }
+          for (const delta of part.toolCallDeltas ?? []) {
             let entry = toolCallAcc.get(delta.index);
             if (!entry) {
-              entry = { id: "", name: "", arguments: "" };
+              entry = { id: "", name: "", arguments: "", invalid: false };
               toolCallAcc.set(delta.index, entry);
             }
+            entry.invalid ||= delta.invalid === true;
             if (delta.id) {
+              if (entry.id && entry.id !== delta.id) {
+                throw new Error(
+                  `OpenAI-compatible conflicting tool call id at index ${delta.index}`,
+                );
+              }
               entry.id = delta.id;
             }
             if (delta.functionName) {
+              if (entry.name && entry.name !== delta.functionName) {
+                throw new Error(
+                  `OpenAI-compatible conflicting tool name at index ${delta.index}`,
+                );
+              }
               entry.name = delta.functionName;
             }
             if (delta.functionArguments) {
               entry.arguments += delta.functionArguments;
-            }
-            // Yield a tool_use chunk when we have both name and arguments
-            if (entry.name && entry.arguments) {
-              try {
-                JSON.parse(entry.arguments);
-                yield {
-                  type: "tool_use",
-                  id: entry.id || `call_${delta.index}`,
-                  name: entry.name,
-                  input: entry.arguments,
-                };
-                // Remove so we don't yield again
-                toolCallAcc.delete(delta.index);
-              } catch {
-                // Arguments not yet complete JSON
-              }
             }
           }
           if (part.usage !== undefined) {
@@ -383,16 +395,74 @@ export class OpenAICompatibleModel implements LanguageModel {
           ) {
             yield { type: "thinking", delta: part.thinkingDelta };
           }
+          if (
+            !part.isDoneMarker &&
+            part.reasoningPassbackDelta &&
+            part.reasoningPassbackDelta.length > 0
+          ) {
+            yield {
+              type: "reasoning_passback",
+              delta: part.reasoningPassbackDelta,
+            };
+          }
           if (part.usage !== undefined) {
             lastUsage = part.usage;
           }
           if (part.finishReason !== undefined) {
             lastFinishReason = part.finishReason;
           }
+          for (const delta of part.toolCallDeltas ?? []) {
+            let entry = toolCallAcc.get(delta.index);
+            if (!entry) {
+              entry = { id: "", name: "", arguments: "", invalid: false };
+              toolCallAcc.set(delta.index, entry);
+            }
+            entry.invalid ||= delta.invalid === true;
+            if (delta.id) {
+              if (entry.id && entry.id !== delta.id) {
+                throw new Error(
+                  `OpenAI-compatible conflicting tool call id at index ${delta.index}`,
+                );
+              }
+              entry.id = delta.id;
+            }
+            if (delta.functionName) {
+              if (entry.name && entry.name !== delta.functionName) {
+                throw new Error(
+                  `OpenAI-compatible conflicting tool name at index ${delta.index}`,
+                );
+              }
+              entry.name = delta.functionName;
+            }
+            if (delta.functionArguments) {
+              entry.arguments += delta.functionArguments;
+            }
+          }
         }
       }
     } finally {
       reader.releaseLock();
+    }
+    const completedCalls = [...toolCallAcc.entries()].sort(
+      ([left], [right]) => left - right,
+    );
+    const callIds = new Set<string>();
+    for (const [index, call] of completedCalls) {
+      if (call.invalid || !call.id.trim() || !call.name.trim()) {
+        throw new Error(
+          `OpenAI-compatible incomplete tool call identity at index ${index}`,
+        );
+      }
+      if (callIds.has(call.id)) {
+        throw new Error(`OpenAI-compatible duplicate tool call id ${call.id}`);
+      }
+      callIds.add(call.id);
+      yield {
+        type: "tool_use",
+        id: call.id,
+        name: call.name,
+        input: call.arguments,
+      };
     }
     yield {
       type: "done",
@@ -407,31 +477,92 @@ export class OpenAICompatibleModel implements LanguageModel {
 /** Extract tool_calls from an OpenAI message object. */
 function extractOpenAiToolCalls(
   message: unknown,
-): Array<{ name: string; arguments: string }> {
+): Array<{ id: string; name: string; arguments: string }> {
   if (message === null || typeof message !== "object") {
     return [];
   }
   const m = message as Record<string, unknown>;
   const toolCalls = m.tool_calls;
-  if (!Array.isArray(toolCalls)) {
+  if (toolCalls === undefined) {
     return [];
   }
-  const out: Array<{ name: string; arguments: string }> = [];
-  for (const tc of toolCalls) {
+  if (!Array.isArray(toolCalls)) {
+    throw new Error("OpenAI-compatible tool_calls must be an array");
+  }
+  const out: Array<{ id: string; name: string; arguments: string }> = [];
+  const ids = new Set<string>();
+  for (let index = 0; index < toolCalls.length; index += 1) {
+    const tc = toolCalls[index];
     if (tc === null || typeof tc !== "object") {
-      continue;
+      throw new Error(`OpenAI-compatible invalid tool call at index ${index}`);
     }
     const t = tc as Record<string, unknown>;
     const fn = t.function;
     if (fn === null || typeof fn !== "object") {
-      continue;
+      throw new Error(
+        `OpenAI-compatible missing tool function at index ${index}`,
+      );
     }
     const f = fn as Record<string, unknown>;
+    const id = typeof t.id === "string" ? t.id : "";
     const name = typeof f.name === "string" ? f.name : "";
     const args = typeof f.arguments === "string" ? f.arguments : "";
-    if (name) {
-      out.push({ name, arguments: args });
+    if (!id.trim() || !name.trim() || typeof f.arguments !== "string") {
+      throw new Error(
+        `OpenAI-compatible incomplete tool call identity at index ${index}`,
+      );
     }
+    if (ids.has(id)) {
+      throw new Error(`OpenAI-compatible duplicate tool call id ${id}`);
+    }
+    ids.add(id);
+    out.push({ id, name, arguments: args });
+  }
+  return out;
+}
+
+/** Serialize request history, expanding atomic native turns on the wire. */
+function serializeOpenAiMessages(
+  messages: readonly ChatMessage[],
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const message of messages) {
+    const nativeTurn = message.nativeToolTurn;
+    if (message.role === "assistant" && isNativeToolTurnV1(nativeTurn)) {
+      out.push({
+        role: "assistant",
+        content: nativeTurn.assistantContent,
+        ...(nativeTurn.reasoningPassback
+          ? { reasoning_content: nativeTurn.reasoningPassback }
+          : {}),
+        tool_calls: nativeTurn.calls.map((call) => ({
+          id: call.callId,
+          type: "function",
+          function: {
+            name: call.providerName,
+            arguments: call.rawArguments,
+          },
+        })),
+      });
+      for (let index = 0; index < nativeTurn.results.length; index += 1) {
+        const call = nativeTurn.calls[index];
+        const result = nativeTurn.results[index];
+        if (!call || !result || call.callId !== result.callId) {
+          throw new Error(`Native tool turn result ${index} is not paired`);
+        }
+        out.push({
+          role: "tool",
+          tool_call_id: result.callId,
+          content: result.content || "(no output)",
+        });
+      }
+      continue;
+    }
+    // Historical thinking is audit data, not generic request state.
+    out.push({
+      role: message.role,
+      content: buildOpenAiMessageContent(message),
+    });
   }
   return out;
 }

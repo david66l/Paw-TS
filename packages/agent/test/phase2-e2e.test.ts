@@ -196,6 +196,63 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
     expect(r2.message).toBe("Resumed run done.");
   });
 
+  test("resumeRun preserves one complete native tool turn and strips legacy audit thinking", async () => {
+    const dir = tmpDir("paw-e2e-native-resume-");
+    const runId = "e2e-native-resume";
+    const store = new FileSystemAppStateStore({
+      statesDir: path.join(dir, ".paw", "states"),
+    });
+    const nativeToolTurn = {
+      schemaVersion: 1 as const,
+      protocol: "openai-compatible" as const,
+      assistantContent: "checking",
+      reasoningPassback: "native passback only",
+      calls: [
+        {
+          callId: "provider-a",
+          providerName: "read_file",
+          rawArguments: '{ "path": "a.txt" }',
+        },
+      ],
+      results: [{ callId: "provider-a", content: "hello" }],
+    };
+    store.save({
+      runId,
+      goal: "resume native history",
+      workspaceRoot: dir,
+      turn: 0,
+      maxSteps: 2,
+      messages: [
+        { role: "user", content: "resume native history" },
+        {
+          role: "assistant",
+          content: "fallback",
+          thinking: "legacy audit must be removed",
+          nativeToolTurn,
+        },
+      ],
+      savedAt: Date.now(),
+    });
+    let seen: readonly import("@paw/models").ChatMessage[] = [];
+    const orchestrator = new AgentOrchestrator({
+      model: {
+        label: "native-resume-capture",
+        async complete(messages) {
+          seen = messages;
+          return { text: '{"action":"final_answer","summary":"done"}' };
+        },
+      },
+      appStateStore: store,
+      retrySleep: async () => {},
+    });
+
+    await orchestrator.resumeRun({ runId });
+
+    const resumed = seen.find((message) => message.nativeToolTurn);
+    expect(resumed?.nativeToolTurn).toEqual(nativeToolTurn);
+    expect(resumed?.thinking).toBeUndefined();
+  });
+
   test("resumeRun continues durable event and checkpoint sequences", async () => {
     const dir = tmpDir("paw-e2e-resume-sequences-");
     writeFileSync(path.join(dir, "a.txt"), "before", "utf8");

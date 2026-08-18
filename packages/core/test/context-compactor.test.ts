@@ -103,10 +103,7 @@ describe("ContextCompactor", () => {
 
     it("incremental mode includes chapter-level revision rule", () => {
       const compactor = new ContextCompactor();
-      const prompt = compactor.buildSummaryPrompt(
-        [],
-        "Previous summary text.",
-      );
+      const prompt = compactor.buildSummaryPrompt([], "Previous summary text.");
       expect(prompt).toContain("REVISION RULE");
       expect(prompt).toContain("Only rewrite the sections that are affected");
       expect(prompt).toContain("Keep all unaffected sections verbatim");
@@ -135,6 +132,37 @@ describe("ContextCompactor", () => {
       expect(prompt).toContain("Hello");
       expect(prompt).toContain("[Assistant]");
       expect(prompt).toContain("Hi there");
+    });
+
+    it("summarizes native call facts without exposing reasoning passback", () => {
+      const compactor = new ContextCompactor();
+      const messages: ChatMessage[] = [
+        {
+          role: "assistant",
+          content:
+            'checking\n{"tool":"read_file","arguments":"{\\"path\\":\\"a.ts\\"}"}\n[Tool: read_file] ok',
+          nativeToolTurn: {
+            schemaVersion: 1,
+            protocol: "openai-compatible",
+            assistantContent: "checking",
+            reasoningPassback: "private provider state",
+            calls: [
+              {
+                callId: "a",
+                providerName: "read_file",
+                rawArguments: '{"path":"a.ts"}',
+              },
+            ],
+            results: [{ callId: "a", content: "[Tool: read_file] ok" }],
+          },
+        },
+      ];
+
+      const prompt = compactor.buildSummaryPrompt(messages, null);
+      expect(prompt).toContain("read_file");
+      expect(prompt).toContain("a.ts");
+      expect(prompt).toContain("[Tool: read_file] ok");
+      expect(prompt).not.toContain("private provider state");
     });
 
     it("includes previous summary when provided", () => {

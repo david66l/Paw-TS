@@ -365,7 +365,6 @@ import {
   diagnoseParseFailure,
   parseAgentActionFromModelText,
   parseAgentActionsFromModelText,
-  toolCallDedupKey,
 } from "./parse-agent-action.js";
 import {
   CircuitBreaker,
@@ -1555,7 +1554,7 @@ export class AgentOrchestrator {
    * - 一些模型（如通过 Ollama 运行的本地模型）不支持原生 function calling
    * - 即使支持，某些场景下模型可能混合使用文本和原生调用
    *
-   * 去重：多个相同工具+相同参数的调用只保留第一个（toolCallDedupKey）。
+   * 文本 fallback 保持解析器自己的去重；原生调用按 provider call id 保留。
    */
   private async callModelAndParseActions(
     ctx: PhaseContext,
@@ -1567,6 +1566,14 @@ export class AgentOrchestrator {
     toolCalls: AgentToolCallAction[];
     singleAction: import("@paw/core").AgentAction | null;
     reasoningText: string;
+    /** Provider-visible assistant text for a native tool-call turn. */
+    nativeAssistantContent?: string;
+    /** Complete provider-native call batch, retained separately from actions. */
+    nativeToolTurn?: {
+      readonly assistantContent: string;
+      readonly reasoningPassback?: string;
+      readonly calls: readonly import("@paw/core").NativeToolTurnCallV1[];
+    };
     finishReason?: string;
     /** 解析诊断：无 action 时描述「为什么无法解析」（供格式反馈回灌） */
     diagnosis: ParseDiagnosis;
@@ -1583,16 +1590,23 @@ export class AgentOrchestrator {
     const modelCallStart = Date.now();
 
     // 核心：调用模型（带熔断和重试）
-    const { text, thinking, nativeToolCalls, finishReason } =
-      await this.invokeModel(
-        model,
-        ctxMgr.buildMessages(),
-        signal,
-        emit,
-        toolDefs,
-        toolNameMap,
-        ctx.loopKernelVersion !== "v2",
-      );
+    const {
+      text,
+      thinking,
+      reasoningPassback,
+      nativeToolCalls,
+      nativeToolErrors: invokeNativeErrors,
+      nativeAssistantContent,
+      finishReason,
+    } = await this.invokeModel(
+      model,
+      ctxMgr.buildMessages(),
+      signal,
+      emit,
+      toolDefs,
+      toolNameMap,
+      ctx.loopKernelVersion !== "v2",
+    );
 
     emit({ type: "phase", name: "parse" });
 
@@ -1603,21 +1617,89 @@ export class AgentOrchestrator {
     let toolCalls: AgentToolCallAction[];
     let reasoningText: string;
     let nativeErrors: NativeToolError[] | undefined;
+    let nativeTurnCalls:
+      | readonly import("@paw/core").NativeToolTurnCallV1[]
+      | undefined;
 
     // 通道 1：原生 tool_use → 直接映射为 AgentToolCallAction
-    if (nativeToolCalls && nativeToolCalls.length > 0) {
+    if (
+      (nativeToolCalls && nativeToolCalls.length > 0) ||
+      (invokeNativeErrors && invokeNativeErrors.length > 0)
+    ) {
       const mapped: AgentToolCallAction[] = [];
       const errors: NativeToolError[] = [];
-      for (const tc of nativeToolCalls) {
+      const entries = [
+        ...(nativeToolCalls ?? []).map((call, fallbackIndex) => ({
+          sourceIndex: call.sourceIndex ?? fallbackIndex,
+          call,
+        })),
+        ...(invokeNativeErrors ?? []).map((error, fallbackIndex) => ({
+          sourceIndex:
+            error.sourceIndex ?? (nativeToolCalls?.length ?? 0) + fallbackIndex,
+          error,
+        })),
+      ].sort((left, right) => left.sourceIndex - right.sourceIndex);
+      const rawTurnCalls = entries.map((entry) =>
+        "call" in entry
+          ? {
+              callId: entry.call.id,
+              providerName: entry.call.name,
+              rawArguments:
+                entry.call.rawArguments ?? JSON.stringify(entry.call.arguments),
+            }
+          : {
+              callId: entry.error.id,
+              providerName: entry.error.name,
+              rawArguments: entry.error.raw,
+            },
+      );
+      const uniqueIds = new Set(rawTurnCalls.map((call) => call.callId));
+      const nativeIdentityValid =
+        rawTurnCalls.every(
+          (call) =>
+            call.callId.trim().length > 0 &&
+            call.providerName.trim().length > 0,
+        ) && uniqueIds.size === rawTurnCalls.length;
+      if (nativeIdentityValid) {
+        nativeTurnCalls = rawTurnCalls;
+      }
+      for (const entry of entries) {
+        if ("error" in entry) {
+          errors.push(entry.error);
+          continue;
+        }
+        const tc = entry.call;
         // 将 sanitized 工具名还原为原始名（如 "Bash" → "Bash(git *)"）
         const originalName = toolNameMap.get(tc.name) ?? tc.name;
+        if (!tc.id) {
+          errors.push({
+            id: tc.id,
+            name: originalName,
+            raw: tc.rawArguments ?? JSON.stringify(tc.arguments),
+            sourceIndex: entry.sourceIndex,
+            reason: "invalid_call_id",
+          });
+          continue;
+        }
+        if (tc.argumentsValid === false) {
+          errors.push({
+            id: tc.id,
+            name: originalName,
+            raw: tc.rawArguments ?? "",
+            sourceIndex: entry.sourceIndex,
+            reason: "malformed_arguments",
+          });
+          continue;
+        }
         if (!knownTools.has(originalName)) {
           // 未知工具名：原生调用不是文本误匹配，静默丢弃会让模型重复犯错
           // → 拒绝执行并回灌「工具不存在 + 可用列表」（参考 OpenHands 做法）
           errors.push({
             id: tc.id,
             name: originalName,
-            raw: JSON.stringify(tc.arguments),
+            raw: tc.rawArguments ?? JSON.stringify(tc.arguments),
+            sourceIndex: entry.sourceIndex,
+            reason: "unknown_tool",
           });
           continue;
         }
@@ -1628,16 +1710,34 @@ export class AgentOrchestrator {
           args: fixMalformedToolArguments(tc.arguments, originalName, toolDefs),
         });
       }
-      // 去重：相同工具+相同参数的调用只保留一个（键序无关）
-      const seen = new Set<string>();
-      toolCalls = mapped.filter((tc) => {
-        const key = toolCallDedupKey(tc.tool, tc.args);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      nativeErrors = errors.length > 0 ? errors : undefined;
-      reasoningText = text;
+      // Native call ids are protocol identities. Do not collapse parallel
+      // calls merely because their tool name and arguments are identical.
+      if (!nativeIdentityValid) {
+        nativeErrors = rawTurnCalls.map((call, sourceIndex) => ({
+          id: call.callId,
+          name: call.providerName,
+          raw: call.rawArguments,
+          sourceIndex,
+          reason: "invalid_call_id" as const,
+        }));
+        toolCalls = [];
+      } else if (errors.length > 0) {
+        const errorsById = new Map(errors.map((error) => [error.id, error]));
+        nativeErrors = rawTurnCalls.map(
+          (call, sourceIndex) =>
+            errorsById.get(call.callId) ?? {
+              id: call.callId,
+              name: call.providerName,
+              raw: call.rawArguments,
+              sourceIndex,
+              reason: "batch_rejected" as const,
+            },
+        );
+        toolCalls = [];
+      } else {
+        toolCalls = mapped;
+      }
+      reasoningText = nativeAssistantContent ?? text;
     } else {
       // 通道 2：文本解析 → 从模型输出中提取工具调用
       const parsed = parseAgentActionsFromModelText(text, { knownTools });
@@ -1689,6 +1789,20 @@ export class AgentOrchestrator {
       singleAction,
       reasoningText,
       diagnosis,
+      ...(nativeAssistantContent !== undefined
+        ? { nativeAssistantContent }
+        : {}),
+      ...(model.runtimeProfile?.protocol === "openai-compatible" &&
+      nativeTurnCalls &&
+      nativeTurnCalls.length > 0
+        ? {
+            nativeToolTurn: {
+              assistantContent: nativeAssistantContent ?? "",
+              ...(reasoningPassback !== undefined ? { reasoningPassback } : {}),
+              calls: nativeTurnCalls,
+            },
+          }
+        : {}),
       ...(finishReason !== undefined ? { finishReason } : {}),
       ...(nativeErrors ? { nativeToolErrors: nativeErrors } : {}),
     };
@@ -2402,6 +2516,7 @@ export class AgentOrchestrator {
       reasoningText,
       diagnosis,
       nativeToolErrors,
+      nativeToolTurn,
       finishReason,
     } = modelResult;
     emit({
@@ -2623,6 +2738,7 @@ export class AgentOrchestrator {
       {
         diagnosis,
         ...(nativeToolErrors ? { nativeToolErrors } : {}),
+        ...(nativeToolTurn ? { nativeToolTurn } : {}),
       },
     );
     // 子 Agent 摘要 → WorkingMemory
@@ -3053,11 +3169,13 @@ export class AgentOrchestrator {
     rawText: string;
     usage?: ModelTokenUsage;
     thinking?: string;
+    reasoningPassback?: string;
     finishReason?: string;
     /** 原生结构化工具调用（当 provider 支持 function calling 时） */
     nativeToolCalls?: readonly NativeToolCall[];
     /** 原生通道参数解析失败的调用（拒绝执行，需回灌给模型） */
     nativeToolErrors?: readonly NativeToolError[];
+    nativeAssistantContent?: string;
   }> {
     // 内部请求超时必须与父级取消区分：前者可重试，后者应立即停 run。
     const timeout = AbortSignal.timeout(this.modelRequestTimeoutMs);
@@ -3080,11 +3198,14 @@ export class AgentOrchestrator {
       if (useStreaming) {
         // ═══ 流式调用 ═══
         let acc = "";
+        let assistantContentAcc = "";
         let thinkingAcc = "";
+        let reasoningPassbackAcc = "";
         let usage: ModelTokenUsage | undefined;
         let finishReason: string | undefined;
         const nativeToolCalls: NativeToolCall[] = [];
         const malformedToolErrors: NativeToolError[] = [];
+        let nativeSourceIndex = 0;
 
         // 流式恢复：边收 chunk 边写盘，崩了不丢输出
         let recoveryStream: fs.WriteStream | undefined;
@@ -3101,12 +3222,15 @@ export class AgentOrchestrator {
         for await (const chunk of streamFn.call(model, messages, modelOpts)) {
           if (chunk.type === "text") {
             acc += chunk.delta;
+            assistantContentAcc += chunk.delta;
             recoveryStream?.write(chunk.delta);
             emit({ type: "model.chunk", text: acc });
           } else if (chunk.type === "thinking") {
             thinkingAcc += chunk.delta;
             recoveryStream?.write(`\n[thinking] ${chunk.delta}\n`);
             emit({ type: "model.thinking", text: thinkingAcc });
+          } else if (chunk.type === "reasoning_passback") {
+            reasoningPassbackAcc += chunk.delta;
           } else if (chunk.type === "tool_use") {
             // 原生 tool_use：收集为结构化对象，同时转为文本用于 TUI 显示
             // 参数 JSON 解析失败 → 拒绝执行（绝不带空参数执行），
@@ -3126,7 +3250,10 @@ export class AgentOrchestrator {
                 id: chunk.id,
                 name: chunk.name,
                 raw: chunk.input,
+                sourceIndex: nativeSourceIndex,
+                reason: "malformed_arguments",
               });
+              nativeSourceIndex += 1;
               const display = JSON.stringify({
                 tool: chunk.name,
                 args: "[unparseable]",
@@ -3140,7 +3267,11 @@ export class AgentOrchestrator {
               id: chunk.id,
               name: chunk.name,
               arguments: parsedArgs,
+              rawArguments: chunk.input,
+              sourceIndex: nativeSourceIndex,
+              argumentsValid: true,
             });
+            nativeSourceIndex += 1;
             const display = JSON.stringify({
               tool: chunk.name,
               args: parsedArgs,
@@ -3194,6 +3325,9 @@ export class AgentOrchestrator {
         // 而不是通过独立的 thinking 流发出。这里做兜底提取。
         const finalExtracted = extractThinkBlocks(acc);
         const finalText = finalExtracted.text || acc;
+        const assistantExtracted = extractThinkBlocks(assistantContentAcc);
+        const nativeAssistantContent =
+          assistantExtracted.text || assistantContentAcc;
         const finalThinking =
           [thinkingAcc, finalExtracted.thinking].filter(Boolean).join("\n\n") ||
           undefined;
@@ -3207,8 +3341,14 @@ export class AgentOrchestrator {
           text: normalized,
           rawText: acc,
           thinking: finalThinking,
+          ...(reasoningPassbackAcc
+            ? { reasoningPassback: reasoningPassbackAcc }
+            : {}),
           usage,
           finishReason,
+          ...(nativeToolCalls.length > 0 || malformedToolErrors.length > 0
+            ? { nativeAssistantContent }
+            : {}),
           ...(nativeToolCalls.length > 0 ? { nativeToolCalls } : {}),
           ...(malformedToolErrors.length > 0
             ? { nativeToolErrors: malformedToolErrors }
@@ -3252,10 +3392,16 @@ export class AgentOrchestrator {
         text: normalizedResult,
         rawText: result.text,
         thinking: result.thinking,
+        ...(result.reasoningPassback !== undefined
+          ? { reasoningPassback: result.reasoningPassback }
+          : {}),
         usage: result.usage,
         finishReason: result.finishReason,
         ...(result.toolCalls && result.toolCalls.length > 0
           ? { nativeToolCalls: result.toolCalls }
+          : {}),
+        ...(result.nativeAssistantContent !== undefined
+          ? { nativeAssistantContent: result.nativeAssistantContent }
           : {}),
       };
     } catch (error) {
@@ -3287,9 +3433,11 @@ export class AgentOrchestrator {
     text: string;
     usage?: ModelTokenUsage;
     thinking?: string;
+    reasoningPassback?: string;
     finishReason?: string;
     nativeToolCalls?: readonly NativeToolCall[];
     nativeToolErrors?: readonly NativeToolError[];
+    nativeAssistantContent?: string;
   }> {
     // 第一次调用（带熔断和重试）
     const result = await this.callModelWithRetry(
@@ -3300,6 +3448,27 @@ export class AgentOrchestrator {
       tools,
       toolNameMap,
     );
+
+    const hasNativeProtocolState =
+      (result.nativeToolCalls?.length ?? 0) > 0 ||
+      (result.nativeToolErrors?.length ?? 0) > 0;
+    if (
+      autoContinueTruncation &&
+      (result.finishReason === "length" ||
+        result.finishReason === "max_tokens") &&
+      hasNativeProtocolState
+    ) {
+      emit({ type: "model.truncated", finishReason: result.finishReason });
+      emit({
+        type: "model.done",
+        text: result.text,
+        ...(result.thinking ? { thinking: result.thinking } : {}),
+        ...(result.usage !== undefined ? { usage: result.usage } : {}),
+      });
+      throw new Error(
+        "Model output was truncated inside a native tool-call turn; refusing to execute or replay a partial provider protocol turn",
+      );
+    }
 
     // 检测截断：需要续写
     if (
@@ -3328,6 +3497,28 @@ export class AgentOrchestrator {
         tools,
         toolNameMap,
       );
+      if (
+        (continued.nativeToolCalls?.length ?? 0) > 0 ||
+        (continued.nativeToolErrors?.length ?? 0) > 0
+      ) {
+        const auditText = AgentOrchestrator.normalizeToolCalls(
+          result.rawText + continued.rawText,
+          toolNameMap,
+        );
+        const auditThinking =
+          [result.thinking, continued.thinking].filter(Boolean).join("") ||
+          undefined;
+        const auditUsage = this.mergeUsage(result.usage, continued.usage);
+        emit({
+          type: "model.done",
+          text: auditText,
+          ...(auditThinking ? { thinking: auditThinking } : {}),
+          ...(auditUsage !== undefined ? { usage: auditUsage } : {}),
+        });
+        throw new Error(
+          "A text auto-continuation produced a native tool-call turn; refusing to collapse two provider turns into one invalid replay envelope",
+        );
+      }
 
       // 合并两次调用的结果
       const combinedRawText = result.rawText + continued.rawText;
@@ -3339,6 +3530,11 @@ export class AgentOrchestrator {
       const combinedThinking =
         [result.thinking, continued.thinking].filter(Boolean).join("") ||
         undefined;
+      const combinedReasoningPassback = continued.reasoningPassback;
+      const combinedNativeAssistantContent =
+        [result.nativeAssistantContent, continued.nativeAssistantContent]
+          .filter((value): value is string => value !== undefined)
+          .join("") || undefined;
 
       emit({
         type: "model.done",
@@ -3349,6 +3545,9 @@ export class AgentOrchestrator {
       return {
         text: combinedText,
         thinking: combinedThinking,
+        ...(combinedReasoningPassback !== undefined
+          ? { reasoningPassback: combinedReasoningPassback }
+          : {}),
         usage: combinedUsage,
         ...(continued.finishReason !== undefined
           ? { finishReason: continued.finishReason }
@@ -3358,6 +3557,9 @@ export class AgentOrchestrator {
           ...(result.nativeToolCalls ?? []),
           ...(continued.nativeToolCalls ?? []),
         ],
+        ...(combinedNativeAssistantContent !== undefined
+          ? { nativeAssistantContent: combinedNativeAssistantContent }
+          : {}),
         // 合并解析失败调用：两次调用的错误都要回灌
         nativeToolErrors: [
           ...(result.nativeToolErrors ?? []),
@@ -3442,9 +3644,11 @@ export class AgentOrchestrator {
     rawText: string;
     usage?: ModelTokenUsage;
     thinking?: string;
+    reasoningPassback?: string;
     finishReason?: string;
     nativeToolCalls?: readonly NativeToolCall[];
     nativeToolErrors?: readonly NativeToolError[];
+    nativeAssistantContent?: string;
   }> {
     const breaker = breakerArg ?? this.getOrCreateBreaker(model.label);
     // 熔断器守卫：如果已经熔断，直接抛异常（不可重试）

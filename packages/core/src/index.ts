@@ -62,9 +62,13 @@ export type {
 // ============================================================
 export {
   ContextManager,
+  isNativeToolTurnV1,
   type Attachment,
   type ChatMessage,
   type ContextManagerOptions,
+  type NativeToolTurnCallV1,
+  type NativeToolTurnResultV1,
+  type NativeToolTurnV1,
 } from "./context/manager.js";
 
 // ============================================================

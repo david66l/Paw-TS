@@ -85,9 +85,7 @@ function getSharedEncoding(
 }
 
 /** 后台预热指定 encoding（fire-and-forget，避免首次调用卡 ~20s） */
-export function prewarmEncoding(
-  name: "cl100k_base" | "o200k_base",
-): void {
+export function prewarmEncoding(name: "cl100k_base" | "o200k_base"): void {
   if (sharedEncodings.has(name)) return;
   // 后台触发加载；加载期间的同步调用会等待同一过程完成
   void Promise.resolve().then(() => {
@@ -155,6 +153,9 @@ export class TiktokenEstimator implements TokenEstimator {
       if (msg.thinking) {
         tokens += this.count(msg.thinking);
       }
+      if (msg.nativeToolTurn?.reasoningPassback) {
+        tokens += this.count(msg.nativeToolTurn.reasoningPassback);
+      }
       if (msg.attachments) {
         for (const att of msg.attachments) {
           if (att.type === "image") {
@@ -218,6 +219,9 @@ export class FastEstimator implements TokenEstimator {
       total += this.count(msg.content);
       if (msg.thinking) {
         total += this.count(msg.thinking);
+      }
+      if (msg.nativeToolTurn?.reasoningPassback) {
+        total += this.count(msg.nativeToolTurn.reasoningPassback);
       }
       if (msg.attachments) {
         for (const att of msg.attachments) {

@@ -126,7 +126,9 @@ function truncateByBudget(
   const msgCost = (m: ChatMessage): number =>
     opts.useTokens
       ? opts.estimator.countMessages([m])
-      : m.content.length + (m.thinking?.length ?? 0);
+      : m.content.length +
+        (m.thinking?.length ?? 0) +
+        (m.nativeToolTurn?.reasoningPassback?.length ?? 0);
 
   // 计算当前总成本
   let current = 0;
@@ -157,7 +159,9 @@ function truncateByBudget(
 
   // P4.2 生命周期驱逐：段状态（active/completed/evictable）+ 残差效用门控。
   // completed ≠ 可删：文件路径仍被最近 tool call 引用 → 保留（残差效用）。
-  const segments = computeSegments(history, { tailTurnCount: opts.tailTurnCount });
+  const segments = computeSegments(history, {
+    tailTurnCount: opts.tailTurnCount,
+  });
   const residualPaths = extractRecentToolCallPaths(history);
   const stateFor = (i: number): SegmentState =>
     segments.find((s) => i >= s.start && i <= s.end)?.state ?? "active";

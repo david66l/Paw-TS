@@ -20,7 +20,7 @@
  * 1. **格式兼容**：同时支持 OpenAI 原生格式、DeepSeek 格式、Qwen DashScope 格式
  *    ——它们都遵循 OpenAI 兼容的 choices[0].delta 结构。
  * 2. **[DONE] 标记**：流结束时 SSE 会发送 `data: [DONE]` 行，解析为 isDoneMarker=true
- * 3. **防御性解析**：JSON 解析失败不抛异常，返回空结果（textDelta=""）
+ * 3. **协议完整性**：JSON 或根对象损坏时抛错，禁止静默执行同批合法 sibling
  * 4. **可选字段合并**：使用展开运算符 + 条件判断，只在字段有值时才包含在返回对象中
  * 5. **cache token 统计**：从 prompt_tokens_details.cached_tokens 中提取缓存命中 token 数
  *    （OpenAI/DeepSeek 兼容的 prompt caching 功能）
@@ -39,6 +39,8 @@ import { extractThinkBlocks } from "./think-extraction.js";
  */
 export interface OpenAiToolCallDelta {
   readonly index: number;
+  /** The provider emitted a malformed structural delta at this source slot. */
+  readonly invalid?: boolean;
   readonly id?: string;
   readonly type?: string;
   readonly functionName?: string;
@@ -62,10 +64,11 @@ export interface OpenAiToolCallDelta {
 export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
   readonly textDelta: string;
   readonly thinkingDelta?: string;
+  readonly reasoningPassbackDelta?: string;
   readonly usage?: ModelTokenUsage;
   readonly isDoneMarker: boolean;
   readonly finishReason?: string;
-  readonly toolCallDelta?: OpenAiToolCallDelta;
+  readonly toolCallDeltas?: readonly OpenAiToolCallDelta[];
 } {
   const t = raw.trim();
   // ── 流结束标记 ──
@@ -77,18 +80,19 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
   try {
     parsed = JSON.parse(t);
   } catch {
-    return { textDelta: "", isDoneMarker: false };
+    throw new Error("OpenAI-compatible: invalid JSON stream payload");
   }
   const root =
     parsed !== null && typeof parsed === "object"
       ? (parsed as Record<string, unknown>)
       : null;
   if (!root) {
-    return { textDelta: "", isDoneMarker: false };
+    throw new Error("OpenAI-compatible: invalid stream payload root");
   }
   let textDelta = "";
   let thinkingDelta: string | undefined;
-  let toolCallDelta: OpenAiToolCallDelta | undefined;
+  let reasoningPassbackDelta: string | undefined;
+  let toolCallDeltas: OpenAiToolCallDelta[] | undefined;
   let finishReason: string | undefined;
 
   // ── 解析 choices[0] ──
@@ -120,6 +124,7 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
       // reasoning_content：OpenAI o1/o3 等推理模型的思考链
       const reasoning = d.reasoning_content;
       if (typeof reasoning === "string") {
+        reasoningPassbackDelta = reasoning;
         thinkingDelta = thinkingDelta
           ? `${thinkingDelta}\n\n${reasoning}`
           : reasoning;
@@ -127,7 +132,10 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
       // 工具调用增量
       const toolCalls = d.tool_calls;
       if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-        toolCallDelta = parseToolCallDelta(toolCalls[0]);
+        const parsedDeltas = toolCalls.map((value, sourceIndex) =>
+          parseToolCallDelta(value, sourceIndex),
+        );
+        if (parsedDeltas.length > 0) toolCallDeltas = parsedDeltas;
       }
     }
   }
@@ -139,10 +147,11 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
   return {
     textDelta,
     ...(thinkingDelta !== undefined ? { thinkingDelta } : {}),
+    ...(reasoningPassbackDelta !== undefined ? { reasoningPassbackDelta } : {}),
     ...(usage !== undefined ? { usage } : {}),
     isDoneMarker: false,
     ...(finishReason !== undefined ? { finishReason } : {}),
-    ...(toolCallDelta !== undefined ? { toolCallDelta } : {}),
+    ...(toolCallDeltas !== undefined ? { toolCallDeltas } : {}),
   };
 }
 
@@ -154,20 +163,30 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
  * Chunk 2: {index:0, function:{arguments:"{\"path"}}
  * Chunk 3: {index:0, function:{arguments:"\":\"/foo/bar\"}"}}
  *
- * 本函数提取每个 chunk 中的 index/id/type/functionName/functionArguments，
- * 如果所有可选字段都为空则返回 undefined（避免无效的 tool call delta）。
+ * 本函数提取每个 chunk 中的 index/id/type/functionName/functionArguments；
+ * malformed source slots are retained and marked invalid so a valid sibling
+ * cannot make a structurally broken provider batch execute partially.
  */
-function parseToolCallDelta(raw: unknown): OpenAiToolCallDelta | undefined {
+function parseToolCallDelta(
+  raw: unknown,
+  sourceIndex: number,
+): OpenAiToolCallDelta {
   if (raw === null || typeof raw !== "object") {
-    return undefined;
+    return { index: sourceIndex, invalid: true };
   }
   const obj = raw as Record<string, unknown>;
-  const index = typeof obj.index === "number" ? obj.index : 0;
+  const hasValidIndex =
+    typeof obj.index === "number" &&
+    Number.isInteger(obj.index) &&
+    obj.index >= 0;
+  const index = hasValidIndex ? (obj.index as number) : sourceIndex;
   const id = typeof obj.id === "string" ? obj.id : undefined;
   const type = typeof obj.type === "string" ? obj.type : undefined;
   const fn = obj.function;
   let functionName: string | undefined;
   let functionArguments: string | undefined;
+  const functionShapeInvalid =
+    fn !== undefined && (fn === null || typeof fn !== "object");
   if (fn !== null && typeof fn === "object") {
     const f = fn as Record<string, unknown>;
     if (typeof f.name === "string") {
@@ -177,17 +196,14 @@ function parseToolCallDelta(raw: unknown): OpenAiToolCallDelta | undefined {
       functionArguments = f.arguments;
     }
   }
-  // 所有可选字段都为空 → 无效的 tool call，返回 undefined
-  if (
-    id === undefined &&
-    type === undefined &&
-    functionName === undefined &&
-    functionArguments === undefined
-  ) {
-    return undefined;
-  }
+  const invalid =
+    !hasValidIndex ||
+    functionShapeInvalid ||
+    (obj.id !== undefined && typeof obj.id !== "string") ||
+    (obj.type !== undefined && typeof obj.type !== "string");
   return {
     index,
+    ...(invalid ? { invalid: true } : {}),
     ...(id !== undefined ? { id } : {}),
     ...(type !== undefined ? { type } : {}),
     ...(functionName !== undefined ? { functionName } : {}),

@@ -10,7 +10,7 @@
  * NativeToolCall：provider 原生返回的工具调用（非文本解析）。
  */
 
-import type { ModelTokenUsage } from "@paw/core";
+import type { ModelTokenUsage, NativeToolTurnV1 } from "@paw/core";
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -33,14 +33,20 @@ export interface ChatMessage {
   readonly thinking?: string;
   /** 用户消息的附件（图片、文件等）。 */
   readonly attachments?: readonly Attachment[];
+  /** Atomic provider-native assistant/tool-result turn for request replay. */
+  readonly nativeToolTurn?: NativeToolTurnV1;
 }
 
 /** 非流式模型调用结果。 */
 export interface ModelCompletionResult {
   readonly text: string;
+  /** Provider-visible assistant text before Paw adds tool-call display lines. */
+  readonly nativeAssistantContent?: string;
   readonly usage?: ModelTokenUsage;
   /** 模型产生的 thinking 内容。 */
   readonly thinking?: string;
+  /** Exact OpenAI-compatible reasoning_content eligible for native passback. */
+  readonly reasoningPassback?: string;
   /** Provider 的 finish/stop reason。"length" 或 "max_tokens" 表示输出被截断。 */
   readonly finishReason?: string;
   /** 原生结构化工具调用（当 provider 支持 function calling 时）。 */
@@ -52,6 +58,12 @@ export interface NativeToolCall {
   readonly id: string;
   readonly name: string;
   readonly arguments: Record<string, unknown>;
+  /** Exact provider argument string used when replaying the native call. */
+  readonly rawArguments?: string;
+  /** Provider source order within one assistant tool-call batch. */
+  readonly sourceIndex?: number;
+  /** False when rawArguments was not a JSON object and must not execute. */
+  readonly argumentsValid?: boolean;
 }
 
 /**
@@ -65,5 +77,15 @@ export interface NativeToolCall {
 export type ModelStreamChunk =
   | { readonly type: "text"; readonly delta: string }
   | { readonly type: "thinking"; readonly delta: string }
-  | { readonly type: "tool_use"; readonly id: string; readonly name: string; readonly input: string }
-  | { readonly type: "done"; readonly usage?: ModelTokenUsage; readonly finishReason?: string };
+  | { readonly type: "reasoning_passback"; readonly delta: string }
+  | {
+      readonly type: "tool_use";
+      readonly id: string;
+      readonly name: string;
+      readonly input: string;
+    }
+  | {
+      readonly type: "done";
+      readonly usage?: ModelTokenUsage;
+      readonly finishReason?: string;
+    };

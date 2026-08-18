@@ -180,6 +180,136 @@ describe("ContextManager", () => {
     expect(cm.charCount).toBeLessThan(1_000);
   });
 
+  test("stores a complete native tool turn as one atomic history item", () => {
+    const cm = new ContextManager({ maxMessages: 1 });
+    cm.addNativeToolTurn(
+      "checking",
+      "reasoning passback",
+      [
+        {
+          callId: "a",
+          providerName: "read_file",
+          rawArguments: '{"path":"a.ts"}',
+        },
+        {
+          callId: "b",
+          providerName: "read_file",
+          rawArguments: '{"path":"b.ts"}',
+        },
+      ],
+      [
+        { callId: "a", tool: "workspace.read_file", ok: true, summary: "A" },
+        { callId: "b", tool: "workspace.read_file", ok: true, summary: "B" },
+      ],
+    );
+
+    const messages = cm.buildMessages();
+    expect(messages).toHaveLength(1);
+    expect(
+      messages[0]?.nativeToolTurn?.calls.map((call) => call.callId),
+    ).toEqual(["a", "b"]);
+    expect(
+      messages[0]?.nativeToolTurn?.results.map((result) => result.callId),
+    ).toEqual(["a", "b"]);
+    expect(messages[0]?.thinking).toBeUndefined();
+    expect(cm.charCount).toBeGreaterThan("reasoning passback".length);
+  });
+
+  test("raw resume preserves valid native passback but drops malformed envelopes", () => {
+    const valid = {
+      schemaVersion: 1 as const,
+      protocol: "openai-compatible" as const,
+      assistantContent: "",
+      reasoningPassback: "keep for native replay",
+      calls: [
+        {
+          callId: "a",
+          providerName: "read_file",
+          rawArguments: "{}",
+        },
+      ],
+      results: [{ callId: "a", content: "ok" }],
+    };
+    const cm = new ContextManager();
+    cm.setHistoryRaw([
+      {
+        role: "assistant",
+        content: "valid fallback",
+        thinking: "drop audit",
+        nativeToolTurn: valid,
+      },
+      {
+        role: "assistant",
+        content: "malformed fallback",
+        nativeToolTurn: {
+          ...valid,
+          results: [{ callId: "wrong", content: "bad" }],
+        },
+      },
+    ]);
+
+    expect(cm.buildMessages()[0]?.nativeToolTurn).toEqual(valid);
+    expect(cm.buildMessages()[0]?.thinking).toBeUndefined();
+    expect(cm.buildMessages()[1]?.nativeToolTurn).toBeUndefined();
+    expect(cm.buildMessages()[1]?.content).toBe("malformed fallback");
+  });
+
+  test("raw resume never throws on corrupt native envelope shapes", () => {
+    const corruptTurns: unknown[] = [
+      null,
+      {},
+      { schemaVersion: 1, protocol: "openai-compatible", calls: {} },
+      {
+        schemaVersion: 1,
+        protocol: "openai-compatible",
+        assistantContent: "",
+        calls: [{ callId: "", providerName: "read_file", rawArguments: "{}" }],
+        results: [{ callId: "", content: "bad" }],
+      },
+      {
+        schemaVersion: 1,
+        protocol: "openai-compatible",
+        assistantContent: "",
+        calls: [
+          { callId: "a", providerName: "read_file", rawArguments: "{}" },
+          { callId: "a", providerName: "read_file", rawArguments: "{}" },
+        ],
+        results: [
+          { callId: "a", content: "one" },
+          { callId: "a", content: "two" },
+        ],
+      },
+      {
+        schemaVersion: 1,
+        protocol: "openai-compatible",
+        assistantContent: "",
+        calls: [{ callId: "a", providerName: "", rawArguments: "{}" }],
+        results: [{ callId: "a", content: "bad" }],
+      },
+    ];
+    const cm = new ContextManager();
+
+    expect(() =>
+      cm.setHistoryRaw(
+        corruptTurns.map(
+          (nativeToolTurn, index) =>
+            ({
+              role: "assistant",
+              content: `fallback-${index}`,
+              nativeToolTurn,
+            }) as unknown as import("../src/context/manager.js").ChatMessage,
+        ),
+      ),
+    ).not.toThrow();
+
+    expect(cm.buildMessages()).toEqual(
+      corruptTurns.map((_turn, index) => ({
+        role: "assistant",
+        content: `fallback-${index}`,
+      })),
+    );
+  });
+
   test("addToolResults combines multiple results into one user message", () => {
     const cm = new ContextManager();
     cm.setSystem("Sys");

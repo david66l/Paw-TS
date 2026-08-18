@@ -27,6 +27,7 @@ import type {
   AgentToolCallAction,
   ArtifactRegistry,
   ContextManager,
+  NativeToolTurnCallV1,
   RunEvent,
   ToolFileChange,
 } from "@paw/core";
@@ -282,6 +283,11 @@ export interface ToolExecutionFinalizationContext
   readonly specGoal: string;
   readonly text: string;
   readonly thinking?: string;
+  readonly nativeToolTurn?: {
+    readonly assistantContent: string;
+    readonly reasoningPassback?: string;
+    readonly calls: readonly NativeToolTurnCallV1[];
+  };
   readonly mutationCaptures?: readonly (
     | LoopV2ShadowMutationCapture
     | undefined
@@ -1157,61 +1163,78 @@ export function finalizeToolExecutionContext(
   results: ToolRunResult[],
   ctx: ToolExecutionFinalizationContext,
 ): ToolExecutionFinalizationResult {
-  // 步骤 2：将模型的工具调用文本作为 assistant 消息加入
-  ctx.ctxMgr.addAssistant(ctx.text, ctx.thinking);
-
-  // 步骤 3：将工具执行结果作为 user 消息加入（模型在下一轮看到这些）
+  // 步骤 2/3：准备模型可见结果。文本 fallback 保持 assistant + user
+  // 消息；完整 OpenAI native batch 则作为一个原子 envelope 持久化。
   // v3 P1 入口闸：注入前做「内容哈希去重 + 分档截断」，
   // 单条结果在进入上下文前就被控制到预算内（TokenPilot ingestion gate）
   // v3 P3 冷库：截断的全文按内容哈希归档（ARC 存储与呈现分离），
   // 上下文中只留头尾预览 + [archived id=N] 引用桩，可经 context.recall 取回。
   const archive = ctx.artifactRegistry;
-  ctx.ctxMgr.addToolResults(
-    results.map((tr, i) => {
-      const tool = calls[i]!.tool;
-      const callerText = ctx.text;
-      // 模型可见 summary 内联 untrusted 退出码标注（与 journal 事实同一判定）
-      const annotated = annotateVerificationFailureRecords(
-        calls[i]!,
-        annotateUntrustedShellExitSummary(calls[i]!, tr),
-        ctx.taskState?.snapshot().filesChanged ?? [],
-      );
-      let payload: unknown = tr.payload;
-      // 去重：同一内容重复出现 → 预览引用（重复读文件/重复跑命令的浪费源）
-      const dup = ctx.payloadDeduper?.check(payload);
-      if (dup) {
-        const archived = archive?.getByHash(dup.hash);
-        payload = archived
-          ? `[repeat of #${dup.hash}, same content as turn ${dup.turn}] ${archive!.toStub(archived.id)}`
-          : `[repeat of #${dup.hash}, same content as turn ${dup.turn}]`;
-      } else {
-        ctx.payloadDeduper?.record(payload, ctx.turn);
-      }
-      // 分档截断（read 类不截断；run_shell 等头尾保留 + 错误行智能保留）
-      const outcome = truncatePayloadWithOutcome(payload, tool);
-      payload = outcome.payload;
-      // 截断发生 → 全文归档 + 引用桩（可寻址恢复的前提）
-      if (outcome.truncated && outcome.fullText && archive) {
-        const id = archive.store(outcome.fullText, {
-          tool,
-          ok: tr.ok,
-          turn: ctx.turn,
-          callerText,
-        });
-        if (id) {
-          const stub = archive.toStub(id);
-          payload = `${String(payload)}\n${stub}`;
-        }
-      }
-      return {
+  const modelFacingResults = results.map((tr, i) => {
+    const tool = calls[i]!.tool;
+    const callerText = ctx.text;
+    // 模型可见 summary 内联 untrusted 退出码标注（与 journal 事实同一判定）
+    const annotated = annotateVerificationFailureRecords(
+      calls[i]!,
+      annotateUntrustedShellExitSummary(calls[i]!, tr),
+      ctx.taskState?.snapshot().filesChanged ?? [],
+    );
+    let payload: unknown = tr.payload;
+    // 去重：同一内容重复出现 → 预览引用（重复读文件/重复跑命令的浪费源）
+    const dup = ctx.payloadDeduper?.check(payload);
+    if (dup) {
+      const archived = archive?.getByHash(dup.hash);
+      payload = archived
+        ? `[repeat of #${dup.hash}, same content as turn ${dup.turn}] ${archive!.toStub(archived.id)}`
+        : `[repeat of #${dup.hash}, same content as turn ${dup.turn}]`;
+    } else {
+      ctx.payloadDeduper?.record(payload, ctx.turn);
+    }
+    // 分档截断（read 类不截断；run_shell 等头尾保留 + 错误行智能保留）
+    const outcome = truncatePayloadWithOutcome(payload, tool);
+    payload = outcome.payload;
+    // 截断发生 → 全文归档 + 引用桩（可寻址恢复的前提）
+    if (outcome.truncated && outcome.fullText && archive) {
+      const id = archive.store(outcome.fullText, {
         tool,
-        ok: annotated.ok,
-        summary: annotated.summary,
-        payload,
-        provenance: observationProvenanceForToolV1(tool),
-      };
-    }),
-  );
+        ok: tr.ok,
+        turn: ctx.turn,
+        callerText,
+      });
+      if (id) {
+        const stub = archive.toStub(id);
+        payload = `${String(payload)}\n${stub}`;
+      }
+    }
+    return {
+      tool,
+      ok: annotated.ok,
+      summary: annotated.summary,
+      payload,
+      provenance: observationProvenanceForToolV1(tool),
+    };
+  });
+  const nativeTurn = ctx.nativeToolTurn;
+  if (
+    nativeTurn &&
+    nativeTurn.calls.length === calls.length &&
+    calls.length === modelFacingResults.length
+  ) {
+    const pairedResults = modelFacingResults.map((result, index) => {
+      const call = nativeTurn.calls[index];
+      if (!call) throw new Error(`Missing native call ${index}`);
+      return { ...result, callId: call.callId };
+    });
+    ctx.ctxMgr.addNativeToolTurn(
+      nativeTurn.assistantContent,
+      nativeTurn.reasoningPassback,
+      nativeTurn.calls,
+      pairedResults,
+    );
+  } else {
+    ctx.ctxMgr.addAssistant(ctx.text, ctx.thinking);
+    ctx.ctxMgr.addToolResults(modelFacingResults);
+  }
 
   // 步骤 4：处理工具产生的新消息
   // 某些工具（如子 Agent）会在结果中附带额外的 user/assistant 消息

@@ -54,10 +54,101 @@ export interface ContextManagerOptions {
   readonly tailTurnCount?: number;
 }
 
+/** One provider-native tool call retained as request state, not display text. */
+export interface NativeToolTurnCallV1 {
+  readonly callId: string;
+  readonly providerName: string;
+  readonly rawArguments: string;
+}
+
+/** One result paired to a provider-native call id. */
+export interface NativeToolTurnResultV1 {
+  readonly callId: string;
+  readonly content: string;
+}
+
+/**
+ * Atomic OpenAI-compatible assistant tool-call turn plus its ordered results.
+ * Keeping the pair in one history entry prevents message-level truncation from
+ * orphaning an assistant tool call or its tool result before P0.3 lands.
+ */
+export interface NativeToolTurnV1 {
+  readonly schemaVersion: 1;
+  readonly protocol: "openai-compatible";
+  readonly assistantContent: string;
+  readonly reasoningPassback?: string;
+  readonly calls: readonly NativeToolTurnCallV1[];
+  readonly results: readonly NativeToolTurnResultV1[];
+}
+
 /** Remove provider audit reasoning before a message enters request history. */
 function stripAuditThinking(message: ChatMessage): ChatMessage {
   const { thinking: _thinking, ...requestMessage } = message;
+  const nativeTurn = requestMessage.nativeToolTurn;
+  if (
+    nativeTurn !== undefined &&
+    (requestMessage.role !== "assistant" || !isNativeToolTurnV1(nativeTurn))
+  ) {
+    const { nativeToolTurn: _invalid, ...fallbackMessage } = requestMessage;
+    return fallbackMessage;
+  }
   return requestMessage;
+}
+
+/** Runtime validator shared by resume ingress and provider serializers. */
+export function isNativeToolTurnV1(value: unknown): value is NativeToolTurnV1 {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const turn = value as Record<string, unknown>;
+  const calls = turn.calls;
+  const results = turn.results;
+  if (
+    turn.schemaVersion !== 1 ||
+    turn.protocol !== "openai-compatible" ||
+    typeof turn.assistantContent !== "string" ||
+    (turn.reasoningPassback !== undefined &&
+      typeof turn.reasoningPassback !== "string") ||
+    !Array.isArray(calls) ||
+    !Array.isArray(results) ||
+    calls.length === 0 ||
+    calls.length !== results.length
+  ) {
+    return false;
+  }
+  const ids = new Set<string>();
+  for (let index = 0; index < calls.length; index += 1) {
+    const call = calls[index];
+    const result = results[index];
+    if (
+      call === null ||
+      typeof call !== "object" ||
+      Array.isArray(call) ||
+      result === null ||
+      typeof result !== "object" ||
+      Array.isArray(result)
+    ) {
+      return false;
+    }
+    const callRecord = call as Record<string, unknown>;
+    const resultRecord = result as Record<string, unknown>;
+    const callId = callRecord.callId;
+    if (
+      typeof callId !== "string" ||
+      callId.trim().length === 0 ||
+      typeof callRecord.providerName !== "string" ||
+      callRecord.providerName.trim().length === 0 ||
+      typeof callRecord.rawArguments !== "string" ||
+      typeof resultRecord.callId !== "string" ||
+      resultRecord.callId !== callId ||
+      typeof resultRecord.content !== "string" ||
+      ids.has(callId)
+    ) {
+      return false;
+    }
+    ids.add(callId);
+  }
+  return true;
 }
 
 /**
@@ -188,6 +279,74 @@ export class ContextManager {
     this.maybeTruncate();
   }
 
+  /** Append one atomic native assistant/tool-result turn for provider replay. */
+  addNativeToolTurn(
+    assistantContent: string,
+    reasoningPassback: string | undefined,
+    calls: readonly NativeToolTurnCallV1[],
+    results: ReadonlyArray<{
+      callId: string;
+      tool: string;
+      ok: boolean;
+      summary: string;
+      payload?: unknown;
+      provenance?: ObservationProvenanceV1;
+    }>,
+  ): void {
+    if (calls.length === 0 || calls.length !== results.length) {
+      throw new Error("Native tool turn requires one result per call");
+    }
+    if (new Set(calls.map((call) => call.callId)).size !== calls.length) {
+      throw new Error("Native tool call ids must be unique");
+    }
+    for (let index = 0; index < calls.length; index += 1) {
+      if (calls[index]?.callId !== results[index]?.callId) {
+        throw new Error(
+          `Native tool result ${index} does not match its call id`,
+        );
+      }
+    }
+    const nativeResults = results.map((result) => ({
+      callId: result.callId,
+      content: formatToolResult({
+        tool: result.tool,
+        ok: result.ok,
+        summary: result.summary,
+        ...(result.payload !== undefined ? { payload: result.payload } : {}),
+        ...(result.provenance ? { provenance: result.provenance } : {}),
+      }),
+    }));
+    const nativeToolTurn: NativeToolTurnV1 = {
+      schemaVersion: 1,
+      protocol: "openai-compatible",
+      assistantContent,
+      ...(reasoningPassback?.trim() ? { reasoningPassback } : {}),
+      calls: calls.map((call) => ({ ...call })),
+      results: nativeResults,
+    };
+    if (!isNativeToolTurnV1(nativeToolTurn)) {
+      throw new Error("Native tool turn is not protocol-valid");
+    }
+    const fallbackContent = [
+      assistantContent,
+      ...calls.map((call) =>
+        JSON.stringify({
+          tool: call.providerName,
+          arguments: call.rawArguments,
+        }),
+      ),
+      ...nativeResults.map((result) => result.content),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    this.history.push({
+      role: "assistant",
+      content: fallbackContent,
+      nativeToolTurn,
+    });
+    this.maybeTruncate();
+  }
+
   /** 替换整个历史（用于恢复/回放）。会立即截断到上限。 */
   replaceHistory(messages: readonly ChatMessage[]): void {
     const sys = messages.find((m) => m.role === "system");
@@ -242,6 +401,9 @@ export class ContextManager {
       n += m.content.length;
       if (m.thinking) {
         n += m.thinking.length;
+      }
+      if (m.nativeToolTurn?.reasoningPassback) {
+        n += m.nativeToolTurn.reasoningPassback.length;
       }
     }
     return n;
@@ -328,4 +490,6 @@ export interface ChatMessage {
   readonly thinking?: string;
   /** 用户消息的附件（图片、文件等）。 */
   readonly attachments?: readonly Attachment[];
+  /** Atomic provider-native tool turn used only by protocol serializers. */
+  readonly nativeToolTurn?: NativeToolTurnV1;
 }

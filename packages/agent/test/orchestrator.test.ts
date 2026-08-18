@@ -223,6 +223,320 @@ describe("AgentOrchestrator", () => {
     expect(result.evidence?.mutationRevision).toBeGreaterThan(0);
   });
 
+  test("keeps parallel native call ids and observations in one atomic turn", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-native-turn-"));
+    writeFileSync(path.join(dir, "note.txt"), "native result");
+    const requests: Array<readonly import("@paw/models").ChatMessage[]> = [];
+    let modelCalls = 0;
+    const events: RunEventEnvelope[] = [];
+    const o = new AgentOrchestrator({
+      allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
+      model: {
+        label: "native-turn-roundtrip",
+        runtimeProfile: {
+          protocol: "openai-compatible",
+          model: "deepseek-v4-flash",
+          baseUrl: "https://example.test",
+        },
+        async complete(messages) {
+          requests.push(messages);
+          modelCalls += 1;
+          return modelCalls === 1
+            ? {
+                text: "display lines are not durable protocol content",
+                nativeAssistantContent: "I will read twice.",
+                thinking:
+                  "inline audit plus provider-exact reasoning for diagnostics",
+                reasoningPassback: "provider-exact reasoning",
+                finishReason: "tool_calls",
+                toolCalls: [
+                  {
+                    id: "provider-a",
+                    name: "workspace_read_file",
+                    arguments: { path: "note.txt" },
+                    rawArguments: '{ "path": "note.txt" }',
+                  },
+                  {
+                    id: "provider-b",
+                    name: "workspace_read_file",
+                    arguments: { path: "note.txt" },
+                    rawArguments: '{"path":"note.txt"}',
+                  },
+                ],
+              }
+            : { text: '{"action":"final_answer","summary":"done"}' };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+
+    await o.run({
+      runId: "native-turn-roundtrip",
+      goal: "read twice then answer",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+
+    expect(
+      events.filter(
+        (event) =>
+          event.event.type === "tool.result" &&
+          event.event.tool === "workspace.read_file",
+      ),
+    ).toHaveLength(2);
+    const turn = requests[1]?.find(
+      (message) => message.nativeToolTurn,
+    )?.nativeToolTurn;
+    expect(turn?.assistantContent).toBe("I will read twice.");
+    expect(turn?.reasoningPassback).toBe("provider-exact reasoning");
+    const audited = events.find(
+      (event) =>
+        event.event.type === "model.done" && event.event.thinking !== undefined,
+    );
+    expect(audited?.event.type).toBe("model.done");
+    if (audited?.event.type === "model.done") {
+      expect(audited.event.thinking).toContain("inline audit");
+    }
+    expect(turn?.calls.map((call) => call.callId)).toEqual([
+      "provider-a",
+      "provider-b",
+    ]);
+    expect(turn?.calls.map((call) => call.rawArguments)).toEqual([
+      '{ "path": "note.txt" }',
+      '{"path":"note.txt"}',
+    ]);
+    expect(turn?.results.map((result) => result.callId)).toEqual([
+      "provider-a",
+      "provider-b",
+    ]);
+  });
+
+  test("closes every provider id when one native call makes the batch invalid", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-native-error-"));
+    writeFileSync(path.join(dir, "note.txt"), "must not be read");
+    const requests: Array<readonly import("@paw/models").ChatMessage[]> = [];
+    const events: RunEventEnvelope[] = [];
+    let modelCalls = 0;
+    const o = new AgentOrchestrator({
+      allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
+      model: {
+        label: "native-error-roundtrip",
+        runtimeProfile: {
+          protocol: "openai-compatible",
+          model: "deepseek-v4-flash",
+          baseUrl: "https://example.test",
+        },
+        async complete(messages) {
+          requests.push(messages);
+          modelCalls += 1;
+          return modelCalls === 1
+            ? {
+                text: "",
+                nativeAssistantContent: "I will inspect.",
+                thinking: "Need the file for audit.",
+                reasoningPassback: "provider-exact-error-passback",
+                finishReason: "tool_calls",
+                toolCalls: [
+                  {
+                    id: "valid-sibling",
+                    name: "workspace_read_file",
+                    arguments: { path: "note.txt" },
+                    rawArguments: '{"path":"note.txt"}',
+                    sourceIndex: 0,
+                    argumentsValid: true,
+                  },
+                  {
+                    id: "malformed-call",
+                    name: "workspace_read_file",
+                    arguments: {},
+                    rawArguments: '{"path":',
+                    sourceIndex: 1,
+                    argumentsValid: false,
+                  },
+                ],
+              }
+            : { text: '{"action":"final_answer","summary":"recovered"}' };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+
+    await o.run({
+      runId: "native-error-roundtrip",
+      goal: "recover malformed native calls",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+
+    const toolResults = events.filter(
+      (event) => event.event.type === "tool.result",
+    );
+    expect(toolResults).toHaveLength(2);
+    expect(
+      toolResults.every(
+        (event) => event.event.type === "tool.result" && !event.event.ok,
+      ),
+    ).toBe(true);
+    const turn = requests[1]?.find(
+      (message) => message.nativeToolTurn,
+    )?.nativeToolTurn;
+    expect(turn?.calls.map((call) => call.callId)).toEqual([
+      "valid-sibling",
+      "malformed-call",
+    ]);
+    expect(turn?.results.map((result) => result.callId)).toEqual([
+      "valid-sibling",
+      "malformed-call",
+    ]);
+    expect(turn?.reasoningPassback).toBe("provider-exact-error-passback");
+  });
+
+  test("rejects a whitespace native call identity without executing the batch", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-native-dup-id-"));
+    writeFileSync(path.join(dir, "note.txt"), "must not be read");
+    const events: RunEventEnvelope[] = [];
+    const o = new AgentOrchestrator({
+      allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
+      model: {
+        label: "native-whitespace-id",
+        runtimeProfile: {
+          protocol: "openai-compatible",
+          model: "deepseek-v4-flash",
+          baseUrl: "https://example.test",
+        },
+        async complete() {
+          return {
+            text: "",
+            nativeAssistantContent: "read twice",
+            toolCalls: [
+              {
+                id: "valid-id",
+                name: "workspace_read_file",
+                arguments: { path: "note.txt" },
+                rawArguments: '{"path":"note.txt"}',
+              },
+              {
+                id: "   ",
+                name: "workspace_read_file",
+                arguments: { path: "note.txt" },
+                rawArguments: '{"path":"note.txt"}',
+              },
+            ],
+          };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+
+    await o.run({
+      runId: "native-whitespace-id",
+      goal: "read twice",
+      workspaceRoot: dir,
+      maxSteps: 1,
+    });
+
+    expect(events.some((event) => event.event.type === "tool.call")).toBe(
+      false,
+    );
+    expect(
+      events.filter((event) => event.event.type === "tool.result"),
+    ).toHaveLength(2);
+  });
+
+  test("v1 keeps a native run_agent and read sibling in one ordered envelope", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-native-v1-mixed-"));
+    writeFileSync(path.join(dir, "note.txt"), "read sibling result");
+    const requests: Array<readonly import("@paw/models").ChatMessage[]> = [];
+    const events: RunEventEnvelope[] = [];
+    let modelCalls = 0;
+    let childCalls = 0;
+    const o = new AgentOrchestrator({
+      allowedTools: null,
+      subAgentLauncher: {
+        async launch() {
+          childCalls += 1;
+          return {
+            status: "completed" as const,
+            summary: "child result",
+            trace: { messages: [], events: [], stepsTaken: 1 },
+          };
+        },
+        async launchStreaming() {
+          throw new Error("unified native batch should use harness launch");
+        },
+      },
+      model: {
+        label: "native-v1-mixed",
+        runtimeProfile: {
+          protocol: "openai-compatible",
+          model: "deepseek-v4-flash",
+          baseUrl: "https://example.test",
+        },
+        async complete(messages) {
+          requests.push(messages);
+          modelCalls += 1;
+          return modelCalls === 1
+            ? {
+                text: "",
+                nativeAssistantContent: "delegate and inspect",
+                reasoningPassback: "both observations are required",
+                toolCalls: [
+                  {
+                    id: "child-call",
+                    name: "workspace_run_agent",
+                    arguments: {
+                      goal: "inspect note",
+                      child_policy: "read_only",
+                    },
+                    rawArguments:
+                      '{"goal":"inspect note","child_policy":"read_only"}',
+                  },
+                  {
+                    id: "read-call",
+                    name: "workspace_read_file",
+                    arguments: { path: "note.txt" },
+                    rawArguments: '{"path":"note.txt"}',
+                  },
+                ],
+              }
+            : { text: '{"action":"final_answer","summary":"done"}' };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+
+    await o.run({
+      runId: "native-v1-mixed",
+      goal: "delegate and read",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+
+    expect(childCalls).toBe(1);
+    expect(
+      events
+        .filter((event) => event.event.type === "tool.result")
+        .map((event) =>
+          event.event.type === "tool.result" ? event.event.tool : "",
+        ),
+    ).toEqual(["workspace.run_agent", "workspace.read_file"]);
+    const turn = requests[1]?.find(
+      (message) => message.nativeToolTurn,
+    )?.nativeToolTurn;
+    expect(turn?.calls.map((call) => call.callId)).toEqual([
+      "child-call",
+      "read-call",
+    ]);
+    expect(turn?.results.map((result) => result.callId)).toEqual([
+      "child-call",
+      "read-call",
+    ]);
+  });
+
   test("records capability shadow choices without pruning real tool schemas", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-capability-shadow-"));
     const events: RunEventEnvelope[] = [];

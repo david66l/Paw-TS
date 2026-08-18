@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { RunEventEnvelope } from "@paw/core";
+import type { RunEventEnvelope, SessionStore } from "@paw/core";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
@@ -199,5 +199,159 @@ describe("Model Truncation", () => {
     });
     const dones = events.filter((e) => e.event.type === "model.done");
     expect(dones.length).toBe(1);
+  });
+
+  test("a truncated native tool turn fails closed without executing", async () => {
+    const dir = tmpDir("paw-trunc-native-");
+    writeFileSync(path.join(dir, "a.txt"), "must not be read");
+    const events: RunEventEnvelope[] = [];
+    const saved: RunEventEnvelope[] = [];
+    let modelCalls = 0;
+    const model: import("@paw/models").LanguageModel = {
+      label: "truncated-native-fixture",
+      async complete() {
+        modelCalls += 1;
+        return {
+          finishReason: "length",
+          text: "",
+          thinking: "partial native audit thinking",
+          reasoningPassback: "partial provider state",
+          toolCalls: [
+            {
+              id: "partial-call",
+              name: "workspace_read_file",
+              arguments: { path: "a.txt" },
+              rawArguments: '{"path":"a.txt"}',
+            },
+          ],
+        };
+      },
+    };
+    const o = new AgentOrchestrator({
+      model,
+      onEvent: (event) => events.push(event),
+      sessionStore: {
+        saveEvent(_runId: string, envelope: RunEventEnvelope) {
+          saved.push(envelope);
+        },
+      } as SessionStore,
+      retrySleep: async () => {},
+    });
+
+    const result = await o.run({
+      runId: "trunc-native",
+      goal: "read a.txt",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(modelCalls).toBe(1);
+    expect(events.some((event) => event.event.type === "tool.call")).toBe(
+      false,
+    );
+    const durableDones = saved.filter(
+      (envelope) => envelope.event.type === "model.done",
+    );
+    expect(durableDones).toHaveLength(1);
+    expect(durableDones[0]?.event).toMatchObject({
+      type: "model.done",
+      thinking: "partial native audit thinking",
+    });
+  });
+
+  test("truncated reasoning-only text still auto-continues", async () => {
+    const dir = tmpDir("paw-trunc-reasoning-only-");
+    let modelCalls = 0;
+    const model: import("@paw/models").LanguageModel = {
+      label: "truncated-reasoning-only-fixture",
+      async complete() {
+        modelCalls += 1;
+        return modelCalls === 1
+          ? {
+              finishReason: "length",
+              text: '{"action":"final_answer","summary":"long answer',
+              reasoningPassback: "provider reasoning state",
+            }
+          : { text: ' continued"}' };
+      },
+    };
+    const o = new AgentOrchestrator({
+      model,
+      retrySleep: async () => {},
+    });
+
+    const result = await o.run({
+      runId: "trunc-reasoning-only",
+      goal: "answer a long reasoning question",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(modelCalls).toBe(2);
+  });
+
+  test("text continuation cannot collapse a later native tool turn", async () => {
+    const dir = tmpDir("paw-trunc-later-native-");
+    writeFileSync(path.join(dir, "a.txt"), "must not be read");
+    const events: RunEventEnvelope[] = [];
+    const saved: RunEventEnvelope[] = [];
+    let modelCalls = 0;
+    const model: import("@paw/models").LanguageModel = {
+      label: "truncated-then-native-fixture",
+      async complete() {
+        modelCalls += 1;
+        return modelCalls === 1
+          ? {
+              finishReason: "length",
+              text: "partial explanation",
+              thinking: "first audit;",
+            }
+          : {
+              text: "",
+              thinking: "second audit",
+              toolCalls: [
+                {
+                  id: "later-native-call",
+                  name: "workspace_read_file",
+                  arguments: { path: "a.txt" },
+                  rawArguments: '{"path":"a.txt"}',
+                },
+              ],
+            };
+      },
+    };
+    const o = new AgentOrchestrator({
+      model,
+      onEvent: (event) => events.push(event),
+      sessionStore: {
+        saveEvent(_runId: string, envelope: RunEventEnvelope) {
+          saved.push(envelope);
+        },
+      } as SessionStore,
+      retrySleep: async () => {},
+    });
+
+    const result = await o.run({
+      runId: "trunc-later-native",
+      goal: "read a.txt after explaining",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(modelCalls).toBe(2);
+    expect(events.some((event) => event.event.type === "tool.call")).toBe(
+      false,
+    );
+    const durableDones = saved.filter(
+      (envelope) => envelope.event.type === "model.done",
+    );
+    expect(durableDones).toHaveLength(1);
+    expect(durableDones[0]?.event).toMatchObject({
+      type: "model.done",
+      thinking: "first audit;second audit",
+    });
   });
 });

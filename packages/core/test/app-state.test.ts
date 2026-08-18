@@ -79,6 +79,39 @@ describe("FileSystemAppStateStore", () => {
     expect(loaded?.runId).toBe("r1");
   });
 
+  test("native tool turns round-trip without losing wire identity", () => {
+    const nativeToolTurn = {
+      schemaVersion: 1 as const,
+      protocol: "openai-compatible" as const,
+      assistantContent: "checking",
+      reasoningPassback: "need exact source",
+      calls: [
+        {
+          callId: "provider-a",
+          providerName: "read_file",
+          rawArguments: '{ "path": "a.ts" }',
+        },
+      ],
+      results: [{ callId: "provider-a", content: "source" }],
+    };
+    store.save(
+      makeState({
+        runId: "native-turn",
+        messages: [
+          {
+            role: "assistant",
+            content: "fallback",
+            nativeToolTurn,
+          },
+        ],
+      }),
+    );
+
+    expect(store.load("native-turn")?.messages[0]?.nativeToolTurn).toEqual(
+      nativeToolTurn,
+    );
+  });
+
   test("load missing returns null", () => {
     expect(store.load("missing")).toBeNull();
   });

@@ -26,6 +26,7 @@ import type {
   AgentAction,
   AgentToolCallAction,
   EvalHooks,
+  NativeToolTurnCallV1,
   SkillRegistry,
   TodoStore,
   WaitingUserInteractionV1,
@@ -157,6 +158,12 @@ export interface NativeToolError {
   readonly id: string;
   readonly name: string;
   readonly raw: string;
+  readonly sourceIndex?: number;
+  readonly reason?:
+    | "malformed_arguments"
+    | "invalid_call_id"
+    | "unknown_tool"
+    | "batch_rejected";
 }
 
 /** 解析阶段的反馈信息：文本通道诊断 + 原生通道失败调用 */
@@ -165,6 +172,12 @@ export interface ParseFeedback {
   readonly diagnosis?: ParseDiagnosis;
   /** 原生通道解析失败的调用（拒绝执行） */
   readonly nativeToolErrors?: readonly NativeToolError[];
+  /** Complete OpenAI-compatible native call batch for atomic persistence. */
+  readonly nativeToolTurn?: {
+    readonly assistantContent: string;
+    readonly reasoningPassback?: string;
+    readonly calls: readonly NativeToolTurnCallV1[];
+  };
 }
 
 /**
@@ -200,6 +213,7 @@ export async function handleAction(
       text,
       thinking,
       opts,
+      feedback.nativeToolTurn,
     );
   }
 
@@ -210,7 +224,10 @@ export async function handleAction(
 
   // V2 owns the complete model-ordered batch. Child calls are scheduler items,
   // so a sibling grep/edit cannot be silently dropped by the legacy split.
-  if (ctx.loopKernelVersion === "v2" && toolCalls.length > 0) {
+  if (
+    toolCalls.length > 0 &&
+    (ctx.loopKernelVersion === "v2" || feedback?.nativeToolTurn)
+  ) {
     return handleToolCalls(
       toolCalls,
       ctx,
@@ -218,6 +235,7 @@ export async function handleAction(
       text,
       thinking,
       opts,
+      feedback?.nativeToolTurn,
     );
   }
 
@@ -242,6 +260,7 @@ export async function handleAction(
       text,
       thinking,
       opts,
+      feedback?.nativeToolTurn,
     );
   }
 
@@ -485,6 +504,7 @@ function handleNativeToolErrors(
   text: string,
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn">,
+  nativeToolTurn?: ParseFeedback["nativeToolTurn"],
 ): { readonly state: TurnState; readonly flags: TurnFlags } {
   const nextFlags: TurnFlags = {
     ...flags,
@@ -492,10 +512,17 @@ function handleNativeToolErrors(
   };
 
   ctx.emit({ type: "phase", name: "tool" });
-  ctx.ctxMgr.addAssistant(text, thinking);
 
   const results = errors.map((e) => {
-    const summary = `[Tool call not executed] arguments for "${e.name}" failed to parse as JSON. Raw input (truncated): ${e.raw.slice(0, 160)}. Retry the call with valid JSON arguments.`;
+    const reason =
+      e.reason === "unknown_tool"
+        ? `tool "${e.name}" is not available`
+        : e.reason === "invalid_call_id"
+          ? "the provider omitted a stable tool call id"
+          : e.reason === "batch_rejected"
+            ? "the native batch contained another invalid call"
+            : `arguments for "${e.name}" failed to parse as a JSON object`;
+    const summary = `[Tool call not executed] ${reason}. Raw input (truncated): ${e.raw.slice(0, 160)}. Correct the call and retry.`;
     ctx.emit({
       type: "tool.result",
       tool: e.name,
@@ -504,7 +531,28 @@ function handleNativeToolErrors(
     });
     return { tool: e.name, ok: false, summary };
   });
-  ctx.ctxMgr.addToolResults(results);
+  if (
+    nativeToolTurn &&
+    nativeToolTurn.calls.length === results.length &&
+    nativeToolTurn.calls.every(
+      (call, index) => call.callId === errors[index]?.id,
+    )
+  ) {
+    const pairedResults = results.map((result, index) => {
+      const call = nativeToolTurn.calls[index];
+      if (!call) throw new Error(`Missing rejected native call ${index}`);
+      return { ...result, callId: call.callId };
+    });
+    ctx.ctxMgr.addNativeToolTurn(
+      nativeToolTurn.assistantContent,
+      nativeToolTurn.reasoningPassback,
+      nativeToolTurn.calls,
+      pairedResults,
+    );
+  } else {
+    ctx.ctxMgr.addAssistant(text, thinking);
+    ctx.ctxMgr.addToolResults(results);
+  }
 
   // maxSteps 检查：最后一轮不能纠正格式，诚实返回 incomplete。
   if (ctx.turn + 1 >= ctx.maxSteps) {
@@ -1513,6 +1561,7 @@ async function handleToolCalls(
   text: string,
   thinking: string | undefined,
   opts: ActionHandlerContext,
+  nativeToolTurn?: ParseFeedback["nativeToolTurn"],
 ): Promise<{
   readonly state: TurnState;
   readonly flags: TurnFlags;
@@ -1837,6 +1886,7 @@ async function handleToolCalls(
     payloadDeduper: ctx.payloadDeduper,
     artifactRegistry: ctx.artifactRegistry,
     failureSignatures: flags.failureSignatures,
+    ...(nativeToolTurn ? { nativeToolTurn } : {}),
   };
   const final = commitsOwnedByScheduler
     ? finalizeToolExecutionContext(calls, results, finalizationContext)
