@@ -19,6 +19,7 @@ import {
 import { memoryOutcomeFromDecision } from "../src/lifecycle/memory-outcome.js";
 import { collectToolRecoveryMessage } from "../src/lifecycle/task-lifecycle.js";
 import {
+  IDLE_FUSE_ESCALATION,
   idleFuseTripped,
   recoveryHintForToolResult,
   updateFailureSignatures,
@@ -657,13 +658,25 @@ describe("VerificationGate", () => {
 });
 
 describe("ToolFailureRecovery + idle fuse", () => {
-  test("edit_file old_string failure suggests apply_patch", () => {
+  test("edit_file old_string failure suggests a refined exact edit", () => {
     const hint = recoveryHintForToolResult("workspace.edit_file", {
       ok: false,
       summary: "edit_file: old_string not found",
       payload: { error: "old_string not found" },
     });
-    expect(hint?.action).toBe("use_apply_patch");
+    expect(hint?.action).toBe("refine_edit");
+    expect(hint?.message).not.toContain("apply_patch");
+  });
+
+  test("blocked and idle-fuse recovery never recommend hidden tools", () => {
+    const blocked = recoveryHintForToolResult("workspace.edit_file", {
+      ok: false,
+      summary: "blocked by user",
+      payload: { error: "blocked by user" },
+    });
+
+    expect(blocked?.message).not.toContain("apply_patch");
+    expect(IDLE_FUSE_ESCALATION).not.toContain("apply_patch");
   });
 
   test("idle fuse trips on repeated signature", () => {

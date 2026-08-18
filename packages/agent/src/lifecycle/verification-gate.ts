@@ -71,7 +71,7 @@ export function checkVerification(
       return {
         ok: false,
         nudge:
-          "This task requires file changes ([require_mutation]) but none were recorded. Use workspace.edit_file / workspace.apply_patch / workspace.write_file to modify source files, then continue — do not final_answer yet.",
+          "This task requires file changes ([require_mutation]) but none were recorded. Use an available workspace mutation tool, then continue — do not final_answer yet.",
       };
     }
     return { ok: true, mode: "no_mutation" };

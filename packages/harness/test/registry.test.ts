@@ -397,6 +397,36 @@ describe("executeTool", () => {
     expect(content).toBe("hello paw\n");
   });
 
+  test("workspace.edit_file creates a missing file with an empty old_string", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-create-"));
+    const r = await executeTool(
+      { workspaceRoot: root },
+      "workspace.edit_file",
+      { path: "nested/new.txt", old_string: "", new_string: "created\n" },
+    );
+
+    expect(r.ok).toBe(true);
+    expect(r.summary).toContain("edit_file(create)");
+    expect(fs.readFileSync(path.join(root, "nested/new.txt"), "utf8")).toBe(
+      "created\n",
+    );
+  });
+
+  test("workspace.edit_file cannot overwrite an existing file with empty old_string", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-create-"));
+    writeFileSync(path.join(root, "x.txt"), "keep\n", "utf8");
+    const r = await executeTool(
+      { workspaceRoot: root },
+      "workspace.edit_file",
+      { path: "x.txt", old_string: "", new_string: "replace\n" },
+    );
+
+    expect(r.ok).toBe(false);
+    expect(r.summary).toContain("file already exists");
+    expect(JSON.stringify(r.payload)).toContain("E_USER");
+    expect(fs.readFileSync(path.join(root, "x.txt"), "utf8")).toBe("keep\n");
+  });
+
   test("workspace.edit_file rejects a no-op replacement as no progress", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-noop-"));
     writeFileSync(path.join(root, "x.txt"), "same\n", "utf8");

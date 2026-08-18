@@ -223,6 +223,10 @@ export type RunEvent =
   /** Shadow inventory for deferred-tool exposure. It never changes available tools. */
   | {
       readonly type: "capability.inventory";
+      readonly capabilitySetSchemaVersion?: string;
+      readonly modelActions?: readonly string[];
+      readonly executableTools?: readonly string[];
+      readonly internalToolCount?: number;
       readonly schemaVersion: "paw.capability-exposure.v1";
       readonly mode: "shadow";
       readonly fullToolCount: number;

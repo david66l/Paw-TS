@@ -139,7 +139,6 @@ interface ActionHandlerContext {
   readonly memoryRuntime?: import("@paw/memory").MemoryRuntime;
   readonly memoryTaskId?: string;
   readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
-  readonly allowedTools?: readonly string[] | null;
   /** 并行子 Agent 的文件锁（仅子 Agent 注入） */
   readonly fileLock?: import("@paw/harness").FileLockLike;
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
@@ -583,7 +582,7 @@ async function handleFinalAnswer(
           type: "decided",
           decision: decideIncomplete({
             reason: "background_jobs_unsettled",
-            message: `Cannot complete while managed background work is unsettled (${detail}). Resume the run to read/wait/kill the job and consume its terminal result.`,
+            message: `Cannot complete while managed background work is unsettled (${detail}). Resume the run so the host can settle and commit its terminal result.`,
             taskState: ctx.taskState.snapshot(),
           }),
         },
@@ -596,7 +595,7 @@ async function handleFinalAnswer(
     };
     ctx.ctxMgr.addAssistant(text, thinking);
     ctx.ctxMgr.addUser(
-      `[Managed jobs are unfinished: ${detail}. Use workspace.job_list, job_read, job_wait, or job_kill. Do not output final_answer until every job has settled and its result has been committed.]`,
+      `[Managed jobs are unfinished: ${detail}. Wait for the host to settle and commit every terminal result before outputting final_answer.]`,
     );
     opts.saveStateFn();
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
@@ -1462,13 +1461,13 @@ async function handlePlanUpdate(
       ? { maxItems: opts.planSnapshotMaxItems }
       : undefined;
   const planSnap = p ? planToSnapshotPayload(p, snapshotOpts) : null;
-  // 事实陈述（非指令）：互不依赖的待办项可并行调查——配合 run_agent 的
-  // 接口事实，让模型知道批量派发是可用选项。
+  // 只有模型实际拥有 run_agent 时才提示并行委派，避免 prompt/schema 冲突。
   const pendingCount = planSnap
     ? (planSnap.items ?? []).filter((item) => item.status !== "done").length
     : 0;
   const parallelNote =
-    pendingCount > 1
+    pendingCount > 1 &&
+    ctx.capabilitySet.executableToolNames.includes("workspace.run_agent")
       ? "\nPending items that do not depend on each other can be investigated in parallel via workspace.run_agent (read-only sub-agents return one-page summaries)."
       : "";
   const planBlock = planSnap
@@ -1623,7 +1622,7 @@ async function handleToolCalls(
     memoryRuntime: opts.memoryRuntime,
     memoryTaskId: opts.memoryTaskId ?? ctx.memoryTaskId,
     createAgent: opts.createAgent,
-    allowedTools: opts.allowedTools,
+    allowedTools: ctx.capabilitySet.executableToolNames,
     fileLock: opts.fileLock,
     artifactRegistry: ctx.artifactRegistry,
     toolExecutionPolicy: opts.toolExecutionPolicy,

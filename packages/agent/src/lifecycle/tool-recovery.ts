@@ -8,7 +8,7 @@ import { isControlPlaneToolResult } from "./control-plane.js";
 export type RecoveryAction =
   | "retry"
   | "reread"
-  | "use_apply_patch"
+  | "refine_edit"
   | "request_approval"
   | "escalate"
   | "change_strategy";
@@ -104,9 +104,9 @@ export function recoveryHintForToolResult(
       blob.includes("no match"))
   ) {
     return {
-      action: "use_apply_patch",
+      action: "refine_edit",
       message:
-        "[Recovery] edit_file failed to match old_string. Re-read the file for exact current text, add more surrounding context for uniqueness, set replace_all=true if every match should change, or use workspace.apply_patch with a unified diff.",
+        "[Recovery] edit_file failed to match old_string. Re-read the file for exact current text, add more surrounding context for uniqueness, or set replace_all=true if every match should change.",
     };
   }
 
@@ -124,7 +124,7 @@ export function recoveryHintForToolResult(
   if (blob.includes("denied by user") || blob.includes("blocked")) {
     return {
       action: "change_strategy",
-      message: `[Recovery] ${tool} was denied/blocked. Choose a different approach (read-only probe, smaller edit, apply_patch).`,
+      message: `[Recovery] ${tool} was denied/blocked. Choose an available read-only probe or a smaller exact edit.`,
     };
   }
 
@@ -210,4 +210,4 @@ export function idleFuseTripped(
 }
 
 export const IDLE_FUSE_ESCALATION =
-  "[Recovery:idle_fuse] The same tool failure repeated. Stop retrying identically — change strategy (re-read, apply_patch, different test command) or output final_answer / abort with an honest status.";
+  "[Recovery:idle_fuse] The same tool failure repeated. Stop retrying identically — re-read current state, make a smaller exact edit, try a different test command, or output final_answer / abort with an honest status.";

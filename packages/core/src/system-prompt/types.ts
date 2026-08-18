@@ -37,6 +37,10 @@ export interface SystemPromptOptions {
   readonly workspaceRoot: string;
   /** 工具目录文本：列出所有可用工具的名称、描述、参数签名 */
   readonly toolCatalog: string;
+  /** Authoritative model-visible tool names. Undefined preserves legacy prompt behavior. */
+  readonly modelToolNames?: readonly string[];
+  /** Authoritative structured action names, such as action.final_answer. */
+  readonly modelActions?: readonly string[];
   /** 可用技能（skills）的描述文本，可选 */
   readonly skills?: string;
   /** git status 输出文本，帮助模型理解当前工作区状态，可选 */

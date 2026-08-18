@@ -20,7 +20,6 @@
 
 import { resolveBasePrompt } from "../prompt/loader.js";
 import { truncateChars } from "./format.js";
-import type { SystemPromptOptions } from "./types.js";
 import { getActionsSection } from "./sections/actions.js";
 import { getDoingTasksSection } from "./sections/doing-tasks.js";
 import { getEnvironmentSection } from "./sections/environment.js";
@@ -32,6 +31,7 @@ import { getSystemSection } from "./sections/system.js";
 import { getToneAndStyleSection } from "./sections/tone-and-style.js";
 import { getUsingToolsSection } from "./sections/using-tools.js";
 import { getVerificationSection } from "./sections/verification.js";
+import type { SystemPromptOptions } from "./types.js";
 
 /**
  * 组装完整的 system prompt。
@@ -77,9 +77,13 @@ export function assembleSystemPrompt(opts: SystemPromptOptions): string {
   const sections: (string | null)[] = [
     basePrompt,
     getUsingToolsSection({
-      hasTaskTool: true,
+      hasTaskTool:
+        opts.modelToolNames === undefined ||
+        opts.modelToolNames.includes("workspace.todo_write"),
       hasSkills: skills !== undefined && skills.length > 0,
       toolCatalog,
+      toolNames: opts.modelToolNames,
+      modelActions: opts.modelActions,
     }),
     skills ?? null,
     getMemorySection({

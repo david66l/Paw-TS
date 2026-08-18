@@ -3,8 +3,8 @@
  *
  * Cutover 后在线路径只有 Runtime：
  * - 相关记忆由 ContextBuilder 注入（title/summary，非整篇）
- * - 读写用 memory.list / memory.read / memory.save（save 经治理）
- * - 禁止用 workspace.write_file 写 ~/.paw/.../memory 或 MEMORY.md
+ * - 完整记忆由宿主按需检索，写入由治理路径管理
+ * - 禁止模型绕过宿主直接维护记忆文件
  */
 
 /**
@@ -30,8 +30,7 @@ export function getMemorySection(opts: {
     "",
     "## How it works",
     "- Relevant memories for this task may already appear below under Environment as short summaries (id/title/score).",
-    "- Full bodies live in the store — do **not** expect long memory essays in the system prompt.",
-    "- Use tools: `memory.list`, `memory.read`, `memory.save` (save goes through governance).",
+    "- Full bodies live in the store; the host retrieves and governs them outside the model tool surface.",
     "",
     "## What to save",
     "- User preferences, durable feedback, project decisions not derivable from code/git.",
@@ -42,9 +41,9 @@ export function getMemorySection(opts: {
     "- Ephemeral task chatter or one-off debug dumps.",
     "",
     "## Rules",
-    "- Never write memory with `workspace.write_file` / shell into a memory directory.",
+    "- Never write memory with workspace file-editing tools or shell commands into a memory directory.",
     "- Never maintain a MEMORY.md index by hand.",
-    "- Memory can be stale: verify paths/symbols with list/read/grep before acting on them.",
+    "- Memory can be stale: verify paths and symbols with the workspace tools available in this run.",
     "- If the user says to ignore memory, do not cite or apply recalled facts.",
   ].join("\n");
 }

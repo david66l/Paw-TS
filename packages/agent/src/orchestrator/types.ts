@@ -29,6 +29,7 @@ import type { LanguageModel, ToolDefinition } from "@paw/models";
 import type { TaskPlanner } from "@paw/store";
 import type { CandidateReviewer } from "../candidate-review.js";
 import type { CapabilityExposureShadowV1 } from "../capability-exposure.js";
+import type { CapabilitySetV1 } from "../capability-set.js";
 import type { ExecutionEnvironmentRegistryV1 } from "../execution-environment.js";
 import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
 import type { CompletionDecision } from "../lifecycle/completion-policy.js";
@@ -198,6 +199,8 @@ export interface PhaseContext {
   readonly toolDefs: readonly ToolDefinition[];
   /** 工具名映射表：sanitized → original */
   readonly toolNameMap: Map<string, string>;
+  /** Single authority for model schema, parser acceptance, and execution. */
+  readonly capabilitySet: CapabilitySetV1;
   readonly ctxMgr: ContextManager;
   readonly planner: TaskPlanner;
   readonly taskState: TaskStateManager;

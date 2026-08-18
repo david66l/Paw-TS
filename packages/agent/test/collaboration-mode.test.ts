@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { resolveAllowedTools } from "../src/agents/resolve-tools.js";
+import type { RunEventEnvelope } from "@paw/core";
+import type { ChatMessage, ModelCompleteOptions } from "@paw/models";
 import {
   CODING_LIFECYCLE_BUDGET,
   CODING_ROOT_IDENTITY,
@@ -99,25 +100,85 @@ describe("coding factory defaults", () => {
     }
   });
 
-  test("createRunOrchestrator defaults to coding with loop budget", () => {
+  test("createRunOrchestrator defaults to coding with loop budget and slim capabilities", async () => {
     const dir = tmpDir("paw-collab-coding-");
+    const events: RunEventEnvelope[] = [];
+    let providerToolNames: string[] = [];
+    let systemPrompt = "";
+    const model = {
+      label: "coding-capability-probe",
+      async complete(
+        messages: readonly ChatMessage[],
+        options?: ModelCompleteOptions,
+      ) {
+        systemPrompt =
+          messages.find((message) => message.role === "system")?.content ?? "";
+        providerToolNames =
+          options?.tools?.map((tool) => tool.function.name) ?? [];
+        return { text: '{"action":"final_answer","summary":"Done."}' };
+      },
+    };
     try {
       writeFileMemorySettings(dir);
-      const run = createRunOrchestrator({ workspaceRoot: dir });
+      const run = createRunOrchestrator({
+        workspaceRoot: dir,
+        mainModel: model,
+        subAgentModel: model,
+        onEvent: (event) => events.push(event),
+      });
       try {
         expect(run.collaborationMode).toBe("coding");
         expect(run.rootMaxSteps).toBe(64);
         expect(CODING_ROOT_IDENTITY.length).toBeGreaterThan(40);
-        const tools = resolveAllowedTools({
-          tools: "inherit",
-          canSpawn: false,
+        await run.orch.run({
+          runId: "coding-capability-probe",
+          goal: "Return a short answer",
+          workspaceRoot: dir,
+          maxSteps: 2,
         });
-        expect(tools).not.toBeNull();
-        if (!tools) throw new Error("coding tools unexpectedly unavailable");
-        expect(tools.includes("workspace.edit_file")).toBe(true);
-        expect(tools.includes("workspace.run_shell")).toBe(true);
-        expect(tools.includes("workspace.run_agent")).toBe(false);
-        expect(tools.includes("workspace.create_agent")).toBe(false);
+        const inventory = events.find(
+          (event) => event.event.type === "capability.inventory",
+        );
+        expect(inventory?.event.type).toBe("capability.inventory");
+        if (inventory?.event.type !== "capability.inventory") {
+          throw new Error("capability inventory missing");
+        }
+        expect(inventory.event.fullToolCount).toBe(3);
+        expect(inventory.event.executableTools).toEqual(
+          expect.arrayContaining([
+            "workspace.run_shell",
+            "workspace.read_file",
+            "workspace.edit_file",
+          ]),
+        );
+        expect(inventory.event.executableTools).not.toContain(
+          "workspace.run_agent",
+        );
+        expect(providerToolNames).toHaveLength(3);
+        expect(providerToolNames).toEqual(
+          expect.arrayContaining(
+            inventory.event.executableTools?.map((name) =>
+              name.replace(/[^a-zA-Z0-9_-]/g, "_"),
+            ) ?? [],
+          ),
+        );
+        for (const hidden of [
+          "workspace.write_file",
+          "workspace.glob",
+          "workspace.grep",
+          "workspace.todo_write",
+          "workspace.run_agent",
+          "workspace.apply_patch",
+          "workspace.job_",
+          "memory.list",
+          "memory.read",
+          "memory.save",
+        ]) {
+          expect(systemPrompt).not.toContain(hidden);
+        }
+        expect(systemPrompt).toContain(
+          "to create a missing file, pass old_string as an empty string",
+        );
       } finally {
         run.watcher.stop();
       }

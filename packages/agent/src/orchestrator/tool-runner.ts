@@ -369,9 +369,9 @@ export async function executeToolCalls(
   // - read_only：拒绝修改性工具
   // - allowedTools：拒绝不在白名单的工具
   const allowSet =
-    toolCtx.allowedTools && toolCtx.allowedTools.length > 0
-      ? new Set(toolCtx.allowedTools)
-      : null;
+    toolCtx.allowedTools === undefined || toolCtx.allowedTools === null
+      ? null
+      : new Set(toolCtx.allowedTools);
   const policyBlocks = await Promise.all(
     calls.map(async (call) => {
       if (toolCtx.childPolicy === "read_only" && isMutatingTool(call.tool)) {

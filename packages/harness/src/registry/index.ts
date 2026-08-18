@@ -5,6 +5,8 @@ export {
   toolDefinitions,
   toolCatalogText,
   CORE_MODEL_TOOLS,
+  CORE_MODEL_ACTIONS,
+  CORE_MODEL_EXECUTABLE_TOOLS,
   CONTEXT_RECALL,
   ACCEPTANCE_UPDATE,
   JOB_START,

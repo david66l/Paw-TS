@@ -135,12 +135,10 @@ import {
 // @paw/harness：执行层 — MCP 客户端、工具定义、Shell 沙箱
 // ─────────────────────────────────────────────────────────────
 import {
-  CORE_MODEL_TOOLS,
   McpClientManager,
   type McpServerConfig,
   type SubAgentLauncher,
   runShellInWorkspace,
-  toolCatalogText,
   toolDefinitions,
   toolNameReverseMap,
 } from "@paw/harness";
@@ -192,6 +190,10 @@ import {
   CapabilityExposureShadowV1,
   capabilityPhaseToolsV1,
 } from "./capability-exposure.js";
+import {
+  type CapabilitySetV1,
+  resolveCapabilitySetV1,
+} from "./capability-set.js";
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
@@ -473,8 +475,11 @@ export interface AgentOrchestratorOptions {
   /** 评估钩子：非侵入式收集 trace 数据，不影响正常流程 */
   readonly evalHooks?: EvalHooks;
   /**
-   * 工具白名单（完整名，如 workspace.read_file）。
-   * null/undefined = 不裁剪；有值则只暴露这些工具（硬拦截）。
+   * 模型工具配置（完整名，如 workspace.read_file）。
+   * undefined/null = 低层兼容全量；数组 = 精确集合。生产 coding 工厂
+   * 必须显式传入核心集合，低层类不暗中选择部署策略。
+   * 同一配置会在 run 初始化时解析为 CapabilitySet，同时约束 schema、
+   * 文本动作解析和执行器。
    */
   readonly allowedTools?: readonly string[] | null;
   /** 注入 system prompt 的 Agent 花名册文本（狸花调度用） */
@@ -719,30 +724,6 @@ export class AgentOrchestrator {
     return this._lastLoopV2CandidateAssessment;
   }
 
-  /** 按 allowedTools 过滤 toolDefs（硬裁） */
-  private filterToolDefs(
-    toolDefs: readonly import("@paw/models").ToolDefinition[],
-    toolNameMap: Map<string, string>,
-  ): readonly import("@paw/models").ToolDefinition[] {
-    if (!this.allowedTools || this.allowedTools.length === 0) {
-      // null = inherit 全量（桌面端/子 agent 明确指定）
-      if (this.allowedTools === null) return toolDefs;
-      // undefined = 未指定 → 默认核心 5 工具（v2 优化：降低模型认知负担）
-      if (this.allowedTools === undefined) {
-        const core = new Set<string>(CORE_MODEL_TOOLS);
-        return toolDefs.filter((d) => {
-          const orig = toolNameMap.get(d.function.name) ?? d.function.name;
-          return core.has(orig);
-        });
-      }
-    }
-    const allow = new Set(this.allowedTools);
-    return toolDefs.filter((d) => {
-      const orig = toolNameMap.get(d.function.name) ?? d.function.name;
-      return allow.has(orig);
-    });
-  }
-
   /** 描述信息：用于日志和调试 */
   describe(): string {
     return "AgentOrchestrator (TS): model + harness tool loop + run events.";
@@ -911,6 +892,7 @@ export class AgentOrchestrator {
         mcp,
         toolDefs,
         toolNameMap,
+        capabilitySet,
         ctxMgr,
         planner,
         sessionMemoryStore,
@@ -1047,6 +1029,9 @@ export class AgentOrchestrator {
               progressBaseline ??
               computeProgressBaselineV1(taskState.snapshot(), turn),
             turn,
+            canDelegate: capabilitySet.executableToolNames.includes(
+              "workspace.run_agent",
+            ),
           });
           progressBaseline = stall.baseline;
           if (stall.message) {
@@ -1220,6 +1205,7 @@ export class AgentOrchestrator {
           mcp,
           toolDefs,
           toolNameMap,
+          capabilitySet,
           ctxMgr,
           planner,
           taskState,
@@ -1610,11 +1596,9 @@ export class AgentOrchestrator {
 
     emit({ type: "phase", name: "parse" });
 
-    // 已知工具名集合：同时包含 sanitized 名和原名，用于过滤无效调用
-    const knownTools = new Set([
-      ...toolNameMap.values(),
-      ...toolNameMap.keys(),
-    ]);
+    // 单一 capability authority：只接受模型实际可见/可执行工具的
+    // sanitized/original 名称。内部工具即使通过文本 JSON 猜出也不会进入动作。
+    const knownTools = ctx.capabilitySet.knownToolNames;
 
     let toolCalls: AgentToolCallAction[];
     let reasoningText: string;
@@ -1666,9 +1650,17 @@ export class AgentOrchestrator {
     }
 
     // 如果没有提取到工具调用，尝试解析单个 action（可能是 final/ask_user/abort）
-    const singleAction =
+    const parsedSingleAction =
       toolCalls.length === 0
         ? parseAgentActionFromModelText(text, { knownTools })
+        : null;
+    const singleAction =
+      parsedSingleAction &&
+      parsedSingleAction.type !== "tool_call" &&
+      ctx.capabilitySet.modelActions.includes(
+        `action.${parsedSingleAction.type}`,
+      )
+        ? parsedSingleAction
         : null;
 
     // 解析诊断：无任何 action 时，描述「为什么解析失败」供格式反馈使用
@@ -2625,7 +2617,6 @@ export class AgentOrchestrator {
         memoryRuntime: this._memoryRuntime ?? undefined,
         memoryTaskId: this._memoryTaskId ?? undefined,
         createAgent: this.createAgent,
-        allowedTools: this.allowedTools,
         toolExecutionPolicy: this.toolExecutionPolicy,
         toolEffectPolicy: this.toolEffectPolicy,
       },
@@ -3552,6 +3543,7 @@ export class AgentOrchestrator {
     mcp?: McpClientManager;
     toolDefs: readonly import("@paw/models").ToolDefinition[];
     toolNameMap: Map<string, string>;
+    capabilitySet: CapabilitySetV1;
     ctxMgr: ContextManager;
     planner: TaskPlanner;
     taskState: TaskStateManager;
@@ -4142,10 +4134,12 @@ export class AgentOrchestrator {
     // Tool descriptions must reflect the actual execution world, not merely
     // the host OS (for example Windows hosting a Linux instance image).
     const toolNameMap = toolNameReverseMap(mcp);
-    const toolDefs = this.filterToolDefs(
-      toolDefinitions(mcp, { shellSandbox }),
+    const capabilitySet = resolveCapabilitySetV1({
+      definitions: toolDefinitions(mcp, { shellSandbox }),
       toolNameMap,
-    );
+      configuredTools: this.allowedTools ?? null,
+    });
+    const toolDefs = capabilitySet.modelToolDefinitions;
     const capabilityExposure = new CapabilityExposureShadowV1({
       definitions: toolDefs,
       toolNameMap,
@@ -4154,6 +4148,10 @@ export class AgentOrchestrator {
     });
     emit({
       type: "capability.inventory",
+      capabilitySetSchemaVersion: capabilitySet.schemaVersion,
+      modelActions: capabilitySet.modelActions,
+      executableTools: capabilitySet.executableToolNames,
+      internalToolCount: capabilitySet.internalToolNames.length,
       ...capabilityExposure.snapshot(
         spec.goal,
         capabilityPhaseToolsV1(taskState.snapshot()),
@@ -4174,7 +4172,7 @@ export class AgentOrchestrator {
         .join("\n");
       const systemContent = buildChildSystemPrompt({
         sharedContext: this.sharedContext,
-        toolCatalog: childCatalog || toolCatalogText(mcp),
+        toolCatalog: childCatalog,
         workspaceRoot,
       });
 
@@ -4208,6 +4206,7 @@ export class AgentOrchestrator {
         mcp,
         toolDefs,
         toolNameMap,
+        capabilitySet,
         ctxMgr,
         planner,
         taskState,
@@ -4430,7 +4429,9 @@ export class AgentOrchestrator {
     const promptBuild = buildSystemPromptWithBudget(
       {
         workspaceRoot,
-        toolCatalog: rootToolCatalog || toolCatalogText(mcp),
+        toolCatalog: rootToolCatalog,
+        modelToolNames: capabilitySet.modelToolNames,
+        modelActions: capabilitySet.modelActions,
         skills: skillsText,
         gitStatus: gitStatusLine,
         pawMd: pawMdContent,
@@ -4598,6 +4599,7 @@ export class AgentOrchestrator {
       mcp,
       toolDefs,
       toolNameMap,
+      capabilitySet,
       ctxMgr,
       planner,
       taskState,

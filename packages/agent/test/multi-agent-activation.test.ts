@@ -55,6 +55,7 @@ describe("multi-agent activation slice", () => {
       state: investigating,
       baseline: base.baseline,
       turn: gap,
+      canDelegate: true,
     });
     expect(advice.message).toContain("[ProgressAdvice:inspect_gap]");
     expect(advice.message).toContain(`last ${gap} turns`);

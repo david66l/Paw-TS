@@ -216,6 +216,11 @@ export {
   type CapabilitySelectionObservationV1,
 } from "./capability-exposure.js";
 export {
+  CAPABILITY_SET_SCHEMA_V1,
+  resolveCapabilitySetV1,
+  type CapabilitySetV1,
+} from "./capability-set.js";
+export {
   CAPABILITY_EXPOSURE_SUMMARY_SCHEMA_V1,
   parseCapabilityExposureTraceV1,
   summarizeCapabilityExposureV1,

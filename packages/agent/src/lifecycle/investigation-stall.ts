@@ -61,6 +61,7 @@ export function evaluateInvestigationStallV1(input: {
   readonly state: TaskState;
   readonly baseline: ProgressBaselineV1;
   readonly turn: number;
+  readonly canDelegate?: boolean;
 }): InvestigationStallResultV1 {
   const current = computeProgressBaselineV1(input.state, input.turn);
   if (hasMeaningfulDelta(input.baseline, current)) {
@@ -69,8 +70,9 @@ export function evaluateInvestigationStallV1(input: {
   const gap = input.turn - input.baseline.turn;
   const thresholds = DEFAULT_PROGRESS_ADVISOR_CONFIG_V2.noDeltaThresholds;
   const investigationFacts = `last ${gap} turns: +${current.filesRead - input.baseline.filesRead} files read, +${current.shellCommandRevision - input.baseline.shellCommandRevision} shell commands, 0 product mutations / new verification results`;
-  const parallelFact =
-    "Parallel read-only investigators can be dispatched via workspace.run_agent (e.g. agent_id bige): each burns its own context and returns a one-page summary, so several hypotheses can be checked without consuming yours.";
+  const parallelFact = input.canDelegate
+    ? "Parallel read-only investigators can be dispatched via workspace.run_agent (e.g. agent_id bige): each returns a focused summary."
+    : "Compare independent hypotheses and choose the next action with the highest information gain.";
   let message: string | undefined;
   if (gap === thresholds.safetyWarning) {
     message = `[ProgressAdvice:safety_line] ${investigationFacts}. The no-progress safety line has been reached. Preserve the decision state and prepare an honest incomplete/stalled handoff unless new evidence arrives. ${parallelFact}`;

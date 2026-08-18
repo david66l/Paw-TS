@@ -296,12 +296,15 @@ export interface WriteFileResult {
 
 /**
  * Create or overwrite a UTF-8 file under the workspace root (after path guard).
+ * createOnly uses the filesystem's exclusive-create flag and never overwrites.
  */
 export function writeWorkspaceFile(
   workspaceRoot: string,
   relPath: string,
   content: string,
-  options: { createDirectories?: boolean } = { createDirectories: true },
+  options: { createDirectories?: boolean; createOnly?: boolean } = {
+    createDirectories: true,
+  },
 ): WriteFileResult {
   const d = checkWorkspacePath(workspaceRoot, relPath);
   if (!d.allowed) return { error: d.reason ?? "path escapes workspace" };
@@ -321,7 +324,11 @@ export function writeWorkspaceFile(
       const dir = path.dirname(d.resolvedPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(d.resolvedPath, content, "utf8");
+    fs.writeFileSync(
+      d.resolvedPath,
+      content,
+      options.createOnly ? { encoding: "utf8", flag: "wx" } : "utf8",
+    );
     const { linesAdded, linesRemoved, diffText } = computeDiffStats(
       d.resolvedPath,
       oldContent,
@@ -336,6 +343,14 @@ export function writeWorkspaceFile(
       diff: diffText,
     };
   } catch (e) {
+    if (
+      options.createOnly &&
+      e instanceof Error &&
+      "code" in e &&
+      e.code === "EEXIST"
+    ) {
+      return { error: `file already exists: ${relPath}` };
+    }
     return { error: e instanceof Error ? e.message : String(e) };
   }
 }

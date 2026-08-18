@@ -294,7 +294,8 @@ function errorCodeForToolPayload(payload: unknown): ToolErrorCode {
   if (
     error.includes("enoent") ||
     error.includes("not found") ||
-    error.includes("missing")
+    error.includes("missing") ||
+    error.includes("already exists")
   ) {
     return "E_USER";
   }
@@ -572,12 +573,13 @@ export async function executeTool(
   }
   if (tool === EDIT) {
     const filePath = typeof rec.path === "string" ? rec.path : "";
-    const oldString =
+    const rawOldString =
       typeof rec.old_string === "string"
         ? rec.old_string
         : typeof rec.oldString === "string"
           ? rec.oldString
-          : "";
+          : undefined;
+    const oldString = rawOldString ?? "";
     const newString =
       typeof rec.new_string === "string"
         ? rec.new_string
@@ -589,10 +591,33 @@ export async function executeTool(
         field: "path",
       });
     }
-    if (!oldString) {
+    if (rawOldString === undefined) {
       return toolErrorResult("edit_file", "E_USER", "missing old_string", {
         field: "old_string",
       });
+    }
+    if (oldString.length === 0) {
+      const created = writeWorkspaceFile(
+        ctx.workspaceRoot,
+        filePath,
+        newString,
+        { createDirectories: true, createOnly: true },
+      );
+      if (created.error) {
+        return toolErrorResult(
+          "edit_file",
+          errorCodeForToolPayload(created),
+          created.error,
+          { path: filePath },
+        );
+      }
+      ctx.watcher?.markAgentWritten(filePath);
+      const diagnostics = diagnoseEditedFilesV1(ctx.workspaceRoot, [filePath]);
+      return {
+        ok: true,
+        payload: { ...created, diagnostics },
+        summary: `edit_file(create): ${filePath} (${created.bytes_written ?? 0} bytes)${diagnosticSummarySuffix(diagnostics)}`,
+      };
     }
     const startLine =
       num(rec.start_line, undefined) ?? num(rec.startLine, undefined);

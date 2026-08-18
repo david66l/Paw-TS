@@ -28,8 +28,53 @@ export function getUsingToolsSection(opts: {
   hasSkills: boolean;
   /** 工具目录文本（所有可用工具的描述） */
   toolCatalog: string;
+  /** Authoritative model-visible tool names. Undefined preserves legacy behavior. */
+  toolNames?: readonly string[];
+  /** Authoritative structured actions. Undefined preserves legacy behavior. */
+  modelActions?: readonly string[];
 }): string {
   const lines: string[] = [];
+  const toolNames = opts.toolNames ? new Set(opts.toolNames) : null;
+  const modelActions = opts.modelActions ? new Set(opts.modelActions) : null;
+  const hasTool = (name: string): boolean => toolNames?.has(name) ?? true;
+  const hasAction = (name: string): boolean => modelActions?.has(name) ?? true;
+
+  const examples: string[] = [];
+  if (hasTool("workspace.read_file")) {
+    examples.push(
+      `{"tool":"workspace.read_file","args":{"path":"<relative-path>"}}`,
+    );
+  }
+  if (hasTool("workspace.run_shell")) {
+    examples.push(
+      `{"tool":"workspace.run_shell","args":{"command":"<shell command>","cwd":"."}}`,
+    );
+  }
+
+  const actions: string[] = [];
+  if (hasAction("action.final_answer")) {
+    actions.push(
+      `{"action":"final_answer","summary":"..."} — task is done, report to the user`,
+    );
+  }
+  if (hasAction("action.ask_user")) {
+    actions.push(
+      `{"action":"ask_user","question":"..."} — ask the user a question`,
+    );
+  }
+  if (hasAction("action.plan_update")) {
+    actions.push(
+      `{"action":"plan_update","reason":"...","new_items":[...],"deprecated_items":[...]} — add plan items or update existing items by id`,
+    );
+  }
+  if (hasAction("action.acceptance_update")) {
+    actions.push(
+      `{"action":"acceptance_update","add":[...],"updates":[...],"reason":"..."} — update the durable acceptance ledger`,
+    );
+  }
+  if (hasAction("action.abort")) {
+    actions.push(`{"action":"abort","reason":"..."} — abort the task`);
+  }
 
   // 基础工具调用格式说明
   lines.push(
@@ -37,19 +82,21 @@ export function getUsingToolsSection(opts: {
     "",
     "You can call tools by outputting one or more JSON objects, each on its own line:",
     "",
-    `{"tool":"workspace.read_file","args":{"path":"<relative-path>"}}`,
-    `{"tool":"workspace.run_shell","args":{"command":"<shell command>","cwd":"."}}`,
+    ...(examples.length > 0
+      ? examples
+      : ["No model-callable workspace tools are enabled for this run."]),
     "",
     // 关键：使用 tool/args 而非 name/arguments——错误的格式不会被识别
     "Use the exact keys `tool` and `args` above. Do NOT use `name` and `arguments` — those are a different format and will not be recognized.",
     "",
     // 其他结构化动作（非工具调用，而是流程控制）
     "Other structured actions (also valid JSON on their own line):",
-    `{"action":"final_answer","summary":"..."} — task is done, report to the user`,
-    `{"action":"ask_user","question":"..."} — ask the user a question`,
-    `{"action":"plan_update","reason":"...","new_items":[...],"deprecated_items":[...]} — add plan items or update existing items by id (including status: pending|running|completed|blocked|skipped|failed)`,
-    "When repository tests or investigation reveal multi-branch requirements or regression conditions, register them with workspace.acceptance_update before implementation. Before final_answer, resolve every active acceptance item against the current code revision; prior evidence becomes stale after another mutation.",
-    `{"action":"abort","reason":"..."} — abort the task`,
+    ...actions,
+    ...(hasAction("action.acceptance_update")
+      ? [
+          "When tests or investigation reveal new regression conditions, register them with acceptance_update. Before final_answer, resolve every active acceptance item against the current code revision.",
+        ]
+      : []),
     "",
     // ReAct 模式：观察→思考→行动，循环直到完成
     "ReAct pattern: (1) Observe tool results. (2) Think about next steps. (3) Act: call a tool, ask the user, or final_answer. Repeat until done. Do NOT stop after just reading or searching — take action on what you learn.",
@@ -61,21 +108,43 @@ export function getUsingToolsSection(opts: {
     opts.toolCatalog,
   );
 
-  // 专用工具优于通用 shell 命令：防止 AI 用 cat/sed/awk 等绕开专用工具
-  lines.push(
-    "",
-    "IMPORTANT: Do NOT use workspace.run_shell to run commands when a relevant dedicated tool is available:",
-    "- To read files use workspace.read_file — never use cat, head, or tail",
-    "- To create files use workspace.write_file — never use cat/echo with heredoc or shell redirection (> / >>)",
-    "- To edit files use workspace.edit_file — never use sed or awk",
-    "- To search for files use workspace.glob — never use find or ls",
-    "- To search content use workspace.grep — never use grep or rg",
-    "",
-    "Creating files via shell commands (cat << 'EOF', echo >, tee, etc.) is FORBIDDEN. Always use workspace.write_file for creating files — this ensures the user can see exactly what was written and the file actually exists on disk. Shell exit codes can be misleading: a shell command that writes to the wrong directory may still return exit 0.",
-  );
+  // 专用工具优于通用 shell；只有实际可见的专用工具才进入说明。
+  const dedicatedGuidance: string[] = [];
+  if (hasTool("workspace.read_file")) {
+    dedicatedGuidance.push(
+      "- To read files use workspace.read_file — never use cat, head, or tail",
+    );
+  }
+  if (hasTool("workspace.write_file")) {
+    dedicatedGuidance.push(
+      "- To create files use workspace.write_file — never use shell redirection",
+    );
+  }
+  if (hasTool("workspace.edit_file")) {
+    dedicatedGuidance.push(
+      "- Use workspace.edit_file for exact edits; to create a missing file, pass old_string as an empty string and new_string as its complete content",
+    );
+  }
+  if (hasTool("workspace.glob")) {
+    dedicatedGuidance.push(
+      "- To search for files use workspace.glob — never use find or ls",
+    );
+  }
+  if (hasTool("workspace.grep")) {
+    dedicatedGuidance.push(
+      "- To search content use workspace.grep — never use grep or rg",
+    );
+  }
+  if (dedicatedGuidance.length > 0) {
+    lines.push(
+      "",
+      "IMPORTANT: Prefer an available dedicated tool over workspace.run_shell:",
+      ...dedicatedGuidance,
+    );
+  }
 
   // 任务管理工具（可选）：让 AI 使用 todo_write 拆分和追踪任务
-  if (opts.hasTaskTool) {
+  if (opts.hasTaskTool && hasTool("workspace.todo_write")) {
     lines.push(
       "",
       "Break down and manage your work with workspace.todo_write. Mark each task as completed as soon as you are done with it. Do not batch up multiple tasks before marking them as completed.",
@@ -83,7 +152,7 @@ export function getUsingToolsSection(opts: {
   }
 
   // Skill 系统（可选）：教 AI 如何通过 /skill-name 调用技能
-  if (opts.hasSkills) {
+  if (opts.hasSkills && hasTool("workspace.run_skill")) {
     lines.push(
       "",
       "When the user types /<skill-name> (e.g., /review), invoke it via workspace.run_skill. Use only skills listed in the available skills section — don't guess or invent names.",
@@ -96,37 +165,41 @@ export function getUsingToolsSection(opts: {
     "You can call multiple tools in a single response. If you intend to call multiple tools and there are no dependencies between them, make all independent tool calls in parallel. Maximize use of parallel tool calls where possible to increase efficiency. However, if some tool calls depend on previous calls to inform dependent values, do NOT call these tools in parallel and instead call them sequentially.",
   );
 
-  // 子代理（sub-agent）使用指南
-  lines.push(
-    "",
-    "## When to use workspace.run_agent",
-    "",
-    "Use sub-agents for tasks that would otherwise fill your context with raw output you won't need again. The sub-agent absorbs the noise and returns only the conclusion.",
-    "",
-    "**Use sub-agents when:**",
-    "- The task requires searching/reading many files (roughly 5+) and you only need the answer, not every file's contents in your context.",
-    "- Multiple independent tasks can run concurrently — output several workspace.run_agent lines in one response to launch them in parallel (e.g. finding TODOs + FIXMEs + HACKs = 3 parallel agents).",
-    "- After non-trivial implementation (3+ file edits), spawn an agent to independently verify your work.",
-    "",
-    "**Do NOT use sub-agents when:**",
-    "- The task is a single read_file, glob, or grep.",
-    "- You need the raw output for your immediate next step.",
-    "- The task can be done in 2 or fewer tool calls.",
-    "- Another agent is already working on the same thing.",
-    "",
-    "**Writing the prompt:**",
-    "The sub-agent starts with zero context about this conversation. Include what you're trying to accomplish, what you've already learned, file paths and line numbers, and a scope boundary (what's in, what's out). If you need a short response, say so.",
-  );
+  // 子代理（sub-agent）使用指南只在该工具实际暴露时出现。
+  if (hasTool("workspace.run_agent")) {
+    lines.push(
+      "",
+      "## When to use workspace.run_agent",
+      "",
+      "Use sub-agents for tasks that would otherwise fill your context with raw output you won't need again. The sub-agent absorbs the noise and returns only the conclusion.",
+      "Use them for broad independent investigation or independent review; avoid them for a single direct tool call.",
+    );
+  }
 
   // 工作模式：复杂任务按"计划→执行→验证"流程，简单任务直接修改
+  const workModeSteps: string[] = [];
+  if (hasAction("action.plan_update")) {
+    workModeSteps.push(
+      "- Start with plan_update when a complex task needs explicit stages.",
+    );
+  }
+  if (hasTool("workspace.todo_write")) {
+    workModeSteps.push(
+      "- Use workspace.todo_write to track actionable tasks and update them as work progresses.",
+    );
+  }
+  workModeSteps.push(
+    "- Read only what is needed, implement the next clear change, and verify it.",
+  );
+  if (hasAction("action.final_answer")) {
+    workModeSteps.push(
+      "- Call final_answer only when the work is done or cannot proceed honestly.",
+    );
+  }
   lines.push(
     "",
     "Work mode for complex tasks (building, designing, refactoring):",
-    "1. Start with plan_update to create a step-by-step plan before writing code or running commands.",
-    "2. Use workspace.todo_write to track actionable tasks. Update todos as you progress.",
-    "3. Follow the plan sequentially — read ONE file, then EDIT it immediately if changes are clear. Do NOT batch-read all files before editing.",
-    "4. Only call final_answer when all planned work is done or you determine it cannot proceed.",
-    "For simple tasks (single file edit, quick lookup), skip planning and edit directly.",
+    ...workModeSteps,
   );
 
   return lines.join("\n");

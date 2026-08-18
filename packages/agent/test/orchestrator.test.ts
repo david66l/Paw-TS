@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { RunEventEnvelope, SessionStore } from "@paw/core";
-import { resetPolicyConfig } from "@paw/harness";
+import { CORE_MODEL_EXECUTABLE_TOOLS, resetPolicyConfig } from "@paw/harness";
 import { FakeLanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
@@ -24,6 +24,7 @@ describe("AgentOrchestrator", () => {
     writeFileSync(path.join(dir, "note.txt"), "x");
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
+      allowedTools: null,
       model: new FakeLanguageModel(),
       onEvent: (e) => {
         events.push(e);
@@ -50,6 +51,176 @@ describe("AgentOrchestrator", () => {
       expect(tr.event.detail).toContain("note.txt");
     }
     expect(events.some((e) => e.event.type === "run.completed")).toBe(true);
+  });
+
+  test("rejects a hidden tool from the text JSON channel", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-capability-deny-"));
+    const events: RunEventEnvelope[] = [];
+    const o = new AgentOrchestrator({
+      allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
+      model: {
+        label: "hidden-tool-text-channel",
+        async complete() {
+          return {
+            text: '{"tool":"workspace.list_dir","args":{"path":"."}}',
+          };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+
+    await o.run({
+      runId: "hidden-tool-text-channel",
+      goal: "list the directory",
+      workspaceRoot: dir,
+      maxSteps: 1,
+    });
+
+    expect(
+      events.some(
+        (event) =>
+          event.event.type === "tool.call" &&
+          event.event.tool === "workspace.list_dir",
+      ),
+    ).toBe(false);
+    const inventory = events.find(
+      (event) => event.event.type === "capability.inventory",
+    );
+    expect(inventory?.event.type).toBe("capability.inventory");
+    if (inventory?.event.type === "capability.inventory") {
+      expect(inventory.event.fullToolCount).toBe(3);
+      expect(inventory.event.executableTools).toEqual(
+        expect.arrayContaining([
+          "workspace.run_shell",
+          "workspace.read_file",
+          "workspace.edit_file",
+        ]),
+      );
+      expect(inventory.event.modelActions).toEqual([
+        "action.final_answer",
+        "action.ask_user",
+        "action.plan_update",
+        "action.acceptance_update",
+        "action.abort",
+      ]);
+    }
+  });
+
+  test("rejects a hidden tool from the native tool-call channel", async () => {
+    const dir = mkdtempSync(
+      path.join(tmpdir(), "paw-orch-native-capability-deny-"),
+    );
+    const events: RunEventEnvelope[] = [];
+    const o = new AgentOrchestrator({
+      allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
+      model: {
+        label: "hidden-tool-native-channel",
+        async complete() {
+          return {
+            text: "",
+            toolCalls: [
+              {
+                id: "hidden-call-1",
+                name: "workspace.list_dir",
+                arguments: { path: "." },
+              },
+            ],
+          };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+
+    await o.run({
+      runId: "hidden-tool-native-channel",
+      goal: "list the directory",
+      workspaceRoot: dir,
+      maxSteps: 1,
+    });
+
+    expect(
+      events.some(
+        (event) =>
+          event.event.type === "tool.call" &&
+          event.event.tool === "workspace.list_dir",
+      ),
+    ).toBe(false);
+  });
+
+  test("executes an allowed core tool from the text JSON channel", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-core-read-"));
+    writeFileSync(path.join(dir, "note.txt"), "core-read-ok");
+    const events: RunEventEnvelope[] = [];
+    const o = new AgentOrchestrator({
+      allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
+      model: {
+        label: "allowed-core-text-channel",
+        async complete() {
+          return {
+            text: '{"tool":"workspace.read_file","args":{"path":"note.txt"}}',
+          };
+        },
+      },
+      onEvent: (event) => events.push(event),
+      retrySleep: async () => {},
+    });
+
+    await o.run({
+      runId: "allowed-core-text-channel",
+      goal: "read the note",
+      workspaceRoot: dir,
+      maxSteps: 1,
+    });
+
+    expect(
+      events.some(
+        (event) =>
+          event.event.type === "tool.result" &&
+          event.event.tool === "workspace.read_file" &&
+          event.event.detail?.includes("core-read-ok") === true,
+      ),
+    ).toBe(true);
+  });
+
+  test("executes an allowed core tool from the native tool-call channel", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-core-edit-"));
+    const target = path.join(dir, "created.txt");
+    const o = new AgentOrchestrator({
+      allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
+      model: {
+        label: "allowed-core-native-channel",
+        async complete() {
+          return {
+            text: "",
+            toolCalls: [
+              {
+                id: "edit-call-1",
+                name: "workspace_edit_file",
+                arguments: {
+                  path: "created.txt",
+                  old_string: "",
+                  new_string: "created-through-edit",
+                },
+              },
+            ],
+          };
+        },
+      },
+      retrySleep: async () => {},
+    });
+
+    const result = await o.run({
+      runId: "allowed-core-native-channel",
+      goal: "edit the note",
+      workspaceRoot: dir,
+      maxSteps: 1,
+    });
+
+    expect(readFileSync(target, "utf-8")).toBe("created-through-edit");
+    expect(result.evidence?.filesChanged).toContain("created.txt");
+    expect(result.evidence?.mutationRevision).toBeGreaterThan(0);
   });
 
   test("records capability shadow choices without pruning real tool schemas", async () => {
@@ -92,7 +263,7 @@ describe("AgentOrchestrator", () => {
       expect(inventory.event.suggestedToolCount).toBeLessThanOrEqual(
         inventory.event.fullToolCount,
       );
-      // v2 core model tools: default is 5, not full 32
+      // null explicitly restores the full provider schema.
       expect(exposedTools).toBeLessThanOrEqual(inventory.event.fullToolCount);
       expect(exposedTools).toBeGreaterThan(0);
     }

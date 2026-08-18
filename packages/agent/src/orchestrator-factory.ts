@@ -12,8 +12,11 @@ import {
   InMemoryTodoStore,
 } from "@paw/core";
 import type { RunEventEnvelope } from "@paw/core";
-import type { McpServerConfig } from "@paw/harness";
-import type { ShellSandboxConfig } from "@paw/harness";
+import {
+  CORE_MODEL_EXECUTABLE_TOOLS,
+  type McpServerConfig,
+  type ShellSandboxConfig,
+} from "@paw/harness";
 import {
   createDeepSeekFlashModel,
   createDefaultLanguageModel,
@@ -27,7 +30,6 @@ import {
   allowedToolsForSpec,
   createAgentInRegistry,
   loadAgentRegistry,
-  resolveAllowedTools,
   resolveModelForSpec,
 } from "./agents/index.js";
 import { createAutonomyProfile } from "./autonomy/profile.js";
@@ -326,11 +328,9 @@ export function createRunOrchestrator(
 
   let allowedTools: readonly string[] | null;
   if (collab.mode === "coding") {
-    // Full builtin surface minus spawn — single agent does the loop itself.
-    allowedTools = resolveAllowedTools({
-      tools: "inherit",
-      canSpawn: false,
-    });
+    // Coding mode is deliberately explicit: the same slim set is resolved
+    // into provider schema, parser acceptance, and executor permissions.
+    allowedTools = CORE_MODEL_EXECUTABLE_TOOLS;
   } else {
     const rootAllowed = rootSpec ? allowedToolsForSpec(rootSpec) : null;
     allowedTools = rootAllowed;

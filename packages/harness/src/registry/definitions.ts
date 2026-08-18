@@ -66,12 +66,27 @@ export const CONTEXT_RECALL = "context.recall" as const;
  *
  * 桌面端传 allowedTools: null 可恢复全量工具 schema。
  */
-export const CORE_MODEL_TOOLS = [
-  SHELL,
-  READ,
-  EDIT,
+/** Model-originated executable tools in the slim coding loop. */
+export const CORE_MODEL_EXECUTABLE_TOOLS = [SHELL, READ, EDIT] as const;
+
+/** Structured control actions parsed by the agent, not MCP tool definitions. */
+export const CORE_MODEL_ACTIONS = [
   "action.final_answer",
   "action.ask_user",
+  "action.plan_update",
+  "action.acceptance_update",
+  "action.abort",
+] as const;
+
+/**
+ * Compatibility catalog for callers that display model-facing tools and
+ * actions together. Execution code must use CORE_MODEL_EXECUTABLE_TOOLS;
+ * final_answer/ask_user are agent control actions and never enter a tool
+ * allowlist or provider tool schema.
+ */
+export const CORE_MODEL_TOOLS = [
+  ...CORE_MODEL_EXECUTABLE_TOOLS,
+  ...CORE_MODEL_ACTIONS,
 ] as const;
 
 const BUILTIN_TOOLS = [
@@ -267,10 +282,14 @@ export function toolDefinitions(
     ),
     fn(
       EDIT,
-      "Perform exact string replacements in an existing file. Line endings are matched flexibly (CRLF/LF). If old_string matches multiple places, either add more surrounding context or set replace_all=true.",
+      "Perform exact string replacements. To create a missing file, pass old_string as an empty string and new_string as the complete content. Line endings are matched flexibly (CRLF/LF).",
       {
         path: { type: "string", description: "Relative path to the file" },
-        old_string: { type: "string", description: "Text to find and replace" },
+        old_string: {
+          type: "string",
+          description:
+            "Text to replace, or empty string only when creating a missing file",
+        },
         new_string: { type: "string", description: "Replacement text" },
         replace_all: {
           type: "boolean",

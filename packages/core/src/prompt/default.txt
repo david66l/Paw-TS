@@ -44,7 +44,7 @@ assistant: {"action":"final_answer","summary":"你好！有什么可以帮你的
 
 <example>
 user: what files are in src/?
-assistant: [calls workspace.list_dir on src/, then calls final_answer with what was found]
+assistant: [uses an available workspace inspection tool, then calls final_answer with what was found]
 </example>
 
 # Final answer formatting
