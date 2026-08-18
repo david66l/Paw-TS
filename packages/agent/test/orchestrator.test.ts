@@ -1554,6 +1554,55 @@ describe("AgentOrchestrator", () => {
     expect(saved.some((e) => e.event.type === "model.thinking")).toBe(false);
   });
 
+  test("keeps thinking in model.done audit but out of the next model request", async () => {
+    const saved: RunEventEnvelope[] = [];
+    const seenRequests: Array<readonly import("@paw/models").ChatMessage[]> =
+      [];
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-thinking-audit-"));
+    writeFileSync(path.join(dir, "note.txt"), "audit boundary");
+    let calls = 0;
+    const o = new AgentOrchestrator({
+      allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
+      model: {
+        label: "thinking-audit-boundary",
+        async complete(messages) {
+          seenRequests.push(messages);
+          calls += 1;
+          return calls === 1
+            ? {
+                text: '{"tool":"workspace.read_file","args":{"path":"note.txt"}}',
+                thinking: "durable private reasoning",
+              }
+            : {
+                text: '{"action":"final_answer","summary":"done"}',
+              };
+        },
+      },
+      sessionStore: {
+        saveEvent(_runId: string, envelope: RunEventEnvelope) {
+          saved.push(envelope);
+        },
+      } as SessionStore,
+      retrySleep: async () => {},
+    });
+
+    await o.run({
+      runId: "thinking-audit-boundary",
+      goal: "read then answer",
+      workspaceRoot: dir,
+      maxSteps: 2,
+    });
+
+    const audited = saved.find(
+      (envelope) =>
+        envelope.event.type === "model.done" &&
+        envelope.event.thinking === "durable private reasoning",
+    );
+    expect(audited?.event.type).toBe("model.done");
+    expect(seenRequests).toHaveLength(2);
+    expect(seenRequests[1]?.every((message) => !message.thinking)).toBe(true);
+  });
+
   test("resolveToolApproval deny skips successful tool execution", async () => {
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({

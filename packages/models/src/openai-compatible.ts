@@ -104,16 +104,12 @@ export class OpenAICompatibleModel implements LanguageModel {
     const url = `${this.baseUrl}/chat/completions`;
     const body: Record<string, unknown> = {
       model: this.model,
-      messages: messages.map((m) => {
-        const payload: Record<string, unknown> = {
-          role: m.role,
-          content: buildOpenAiMessageContent(m),
-        };
-        if (m.thinking) {
-          payload.reasoning_content = m.thinking;
-        }
-        return payload;
-      }),
+      // Historical thinking is audit data, not generic request state. Native
+      // tool-turn passback will be added only once tool_call_id is preserved.
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: buildOpenAiMessageContent(m),
+      })),
       ...(this.runtimeProfile.thinkingEnabled === true ||
       this.runtimeProfile.reasoningEffort !== undefined
         ? {}
@@ -228,16 +224,10 @@ export class OpenAICompatibleModel implements LanguageModel {
       throw abortError();
     }
     const url = `${this.baseUrl}/chat/completions`;
-    const messagesPayload = messages.map((m) => {
-      const payload: Record<string, unknown> = {
-        role: m.role,
-        content: buildOpenAiMessageContent(m),
-      };
-      if (m.thinking) {
-        payload.reasoning_content = m.thinking;
-      }
-      return payload;
-    });
+    const messagesPayload = messages.map((m) => ({
+      role: m.role,
+      content: buildOpenAiMessageContent(m),
+    }));
     const baseStreamBody: Record<string, unknown> = {
       model: this.model,
       messages: messagesPayload,

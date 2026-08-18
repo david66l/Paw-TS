@@ -139,21 +139,45 @@ describe("ContextManager", () => {
     expect(msgs[0]?.attachments?.[0]?.name).toBe("photo.png");
   });
 
-  test("addAssistant with thinking", () => {
+  test("addAssistant keeps audit thinking out of request history", () => {
     const cm = new ContextManager();
     cm.addAssistant("The answer is 42", "Let me calculate...");
     const msgs = cm.buildMessages();
-    expect(msgs[0]?.thinking).toBe("Let me calculate...");
+    expect(msgs[0]?.thinking).toBeUndefined();
   });
 
-  test("truncation by char count includes thinking", () => {
+  test("legacy history is stripped of audit thinking before truncation", () => {
     const cm = new ContextManager({ maxMessages: 100, maxChars: 20 });
     cm.setSystem("sys");
-    cm.addAssistant("hi", "long thinking text");
+    cm.replaceHistory([
+      { role: "assistant", content: "hi", thinking: "long thinking text" },
+    ]);
     const msgs = cm.buildMessages();
-    // sys (3) + hi (2) + thinking (18) = 23 > 20, but we keep at least 1 history msg
     expect(msgs.length).toBe(2);
-    expect(cm.charCount).toBeGreaterThan(20);
+    expect(msgs[1]?.thinking).toBeUndefined();
+    expect(cm.charCount).toBe(5);
+  });
+
+  test("raw resume history is stripped of audit thinking", () => {
+    const cm = new ContextManager();
+    cm.setHistoryRaw([
+      { role: "assistant", content: "legacy", thinking: "old audit" },
+    ]);
+
+    expect(cm.buildMessages()).toEqual([
+      { role: "assistant", content: "legacy" },
+    ]);
+  });
+
+  test("24 turns do not grow the request budget with audit thinking", () => {
+    const cm = new ContextManager({ maxMessages: 100 });
+    for (let turn = 0; turn < 24; turn++) {
+      cm.addAssistant(`answer-${turn}`, "x".repeat(10_000));
+      cm.addUser(`observation-${turn}`);
+    }
+
+    expect(cm.buildMessages().every((message) => !message.thinking)).toBe(true);
+    expect(cm.charCount).toBeLessThan(1_000);
   });
 
   test("addToolResults combines multiple results into one user message", () => {

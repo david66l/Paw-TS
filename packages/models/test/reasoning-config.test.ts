@@ -151,6 +151,98 @@ describe("reasoning configuration", () => {
     expect(anthropicCaptured[0]?.output_config).toEqual({ effort: "max" });
   });
 
+  test("OpenAI requests never replay historical audit thinking", async () => {
+    const completeCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureJsonResponse(
+      { choices: [{ message: { content: "done" }, finish_reason: "stop" }] },
+      completeCaptured,
+    );
+    const model = new OpenAICompatibleModel({
+      apiKey: "test",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-v4-flash",
+      thinkingEnabled: true,
+    });
+    const history = [
+      { role: "user" as const, content: "solve" },
+      {
+        role: "assistant" as const,
+        content: "plain assistant answer",
+        thinking: "plain audit reasoning",
+      },
+      {
+        role: "assistant" as const,
+        content: '{"tool":"workspace_read_file","args":{}}',
+        thinking: "text-json audit reasoning",
+      },
+    ];
+
+    await model.complete(history);
+    const completeMessages = completeCaptured[0]?.messages as
+      | Array<Record<string, unknown>>
+      | undefined;
+    expect(completeMessages?.[1]).not.toHaveProperty("reasoning_content");
+    expect(completeMessages?.[2]).not.toHaveProperty("reasoning_content");
+
+    const streamCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureStreamResponse(
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+      streamCaptured,
+    );
+    for await (const _chunk of model.completeStream(history)) {
+      // drain stream
+    }
+    const streamMessages = streamCaptured[0]?.messages as
+      | Array<Record<string, unknown>>
+      | undefined;
+    expect(streamMessages?.[1]).not.toHaveProperty("reasoning_content");
+    expect(streamMessages?.[2]).not.toHaveProperty("reasoning_content");
+  });
+
+  test("stream 400 fallback also excludes historical audit thinking", async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    let attempt = 0;
+    global.fetch = Object.assign(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        captured.push(
+          JSON.parse(String(init?.body)) as Record<string, unknown>,
+        );
+        attempt += 1;
+        if (attempt === 1)
+          return new Response("unsupported stream_options", { status: 400 });
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+              ),
+            );
+            controller.close();
+          },
+        });
+        return new Response(stream, { status: 200 });
+      },
+      { preconnect: originalFetch.preconnect },
+    ) as typeof fetch;
+    const model = new OpenAICompatibleModel({
+      apiKey: "test",
+      model: "deepseek-v4-flash",
+      thinkingEnabled: true,
+    });
+
+    for await (const _chunk of model.completeStream([
+      { role: "assistant", content: "tool action", thinking: "audit only" },
+    ])) {
+      // drain stream
+    }
+
+    expect(captured).toHaveLength(2);
+    for (const body of captured) {
+      const requestMessages = body.messages as Array<Record<string, unknown>>;
+      expect(requestMessages[0]).not.toHaveProperty("reasoning_content");
+    }
+  });
+
   test("rejects contradictory thinking settings", () => {
     expect(
       () =>

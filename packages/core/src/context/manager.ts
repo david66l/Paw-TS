@@ -54,6 +54,12 @@ export interface ContextManagerOptions {
   readonly tailTurnCount?: number;
 }
 
+/** Remove provider audit reasoning before a message enters request history. */
+function stripAuditThinking(message: ChatMessage): ChatMessage {
+  const { thinking: _thinking, ...requestMessage } = message;
+  return requestMessage;
+}
+
 /**
  * 系统注入消息的前缀。
  * 这些消息由 orchestrator 生成（工具结果、nudge、警告等），
@@ -138,12 +144,9 @@ export class ContextManager {
     this.maybeTruncate();
   }
 
-  /** 追加 assistant 消息（可选 thinking 内容）。 */
-  addAssistant(content: string, thinking?: string): void {
-    const msg: ChatMessage = thinking
-      ? { role: "assistant", content, thinking }
-      : { role: "assistant", content };
-    this.history.push(msg);
+  /** 追加 assistant 正文；thinking 只由 durable model.done 审计保存。 */
+  addAssistant(content: string, _thinking?: string): void {
+    this.history.push({ role: "assistant", content });
     this.maybeTruncate();
   }
 
@@ -189,11 +192,11 @@ export class ContextManager {
   replaceHistory(messages: readonly ChatMessage[]): void {
     const sys = messages.find((m) => m.role === "system");
     if (sys) {
-      this.systemMessage = sys;
+      this.systemMessage = stripAuditThinking(sys);
     }
     this.history = messages
       .filter((m) => m.role !== "system")
-      .map((m) => ({ ...m }));
+      .map(stripAuditThinking);
     this.maybeTruncate();
   }
 
@@ -206,7 +209,7 @@ export class ContextManager {
   setHistoryRaw(messages: readonly ChatMessage[]): void {
     this.history = messages
       .filter((m) => m.role !== "system")
-      .map((m) => ({ ...m }));
+      .map(stripAuditThinking);
   }
 
   /** 公开 maybeTruncate，供外部在手动压缩后调用。 */
