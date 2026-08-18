@@ -39,6 +39,12 @@ export interface LoopControlCheckpointV1 {
       readonly summaryFingerprint?: string;
     };
   };
+  readonly lateGuidance?: {
+    readonly contextGuardDelivered?: true;
+    readonly implementationDelivered?: true;
+    readonly convergenceEvidenceKey?: string;
+    readonly maxStepsDelivered?: true;
+  };
 }
 
 const PROTOCOL_ISSUES = new Set([
@@ -142,12 +148,33 @@ export function checkpointLoopControlV1(
           ...(candidateReview ? { candidateReview } : {}),
         }
       : undefined;
+  const lateGuidance =
+    flags._budgetGuardWarned ||
+    flags._implementationWarned ||
+    flags._convergenceEvidenceKey ||
+    flags._maxStepsWarned
+      ? {
+          ...(flags._budgetGuardWarned
+            ? { contextGuardDelivered: true as const }
+            : {}),
+          ...(flags._implementationWarned
+            ? { implementationDelivered: true as const }
+            : {}),
+          ...(flags._convergenceEvidenceKey
+            ? { convergenceEvidenceKey: flags._convergenceEvidenceKey }
+            : {}),
+          ...(flags._maxStepsWarned
+            ? { maxStepsDelivered: true as const }
+            : {}),
+        }
+      : undefined;
   if (
     !flags.providerTerminal &&
     !readiness &&
     !pendingControl &&
     !protocolRecovery &&
-    !completionGates
+    !completionGates &&
+    !lateGuidance
   ) {
     return undefined;
   }
@@ -160,6 +187,7 @@ export function checkpointLoopControlV1(
     ...(pendingControl ? { pendingControl } : {}),
     ...(protocolRecovery ? { protocolRecovery } : {}),
     ...(completionGates ? { completionGates } : {}),
+    ...(lateGuidance ? { lateGuidance } : {}),
   };
 }
 
@@ -182,12 +210,15 @@ export function parseLoopControlCheckpointV1(
     return undefined;
   const completionGates = parseCompletionGates(value.completionGates);
   if (value.completionGates !== undefined && !completionGates) return undefined;
+  const lateGuidance = parseLateGuidance(value.lateGuidance);
+  if (value.lateGuidance !== undefined && !lateGuidance) return undefined;
   if (
     !providerTerminal &&
     !readiness &&
     !pendingControl &&
     !protocolRecovery &&
-    !completionGates
+    !completionGates &&
+    !lateGuidance
   )
     return undefined;
   return {
@@ -197,6 +228,7 @@ export function parseLoopControlCheckpointV1(
     ...(pendingControl ? { pendingControl } : {}),
     ...(protocolRecovery ? { protocolRecovery } : {}),
     ...(completionGates ? { completionGates } : {}),
+    ...(lateGuidance ? { lateGuidance } : {}),
   };
 }
 
@@ -227,6 +259,10 @@ export function restoreLoopControlFlagsV1(input: {
     | "candidateReviewNudges"
     | "candidateReviewRevision"
     | "candidateReviewSummaryFingerprint"
+    | "_budgetGuardWarned"
+    | "_implementationWarned"
+    | "_convergenceEvidenceKey"
+    | "_maxStepsWarned"
   >
 > {
   const checkpoint = parseLoopControlCheckpointV1(input.value);
@@ -290,6 +326,21 @@ export function restoreLoopControlFlagsV1(input: {
                 }
               : {}),
           }
+        : {}),
+      ...(checkpoint.lateGuidance?.contextGuardDelivered
+        ? { _budgetGuardWarned: true }
+        : {}),
+      ...(checkpoint.lateGuidance?.implementationDelivered
+        ? { _implementationWarned: true }
+        : {}),
+      ...(checkpoint.lateGuidance?.convergenceEvidenceKey
+        ? {
+            _convergenceEvidenceKey:
+              checkpoint.lateGuidance.convergenceEvidenceKey,
+          }
+        : {}),
+      ...(checkpoint.lateGuidance?.maxStepsDelivered
+        ? { _maxStepsWarned: true }
         : {}),
     };
     // c3a/c2 snapshots already have a provider/protocol checkpoint while the
@@ -495,6 +546,46 @@ function parseCandidateReviewGate(
     revision: value.revision as number,
     nudges,
     ...(summaryFingerprint ? { summaryFingerprint } : {}),
+  };
+}
+
+function parseLateGuidance(
+  value: unknown,
+): LoopControlCheckpointV1["lateGuidance"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const contextGuardDelivered =
+    value.contextGuardDelivered === true ? true : undefined;
+  const implementationDelivered =
+    value.implementationDelivered === true ? true : undefined;
+  const maxStepsDelivered = value.maxStepsDelivered === true ? true : undefined;
+  const convergenceEvidenceKey =
+    typeof value.convergenceEvidenceKey === "string" &&
+    /^r(?:0|[1-9]\d*):(?:missing|stale|passed|code_failed|harness_failed):(?:current|stale)$/.test(
+      value.convergenceEvidenceKey,
+    )
+      ? value.convergenceEvidenceKey
+      : undefined;
+  if (
+    (value.contextGuardDelivered !== undefined && !contextGuardDelivered) ||
+    (value.implementationDelivered !== undefined && !implementationDelivered) ||
+    (value.maxStepsDelivered !== undefined && !maxStepsDelivered) ||
+    (value.convergenceEvidenceKey !== undefined && !convergenceEvidenceKey)
+  ) {
+    return undefined;
+  }
+  if (
+    !contextGuardDelivered &&
+    !implementationDelivered &&
+    !maxStepsDelivered &&
+    !convergenceEvidenceKey
+  ) {
+    return undefined;
+  }
+  return {
+    ...(contextGuardDelivered ? { contextGuardDelivered } : {}),
+    ...(implementationDelivered ? { implementationDelivered } : {}),
+    ...(convergenceEvidenceKey ? { convergenceEvidenceKey } : {}),
+    ...(maxStepsDelivered ? { maxStepsDelivered } : {}),
   };
 }
 

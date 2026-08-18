@@ -12,6 +12,42 @@ import { TaskStateManager } from "../src/task-state.js";
 const READINESS_KEY = "a".repeat(64);
 
 describe("Loop control checkpoint v1", () => {
+  test("round-trips bounded late-guidance delivery receipts", () => {
+    const checkpoint = checkpointLoopControlV1({
+      autoContinueNudges: 0,
+      lastTurnHadToolCall: false,
+      hasEverUsedTools: false,
+      _budgetGuardWarned: true,
+      _implementationWarned: true,
+      _convergenceEvidenceKey: "r2:passed:current",
+      _maxStepsWarned: true,
+    });
+
+    expect(parseLoopControlCheckpointV1(checkpoint)).toEqual(checkpoint);
+    expect(
+      restoreLoopControlFlagsV1({
+        runId: "run-guidance",
+        startTurn: 0,
+        value: checkpoint,
+        legacyMessages: [],
+      }),
+    ).toMatchObject({
+      _budgetGuardWarned: true,
+      _implementationWarned: true,
+      _convergenceEvidenceKey: "r2:passed:current",
+      _maxStepsWarned: true,
+    });
+    expect(
+      parseLoopControlCheckpointV1({
+        schemaVersion: "paw.loop-control.v1",
+        lateGuidance: { convergenceEvidenceKey: "r2:unknown:current" },
+      }),
+    ).toBeUndefined();
+    expect(resetLoopControlForRewindV1("run-guidance", 1)).not.toHaveProperty(
+      "lateGuidance",
+    );
+  });
+
   test("round-trips provider cursor, readiness budget, and one pending control", () => {
     const checkpoint = checkpointLoopControlV1({
       autoContinueNudges: 0,

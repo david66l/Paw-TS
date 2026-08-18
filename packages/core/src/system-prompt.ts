@@ -34,7 +34,6 @@
  * - MAX_STEPS_WARNING 作为一个独立的静态提示，在接近步数上限时注入
  */
 
-import { estimateTokens } from "./token-estimate.js";
 import { truncateTextToTokenBudget } from "./context/budget.js";
 import { assembleSystemPrompt } from "./system-prompt/assembler.js";
 import { trimSystemPromptToBudget } from "./system-prompt/trim.js";
@@ -42,6 +41,7 @@ import type {
   SystemPromptBuildResult,
   SystemPromptOptions,
 } from "./system-prompt/types.js";
+import { estimateTokens } from "./token-estimate.js";
 
 // 重新导出类型，方便调用方 import
 export type {
@@ -59,8 +59,8 @@ export { assembleSystemPrompt } from "./system-prompt/assembler.js";
  * 当 Agent 接近最大执行步数时，将此文本注入到系统提示词中，
  * 强制要求 LLM 停止探索、提交当前结果。
  *
- * 这不是通过常规的 assemble 流程注入的，而是在运行时由
- * 步数监控逻辑动态追加到系统提示词末尾。
+ * 这不是静态 system 内容；Agent 在运行时把它作为 request-only
+ * progress control 送入唯一 ContextAssembler seam。
  */
 export const MAX_STEPS_WARNING = `CRITICAL - APPROACHING MAXIMUM STEPS
 

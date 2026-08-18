@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { type ChatMessage, InMemoryAppStateStore } from "@paw/core";
+import {
+  type ChatMessage,
+  InMemoryAppStateStore,
+  MAX_STEPS_WARNING,
+} from "@paw/core";
 import { SessionMemoryStore } from "@paw/memory";
 
 import {
@@ -175,6 +179,16 @@ describe("ContextAssembler v1", () => {
       })),
     );
     const legacyLargeAcceptance = `Acceptance ledger updated: direct check.\n\n${formatTaskStateForContext(largeTaskState.snapshot())}`;
+    const legacyContextGuard =
+      "[Context guard] History budget exhausted (123 / 100 tokens). New tool outputs will be truncated and archived as [archived id=N] references — use context.recall to restore the full text when needed. Prefer short commands and targeted reads.";
+    const legacyImplementation =
+      "[Implementation checkpoint] Half of the available model turns have been used without a recorded source change. Consolidate the evidence into the smallest plausible implementation soon. If one specific unseen source span or materially different diagnostic is still required to edit safely, gather it now; avoid exact repeats and broad browsing. Then edit the product source and run the narrowest existing test.";
+    const legacyConvergence =
+      "[Convergence checkpoint] 4 model turns remain. Preserve the existing solution state and close the loop. Run the narrowest high-signal acceptance or regression test against the current source revision. Prefer an existing repository test or a direct command; do not build and debug a separate helper harness. Do not rely on a test that predates the latest edit.";
+    const impossibleContextGuard = legacyContextGuard.replace(
+      "123 / 100",
+      "1 / 2",
+    );
     const assembled = assembleModelContextV1({
       durable: {
         messages: [
@@ -187,9 +201,21 @@ describe("ContextAssembler v1", () => {
           { role: "user", content: legacyEmptyReasonPlan },
           { role: "user", content: legacyParallelPlan },
           { role: "user", content: legacyLargeAcceptance },
+          { role: "user", content: legacyContextGuard },
+          { role: "user", content: legacyImplementation },
+          { role: "user", content: legacyConvergence },
+          { role: "user", content: MAX_STEPS_WARNING },
           { role: "user", content: `${legacyAcceptance} please explain` },
           { role: "user", content: `${legacyPlan} please explain` },
           { role: "user", content: nearCollisionParallelPlan },
+          { role: "user", content: `${legacyContextGuard}\nplease explain` },
+          { role: "user", content: impossibleContextGuard },
+          { role: "user", content: `${legacyImplementation} changed` },
+          {
+            role: "user",
+            content: legacyConvergence.replace("4 model", "13 model"),
+          },
+          { role: "user", content: `${MAX_STEPS_WARNING}\nextra` },
           { role: "assistant", content: "working" },
         ],
       },
@@ -211,6 +237,11 @@ describe("ContextAssembler v1", () => {
       `${legacyAcceptance} please explain`,
       `${legacyPlan} please explain`,
       nearCollisionParallelPlan,
+      `${legacyContextGuard}\nplease explain`,
+      impossibleContextGuard,
+      `${legacyImplementation} changed`,
+      legacyConvergence.replace("4 model", "13 model"),
+      `${MAX_STEPS_WARNING}\nextra`,
       '[Host State v1]\n[Task Brief]\nstage: verify\n[Constraints]\n- keep API stable\n[Current State]\nNext step: test\n[Plan Snapshot]\nPending items that do not depend on each other can be investigated in parallel via workspace.run_agent (read-only sub-agents return one-page summaries).\nCurrent plan (JSON):\n{"workflow_id":"run-1","items":[]}\n[Status Snapshot v1]\nfresh status',
       "working",
     ]);
@@ -862,6 +893,101 @@ describe("ContextAssembler v1", () => {
     expect(
       saved?.messages.some((message) =>
         message.content.startsWith("[VerificationGate]"),
+      ),
+    ).toBe(false);
+  });
+
+  test("late guidance retries after provider failure, then checkpoints only a successful delivery", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-late-guidance-resume-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(workspaceRoot, "a.ts"),
+      "export const a = 1;",
+      "utf8",
+    );
+    const runId = "late-guidance-provider-failure";
+    const goal = "Fix the parser bug";
+    const initialTaskState = new TaskStateManager(goal).snapshot();
+    const stateStore = new InMemoryAppStateStore();
+    stateStore.save({
+      runId,
+      goal,
+      workspaceRoot,
+      turn: 3,
+      maxSteps: 6,
+      messages: [{ role: "user", content: goal }],
+      taskState: {
+        ...initialTaskState,
+        filesRead: ["a.ts", "b.ts", "c.ts"],
+      },
+      savedAt: Date.now(),
+    });
+
+    const failedRequests: (readonly ChatMessage[])[] = [];
+    const failing = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "late-guidance-provider-down",
+        async complete(messages) {
+          failedRequests.push(messages);
+          throw new Error("provider unavailable");
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await failing.resumeRun({ runId, workspaceRoot });
+    expect(
+      failedRequests[0]?.filter((message) =>
+        message.content.includes("[Implementation checkpoint]"),
+      ),
+    ).toHaveLength(1);
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
+      "lateGuidance.implementationDelivered",
+    );
+
+    const resumedRequests: (readonly ChatMessage[])[] = [];
+    let calls = 0;
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "late-guidance-consume",
+        async complete(messages) {
+          resumedRequests.push(messages);
+          calls += 1;
+          return calls === 1
+            ? {
+                text: '{"tool":"workspace.read_file","args":{"path":"a.ts"}}',
+              }
+            : { text: '{"action":"abort","reason":"stop test"}' };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await resumed.resumeRun({ runId, workspaceRoot });
+    expect(
+      resumedRequests[0]?.filter((message) =>
+        message.content.includes("[Implementation checkpoint]"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      resumedRequests[1]?.some((message) =>
+        message.content.includes("[Implementation checkpoint]"),
+      ),
+    ).toBe(false);
+    const saved = stateStore.load(runId);
+    expect(saved?.loopControl).toMatchObject({
+      lateGuidance: { implementationDelivered: true },
+    });
+    expect(
+      saved?.messages.some((message) =>
+        message.content.includes("[Implementation checkpoint]"),
       ),
     ).toBe(false);
   });

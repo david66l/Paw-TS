@@ -62,7 +62,6 @@ import {
   DEFAULT_KEEP_RECENT_TOOLS,
   type EvalHooks,
   MAX_COMPRESSION_SAVINGS_RATIO,
-  MAX_STEPS_WARNING,
   MIN_COMPRESSION_SAVINGS_RATIO,
   type ModelTokenUsage,
   type RunEvent,
@@ -365,10 +364,10 @@ function isControlOnlyCandidateExtension(
 }
 import { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import {
-  convergenceEvidenceKey,
-  convergenceGuidance,
-  implementationGuidance,
-} from "./lifecycle/convergence.js";
+  type LoopGuidanceCandidateV1,
+  applyLoopGuidanceReceiptV1,
+  deriveLoopGuidanceCandidatesV1,
+} from "./lifecycle/loop-guidance.js";
 import type {
   PhaseContext,
   SharedContext,
@@ -591,8 +590,6 @@ export class AgentOrchestrator {
   private compactCooldownTurns = 0;
   /** P4.4 压缩版本化：提交序号（orchestrator 生命周期内单调递增） */
   private _compactionCommitSeq = 0;
-  /** P4.3 硬守卫：预算已满提示是否已发出（避免每轮重复注入） */
-  private _budgetGuardWarned = false;
   /** P4.3 逐块账本去重键：块账本无变化时不重复发事件 */
   private _lastBlocksKey: string | null = null;
   /** 上下文预算去重键：避免连续两轮发出完全相同的 budget 事件（实例级，跨 run 不共享） */
@@ -2408,23 +2405,6 @@ export class AgentOrchestrator {
       requestProjectionMessages,
     );
 
-    // 发出轮次 tick 事件（TUI 用此更新进度条和 token 计数）
-    emit({
-      type: "loop.tick",
-      turn: ctx.turn + 1,
-      maxSteps,
-      estimatedTokens:
-        ctxMgr.estimatedTokens +
-        requestProjectionTokens +
-        AgentOrchestrator.estimateToolTokens(toolDefs, ctxMgr.estimator),
-    });
-    emit({ type: "phase", name: "model" });
-    emit({
-      type: "model.request",
-      label: model.label,
-      messageCount: ctxMgr.length + requestProjectionMessages.length,
-    });
-
     // 步骤 1：报告自上轮以来被外部修改的文件
     this.maybeReportStaleFiles(ctx);
 
@@ -2516,25 +2496,6 @@ export class AgentOrchestrator {
     // （覆盖/反转/撤销/过期判定归 LLM；这里只决定"该不该问"）
     await this.maybeReconcileConstraints(ctx);
 
-    // P4.3 硬守卫：历史预算已满 → 拒绝继续注入并提示模型
-    // （"放不下的新内容拒绝并提示"，不静默截断；提示每 run 只注入一次）
-    if (
-      requestBudgetSnapshot.historyUsed >
-        requestBudgetSnapshot.allocation.historyBudget &&
-      !this._budgetGuardWarned
-    ) {
-      this._budgetGuardWarned = true;
-      emit({
-        type: "context.guard",
-        historyUsed: requestBudgetSnapshot.historyUsed,
-        historyBudget: requestBudgetSnapshot.allocation.historyBudget,
-        reason: "budget_exhausted",
-      });
-      ctxMgr.addUser(
-        `[Context guard] History budget exhausted (${requestBudgetSnapshot.historyUsed} / ${requestBudgetSnapshot.allocation.historyBudget} tokens). New tool outputs will be truncated and archived as [archived id=N] references — use context.recall to restore the full text when needed. Prefer short commands and targeted reads.`,
-      );
-    }
-
     // ── goal 变化时刷新记忆上下文 ──
     if (this._memoryRuntime && this._memoryTaskId) {
       const goalChanged = specGoal !== this._lastDynamicMemoryGoal;
@@ -2566,68 +2527,89 @@ export class AgentOrchestrator {
       }
     }
 
-    // 步骤 4：注入 max-steps 警告
-    // 当剩余轮数 ≤ 3 且已至少跑了 5 轮时，提示模型加快进度
-    const turnsRemaining = maxSteps - ctx.turn;
     const taskSnapshot = ctx.taskState.snapshot();
-    if (!flags._implementationWarned) {
-      const guidance = implementationGuidance(
-        taskSnapshot,
-        ctx.turn + 1,
-        maxSteps,
-      );
-      if (guidance) {
-        ctxMgr.addUser(guidance);
-        flags._implementationWarned = true;
-      }
-    }
-    const evidenceKey = convergenceEvidenceKey(taskSnapshot);
-    if (flags._convergenceEvidenceKey !== evidenceKey) {
-      const guidance = convergenceGuidance(
-        taskSnapshot,
-        turnsRemaining,
-        maxSteps,
-        ctx.verificationPolicy,
-      );
-      if (guidance) ctxMgr.addUser(guidance);
-      flags._convergenceEvidenceKey = evidenceKey;
-    }
-    if (
-      turnsRemaining <= 3 &&
-      turnsRemaining > 0 &&
-      ctx.turn >= 5 &&
-      !flags._maxStepsWarned
-    ) {
-      ctxMgr.addUser(MAX_STEPS_WARNING);
-      flags._maxStepsWarned = true;
-    }
-
-    // Rebuild after reconciliation, memory refresh, compaction and guidance so
-    // this exact provider request sees the latest host-owned facts.
+    // Rebuild after reconciliation, memory refresh, and compaction. Late-loop
+    // guidance competes at the typed control seam and only earns a receipt
+    // after a successful provider response.
     hostStateForRequest = this.buildHostState(ctx);
-    const finalRequestProjectionTokens = ctxMgr.estimator.countMessages(
+    const postCompactBudgetSnapshot = AgentOrchestrator.measureBudget(
+      ctxMgr,
+      toolDefs,
+      contextWindow,
+      cacheHitRate,
+    );
+    const provisionalProjectionTokens = ctxMgr.estimator.countMessages(
       assembleModelContextV1({
         durable: { messages: [] },
         hostState: hostStateForRequest,
         ...(control ? { control } : {}),
       }),
     );
-    if (finalRequestProjectionTokens !== requestProjectionTokens) {
-      requestBudgetSnapshot = AgentOrchestrator.reserveRequestProjection(
-        budgetSnapshot,
-        finalRequestProjectionTokens,
+    const provisionalRequestBudget = AgentOrchestrator.reserveRequestProjection(
+      postCompactBudgetSnapshot,
+      provisionalProjectionTokens,
+    );
+    const guidanceCandidates = deriveLoopGuidanceCandidatesV1({
+      state: taskSnapshot,
+      flags,
+      turn: ctx.turn,
+      maxSteps,
+      historyUsed: postCompactBudgetSnapshot.historyUsed,
+      historyBudget: provisionalRequestBudget.allocation.historyBudget,
+      ...(ctx.verificationPolicy
+        ? { verificationPolicy: ctx.verificationPolicy }
+        : {}),
+    });
+    const requestControl = selectEphemeralControlV1([
+      control,
+      ...guidanceCandidates.map((candidate) => candidate.control),
+    ]);
+    const selectedGuidance: LoopGuidanceCandidateV1 | undefined =
+      guidanceCandidates.find(
+        (candidate) => candidate.control === requestControl,
       );
-      ctxMgr.setHistoryTokenBudget(
-        requestBudgetSnapshot.allocation.historyBudget,
-      );
-      if (
-        ctxMgr.historyEstimatedTokens >
-        requestBudgetSnapshot.allocation.historyBudget
-      ) {
-        ctxMgr.truncateNow();
-      }
-      this.emitContextBudget(emit, contextWindow, requestBudgetSnapshot);
+    const finalRequestProjectionTokens = ctxMgr.estimator.countMessages(
+      assembleModelContextV1({
+        durable: { messages: [] },
+        hostState: hostStateForRequest,
+        ...(requestControl ? { control: requestControl } : {}),
+      }),
+    );
+    requestBudgetSnapshot = AgentOrchestrator.reserveRequestProjection(
+      postCompactBudgetSnapshot,
+      finalRequestProjectionTokens,
+    );
+    ctxMgr.setHistoryTokenBudget(
+      requestBudgetSnapshot.allocation.historyBudget,
+    );
+    if (
+      ctxMgr.historyEstimatedTokens >
+      requestBudgetSnapshot.allocation.historyBudget
+    ) {
+      ctxMgr.truncateNow();
     }
+    this.emitContextBudget(emit, contextWindow, requestBudgetSnapshot);
+
+    const finalRequestProjectionMessages = assembleModelContextV1({
+      durable: { messages: [] },
+      hostState: hostStateForRequest,
+      ...(requestControl ? { control: requestControl } : {}),
+    });
+    emit({
+      type: "loop.tick",
+      turn: ctx.turn + 1,
+      maxSteps,
+      estimatedTokens:
+        ctxMgr.estimatedTokens +
+        finalRequestProjectionTokens +
+        AgentOrchestrator.estimateToolTokens(toolDefs, ctxMgr.estimator),
+    });
+    emit({ type: "phase", name: "model" });
+    emit({
+      type: "model.request",
+      label: model.label,
+      messageCount: ctxMgr.length + finalRequestProjectionMessages.length,
+    });
 
     // 步骤 5：调用模型 + 解析返回的工具调用/动作
     // 设置流式恢复路径——模型输出时实时写盘，崩了不丢
@@ -2645,7 +2627,7 @@ export class AgentOrchestrator {
         toolDefs,
         toolNameMap,
         hostStateForRequest,
-        control,
+        requestControl,
       );
     } finally {
       this._streamRecoveryPath = undefined;
@@ -2675,7 +2657,21 @@ export class AgentOrchestrator {
     });
 
     let dispatchedAction = singleAction;
-    const { pendingControl: _consumedControl, ...flagsAfterControl } = flags;
+    const { pendingControl: _consumedControl, ...unmarkedFlags } = flags;
+    const flagsAfterControl = selectedGuidance
+      ? applyLoopGuidanceReceiptV1(
+          unmarkedFlags as TurnFlags,
+          selectedGuidance.receipt,
+        )
+      : (unmarkedFlags as TurnFlags);
+    if (selectedGuidance?.receipt.kind === "context_guard") {
+      emit({
+        type: "context.guard",
+        historyUsed: postCompactBudgetSnapshot.historyUsed,
+        historyBudget: provisionalRequestBudget.allocation.historyBudget,
+        reason: "budget_exhausted",
+      });
+    }
     let dispatchedFlags: TurnFlags = flagsAfterControl;
     const controlAction = nativeToolErrors?.length
       ? ("native_tool_errors" as const)
@@ -2820,6 +2816,10 @@ export class AgentOrchestrator {
         };
       }
     }
+
+    // The provider consumed the selected request control. Advance the
+    // run-scope crash checkpoint before any action handler can throw.
+    checkpointActiveFlags(dispatchedFlags);
 
     // 步骤 6：通过 action 处理器分发执行
     // handleAction 在 orchestrator/action-handlers.ts 中实现，
@@ -3982,8 +3982,7 @@ export class AgentOrchestrator {
     this._interactionInbox = parseInteractionInboxV1(
       spec.resumeFromState?.interactionInbox,
     );
-    // P4.3/P4.4 每 run 重置：硬守卫提示、块账本/预算事件去重、压缩提交序号
-    this._budgetGuardWarned = false;
+    // P4.3/P4.4 每 run 重置：块账本/预算事件去重、压缩提交序号
     this._lastBlocksKey = null;
     this._lastBudgetKey = null;
     this._compactionCommitSeq = 0;

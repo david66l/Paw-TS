@@ -162,6 +162,8 @@ export interface TurnFlags {
   readonly idleFuseTrips?: number;
   /** maxSteps 警告是否已发出（私有字段，_ 前缀表示内部使用） */
   _maxStepsWarned?: boolean;
+  /** Context budget guard was actually delivered to a successful request. */
+  _budgetGuardWarned?: boolean;
   /** Last revision-scoped closeout state injected; unchanged states dedupe. */
   _convergenceEvidenceKey?: string;
   /** Mid-run no-mutation checkpoint has been injected. */

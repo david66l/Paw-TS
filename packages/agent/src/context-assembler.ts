@@ -183,6 +183,32 @@ const LEGACY_CONTROL_PROJECTION_PATTERNS = [
   ...LEGACY_COMPLETION_GATE_PATTERNS.map((entry) => entry.pattern),
 ] as const;
 
+const LEGACY_IMPLEMENTATION_GUIDANCE =
+  "[Implementation checkpoint] Half of the available model turns have been used without a recorded source change. Consolidate the evidence into the smallest plausible implementation soon. If one specific unseen source span or materially different diagnostic is still required to edit safely, gather it now; avoid exact repeats and broad browsing. Then edit the product source and run the narrowest existing test.";
+const LEGACY_MAX_STEPS_WARNING = `CRITICAL - APPROACHING MAXIMUM STEPS
+
+You are approaching the maximum number of steps for this task. Stop exploring and complete the task now.
+
+STRICT REQUIREMENTS:
+1. Do NOT start any new explorations or read additional files unless absolutely critical
+2. Complete the task with the information you already have
+3. Call final_answer with a summary of what was accomplished and any remaining work
+4. If you cannot complete the task with available information, state what was done and what remains`;
+const LEGACY_CONVERGENCE_NEXT_STEPS = new Set([
+  "Run the narrowest high-signal acceptance or regression test against the current source revision. Prefer an existing repository test or a direct command; do not build and debug a separate helper harness. Do not rely on a test that predates the latest edit.",
+  "The shell command's final status does not prove the verification runner passed. Run one materially simpler direct command from the same test-runner family now; remove display-only pipes, fallbacks, or trailing commands.",
+  "The verification command failed for a recoverable invocation reason. Run one materially simpler direct command from the same test-runner family now; remove display-only pipes, redirections, wrappers, or invalid options.",
+  "Local verification did not produce trustworthy pass evidence, and a trusted external verifier is configured. Deliver final_answer now with an honest evidence caveat; do not claim tests passed.",
+  "Local verification could not execute, and a trusted external verifier is configured. Deliver final_answer now with an honest local-verification caveat; do not claim tests passed.",
+  "Local shell control flow did not preserve the verification status, and a trusted external verifier is configured. Stop building replacement harnesses and inspect the final product diff now.",
+  "Local verification could not execute, and a trusted external verifier is configured. Stop building replacement harnesses and inspect the final product diff now.",
+  "The last shell command did not preserve the verification runner's exit status. Run the test directly or explicitly preserve its status; do not treat the downstream command's exit zero as a test pass.",
+  "The last verification did not execute because the harness or environment failed. Repair the invocation with a bounded diagnostic, then rerun it; do not treat infrastructure failure as a code assertion failure.",
+  "Use the exact current test failure to revise the implementation, then rerun that test. Avoid reopening broad repository exploration.",
+  "Inspect the final diff for the current revision. Check scope, accidental files, and whether the implementation actually covers the requested edge cases.",
+  "The current revision has passing verification and an inspected diff. Run at most one materially different adversarial check if a concrete risk remains; otherwise deliver final_answer now.",
+]);
+
 export interface LegacyProtocolRecoveryProjectionV1 {
   readonly pendingControl: Extract<
     EphemeralControlV1,
@@ -358,8 +384,38 @@ function isLegacyContextProjection(message: ChatMessage): boolean {
     LEGACY_CONTROL_PROJECTION_PATTERNS.some((pattern) =>
       pattern.test(message.content),
     ) ||
+    isLegacyLoopGuidanceProjection(message.content) ||
     isLegacyAcceptanceSuccessEcho(message.content) ||
     isLegacyPlanUpdateEcho(message.content)
+  );
+}
+
+function isLegacyLoopGuidanceProjection(content: string): boolean {
+  if (
+    content === LEGACY_IMPLEMENTATION_GUIDANCE ||
+    content === LEGACY_MAX_STEPS_WARNING
+  ) {
+    return true;
+  }
+  const contextGuard =
+    /^\[Context guard\] History budget exhausted \(((?:0|[1-9]\d{0,9})) \/ ((?:0|[1-9]\d{0,9})) tokens\)\. New tool outputs will be truncated and archived as \[archived id=N\] references — use context\.recall to restore the full text when needed\. Prefer short commands and targeted reads\.$/.exec(
+      content,
+    );
+  if (contextGuard) {
+    const used = Number.parseInt(contextGuard[1] ?? "", 10);
+    const budget = Number.parseInt(contextGuard[2] ?? "", 10);
+    return (
+      Number.isSafeInteger(used) &&
+      Number.isSafeInteger(budget) &&
+      used > budget
+    );
+  }
+  const convergence =
+    /^\[Convergence checkpoint\] ((?:[1-9]|1[0-2])) model turns remain\. Preserve the existing solution state and close the loop\. ([\s\S]+)$/.exec(
+      content,
+    );
+  return (
+    !!convergence && LEGACY_CONVERGENCE_NEXT_STEPS.has(convergence[2] ?? "")
   );
 }
 
