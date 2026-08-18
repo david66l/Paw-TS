@@ -242,9 +242,13 @@ import {
 } from "./loop-v2/test-warden.js";
 import { ManagedJobControllerV1 } from "./managed-job-controller.js";
 import {
-  observationProvenanceForToolV1,
-  wrapObservationContentV1,
-} from "./observation-provenance.js";
+  type MemoryHintCheckpointV1,
+  createMemoryHintCheckpointV1,
+  migrateLegacyMemoryProjectionsV1,
+  parseMemoryHintCheckpointV1,
+  renderRelevantMemoryV1,
+} from "./memory-host-state.js";
+import { observationProvenanceForToolV1 } from "./observation-provenance.js";
 import { handleAction } from "./orchestrator/action-handlers.js";
 import type { NativeToolError } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
@@ -620,6 +624,10 @@ export class AgentOrchestrator {
   private _memoryRuntime: MemoryRuntime | null = null;
   private _memoryTaskId: string | null = null;
   private _memoryContextSection = "";
+  private _memoryLatestHint: MemoryHintCheckpointV1 | undefined;
+  private _coldResumeMemoryContext:
+    | { readonly task: string; readonly state: string }
+    | undefined;
   private _lastDynamicMemoryGoal = "";
   /** 多轮会话：本 run 结束时跳过 completeTask */
   private _deferMemoryComplete = false;
@@ -855,6 +863,7 @@ export class AgentOrchestrator {
         ...preparedState,
         turn: opts.fromTurn,
         loopControl: resetLoopControlForRewindV1(opts.runId, opts.fromTurn),
+        memoryHint: undefined,
       };
     }
 
@@ -2125,10 +2134,10 @@ export class AgentOrchestrator {
               ...(sessionMemory.constraints ?? []),
             ],
           });
-          if (injected?.injected) {
-            ctx.ctxMgr.addUser(
-              `[Memory hint]\n${injected.injected.slice(0, 2000)}`,
-            );
+          if (this._memoryLatestHint?.kind !== "action_failed") {
+            this._memoryLatestHint = injected?.injected
+              ? createMemoryHintCheckpointV1("post_compact", injected.injected)
+              : undefined;
           }
         } catch {
           /* best-effort：T3 检索失败不影响压缩结果 */
@@ -2322,10 +2331,10 @@ export class AgentOrchestrator {
               ...(sessionMemory.constraints ?? []),
             ],
           });
-          if (injected?.injected) {
-            ctxMgr.addUser(
-              `[Memory hint]\n${injected.injected.slice(0, 2000)}`,
-            );
+          if (this._memoryLatestHint?.kind !== "action_failed") {
+            this._memoryLatestHint = injected?.injected
+              ? createMemoryHintCheckpointV1("post_compact", injected.injected)
+              : undefined;
           }
         } catch {
           /* best-effort：T3 检索失败不影响压缩结果 */
@@ -2542,13 +2551,9 @@ export class AgentOrchestrator {
             currentUserRequest: extractCleanMemoryQuery(specGoal) || specGoal,
             limit: 5,
           });
-          this._memoryContextSection = section.promptSection
-            ? wrapObservationContentV1("memory.read", section.promptSection)
-            : "";
+          this._memoryContextSection =
+            section.promptSection?.slice(0, 6000) ?? "";
           if (section.promptSection) {
-            ctxMgr.addUser(
-              `[Memory refresh]\n${wrapObservationContentV1("memory.read", section.promptSection.slice(0, 2000))}`,
-            );
             emit({
               type: "memory.turn.inject",
               recordCount: section.items.length,
@@ -2645,6 +2650,9 @@ export class AgentOrchestrator {
     } finally {
       this._streamRecoveryPath = undefined;
     }
+    // This response consumed the advisory hint that was in its request.
+    // A failed tool later in the turn may replace it with a new checkpoint.
+    this._memoryLatestHint = undefined;
     const {
       text,
       thinking,
@@ -2896,6 +2904,11 @@ export class AgentOrchestrator {
         evalHooks: this.evalHooks,
         memoryRuntime: this._memoryRuntime ?? undefined,
         memoryTaskId: this._memoryTaskId ?? undefined,
+        publishMemoryHint: (content) => {
+          this._memoryLatestHint = content
+            ? createMemoryHintCheckpointV1("action_failed", content)
+            : undefined;
+        },
         createAgent: this.createAgent,
         toolExecutionPolicy: this.toolExecutionPolicy,
         toolEffectPolicy: this.toolEffectPolicy,
@@ -3063,6 +3076,7 @@ export class AgentOrchestrator {
           1 &&
         ctx.capabilitySet.executableToolNames.includes("workspace.run_agent"),
     );
+    const relevantMemory = this.buildRelevantMemoryProjection();
     return {
       ...(taskSnap.nextStep
         ? { taskBrief: { currentObjective: taskSnap.nextStep } }
@@ -3089,14 +3103,29 @@ export class AgentOrchestrator {
             },
           }
         : {}),
-      ...(this._memoryContextSection
-        ? { relevantMemory: this._memoryContextSection }
-        : {}),
+      ...(relevantMemory ? { relevantMemory } : {}),
       ...(this._contextPackageCode.length > 0
         ? { relevantCode: this._contextPackageCode.slice(0, 5) }
         : {}),
       status: formatStatusSnapshotV1(status),
     };
+  }
+
+  /**
+   * Compose fixed, bounded memory channels for one request. The renderer adds
+   * observation provenance; retrieved text never becomes system policy or a
+   * durable user turn.
+   */
+  private buildRelevantMemoryProjection(): string | undefined {
+    return renderRelevantMemoryV1({
+      ...(this._memoryContextSection
+        ? { primary: this._memoryContextSection }
+        : {}),
+      ...(this._memoryLatestHint ? { latestHint: this._memoryLatestHint } : {}),
+      ...(this._coldResumeMemoryContext
+        ? { coldResume: this._coldResumeMemoryContext }
+        : {}),
+    });
   }
 
   // ─────────────────────────────────────────────────────────
@@ -3200,6 +3229,7 @@ export class AgentOrchestrator {
       ...(this.todoStore ? { todos: this.todoStore.items } : {}),
       taskState: taskState.snapshot(),
       ...(this._memoryTaskId ? { memoryTaskId: this._memoryTaskId } : {}),
+      ...(this._memoryLatestHint ? { memoryHint: this._memoryLatestHint } : {}),
       ...(this._interactionState
         ? { interaction: this._interactionState }
         : {}),
@@ -4637,7 +4667,6 @@ export class AgentOrchestrator {
     const cleanMemoryQuery = extractCleanMemoryQuery(spec.goal);
     const retrievalQuery =
       buildConversationAwareQuery(spec.goal) || cleanMemoryQuery || spec.goal;
-    let memoryContextSection: string | undefined;
     let selectedForEvent: {
       id: string;
       title: string;
@@ -4651,6 +4680,8 @@ export class AgentOrchestrator {
     this._memoryRuntime = null;
     this._memoryTaskId = null;
     this._memoryContextSection = "";
+    this._memoryLatestHint = undefined;
+    this._coldResumeMemoryContext = undefined;
     this._lastDynamicMemoryGoal = "";
     this._deferMemoryComplete = spec.deferMemoryComplete === true;
     this._conversationId =
@@ -4730,10 +4761,8 @@ export class AgentOrchestrator {
             currentUserRequest: cleanMemoryQuery || spec.goal,
             limit: 8,
           });
-          this._memoryContextSection = section.promptSection
-            ? wrapObservationContentV1("memory.read", section.promptSection)
-            : "";
-          memoryContextSection = this._memoryContextSection;
+          this._memoryContextSection =
+            section.promptSection?.slice(0, 6000) ?? "";
           selectedForEvent = section.items.map((item) => ({
             id: item.id,
             title: item.title,
@@ -4816,7 +4845,6 @@ export class AgentOrchestrator {
         gitStatus: gitStatusLine,
         pawMd: pawMdContent,
         projectMemory,
-        memoryContextSection,
         todos: todosText,
         modelLabel: model.label,
         modelId: model.label,
@@ -4864,9 +4892,13 @@ export class AgentOrchestrator {
       const s = spec.resumeFromState;
       startTurn = s.turn;
       ctxMgr.setSystem(systemContent);
-      const history = stripLegacyContextProjectionsV1(s.messages).filter(
-        (m) => m.role !== "system",
-      );
+      const legacyMemory = migrateLegacyMemoryProjectionsV1(s.messages);
+      const restoredMemoryHint = parseMemoryHintCheckpointV1(s.memoryHint);
+      this._memoryLatestHint = restoredMemoryHint ?? legacyMemory.latestHint;
+      this._coldResumeMemoryContext = legacyMemory.coldResume;
+      const history = stripLegacyContextProjectionsV1(
+        legacyMemory.messages,
+      ).filter((m) => m.role !== "system");
 
       if (history.length > 0) {
         // Step 1: 先不做硬截断——把完整历史放进去
@@ -4933,9 +4965,10 @@ export class AgentOrchestrator {
       // 冷恢复（历史 ≤ 1 条）：注入会话记忆摘要帮助模型回忆上下文
       const prevMemory = sessionMemoryStore.load(runId);
       if (prevMemory?.task && history.length <= 1) {
-        ctxMgr.addUser(
-          `[Previous session context]\nTask: ${prevMemory.task}\nState: ${prevMemory.currentState ?? "unknown"}`,
-        );
+        this._coldResumeMemoryContext = {
+          task: prevMemory.task,
+          state: prevMemory.currentState ?? "unknown",
+        };
       }
       emit({ type: "run.started", goal: spec.goal });
     } else {

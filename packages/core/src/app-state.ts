@@ -90,6 +90,8 @@ export interface AppState {
   readonly taskState?: unknown;
   /** Active memory TaskSession reused after crash/wait resume. */
   readonly memoryTaskId?: string;
+  /** Agent-owned, bounded latest memory retrieval hint for crash-safe replay. */
+  readonly memoryHint?: unknown;
   /** Durable human-interaction state; waiting is neither success nor failure. */
   readonly interaction?: WaitingUserInteractionV1;
   /** Append-only replies submitted while the orchestrator process may be absent. */

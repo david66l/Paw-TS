@@ -142,6 +142,8 @@ interface ActionHandlerContext {
   readonly evalHooks?: EvalHooks;
   readonly memoryRuntime?: import("@paw/memory").MemoryRuntime;
   readonly memoryTaskId?: string;
+  /** Publish a bounded retrieval result into request-only HostState memory. */
+  readonly publishMemoryHint?: (content?: string) => void;
   readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
   /** 并行子 Agent 的文件锁（仅子 Agent 注入） */
   readonly fileLock?: import("@paw/harness").FileLockLike;
@@ -1874,11 +1876,9 @@ async function handleToolCalls(
         .catch(() => undefined);
       if (injected?.injected) injections.push(injected.injected);
     }
-    if (injections.length > 0) {
-      ctx.ctxMgr.addUser(
-        `[Memory hint]\n${injections.join("\n\n").slice(0, 2000)}`,
-      );
-    }
+    opts.publishMemoryHint?.(
+      injections.length > 0 ? injections.join("\n\n") : undefined,
+    );
   }
 
   // 将工具结果注入上下文（assistant 消息 + tool results）

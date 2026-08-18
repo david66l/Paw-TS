@@ -29,7 +29,7 @@ export function getMemorySection(opts: {
     "Persistent memory is database-backed (MemoryRuntime), not a markdown folder.",
     "",
     "## How it works",
-    "- Relevant memories for this task may already appear below under Environment as short summaries (id/title/score).",
+    "- Relevant memories for this task may appear in the current request's Host State as bounded relevant-memory facts (id/title/score).",
     "- Full bodies live in the store; the host retrieves and governs them outside the model tool surface.",
     "",
     "## What to save",

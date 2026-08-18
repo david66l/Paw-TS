@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { type ChatMessage, InMemoryAppStateStore } from "@paw/core";
+import { SessionMemoryStore } from "@paw/memory";
 
 import {
   type HostStateV1,
@@ -1068,5 +1069,201 @@ describe("ContextAssembler v1", () => {
           '[Protocol recovery attempt 1: do not narrate the action you intend to take. Emit the valid tool-call JSON now. If and only if the task is complete, emit {"action":"final_answer","summary":"<complete result>"}.]',
       ),
     ).toBe(true);
+  });
+
+  test("cold resume memory is request-only HostState and absent from system and durable history", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-cold-memory-"));
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const runId = "cold-memory-host-state";
+    new SessionMemoryStore({ workspaceRoot }).save(runId, {
+      session: runId,
+      project: "test",
+      updatedAt: Date.now(),
+      task: "cold task sentinel",
+      currentState: "cold state sentinel",
+    });
+    const stateStore = new InMemoryAppStateStore();
+    stateStore.save({
+      runId,
+      goal: "continue the task",
+      workspaceRoot,
+      turn: 0,
+      maxSteps: 1,
+      messages: [{ role: "user", content: "continue the task" }],
+      savedAt: Date.now(),
+    });
+    let request: readonly ChatMessage[] = [];
+    const orchestrator = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "cold-memory-host-state",
+        async complete(messages) {
+          request = messages;
+          return { text: '{"action":"abort","reason":"test complete"}' };
+        },
+      },
+    });
+
+    await orchestrator.resumeRun({ runId, workspaceRoot });
+
+    expect(
+      request.filter((message) =>
+        message.content.includes("cold task sentinel"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      request.find((message) => message.role === "system")?.content,
+    ).not.toContain("cold task sentinel");
+    expect(
+      request.find((message) => message.content.includes("cold task sentinel"))
+        ?.content,
+    ).toContain("[Previous Session Memory]");
+    expect(
+      stateStore
+        .load(runId)
+        ?.messages.some((message) =>
+          message.content.includes("[Previous session context]"),
+        ),
+    ).toBe(false);
+  });
+
+  test("rewind drops a later memory hint checkpoint", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-memory-rewind-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const runId = "memory-hint-rewind";
+    const stateStore = new InMemoryAppStateStore();
+    stateStore.save({
+      runId,
+      goal: "continue",
+      workspaceRoot,
+      turn: 1,
+      maxSteps: 2,
+      messages: [{ role: "user", content: "continue" }],
+      memoryHint: {
+        schemaVersion: "paw.memory-hint.v1",
+        kind: "action_failed",
+        text: "later failure sentinel",
+      },
+      savedAt: Date.now(),
+    });
+    let request: readonly ChatMessage[] = [];
+    const orchestrator = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "memory-hint-rewind",
+        async complete(messages) {
+          request = messages;
+          return { text: '{"action":"abort","reason":"test complete"}' };
+        },
+      },
+    });
+
+    await orchestrator.resumeRun({ runId, workspaceRoot, fromTurn: 0 });
+
+    expect(
+      request.some((message) =>
+        message.content.includes("later failure sentinel"),
+      ),
+    ).toBe(false);
+    expect(stateStore.load(runId)?.memoryHint).toBeUndefined();
+  });
+
+  test("memory hint survives provider failure once, new checkpoint wins legacy, and success consumes it", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-memory-hint-resume-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const runId = "memory-hint-provider-failure";
+    const legacyXml =
+      '<agent-memory source="semantic" id="old" status="verified">\nlegacy sentinel\n</agent-memory>';
+    const stateStore = new InMemoryAppStateStore();
+    stateStore.save({
+      runId,
+      goal: "continue",
+      workspaceRoot,
+      turn: 0,
+      maxSteps: 2,
+      messages: [
+        { role: "user", content: `[Memory hint]\n${legacyXml}` },
+        { role: "assistant", content: "tool action" },
+        { role: "user", content: "tool observation" },
+      ],
+      memoryHint: {
+        schemaVersion: "paw.memory-hint.v1",
+        kind: "action_failed",
+        text: "new checkpoint sentinel",
+      },
+      savedAt: Date.now(),
+    });
+    const failedRequests: (readonly ChatMessage[])[] = [];
+    const failing = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "memory-hint-provider-failure",
+        async complete(messages) {
+          failedRequests.push(messages);
+          throw new Error("provider unavailable");
+        },
+      },
+      retrySleep: async () => {},
+    });
+
+    await failing.resumeRun({ runId, workspaceRoot });
+
+    expect(
+      failedRequests[0]?.filter((message) =>
+        message.content.includes("new checkpoint sentinel"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      failedRequests[0]?.some((message) =>
+        message.content.includes("legacy sentinel"),
+      ),
+    ).toBe(false);
+    expect(stateStore.load(runId)?.memoryHint).toMatchObject({
+      kind: "action_failed",
+      text: "new checkpoint sentinel",
+    });
+
+    let consumedRequest: readonly ChatMessage[] = [];
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "memory-hint-consume",
+        async complete(messages) {
+          consumedRequest = messages;
+          return { text: '{"action":"abort","reason":"test complete"}' };
+        },
+      },
+    });
+    await resumed.resumeRun({ runId, workspaceRoot });
+    expect(
+      consumedRequest.filter((message) =>
+        message.content.includes("new checkpoint sentinel"),
+      ),
+    ).toHaveLength(1);
+    expect(stateStore.load(runId)?.memoryHint).toBeUndefined();
+    expect(
+      stateStore
+        .load(runId)
+        ?.messages.some((message) => message.content.includes("[Memory hint]")),
+    ).toBe(false);
   });
 });
