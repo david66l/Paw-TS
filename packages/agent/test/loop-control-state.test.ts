@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { stripLegacyContextProjectionsV1 } from "../src/context-assembler.js";
+import { advanceRepeatToolReminder } from "../src/lifecycle/repeat-tool-reminder.js";
+import {
+  formatRecoveryHints,
+  recoveryHintForToolResult,
+} from "../src/lifecycle/tool-recovery.js";
 import { checkVerification } from "../src/lifecycle/verification-gate.js";
 import {
   checkpointLoopControlV1,
+  consumeSelectedPendingControlV1,
   parseLoopControlCheckpointV1,
   resetLoopControlForRewindV1,
   restoreLoopControlFlagsV1,
@@ -12,6 +18,282 @@ import { TaskStateManager } from "../src/task-state.js";
 const READINESS_KEY = "a".repeat(64);
 
 describe("Loop control checkpoint v1", () => {
+  test("consumes pending only when the exact candidate won selection", () => {
+    const pending = {
+      kind: "tool_guidance" as const,
+      topic: "repeat_tool" as const,
+      text: "change the call",
+    };
+    const flags = {
+      autoContinueNudges: 0,
+      lastTurnHadToolCall: true,
+      hasEverUsedTools: true,
+      pendingControl: pending,
+    };
+    expect(
+      consumeSelectedPendingControlV1(flags, {
+        kind: "test_warden",
+        text: "tests failed",
+      }).pendingControl,
+    ).toBe(pending);
+    expect(
+      consumeSelectedPendingControlV1(flags, { ...pending }).pendingControl,
+    ).toBe(pending);
+    expect(consumeSelectedPendingControlV1(flags, pending)).not.toHaveProperty(
+      "pendingControl",
+    );
+  });
+
+  test("round-trips bounded tool-loop state and one pending guidance", () => {
+    const checkpoint = checkpointLoopControlV1({
+      autoContinueNudges: 0,
+      lastTurnHadToolCall: true,
+      hasEverUsedTools: true,
+      failureSignatures: ["workspace.edit_file|12345678|abcdef12|87654321"],
+      idleFuseTrips: 1,
+      repeatTool: {
+        key: "a".repeat(64),
+        tool: "workspace.read_file",
+        count: 2,
+      },
+      codingPhase: {
+        navigationCalls: 9,
+        successfulEdits: 0,
+        postEditNavigationCalls: 0,
+        verificationCalls: 0,
+        locateNudged: false,
+        verifyNudged: false,
+      },
+      codingPhaseViolationTurns: 1,
+      pendingControl: {
+        kind: "tool_guidance",
+        topic: "tool_recovery",
+        text: "recover once",
+      },
+    });
+    expect(parseLoopControlCheckpointV1(checkpoint)).toEqual(checkpoint);
+    expect(
+      restoreLoopControlFlagsV1({
+        runId: "tool-loop",
+        startTurn: 2,
+        value: checkpoint,
+        legacyMessages: [],
+      }),
+    ).toMatchObject({
+      failureSignatures: ["workspace.edit_file|12345678|abcdef12|87654321"],
+      idleFuseTrips: 1,
+      repeatTool: { count: 2 },
+      codingPhase: { navigationCalls: 9 },
+      codingPhaseViolationTurns: 1,
+      pendingControl: {
+        kind: "tool_guidance",
+        topic: "tool_recovery",
+      },
+    });
+
+    for (const toolLoop of [
+      { failureSignatures: Array.from({ length: 9 }, () => "x") },
+      { repeatTool: { key: "bad", tool: "read", count: 1 } },
+      {
+        repeatTool: { key: "a".repeat(64), tool: "read", count: 0 },
+      },
+      {
+        codingPhase: {
+          navigationCalls: -1,
+          successfulEdits: 0,
+          postEditNavigationCalls: 0,
+          verificationCalls: 0,
+          locateNudged: false,
+          verifyNudged: false,
+        },
+      },
+      { codingPhaseViolationTurns: 3 },
+    ]) {
+      expect(
+        parseLoopControlCheckpointV1({
+          schemaVersion: "paw.loop-control.v1",
+          toolLoop,
+        }),
+      ).toBeUndefined();
+    }
+    expect(
+      parseLoopControlCheckpointV1({
+        schemaVersion: "paw.loop-control.v1",
+        pendingControl: {
+          kind: "tool_guidance",
+          topic: "unknown",
+          text: "bad",
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  test("migrates only exact unconsumed legacy tool guidance", () => {
+    const idle =
+      "[Recovery:idle_fuse] The same tool failure repeated. Stop retrying identically — re-read current state, make a smaller exact edit, try a different test command, or output final_answer / abort with an honest status.";
+    let repeated: ReturnType<typeof advanceRepeatToolReminder> | undefined;
+    const repeatedCall = {
+      type: "tool_call" as const,
+      tool: "workspace.read_file",
+      args: { path: `a-${"x".repeat(700)}.ts` },
+    };
+    for (let count = 1; count <= 8; count += 1) {
+      repeated = advanceRepeatToolReminder(repeated?.state, [repeatedCall]);
+    }
+    const realTruncatedRepeat = repeated?.reminders.at(-1);
+    expect(realTruncatedRepeat).toBeTruthy();
+    let mcpRepeated: ReturnType<typeof advanceRepeatToolReminder> | undefined;
+    for (let count = 1; count <= 5; count += 1) {
+      mcpRepeated = advanceRepeatToolReminder(mcpRepeated?.state, [
+        {
+          type: "tool_call",
+          tool: "mcp:github/search_code",
+          args: { q: "x" },
+        },
+      ]);
+    }
+    const realMcpRepeat = mcpRepeated?.reminders.at(-1);
+    const mcpRecovery = recoveryHintForToolResult("mcp:github/search_code", {
+      ok: false,
+      summary: "boom",
+      payload: { code: "E_FAIL" },
+    });
+    const embeddedRecovery = recoveryHintForToolResult(
+      "mcp:github/search_code",
+      {
+        ok: false,
+        summary: "boom\n[Recovery] repository output, not a host branch",
+        payload: { code: "E_FAIL" },
+      },
+    );
+    expect(realMcpRepeat).toBeTruthy();
+    expect(mcpRecovery).toBeTruthy();
+    expect(embeddedRecovery).toBeTruthy();
+    const fixtures = [
+      "[Recovery] workspace.run_shell was blocked by policy. Use a safer workspace command, or ensure AutonomyProfile allows it. Do not treat this as a fatal crash.",
+      "[Recovery] edit_file failed to match old_string. Re-read the file for exact current text, add more surrounding context for uniqueness, or set replace_all=true if every match should change.",
+      "[Recovery] workspace.run_shell timed out or is retryable. Retry with a tighter scope or longer timeout_sec; avoid repeating the identical failing command blindly.",
+      "[Recovery] workspace.edit_file was denied/blocked. Choose an available read-only probe or a smaller exact edit.",
+      "[Recovery] workspace.run_shell failed (line one\nline two). Inspect the error, re-read relevant files, then try a different tool or smaller change.",
+      "[Recovery] edit_file failed to match old_string. Re-read the file for exact current text, add more surrounding context for uniqueness, or set replace_all=true if every match should change.\n[Recovery] workspace.run_shell timed out or is retryable. Retry with a tighter scope or longer timeout_sec; avoid repeating the identical failing command blindly.",
+      `[Recovery] workspace.edit_file failed (no match). Inspect the error, re-read relevant files, then try a different tool or smaller change.\n${idle}`,
+      "[Loop reminder] You have made the exact same tool call with identical arguments three consecutive times. Re-read the latest result and use materially different arguments or a different approach if more evidence is needed. The call was not blocked.",
+      '[Loop reminder] Exact tool call repeated 5 consecutive times:\n- tool: workspace.read_file\n- arguments: {"path":"a.ts"}\nThe call was not blocked. Inspect the latest result, then change the action or finish if the task is complete.',
+      realTruncatedRepeat ?? "",
+      realMcpRepeat ?? "",
+      formatRecoveryHints(mcpRecovery ? [mcpRecovery] : []) ?? "",
+      formatRecoveryHints(embeddedRecovery ? [embeddedRecovery] : []) ?? "",
+      "[CodingPhase:verify] A source edit now exists. Preserve the remaining budget: run the narrowest relevant test next, fix exact failures, then final_answer after a passing verification.",
+      "[CodingPhase:locate] 10 repository navigation calls have produced no source edit. Consolidate the evidence into one likely cause and make a minimal candidate edit before the hard limit at 14.",
+      "[CodingPhase:locate] 14 repository navigation calls have produced no source edit. Consolidate the evidence into one likely cause and make a minimal candidate edit before the hard limit at 14.",
+    ];
+    for (const marker of fixtures) {
+      const restored = restoreLoopControlFlagsV1({
+        runId: "legacy-tool",
+        startTurn: 1,
+        value: undefined,
+        legacyMessages: [
+          { role: "assistant", content: "tool call" },
+          { role: "user", content: marker },
+        ],
+      });
+      expect(restored.pendingControl).toMatchObject({
+        kind: "tool_guidance",
+        text: marker,
+      });
+      expect(
+        stripLegacyContextProjectionsV1([
+          { role: "assistant", content: "tool call" },
+          { role: "user", content: marker },
+        ]).map((message) => message.content),
+      ).toEqual(["tool call"]);
+      expect(
+        restoreLoopControlFlagsV1({
+          runId: "legacy-tool",
+          startTurn: 1,
+          value: undefined,
+          legacyMessages: [
+            { role: "user", content: marker },
+            { role: "assistant", content: "already consumed" },
+          ],
+        }).pendingControl,
+      ).toBeUndefined();
+    }
+
+    for (const collision of [
+      "[Recovery] please explain this title",
+      `${fixtures[0]} extra`,
+      "[Loop reminder] Exact tool call repeated 5 consecutive times:\n- tool: explain this request\n- arguments: please keep my text\nThe call was not blocked. Inspect the latest result, then change the action or finish if the task is complete.",
+      '[Loop reminder] Exact tool call repeated 5 consecutive times:\n- tool: workspace.read_file\n- arguments: {"z":1,"a":2}\nThe call was not blocked. Inspect the latest result, then change the action or finish if the task is complete.',
+      "[Loop reminder] Exact tool call repeated 4 consecutive times:\n- tool: workspace.read_file\n- arguments: {}\nThe call was not blocked. Inspect the latest result, then change the action or finish if the task is complete.",
+      "[CodingPhase:locate] 9 repository navigation calls have produced no source edit. Consolidate the evidence into one likely cause and make a minimal candidate edit before the hard limit at 14.",
+      "[CodingPhase:locate] 15 repository navigation calls have produced no source edit. Consolidate the evidence into one likely cause and make a minimal candidate edit before the hard limit at 14.",
+    ]) {
+      expect(
+        stripLegacyContextProjectionsV1([{ role: "user", content: collision }]),
+      ).toHaveLength(1);
+    }
+    const snapshotWins = restoreLoopControlFlagsV1({
+      runId: "legacy-tool",
+      startTurn: 1,
+      value: {
+        schemaVersion: "paw.loop-control.v1",
+        pendingControl: { kind: "protocol_recovery", text: "retry protocol" },
+      },
+      legacyMessages: [{ role: "user", content: fixtures[0] ?? "" }],
+    });
+    expect(snapshotWins.pendingControl).toEqual({
+      kind: "protocol_recovery",
+      text: "retry protocol",
+    });
+
+    const priorityRestored = restoreLoopControlFlagsV1({
+      runId: "legacy-tool-priority",
+      startTurn: 1,
+      value: undefined,
+      legacyMessages: [
+        { role: "assistant", content: "tool call" },
+        { role: "user", content: `${fixtures[4]}\n${idle}` },
+        { role: "user", content: fixtures[8] ?? "" },
+      ],
+    });
+    expect(priorityRestored.pendingControl).toMatchObject({
+      kind: "tool_guidance",
+      topic: "idle_fuse",
+    });
+    const recoveryPriority = restoreLoopControlFlagsV1({
+      runId: "legacy-tool-recovery-priority",
+      startTurn: 1,
+      value: undefined,
+      legacyMessages: [
+        { role: "assistant", content: "tool call" },
+        { role: "user", content: fixtures[0] ?? "" },
+        { role: "user", content: fixtures[8] ?? "" },
+      ],
+    });
+    expect(recoveryPriority.pendingControl).toMatchObject({
+      kind: "tool_guidance",
+      topic: "tool_recovery",
+    });
+
+    const newToolLoopWins = restoreLoopControlFlagsV1({
+      runId: "legacy-tool-new-wins",
+      startTurn: 1,
+      value: {
+        schemaVersion: "paw.loop-control.v1",
+        toolLoop: {
+          repeatTool: {
+            key: "b".repeat(64),
+            tool: "workspace.read_file",
+            count: 4,
+          },
+        },
+      },
+      legacyMessages: [{ role: "user", content: fixtures[7] ?? "" }],
+    });
+    expect(newToolLoopWins).not.toHaveProperty("pendingControl");
+  });
+
   test("round-trips bounded late-guidance delivery receipts", () => {
     const checkpoint = checkpointLoopControlV1({
       autoContinueNudges: 0,

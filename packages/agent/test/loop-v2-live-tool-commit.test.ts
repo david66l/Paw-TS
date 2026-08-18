@@ -711,7 +711,6 @@ describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
 
     // 4) 模型可见上下文（下一轮 user 消息）包含标注
     const ctxMgr = new ContextManager();
-    let saved = 0;
     const final = finalizeToolExecutionContext([call], [result], {
       ctxMgr,
       emit() {},
@@ -721,13 +720,9 @@ describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
       maxSteps: 96,
       specGoal: "fix django i18n prefix",
       text: "running the full suite",
-      saveStateFn() {
-        saved += 1;
-      },
       taskState,
     });
     expect(final.type).toBe("continue");
-    expect(saved).toBe(1);
     const lastUser = ctxMgr.buildMessages().at(-1);
     expect(lastUser?.role).toBe("user");
     expect(lastUser?.content).toContain("[Tool workspace.run_shell completed]");

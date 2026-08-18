@@ -70,6 +70,7 @@ import {
   goalRequiresMutation,
   resolveLifecycleBudget,
 } from "../lifecycle/task-lifecycle.js";
+import { selectToolGuidanceV1 } from "../lifecycle/tool-guidance.js";
 import { resolveLoopAuthorityPolicyV1 } from "../loop-authority.js";
 import {
   type ControlReductionV1,
@@ -1896,7 +1897,6 @@ async function handleToolCalls(
     executionEnvironment: ctx.executionEnvironment,
     mutationCaptures,
     observeLoopV2ToolCommit: ctx.observeLoopV2ToolCommit,
-    saveStateFn: () => opts.saveStateFn(nextFlags),
     payloadDeduper: ctx.payloadDeduper,
     artifactRegistry: ctx.artifactRegistry,
     failureSignatures: flags.failureSignatures,
@@ -1920,12 +1920,18 @@ async function handleToolCalls(
     ? advanceCodingPhase(priorCodingPhase, calls, results)
     : undefined;
   const repeatTool = advanceRepeatToolReminder(flags.repeatTool, calls);
-  for (const nudge of repeatTool.reminders) {
-    ctx.ctxMgr.addUser(nudge);
-  }
-  for (const nudge of codingPhase?.nudges ?? []) {
-    ctx.ctxMgr.addUser(nudge);
-  }
+  const toolGuidance = selectToolGuidanceV1({
+    ...(final.recoveryMessage
+      ? { recoveryMessage: final.recoveryMessage }
+      : {}),
+    ...(final.idleFuseTripped ? { idleFuseTripped: true } : {}),
+    ...(codingPhase?.nudges.length
+      ? { codingPhaseNudges: codingPhase.nudges }
+      : {}),
+    ...(repeatTool.reminders.length
+      ? { repeatToolReminders: repeatTool.reminders }
+      : {}),
+  });
   const phaseViolationThisTurn =
     codingPhaseEnabled && codingPhaseBlockReasons.some(Boolean);
   const requiredPhaseActionSucceeded =
@@ -1952,8 +1958,19 @@ async function handleToolCalls(
       call.tool === "workspace.acceptance_update" &&
       results[index]?.ok === true,
   );
+  const { pendingControl: priorPendingControl, ...nextFlagsWithoutPending } =
+    nextFlags;
+  const retainedPendingControl =
+    priorPendingControl?.kind === "tool_guidance"
+      ? undefined
+      : priorPendingControl;
   const fusedFlags: TurnFlags = {
-    ...nextFlags,
+    ...nextFlagsWithoutPending,
+    ...(toolGuidance
+      ? { pendingControl: toolGuidance }
+      : retainedPendingControl
+        ? { pendingControl: retainedPendingControl }
+        : {}),
     ...(repeatTool.state ? { repeatTool: repeatTool.state } : {}),
     ...(codingPhase ? { codingPhase: codingPhase.state } : {}),
     ...(codingPhaseEnabled ? { codingPhaseViolationTurns } : {}),
@@ -1971,11 +1988,22 @@ async function handleToolCalls(
       ? { idleFuseTrips: (flags.idleFuseTrips ?? 0) + 1 }
       : {}),
   };
-  // finalizeToolExecution saves transcript/tool facts before lifecycle flags
-  // are fully derived; overwrite the checkpoint with the committed flags.
-  opts.saveStateFn(fusedFlags);
+  const budget = resolveLifecycleBudget();
+  const codingHardStop = codingPhaseEnabled && codingPhaseViolationTurns >= 2;
+  const idleHardStop =
+    legacyBehaviorGuards &&
+    final.idleFuseTripped &&
+    (fusedFlags.idleFuseTrips ?? 0) >= budget.idleFuseHardStopTrips;
+  const hasNoNextRequest =
+    codingHardStop || idleHardStop || final.type === "incomplete";
+  const committedFlags: TurnFlags = hasNoNextRequest
+    ? (({ pendingControl: _terminalControl, ...rest }) => rest)(fusedFlags)
+    : fusedFlags;
+  // One post-tool checkpoint owns both the durable observation and the fully
+  // derived recovery/repeat/coding state. There is no earlier stale save.
+  opts.saveStateFn(committedFlags);
 
-  if (codingPhaseEnabled && codingPhaseViolationTurns >= 2) {
+  if (codingHardStop) {
     const decision = decideCompletion({
       intent: "budget_exhausted",
       message:
@@ -1985,18 +2013,13 @@ async function handleToolCalls(
     });
     return {
       state: { type: "decided", decision },
-      flags: fusedFlags,
+      flags: committedFlags,
       ...(subResults.length > 0 ? { subResults } : {}),
     };
   }
 
   // Idle fuse hard-stop：重复同一失败达到预算后诚实 incomplete
-  const budget = resolveLifecycleBudget();
-  if (
-    legacyBehaviorGuards &&
-    final.idleFuseTripped &&
-    (fusedFlags.idleFuseTrips ?? 0) >= budget.idleFuseHardStopTrips
-  ) {
+  if (idleHardStop) {
     const decision = decideCompletion({
       intent: "budget_exhausted",
       message: `${IDLE_FUSE_ESCALATION}\n(idle fuse hard-stop after ${fusedFlags.idleFuseTrips} trips)`,
@@ -2005,7 +2028,7 @@ async function handleToolCalls(
     });
     return {
       state: { type: "decided", decision },
-      flags: fusedFlags,
+      flags: committedFlags,
       ...(subResults.length > 0 ? { subResults } : {}),
     };
   }
@@ -2025,7 +2048,7 @@ async function handleToolCalls(
     );
     return {
       state: { type: "decided", decision },
-      flags: fusedFlags,
+      flags: committedFlags,
       ...(subResults.length > 0 ? { subResults } : {}),
     };
   }

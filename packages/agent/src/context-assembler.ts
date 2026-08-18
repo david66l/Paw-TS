@@ -45,10 +45,21 @@ export type CompletionGateKindV1 =
   | "candidate_review"
   | "acceptance";
 
+export type ToolGuidanceTopicV1 =
+  | "idle_fuse"
+  | "coding_phase"
+  | "tool_recovery"
+  | "repeat_tool";
+
 export type EphemeralControlV1 =
   | { readonly kind: "status"; readonly text: string }
   | { readonly kind: "progress"; readonly text: string }
   | { readonly kind: "test_warden"; readonly text: string }
+  | {
+      readonly kind: "tool_guidance";
+      readonly topic: ToolGuidanceTopicV1;
+      readonly text: string;
+    }
   | {
       readonly kind: "completion_gate";
       readonly gate: CompletionGateKindV1;
@@ -62,10 +73,11 @@ const CONTROL_PRIORITY_V1: Readonly<
 > = {
   status: 0,
   progress: 1,
-  test_warden: 2,
-  completion_gate: 3,
-  readiness: 4,
-  protocol_recovery: 5,
+  tool_guidance: 2,
+  test_warden: 3,
+  completion_gate: 4,
+  readiness: 5,
+  protocol_recovery: 6,
 };
 
 /** Deterministically admit at most one control projection for a request. */
@@ -208,6 +220,44 @@ const LEGACY_CONVERGENCE_NEXT_STEPS = new Set([
   "Inspect the final diff for the current revision. Check scope, accidental files, and whether the implementation actually covers the requested edge cases.",
   "The current revision has passing verification and an inspected diff. Run at most one materially different adversarial check if a concrete risk remains; otherwise deliver final_answer now.",
 ]);
+const LEGACY_IDLE_FUSE =
+  "[Recovery:idle_fuse] The same tool failure repeated. Stop retrying identically — re-read current state, make a smaller exact edit, try a different test command, or output final_answer / abort with an honest status.";
+const LEGACY_TOOL_NAME_SOURCE = String.raw`(?:[A-Za-z][A-Za-z0-9_-]{0,99}(?:\.[A-Za-z0-9][A-Za-z0-9_-]{0,99})+|mcp:[^/:\r\n]{1,100}/[^/\r\n]{1,100})`;
+const LEGACY_RECOVERY_BRANCH_PATTERNS = [
+  {
+    branch: "policy",
+    pattern: new RegExp(
+      `^\\[Recovery\\] ${LEGACY_TOOL_NAME_SOURCE} was blocked by policy\\. Use a safer workspace command, or ensure AutonomyProfile allows it\\. Do not treat this as a fatal crash\\.`,
+    ),
+  },
+  {
+    branch: "edit",
+    pattern:
+      /^\[Recovery\] edit_file failed to match old_string\. Re-read the file for exact current text, add more surrounding context for uniqueness, or set replace_all=true if every match should change\./,
+  },
+  {
+    branch: "retry",
+    pattern: new RegExp(
+      `^\\[Recovery\\] ${LEGACY_TOOL_NAME_SOURCE} timed out or is retryable\\. Retry with a tighter scope or longer timeout_sec; avoid repeating the identical failing command blindly\\.`,
+    ),
+  },
+  {
+    branch: "denied",
+    pattern: new RegExp(
+      `^\\[Recovery\\] ${LEGACY_TOOL_NAME_SOURCE} was denied/blocked\\. Choose an available read-only probe or a smaller exact edit\\.`,
+    ),
+  },
+  {
+    branch: "failed",
+    pattern: new RegExp(
+      `^\\[Recovery\\] ${LEGACY_TOOL_NAME_SOURCE} failed \\([\\s\\S]{0,120}?\\)\\. Inspect the error, re-read relevant files, then try a different tool or smaller change\\.`,
+    ),
+  },
+] as const;
+const LEGACY_REPEAT_THREE =
+  "[Loop reminder] You have made the exact same tool call with identical arguments three consecutive times. Re-read the latest result and use materially different arguments or a different approach if more evidence is needed. The call was not blocked.";
+const LEGACY_CODING_VERIFY =
+  "[CodingPhase:verify] A source edit now exists. Preserve the remaining budget: run the narrowest relevant test next, fix exact failures, then final_answer after a passing verification.";
 
 export interface LegacyProtocolRecoveryProjectionV1 {
   readonly pendingControl: Extract<
@@ -218,6 +268,49 @@ export interface LegacyProtocolRecoveryProjectionV1 {
   readonly noActionNudges?: number;
   readonly hasEverUsedTools?: true;
 }
+
+/** Migrate only an exact, not-yet-consumed legacy post-tool instruction. */
+export function parseLegacyToolGuidanceProjectionV1(
+  messages: readonly ChatMessage[],
+): Extract<EphemeralControlV1, { readonly kind: "tool_guidance" }> | undefined {
+  let lastAssistantIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "assistant") {
+      lastAssistantIndex = index;
+      break;
+    }
+  }
+  let pending:
+    | Extract<EphemeralControlV1, { readonly kind: "tool_guidance" }>
+    | undefined;
+  for (
+    let index = lastAssistantIndex + 1;
+    index < messages.length;
+    index += 1
+  ) {
+    const message = messages[index];
+    if (message?.role !== "user") continue;
+    const parsed = parseLegacyToolGuidanceTextV1(message.content);
+    if (
+      parsed &&
+      (!pending ||
+        LEGACY_TOOL_GUIDANCE_PRIORITY[parsed.topic] >=
+          LEGACY_TOOL_GUIDANCE_PRIORITY[pending.topic])
+    ) {
+      pending = parsed;
+    }
+  }
+  return pending;
+}
+
+const LEGACY_TOOL_GUIDANCE_PRIORITY: Readonly<
+  Record<ToolGuidanceTopicV1, number>
+> = {
+  repeat_tool: 0,
+  tool_recovery: 1,
+  coding_phase: 2,
+  idle_fuse: 3,
+};
 
 /** Migrate only an unconsumed legacy recovery marker at the durable tail. */
 export function parseLegacyProtocolRecoveryProjectionV1(
@@ -365,7 +458,9 @@ export function assembleModelContextV1(
     const controlHeader =
       input.control.kind === "completion_gate"
         ? `kind: completion_gate\ngate: ${input.control.gate}`
-        : `kind: ${input.control.kind}`;
+        : input.control.kind === "tool_guidance"
+          ? `kind: tool_guidance\ntopic: ${input.control.topic}`
+          : `kind: ${input.control.kind}`;
     messages.push({
       role: "user",
       content: `[Ephemeral Control v1]\n${controlHeader}\n${input.control.text}`,
@@ -385,9 +480,103 @@ function isLegacyContextProjection(message: ChatMessage): boolean {
       pattern.test(message.content),
     ) ||
     isLegacyLoopGuidanceProjection(message.content) ||
+    !!parseLegacyToolGuidanceTextV1(message.content) ||
     isLegacyAcceptanceSuccessEcho(message.content) ||
     isLegacyPlanUpdateEcho(message.content)
   );
+}
+
+function parseLegacyToolGuidanceTextV1(
+  content: string,
+): Extract<EphemeralControlV1, { readonly kind: "tool_guidance" }> | undefined {
+  if (hasUniqueLegacyRecoveryBranches(content)) {
+    return {
+      kind: "tool_guidance",
+      topic: content.endsWith(LEGACY_IDLE_FUSE) ? "idle_fuse" : "tool_recovery",
+      text: content,
+    };
+  }
+  if (content === LEGACY_REPEAT_THREE) {
+    return { kind: "tool_guidance", topic: "repeat_tool", text: content };
+  }
+  const detailedRepeat = new RegExp(
+    `^\\[Loop reminder\\] Exact tool call repeated (5|8) consecutive times:\\n- tool: (${LEGACY_TOOL_NAME_SOURCE})\\n- arguments: ([^\\r\\n]{1,600})\\nThe call was not blocked\\. Inspect the latest result, then change the action or finish if the task is complete\\.$`,
+  ).exec(content);
+  if (detailedRepeat) {
+    const args = detailedRepeat[3] ?? "";
+    const validArgs = isLegacyCanonicalArgumentsPreview(args);
+    if (validArgs) {
+      return { kind: "tool_guidance", topic: "repeat_tool", text: content };
+    }
+  }
+  if (content === LEGACY_CODING_VERIFY) {
+    return { kind: "tool_guidance", topic: "coding_phase", text: content };
+  }
+  if (
+    /^\[CodingPhase:locate\] (?:1[0-4]) repository navigation calls have produced no source edit\. Consolidate the evidence into one likely cause and make a minimal candidate edit before the hard limit at 14\.$/.test(
+      content,
+    )
+  ) {
+    return { kind: "tool_guidance", topic: "coding_phase", text: content };
+  }
+  return undefined;
+}
+
+function hasUniqueLegacyRecoveryBranches(content: string): boolean {
+  const withoutIdle = content.endsWith(`\n${LEGACY_IDLE_FUSE}`)
+    ? content.slice(0, -LEGACY_IDLE_FUSE.length - 1)
+    : content;
+  if (!withoutIdle) return false;
+  const used = new Set<string>();
+  let rest = withoutIdle;
+  while (rest) {
+    const match = LEGACY_RECOVERY_BRANCH_PATTERNS.map((entry) => ({
+      entry,
+      match: entry.pattern.exec(rest),
+    })).find((candidate) => candidate.match);
+    if (!match?.match || used.has(match.entry.branch)) return false;
+    used.add(match.entry.branch);
+    if (used.size > 5) return false;
+    rest = rest.slice(match.match[0].length);
+    if (!rest) return true;
+    if (!rest.startsWith("\n")) return false;
+    rest = rest.slice(1);
+  }
+  return used.size > 0;
+}
+
+function isLegacyCanonicalArgumentsPreview(value: string): boolean {
+  const truncated = /^(.{500})…\(\+([1-9]\d*) chars\)$/.exec(value);
+  if (truncated) {
+    const prefix = truncated[1] ?? "";
+    return prefix.startsWith('{"') && !/[\r\n]/.test(prefix);
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      stableLegacyJson(parsed) === value
+    );
+  } catch {
+    return false;
+  }
+}
+
+function stableLegacyJson(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return `[${value.map(stableLegacyJson).join(",")}]`;
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableLegacyJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? String(value);
 }
 
 function isLegacyLoopGuidanceProjection(content: string): boolean {

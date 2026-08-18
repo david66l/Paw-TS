@@ -42,7 +42,6 @@ function injectToolResult(opts: {
       maxSteps: 30,
       specGoal: "test",
       text: opts.text ?? `{"tool":"${opts.tool}","args":{}}`,
-      saveStateFn: () => {},
       payloadDeduper: deduper,
       artifactRegistry: registry,
     },
@@ -63,7 +62,9 @@ describe("P3 冷库接线 — 截断 → 归档 → context.recall", () => {
       payload: big,
       turn: 3,
     });
-    const toolMsg = messages.find((m) => m.includes("[Tool workspace.run_shell"))!;
+    const toolMsg = messages.find((m) =>
+      m.includes("[Tool workspace.run_shell"),
+    )!;
     expect(toolMsg).toBeDefined();
     // 截断预览（头尾）+ 引用桩
     expect(toolMsg).toContain("[truncated");
@@ -120,7 +121,10 @@ describe("P3 冷库接线 — 截断 → 归档 → context.recall", () => {
       { id: "99999" },
     );
     expect(miss.ok).toBe(false);
-    const missPayload = miss.payload as { candidates?: unknown[]; error: string };
+    const missPayload = miss.payload as {
+      candidates?: unknown[];
+      error: string;
+    };
     expect(missPayload.error).toContain("no archived artifact");
     expect(missPayload.candidates?.length).toBeGreaterThan(0);
 
@@ -174,7 +178,11 @@ describe("P3 冷库接线 — 截断 → 归档 → context.recall", () => {
   test("AC-P3-1 去重后引用桩链接到同一归档 id", () => {
     // >40K：既参与去重（≥2K）又触发截断归档
     const content = "repeat-me\n".repeat(6_000); // 60K
-    const a = injectToolResult({ tool: "workspace.run_shell", payload: content, turn: 1 });
+    const a = injectToolResult({
+      tool: "workspace.run_shell",
+      payload: content,
+      turn: 1,
+    });
     const b = injectToolResult({
       tool: "workspace.run_shell",
       payload: content,
@@ -208,6 +216,8 @@ describe("P3 冷库接线 — 截断 → 归档 → context.recall", () => {
     expect(outcome.truncated).toBe(true);
     expect(outcome.fullText).toBe(big);
     const small = "ok";
-    expect(truncatePayloadWithOutcome(small, "workspace.run_shell").truncated).toBe(false);
+    expect(
+      truncatePayloadWithOutcome(small, "workspace.run_shell").truncated,
+    ).toBe(false);
   });
 });

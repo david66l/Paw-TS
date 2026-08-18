@@ -15,6 +15,8 @@ import {
   assembleModelContextV1,
   selectEphemeralControlV1,
 } from "../src/context-assembler.js";
+import { CODING_PHASE_BUDGET_MARKER } from "../src/lifecycle/coding-phase.js";
+import { advanceRepeatToolReminder } from "../src/lifecycle/repeat-tool-reminder.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 import {
   TaskStateManager,
@@ -119,6 +121,11 @@ describe("ContextAssembler v1", () => {
     expect(
       selectEphemeralControlV1([
         { kind: "progress", text: "change hypothesis" },
+        {
+          kind: "tool_guidance",
+          topic: "tool_recovery",
+          text: "recover tool",
+        },
         { kind: "test_warden", text: "tests failed" },
         {
           kind: "completion_gate",
@@ -129,6 +136,16 @@ describe("ContextAssembler v1", () => {
         { kind: "protocol_recovery", text: "retry protocol" },
       ]),
     ).toEqual({ kind: "protocol_recovery", text: "retry protocol" });
+    expect(
+      selectEphemeralControlV1([
+        {
+          kind: "tool_guidance",
+          topic: "repeat_tool",
+          text: "repeat",
+        },
+        { kind: "test_warden", text: "tests failed" },
+      ]),
+    ).toEqual({ kind: "test_warden", text: "tests failed" });
     expect(
       selectEphemeralControlV1([
         { kind: "progress", text: "first" },
@@ -154,6 +171,17 @@ describe("ContextAssembler v1", () => {
     });
     expect(completionOnly[0]?.content).toBe(
       "[Ephemeral Control v1]\nkind: completion_gate\ngate: acceptance\nresolve criterion C1",
+    );
+    const toolOnly = assembleModelContextV1({
+      durable: { messages: [] },
+      control: {
+        kind: "tool_guidance",
+        topic: "coding_phase",
+        text: "edit now",
+      },
+    });
+    expect(toolOnly[0]?.content).toBe(
+      "[Ephemeral Control v1]\nkind: tool_guidance\ntopic: coding_phase\nedit now",
     );
   });
 
@@ -991,6 +1019,407 @@ describe("ContextAssembler v1", () => {
       ),
     ).toBe(false);
   });
+
+  test("tool recovery is one crash-safe control while the failed observation stays durable", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-tool-guidance-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(workspaceRoot, "a.ts"),
+      "export const a = 1;",
+      "utf8",
+    );
+    const stateStore = new InMemoryAppStateStore();
+    const requests: (readonly ChatMessage[])[] = [];
+    let calls = 0;
+    const orchestrator = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "tool-guidance",
+        async complete(messages) {
+          requests.push(messages);
+          calls += 1;
+          if (calls === 1) {
+            return {
+              text: '{"tool":"workspace.edit_file","args":{"path":"a.ts","old_string":"missing","new_string":"changed"}}',
+            };
+          }
+          throw new Error("provider unavailable");
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await orchestrator.run({
+      runId: "tool-guidance",
+      goal: "Fix a.ts",
+      workspaceRoot,
+      maxSteps: 3,
+    });
+
+    expect(
+      requests[1]?.filter(
+        (message) =>
+          message.content.includes("kind: tool_guidance") &&
+          message.content.includes("topic: tool_recovery"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      requests[1]?.some((message) =>
+        message.content.includes("failed to match old_string"),
+      ),
+    ).toBe(true);
+    const interrupted = stateStore.load("tool-guidance");
+    expect(interrupted?.loopControl).toMatchObject({
+      pendingControl: {
+        kind: "tool_guidance",
+        topic: "tool_recovery",
+      },
+    });
+    const resumedRequests: (readonly ChatMessage[])[] = [];
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "tool-guidance-resume",
+        async complete(messages) {
+          resumedRequests.push(messages);
+          return { text: '{"action":"abort","reason":"stop test"}' };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await resumed.resumeRun({
+      runId: "tool-guidance",
+      workspaceRoot,
+    });
+    expect(
+      resumedRequests[0]?.filter((message) =>
+        message.content.includes("topic: tool_recovery"),
+      ),
+    ).toHaveLength(1);
+
+    const saved = stateStore.load("tool-guidance");
+    expect(
+      saved?.messages.some((message) =>
+        message.content.startsWith("[Recovery]"),
+      ),
+    ).toBe(false);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content.includes("[Tool workspace.edit_file") &&
+          message.content.toLowerCase().includes("old_string"),
+      ),
+    ).toBe(true);
+    expect(saved?.loopControl).toMatchObject({
+      toolLoop: {
+        failureSignatures: [expect.any(String)],
+        repeatTool: { tool: "workspace.edit_file", count: 1 },
+      },
+    });
+    expect(saved?.loopControl).not.toHaveProperty("pendingControl");
+  });
+
+  test("two saved failures resume into a third-failure idle fuse", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-idle-fuse-resume-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(workspaceRoot, "a.ts"),
+      "export const a = 1;",
+      "utf8",
+    );
+    const runId = "idle-fuse-resume";
+    const stateStore = new InMemoryAppStateStore();
+    const failingEdit =
+      '{"tool":"workspace.edit_file","args":{"path":"a.ts","old_string":"missing","new_string":"changed"}}';
+    let firstCalls = 0;
+    const first = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "idle-fuse-first",
+        async complete() {
+          firstCalls += 1;
+          if (firstCalls <= 2) return { text: failingEdit };
+          throw new Error("provider unavailable");
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await first.run({ runId, goal: "Fix a.ts", workspaceRoot, maxSteps: 6 });
+    const interruptedControl = stateStore.load(runId)?.loopControl as {
+      toolLoop?: { failureSignatures?: readonly string[] };
+      pendingControl?: { kind?: string; topic?: string };
+    };
+    expect(interruptedControl.pendingControl).toMatchObject({
+      kind: "tool_guidance",
+      topic: "tool_recovery",
+    });
+    expect(interruptedControl.toolLoop?.failureSignatures).toHaveLength(2);
+    expect(
+      interruptedControl.toolLoop?.failureSignatures?.every(
+        (signature) => typeof signature === "string",
+      ),
+    ).toBe(true);
+
+    const resumedRequests: (readonly ChatMessage[])[] = [];
+    let resumedCalls = 0;
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "idle-fuse-resumed",
+        async complete(messages) {
+          resumedRequests.push(messages);
+          resumedCalls += 1;
+          return resumedCalls === 1
+            ? { text: failingEdit }
+            : { text: '{"action":"abort","reason":"stop test"}' };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await resumed.resumeRun({ runId, workspaceRoot });
+    expect(
+      resumedRequests[0]?.some((message) =>
+        message.content.includes("topic: tool_recovery"),
+      ),
+    ).toBe(true);
+    expect(
+      resumedRequests[1]?.filter(
+        (message) =>
+          message.content.includes("topic: idle_fuse") &&
+          message.content.includes("[Recovery:idle_fuse]"),
+      ),
+    ).toHaveLength(1);
+    const finalControl = stateStore.load(runId)?.loopControl as {
+      toolLoop?: {
+        failureSignatures?: readonly string[];
+        idleFuseTrips?: number;
+      };
+    };
+    expect(finalControl.toolLoop?.failureSignatures).toHaveLength(3);
+    expect(finalControl.toolLoop?.idleFuseTrips).toBe(1);
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
+      "pendingControl",
+    );
+  });
+
+  test("a terminal post-tool checkpoint does not retain guidance with no consumer", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-tool-guidance-terminal-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(workspaceRoot, "a.ts"),
+      "export const a = 1;",
+      "utf8",
+    );
+    const stateStore = new InMemoryAppStateStore();
+    const orchestrator = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "tool-guidance-terminal",
+        async complete() {
+          return {
+            text: '{"tool":"workspace.edit_file","args":{"path":"a.ts","old_string":"missing","new_string":"changed"}}',
+          };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await orchestrator.run({
+      runId: "tool-guidance-terminal",
+      goal: "Fix a.ts",
+      workspaceRoot,
+      maxSteps: 1,
+    });
+    const saved = stateStore.load("tool-guidance-terminal");
+    expect(saved?.loopControl).not.toHaveProperty("pendingControl");
+    expect(saved?.loopControl).toHaveProperty("toolLoop.failureSignatures");
+  });
+
+  test("terminal drops a tool guidance that lost selection to TestWarden", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-tool-guidance-terminal-selection-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const runId = "tool-guidance-terminal-selection";
+    const stateStore = new InMemoryAppStateStore();
+    stateStore.save({
+      runId,
+      goal: "Inspect the workspace.",
+      workspaceRoot,
+      turn: 1,
+      maxSteps: 3,
+      messages: [{ role: "user", content: "Inspect the workspace." }],
+      loopControl: {
+        schemaVersion: "paw.loop-control.v1",
+        pendingControl: {
+          kind: "tool_guidance",
+          topic: "repeat_tool",
+          text: "change the repeated call",
+        },
+      },
+      savedAt: Date.now(),
+    });
+    let request: readonly ChatMessage[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      appStateStore: stateStore,
+      model: {
+        label: "tool-guidance-terminal-selection",
+        async complete(messages) {
+          request = messages;
+          return { text: '{"action":"abort","reason":"stop test"}' };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await orchestrator.resumeRun({ runId, workspaceRoot });
+    expect(
+      request.some(
+        (message) =>
+          message.content.includes("kind: test_warden") &&
+          message.content.includes("[TestWarden]"),
+      ),
+    ).toBe(true);
+    expect(
+      request.some((message) => message.content.includes("topic: repeat_tool")),
+    ).toBe(false);
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
+      "pendingControl",
+    );
+  });
+
+  for (const fixture of [
+    {
+      name: "repeat count two resumes at the third-call reminder",
+      goal: "Inspect a.ts",
+      topic: "repeat_tool",
+      toolLoop: {
+        repeatTool: advanceRepeatToolReminder(
+          advanceRepeatToolReminder(undefined, [
+            {
+              type: "tool_call",
+              tool: "workspace.read_file",
+              args: { path: "a.ts" },
+            },
+          ]).state,
+          [
+            {
+              type: "tool_call",
+              tool: "workspace.read_file",
+              args: { path: "a.ts" },
+            },
+          ],
+        ).state,
+      },
+    },
+    {
+      name: "coding navigation nine resumes at the locate reminder",
+      goal: `Fix a.ts [require_mutation] ${CODING_PHASE_BUDGET_MARKER}`,
+      topic: "coding_phase",
+      toolLoop: {
+        codingPhase: {
+          navigationCalls: 9,
+          successfulEdits: 0,
+          postEditNavigationCalls: 0,
+          verificationCalls: 0,
+          locateNudged: false,
+          verifyNudged: false,
+        },
+      },
+    },
+  ] as const) {
+    test(fixture.name, async () => {
+      const workspaceRoot = mkdtempSync(
+        path.join(tmpdir(), "paw-tool-loop-resume-"),
+      );
+      mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+      writeFileSync(
+        path.join(workspaceRoot, ".paw", "memory-config.json"),
+        JSON.stringify({ enable: false }),
+        "utf8",
+      );
+      writeFileSync(
+        path.join(workspaceRoot, "a.ts"),
+        "export const a = 1;",
+        "utf8",
+      );
+      const runId = `tool-loop-${fixture.topic}`;
+      const stateStore = new InMemoryAppStateStore();
+      stateStore.save({
+        runId,
+        goal: fixture.goal,
+        workspaceRoot,
+        turn: 2,
+        maxSteps: 5,
+        messages: [{ role: "user", content: fixture.goal }],
+        loopControl: {
+          schemaVersion: "paw.loop-control.v1",
+          toolLoop: fixture.toolLoop,
+        },
+        savedAt: Date.now(),
+      });
+      const requests: (readonly ChatMessage[])[] = [];
+      let calls = 0;
+      const orchestrator = new AgentOrchestrator({
+        loopKernelVersion: "v1",
+        appStateStore: stateStore,
+        model: {
+          label: fixture.topic,
+          async complete(messages) {
+            requests.push(messages);
+            calls += 1;
+            return calls === 1
+              ? {
+                  text: '{"tool":"workspace.read_file","args":{"path":"a.ts"}}',
+                }
+              : { text: '{"action":"abort","reason":"stop test"}' };
+          },
+        },
+        retrySleep: async () => {},
+      });
+      await orchestrator.resumeRun({ runId, workspaceRoot });
+      expect(
+        requests[1]?.filter(
+          (message) =>
+            message.content.includes("kind: tool_guidance") &&
+            message.content.includes(`topic: ${fixture.topic}`),
+        ),
+      ).toHaveLength(1);
+      expect(
+        stateStore
+          .load(runId)
+          ?.messages.some(
+            (message) =>
+              message.content.startsWith("[Loop reminder]") ||
+              message.content.startsWith("[CodingPhase:"),
+          ),
+      ).toBe(false);
+    });
+  }
 
   test("resume removes legacy host projections from runtime and next save", async () => {
     const workspaceRoot = mkdtempSync(

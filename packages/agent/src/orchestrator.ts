@@ -103,6 +103,8 @@ import {
 } from "@paw/core";
 import {
   checkpointLoopControlV1,
+  consumeSelectedPendingControlV1,
+  dropPendingControlV1,
   resetLoopControlForRewindV1,
   restoreLoopControlFlagsV1,
 } from "./loop-control-state.js";
@@ -1357,6 +1359,10 @@ export class AgentOrchestrator {
           const terminalStatus = state.decision.status;
           const terminalMessage = state.decision.message;
           const waitingUser = state.decision.reason === "user_input_required";
+          if (!waitingUser) {
+            flags = dropPendingControlV1(flags);
+            activeTurnFlags = flags;
+          }
           // 保存断点续跑状态
           const appStatus =
             terminalStatus === "aborted" ? ("failed" as const) : terminalStatus;
@@ -1455,6 +1461,8 @@ export class AgentOrchestrator {
         "budget_exhausted",
       );
       const runResult = runResultFromDecision(runId, decision);
+      flags = dropPendingControlV1(flags);
+      activeTurnFlags = flags;
       this.saveState(
         runId,
         spec.goal,
@@ -2657,7 +2665,10 @@ export class AgentOrchestrator {
     });
 
     let dispatchedAction = singleAction;
-    const { pendingControl: _consumedControl, ...unmarkedFlags } = flags;
+    const unmarkedFlags = consumeSelectedPendingControlV1(
+      flags,
+      requestControl,
+    );
     const flagsAfterControl = selectedGuidance
       ? applyLoopGuidanceReceiptV1(
           unmarkedFlags as TurnFlags,

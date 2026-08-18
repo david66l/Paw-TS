@@ -2,8 +2,10 @@ import type { ChatMessage } from "@paw/core";
 import {
   type CompletionGateKindV1,
   type EphemeralControlV1,
+  type ToolGuidanceTopicV1,
   parseLegacyCompletionGateProjectionV1,
   parseLegacyProtocolRecoveryProjectionV1,
+  parseLegacyToolGuidanceProjectionV1,
 } from "./context-assembler.js";
 import type { ProviderTerminalStateV2 } from "./loop-v2/index.js";
 import { parseLoopV2ReadinessFeedbackMarker } from "./loop-v2/index.js";
@@ -12,7 +14,11 @@ import type { TurnFlags } from "./orchestrator/types.js";
 type CrashSafePendingControlV1 = Extract<
   EphemeralControlV1,
   {
-    readonly kind: "readiness" | "protocol_recovery" | "completion_gate";
+    readonly kind:
+      | "readiness"
+      | "protocol_recovery"
+      | "completion_gate"
+      | "tool_guidance";
   }
 >;
 
@@ -45,6 +51,24 @@ export interface LoopControlCheckpointV1 {
     readonly convergenceEvidenceKey?: string;
     readonly maxStepsDelivered?: true;
   };
+  readonly toolLoop?: {
+    readonly failureSignatures?: readonly string[];
+    readonly idleFuseTrips?: number;
+    readonly repeatTool?: {
+      readonly key: string;
+      readonly tool: string;
+      readonly count: number;
+    };
+    readonly codingPhase?: {
+      readonly navigationCalls: number;
+      readonly successfulEdits: number;
+      readonly postEditNavigationCalls: number;
+      readonly verificationCalls: number;
+      readonly locateNudged: boolean;
+      readonly verifyNudged: boolean;
+    };
+    readonly codingPhaseViolationTurns?: number;
+  };
 }
 
 const PROTOCOL_ISSUES = new Set([
@@ -56,6 +80,13 @@ const CONTROL_KINDS = new Set<CrashSafePendingControlV1["kind"]>([
   "readiness",
   "protocol_recovery",
   "completion_gate",
+  "tool_guidance",
+]);
+const TOOL_GUIDANCE_TOPICS = new Set<ToolGuidanceTopicV1>([
+  "idle_fuse",
+  "coding_phase",
+  "tool_recovery",
+  "repeat_tool",
 ]);
 const COMPLETION_GATE_KINDS = new Set<CompletionGateKindV1>([
   "managed_jobs",
@@ -82,6 +113,23 @@ export function resetLoopControlForRewindV1(
   };
 }
 
+/** Consume a pending control only when that exact candidate won selection. */
+export function consumeSelectedPendingControlV1(
+  flags: TurnFlags,
+  selected: EphemeralControlV1 | undefined,
+): TurnFlags {
+  if (!flags.pendingControl || selected !== flags.pendingControl) return flags;
+  const { pendingControl: _consumed, ...rest } = flags;
+  return rest as TurnFlags;
+}
+
+/** A terminal run has no automatic next request that could consume advice. */
+export function dropPendingControlV1(flags: TurnFlags): TurnFlags {
+  if (!flags.pendingControl) return flags;
+  const { pendingControl: _terminalPending, ...rest } = flags;
+  return rest as TurnFlags;
+}
+
 /** Persist only cross-crash loop-control facts, not the whole TurnFlags bag. */
 export function checkpointLoopControlV1(
   flags: TurnFlags | undefined,
@@ -97,7 +145,8 @@ export function checkpointLoopControlV1(
   const pendingControl =
     flags.pendingControl?.kind === "readiness" ||
     flags.pendingControl?.kind === "protocol_recovery" ||
-    flags.pendingControl?.kind === "completion_gate"
+    flags.pendingControl?.kind === "completion_gate" ||
+    flags.pendingControl?.kind === "tool_guidance"
       ? flags.pendingControl
       : undefined;
   const protocolRecovery =
@@ -168,13 +217,36 @@ export function checkpointLoopControlV1(
             : {}),
         }
       : undefined;
+  const toolLoop =
+    (flags.failureSignatures?.length ?? 0) > 0 ||
+    (flags.idleFuseTrips ?? 0) > 0 ||
+    flags.repeatTool ||
+    flags.codingPhase ||
+    (flags.codingPhaseViolationTurns ?? 0) > 0
+      ? {
+          ...(flags.failureSignatures?.length
+            ? { failureSignatures: [...flags.failureSignatures] }
+            : {}),
+          ...((flags.idleFuseTrips ?? 0) > 0
+            ? { idleFuseTrips: flags.idleFuseTrips }
+            : {}),
+          ...(flags.repeatTool ? { repeatTool: flags.repeatTool } : {}),
+          ...(flags.codingPhase ? { codingPhase: flags.codingPhase } : {}),
+          ...((flags.codingPhaseViolationTurns ?? 0) > 0
+            ? {
+                codingPhaseViolationTurns: flags.codingPhaseViolationTurns,
+              }
+            : {}),
+        }
+      : undefined;
   if (
     !flags.providerTerminal &&
     !readiness &&
     !pendingControl &&
     !protocolRecovery &&
     !completionGates &&
-    !lateGuidance
+    !lateGuidance &&
+    !toolLoop
   ) {
     return undefined;
   }
@@ -188,6 +260,7 @@ export function checkpointLoopControlV1(
     ...(protocolRecovery ? { protocolRecovery } : {}),
     ...(completionGates ? { completionGates } : {}),
     ...(lateGuidance ? { lateGuidance } : {}),
+    ...(toolLoop ? { toolLoop } : {}),
   };
 }
 
@@ -212,13 +285,16 @@ export function parseLoopControlCheckpointV1(
   if (value.completionGates !== undefined && !completionGates) return undefined;
   const lateGuidance = parseLateGuidance(value.lateGuidance);
   if (value.lateGuidance !== undefined && !lateGuidance) return undefined;
+  const toolLoop = parseToolLoop(value.toolLoop);
+  if (value.toolLoop !== undefined && !toolLoop) return undefined;
   if (
     !providerTerminal &&
     !readiness &&
     !pendingControl &&
     !protocolRecovery &&
     !completionGates &&
-    !lateGuidance
+    !lateGuidance &&
+    !toolLoop
   )
     return undefined;
   return {
@@ -229,6 +305,7 @@ export function parseLoopControlCheckpointV1(
     ...(protocolRecovery ? { protocolRecovery } : {}),
     ...(completionGates ? { completionGates } : {}),
     ...(lateGuidance ? { lateGuidance } : {}),
+    ...(toolLoop ? { toolLoop } : {}),
   };
 }
 
@@ -263,6 +340,11 @@ export function restoreLoopControlFlagsV1(input: {
     | "_implementationWarned"
     | "_convergenceEvidenceKey"
     | "_maxStepsWarned"
+    | "failureSignatures"
+    | "idleFuseTrips"
+    | "repeatTool"
+    | "codingPhase"
+    | "codingPhaseViolationTurns"
   >
 > {
   const checkpoint = parseLoopControlCheckpointV1(input.value);
@@ -342,6 +424,24 @@ export function restoreLoopControlFlagsV1(input: {
       ...(checkpoint.lateGuidance?.maxStepsDelivered
         ? { _maxStepsWarned: true }
         : {}),
+      ...(checkpoint.toolLoop?.failureSignatures
+        ? { failureSignatures: checkpoint.toolLoop.failureSignatures }
+        : {}),
+      ...(checkpoint.toolLoop?.idleFuseTrips
+        ? { idleFuseTrips: checkpoint.toolLoop.idleFuseTrips }
+        : {}),
+      ...(checkpoint.toolLoop?.repeatTool
+        ? { repeatTool: checkpoint.toolLoop.repeatTool }
+        : {}),
+      ...(checkpoint.toolLoop?.codingPhase
+        ? { codingPhase: checkpoint.toolLoop.codingPhase }
+        : {}),
+      ...(checkpoint.toolLoop?.codingPhaseViolationTurns
+        ? {
+            codingPhaseViolationTurns:
+              checkpoint.toolLoop.codingPhaseViolationTurns,
+          }
+        : {}),
     };
     // c3a/c2 snapshots already have a provider/protocol checkpoint while the
     // not-yet-consumed completion gate still lives at the durable tail. Keep
@@ -356,6 +456,14 @@ export function restoreLoopControlFlagsV1(input: {
         return { ...restored, ...legacyCompletionGate };
       }
     }
+    if (!checkpoint.pendingControl && !checkpoint.toolLoop) {
+      const legacyToolGuidance = parseLegacyToolGuidanceProjectionV1(
+        input.legacyMessages,
+      );
+      if (legacyToolGuidance) {
+        return { ...restored, pendingControl: legacyToolGuidance };
+      }
+    }
     return restored;
   }
   const legacyProtocolRecovery = parseLegacyProtocolRecoveryProjectionV1(
@@ -367,6 +475,10 @@ export function restoreLoopControlFlagsV1(input: {
     input.legacyCandidateReview,
   );
   if (legacyCompletionGate) return legacyCompletionGate;
+  const legacyToolGuidance = parseLegacyToolGuidanceProjectionV1(
+    input.legacyMessages,
+  );
+  if (legacyToolGuidance) return { pendingControl: legacyToolGuidance };
   if (input.allowLegacyReadiness === false) return {};
   const legacyReadiness = [...input.legacyMessages]
     .reverse()
@@ -445,7 +557,21 @@ function parsePendingControl(
       text: value.text,
     };
   }
-  if (value.gate !== undefined) return undefined;
+  if (value.kind === "tool_guidance") {
+    if (
+      value.gate !== undefined ||
+      typeof value.topic !== "string" ||
+      !TOOL_GUIDANCE_TOPICS.has(value.topic as ToolGuidanceTopicV1)
+    ) {
+      return undefined;
+    }
+    return {
+      kind: "tool_guidance",
+      topic: value.topic as ToolGuidanceTopicV1,
+      text: value.text,
+    };
+  }
+  if (value.gate !== undefined || value.topic !== undefined) return undefined;
   return {
     kind: value.kind as "readiness" | "protocol_recovery",
     text: value.text,
@@ -586,6 +712,125 @@ function parseLateGuidance(
     ...(implementationDelivered ? { implementationDelivered } : {}),
     ...(convergenceEvidenceKey ? { convergenceEvidenceKey } : {}),
     ...(maxStepsDelivered ? { maxStepsDelivered } : {}),
+  };
+}
+
+function parseToolLoop(
+  value: unknown,
+): LoopControlCheckpointV1["toolLoop"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const rawFailureSignatures = value.failureSignatures;
+  const failureSignatures = Array.isArray(rawFailureSignatures)
+    ? rawFailureSignatures.filter(
+        (signature): signature is string =>
+          typeof signature === "string" &&
+          signature.length > 0 &&
+          signature.length <= 512 &&
+          !/[\r\n]/.test(signature),
+      )
+    : undefined;
+  const rawFailureSignatureCount = Array.isArray(rawFailureSignatures)
+    ? rawFailureSignatures.length
+    : undefined;
+  if (
+    rawFailureSignatures !== undefined &&
+    (!failureSignatures ||
+      failureSignatures.length !== rawFailureSignatureCount ||
+      failureSignatures.length === 0 ||
+      failureSignatures.length > 8)
+  ) {
+    return undefined;
+  }
+  const idleFuseTrips = parseBoundedCounter(value.idleFuseTrips, 10_000);
+  if (value.idleFuseTrips !== undefined && idleFuseTrips === undefined) {
+    return undefined;
+  }
+  const repeatTool = parseRepeatTool(value.repeatTool);
+  if (value.repeatTool !== undefined && !repeatTool) return undefined;
+  const codingPhase = parseCodingPhase(value.codingPhase);
+  if (value.codingPhase !== undefined && !codingPhase) return undefined;
+  const codingPhaseViolationTurns = parseBoundedCounter(
+    value.codingPhaseViolationTurns,
+    2,
+  );
+  if (
+    value.codingPhaseViolationTurns !== undefined &&
+    codingPhaseViolationTurns === undefined
+  ) {
+    return undefined;
+  }
+  if (
+    !failureSignatures &&
+    idleFuseTrips === undefined &&
+    !repeatTool &&
+    !codingPhase &&
+    codingPhaseViolationTurns === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    ...(failureSignatures ? { failureSignatures } : {}),
+    ...(idleFuseTrips !== undefined ? { idleFuseTrips } : {}),
+    ...(repeatTool ? { repeatTool } : {}),
+    ...(codingPhase ? { codingPhase } : {}),
+    ...(codingPhaseViolationTurns !== undefined
+      ? { codingPhaseViolationTurns }
+      : {}),
+  };
+}
+
+function parseRepeatTool(
+  value: unknown,
+): NonNullable<LoopControlCheckpointV1["toolLoop"]>["repeatTool"] {
+  if (!isRecord(value)) return undefined;
+  if (
+    typeof value.key !== "string" ||
+    !/^[a-f0-9]{64}$/.test(value.key) ||
+    typeof value.tool !== "string" ||
+    !value.tool.trim() ||
+    value.tool.length > 200 ||
+    /[\r\n]/.test(value.tool) ||
+    !Number.isSafeInteger(value.count) ||
+    (value.count as number) < 1 ||
+    (value.count as number) > 1_000_000
+  ) {
+    return undefined;
+  }
+  return { key: value.key, tool: value.tool, count: value.count as number };
+}
+
+function parseCodingPhase(
+  value: unknown,
+): NonNullable<LoopControlCheckpointV1["toolLoop"]>["codingPhase"] {
+  if (!isRecord(value)) return undefined;
+  const fields = [
+    "navigationCalls",
+    "successfulEdits",
+    "postEditNavigationCalls",
+    "verificationCalls",
+  ] as const;
+  for (const field of fields) {
+    if (
+      !Number.isSafeInteger(value[field]) ||
+      (value[field] as number) < 0 ||
+      (value[field] as number) > 1_000_000
+    ) {
+      return undefined;
+    }
+  }
+  if (
+    typeof value.locateNudged !== "boolean" ||
+    typeof value.verifyNudged !== "boolean"
+  ) {
+    return undefined;
+  }
+  return {
+    navigationCalls: value.navigationCalls as number,
+    successfulEdits: value.successfulEdits as number,
+    postEditNavigationCalls: value.postEditNavigationCalls as number,
+    verificationCalls: value.verificationCalls as number,
+    locateNudged: value.locateNudged,
+    verifyNudged: value.verifyNudged,
   };
 }
 

@@ -292,7 +292,6 @@ export interface ToolExecutionFinalizationContext
     | LoopV2ShadowMutationCapture
     | undefined
   )[];
-  readonly saveStateFn: () => void;
   /** 会话级工具输出去重器（P1 入口闸） */
   readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
   /** P3 冷库：截断的全文按内容哈希归档，注入 [archived id] 引用桩 */
@@ -304,6 +303,8 @@ export interface ToolExecutionFinalizationContext
 export interface ToolExecutionFinalizationResult {
   readonly type: "continue" | "incomplete";
   readonly message?: string;
+  /** Request-only host advice derived from the durable tool observations. */
+  readonly recoveryMessage?: string;
   readonly failureSignatures?: readonly string[];
   readonly idleFuseTripped?: boolean;
 }
@@ -1258,9 +1259,6 @@ export function finalizeToolExecutionContext(
     results,
     ctx.failureSignatures,
   );
-  if (recovery.message) {
-    ctx.ctxMgr.addUser(recovery.message);
-  }
 
   // 步骤 5：Max steps 检查 → incomplete（禁止假 completed）
   if (ctx.turn + 1 >= ctx.maxSteps) {
@@ -1268,15 +1266,17 @@ export function finalizeToolExecutionContext(
     return {
       type: "incomplete",
       message: `Max steps (${ctx.maxSteps}) reached after tool(s): ${toolNames}`,
+      ...(recovery.message ? { recoveryMessage: recovery.message } : {}),
       failureSignatures: recovery.signatures,
       idleFuseTripped: recovery.fuseTripped,
     };
   }
 
-  // 步骤 6：保存状态（断点续跑）+ 继续
-  ctx.saveStateFn();
+  // AppState is saved by the action handler after it has atomically derived
+  // recovery/repeat/coding flags from this finalized tool batch.
   return {
     type: "continue",
+    ...(recovery.message ? { recoveryMessage: recovery.message } : {}),
     failureSignatures: recovery.signatures,
     idleFuseTripped: recovery.fuseTripped,
   };

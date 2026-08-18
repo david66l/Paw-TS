@@ -157,7 +157,9 @@ export function failureSignature(
   call: { readonly tool: string; readonly args?: unknown },
   result: ToolRunResult,
 ): string {
-  const code = errorCode(result.payload) || (result.ok ? "ok" : "fail");
+  const code = fingerprint(
+    errorCode(result.payload) || (result.ok ? "ok" : "fail"),
+  );
   return `${call.tool}|${actionIdentity(call)}|${code}|${fingerprint(
     result.summary.slice(0, 240),
   )}`;
