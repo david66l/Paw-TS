@@ -629,6 +629,7 @@ async function handleFinalAnswer(
   // must be committed before any final decision.
   if (jobReadiness.blocksCompletion) {
     const detail = `${jobReadiness.running} running, ${jobReadiness.stopping} stopping, ${jobReadiness.pendingSettlements} awaiting commit`;
+    const message = `[Managed jobs are unfinished: ${detail}. Wait for the host to settle and commit every terminal result before outputting final_answer.]`;
     if (noRoomForAnotherTurn) {
       return {
         state: {
@@ -644,12 +645,14 @@ async function handleFinalAnswer(
     }
     const nextFlags: TurnFlags = {
       ...flags,
+      pendingControl: {
+        kind: "completion_gate",
+        gate: "managed_jobs",
+        text: message,
+      },
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
-    ctx.ctxMgr.addUser(
-      `[Managed jobs are unfinished: ${detail}. Wait for the host to settle and commit every terminal result before outputting final_answer.]`,
-    );
     opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
@@ -687,13 +690,21 @@ async function handleFinalAnswer(
     ]
       .filter(Boolean)
       .join(", ");
+    const message = `[You have pending work: ${pending}. Continue from where you left off — do not summarize or apologize, just take the next action.]`;
 
-    // 注入提醒消息
-    ctx.ctxMgr.addUser(
-      `[You have pending work: ${pending}. Continue from where you left off — do not summarize or apologize, just take the next action.]`,
-    );
-    opts.saveStateFn(nextFlags);
-    return { state: { type: "continue", nextFlags }, flags: nextFlags };
+    const gatedFlags: TurnFlags = {
+      ...nextFlags,
+      pendingControl: {
+        kind: "completion_gate",
+        gate: "pending_work",
+        text: message,
+      },
+    };
+    opts.saveStateFn(gatedFlags);
+    return {
+      state: { type: "continue", nextFlags: gatedFlags },
+      flags: gatedFlags,
+    };
   }
 
   if (planningCanVeto && (hasPendingPlan || hasPendingTodos)) {
@@ -828,10 +839,14 @@ async function handleFinalAnswer(
     const nextFlags: TurnFlags = {
       ...flags,
       verifyNudges: verifyNudges + 1,
+      pendingControl: {
+        kind: "completion_gate",
+        gate: "verification",
+        text: evaluated.nudgeMessage,
+      },
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
-    ctx.ctxMgr.addUser(evaluated.nudgeMessage);
     opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
@@ -1007,9 +1022,16 @@ function enforceControlCandidateDecision(
       flags,
     };
   }
-  const nextFlags: TurnFlags = { ...flags, lastTurnHadToolCall: false };
+  const nextFlags: TurnFlags = {
+    ...flags,
+    pendingControl: {
+      kind: "completion_gate",
+      gate: "repair_obligation",
+      text: message,
+    },
+    lastTurnHadToolCall: false,
+  };
   ctx.ctxMgr.addAssistant(text, thinking);
-  ctx.ctxMgr.addUser(message);
   opts.saveStateFn(nextFlags);
   return { state: { type: "continue", nextFlags }, flags: nextFlags };
 }
@@ -1039,10 +1061,14 @@ async function checkLoopV2SemanticReviewGate(
     // 无计数名额，退出仅由运行预算决定。
     const nextFlags: TurnFlags = {
       ...flags,
+      pendingControl: {
+        kind: "completion_gate",
+        gate: "semantic_review",
+        text: gate.message,
+      },
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
-    ctx.ctxMgr.addUser(gate.message);
     opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
@@ -1082,10 +1108,14 @@ async function checkLoopV2VerificationProbeGate(
   if (gate.type === "feedback") {
     const nextFlags: TurnFlags = {
       ...flags,
+      pendingControl: {
+        kind: "completion_gate",
+        gate: "verification_probe",
+        text: gate.message,
+      },
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
-    ctx.ctxMgr.addUser(gate.message);
     opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
@@ -1225,10 +1255,14 @@ async function checkCandidateReviewGate(
       ...(reportIssue
         ? { candidateReviewSummaryFingerprint: summaryFingerprint }
         : {}),
+      pendingControl: {
+        kind: "completion_gate",
+        gate: "candidate_review",
+        text: message,
+      },
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
-    ctx.ctxMgr.addUser(message);
     opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
@@ -1282,10 +1316,14 @@ function handleAcceptanceGateFailure(
     const nextFlags: TurnFlags = {
       ...flags,
       acceptanceNudges: acceptanceNudges + 1,
+      pendingControl: {
+        kind: "completion_gate",
+        gate: "acceptance",
+        text: acceptance.message,
+      },
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
-    ctx.ctxMgr.addUser(acceptance.message);
     opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }

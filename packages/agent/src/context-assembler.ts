@@ -31,10 +31,25 @@ export interface HostStateV1 {
 }
 
 /** At most one host control projection is admitted to a model request. */
+export type CompletionGateKindV1 =
+  | "managed_jobs"
+  | "pending_work"
+  | "verification"
+  | "repair_obligation"
+  | "semantic_review"
+  | "verification_probe"
+  | "candidate_review"
+  | "acceptance";
+
 export type EphemeralControlV1 =
   | { readonly kind: "status"; readonly text: string }
   | { readonly kind: "progress"; readonly text: string }
   | { readonly kind: "test_warden"; readonly text: string }
+  | {
+      readonly kind: "completion_gate";
+      readonly gate: CompletionGateKindV1;
+      readonly text: string;
+    }
   | { readonly kind: "readiness"; readonly text: string }
   | { readonly kind: "protocol_recovery"; readonly text: string };
 
@@ -44,8 +59,9 @@ const CONTROL_PRIORITY_V1: Readonly<
   status: 0,
   progress: 1,
   test_warden: 2,
-  readiness: 3,
-  protocol_recovery: 4,
+  completion_gate: 3,
+  readiness: 4,
+  protocol_recovery: 5,
 };
 
 /** Deterministically admit at most one control projection for a request. */
@@ -83,6 +99,68 @@ const LEGACY_NO_ACTION_SECOND_PATTERN =
   /^\[Your previous response again contained no executable action\. Continue by emitting exactly one valid tool call, or emit \{"action":"final_answer","summary":"<complete result>"\} only if the task is actually done\.\]$/;
 const LEGACY_NO_ACTION_LATER_PATTERN =
   /^\[Protocol recovery attempt ((?:[3-9]|[1-9]\d+)): do not narrate the action you intend to take\. Emit the valid tool-call JSON now\. If and only if the task is complete, emit \{"action":"final_answer","summary":"<complete result>"\}\.\]$/;
+const LEGACY_VERIFICATION_GATE_PATTERNS = [
+  /^\[VerificationGate\] This task requires file changes \(\[require_mutation\]\) but none were recorded\. Use an available workspace mutation tool, then continue — do not final_answer yet\.$/,
+  /^\[VerificationGate\] The current edit introduced \d+ syntax diagnostic error\(s\)(?: \([\s\S]{1,2000}\))?\. Fix the syntax error before final_answer\. This immediate diagnostic is not a substitute for the required test verification\.$/,
+  /^\[VerificationGate\] The last passing verification predates the latest file change \(verified revision \d+, current revision \d+\)\. Re-run the relevant verification after the final edit before final_answer\.$/,
+  /^\[VerificationGate\] Files were changed but the latest code verification failed \([\s\S]{1,4000}\)\. Fix the implementation failure and re-run verification before final_answer\.$/,
+  /^\[VerificationGate\] The shell command contained a verification runner, but downstream control flow owns the final exit status, so it is not pass evidence\. Run one materially simpler direct command from the same test-runner family before final_answer; remove display-only pipes, fallbacks, or trailing commands\.$/,
+  /^\[VerificationGate\] The local verification failed for a recoverable command-invocation reason\. Run one materially simpler direct command from the same test-runner family before final_answer; remove display-only pipes, redirections, wrappers, or invalid options\.$/,
+  /^\[VerificationGate\] Local verification did not produce trustworthy pass evidence because shell control flow masked the runner status, and this task has a trusted external verifier\. Inspect the final diff for the current revision before final_answer; do not claim that local tests passed\.$/,
+  /^\[VerificationGate\] Local verification could not execute and this task has a trusted external verifier\. Inspect the final diff for the current revision before final_answer; do not claim that local tests passed\.$/,
+  /^\[VerificationGate\] Files were changed but the latest shell command's final exit status does not prove its verification runner passed \([\s\S]{1,4000}\)\. Run the verification directly or preserve its exit status explicitly before final_answer\.$/,
+  /^\[VerificationGate\] Files were changed but the latest verification did not execute because its harness\/environment failed \([\s\S]{1,4000}\)\. Repair or replace the verification command and obtain real test evidence before final_answer\.$/,
+  /^\[VerificationGate\] Files were changed \([\s\S]{1,4000}\) but no passing test evidence was recorded\. Run the relevant tests \(e\.g\. pytest \/ npm test\), then final_answer\. A \[skip_verify: <reason>\] claim is accepted only when the trusted task input includes \[allow_skip_verify\]\.$/,
+] as const;
+const LEGACY_COMPLETION_GATE_PATTERNS: readonly {
+  readonly gate: CompletionGateKindV1;
+  readonly pattern: RegExp;
+}[] = [
+  {
+    gate: "managed_jobs",
+    pattern:
+      /^\[Managed jobs are unfinished: \d+ running, \d+ stopping, \d+ awaiting commit\. Wait for the host to settle and commit every terminal result before outputting final_answer\.\]$/,
+  },
+  {
+    gate: "pending_work",
+    pattern:
+      /^\[You have pending work: (?:(?:\d+ plan item\(s\))(?:, \d+ todo\(s\))?|\d+ todo\(s\))\. Continue from where you left off — do not summarize or apologize, just take the next action\.\]$/,
+  },
+  ...LEGACY_VERIFICATION_GATE_PATTERNS.map((pattern) => ({
+    gate: "verification" as const,
+    pattern,
+  })),
+  {
+    gate: "repair_obligation",
+    pattern:
+      /^\[LoopControl:repair_required id=repair-[a-f0-9]{16}\] (?:Run a direct [\s\S]+ verification for revision \d+, covering [\s\S]+|Commit a material source change after revision \d+[\s\S]*)\. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation\.$/,
+  },
+  {
+    gate: "semantic_review",
+    pattern:
+      /^\[LoopV2SemanticReview:fail key=[a-f0-9]{64}\]\nIndependent semantic review returned fail for the persisted candidate\.(?:\n[1-8]\. (?:blocking|warning) (?:criterion=[^\s]+|invariant=[^\s]+|unbound-warning)(?: file=[^\r\n]{1,1000})?: [^\r\n]{1,500} Risk: [^\r\n]{1,500}(?: Minimal alternative: [^\r\n]{1,500})?){1,8}\nFix the bound issue, produce a real source mutation, re-run relevant verification, and then submit a new candidate\. Resubmitting identical code is pointless: this review is bound to the exact candidate, and an identical resubmission replays the same verdict\. Only a real code change produces a new candidate and a fresh review\.$/,
+  },
+  {
+    gate: "semantic_review",
+    pattern:
+      /^\[LoopV2SemanticReview:partial key=[a-f0-9]{64}\]\nIndependent semantic review returned partial for the persisted candidate\.(?:\n[1-8]\. (?:blocking|warning) (?:criterion=[^\s]+|invariant=[^\s]+|unbound-warning)(?: file=[^\r\n]{1,1000})?: [^\r\n]{1,500} Risk: [^\r\n]{1,500}(?: Minimal alternative: [^\r\n]{1,500})?){1,8}\nSemantic review did not produce a certifying verdict\. Do not resubmit the unchanged candidate; make a fact-changing correction or report an honest blocker\.$/,
+  },
+  {
+    gate: "verification_probe",
+    pattern:
+      /^\[LoopV2Probe:fail key=probe:[a-f0-9]{64}\]\nAn adversarial verification probe executed against the current candidate diff and FAILED\. The candidate is not certified\.\nFailed probe\(s\):\n(?:[1-9]\d*\. command: [^\r\n]{1,4000}\n {3}output: [\s\S]{1,700}\n?)+Fix the code so the failing behavior is corrected, then propose a new final answer\. Resubmitting the same code is pointless: the failed probe is bound to this exact candidate, so an identical resubmission will replay the same failure\. Only a real code change produces a new candidate and a fresh probe\.$/,
+  },
+  {
+    gate: "candidate_review",
+    pattern:
+      /^\[IndependentReview:(?:REPORT_GROUNDING_(?:UNKNOWN|FAIL)|FAIL|PARTIAL) r\d+\] [\s\S]+\n(?:Revise only the proposed final summary so every verification, baseline, and pass\/fail claim matches the host-recorded evidence\. Do not mutate source merely to satisfy this reporting gate\. A materially revised summary will be reviewed again on the same source revision\.|Fix the concrete issue, re-run relevant verification, inspect the new diff, and then try final_answer again\. The semantic reviewer will run again only after a real source mutation\.|Address any actionable semantic finding\. If this is only an unavoidable environment limitation, try final_answer again and report the limitation honestly\.)$/,
+  },
+  {
+    gate: "acceptance",
+    pattern:
+      /^\[AcceptanceGate\] Before final_answer, resolve [\s\S]+\. Verify each observable condition against the current code revision, then use acceptance_update with concrete evidence\. Do not mark an item satisfied from memory or intention\.$/,
+  },
+];
 const LEGACY_CONTROL_PROJECTION_PATTERNS = [
   /^\[ProgressAdvice:(?:inspect_gap|hypothesis_stale|safety_line)\] /,
   /^\[TestWarden\] (?:No Python test files detected;|Attempted:|Pre-flight:|No existing tests are linked to the changed files;|\d+ impacted test file\(s\) all passed\.|\d+\/\d+ impacted test file\(s\) FAILED:)/,
@@ -96,6 +174,7 @@ const LEGACY_CONTROL_PROJECTION_PATTERNS = [
   LEGACY_NO_ACTION_FIRST_PATTERN,
   LEGACY_NO_ACTION_SECOND_PATTERN,
   LEGACY_NO_ACTION_LATER_PATTERN,
+  ...LEGACY_COMPLETION_GATE_PATTERNS.map((entry) => entry.pattern),
 ] as const;
 
 export interface LegacyProtocolRecoveryProjectionV1 {
@@ -144,6 +223,77 @@ export function parseLegacyProtocolRecoveryProjectionV1(
   };
 }
 
+export interface LegacyCompletionGateProjectionV1 {
+  readonly pendingControl: Extract<
+    EphemeralControlV1,
+    { readonly kind: "completion_gate" }
+  >;
+  readonly autoContinueNudges?: number;
+  readonly verifyNudges?: number;
+  readonly acceptanceNudges?: number;
+  readonly candidateReviewNudges?: number;
+  readonly candidateReviewRevision?: number;
+  readonly candidateReviewSummaryFingerprint?: string;
+}
+
+export interface LegacyCandidateReviewIdentityV1 {
+  readonly mutationRevision: number;
+  readonly summaryFingerprint?: string;
+}
+
+/** Migrate only a not-yet-consumed completion gate at the durable tail. */
+export function parseLegacyCompletionGateProjectionV1(
+  messages: readonly ChatMessage[],
+  candidateReview?: LegacyCandidateReviewIdentityV1,
+): LegacyCompletionGateProjectionV1 | undefined {
+  const tail = messages.at(-1);
+  if (!tail || tail.role !== "user") return undefined;
+  const matched = LEGACY_COMPLETION_GATE_PATTERNS.find((entry) =>
+    entry.pattern.test(tail.content),
+  );
+  if (!matched) return undefined;
+  const candidateRevisionMatch =
+    matched.gate === "candidate_review"
+      ? /^\[IndependentReview:[^\]]+ r(\d+)\]/.exec(tail.content)
+      : undefined;
+  const candidateRevision = candidateRevisionMatch
+    ? Number.parseInt(candidateRevisionMatch[1] ?? "", 10)
+    : undefined;
+  const isReportGroundingGate =
+    /^\[IndependentReview:REPORT_GROUNDING_(?:UNKNOWN|FAIL) r\d+\]/.test(
+      tail.content,
+    );
+  const candidateIdentityMatches =
+    candidateRevision !== undefined &&
+    candidateReview?.mutationRevision === candidateRevision;
+  return {
+    pendingControl: {
+      kind: "completion_gate",
+      gate: matched.gate,
+      text: tail.content,
+    },
+    ...(matched.gate === "pending_work" ? { autoContinueNudges: 1 } : {}),
+    ...(matched.gate === "verification" ? { verifyNudges: 1 } : {}),
+    ...(matched.gate === "acceptance" ? { acceptanceNudges: 1 } : {}),
+    ...(matched.gate === "candidate_review" &&
+    candidateRevision !== undefined &&
+    Number.isSafeInteger(candidateRevision)
+      ? {
+          candidateReviewNudges: 1,
+          candidateReviewRevision: candidateRevision,
+          ...(isReportGroundingGate &&
+          candidateIdentityMatches &&
+          candidateReview?.summaryFingerprint
+            ? {
+                candidateReviewSummaryFingerprint:
+                  candidateReview.summaryFingerprint,
+              }
+            : {}),
+        }
+      : {}),
+  };
+}
+
 /** Remove only host/control formats Paw itself durably injected before P0.3. */
 export function stripLegacyContextProjectionsV1(
   messages: readonly ChatMessage[],
@@ -180,9 +330,13 @@ export function assembleModelContextV1(
     messages.splice(insertionIndex, 0, hostMessage);
   }
   if (input.control) {
+    const controlHeader =
+      input.control.kind === "completion_gate"
+        ? `kind: completion_gate\ngate: ${input.control.gate}`
+        : `kind: ${input.control.kind}`;
     messages.push({
       role: "user",
-      content: `[Ephemeral Control v1]\nkind: ${input.control.kind}\n${input.control.text}`,
+      content: `[Ephemeral Control v1]\n${controlHeader}\n${input.control.text}`,
     });
   }
   return messages;

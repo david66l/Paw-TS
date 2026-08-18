@@ -49,6 +49,14 @@ function makeCtx(overrides?: {
     ctxMgr,
     planner: undefined,
     taskState: new TaskStateManager("test goal"),
+    managedJobs: {
+      readiness: () => ({
+        blocksCompletion: false,
+        running: 0,
+        stopping: 0,
+        pendingSettlements: 0,
+      }),
+    },
     emit: (e: unknown) => events.push(e),
     checkpointSeq: { n: 0 },
     specGoal: "test goal",
@@ -81,7 +89,7 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
       baseFlags(),
       '{"tool":"workspace.read_file","args":{"path": "a.txt"',
       undefined,
-      { planner: undefined as never, saveStateFn: noopSave },
+      { planner: { plan: null } as never, saveStateFn: noopSave },
       { diagnosis },
     );
 
@@ -119,7 +127,7 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
       baseFlags(),
       '{"tool":"workspace.unknown_tool","args":{}}',
       undefined,
-      { planner: undefined as never, saveStateFn: noopSave },
+      { planner: { plan: null } as never, saveStateFn: noopSave },
       { diagnosis },
     );
 
@@ -279,5 +287,80 @@ describe("handleAction — 原生通道坏 args（拒绝执行 + 错误注入）
         reason: "max_steps_reached_after_tools",
       },
     });
+  });
+});
+
+describe("handleAction — completion gate request-only control", () => {
+  test("verification feedback is pending control, not durable user history", async () => {
+    const { ctx, messages } = makeCtx();
+    const guarded = {
+      ...ctx,
+      specGoal: "[require_mutation] change the implementation",
+      taskState: new TaskStateManager(
+        "[require_mutation] change the implementation",
+      ),
+    } as PhaseContext;
+    const result = await handleAction(
+      [{ type: "final_answer", summary: "done" }],
+      [],
+      guarded,
+      baseFlags(),
+      '{"action":"final_answer","summary":"done"}',
+      undefined,
+      { planner: { plan: null } as never, saveStateFn: noopSave },
+    );
+
+    expect(result.state.type).toBe("continue");
+    if (result.state.type === "continue") {
+      expect(result.state.nextFlags.pendingControl).toMatchObject({
+        kind: "completion_gate",
+        gate: "verification",
+      });
+      expect(result.state.nextFlags.pendingControl?.text).toContain(
+        "[VerificationGate]",
+      );
+    }
+    expect(
+      messages.filter(
+        (message) =>
+          message.role === "user" &&
+          message.content.startsWith("[VerificationGate]"),
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("acceptance feedback is pending control, not durable user history", async () => {
+    const { ctx, messages } = makeCtx();
+    ctx.taskState.registerAcceptanceCriteria(
+      [{ text: "output is correct", source: "user" }],
+      0,
+    );
+    const result = await handleAction(
+      [{ type: "final_answer", summary: "done" }],
+      [],
+      ctx,
+      baseFlags(),
+      '{"action":"final_answer","summary":"done"}',
+      undefined,
+      { planner: { plan: null } as never, saveStateFn: noopSave },
+    );
+
+    expect(result.state.type).toBe("continue");
+    if (result.state.type === "continue") {
+      expect(result.state.nextFlags.pendingControl).toMatchObject({
+        kind: "completion_gate",
+        gate: "acceptance",
+      });
+      expect(result.state.nextFlags.pendingControl?.text).toContain(
+        "[AcceptanceGate]",
+      );
+    }
+    expect(
+      messages.filter(
+        (message) =>
+          message.role === "user" &&
+          message.content.startsWith("[AcceptanceGate]"),
+      ),
+    ).toHaveLength(0);
   });
 });

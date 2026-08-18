@@ -962,6 +962,7 @@ export class AgentOrchestrator {
             startTurn,
             value: spec.resumeFromState.loopControl,
             legacyMessages: spec.resumeFromState.messages,
+            legacyCandidateReview: taskState.snapshot().candidateReview,
             allowLegacyReadiness: this.loopKernelVersion === "v2",
           })
         : {};
@@ -1183,6 +1184,27 @@ export class AgentOrchestrator {
           managedJobs.acknowledgeSettlements(
             jobSettlements.map((settlement) => settlement.jobId),
           );
+          this.saveState(
+            runId,
+            spec.goal,
+            workspaceRoot,
+            turn,
+            maxSteps,
+            ctxMgr,
+            planner,
+            taskState,
+            undefined,
+            flags,
+          );
+        }
+        if (
+          flags.pendingControl?.kind === "completion_gate" &&
+          flags.pendingControl.gate === "managed_jobs" &&
+          !managedJobs.readiness().blocksCompletion
+        ) {
+          const { pendingControl: _settledJobControl, ...settledFlags } = flags;
+          flags = settledFlags;
+          activeTurnFlags = flags;
           this.saveState(
             runId,
             spec.goal,

@@ -111,6 +111,11 @@ describe("ContextAssembler v1", () => {
       selectEphemeralControlV1([
         { kind: "progress", text: "change hypothesis" },
         { kind: "test_warden", text: "tests failed" },
+        {
+          kind: "completion_gate",
+          gate: "verification",
+          text: "verify before completion",
+        },
         { kind: "readiness", text: "repair candidate" },
         { kind: "protocol_recovery", text: "retry protocol" },
       ]),
@@ -130,6 +135,17 @@ describe("ContextAssembler v1", () => {
     expect(
       selectEphemeralControlV1([{ kind: "status", text: "tests passed" }]),
     ).toEqual({ kind: "status", text: "tests passed" });
+    const completionOnly = assembleModelContextV1({
+      durable: { messages: [] },
+      control: {
+        kind: "completion_gate",
+        gate: "acceptance",
+        text: "resolve criterion C1",
+      },
+    });
+    expect(completionOnly[0]?.content).toBe(
+      "[Ephemeral Control v1]\nkind: completion_gate\ngate: acceptance\nresolve criterion C1",
+    );
   });
 
   test("uses canonical host order and removes only exact legacy projections", () => {
@@ -714,6 +730,100 @@ describe("ContextAssembler v1", () => {
       });
     }
   }
+
+  test("completion gate survives provider failure, is delivered once, and never becomes durable", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-completion-gate-resume-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const runId = "completion-gate-provider-failure";
+    const stateStore = new InMemoryAppStateStore();
+    const abort = new AbortController();
+    const first = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "completion-gate-first",
+        async complete() {
+          return { text: '{"action":"final_answer","summary":"done"}' };
+        },
+      },
+      onEvent(envelope) {
+        if (envelope.event.type === "model.done") abort.abort();
+      },
+      retrySleep: async () => {},
+    });
+    await first.run({
+      runId,
+      goal: "[require_mutation] change the implementation",
+      workspaceRoot,
+      maxSteps: 4,
+      abortSignal: abort.signal,
+    });
+    expect(stateStore.load(runId)?.loopControl).toMatchObject({
+      completionGates: { verifyNudges: 1 },
+      pendingControl: {
+        kind: "completion_gate",
+        gate: "verification",
+      },
+    });
+
+    const failedRequests: (readonly ChatMessage[])[] = [];
+    const failing = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "completion-gate-provider-down",
+        async complete(messages) {
+          failedRequests.push(messages);
+          throw new Error("provider unavailable");
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await failing.resumeRun({ runId, workspaceRoot });
+    expect(
+      failedRequests[0]?.filter(
+        (message) =>
+          message.content.includes("kind: completion_gate") &&
+          message.content.includes("gate: verification"),
+      ),
+    ).toHaveLength(1);
+    expect(stateStore.load(runId)?.loopControl).toHaveProperty(
+      "pendingControl",
+    );
+
+    const resumedRequests: (readonly ChatMessage[])[] = [];
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "completion-gate-consume",
+        async complete(messages) {
+          resumedRequests.push(messages);
+          return { text: '{"action":"abort","reason":"stop test"}' };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await resumed.resumeRun({ runId, workspaceRoot });
+    expect(
+      resumedRequests[0]?.filter(
+        (message) =>
+          message.content.includes("kind: completion_gate") &&
+          message.content.includes("gate: verification"),
+      ),
+    ).toHaveLength(1);
+    const saved = stateStore.load(runId);
+    expect(saved?.loopControl).not.toHaveProperty("pendingControl");
+    expect(
+      saved?.messages.some((message) =>
+        message.content.startsWith("[VerificationGate]"),
+      ),
+    ).toBe(false);
+  });
 
   test("resume removes legacy host projections from runtime and next save", async () => {
     const workspaceRoot = mkdtempSync(

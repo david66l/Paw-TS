@@ -1,6 +1,8 @@
 import type { ChatMessage } from "@paw/core";
 import {
+  type CompletionGateKindV1,
   type EphemeralControlV1,
+  parseLegacyCompletionGateProjectionV1,
   parseLegacyProtocolRecoveryProjectionV1,
 } from "./context-assembler.js";
 import type { ProviderTerminalStateV2 } from "./loop-v2/index.js";
@@ -9,7 +11,9 @@ import type { TurnFlags } from "./orchestrator/types.js";
 
 type CrashSafePendingControlV1 = Extract<
   EphemeralControlV1,
-  { readonly kind: "readiness" | "protocol_recovery" }
+  {
+    readonly kind: "readiness" | "protocol_recovery" | "completion_gate";
+  }
 >;
 
 export interface LoopControlCheckpointV1 {
@@ -25,6 +29,16 @@ export interface LoopControlCheckpointV1 {
     readonly noActionNudges?: number;
     readonly hasEverUsedTools?: true;
   };
+  readonly completionGates?: {
+    readonly autoContinueNudges?: number;
+    readonly verifyNudges?: number;
+    readonly acceptanceNudges?: number;
+    readonly candidateReview?: {
+      readonly revision: number;
+      readonly nudges: number;
+      readonly summaryFingerprint?: string;
+    };
+  };
 }
 
 const PROTOCOL_ISSUES = new Set([
@@ -35,6 +49,17 @@ const PROTOCOL_ISSUES = new Set([
 const CONTROL_KINDS = new Set<CrashSafePendingControlV1["kind"]>([
   "readiness",
   "protocol_recovery",
+  "completion_gate",
+]);
+const COMPLETION_GATE_KINDS = new Set<CompletionGateKindV1>([
+  "managed_jobs",
+  "pending_work",
+  "verification",
+  "repair_obligation",
+  "semantic_review",
+  "verification_probe",
+  "candidate_review",
+  "acceptance",
 ]);
 
 /** Rewind starts a new control timeline and must not migrate later markers. */
@@ -65,7 +90,8 @@ export function checkpointLoopControlV1(
       : undefined;
   const pendingControl =
     flags.pendingControl?.kind === "readiness" ||
-    flags.pendingControl?.kind === "protocol_recovery"
+    flags.pendingControl?.kind === "protocol_recovery" ||
+    flags.pendingControl?.kind === "completion_gate"
       ? flags.pendingControl
       : undefined;
   const protocolRecovery =
@@ -84,11 +110,44 @@ export function checkpointLoopControlV1(
             : {}),
         }
       : undefined;
+  const candidateReview =
+    (flags.candidateReviewNudges ?? 0) > 0 &&
+    Number.isSafeInteger(flags.candidateReviewRevision) &&
+    (flags.candidateReviewRevision ?? -1) >= 0
+      ? {
+          revision: flags.candidateReviewRevision ?? 0,
+          nudges: flags.candidateReviewNudges ?? 0,
+          ...(flags.candidateReviewSummaryFingerprint
+            ? {
+                summaryFingerprint: flags.candidateReviewSummaryFingerprint,
+              }
+            : {}),
+        }
+      : undefined;
+  const completionGates =
+    (flags.autoContinueNudges ?? 0) > 0 ||
+    (flags.verifyNudges ?? 0) > 0 ||
+    (flags.acceptanceNudges ?? 0) > 0 ||
+    candidateReview
+      ? {
+          ...((flags.autoContinueNudges ?? 0) > 0
+            ? { autoContinueNudges: flags.autoContinueNudges }
+            : {}),
+          ...((flags.verifyNudges ?? 0) > 0
+            ? { verifyNudges: flags.verifyNudges }
+            : {}),
+          ...((flags.acceptanceNudges ?? 0) > 0
+            ? { acceptanceNudges: flags.acceptanceNudges }
+            : {}),
+          ...(candidateReview ? { candidateReview } : {}),
+        }
+      : undefined;
   if (
     !flags.providerTerminal &&
     !readiness &&
     !pendingControl &&
-    !protocolRecovery
+    !protocolRecovery &&
+    !completionGates
   ) {
     return undefined;
   }
@@ -100,6 +159,7 @@ export function checkpointLoopControlV1(
     ...(readiness ? { readiness } : {}),
     ...(pendingControl ? { pendingControl } : {}),
     ...(protocolRecovery ? { protocolRecovery } : {}),
+    ...(completionGates ? { completionGates } : {}),
   };
 }
 
@@ -120,7 +180,15 @@ export function parseLoopControlCheckpointV1(
   const protocolRecovery = parseProtocolRecovery(value.protocolRecovery);
   if (value.protocolRecovery !== undefined && !protocolRecovery)
     return undefined;
-  if (!providerTerminal && !readiness && !pendingControl && !protocolRecovery)
+  const completionGates = parseCompletionGates(value.completionGates);
+  if (value.completionGates !== undefined && !completionGates) return undefined;
+  if (
+    !providerTerminal &&
+    !readiness &&
+    !pendingControl &&
+    !protocolRecovery &&
+    !completionGates
+  )
     return undefined;
   return {
     schemaVersion: "paw.loop-control.v1",
@@ -128,6 +196,7 @@ export function parseLoopControlCheckpointV1(
     ...(readiness ? { readiness } : {}),
     ...(pendingControl ? { pendingControl } : {}),
     ...(protocolRecovery ? { protocolRecovery } : {}),
+    ...(completionGates ? { completionGates } : {}),
   };
 }
 
@@ -137,6 +206,10 @@ export function restoreLoopControlFlagsV1(input: {
   readonly startTurn: number;
   readonly value: unknown;
   readonly legacyMessages: readonly ChatMessage[];
+  readonly legacyCandidateReview?: {
+    readonly mutationRevision: number;
+    readonly summaryFingerprint?: string;
+  };
   readonly allowLegacyReadiness?: boolean;
 }): Partial<
   Pick<
@@ -148,6 +221,12 @@ export function restoreLoopControlFlagsV1(input: {
     | "formatErrorNudges"
     | "noActionNudges"
     | "hasEverUsedTools"
+    | "autoContinueNudges"
+    | "verifyNudges"
+    | "acceptanceNudges"
+    | "candidateReviewNudges"
+    | "candidateReviewRevision"
+    | "candidateReviewSummaryFingerprint"
   >
 > {
   const checkpoint = parseLoopControlCheckpointV1(input.value);
@@ -162,7 +241,7 @@ export function restoreLoopControlFlagsV1(input: {
     ) {
       throw new Error("Loop-control provider cursor does not match AppState");
     }
-    return {
+    const restored: Partial<TurnFlags> = {
       ...(checkpoint.providerTerminal
         ? { providerTerminal: checkpoint.providerTerminal }
         : {}),
@@ -186,12 +265,57 @@ export function restoreLoopControlFlagsV1(input: {
       ...(checkpoint.protocolRecovery?.hasEverUsedTools
         ? { hasEverUsedTools: true }
         : {}),
+      ...(checkpoint.completionGates?.autoContinueNudges
+        ? {
+            autoContinueNudges: checkpoint.completionGates.autoContinueNudges,
+          }
+        : {}),
+      ...(checkpoint.completionGates?.verifyNudges
+        ? { verifyNudges: checkpoint.completionGates.verifyNudges }
+        : {}),
+      ...(checkpoint.completionGates?.acceptanceNudges
+        ? { acceptanceNudges: checkpoint.completionGates.acceptanceNudges }
+        : {}),
+      ...(checkpoint.completionGates?.candidateReview
+        ? {
+            candidateReviewNudges:
+              checkpoint.completionGates.candidateReview.nudges,
+            candidateReviewRevision:
+              checkpoint.completionGates.candidateReview.revision,
+            ...(checkpoint.completionGates.candidateReview.summaryFingerprint
+              ? {
+                  candidateReviewSummaryFingerprint:
+                    checkpoint.completionGates.candidateReview
+                      .summaryFingerprint,
+                }
+              : {}),
+          }
+        : {}),
     };
+    // c3a/c2 snapshots already have a provider/protocol checkpoint while the
+    // not-yet-consumed completion gate still lives at the durable tail. Keep
+    // the authoritative checkpoint and migrate that one tail marker only when
+    // the newer snapshot has neither a pending control nor completion state.
+    if (!checkpoint.pendingControl && !checkpoint.completionGates) {
+      const legacyCompletionGate = parseLegacyCompletionGateProjectionV1(
+        input.legacyMessages,
+        input.legacyCandidateReview,
+      );
+      if (legacyCompletionGate) {
+        return { ...restored, ...legacyCompletionGate };
+      }
+    }
+    return restored;
   }
   const legacyProtocolRecovery = parseLegacyProtocolRecoveryProjectionV1(
     input.legacyMessages,
   );
   if (legacyProtocolRecovery) return legacyProtocolRecovery;
+  const legacyCompletionGate = parseLegacyCompletionGateProjectionV1(
+    input.legacyMessages,
+    input.legacyCandidateReview,
+  );
+  if (legacyCompletionGate) return legacyCompletionGate;
   if (input.allowLegacyReadiness === false) return {};
   const legacyReadiness = [...input.legacyMessages]
     .reverse()
@@ -257,8 +381,22 @@ function parsePendingControl(
   ) {
     return undefined;
   }
+  if (value.kind === "completion_gate") {
+    if (
+      typeof value.gate !== "string" ||
+      !COMPLETION_GATE_KINDS.has(value.gate as CompletionGateKindV1)
+    ) {
+      return undefined;
+    }
+    return {
+      kind: "completion_gate",
+      gate: value.gate as CompletionGateKindV1,
+      text: value.text,
+    };
+  }
+  if (value.gate !== undefined) return undefined;
   return {
-    kind: value.kind as CrashSafePendingControlV1["kind"],
+    kind: value.kind as "readiness" | "protocol_recovery",
     text: value.text,
   };
 }
@@ -293,6 +431,70 @@ function parseProtocolRecovery(
     ...(formatErrorNudges !== undefined ? { formatErrorNudges } : {}),
     ...(noActionNudges !== undefined ? { noActionNudges } : {}),
     ...(hasEverUsedTools ? { hasEverUsedTools } : {}),
+  };
+}
+
+function parseCompletionGates(
+  value: unknown,
+): LoopControlCheckpointV1["completionGates"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const autoContinueNudges = parseBoundedCounter(value.autoContinueNudges, 3);
+  const verifyNudges = parseBoundedCounter(value.verifyNudges, 2);
+  const acceptanceNudges = parseBoundedCounter(value.acceptanceNudges, 2);
+  const candidateReview = parseCandidateReviewGate(value.candidateReview);
+  if (
+    (value.autoContinueNudges !== undefined &&
+      autoContinueNudges === undefined) ||
+    (value.verifyNudges !== undefined && verifyNudges === undefined) ||
+    (value.acceptanceNudges !== undefined && acceptanceNudges === undefined) ||
+    (value.candidateReview !== undefined && candidateReview === undefined)
+  ) {
+    return undefined;
+  }
+  if (
+    autoContinueNudges === undefined &&
+    verifyNudges === undefined &&
+    acceptanceNudges === undefined &&
+    candidateReview === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    ...(autoContinueNudges !== undefined ? { autoContinueNudges } : {}),
+    ...(verifyNudges !== undefined ? { verifyNudges } : {}),
+    ...(acceptanceNudges !== undefined ? { acceptanceNudges } : {}),
+    ...(candidateReview ? { candidateReview } : {}),
+  };
+}
+
+function parseCandidateReviewGate(
+  value: unknown,
+):
+  | NonNullable<
+      NonNullable<LoopControlCheckpointV1["completionGates"]>["candidateReview"]
+    >
+  | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!Number.isSafeInteger(value.revision) || (value.revision as number) < 0) {
+    return undefined;
+  }
+  const nudges = parseBoundedCounter(value.nudges, 2);
+  if (!nudges) return undefined;
+  const summaryFingerprint =
+    typeof value.summaryFingerprint === "string" &&
+    /^[a-f0-9]{64}$/.test(value.summaryFingerprint)
+      ? value.summaryFingerprint
+      : undefined;
+  if (
+    value.summaryFingerprint !== undefined &&
+    summaryFingerprint === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    revision: value.revision as number,
+    nudges,
+    ...(summaryFingerprint ? { summaryFingerprint } : {}),
   };
 }
 

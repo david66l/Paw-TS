@@ -136,8 +136,11 @@ describe("managed jobs in the real agent loop", () => {
     const root = fixture("premature-final", 700);
     let calls = 0;
     let sawCompletionNudge = false;
+    let sawStaleControlAfterSettlement = false;
+    const stateStore = new InMemoryAppStateStore();
     const events: RunEventEnvelope[] = [];
     const orchestrator = new AgentOrchestrator({
+      appStateStore: stateStore,
       memoryExtraction: "off",
       memoryLlm: "off",
       retrySleep: async () => {},
@@ -151,6 +154,11 @@ describe("managed jobs in the real agent loop", () => {
               (message) =>
                 message.role === "user" &&
                 message.content.includes("Managed jobs are unfinished"),
+            );
+          }
+          if (calls === 4) {
+            sawStaleControlAfterSettlement = messages.some((message) =>
+              message.content.includes("gate: managed_jobs"),
             );
           }
           if (calls === 1) {
@@ -188,10 +196,18 @@ describe("managed jobs in the real agent loop", () => {
     expect(result.status).toBe("completed");
     expect(calls).toBe(4);
     expect(sawCompletionNudge).toBe(true);
+    expect(sawStaleControlAfterSettlement).toBe(false);
     expect(result.message).not.toContain("Done too early");
     expect(events.some((event) => event.event.type === "job.settled")).toBe(
       true,
     );
+    expect(
+      stateStore
+        .load("managed-job-premature-final")
+        ?.messages.some((message) =>
+          message.content.startsWith("[Managed jobs are unfinished:"),
+        ),
+    ).toBe(false);
   });
 
   test("persists live jobs and resumes them as interrupted_orphaned instead of reattaching a pid", async () => {
