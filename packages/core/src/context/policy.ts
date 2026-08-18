@@ -32,6 +32,7 @@
 import type { TokenEstimator } from "../token-estimator.js";
 import { isToolResultMessage } from "../tool-result/format.js";
 import type { ChatMessage } from "./manager.js";
+import { flattenContextTurnsV1, groupContextTurnsV1 } from "./turns.js";
 
 /** Token/字符预算截断的选项 */
 export interface TruncateBudgetOptions {
@@ -96,17 +97,33 @@ function truncateByMessageCount(
   maxMessages: number,
   protectedIndices: readonly number[],
 ): ChatMessage[] {
-  // 无保护索引时，直接取最后 maxMessages 条
-  if (protectedIndices.length === 0) {
-    return history.slice(-maxMessages);
+  const turns = groupContextTurnsV1(history);
+  const keepTurns = new Set<number>();
+  for (const messageIndex of protectedIndices) {
+    const turnIndex = turns.findIndex(
+      (turn) => messageIndex >= turn.start && messageIndex < turn.endExclusive,
+    );
+    if (turnIndex >= 0) keepTurns.add(turnIndex);
   }
-
-  // 有保护索引时，优先保留受保护的消息，再从尾部向前补充到 maxMessages 条
-  const keep = new Set<number>(protectedIndices);
-  for (let i = history.length - 1; i >= 0 && keep.size < maxMessages; i--) {
-    keep.add(i);
+  // The newest derived unit may still be awaiting an observation on the next
+  // append. Keep it even when protected constraints already consume the cap.
+  if (turns.length > 0) keepTurns.add(turns.length - 1);
+  let keptMessages = [...keepTurns].reduce(
+    (count, turnIndex) => count + (turns[turnIndex]?.messages.length ?? 0),
+    0,
+  );
+  for (let turnIndex = turns.length - 2; turnIndex >= 0; turnIndex -= 1) {
+    if (keepTurns.has(turnIndex)) continue;
+    const turnSize = turns[turnIndex]?.messages.length ?? 0;
+    // Keep one continuous newest suffix. Skipping a newer unit and then
+    // collecting an older small unit would create an unjustified time hole.
+    if (keptMessages + turnSize > maxMessages) break;
+    keepTurns.add(turnIndex);
+    keptMessages += turnSize;
   }
-  return history.filter((_, i) => keep.has(i));
+  return flattenContextTurnsV1(
+    turns.filter((_, turnIndex) => keepTurns.has(turnIndex)),
+  );
 }
 
 /**
@@ -136,26 +153,44 @@ function truncateByBudget(
     current += msgCost(m);
   }
   if (current <= opts.budget) return history;
+  const turns = groupContextTurnsV1(history);
+  const turnCost = (turnIndex: number): number =>
+    turns[turnIndex]?.messages.reduce(
+      (sum, message) => sum + msgCost(message),
+      0,
+    ) ?? 0;
+  const turnIndexForMessage = (messageIndex: number): number =>
+    turns.findIndex(
+      (turn) => messageIndex >= turn.start && messageIndex < turn.endExclusive,
+    );
 
   // 寻找合适的保护级别：从 3 → 2 → 1 → 0 逐级降级
   // 保护级别 = 保留最近 N 个对话回合
-  let protectedIndices: number[] = [];
-  for (let turns = opts.tailTurnCount; turns >= 0; turns--) {
-    protectedIndices = getProtectedIndices(history, turns);
-    const protectedCost = protectedIndices.reduce((sum, i) => {
-      const msg = history[i];
-      return msg ? sum + msgCost(msg) : sum;
-    }, 0);
-    const lastMsg = history[history.length - 1];
-    const lastMsgCost = lastMsg ? msgCost(lastMsg) : 0;
-    // 受保护消息 + 最后一条消息不超预算，则接受此保护级别
-    if (protectedCost + lastMsgCost <= opts.budget) {
+  let protectedTurnIndices: number[] = [];
+  for (let tailTurns = opts.tailTurnCount; tailTurns >= 0; tailTurns--) {
+    protectedTurnIndices = [
+      ...new Set(
+        getProtectedIndices(history, tailTurns)
+          .map(turnIndexForMessage)
+          .filter((index) => index >= 0),
+      ),
+    ];
+    const latestTurnIndex = Math.max(0, turns.length - 1);
+    const protectedWithLatest = new Set([
+      ...protectedTurnIndices,
+      latestTurnIndex,
+    ]);
+    const protectedCost = [...protectedWithLatest].reduce(
+      (sum, turnIndex) => sum + turnCost(turnIndex),
+      0,
+    );
+    if (protectedCost <= opts.budget) {
       break;
     }
   }
 
-  const protectedSet = new Set(protectedIndices);
-  protectedSet.add(history.length - 1); // 最后一条消息始终受保护
+  const protectedSet = new Set(protectedTurnIndices);
+  protectedSet.add(Math.max(0, turns.length - 1));
 
   // P4.2 生命周期驱逐：段状态（active/completed/evictable）+ 残差效用门控。
   // completed ≠ 可删：文件路径仍被最近 tool call 引用 → 保留（残差效用）。
@@ -173,19 +208,24 @@ function truncateByBudget(
     return false;
   };
 
-  // 对可驱逐消息（排除受保护的和最后一条）按优先级评分
+  // 对可驱逐回合（排除受保护的和最后一回合）按聚合优先级评分
   const scored: Array<{ idx: number; cost: number; score: number }> = [];
-  for (let i = 0; i < history.length - 1; i++) {
-    if (protectedSet.has(i)) continue;
-    const msg = history[i];
-    if (!msg) continue;
+  for (let turnIndex = 0; turnIndex < turns.length - 1; turnIndex++) {
+    if (protectedSet.has(turnIndex)) continue;
+    const turn = turns[turnIndex];
+    if (!turn) continue;
     scored.push({
-      idx: i,
-      cost: msgCost(msg),
-      score: messagePriorityScore(msg, i, history.length, {
-        lifecycle: stateFor(i),
-        residualHit: residualHitFor(i),
-      }),
+      idx: turnIndex,
+      cost: turnCost(turnIndex),
+      score: Math.max(
+        ...turn.messages.map((message, offset) => {
+          const messageIndex = turn.start + offset;
+          return messagePriorityScore(message, messageIndex, history.length, {
+            lifecycle: stateFor(messageIndex),
+            residualHit: residualHitFor(messageIndex),
+          });
+        }),
+      ),
     });
   }
 
@@ -199,35 +239,14 @@ function truncateByBudget(
     current -= s.cost;
   }
 
-  // 如果仍超预算，进一步降级保护（移除初始目标等受保护消息中优先级较低的）
-  if (current > opts.budget) {
-    const degradable = protectedIndices
-      .filter((i) => i < history.length - 1 && !evictSet.has(i))
-      .flatMap((i) => {
-        const msg = history[i];
-        if (!msg) return [];
-        return [
-          {
-            idx: i,
-            cost: msgCost(msg),
-            score: messagePriorityScore(msg, i, history.length, {
-              lifecycle: stateFor(i),
-              residualHit: residualHitFor(i),
-            }),
-          },
-        ];
-      })
-      .sort((a, b) => a.score - b.score || b.cost - a.cost);
-
-    for (const d of degradable) {
-      if (current <= opts.budget) break;
-      evictSet.add(d.idx);
-      current -= d.cost;
-    }
-  }
+  // If the initial goal/constraints plus the latest whole unit alone exceed
+  // the budget, return that soft overflow. Deleting any of them would either
+  // lose an explicit safety constraint or orphan the active action protocol.
 
   if (evictSet.size === 0) return history;
-  return history.filter((_, i) => !evictSet.has(i));
+  return flattenContextTurnsV1(
+    turns.filter((_, turnIndex) => !evictSet.has(turnIndex)),
+  );
 }
 
 /**
@@ -360,7 +379,7 @@ function messagePriorityScore(
   if (msg.role === "user" && isToolResultMessage(msg.content)) {
     const age =
       index !== undefined && total !== undefined ? total - 1 - index : 0;
-    let score = Math.max(
+    const score = Math.max(
       TOOL_RESULT_AGE_FLOOR,
       MSG_PRIORITY.TOOL_RESULT - age * TOOL_RESULT_AGE_PENALTY,
     );
@@ -506,34 +525,22 @@ export function computeSegments(
 ): SegmentInfo[] {
   const tail = opts?.tailTurnCount ?? 3;
   if (messages.length === 0) return [];
-
-  // 回合边界：assistant 消息
-  const turnStarts: number[] = [];
-  for (let i = 0; i < messages.length; i++) {
-    if (messages[i]?.role === "assistant") turnStarts.push(i);
-  }
-
-  // 段 = [turnStart .. 下一个 turnStart-1]
-  const segments: SegmentInfo[] = [];
-  const firstUserIdx = messages.findIndex(
-    (m) => m.role === "user" && !isToolResultMessage(m.content),
-  );
-
-  // 首条目标段（到第一个 assistant 之前）
-  const goalEnd =
-    turnStarts.length > 0
-      ? Math.min(firstUserIdx >= 0 ? firstUserIdx : 0, turnStarts[0]!)
-      : messages.length - 1;
-  segments.push({ start: 0, end: goalEnd, state: "active" });
-
-  for (let t = 0; t < turnStarts.length; t++) {
-    const start = turnStarts[t]!;
-    const end =
-      t + 1 < turnStarts.length ? turnStarts[t + 1]! - 1 : messages.length - 1;
-    // 尾部最近 tail 个回合 → active
-    const isTail = t >= turnStarts.length - tail;
-    segments.push({ start, end, state: isTail ? "active" : "evictable" });
-  }
+  const turns = groupContextTurnsV1(messages);
+  const assistantTurnCount = turns.filter(
+    (turn) => turn.messages[0]?.role === "assistant",
+  ).length;
+  let assistantOrdinal = 0;
+  const segments: SegmentInfo[] = turns.map((turn) => {
+    const startsWithAssistant = turn.messages[0]?.role === "assistant";
+    const isTail =
+      startsWithAssistant && assistantOrdinal >= assistantTurnCount - tail;
+    if (startsWithAssistant) assistantOrdinal += 1;
+    return {
+      start: turn.start,
+      end: turn.endExclusive - 1,
+      state: startsWithAssistant && !isTail ? "evictable" : "active",
+    };
+  });
 
   // 完成证据 → completed；TASK_PIVOT 之后的旧 completed → evictable
   let pivoted = false;
@@ -573,11 +580,12 @@ export function extractRecentToolCallPaths(
     const msg = messages[i];
     if (!msg || msg.role !== "assistant") continue;
     scanned++;
-    let m: RegExpExecArray | null;
     PATH_REF_PATTERN.lastIndex = 0;
-    while ((m = PATH_REF_PATTERN.exec(msg.content)) !== null) {
-      const p = m[1]!.replace(/^\/+/, "").trim();
+    let match = PATH_REF_PATTERN.exec(msg.content);
+    while (match !== null) {
+      const p = (match[1] ?? "").replace(/^\/+/, "").trim();
       if (p && !p.includes("\\") && p.length < 300) paths.add(p);
+      match = PATH_REF_PATTERN.exec(msg.content);
     }
   }
   return paths;

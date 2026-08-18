@@ -68,11 +68,81 @@ describe("ContextManager", () => {
     cm.addAssistant("D");
     cm.addUser("E");
     const msgs = cm.buildMessages();
-    // system + 3 most recent
-    expect(msgs.length).toBe(4);
-    expect(msgs[1]?.content).toBe("C");
-    expect(msgs[2]?.content).toBe("D");
-    expect(msgs[3]?.content).toBe("E");
+    // The soft message cap keeps the newest complete assistant-boundary unit.
+    expect(msgs.length).toBe(3);
+    expect(msgs[1]?.content).toBe("D");
+    expect(msgs[2]?.content).toBe("E");
+  });
+
+  test("maxMessages never orphans a tool observation", () => {
+    const cm = new ContextManager({ maxMessages: 1 });
+    cm.addAssistant('{"tool":"workspace.read_file","args":{"path":"a.ts"}}');
+    cm.addToolResult("workspace.read_file", true, "read a.ts");
+    const messages = cm.buildMessages();
+    expect(messages).toHaveLength(2);
+    expect(messages[0]?.role).toBe("assistant");
+    expect(messages[1]?.content).toContain(
+      "[Tool workspace.read_file completed]",
+    );
+  });
+
+  test("maxMessages keeps the latest tool unit even beside an old constraint", () => {
+    const cm = new ContextManager({ maxMessages: 1 });
+    cm.setHistoryRaw([
+      { role: "user", content: "只能修改当前目录，不要动外部文件" },
+      {
+        role: "assistant",
+        content: '{"tool":"workspace.read_file","args":{"path":"a.ts"}}',
+      },
+      {
+        role: "user",
+        content: "[Tool workspace.read_file completed]\nread a.ts",
+      },
+    ]);
+    cm.truncateNow();
+    const messages = cm.buildMessages();
+    expect(messages.map((message) => message.content)).toEqual([
+      "只能修改当前目录，不要动外部文件",
+      '{"tool":"workspace.read_file","args":{"path":"a.ts"}}',
+      "[Tool workspace.read_file completed]\nread a.ts",
+    ]);
+  });
+
+  test("batch truncation keeps a continuous newest whole-unit suffix", () => {
+    const history = [
+      { role: "user" as const, content: "A" },
+      { role: "assistant" as const, content: "B" },
+      { role: "user" as const, content: "C" },
+      { role: "assistant" as const, content: "D" },
+      { role: "user" as const, content: "E" },
+    ];
+    const raw = new ContextManager({ maxMessages: 3 });
+    raw.setHistoryRaw(history);
+    raw.truncateNow();
+    expect(raw.buildMessages().map((message) => message.content)).toEqual([
+      "D",
+      "E",
+    ]);
+
+    const replaced = new ContextManager({ maxMessages: 3 });
+    replaced.replaceHistory(history);
+    expect(replaced.buildMessages().map((message) => message.content)).toEqual([
+      "D",
+      "E",
+    ]);
+  });
+
+  test("an oversized latest tool turn soft-exceeds the character budget", () => {
+    const cm = new ContextManager({ maxChars: 20 });
+    cm.addAssistant('{"tool":"workspace.run_shell","args":{"command":"test"}}');
+    cm.addToolResult("workspace.run_shell", false, "failed", {
+      stderr: "x".repeat(200),
+    });
+    const messages = cm.buildMessages();
+    expect(messages).toHaveLength(2);
+    expect(messages[0]?.role).toBe("assistant");
+    expect(messages[1]?.content).toContain("[Tool workspace.run_shell failed]");
+    expect(cm.charCount).toBeGreaterThan(20);
   });
 
   test("maxMessages preserves explicit user constraints", () => {
@@ -88,16 +158,18 @@ describe("ContextManager", () => {
     expect(contents).toContain("Result 2");
   });
 
-  test("truncates by maxChars", () => {
+  test("soft-exceeds maxChars for the initial goal and latest whole unit", () => {
     const cm = new ContextManager({ maxChars: 50 });
     cm.setSystem("Sys");
     cm.addUser("A".repeat(30));
     cm.addAssistant("B".repeat(30));
     const msgs = cm.buildMessages();
-    // system + at least one message, but total under 50 chars
-    // After truncation, should keep system + last message if it fits
-    const totalChars = msgs.reduce((acc, m) => acc + m.content.length, 0);
-    expect(totalChars).toBeLessThanOrEqual(50 + 10); // small buffer for system
+    expect(msgs.map((message) => message.content)).toEqual([
+      "Sys",
+      "A".repeat(30),
+      "B".repeat(30),
+    ]);
+    expect(cm.charCount).toBeGreaterThan(50);
   });
 
   test("replaceHistory replaces all", () => {
@@ -365,20 +437,24 @@ describe("ContextManager", () => {
     expect(result.freedTokens).toBe(0);
   });
 
-  test("truncates by maxTokens when configured", () => {
+  test("soft-exceeds maxTokens for the goal and latest assistant unit", () => {
     // TiktokenEstimator includes 4 tokens overhead per message + 2 priming,
     // so maxTokens needs to account for message-format overhead.
-    const cm = new ContextManager({ maxTokens: 25 });
+    const cm = new ContextManager({ maxTokens: 8 });
     cm.setSystem("sys");
     cm.addUser("hello world");
     cm.addAssistant("how are you today");
-    // Total ~21 tokens (with overhead), under 25
     cm.addUser("fine thanks");
-    // Total ~27 tokens, exceeds 25 → triggers truncation
+    // The history exceeds 8 tokens. The initial goal and newest complete
+    // assistant-boundary unit are both protected, so this is a soft limit.
     const msgs = cm.buildMessages();
-    // Should drop oldest non-system message to get under 25
-    expect(msgs.length).toBeLessThan(4);
-    expect(cm.estimatedTokens).toBeLessThanOrEqual(25);
+    expect(msgs.map((message) => message.content)).toEqual([
+      "sys",
+      "hello world",
+      "how are you today",
+      "fine thanks",
+    ]);
+    expect(cm.historyEstimatedTokens).toBeGreaterThan(8);
   });
 
   test("maxTokens takes priority over maxChars", () => {

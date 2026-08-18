@@ -70,6 +70,11 @@ export {
   type NativeToolTurnResultV1,
   type NativeToolTurnV1,
 } from "./context/manager.js";
+export {
+  flattenContextTurnsV1,
+  groupContextTurnsV1,
+  type ContextTurnV1,
+} from "./context/turns.js";
 
 // ============================================================
 // 应用状态

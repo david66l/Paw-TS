@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import { truncateHistory } from "../src/context/policy.js";
 import {
   ArtifactRegistry,
+  type ChatMessage,
   computeSegments,
   extractRecentToolCallPaths,
   listCompactionCommits,
   loadCompactionSnapshot,
   saveCompactionCommit,
-  type ChatMessage,
 } from "../src/index.js";
-import { truncateHistory } from "../src/context/policy.js";
 
 const msg = (role: "user" | "assistant", content: string): ChatMessage => ({
   role,
@@ -17,6 +17,19 @@ const msg = (role: "user" | "assistant", content: string): ChatMessage => ({
 });
 
 describe("P4.2 生命周期驱逐 — computeSegments", () => {
+  test("reuses non-overlapping assistant-boundary units", () => {
+    const messages = [
+      msg("assistant", "action one"),
+      msg("user", "observation one"),
+      msg("assistant", "action two"),
+      msg("user", "observation two"),
+    ];
+    expect(computeSegments(messages, { tailTurnCount: 1 })).toEqual([
+      { start: 0, end: 1, state: "evictable" },
+      { start: 2, end: 3, state: "active" },
+    ]);
+  });
+
   test("首条目标 + 尾部最近回合 = active", () => {
     const messages = [
       msg("user", "fix the bug in main.ts"),
@@ -60,9 +73,15 @@ describe("P4.2 生命周期驱逐 — computeSegments", () => {
 describe("P4.2 残差效用门控", () => {
   test("extractRecentToolCallPaths 提取最近工具调用引用的路径", () => {
     const messages = [
-      msg("assistant", '{"tool":"workspace.read_file","args":{"path":"src/a.ts"}}'),
+      msg(
+        "assistant",
+        '{"tool":"workspace.read_file","args":{"path":"src/a.ts"}}',
+      ),
       msg("user", "[Tool workspace.read_file completed]\nsrc/a.ts"),
-      msg("assistant", '{"tool":"workspace.edit_file","args":{"path":"src/b.ts","old_string":"x"}}'),
+      msg(
+        "assistant",
+        '{"tool":"workspace.edit_file","args":{"path":"src/b.ts","old_string":"x"}}',
+      ),
     ];
     const paths = extractRecentToolCallPaths(messages, 6);
     expect(paths.has("src/a.ts")).toBe(true);
@@ -75,7 +94,10 @@ describe("P4.2 残差效用门控", () => {
       msg("user", "goal"),
       msg("assistant", "read the config file"), // evictable，无路径引用
       msg("assistant", "src/hot.ts is the cause"), // evictable，被最近调用引用
-      msg("assistant", '{"tool":"workspace.read_file","args":{"path":"src/hot.ts"}}'), // 最近引用（tail 保护）
+      msg(
+        "assistant",
+        '{"tool":"workspace.read_file","args":{"path":"src/hot.ts"}}',
+      ), // 最近引用（tail 保护）
       msg("user", "final"),
     ];
     const truncated = truncateHistory([...messages], {
@@ -103,7 +125,11 @@ describe("P4.1 降级链 — 引用桩 → 裸 ID → 删除", () => {
   test("裸 ID 桩可解析；downgradeStubToBare 保留寻址键", () => {
     const r = new ArtifactRegistry({ maxStubsInContext: 1 });
     r.startTurn(0);
-    const id = r.store("x".repeat(100), { tool: "run_shell", ok: true, turn: 1 })!;
+    const id = r.store("x".repeat(100), {
+      tool: "run_shell",
+      ok: true,
+      turn: 1,
+    })!;
     const stub = r.toStub(id);
     const bare = r.downgradeStubToBare(stub);
     expect(bare).toBe(`[archived id=${id}]`);
@@ -113,11 +139,26 @@ describe("P4.1 降级链 — 引用桩 → 裸 ID → 删除", () => {
   });
 
   test("AC-P4-2 有界化两级降级：完整桩 → 裸 ID → 删除", () => {
-    const r = new ArtifactRegistry({ maxStubsInContext: 1, maxBareStubsInContext: 1 });
+    const r = new ArtifactRegistry({
+      maxStubsInContext: 1,
+      maxBareStubsInContext: 1,
+    });
     r.startTurn(0);
-    const a = r.store("A".repeat(50), { tool: "run_shell", ok: true, turn: 1 })!;
-    const b = r.store("B".repeat(50), { tool: "run_shell", ok: true, turn: 2 })!;
-    const c = r.store("C".repeat(50), { tool: "run_shell", ok: true, turn: 3 })!;
+    const a = r.store("A".repeat(50), {
+      tool: "run_shell",
+      ok: true,
+      turn: 1,
+    })!;
+    const b = r.store("B".repeat(50), {
+      tool: "run_shell",
+      ok: true,
+      turn: 2,
+    })!;
+    const c = r.store("C".repeat(50), {
+      tool: "run_shell",
+      ok: true,
+      turn: 3,
+    })!;
     const messages = [
       { content: `[${r.toStub(a)}]` },
       { content: `[${r.toStub(b)}]` },
@@ -136,10 +177,21 @@ describe("P4.1 降级链 — 引用桩 → 裸 ID → 删除", () => {
   });
 
   test("Cited 桩永不降级不删除", () => {
-    const r = new ArtifactRegistry({ maxStubsInContext: 1, maxBareStubsInContext: 1 });
+    const r = new ArtifactRegistry({
+      maxStubsInContext: 1,
+      maxBareStubsInContext: 1,
+    });
     r.startTurn(0);
-    const a = r.store("A".repeat(50), { tool: "run_shell", ok: true, turn: 1 })!;
-    const b = r.store("B".repeat(50), { tool: "run_shell", ok: true, turn: 2 })!;
+    const a = r.store("A".repeat(50), {
+      tool: "run_shell",
+      ok: true,
+      turn: 1,
+    })!;
+    const b = r.store("B".repeat(50), {
+      tool: "run_shell",
+      ok: true,
+      turn: 2,
+    })!;
     r.markCited(a);
     const { messages: out } = r.trimStubsInMessages([
       { content: `[${r.toStub(a)}]` },
@@ -158,17 +210,39 @@ describe("P4.4 压缩版本化 — compaction commits", () => {
   test("save → list → load 快照往返", () => {
     const root = "C:/work/ver";
     const runId = "run-v1";
-    const before: ChatMessage[] = [msg("user", "goal"), msg("assistant", "old context")];
-    const after: ChatMessage[] = [msg("user", "goal"), msg("user", "[Context Summary]\ncompressed")];
+    const before: ChatMessage[] = [
+      msg("user", "goal"),
+      msg("assistant", "old context"),
+    ];
+    const after: ChatMessage[] = [
+      msg("user", "goal"),
+      msg("user", "[Context Summary]\ncompressed"),
+    ];
     const p1 = saveCompactionCommit({
       workspaceRoot: root,
       runId,
-      commit: { n: 1, ts: 1, reason: "auto_compact", beforeMessages: before, afterMessages: after, beforeTokens: 100, afterTokens: 20 },
+      commit: {
+        n: 1,
+        ts: 1,
+        reason: "auto_compact",
+        beforeMessages: before,
+        afterMessages: after,
+        beforeTokens: 100,
+        afterTokens: 20,
+      },
     });
     saveCompactionCommit({
       workspaceRoot: root,
       runId,
-      commit: { n: 2, ts: 2, reason: "resume", beforeMessages: after, afterMessages: before, beforeTokens: 20, afterTokens: 100 },
+      commit: {
+        n: 2,
+        ts: 2,
+        reason: "resume",
+        beforeMessages: after,
+        afterMessages: before,
+        beforeTokens: 20,
+        afterTokens: 100,
+      },
     });
     expect(p1).toContain("compaction-commits");
     const commits = listCompactionCommits(root, runId);
