@@ -56,8 +56,8 @@ describe("约束生命周期（Constraint Lifecycle）", () => {
       },
     ];
     const events2: RunEventEnvelope[] = [];
-    let lastPackageText = "";
-    // 第 1 轮调工具、第 2 轮 final——确保调和后的下一轮 refresh 生效可见
+    const hostStates: string[] = [];
+    // 第 1 轮调工具、第 2 轮 final；第一轮本身必须看到调和后的约束。
     // 注意：不提供 completeStream（否则走流式路径，mock 的 text 被丢弃）
     const turnModel = {
       label: "cycle",
@@ -97,9 +97,9 @@ describe("约束生命周期（Constraint Lifecycle）", () => {
       evalHooks: {
         beforeModelCall: ({ messages }) => {
           const pkg = (messages as ChatMessage[]).find((m) =>
-            m.content.startsWith("[Context Package]"),
+            m.content.startsWith("[Host State v1]"),
           );
-          if (pkg) lastPackageText = pkg.content;
+          if (pkg) hostStates.push(pkg.content);
         },
       },
       onEvent: (e) => events2.push(e),
@@ -153,9 +153,9 @@ describe("约束生命周期（Constraint Lifecycle）", () => {
       expect(updated.event.active).toContain("重构 src/a.txt 为模块化结构");
     }
 
-    // 调和后的 [Context Package]（红线区）：旧约束消失，新约束进入
-    expect(lastPackageText).toContain("重构 src/a.txt 为模块化结构");
-    expect(lastPackageText).not.toContain("不要修改 src/a.txt");
+    // 同一轮的 HostState（红线区）：旧约束消失，新约束立即进入。
+    expect(hostStates[0]).toContain("重构 src/a.txt 为模块化结构");
+    expect(hostStates[0]).not.toContain("不要修改 src/a.txt");
   });
 
   test("LLM 调和故障 → 降级：约束全部保留（不丢红线）", async () => {

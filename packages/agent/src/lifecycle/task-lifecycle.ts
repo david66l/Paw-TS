@@ -76,7 +76,7 @@ export type {
   AcceptanceGateDecision,
 };
 
-/** Task state block for Context Package (control-plane visibility). */
+/** Task state block for the one-request HostState projection. */
 export function taskStateContextSection(state: TaskState): string {
   return formatTaskStateForContext(state);
 }

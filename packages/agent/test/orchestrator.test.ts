@@ -901,7 +901,7 @@ describe("AgentOrchestrator", () => {
           const packageMessage = messages.find(
             (message) =>
               message.role === "user" &&
-              message.content.includes("[Context Package]"),
+              message.content.startsWith("[Host State v1]"),
           );
           expect(packageMessage?.content).toContain("Mutation revision: 1");
           expect(packageMessage?.content).toContain("Verification: missing");

@@ -350,7 +350,9 @@ describe("AgentOrchestrator compression & budget", () => {
       expect(blocks.event.blocks.length).toBeGreaterThan(0);
       const types = new Set(blocks.event.blocks.map((b) => b.type));
       expect(types.has("system")).toBe(true);
-      expect(types.has("pinned")).toBe(true); // [Context Package]
+      // Dynamic HostState is request-only and therefore absent from the
+      // durable context-block ledger.
+      expect(types.has("pinned")).toBe(false);
       for (const b of blocks.event.blocks) {
         expect(b.tokens).toBeGreaterThanOrEqual(0);
         expect(b.ageTurns).toBeGreaterThanOrEqual(0);

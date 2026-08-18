@@ -750,14 +750,29 @@ function hasMaterialFileChange(result: ToolRunResult): boolean {
 }
 
 export function formatTaskStateForContext(state: TaskState): string {
-  const lines = ["[Current State]", `Goal: ${state.goal}`];
-  appendList(
-    lines,
-    "Constraints",
-    state.constraints
-      .filter((c) => c.status === "active")
-      .map((c) => `${c.text} (turn ${c.sourceTurn})`),
-  );
+  return formatTaskStateBlock(state, true);
+}
+
+/** One-request host projection; the durable user request owns goal/constraints. */
+export function formatTaskProgressForContext(state: TaskState): string {
+  return formatTaskStateBlock(state, false);
+}
+
+function formatTaskStateBlock(
+  state: TaskState,
+  includeGoalAndConstraints: boolean,
+): string {
+  const lines = ["[Current State]"];
+  if (includeGoalAndConstraints) {
+    lines.push(`Goal: ${state.goal}`);
+    appendList(
+      lines,
+      "Constraints",
+      state.constraints
+        .filter((c) => c.status === "active")
+        .map((c) => `${c.text} (turn ${c.sourceTurn})`),
+    );
+  }
   appendList(
     lines,
     "Acceptance criteria",

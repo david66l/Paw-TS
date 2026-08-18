@@ -160,7 +160,9 @@ export class FakeLanguageModel implements LanguageModel {
       .reverse()
       .find(
         (m) =>
-          m.role === "user" && !m.content.startsWith("[Status Snapshot v1]"),
+          m.role === "user" &&
+          !m.content.startsWith("[Status Snapshot v1]") &&
+          !m.content.startsWith("[Host State v1]"),
       );
     const raw = last?.content ?? "";
     // 剥离自动注入的上下文块，确保启发式只看到用户的真实指令

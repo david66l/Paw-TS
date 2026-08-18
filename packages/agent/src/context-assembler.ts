@@ -5,18 +5,30 @@ export interface DurableContextV1 {
   readonly messages: readonly ChatMessage[];
 }
 
-/** Typed host facts rendered for one request without mutating the transcript. */
-export type HostStateFactV1 =
-  | {
-      readonly kind: "task_brief";
-      readonly currentObjective: string;
-      readonly stage?: string;
-      readonly openItems?: readonly string[];
-    }
-  | { readonly kind: "constraints"; readonly items: readonly string[] }
-  | { readonly kind: "current_hypothesis"; readonly text: string }
-  | { readonly kind: "key_observations"; readonly items: readonly string[] }
-  | { readonly kind: "relevant_memory"; readonly items: readonly string[] };
+/**
+ * Typed host facts rendered in a canonical order for one request.
+ *
+ * A fixed shape prevents duplicate fact kinds and unstable prompt ordering.
+ * The original user request is deliberately absent: it belongs only to the
+ * durable transcript. `currentObjective` is therefore a current next step,
+ * never a copy of the original goal.
+ */
+export interface HostStateV1 {
+  readonly taskBrief?: {
+    readonly currentObjective?: string;
+    readonly stage?: string;
+    readonly openItems?: readonly string[];
+  };
+  readonly constraints?: readonly string[];
+  readonly taskProgress?: string;
+  readonly relevantMemory?: string;
+  readonly relevantCode?: readonly {
+    readonly path: string;
+    readonly reason: string;
+    readonly symbols?: readonly string[];
+  }[];
+  readonly status?: string;
+}
 
 /** At most one host control projection is admitted to a model request. */
 export type EphemeralControlV1 =
@@ -28,8 +40,20 @@ export type EphemeralControlV1 =
 
 export interface AssembleModelContextInputV1 {
   readonly durable: DurableContextV1;
-  readonly hostState?: readonly HostStateFactV1[];
+  readonly hostState?: HostStateV1;
   readonly control?: EphemeralControlV1;
+}
+
+const LEGACY_HOST_PROJECTION_PREFIXES = [
+  "[Context Package]",
+  "[Status Snapshot v1]",
+] as const;
+
+/** Remove only schemas Paw itself durably injected before P0.3b. */
+export function stripLegacyHostProjectionsV1(
+  messages: readonly ChatMessage[],
+): readonly ChatMessage[] {
+  return messages.filter((message) => !isLegacyHostProjection(message));
 }
 
 /**
@@ -42,12 +66,23 @@ export interface AssembleModelContextInputV1 {
 export function assembleModelContextV1(
   input: AssembleModelContextInputV1,
 ): readonly ChatMessage[] {
-  const messages = input.durable.messages.map((message) => ({ ...message }));
-  if (input.hostState && input.hostState.length > 0) {
-    messages.push({
+  const messages = stripLegacyHostProjectionsV1(input.durable.messages).map(
+    (message) => ({ ...message }),
+  );
+  if (input.hostState && hasHostStateV1(input.hostState)) {
+    const hostMessage: ChatMessage = {
       role: "user",
       content: renderHostStateV1(input.hostState),
-    });
+    };
+    // Keep the latest real input/observation as the attention tail. This also
+    // preserves an atomic native tool-turn envelope because insertion happens
+    // between messages, never inside one. Explicit control is appended below.
+    let leadingSystemMessages = 0;
+    while (messages[leadingSystemMessages]?.role === "system") {
+      leadingSystemMessages += 1;
+    }
+    const insertionIndex = Math.max(leadingSystemMessages, messages.length - 1);
+    messages.splice(insertionIndex, 0, hostMessage);
   }
   if (input.control) {
     messages.push({
@@ -58,34 +93,63 @@ export function assembleModelContextV1(
   return messages;
 }
 
-function renderHostStateV1(facts: readonly HostStateFactV1[]): string {
+function isLegacyHostProjection(message: ChatMessage): boolean {
+  return (
+    message.role === "user" &&
+    LEGACY_HOST_PROJECTION_PREFIXES.some(
+      (prefix) =>
+        message.content === prefix || message.content.startsWith(`${prefix}\n`),
+    )
+  );
+}
+
+function hasHostStateV1(state: HostStateV1): boolean {
+  return Boolean(
+    state.taskBrief ||
+      state.constraints?.length ||
+      state.taskProgress?.trim() ||
+      state.relevantMemory?.trim() ||
+      state.relevantCode?.length ||
+      state.status?.trim(),
+  );
+}
+
+function renderHostStateV1(state: HostStateV1): string {
   const lines = ["[Host State v1]"];
-  for (const fact of facts) {
-    switch (fact.kind) {
-      case "task_brief":
-        lines.push(`current_objective: ${fact.currentObjective}`);
-        if (fact.stage) lines.push(`stage: ${fact.stage}`);
-        if (fact.openItems && fact.openItems.length > 0) {
-          lines.push("open_items:");
-          lines.push(...fact.openItems.map((item) => `- ${item}`));
-        }
-        break;
-      case "constraints":
-        lines.push("constraints:");
-        lines.push(...fact.items.map((item) => `- ${item}`));
-        break;
-      case "current_hypothesis":
-        lines.push(`current_hypothesis: ${fact.text}`);
-        break;
-      case "key_observations":
-        lines.push("key_observations:");
-        lines.push(...fact.items.map((item) => `- ${item}`));
-        break;
-      case "relevant_memory":
-        lines.push("relevant_memory:");
-        lines.push(...fact.items.map((item) => `- ${item}`));
-        break;
+  const brief = state.taskBrief;
+  if (brief) {
+    lines.push("[Task Brief]");
+    if (brief.currentObjective?.trim()) {
+      lines.push(`current_objective: ${brief.currentObjective.trim()}`);
     }
+    if (brief.stage?.trim()) lines.push(`stage: ${brief.stage.trim()}`);
+    if (brief.openItems && brief.openItems.length > 0) {
+      lines.push("open_items:");
+      lines.push(...brief.openItems.map((item) => `- ${item}`));
+    }
+  }
+  if (state.constraints && state.constraints.length > 0) {
+    lines.push("[Constraints]");
+    lines.push(...state.constraints.map((item) => `- ${item}`));
+  }
+  if (state.taskProgress?.trim()) {
+    lines.push(state.taskProgress.trim());
+  }
+  if (state.relevantMemory?.trim()) {
+    lines.push("[Relevant Memory]");
+    lines.push(state.relevantMemory.trim());
+  }
+  if (state.relevantCode && state.relevantCode.length > 0) {
+    lines.push("[Relevant Code]");
+    for (const block of state.relevantCode) {
+      lines.push(`- ${block.path}: ${block.reason}`);
+      if (block.symbols?.length) {
+        lines.push(`  symbols=${block.symbols.slice(0, 8).join(", ")}`);
+      }
+    }
+  }
+  if (state.status?.trim()) {
+    lines.push(state.status.trim());
   }
   return lines.join("\n");
 }

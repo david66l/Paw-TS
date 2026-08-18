@@ -197,7 +197,11 @@ import {
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
-import { assembleModelContextV1 } from "./context-assembler.js";
+import {
+  type HostStateV1,
+  assembleModelContextV1,
+  stripLegacyHostProjectionsV1,
+} from "./context-assembler.js";
 import {
   appendReplyToInboxV1,
   appendUserReplyV1,
@@ -375,10 +379,12 @@ import { resolveMaxSteps } from "./resolve-max-steps.js";
 import { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";
 import {
   RunStatusTelemetryV1,
-  STATUS_SNAPSHOT_PREFIX,
   formatStatusSnapshotV1,
 } from "./status-snapshot.js";
-import { TaskStateManager, formatTaskStateForContext } from "./task-state.js";
+import {
+  TaskStateManager,
+  formatTaskProgressForContext,
+} from "./task-state.js";
 
 // ═════════════════════════════════════════════════════════════
 // 公开接口
@@ -1561,6 +1567,7 @@ export class AgentOrchestrator {
     ctx: PhaseContext,
     toolDefs: readonly import("@paw/models").ToolDefinition[],
     toolNameMap: Map<string, string>,
+    hostState: HostStateV1,
   ): Promise<{
     text: string;
     thinking: string | undefined;
@@ -1587,6 +1594,7 @@ export class AgentOrchestrator {
     // same request. Later P0.3 slices add typed host/control projections here.
     const requestMessages = assembleModelContextV1({
       durable: { messages: ctxMgr.buildMessages() },
+      hostState,
     });
 
     // 评估钩子：模型调用前记录 messages（用于训练数据收集）
@@ -2306,7 +2314,14 @@ export class AgentOrchestrator {
     // P3：每轮重置 context.recall 取回预算（每步 ≤2 次、每轮 ≤16K 字符）
     ctx.artifactRegistry?.startTurn(ctx.turn);
 
-    this.refreshContextPackage(ctx);
+    let hostStateForRequest = this.buildHostState(ctx);
+    const hostProjectionMessages = assembleModelContextV1({
+      durable: { messages: [] },
+      hostState: hostStateForRequest,
+    });
+    const hostProjectionTokens = ctxMgr.estimator.countMessages(
+      hostProjectionMessages,
+    );
 
     // 发出轮次 tick 事件（TUI 用此更新进度条和 token 计数）
     emit({
@@ -2315,13 +2330,14 @@ export class AgentOrchestrator {
       maxSteps,
       estimatedTokens:
         ctxMgr.estimatedTokens +
+        hostProjectionTokens +
         AgentOrchestrator.estimateToolTokens(toolDefs, ctxMgr.estimator),
     });
     emit({ type: "phase", name: "model" });
     emit({
       type: "model.request",
       label: model.label,
-      messageCount: ctxMgr.length,
+      messageCount: ctxMgr.length + hostProjectionMessages.length,
     });
 
     // 步骤 1：报告自上轮以来被外部修改的文件
@@ -2358,8 +2374,14 @@ export class AgentOrchestrator {
       contextWindow,
       cacheHitRate,
     );
-    ctxMgr.setHistoryTokenBudget(budgetSnapshot.allocation.historyBudget);
-    this.emitContextBudget(emit, contextWindow, budgetSnapshot);
+    let requestBudgetSnapshot = AgentOrchestrator.reserveHostProjection(
+      budgetSnapshot,
+      hostProjectionTokens,
+    );
+    ctxMgr.setHistoryTokenBudget(
+      requestBudgetSnapshot.allocation.historyBudget,
+    );
+    this.emitContextBudget(emit, contextWindow, requestBudgetSnapshot);
     // P4.3 逐块账本 dashboard（VISTA）：块粒度 id/token/轮龄/状态
     this.emitContextBlocks(ctx, budgetSnapshot);
 
@@ -2368,16 +2390,18 @@ export class AgentOrchestrator {
       ctx,
       compactor,
       sessionMemoryStore,
-      budgetSnapshot,
+      requestBudgetSnapshot,
     );
 
     // P5.1 侧信道触发：monitor 采样（10% + 5 步冷却 + 预算软启动），
     // 命中 subtask_end / low_density / critical_issue → 强制压缩（跳过阈值）
-    const historyBudget = budgetSnapshot.allocation.historyBudget;
+    const historyBudget = requestBudgetSnapshot.allocation.historyBudget;
     const remainingRatio =
-      historyBudget > 0 ? 1 - budgetSnapshot.historyUsed / historyBudget : 1;
+      historyBudget > 0
+        ? 1 - requestBudgetSnapshot.historyUsed / historyBudget
+        : 1;
     const historyUsageRatio =
-      historyBudget > 0 ? budgetSnapshot.historyUsed / historyBudget : 0;
+      historyBudget > 0 ? requestBudgetSnapshot.historyUsed / historyBudget : 0;
     if (this.monitor.shouldEvaluate(ctx.turn, remainingRatio)) {
       const decision = evaluateTrigger(ctx.ctxMgr.buildMessages());
       const budgetCritical = decision.reason === "budget_critical";
@@ -2397,7 +2421,7 @@ export class AgentOrchestrator {
           ctx,
           compactor,
           sessionMemoryStore,
-          budgetSnapshot,
+          requestBudgetSnapshot,
           true,
         );
       }
@@ -2410,18 +2434,19 @@ export class AgentOrchestrator {
     // P4.3 硬守卫：历史预算已满 → 拒绝继续注入并提示模型
     // （"放不下的新内容拒绝并提示"，不静默截断；提示每 run 只注入一次）
     if (
-      budgetSnapshot.historyUsed > budgetSnapshot.allocation.historyBudget &&
+      requestBudgetSnapshot.historyUsed >
+        requestBudgetSnapshot.allocation.historyBudget &&
       !this._budgetGuardWarned
     ) {
       this._budgetGuardWarned = true;
       emit({
         type: "context.guard",
-        historyUsed: budgetSnapshot.historyUsed,
-        historyBudget: budgetSnapshot.allocation.historyBudget,
+        historyUsed: requestBudgetSnapshot.historyUsed,
+        historyBudget: requestBudgetSnapshot.allocation.historyBudget,
         reason: "budget_exhausted",
       });
       ctxMgr.addUser(
-        `[Context guard] History budget exhausted (${budgetSnapshot.historyUsed} / ${budgetSnapshot.allocation.historyBudget} tokens). New tool outputs will be truncated and archived as [archived id=N] references — use context.recall to restore the full text when needed. Prefer short commands and targeted reads.`,
+        `[Context guard] History budget exhausted (${requestBudgetSnapshot.historyUsed} / ${requestBudgetSnapshot.allocation.historyBudget} tokens). New tool outputs will be truncated and archived as [archived id=N] references — use context.recall to restore the full text when needed. Prefer short commands and targeted reads.`,
       );
     }
 
@@ -2496,6 +2521,32 @@ export class AgentOrchestrator {
       flags._maxStepsWarned = true;
     }
 
+    // Rebuild after reconciliation, memory refresh, compaction and guidance so
+    // this exact provider request sees the latest host-owned facts.
+    hostStateForRequest = this.buildHostState(ctx);
+    const finalHostProjectionTokens = ctxMgr.estimator.countMessages(
+      assembleModelContextV1({
+        durable: { messages: [] },
+        hostState: hostStateForRequest,
+      }),
+    );
+    if (finalHostProjectionTokens !== hostProjectionTokens) {
+      requestBudgetSnapshot = AgentOrchestrator.reserveHostProjection(
+        budgetSnapshot,
+        finalHostProjectionTokens,
+      );
+      ctxMgr.setHistoryTokenBudget(
+        requestBudgetSnapshot.allocation.historyBudget,
+      );
+      if (
+        ctxMgr.historyEstimatedTokens >
+        requestBudgetSnapshot.allocation.historyBudget
+      ) {
+        ctxMgr.truncateNow();
+      }
+      this.emitContextBudget(emit, contextWindow, requestBudgetSnapshot);
+    }
+
     // 步骤 5：调用模型 + 解析返回的工具调用/动作
     // 设置流式恢复路径——模型输出时实时写盘，崩了不丢
     this._streamRecoveryPath = path.join(
@@ -2511,6 +2562,7 @@ export class AgentOrchestrator {
         ctx,
         toolDefs,
         toolNameMap,
+        hostStateForRequest,
       );
     } finally {
       this._streamRecoveryPath = undefined;
@@ -2869,70 +2921,49 @@ export class AgentOrchestrator {
         .map((c) => c.text),
       ok: result.ok,
     });
-    // refreshContextPackage 在下一轮自动用新约束集重注入 [Constraints]
+    // HostState 在同一轮模型请求前从最新约束集重新派生。
   }
 
-  private refreshContextPackage(ctx: PhaseContext): void {
-    const codeLines =
-      this._contextPackageCode.length > 0
-        ? [
-            "",
-            "[Relevant Code]",
-            ...this._contextPackageCode.slice(0, 5).map((b) => {
-              const parts = [`- ${b.path}: ${b.reason}`];
-              if (b.symbols?.length)
-                parts.push(`  symbols=${b.symbols.slice(0, 8).join(", ")}`);
-              return parts.join("\n");
-            }),
-          ]
-        : [];
+  private buildHostState(ctx: PhaseContext): HostStateV1 {
     const taskSnap = ctx.taskState.snapshot();
-    // v3 P0.3：用户约束提升为每轮重注入的状态段（[Constraints] 行）
-    // 约束从此不依赖它在历史中的位置——历史被压缩也不影响它存活
-    // 约束生命周期：只注入 active 约束（被 LLM 调和判定撤销/反转/过期的
-    // superseded/expired 约束不再注入，避免模型继续遵守旧指令）
     const activeConstraints = ctx.taskState.activeConstraints();
-    const constraintLines =
-      activeConstraints.length > 0
-        ? [
-            "",
-            "[Constraints]",
-            ...activeConstraints.map(
-              (c) => `- ${c.text} (stated at turn ${c.sourceTurn})`,
+    // Do not echo a verbatim constraint that is already visible in durable
+    // user/history text. If compaction later removes the verbatim text, the
+    // same typed HostState projection restores it for that request.
+    const visibleDurableUserMessages = assembleModelContextV1({
+      durable: { messages: ctx.ctxMgr.buildMessages() },
+    })
+      .filter((message) => message.role === "user")
+      .map((message) => message.content);
+    const status = ctx.statusTelemetry.snapshot(
+      ctx.turn,
+      ctx.maxSteps,
+      taskSnap,
+    );
+    return {
+      ...(taskSnap.nextStep
+        ? { taskBrief: { currentObjective: taskSnap.nextStep } }
+        : {}),
+      constraints: activeConstraints
+        .filter(
+          (constraint) =>
+            !visibleDurableUserMessages.some((content) =>
+              content.includes(constraint.text),
             ),
-          ]
-        : [];
-    // TaskLifecycle：filesChanged / tests / commands 进入 Context Package（控制面可见）
-    const taskBlock = formatTaskStateForContext(taskSnap);
-    const text = [
-      CONTEXT_PACKAGE_PREFIX,
-      `[Task] ${taskSnap.goal}`,
-      ...constraintLines,
-      taskBlock,
-      this._memoryContextSection || "",
-      ...codeLines,
-    ]
-      .filter((line) => line !== undefined)
-      .join("\n");
-    // P5.2 前缀稳定：内容无变化时不 upsert（避免无意义的 system 后前缀重写，
-    // 破坏 prompt cache；TokenPilot 前缀稳定 = cache 命中率）
-    const existing = ctx.ctxMgr
-      .buildMessages()
-      .find((m) => m.content.startsWith(CONTEXT_PACKAGE_PREFIX));
-    if (!existing || existing.content !== text) {
-      ctx.ctxMgr.upsertUserByPrefix(CONTEXT_PACKAGE_PREFIX, text);
-    }
-    const statusText = formatStatusSnapshotV1(
-      ctx.statusTelemetry.snapshot(
-        ctx.turn,
-        ctx.maxSteps,
-        ctx.taskState.snapshot(),
-      ),
-    );
-    ctx.ctxMgr.upsertUserByPrefixBeforeLatest(
-      STATUS_SNAPSHOT_PREFIX,
-      statusText,
-    );
+        )
+        .map(
+          (constraint) =>
+            `${constraint.text} (stated at turn ${constraint.sourceTurn})`,
+        ),
+      taskProgress: formatTaskProgressForContext(taskSnap),
+      ...(this._memoryContextSection
+        ? { relevantMemory: this._memoryContextSection }
+        : {}),
+      ...(this._contextPackageCode.length > 0
+        ? { relevantCode: this._contextPackageCode.slice(0, 5) }
+        : {}),
+      status: formatStatusSnapshotV1(status),
+    };
   }
 
   // ─────────────────────────────────────────────────────────
@@ -3027,7 +3058,7 @@ export class AgentOrchestrator {
       workspaceRoot,
       turn,
       maxSteps,
-      messages: ctxMgr.buildMessages(),
+      messages: stripLegacyHostProjectionsV1(ctxMgr.buildMessages()),
       ...(plan
         ? { plan: { revision: plan.revision, items: plan.items as unknown[] } }
         : {}),
@@ -4392,7 +4423,9 @@ export class AgentOrchestrator {
         const s = spec.resumeFromState;
         startTurn = s.turn;
         ctxMgr.setSystem(systemContent);
-        const history = s.messages.filter((m) => m.role !== "system");
+        const history = stripLegacyHostProjectionsV1(s.messages).filter(
+          (m) => m.role !== "system",
+        );
         if (history.length > 0) ctxMgr.replaceHistory(history);
         if (s.todos && this.todoStore) this.todoStore.set(s.todos);
       } else {
@@ -4695,7 +4728,9 @@ export class AgentOrchestrator {
       const s = spec.resumeFromState;
       startTurn = s.turn;
       ctxMgr.setSystem(systemContent);
-      const history = s.messages.filter((m) => m.role !== "system");
+      const history = stripLegacyHostProjectionsV1(s.messages).filter(
+        (m) => m.role !== "system",
+      );
 
       if (history.length > 0) {
         // Step 1: 先不做硬截断——把完整历史放进去
@@ -4878,6 +4913,40 @@ export class AgentOrchestrator {
       };
     }
     return snapshot;
+  }
+
+  /** Reserve one-request HostState space without pretending it is durable history. */
+  private static reserveHostProjection(
+    snapshot: ContextBudgetSnapshot,
+    projectionTokens: number,
+  ): ContextBudgetSnapshot {
+    const reserved = Math.max(0, Math.ceil(projectionTokens));
+    if (reserved === 0) return snapshot;
+    const historyBudget = Math.max(
+      0,
+      snapshot.allocation.historyBudget - reserved,
+    );
+    const originalBaseThreshold = Math.max(
+      0,
+      computeCompactThreshold(snapshot.allocation.historyBudget) - 10_000,
+    );
+    const adjustedFactor =
+      originalBaseThreshold > 0
+        ? snapshot.compactThreshold / originalBaseThreshold
+        : 1;
+    const compactThreshold = Math.max(
+      0,
+      Math.floor(
+        Math.max(0, computeCompactThreshold(historyBudget) - 10_000) *
+          adjustedFactor,
+      ),
+    );
+    return {
+      ...snapshot,
+      allocation: { ...snapshot.allocation, historyBudget },
+      historyOverBudget: snapshot.historyUsed > historyBudget,
+      compactThreshold,
+    };
   }
 
   /**

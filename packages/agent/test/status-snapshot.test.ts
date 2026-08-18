@@ -313,7 +313,8 @@ describe("StatusSnapshotV1", () => {
     );
     writeFileSync(path.join(workspaceRoot, "source.txt"), "evidence\n", "utf8");
     const snapshots: string[] = [];
-    const statusWasTailAdjacent: boolean[] = [];
+    const hostWasTailAdjacent: boolean[] = [];
+    const durableProjectionCounts: number[] = [];
     let modelCalls = 0;
     const orchestrator = new AgentOrchestrator({
       memoryExtraction: "off",
@@ -324,13 +325,14 @@ describe("StatusSnapshotV1", () => {
           modelCalls += 1;
           const snapshot = [...messages]
             .reverse()
-            .find((message) =>
-              message.content.startsWith(STATUS_SNAPSHOT_PREFIX),
+            .find(
+              (message) =>
+                message.content.startsWith("[Host State v1]") &&
+                message.content.includes(STATUS_SNAPSHOT_PREFIX),
             );
           if (snapshot) snapshots.push(snapshot.content);
-          statusWasTailAdjacent.push(
-            messages.at(-2)?.content.startsWith(STATUS_SNAPSHOT_PREFIX) ??
-              false,
+          hostWasTailAdjacent.push(
+            messages.at(-2)?.content.startsWith("[Host State v1]") ?? false,
           );
           if (modelCalls === 1) {
             return {
@@ -340,6 +342,19 @@ describe("StatusSnapshotV1", () => {
           return {
             text: '{"action":"final_answer","summary":"Inspected source.txt."}',
           };
+        },
+      },
+      evalHooks: {
+        beforeModelCall: ({ contextManager }) => {
+          durableProjectionCounts.push(
+            contextManager
+              .buildMessages()
+              .filter(
+                (message) =>
+                  message.content.startsWith(STATUS_SNAPSHOT_PREFIX) ||
+                  message.content.startsWith("[Context Package]"),
+              ).length,
+          );
         },
       },
     });
@@ -353,7 +368,8 @@ describe("StatusSnapshotV1", () => {
 
     expect(result.status).toBe("completed");
     expect(snapshots).toHaveLength(2);
-    expect(statusWasTailAdjacent).toEqual([true, true]);
+    expect(hostWasTailAdjacent).toEqual([true, true]);
+    expect(durableProjectionCounts).toEqual([0, 0]);
     expect(snapshots[0]).toContain("tools calls=0 failures=0");
     expect(snapshots[1]).toContain("tools calls=1 failures=0");
     expect(snapshots[1]).toContain(
