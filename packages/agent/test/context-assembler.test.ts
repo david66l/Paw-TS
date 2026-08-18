@@ -332,6 +332,389 @@ describe("ContextAssembler v1", () => {
     expect(durableProgressCounts.every((count) => count === 0)).toBe(true);
   });
 
+  test("format recovery survives interruption once and stays out of durable history", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-format-recovery-resume-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const runId = "format-recovery-resume";
+    const stateStore = new InMemoryAppStateStore();
+    const abort = new AbortController();
+    const first = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "malformed-tool-call",
+        async complete() {
+          return { text: '{"tool":"workspace.read_file","args":' };
+        },
+      },
+      onEvent(envelope) {
+        if (envelope.event.type === "model.done") abort.abort();
+      },
+      retrySleep: async () => {},
+    });
+
+    const interrupted = await first.run({
+      runId,
+      goal: "Inspect the workspace.",
+      workspaceRoot,
+      maxSteps: 3,
+      abortSignal: abort.signal,
+    });
+    expect(interrupted.status).toBe("aborted");
+    expect(stateStore.load(runId)?.loopControl).toMatchObject({
+      protocolRecovery: { formatErrorNudges: 1 },
+      pendingControl: { kind: "protocol_recovery" },
+    });
+    expect(
+      stateStore
+        .load(runId)
+        ?.messages.some((message) =>
+          message.content.startsWith(
+            "[Your last output could not be parsed as a tool call",
+          ),
+        ),
+    ).toBe(false);
+
+    let request: readonly ChatMessage[] = [];
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "format-recovery-resumed",
+        async complete(messages) {
+          request = messages;
+          return { text: '{"action":"final_answer","summary":"done"}' };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await resumed.resumeRun({ runId, workspaceRoot });
+
+    expect(
+      request.filter((message) =>
+        message.content.includes(
+          "[Your last output could not be parsed as a tool call",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(stateStore.load(runId)?.loopControl).toMatchObject({
+      protocolRecovery: { formatErrorNudges: 1 },
+    });
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
+      "pendingControl",
+    );
+  });
+
+  test("no-action recovery survives interruption and a valid action resets it", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-no-action-resume-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    writeFileSync(path.join(workspaceRoot, "note.txt"), "hello\n", "utf8");
+    const runId = "no-action-recovery-resume";
+    const stateStore = new InMemoryAppStateStore();
+    const abort = new AbortController();
+    const responses = [
+      '{"tool":"workspace.read_file","args":{"path":"note.txt"}}',
+      "I inspected the file and will now report it.",
+    ];
+    let doneCount = 0;
+    const first = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "no-action-after-tool",
+        async complete() {
+          return { text: responses.shift() ?? "" };
+        },
+      },
+      onEvent(envelope) {
+        if (envelope.event.type === "model.done" && ++doneCount === 2) {
+          abort.abort();
+        }
+      },
+      retrySleep: async () => {},
+    });
+
+    const interrupted = await first.run({
+      runId,
+      goal: "Read note.txt and report it.",
+      workspaceRoot,
+      maxSteps: 4,
+      abortSignal: abort.signal,
+    });
+    expect(interrupted.status).toBe("aborted");
+    expect(stateStore.load(runId)?.loopControl).toMatchObject({
+      protocolRecovery: { noActionNudges: 1, hasEverUsedTools: true },
+      pendingControl: { kind: "protocol_recovery" },
+    });
+    expect(
+      stateStore
+        .load(runId)
+        ?.messages.some((message) =>
+          message.content.startsWith(
+            "[You stopped without a final_answer action.",
+          ),
+        ),
+    ).toBe(false);
+
+    let request: readonly ChatMessage[] = [];
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "no-action-recovery-resumed",
+        async complete(messages) {
+          request = messages;
+          return {
+            text: '{"action":"final_answer","summary":"note.txt says hello"}',
+          };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await resumed.resumeRun({ runId, workspaceRoot });
+
+    expect(
+      request.filter((message) =>
+        message.content.includes("[You stopped without a final_answer action."),
+      ),
+    ).toHaveLength(1);
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
+      "pendingControl",
+    );
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
+      "protocolRecovery.noActionNudges",
+    );
+  });
+
+  test("ask_user persists a valid-action reset before pausing and resume starts at attempt one", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-no-action-ask-user-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const runId = "no-action-ask-user-reset";
+    const stateStore = new InMemoryAppStateStore();
+    stateStore.save({
+      runId,
+      goal: "Ask which color to use, then report it.",
+      workspaceRoot,
+      turn: 0,
+      maxSteps: 4,
+      messages: [
+        { role: "user", content: "Ask which color to use, then report it." },
+      ],
+      loopControl: {
+        schemaVersion: "paw.loop-control.v1",
+        protocolRecovery: { noActionNudges: 1, hasEverUsedTools: true },
+        pendingControl: {
+          kind: "protocol_recovery",
+          text: "legacy attempt one",
+        },
+      },
+      savedAt: Date.now(),
+    });
+    const pausing = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "valid-ask-user",
+        async complete() {
+          return {
+            text: '{"action":"ask_user","question":"Which color?","context":{},"timeout_sec":null}',
+          };
+        },
+      },
+      retrySleep: async () => {},
+    });
+
+    const paused = await pausing.resumeRun({ runId, workspaceRoot });
+    expect(paused).toMatchObject({
+      status: "incomplete",
+      completionReason: "user_input_required",
+    });
+    const waiting = stateStore.load(runId);
+    expect(waiting?.interaction).toMatchObject({ status: "waiting_user" });
+    expect(waiting?.loopControl).not.toHaveProperty("pendingControl");
+    expect(waiting?.loopControl).not.toHaveProperty(
+      "protocolRecovery.noActionNudges",
+    );
+    const requestId = waiting?.interaction?.requestId;
+    if (!requestId) throw new Error("missing waiting request id");
+
+    await pausing.submitUserReply({ runId, requestId, reply: "blue" });
+    const requests: (readonly ChatMessage[])[] = [];
+    const responses = [
+      "I will now report the selected color.",
+      '{"action":"final_answer","summary":"Blue selected."}',
+    ];
+    const resumed = new AgentOrchestrator({
+      appStateStore: stateStore,
+      model: {
+        label: "ask-user-resumed",
+        async complete(messages) {
+          requests.push(messages);
+          return { text: responses.shift() ?? "" };
+        },
+      },
+      retrySleep: async () => {},
+    });
+    await resumed.resumeRun({ runId, workspaceRoot });
+
+    const recovery = requests[1]?.find((message) =>
+      message.content.includes("[You stopped without a final_answer action."),
+    );
+    expect(recovery?.content).toContain("kind: protocol_recovery");
+    expect(recovery?.content).not.toContain(
+      "Your previous response again contained no executable action",
+    );
+  });
+
+  for (const loopKernelVersion of ["v1", "v2"] as const) {
+    test(`${loopKernelVersion} ask_user resolver failure preserves its committed cursor and recovery reset`, async () => {
+      const workspaceRoot = mkdtempSync(
+        path.join(tmpdir(), "paw-no-action-ask-failure-"),
+      );
+      mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+      writeFileSync(
+        path.join(workspaceRoot, ".paw", "memory-config.json"),
+        JSON.stringify({ enable: false }),
+        "utf8",
+      );
+      const runId = `no-action-ask-user-failure-${loopKernelVersion}`;
+      const stateStore = new InMemoryAppStateStore();
+      stateStore.save({
+        runId,
+        goal: "Ask a question.",
+        workspaceRoot,
+        turn: 0,
+        maxSteps: 3,
+        messages: [{ role: "user", content: "Ask a question." }],
+        loopControl: {
+          schemaVersion: "paw.loop-control.v1",
+          protocolRecovery: { noActionNudges: 1, hasEverUsedTools: true },
+          pendingControl: {
+            kind: "protocol_recovery",
+            text: "legacy attempt one",
+          },
+        },
+        savedAt: Date.now(),
+      });
+      const orchestrator = new AgentOrchestrator({
+        loopKernelVersion,
+        appStateStore: stateStore,
+        resolveAskUser: async () => {
+          throw new Error("simulated resolver failure");
+        },
+        model: {
+          label: "ask-user-failure",
+          async complete() {
+            return {
+              text: '{"action":"ask_user","question":"Continue?","context":{},"timeout_sec":null}',
+            };
+          },
+        },
+        retrySleep: async () => {},
+      });
+
+      const result = await orchestrator.resumeRun({ runId, workspaceRoot });
+      expect(result.status).toBe("failed");
+      const saved = stateStore.load(runId);
+      expect(saved?.turn).toBe(1);
+      expect(saved?.interaction).toMatchObject({ status: "waiting_user" });
+      expect(saved?.loopControl).not.toHaveProperty("pendingControl");
+      expect(saved?.loopControl).not.toHaveProperty(
+        "protocolRecovery.noActionNudges",
+      );
+    });
+  }
+
+  for (const loopKernelVersion of ["v1", "v2"] as const) {
+    for (const fixture of [
+      {
+        name: "format",
+        marker:
+          '[Your last output could not be parsed as a tool call and was NOT executed.]\nReason: invalid JSON.\nCorrect format is a single JSON object, no surrounding text or code fences:\n{"tool":"workspace.read_file","args":{"path":"<file>"}}\nFix the format and retry the call, or if you are done reply with:\n{"action":"final_answer","summary":"<your complete findings>"}',
+      },
+      {
+        name: "no-action",
+        marker:
+          '[You stopped without a final_answer action. If you have completed the task, output: {"action":"final_answer","summary":"<your complete findings here>"}. If not done, continue — call the next tool or take the next action.]',
+      },
+    ] as const) {
+      test(`${loopKernelVersion} migrates an unconsumed legacy ${fixture.name} recovery once`, async () => {
+        const workspaceRoot = mkdtempSync(
+          path.join(tmpdir(), `paw-legacy-${loopKernelVersion}-`),
+        );
+        mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+        writeFileSync(
+          path.join(workspaceRoot, ".paw", "memory-config.json"),
+          JSON.stringify({ enable: false }),
+          "utf8",
+        );
+        const runId = `legacy-${loopKernelVersion}-${fixture.name}`;
+        const stateStore = new InMemoryAppStateStore();
+        const legitimate = `${fixture.marker.split("\n")[0]} please explain this label`;
+        stateStore.save({
+          runId,
+          goal: "Inspect the legacy state.",
+          workspaceRoot,
+          turn: 0,
+          maxSteps: 1,
+          messages: [
+            { role: "user", content: "Inspect the legacy state." },
+            { role: "user", content: legitimate },
+            { role: "user", content: fixture.marker },
+          ],
+          savedAt: Date.now(),
+        });
+        const requests: (readonly ChatMessage[])[] = [];
+        const orchestrator = new AgentOrchestrator({
+          loopKernelVersion,
+          appStateStore: stateStore,
+          model: {
+            label: `legacy-${loopKernelVersion}-${fixture.name}`,
+            async complete(messages) {
+              requests.push(messages);
+              return { text: '{"action":"final_answer","summary":"done"}' };
+            },
+          },
+          retrySleep: async () => {},
+        });
+
+        await orchestrator.resumeRun({ runId, workspaceRoot });
+
+        expect(
+          requests[0]?.filter((message) =>
+            message.content.startsWith(
+              `[Ephemeral Control v1]\nkind: protocol_recovery\n${fixture.marker}`,
+            ),
+          ),
+        ).toHaveLength(1);
+        const saved = stateStore.load(runId);
+        expect(
+          saved?.messages.some((message) => message.content === fixture.marker),
+        ).toBe(false);
+        expect(
+          saved?.messages.some((message) => message.content === legitimate),
+        ).toBe(true);
+        expect(saved?.loopControl).not.toHaveProperty("pendingControl");
+      });
+    }
+  }
+
   test("resume removes legacy host projections from runtime and next save", async () => {
     const workspaceRoot = mkdtempSync(
       path.join(tmpdir(), "paw-context-resume-"),
@@ -377,6 +760,21 @@ describe("ContextAssembler v1", () => {
           content:
             "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly.",
         },
+        {
+          role: "user",
+          content:
+            '[Your last output could not be parsed as a tool call and was NOT executed.]\nReason: invalid JSON.\nCorrect format is a single JSON object, no surrounding text or code fences:\n{"tool":"workspace.read_file","args":{"path":"<file>"}}\nFix the format and retry the call, or if you are done reply with:\n{"action":"final_answer","summary":"<your complete findings>"}',
+        },
+        {
+          role: "user",
+          content:
+            '[You stopped without a final_answer action. If you have completed the task, output: {"action":"final_answer","summary":"<your complete findings here>"}. If not done, continue — call the next tool or take the next action.]',
+        },
+        {
+          role: "user",
+          content:
+            '[Protocol recovery attempt 3: do not narrate the action you intend to take. Emit the valid tool-call JSON now. If and only if the task is complete, emit {"action":"final_answer","summary":"<complete result>"}.]',
+        },
         { role: "user", content: "[Context Package] is my requested title" },
         { role: "user", content: "[TestWarden] please explain this label" },
         { role: "user", content: "[ProviderProtocol] explain this label" },
@@ -393,6 +791,21 @@ describe("ContextAssembler v1", () => {
           role: "user",
           content:
             "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn unexpectedly; explain why",
+        },
+        {
+          role: "user",
+          content:
+            "[Your last output could not be parsed as a tool call and was NOT executed.] please explain this label",
+        },
+        {
+          role: "user",
+          content:
+            "[Protocol recovery attempt 3: please explain how recovery works]",
+        },
+        {
+          role: "user",
+          content:
+            '[Protocol recovery attempt 1: do not narrate the action you intend to take. Emit the valid tool-call JSON now. If and only if the task is complete, emit {"action":"final_answer","summary":"<complete result>"}.]',
         },
         { role: "user", content: "Inspect the saved state." },
       ],
@@ -432,7 +845,14 @@ describe("ContextAssembler v1", () => {
       message.content ===
         "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response." ||
       message.content ===
-        "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly.";
+        "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly." ||
+      message.content.startsWith(
+        "[Your last output could not be parsed as a tool call and was NOT executed.]\nReason:",
+      ) ||
+      message.content ===
+        '[You stopped without a final_answer action. If you have completed the task, output: {"action":"final_answer","summary":"<your complete findings here>"}. If not done, continue — call the next tool or take the next action.]' ||
+      message.content ===
+        '[Protocol recovery attempt 3: do not narrate the action you intend to take. Emit the valid tool-call JSON now. If and only if the task is complete, emit {"action":"final_answer","summary":"<complete result>"}.]';
     expect(providerMessages.some(isLegacyProjection)).toBe(false);
     expect(
       durableSnapshots.some((messages) => messages.some(isLegacyProjection)),
@@ -475,6 +895,27 @@ describe("ContextAssembler v1", () => {
         (message) =>
           message.content ===
           "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn unexpectedly; explain why",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content ===
+          "[Your last output could not be parsed as a tool call and was NOT executed.] please explain this label",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content ===
+          "[Protocol recovery attempt 3: please explain how recovery works]",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content ===
+          '[Protocol recovery attempt 1: do not narrate the action you intend to take. Emit the valid tool-call JSON now. If and only if the task is complete, emit {"action":"final_answer","summary":"<complete result>"}.]',
       ),
     ).toBe(true);
   });

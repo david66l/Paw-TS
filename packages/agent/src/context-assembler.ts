@@ -75,6 +75,14 @@ const LEGACY_HOST_PROJECTION_PREFIXES = [
   "[Context Package]",
   "[Status Snapshot v1]",
 ] as const;
+const LEGACY_FORMAT_RECOVERY_PATTERN =
+  /^\[Your last output could not be parsed as a tool call and was NOT executed\.\]\nReason: [^\r\n]+\.\nCorrect format is a single JSON object, no surrounding text or code fences:\n\{"tool":"workspace\.read_file","args":\{"path":"<file>"\}\}\nFix the format and retry the call, or if you are done reply with:\n\{"action":"final_answer","summary":"<your complete findings>"\}$/;
+const LEGACY_NO_ACTION_FIRST_PATTERN =
+  /^\[You stopped without a final_answer action\. If you have completed the task, output: \{"action":"final_answer","summary":"<your complete findings here>"\}\. If not done, continue — call the next tool or take the next action\.\]$/;
+const LEGACY_NO_ACTION_SECOND_PATTERN =
+  /^\[Your previous response again contained no executable action\. Continue by emitting exactly one valid tool call, or emit \{"action":"final_answer","summary":"<complete result>"\} only if the task is actually done\.\]$/;
+const LEGACY_NO_ACTION_LATER_PATTERN =
+  /^\[Protocol recovery attempt ((?:[3-9]|[1-9]\d+)): do not narrate the action you intend to take\. Emit the valid tool-call JSON now\. If and only if the task is complete, emit \{"action":"final_answer","summary":"<complete result>"\}\.\]$/;
 const LEGACY_CONTROL_PROJECTION_PATTERNS = [
   /^\[ProgressAdvice:(?:inspect_gap|hypothesis_stale|safety_line)\] /,
   /^\[TestWarden\] (?:No Python test files detected;|Attempted:|Pre-flight:|No existing tests are linked to the changed files;|\d+ impacted test file\(s\) all passed\.|\d+\/\d+ impacted test file\(s\) FAILED:)/,
@@ -84,7 +92,57 @@ const LEGACY_CONTROL_PROJECTION_PATTERNS = [
   /^\[ProviderProtocol:missing_tool_calls\] The provider declared tool calls but supplied none\. Emit the complete structured calls once, or return a visible candidate response\.$/,
   /^\[LoopControl:turn_boundary\] Your previous natural-language response ended the provider turn but did not submit a completion candidate\. Continue with the next required tool\/action\. If the task is actually ready, submit the structured final_answer action explicitly\.$/,
   /^\[LoopControl:repair_required id=repair-[a-f0-9]{16}\] The durable (?:direct_verification|material_change) obligation remains open\. Execute the matching tool action now\. Prose, repeated reads, unrelated successful tools, and another final_answer do not satisfy it\.$/,
+  LEGACY_FORMAT_RECOVERY_PATTERN,
+  LEGACY_NO_ACTION_FIRST_PATTERN,
+  LEGACY_NO_ACTION_SECOND_PATTERN,
+  LEGACY_NO_ACTION_LATER_PATTERN,
 ] as const;
+
+export interface LegacyProtocolRecoveryProjectionV1 {
+  readonly pendingControl: Extract<
+    EphemeralControlV1,
+    { readonly kind: "protocol_recovery" }
+  >;
+  readonly formatErrorNudges?: number;
+  readonly noActionNudges?: number;
+  readonly hasEverUsedTools?: true;
+}
+
+/** Migrate only an unconsumed legacy recovery marker at the durable tail. */
+export function parseLegacyProtocolRecoveryProjectionV1(
+  messages: readonly ChatMessage[],
+): LegacyProtocolRecoveryProjectionV1 | undefined {
+  const tail = messages.at(-1);
+  if (!tail || tail.role !== "user") return undefined;
+  const text = tail.content;
+  if (LEGACY_FORMAT_RECOVERY_PATTERN.test(text)) {
+    const count = messages.filter(
+      (message) =>
+        message.role === "user" &&
+        LEGACY_FORMAT_RECOVERY_PATTERN.test(message.content),
+    ).length;
+    return {
+      pendingControl: { kind: "protocol_recovery", text },
+      formatErrorNudges: Math.min(Math.max(count, 1), 2),
+    };
+  }
+  const laterAttempt = LEGACY_NO_ACTION_LATER_PATTERN.exec(text);
+  const attempt = LEGACY_NO_ACTION_FIRST_PATTERN.test(text)
+    ? 1
+    : LEGACY_NO_ACTION_SECOND_PATTERN.test(text)
+      ? 2
+      : laterAttempt
+        ? Number.parseInt(laterAttempt[1] ?? "", 10)
+        : undefined;
+  if (!attempt || !Number.isSafeInteger(attempt) || attempt > 10_000) {
+    return undefined;
+  }
+  return {
+    pendingControl: { kind: "protocol_recovery", text },
+    noActionNudges: attempt,
+    hasEverUsedTools: true,
+  };
+}
 
 /** Remove only host/control formats Paw itself durably injected before P0.3. */
 export function stripLegacyContextProjectionsV1(

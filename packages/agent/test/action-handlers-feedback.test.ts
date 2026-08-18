@@ -89,17 +89,21 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
     if (result.state.type === "continue") {
       expect(result.state.nextFlags.formatErrorNudges).toBe(1);
       expect(result.state.nextFlags.lastTurnHadToolCall).toBe(false);
+      expect(result.state.nextFlags.pendingControl).toMatchObject({
+        kind: "protocol_recovery",
+      });
+      expect(result.state.nextFlags.pendingControl?.text).toContain(
+        "Reason: invalid JSON starting near line 2",
+      );
+      expect(result.state.nextFlags.pendingControl?.text).toContain(
+        '{"tool":"workspace.read_file","args":{"path":"<file>"}}',
+      );
     }
-    const feedback = messages.find(
-      (m) => m.role === "user" && m.content.includes("could not be parsed"),
-    );
-    expect(feedback).toBeDefined();
-    expect(feedback!.content).toContain(
-      "Reason: invalid JSON starting near line 2",
-    );
-    expect(feedback!.content).toContain(
-      '{"tool":"workspace.read_file","args":{"path":"<file>"}}',
-    );
+    expect(
+      messages.filter(
+        (m) => m.role === "user" && m.content.includes("could not be parsed"),
+      ),
+    ).toHaveLength(0);
   });
 
   test("未知工具名：注入 invalid 反馈并继续", async () => {
@@ -120,11 +124,17 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
     );
 
     expect(result.state.type).toBe("continue");
-    const feedback = messages.find((m) =>
-      m.content.includes("could not be parsed"),
-    );
-    expect(feedback).toBeDefined();
-    expect(feedback!.content).toContain("unknown tool");
+    if (result.state.type === "continue") {
+      expect(result.state.nextFlags.pendingControl).toMatchObject({
+        kind: "protocol_recovery",
+      });
+      expect(result.state.nextFlags.pendingControl?.text).toContain(
+        "unknown tool",
+      );
+    }
+    expect(
+      messages.filter((m) => m.content.includes("could not be parsed")),
+    ).toHaveLength(0);
   });
 
   test("纯对话 + 诊断 ok：由 CompletionPolicy 裁决为 completed", async () => {

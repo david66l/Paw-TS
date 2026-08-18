@@ -1,5 +1,8 @@
 import type { ChatMessage } from "@paw/core";
-import type { EphemeralControlV1 } from "./context-assembler.js";
+import {
+  type EphemeralControlV1,
+  parseLegacyProtocolRecoveryProjectionV1,
+} from "./context-assembler.js";
 import type { ProviderTerminalStateV2 } from "./loop-v2/index.js";
 import { parseLoopV2ReadinessFeedbackMarker } from "./loop-v2/index.js";
 import type { TurnFlags } from "./orchestrator/types.js";
@@ -17,6 +20,11 @@ export interface LoopControlCheckpointV1 {
     readonly nudges: number;
   };
   readonly pendingControl?: CrashSafePendingControlV1;
+  readonly protocolRecovery?: {
+    readonly formatErrorNudges?: number;
+    readonly noActionNudges?: number;
+    readonly hasEverUsedTools?: true;
+  };
 }
 
 const PROTOCOL_ISSUES = new Set([
@@ -60,7 +68,28 @@ export function checkpointLoopControlV1(
     flags.pendingControl?.kind === "protocol_recovery"
       ? flags.pendingControl
       : undefined;
-  if (!flags.providerTerminal && !readiness && !pendingControl) {
+  const protocolRecovery =
+    (flags.formatErrorNudges ?? 0) > 0 ||
+    (flags.noActionNudges ?? 0) > 0 ||
+    flags.hasEverUsedTools
+      ? {
+          ...((flags.formatErrorNudges ?? 0) > 0
+            ? { formatErrorNudges: flags.formatErrorNudges }
+            : {}),
+          ...((flags.noActionNudges ?? 0) > 0
+            ? { noActionNudges: flags.noActionNudges }
+            : {}),
+          ...(flags.hasEverUsedTools
+            ? { hasEverUsedTools: true as const }
+            : {}),
+        }
+      : undefined;
+  if (
+    !flags.providerTerminal &&
+    !readiness &&
+    !pendingControl &&
+    !protocolRecovery
+  ) {
     return undefined;
   }
   return {
@@ -70,6 +99,7 @@ export function checkpointLoopControlV1(
       : {}),
     ...(readiness ? { readiness } : {}),
     ...(pendingControl ? { pendingControl } : {}),
+    ...(protocolRecovery ? { protocolRecovery } : {}),
   };
 }
 
@@ -87,12 +117,17 @@ export function parseLoopControlCheckpointV1(
   if (value.readiness !== undefined && !readiness) return undefined;
   const pendingControl = parsePendingControl(value.pendingControl);
   if (value.pendingControl !== undefined && !pendingControl) return undefined;
-  if (!providerTerminal && !readiness && !pendingControl) return undefined;
+  const protocolRecovery = parseProtocolRecovery(value.protocolRecovery);
+  if (value.protocolRecovery !== undefined && !protocolRecovery)
+    return undefined;
+  if (!providerTerminal && !readiness && !pendingControl && !protocolRecovery)
+    return undefined;
   return {
     schemaVersion: "paw.loop-control.v1",
     ...(providerTerminal ? { providerTerminal } : {}),
     ...(readiness ? { readiness } : {}),
     ...(pendingControl ? { pendingControl } : {}),
+    ...(protocolRecovery ? { protocolRecovery } : {}),
   };
 }
 
@@ -102,12 +137,18 @@ export function restoreLoopControlFlagsV1(input: {
   readonly startTurn: number;
   readonly value: unknown;
   readonly legacyMessages: readonly ChatMessage[];
-}): Pick<
-  TurnFlags,
-  | "providerTerminal"
-  | "loopV2ReadinessFeedbackKey"
-  | "loopV2ReadinessNudges"
-  | "pendingControl"
+  readonly allowLegacyReadiness?: boolean;
+}): Partial<
+  Pick<
+    TurnFlags,
+    | "providerTerminal"
+    | "loopV2ReadinessFeedbackKey"
+    | "loopV2ReadinessNudges"
+    | "pendingControl"
+    | "formatErrorNudges"
+    | "noActionNudges"
+    | "hasEverUsedTools"
+  >
 > {
   const checkpoint = parseLoopControlCheckpointV1(input.value);
   if (input.value !== undefined && !checkpoint) {
@@ -134,8 +175,24 @@ export function restoreLoopControlFlagsV1(input: {
       ...(checkpoint.pendingControl
         ? { pendingControl: checkpoint.pendingControl }
         : {}),
+      ...(checkpoint.protocolRecovery?.formatErrorNudges
+        ? {
+            formatErrorNudges: checkpoint.protocolRecovery.formatErrorNudges,
+          }
+        : {}),
+      ...(checkpoint.protocolRecovery?.noActionNudges
+        ? { noActionNudges: checkpoint.protocolRecovery.noActionNudges }
+        : {}),
+      ...(checkpoint.protocolRecovery?.hasEverUsedTools
+        ? { hasEverUsedTools: true }
+        : {}),
     };
   }
+  const legacyProtocolRecovery = parseLegacyProtocolRecoveryProjectionV1(
+    input.legacyMessages,
+  );
+  if (legacyProtocolRecovery) return legacyProtocolRecovery;
+  if (input.allowLegacyReadiness === false) return {};
   const legacyReadiness = [...input.legacyMessages]
     .reverse()
     .map((message) => parseLoopV2ReadinessFeedbackMarker(message.content))
@@ -204,6 +261,47 @@ function parsePendingControl(
     kind: value.kind as CrashSafePendingControlV1["kind"],
     text: value.text,
   };
+}
+
+function parseProtocolRecovery(
+  value: unknown,
+): LoopControlCheckpointV1["protocolRecovery"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const formatErrorNudges = parseBoundedCounter(value.formatErrorNudges, 2);
+  const noActionNudges = parseBoundedCounter(value.noActionNudges, 10_000);
+  const hasEverUsedTools = value.hasEverUsedTools === true ? true : undefined;
+  if (
+    value.formatErrorNudges !== undefined &&
+    formatErrorNudges === undefined
+  ) {
+    return undefined;
+  }
+  if (value.noActionNudges !== undefined && noActionNudges === undefined) {
+    return undefined;
+  }
+  if (value.hasEverUsedTools !== undefined && hasEverUsedTools === undefined) {
+    return undefined;
+  }
+  if (
+    formatErrorNudges === undefined &&
+    noActionNudges === undefined &&
+    hasEverUsedTools === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    ...(formatErrorNudges !== undefined ? { formatErrorNudges } : {}),
+    ...(noActionNudges !== undefined ? { noActionNudges } : {}),
+    ...(hasEverUsedTools ? { hasEverUsedTools } : {}),
+  };
+}
+
+function parseBoundedCounter(value: unknown, max: number): number | undefined {
+  return Number.isSafeInteger(value) &&
+    (value as number) >= 1 &&
+    (value as number) <= max
+    ? (value as number)
+    : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -898,6 +898,7 @@ export class AgentOrchestrator {
     let emitRunMetrics: (() => void) | undefined;
     let persistLoopV2Terminal: ((result: RunResult) => void) | undefined;
     let activeTurnFlags: TurnFlags | undefined;
+    let activeTurnCursor: number | undefined;
 
     try {
       // 阶段 1：初始化（记忆检索、system prompt 构建、MCP 连接等）
@@ -955,15 +956,15 @@ export class AgentOrchestrator {
       // - autoContinueNudges: 连续自动继续次数（防止死循环）
       // - lastTurnHadToolCall: 上一轮是否执行了工具
       // - hasEverUsedTools: 是否使用过工具
-      const restoredLoopControl =
-        this.loopKernelVersion === "v2" && spec.resumeFromState
-          ? restoreLoopControlFlagsV1({
-              runId,
-              startTurn,
-              value: spec.resumeFromState.loopControl,
-              legacyMessages: spec.resumeFromState.messages,
-            })
-          : {};
+      const restoredLoopControl = spec.resumeFromState
+        ? restoreLoopControlFlagsV1({
+            runId,
+            startTurn,
+            value: spec.resumeFromState.loopControl,
+            legacyMessages: spec.resumeFromState.messages,
+            allowLegacyReadiness: this.loopKernelVersion === "v2",
+          })
+        : {};
       let flags: TurnFlags = {
         autoContinueNudges: 0,
         lastTurnHadToolCall: false,
@@ -981,6 +982,7 @@ export class AgentOrchestrator {
           : {}),
       };
       activeTurnFlags = flags;
+      activeTurnCursor = startTurn;
 
       // 捕获到闭包中，供 executeTurn 使用
       const turnCompactor = compactor;
@@ -1303,8 +1305,13 @@ export class AgentOrchestrator {
           agentGroup,
           turnCompactor,
           turnSessionMemoryStore,
+          (checkpointedFlags) => {
+            activeTurnFlags = checkpointedFlags;
+            activeTurnCursor = phaseCtx.turn + 1;
+          },
           turnControl,
         );
+        activeTurnCursor = turn + 1;
 
         // 状态机判断：
         // - "continue"：模型返回了工具调用，继续下一轮
@@ -1482,7 +1489,9 @@ export class AgentOrchestrator {
           runId,
           spec.goal,
           workspaceRoot,
-          activeTurnFlags?.providerTerminal?.lastTurn ?? startTurn,
+          activeTurnCursor ??
+            activeTurnFlags?.providerTerminal?.lastTurn ??
+            startTurn,
           maxSteps,
           ctxMgr,
           planner,
@@ -2333,6 +2342,7 @@ export class AgentOrchestrator {
     agentGroup: AgentGroup | undefined,
     compactor: ContextCompactor,
     sessionMemoryStore: SessionMemoryStore,
+    checkpointActiveFlags: (flags: TurnFlags) => void,
     control?: EphemeralControlV1,
   ): Promise<TurnState> {
     const {
@@ -2634,7 +2644,8 @@ export class AgentOrchestrator {
     });
 
     let dispatchedAction = singleAction;
-    let dispatchedFlags = flags;
+    const { pendingControl: _consumedControl, ...flagsAfterControl } = flags;
+    let dispatchedFlags: TurnFlags = flagsAfterControl;
     const controlAction = nativeToolErrors?.length
       ? ("native_tool_errors" as const)
       : singleAction &&
@@ -2660,7 +2671,6 @@ export class AgentOrchestrator {
       });
     }
     if (ctx.loopKernelVersion === "v2") {
-      const { pendingControl: _consumedControl, ...flagsAfterControl } = flags;
       const priorProviderState =
         flags.providerTerminal ??
         ({
@@ -2798,7 +2808,9 @@ export class AgentOrchestrator {
         todoStore: this.todoStore,
         planner,
         planSnapshotMaxItems: this.planSnapshotMaxItems,
-        saveStateFn: (flagsOverride) =>
+        saveStateFn: (flagsOverride) => {
+          const checkpointedFlags = flagsOverride ?? dispatchedFlags;
+          checkpointActiveFlags(checkpointedFlags);
           this.saveState(
             runId,
             specGoal,
@@ -2809,9 +2821,11 @@ export class AgentOrchestrator {
             planner,
             ctx.taskState,
             undefined,
-            flagsOverride ?? dispatchedFlags,
-          ),
-        saveWaitingStateFn: (state) => {
+            checkpointedFlags,
+          );
+        },
+        saveWaitingStateFn: (state, flagsOverride) => {
+          checkpointActiveFlags(flagsOverride);
           this._interactionState = state;
           this.saveState(
             runId,
@@ -2823,10 +2837,11 @@ export class AgentOrchestrator {
             planner,
             ctx.taskState,
             undefined,
-            dispatchedFlags,
+            flagsOverride,
           );
         },
-        consumeWaitingStateFn: (state, reply) => {
+        consumeWaitingStateFn: (state, reply, flagsOverride) => {
+          checkpointActiveFlags(flagsOverride);
           const appended = appendReplyToInboxV1(this._interactionInbox, state, {
             requestId: state.requestId,
             reply,
@@ -2847,7 +2862,7 @@ export class AgentOrchestrator {
             planner,
             ctx.taskState,
             undefined,
-            dispatchedFlags,
+            flagsOverride,
           );
         },
         agentGroup,

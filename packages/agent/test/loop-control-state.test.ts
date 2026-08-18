@@ -14,6 +14,8 @@ describe("Loop control checkpoint v1", () => {
       autoContinueNudges: 0,
       lastTurnHadToolCall: false,
       hasEverUsedTools: true,
+      formatErrorNudges: 2,
+      noActionNudges: 3,
       providerTerminal: {
         runId: "run-1",
         lastTurn: 3,
@@ -43,6 +45,9 @@ describe("Loop control checkpoint v1", () => {
       },
       loopV2ReadinessFeedbackKey: READINESS_KEY,
       loopV2ReadinessNudges: 1,
+      formatErrorNudges: 2,
+      noActionNudges: 3,
+      hasEverUsedTools: true,
       pendingControl: {
         kind: "readiness",
         text: "repair the missing verification",
@@ -66,6 +71,18 @@ describe("Loop control checkpoint v1", () => {
       {
         schemaVersion: "paw.loop-control.v1",
         pendingControl: { kind: "readiness", text: "" },
+      },
+      {
+        schemaVersion: "paw.loop-control.v1",
+        protocolRecovery: { formatErrorNudges: 0 },
+      },
+      {
+        schemaVersion: "paw.loop-control.v1",
+        protocolRecovery: { noActionNudges: 10_001 },
+      },
+      {
+        schemaVersion: "paw.loop-control.v1",
+        protocolRecovery: { hasEverUsedTools: false },
       },
     ]) {
       expect(parseLoopControlCheckpointV1(value)).toBeUndefined();
@@ -140,5 +157,50 @@ describe("Loop control checkpoint v1", () => {
     ).toEqual({
       providerTerminal: { runId: "run-1", lastTurn: 0 },
     });
+  });
+
+  test("migrates only an unconsumed exact legacy protocol recovery tail", () => {
+    const marker =
+      '[You stopped without a final_answer action. If you have completed the task, output: {"action":"final_answer","summary":"<your complete findings here>"}. If not done, continue — call the next tool or take the next action.]';
+    expect(
+      restoreLoopControlFlagsV1({
+        runId: "run-1",
+        startTurn: 1,
+        value: undefined,
+        legacyMessages: [
+          { role: "user", content: "goal" },
+          { role: "user", content: marker },
+        ],
+        allowLegacyReadiness: false,
+      }),
+    ).toEqual({
+      pendingControl: { kind: "protocol_recovery", text: marker },
+      noActionNudges: 1,
+      hasEverUsedTools: true,
+    });
+
+    for (const legacyMessages of [
+      [
+        { role: "user" as const, content: marker },
+        { role: "assistant" as const, content: "already consumed" },
+      ],
+      [
+        {
+          role: "user" as const,
+          content:
+            "[You stopped without a final_answer action.] explain this label",
+        },
+      ],
+    ]) {
+      expect(
+        restoreLoopControlFlagsV1({
+          runId: "run-1",
+          startTurn: 1,
+          value: undefined,
+          legacyMessages,
+          allowLegacyReadiness: false,
+        }),
+      ).toEqual({});
+    }
   });
 });

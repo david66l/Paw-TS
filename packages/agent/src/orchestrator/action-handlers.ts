@@ -124,10 +124,14 @@ interface ActionHandlerContext {
   readonly planSnapshotMaxItems?: number;
   /** 保存断点续跑状态的函数 */
   readonly saveStateFn: (flagsOverride?: TurnFlags) => void;
-  readonly saveWaitingStateFn?: (state: WaitingUserInteractionV1) => void;
+  readonly saveWaitingStateFn?: (
+    state: WaitingUserInteractionV1,
+    flagsOverride: TurnFlags,
+  ) => void;
   readonly consumeWaitingStateFn?: (
     state: WaitingUserInteractionV1,
     reply: string,
+    flagsOverride: TurnFlags,
   ) => void;
   /** 子 Agent 管理器 */
   readonly agentGroup?: AgentGroup;
@@ -350,7 +354,7 @@ function handleAcceptanceUpdate(
       flags: nextFlags,
     };
   }
-  opts.saveStateFn();
+  opts.saveStateFn(nextFlags);
   return { state: { type: "continue", nextFlags }, flags: nextFlags };
 }
 
@@ -395,14 +399,15 @@ function handleNoAction(
     formatNudges < FORMAT_ERROR_NUDGE_LIMIT &&
     !noRoomForAnotherTurn
   ) {
+    const message = formatErrorFeedbackMessage(diagnosis);
     const nextFlags: TurnFlags = {
       ...flags,
       formatErrorNudges: formatNudges + 1,
+      pendingControl: { kind: "protocol_recovery", text: message },
       lastTurnHadToolCall: false,
     };
     ctx.ctxMgr.addAssistant(text, thinking);
-    ctx.ctxMgr.addUser(formatErrorFeedbackMessage(diagnosis));
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
@@ -411,16 +416,16 @@ function handleNoAction(
   // 23/64 之类的位置被错误标记为 maxSteps exhausted。
   if (flags.hasEverUsedTools && !noRoomForAnotherTurn) {
     const noActionNudges = flags.noActionNudges ?? 0;
+    const message = noActionRecoveryMessage(noActionNudges + 1);
     const nextFlags: TurnFlags = {
       ...flags,
       noActionNudges: noActionNudges + 1,
+      pendingControl: { kind: "protocol_recovery", text: message },
       lastTurnHadToolCall: false,
     };
     // 把模型的文本输出作为 assistant 消息注入
     ctx.ctxMgr.addAssistant(text, thinking);
-    // 推一条提示让模型继续
-    ctx.ctxMgr.addUser(noActionRecoveryMessage(noActionNudges + 1));
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
@@ -567,7 +572,7 @@ function handleNativeToolErrors(
     };
   }
 
-  opts.saveStateFn();
+  opts.saveStateFn(nextFlags);
   return { state: { type: "continue", nextFlags }, flags: nextFlags };
 }
 
@@ -645,7 +650,7 @@ async function handleFinalAnswer(
     ctx.ctxMgr.addUser(
       `[Managed jobs are unfinished: ${detail}. Wait for the host to settle and commit every terminal result before outputting final_answer.]`,
     );
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
@@ -687,7 +692,7 @@ async function handleFinalAnswer(
     ctx.ctxMgr.addUser(
       `[You have pending work: ${pending}. Continue from where you left off — do not summarize or apologize, just take the next action.]`,
     );
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
@@ -827,7 +832,7 @@ async function handleFinalAnswer(
     };
     ctx.ctxMgr.addAssistant(text, thinking);
     ctx.ctxMgr.addUser(evaluated.nudgeMessage);
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
@@ -1005,7 +1010,7 @@ function enforceControlCandidateDecision(
   const nextFlags: TurnFlags = { ...flags, lastTurnHadToolCall: false };
   ctx.ctxMgr.addAssistant(text, thinking);
   ctx.ctxMgr.addUser(message);
-  opts.saveStateFn();
+  opts.saveStateFn(nextFlags);
   return { state: { type: "continue", nextFlags }, flags: nextFlags };
 }
 
@@ -1038,7 +1043,7 @@ async function checkLoopV2SemanticReviewGate(
     };
     ctx.ctxMgr.addAssistant(text, thinking);
     ctx.ctxMgr.addUser(gate.message);
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
   return {
@@ -1081,7 +1086,7 @@ async function checkLoopV2VerificationProbeGate(
     };
     ctx.ctxMgr.addAssistant(text, thinking);
     ctx.ctxMgr.addUser(gate.message);
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
   return {
@@ -1179,7 +1184,7 @@ async function checkCandidateReviewGate(
       });
     }
     ctx.taskState.recordCandidateReview(review);
-    opts.saveStateFn();
+    opts.saveStateFn(flags);
   }
 
   const reportGrounding = review.reportGrounding ?? "unknown";
@@ -1224,7 +1229,7 @@ async function checkCandidateReviewGate(
     };
     ctx.ctxMgr.addAssistant(text, thinking);
     ctx.ctxMgr.addUser(message);
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
   if (reportIssue) {
@@ -1281,7 +1286,7 @@ function handleAcceptanceGateFailure(
     };
     ctx.ctxMgr.addAssistant(text, thinking);
     ctx.ctxMgr.addUser(acceptance.message);
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
@@ -1371,7 +1376,7 @@ async function handleAskUser(
   });
   // Persist the question before an interactive resolver can block forever.
   ctx.ctxMgr.addAssistant(text, thinking);
-  opts.saveWaitingStateFn?.(waiting);
+  opts.saveWaitingStateFn?.(waiting, nextFlags);
 
   if (opts.resolveAskUser) {
     // 阻塞等待用户输入
@@ -1382,7 +1387,7 @@ async function handleAskUser(
     // The question is already durable; append and consume the reply before
     // the next model turn so a crash cannot replay the ask action.
     ctx.ctxMgr.addUser(reply);
-    opts.consumeWaitingStateFn?.(waiting, reply);
+    opts.consumeWaitingStateFn?.(waiting, reply, nextFlags);
 
     // 检查是否达到最大轮数
     if (ctx.turn + 1 >= ctx.maxSteps) {
@@ -1398,7 +1403,7 @@ async function handleAskUser(
       };
     }
 
-    opts.saveStateFn();
+    opts.saveStateFn(nextFlags);
     return { state: { type: "continue", nextFlags }, flags: nextFlags };
   }
 
@@ -1538,7 +1543,7 @@ async function handlePlanUpdate(
     };
   }
 
-  opts.saveStateFn();
+  opts.saveStateFn(nextFlags);
   return { state: { type: "continue", nextFlags }, flags: nextFlags };
 }
 
@@ -1885,7 +1890,7 @@ async function handleToolCalls(
     executionEnvironment: ctx.executionEnvironment,
     mutationCaptures,
     observeLoopV2ToolCommit: ctx.observeLoopV2ToolCommit,
-    saveStateFn: opts.saveStateFn,
+    saveStateFn: () => opts.saveStateFn(nextFlags),
     payloadDeduper: ctx.payloadDeduper,
     artifactRegistry: ctx.artifactRegistry,
     failureSignatures: flags.failureSignatures,
@@ -1960,6 +1965,9 @@ async function handleToolCalls(
       ? { idleFuseTrips: (flags.idleFuseTrips ?? 0) + 1 }
       : {}),
   };
+  // finalizeToolExecution saves transcript/tool facts before lifecycle flags
+  // are fully derived; overwrite the checkpoint with the committed flags.
+  opts.saveStateFn(fusedFlags);
 
   if (codingPhaseEnabled && codingPhaseViolationTurns >= 2) {
     const decision = decideCompletion({
@@ -2159,7 +2167,7 @@ async function handleRunAgent(
     };
   }
 
-  opts.saveStateFn();
+  opts.saveStateFn(nextFlags);
   return {
     state: { type: "continue", nextFlags },
     flags: nextFlags,
