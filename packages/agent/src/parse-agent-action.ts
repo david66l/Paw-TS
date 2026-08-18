@@ -376,7 +376,7 @@ function parseArguments(v: unknown): Record<string, unknown> | null {
 }
 
 /** 判断 tool 信封里装的是不是结构化动作名（而非真实工具） */
-function isStructuredActionKind(toolId: string): boolean {
+export function isStructuredActionKind(toolId: string): boolean {
   const kind = toolId.toLowerCase().replace(/-/g, "_");
   return (
     kind === "ask_user" ||

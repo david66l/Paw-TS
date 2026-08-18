@@ -48,6 +48,7 @@ import path from "node:path";
 // @paw/core：平台基础层 — 上下文管理、记忆系统、事件、token 估算
 // ─────────────────────────────────────────────────────────────
 import {
+  type AgentAction,
   type AgentToolCallAction,
   type AppState,
   type AppStateStore,
@@ -381,6 +382,7 @@ import type {
 import {
   type ParseDiagnosis,
   diagnoseParseFailure,
+  isStructuredActionKind,
   parseAgentActionFromModelText,
   parseAgentActionsFromModelText,
 } from "./parse-agent-action.js";
@@ -534,6 +536,67 @@ export interface AgentOrchestratorOptions {
   readonly onLoopV2CandidateAssessment?: (
     assessment: LoopV2LiveCandidateAssessmentV1,
   ) => void;
+}
+
+/**
+ * 将原生 tool-call 的控制动作名称（如 "action-final_answer"）归一化为
+ * 对应的 AgentAction。覆盖 DeepSeek 等原生 tool-call 提供商可能产生的
+ * 各种别名变体（连字符/下划线/前缀）。只在 native tool-call 进入
+ * unknown_tool 拒绝之前调用；归一化后的动作不进入 workspace 工具
+ * 执行器，走正常的 action 分发路径。
+ */
+function normalizeNativeControlAction(
+  name: string,
+  args: Record<string, unknown> | undefined,
+): AgentAction | null {
+  const normalized = name.toLowerCase().replace(/[-_.]/g, "_");
+  // 去掉可能的 "action_" 前缀
+  const kind = normalized.replace(/^action_/, "");
+  if (!isStructuredActionKind(kind)) return null;
+
+  const payload = args ?? {};
+  if (kind === "final_answer" || kind === "finalanswer") {
+    const summary =
+      typeof payload.summary === "string"
+        ? payload.summary
+        : typeof payload.text === "string"
+          ? payload.text
+          : typeof payload.message === "string"
+            ? payload.message
+            : "(completed)";
+    return { type: "final_answer", summary };
+  }
+  if (kind === "ask_user" || kind === "askuser") {
+    const question =
+      typeof payload.question === "string" ? payload.question : "";
+    if (!question) return null;
+    const ctx =
+      payload.context && typeof payload.context === "object"
+        ? (payload.context as Record<string, unknown>)
+        : {};
+    let timeoutSec: number | null = null;
+    if (typeof payload.timeout_sec === "number") {
+      timeoutSec = payload.timeout_sec;
+    } else if (typeof payload.timeoutSec === "number") {
+      timeoutSec = payload.timeoutSec;
+    }
+    return {
+      type: "ask_user",
+      question,
+      context: ctx,
+      timeoutSec,
+    };
+  }
+  if (kind === "abort") {
+    return {
+      type: "abort",
+      reason: typeof payload.reason === "string" ? payload.reason : "aborted",
+      canResume: false,
+    };
+  }
+  // plan_update / acceptance_update 需要复杂嵌套参数，
+  // 暂不支持原生桥接（模型可用文本 JSON 发出）
+  return null;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -1657,6 +1720,8 @@ export class AgentOrchestrator {
     thinking: string | undefined;
     toolCalls: AgentToolCallAction[];
     singleAction: import("@paw/core").AgentAction | null;
+    /** Native tool-call 桥接的控制动作（如 action-final_answer）。 */
+    nativeControlAction: AgentAction | null;
     reasoningText: string;
     /** Provider-visible assistant text for a native tool-call turn. */
     nativeAssistantContent?: string;
@@ -1721,6 +1786,10 @@ export class AgentOrchestrator {
       | readonly import("@paw/core").NativeToolTurnCallV1[]
       | undefined;
 
+    // 原生控制动作（从 native tool-call 桥接的控制动作）——提升到
+    // turn 级作用域，native 处理和 action 分发都可以访问
+    const nativeControlActions: AgentAction[] = [];
+
     // 通道 1：原生 tool_use → 直接映射为 AgentToolCallAction
     if (
       (nativeToolCalls && nativeToolCalls.length > 0) ||
@@ -1728,6 +1797,7 @@ export class AgentOrchestrator {
     ) {
       const mapped: AgentToolCallAction[] = [];
       const errors: NativeToolError[] = [];
+      // nativeControlActions 已提升到 turn 级作用域（line ~1784）
       const entries = [
         ...(nativeToolCalls ?? []).map((call, fallbackIndex) => ({
           sourceIndex: call.sourceIndex ?? fallbackIndex,
@@ -1792,6 +1862,20 @@ export class AgentOrchestrator {
           continue;
         }
         if (!knownTools.has(originalName)) {
+          // 控制动作桥接：DeepSeek 等原生 tool-call 提供商会把
+          // final_answer / ask_user 等控制动作表示为工具名（如
+          // "action-final_answer"）。在拒绝为未知工具之前，先尝试
+          // 归一化为控制动作。真实轨迹（django-15098 msysowi8）
+          // 模型连续 17 次尝试 action-final_answer 均被拒绝，
+          // 浪费 ~30 回合导致超时。
+          const nativeControl = normalizeNativeControlAction(
+            originalName,
+            tc.arguments,
+          );
+          if (nativeControl) {
+            nativeControlActions.push(nativeControl);
+            continue;
+          }
           // 未知工具名：原生调用不是文本误匹配，静默丢弃会让模型重复犯错
           // → 拒绝执行并回灌「工具不存在 + 可用列表」（参考 OpenHands 做法）
           errors.push({
@@ -1854,14 +1938,21 @@ export class AgentOrchestrator {
       toolCalls.length === 0
         ? parseAgentActionFromModelText(text, { knownTools })
         : null;
+    // 原生控制动作桥接优先：native tool-call 中的 final_answer 等
+    // 比文本解析更可靠（模型明确选择了控制动作名称）
+    const nativeControlAction =
+      nativeControlActions.length > 0
+        ? (nativeControlActions[0] ?? null)
+        : null;
     const singleAction =
-      parsedSingleAction &&
+      nativeControlAction ??
+      (parsedSingleAction &&
       parsedSingleAction.type !== "tool_call" &&
       ctx.capabilitySet.modelActions.includes(
         `action.${parsedSingleAction.type}`,
       )
         ? parsedSingleAction
-        : null;
+        : null);
 
     // 解析诊断：无任何 action 时，描述「为什么解析失败」供格式反馈使用
     const diagnosis: ParseDiagnosis =
@@ -1887,6 +1978,7 @@ export class AgentOrchestrator {
       thinking,
       toolCalls,
       singleAction,
+      nativeControlAction,
       reasoningText,
       diagnosis,
       ...(nativeAssistantContent !== undefined
@@ -2622,6 +2714,8 @@ export class AgentOrchestrator {
       nativeToolTurn,
       finishReason,
     } = modelResult;
+    // 原生控制动作已在 singleAction 中（nativeControlAction 优先合并）
+    // 不需要在此处重复处理
     emit({
       type: "capability.selection",
       ...ctx.capabilityExposure.observe(
@@ -2633,6 +2727,7 @@ export class AgentOrchestrator {
     });
 
     let dispatchedAction = singleAction;
+    // 原生控制动作已通过 singleAction 传递（nativeControlAction 优先合并）
     const unmarkedFlags = consumeSelectedPendingControlV1(
       flags,
       requestControl,
