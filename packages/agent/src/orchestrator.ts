@@ -198,9 +198,11 @@ import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
 import {
+  type EphemeralControlV1,
   type HostStateV1,
   assembleModelContextV1,
-  stripLegacyHostProjectionsV1,
+  selectEphemeralControlV1,
+  stripLegacyContextProjectionsV1,
 } from "./context-assembler.js";
 import {
   appendReplyToInboxV1,
@@ -1008,6 +1010,7 @@ export class AgentOrchestrator {
       // 测试守卫：惰性构建的代码-测试依赖图 + 上次验证的 revision
       let testWardenMap: TestMapV1 | undefined;
       let lastVerifiedRevision = -1;
+      let preflightControl: EphemeralControlV1 | undefined;
       // Layer 1：开工安检（基线验证测试基础设施可执行）
       if (this.loopKernelVersion === "v2") {
         try {
@@ -1016,7 +1019,10 @@ export class AgentOrchestrator {
             ...(this.shellSandbox ? { shellSandbox: this.shellSandbox } : {}),
           });
           if (preFlight.note) {
-            ctxMgr.addUser(preFlight.note);
+            preflightControl = {
+              kind: "test_warden",
+              text: preFlight.note,
+            };
           }
           if (preFlight.runnerExecutable) {
             testWardenMap = buildTestMapV1(workspaceRoot);
@@ -1026,6 +1032,8 @@ export class AgentOrchestrator {
         }
       }
       for (let turn = startTurn; turn < maxSteps; turn++) {
+        let progressControl: EphemeralControlV1 | undefined;
+        let testWardenControl: EphemeralControlV1 | undefined;
         // Loop v2.1 §8.3 停滞阶梯：无产品级进展的回合差达到版本化阈值时注入
         // 事实建议（含可并行派发只读调查员的接口事实）。advice-only，不拦截。
         if (this.loopKernelVersion === "v2") {
@@ -1041,7 +1049,7 @@ export class AgentOrchestrator {
           });
           progressBaseline = stall.baseline;
           if (stall.message) {
-            ctxMgr.addUser(stall.message);
+            progressControl = { kind: "progress", text: stall.message };
           }
         }
         // 测试守卫 Layer 2：mutation revision 增长时确定性执行受影响测试
@@ -1059,7 +1067,10 @@ export class AgentOrchestrator {
                   : {}),
                 testMap: testWardenMap,
               });
-              ctxMgr.addUser(wardenResult.renderedSummary);
+              testWardenControl = {
+                kind: wardenResult.allPassed ? "status" : "test_warden",
+                text: wardenResult.renderedSummary,
+              };
             }
             lastVerifiedRevision = currentRevision;
           }
@@ -1265,6 +1276,13 @@ export class AgentOrchestrator {
             : {}),
         };
 
+        const turnControl = selectEphemeralControlV1([
+          testWardenControl,
+          preflightControl,
+          progressControl,
+        ]);
+        preflightControl = undefined;
+
         // 执行一轮
         const state = await this.executeTurn(
           phaseCtx,
@@ -1272,6 +1290,7 @@ export class AgentOrchestrator {
           agentGroup,
           turnCompactor,
           turnSessionMemoryStore,
+          turnControl,
         );
 
         // 状态机判断：
@@ -1568,6 +1587,7 @@ export class AgentOrchestrator {
     toolDefs: readonly import("@paw/models").ToolDefinition[],
     toolNameMap: Map<string, string>,
     hostState: HostStateV1,
+    control?: EphemeralControlV1,
   ): Promise<{
     text: string;
     thinking: string | undefined;
@@ -1595,6 +1615,7 @@ export class AgentOrchestrator {
     const requestMessages = assembleModelContextV1({
       durable: { messages: ctxMgr.buildMessages() },
       hostState,
+      ...(control ? { control } : {}),
     });
 
     // 评估钩子：模型调用前记录 messages（用于训练数据收集）
@@ -2292,6 +2313,7 @@ export class AgentOrchestrator {
     agentGroup: AgentGroup | undefined,
     compactor: ContextCompactor,
     sessionMemoryStore: SessionMemoryStore,
+    control?: EphemeralControlV1,
   ): Promise<TurnState> {
     const {
       runId,
@@ -2315,12 +2337,13 @@ export class AgentOrchestrator {
     ctx.artifactRegistry?.startTurn(ctx.turn);
 
     let hostStateForRequest = this.buildHostState(ctx);
-    const hostProjectionMessages = assembleModelContextV1({
+    const requestProjectionMessages = assembleModelContextV1({
       durable: { messages: [] },
       hostState: hostStateForRequest,
+      ...(control ? { control } : {}),
     });
-    const hostProjectionTokens = ctxMgr.estimator.countMessages(
-      hostProjectionMessages,
+    const requestProjectionTokens = ctxMgr.estimator.countMessages(
+      requestProjectionMessages,
     );
 
     // 发出轮次 tick 事件（TUI 用此更新进度条和 token 计数）
@@ -2330,14 +2353,14 @@ export class AgentOrchestrator {
       maxSteps,
       estimatedTokens:
         ctxMgr.estimatedTokens +
-        hostProjectionTokens +
+        requestProjectionTokens +
         AgentOrchestrator.estimateToolTokens(toolDefs, ctxMgr.estimator),
     });
     emit({ type: "phase", name: "model" });
     emit({
       type: "model.request",
       label: model.label,
-      messageCount: ctxMgr.length + hostProjectionMessages.length,
+      messageCount: ctxMgr.length + requestProjectionMessages.length,
     });
 
     // 步骤 1：报告自上轮以来被外部修改的文件
@@ -2374,9 +2397,9 @@ export class AgentOrchestrator {
       contextWindow,
       cacheHitRate,
     );
-    let requestBudgetSnapshot = AgentOrchestrator.reserveHostProjection(
+    let requestBudgetSnapshot = AgentOrchestrator.reserveRequestProjection(
       budgetSnapshot,
-      hostProjectionTokens,
+      requestProjectionTokens,
     );
     ctxMgr.setHistoryTokenBudget(
       requestBudgetSnapshot.allocation.historyBudget,
@@ -2524,16 +2547,17 @@ export class AgentOrchestrator {
     // Rebuild after reconciliation, memory refresh, compaction and guidance so
     // this exact provider request sees the latest host-owned facts.
     hostStateForRequest = this.buildHostState(ctx);
-    const finalHostProjectionTokens = ctxMgr.estimator.countMessages(
+    const finalRequestProjectionTokens = ctxMgr.estimator.countMessages(
       assembleModelContextV1({
         durable: { messages: [] },
         hostState: hostStateForRequest,
+        ...(control ? { control } : {}),
       }),
     );
-    if (finalHostProjectionTokens !== hostProjectionTokens) {
-      requestBudgetSnapshot = AgentOrchestrator.reserveHostProjection(
+    if (finalRequestProjectionTokens !== requestProjectionTokens) {
+      requestBudgetSnapshot = AgentOrchestrator.reserveRequestProjection(
         budgetSnapshot,
-        finalHostProjectionTokens,
+        finalRequestProjectionTokens,
       );
       ctxMgr.setHistoryTokenBudget(
         requestBudgetSnapshot.allocation.historyBudget,
@@ -2563,6 +2587,7 @@ export class AgentOrchestrator {
         toolDefs,
         toolNameMap,
         hostStateForRequest,
+        control,
       );
     } finally {
       this._streamRecoveryPath = undefined;
@@ -3058,7 +3083,7 @@ export class AgentOrchestrator {
       workspaceRoot,
       turn,
       maxSteps,
-      messages: stripLegacyHostProjectionsV1(ctxMgr.buildMessages()),
+      messages: stripLegacyContextProjectionsV1(ctxMgr.buildMessages()),
       ...(plan
         ? { plan: { revision: plan.revision, items: plan.items as unknown[] } }
         : {}),
@@ -4423,7 +4448,7 @@ export class AgentOrchestrator {
         const s = spec.resumeFromState;
         startTurn = s.turn;
         ctxMgr.setSystem(systemContent);
-        const history = stripLegacyHostProjectionsV1(s.messages).filter(
+        const history = stripLegacyContextProjectionsV1(s.messages).filter(
           (m) => m.role !== "system",
         );
         if (history.length > 0) ctxMgr.replaceHistory(history);
@@ -4728,7 +4753,7 @@ export class AgentOrchestrator {
       const s = spec.resumeFromState;
       startTurn = s.turn;
       ctxMgr.setSystem(systemContent);
-      const history = stripLegacyHostProjectionsV1(s.messages).filter(
+      const history = stripLegacyContextProjectionsV1(s.messages).filter(
         (m) => m.role !== "system",
       );
 
@@ -4915,8 +4940,8 @@ export class AgentOrchestrator {
     return snapshot;
   }
 
-  /** Reserve one-request HostState space without pretending it is durable history. */
-  private static reserveHostProjection(
+  /** Reserve request-only HostState/control space outside durable history. */
+  private static reserveRequestProjection(
     snapshot: ContextBudgetSnapshot,
     projectionTokens: number,
   ): ContextBudgetSnapshot {

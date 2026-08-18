@@ -38,6 +38,33 @@ export type EphemeralControlV1 =
   | { readonly kind: "readiness"; readonly text: string }
   | { readonly kind: "protocol_recovery"; readonly text: string };
 
+const CONTROL_PRIORITY_V1: Readonly<
+  Record<EphemeralControlV1["kind"], number>
+> = {
+  status: 0,
+  progress: 1,
+  test_warden: 2,
+  readiness: 3,
+  protocol_recovery: 4,
+};
+
+/** Deterministically admit at most one control projection for a request. */
+export function selectEphemeralControlV1(
+  candidates: readonly (EphemeralControlV1 | undefined)[],
+): EphemeralControlV1 | undefined {
+  let selected: EphemeralControlV1 | undefined;
+  for (const candidate of candidates) {
+    if (!candidate?.text.trim()) continue;
+    if (
+      !selected ||
+      CONTROL_PRIORITY_V1[candidate.kind] > CONTROL_PRIORITY_V1[selected.kind]
+    ) {
+      selected = candidate;
+    }
+  }
+  return selected;
+}
+
 export interface AssembleModelContextInputV1 {
   readonly durable: DurableContextV1;
   readonly hostState?: HostStateV1;
@@ -48,12 +75,16 @@ const LEGACY_HOST_PROJECTION_PREFIXES = [
   "[Context Package]",
   "[Status Snapshot v1]",
 ] as const;
+const LEGACY_CONTROL_PROJECTION_PATTERNS = [
+  /^\[ProgressAdvice:(?:inspect_gap|hypothesis_stale|safety_line)\] /,
+  /^\[TestWarden\] (?:No Python test files detected;|Attempted:|Pre-flight:|No existing tests are linked to the changed files;|\d+ impacted test file\(s\) all passed\.|\d+\/\d+ impacted test file\(s\) FAILED:)/,
+] as const;
 
-/** Remove only schemas Paw itself durably injected before P0.3b. */
-export function stripLegacyHostProjectionsV1(
+/** Remove only host/control formats Paw itself durably injected before P0.3. */
+export function stripLegacyContextProjectionsV1(
   messages: readonly ChatMessage[],
 ): readonly ChatMessage[] {
-  return messages.filter((message) => !isLegacyHostProjection(message));
+  return messages.filter((message) => !isLegacyContextProjection(message));
 }
 
 /**
@@ -66,7 +97,7 @@ export function stripLegacyHostProjectionsV1(
 export function assembleModelContextV1(
   input: AssembleModelContextInputV1,
 ): readonly ChatMessage[] {
-  const messages = stripLegacyHostProjectionsV1(input.durable.messages).map(
+  const messages = stripLegacyContextProjectionsV1(input.durable.messages).map(
     (message) => ({ ...message }),
   );
   if (input.hostState && hasHostStateV1(input.hostState)) {
@@ -93,12 +124,15 @@ export function assembleModelContextV1(
   return messages;
 }
 
-function isLegacyHostProjection(message: ChatMessage): boolean {
+function isLegacyContextProjection(message: ChatMessage): boolean {
+  if (message.role !== "user") return false;
   return (
-    message.role === "user" &&
     LEGACY_HOST_PROJECTION_PREFIXES.some(
       (prefix) =>
         message.content === prefix || message.content.startsWith(`${prefix}\n`),
+    ) ||
+    LEGACY_CONTROL_PROJECTION_PATTERNS.some((pattern) =>
+      pattern.test(message.content),
     )
   );
 }

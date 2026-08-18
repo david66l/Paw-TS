@@ -8,6 +8,7 @@ import { type ChatMessage, InMemoryAppStateStore } from "@paw/core";
 import {
   type HostStateV1,
   assembleModelContextV1,
+  selectEphemeralControlV1,
 } from "../src/context-assembler.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
@@ -105,6 +106,32 @@ describe("ContextAssembler v1", () => {
     );
   });
 
+  test("selects one control by stable urgency priority", () => {
+    expect(
+      selectEphemeralControlV1([
+        { kind: "progress", text: "change hypothesis" },
+        { kind: "test_warden", text: "tests failed" },
+        { kind: "readiness", text: "repair candidate" },
+        { kind: "protocol_recovery", text: "retry protocol" },
+      ]),
+    ).toEqual({ kind: "protocol_recovery", text: "retry protocol" });
+    expect(
+      selectEphemeralControlV1([
+        { kind: "progress", text: "first" },
+        { kind: "progress", text: "second" },
+      ]),
+    ).toEqual({ kind: "progress", text: "first" });
+    expect(
+      selectEphemeralControlV1([
+        { kind: "test_warden", text: "   " },
+        undefined,
+      ]),
+    ).toBeUndefined();
+    expect(
+      selectEphemeralControlV1([{ kind: "status", text: "tests passed" }]),
+    ).toEqual({ kind: "status", text: "tests passed" });
+  });
+
   test("uses canonical host order and removes only exact legacy projections", () => {
     const assembled = assembleModelContextV1({
       durable: {
@@ -193,6 +220,118 @@ describe("ContextAssembler v1", () => {
     expect(requestText?.split("LOCKED_ONCE_91A")).toHaveLength(2);
   });
 
+  test("v2 preflight TestWarden is request-only ephemeral control", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-control-v2-"));
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    let providerMessages: readonly ChatMessage[] = [];
+    const durableControlCounts: number[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      model: {
+        label: "v2-ephemeral-preflight",
+        async complete(messages) {
+          providerMessages = messages;
+          return { text: '{"action":"final_answer","summary":"done"}' };
+        },
+      },
+      evalHooks: {
+        beforeModelCall: ({ contextManager }) => {
+          durableControlCounts.push(
+            contextManager
+              .buildMessages()
+              .filter((message) => message.content.includes("[TestWarden]"))
+              .length,
+          );
+        },
+      },
+      retrySleep: async () => {},
+    });
+
+    await orchestrator.run({
+      runId: "v2-ephemeral-preflight",
+      goal: "Inspect this empty fixture.",
+      workspaceRoot,
+      maxSteps: 1,
+    });
+
+    const controls = providerMessages.filter((message) =>
+      message.content.startsWith("[Ephemeral Control v1]"),
+    );
+    expect(controls).toHaveLength(1);
+    expect(controls[0]?.content).toContain("kind: test_warden");
+    expect(controls[0]?.content).toContain("[TestWarden]");
+    expect(providerMessages.at(-1)).toBe(controls[0]);
+    expect(durableControlCounts).toEqual([0]);
+  });
+
+  test("v2 ProgressAdvice appears once without growing durable history", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-control-progress-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    for (const name of ["a.txt", "b.txt", "c.txt", "d.txt"]) {
+      writeFileSync(path.join(workspaceRoot, name), name, "utf8");
+    }
+    const responses = [
+      '{"tool":"workspace.read_file","args":{"path":"a.txt"}}',
+      '{"tool":"workspace.read_file","args":{"path":"b.txt"}}',
+      '{"tool":"workspace.read_file","args":{"path":"c.txt"}}',
+      '{"tool":"workspace.read_file","args":{"path":"d.txt"}}',
+      '{"action":"final_answer","summary":"inspected"}',
+    ];
+    const requestControls: string[] = [];
+    const durableProgressCounts: number[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      model: {
+        label: "v2-ephemeral-progress",
+        async complete(messages) {
+          const control = messages.find((message) =>
+            message.content.startsWith("[Ephemeral Control v1]"),
+          );
+          if (control) requestControls.push(control.content);
+          return { text: responses.shift() ?? "" };
+        },
+      },
+      evalHooks: {
+        beforeModelCall: ({ contextManager }) => {
+          durableProgressCounts.push(
+            contextManager
+              .buildMessages()
+              .filter((message) => message.content.includes("[ProgressAdvice:"))
+              .length,
+          );
+        },
+      },
+      retrySleep: async () => {},
+    });
+
+    await orchestrator.run({
+      runId: "v2-ephemeral-progress",
+      goal: "Inspect four files before deciding.",
+      workspaceRoot,
+      maxSteps: 5,
+    });
+
+    expect(
+      requestControls.filter((content) => content.includes("kind: progress")),
+    ).toHaveLength(1);
+    expect(requestControls.join("\n")).toContain(
+      "[ProgressAdvice:inspect_gap]",
+    );
+    expect(durableProgressCounts.every((count) => count === 0)).toBe(true);
+  });
+
   test("resume removes legacy host projections from runtime and next save", async () => {
     const workspaceRoot = mkdtempSync(
       path.join(tmpdir(), "paw-context-resume-"),
@@ -214,7 +353,18 @@ describe("ContextAssembler v1", () => {
       messages: [
         { role: "user", content: "[Context Package]\nlegacy task facts" },
         { role: "user", content: "[Status Snapshot v1]\nlegacy telemetry" },
+        {
+          role: "user",
+          content:
+            "[ProgressAdvice:inspect_gap] last 4 turns: no product progress",
+        },
+        {
+          role: "user",
+          content:
+            "[TestWarden] No Python test files detected; the test warden is inactive for this workspace.",
+        },
         { role: "user", content: "[Context Package] is my requested title" },
+        { role: "user", content: "[TestWarden] please explain this label" },
         { role: "user", content: "Inspect the saved state." },
       ],
       savedAt: Date.now(),
@@ -244,7 +394,9 @@ describe("ContextAssembler v1", () => {
       message.content === "[Context Package]" ||
       message.content.startsWith("[Context Package]\n") ||
       message.content === "[Status Snapshot v1]" ||
-      message.content.startsWith("[Status Snapshot v1]\n");
+      message.content.startsWith("[Status Snapshot v1]\n") ||
+      message.content.startsWith("[ProgressAdvice:inspect_gap] ") ||
+      message.content.startsWith("[TestWarden] No Python test files detected;");
     expect(providerMessages.some(isLegacyProjection)).toBe(false);
     expect(
       durableSnapshots.some((messages) => messages.some(isLegacyProjection)),
@@ -255,6 +407,12 @@ describe("ContextAssembler v1", () => {
       saved?.messages.some(
         (message) =>
           message.content === "[Context Package] is my requested title",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content === "[TestWarden] please explain this label",
       ),
     ).toBe(true);
   });
