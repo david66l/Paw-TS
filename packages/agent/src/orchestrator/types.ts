@@ -30,6 +30,7 @@ import type { TaskPlanner } from "@paw/store";
 import type { CandidateReviewer } from "../candidate-review.js";
 import type { CapabilityExposureShadowV1 } from "../capability-exposure.js";
 import type { CapabilitySetV1 } from "../capability-set.js";
+import type { EphemeralControlV1 } from "../context-assembler.js";
 import type { ExecutionEnvironmentRegistryV1 } from "../execution-environment.js";
 import type { CodingPhaseState } from "../lifecycle/coding-phase.js";
 import type { CompletionDecision } from "../lifecycle/completion-policy.js";
@@ -113,7 +114,12 @@ export type TurnState =
       readonly thinking?: string;
     }
   /** CompletionPolicy 已作出唯一裁决；外层只能持久化/映射，不得重算。 */
-  | { readonly type: "decided"; readonly decision: CompletionDecision }
+  | {
+      readonly type: "decided";
+      readonly decision: CompletionDecision;
+      /** Final flags after this provider turn, used for crash-safe save/resume. */
+      readonly nextFlags?: TurnFlags;
+    }
   /** 继续下一轮（携带更新后的 flags）*/
   | { readonly type: "continue"; readonly nextFlags: TurnFlags };
 
@@ -172,6 +178,8 @@ export interface TurnFlags {
   readonly loopV2ReadinessFeedbackKey?: string;
   /** Feedback count for the matching v2 readiness identity (currently 0 or 1). */
   readonly loopV2ReadinessNudges?: number;
+  /** One crash-safe host control to project into the next model request. */
+  readonly pendingControl?: EphemeralControlV1;
 }
 
 // ═════════════════════════════════════════════════════════════

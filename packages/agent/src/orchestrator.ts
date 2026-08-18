@@ -103,6 +103,11 @@ import {
   validateCompressionSummary,
 } from "@paw/core";
 import {
+  checkpointLoopControlV1,
+  resetLoopControlForRewindV1,
+  restoreLoopControlFlagsV1,
+} from "./loop-control-state.js";
+import {
   type ControlReductionV1,
   type LoopKernelVersion,
   type LoopV2LegacyTerminalV1,
@@ -124,7 +129,6 @@ import {
   normalizeProviderResponseV2,
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
-  parseLoopV2ReadinessFeedbackMarker,
   resolveLoopKernelVersion,
   restoreLoopV2ProjectionObserver,
   runVerificationProbeOnceV2,
@@ -845,7 +849,13 @@ export class AgentOrchestrator {
       restoreCheckpoint(workspaceRoot, opts.runId, opts.fromTurn, {
         backup: true,
       });
-      resumeState = { ...preparedState, turn: opts.fromTurn };
+      // A rewind invalidates later provider cursors, recovery budgets and
+      // pending controls. Recreate loop control from the requested boundary.
+      resumeState = {
+        ...preparedState,
+        turn: opts.fromTurn,
+        loopControl: resetLoopControlForRewindV1(opts.runId, opts.fromTurn),
+      };
     }
 
     return this.run({
@@ -887,6 +897,7 @@ export class AgentOrchestrator {
     let agentGroup: AgentGroup | undefined;
     let emitRunMetrics: (() => void) | undefined;
     let persistLoopV2Terminal: ((result: RunResult) => void) | undefined;
+    let activeTurnFlags: TurnFlags | undefined;
 
     try {
       // 阶段 1：初始化（记忆检索、system prompt 构建、MCP 连接等）
@@ -944,34 +955,32 @@ export class AgentOrchestrator {
       // - autoContinueNudges: 连续自动继续次数（防止死循环）
       // - lastTurnHadToolCall: 上一轮是否执行了工具
       // - hasEverUsedTools: 是否使用过工具
-      const restoredReadinessFeedback =
+      const restoredLoopControl =
         this.loopKernelVersion === "v2" && spec.resumeFromState
-          ? [...spec.resumeFromState.messages]
-              .reverse()
-              .map((message) =>
-                parseLoopV2ReadinessFeedbackMarker(message.content),
-              )
-              .find((state) => state !== undefined)
-          : undefined;
+          ? restoreLoopControlFlagsV1({
+              runId,
+              startTurn,
+              value: spec.resumeFromState.loopControl,
+              legacyMessages: spec.resumeFromState.messages,
+            })
+          : {};
       let flags: TurnFlags = {
         autoContinueNudges: 0,
         lastTurnHadToolCall: false,
         hasEverUsedTools: false,
-        ...(restoredReadinessFeedback
-          ? {
-              loopV2ReadinessFeedbackKey: restoredReadinessFeedback.key,
-              loopV2ReadinessNudges: restoredReadinessFeedback.nudges,
-            }
-          : {}),
+        ...restoredLoopControl,
         ...(this.loopKernelVersion === "v2"
-          ? {
-              providerTerminal: {
-                ...createProviderTerminalStateV2(runId),
-                lastTurn: startTurn,
-              },
-            }
+          ? restoredLoopControl.providerTerminal
+            ? {}
+            : {
+                providerTerminal: {
+                  ...createProviderTerminalStateV2(runId),
+                  lastTurn: startTurn,
+                },
+              }
           : {}),
       };
+      activeTurnFlags = flags;
 
       // 捕获到闭包中，供 executeTurn 使用
       const turnCompactor = compactor;
@@ -1181,6 +1190,8 @@ export class AgentOrchestrator {
             ctxMgr,
             planner,
             taskState,
+            undefined,
+            flags,
           );
         }
 
@@ -1201,6 +1212,7 @@ export class AgentOrchestrator {
               status: "aborted",
               message,
             },
+            flags,
           );
           const runResult = { runId, status: "aborted", message } as const;
           persistLoopV2Terminal(runResult);
@@ -1277,6 +1289,7 @@ export class AgentOrchestrator {
         };
 
         const turnControl = selectEphemeralControlV1([
+          flags.pendingControl,
           testWardenControl,
           preflightControl,
           progressControl,
@@ -1298,10 +1311,13 @@ export class AgentOrchestrator {
         // - "decided"：CompletionPolicy 已给出唯一终局裁决
         if (state.type === "continue") {
           flags = state.nextFlags;
+          activeTurnFlags = flags;
           continue;
         }
 
         if (state.type === "decided") {
+          flags = state.nextFlags ?? flags;
+          activeTurnFlags = flags;
           const terminalStatus = state.decision.status;
           const terminalMessage = state.decision.message;
           const waitingUser = state.decision.reason === "user_input_required";
@@ -1323,6 +1339,7 @@ export class AgentOrchestrator {
                   status: appStatus,
                   message: terminalMessage,
                 },
+            flags,
           );
           const { runResultFromDecision } = await import(
             "./lifecycle/task-lifecycle.js"
@@ -1412,6 +1429,7 @@ export class AgentOrchestrator {
         planner,
         taskState,
         { status: "incomplete", message: runResult.message },
+        flags,
       );
       persistLoopV2Terminal(runResult);
       emit({
@@ -1454,6 +1472,7 @@ export class AgentOrchestrator {
           runId,
           workspaceRoot,
           maxSteps,
+          startTurn,
           ctxMgr,
           planner,
           taskState,
@@ -1463,7 +1482,7 @@ export class AgentOrchestrator {
           runId,
           spec.goal,
           workspaceRoot,
-          maxSteps,
+          activeTurnFlags?.providerTerminal?.lastTurn ?? startTurn,
           maxSteps,
           ctxMgr,
           planner,
@@ -1472,6 +1491,7 @@ export class AgentOrchestrator {
             status,
             message,
           },
+          activeTurnFlags,
         );
         const decision = decideCompletion({
           intent: aborted ? "abort" : "error",
@@ -2640,6 +2660,7 @@ export class AgentOrchestrator {
       });
     }
     if (ctx.loopKernelVersion === "v2") {
+      const { pendingControl: _consumedControl, ...flagsAfterControl } = flags;
       const priorProviderState =
         flags.providerTerminal ??
         ({
@@ -2662,7 +2683,7 @@ export class AgentOrchestrator {
           : {}),
       });
       dispatchedFlags = {
-        ...flags,
+        ...flagsAfterControl,
         providerTerminal: terminal.state,
       };
 
@@ -2676,12 +2697,17 @@ export class AgentOrchestrator {
               message,
               taskState: ctx.taskState.snapshot(),
             }),
+            nextFlags: dispatchedFlags,
           };
         }
+        dispatchedFlags = {
+          ...dispatchedFlags,
+          pendingControl: {
+            kind: "protocol_recovery",
+            text: providerProtocolRecoveryMessageV2(terminal.decision.issue),
+          },
+        };
         ctx.ctxMgr.addAssistant(text, thinking);
-        ctx.ctxMgr.addUser(
-          providerProtocolRecoveryMessageV2(terminal.decision.issue),
-        );
         this.saveState(
           runId,
           specGoal,
@@ -2691,6 +2717,8 @@ export class AgentOrchestrator {
           ctxMgr,
           planner,
           ctx.taskState,
+          undefined,
+          dispatchedFlags,
         );
         return { type: "continue", nextFlags: dispatchedFlags };
       }
@@ -2705,6 +2733,7 @@ export class AgentOrchestrator {
             message: `[ProviderProtocol:${terminal.decision.reasonCode}] ${terminal.decision.detail}`,
             taskState: ctx.taskState.snapshot(),
           }),
+          nextFlags: dispatchedFlags,
         };
       }
       if (terminal.decision.kind === "turn_boundary") {
@@ -2718,8 +2747,14 @@ export class AgentOrchestrator {
             "Loop v2 provider turn boundary is missing its reducer decision",
           );
         }
+        dispatchedFlags = {
+          ...dispatchedFlags,
+          pendingControl: {
+            kind: "protocol_recovery",
+            text: providerTurnBoundaryMessageV2(reduction),
+          },
+        };
         ctx.ctxMgr.addAssistant(text, thinking);
-        ctx.ctxMgr.addUser(providerTurnBoundaryMessageV2(reduction));
         this.saveState(
           runId,
           specGoal,
@@ -2729,6 +2764,8 @@ export class AgentOrchestrator {
           ctxMgr,
           planner,
           ctx.taskState,
+          undefined,
+          dispatchedFlags,
         );
         return {
           type: "continue",
@@ -2761,7 +2798,7 @@ export class AgentOrchestrator {
         todoStore: this.todoStore,
         planner,
         planSnapshotMaxItems: this.planSnapshotMaxItems,
-        saveStateFn: () =>
+        saveStateFn: (flagsOverride) =>
           this.saveState(
             runId,
             specGoal,
@@ -2771,6 +2808,8 @@ export class AgentOrchestrator {
             ctxMgr,
             planner,
             ctx.taskState,
+            undefined,
+            flagsOverride ?? dispatchedFlags,
           ),
         saveWaitingStateFn: (state) => {
           this._interactionState = state;
@@ -2783,6 +2822,8 @@ export class AgentOrchestrator {
             ctxMgr,
             planner,
             ctx.taskState,
+            undefined,
+            dispatchedFlags,
           );
         },
         consumeWaitingStateFn: (state, reply) => {
@@ -2805,6 +2846,8 @@ export class AgentOrchestrator {
             ctxMgr,
             planner,
             ctx.taskState,
+            undefined,
+            dispatchedFlags,
           );
         },
         agentGroup,
@@ -2871,7 +2914,9 @@ export class AgentOrchestrator {
         });
       }
     }
-    return actionResult.state;
+    return actionResult.state.type === "decided"
+      ? { ...actionResult.state, nextFlags: actionResult.flags }
+      : actionResult.state;
   }
 
   /**
@@ -3062,6 +3107,7 @@ export class AgentOrchestrator {
       status: "completed" | "failed" | "aborted" | "incomplete";
       message: string;
     },
+    turnFlags?: TurnFlags,
   ): void {
     if (!this.appStateStore) return;
     // 清理 goal 中的历史会话前缀，只保留当前请求文本
@@ -3077,6 +3123,7 @@ export class AgentOrchestrator {
         )
         .trim() || goal.trim();
     const plan = planner.plan;
+    const loopControl = checkpointLoopControlV1(turnFlags);
     const state: AppState = {
       runId,
       goal: cleanGoal,
@@ -3102,6 +3149,7 @@ export class AgentOrchestrator {
       ...(this._managedJobs
         ? { managedJobs: this._managedJobs.projection() }
         : {}),
+      ...(loopControl ? { loopControl } : {}),
       ...(outcome ? { outcome } : {}),
       savedAt: Date.now(),
     };

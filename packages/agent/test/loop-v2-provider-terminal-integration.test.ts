@@ -262,9 +262,13 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         { text: "", finishReason: "stop" },
       ],
     });
+    const requests: (readonly import("@paw/models").ChatMessage[])[] = [];
     const orchestrator = new AgentOrchestrator({
       loopKernelVersion: "v2",
       model,
+      evalHooks: {
+        beforeModelCall: ({ messages }) => requests.push(messages),
+      },
     });
 
     try {
@@ -278,6 +282,11 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.message).toContain("ProviderProtocol:empty_response");
       expect(result.message).toContain("recovery exhausted");
       expect(model.callCount).toBe(3);
+      expect(
+        requests[2]?.filter((message) =>
+          message.content.includes("[ProviderProtocol:empty_response]"),
+        ),
+      ).toHaveLength(1);
       expect(
         parseLoopV2LiveTerminalArtifactV1(
           fs.readFileSync(
@@ -294,6 +303,177 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         },
         comparison: "equal",
       });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("protocol recovery survives a crash without entering durable transcript", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-provider-recovery-resume-");
+    const runId = "v2-provider-recovery-resume";
+    fs.writeFileSync(path.join(workspaceRoot, "note.txt"), "hello\n", "utf8");
+    const appStateStore = new FileSystemAppStateStore({
+      statesDir: path.join(workspaceRoot, ".paw", "states"),
+    });
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot });
+    const abort = new AbortController();
+    const first = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      appStateStore,
+      sessionStore,
+      model: new FakeLanguageModel({
+        responses: [
+          {
+            text: '{"tool":"workspace.read_file","args":{"path":"note.txt"}}',
+            finishReason: "stop",
+          },
+          { text: "", finishReason: "stop" },
+        ],
+      }),
+      onEvent(envelope) {
+        if (
+          envelope.event.type === "provider.turn_stopped" &&
+          envelope.event.empty
+        ) {
+          abort.abort();
+        }
+      },
+    });
+
+    try {
+      const interrupted = await first.run({
+        runId,
+        goal: "Read note.txt and report its content.",
+        workspaceRoot,
+        maxSteps: 6,
+        abortSignal: abort.signal,
+      });
+      expect(interrupted.status).toBe("aborted");
+      const saved = appStateStore.load(runId);
+      expect(saved?.loopControl).toMatchObject({
+        schemaVersion: "paw.loop-control.v1",
+        providerTerminal: { pendingProtocolIssue: "empty_response" },
+        pendingControl: { kind: "protocol_recovery" },
+      });
+      expect(
+        saved?.messages.some((message) =>
+          message.content.startsWith("[ProviderProtocol:empty_response]"),
+        ),
+      ).toBeFalse();
+
+      const requests: (readonly import("@paw/models").ChatMessage[])[] = [];
+      const resumed = new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        appStateStore,
+        sessionStore,
+        model: new FakeLanguageModel({
+          responses: [{ text: "", finishReason: "stop" }],
+        }),
+        evalHooks: {
+          beforeModelCall: ({ messages }) => requests.push(messages),
+        },
+      });
+      const result = await resumed.resumeRun({ runId, workspaceRoot });
+      expect(result.status).toBe("incomplete");
+      expect(result.message).toContain("recovery exhausted");
+      expect(
+        requests[0]?.filter((message) =>
+          message.content.includes("[ProviderProtocol:empty_response]"),
+        ),
+      ).toHaveLength(1);
+      expect(
+        appStateStore
+          .load(runId)
+          ?.messages.some((message) =>
+            message.content.startsWith("[ProviderProtocol:empty_response]"),
+          ),
+      ).toBeFalse();
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("provider failure preserves the pending control at the current cursor", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-provider-pending-failure-");
+    const runId = "v2-provider-pending-failure";
+    const appStateStore = new FileSystemAppStateStore({
+      statesDir: path.join(workspaceRoot, ".paw", "states"),
+    });
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot });
+    appStateStore.save({
+      runId,
+      goal: "Recover the pending provider turn.",
+      workspaceRoot,
+      turn: 1,
+      maxSteps: 3,
+      messages: [
+        { role: "user", content: "Recover the pending provider turn." },
+      ],
+      loopControl: {
+        schemaVersion: "paw.loop-control.v1",
+        providerTerminal: {
+          runId,
+          lastTurn: 1,
+          pendingProtocolIssue: "empty_response",
+        },
+        pendingControl: {
+          kind: "protocol_recovery",
+          text: "[ProviderProtocol:empty_response] retry once",
+        },
+      },
+      savedAt: Date.now(),
+    });
+    let failedCalls = 0;
+    const failingModel: LanguageModel = {
+      label: "pending-control-provider-failure",
+      async complete() {
+        failedCalls += 1;
+        throw new Error("provider offline");
+      },
+    };
+
+    try {
+      const failing = new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: failingModel,
+        appStateStore,
+        sessionStore,
+      });
+      const failed = await failing.resumeRun({ runId, workspaceRoot });
+      expect(failed.status).toBe("failed");
+      expect(failedCalls).toBe(1);
+      expect(appStateStore.load(runId)).toMatchObject({
+        turn: 1,
+        loopControl: {
+          providerTerminal: { lastTurn: 1 },
+          pendingControl: { kind: "protocol_recovery" },
+        },
+      });
+
+      let resumedCalls = 0;
+      const resumed = new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: {
+          label: "pending-control-second-resume",
+          async complete() {
+            resumedCalls += 1;
+            return { text: "", finishReason: "stop" };
+          },
+        },
+        appStateStore,
+        sessionStore,
+      });
+      const result = await resumed.resumeRun({ runId, workspaceRoot });
+      expect(result.status).toBe("incomplete");
+      expect(resumedCalls).toBe(1);
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -1375,7 +1555,12 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
             typeof message.content === "string" &&
             message.content.startsWith("[LoopV2Readiness:needs_work"),
         ),
-      ).toBeTrue();
+      ).toBeFalse();
+      expect(saved?.loopControl).toMatchObject({
+        schemaVersion: "paw.loop-control.v1",
+        readiness: { nudges: 1 },
+        pendingControl: { kind: "readiness" },
+      });
       const beforeResume = parseLoopV2ProjectionCheckpointV1(
         fs.readFileSync(
           loopV2ProjectionCheckpointPath(workspaceRoot, runId),
@@ -1397,6 +1582,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           },
         ],
       });
+      const resumedRequests: (readonly import("@paw/models").ChatMessage[])[] =
+        [];
       const resumed = new AgentOrchestrator({
         loopKernelVersion: "v2",
         memoryExtraction: "off",
@@ -1404,11 +1591,26 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         model: resumedModel,
         appStateStore,
         sessionStore,
+        evalHooks: {
+          beforeModelCall: ({ messages }) => resumedRequests.push(messages),
+        },
       });
       const result = await resumed.resumeRun({ runId, workspaceRoot });
       expect(result.status).toBe("incomplete");
       expect(result.message).toContain("LoopControl:repair_required");
       expect(resumedModel.callCount).toBe(1);
+      expect(
+        resumedRequests[0]?.filter((message) =>
+          message.content.includes("[LoopV2Readiness:needs_work"),
+        ),
+      ).toHaveLength(1);
+      expect(
+        appStateStore
+          .load(runId)
+          ?.messages.some((message) =>
+            message.content.startsWith("[LoopV2Readiness:needs_work"),
+          ),
+      ).toBeFalse();
       const afterResume = parseLoopV2ProjectionCheckpointV1(
         fs.readFileSync(
           loopV2ProjectionCheckpointPath(workspaceRoot, runId),

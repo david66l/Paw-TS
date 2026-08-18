@@ -78,6 +78,12 @@ const LEGACY_HOST_PROJECTION_PREFIXES = [
 const LEGACY_CONTROL_PROJECTION_PATTERNS = [
   /^\[ProgressAdvice:(?:inspect_gap|hypothesis_stale|safety_line)\] /,
   /^\[TestWarden\] (?:No Python test files detected;|Attempted:|Pre-flight:|No existing tests are linked to the changed files;|\d+ impacted test file\(s\) all passed\.|\d+\/\d+ impacted test file\(s\) FAILED:)/,
+  /^\[LoopV2Readiness:(?:needs_work|blocked) key=[a-f0-9]{64}\]\n/,
+  /^\[ProviderProtocol:empty_response\] The provider returned no visible text or executable action\. Retry once with complete tool calls, an explicit control action, or a visible candidate response\.$/,
+  /^\[ProviderProtocol:truncated_response\] The previous response was discarded before any tool execution because it was truncated\. Retry the complete tool call or candidate response once; do not continue partial JSON\.$/,
+  /^\[ProviderProtocol:missing_tool_calls\] The provider declared tool calls but supplied none\. Emit the complete structured calls once, or return a visible candidate response\.$/,
+  /^\[LoopControl:turn_boundary\] Your previous natural-language response ended the provider turn but did not submit a completion candidate\. Continue with the next required tool\/action\. If the task is actually ready, submit the structured final_answer action explicitly\.$/,
+  /^\[LoopControl:repair_required id=repair-[a-f0-9]{16}\] The durable (?:direct_verification|material_change) obligation remains open\. Execute the matching tool action now\. Prose, repeated reads, unrelated successful tools, and another final_answer do not satisfy it\.$/,
 ] as const;
 
 /** Remove only host/control formats Paw itself durably injected before P0.3. */

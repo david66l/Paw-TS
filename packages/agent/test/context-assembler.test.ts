@@ -363,8 +363,37 @@ describe("ContextAssembler v1", () => {
           content:
             "[TestWarden] No Python test files detected; the test warden is inactive for this workspace.",
         },
+        {
+          role: "user",
+          content: `[LoopV2Readiness:needs_work key=${"b".repeat(64)}]\nlegacy repair`,
+        },
+        {
+          role: "user",
+          content:
+            "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response.",
+        },
+        {
+          role: "user",
+          content:
+            "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly.",
+        },
         { role: "user", content: "[Context Package] is my requested title" },
         { role: "user", content: "[TestWarden] please explain this label" },
+        { role: "user", content: "[ProviderProtocol] explain this label" },
+        {
+          role: "user",
+          content:
+            "[ProviderProtocol:empty_response] please explain this label",
+        },
+        {
+          role: "user",
+          content: "[LoopControl:turn_boundary] explain this label",
+        },
+        {
+          role: "user",
+          content:
+            "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn unexpectedly; explain why",
+        },
         { role: "user", content: "Inspect the saved state." },
       ],
       savedAt: Date.now(),
@@ -396,7 +425,14 @@ describe("ContextAssembler v1", () => {
       message.content === "[Status Snapshot v1]" ||
       message.content.startsWith("[Status Snapshot v1]\n") ||
       message.content.startsWith("[ProgressAdvice:inspect_gap] ") ||
-      message.content.startsWith("[TestWarden] No Python test files detected;");
+      message.content.startsWith(
+        "[TestWarden] No Python test files detected;",
+      ) ||
+      message.content.startsWith("[LoopV2Readiness:needs_work key=") ||
+      message.content ===
+        "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response." ||
+      message.content ===
+        "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly.";
     expect(providerMessages.some(isLegacyProjection)).toBe(false);
     expect(
       durableSnapshots.some((messages) => messages.some(isLegacyProjection)),
@@ -413,6 +449,32 @@ describe("ContextAssembler v1", () => {
       saved?.messages.some(
         (message) =>
           message.content === "[TestWarden] please explain this label",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content === "[ProviderProtocol] explain this label",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content ===
+          "[ProviderProtocol:empty_response] please explain this label",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content === "[LoopControl:turn_boundary] explain this label",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) =>
+          message.content ===
+          "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn unexpectedly; explain why",
       ),
     ).toBe(true);
   });

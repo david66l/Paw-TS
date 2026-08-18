@@ -123,7 +123,7 @@ interface ActionHandlerContext {
   /** 计划快照最大条目数 */
   readonly planSnapshotMaxItems?: number;
   /** 保存断点续跑状态的函数 */
-  readonly saveStateFn: () => void;
+  readonly saveStateFn: (flagsOverride?: TurnFlags) => void;
   readonly saveWaitingStateFn?: (state: WaitingUserInteractionV1) => void;
   readonly consumeWaitingStateFn?: (
     state: WaitingUserInteractionV1,
@@ -780,11 +780,14 @@ async function handleFinalAnswer(
         ...flags,
         loopV2ReadinessFeedbackKey: readinessGate.key,
         loopV2ReadinessNudges: 1,
+        pendingControl: {
+          kind: "readiness",
+          text: readinessGate.message,
+        },
         lastTurnHadToolCall: false,
       };
       ctx.ctxMgr.addAssistant(text, thinking);
-      ctx.ctxMgr.addUser(readinessGate.message);
-      opts.saveStateFn();
+      opts.saveStateFn(nextFlags);
       return { state: { type: "continue", nextFlags }, flags: nextFlags };
     }
     if (readinessGate.type === "incomplete") {

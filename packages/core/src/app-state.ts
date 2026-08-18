@@ -98,6 +98,8 @@ export interface AppState {
   readonly executionEnvironment?: unknown;
   /** Agent-owned managed-job lifecycle projection for honest crash recovery. */
   readonly managedJobs?: unknown;
+  /** Agent-owned, versioned loop-control checkpoint; core only persists it. */
+  readonly loopControl?: unknown;
   /** 运行已完成时的最终结果 */
   readonly outcome?: {
     /** 完成状态：成功、失败、不完整或用户中止 */
