@@ -23,7 +23,10 @@ import type {
   LoopV2ShadowReason,
   LoopV2ShadowReport,
 } from "./shadow-runtime.js";
-import { createLoopV2ShadowObserver } from "./shadow-runtime.js";
+import {
+  createLoopV2ShadowObserver,
+  observeLoopV2DurableEnvelopeV1,
+} from "./shadow-runtime.js";
 
 export const LOOP_V2_SHADOW_ARTIFACT_SCHEMA_VERSION = 1 as const;
 
@@ -133,7 +136,7 @@ export function replayLegacyTraceToLoopV2ShadowV1(
     ) {
       throw new Error(`Loop v2 shadow trace envelope ${index} is invalid`);
     }
-    observer.observe({
+    observeLoopV2DurableEnvelopeV1(observer, {
       runId,
       seq: envelope.seq as number,
       ts: envelope.ts,

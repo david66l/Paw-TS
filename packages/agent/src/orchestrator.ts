@@ -61,6 +61,7 @@ import {
   type CostTracker,
   DEFAULT_KEEP_RECENT_TOOLS,
   type EvalHooks,
+  FileSystemSessionStore,
   MAX_COMPRESSION_SAVINGS_RATIO,
   MIN_COMPRESSION_SAVINGS_RATIO,
   type ModelTokenUsage,
@@ -117,7 +118,6 @@ import {
   LoopV2LiveReviewRuntimeV1,
   type LoopV2ShadowObserver,
   type LoopV2ShadowReport,
-  type LoopV2ShadowToolCommitPortInput,
   type VerificationRecordV2,
   buildLoopV2LiveCandidateArtifactV1,
   buildLoopV2ProjectionCheckpointV1,
@@ -129,6 +129,7 @@ import {
   loopV2ProjectionCheckpointPath,
   loopV2ReadinessProgressKeyV1,
   normalizeProviderResponseV2,
+  observeLoopV2DurableEnvelopeV1,
   parseLoopV2LiveCandidateArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
   resolveLoopKernelVersion,
@@ -952,8 +953,10 @@ export class AgentOrchestrator {
         agentGroup = new AgentGroup({
           parentRunId: runId,
           parentOnEvent: (envelope) => {
+            // Child-local events remain a live UI/audit stream. Their local
+            // seq values are not canonical parent identities, so they must not
+            // enter the parent's replay journal or decision projection.
             this.onEvent?.(envelope);
-            this.sessionStore?.saveEvent(runId, envelope);
           },
           parentWatcher: this.watcher,
           launcher: this.subAgentLauncher,
@@ -1143,11 +1146,7 @@ export class AgentOrchestrator {
                 turn,
                 taskState,
                 executionEnvironment,
-                ...(init.observeLoopV2ToolCommit
-                  ? {
-                      observeLoopV2ToolCommit: init.observeLoopV2ToolCommit,
-                    }
-                  : {}),
+                captureLoopV2Facts: init.captureLoopV2Facts,
               },
               {
                 concurrentMutation: false,
@@ -1317,9 +1316,7 @@ export class AgentOrchestrator {
           ...(init.probeLoopV2Candidate
             ? { probeLoopV2Candidate: init.probeLoopV2Candidate }
             : {}),
-          ...(init.observeLoopV2ToolCommit
-            ? { observeLoopV2ToolCommit: init.observeLoopV2ToolCommit }
-            : {}),
+          captureLoopV2Facts: init.captureLoopV2Facts,
         };
 
         const turnControl = selectEphemeralControlV1([
@@ -3945,7 +3942,7 @@ export class AgentOrchestrator {
     compactor: ContextCompactor;
     artifactRegistry: ArtifactRegistry;
     emit: (event: RunEvent) => void;
-    observeLoopV2ToolCommit?: (input: LoopV2ShadowToolCommitPortInput) => void;
+    captureLoopV2Facts: boolean;
     getLoopV2ControlReduction?: NonNullable<
       PhaseContext["getLoopV2ControlReduction"]
     >;
@@ -3979,6 +3976,11 @@ export class AgentOrchestrator {
       return findPawRoot(cwd) ?? cwd;
     })();
     const maxSteps = resolveMaxSteps(workspaceRoot, spec.maxSteps);
+    const durableSessionStore =
+      this.sessionStore ??
+      (this.loopKernelVersion === "v2"
+        ? new FileSystemSessionStore({ workspaceRoot })
+        : undefined);
     const loopV2LiveReviewRuntime =
       this.loopKernelVersion === "v2"
         ? new LoopV2LiveReviewRuntimeV1({
@@ -3995,6 +3997,7 @@ export class AgentOrchestrator {
 
     const seq = { n: 0 };
     const checkpointSeq = { n: 0 };
+    let persistedRunEvents: RunEventEnvelope[] = [];
     let loopV2Projection: LoopV2ShadowObserver | undefined;
     this._lastLoopV2ShadowReport = undefined;
     this._lastLoopV2CandidateAssessment = undefined;
@@ -4005,12 +4008,30 @@ export class AgentOrchestrator {
       // Restarting either counter at zero creates duplicate event identities
       // and can overwrite rollback snapshots from the pre-crash trajectory.
       try {
-        const persisted = this.sessionStore?.loadRun(runId) ?? [];
-        seq.n = persisted.reduce(
+        if (
+          this.loopKernelVersion === "v2" &&
+          !durableSessionStore?.loadRunStrict
+        ) {
+          throw new Error(
+            "Loop v2 requires a SessionStore with strict journal loading",
+          );
+        }
+        persistedRunEvents =
+          (this.loopKernelVersion === "v2"
+            ? durableSessionStore?.loadRunStrict(runId)
+            : durableSessionStore?.loadRun(runId)) ?? [];
+        seq.n = persistedRunEvents.reduce(
           (max, envelope) => Math.max(max, envelope.seq),
           0,
         );
-      } catch {
+        if (
+          this.loopKernelVersion === "v2" &&
+          persistedRunEvents.length === 0
+        ) {
+          throw new Error("Loop v2 durable session journal is missing");
+        }
+      } catch (error) {
+        if (this.loopKernelVersion === "v2") throw error;
         // A damaged optional event log must not make the saved AppState
         // unusable. The resumed run still proceeds, starting a fresh segment.
       }
@@ -4078,6 +4099,23 @@ export class AgentOrchestrator {
         loopV2Projection = restoredReport
           ? restoreLoopV2ProjectionObserver(restoredReport)
           : createLoopV2ShadowObserver(runId);
+        // The checkpoint is only an acceleration snapshot. Durable events
+        // appended after it remain authoritative and must be reduced through
+        // the same admission adapter as live execution. This also makes a
+        // missing checkpoint recoverable from the SessionStore alone.
+        for (const envelope of persistedRunEvents) {
+          if (envelope.seq <= (restoredReport?.sourceThroughSeq ?? 0)) continue;
+          if (
+            envelope.event.type === "tool.result" &&
+            envelope.event.decisionCommit === undefined &&
+            envelope.event.decisionDisposition === undefined
+          ) {
+            throw new Error(
+              `Loop v2 journal tool.result at seq ${envelope.seq} lacks a decision commit`,
+            );
+          }
+          observeLoopV2DurableEnvelopeV1(loopV2Projection, envelope);
+        }
         if (
           restoredReport &&
           candidateArtifact &&
@@ -4174,7 +4212,6 @@ export class AgentOrchestrator {
         ts: Date.now(),
         event,
       };
-      this.onEvent?.(envelope);
       const liveOnly =
         event.type === "model.chunk" || event.type === "model.thinking";
       // Streaming chunk events contain the full accumulated text, not a delta.
@@ -4183,14 +4220,23 @@ export class AgentOrchestrator {
       // model.done event is complete, while the separate recovery stream
       // protects an in-flight response, so partial snapshots stay live-only.
       if (!liveOnly) {
-        this.sessionStore?.saveEvent(runId, envelope);
+        durableSessionStore?.saveEvent(runId, envelope);
       }
+      // Durable append precedes external delivery: a throwing UI/test callback
+      // must never leave an already-executed tool without its replay fact.
+      this.onEvent?.(envelope);
       // Projection happens after the legacy delivery/persistence path. Shadow
       // remains fail-open; explicit v2 treats projection integrity as runtime
       // authority and therefore fails closed before continuing the loop.
       if (loopV2Projection && !liveOnly) {
         try {
-          loopV2Projection.observe(envelope);
+          observeLoopV2DurableEnvelopeV1(loopV2Projection, envelope);
+          if (
+            event.type === "tool.result" &&
+            event.decisionCommit !== undefined
+          ) {
+            persistLoopV2ProjectionCheckpoint();
+          }
           if (
             event.type === "provider.turn_stopped" ||
             event.type === "candidate.readiness" ||
@@ -4298,17 +4344,6 @@ export class AgentOrchestrator {
       });
     };
 
-    const observeLoopV2ToolCommit = loopV2Projection
-      ? (input: LoopV2ShadowToolCommitPortInput) => {
-          try {
-            loopV2Projection.observeToolCommit({ ...input, sourceSeq: seq.n });
-            persistLoopV2ProjectionCheckpoint();
-          } catch (error) {
-            if (this.loopKernelVersion === "v2") throw error;
-            // Rich shadow capture is diagnostic-only while v1 is authoritative.
-          }
-        }
-      : undefined;
     const getLoopV2ControlReduction = loopV2Projection
       ? () => loopV2Projection.latestControlReduction()
       : undefined;
@@ -4611,6 +4646,7 @@ export class AgentOrchestrator {
         compactor,
         artifactRegistry,
         emit,
+        captureLoopV2Facts: Boolean(loopV2Projection),
         emitRunMetrics,
         seq,
         checkpointSeq,
@@ -5008,7 +5044,7 @@ export class AgentOrchestrator {
       compactor,
       artifactRegistry,
       emit,
-      ...(observeLoopV2ToolCommit ? { observeLoopV2ToolCommit } : {}),
+      captureLoopV2Facts: Boolean(loopV2Projection),
       ...(getLoopV2ControlReduction ? { getLoopV2ControlReduction } : {}),
       ...(reviewLoopV2Candidate ? { reviewLoopV2Candidate } : {}),
       ...(probeLoopV2Candidate ? { probeLoopV2Candidate } : {}),

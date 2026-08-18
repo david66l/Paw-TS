@@ -10,10 +10,12 @@ import {
   buildLoopV2ShadowArtifactV1,
   createLoopV2ShadowObserver,
   createSemanticReviewLedgerV2,
+  observeLoopV2DurableEnvelopeV1,
   parseLoopV2LiveTerminalArtifactV1,
   parseLoopV2RunResultShadowArtifactV1,
   parseLoopV2ShadowArtifactV1,
   replayLegacyTraceToLoopV2ShadowV1,
+  restoreLoopV2ProjectionObserver,
   reviewCandidateOnceV2,
   serializeLoopV2LiveTerminalArtifactV1,
   serializeLoopV2RunResultShadowArtifactV1,
@@ -495,6 +497,197 @@ describe("Loop Kernel v2 shadow artifacts", () => {
         trace[0],
       ]),
     ).toThrow(/sequence must increase/);
+  });
+
+  test("durable rich tool commits replay to the exact live projection", () => {
+    const trace = [
+      envelope(1, { type: "run.started", goal: "Change value" }),
+      envelope(2, { type: "model.thinking", text: "live only snapshot" }),
+      envelope(8, {
+        type: "tool.result",
+        tool: "workspace.edit_file",
+        ok: true,
+        summary: "edited src/value.ts",
+        decisionCommit: {
+          schemaVersion: "paw.tool-decision-commit.v1",
+          callId: "legacy:shadow-artifact:turn:1:call:0",
+          tool: "workspace.edit_file",
+          args: { path: "src/value.ts", old_string: "a", new_string: "b" },
+          result: {
+            ok: true,
+            payload: { path: "src/value.ts", linesAdded: 1, linesRemoved: 1 },
+            summary: "edited src/value.ts",
+          },
+          repositoryRevision: "run:shadow-artifact:mutation:0",
+          concurrentMutation: false,
+          mutationCapture: {
+            status: "complete",
+            paths: ["src/value.ts"],
+            beforeContents: { "src/value.ts": "a\n" },
+            afterContents: { "src/value.ts": "b\n" },
+          },
+        },
+      }),
+      envelope(12, {
+        type: "tool.result",
+        tool: "workspace.grep",
+        ok: true,
+        summary: "found value",
+        decisionCommit: {
+          schemaVersion: "paw.tool-decision-commit.v1",
+          callId: "legacy:shadow-artifact:turn:2:call:0",
+          tool: "workspace.grep",
+          args: { path: "src", pattern: "value" },
+          result: {
+            ok: true,
+            payload: { matches: ["src/value.ts:1:b"] },
+            summary: "found value",
+          },
+          repositoryRevision: "run:shadow-artifact:mutation:1",
+          concurrentMutation: false,
+          mutationCapture: {
+            status: "complete",
+            paths: [],
+            beforeContents: {},
+            afterContents: {},
+          },
+        },
+      }),
+    ];
+    const live = createLoopV2ShadowObserver("shadow-artifact");
+    for (const item of trace) observeLoopV2DurableEnvelopeV1(live, item);
+
+    const prefix = createLoopV2ShadowObserver("shadow-artifact");
+    for (const item of trace.slice(0, 3)) {
+      observeLoopV2DurableEnvelopeV1(prefix, item);
+    }
+    const checkpointPlusTail = restoreLoopV2ProjectionObserver(
+      prefix.snapshot(),
+    );
+    for (const item of trace.slice(3)) {
+      observeLoopV2DurableEnvelopeV1(checkpointPlusTail, item);
+    }
+
+    const liveReport = live.snapshot();
+    const replayed = replayLegacyTraceToLoopV2ShadowV1(
+      "shadow-artifact",
+      trace,
+    );
+    expect(replayed).toEqual(liveReport);
+    expect(checkpointPlusTail.snapshot()).toEqual(liveReport);
+    expect(replayed.sourceThroughSeq).toBe(12);
+    expect(replayed.projectedEvents).toHaveLength(3);
+    expect(replayed.state.currentMutationRevision).toBe(1);
+    expect(Object.keys(replayed.state.evidence)).toHaveLength(1);
+    expect(replayed.artifactBlobs).toHaveLength(3);
+    expect(replayed.diagnostics).toHaveLength(3);
+    expect(replayed.diagnostics.some((item) => item.sourceSeq === 2)).toBeFalse();
+  });
+
+  test("rejects a malformed versioned rich tool commit before partial replay", () => {
+    expect(() =>
+      replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", [
+        envelope(1, { type: "run.started", goal: "Inspect" }),
+        envelope(2, {
+          type: "tool.result",
+          tool: "workspace.read_file",
+          ok: true,
+          summary: "read",
+          decisionCommit: {
+            schemaVersion: "paw.tool-decision-commit.v1",
+            callId: " ",
+          },
+        }),
+      ]),
+    ).toThrow(/callId must not be empty/);
+
+    expect(() =>
+      replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", [
+        envelope(1, { type: "run.started", goal: "Inspect" }),
+        envelope(2, {
+          type: "tool.result",
+          tool: "workspace.read_file",
+          ok: true,
+          summary: "outer summary",
+          decisionCommit: {
+            schemaVersion: "paw.tool-decision-commit.v1",
+            callId: "legacy:shadow-artifact:turn:1:call:0",
+            tool: "workspace.read_file",
+            args: { path: "note.txt" },
+            result: {
+              ok: true,
+              payload: { content: "hello", line_count: 1 },
+              summary: "different inner summary",
+            },
+            repositoryRevision: "run:shadow-artifact:mutation:0",
+            concurrentMutation: false,
+          },
+        }),
+      ]),
+    ).toThrow(/does not match its durable tool\.result/);
+  });
+
+  test("replays a versioned pre-execution native rejection without inventing a commit", () => {
+    const trace = [
+      envelope(1, { type: "run.started", goal: "Retry a native call" }),
+      envelope(4, {
+        type: "tool.result",
+        tool: "workspace.write_file",
+        ok: false,
+        summary: "[Tool call not executed] arguments failed to parse.",
+        decisionDisposition: {
+          schemaVersion: "paw.tool-decision-disposition.v1",
+          status: "not_executed",
+          reason: "native_tool_rejected",
+        },
+      }),
+    ];
+    const live = createLoopV2ShadowObserver("shadow-artifact");
+    for (const item of trace) observeLoopV2DurableEnvelopeV1(live, item);
+    const replayed = replayLegacyTraceToLoopV2ShadowV1(
+      "shadow-artifact",
+      trace,
+    );
+    expect(replayed).toEqual(live.snapshot());
+    expect(replayed.state.currentMutationRevision).toBe(0);
+    expect(replayed.diagnostics.at(-1)).toMatchObject({
+      disposition: "ignored",
+      reason: "non_decision_event",
+    });
+
+    expect(() =>
+      replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", [
+        envelope(1, { type: "run.started", goal: "Retry" }),
+        envelope(2, {
+          type: "tool.result",
+          tool: "workspace.write_file",
+          ok: false,
+          summary: "rejected",
+          decisionDisposition: {
+            schemaVersion: "paw.tool-decision-disposition.v1",
+            status: "not_executed",
+            reason: "invented_reason",
+          },
+        }),
+      ]),
+    ).toThrow(/decision disposition is invalid/);
+    expect(() =>
+      replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", [
+        envelope(1, { type: "run.started", goal: "Retry" }),
+        envelope(2, {
+          type: "tool.result",
+          tool: "workspace.write_file",
+          ok: false,
+          summary: "rejected",
+          decisionCommit: {},
+          decisionDisposition: {
+            schemaVersion: "paw.tool-decision-disposition.v1",
+            status: "not_executed",
+            reason: "native_tool_rejected",
+          },
+        }),
+      ]),
+    ).toThrow(/cannot contain both/);
   });
 
   test("preserves a legacy runtime failure as an interrupted v2 outcome", () => {

@@ -40,7 +40,6 @@ import type {
   ControlReductionV1,
   LoopKernelVersion,
   LoopV2LiveCandidateAssessmentV1,
-  LoopV2ShadowToolCommitPortInput,
   ProviderTerminalStateV2,
   SemanticReviewOnceResultV2,
   VerificationProbeOnceResultV2,
@@ -267,10 +266,8 @@ export interface PhaseContext {
    * executed, at-most-once per candidateInputHash). Absent disables the gate.
    */
   readonly probeLoopV2Candidate?: () => Promise<VerificationProbeOnceResultV2>;
-  /** Read-only shadow observation after the matching legacy tool.result. */
-  readonly observeLoopV2ToolCommit?: (
-    input: LoopV2ShadowToolCommitPortInput,
-  ) => void;
+  /** Capture rich facts into the matching durable tool.result event. */
+  readonly captureLoopV2Facts?: boolean;
 }
 
 // ═════════════════════════════════════════════════════════════

@@ -31,6 +31,7 @@ import {
   parseLoopV2LiveTerminalArtifactV1,
   parseLoopV2ProjectionCheckpointV1,
   parseLoopV2RunResultShadowArtifactV1,
+  replayLegacyTraceToLoopV2ShadowV1,
   reviewCandidateOnceV2,
   serializeLoopV2LiveReviewArtifactV1,
   serializeLoopV2LiveReviewClaimV1,
@@ -427,6 +428,15 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       },
       savedAt: Date.now(),
     });
+    sessionStore.saveEvent(runId, {
+      runId,
+      seq: 1,
+      ts: Date.now(),
+      event: {
+        type: "run.started",
+        goal: "Recover the pending provider turn.",
+      },
+    });
     let failedCalls = 0;
     const failingModel: LanguageModel = {
       label: "pending-control-provider-failure",
@@ -569,7 +579,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     }
   });
 
-  test("resume restores pre-candidate rich commits from the latest projection checkpoint", async () => {
+  test("resume rebuilds pre-candidate rich commits from the durable journal without a checkpoint", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-projection-resume-");
     const runId = "v2-projection-resume";
     fs.writeFileSync(
@@ -640,6 +650,24 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       );
       expect(checkpoint.report.state.currentMutationRevision).toBe(1);
       expect(checkpoint.report.state.currentCandidate).toBeUndefined();
+      const durablePrefix = (sessionStore.loadRun(runId) ?? []).filter(
+        (event) => event.seq <= checkpoint.report.sourceThroughSeq,
+      );
+      const replayed = replayLegacyTraceToLoopV2ShadowV1(
+        runId,
+        durablePrefix,
+      );
+      expect(replayed.projectedEvents).toEqual(
+        checkpoint.report.projectedEvents,
+      );
+      expect(replayed.stateHash).toBe(checkpoint.report.stateHash);
+      expect(replayed.controlStateHash).toBe(
+        checkpoint.report.controlStateHash,
+      );
+      expect(replayed.artifactBlobs).toEqual(checkpoint.report.artifactBlobs);
+      expect(replayed.sourceThroughSeq).toBe(
+        checkpoint.report.sourceThroughSeq,
+      );
       const tampered = JSON.parse(
         fs.readFileSync(
           loopV2ProjectionCheckpointPath(workspaceRoot, runId),
@@ -650,6 +678,38 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(() =>
         parseLoopV2ProjectionCheckpointV1(JSON.stringify(tampered)),
       ).toThrow("projected state mismatch");
+      fs.unlinkSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId));
+      const journalPath = path.join(
+        workspaceRoot,
+        ".paw",
+        "sessions",
+        `${runId}.jsonl`,
+      );
+      const validJournal = fs.readFileSync(journalPath, "utf8");
+      const legacyJournal = validJournal
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const envelope = JSON.parse(line) as RunEventEnvelope;
+          if (envelope.event.type !== "tool.result") return line;
+          const { decisionCommit: _, ...legacyResult } = envelope.event;
+          return JSON.stringify({ ...envelope, event: legacyResult });
+        })
+        .join("\n");
+      fs.writeFileSync(journalPath, `${legacyJournal}\n`, "utf8");
+      const rejectedLegacyResume = await new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        model: new FakeLanguageModel({ responses: [] }),
+        appStateStore,
+        sessionStore,
+      }).resumeRun({ runId, workspaceRoot });
+      expect(rejectedLegacyResume).toMatchObject({
+        status: "failed",
+        message: expect.stringContaining("lacks a decision commit"),
+      });
+      fs.writeFileSync(journalPath, validJournal, "utf8");
       expect(
         fs.existsSync(loopV2LiveArtifactPath(workspaceRoot, runId)),
       ).toBeFalse();
@@ -684,6 +744,94 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           gaps: [],
         },
       });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("resume accepts a durable native rejection disposition without a projection checkpoint", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-native-rejection-resume-");
+    const runId = "v2-native-rejection-resume";
+    const appStateStore = new FileSystemAppStateStore({
+      statesDir: path.join(workspaceRoot, ".paw", "states"),
+    });
+    const sessionStore = new FileSystemSessionStore({ workspaceRoot });
+    const abort = new AbortController();
+    try {
+      const interrupted = await new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        appStateStore,
+        sessionStore,
+        model: {
+          label: "v2-native-rejection-fixture",
+          runtimeProfile: {
+            protocol: "openai-compatible",
+            model: "deepseek-v4-flash",
+            baseUrl: "https://example.test",
+          },
+          async complete() {
+            return {
+              text: "",
+              nativeAssistantContent: "attempt malformed read",
+              toolCalls: [
+                {
+                  id: "malformed-read",
+                  name: "workspace_read_file",
+                  arguments: {},
+                  rawArguments: '{"path":',
+                  argumentsValid: false,
+                },
+              ],
+            };
+          },
+        },
+        onEvent(envelope) {
+          if (envelope.event.type === "tool.result") abort.abort();
+        },
+      }).run({
+        runId,
+        goal: "Recover from a malformed native call and report the result.",
+        workspaceRoot,
+        maxSteps: 4,
+        abortSignal: abort.signal,
+      });
+      expect(interrupted.status).toBe("aborted");
+      const rejection = (sessionStore.loadRunStrict(runId) ?? []).find(
+        (event) => event.event.type === "tool.result",
+      );
+      expect(rejection?.event).toMatchObject({
+        type: "tool.result",
+        ok: false,
+        decisionDisposition: {
+          schemaVersion: "paw.tool-decision-disposition.v1",
+          status: "not_executed",
+        },
+      });
+      const projectionPath = loopV2ProjectionCheckpointPath(
+        workspaceRoot,
+        runId,
+      );
+      if (fs.existsSync(projectionPath)) fs.unlinkSync(projectionPath);
+
+      let resumeCalls = 0;
+      const resumed = await new AgentOrchestrator({
+        loopKernelVersion: "v2",
+        memoryExtraction: "off",
+        memoryLlm: "off",
+        appStateStore,
+        sessionStore,
+        model: {
+          label: "v2-native-rejection-resume-fixture",
+          async complete() {
+            resumeCalls += 1;
+            return { text: finalAnswer("Recovered without executing the call.") };
+          },
+        },
+      }).resumeRun({ runId, workspaceRoot });
+      expect(resumed.status).toBe("completed");
+      expect(resumeCalls).toBe(1);
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }

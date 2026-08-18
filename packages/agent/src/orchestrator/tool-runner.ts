@@ -29,6 +29,7 @@ import type {
   ContextManager,
   NativeToolTurnCallV1,
   RunEvent,
+  ToolDecisionCommitV1,
   ToolFileChange,
 } from "@paw/core";
 import { extractCheckpointTargets, isMutatingTool } from "@paw/core";
@@ -59,7 +60,6 @@ import {
 } from "../loop-v2/failure-records.js";
 import type {
   LoopV2ShadowMutationCapture,
-  LoopV2ShadowToolCommitPortInput,
   LoopV2ShadowVerificationCapture,
   ToolExecutionModeV2,
 } from "../loop-v2/index.js";
@@ -271,9 +271,8 @@ export interface ToolResultCommitContext {
   readonly turn: number;
   readonly taskState?: TaskStateManager;
   readonly executionEnvironment?: ExecutionEnvironmentRegistryV1;
-  readonly observeLoopV2ToolCommit?: (
-    input: LoopV2ShadowToolCommitPortInput,
-  ) => void;
+  /** Attach a versioned rich decision fact to the durable tool.result. */
+  readonly captureLoopV2Facts?: boolean;
 }
 
 export interface ToolExecutionFinalizationContext
@@ -1071,9 +1070,10 @@ export function annotateUntrustedShellExitSummary(
 }
 
 /**
- * Commit one tool result to TaskState, the durable legacy event stream, and
- * the v2 observation port. A v2 exclusive scheduler must keep its barrier
- * held until this function returns.
+ * Commit one tool result to TaskState and the durable event stream. The rich
+ * v2 decision fact is attached atomically to tool.result, so replay never
+ * depends on a memory-only callback. A v2 exclusive scheduler must keep its
+ * barrier held until this function returns.
  */
 export function commitToolExecutionResult(
   call: AgentToolCallAction,
@@ -1094,7 +1094,7 @@ export function commitToolExecutionResult(
   const taskStateBefore = ctx.taskState?.snapshot();
   const repositoryRevision = `run:${ctx.runId}:mutation:${taskStateBefore?.mutationRevision ?? 0}`;
   const sourceContentHash =
-    ctx.observeLoopV2ToolCommit &&
+    ctx.captureLoopV2Facts &&
     observed.ok &&
     call.tool === "workspace.read_file" &&
     !options.concurrentMutation
@@ -1133,6 +1133,23 @@ export function commitToolExecutionResult(
     });
   }
   const workspaceEffect = workspaceEffectFromPayload(result.payload);
+  const decisionCommit: ToolDecisionCommitV1 | undefined =
+    ctx.captureLoopV2Facts
+      ? {
+          schemaVersion: "paw.tool-decision-commit.v1",
+          callId: `legacy:${ctx.runId}:turn:${ctx.turn}:call:${sourceIndex}`,
+          tool: call.tool,
+          args: call.args,
+          result: observed,
+          repositoryRevision,
+          concurrentMutation: options.concurrentMutation,
+          ...(sourceContentHash ? { sourceContentHash } : {}),
+          ...(options.mutationCapture
+            ? { mutationCapture: options.mutationCapture }
+            : {}),
+          ...(verificationCapture ? { verificationCapture } : {}),
+        }
+      : undefined;
   ctx.emit({
     type: "tool.result",
     tool: call.tool,
@@ -1142,19 +1159,7 @@ export function commitToolExecutionResult(
     provenance: observationProvenanceForToolV1(call.tool),
     ...(workspaceEffect ? { workspaceEffect } : {}),
     ...(fileChanges ? { fileChanges } : {}),
-  });
-  ctx.observeLoopV2ToolCommit?.({
-    callId: `legacy:${ctx.runId}:turn:${ctx.turn}:call:${sourceIndex}`,
-    tool: call.tool,
-    args: call.args,
-    result: observed,
-    repositoryRevision,
-    concurrentMutation: options.concurrentMutation,
-    ...(sourceContentHash ? { sourceContentHash } : {}),
-    ...(options.mutationCapture
-      ? { mutationCapture: options.mutationCapture }
-      : {}),
-    ...(verificationCapture ? { verificationCapture } : {}),
+    ...(decisionCommit ? { decisionCommit } : {}),
   });
 }
 
@@ -1398,7 +1403,7 @@ function buildShadowVerificationCapture(
   result: ToolRunResult,
   before: TaskState | undefined,
   after: TaskState | undefined,
-): LoopV2ShadowToolCommitPortInput["verificationCapture"] {
+): LoopV2ShadowVerificationCapture | undefined {
   if (call.tool !== "workspace.run_shell" || !before || !after) {
     return undefined;
   }

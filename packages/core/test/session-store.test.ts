@@ -31,6 +31,52 @@ describe("FileSystemSessionStore", () => {
     expect(loaded).toEqual([env]);
   });
 
+  test("round-trips a rich tool decision commit without losing replay facts", () => {
+    const env: RunEventEnvelope = {
+      runId: "rich-tool",
+      seq: 7,
+      ts: 1_007,
+      event: {
+        type: "tool.result",
+        tool: "workspace.edit_file",
+        ok: true,
+        summary: "edited src/value.ts",
+        decisionCommit: {
+          schemaVersion: "paw.tool-decision-commit.v1",
+          callId: "legacy:rich-tool:turn:2:call:0",
+          tool: "workspace.edit_file",
+          args: { path: "src/value.ts", old_string: "a", new_string: "b" },
+          result: {
+            ok: true,
+            payload: { path: "src/value.ts", linesAdded: 1, linesRemoved: 1 },
+            summary: "edited src/value.ts",
+          },
+          repositoryRevision: "run:rich-tool:mutation:0",
+          concurrentMutation: false,
+          mutationCapture: {
+            status: "complete",
+            paths: ["src/value.ts"],
+            beforeContents: { "src/value.ts": "a\n" },
+            afterContents: { "src/value.ts": "b\n" },
+          },
+          verificationCapture: {
+            runner: "bun_test",
+            argv: ["bun", "test"],
+            cwd: ".",
+            scope: ["src/value.ts"],
+            mutationRevision: 1,
+            outcome: "passed",
+            exitCode: 0,
+            output: "1 pass",
+            authoritative: true,
+          },
+        },
+      },
+    };
+    store.saveEvent(env.runId, env);
+    expect(store.loadRun(env.runId)).toEqual([env]);
+  });
+
   test("listRuns returns newest first", () => {
     store.saveEvent("r1", {
       runId: "r1",
@@ -132,6 +178,35 @@ describe("FileSystemSessionStore", () => {
     expect(loaded).not.toBeNull();
     expect(loaded?.length).toBe(1);
     expect(loaded?.[0]?.event.type).toBe("run.started");
+    expect(() => store.loadRunStrict("corrupt")).toThrow(
+      /line 2 is not valid JSON/,
+    );
+  });
+
+  test("strict journal loading rejects reordered event identities", () => {
+    const sessionsDir = path.join(root, ".paw", "sessions");
+    const p = path.join(sessionsDir, "reordered.jsonl");
+    writeFileSync(
+      p,
+      [
+        JSON.stringify({
+          runId: "reordered",
+          seq: 2,
+          ts: 2,
+          event: { type: "run.started", goal: "x" },
+        }),
+        JSON.stringify({
+          runId: "reordered",
+          seq: 1,
+          ts: 3,
+          event: { type: "run.failed", message: "bad" },
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+    expect(() => store.loadRunStrict("reordered")).toThrow(
+      /sequence must increase/,
+    );
   });
 
   test("getRunSummary counts tool calls", () => {

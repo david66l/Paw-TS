@@ -175,6 +175,40 @@ describe("Loop Kernel v2 shadow migration", () => {
     });
   });
 
+  test("checkpoint restore preserves a pending natural-stop adapter", () => {
+    const runId = "shadow-natural-checkpoint";
+    const full = createLoopV2ShadowObserver(runId);
+    const prefix = createLoopV2ShadowObserver(runId);
+    const started = legacyEnvelope(
+      1,
+      { type: "run.started", goal: "Inspect the result" },
+      runId,
+    );
+    const stopped = legacyEnvelope(
+      2,
+      { type: "provider.turn_stopped", turn: 1, empty: false },
+      runId,
+    );
+    const final = legacyEnvelope(
+      3,
+      {
+        type: "agent.action",
+        action: { type: "final_answer", summary: "done" },
+      },
+      runId,
+    );
+    for (const event of [started, stopped, final]) full.observe(event);
+    prefix.observe(started);
+    prefix.observe(stopped);
+    const restored = restoreLoopV2ProjectionObserver(prefix.snapshot());
+    restored.observe(final);
+
+    expect(restored.snapshot()).toEqual(full.snapshot());
+    expect(restored.snapshot().state.currentCandidate?.source).toBe(
+      "natural_stop_adapter",
+    );
+  });
+
   test("rich read facts project exact coverage while repeated spans stay non-progress", () => {
     const observer = createLoopV2ShadowObserver("shadow-r19");
     observer.observe(

@@ -86,6 +86,11 @@ export interface SessionStore {
   listRuns(): RunSummary[];
   /** 按序号顺序加载一次运行的全部事件信封 */
   loadRun(runId: string): RunEventEnvelope[] | null;
+  /**
+   * Fail-closed journal load for authoritative resume/replay. Unlike loadRun,
+   * any malformed or truncated non-empty line rejects the whole prefix.
+   */
+  loadRunStrict(runId: string): RunEventEnvelope[] | null;
   /** 分页加载运行的事件信封（支持偏移量和限制数量） */
   loadRunPaginated(
     runId: string,
@@ -187,6 +192,36 @@ export class FileSystemSessionStore implements SessionStore {
       } catch {
         // 跳过损坏行（JSON 解析失败），不影响其他行
       }
+    }
+    return out;
+  }
+
+  loadRunStrict(runId: string): RunEventEnvelope[] | null {
+    const p = this.runPath(runId);
+    if (!fs.existsSync(p)) return null;
+    const raw = fs.readFileSync(p, "utf8");
+    const lines = raw.split("\n");
+    const out: RunEventEnvelope[] = [];
+    let priorSeq = 0;
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index]!;
+      if (line.trim() === "") continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line) as unknown;
+      } catch {
+        throw new Error(`Session journal line ${index + 1} is not valid JSON`);
+      }
+      if (!isEnvelope(parsed) || parsed.runId !== runId) {
+        throw new Error(`Session journal line ${index + 1} is not a valid envelope`);
+      }
+      if (parsed.seq <= priorSeq) {
+        throw new Error(
+          `Session journal sequence must increase at line ${index + 1}`,
+        );
+      }
+      priorSeq = parsed.seq;
+      out.push(parsed);
     }
     return out;
   }

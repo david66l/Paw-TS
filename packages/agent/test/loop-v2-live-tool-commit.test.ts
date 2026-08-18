@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   type AgentToolCallAction,
   ContextManager,
+  FileSystemSessionStore,
   type RunEvent,
   type RunEventEnvelope,
 } from "@paw/core";
@@ -45,7 +46,7 @@ function toolCall(
 }
 
 describe("Loop Kernel v2 live tool commit seam", () => {
-  test("exclusive barrier includes TaskState, durable result event, and projector port", async () => {
+  test("exclusive barrier includes TaskState and the atomic durable decision fact", async () => {
     const workspaceRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "paw-v2-live-commit-"),
     );
@@ -141,20 +142,21 @@ describe("Loop Kernel v2 live tool commit seam", () => {
               emit(event: RunEvent) {
                 if (event.type === "tool.result") {
                   trace.push(`${index}:event`);
+                  const input = event.decisionCommit;
+                  if (!input) throw new Error("missing durable decision commit");
+                  trace.push(`${index}:projector`);
+                  projected.push({
+                    callId: input.callId,
+                    repositoryRevision: input.repositoryRevision,
+                    concurrentMutation: input.concurrentMutation,
+                  });
                 }
               },
               runId: "v2-live-commit",
               workspaceRoot,
               turn: 4,
               taskState,
-              observeLoopV2ToolCommit(input) {
-                trace.push(`${index}:projector`);
-                projected.push({
-                  callId: input.callId,
-                  repositoryRevision: input.repositoryRevision,
-                  concurrentMutation: input.concurrentMutation,
-                });
-              },
+              captureLoopV2Facts: true,
             },
             {
               concurrentMutation: false,
@@ -271,6 +273,74 @@ describe("Loop Kernel v2 live tool commit seam", () => {
         "v2-live-mixed",
       );
       expect(fs.readdirSync(checkpointRoot).sort()).toEqual(["1", "2"]);
+      const durableEvents =
+        new FileSystemSessionStore({ workspaceRoot }).loadRun(
+          "v2-live-mixed",
+        ) ?? [];
+      const durableToolResults = durableEvents.filter(
+        (event) => event.event.type === "tool.result",
+      );
+      expect(durableToolResults).toHaveLength(4);
+      expect(
+        durableToolResults.every(
+          (event) =>
+            event.event.type === "tool.result" &&
+            event.event.decisionCommit?.schemaVersion ===
+              "paw.tool-decision-commit.v1",
+        ),
+      ).toBeTrue();
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("a throwing event consumer cannot erase an executed tool from the durable journal", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-v2-durable-before-delivery-"),
+    );
+    fs.writeFileSync(path.join(workspaceRoot, "value.txt"), "before\n", "utf8");
+    const runId = "v2-durable-before-delivery";
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model: {
+        label: "durable-before-delivery-fixture",
+        async complete() {
+          return {
+            text: '{"tool":"workspace.edit_file","args":{"path":"value.txt","old_string":"before","new_string":"after"}}',
+          };
+        },
+      },
+      onEvent(envelope) {
+        if (envelope.event.type === "tool.result") {
+          throw new Error("consumer failed");
+        }
+      },
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId,
+        goal: "change value.txt",
+        workspaceRoot,
+        maxSteps: 2,
+      });
+      expect(result.status).toBe("failed");
+      expect(fs.readFileSync(path.join(workspaceRoot, "value.txt"), "utf8")).toBe(
+        "after\n",
+      );
+      const journal =
+        new FileSystemSessionStore({ workspaceRoot }).loadRunStrict(runId) ?? [];
+      const committed = journal.find(
+        (event) => event.event.type === "tool.result",
+      );
+      expect(committed?.event.type).toBe("tool.result");
+      if (committed?.event.type === "tool.result") {
+        expect(committed.event.decisionCommit?.mutationCapture?.status).toBe(
+          "complete",
+        );
+      }
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -641,6 +711,13 @@ describe("Loop Kernel v2 live tool commit seam", () => {
             event.event.callId === "child-v2-mixed-child-2",
         ),
       ).toBeTrue();
+      const journal = new FileSystemSessionStore({
+        workspaceRoot,
+      }).loadRunStrict("v2-mixed-child");
+      expect(journal).not.toBeNull();
+      expect(journal?.map((event) => event.seq)).toEqual(
+        journal?.map((event) => event.seq).sort((left, right) => left - right),
+      );
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -662,13 +739,13 @@ describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
     };
   }
 
-  test("piped verification command annotates the durable fact, the v2 port, and the model-visible summary", () => {
+  test("piped verification command annotates the durable decision fact and model-visible summary", () => {
     const workspaceRoot = path.join(os.tmpdir(), "paw-untrusted-exit-ws");
     const call = toolCall("workspace.run_shell", { command: pipedCommand });
     const result = shellResult("run_shell: exit 0");
     const taskState = new TaskStateManager("fix django i18n prefix");
     const events: RunEvent[] = [];
-    const portResults: ToolRunResult[] = [];
+    const durableResults: ToolRunResult[] = [];
 
     commitToolExecutionResult(
       call,
@@ -677,14 +754,15 @@ describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
       {
         emit(event: RunEvent) {
           events.push(event);
+          if (event.type === "tool.result" && event.decisionCommit) {
+            durableResults.push(event.decisionCommit.result);
+          }
         },
         runId: "untrusted-exit",
         workspaceRoot,
         turn: 30,
         taskState,
-        observeLoopV2ToolCommit(input) {
-          portResults.push(input.result);
-        },
+        captureLoopV2Facts: true,
       },
       { concurrentMutation: false },
     );
@@ -706,8 +784,8 @@ describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
     expect(verification?.outcome).toBe("harness_failed");
     expect(verification?.failureKind).toBe("untrusted_exit_status");
 
-    // 3) v2 observation port 收到同一份标注后的结果
-    expect(portResults[0]?.summary).toContain("[UntrustedExitStatus]");
+    // 3) durable v2 decision fact 收到同一份标注后的结果
+    expect(durableResults[0]?.summary).toContain("[UntrustedExitStatus]");
 
     // 4) 模型可见上下文（下一轮 user 消息）包含标注
     const ctxMgr = new ContextManager();

@@ -531,6 +531,15 @@ function handleNativeToolErrors(
       tool: e.name,
       ok: false,
       summary,
+      ...(ctx.captureLoopV2Facts
+        ? {
+            decisionDisposition: {
+              schemaVersion: "paw.tool-decision-disposition.v1" as const,
+              status: "not_executed" as const,
+              reason: "native_tool_rejected" as const,
+            },
+          }
+        : {}),
     });
     return { tool: e.name, ok: false, summary };
   });
@@ -1693,7 +1702,7 @@ async function handleToolCalls(
     artifactRegistry: ctx.artifactRegistry,
     toolExecutionPolicy: opts.toolExecutionPolicy,
     toolEffectPolicy: opts.toolEffectPolicy,
-    captureLoopV2Facts: Boolean(ctx.observeLoopV2ToolCommit),
+    captureLoopV2Facts: ctx.captureLoopV2Facts,
     managedJobs: {
       startShell: (input: {
         readonly command: string;
@@ -1821,7 +1830,7 @@ async function handleToolCalls(
       const blocked = blockedResult(index);
       if (blocked) {
         mutationCaptures.push(
-          ctx.observeLoopV2ToolCommit
+          ctx.captureLoopV2Facts
             ? createLoopV2NoMutationCapture()
             : undefined,
         );
@@ -1896,7 +1905,7 @@ async function handleToolCalls(
     taskState: ctx.taskState,
     executionEnvironment: ctx.executionEnvironment,
     mutationCaptures,
-    observeLoopV2ToolCommit: ctx.observeLoopV2ToolCommit,
+    captureLoopV2Facts: ctx.captureLoopV2Facts,
     payloadDeduper: ctx.payloadDeduper,
     artifactRegistry: ctx.artifactRegistry,
     failureSignatures: flags.failureSignatures,

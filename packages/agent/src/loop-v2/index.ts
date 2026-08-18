@@ -246,6 +246,8 @@ export {
 } from "./test-warden.js";
 export {
   createLoopV2ShadowObserver,
+  observeLoopV2DurableEnvelopeV1,
+  parseToolDecisionCommitV1,
   restoreLoopV2ProjectionObserver,
   type LegacyRunEventEnvelopeV1,
   type LoopV2ShadowCoverage,

@@ -133,6 +133,10 @@ export type { EvalHooks } from "./eval-hooks.js";
 export type {
   RunEvent,
   RunEventEnvelope,
+  ToolDecisionCommitV1,
+  ToolDecisionDispositionV1,
+  ToolDecisionMutationCaptureV1,
+  ToolDecisionVerificationCaptureV1,
   ToolFileChange,
 } from "./run-events.js";
 

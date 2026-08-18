@@ -1,3 +1,9 @@
+import type {
+  ToolDecisionCommitV1,
+  ToolDecisionDispositionV1,
+  ToolDecisionMutationCaptureV1,
+  ToolDecisionVerificationCaptureV1,
+} from "@paw/core";
 import {
   type ArtifactContentBlobV2,
   artifactContentHashV2,
@@ -114,58 +120,154 @@ export interface LegacyRunEventEnvelopeV1 {
   readonly event: { readonly type: string };
 }
 
-export interface LoopV2ShadowToolCommitInput {
+export type LoopV2ShadowToolCommitInput = Omit<
+  ToolDecisionCommitV1,
+  "schemaVersion"
+> & {
   readonly sourceSeq: number;
-  readonly callId: string;
-  readonly tool: string;
-  readonly args: unknown;
-  readonly result: Readonly<{
-    readonly ok: boolean;
-    readonly payload: unknown;
-    readonly summary: string;
-  }>;
-  readonly repositoryRevision: string;
-  /** Hash of the complete file version, distinct from the observed span blob. */
-  readonly sourceContentHash?: string;
-  /** A sibling mutation may race a read/search in the legacy parallel batch. */
-  readonly concurrentMutation: boolean;
-  readonly mutationCapture?: LoopV2ShadowMutationCapture;
-  readonly verificationCapture?: LoopV2ShadowVerificationCapture;
-}
+};
 
-export interface LoopV2ShadowVerificationCapture {
-  readonly runner: import("./schema.js").VerificationRecordV2["runner"];
-  readonly argv: readonly string[];
-  readonly cwd: string;
-  readonly scope: readonly string[];
-  readonly mutationRevision: number;
-  readonly outcome: import("./schema.js").VerificationRecordV2["outcome"];
-  readonly exitCode?: number;
-  readonly failureClass?: string;
-  readonly output: string;
-  readonly authoritative: boolean;
-}
+export type LoopV2ShadowVerificationCapture =
+  ToolDecisionVerificationCaptureV1;
 
-export type LoopV2ShadowMutationCapture =
-  | Readonly<{
-      status: "complete";
-      paths: readonly string[];
-      beforeContents: Readonly<Record<string, string | null>>;
-      afterContents: Readonly<Record<string, string | null>>;
-    }>
-  | Readonly<{
-      status: "gap";
-      reason:
-        | "parallel_mutations"
-        | "unbounded_mutation_surface"
-        | "unsafe_or_missing_target"
-        | "capture_failed";
-    }>;
+export type LoopV2ShadowMutationCapture = ToolDecisionMutationCaptureV1;
 
 export type LoopV2ShadowToolCommitPortInput = Omit<
-  LoopV2ShadowToolCommitInput,
-  "sourceSeq"
+  ToolDecisionCommitV1,
+  "schemaVersion"
 >;
+
+/**
+ * Shared durable admission boundary for live projection and offline replay.
+ * Streaming snapshots are intentionally ignored; a versioned rich tool fact
+ * is consumed only after its matching durable tool.result has been observed.
+ */
+export function observeLoopV2DurableEnvelopeV1(
+  observer: LoopV2ShadowObserver,
+  envelope: LegacyRunEventEnvelopeV1,
+): void {
+  if (
+    envelope.event.type === "model.chunk" ||
+    envelope.event.type === "model.thinking"
+  ) {
+    return;
+  }
+  const rawDecisionCommit =
+    envelope.event.type === "tool.result"
+      ? readUnknown(envelope.event, "decisionCommit")
+      : undefined;
+  const rawDecisionDisposition =
+    envelope.event.type === "tool.result"
+      ? readUnknown(envelope.event, "decisionDisposition")
+      : undefined;
+  if (
+    rawDecisionCommit !== undefined &&
+    rawDecisionDisposition !== undefined
+  ) {
+    throw new Error(
+      "Durable tool.result cannot contain both a decision commit and disposition",
+    );
+  }
+  const decisionCommit =
+    rawDecisionCommit === undefined
+      ? undefined
+      : parseToolDecisionCommitV1(rawDecisionCommit);
+  const decisionDisposition =
+    rawDecisionDisposition === undefined
+      ? undefined
+      : parseToolDecisionDispositionV1(rawDecisionDisposition);
+  if (decisionCommit) {
+    const outerTool = readString(envelope.event, "tool");
+    const outerOk = readBoolean(envelope.event, "ok");
+    const outerSummary = readString(envelope.event, "summary");
+    if (
+      outerTool !== decisionCommit.tool ||
+      outerOk !== decisionCommit.result.ok ||
+      outerSummary !== decisionCommit.result.summary
+    ) {
+      throw new Error(
+        "Tool decision commit does not match its durable tool.result",
+      );
+    }
+  }
+  if (decisionDisposition && readBoolean(envelope.event, "ok") !== false) {
+    throw new Error(
+      "A not-executed tool decision disposition requires tool.result ok=false",
+    );
+  }
+  observer.observe(envelope);
+  if (decisionCommit === undefined) return;
+  const { schemaVersion: _, ...input } = decisionCommit;
+  observer.observeToolCommit({ ...input, sourceSeq: envelope.seq });
+}
+
+/** Strict persisted-JSON boundary for the versioned rich tool fact. */
+export function parseToolDecisionCommitV1(
+  value: unknown,
+): ToolDecisionCommitV1 {
+  const record = requireRecord(value, "tool decision commit");
+  if (record.schemaVersion !== "paw.tool-decision-commit.v1") {
+    throw new Error("Tool decision commit has an unsupported schemaVersion");
+  }
+  const callId = requireNonEmptyString(record.callId, "callId");
+  const tool = requireNonEmptyString(record.tool, "tool");
+  const resultRecord = requireRecord(record.result, "result");
+  if (typeof resultRecord.ok !== "boolean") {
+    throw new Error("Tool decision commit result.ok must be boolean");
+  }
+  const summary = requireString(resultRecord.summary, "result.summary");
+  const repositoryRevision = requireNonEmptyString(
+    record.repositoryRevision,
+    "repositoryRevision",
+  );
+  if (typeof record.concurrentMutation !== "boolean") {
+    throw new Error("Tool decision commit concurrentMutation must be boolean");
+  }
+  const sourceContentHash = optionalNonEmptyString(
+    record.sourceContentHash,
+    "sourceContentHash",
+  );
+  const mutationCapture = parseDecisionMutationCaptureV1(
+    record.mutationCapture,
+  );
+  const verificationCapture = parseDecisionVerificationCaptureV1(
+    record.verificationCapture,
+  );
+  return {
+    schemaVersion: "paw.tool-decision-commit.v1",
+    callId,
+    tool,
+    args: structuredClone(record.args),
+    result: {
+      ok: resultRecord.ok,
+      payload: structuredClone(resultRecord.payload),
+      summary,
+    },
+    repositoryRevision,
+    concurrentMutation: record.concurrentMutation,
+    ...(sourceContentHash ? { sourceContentHash } : {}),
+    ...(mutationCapture ? { mutationCapture } : {}),
+    ...(verificationCapture ? { verificationCapture } : {}),
+  };
+}
+
+function parseToolDecisionDispositionV1(
+  value: unknown,
+): ToolDecisionDispositionV1 {
+  const record = requireRecord(value, "decision disposition");
+  if (
+    record.schemaVersion !== "paw.tool-decision-disposition.v1" ||
+    record.status !== "not_executed" ||
+    record.reason !== "native_tool_rejected"
+  ) {
+    throw new Error("Tool decision disposition is invalid");
+  }
+  return {
+    schemaVersion: "paw.tool-decision-disposition.v1",
+    status: "not_executed",
+    reason: "native_tool_rejected",
+  };
+}
 
 /**
  * Observe the legacy loop without inventing facts that its event contract
@@ -200,7 +302,11 @@ export function createLoopV2ShadowObserver(
   const consumedToolCommits = new Set<number>();
   let legacyTerminal: LoopV2ShadowLegacyTerminal | undefined =
     seed?.legacyTerminal;
-  let pendingNaturalStopAdapter = false;
+  let pendingNaturalStopAdapter = Boolean(
+    seed &&
+      seed.diagnostics.at(-1)?.sourceSeq === seed.sourceThroughSeq &&
+      seed.diagnostics.at(-1)?.reason === "provider_turn_stopped_projected",
+  );
 
   const appendProjected = (projected: LoopV2Envelope): void => {
     state = projectLoopV2Event(state, projected).state;
@@ -989,6 +1095,172 @@ function readBoolean(
   if (!value) return undefined;
   const candidate = (value as Readonly<Record<string, unknown>>)[key];
   return typeof candidate === "boolean" ? candidate : undefined;
+}
+
+function readUnknown(value: unknown, key: string): unknown {
+  return asRecord(value)?.[key];
+}
+
+function requireRecord(
+  value: unknown,
+  label: string,
+): Readonly<Record<string, unknown>> {
+  const record = asRecord(value);
+  if (!record) {
+    throw new Error(`Tool decision commit ${label} must be an object`);
+  }
+  return record;
+}
+
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Tool decision commit ${label} must be a string`);
+  }
+  return value;
+}
+
+function requireNonEmptyString(value: unknown, label: string): string {
+  const text = requireString(value, label);
+  if (!text.trim()) {
+    throw new Error(`Tool decision commit ${label} must not be empty`);
+  }
+  return text;
+}
+
+function optionalNonEmptyString(
+  value: unknown,
+  label: string,
+): string | undefined {
+  return value === undefined ? undefined : requireNonEmptyString(value, label);
+}
+
+function requireStringArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new Error(`Tool decision commit ${label} must be a string array`);
+  }
+  return [...value];
+}
+
+function requireContentRecord(
+  value: unknown,
+  label: string,
+): Readonly<Record<string, string | null>> {
+  const record = requireRecord(value, label);
+  for (const entry of Object.values(record)) {
+    if (entry !== null && typeof entry !== "string") {
+      throw new Error(
+        `Tool decision commit ${label} values must be strings or null`,
+      );
+    }
+  }
+  return { ...record } as Readonly<Record<string, string | null>>;
+}
+
+function parseDecisionMutationCaptureV1(
+  value: unknown,
+): ToolDecisionMutationCaptureV1 | undefined {
+  if (value === undefined) return undefined;
+  const record = requireRecord(value, "mutationCapture");
+  if (record.status === "complete") {
+    return {
+      status: "complete",
+      paths: requireStringArray(record.paths, "mutationCapture.paths"),
+      beforeContents: requireContentRecord(
+        record.beforeContents,
+        "mutationCapture.beforeContents",
+      ),
+      afterContents: requireContentRecord(
+        record.afterContents,
+        "mutationCapture.afterContents",
+      ),
+    };
+  }
+  const gapReasons = new Set([
+    "parallel_mutations",
+    "unbounded_mutation_surface",
+    "unsafe_or_missing_target",
+    "capture_failed",
+  ]);
+  if (
+    record.status === "gap" &&
+    typeof record.reason === "string" &&
+    gapReasons.has(record.reason)
+  ) {
+    return {
+      status: "gap",
+      reason: record.reason as Extract<
+        ToolDecisionMutationCaptureV1,
+        { readonly status: "gap" }
+      >["reason"],
+    };
+  }
+  throw new Error("Tool decision commit mutationCapture is invalid");
+}
+
+function parseDecisionVerificationCaptureV1(
+  value: unknown,
+): ToolDecisionVerificationCaptureV1 | undefined {
+  if (value === undefined) return undefined;
+  const record = requireRecord(value, "verificationCapture");
+  const runners = new Set([
+    "pytest",
+    "unittest",
+    "bun_test",
+    "npm_test",
+    "custom",
+  ]);
+  const outcomes = new Set(["passed", "code_failed", "harness_failed"]);
+  if (typeof record.runner !== "string" || !runners.has(record.runner)) {
+    throw new Error("Tool decision commit verificationCapture.runner is invalid");
+  }
+  if (typeof record.outcome !== "string" || !outcomes.has(record.outcome)) {
+    throw new Error("Tool decision commit verificationCapture.outcome is invalid");
+  }
+  if (
+    !Number.isSafeInteger(record.mutationRevision) ||
+    (record.mutationRevision as number) < 0
+  ) {
+    throw new Error(
+      "Tool decision commit verificationCapture.mutationRevision is invalid",
+    );
+  }
+  if (
+    record.exitCode !== undefined &&
+    !Number.isSafeInteger(record.exitCode)
+  ) {
+    throw new Error(
+      "Tool decision commit verificationCapture.exitCode is invalid",
+    );
+  }
+  if (
+    record.failureClass !== undefined &&
+    typeof record.failureClass !== "string"
+  ) {
+    throw new Error(
+      "Tool decision commit verificationCapture.failureClass is invalid",
+    );
+  }
+  if (typeof record.authoritative !== "boolean") {
+    throw new Error(
+      "Tool decision commit verificationCapture.authoritative must be boolean",
+    );
+  }
+  return {
+    runner: record.runner as ToolDecisionVerificationCaptureV1["runner"],
+    argv: requireStringArray(record.argv, "verificationCapture.argv"),
+    cwd: requireString(record.cwd, "verificationCapture.cwd"),
+    scope: requireStringArray(record.scope, "verificationCapture.scope"),
+    mutationRevision: record.mutationRevision as number,
+    outcome: record.outcome as ToolDecisionVerificationCaptureV1["outcome"],
+    ...(record.exitCode !== undefined
+      ? { exitCode: record.exitCode as number }
+      : {}),
+    ...(record.failureClass !== undefined
+      ? { failureClass: record.failureClass as string }
+      : {}),
+    output: requireString(record.output, "verificationCapture.output"),
+    authoritative: record.authoritative,
+  };
 }
 
 function readArray(

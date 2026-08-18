@@ -241,7 +241,7 @@ describe("handleAction — 原生通道坏 args（拒绝执行 + 错误注入）
     const result = await handleAction(
       [],
       [],
-      ctx,
+      { ...ctx, captureLoopV2Facts: true },
       baseFlags(),
       "I'll write the file.",
       undefined,
@@ -261,6 +261,13 @@ describe("handleAction — 原生通道坏 args（拒绝执行 + 错误注入）
         (e as { ok?: boolean }).ok === false,
     );
     expect(errResults.length).toBe(1);
+    expect(errResults[0]).toMatchObject({
+      decisionDisposition: {
+        schemaVersion: "paw.tool-decision-disposition.v1",
+        status: "not_executed",
+        reason: "native_tool_rejected",
+      },
+    });
   });
 
   test("解析失败 + 最后一轮：诚实返回 incomplete", async () => {

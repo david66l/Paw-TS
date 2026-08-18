@@ -58,6 +58,60 @@ export interface ToolFileChange {
   readonly diff?: string;
 }
 
+/** Versioned rich fact attached atomically to its durable tool.result event. */
+export interface ToolDecisionCommitV1 {
+  readonly schemaVersion: "paw.tool-decision-commit.v1";
+  readonly callId: string;
+  readonly tool: string;
+  readonly args: unknown;
+  readonly result: Readonly<{
+    readonly ok: boolean;
+    readonly payload: unknown;
+    readonly summary: string;
+  }>;
+  readonly repositoryRevision: string;
+  readonly sourceContentHash?: string;
+  readonly concurrentMutation: boolean;
+  readonly mutationCapture?: ToolDecisionMutationCaptureV1;
+  readonly verificationCapture?: ToolDecisionVerificationCaptureV1;
+}
+
+/** Durable proof that a reported native tool call was rejected pre-execution. */
+export interface ToolDecisionDispositionV1 {
+  readonly schemaVersion: "paw.tool-decision-disposition.v1";
+  readonly status: "not_executed";
+  readonly reason: "native_tool_rejected";
+}
+
+export type ToolDecisionMutationCaptureV1 =
+  | Readonly<{
+      status: "complete";
+      paths: readonly string[];
+      beforeContents: Readonly<Record<string, string | null>>;
+      afterContents: Readonly<Record<string, string | null>>;
+    }>
+  | Readonly<{
+      status: "gap";
+      reason:
+        | "parallel_mutations"
+        | "unbounded_mutation_surface"
+        | "unsafe_or_missing_target"
+        | "capture_failed";
+    }>;
+
+export interface ToolDecisionVerificationCaptureV1 {
+  readonly runner: "pytest" | "unittest" | "bun_test" | "npm_test" | "custom";
+  readonly argv: readonly string[];
+  readonly cwd: string;
+  readonly scope: readonly string[];
+  readonly mutationRevision: number;
+  readonly outcome: "passed" | "code_failed" | "harness_failed";
+  readonly exitCode?: number;
+  readonly failureClass?: string;
+  readonly output: string;
+  readonly authoritative: boolean;
+}
+
 /**
  * 运行生命周期事件联合类型
  *
@@ -271,6 +325,10 @@ export type RunEvent =
        * 每个被改文件一条，供 UI 展示「Changed N files +A −B」与 diff 预览
        */
       readonly fileChanges?: readonly ToolFileChange[];
+      /** Canonical replay input for Loop v2; absent on legacy/v1-only runs. */
+      readonly decisionCommit?: ToolDecisionCommitV1;
+      /** Versioned non-execution disposition; mutually exclusive with commit. */
+      readonly decisionDisposition?: ToolDecisionDispositionV1;
     }
   /** 工具输出流式块（例如长时间运行的命令的 stdout/stderr） */
   | {
