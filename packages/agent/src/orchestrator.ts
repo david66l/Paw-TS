@@ -197,6 +197,7 @@ import {
 import { buildChildSystemPrompt } from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
+import { assembleModelContextV1 } from "./context-assembler.js";
 import {
   appendReplyToInboxV1,
   appendUserReplyV1,
@@ -1582,9 +1583,15 @@ export class AgentOrchestrator {
   }> {
     const { model, ctxMgr, signal, emit } = ctx;
 
+    // Assemble exactly once: eval capture and the provider must observe the
+    // same request. Later P0.3 slices add typed host/control projections here.
+    const requestMessages = assembleModelContextV1({
+      durable: { messages: ctxMgr.buildMessages() },
+    });
+
     // 评估钩子：模型调用前记录 messages（用于训练数据收集）
     this.evalHooks?.beforeModelCall?.({
-      messages: ctxMgr.buildMessages(),
+      messages: requestMessages,
       contextManager: ctxMgr,
     });
     const modelCallStart = Date.now();
@@ -1600,7 +1607,7 @@ export class AgentOrchestrator {
       finishReason,
     } = await this.invokeModel(
       model,
-      ctxMgr.buildMessages(),
+      requestMessages,
       signal,
       emit,
       toolDefs,
