@@ -8,6 +8,8 @@ import type { LanguageModel } from "@paw/models";
 import {
   type VerificationProbeOnceResultV2,
   buildVerificationProbePromptV1,
+  detectProtocolFallbackRisk,
+  discoverRepositoryExtensionPointsV1,
   evaluateVerificationProbeGateV1,
   executeVerificationProbesV1,
   parseVerificationProbePlanV1,
@@ -63,6 +65,140 @@ describe("Loop v2 adversarial verification probe", () => {
     expect(prompt).toContain("no network");
     expect(prompt).toContain("unchanged downstream code");
     expect(prompt).toContain('{"probes"');
+  });
+
+  test("protocol fallback risk requests handler ownership and input/out counterexamples", () => {
+    const diff = [
+      "@@ -10,2 +10,6 @@",
+      "+        try:",
+      "+            converted = value.to(unit, out=out)",
+      "+        except Exception:",
+      "+            return NotImplemented",
+    ].join("\n");
+    const risk = detectProtocolFallbackRisk(diff);
+    const prompt = buildVerificationProbePromptV1({
+      goal: "Support duck quantities without stealing another ufunc handler",
+      diff,
+      changedFiles: ["astropy/units/quantity.py"],
+    });
+
+    expect(risk).toEqual({
+      broadCatch: "except Exception:",
+      fallback: "return NotImplemented",
+    });
+    expect(prompt).toContain("Protocol fallback ownership risk");
+    expect(prompt).toContain("really implements the competing protocol");
+    expect(prompt).toContain(
+      "similar metadata but no explicit protocol handler",
+    );
+    expect(prompt).toContain("out/output");
+    expect(
+      detectProtocolFallbackRisk(
+        "+        except (TypeError, ValueError):\n+            return NotImplemented",
+      ),
+    ).toBeUndefined();
+
+    expect(
+      detectProtocolFallbackRisk(
+        [
+          "diff --git a/a.py b/a.py",
+          "@@ -1 +1 @@",
+          "+except Exception:",
+          "+    log_error()",
+          "diff --git a/b.py b/b.py",
+          "@@ -1 +1 @@",
+          "+return NotImplemented",
+        ].join("\n"),
+      ),
+    ).toBeUndefined();
+
+    const equalityPrompt = buildVerificationProbePromptV1({
+      goal: "Implement Python equality fallback",
+      diff: "+except Exception:\n+    return NotImplemented",
+      changedFiles: ["pkg/equality.py"],
+    });
+    expect(equalityPrompt).toContain("Protocol fallback ownership risk");
+    expect(equalityPrompt).not.toContain("out/output");
+  });
+
+  test("nearby handler directories trigger extension-point comparison for base behavior", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-extension-"));
+    try {
+      fs.mkdirSync(path.join(dir, "sympy", "sets", "handlers"), {
+        recursive: true,
+      });
+      fs.writeFileSync(
+        path.join(dir, "sympy", "sets", "sets.py"),
+        "class Set: pass\n",
+      );
+      const hints = discoverRepositoryExtensionPointsV1(dir, [
+        "sympy/sets/sets.py",
+      ]);
+      const prompt = buildVerificationProbePromptV1({
+        goal: "Make ProductSet equality evaluate correctly",
+        diff: [
+          "@@ class Set:",
+          "+    def equals(self, other):",
+          "+        return all(item in other for item in self)",
+          "+    def _eval_simplify(self, **kwargs):",
+          "+        return self.equals(kwargs.get('other'))",
+        ].join("\n"),
+        changedFiles: ["sympy/sets/sets.py"],
+        extensionPointHints: hints,
+      });
+
+      expect(hints).toContain("sympy/sets/handlers");
+      expect(prompt).toContain("Existing extension-point bypass risk");
+      expect(prompt).toContain("sympy/sets/handlers");
+      expect(prompt).toContain("direct construction/evaluation");
+      expect(prompt).toContain("simplify/post-processing");
+
+      const topLevelPrompt = buildVerificationProbePromptV1({
+        goal: "Register a new conversion",
+        diff: "+def convert(value):\n+    return value",
+        changedFiles: ["sympy/sets/sets.py"],
+        extensionPointHints: hints,
+      });
+      expect(topLevelPrompt).toContain("Existing extension-point bypass risk");
+
+      const insideHandlerPrompt = buildVerificationProbePromptV1({
+        goal: "Add the registered comparison handler",
+        diff: [
+          "diff --git a/sympy/sets/handlers/comparison.py b/sympy/sets/handlers/comparison.py",
+          "@@ -1 +1,3 @@",
+          "+def compare_product_set(left, right):",
+          "+    return True",
+        ].join("\n"),
+        changedFiles: ["sympy/sets/handlers/comparison.py"],
+        extensionPointHints: hints,
+      });
+      expect(insideHandlerPrompt).not.toContain(
+        "Existing extension-point bypass risk",
+      );
+
+      let captured = "";
+      const model = {
+        label: "extension-probe-fixture",
+        async complete(messages: readonly { content: string }[]) {
+          captured = messages.map((message) => message.content).join("\n");
+          return { text: '{"probes":[]}' };
+        },
+      } as unknown as LanguageModel;
+      await runVerificationProbeOnceV2({
+        model,
+        runId: "extension-probe-production-seam",
+        workspaceRoot: dir,
+        goal: "Make ProductSet equality evaluate correctly",
+        diff: "+    def equals(self, other):\n+        return True",
+        changedFiles: ["sympy/sets/sets.py"],
+        candidateInputHash: "extension-candidate",
+        mutationRevision: 1,
+      });
+      expect(captured).toContain("Existing extension-point bypass risk");
+      expect(captured).toContain("sympy/sets/handlers");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("parse extracts a bounded plan and drops dangerous commands", () => {

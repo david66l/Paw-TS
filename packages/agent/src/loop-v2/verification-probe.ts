@@ -70,6 +70,11 @@ interface RegexNarrowingRisk {
   readonly newPattern: string;
 }
 
+interface ProtocolFallbackRisk {
+  readonly broadCatch: string;
+  readonly fallback: string;
+}
+
 /**
  * 检测 diff 中的正则/模式改动是否可能收窄行为（拒绝旧实现接受的输入）。
  * 这不是精确的语义比较——是给对抗探针的风险提示，让它重点测试
@@ -101,8 +106,151 @@ export function detectRegexNarrowing(
   return undefined;
 }
 
+/**
+ * Detect a newly-added broad exception boundary that falls back to a protocol
+ * sentinel. This is only a probe-planning hint: the executable probe must
+ * establish whether the fallback is correct for participants that do and do
+ * not actually implement the competing protocol.
+ */
+export function detectProtocolFallbackRisk(
+  diff: string,
+): ProtocolFallbackRisk | undefined {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  for (const line of diff.split(/\r?\n/)) {
+    if (/^(?:diff --git |@@ )/.test(line) && current.length > 0) {
+      chunks.push(current);
+      current = [];
+    }
+    current.push(line);
+  }
+  if (current.length > 0) chunks.push(current);
+  for (const chunk of chunks) {
+    const added = chunk
+      .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+      .map((line) => line.slice(1));
+    const broadCatch = added.find((line) =>
+      /^\s*except\s*(?::|(?:Exception|BaseException)\b)/.test(line),
+    );
+    const fallback = added.find((line) =>
+      /^\s*return\s+NotImplemented\b/.test(line),
+    );
+    if (broadCatch && fallback) {
+      return { broadCatch: broadCatch.trim(), fallback: fallback.trim() };
+    }
+  }
+  return undefined;
+}
+
+const EXTENSION_POINT_NAME =
+  /^(?:handlers?|dispatch(?:es)?|plugins?|registr(?:y|ies))(?:\.[cm]?[jt]s|\.py)?$/i;
+
+/**
+ * Read-only, shallow discovery around changed files. It does not infer that a
+ * handler is correct; it only tells the fresh reviewer which established
+ * extension mechanisms are close enough to inspect before widening a base.
+ */
+export function discoverRepositoryExtensionPointsV1(
+  workspaceRoot: string,
+  changedFiles: readonly string[],
+): readonly string[] {
+  const root = path.resolve(workspaceRoot);
+  let realRoot = root;
+  try {
+    realRoot = fs.realpathSync(root);
+  } catch {
+    // Missing workspaces yield no entries; lexical containment still applies.
+  }
+  const searchDirs = new Set<string>();
+  for (const changedFile of changedFiles.slice(0, 40)) {
+    if (!changedFile.trim() || path.isAbsolute(changedFile)) continue;
+    const absolute = path.resolve(root, changedFile);
+    const relative = path.relative(root, absolute);
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      continue;
+    }
+    let current = path.dirname(absolute);
+    for (let depth = 0; depth < 3; depth += 1) {
+      const currentRelative = path.relative(root, current);
+      if (
+        currentRelative.startsWith("..") ||
+        path.isAbsolute(currentRelative)
+      ) {
+        break;
+      }
+      try {
+        const realCurrent = fs.realpathSync(current);
+        const realRelative = path.relative(realRoot, realCurrent);
+        if (realRelative.startsWith("..") || path.isAbsolute(realRelative)) {
+          break;
+        }
+      } catch {
+        break;
+      }
+      searchDirs.add(current);
+      if (current === root) break;
+      current = path.dirname(current);
+    }
+  }
+  const hints = new Set<string>();
+  for (const directory of searchDirs) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!EXTENSION_POINT_NAME.test(entry.name)) continue;
+      const relative = path
+        .relative(root, path.join(directory, entry.name))
+        .replace(/\\/g, "/");
+      if (relative && !relative.startsWith("..")) hints.add(relative);
+    }
+  }
+  return [...hints].sort().slice(0, 12);
+}
+
 const PROBE_COMMAND_DENYLIST =
   /\b(?:curl|wget|nc|netcat|ssh|scp|pip3?|npm|pnpm|yarn|conda|apt|apt-get|brew|git\s+(?:push|fetch|pull|clone))\b/i;
+
+const ADDED_CALLABLE =
+  /^\+\s*(?:(?:async\s+)?def\s+|(?:public\s+|protected\s+|private\s+)?(?:async\s+)?(?:function\s+)?[A-Za-z_$][\w$]*\s*\()/;
+
+function changedCallableFilesV1(
+  diff: string,
+  fallbackChangedFiles: readonly string[],
+): readonly string[] {
+  const files = new Set<string>();
+  let currentPath: string | undefined;
+  for (const line of diff.split(/\r?\n/)) {
+    const header = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+    if (header?.[2]) {
+      currentPath = header[2].replace(/\\/g, "/");
+      continue;
+    }
+    if (!ADDED_CALLABLE.test(line)) continue;
+    if (currentPath) {
+      files.add(currentPath);
+    } else {
+      for (const changedFile of fallbackChangedFiles) {
+        files.add(changedFile.replace(/\\/g, "/"));
+      }
+    }
+  }
+  return [...files].sort();
+}
+
+function isInsideExtensionPointV1(
+  changedFile: string,
+  extensionPointHints: readonly string[],
+): boolean {
+  const normalized = changedFile.replace(/\\/g, "/").replace(/^\.\//, "");
+  return extensionPointHints.some((hint) => {
+    const point = hint.replace(/\\/g, "/").replace(/^\.\//, "");
+    return normalized === point || normalized.startsWith(`${point}/`);
+  });
+}
 
 export function buildVerificationProbePromptV1(input: {
   readonly goal: string;
@@ -110,6 +258,8 @@ export function buildVerificationProbePromptV1(input: {
   readonly changedFiles: readonly string[];
   /** Layer 3 增强：受影响的既有测试清单（来自代码-测试依赖图）。 */
   readonly impactedTests?: readonly string[];
+  /** Nearby repository-owned handler/dispatch/registry mechanisms. */
+  readonly extensionPointHints?: readonly string[];
 }): string {
   const diffText =
     input.diff.length > DIFF_BUDGET_CHARS
@@ -117,6 +267,22 @@ export function buildVerificationProbePromptV1(input: {
       : input.diff;
   // 检测 diff 中的正则/模式改动，提取行为收窄风险
   const narrowingRisk = detectRegexNarrowing(input.diff);
+  const protocolFallbackRisk = detectProtocolFallbackRisk(input.diff);
+  const extensionPointHints = input.extensionPointHints ?? [];
+  const callableFiles = changedCallableFilesV1(input.diff, input.changedFiles);
+  const extensionPointRisk =
+    extensionPointHints.length > 0 &&
+    callableFiles.some(
+      (changedFile) =>
+        !isInsideExtensionPointV1(changedFile, extensionPointHints),
+    );
+  const simplifyVisible = /simplif(?:y|ied|ication)\b/i.test(
+    `${input.goal}\n${input.diff}`,
+  );
+  const protocolVariantVisible =
+    /\b(?:out(?:put)?|in[-_ ]?place|reflected)\b|__r[a-z_]+__/i.test(
+      `${input.goal}\n${input.diff}`,
+    );
   return [
     "You are an adversarial verification engineer. Another engineer claims the change below completes the stated task. Your ONLY job is to try to BREAK the candidate change before it ships.",
     "",
@@ -140,11 +306,41 @@ export function buildVerificationProbePromptV1(input: {
       ? [
           "",
           "## ⚠ Behavioral narrowing risk detected",
-          `The diff modifies a pattern/regex. The OLD pattern accepted inputs that the NEW pattern might reject:`,
+          "The diff modifies a pattern/regex. The OLD pattern accepted inputs that the NEW pattern might reject:",
           `  OLD: ${narrowingRisk.oldPattern}`,
           `  NEW: ${narrowingRisk.newPattern}`,
           "",
           "Generate probe commands that test inputs the OLD pattern accepted. If the NEW pattern rejects any previously-accepted input without the task explicitly requiring it, that is a blocking defect.",
+        ]
+      : []),
+    ...(protocolFallbackRisk
+      ? [
+          "",
+          "## ⚠ Protocol fallback ownership risk detected",
+          "The diff adds a broad exception boundary that returns a protocol fallback sentinel:",
+          `  CATCH: ${protocolFallbackRisk.broadCatch}`,
+          `  FALLBACK: ${protocolFallbackRisk.fallback}`,
+          "",
+          "Generate a minimal ownership matrix, not only the happy path: (1) a participant that really implements the competing protocol and (2) a look-alike with similar metadata but no explicit protocol handler. Verify the fallback occurs only when another implementation can own the operation, and that only expected conversion/type exceptions are caught.",
+          ...(protocolVariantVisible
+            ? [
+                "The visible protocol also exposes an out/output, in-place, reflected, or related dispatch variant; cover each applicable path.",
+              ]
+            : []),
+        ]
+      : []),
+    ...(extensionPointRisk
+      ? [
+          "",
+          "## ⚠ Existing extension-point bypass risk detected",
+          "The repository has these nearby candidate handler/dispatch/registry mechanisms:",
+          ...extensionPointHints.slice(0, 12).map((hint) => `- ${hint}`),
+          "First determine whether one of these mechanisms owns the changed behavior. If it does, compare the candidate with the smallest registered handler/plugin instead of assuming a broad base-class special case is necessary. Probe the earliest public dispatch/evaluation path and any downstream normalization or post-processing path visible in the task or diff.",
+          ...(simplifyVisible
+            ? [
+                "Simplification is visible in this candidate: explicitly compare direct construction/evaluation with the simplify/post-processing path; passing only the latter can hide a wrong dispatch layer.",
+              ]
+            : []),
         ]
       : []),
     "",
@@ -354,6 +550,10 @@ export async function runVerificationProbeOnceV2(input: {
           ...(input.impactedTests
             ? { impactedTests: input.impactedTests }
             : {}),
+          extensionPointHints: discoverRepositoryExtensionPointsV1(
+            input.workspaceRoot,
+            input.changedFiles,
+          ),
         }),
       },
     ],
