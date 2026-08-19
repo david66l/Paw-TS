@@ -7,9 +7,11 @@ import {
   type SemanticReviewOnceResultV2,
   createInterruptedSemanticReviewRecordV2,
   createSemanticReviewLedgerV2,
+  createSemanticReviewSubjectChangedRecordV2,
+  rebindSemanticReviewRecordV2,
   reviewCandidateOnceV2,
+  semanticReviewSubjectHashV2,
 } from "./candidate-certification.js";
-import { canonicalJson } from "./canonical.js";
 import {
   type LoopV2LiveCandidateArtifactV1,
   loopV2LiveArtifactPath,
@@ -115,7 +117,7 @@ export class LoopV2LiveReviewRuntimeV1 {
     );
   }
 
-  /** Persists a fact-changing candidate; summary-only proposals reuse the first artifact. */
+  /** Persists the latest facts while keeping reviewer calls at-most-once per product revision. */
   persistCandidate(
     artifact: LoopV2LiveCandidateArtifactV1,
   ): LoopV2LiveCandidateArtifactV1 {
@@ -124,32 +126,74 @@ export class LoopV2LiveReviewRuntimeV1 {
     }
     const artifactPath = loopV2LiveArtifactPath(this.workspaceRoot, this.runId);
     const prior = this.candidate;
-    const sameSemanticCandidate =
-      prior?.assessment.candidateInputHash ===
-        artifact.assessment.candidateInputHash &&
-      canonicalJson(prior.policy) === canonicalJson(artifact.policy);
-    if (!sameSemanticCandidate) {
-      atomicWrite(
-        artifactPath,
-        serializeLoopV2LiveCandidateArtifactV1(artifact),
+    const settledSameProductRevision =
+      prior?.assessment.mutationRevision ===
+        artifact.assessment.mutationRevision &&
+      (this.claim !== undefined || this.review !== undefined);
+    const priorClaim = this.claim;
+    const priorReview = this.review;
+    if (prior?.artifactHash === artifact.artifactHash) return prior;
+
+    let futureReview: LoopV2LiveReviewArtifactV1 | undefined;
+    if (settledSameProductRevision && prior) {
+      const previousPayload = buildLoopV2LiveReviewPayloadV1(
+        prior.report,
+        prior.policy,
       );
+      const nextPayload = buildLoopV2LiveReviewPayloadV1(
+        artifact.report,
+        artifact.policy,
+      );
+      const previousSubject = semanticReviewSubjectHashV2(previousPayload);
+      const nextSubject = semanticReviewSubjectHashV2(nextPayload);
+      // Keep a guard bound to the old candidate before replacing its settled
+      // review with a future review. If the process dies before the candidate
+      // commit, resume sees this claim and fails closed without another model
+      // call. Once the candidate commit lands, futureReview already matches it.
+      if (!priorClaim) this.persistClaim(prior);
+      if (previousSubject !== nextSubject) {
+        const changed = createSemanticReviewSubjectChangedRecordV2(nextPayload);
+        futureReview = this.persistReview(
+          artifact,
+          buildLoopV2LiveReviewArtifactV1(artifact, changed),
+        );
+      } else if (priorReview) {
+        const rebound = rebindSemanticReviewRecordV2(
+          priorReview.record,
+          previousPayload,
+          nextPayload,
+        );
+        futureReview = this.persistReview(
+          artifact,
+          buildLoopV2LiveReviewArtifactV1(artifact, rebound, {
+            fromReviewKey: priorReview.reviewKey,
+            semanticSubjectHash: nextSubject,
+          }),
+        );
+      } else if (priorClaim) {
+        const interrupted =
+          createInterruptedSemanticReviewRecordV2(nextPayload);
+        futureReview = this.persistReview(
+          artifact,
+          buildLoopV2LiveReviewArtifactV1(artifact, interrupted),
+        );
+      }
     }
+
+    // Candidate is the commit marker and is always written last. Before it,
+    // either no review exists for this revision or a future review plus an old
+    // guard claim are already durable. Both sides of a process crash therefore
+    // remain at-most-once and fail closed.
+    this.commitCandidateArtifact(artifactPath, artifact);
     const persisted = parseLoopV2LiveCandidateArtifactV1(
       fs.readFileSync(artifactPath, "utf8"),
     );
-    if (
-      sameSemanticCandidate &&
-      persisted.artifactHash !== prior?.artifactHash
-    ) {
-      throw new Error(
-        "Loop v2 semantic candidate artifact changed without a fact change",
-      );
-    }
-    if (prior?.artifactHash !== persisted.artifactHash) {
-      this.claim = undefined;
-      this.review = undefined;
+    if (persisted.artifactHash !== artifact.artifactHash) {
+      throw new Error("Loop v2 candidate commit did not persist its target");
     }
     this.candidate = persisted;
+    this.claim = undefined;
+    this.review = futureReview;
     return persisted;
   }
 
@@ -315,6 +359,13 @@ export class LoopV2LiveReviewRuntimeV1 {
       fs.readFileSync(claimPath, "utf8"),
       candidate,
     );
+  }
+
+  private commitCandidateArtifact(
+    artifactPath: string,
+    artifact: LoopV2LiveCandidateArtifactV1,
+  ): void {
+    atomicWrite(artifactPath, serializeLoopV2LiveCandidateArtifactV1(artifact));
   }
 
   private persistReview(

@@ -1,4 +1,5 @@
 export { canonicalJson, sha256Canonical } from "./canonical.js";
+export { isStableCandidateCheckpointEligibleV1 } from "./stable-candidate-checkpoint.js";
 export {
   CONTROL_STATE_SCHEMA_VERSION,
   controlInputFromLoopV2EnvelopeV1,
@@ -46,8 +47,11 @@ export {
   candidateSnapshotHashV2,
   createSemanticReviewLedgerV2,
   createInterruptedSemanticReviewRecordV2,
+  createSemanticReviewSubjectChangedRecordV2,
   evaluateCandidateReadinessV2,
+  rebindSemanticReviewRecordV2,
   reviewCandidateOnceV2,
+  semanticReviewSubjectHashV2,
   semanticReviewKeyV2,
   validateSemanticReviewRecordV2,
   type CandidateArtifactEvidenceV2,

@@ -247,8 +247,11 @@ export interface CandidateRecordV2 {
   readonly mutationRevision: number;
   readonly candidateInputHash: string;
   readonly proposedAtSeq: number;
-  /** Migration provenance; natural_stop_adapter is never explicit intent. */
-  readonly source?: "legacy_final_answer" | "natural_stop_adapter";
+  /** Migration provenance; only legacy_final_answer is explicit agent intent. */
+  readonly source?:
+    | "legacy_final_answer"
+    | "natural_stop_adapter"
+    | "host_stable_checkpoint";
 }
 
 export interface EvidenceRecordV2 {
@@ -633,7 +636,7 @@ function assertCandidate(value: unknown): void {
   if (value.source !== undefined) {
     assertOneOf(
       value.source,
-      ["legacy_final_answer", "natural_stop_adapter"],
+      ["legacy_final_answer", "natural_stop_adapter", "host_stable_checkpoint"],
       `${label}.source`,
     );
   }

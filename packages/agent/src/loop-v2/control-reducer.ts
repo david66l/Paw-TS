@@ -439,7 +439,11 @@ export function controlInputFromLoopV2EnvelopeV1(
       };
       break;
     case "candidate.proposed":
-      if (event.candidate.source === "natural_stop_adapter") return undefined;
+      if (
+        event.candidate.source === "natural_stop_adapter" ||
+        event.candidate.source === "host_stable_checkpoint"
+      )
+        return undefined;
       fact = {
         type: "candidate.submitted",
         candidate: {

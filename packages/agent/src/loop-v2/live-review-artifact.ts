@@ -3,6 +3,7 @@ import path from "node:path";
 import type { SemanticReviewRecordV2 } from "./candidate-certification.js";
 import {
   semanticReviewKeyV2,
+  semanticReviewSubjectHashV2,
   validateSemanticReviewRecordV2,
 } from "./candidate-certification.js";
 import { canonicalJson, sha256Canonical } from "./canonical.js";
@@ -23,6 +24,11 @@ export interface LoopV2LiveReviewArtifactV1 {
   readonly mutationRevision: number;
   readonly reviewKey: string;
   readonly record: SemanticReviewRecordV2;
+  /** A settled verdict rebound to newer verification facts, without a model call. */
+  readonly reuse?: Readonly<{
+    readonly fromReviewKey: string;
+    readonly semanticSubjectHash: string;
+  }>;
   readonly artifactHash: string;
 }
 
@@ -49,6 +55,7 @@ export function loopV2LiveReviewArtifactPath(
 export function buildLoopV2LiveReviewArtifactV1(
   candidateArtifact: LoopV2LiveCandidateArtifactV1,
   record: SemanticReviewRecordV2,
+  reuse?: LoopV2LiveReviewArtifactV1["reuse"],
 ): LoopV2LiveReviewArtifactV1 {
   assertLoopV2LiveCandidateArtifactV1(candidateArtifact);
   const payload = buildLoopV2LiveReviewPayloadV1(
@@ -60,6 +67,14 @@ export function buildLoopV2LiveReviewArtifactV1(
     payload.input.mutationRevision,
     payload.candidateInputHash,
   );
+  if (reuse) {
+    if (!reuse.fromReviewKey.trim() || reuse.fromReviewKey === reviewKey) {
+      throw new Error("Loop v2 semantic review reuse source is invalid");
+    }
+    if (reuse.semanticSubjectHash !== semanticReviewSubjectHashV2(payload)) {
+      throw new Error("Loop v2 semantic review reuse subject mismatch");
+    }
+  }
   const withoutHash = {
     schemaVersion: LOOP_V2_LIVE_REVIEW_ARTIFACT_SCHEMA_VERSION,
     kind: "paw.loop-v2-live-review-artifact" as const,
@@ -69,6 +84,7 @@ export function buildLoopV2LiveReviewArtifactV1(
     mutationRevision: payload.input.mutationRevision,
     reviewKey,
     record: normalized,
+    ...(reuse ? { reuse: { ...reuse } } : {}),
   };
   return {
     ...withoutHash,
@@ -117,6 +133,12 @@ export function assertLoopV2LiveReviewArtifactV1(
   const expected = buildLoopV2LiveReviewArtifactV1(
     candidateArtifact,
     value.record as SemanticReviewRecordV2,
+    isRecord(value.reuse)
+      ? {
+          fromReviewKey: String(value.reuse.fromReviewKey ?? ""),
+          semanticSubjectHash: String(value.reuse.semanticSubjectHash ?? ""),
+        }
+      : undefined,
   );
   if (canonicalJson(value) !== canonicalJson(expected)) {
     throw new Error("Loop v2 live review artifact does not match candidate");

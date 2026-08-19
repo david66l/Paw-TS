@@ -104,6 +104,79 @@ describe("Loop Kernel v2 shadow migration", () => {
     });
   });
 
+  test("host stable checkpoint is review-only and cannot submit or certify a candidate", () => {
+    const runId = "shadow-host-checkpoint";
+    const observer = createLoopV2ShadowObserver(runId);
+    observer.observe(
+      legacyEnvelope(1, { type: "run.started", goal: "Change source" }, runId),
+    );
+    observer.observe(
+      legacyEnvelope(
+        2,
+        {
+          type: "tool.result",
+          tool: "workspace.edit_file",
+          ok: true,
+          summary: "edited source.txt",
+          workspaceEffect: { changed: true, paths: ["source.txt"] },
+        },
+        runId,
+      ),
+    );
+    observer.observeToolCommit({
+      sourceSeq: 2,
+      callId: "edit-1",
+      tool: "workspace.edit_file",
+      args: { path: "source.txt" },
+      result: { ok: true, summary: "edited", payload: { changed: true } },
+      repositoryRevision: `run:${runId}:mutation:0`,
+      concurrentMutation: false,
+      mutationCapture: {
+        status: "complete",
+        paths: ["source.txt"],
+        beforeContents: { "source.txt": "before\n" },
+        afterContents: { "source.txt": "after\n" },
+      },
+    });
+    observer.observe(
+      legacyEnvelope(
+        3,
+        { type: "candidate.checkpoint", mutationRevision: 1 },
+        runId,
+      ),
+    );
+    const checkpoint = observer.snapshot().state.currentCandidate;
+    if (!checkpoint) throw new Error("host checkpoint was not projected");
+    expect(checkpoint?.source).toBe("host_stable_checkpoint");
+    expect(observer.snapshot().controlState?.candidate).toBeUndefined();
+
+    observer.observe(
+      legacyEnvelope(
+        4,
+        {
+          type: "candidate.review",
+          candidateId: checkpoint.id,
+          mutationRevision: 1,
+          reviewKey: "review-checkpoint",
+          verdict: "pass",
+          externalVerification: "not_configured",
+          stage: "checkpoint",
+          summary: "pass",
+          modelCalls: 1,
+        },
+        runId,
+      ),
+    );
+    const report = observer.snapshot();
+    expect(report.controlState?.status).toBe("running");
+    expect(report.controlState?.semanticReview).toBeUndefined();
+    expect(report.diagnostics.at(-1)).toMatchObject({
+      disposition: "ignored",
+      reason: "semantic_review_checkpoint_ignored",
+    });
+    expect(() => assertLoopV2ShadowReportIntegrity(report)).not.toThrow();
+  });
+
   test("a later turn does not inherit natural-stop adapter provenance", () => {
     const observer = createLoopV2ShadowObserver("shadow-next-turn-candidate");
     observer.observe(
@@ -269,10 +342,14 @@ describe("Loop Kernel v2 shadow migration", () => {
   test("a successful read beyond EOF stays logged without inventing an empty span", () => {
     const observer = createLoopV2ShadowObserver("shadow-empty-read");
     observer.observe(
-      legacyEnvelope(1, {
-        type: "run.started",
-        goal: "Read beyond the end of src/a.ts",
-      }, "shadow-empty-read"),
+      legacyEnvelope(
+        1,
+        {
+          type: "run.started",
+          goal: "Read beyond the end of src/a.ts",
+        },
+        "shadow-empty-read",
+      ),
     );
     observer.observe(
       legacyEnvelope(
@@ -960,9 +1037,7 @@ describe("Loop Kernel v2 shadow migration", () => {
       ),
     ).toHaveLength(1);
     expect(
-      report.diagnostics.filter(
-        (item) => item.reason === "rich_tool_failed",
-      ),
+      report.diagnostics.filter((item) => item.reason === "rich_tool_failed"),
     ).toHaveLength(1);
   });
 

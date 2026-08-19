@@ -254,7 +254,9 @@ export interface PhaseContext {
   /** Latest pure-reducer result after a control fact was journaled. */
   readonly getLoopV2ControlReduction?: () => ControlReductionV1 | undefined;
   /** Candidate-bound, durable, at-most-once explicit-v2 review transaction. */
-  readonly reviewLoopV2Candidate?: () => Promise<
+  readonly reviewLoopV2Candidate?: (
+    stage?: "checkpoint" | "final_submission",
+  ) => Promise<
     SemanticReviewOnceResultV2 &
       Readonly<{
         readonly modelCalls: number;
@@ -265,7 +267,9 @@ export interface PhaseContext {
    * Candidate-bound adversarial verification probe (fresh context, host
    * executed, at-most-once per candidateInputHash). Absent disables the gate.
    */
-  readonly probeLoopV2Candidate?: () => Promise<VerificationProbeOnceResultV2>;
+  readonly probeLoopV2Candidate?: (
+    stage?: "checkpoint" | "final_submission",
+  ) => Promise<VerificationProbeOnceResultV2>;
   /** Capture rich facts into the matching durable tool.result event. */
   readonly captureLoopV2Facts?: boolean;
 }

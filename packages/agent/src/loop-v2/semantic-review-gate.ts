@@ -45,6 +45,13 @@ export function evaluateLoopV2SemanticReviewGateV1(input: {
 function semanticReviewFeedbackMessage(
   result: SemanticReviewOnceResultV2,
 ): string {
+  if (result.reasonCode === "review_subject_changed") {
+    return [
+      `[LoopV2SemanticReview:checkpoint_stale key=${result.reviewKey}]`,
+      "The code revision did not change, but the non-verification review contract changed after its host checkpoint.",
+      "The previous verdict was not reused and the reviewer was not called again. Reconcile the changed criteria, risk, or source facts; make a source edit only when that reconciliation identifies a genuine code defect.",
+    ].join("\n");
+  }
   const verdict = result.review.verdict;
   const findings = result.review.findings.slice(0, 8).map((finding, index) => {
     const binding = finding.criterionId

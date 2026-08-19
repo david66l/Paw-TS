@@ -12,7 +12,9 @@ import { FakeLanguageModel, type LanguageModel } from "@paw/models";
 
 import type { ToolEffectPolicy } from "../src/execution-policy.js";
 import {
+  type LoopV2LiveCandidateArtifactV1,
   type LoopV2LiveCandidateAssessmentV1,
+  LoopV2LiveReviewRuntimeV1,
   assessLoopV2AuthorityEligibilityV1,
   buildLoopV2LiveReviewArtifactV1,
   buildLoopV2LiveReviewClaimV1,
@@ -33,6 +35,7 @@ import {
   parseLoopV2RunResultShadowArtifactV1,
   replayLegacyTraceToLoopV2ShadowV1,
   reviewCandidateOnceV2,
+  serializeLoopV2LiveCandidateArtifactV1,
   serializeLoopV2LiveReviewArtifactV1,
   serializeLoopV2LiveReviewClaimV1,
 } from "../src/loop-v2/index.js";
@@ -1168,6 +1171,718 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     }
   });
 
+  test("explicit v2 reviews and probes a verified inspected revision before final_answer", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-stable-checkpoint-");
+    const runId = "v2-stable-checkpoint";
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw@example.test"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "."],
+      ["commit", "-m", "baseline"],
+    ]) {
+      const command = Bun.spawnSync(["git", ...args], { cwd: workspaceRoot });
+      if (command.exitCode !== 0) {
+        throw new Error(`git ${args.join(" ")} failed`);
+      }
+    }
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.git_diff","args":{}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+          finishReason: "stop",
+        },
+        {
+          text: finalAnswer("Implemented and verified."),
+          finishReason: "stop",
+        },
+      ],
+    });
+    let reviewCalls = 0;
+    const reviewModel: LanguageModel = {
+      label: "stable-review-fixture",
+      async complete(messages) {
+        reviewCalls += 1;
+        expect(model.callCount).toBe(3);
+        const material = messages.at(-1)?.content ?? "";
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
+          material,
+        )?.[1];
+        const mutationRevision = Number(
+          /"mutationRevision":(\d+)/.exec(material)?.[1],
+        );
+        if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
+          throw new Error("stable reviewer did not receive candidate identity");
+        }
+        return {
+          text: JSON.stringify({
+            candidateInputHash,
+            mutationRevision,
+            verdict: "pass",
+            findings: [],
+          }),
+          finishReason: "stop",
+        };
+      },
+    };
+    let probeCalls = 0;
+    const probeModel: LanguageModel = {
+      label: "stable-probe-fixture",
+      async complete() {
+        probeCalls += 1;
+        expect(model.callCount).toBe(3);
+        return { text: '{"probes":[]}', finishReason: "stop" };
+      },
+    };
+    const events: RunEventEnvelope[] = [];
+    const candidateArtifacts: LoopV2LiveCandidateArtifactV1[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      loopV2SemanticReviewModel: reviewModel,
+      loopV2VerificationProbeModel: probeModel,
+      verificationPolicy: { authority: "local", requireMutation: true },
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+      onEvent: (event) => events.push(event),
+      onLoopV2CandidateAssessment() {
+        candidateArtifacts.push(
+          parseLoopV2LiveCandidateArtifactV1(
+            fs.readFileSync(
+              loopV2LiveArtifactPath(workspaceRoot, runId),
+              "utf8",
+            ),
+          ),
+        );
+      },
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 8,
+      });
+      expect(result.status).toBe("completed");
+      expect(reviewCalls).toBe(1);
+      expect(probeCalls).toBe(1);
+      expect(model.callCount).toBe(5);
+      expect(
+        events.filter((event) => event.event.type === "candidate.checkpoint"),
+      ).toHaveLength(1);
+      const reviews = events
+        .filter((event) => event.event.type === "candidate.review")
+        .map((event) => event.event);
+      expect(reviews).toHaveLength(2);
+      expect(reviews[0]).toMatchObject({
+        type: "candidate.review",
+        stage: "checkpoint",
+        verdict: "pass",
+        modelCalls: 1,
+      });
+      expect(reviews[1]).toMatchObject({
+        type: "candidate.review",
+        stage: "final_submission",
+        verdict: "pass",
+        modelCalls: 0,
+      });
+      if (
+        reviews[0]?.type !== "candidate.review" ||
+        reviews[1]?.type !== "candidate.review" ||
+        !reviews[0].reviewKey
+      ) {
+        throw new Error("missing stable review events");
+      }
+      const checkpointReviewKey = reviews[0].reviewKey;
+      expect(reviews[1].reviewKey).not.toBe(reviews[0].reviewKey);
+      const probes = events
+        .filter((event) => event.event.type === "candidate.probe")
+        .map((event) => event.event);
+      expect(probes).toHaveLength(2);
+      expect(probes[0]).toMatchObject({
+        type: "candidate.probe",
+        stage: "checkpoint",
+        verdict: "pass",
+        modelCalls: 1,
+      });
+      expect(probes[1]).toMatchObject({
+        type: "candidate.probe",
+        stage: "final_submission",
+        verdict: "pass",
+        modelCalls: 0,
+      });
+      expect(
+        events.findIndex(
+          (event) =>
+            event.event.type === "candidate.review" &&
+            event.event.stage === "checkpoint",
+        ),
+      ).toBeLessThan(
+        events.findIndex(
+          (event) =>
+            event.event.type === "agent.action" &&
+            event.event.action.type === "final_answer",
+        ),
+      );
+      const candidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
+      );
+      const review = parseLoopV2LiveReviewArtifactV1(
+        fs.readFileSync(
+          loopV2LiveReviewArtifactPath(workspaceRoot, runId),
+          "utf8",
+        ),
+        candidate,
+      );
+      expect(review.reuse).toEqual({
+        fromReviewKey: checkpointReviewKey,
+        semanticSubjectHash: expect.any(String),
+      });
+      const terminal = parseLoopV2LiveTerminalArtifactV1(
+        fs.readFileSync(
+          loopV2LiveTerminalArtifactPath(workspaceRoot, runId),
+          "utf8",
+        ),
+        candidate,
+        review,
+      );
+      expect(terminal.v2Outcome).toMatchObject({
+        candidateStatus: "certified",
+        localVerification: "passed",
+        reasonCode: "candidate_certified",
+      });
+      expect(
+        assessLoopV2AuthorityEligibilityV1(terminal, candidate, review),
+      ).toEqual({ eligible: true, reasons: [] });
+
+      // Claim-only migration uses the same write ordering: a future
+      // interrupted record is durable before the candidate commit. Exercise
+      // both sides of that commit without another reviewer invocation.
+      expect(candidateArtifacts).toHaveLength(2);
+      const checkpointCandidate = candidateArtifacts[0];
+      const finalCandidate = candidateArtifacts[1];
+      if (!checkpointCandidate || !finalCandidate) {
+        throw new Error("missing checkpoint candidate artifacts");
+      }
+      const candidatePath = loopV2LiveArtifactPath(workspaceRoot, runId);
+      const claimPath = loopV2LiveReviewClaimPath(workspaceRoot, runId);
+      const reviewPath = loopV2LiveReviewArtifactPath(workspaceRoot, runId);
+      const resetClaimOnly = () => {
+        fs.writeFileSync(
+          candidatePath,
+          serializeLoopV2LiveCandidateArtifactV1(checkpointCandidate),
+        );
+        fs.writeFileSync(
+          claimPath,
+          serializeLoopV2LiveReviewClaimV1(
+            buildLoopV2LiveReviewClaimV1(checkpointCandidate),
+            checkpointCandidate,
+          ),
+        );
+        fs.rmSync(reviewPath, { force: true });
+      };
+      let claimOnlyModelCalls = 0;
+      const createClaimOnlyRuntime = () =>
+        new LoopV2LiveReviewRuntimeV1({
+          workspaceRoot,
+          runId,
+          model: {
+            label: "must-not-repeat-claim-only-review",
+            async complete() {
+              claimOnlyModelCalls += 1;
+              return { text: "{}" };
+            },
+          },
+        });
+      resetClaimOnly();
+      const beforeCommit = createClaimOnlyRuntime();
+      beforeCommit.restoreCandidate(checkpointCandidate);
+      type CandidateCommit = (
+        artifactPath: string,
+        artifact: LoopV2LiveCandidateArtifactV1,
+      ) => void;
+      const prototype = LoopV2LiveReviewRuntimeV1.prototype as unknown as {
+        commitCandidateArtifact: CandidateCommit;
+      };
+      const originalCommit = prototype.commitCandidateArtifact;
+      prototype.commitCandidateArtifact = () => {
+        throw new Error("injected claim-only candidate commit crash");
+      };
+      try {
+        expect(() => beforeCommit.persistCandidate(finalCandidate)).toThrow(
+          "injected claim-only candidate commit crash",
+        );
+      } finally {
+        prototype.commitCandidateArtifact = originalCommit;
+      }
+      const oldSide = createClaimOnlyRuntime();
+      oldSide.restoreCandidate(checkpointCandidate);
+      expect(await oldSide.reviewCandidate()).toMatchObject({
+        modelCalls: 0,
+        reasonCode: "reviewer_interrupted",
+      });
+
+      resetClaimOnly();
+      const afterCommit = createClaimOnlyRuntime();
+      afterCommit.restoreCandidate(checkpointCandidate);
+      afterCommit.persistCandidate(finalCandidate);
+      const newSide = createClaimOnlyRuntime();
+      newSide.restoreCandidate(finalCandidate);
+      expect(await newSide.reviewCandidate()).toMatchObject({
+        modelCalls: 0,
+        reasonCode: "reviewer_interrupted",
+      });
+      expect(claimOnlyModelCalls).toBe(0);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("candidate commit crash keeps the old guard claim and never repeats semantic review", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-stable-commit-crash-");
+    const runId = "v2-stable-commit-crash";
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+    );
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw@example.test"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "."],
+      ["commit", "-m", "baseline"],
+    ]) {
+      const command = Bun.spawnSync(["git", ...args], { cwd: workspaceRoot });
+      if (command.exitCode !== 0) throw new Error("git fixture setup failed");
+    }
+    const implementationModel = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+        },
+        { text: '{"tool":"workspace.git_diff","args":{}}' },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+        },
+        { text: finalAnswer("Commit the reviewed candidate.") },
+      ],
+    });
+    let reviewCalls = 0;
+    const reviewModel: LanguageModel = {
+      label: "stable-commit-crash-review",
+      async complete(messages) {
+        reviewCalls += 1;
+        const material = messages.at(-1)?.content ?? "";
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
+          material,
+        )?.[1];
+        const mutationRevision = Number(
+          /"mutationRevision":(\d+)/.exec(material)?.[1],
+        );
+        return {
+          text: JSON.stringify({
+            candidateInputHash,
+            mutationRevision,
+            verdict: "pass",
+            findings: [],
+          }),
+        };
+      },
+    };
+    type CandidateCommit = (
+      artifactPath: string,
+      artifact: LoopV2LiveCandidateArtifactV1,
+    ) => void;
+    const prototype = LoopV2LiveReviewRuntimeV1.prototype as unknown as {
+      commitCandidateArtifact: CandidateCommit;
+    };
+    const originalCommit = prototype.commitCandidateArtifact;
+    let commits = 0;
+    prototype.commitCandidateArtifact = function crashSecondCommit(
+      artifactPath,
+      artifact,
+    ) {
+      commits += 1;
+      if (commits === 2) throw new Error("injected candidate commit crash");
+      return originalCommit.call(this, artifactPath, artifact);
+    };
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model: implementationModel,
+      loopV2SemanticReviewModel: reviewModel,
+      verificationPolicy: { authority: "local", requireMutation: true },
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+    });
+    try {
+      const result = await orchestrator.run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 8,
+      });
+      expect(result.status).toBe("failed");
+      expect(result.message).toContain("injected candidate commit crash");
+      expect(reviewCalls).toBe(1);
+      const oldCandidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
+      );
+      let repeatedCalls = 0;
+      const recovery = new LoopV2LiveReviewRuntimeV1({
+        workspaceRoot,
+        runId,
+        model: {
+          label: "must-not-repeat-after-commit-crash",
+          async complete() {
+            repeatedCalls += 1;
+            return { text: "{}" };
+          },
+        },
+      });
+      recovery.restoreCandidate(oldCandidate);
+      const recovered = await recovery.reviewCandidate();
+      expect(recovered).toMatchObject({
+        modelCalls: 0,
+        reasonCode: "reviewer_interrupted",
+        review: { verdict: "partial" },
+      });
+      expect(repeatedCalls).toBe(0);
+    } finally {
+      prototype.commitCandidateArtifact = originalCommit;
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("a blocking stable semantic review feeds back without running the probe or terminal reducer", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-stable-block-");
+    const runId = "v2-stable-block";
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw@example.test"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "."],
+      ["commit", "-m", "baseline"],
+    ]) {
+      const command = Bun.spawnSync(["git", ...args], { cwd: workspaceRoot });
+      if (command.exitCode !== 0) throw new Error("git fixture setup failed");
+    }
+    let implementationCalls = 0;
+    let sawCheckpointFeedback = false;
+    const implementationModel: LanguageModel = {
+      label: "stable-block-implementation",
+      async complete(messages) {
+        implementationCalls += 1;
+        if (implementationCalls === 1)
+          return {
+            text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          };
+        if (implementationCalls === 2)
+          return {
+            text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+          };
+        if (implementationCalls === 3)
+          return { text: '{"tool":"workspace.git_diff","args":{}}' };
+        sawCheckpointFeedback = messages.some((message) =>
+          message.content.includes("LoopV2SemanticReview:partial"),
+        );
+        return { text: '{"action":"abort","reason":"fixture complete"}' };
+      },
+    };
+    let reviewCalls = 0;
+    const reviewModel: LanguageModel = {
+      label: "stable-block-review",
+      async complete() {
+        reviewCalls += 1;
+        return { text: "{}" };
+      },
+    };
+    let probeCalls = 0;
+    const probeModel: LanguageModel = {
+      label: "stable-block-probe",
+      async complete() {
+        probeCalls += 1;
+        return { text: '{"probes":[]}' };
+      },
+    };
+    const events: RunEventEnvelope[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model: implementationModel,
+      loopV2SemanticReviewModel: reviewModel,
+      loopV2VerificationProbeModel: probeModel,
+      verificationPolicy: { authority: "local", requireMutation: true },
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+      onEvent: (event) => events.push(event),
+    });
+    try {
+      const result = await orchestrator.run({
+        runId,
+        goal: "Change source.txt from before to after and verify it.",
+        workspaceRoot,
+        maxSteps: 6,
+      });
+      expect(result.status).toBe("failed");
+      expect(result.completionReason).toBe("model_abort");
+      expect(reviewCalls).toBe(1);
+      expect(probeCalls).toBe(0);
+      expect(sawCheckpointFeedback).toBe(true);
+      expect(
+        events.filter((event) => event.event.type === "candidate.checkpoint"),
+      ).toHaveLength(1);
+      expect(
+        events.filter((event) => event.event.type === "candidate.review"),
+      ).toEqual([
+        expect.objectContaining({
+          event: expect.objectContaining({
+            stage: "checkpoint",
+            verdict: "partial",
+            modelCalls: 1,
+          }),
+        }),
+      ]);
+      expect(
+        events.some((event) => event.event.type === "candidate.readiness"),
+      ).toBe(false);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("a later failing verification replaces checkpoint readiness without repeating review", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-stable-late-failure-");
+    const runId = "v2-stable-late-failure";
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "pass-test.js"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "fail-test.js"),
+      "process.exit(1);\n",
+      "utf8",
+    );
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw@example.test"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "."],
+      ["commit", "-m", "baseline"],
+    ]) {
+      const command = Bun.spawnSync(["git", ...args], { cwd: workspaceRoot });
+      if (command.exitCode !== 0) throw new Error("git fixture setup failed");
+    }
+    const implementationModel = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node pass-test.js"}}',
+        },
+        { text: '{"tool":"workspace.git_diff","args":{}}' },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node fail-test.js"}}',
+        },
+        { text: finalAnswer("The candidate is ready.") },
+        { text: '{"action":"abort","reason":"fixture complete"}' },
+      ],
+    });
+    let reviewCalls = 0;
+    const reviewModel: LanguageModel = {
+      label: "stable-late-failure-review",
+      async complete(messages) {
+        reviewCalls += 1;
+        const material = messages.at(-1)?.content ?? "";
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
+          material,
+        )?.[1];
+        const mutationRevision = Number(
+          /"mutationRevision":(\d+)/.exec(material)?.[1],
+        );
+        if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
+          throw new Error("review identity missing");
+        }
+        return {
+          text: JSON.stringify({
+            candidateInputHash,
+            mutationRevision,
+            verdict: "pass",
+            findings: [],
+          }),
+        };
+      },
+    };
+    let probeCalls = 0;
+    const probeModel: LanguageModel = {
+      label: "stable-late-failure-probe",
+      async complete() {
+        probeCalls += 1;
+        return { text: '{"probes":[]}' };
+      },
+    };
+    const events: RunEventEnvelope[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model: implementationModel,
+      loopV2SemanticReviewModel: reviewModel,
+      loopV2VerificationProbeModel: probeModel,
+      verificationPolicy: { authority: "local", requireMutation: true },
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+      onEvent: (event) => events.push(event),
+    });
+    try {
+      const result = await orchestrator.run({
+        runId,
+        goal: "Change source.txt and reject it if broader verification fails.",
+        workspaceRoot,
+        maxSteps: 8,
+      });
+      expect(result.status).toBe("failed");
+      expect(result.completionReason).toBe("model_abort");
+      expect(reviewCalls).toBe(1);
+      expect(probeCalls).toBe(1);
+      expect(
+        events.filter((event) => event.event.type === "candidate.review"),
+      ).toHaveLength(1);
+      expect(
+        events.filter((event) => event.event.type === "candidate.probe"),
+      ).toHaveLength(1);
+      expect(
+        events.some(
+          (event) =>
+            event.event.type === "candidate.readiness" &&
+            event.event.result.kind === "repair_required",
+        ),
+      ).toBe(true);
+      const candidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
+      );
+      expect(candidate.assessment.readiness).toMatchObject({
+        readyForSemanticReview: false,
+        localVerification: "code_failed",
+      });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("a pending failing-test control defers the stable checkpoint", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-stable-not-ready-");
+    const runId = "v2-stable-not-ready";
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "fail-test.js"),
+      "process.exit(1);\n",
+    );
+    for (const args of [
+      ["init"],
+      ["config", "user.email", "paw@example.test"],
+      ["config", "user.name", "Paw Test"],
+      ["add", "."],
+      ["commit", "-m", "baseline"],
+    ]) {
+      const command = Bun.spawnSync(["git", ...args], { cwd: workspaceRoot });
+      if (command.exitCode !== 0) throw new Error("git fixture setup failed");
+    }
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node fail-test.js"}}',
+        },
+        { text: '{"tool":"workspace.git_diff","args":{}}' },
+        { text: '{"tool":"workspace.read_file","args":{"path":"source.txt"}}' },
+        { text: '{"action":"abort","reason":"fixture complete"}' },
+      ],
+    });
+    let reviewCalls = 0;
+    const events: RunEventEnvelope[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      loopV2SemanticReviewModel: {
+        label: "must-not-review-not-ready",
+        async complete() {
+          reviewCalls += 1;
+          return { text: "{}" };
+        },
+      },
+      verificationPolicy: { authority: "local", requireMutation: true },
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+      onEvent: (event) => events.push(event),
+    });
+    try {
+      const result = await orchestrator.run({
+        runId,
+        goal: "Change source.txt only if verification passes.",
+        workspaceRoot,
+        maxSteps: 7,
+      });
+      expect(result.status).toBe("failed");
+      expect(reviewCalls).toBe(0);
+      expect(
+        events.filter((event) => event.event.type === "candidate.checkpoint"),
+      ).toHaveLength(0);
+      expect(
+        events.filter((event) => event.event.type === "candidate.review"),
+      ).toHaveLength(0);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("v2 readiness does not run the old verification gate again", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-no-double-verification-");
     fs.writeFileSync(
@@ -1582,12 +2297,15 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.status).toBe("incomplete");
       expect(result.message).toContain("LoopControl:repair_required");
       expect(reviewCalls).toBe(0);
+      const resumedCandidate = parseLoopV2LiveCandidateArtifactV1(
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
+      );
       const interruptedReview = parseLoopV2LiveReviewArtifactV1(
         fs.readFileSync(
           loopV2LiveReviewArtifactPath(workspaceRoot, runId),
           "utf8",
         ),
-        candidate,
+        resumedCandidate,
       );
       expect(interruptedReview.record).toMatchObject({
         completion: "protocol_partial",

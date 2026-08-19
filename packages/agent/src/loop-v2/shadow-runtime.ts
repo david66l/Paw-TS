@@ -61,6 +61,7 @@ export type LoopV2ShadowReason =
   | "provider_turn_stopped_projected"
   | "readiness_evaluated_projected"
   | "semantic_review_projected"
+  | "semantic_review_checkpoint_ignored"
   | "non_decision_event";
 
 export interface LoopV2ShadowDiagnostic {
@@ -127,8 +128,7 @@ export type LoopV2ShadowToolCommitInput = Omit<
   readonly sourceSeq: number;
 };
 
-export type LoopV2ShadowVerificationCapture =
-  ToolDecisionVerificationCaptureV1;
+export type LoopV2ShadowVerificationCapture = ToolDecisionVerificationCaptureV1;
 
 export type LoopV2ShadowMutationCapture = ToolDecisionMutationCaptureV1;
 
@@ -160,10 +160,7 @@ export function observeLoopV2DurableEnvelopeV1(
     envelope.event.type === "tool.result"
       ? readUnknown(envelope.event, "decisionDisposition")
       : undefined;
-  if (
-    rawDecisionCommit !== undefined &&
-    rawDecisionDisposition !== undefined
-  ) {
+  if (rawDecisionCommit !== undefined && rawDecisionDisposition !== undefined) {
     throw new Error(
       "Durable tool.result cannot contain both a decision commit and disposition",
     );
@@ -421,6 +418,47 @@ export function createLoopV2ShadowObserver(
         return;
       }
 
+      if (envelope.event.type === "candidate.checkpoint") {
+        const checkpoint = envelope.event as unknown as Readonly<{
+          mutationRevision: number;
+        }>;
+        if (
+          !Number.isSafeInteger(checkpoint.mutationRevision) ||
+          checkpoint.mutationRevision <= 0 ||
+          checkpoint.mutationRevision !== state.currentMutationRevision
+        ) {
+          throw new Error(
+            "Host stable candidate checkpoint must bind the current product mutation revision",
+          );
+        }
+        const proposedAtSeq = projectedEvents.length + 1;
+        const input = buildCandidateInputV2(
+          state,
+          materializeTerminalCandidateSnapshotsV2(state, [
+            ...artifactBlobs.values(),
+          ]).map(({ path, contentHash }) => ({ path, contentHash })),
+        );
+        const candidateInputHash = candidateInputHashV2(input);
+        appendProjected({
+          schemaVersion: LOOP_V2_SCHEMA_VERSION,
+          runId,
+          seq: proposedAtSeq,
+          ts: envelope.ts,
+          event: {
+            type: "candidate.proposed",
+            candidate: {
+              id: `candidate-${candidateInputHash.slice(0, 16)}`,
+              mutationRevision: state.currentMutationRevision,
+              candidateInputHash,
+              proposedAtSeq,
+              source: "host_stable_checkpoint",
+            },
+          },
+        });
+        record(envelope, "projected", "rich_candidate_projected");
+        return;
+      }
+
       if (isFinalAnswer) {
         const proposedAtSeq = projectedEvents.length + 1;
         const source = pendingNaturalStopAdapter
@@ -501,7 +539,12 @@ export function createLoopV2ShadowObserver(
           reviewKey?: string;
           verdict: "pass" | "fail" | "partial";
           externalVerification?: "not_configured" | "pending";
+          stage?: "checkpoint" | "final_submission";
         }>;
+        if (review.stage === "checkpoint") {
+          record(envelope, "ignored", "semantic_review_checkpoint_ignored");
+          return;
+        }
         if (
           review.candidateId &&
           review.reviewKey &&
@@ -1144,7 +1187,10 @@ function optionalNonEmptyString(
 }
 
 function requireStringArray(value: unknown, label: string): readonly string[] {
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string")
+  ) {
     throw new Error(`Tool decision commit ${label} must be a string array`);
   }
   return [...value];
@@ -1220,10 +1266,14 @@ function parseDecisionVerificationCaptureV1(
   ]);
   const outcomes = new Set(["passed", "code_failed", "harness_failed"]);
   if (typeof record.runner !== "string" || !runners.has(record.runner)) {
-    throw new Error("Tool decision commit verificationCapture.runner is invalid");
+    throw new Error(
+      "Tool decision commit verificationCapture.runner is invalid",
+    );
   }
   if (typeof record.outcome !== "string" || !outcomes.has(record.outcome)) {
-    throw new Error("Tool decision commit verificationCapture.outcome is invalid");
+    throw new Error(
+      "Tool decision commit verificationCapture.outcome is invalid",
+    );
   }
   if (
     !Number.isSafeInteger(record.mutationRevision) ||
@@ -1233,10 +1283,7 @@ function parseDecisionVerificationCaptureV1(
       "Tool decision commit verificationCapture.mutationRevision is invalid",
     );
   }
-  if (
-    record.exitCode !== undefined &&
-    !Number.isSafeInteger(record.exitCode)
-  ) {
+  if (record.exitCode !== undefined && !Number.isSafeInteger(record.exitCode)) {
     throw new Error(
       "Tool decision commit verificationCapture.exitCode is invalid",
     );

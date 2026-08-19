@@ -159,7 +159,8 @@ export interface SemanticReviewRecordV2 {
   readonly reasonCode?:
     | "reviewer_error"
     | "reviewer_protocol_invalid"
-    | "reviewer_interrupted";
+    | "reviewer_interrupted"
+    | "review_subject_changed";
 }
 
 export interface SemanticReviewLedgerV2 {
@@ -170,6 +171,7 @@ export interface SemanticReviewOnceResultV2 {
   readonly reviewKey: string;
   readonly review: SemanticReviewV2;
   readonly reused: boolean;
+  readonly reasonCode?: SemanticReviewRecordV2["reasonCode"];
   readonly ledger: SemanticReviewLedgerV2;
 }
 
@@ -250,6 +252,29 @@ export function buildCandidateInputV2(
 
 export function candidateInputHashV2(input: CandidateInputV2): string {
   return sha256Canonical(input);
+}
+
+/**
+ * Identity of the code/contract material inspected by the semantic reviewer.
+ * Verification records deliberately stay outside this hash: they affect the
+ * latest delivery readiness, but an extra test run must not cause a second
+ * model review of unchanged code.
+ */
+export function semanticReviewSubjectHashV2(
+  payload: CandidateReviewPayloadV2,
+): string {
+  assertReviewPayloadIdentity(payload);
+  const { currentVerification: _verification, ...semanticInput } =
+    payload.input;
+  return sha256Canonical({
+    schemaVersion: "paw.semantic-review-subject.v1",
+    input: semanticInput,
+    goal: payload.goal,
+    verificationContext: payload.verificationContext,
+    terminalPatch: payload.terminalPatch,
+    mutationPatches: payload.mutationPatches,
+    snapshots: payload.snapshots,
+  });
 }
 
 export function candidateSnapshotHashV2(content: string): string {
@@ -599,6 +624,7 @@ export async function reviewCandidateOnceV2(
       reviewKey,
       review: validated.review,
       reused: true,
+      ...(validated.reasonCode ? { reasonCode: validated.reasonCode } : {}),
       ledger,
     };
   }
@@ -632,6 +658,7 @@ export async function reviewCandidateOnceV2(
     reviewKey,
     review: record.review,
     reused: false,
+    ...(record.reasonCode ? { reasonCode: record.reasonCode } : {}),
     ledger: nextLedger,
   };
 }
@@ -667,7 +694,8 @@ export function validateSemanticReviewRecordV2(
     if (
       value.reasonCode !== "reviewer_error" &&
       value.reasonCode !== "reviewer_protocol_invalid" &&
-      value.reasonCode !== "reviewer_interrupted"
+      value.reasonCode !== "reviewer_interrupted" &&
+      value.reasonCode !== "review_subject_changed"
     ) {
       throw new Error("Partial semantic review reason code is invalid");
     }
@@ -680,7 +708,9 @@ export function validateSemanticReviewRecordV2(
           ? "Reviewer returned an invalid structured verdict."
           : value.reasonCode === "reviewer_interrupted"
             ? "Reviewer invocation was interrupted before a durable result."
-            : "Reviewer did not complete.",
+            : value.reasonCode === "review_subject_changed"
+              ? "Semantic review subject changed without a new product revision."
+              : "Reviewer did not complete.",
       ),
       completion: "protocol_partial",
       reasonCode: value.reasonCode,
@@ -692,6 +722,56 @@ export function validateSemanticReviewRecordV2(
     throw new Error("Semantic review record is not canonical");
   }
   return normalized;
+}
+
+/** Rebinds a settled verdict to newer verification facts for identical code. */
+export function rebindSemanticReviewRecordV2(
+  record: SemanticReviewRecordV2,
+  previousPayload: CandidateReviewPayloadV2,
+  nextPayload: CandidateReviewPayloadV2,
+): SemanticReviewRecordV2 {
+  const previous = validateSemanticReviewRecordV2(record, previousPayload);
+  if (
+    semanticReviewSubjectHashV2(previousPayload) !==
+    semanticReviewSubjectHashV2(nextPayload)
+  ) {
+    throw new Error("Semantic review subject changed during record rebind");
+  }
+  const rebound: SemanticReviewRecordV2 = {
+    reviewKey: semanticReviewKeyV2(
+      nextPayload.input.mutationRevision,
+      nextPayload.candidateInputHash,
+    ),
+    review: {
+      ...previous.review,
+      candidateInputHash: nextPayload.candidateInputHash,
+      mutationRevision: nextPayload.input.mutationRevision,
+    },
+    completion: previous.completion,
+    ...(previous.reasonCode ? { reasonCode: previous.reasonCode } : {}),
+  };
+  return validateSemanticReviewRecordV2(rebound, nextPayload);
+}
+
+/** Honest no-call result when non-verification review material drifted in-place. */
+export function createSemanticReviewSubjectChangedRecordV2(
+  payload: CandidateReviewPayloadV2,
+): SemanticReviewRecordV2 {
+  assertReviewPayloadIdentity(payload);
+  const reviewKey = semanticReviewKeyV2(
+    payload.input.mutationRevision,
+    payload.candidateInputHash,
+  );
+  return {
+    reviewKey,
+    review: partialReview(
+      payload.candidateInputHash,
+      payload.input.mutationRevision,
+      "Semantic review subject changed without a new product revision.",
+    ),
+    completion: "protocol_partial",
+    reasonCode: "review_subject_changed",
+  };
 }
 
 /**

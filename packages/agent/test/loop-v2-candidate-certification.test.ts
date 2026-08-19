@@ -12,8 +12,10 @@ import {
   createWorkingDecisionStateV2,
   evaluateCandidateReadinessV2,
   projectLoopV2Event,
+  rebindSemanticReviewRecordV2,
   reviewCandidateOnceV2,
   semanticReviewKeyV2,
+  semanticReviewSubjectHashV2,
   sha256Canonical,
 } from "../src/loop-v2/index.js";
 
@@ -435,5 +437,73 @@ describe("Loop Kernel v2 candidate certification", () => {
     expect(second.reused).toBeTrue();
     expect(second.review).toEqual(first.review);
     expect(calls).toBe(1);
+  });
+
+  test("rebinds one settled semantic verdict across newer verification facts", async () => {
+    const content = "export function renderPublic() { return 'fixed'; }";
+    const snapshots = [
+      {
+        path: "src/public.ts",
+        contentHash: candidateSnapshotHashV2(content),
+        content,
+      },
+    ];
+    const firstPayload = buildCandidateReviewPayloadV2(
+      baseState(),
+      snapshots,
+      terminalPatch(),
+    );
+    const reviewed = await reviewCandidateOnceV2(
+      createSemanticReviewLedgerV2(),
+      firstPayload,
+      async (value) => ({
+        candidateInputHash: value.candidateInputHash,
+        mutationRevision: value.input.mutationRevision,
+        verdict: "pass",
+        findings: [],
+      }),
+    );
+    const firstRecord = reviewed.ledger.records[reviewed.reviewKey];
+    if (!firstRecord) throw new Error("missing first semantic review");
+    const newerState = append(baseState(), {
+      type: "verification.recorded",
+      verification: {
+        id: "verify-r1-broader",
+        runner: "bun_test",
+        argv: ["bun", "test"],
+        cwd: ".",
+        scope: ["test"],
+        mutationRevision: 1,
+        outcome: "passed",
+        outputArtifactRef: "artifact://verify-r1-broader",
+        authoritative: true,
+      },
+    });
+    const nextPayload = buildCandidateReviewPayloadV2(
+      newerState,
+      snapshots,
+      terminalPatch(),
+    );
+
+    expect(nextPayload.candidateInputHash).not.toBe(
+      firstPayload.candidateInputHash,
+    );
+    expect(semanticReviewSubjectHashV2(nextPayload)).toBe(
+      semanticReviewSubjectHashV2(firstPayload),
+    );
+    const rebound = rebindSemanticReviewRecordV2(
+      firstRecord,
+      firstPayload,
+      nextPayload,
+    );
+    expect(rebound).toMatchObject({
+      reviewKey: semanticReviewKeyV2(1, nextPayload.candidateInputHash),
+      completion: "completed",
+      review: {
+        candidateInputHash: nextPayload.candidateInputHash,
+        mutationRevision: 1,
+        verdict: "pass",
+      },
+    });
   });
 });

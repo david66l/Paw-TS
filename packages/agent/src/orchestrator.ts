@@ -125,7 +125,10 @@ import {
   canonicalJson,
   createLoopV2ShadowObserver,
   createProviderTerminalStateV2,
+  evaluateLoopV2SemanticReviewGateV1,
+  evaluateVerificationProbeGateV1,
   formatRepairObligationV1,
+  isStableCandidateCheckpointEligibleV1,
   loopV2LiveArtifactPath,
   loopV2ProjectionCheckpointPath,
   loopV2ReadinessProgressKeyV1,
@@ -347,14 +350,19 @@ function providerTurnBoundaryMessageV2(reduction: ControlReductionV1): string {
   return "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly.";
 }
 
-function isControlOnlyCandidateExtension(
+function isSameRevisionCandidateExtension(
   candidateReport: LoopV2ShadowReport,
   restoredReport: LoopV2ShadowReport,
 ): boolean {
   if (candidateReport.reportHash === restoredReport.reportHash) return true;
+  if (
+    candidateReport.state.currentMutationRevision !==
+    restoredReport.state.currentMutationRevision
+  )
+    return false;
   const candidateEvents = candidateReport.projectedEvents;
   const restoredEvents = restoredReport.projectedEvents;
-  if (restoredEvents.length <= candidateEvents.length) return false;
+  if (restoredEvents.length < candidateEvents.length) return false;
   for (let index = 0; index < candidateEvents.length; index += 1) {
     if (
       canonicalJson(candidateEvents[index]) !==
@@ -363,9 +371,18 @@ function isControlOnlyCandidateExtension(
       return false;
     }
   }
-  return restoredEvents
-    .slice(candidateEvents.length)
-    .every((envelope) => envelope.event.type === "readiness.evaluated");
+  const candidateIdentity = candidateReport.state.currentCandidate;
+  return restoredEvents.slice(candidateEvents.length).every((envelope) => {
+    if (envelope.event.type === "mutation.recorded") return false;
+    if (envelope.event.type !== "candidate.proposed") return true;
+    return (
+      candidateIdentity !== undefined &&
+      envelope.event.candidate.mutationRevision ===
+        candidateIdentity.mutationRevision &&
+      envelope.event.candidate.candidateInputHash ===
+        candidateIdentity.candidateInputHash
+    );
+  });
 }
 import { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import {
@@ -1315,6 +1332,37 @@ export class AgentOrchestrator {
           emit({ type: "run.completed", status: "aborted", message });
           emitRunMetrics();
           return runResult;
+        }
+
+        // A stable product revision may be reviewed before the implementation
+        // model explicitly submits final_answer. This runs only after the abort
+        // boundary and never owns completion: it can persist feedback for the
+        // next request, while the real final submission remains reducer-owned.
+        const checkpointControl = flags.pendingControl
+          ? undefined
+          : await init.runStableCandidateCheckpoint?.();
+        if (checkpointControl) {
+          flags = {
+            ...flags,
+            pendingControl: selectEphemeralControlV1([
+              flags.pendingControl,
+              checkpointControl,
+            ]),
+          };
+          activeTurnFlags = flags;
+          activeTurnCursor = turn;
+          this.saveState(
+            runId,
+            spec.goal,
+            workspaceRoot,
+            turn,
+            maxSteps,
+            ctxMgr,
+            planner,
+            taskState,
+            undefined,
+            flags,
+          );
         }
 
         // 构造当前轮次的上下文对象（PhaseContext）
@@ -4043,6 +4091,9 @@ export class AgentOrchestrator {
     >;
     reviewLoopV2Candidate?: NonNullable<PhaseContext["reviewLoopV2Candidate"]>;
     probeLoopV2Candidate?: NonNullable<PhaseContext["probeLoopV2Candidate"]>;
+    runStableCandidateCheckpoint?: () => Promise<
+      EphemeralControlV1 | undefined
+    >;
     persistLoopV2Terminal?: (result: RunResult) => void;
     emitRunMetrics: () => void;
     seq: { n: number };
@@ -4214,7 +4265,7 @@ export class AgentOrchestrator {
         if (
           restoredReport &&
           candidateArtifact &&
-          isControlOnlyCandidateExtension(
+          isSameRevisionCandidateExtension(
             candidateArtifact.report,
             restoredReport,
           )
@@ -4259,6 +4310,48 @@ export class AgentOrchestrator {
       parseLoopV2ProjectionCheckpointV1(
         fs.readFileSync(checkpointPath, "utf8"),
       );
+    };
+
+    const persistCurrentLoopV2Candidate = () => {
+      if (!loopV2Projection || !loopV2LiveReviewRuntime) {
+        throw new Error("Loop v2 live candidate runtime was not initialized");
+      }
+      const report = loopV2Projection.snapshot();
+      this._lastLoopV2ReadinessProgressKey = loopV2ReadinessProgressKeyV1(
+        report.state,
+      );
+      this._lastLoopV2ReadinessVerificationRecords = Object.values(
+        report.state.verification,
+      )
+        .filter(
+          (verification) =>
+            verification.mutationRevision ===
+            report.state.currentMutationRevision,
+        )
+        .sort((left, right) => left.id.localeCompare(right.id));
+      const requireProductMutation =
+        this.verificationPolicy?.requireMutation ??
+        goalRequiresMutation(spec.goal);
+      const trustedSkipAllowed = goalAllowsSkipVerification(spec.goal);
+      const requiresVerification =
+        requireProductMutation || report.state.currentMutationRevision > 0;
+      const policy = {
+        requireProductMutation,
+        verificationAuthority:
+          requiresVerification && !trustedSkipAllowed
+            ? (this.verificationPolicy?.authority ?? "local")
+            : "not_required",
+      } as const;
+      const persisted = loopV2LiveReviewRuntime.persistCandidate(
+        buildLoopV2LiveCandidateArtifactV1(report, policy),
+      );
+      this._lastLoopV2CandidateAssessment = persisted.assessment;
+      try {
+        this.onLoopV2CandidateAssessment?.(persisted.assessment);
+      } catch {
+        // A consumer callback is not completion authority.
+      }
+      return persisted.assessment;
     };
 
     /**
@@ -4334,10 +4427,17 @@ export class AgentOrchestrator {
           }
           if (
             event.type === "provider.turn_stopped" ||
+            event.type === "candidate.checkpoint" ||
             event.type === "candidate.readiness" ||
             (event.type === "candidate.review" && event.candidateId)
           ) {
             persistLoopV2ProjectionCheckpoint();
+          }
+          if (
+            this.loopKernelVersion === "v2" &&
+            event.type === "candidate.checkpoint"
+          ) {
+            persistCurrentLoopV2Candidate();
           }
           if (
             this.loopKernelVersion === "v2" &&
@@ -4362,47 +4462,7 @@ export class AgentOrchestrator {
               }
               return;
             }
-            const report = loopV2Projection.snapshot();
-            this._lastLoopV2ReadinessProgressKey = loopV2ReadinessProgressKeyV1(
-              report.state,
-            );
-            this._lastLoopV2ReadinessVerificationRecords = Object.values(
-              report.state.verification,
-            )
-              .filter(
-                (verification) =>
-                  verification.mutationRevision ===
-                  report.state.currentMutationRevision,
-              )
-              .sort((left, right) => left.id.localeCompare(right.id));
-            const requireProductMutation =
-              this.verificationPolicy?.requireMutation ??
-              goalRequiresMutation(spec.goal);
-            const trustedSkipAllowed = goalAllowsSkipVerification(spec.goal);
-            const requiresVerification =
-              requireProductMutation ||
-              report.state.currentMutationRevision > 0;
-            const policy = {
-              requireProductMutation,
-              verificationAuthority:
-                requiresVerification && !trustedSkipAllowed
-                  ? (this.verificationPolicy?.authority ?? "local")
-                  : "not_required",
-            } as const;
-            const artifact = buildLoopV2LiveCandidateArtifactV1(report, policy);
-            if (!loopV2LiveReviewRuntime) {
-              throw new Error(
-                "Loop v2 live review runtime was not initialized",
-              );
-            }
-            const persisted =
-              loopV2LiveReviewRuntime.persistCandidate(artifact);
-            this._lastLoopV2CandidateAssessment = persisted.assessment;
-            try {
-              this.onLoopV2CandidateAssessment?.(persisted.assessment);
-            } catch {
-              // A consumer callback is not completion authority.
-            }
+            persistCurrentLoopV2Candidate();
           }
           if (
             this.loopKernelVersion === "v2-shadow" &&
@@ -4444,7 +4504,9 @@ export class AgentOrchestrator {
       : undefined;
 
     const reviewLoopV2Candidate = loopV2LiveReviewRuntime?.canReview
-      ? async () => {
+      ? async (
+          stage: "checkpoint" | "final_submission" = "final_submission",
+        ) => {
           const result = await loopV2LiveReviewRuntime.reviewCandidate();
           const assessment = this._lastLoopV2CandidateAssessment;
           if (!assessment) {
@@ -4475,6 +4537,7 @@ export class AgentOrchestrator {
                 : "not_configured",
             summary,
             modelCalls: result.modelCalls,
+            stage,
             ...(result.usage ? { usage: result.usage } : {}),
           });
           return result;
@@ -4532,7 +4595,9 @@ export class AgentOrchestrator {
     // at-most-once 持久化，失败走修复反馈，不拥有终局。
     const probeLoopV2Candidate =
       this.loopKernelVersion === "v2" && this.loopV2VerificationProbeModel
-        ? async () => {
+        ? async (
+            stage: "checkpoint" | "final_submission" = "final_submission",
+          ) => {
             const assessment = this._lastLoopV2CandidateAssessment;
             if (!assessment) {
               throw new Error(
@@ -4592,9 +4657,74 @@ export class AgentOrchestrator {
               verdict: result.verdict,
               summary,
               modelCalls: result.modelCalls,
+              stage,
               ...(result.usage ? { usage: result.usage } : {}),
             });
             return result;
+          }
+        : undefined;
+
+    // In-memory delivery receipt only. On crash/resume we intentionally replay
+    // the settled (zero-model-call) review once so feedback can be checkpointed
+    // into loopControl; using the audit event itself as delivery proof would
+    // lose feedback in the crash window before AppState.save.
+    const stableReviewAttemptedRevisions = new Set<number>();
+    const runStableCandidateCheckpoint =
+      this.loopKernelVersion === "v2" && reviewLoopV2Candidate
+        ? async (): Promise<EphemeralControlV1 | undefined> => {
+            const taskSnapshot = taskState.snapshot();
+            const revision = taskSnapshot.mutationRevision ?? 0;
+            if (!loopV2Projection) return undefined;
+            const report = loopV2Projection.snapshot();
+            if (
+              !isStableCandidateCheckpointEligibleV1({
+                mutationRevision: revision,
+                diffInspectedRevision: taskSnapshot.diffInspectedRevision,
+                managedJobsBlockCompletion:
+                  managedJobs.readiness().blocksCompletion,
+                reviewAlreadyAttempted:
+                  stableReviewAttemptedRevisions.has(revision),
+                verification: Object.values(report.state.verification),
+              })
+            )
+              return undefined;
+
+            // One host checkpoint per revision in this process. Add the
+            // receipt before projection/review so a not-ready assessment does
+            // not spam the journal every turn. Crash recovery may replay once;
+            // durable reviewer/probe claims keep external calls at-most-once.
+            stableReviewAttemptedRevisions.add(revision);
+            emit({ type: "candidate.checkpoint", mutationRevision: revision });
+            const assessment = this._lastLoopV2CandidateAssessment;
+            if (!assessment?.readiness.readyForSemanticReview) return undefined;
+
+            const review = await reviewLoopV2Candidate("checkpoint");
+            const reviewGate = evaluateLoopV2SemanticReviewGateV1({
+              result: review,
+              noRoomForAnotherTurn: false,
+            });
+            if (reviewGate.type !== "accept") {
+              return {
+                kind: "completion_gate",
+                gate: "semantic_review",
+                text: reviewGate.message,
+              };
+            }
+
+            if (!probeLoopV2Candidate) return undefined;
+            const probe = await probeLoopV2Candidate("checkpoint");
+            const probeGate = evaluateVerificationProbeGateV1({
+              result: probe,
+              noRoomForAnotherTurn: false,
+            });
+            if (probeGate.type !== "accept") {
+              return {
+                kind: "completion_gate",
+                gate: "verification_probe",
+                text: probeGate.message,
+              };
+            }
+            return undefined;
           }
         : undefined;
 
@@ -5143,6 +5273,7 @@ export class AgentOrchestrator {
       ...(getLoopV2ControlReduction ? { getLoopV2ControlReduction } : {}),
       ...(reviewLoopV2Candidate ? { reviewLoopV2Candidate } : {}),
       ...(probeLoopV2Candidate ? { probeLoopV2Candidate } : {}),
+      ...(runStableCandidateCheckpoint ? { runStableCandidateCheckpoint } : {}),
       ...(persistLoopV2Terminal ? { persistLoopV2Terminal } : {}),
       emitRunMetrics,
       seq,

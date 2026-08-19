@@ -669,7 +669,7 @@ export async function runVerificationProbeOnceV2(input: {
       : undefined;
   if (existing) {
     if (existing?.candidateInputHash === input.candidateInputHash) {
-      return existing.result;
+      return { ...existing.result, modelCalls: 0 };
     }
     // Candidate identity can change when new evidence is attached without a
     // product mutation. The code under test is unchanged, so reuse the settled

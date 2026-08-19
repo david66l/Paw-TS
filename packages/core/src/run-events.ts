@@ -171,6 +171,15 @@ export type RunEvent =
   /** 解析出结构化的代理动作（V2 §8.5），编排器据此决定下一步分支 */
   /** Parsed structured outcome (V2 §8.5) before orchestrator branches. */
   | { readonly type: "agent.action"; readonly action: AgentAction }
+  /**
+   * Host-owned, pre-final stable-candidate checkpoint. This is review
+   * provenance only: it never represents agent completion intent and cannot
+   * commit a terminal result.
+   */
+  | {
+      readonly type: "candidate.checkpoint";
+      readonly mutationRevision: number;
+    }
   /** Fresh-context semantic review of a candidate source revision. */
   | {
       readonly type: "candidate.review";
@@ -180,6 +189,8 @@ export type RunEvent =
       readonly candidateId?: string;
       readonly reviewKey?: string;
       readonly externalVerification?: "not_configured" | "pending";
+      /** Checkpoint reviews are audit/feedback only; final is the legacy default. */
+      readonly stage?: "checkpoint" | "final_submission";
       readonly reportGrounding?: "pass" | "fail" | "unknown";
       readonly summary: string;
       readonly modelCalls: number;
@@ -192,6 +203,8 @@ export type RunEvent =
       readonly mutationRevision: number;
       readonly probeKey: string;
       readonly verdict: "pass" | "fail" | "error";
+      /** Checkpoint probes are audit/feedback only; final is the legacy default. */
+      readonly stage?: "checkpoint" | "final_submission";
       readonly summary: string;
       readonly modelCalls: number;
       readonly usage?: ModelTokenUsage;
