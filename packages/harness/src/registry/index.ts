@@ -14,6 +14,7 @@ export {
   JOB_READ,
   JOB_WAIT,
   JOB_KILL,
+  UNDO_LAST_EDIT,
   type ToolRunResult,
   type ToolName,
   type BuiltinToolName,

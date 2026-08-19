@@ -519,6 +519,27 @@ export class TaskStateManager {
       editRecoveryPath = undefined;
     }
 
+    if (result.ok && call.tool === "workspace.undo_last_edit") {
+      const payload = isRecord(result.payload) ? result.payload : {};
+      const effect = isRecord(payload.workspaceEffect)
+        ? payload.workspaceEffect
+        : {};
+      const restoredPaths = Array.isArray(effect.paths)
+        ? effect.paths.filter(
+            (restoredPath): restoredPath is string =>
+              typeof restoredPath === "string" && restoredPath.length > 0,
+          )
+        : [];
+      if (effect.changed === true && restoredPaths.length > 0) {
+        for (const restoredPath of restoredPaths) {
+          pushUnique(filesChanged, restoredPath);
+        }
+        mutationRevision += 1;
+        mutationShellCommandRevision = shellCommandRevision;
+        editRecoveryPath = undefined;
+      }
+    }
+
     if (result.ok && call.tool === "workspace.run_agent") {
       const payload = isRecord(result.payload) ? result.payload : {};
       const childChangedFiles = Array.isArray(payload.changedFiles)

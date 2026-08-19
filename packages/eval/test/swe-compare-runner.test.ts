@@ -874,6 +874,141 @@ describe("SWE compare runner", () => {
     expect(existsSync(path.join(root, "__pycache__", "app.pyc"))).toBe(false);
   });
 
+  test("shell effect audit discards pre-existing mutable pytest cache without rejecting verification", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-old-cache-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, ".gitignore"), ".pytest_cache/\n", "utf8");
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    mkdirSync(path.join(root, ".pytest_cache", "v", "cache"), {
+      recursive: true,
+    });
+    writeFileSync(
+      path.join(root, ".pytest_cache", "v", "cache", "nodeids"),
+      "old\n",
+      "utf8",
+    );
+    git(root, ["add", ".gitignore", "app.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set([".gitignore", "app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "pytest" },
+      workspaceRoot: root,
+    });
+    writeFileSync(
+      path.join(root, ".pytest_cache", "v", "cache", "nodeids"),
+      "new\n",
+      "utf8",
+    );
+
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "pytest" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "tests passed", payload: {} },
+      },
+      prepared,
+    );
+
+    expect(decision.allowed).toBe(true);
+    expect(
+      readFileSync(
+        path.join(root, ".pytest_cache", "v", "cache", "nodeids"),
+        "utf8",
+      ),
+    ).toBe("old\n");
+  });
+
+  test("shell effect audit treats matplotlib result_images as disposable test output", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-images-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "pytest matplotlib/tests/test_dates.py" },
+      workspaceRoot: root,
+    });
+    mkdirSync(path.join(root, "result_images", "test_dates"), {
+      recursive: true,
+    });
+    writeFileSync(
+      path.join(root, "result_images", "test_dates", "date-expected.png"),
+      "png",
+      "utf8",
+    );
+
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "pytest matplotlib/tests/test_dates.py" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "tests passed", payload: {} },
+      },
+      prepared,
+    );
+
+    expect(decision.allowed).toBe(true);
+    expect(
+      existsSync(
+        path.join(
+          root,
+          "result_images",
+          "test_dates",
+          "date-expected.png",
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  test("shell effect audit preserves pre-existing untracked result_images assets", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-owned-images-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    mkdirSync(path.join(root, "docs", "result_images"), { recursive: true });
+    const asset = path.join(root, "docs", "result_images", "keep.png");
+    writeFileSync(asset, "important-untracked", "utf8");
+    git(root, ["add", "app.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "true" },
+      workspaceRoot: root,
+    });
+
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "true" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "exit 0", payload: {} },
+      },
+      prepared,
+    );
+
+    expect(decision.allowed).toBe(true);
+    expect(readFileSync(asset, "utf8")).toBe("important-untracked");
+  });
+
   test("shell effect audit restores the ignored runner configuration baseline", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-config-"));
     git(root, ["init"]);

@@ -464,9 +464,13 @@ function isEphemeralGeneratedPath(file: string): boolean {
     ".eggs",
   ];
   if (parts.some((part) => ephemeral.includes(part))) return true;
+  // Matplotlib image-comparison tests write generated PNGs under the
+  // repository-root result_images directory. Do not classify arbitrary nested
+  // user directories with the same name as disposable.
+  if (parts[0] === "result_images") return true;
   // setuptools/setuptools-scm writes the resolved version module next to the
   // package when tests execute from a checkout (e.g. src/_pytest/_version.py).
-  return parts.includes("_version.py");
+  return parts.at(-1) === "_version.py" && parts.includes("_pytest");
 }
 
 function snapshotUntrackedFiles(
@@ -670,9 +674,12 @@ export function createSweCompareToolEffectPolicy(input: {
           input.workspaceRoot,
           before.untracked,
         );
-        if (changedBaselineFiles.length > 0) {
+        const prohibitedBaselineChanges = changedBaselineFiles.filter(
+          (file) => !isEphemeralGeneratedPath(file),
+        );
+        if (prohibitedBaselineChanges.length > 0) {
           reasons.push(
-            `untracked baseline mutation: ${changedBaselineFiles.join(", ")}`,
+            `untracked baseline mutation: ${prohibitedBaselineChanges.join(", ")}`,
           );
         }
         const newFiles = afterUntracked.filter(

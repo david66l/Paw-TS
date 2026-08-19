@@ -620,6 +620,14 @@ export function createLoopV2ShadowObserver(
       }
 
       if (isMutationTool(input.tool)) {
+        if (!input.result.ok) {
+          diagnostics[diagnosticIndex] = {
+            ...diagnostic,
+            disposition: "ignored",
+            reason: "rich_tool_failed",
+          };
+          return;
+        }
         const mutation = buildRichMutation(
           input,
           state.currentMutationRevision + 1,
@@ -866,6 +874,7 @@ function isMutationTool(tool: string): boolean {
     tool === "workspace.edit_file" ||
     tool === "workspace.apply_patch" ||
     tool === "workspace.notebook_edit" ||
+    tool === "workspace.undo_last_edit" ||
     tool === "workspace.run_shell"
   );
 }

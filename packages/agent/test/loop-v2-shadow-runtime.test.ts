@@ -958,7 +958,12 @@ describe("Loop Kernel v2 shadow migration", () => {
       report.diagnostics.filter(
         (item) => item.reason === "rich_mutation_no_effect",
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
+    expect(
+      report.diagnostics.filter(
+        (item) => item.reason === "rich_tool_failed",
+      ),
+    ).toHaveLength(1);
   });
 
   test("a convergence-policy rejected shell is an audited no-op, not a mutation gap", async () => {

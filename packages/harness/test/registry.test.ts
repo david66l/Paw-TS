@@ -3,6 +3,8 @@ import fs, { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { finalizeCheckpoint, saveCheckpoint } from "@paw/core";
+
 import {
   executeTool,
   listToolNames,
@@ -35,6 +37,53 @@ describe("executeTool", () => {
     expect(r.ok).toBe(true);
     expect(r.summary).toContain("x.txt");
     expect(JSON.stringify(r.payload)).toContain("hello");
+  });
+
+  test("workspace.undo_last_edit restores only the latest finalized Agent edit", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-harness-undo-"));
+    const filePath = path.join(root, "x.txt");
+    writeFileSync(filePath, "before", "utf8");
+    saveCheckpoint(root, "run-undo", 1, "workspace.edit_file", {
+      path: "x.txt",
+    });
+    writeFileSync(filePath, "after", "utf8");
+    finalizeCheckpoint(root, "run-undo", 1);
+
+    const result = await executeTool(
+      { workspaceRoot: root, parentRunId: "run-undo" },
+      "workspace.undo_last_edit",
+      {},
+    );
+
+    expect(result.ok).toBe(true);
+    expect(fs.readFileSync(filePath, "utf8")).toBe("before");
+    expect(result.payload).toMatchObject({
+      checkpointSeq: 1,
+      paths: ["x.txt"],
+      workspaceEffect: { changed: true, paths: ["x.txt"] },
+    });
+  });
+
+  test("workspace.undo_last_edit refuses an intervening external write", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-harness-undo-conflict-"));
+    const filePath = path.join(root, "x.txt");
+    writeFileSync(filePath, "before", "utf8");
+    saveCheckpoint(root, "run-undo-conflict", 1, "workspace.edit_file", {
+      path: "x.txt",
+    });
+    writeFileSync(filePath, "agent", "utf8");
+    finalizeCheckpoint(root, "run-undo-conflict", 1);
+    writeFileSync(filePath, "external", "utf8");
+
+    const result = await executeTool(
+      { workspaceRoot: root, parentRunId: "run-undo-conflict" },
+      "workspace.undo_last_edit",
+      {},
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain("changed after the Agent edit");
+    expect(fs.readFileSync(filePath, "utf8")).toBe("external");
   });
 
   test("workspace.read_file rejects missing path", async () => {

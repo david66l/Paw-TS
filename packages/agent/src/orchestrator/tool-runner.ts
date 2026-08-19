@@ -32,8 +32,13 @@ import type {
   ToolDecisionCommitV1,
   ToolFileChange,
 } from "@paw/core";
-import { extractCheckpointTargets, isMutatingTool } from "@paw/core";
-import { saveCheckpoint } from "@paw/core";
+import {
+  extractCheckpointTargets,
+  finalizeCheckpoint,
+  inspectLastSafeFileMutationCheckpoint,
+  isMutatingTool,
+  saveCheckpoint,
+} from "@paw/core";
 import type {
   HarnessContext,
   ShellSandboxConfig,
@@ -45,6 +50,7 @@ import {
   JOB_READ,
   JOB_START,
   JOB_WAIT,
+  UNDO_LAST_EDIT,
   toolRequiresApproval,
 } from "@paw/harness";
 import type { FileLockLike } from "@paw/harness";
@@ -518,15 +524,23 @@ export async function executeToolCalls(
     if (
       blockedByPolicy[index] ||
       !approvals[index] ||
-      !isMutatingTool(call.tool)
+      !isMutatingTool(call.tool) ||
+      call.tool === UNDO_LAST_EDIT
     )
       return undefined;
     toolCtx.checkpointSeq.n += 1;
     return toolCtx.checkpointSeq.n;
   });
-  const mutationCallCount = calls.filter((call) =>
-    isMutatingTool(call.tool),
-  ).length;
+  const serializeToolCalls =
+    effectPolicyApplies.some(Boolean) ||
+    calls.some(
+      (call) =>
+        call.tool === "workspace.acceptance_update" ||
+        call.tool === UNDO_LAST_EDIT,
+    );
+  const mutationCallCount = serializeToolCalls
+    ? 1
+    : calls.filter((call) => isMutatingTool(call.tool)).length;
   const mutationCaptures: Array<LoopV2ShadowMutationCapture | undefined> =
     calls.map(() => undefined);
 
@@ -579,21 +593,45 @@ export async function executeToolCalls(
       };
     }
 
-    // 保存 checkpoint（修改性工具）
+    const beforeCapture = toolCtx.captureLoopV2Facts
+      ? captureMutationBefore(
+          toolCtx.workspaceRoot,
+          toolCtx.runId,
+          call,
+          mutationCallCount,
+        )
+      : undefined;
+
+    // Capture the product state before checkpoint infrastructure writes under
+    // .paw, then save the rollback snapshot for the actual tool target.
     const cpNum = checkpointNums[i];
     if (cpNum !== undefined) {
-      saveCheckpoint(
-        toolCtx.workspaceRoot,
-        toolCtx.runId,
-        cpNum,
-        call.tool,
-        call.args,
-      );
+      try {
+        saveCheckpoint(
+          toolCtx.workspaceRoot,
+          toolCtx.runId,
+          cpNum,
+          call.tool,
+          call.args,
+        );
+      } catch (error) {
+        if (toolCtx.captureLoopV2Facts) {
+          mutationCaptures[i] = createLoopV2NoMutationCapture();
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          summary: `[Checkpoint:prepare_failed] ${message}`,
+          payload: {
+            blocked: true,
+            code: "E_CHECKPOINT",
+            message,
+            executed: false,
+            workspaceEffect: { changed: false, paths: [] },
+          },
+        };
+      }
     }
-
-    const beforeCapture = toolCtx.captureLoopV2Facts
-      ? captureMutationBefore(toolCtx.workspaceRoot, call, mutationCallCount)
-      : undefined;
 
     let prepared: unknown;
     if (toolCtx.toolEffectPolicy && effectPolicyApplies[i]) {
@@ -723,6 +761,36 @@ export async function executeToolCalls(
         };
       }
     }
+    if (cpNum !== undefined) {
+      try {
+        finalizeCheckpoint(toolCtx.workspaceRoot, toolCtx.runId, cpNum, {
+          toolSucceeded: settledResult.ok,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const payload =
+          settledResult.payload &&
+          typeof settledResult.payload === "object" &&
+          !Array.isArray(settledResult.payload)
+            ? (settledResult.payload as Record<string, unknown>)
+            : { originalPayload: settledResult.payload };
+        // The tool effect already happened. Preserve its real success/failure
+        // and file-change payload so TaskState and the durable decision event
+        // remain truthful; expose checkpoint degradation as explicit metadata.
+        settledResult = {
+          ...settledResult,
+          summary: `${settledResult.summary} [Checkpoint:finalize_failed] ${message}`,
+          payload: {
+            ...payload,
+            checkpoint: {
+              finalized: false,
+              seq: cpNum,
+              error: message,
+            },
+          },
+        };
+      }
+    }
     if (beforeCapture) {
       mutationCaptures[i] = captureMutationAfter(
         toolCtx.workspaceRoot,
@@ -734,10 +802,7 @@ export async function executeToolCalls(
   };
 
   const results: ToolRunResult[] = [];
-  if (
-    effectPolicyApplies.some(Boolean) ||
-    calls.some((call) => call.tool === "workspace.acceptance_update")
-  ) {
+  if (serializeToolCalls) {
     for (const [i, call] of calls.entries()) {
       results.push(await executeOne(call, i));
     }
@@ -1335,6 +1400,7 @@ function readSourceContentHash(
 
 function captureMutationBefore(
   workspaceRoot: string,
+  runId: string,
   call: AgentToolCallAction,
   mutationCallCount: number,
 ): MutationBeforeCapture | undefined {
@@ -1345,9 +1411,23 @@ function captureMutationBefore(
   if (call.tool === "workspace.run_shell") {
     return { status: "gap", reason: "unbounded_mutation_surface" };
   }
+  const targets =
+    call.tool === UNDO_LAST_EDIT
+      ? (() => {
+          const inspection = inspectLastSafeFileMutationCheckpoint(
+            workspaceRoot,
+            runId,
+          );
+          return inspection.status === "ready"
+            ? inspection.entry.targets.filter(
+                (target) => target !== "__shell_cmd__",
+              )
+            : [];
+        })()
+      : extractCheckpointTargets(call.tool, call.args);
   const normalized = normalizeMutationTargets(
     workspaceRoot,
-    extractCheckpointTargets(call.tool, call.args),
+    targets,
   );
   if (!normalized) {
     return { status: "gap", reason: "unsafe_or_missing_target" };

@@ -22,6 +22,7 @@ export const READ = "workspace.read_file" as const;
 export const LIST = "workspace.list_dir" as const;
 export const WRITE = "workspace.write_file" as const;
 export const EDIT = "workspace.edit_file" as const;
+export const UNDO_LAST_EDIT = "workspace.undo_last_edit" as const;
 export const SEARCH = "workspace.search" as const;
 export const GLOB = "workspace.glob" as const;
 export const GREP = "workspace.grep" as const;
@@ -52,7 +53,7 @@ export const MEMORY_SAVE = "memory.save" as const;
 export const CONTEXT_RECALL = "context.recall" as const;
 
 /**
- * 模型直接可见的核心工具集（5 个）。
+ * 模型直接可见的核心工具集（4 个）。
  *
  * 参考 mini-SWE-agent 的实验证据（100 行 + bash = 74% on SWE-bench
  * Verified vs 全功能 harness ~30%）：模型认知负担与系统提示体积是
@@ -61,13 +62,19 @@ export const CONTEXT_RECALL = "context.recall" as const;
  *
  * bash 替代 run_shell、grep、glob、search、symbol_search、lsp、
  * git 命令、job 管理、web 工具；edit_file 合并 write_file 与
- * apply_patch 的核心场景。其余 27 个工具保留为内部能力（子 agent、
- * 桌面 UI、认证链直接调用），不进模型 schema。
+ * apply_patch 的核心场景；undo_last_edit 只提供受检查点与 CAS 约束的
+ * 窄恢复能力。其余工具保留为内部能力（子 agent、桌面 UI、认证链直接
+ * 调用），不进模型 schema。
  *
  * 桌面端传 allowedTools: null 可恢复全量工具 schema。
  */
 /** Model-originated executable tools in the slim coding loop. */
-export const CORE_MODEL_EXECUTABLE_TOOLS = [SHELL, READ, EDIT] as const;
+export const CORE_MODEL_EXECUTABLE_TOOLS = [
+  SHELL,
+  READ,
+  EDIT,
+  UNDO_LAST_EDIT,
+] as const;
 
 /** Structured control actions parsed by the agent, not MCP tool definitions. */
 export const CORE_MODEL_ACTIONS = [
@@ -95,6 +102,7 @@ const BUILTIN_TOOLS = [
   SEARCH,
   WRITE,
   EDIT,
+  UNDO_LAST_EDIT,
   GLOB,
   GREP,
   SHELL,
@@ -298,6 +306,11 @@ export function toolDefinitions(
         },
       },
       ["path", "old_string", "new_string"],
+    ),
+    fn(
+      UNDO_LAST_EDIT,
+      "Safely undo only this run's most recent checkpoint-backed edit/write/patch. Refuses to overwrite later external changes and cannot select arbitrary files, commits, or older revisions.",
+      {},
     ),
     fn(
       GLOB,
@@ -735,6 +748,7 @@ export function toolCatalogText(mcp?: McpClientManager): string {
     `{"tool":"${GREP}","args":{"pattern":"<regex>","path":".","file_pattern":"*.ts","output_mode":"files_with_matches","-i":false,"-n":true,"head_limit":250,"max_results":50,"max_depth":4}}`,
     `{"tool":"${WRITE}","args":{"path":"<relative-path>","content":"<utf-8 text>","create_directories":true}}`,
     `{"tool":"${EDIT}","args":{"path":"<relative-path>","old_string":"<text to find>","new_string":"<replacement>"}}`,
+    `{"tool":"${UNDO_LAST_EDIT}","args":{}} — restore only the latest safe checkpoint-backed Agent edit`,
     `{"tool":"${SHELL}","args":{"command":"<shell command>","cwd":".","timeout_sec":60}}`,
     `{"tool":"${JOB_START}","args":{"command":"<long-running shell command>","cwd":".","output_limit_bytes":262144}}`,
     `{"tool":"${JOB_LIST}","args":{}}`,

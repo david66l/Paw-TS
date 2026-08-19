@@ -385,12 +385,18 @@ export {
 // ============================================================
 export {
   extractCheckpointTargets,
+  finalizeCheckpoint,
+  inspectLastSafeFileMutationCheckpoint,
   isMutatingTool,
   listCheckpoints,
   restoreCheckpoint,
   saveCheckpoint,
   undoLastCheckpoint,
+  undoLastSafeFileMutationCheckpoint,
   type CheckpointEntry,
+  type CheckpointOutcomeV1,
+  type CheckpointTargetStateV1,
+  type SafeFileMutationCheckpointInspection,
 } from "./checkpoint.js";
 
 // ============================================================

@@ -84,6 +84,7 @@ export {
   JOB_READ,
   JOB_WAIT,
   JOB_KILL,
+  UNDO_LAST_EDIT,
   type ToolName,
   type ToolRunResult,
 } from "./registry/index.js";

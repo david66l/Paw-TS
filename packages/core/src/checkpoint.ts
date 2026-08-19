@@ -46,6 +46,82 @@ export interface CheckpointEntry {
   readonly targets: readonly string[];
   /** 快照保存时间戳（毫秒） */
   readonly savedAt: number;
+  /** Post-execution state used by the model-facing compare-and-swap undo. */
+  readonly outcome?: CheckpointOutcomeV1;
+}
+
+export interface CheckpointTargetStateV1 {
+  readonly path: string;
+  readonly state: "file" | "missing";
+  readonly sha256?: string;
+}
+
+export interface CheckpointOutcomeV1 {
+  readonly schemaVersion: "paw.checkpoint-outcome.v1";
+  readonly toolSucceeded: boolean;
+  readonly materiallyChanged: boolean;
+  readonly after: readonly CheckpointTargetStateV1[];
+}
+
+export type SafeFileMutationCheckpointInspection =
+  | { readonly status: "ready"; readonly entry: CheckpointEntry }
+  | {
+      readonly status: "conflict";
+      readonly entry: CheckpointEntry;
+      readonly conflictingPaths: readonly string[];
+    }
+  | { readonly status: "invalid"; readonly reason: string }
+  | { readonly status: "none" };
+
+function resolveCheckpointTarget(
+  workspaceRoot: string,
+  rel: string,
+): string | undefined {
+  if (!rel || rel === "__shell_cmd__") return undefined;
+  const root = path.resolve(workspaceRoot);
+  const full = path.resolve(root, rel);
+  const relative = path.relative(root, full);
+  if (
+    relative.length === 0 ||
+    path.isAbsolute(relative) ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`)
+  ) {
+    return undefined;
+  }
+  try {
+    const rootReal = fs.realpathSync.native?.(root) ?? fs.realpathSync(root);
+    let existing = full;
+    while (!fs.existsSync(existing)) {
+      const parent = path.dirname(existing);
+      if (parent === existing) return undefined;
+      existing = parent;
+    }
+    const existingReal =
+      fs.realpathSync.native?.(existing) ?? fs.realpathSync(existing);
+    const realRelative = path.relative(rootReal, existingReal);
+    if (
+      path.isAbsolute(realRelative) ||
+      realRelative === ".." ||
+      realRelative.startsWith(`..${path.sep}`)
+    ) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  return full;
+}
+
+function isReservedCheckpointTarget(
+  workspaceRoot: string,
+  rel: string,
+): boolean {
+  const full = resolveCheckpointTarget(workspaceRoot, rel);
+  if (!full) return false;
+  const relative = path.relative(path.resolve(workspaceRoot), full);
+  const [topLevel] = relative.split(path.sep);
+  return topLevel?.toLowerCase() === ".paw";
 }
 
 /** 一次运行的检查点集合（一个 seq 对应一个 CheckpointEntry） */
@@ -122,7 +198,20 @@ export function saveCheckpoint(
   tool: string,
   args: unknown,
 ): CheckpointEntry {
-  const targets = extractCheckpointTargets(tool, args);
+  const targets = [...new Set(extractCheckpointTargets(tool, args))];
+  const fileTargets = targets.filter((target) => target !== "__shell_cmd__");
+  const snapshotKeys = fileTargets.map((target) => sanitizeFileName(target));
+  if (new Set(snapshotKeys).size !== snapshotKeys.length) {
+    throw new Error("checkpoint targets collide after path sanitization");
+  }
+  for (const target of fileTargets) {
+    if (!resolveCheckpointTarget(workspaceRoot, target)) {
+      throw new Error(`checkpoint target escapes workspace: ${target}`);
+    }
+    if (isReservedCheckpointTarget(workspaceRoot, target)) {
+      throw new Error(`checkpoint target is reserved Paw state: ${target}`);
+    }
+  }
   const checkpointDir = path.join(
     checkpointsDir(workspaceRoot, runId),
     String(seq),
@@ -146,9 +235,7 @@ export function saveCheckpoint(
       continue;
     }
 
-    const full = path.join(workspaceRoot, rel);
-    // 跳过试图逃逸工作区之外的路径
-    if (!full.startsWith(path.resolve(workspaceRoot))) continue;
+    const full = resolveCheckpointTarget(workspaceRoot, rel)!;
 
     if (fs.existsSync(full) && fs.statSync(full).isFile()) {
       const content = fs.readFileSync(full);
@@ -204,11 +291,24 @@ function applyCheckpointRestore(
     fs.readFileSync(metaPath, "utf8"),
   ) as CheckpointEntry;
 
+  const resolvedTargets = new Map<string, string>();
+  const snapshotKeys = new Set<string>();
+  for (const rel of meta.targets) {
+    if (rel === "__shell_cmd__") continue;
+    const full = resolveCheckpointTarget(workspaceRoot, rel);
+    // Validate every target before restoring any of them. A corrupt mixed
+    // checkpoint must never partially restore its first valid path.
+    const snapshotKey = sanitizeFileName(rel);
+    if (!full || snapshotKeys.has(snapshotKey)) return null;
+    snapshotKeys.add(snapshotKey);
+    resolvedTargets.set(rel, full);
+  }
+
   for (const rel of meta.targets) {
     if (rel === "__shell_cmd__") continue; // 虚拟目标 —— 不执行文件操作
 
-    const full = path.join(workspaceRoot, rel);
-    if (!full.startsWith(path.resolve(workspaceRoot))) continue;
+    const full = resolvedTargets.get(rel);
+    if (!full) return null;
 
     const createMarker = path.join(
       checkpointDir,
@@ -236,6 +336,390 @@ function applyCheckpointRestore(
   }
 
   return meta;
+}
+
+function checkpointTargetState(
+  workspaceRoot: string,
+  rel: string,
+): CheckpointTargetStateV1 | undefined {
+  const full = resolveCheckpointTarget(workspaceRoot, rel);
+  if (!full) return undefined;
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+    return { path: rel, state: "missing" };
+  }
+  return {
+    path: rel,
+    state: "file",
+    sha256: createHash("sha256").update(fs.readFileSync(full)).digest("hex"),
+  };
+}
+
+function checkpointBeforeState(
+  checkpointDir: string,
+  rel: string,
+): CheckpointTargetStateV1 | undefined {
+  const sanitized = sanitizeFileName(rel);
+  if (fs.existsSync(path.join(checkpointDir, `.create-${sanitized}`))) {
+    return { path: rel, state: "missing" };
+  }
+  const snapshot = fs
+    .readdirSync(checkpointDir)
+    .find((name) => name.endsWith(`-${sanitized}`));
+  if (!snapshot) return undefined;
+  return {
+    path: rel,
+    state: "file",
+    sha256: createHash("sha256")
+      .update(fs.readFileSync(path.join(checkpointDir, snapshot)))
+      .digest("hex"),
+  };
+}
+
+function targetStatesEqual(
+  left: CheckpointTargetStateV1,
+  right: CheckpointTargetStateV1,
+): boolean {
+  return (
+    left.path === right.path &&
+    left.state === right.state &&
+    (left.state === "missing" || left.sha256 === right.sha256)
+  );
+}
+
+/**
+ * Seal a pre-execution checkpoint with the actual post-tool file state.
+ * This turns later model-initiated undo into compare-and-swap: Paw will only
+ * restore when the workspace still equals the state produced by that tool.
+ */
+export function finalizeCheckpoint(
+  workspaceRoot: string,
+  runId: string,
+  seq: number,
+  options: { readonly toolSucceeded?: boolean } = {},
+): CheckpointEntry | null {
+  const checkpointDir = path.join(
+    checkpointsDir(workspaceRoot, runId),
+    String(seq),
+  );
+  const metaPath = path.join(checkpointDir, "_meta.json");
+  if (!fs.existsSync(metaPath)) return null;
+  const entry = JSON.parse(fs.readFileSync(metaPath, "utf8")) as CheckpointEntry;
+  const fileTargets = entry.targets.filter((target) => target !== "__shell_cmd__");
+  const snapshotKeys = fileTargets.map((target) => sanitizeFileName(target));
+  if (new Set(snapshotKeys).size !== snapshotKeys.length) {
+    throw new Error("checkpoint targets collide after path sanitization");
+  }
+  const after = fileTargets.map((target) => {
+    const state = checkpointTargetState(workspaceRoot, target);
+    if (!state) throw new Error(`unsafe checkpoint target: ${target}`);
+    return state;
+  });
+  const materiallyChanged = fileTargets.some((target, index) => {
+    const before = checkpointBeforeState(checkpointDir, target);
+    return !before || !targetStatesEqual(before, after[index]!);
+  });
+  const finalized: CheckpointEntry = {
+    ...entry,
+    outcome: {
+      schemaVersion: "paw.checkpoint-outcome.v1",
+      toolSucceeded: options.toolSucceeded ?? true,
+      materiallyChanged,
+      after,
+    },
+  };
+  atomicWrite(metaPath, JSON.stringify(finalized, null, 2));
+  return finalized;
+}
+
+const SAFE_FILE_MUTATION_TOOLS = new Set([
+  "workspace.write_file",
+  "workspace.edit_file",
+  "workspace.apply_patch",
+  "workspace.notebook_edit",
+]);
+
+function parseSafeCheckpointEntry(
+  value: unknown,
+  expectedSeq: number,
+):
+  | { readonly status: "ok"; readonly entry: CheckpointEntry }
+  | { readonly status: "invalid"; readonly reason: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      status: "invalid",
+      reason: `checkpoint ${expectedSeq} metadata is not an object`,
+    };
+  }
+  const entry = value as Record<string, unknown>;
+  if (
+    entry.seq !== expectedSeq ||
+    typeof entry.tool !== "string" ||
+    entry.tool.length === 0 ||
+    !Array.isArray(entry.targets) ||
+    !entry.targets.every((target) => typeof target === "string") ||
+    typeof entry.savedAt !== "number" ||
+    !Number.isFinite(entry.savedAt)
+  ) {
+    return {
+      status: "invalid",
+      reason: `checkpoint ${expectedSeq} metadata is malformed`,
+    };
+  }
+  return { status: "ok", entry: value as CheckpointEntry };
+}
+
+function validateSafeCheckpointOutcome(
+  entry: CheckpointEntry,
+): string | undefined {
+  const outcome = entry.outcome;
+  if (!outcome || outcome.schemaVersion !== "paw.checkpoint-outcome.v1") {
+    return "missing finalized outcome";
+  }
+  if (
+    typeof outcome.toolSucceeded !== "boolean" ||
+    typeof outcome.materiallyChanged !== "boolean" ||
+    !Array.isArray(outcome.after)
+  ) {
+    return "malformed finalized outcome";
+  }
+  const fileTargets = entry.targets.filter(
+    (target) => target !== "__shell_cmd__",
+  );
+  const snapshotKeys = fileTargets.map((target) => sanitizeFileName(target));
+  if (
+    fileTargets.length === 0 ||
+    new Set(snapshotKeys).size !== snapshotKeys.length ||
+    outcome.after.length !== fileTargets.length ||
+    outcome.after.some((state, index) => {
+      if (
+        !state ||
+        typeof state !== "object" ||
+        state.path !== fileTargets[index]
+      ) {
+        return true;
+      }
+      if (state.state === "missing") return state.sha256 !== undefined;
+      return (
+        state.state !== "file" ||
+        !/^[0-9a-f]{64}$/.test(state.sha256 ?? "")
+      );
+    })
+  ) {
+    return "finalized outcome does not match checkpoint targets";
+  }
+  return undefined;
+}
+
+/** Inspect the latest actual file mutation without modifying the workspace. */
+export function inspectLastSafeFileMutationCheckpoint(
+  workspaceRoot: string,
+  runId: string,
+): SafeFileMutationCheckpointInspection {
+  const runDir = checkpointsDir(workspaceRoot, runId);
+  if (!fs.existsSync(runDir)) return { status: "none" };
+  const dirs = fs
+    .readdirSync(runDir)
+    .filter((name) => /^\d+$/.test(name))
+    .map((name) => ({ name, seq: Number.parseInt(name, 10) }))
+    .sort((left, right) => right.seq - left.seq);
+  let entry: CheckpointEntry | undefined;
+  for (const dir of dirs) {
+    const metaPath = path.join(runDir, dir.name, "_meta.json");
+    if (!fs.existsSync(metaPath)) {
+      return {
+        status: "invalid",
+        reason: `checkpoint ${dir.seq} metadata is missing`,
+      };
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+    } catch {
+      return {
+        status: "invalid",
+        reason: `checkpoint ${dir.seq} metadata is not valid JSON`,
+      };
+    }
+    const parsed = parseSafeCheckpointEntry(raw, dir.seq);
+    if (parsed.status === "invalid") return parsed;
+    if (!SAFE_FILE_MUTATION_TOOLS.has(parsed.entry.tool)) continue;
+    if (!parsed.entry.outcome) continue;
+    const outcomeError = validateSafeCheckpointOutcome(parsed.entry);
+    if (outcomeError) {
+      return {
+        status: "invalid",
+        reason: `checkpoint ${dir.seq}: ${outcomeError}`,
+      };
+    }
+    if (!parsed.entry.outcome.materiallyChanged) continue;
+    if (!parsed.entry.outcome.toolSucceeded) continue;
+    entry = parsed.entry;
+    break;
+  }
+  if (!entry?.outcome) return { status: "none" };
+  for (const target of entry.targets) {
+    if (target === "__shell_cmd__") continue;
+    if (!resolveCheckpointTarget(workspaceRoot, target)) {
+      return {
+        status: "invalid",
+        reason: `unsafe checkpoint target: ${target}`,
+      };
+    }
+  }
+  const conflicts = entry.outcome.after
+    .filter(
+      (expected) => {
+        const current = checkpointTargetState(workspaceRoot, expected.path);
+        return !current || !targetStatesEqual(expected, current);
+      },
+    )
+    .map((state) => state.path);
+  return conflicts.length > 0
+    ? { status: "conflict", entry, conflictingPaths: conflicts }
+    : { status: "ready", entry };
+}
+
+/**
+ * Restore only the latest finalized Agent file mutation. Arbitrary revisions
+ * and paths are deliberately unsupported, and intervening external writes
+ * fail closed instead of being overwritten.
+ */
+export function undoLastSafeFileMutationCheckpoint(
+  workspaceRoot: string,
+  runId: string,
+): SafeFileMutationCheckpointInspection {
+  const inspected = inspectLastSafeFileMutationCheckpoint(workspaceRoot, runId);
+  if (inspected.status !== "ready") return inspected;
+  const checkpointDir = path.join(
+    checkpointsDir(workspaceRoot, runId),
+    String(inspected.entry.seq),
+  );
+  const actions: Array<{
+    readonly path: string;
+    readonly full: string;
+    readonly expected: CheckpointTargetStateV1;
+    readonly restore: Buffer | null;
+    readonly rollback: Buffer | null;
+  }> = [];
+  try {
+    for (const rel of inspected.entry.targets) {
+      if (rel === "__shell_cmd__") continue;
+      const full = resolveCheckpointTarget(workspaceRoot, rel);
+      if (!full) {
+        return { status: "invalid", reason: `unsafe checkpoint target: ${rel}` };
+      }
+      const expected = inspected.entry.outcome?.after.find(
+        (state) => state.path === rel,
+      );
+      const current = checkpointTargetState(workspaceRoot, rel);
+      if (!expected || !current || !targetStatesEqual(expected, current)) {
+        return {
+          status: "conflict",
+          entry: inspected.entry,
+          conflictingPaths: [rel],
+        };
+      }
+      const rollback =
+        fs.existsSync(full) && fs.statSync(full).isFile()
+          ? fs.readFileSync(full)
+          : null;
+      const createMarker = path.join(
+        checkpointDir,
+        `.create-${sanitizeFileName(rel)}`,
+      );
+      const suffix = `-${sanitizeFileName(rel)}`;
+      const snapshots = fs
+        .readdirSync(checkpointDir)
+        .filter((name) => name.endsWith(suffix));
+      const hasCreateMarker = fs.existsSync(createMarker);
+      if (Number(hasCreateMarker) + snapshots.length !== 1) {
+        return {
+          status: "invalid",
+          reason: `checkpoint ${inspected.entry.seq} must have exactly one marker or snapshot for ${rel}`,
+        };
+      }
+      let restore: Buffer | null = null;
+      if (!hasCreateMarker) {
+        restore = fs.readFileSync(path.join(checkpointDir, snapshots[0]!));
+        const encodedHash = snapshots[0]!.slice(0, -suffix.length);
+        if (encodedHash !== hashBytes(restore)) {
+          return {
+            status: "invalid",
+            reason: `checkpoint ${inspected.entry.seq} snapshot hash mismatch for ${rel}`,
+          };
+        }
+      }
+      actions.push({ path: rel, full, expected, restore, rollback });
+    }
+  } catch (error) {
+    return {
+      status: "invalid",
+      reason: `checkpoint ${inspected.entry.seq} cannot be prepared: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  const applied: typeof actions = [];
+  const rollbackApplied = (): boolean => {
+    let restored = true;
+    for (const action of applied.reverse()) {
+      try {
+        if (action.rollback === null) fs.rmSync(action.full, { force: true });
+        else fs.writeFileSync(action.full, action.rollback);
+      } catch {
+        restored = false;
+      }
+    }
+    return restored;
+  };
+  try {
+    // Compare each target immediately before its own restore. This keeps a
+    // later target from being overwritten when it changes while an earlier
+    // member of the same multi-file checkpoint is being restored.
+    for (const action of actions) {
+      const current = checkpointTargetState(workspaceRoot, action.path);
+      if (!current || !targetStatesEqual(action.expected, current)) {
+        if (!rollbackApplied()) {
+          return {
+            status: "invalid",
+            reason: `checkpoint ${inspected.entry.seq} conflict rollback failed`,
+          };
+        }
+        return {
+          status: "conflict",
+          entry: inspected.entry,
+          conflictingPaths: [action.path],
+        };
+      }
+      // Register the rollback before the filesystem call: a write can fail
+      // after truncating or partially replacing the target.
+      applied.push(action);
+      if (action.restore === null) {
+        fs.unlinkSync(action.full);
+      } else {
+        fs.mkdirSync(path.dirname(action.full), { recursive: true });
+        fs.writeFileSync(action.full, action.restore);
+      }
+    }
+  } catch (error) {
+    // Best-effort transaction rollback: never report a successful safe undo
+    // when one of a multi-file checkpoint's restores failed.
+    rollbackApplied();
+    return {
+      status: "invalid",
+      reason: `checkpoint ${inspected.entry.seq} restore failed: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  const runCheckpointsDir = checkpointsDir(workspaceRoot, runId);
+  for (const candidate of fs.readdirSync(runCheckpointsDir)) {
+    if (!/^\d+$/.test(candidate)) continue;
+    if (Number.parseInt(candidate, 10) < inspected.entry.seq) continue;
+    fs.rmSync(path.join(runCheckpointsDir, candidate), {
+      recursive: true,
+      force: true,
+    });
+  }
+  return { status: "ready", entry: inspected.entry };
 }
 
 /**
@@ -376,6 +860,7 @@ export function isMutatingTool(tool: string): boolean {
     tool === "workspace.edit_file" ||
     tool === "workspace.apply_patch" ||
     tool === "workspace.notebook_edit" ||
+    tool === "workspace.undo_last_edit" ||
     tool === "workspace.run_shell" ||
     tool === "workspace.job_start"
   );

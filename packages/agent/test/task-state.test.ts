@@ -868,6 +868,27 @@ describe("TaskStateManager", () => {
     expect(state.snapshot().filesChanged).toEqual([]);
   });
 
+  test("records safe undo as a new source mutation", () => {
+    const state = new TaskStateManager("repair source");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.undo_last_edit",
+        args: {},
+      },
+      {
+        ok: true,
+        summary: "restored checkpoint 1",
+        payload: {
+          workspaceEffect: { changed: true, paths: ["src/app.py"] },
+        },
+      },
+    );
+
+    expect(state.snapshot().mutationRevision).toBe(1);
+    expect(state.snapshot().filesChanged).toEqual(["src/app.py"]);
+  });
+
   test("records a trusted shell workspace effect as a source mutation", () => {
     const state = new TaskStateManager("fix bug");
     state.recordToolResult(

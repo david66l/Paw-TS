@@ -27,7 +27,7 @@ describe("CapabilitySetV1", () => {
     );
     expect(set.executableToolNames).toEqual(set.modelToolNames);
     expect(set.modelActions).toEqual(CORE_MODEL_ACTIONS);
-    expect(set.modelToolDefinitions).toHaveLength(3);
+    expect(set.modelToolDefinitions).toHaveLength(4);
     expect(set.internalToolNames).toContain("workspace.grep");
     expect(set.knownToolNames.has("workspace.grep")).toBe(false);
   });

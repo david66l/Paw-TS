@@ -4,6 +4,7 @@ import {
   type ToolErrorCode,
   makeToolError,
   renderSkillPrompt,
+  undoLastSafeFileMutationCheckpoint,
 } from "@paw/core";
 import {
   LspClient,
@@ -66,6 +67,7 @@ import {
   SHELL,
   SYMBOL_SEARCH,
   TODO_WRITE,
+  UNDO_LAST_EDIT,
   type ToolRunResult,
   WEBFETCH,
   WEBSEARCH,
@@ -663,6 +665,57 @@ export async function executeTool(
       ok: true,
       payload: { ...r, diagnostics },
       summary: `edit_file: ${filePath}${diffHint}${diagnosticSummarySuffix(diagnostics)}`,
+    };
+  }
+  if (tool === UNDO_LAST_EDIT) {
+    const runId = ctx.parentRunId?.trim();
+    if (!runId) {
+      return toolErrorResult(
+        "undo_last_edit",
+        "E_USER",
+        "safe undo requires an active Agent run",
+      );
+    }
+    const undone = undoLastSafeFileMutationCheckpoint(
+      ctx.workspaceRoot,
+      runId,
+    );
+    if (undone.status === "none") {
+      return toolErrorResult(
+        "undo_last_edit",
+        "E_USER",
+        "no finalized checkpoint-backed file mutation is available to undo",
+      );
+    }
+    if (undone.status === "conflict") {
+      return toolErrorResult(
+        "undo_last_edit",
+        "E_USER",
+        `safe undo refused because files changed after the Agent edit: ${undone.conflictingPaths.join(", ")}`,
+      );
+    }
+    if (undone.status === "invalid") {
+      return toolErrorResult(
+        "undo_last_edit",
+        "E_USER",
+        `safe undo refused because checkpoint metadata is invalid: ${undone.reason}`,
+      );
+    }
+    const paths = undone.entry.targets.filter(
+      (target) => target !== "__shell_cmd__",
+    );
+    for (const restoredPath of paths) {
+      ctx.watcher?.markAgentWritten(restoredPath);
+    }
+    return {
+      ok: true,
+      summary: `undo_last_edit: restored checkpoint ${undone.entry.seq} (${paths.join(", ")})`,
+      payload: {
+        checkpointSeq: undone.entry.seq,
+        restoredTool: undone.entry.tool,
+        paths,
+        workspaceEffect: { changed: paths.length > 0, paths },
+      },
     };
   }
   if (tool === JOB_START) {
