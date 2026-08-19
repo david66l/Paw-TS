@@ -7,7 +7,7 @@ import type {
 } from "./schema.js";
 
 export const PROGRESS_ADVISOR_POLICY_VERSION =
-  "paw-progress-advisor-v1" as const;
+  "paw-progress-advisor-v2" as const;
 
 export interface ProgressAdvisorConfigV2 {
   readonly policyVersion: typeof PROGRESS_ADVISOR_POLICY_VERSION;
@@ -153,13 +153,16 @@ function stallAdvice(
         : "No active hypothesis has produced progress. Record a falsifiable hypothesis and take a materially different action.",
     };
   }
-  if (count === thresholds.safetyWarning) {
+  if (
+    count >= thresholds.safetyWarning &&
+    (count - thresholds.safetyWarning) % thresholds.changeHypothesis === 0
+  ) {
     return {
       kind: "cost_warning",
       priority: "urgent",
       evidenceRefs,
       message:
-        "The configured no-progress safety line has been reached. Preserve the decision state and prepare an honest incomplete/stalled handoff unless new evidence is available.",
+        "A periodic no-progress checkpoint has been reached. This is not a forced stop or edit. Summarize confirmed facts, contradictions, the current hypothesis, and the exact missing evidence; then continue with one materially different discriminating action from another evidence class.",
     };
   }
   return undefined;

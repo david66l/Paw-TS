@@ -50,6 +50,16 @@ function hasMeaningfulDelta(
   );
 }
 
+function boundedFact(value: string | undefined, limit = 120): string {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  return normalized ? normalized.slice(0, limit) : "none";
+}
+
+function investigationFocus(state: TaskState): string {
+  const latestTest = state.testResults.at(-1);
+  return `current focus: latest file=${boundedFact(state.filesRead.at(-1))}; latest command=${boundedFact(state.commandsRun.at(-1)?.command)}; latest verification=${latestTest ? `${latestTest.outcome ?? (latestTest.passed ? "passed" : "failed")}: ${boundedFact(latestTest.command, 80)}` : "none"}`;
+}
+
 export interface InvestigationStallResultV1 {
   /** 更新后的基线（有意义进展时重置到当前回合）。 */
   readonly baseline: ProgressBaselineV1;
@@ -74,8 +84,11 @@ export function evaluateInvestigationStallV1(input: {
     ? "Parallel read-only investigators can be dispatched via workspace.run_agent (e.g. agent_id bige): each returns a focused summary."
     : "Compare independent hypotheses and choose the next action with the highest information gain.";
   let message: string | undefined;
-  if (gap === thresholds.safetyWarning) {
-    message = `[ProgressAdvice:safety_line] ${investigationFacts}. The no-progress safety line has been reached. Preserve the decision state and prepare an honest incomplete/stalled handoff unless new evidence arrives. ${parallelFact}`;
+  const periodicReframe =
+    gap >= thresholds.safetyWarning &&
+    (gap - thresholds.safetyWarning) % thresholds.changeHypothesis === 0;
+  if (periodicReframe) {
+    message = `[ProgressAdvice:safety_line] ${investigationFacts}; ${investigationFocus(input.state)}. This is a periodic investigation checkpoint, not a forced stop or edit. Summarize confirmed facts, contradictions, the current hypothesis, and the exact missing evidence; then choose one materially different discriminating action and continue. Prefer a different evidence class (implementation, existing contract test, or minimal direct reproduction) from the current focus. ${parallelFact}`;
   } else if (gap === thresholds.changeHypothesis) {
     message = `[ProgressAdvice:hypothesis_stale] ${investigationFacts}. Change or reject the current hypothesis and take a materially different falsifying action. ${parallelFact}`;
   } else if (gap === thresholds.inspectGap) {

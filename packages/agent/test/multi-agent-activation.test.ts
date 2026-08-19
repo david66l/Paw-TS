@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   AGENT_ROSTER_ORDER,
@@ -10,6 +13,7 @@ import {
   evaluateInvestigationStallV1,
 } from "../src/lifecycle/investigation-stall.js";
 import { DEFAULT_PROGRESS_ADVISOR_CONFIG_V2 } from "../src/loop-v2/progress-advisor.js";
+import { AgentOrchestrator } from "../src/orchestrator.js";
 import type { TaskState } from "../src/task-state.js";
 
 function state(overrides: Partial<TaskState>): TaskState {
@@ -84,7 +88,27 @@ describe("multi-agent activation slice", () => {
       turn: DEFAULT_PROGRESS_ADVISOR_CONFIG_V2.noDeltaThresholds.safetyWarning,
     });
     expect(safety.message).toContain("[ProgressAdvice:safety_line]");
-    expect(safety.message).toContain("honest incomplete/stalled handoff");
+    expect(safety.message).toContain("not a forced stop or edit");
+    expect(safety.message).toContain("confirmed facts");
+    expect(safety.message).toContain("current focus:");
+
+    for (const periodicGap of [24, 32, 40]) {
+      const periodic = evaluateInvestigationStallV1({
+        state: investigating,
+        baseline: base.baseline,
+        turn: periodicGap,
+      });
+      expect(periodic.message).toContain("[ProgressAdvice:safety_line]");
+      expect(periodic.message).toContain(`last ${periodicGap} turns`);
+      expect(periodic.message).toContain("materially different");
+    }
+    expect(
+      evaluateInvestigationStallV1({
+        state: investigating,
+        baseline: base.baseline,
+        turn: 23,
+      }).message,
+    ).toBeUndefined();
   });
 
   test("meaningful product progress resets the baseline without advice", () => {
@@ -128,5 +152,66 @@ describe("multi-agent activation slice", () => {
       turn: 7,
     });
     expect(next.message).toBeUndefined();
+  });
+
+  test("a 42-turn production loop receives 4/8/16 then periodic 24/32/40 advice", async () => {
+    const workspaceRoot = mkdtempSync(
+      path.join(tmpdir(), "paw-stall-cadence-"),
+    );
+    mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
+    writeFileSync(
+      path.join(workspaceRoot, ".paw", "memory-config.json"),
+      JSON.stringify({ enable: false }),
+      "utf8",
+    );
+    const files = Array.from({ length: 42 }, (_, index) => `fact-${index}.txt`);
+    for (const file of files) {
+      writeFileSync(path.join(workspaceRoot, file), file, "utf8");
+    }
+    const progressTags: string[] = [];
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model: {
+        label: "stall-cadence-fixture",
+        async complete(messages) {
+          const control = messages.find((message) =>
+            message.content.includes("[ProgressAdvice:"),
+          );
+          const tag = control?.content.match(
+            /\[ProgressAdvice:([^\]]+)\]/,
+          )?.[1];
+          if (tag) progressTags.push(tag);
+          const file = files.shift() ?? "fact-41.txt";
+          return {
+            text: JSON.stringify({
+              tool: "workspace.read_file",
+              args: { path: file },
+            }),
+          };
+        },
+      },
+      retrySleep: async () => {},
+    });
+
+    try {
+      await orchestrator.run({
+        runId: "stall-cadence-production",
+        goal: "Inspect repository evidence until the cause is established.",
+        workspaceRoot,
+        maxSteps: 42,
+      });
+      expect(progressTags).toEqual([
+        "inspect_gap",
+        "hypothesis_stale",
+        "safety_line",
+        "safety_line",
+        "safety_line",
+        "safety_line",
+      ]);
+    } finally {
+      rmSync(workspaceRoot, { recursive: true, force: true });
+    }
   });
 });

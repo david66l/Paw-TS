@@ -235,7 +235,7 @@ describe("Loop Kernel v2 progress advisor", () => {
     expect(advisor.repeat?.count).toBe(8);
   });
 
-  test("versioned no-delta stages advise at 4/8/16 without gaining authority", () => {
+  test("versioned no-delta stages continue every eight cycles after 16 without gaining authority", () => {
     let state = projectLoopV2Event(
       bootstrap(),
       envelope(2, {
@@ -254,7 +254,7 @@ describe("Loop Kernel v2 progress advisor", () => {
     let advisor = createProgressAdvisorStateV2(RUN_ID);
     const observedKinds: string[] = [];
 
-    for (let cycle = 1; cycle <= 16; cycle += 1) {
+    for (let cycle = 1; cycle <= 40; cycle += 1) {
       const projected = projectLoopV2Event(
         state,
         envelope(cycle + 2, {
@@ -277,8 +277,11 @@ describe("Loop Kernel v2 progress advisor", () => {
       "evidence_gap",
       "hypothesis_stale",
       "cost_warning",
+      "cost_warning",
+      "cost_warning",
+      "cost_warning",
     ]);
-    expect(advisor.consecutiveNoDeltaCycles).toBe(16);
+    expect(advisor.consecutiveNoDeltaCycles).toBe(40);
   });
 
   test("canonical action keys and policy configuration fail closed", () => {
@@ -321,7 +324,7 @@ describe("Loop Kernel v2 progress advisor", () => {
     expect(second.state.repeat?.count).toBe(2);
 
     const invalid: ProgressAdvisorConfigV2 = {
-      policyVersion: "paw-progress-advisor-v1",
+      policyVersion: "paw-progress-advisor-v2",
       repeatThresholds: [5, 3],
       noDeltaThresholds: {
         inspectGap: 4,
