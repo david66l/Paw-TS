@@ -179,6 +179,18 @@ export function convergenceToolBlockReason(
     currentVerification &&
     verificationOutcome(latest) === "code_failed"
   ) {
+    if (verificationPolicy?.authority === "external") {
+      if ((state.diffInspectedRevision ?? 0) !== revision) {
+        if (isDiffInspection(call) || SOURCE_MUTATION_TOOLS.has(call.tool)) {
+          return null;
+        }
+        return "[LoopPolicy:inspect_external_diff] Local verification reports a code failure, but it is diagnostic when a trusted external verifier owns final acceptance. Do not claim a pass or erase the failure. Inspect the final diff for scope and accidental changes; edit only if the failure exposes a real candidate defect.";
+      }
+      if (isInvestigationCall(call) || isVerificationCall(call)) {
+        return "[LoopPolicy:deliver_external] Local verification remains a recorded diagnostic failure, while the current product revision has an inspected final diff and a trusted external verifier is configured. Do not claim tests passed. Deliver final_answer so semantic review and the external verifier can decide the candidate.";
+      }
+      return null;
+    }
     if (isInvestigationCall(call)) {
       const diagnosticCalls = shellCallsSince(
         state,

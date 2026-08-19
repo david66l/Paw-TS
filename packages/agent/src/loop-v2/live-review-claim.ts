@@ -46,7 +46,10 @@ export function buildLoopV2LiveReviewClaimV1(
   candidateArtifact: LoopV2LiveCandidateArtifactV1,
 ): LoopV2LiveReviewClaimV1 {
   assertLoopV2LiveCandidateArtifactV1(candidateArtifact);
-  const payload = buildLoopV2LiveReviewPayloadV1(candidateArtifact.report);
+  const payload = buildLoopV2LiveReviewPayloadV1(
+    candidateArtifact.report,
+    candidateArtifact.assessment.policy,
+  );
   const withoutHash = {
     schemaVersion: LOOP_V2_LIVE_REVIEW_CLAIM_SCHEMA_VERSION,
     kind: "paw.loop-v2-live-review-claim" as const,

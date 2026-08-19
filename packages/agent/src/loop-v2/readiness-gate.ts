@@ -121,11 +121,8 @@ function deriveRepairRequirement(
   const current = verificationRecords.filter(
     (record) => record.mutationRevision === assessment.mutationRevision,
   );
-  const codeFailure = [...current]
-    .reverse()
-    .find((record) => record.outcome === "code_failed");
   if (
-    codeFailure ||
+    gapCodes.has("verification_code_failed") ||
     [
       "product_mutation_missing",
       "journal_incomplete",

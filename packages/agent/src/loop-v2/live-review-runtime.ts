@@ -167,7 +167,10 @@ export class LoopV2LiveReviewRuntimeV1 {
     if (!model) {
       throw new Error("Loop v2 semantic review model is not configured");
     }
-    const payload = buildLoopV2LiveReviewPayloadV1(candidate.report);
+    const payload = buildLoopV2LiveReviewPayloadV1(
+      candidate.report,
+      candidate.policy,
+    );
     const existingReview =
       this.review?.candidateArtifactHash === candidate.artifactHash
         ? this.review

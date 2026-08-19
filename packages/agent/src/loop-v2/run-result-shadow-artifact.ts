@@ -75,7 +75,10 @@ export function mapEligibleLoopV2RunResultV1(
       `Loop v2 RunResult mapping requires eligibility: ${eligibility.reasons.join(",")}`,
     );
   }
-  const payload = buildLoopV2LiveReviewPayloadV1(candidate.report);
+  const payload = buildLoopV2LiveReviewPayloadV1(
+    candidate.report,
+    candidate.assessment.policy,
+  );
   const report = renderHostReportV2({
     candidate: payload.input,
     outcome: terminal.v2Outcome,

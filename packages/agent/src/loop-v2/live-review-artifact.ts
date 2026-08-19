@@ -51,7 +51,10 @@ export function buildLoopV2LiveReviewArtifactV1(
   record: SemanticReviewRecordV2,
 ): LoopV2LiveReviewArtifactV1 {
   assertLoopV2LiveCandidateArtifactV1(candidateArtifact);
-  const payload = buildLoopV2LiveReviewPayloadV1(candidateArtifact.report);
+  const payload = buildLoopV2LiveReviewPayloadV1(
+    candidateArtifact.report,
+    candidateArtifact.assessment.policy,
+  );
   const normalized = validateSemanticReviewRecordV2(record, payload);
   const reviewKey = semanticReviewKeyV2(
     payload.input.mutationRevision,

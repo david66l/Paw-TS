@@ -630,4 +630,47 @@ describe("convergence guidance", () => {
       ),
     ).toContain("fix_current_failure");
   });
+
+  test("external code failure routes through inspected diff without claiming a pass", () => {
+    const failed = state({
+      testResults: [
+        {
+          command: "pytest lib/tests/test_dates.py",
+          passed: false,
+          outcome: "code_failed",
+          summary: "base-checkout assertion failed",
+          mutationRevision: 1,
+        },
+      ],
+    });
+    const read = {
+      type: "tool_call" as const,
+      tool: "workspace.read_file",
+      args: { path: "lib/dates.py" },
+    };
+    const diff = {
+      type: "tool_call" as const,
+      tool: "workspace.git_diff",
+      args: {},
+    };
+    expect(
+      convergenceToolBlockReason(read, failed, 40, 64, {
+        authority: "external",
+      }),
+    ).toContain("inspect_external_diff");
+    expect(
+      convergenceToolBlockReason(diff, failed, 40, 64, {
+        authority: "external",
+      }),
+    ).toBeNull();
+    expect(
+      convergenceToolBlockReason(
+        read,
+        { ...failed, diffInspectedRevision: 1 },
+        41,
+        64,
+        { authority: "external" },
+      ),
+    ).toContain("Do not claim tests passed");
+  });
 });

@@ -62,6 +62,15 @@ export interface CandidateReviewPayloadV2 {
   readonly input: CandidateInputV2;
   readonly candidateInputHash: string;
   readonly goal: string;
+  /** How the reviewer must interpret local verification records. */
+  readonly verificationContext: Readonly<{
+    readonly authority: "local" | "external" | "not_required";
+    readonly localEvidenceRole:
+      | "delivery_authority"
+      | "diagnostic_not_acceptance"
+      | "not_required";
+    readonly externalVerification: "pending" | "not_configured";
+  }>;
   /** Baseline-to-terminal artifact derived from the complete mutation journal. */
   readonly terminalPatch: Readonly<{
     readonly patch: string;
@@ -251,6 +260,7 @@ export function buildCandidateReviewPayloadV2(
   state: WorkingDecisionStateV2,
   snapshots: readonly CandidateSourceSnapshotV2[],
   terminalPatch: CandidateReviewPayloadV2["terminalPatch"],
+  verificationAuthority: CandidateReadinessPolicyV2["verificationAuthority"] = "local",
 ): CandidateReviewPayloadV2 {
   for (const snapshot of snapshots) {
     if (candidateSnapshotHashV2(snapshot.content) !== snapshot.contentHash) {
@@ -275,6 +285,17 @@ export function buildCandidateReviewPayloadV2(
     input,
     candidateInputHash: candidateInputHashV2(input),
     goal: state.goal?.verbatim ?? "",
+    verificationContext: {
+      authority: verificationAuthority ?? "local",
+      localEvidenceRole:
+        verificationAuthority === "external"
+          ? "diagnostic_not_acceptance"
+          : verificationAuthority === "not_required"
+            ? "not_required"
+            : "delivery_authority",
+      externalVerification:
+        verificationAuthority === "external" ? "pending" : "not_configured",
+    },
     terminalPatch: {
       patch: terminalPatch.patch,
       patchHash: terminalPatch.patchHash,
@@ -461,11 +482,16 @@ export function evaluateCandidateReadinessV2(
             : "missing";
   if (requireVerification) {
     if (codeFailures.length > 0) {
-      gaps.push({
-        code: "verification_code_failed",
-        evidenceRefs: codeFailures.map((verification) => verification.id),
-        message: "Current authoritative verification reports a code failure.",
-      });
+      // A local-authority failure is a delivery blocker. With external
+      // authority it remains an explicit diagnostic fact, but cannot decide
+      // the acceptance contract owned by the configured external verifier.
+      if (verificationAuthority === "local") {
+        gaps.push({
+          code: "verification_code_failed",
+          evidenceRefs: codeFailures.map((verification) => verification.id),
+          message: "Current authoritative verification reports a code failure.",
+        });
+      }
     } else if (
       missingScopes.length > 0 &&
       harnessBlockedScopes.length === missingScopes.length &&
@@ -858,6 +884,25 @@ function parseFinding(
 }
 
 function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
+  const expectedEvidenceRole =
+    payload.verificationContext.authority === "external"
+      ? "diagnostic_not_acceptance"
+      : payload.verificationContext.authority === "not_required"
+        ? "not_required"
+        : payload.verificationContext.authority === "local"
+          ? "delivery_authority"
+          : undefined;
+  if (payload.verificationContext.localEvidenceRole !== expectedEvidenceRole) {
+    throw new Error("Candidate review verification context is invalid");
+  }
+  if (
+    payload.verificationContext.externalVerification !==
+    (payload.verificationContext.authority === "external"
+      ? "pending"
+      : "not_configured")
+  ) {
+    throw new Error("Candidate review external verification state is invalid");
+  }
   const expectedHash = candidateInputHashV2(payload.input);
   if (payload.candidateInputHash !== expectedHash) {
     throw new Error("Candidate review payload identity hash mismatch");

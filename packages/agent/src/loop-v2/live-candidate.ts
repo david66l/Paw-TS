@@ -89,8 +89,9 @@ export function assessLoopV2LiveCandidateV1(
 /** Strict reviewer payload whose identity must equal the persisted candidate. */
 export function buildLoopV2LiveReviewPayloadV1(
   report: LoopV2ShadowReport,
+  policy: CandidateReadinessPolicyV2 = {},
 ): CandidateReviewPayloadV2 {
-  buildLoopV2ShadowArtifactV1(report);
+  buildLoopV2ShadowArtifactV1(report, policy);
   const candidate = report.state.currentCandidate;
   if (!candidate) {
     throw new Error("Loop v2 live review payload requires candidate.proposed");
@@ -113,6 +114,7 @@ export function buildLoopV2LiveReviewPayloadV1(
       patchHash: terminalArtifact.patchHash,
       changedPaths: terminalArtifact.changedPaths,
     },
+    policy.verificationAuthority,
   );
   if (
     payload.candidateInputHash !== candidate.candidateInputHash ||

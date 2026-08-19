@@ -176,6 +176,60 @@ describe("Loop Kernel v2 candidate certification", () => {
     ]);
   });
 
+  test("external code failure remains visible but does not replace patched review authority", () => {
+    const failed = append(baseState(), {
+      type: "verification.recorded",
+      verification: {
+        id: "verify-base-failed",
+        runner: "bun_test",
+        argv: ["bun", "test", "test/public.test.ts"],
+        cwd: ".",
+        scope: ["test/public.test.ts"],
+        mutationRevision: 1,
+        outcome: "code_failed",
+        assertions: { passed: 2, failed: 1, total: 3 },
+        outputArtifactRef: "artifact://verify-base-failed",
+        authoritative: true,
+      },
+    });
+
+    const local = evaluateCandidateReadinessV2(failed, artifact, {
+      verificationAuthority: "local",
+    });
+    expect(local.localVerification).toBe("code_failed");
+    expect(local.readyForSemanticReview).toBeFalse();
+    expect(local.gaps).toContainEqual(
+      expect.objectContaining({ code: "verification_code_failed" }),
+    );
+
+    const external = evaluateCandidateReadinessV2(failed, artifact, {
+      verificationAuthority: "external",
+    });
+    expect(external.localVerification).toBe("code_failed");
+    expect(external.readyForSemanticReview).toBeTrue();
+    expect(external.gaps).toEqual([]);
+    expect(external.pendingExternalCriterionIds).toEqual([
+      "criterion-external",
+    ]);
+  });
+
+  test("external authority still requires one current local verification attempt", () => {
+    const withoutVerification: WorkingDecisionStateV2 = {
+      ...baseState(),
+      verification: {},
+    };
+    const readiness = evaluateCandidateReadinessV2(
+      withoutVerification,
+      artifact,
+      { verificationAuthority: "external" },
+    );
+    expect(readiness.readyForSemanticReview).toBeFalse();
+    expect(readiness.localVerification).toBe("missing");
+    expect(readiness.gaps).toContainEqual(
+      expect.objectContaining({ code: "verification_missing" }),
+    );
+  });
+
   test("a genuinely read-only candidate does not require a synthetic empty patch", () => {
     let state = createWorkingDecisionStateV2(RUN_ID);
     state = append(state, {

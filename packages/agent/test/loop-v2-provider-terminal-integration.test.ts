@@ -653,10 +653,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       const durablePrefix = (sessionStore.loadRun(runId) ?? []).filter(
         (event) => event.seq <= checkpoint.report.sourceThroughSeq,
       );
-      const replayed = replayLegacyTraceToLoopV2ShadowV1(
-        runId,
-        durablePrefix,
-      );
+      const replayed = replayLegacyTraceToLoopV2ShadowV1(runId, durablePrefix);
       expect(replayed.projectedEvents).toEqual(
         checkpoint.report.projectedEvents,
       );
@@ -826,7 +823,9 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           label: "v2-native-rejection-resume-fixture",
           async complete() {
             resumeCalls += 1;
-            return { text: finalAnswer("Recovered without executing the call.") };
+            return {
+              text: finalAnswer("Recovered without executing the call."),
+            };
           },
         },
       }).resumeRun({ runId, workspaceRoot });
@@ -1227,6 +1226,136 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           localVerification: "harness_failed",
           gaps: [],
         },
+      });
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("external base-checkout code failure still reaches one semantic review", async () => {
+    const workspaceRoot = tempWorkspace("paw-v2-external-code-failed-");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "source.txt"),
+      "before\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(workspaceRoot, "smoke-test.js"),
+      "process.exit(1);\n",
+      "utf8",
+    );
+    const model = new FakeLanguageModel({
+      responses: [
+        {
+          text: '{"tool":"workspace.edit_file","args":{"path":"source.txt","old_string":"before","new_string":"after"}}',
+          finishReason: "stop",
+        },
+        {
+          text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
+          finishReason: "stop",
+        },
+        {
+          text: finalAnswer(
+            "The local base assertion remains failed; external verification is required.",
+          ),
+          finishReason: "stop",
+        },
+      ],
+    });
+    let reviewCalls = 0;
+    let reviewMaterial = "";
+    let probeCalls = 0;
+    const reviewModel: LanguageModel = {
+      label: "external-code-failed-review",
+      async complete(messages) {
+        reviewCalls += 1;
+        const material = messages.at(-1)?.content ?? "";
+        reviewMaterial = material;
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
+          material,
+        )?.[1];
+        const mutationRevision = Number(
+          /"mutationRevision":(\d+)/.exec(material)?.[1],
+        );
+        if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
+          throw new Error(
+            "Reviewer fixture did not receive candidate identity",
+          );
+        }
+        return {
+          text: JSON.stringify({
+            candidateInputHash,
+            mutationRevision,
+            verdict: "pass",
+            findings: [],
+          }),
+          finishReason: "stop",
+        };
+      },
+    };
+    const events: RunEventEnvelope[] = [];
+    const probeModel: LanguageModel = {
+      label: "external-code-failed-probe",
+      async complete() {
+        probeCalls += 1;
+        return { text: '{"probes":[]}', finishReason: "stop" };
+      },
+    };
+    const orchestrator = new AgentOrchestrator({
+      loopKernelVersion: "v2",
+      memoryExtraction: "off",
+      memoryLlm: "off",
+      model,
+      loopV2SemanticReviewModel: reviewModel,
+      loopV2VerificationProbeModel: probeModel,
+      verificationPolicy: { authority: "external", requireMutation: true },
+      toolEffectPolicy: trustedNoEffectShellPolicy(),
+      onEvent: (event) => events.push(event),
+    });
+
+    try {
+      const result = await orchestrator.run({
+        runId: "v2-external-code-failed",
+        goal: "Change source.txt; official acceptance belongs to the external verifier.",
+        workspaceRoot,
+        maxSteps: 5,
+      });
+
+      expect(result).toMatchObject({
+        status: "completed",
+        outcome: "model_declared",
+        completionReason: "external_verification_pending",
+      });
+      expect(reviewCalls).toBe(1);
+      expect(probeCalls).toBe(1);
+      expect(reviewMaterial).toContain('"authority":"external"');
+      expect(reviewMaterial).toContain(
+        '"localEvidenceRole":"diagnostic_not_acceptance"',
+      );
+      expect(reviewMaterial).toContain('"externalVerification":"pending"');
+      expect(reviewMaterial).toContain('"outcome":"code_failed"');
+      expect(orchestrator.getLastLoopV2CandidateAssessment()).toMatchObject({
+        readiness: {
+          disposition: "ready_for_review",
+          readyForSemanticReview: true,
+          localVerification: "code_failed",
+          gaps: [],
+        },
+      });
+      expect(
+        events.find((event) => event.event.type === "candidate.review")?.event,
+      ).toMatchObject({
+        type: "candidate.review",
+        verdict: "pass",
+        externalVerification: "pending",
+        modelCalls: 1,
+      });
+      expect(
+        events.find((event) => event.event.type === "candidate.probe")?.event,
+      ).toMatchObject({
+        type: "candidate.probe",
+        verdict: "pass",
+        modelCalls: 1,
       });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
