@@ -9,6 +9,7 @@ import {
   type WorkingDecisionStateV2,
   artifactEvidenceV2,
   buildCandidateReviewPayloadV2,
+  buildSemanticReviewMessagesV2,
   candidateSnapshotHashV2,
   createArtifactContentBlobV2,
   createWorkingDecisionStateV2,
@@ -17,6 +18,7 @@ import {
   materializeCandidateArtifactV2,
   projectLoopV2Event,
   renderMutationStepPatchV2,
+  sha256Canonical,
 } from "../src/loop-v2/index.js";
 
 const RUN_ID = "loop-v2-artifact";
@@ -109,13 +111,20 @@ function passReview(
   state: WorkingDecisionStateV2,
   terminalContent: string,
 ): SemanticReviewV2 {
-  const payload = buildCandidateReviewPayloadV2(state, [
-    {
-      path: FILE,
-      contentHash: candidateSnapshotHashV2(terminalContent),
-      content: terminalContent,
-    },
+  const patch = renderMutationStepPatchV2([
+    { path: FILE, beforeContent: "", afterContent: terminalContent },
   ]);
+  const payload = buildCandidateReviewPayloadV2(
+    state,
+    [
+      {
+        path: FILE,
+        contentHash: candidateSnapshotHashV2(terminalContent),
+        content: terminalContent,
+      },
+    ],
+    { patch, patchHash: sha256Canonical(patch), changedPaths: [FILE] },
+  );
   return {
     candidateInputHash: payload.candidateInputHash,
     mutationRevision: state.currentMutationRevision,
@@ -151,6 +160,28 @@ describe("Loop Kernel v2 verification and artifact", () => {
     if (!finalPatch) throw new Error("missing final materialized patch");
     expect(applyPatch(before.content, finalPatch)).toBe(after.content);
     expect(artifact.patch).not.toContain("export const value = 2;");
+
+    const state = stateWithMutations(mutations);
+    const payload = buildCandidateReviewPayloadV2(
+      state,
+      [
+        {
+          path: FILE,
+          contentHash: candidateSnapshotHashV2(after.content),
+          content: after.content,
+        },
+      ],
+      {
+        patch: artifact.patch,
+        patchHash: artifact.patchHash,
+        changedPaths: artifact.changedPaths,
+      },
+    );
+    const prompt = buildSemanticReviewMessagesV2(payload)
+      .map((message) => message.content)
+      .join("\n");
+    expect(prompt).toContain("export const value = 3;");
+    expect(prompt).not.toContain("export const value = 2;");
   });
 
   test("materializes CRLF snapshots into a parseable canonical patch", () => {

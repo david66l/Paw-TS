@@ -62,6 +62,12 @@ export interface CandidateReviewPayloadV2 {
   readonly input: CandidateInputV2;
   readonly candidateInputHash: string;
   readonly goal: string;
+  /** Baseline-to-terminal artifact derived from the complete mutation journal. */
+  readonly terminalPatch: Readonly<{
+    readonly patch: string;
+    readonly patchHash: string;
+    readonly changedPaths: readonly string[];
+  }>;
   readonly mutationPatches: readonly Readonly<{
     readonly callId: string;
     readonly mutationRevision: number;
@@ -244,6 +250,7 @@ export function candidateSnapshotHashV2(content: string): string {
 export function buildCandidateReviewPayloadV2(
   state: WorkingDecisionStateV2,
   snapshots: readonly CandidateSourceSnapshotV2[],
+  terminalPatch: CandidateReviewPayloadV2["terminalPatch"],
 ): CandidateReviewPayloadV2 {
   for (const snapshot of snapshots) {
     if (candidateSnapshotHashV2(snapshot.content) !== snapshot.contentHash) {
@@ -251,10 +258,28 @@ export function buildCandidateReviewPayloadV2(
     }
   }
   const input = buildCandidateInputV2(state, snapshots);
+  if (!terminalPatch.patch.trim()) {
+    throw new Error("Candidate terminal patch must not be empty");
+  }
+  if (sha256Canonical(terminalPatch.patch) !== terminalPatch.patchHash) {
+    throw new Error("Candidate terminal patch hash mismatch");
+  }
+  const changedPaths = sortedUnique(terminalPatch.changedPaths);
+  if (
+    changedPaths.length === 0 ||
+    changedPaths.length !== terminalPatch.changedPaths.length
+  ) {
+    throw new Error("Candidate terminal patch changed paths are invalid");
+  }
   return {
     input,
     candidateInputHash: candidateInputHashV2(input),
     goal: state.goal?.verbatim ?? "",
+    terminalPatch: {
+      patch: terminalPatch.patch,
+      patchHash: terminalPatch.patchHash,
+      changedPaths,
+    },
     mutationPatches: Object.values(state.mutations)
       .sort(compareMutations)
       .map((mutation) => ({
@@ -836,6 +861,15 @@ function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
   const expectedHash = candidateInputHashV2(payload.input);
   if (payload.candidateInputHash !== expectedHash) {
     throw new Error("Candidate review payload identity hash mismatch");
+  }
+  if (
+    !payload.terminalPatch.patch.trim() ||
+    sha256Canonical(payload.terminalPatch.patch) !==
+      payload.terminalPatch.patchHash ||
+    sortedUnique(payload.terminalPatch.changedPaths).length !==
+      payload.terminalPatch.changedPaths.length
+  ) {
+    throw new Error("Candidate review payload terminal patch mismatch");
   }
   const patchByCallId = new Map(
     payload.mutationPatches.map((mutation) => [mutation.callId, mutation]),

@@ -1,4 +1,7 @@
-import type { MaterializedCandidateArtifactV2 } from "./artifact-materializer.js";
+import {
+  type MaterializedCandidateArtifactV2,
+  materializeCandidateArtifactV2,
+} from "./artifact-materializer.js";
 import type {
   CandidateReadinessPolicyV2,
   CandidateReadinessV2,
@@ -92,9 +95,24 @@ export function buildLoopV2LiveReviewPayloadV1(
   if (!candidate) {
     throw new Error("Loop v2 live review payload requires candidate.proposed");
   }
+  const terminalArtifact = materializeCandidateArtifactV2(
+    Object.values(report.state.mutations),
+    report.artifactBlobs,
+    { status: "unavailable" },
+  );
+  if (terminalArtifact.status !== "valid") {
+    throw new Error(
+      `Loop v2 live review terminal artifact is invalid: ${terminalArtifact.errors.join("; ")}`,
+    );
+  }
   const payload = buildCandidateReviewPayloadV2(
     report.state,
     materializeTerminalCandidateSnapshotsV2(report.state, report.artifactBlobs),
+    {
+      patch: terminalArtifact.patch,
+      patchHash: terminalArtifact.patchHash,
+      changedPaths: terminalArtifact.changedPaths,
+    },
   );
   if (
     payload.candidateInputHash !== candidate.candidateInputHash ||

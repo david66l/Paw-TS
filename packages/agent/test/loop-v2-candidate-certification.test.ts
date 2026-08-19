@@ -14,9 +14,20 @@ import {
   projectLoopV2Event,
   reviewCandidateOnceV2,
   semanticReviewKeyV2,
+  sha256Canonical,
 } from "../src/loop-v2/index.js";
 
 const RUN_ID = "loop-v2-certification";
+
+function terminalPatch(
+  patch = "diff --git a/src/public.ts b/src/public.ts\n+fixed",
+) {
+  return {
+    patch,
+    patchHash: sha256Canonical(patch),
+    changedPaths: ["src/public.ts"],
+  };
+}
 
 function append(
   state: WorkingDecisionStateV2,
@@ -302,13 +313,17 @@ describe("Loop Kernel v2 candidate certification", () => {
 
   test("R05 reviews one semantic candidate once across six different summaries", async () => {
     const content = "export function renderPublic() { return 'fixed'; }";
-    const payload = buildCandidateReviewPayloadV2(baseState(), [
-      {
-        path: "src/public.ts",
-        contentHash: candidateSnapshotHashV2(content),
-        content,
-      },
-    ]);
+    const payload = buildCandidateReviewPayloadV2(
+      baseState(),
+      [
+        {
+          path: "src/public.ts",
+          contentHash: candidateSnapshotHashV2(content),
+          content,
+        },
+      ],
+      terminalPatch(),
+    );
     let ledger: SemanticReviewLedgerV2 = createSemanticReviewLedgerV2();
     let calls = 0;
     const summaries = Array.from(
@@ -338,7 +353,11 @@ describe("Loop Kernel v2 candidate certification", () => {
   });
 
   test("R18 records malformed reviewer output once as partial and never retries", async () => {
-    const payload = buildCandidateReviewPayloadV2(baseState(), []);
+    const payload = buildCandidateReviewPayloadV2(
+      baseState(),
+      [],
+      terminalPatch(),
+    );
     let calls = 0;
     const first = await reviewCandidateOnceV2(
       createSemanticReviewLedgerV2(),

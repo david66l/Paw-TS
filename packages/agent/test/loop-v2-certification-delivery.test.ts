@@ -16,9 +16,29 @@ import {
   projectLoopV2Event,
   renderHostReportV2,
   reviewCandidateOnceV2,
+  sha256Canonical,
 } from "../src/loop-v2/index.js";
 
 const RUN_ID = "loop-v2-django-14155";
+
+function djangoTerminalPatch(newStart = 1) {
+  const patch = [
+    "diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py",
+    "--- a/django/urls/resolvers.py",
+    "+++ b/django/urls/resolvers.py",
+    `@@ -${newStart},2 +${newStart},4 @@`,
+    " class ResolverMatch:",
+    "-    self.func = func",
+    "+    def __init__(self, func, args, kwargs):",
+    "+        self.func = func.func",
+    "+        self.args = func.args + args",
+  ].join("\n");
+  return {
+    patch,
+    patchHash: sha256Canonical(patch),
+    changedPaths: ["django/urls/resolvers.py"],
+  };
+}
 
 function append(
   state: WorkingDecisionStateV2,
@@ -124,13 +144,17 @@ function djangoPayload() {
     "        self.kwargs = {**func.keywords, **kwargs}",
     "    def __repr__(self): ...",
   ].join("\n");
-  return buildCandidateReviewPayloadV2(djangoCandidateState(), [
-    {
-      path: "django/urls/resolvers.py",
-      contentHash: candidateSnapshotHashV2(content),
-      content,
-    },
-  ]);
+  return buildCandidateReviewPayloadV2(
+    djangoCandidateState(),
+    [
+      {
+        path: "django/urls/resolvers.py",
+        contentHash: candidateSnapshotHashV2(content),
+        content,
+      },
+    ],
+    djangoTerminalPatch(),
+  );
 }
 
 const artifact = {
@@ -170,6 +194,20 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
         async () => ({}),
       ),
     ).rejects.toThrow("snapshot mismatch");
+
+    expect(
+      reviewCandidateOnceV2(
+        createSemanticReviewLedgerV2(),
+        {
+          ...payload,
+          terminalPatch: {
+            ...payload.terminalPatch,
+            patch: `${payload.terminalPatch.patch}\n+tampered`,
+          },
+        },
+        async () => ({}),
+      ),
+    ).rejects.toThrow("terminal patch mismatch");
   });
 
   test("model reviewer is a one-call, tool-free, de-anchored adapter", async () => {
@@ -355,9 +393,231 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
     expect(outcome.reasonCode).toBe("criterion_pending");
   });
 
-  test("semantic prompt size fails explicitly instead of silently truncating evidence", () => {
-    expect(() => buildSemanticReviewMessagesV2(djangoPayload(), 1_000)).toThrow(
-      "exceeds 1000 characters",
+  test("mandatory evidence that cannot fit fails closed instead of certifying a partial prompt", async () => {
+    const payload = djangoPayload();
+    let modelCalls = 0;
+    const result = await reviewCandidateOnceV2(
+      createSemanticReviewLedgerV2(),
+      payload,
+      createModelSemanticReviewerV2({
+        maxInputChars: 1_000,
+        model: {
+          label: "must-not-run",
+          async complete() {
+            modelCalls += 1;
+            return {
+              text: JSON.stringify({
+                candidateInputHash: payload.candidateInputHash,
+                mutationRevision: payload.input.mutationRevision,
+                verdict: "pass",
+                findings: [],
+              }),
+            };
+          },
+        },
+      }),
     );
+
+    expect(modelCalls).toBe(0);
+    expect(result.review.verdict).toBe("partial");
+    expect(result.ledger.records[result.reviewKey]?.reasonCode).toBe(
+      "reviewer_error",
+    );
+  });
+
+  test("review material excludes historical patch bodies that are absent from the terminal candidate", () => {
+    const payload = djangoPayload();
+    const stale = "STALE_INTERMEDIATE_IMPLEMENTATION_MUST_NOT_BE_REVIEWED";
+    const messages = buildSemanticReviewMessagesV2({
+      ...payload,
+      mutationPatches: payload.mutationPatches.map((mutation) => ({
+        ...mutation,
+        patch: `${mutation.patch}\n+${stale}`,
+      })),
+    });
+    const captured = messages.map((message) => message.content).join("\n");
+    const material = JSON.parse(
+      messages[1]?.content.split("\n\n").at(-1) ?? "{}",
+    ) as { terminalPatch: { patch: string } };
+
+    expect(material.terminalPatch.patch).toBe(payload.terminalPatch.patch);
+    expect(captured).not.toContain(stale);
+    expect(captured).toContain("historicalPatchBodies");
+  });
+
+  test("large source snapshots are projected to bounded excerpts and still make one model call", async () => {
+    const resolverLines = Array.from(
+      { length: 5_500 },
+      (_, index) => `resolver_filler_${index}`,
+    );
+    resolverLines[2_700] = "class ResolverMatch:";
+    resolverLines[2_701] = "    def __init__(self, func, args, kwargs):";
+    resolverLines[2_702] = "        self.func = func.func";
+    resolverLines[4_000] = "FAR_RESOLVER_SENTINEL_MUST_BE_OMITTED";
+    const helperLines = Array.from(
+      { length: 4_000 },
+      (_, index) => `helper_filler_${index}`,
+    );
+    helperLines[2_000] = "FAR_HELPER_SENTINEL_MUST_BE_OMITTED";
+    const resolver = resolverLines.join("\n");
+    const helper = helperLines.join("\n");
+    const payload = buildCandidateReviewPayloadV2(
+      djangoCandidateState(),
+      [
+        {
+          path: "django/urls/resolvers.py",
+          contentHash: candidateSnapshotHashV2(resolver),
+          content: resolver,
+        },
+        {
+          path: "django/urls/helper.py",
+          contentHash: candidateSnapshotHashV2(helper),
+          content: helper,
+        },
+      ],
+      djangoTerminalPatch(2_701),
+    );
+    expect(
+      payload.snapshots.reduce(
+        (sum, snapshot) => sum + snapshot.content.length,
+        0,
+      ),
+    ).toBeGreaterThan(120_000);
+    let calls = 0;
+    let captured = "";
+    const reviewer = createModelSemanticReviewerV2({
+      maxInputChars: 120_000,
+      model: {
+        label: "large-review-fixture",
+        async complete(messages) {
+          calls += 1;
+          captured = messages.map((message) => message.content).join("\n");
+          return {
+            text: JSON.stringify({
+              candidateInputHash: payload.candidateInputHash,
+              mutationRevision: payload.input.mutationRevision,
+              verdict: "pass",
+              findings: [],
+            }),
+          };
+        },
+      },
+    });
+
+    await reviewer(payload);
+
+    expect(calls).toBe(1);
+    expect(captured.length).toBeLessThan(122_000);
+    expect(captured).toContain("self.func = func.func");
+    expect(captured).toContain("def __init__");
+    expect(captured).toContain("paw.semantic-review-projection.v2");
+    expect(captured).not.toContain("FAR_RESOLVER_SENTINEL_MUST_BE_OMITTED");
+    expect(captured).not.toContain("FAR_HELPER_SENTINEL_MUST_BE_OMITTED");
+  });
+
+  test("multi-file hunk windows are whole units and every omitted window is explicit", () => {
+    const base = djangoPayload();
+    const resolver = Array.from(
+      { length: 100 },
+      (_, index) => `resolver_line_${index + 1}`,
+    ).join("\n");
+    const helper = Array.from(
+      { length: 100 },
+      (_, index) => `helper_line_${index + 1}`,
+    ).join("\n");
+    const patch = [
+      "diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py",
+      "--- a/django/urls/resolvers.py",
+      "+++ b/django/urls/resolvers.py",
+      "@@ -2,1 +2,1 @@",
+      "-old resolver 2",
+      "+resolver_line_2",
+      "@@ -70,1 +70,1 @@",
+      "-old resolver 70",
+      "+resolver_line_70",
+      "diff --git a/django/urls/helper.py b/django/urls/helper.py",
+      "--- a/django/urls/helper.py",
+      "+++ b/django/urls/helper.py",
+      "@@ -40,1 +40,1 @@",
+      "-old helper 40",
+      "+helper_line_40",
+    ].join("\n");
+    const payload = {
+      ...base,
+      terminalPatch: {
+        patch,
+        patchHash: sha256Canonical(patch),
+        changedPaths: ["django/urls/helper.py", "django/urls/resolvers.py"],
+      },
+      snapshots: [
+        {
+          path: "django/urls/helper.py",
+          contentHash: candidateSnapshotHashV2(helper),
+          content: helper,
+        },
+        {
+          path: "django/urls/resolvers.py",
+          contentHash: candidateSnapshotHashV2(resolver),
+          content: resolver,
+        },
+      ],
+    };
+    type ProjectedMaterial = {
+      sourceContext: {
+        windows: Array<{
+          path: string;
+          hunkStartLine: number;
+          hunkEndLine: number;
+          excerpt: string;
+        }>;
+        omissions: Array<{
+          path: string;
+          contentHash: string;
+          hunkStartLine: number;
+          hunkEndLine: number;
+          reason: string;
+        }>;
+      };
+    };
+    let material: ProjectedMaterial | undefined;
+    for (let budget = 2_800; budget <= 3_600; budget += 10) {
+      try {
+        const messages = buildSemanticReviewMessagesV2(payload, budget);
+        const candidate = JSON.parse(
+          messages[1]?.content.split("\n\n").at(-1) ?? "{}",
+        ) as ProjectedMaterial;
+        if (candidate.sourceContext.omissions.length > 0) {
+          material = candidate;
+          break;
+        }
+      } catch {
+        // The mandatory section or omission manifest does not fit yet.
+      }
+    }
+    if (!material)
+      throw new Error("fixture did not exercise bounded omissions");
+    const accounted = [
+      ...material.sourceContext.windows,
+      ...material.sourceContext.omissions,
+    ].map(
+      (entry) => `${entry.path}:${entry.hunkStartLine}-${entry.hunkEndLine}`,
+    );
+
+    expect(accounted.sort()).toEqual([
+      "django/urls/helper.py:40-40",
+      "django/urls/resolvers.py:2-2",
+      "django/urls/resolvers.py:70-70",
+    ]);
+    expect(material.sourceContext.omissions.length).toBeGreaterThan(0);
+    for (const omission of material.sourceContext.omissions) {
+      expect(omission.contentHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(omission.reason).toBe("source_window_budget");
+    }
+    for (const window of material.sourceContext.windows) {
+      expect(window.excerpt).not.toContain("omitted by semantic-review budget");
+      expect(
+        window.excerpt.split("\n").every((line) => /^\d+: /.test(line)),
+      ).toBeTrue();
+    }
   });
 });
