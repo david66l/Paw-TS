@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import type { ModelTokenUsage } from "@paw/core";
+import { type ModelTokenUsage, atomicWrite } from "@paw/core";
 import { type ShellSandboxConfig, runShellInWorkspace } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
 
@@ -54,6 +54,8 @@ export interface VerificationProbeOnceResultV2 {
   readonly verdict: "pass" | "fail" | "error";
   readonly note?: string;
   readonly modelCalls: number;
+  /** A durable claim existed without a settled record; never re-execute it. */
+  readonly interrupted?: true;
   readonly usage?: ModelTokenUsage;
 }
 
@@ -452,6 +454,16 @@ export function evaluateVerificationProbeGateV1(input: {
   readonly noRoomForAnotherTurn: boolean;
 }): VerificationProbeGateDecisionV1 {
   const key = `probe:${input.result.candidateInputHash}`;
+  if (input.result.interrupted) {
+    const message = [
+      `[LoopV2Probe:interrupted key=${key}]`,
+      "The host found a durable verification-probe claim without a settled result. The prior probe may already have executed model or shell work, so it will not be run again.",
+      "Treat this candidate as not certified. Make a real code change before requesting another probe, or end honestly as incomplete if the result cannot be recovered.",
+    ].join("\n");
+    return input.noRoomForAnotherTurn
+      ? { type: "incomplete", key, message, reason: "no_turn_budget" }
+      : { type: "feedback", key, message };
+  }
   if (input.result.verdict !== "fail") {
     // pass 或 error（环境原因无法执行）都不拦截：error 不冒充代码缺陷。
     return {
@@ -493,6 +505,14 @@ interface ProbeRecordV1 {
   readonly result: VerificationProbeOnceResultV2;
 }
 
+interface ProbeClaimV1 {
+  readonly schemaVersion: 1;
+  readonly kind: "paw.loop-v2-verification-probe-claim";
+  readonly candidateInputHash: string;
+  readonly mutationRevision: number;
+  readonly claimKey: string;
+}
+
 function probeRecordPath(workspaceRoot: string, runId: string): string {
   return path.join(
     path.resolve(workspaceRoot),
@@ -502,6 +522,122 @@ function probeRecordPath(workspaceRoot: string, runId: string): string {
     sha256Canonical({ runId }),
     "verification-probe-v1.json",
   );
+}
+
+function probeClaimPath(workspaceRoot: string, runId: string): string {
+  return path.join(
+    path.dirname(probeRecordPath(workspaceRoot, runId)),
+    "verification-probe-claim-v1.json",
+  );
+}
+
+function parseProbeRecordV1(value: unknown): ProbeRecordV1 | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const record = value as Partial<ProbeRecordV1>;
+  const result = record.result;
+  if (
+    record.schemaVersion !== 1 ||
+    record.kind !== "paw.loop-v2-verification-probe" ||
+    typeof record.candidateInputHash !== "string" ||
+    !record.candidateInputHash.trim() ||
+    !Number.isSafeInteger(record.mutationRevision) ||
+    (record.mutationRevision ?? -1) < 0 ||
+    !result ||
+    result.candidateInputHash !== record.candidateInputHash ||
+    result.mutationRevision !== record.mutationRevision ||
+    !["pass", "fail", "error"].includes(result.verdict) ||
+    !Array.isArray(result.probes) ||
+    !result.probes.every(
+      (probe) =>
+        probe &&
+        typeof probe === "object" &&
+        typeof probe.command === "string" &&
+        ["pass", "fail", "error"].includes(probe.status) &&
+        (probe.exitCode === undefined ||
+          Number.isSafeInteger(probe.exitCode)) &&
+        typeof probe.output === "string",
+    ) ||
+    !Number.isSafeInteger(result.modelCalls) ||
+    result.modelCalls < 0 ||
+    (result.interrupted !== undefined && result.interrupted !== true) ||
+    (result.interrupted === true &&
+      (result.verdict !== "error" ||
+        result.modelCalls !== 0 ||
+        result.probes.length !== 0)) ||
+    (!result.interrupted &&
+      result.verdict !==
+        (result.probes.some((probe) => probe.status === "fail")
+          ? "fail"
+          : result.probes.some((probe) => probe.status === "error")
+            ? "error"
+            : "pass"))
+  )
+    return undefined;
+  return record as ProbeRecordV1;
+}
+
+function parseProbeClaimV1(value: unknown): ProbeClaimV1 | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const claim = value as Partial<ProbeClaimV1>;
+  if (
+    claim.schemaVersion !== 1 ||
+    claim.kind !== "paw.loop-v2-verification-probe-claim" ||
+    typeof claim.candidateInputHash !== "string" ||
+    !claim.candidateInputHash.trim() ||
+    !Number.isSafeInteger(claim.mutationRevision) ||
+    (claim.mutationRevision ?? -1) < 0 ||
+    typeof claim.claimKey !== "string" ||
+    claim.claimKey !==
+      sha256Canonical({
+        policy: "paw.loop-v2-verification-probe-v1",
+        candidateInputHash: claim.candidateInputHash,
+        mutationRevision: claim.mutationRevision,
+      })
+  )
+    return undefined;
+  return claim as ProbeClaimV1;
+}
+
+function readProbeJsonV1(
+  filePath: string,
+):
+  | Readonly<{ state: "missing" }>
+  | Readonly<{ state: "corrupt" }>
+  | Readonly<{ state: "parsed"; value: unknown }> {
+  try {
+    return {
+      state: "parsed",
+      value: JSON.parse(fs.readFileSync(filePath, "utf8")),
+    };
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return { state: "missing" };
+    }
+    return { state: "corrupt" };
+  }
+}
+
+function interruptedProbeResultV2(input: {
+  readonly candidateInputHash: string;
+  readonly mutationRevision: number;
+  readonly note: string;
+}): VerificationProbeOnceResultV2 {
+  return {
+    candidateInputHash: input.candidateInputHash,
+    mutationRevision: input.mutationRevision,
+    probes: [],
+    verdict: "error",
+    interrupted: true,
+    note: input.note,
+    modelCalls: 0,
+  };
 }
 
 /**
@@ -525,18 +661,72 @@ export async function runVerificationProbeOnceV2(input: {
   readonly onUsage?: (modelLabel: string, usage: ModelTokenUsage) => void;
 }): Promise<VerificationProbeOnceResultV2> {
   const recordPath = probeRecordPath(input.workspaceRoot, input.runId);
-  try {
-    const existing = JSON.parse(
-      fs.readFileSync(recordPath, "utf8"),
-    ) as ProbeRecordV1;
-    if (
-      existing?.kind === "paw.loop-v2-verification-probe" &&
-      existing.candidateInputHash === input.candidateInputHash
-    ) {
+  const claimPath = probeClaimPath(input.workspaceRoot, input.runId);
+  const recordRead = readProbeJsonV1(recordPath);
+  const existing =
+    recordRead.state === "parsed"
+      ? parseProbeRecordV1(recordRead.value)
+      : undefined;
+  if (existing) {
+    if (existing?.candidateInputHash === input.candidateInputHash) {
       return existing.result;
     }
-  } catch {
-    // No usable record: first probe for this run (or damaged file).
+    // Candidate identity can change when new evidence is attached without a
+    // product mutation. The code under test is unchanged, so reuse the settled
+    // probe instead of executing a second model/shell transaction.
+    if (existing?.mutationRevision === input.mutationRevision) {
+      return {
+        ...existing.result,
+        candidateInputHash: input.candidateInputHash,
+        mutationRevision: input.mutationRevision,
+        modelCalls: 0,
+      };
+    }
+  }
+  const claimRead = readProbeJsonV1(claimPath);
+  const existingClaim =
+    claimRead.state === "parsed"
+      ? parseProbeClaimV1(claimRead.value)
+      : undefined;
+  if (existingClaim) {
+    if (
+      existingClaim.candidateInputHash === input.candidateInputHash ||
+      existingClaim.mutationRevision === input.mutationRevision
+    ) {
+      return interruptedProbeResultV2({
+        candidateInputHash: input.candidateInputHash,
+        mutationRevision: input.mutationRevision,
+        note: "verification probe interrupted after its durable claim; execution was not repeated",
+      });
+    }
+  }
+  if (
+    recordRead.state === "corrupt" ||
+    (recordRead.state === "parsed" && !existing) ||
+    claimRead.state === "corrupt" ||
+    (claimRead.state === "parsed" && !existingClaim)
+  ) {
+    return interruptedProbeResultV2({
+      candidateInputHash: input.candidateInputHash,
+      mutationRevision: input.mutationRevision,
+      note: "verification probe durable state is corrupt; execution was not repeated",
+    });
+  }
+
+  const claim: ProbeClaimV1 = {
+    schemaVersion: 1,
+    kind: "paw.loop-v2-verification-probe-claim",
+    candidateInputHash: input.candidateInputHash,
+    mutationRevision: input.mutationRevision,
+    claimKey: sha256Canonical({
+      policy: "paw.loop-v2-verification-probe-v1",
+      candidateInputHash: input.candidateInputHash,
+      mutationRevision: input.mutationRevision,
+    }),
+  };
+  atomicWrite(claimPath, JSON.stringify(claim));
+  if (!parseProbeClaimV1(JSON.parse(fs.readFileSync(claimPath, "utf8")))) {
+    throw new Error("Verification probe claim failed strict reread");
   }
 
   const completion = await input.model.complete(
@@ -590,18 +780,22 @@ export async function runVerificationProbeOnceV2(input: {
     modelCalls: 1,
     ...(completion.usage ? { usage: completion.usage } : {}),
   };
-  // error（环境原因）不写终局缓存：同一候选重交时允许重新执行探针；
-  // pass/fail 是代码事实，按 candidateInputHash at-most-once 持久化。
-  if (result.verdict !== "error") {
-    const record: ProbeRecordV1 = {
-      schemaVersion: 1,
-      kind: "paw.loop-v2-verification-probe",
-      candidateInputHash: input.candidateInputHash,
-      mutationRevision: input.mutationRevision,
-      result,
-    };
-    fs.mkdirSync(path.dirname(recordPath), { recursive: true });
-    fs.writeFileSync(recordPath, JSON.stringify(record), "utf8");
+  // Once claimed, every outcome is settled atomically. Retrying an environment
+  // error would repeat model/shell side effects after a crash and is therefore
+  // less honest than preserving the explicit error fact for this revision.
+  const record: ProbeRecordV1 = {
+    schemaVersion: 1,
+    kind: "paw.loop-v2-verification-probe",
+    candidateInputHash: input.candidateInputHash,
+    mutationRevision: input.mutationRevision,
+    result,
+  };
+  atomicWrite(recordPath, JSON.stringify(record));
+  const settled = parseProbeRecordV1(
+    JSON.parse(fs.readFileSync(recordPath, "utf8")),
+  );
+  if (!settled) {
+    throw new Error("Verification probe record failed strict reread");
   }
-  return result;
+  return settled.result;
 }

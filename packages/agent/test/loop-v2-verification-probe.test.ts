@@ -31,6 +31,16 @@ function fakeModel(responses: readonly string[]): LanguageModel & {
   return Object.assign(model, { calls: () => calls });
 }
 
+function onlyProbeRunFolder(workspaceRoot: string): string {
+  const folders = fs.readdirSync(
+    path.join(workspaceRoot, ".paw", "loop-v2", "runs"),
+  );
+  expect(folders).toHaveLength(1);
+  const folder = folders[0];
+  if (!folder) throw new Error("missing verification probe run folder");
+  return folder;
+}
+
 function probeResult(
   verdict: "pass" | "fail" | "error",
   command = "python -c 'assert True'",
@@ -334,6 +344,180 @@ describe("Loop v2 adversarial verification probe", () => {
       expect(secondModel.calls()).toBe(1);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("durable claim prevents model and shell replay after an interrupted probe", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-claim-"));
+    try {
+      let crashingCalls = 0;
+      const crashingModel = {
+        label: "probe-crash-fixture",
+        async complete() {
+          crashingCalls += 1;
+          const runFolder = onlyProbeRunFolder(dir);
+          expect(
+            JSON.parse(
+              fs.readFileSync(
+                path.join(
+                  dir,
+                  ".paw",
+                  "loop-v2",
+                  "runs",
+                  runFolder,
+                  "verification-probe-claim-v1.json",
+                ),
+                "utf8",
+              ),
+            ).kind,
+          ).toBe("paw.loop-v2-verification-probe-claim");
+          throw new Error("simulated crash after durable claim");
+        },
+      } as unknown as LanguageModel;
+      await expect(
+        runVerificationProbeOnceV2({
+          model: crashingModel,
+          runId: "probe-claim",
+          workspaceRoot: dir,
+          goal: "goal",
+          diff: "+1",
+          changedFiles: ["a.py"],
+          candidateInputHash: "hash-claim",
+          mutationRevision: 1,
+        }),
+      ).rejects.toThrow("simulated crash");
+      expect(crashingCalls).toBe(1);
+
+      const replayModel = fakeModel([
+        `{"probes":[{"command":"python -c ${JSON.stringify("raise SystemExit(1)")}","rationale":"must not run"}]}`,
+      ]);
+      const replay = await runVerificationProbeOnceV2({
+        model: replayModel,
+        runId: "probe-claim",
+        workspaceRoot: dir,
+        goal: "goal",
+        diff: "+1",
+        changedFiles: ["a.py"],
+        candidateInputHash: "hash-claim",
+        mutationRevision: 1,
+      });
+      expect(replay.interrupted).toBe(true);
+      expect(replay.modelCalls).toBe(0);
+      expect(replayModel.calls()).toBe(0);
+      expect(
+        evaluateVerificationProbeGateV1({
+          result: replay,
+          noRoomForAnotherTurn: false,
+        }).type,
+      ).toBe("feedback");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("corrupt claim or settled record fails closed without another model call", async () => {
+    const claimDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-probe-corrupt-claim-"),
+    );
+    try {
+      const crashModel = {
+        label: "probe-corrupt-claim",
+        async complete() {
+          throw new Error("crash");
+        },
+      } as unknown as LanguageModel;
+      await expect(
+        runVerificationProbeOnceV2({
+          model: crashModel,
+          runId: "corrupt-claim",
+          workspaceRoot: claimDir,
+          goal: "goal",
+          diff: "+1",
+          changedFiles: ["a.py"],
+          candidateInputHash: "hash-corrupt",
+          mutationRevision: 1,
+        }),
+      ).rejects.toThrow("crash");
+      const runFolder = onlyProbeRunFolder(claimDir);
+      fs.writeFileSync(
+        path.join(
+          claimDir,
+          ".paw",
+          "loop-v2",
+          "runs",
+          runFolder,
+          "verification-probe-claim-v1.json",
+        ),
+        "{broken",
+      );
+      const neverModel = fakeModel(["{}"]);
+      const interrupted = await runVerificationProbeOnceV2({
+        model: neverModel,
+        runId: "corrupt-claim",
+        workspaceRoot: claimDir,
+        goal: "goal",
+        diff: "+1",
+        changedFiles: ["a.py"],
+        candidateInputHash: "hash-corrupt",
+        mutationRevision: 1,
+      });
+      expect(interrupted.interrupted).toBe(true);
+      expect(neverModel.calls()).toBe(0);
+    } finally {
+      fs.rmSync(claimDir, { recursive: true, force: true });
+    }
+
+    const recordDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-probe-corrupt-record-"),
+    );
+    try {
+      const model = fakeModel(['{"probes":[]}']);
+      await runVerificationProbeOnceV2({
+        model,
+        runId: "corrupt-record",
+        workspaceRoot: recordDir,
+        goal: "goal",
+        diff: "+1",
+        changedFiles: ["a.py"],
+        candidateInputHash: "hash-record",
+        mutationRevision: 1,
+      });
+      const runFolder = onlyProbeRunFolder(recordDir);
+      fs.writeFileSync(
+        path.join(
+          recordDir,
+          ".paw",
+          "loop-v2",
+          "runs",
+          runFolder,
+          "verification-probe-v1.json",
+        ),
+        JSON.stringify({
+          schemaVersion: 1,
+          kind: "paw.loop-v2-verification-probe",
+          candidateInputHash: "hash-record",
+          mutationRevision: 1,
+          result: {
+            candidateInputHash: "hash-record",
+            mutationRevision: 1,
+          },
+        }),
+      );
+      const neverModel = fakeModel(["{}"]);
+      const interrupted = await runVerificationProbeOnceV2({
+        model: neverModel,
+        runId: "corrupt-record",
+        workspaceRoot: recordDir,
+        goal: "goal",
+        diff: "+1",
+        changedFiles: ["a.py"],
+        candidateInputHash: "hash-record",
+        mutationRevision: 1,
+      });
+      expect(interrupted.interrupted).toBe(true);
+      expect(neverModel.calls()).toBe(0);
+    } finally {
+      fs.rmSync(recordDir, { recursive: true, force: true });
     }
   });
 
