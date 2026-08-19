@@ -2,10 +2,14 @@ import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
+  realpathSync,
   renameSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -407,11 +411,20 @@ export function createSweCompareToolExecutionPolicy(input: {
   };
 }
 
+type FrozenUntrackedEntry =
+  | { readonly kind: "file"; readonly content: Buffer }
+  | { readonly kind: "symlink"; readonly target: string }
+  | { readonly kind: "opaque" };
+
+type InspectedUntrackedEntry =
+  | FrozenUntrackedEntry
+  | { readonly kind: "missing" };
+
 interface SweWorkspaceEffectSnapshot {
   readonly head: string;
   readonly trackedPatch: string;
   readonly trackedPaths: readonly string[];
-  readonly untracked: ReadonlyMap<string, Buffer>;
+  readonly untracked: ReadonlyMap<string, FrozenUntrackedEntry>;
 }
 
 function gitNullList(workspaceRoot: string, args: readonly string[]): string[] {
@@ -452,7 +465,7 @@ function normalizeFrozenPath(file: string): string {
 }
 
 function isEphemeralGeneratedPath(file: string): boolean {
-  const parts = file.replace(/\\/g, "/").toLowerCase().split("/");
+  const parts = normalizeFrozenPath(file.replace(/\\/g, "/")).split("/");
   const ephemeral = [
     "__pycache__",
     ".pytest_cache",
@@ -467,7 +480,11 @@ function isEphemeralGeneratedPath(file: string): boolean {
   // Matplotlib image-comparison tests write generated PNGs under the
   // repository-root result_images directory. Do not classify arbitrary nested
   // user directories with the same name as disposable.
-  if (parts[0] === "result_images") return true;
+  if (
+    parts[0] === "result_images" ||
+    (parts[0] === "lib" && parts[1] === "result_images")
+  )
+    return true;
   // setuptools/setuptools-scm writes the resolved version module next to the
   // package when tests execute from a checkout (e.g. src/_pytest/_version.py).
   return parts.at(-1) === "_version.py" && parts.includes("_pytest");
@@ -475,37 +492,144 @@ function isEphemeralGeneratedPath(file: string): boolean {
 
 function snapshotUntrackedFiles(
   workspaceRoot: string,
-): ReadonlyMap<string, Buffer> {
+): ReadonlyMap<string, FrozenUntrackedEntry> {
   const files = gitNullList(workspaceRoot, ["ls-files", "--others", "-z"]);
-  const snapshot = new Map<string, Buffer>();
+  const snapshot = new Map<string, FrozenUntrackedEntry>();
   for (const file of files) {
     const relative = normalizePolicyPath(workspaceRoot, file);
     if (!relative) throw new Error(`unsafe untracked baseline path: ${file}`);
     const absolute = path.resolve(workspaceRoot, relative);
-    if (!existsSync(absolute)) continue;
-    snapshot.set(normalizeFrozenPath(file), readFileSync(absolute));
+    assertSafeUntrackedAncestors(workspaceRoot, absolute);
+    const entry = inspectUntrackedPath(absolute);
+    if (entry.kind === "missing") {
+      throw new Error(`untracked baseline path disappeared: ${file}`);
+    }
+    if (entry.kind === "opaque") {
+      // Docker can create dangling Linux symlinks whose Windows reparse points
+      // are visible to Git but unreadable to Bun (existsSync=false/lstat=EACCES).
+      // Keep their ownership in the frozen baseline so recovery never treats a
+      // pre-existing link as disposable output.
+      if (!isEphemeralGeneratedPath(file)) {
+        throw new Error(`unreadable untracked baseline path: ${file}`);
+      }
+    }
+    snapshot.set(normalizeFrozenPath(file), entry);
   }
   return snapshot;
 }
 
+function assertSafeUntrackedAncestors(
+  workspaceRoot: string,
+  absolute: string,
+): void {
+  const root = path.resolve(workspaceRoot);
+  const relative = path.relative(root, absolute);
+  if (
+    !relative ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error(`unsafe untracked path: ${absolute}`);
+  }
+  const canonicalRoot = realpathSync(root);
+  let cursor = root;
+  for (const part of relative.split(path.sep).slice(0, -1)) {
+    cursor = path.join(cursor, part);
+    let stat;
+    try {
+      stat = lstatSync(cursor);
+    } catch (error) {
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? String(error.code)
+          : undefined;
+      if (code === "ENOENT") break;
+      throw error;
+    }
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new Error(`unsafe untracked ancestor: ${cursor}`);
+    }
+    const canonicalCursor = realpathSync(cursor);
+    const canonicalRelative = path.relative(canonicalRoot, canonicalCursor);
+    if (
+      canonicalRelative === ".." ||
+      canonicalRelative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(canonicalRelative)
+    ) {
+      throw new Error(`untracked ancestor escapes workspace: ${cursor}`);
+    }
+  }
+}
+
+function inspectUntrackedPath(absolute: string): InspectedUntrackedEntry {
+  try {
+    const stat = lstatSync(absolute);
+    if (stat.isSymbolicLink()) {
+      try {
+        return { kind: "symlink", target: readlinkSync(absolute) };
+      } catch {
+        return { kind: "opaque" };
+      }
+    }
+    if (stat.isFile()) {
+      try {
+        return { kind: "file", content: readFileSync(absolute) };
+      } catch {
+        return { kind: "opaque" };
+      }
+    }
+    return { kind: "opaque" };
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : undefined;
+    return code === "ENOENT" ? { kind: "missing" } : { kind: "opaque" };
+  }
+}
+
 function restoreUntrackedBaseline(
   workspaceRoot: string,
-  before: ReadonlyMap<string, Buffer>,
+  before: ReadonlyMap<string, FrozenUntrackedEntry>,
 ): string[] {
   const changed: string[] = [];
-  for (const [file, content] of before) {
+  for (const [file, entry] of before) {
+    if (entry.kind === "opaque") continue;
     const relative = normalizePolicyPath(workspaceRoot, file);
     if (!relative) throw new Error(`unsafe untracked recovery path: ${file}`);
     const absolute = path.resolve(workspaceRoot, relative);
-    const current = existsSync(absolute) ? readFileSync(absolute) : undefined;
-    if (current?.equals(content)) continue;
+    assertSafeUntrackedAncestors(workspaceRoot, absolute);
+    const current = inspectUntrackedPath(absolute);
+    if (
+      (entry.kind === "file" &&
+        current.kind === "file" &&
+        current.content.equals(entry.content)) ||
+      (entry.kind === "symlink" &&
+        current.kind === "symlink" &&
+        current.target === entry.target)
+    )
+      continue;
     changed.push(file);
-    if (existsSync(absolute))
-      rmSync(absolute, { recursive: true, force: true });
+    // Always remove the directory entry before restoring bytes. existsSync is
+    // false for dangling links; writing without unlinking could follow the
+    // link and overwrite a target outside the workspace.
+    assertSafeUntrackedAncestors(workspaceRoot, absolute);
+    rmSync(absolute, { recursive: true, force: true });
     mkdirSync(path.dirname(absolute), { recursive: true });
-    writeFileSync(absolute, content);
+    if (entry.kind === "file") writeFileSync(absolute, entry.content);
+    else symlinkSync(entry.target, absolute, "file");
   }
   return changed;
+}
+
+function ephemeralCleanupRoot(file: string): string | undefined {
+  const actualParts = file.replace(/\\/g, "/").split("/");
+  const comparableParts = normalizeFrozenPath(actualParts.join("/")).split("/");
+  if (comparableParts[0] === "result_images") return actualParts[0];
+  if (comparableParts[0] === "lib" && comparableParts[1] === "result_images")
+    return actualParts.slice(0, 2).join("/");
+  return undefined;
 }
 
 function gitPatch(workspaceRoot: string): string {
@@ -670,6 +794,26 @@ export function createSweCompareToolEffectPolicy(input: {
           "--others",
           "-z",
         ]);
+        const afterUntrackedSet = new Set(
+          afterUntracked.map(normalizeFrozenPath),
+        );
+        const invalidOpaqueBaseline = [...before.untracked.entries()]
+          .filter(([file, entry]) => {
+            if (entry.kind !== "opaque") return false;
+            if (!afterUntrackedSet.has(file)) return true;
+            const relative = normalizePolicyPath(input.workspaceRoot, file);
+            if (!relative) return true;
+            const absolute = path.resolve(input.workspaceRoot, relative);
+            assertSafeUntrackedAncestors(input.workspaceRoot, absolute);
+            return inspectUntrackedPath(absolute).kind !== "opaque";
+          })
+          .map(([file]) => file);
+        if (invalidOpaqueBaseline.length > 0) {
+          recovered = false;
+          reasons.push(
+            `opaque untracked baseline lost or replaced: ${invalidOpaqueBaseline.join(", ")}`,
+          );
+        }
         const changedBaselineFiles = restoreUntrackedBaseline(
           input.workspaceRoot,
           before.untracked,
@@ -694,12 +838,51 @@ export function createSweCompareToolEffectPolicy(input: {
           if (prohibitedNewFiles.length > 0) {
             reasons.push(`new file: ${prohibitedNewFiles.join(", ")}`);
           }
+          const cleanupRoots = new Set(
+            newFiles
+              .map(ephemeralCleanupRoot)
+              .filter((root): root is string => root !== undefined),
+          );
+          for (const root of cleanupRoots) {
+            const normalizedRoot = `${normalizeFrozenPath(root)}/`;
+            const ownedByBaseline = [...before.untracked.keys()].some(
+              (file) =>
+                file === normalizeFrozenPath(root) ||
+                file.startsWith(normalizedRoot),
+            );
+            if (!ownedByBaseline) {
+              // Git for Windows can remove Linux symlink reparse points created
+              // through the Docker bind mount even when Bun's fs APIs return
+              // EACCES. The path is a fixed, policy-owned generated-output root.
+              gitText(input.workspaceRoot, ["clean", "-fdx", "--", root]);
+            } else {
+              for (const file of newFiles) {
+                if (ephemeralCleanupRoot(file) !== root) continue;
+                gitText(input.workspaceRoot, ["clean", "-fdx", "--", file]);
+              }
+            }
+          }
           for (const file of newFiles) {
+            if (ephemeralCleanupRoot(file)) continue;
             const relative = normalizePolicyPath(input.workspaceRoot, file);
             if (!relative) throw new Error(`unsafe recovery path: ${file}`);
             const absolute = path.resolve(input.workspaceRoot, relative);
-            if (existsSync(absolute))
-              rmSync(absolute, { recursive: true, force: true });
+            rmSync(absolute, { recursive: true, force: true });
+          }
+          const remainingUntracked = new Set(
+            gitNullList(input.workspaceRoot, [
+              "ls-files",
+              "--others",
+              "-z",
+            ]).map(normalizeFrozenPath),
+          );
+          const cleanupResidue = newFiles.filter((file) =>
+            remainingUntracked.has(normalizeFrozenPath(file)),
+          );
+          if (cleanupResidue.length > 0) {
+            throw new Error(
+              `generated output cleanup incomplete: ${cleanupResidue.join(", ")}`,
+            );
           }
         }
         const afterTrackedPaths = new Set(

@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -972,6 +973,221 @@ describe("SWE compare runner", () => {
         ),
       ),
     ).toBe(false);
+  });
+
+  test("shell effect audit cleans matplotlib lib/result_images output", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-lib-images-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    mkdirSync(path.join(root, "lib"), { recursive: true });
+    writeFileSync(path.join(root, "lib", "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["lib/app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "pytest lib/matplotlib/tests/test_dates.py" },
+      workspaceRoot: root,
+    });
+    const generated = path.join(
+      root,
+      "lib",
+      "result_images",
+      "test_dates",
+      "date-expected.png",
+    );
+    mkdirSync(path.dirname(generated), { recursive: true });
+    writeFileSync(generated, "png", "utf8");
+
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "pytest lib/matplotlib/tests/test_dates.py" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "tests passed", payload: {} },
+      },
+      prepared,
+    );
+
+    expect(decision.allowed).toBe(true);
+    expect(existsSync(generated)).toBe(false);
+  });
+
+  test("shell effect audit preserves owned lib/result_images while cleaning new output", async () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), "paw-swe-effect-owned-lib-images-"),
+    );
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    const owned = path.join(root, "lib", "result_images", "owned", "keep.png");
+    mkdirSync(path.dirname(owned), { recursive: true });
+    writeFileSync(owned, "important-untracked", "utf8");
+    git(root, ["add", "app.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "pytest" },
+      workspaceRoot: root,
+    });
+    const generated = path.join(
+      root,
+      "lib",
+      "result_images",
+      "generated",
+      "new.png",
+    );
+    mkdirSync(path.dirname(generated), { recursive: true });
+    writeFileSync(generated, "generated", "utf8");
+
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "pytest" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "tests passed", payload: {} },
+      },
+      prepared,
+    );
+
+    expect(decision.allowed).toBe(true);
+    expect(readFileSync(owned, "utf8")).toBe("important-untracked");
+    expect(existsSync(generated)).toBe(false);
+  });
+
+  test("shell effect recovery unlinks a replacement symlink before restoring bytes", async () => {
+    if (process.platform === "win32") return;
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-link-swap-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    const owned = path.join(root, "owned.txt");
+    writeFileSync(owned, "important-untracked", "utf8");
+    git(root, ["add", "app.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "replace owned file" },
+      workspaceRoot: root,
+    });
+    const outside = path.join(
+      path.dirname(root),
+      `${path.basename(root)}-outside.txt`,
+    );
+    rmSync(owned);
+    symlinkSync(outside, owned, "file");
+
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "replace owned file" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "done", payload: {} },
+      },
+      prepared,
+    );
+
+    expect(decision.allowed).toBe(false);
+    expect(existsSync(outside)).toBe(false);
+    expect(readFileSync(owned, "utf8")).toBe("important-untracked");
+  });
+
+  test("shell effect recovery never follows a replaced parent directory symlink", async () => {
+    if (process.platform === "win32") return;
+    const root = mkdtempSync(
+      path.join(tmpdir(), "paw-swe-effect-parent-link-swap-"),
+    );
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    const ownedDir = path.join(root, "owned");
+    const owned = path.join(ownedDir, "keep.txt");
+    mkdirSync(ownedDir);
+    writeFileSync(owned, "important-untracked", "utf8");
+    git(root, ["add", "app.py"]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "replace owned directory" },
+      workspaceRoot: root,
+    });
+    const outsideDir = mkdtempSync(
+      path.join(tmpdir(), "paw-swe-effect-outside-"),
+    );
+    const outside = path.join(outsideDir, "keep.txt");
+    rmSync(ownedDir, { recursive: true });
+    symlinkSync(outsideDir, ownedDir, "dir");
+
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "replace owned directory" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "done", payload: {} },
+      },
+      prepared,
+    );
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) {
+      expect(decision.reason).toBe("prohibited_workspace_effect_unrecovered");
+    }
+    expect(existsSync(outside)).toBe(false);
+  });
+
+  test("shell effect audit does not classify differently-cased result image roots on POSIX", async () => {
+    if (process.platform === "win32") return;
+    const root = mkdtempSync(path.join(tmpdir(), "paw-swe-effect-case-"));
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "test@example.invalid"]);
+    git(root, ["config", "user.name", "Paw Test"]);
+    writeFileSync(path.join(root, "app.py"), "x = 1\n", "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "base"]);
+    const policy = createSweCompareToolEffectPolicy({
+      workspaceRoot: root,
+      trackedFiles: new Set(["app.py"]),
+    });
+    const prepared = await policy.prepare({
+      tool: "workspace.run_shell",
+      args: { command: "generate" },
+      workspaceRoot: root,
+    });
+    const generated = path.join(root, "Lib", "result_images", "generated.png");
+    mkdirSync(path.dirname(generated), { recursive: true });
+    writeFileSync(generated, "not-canonical-output", "utf8");
+
+    const decision = await policy.settle(
+      {
+        tool: "workspace.run_shell",
+        args: { command: "generate" },
+        workspaceRoot: root,
+        result: { ok: true, summary: "done", payload: {} },
+      },
+      prepared,
+    );
+
+    expect(decision.allowed).toBe(false);
+    expect(existsSync(generated)).toBe(false);
   });
 
   test("shell effect audit preserves pre-existing untracked result_images assets", async () => {
