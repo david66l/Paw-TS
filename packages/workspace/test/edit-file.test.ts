@@ -60,6 +60,103 @@ describe("editWorkspaceFile — string mode", () => {
     expect(content).toBe("hello world\nbaz bar\n");
   });
 
+  test("treats JavaScript replacement tokens as literal source text", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    writeFileSync(path.join(root, "tokens.txt"), "before TARGET after\n", "utf8");
+    const literal = "$&|$`|$'|$$";
+    const r = editWorkspaceFile(root, "tokens.txt", {
+      oldString: "TARGET",
+      newString: literal,
+    });
+    expect(r.error).toBeUndefined();
+    expect(fs.readFileSync(path.join(root, "tokens.txt"), "utf8")).toBe(
+      `before ${literal} after\n`,
+    );
+  });
+
+  test("does not duplicate a file suffix for matplotlib-style Python source", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    const suffix = Array.from(
+      { length: 1_300 },
+      (_, index) => `line_${index} = ${index}`,
+    ).join("\n");
+    const before = `def _wrap_in_tex(s):\n    return '$' + s.replace('-', '{-}') + '}$'\n${suffix}\n`;
+    const oldString = "    return '$' + s.replace('-', '{-}') + '}$'";
+    const newString =
+      "    return '$' + s.replace('-', '{-}').replace(':', '{:}') + '}$'";
+    writeFileSync(path.join(root, "dates.py"), before, "utf8");
+
+    const r = editWorkspaceFile(root, "dates.py", { oldString, newString });
+
+    expect(r.error).toBeUndefined();
+    const after = fs.readFileSync(path.join(root, "dates.py"), "utf8");
+    expect(after).toBe(before.slice(0, before.indexOf(oldString)) + newString + before.slice(before.indexOf(oldString) + oldString.length));
+    expect(after.match(/line_1299 = 1299/g)).toHaveLength(1);
+    expect(r.linesAdded).toBe(1);
+    expect(r.linesRemoved).toBe(1);
+  });
+
+  test("rejects an oversized replacement before writing", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    const filePath = path.join(root, "a.txt");
+    writeFileSync(filePath, "before TARGET after\n", "utf8");
+    const original = fs.readFileSync(filePath, "utf8");
+
+    const r = editWorkspaceFile(root, "a.txt", {
+      oldString: "TARGET",
+      newString: "x".repeat(512 * 1024),
+    });
+
+    expect(r.error).toContain("edited file exceeds max");
+    expect(fs.readFileSync(filePath, "utf8")).toBe(original);
+  });
+
+  test("checks the final CRLF-restored byte size before writing", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    const filePath = path.join(root, "crlf.txt");
+    const original = `${"a\r\n".repeat(100_000)}TARGET\r\n`;
+    writeFileSync(filePath, original, "utf8");
+
+    const r = editWorkspaceFile(root, "crlf.txt", {
+      oldString: "TARGET",
+      newString: "x".repeat(300_000),
+    });
+
+    expect(r.error).toContain("edited file exceeds max");
+    expect(fs.readFileSync(filePath, "utf8")).toBe(original);
+  });
+
+  test("uses UTF-8 bytes rather than JavaScript character count", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    const filePath = path.join(root, "unicode.txt");
+    writeFileSync(filePath, "TARGET\n", "utf8");
+
+    const r = editWorkspaceFile(root, "unicode.txt", {
+      oldString: "TARGET",
+      newString: "你".repeat(180_000),
+    });
+
+    expect(r.error).toContain("edited file exceeds max");
+    expect(fs.readFileSync(filePath, "utf8")).toBe("TARGET\n");
+  });
+
+  test("replace_all uses non-overlapping literal matches", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    writeFileSync(path.join(root, "overlap.txt"), "aaaa\n", "utf8");
+
+    const r = editWorkspaceFile(root, "overlap.txt", {
+      oldString: "aa",
+      newString: "$'",
+      replaceAll: true,
+    });
+
+    expect(r.error).toBeUndefined();
+    expect(r.replacements).toBe(2);
+    expect(fs.readFileSync(path.join(root, "overlap.txt"), "utf8")).toBe(
+      "$'$'\n",
+    );
+  });
+
   test("rejects when old_string not found", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
     writeFileSync(path.join(root, "a.txt"), "hello world\n", "utf8");
@@ -163,16 +260,31 @@ describe("editWorkspaceFile — string mode", () => {
 
   test("fuzzy match ignores leading/trailing whitespace", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(path.join(root, "a.txt"), "  hello  \n", "utf8");
+    writeFileSync(path.join(root, "a.txt"), "\thello\t\n", "utf8");
     const r = editWorkspaceFile(root, "a.txt", {
-      oldString: "hello",
+      oldString: " hello ",
       newString: "world",
       fuzzy: true,
     });
     expect(r.error).toBeUndefined();
     expect(r.replacements).toBe(1);
     const content = fs.readFileSync(path.join(root, "a.txt"), "utf8");
-    expect(content).toBe("  world  \n");
+    expect(content).toBe("world\n");
+  });
+
+  test("rejects oversized fuzzy output before writing", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    const filePath = path.join(root, "fuzzy.txt");
+    writeFileSync(filePath, "\thello\t\n", "utf8");
+
+    const r = editWorkspaceFile(root, "fuzzy.txt", {
+      oldString: " hello ",
+      newString: "x".repeat(512 * 1024),
+      fuzzy: true,
+    });
+
+    expect(r.error).toContain("edited file exceeds max");
+    expect(fs.readFileSync(filePath, "utf8")).toBe("\thello\t\n");
   });
 
   test("fuzzy match falls back to exact when no fuzzy match", () => {
@@ -225,6 +337,20 @@ describe("editWorkspaceFile — line mode", () => {
     expect(r.error).toBeUndefined();
     const content = fs.readFileSync(path.join(root, "a.txt"), "utf8");
     expect(content).toBe("a\nx\ny\nz\nc\n");
+  });
+
+  test("rejects oversized line replacement before writing", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
+    const filePath = path.join(root, "a.txt");
+    writeFileSync(filePath, "a\nb\nc\n", "utf8");
+
+    const r = editWorkspaceFile(root, "a.txt", {
+      startLine: 2,
+      newString: "x".repeat(512 * 1024),
+    });
+
+    expect(r.error).toContain("edited file exceeds max");
+    expect(fs.readFileSync(filePath, "utf8")).toBe("a\nb\nc\n");
   });
 
   test("deletes lines with empty newString", () => {

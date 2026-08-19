@@ -59,6 +59,64 @@ function applyEol(s: string, eol: "\r\n" | "\n"): string {
   return eol === "\r\n" ? lf.replace(/\n/g, "\r\n") : lf;
 }
 
+function validateFinalEditContent(content: string): string | undefined {
+  const bytes = Buffer.byteLength(content, "utf8");
+  return bytes > MAX_EDIT_BYTES
+    ? `edited file exceeds max ${MAX_EDIT_BYTES} bytes; no changes were written`
+    : undefined;
+}
+
+interface LiteralReplacementResult {
+  readonly content: string;
+  readonly replacements: number;
+}
+
+/**
+ * Replace exact text without interpreting JavaScript replacement tokens such as
+ * `$&`, `$\``, `$'`, or `$$`. Index slicing also gives us a locality invariant:
+ * bytes outside the requested matches are copied from the original verbatim.
+ */
+function replaceLiteral(
+  content: string,
+  search: string,
+  replacement: string,
+  replaceAll: boolean,
+): LiteralReplacementResult {
+  const chunks: string[] = [];
+  let cursor = 0;
+  let replacements = 0;
+
+  while (true) {
+    const matchIndex = content.indexOf(search, cursor);
+    if (matchIndex < 0) break;
+    chunks.push(content.slice(cursor, matchIndex), replacement);
+    cursor = matchIndex + search.length;
+    replacements++;
+    if (!replaceAll) break;
+  }
+
+  chunks.push(content.slice(cursor));
+  return { content: chunks.join(""), replacements };
+}
+
+function validateLiteralReplacement(
+  original: string,
+  search: string,
+  replacement: string,
+  expectedReplacements: number,
+  result: LiteralReplacementResult,
+): string | undefined {
+  if (result.replacements !== expectedReplacements) {
+    return `edit invariant failed: expected ${expectedReplacements} replacements but produced ${result.replacements}`;
+  }
+  const expectedLength =
+    original.length + expectedReplacements * (replacement.length - search.length);
+  if (result.content.length !== expectedLength) {
+    return `edit invariant failed: expected ${expectedLength} LF characters but produced ${result.content.length}`;
+  }
+  return undefined;
+}
+
 interface DiffStats {
   linesAdded: number;
   linesRemoved: number;
@@ -180,6 +238,8 @@ export function editWorkspaceFile(
     if (hasTrailingNewline) {
       newContent += eol === "\r\n" ? "\r\n" : "\n";
     }
+    const finalContentError = validateFinalEditContent(newContent);
+    if (finalContentError) return { error: finalContentError };
     try {
       fs.writeFileSync(filepath, newContent, { encoding: "utf8" });
     } catch (err) {
@@ -214,10 +274,24 @@ export function editWorkspaceFile(
   const occurrences = contentLf.split(searchLf).length - 1;
 
   if (occurrences === 1 || (replaceAll && occurrences > 1)) {
-    const replacedLf = replaceAll
-      ? contentLf.split(searchLf).join(newLf)
-      : contentLf.replace(searchLf, newLf);
+    const replacementResult = replaceLiteral(
+      contentLf,
+      searchLf,
+      newLf,
+      replaceAll,
+    );
+    const invariantError = validateLiteralReplacement(
+      contentLf,
+      searchLf,
+      newLf,
+      occurrences,
+      replacementResult,
+    );
+    if (invariantError) return { error: invariantError };
+    const replacedLf = replacementResult.content;
     const replaced = applyEol(replacedLf, eol);
+    const finalContentError = validateFinalEditContent(replaced);
+    if (finalContentError) return { error: finalContentError };
     try {
       fs.writeFileSync(filepath, replaced, { encoding: "utf8" });
     } catch (err) {
@@ -250,6 +324,8 @@ export function editWorkspaceFile(
       const replacedLines = [...lines];
       replacedLines[fuzzyHits[0]!] = newString;
       const replaced = applyEol(replacedLines.join("\n"), eol);
+      const finalContentError = validateFinalEditContent(replaced);
+      if (finalContentError) return { error: finalContentError };
       try {
         fs.writeFileSync(filepath, replaced, { encoding: "utf8" });
       } catch (err) {
