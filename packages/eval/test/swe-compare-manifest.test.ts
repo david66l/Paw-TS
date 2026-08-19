@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { buildSweCompareGoal } from "../src/swe-compare/goal.js";
 import {
+  PAW_FIXED_TEN_DIAGNOSTIC_RULE,
   PAW_FRESH_DEVELOPMENT_RULE,
   PAW_FRESH_QUALIFICATION_RULE,
   PAW_FRESH_QUALIFICATION_V3_RULE,
@@ -33,6 +34,7 @@ import {
   PAW_SEEN_DEVELOPMENT_IDS,
   createSweCompareManifest,
   findLocalTrajectoryHits,
+  reusePawFixedTenDiagnosticPreflights,
   selectPawFreshDevelopmentIds,
   selectPawFreshQualificationIds,
 } from "../src/swe-compare/manifest.js";
@@ -400,6 +402,77 @@ describe("SWE compare manifest", () => {
     expect(
       selectPawFreshQualificationIds({ repoRoot: root, datasetPath }),
     ).toEqual(selected);
+  });
+
+  test("keeps the requested ten-task replay explicitly diagnostic and external", () => {
+    expect(PAW_FIXED_TEN_DIAGNOSTIC_RULE.ids).toHaveLength(10);
+    expect(new Set(PAW_FIXED_TEN_DIAGNOSTIC_RULE.ids).size).toBe(10);
+    expect(PAW_FIXED_TEN_DIAGNOSTIC_RULE.ids).toContain(
+      "matplotlib__matplotlib-21568",
+    );
+    expect(PAW_FIXED_TEN_DIAGNOSTIC_RULE.ids).toContain(
+      "astropy__astropy-13977",
+    );
+    expect(PAW_FIXED_TEN_DIAGNOSTIC_RULE.ids).toContain("sympy__sympy-20438");
+    expect(PAW_FIXED_TEN_DIAGNOSTIC_RULE.verificationAuthority).toBe(
+      "external",
+    );
+    expect(PAW_FIXED_TEN_DIAGNOSTIC_RULE.verificationEnvironment).toBe(
+      "instance_image",
+    );
+  });
+
+  test("reuses only the byte-anchored official v15 preflight facts", () => {
+    const sourcePath = path.join(
+      process.cwd(),
+      "benchmarks/swe-compare/manifests/paw-fresh-qualification-v15.json",
+    );
+    const sourceBytes = readFileSync(sourcePath);
+    const source = JSON.parse(sourceBytes.toString("utf8"));
+    const fresh = {
+      ...source,
+      selection: {
+        ...source.selection,
+        ruleVersion: PAW_FIXED_TEN_DIAGNOSTIC_RULE.version,
+        ids: PAW_FIXED_TEN_DIAGNOSTIC_RULE.ids,
+        excludedSeenIds: PAW_FIXED_TEN_DIAGNOSTIC_RULE.ids,
+      },
+      instances: source.instances.map((instance: { instanceId: string }) => ({
+        ...instance,
+        qualification: "static_qualified",
+        preflight: undefined,
+      })),
+    };
+    const reused = reusePawFixedTenDiagnosticPreflights({
+      sourceBytes,
+      fresh,
+    });
+    expect(
+      reused.instances.every((instance) => instance.preflight?.completed),
+    ).toBe(true);
+
+    expect(() =>
+      reusePawFixedTenDiagnosticPreflights({
+        sourceBytes: Buffer.from(`${sourceBytes.toString("utf8")} `),
+        fresh,
+      }),
+    ).toThrow("fixed-ten preflight source");
+
+    const first = source.instances[0];
+    const goalDrift = {
+      ...fresh,
+      instances: fresh.instances.map((instance: { instanceId: string }) =>
+        instance.instanceId === first.instanceId
+          ? { ...instance, goalSha256: "0".repeat(64) }
+          : instance,
+      ),
+    };
+    expect(() =>
+      reusePawFixedTenDiagnosticPreflights({
+        sourceBytes,
+        fresh: goalDrift,
+      }),
+    ).toThrow("preflight bundle");
   });
   test("uses one provider-neutral goal without leaking gold", () => {
     const goal = buildSweCompareGoal({

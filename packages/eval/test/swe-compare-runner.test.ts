@@ -26,7 +26,10 @@ import {
   claudeContainerNames,
   parseClaudeProxyAudit,
 } from "../src/swe-compare/claude-container.js";
-import { PAW_FRESH_QUALIFICATION_RULE } from "../src/swe-compare/manifest.js";
+import {
+  PAW_FIXED_TEN_DIAGNOSTIC_RULE,
+  PAW_FRESH_QUALIFICATION_RULE,
+} from "../src/swe-compare/manifest.js";
 
 import {
   allowSweCompareToolCall,
@@ -226,6 +229,15 @@ describe("SWE compare runner", () => {
     expect(
       compareProtocolMetadataIsValid({
         ...current,
+        selection: {
+          ...current.selection,
+          ruleVersion: PAW_FIXED_TEN_DIAGNOSTIC_RULE.version,
+        },
+      } as unknown as SweCompareManifest),
+    ).toBe(true);
+    expect(
+      compareProtocolMetadataIsValid({
+        ...current,
         selection: { ...current.selection, ruleVersion: "unknown-v13" },
       } as unknown as SweCompareManifest),
     ).toBe(false);
@@ -255,6 +267,100 @@ describe("SWE compare runner", () => {
       authority: "local",
       requireMutation: true,
     });
+
+    const diagnostic = {
+      runners: {
+        paw: { memory: "off", verificationAuthority: "external" },
+      },
+    } as unknown as SweCompareManifest;
+    expect(pawVerificationPolicyFromManifest(diagnostic)).toEqual({
+      authority: "external",
+      requireMutation: true,
+    });
+  });
+
+  test("freezes the same ten diagnostic tasks under external verification", () => {
+    const rule = PAW_FIXED_TEN_DIAGNOSTIC_RULE;
+    const frozenInstances = JSON.parse(
+      readFileSync(
+        path.join(
+          process.cwd(),
+          "benchmarks/swe-compare/manifests/paw-fresh-qualification-v15.json",
+        ),
+        "utf8",
+      ),
+    ).instances;
+    const manifest = {
+      protocol: "paw-only-seen-development",
+      selection: {
+        ruleVersion: rule.version,
+        purpose:
+          "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score",
+        ids: rule.ids,
+        excludedSeenIds: rule.ids,
+      },
+      budget: {
+        pawMaxSteps: rule.pawMaxSteps,
+        sharedTimeoutMs: rule.sharedTimeoutMs,
+        codingPhaseBudget: false,
+      },
+      dataset: rule.dataset,
+      instances: frozenInstances,
+      runners: {
+        paw: {
+          memory: "off",
+          verificationAuthority: rule.verificationAuthority,
+          verificationEnvironment: rule.verificationEnvironment,
+        },
+      },
+    } as unknown as SweCompareManifest;
+
+    expect(compareProtocolMetadataIsValid(manifest)).toBe(true);
+    expect(() => validatePawQualificationContract(manifest)).not.toThrow();
+    expect(pawVerificationPolicyFromManifest(manifest)).toEqual({
+      authority: "external",
+      requireMutation: true,
+    });
+    expect(() =>
+      validatePawQualificationContract({
+        ...manifest,
+        instances: [...manifest.instances, { instanceId: "extra__task-1" }],
+      } as unknown as SweCompareManifest),
+    ).toThrow(`${rule.version} contract drift`);
+    expect(() =>
+      validatePawQualificationContract({
+        ...manifest,
+        instances: manifest.instances.map((instance, index) =>
+          index === 0
+            ? {
+                ...instance,
+                qualification: "eligible",
+                preflight: {
+                  checkedAt: "2026-08-19T00:00:00.000Z",
+                  runId: "tampered",
+                  source: "swebench_harness",
+                  baselineResolved: false,
+                  completed: true,
+                  emptyPatch: false,
+                  harnessError: false,
+                },
+              }
+            : instance,
+        ),
+      } as unknown as SweCompareManifest),
+    ).toThrow(`${rule.version} contract drift`);
+    expect(() =>
+      validatePawQualificationContract({
+        ...manifest,
+        runners: {
+          ...manifest.runners,
+          paw: {
+            ...manifest.runners.paw,
+            verificationAuthority: "local",
+          },
+        },
+      }),
+    ).toThrow(`${rule.version} contract drift`);
   });
 
   test("fails closed when the current qualification contract drifts or its image is absent", () => {
@@ -3007,5 +3113,8 @@ describe("SWE compare runner", () => {
     expect(() => validateCompareRun(repoRoot, manifest, instanceId)).toThrow(
       "current source tree is dirty",
     );
+    expect(() =>
+      validateCompareRun(repoRoot, manifest, "extra__task-not-selected"),
+    ).toThrow("instance is not in frozen selection");
   });
 });

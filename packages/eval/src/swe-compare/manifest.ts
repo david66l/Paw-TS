@@ -307,6 +307,177 @@ export const PAW_FRESH_QUALIFICATION_RULE = {
   seed: "paw-fresh-qualification-v15-verified",
 } as const;
 
+/**
+ * Fixed replay set requested for architecture debugging. These tasks are all
+ * exposed and must never be reported as fresh qualification/headline score.
+ * External verification is authoritative because the base checkout does not
+ * contain the official test patch whose changed expectations define F2P.
+ */
+export const PAW_FIXED_TEN_DIAGNOSTIC_RULE = {
+  version: "paw-fixed-ten-diagnostic-v1" as const,
+  ids: [
+    "django__django-15098",
+    "pydata__xarray-4966",
+    "pytest-dev__pytest-7521",
+    "scikit-learn__scikit-learn-25102",
+    "sympy__sympy-20438",
+    "sphinx-doc__sphinx-9461",
+    "matplotlib__matplotlib-21568",
+    "astropy__astropy-13977",
+    "pylint-dev__pylint-6528",
+    "mwaskom__seaborn-3069",
+  ] as const,
+  pawMaxSteps: 96,
+  sharedTimeoutMs: 2_700_000,
+  verificationAuthority: "external" as const,
+  verificationEnvironment: "instance_image" as const,
+  dataset: {
+    name: "SWE-bench/SWE-bench_Verified" as const,
+    split: "test" as const,
+    sha256: "39e72d0da80f692b283386d46f55afaaf28a6c83eda7c011a44c730b97379ff4",
+  },
+  preflightSource: {
+    ruleVersion: "paw-fresh-qualification-v15" as const,
+    purpose:
+      "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score" as const,
+    manifestSha256:
+      "9071c42fb442f846d56dd6ebef3ad84fc234eb5ff9cc5d2f0d0a56a643d09928",
+    preflightBundleSha256:
+      "bb1843a130388e8e445bc6092abb1637bd4fcfa3c88855beea216175f2dacb1d",
+  },
+} as const;
+
+export function isEligibleOfficialPreflight(
+  instance: SweCompareInstanceManifest,
+): boolean {
+  const preflight = instance.preflight;
+  return (
+    instance.qualification === "eligible" &&
+    preflight?.completed === true &&
+    preflight.source === "swebench_harness" &&
+    preflight.baselineResolved === false &&
+    preflight.emptyPatch === false &&
+    preflight.harnessError === false &&
+    !preflight.error
+  );
+}
+
+function hasExactUniqueInstanceIds(
+  manifest: SweCompareManifest,
+  expected: readonly string[],
+): boolean {
+  const actual = manifest.instances.map((instance) => instance.instanceId);
+  return (
+    new Set(actual).size === actual.length &&
+    JSON.stringify(actual) === JSON.stringify(expected)
+  );
+}
+
+export function pawFixedTenPreflightBundleSha256(
+  manifest: SweCompareManifest,
+): string {
+  return sha256(
+    JSON.stringify(
+      manifest.instances.map(
+        ({
+          instanceId,
+          repo,
+          baseCommit,
+          failToPassCount,
+          passToPassCount,
+          problemStatementSha256,
+          goalSha256,
+          qualification,
+          preflight,
+        }) => ({
+          instanceId,
+          repo,
+          baseCommit,
+          failToPassCount,
+          passToPassCount,
+          problemStatementSha256,
+          goalSha256,
+          qualification,
+          preflight,
+        }),
+      ),
+    ),
+  );
+}
+
+/**
+ * Reuse only the already-paid official v15 preflight facts. The ignored JSON
+ * is data, not authority: its exact bytes and every per-instance identity are
+ * bound to tracked constants/current Verified metadata before reuse.
+ */
+export function reusePawFixedTenDiagnosticPreflights(input: {
+  readonly sourceBytes: string | Buffer;
+  readonly fresh: SweCompareManifest;
+}): SweCompareManifest {
+  const rule = PAW_FIXED_TEN_DIAGNOSTIC_RULE;
+  if (sha256(input.sourceBytes) !== rule.preflightSource.manifestSha256) {
+    throw new Error("fixed-ten preflight source bytes are not frozen v15");
+  }
+  let source: SweCompareManifest;
+  try {
+    source = JSON.parse(input.sourceBytes.toString()) as SweCompareManifest;
+  } catch {
+    throw new Error("fixed-ten preflight source is not valid JSON");
+  }
+  if (
+    source.selection.ruleVersion !== rule.preflightSource.ruleVersion ||
+    source.selection.purpose !== rule.preflightSource.purpose ||
+    JSON.stringify(source.selection.ids) !== JSON.stringify(rule.ids) ||
+    !hasExactUniqueInstanceIds(source, rule.ids) ||
+    source.dataset.name !== rule.dataset.name ||
+    source.dataset.split !== rule.dataset.split ||
+    source.dataset.sha256 !== rule.dataset.sha256
+  ) {
+    throw new Error(
+      "fixed-ten preflight source is not the frozen v15 artifact",
+    );
+  }
+  if (
+    input.fresh.dataset.name !== rule.dataset.name ||
+    input.fresh.dataset.split !== rule.dataset.split ||
+    input.fresh.dataset.sha256 !== rule.dataset.sha256 ||
+    !hasExactUniqueInstanceIds(input.fresh, rule.ids)
+  ) {
+    throw new Error("fixed-ten fresh manifest dataset or selection drift");
+  }
+  const reusable = new Map(
+    source.instances
+      .filter(isEligibleOfficialPreflight)
+      .map((instance) => [instance.instanceId, instance]),
+  );
+  const result: SweCompareManifest = {
+    ...input.fresh,
+    instances: input.fresh.instances.map((instance) => {
+      const prior = reusable.get(instance.instanceId);
+      return prior &&
+        prior.repo === instance.repo &&
+        prior.baseCommit === instance.baseCommit &&
+        prior.problemStatementSha256 === instance.problemStatementSha256 &&
+        prior.goalSha256 === instance.goalSha256 &&
+        prior.failToPassCount === instance.failToPassCount &&
+        prior.passToPassCount === instance.passToPassCount
+        ? {
+            ...instance,
+            qualification: prior.qualification,
+            preflight: prior.preflight,
+          }
+        : instance;
+    }),
+  };
+  if (
+    pawFixedTenPreflightBundleSha256(result) !==
+    rule.preflightSource.preflightBundleSha256
+  ) {
+    throw new Error("fixed-ten reused preflight bundle does not match v15");
+  }
+  return result;
+}
+
 const PAW_QUALIFICATION_VERIFIED_DATASET =
   "SWE-bench/SWE-bench_Verified" as const;
 
@@ -419,7 +590,8 @@ export function createSweCompareManifest(opts: {
     | "paw-fresh-qualification-v12"
     | "paw-fresh-qualification-v13"
     | "paw-fresh-qualification-v14"
-    | "paw-fresh-qualification-v15";
+    | "paw-fresh-qualification-v15"
+    | "paw-fixed-ten-diagnostic-v1";
   readonly excludedSeenIds?: readonly string[];
   readonly pawMaxSteps?: number;
   readonly sharedTimeoutMs?: number;
@@ -701,6 +873,28 @@ export function createPawFreshQualificationManifest(opts: {
     mode: "paw-seen-development",
     pawDevelopmentRuleVersion: rule.version,
     excludedSeenIds: PAW_QUALIFICATION_V15_EXPOSED_IDS,
+    pawMaxSteps: rule.pawMaxSteps,
+    sharedTimeoutMs: rule.sharedTimeoutMs,
+    verificationAuthority: rule.verificationAuthority,
+    verificationEnvironment: rule.verificationEnvironment,
+  });
+}
+
+export function createPawFixedTenDiagnosticManifest(opts: {
+  readonly repoRoot: string;
+  readonly datasetPath?: string;
+  readonly now?: () => Date;
+}): SweCompareManifest {
+  const rule = PAW_FIXED_TEN_DIAGNOSTIC_RULE;
+  const datasetPath = opts.datasetPath ?? defaultVerifiedJsonl(opts.repoRoot);
+  return createSweCompareManifest({
+    ...opts,
+    datasetPath,
+    datasetName: PAW_QUALIFICATION_VERIFIED_DATASET,
+    instanceIds: rule.ids,
+    mode: "paw-seen-development",
+    pawDevelopmentRuleVersion: rule.version,
+    excludedSeenIds: rule.ids,
     pawMaxSteps: rule.pawMaxSteps,
     sharedTimeoutMs: rule.sharedTimeoutMs,
     verificationAuthority: rule.verificationAuthority,

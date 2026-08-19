@@ -67,7 +67,12 @@ import {
   runClaudeContainer,
 } from "./claude-container.js";
 import { buildSweCompareGoal } from "./goal.js";
-import { PAW_FRESH_QUALIFICATION_RULE } from "./manifest.js";
+import {
+  isEligibleOfficialPreflight,
+  PAW_FIXED_TEN_DIAGNOSTIC_RULE,
+  PAW_FRESH_QUALIFICATION_RULE,
+  pawFixedTenPreflightBundleSha256,
+} from "./manifest.js";
 import { persistOnlineLoopV2ShadowArtifact } from "./shadow-replay.js";
 import type { SweCompareManifest } from "./types.js";
 import {
@@ -536,7 +541,7 @@ function assertSafeUntrackedAncestors(
   let cursor = root;
   for (const part of relative.split(path.sep).slice(0, -1)) {
     cursor = path.join(cursor, part);
-    let stat;
+    let stat: ReturnType<typeof lstatSync>;
     try {
       stat = lstatSync(cursor);
     } catch (error) {
@@ -986,6 +991,8 @@ export function compareProtocolMetadataIsValid(
       manifest.selection.ruleVersion === "paw-fresh-qualification-v6" ||
       manifest.selection.ruleVersion === "paw-fresh-qualification-v7" ||
       manifest.selection.ruleVersion === "paw-fresh-qualification-v8" ||
+      manifest.selection.ruleVersion ===
+        PAW_FIXED_TEN_DIAGNOSTIC_RULE.version ||
       manifest.selection.ruleVersion === PAW_FRESH_QUALIFICATION_RULE.version
     : manifest.selection.ruleVersion === "formal-dev-v1";
   return (
@@ -1002,6 +1009,9 @@ export function validateCompareRun(
   manifest: SweCompareManifest,
   instanceId: string,
 ): void {
+  if (!manifest.selection.ids.includes(instanceId)) {
+    throw new Error(`instance is not in frozen selection: ${instanceId}`);
+  }
   if (manifest.sourceTree.gitDirty) {
     throw new Error("compare manifest was created from a dirty source tree");
   }
@@ -1023,10 +1033,7 @@ export function validateCompareRun(
   );
   if (!instance)
     throw new Error(`instance not frozen in manifest: ${instanceId}`);
-  if (
-    instance.qualification !== "eligible" ||
-    instance.preflight?.completed !== true
-  ) {
+  if (!isEligibleOfficialPreflight(instance)) {
     throw new Error(`instance is not preflight eligible: ${instanceId}`);
   }
   const datasetPath = path.join(repoRoot, manifest.dataset.localPath);
@@ -1068,6 +1075,37 @@ export function pawVerificationPolicyFromManifest(
 export function validatePawQualificationContract(
   manifest: SweCompareManifest,
 ): void {
+  if (
+    manifest.selection.ruleVersion === PAW_FIXED_TEN_DIAGNOSTIC_RULE.version
+  ) {
+    const rule = PAW_FIXED_TEN_DIAGNOSTIC_RULE;
+    const instanceIds = manifest.instances.map((item) => item.instanceId);
+    if (
+      JSON.stringify(manifest.selection.ids) !== JSON.stringify(rule.ids) ||
+      new Set(instanceIds).size !== instanceIds.length ||
+      JSON.stringify(instanceIds) !== JSON.stringify(rule.ids) ||
+      JSON.stringify(manifest.selection.excludedSeenIds) !==
+        JSON.stringify(rule.ids) ||
+      manifest.dataset.name !== rule.dataset.name ||
+      manifest.dataset.split !== rule.dataset.split ||
+      manifest.dataset.sha256 !== rule.dataset.sha256 ||
+      pawFixedTenPreflightBundleSha256(manifest) !==
+        rule.preflightSource.preflightBundleSha256 ||
+      manifest.selection.purpose !==
+        "paw_only_seen_architecture_diagnostic_not_holdout_or_headline_score" ||
+      manifest.budget.pawMaxSteps !== rule.pawMaxSteps ||
+      manifest.budget.sharedTimeoutMs !== rule.sharedTimeoutMs ||
+      manifest.budget.codingPhaseBudget !== false ||
+      manifest.runners.paw.memory !== "off" ||
+      manifest.runners.paw.verificationAuthority !==
+        rule.verificationAuthority ||
+      manifest.runners.paw.verificationEnvironment !==
+        rule.verificationEnvironment
+    ) {
+      throw new Error(`${rule.version} contract drift`);
+    }
+    return;
+  }
   const rule = PAW_FRESH_QUALIFICATION_RULE;
   if (manifest.selection.ruleVersion !== rule.version) return;
   if (
