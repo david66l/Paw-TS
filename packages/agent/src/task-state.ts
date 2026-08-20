@@ -9,7 +9,7 @@ import {
   decomposeVerificationFailuresV2,
   verificationRunHasOwnedFailures,
 } from "./loop-v2/failure-records.js";
-import { isGitDiffCommand } from "./shell-command.js";
+import { containsExecutedGitDiffCommand } from "./shell-command.js";
 import {
   type TaskGraphEventV1,
   appendTaskGraphFactsV1,
@@ -641,7 +641,15 @@ export class TaskStateManager {
             executionEnvironmentIssues = [];
           }
         }
-        if (result.ok && isGitDiffCommand(command)) {
+        const shellStdout = isRecord(result.payload)
+          ? result.payload.stdout
+          : undefined;
+        if (
+          result.ok &&
+          containsExecutedGitDiffCommand(command) &&
+          typeof shellStdout === "string" &&
+          shellStdout.includes("diff --git ")
+        ) {
           diffInspectedRevision = mutationRevision;
         }
       }

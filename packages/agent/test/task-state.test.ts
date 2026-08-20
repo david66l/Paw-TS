@@ -151,6 +151,75 @@ describe("TaskStateManager", () => {
     );
   });
 
+  test("records a successful final git diff shell segment at the current revision", () => {
+    const state = new TaskStateManager("inspect each candidate diff");
+    const edit = (path: string) =>
+      state.recordToolResult(
+        {
+          type: "tool_call",
+          tool: "workspace.edit_file",
+          args: { path },
+        },
+        {
+          ok: true,
+          summary: "edited",
+          payload: { path, linesAdded: 1, linesRemoved: 1 },
+        },
+      );
+
+    edit("src/one.ts");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: {
+          command:
+            "cd /testbed && git status --short && echo ==== && git --no-pager diff HEAD",
+        },
+      },
+      {
+        ok: true,
+        summary: "run_shell: exit 0",
+        payload: {
+          stdout:
+            "diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-before\n+after",
+        },
+      },
+    );
+    expect(state.snapshot().diffInspectedRevision).toBe(1);
+
+    edit("src/two.ts");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "git --no-pager diff HEAD -- src/missing.ts" },
+      },
+      { ok: true, summary: "run_shell: exit 0", payload: { stdout: "" } },
+    );
+    expect(state.snapshot().diffInspectedRevision).toBe(1);
+
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "git --no-pager diff HEAD" },
+      },
+      { ok: false, summary: "run_shell: exit 1", payload: {} },
+    );
+    expect(state.snapshot().diffInspectedRevision).toBe(1);
+
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: { command: "git --no-pager diff HEAD; true" },
+      },
+      { ok: true, summary: "run_shell: exit 0", payload: {} },
+    );
+    expect(state.snapshot().diffInspectedRevision).toBe(1);
+  });
+
   test("restores legacy snapshots with an empty acceptance ledger", () => {
     const current = new TaskStateManager("fix bug").snapshot();
     const { acceptanceCriteria: _removed, ...legacy } = current;
@@ -349,7 +418,14 @@ describe("TaskStateManager", () => {
         tool: "workspace.run_shell",
         args: { command: "git --no-pager diff -- a.py" },
       },
-      { ok: true, summary: "diff", payload: {} },
+      {
+        ok: true,
+        summary: "diff",
+        payload: {
+          stdout:
+            "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-old\n+new",
+        },
+      },
     );
     expect(formatCompletionReadiness(state.snapshot())).toEqual([
       "Completion readiness:",

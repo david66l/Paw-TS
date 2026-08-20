@@ -1607,6 +1607,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     }
     let implementationCalls = 0;
     let sawCheckpointFeedback = false;
+    let sawInspectedPatch = false;
     const implementationModel: LanguageModel = {
       label: "stable-block-implementation",
       async complete(messages) {
@@ -1620,7 +1621,15 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
             text: '{"tool":"workspace.run_shell","args":{"command":"node smoke-test.js"}}',
           };
         if (implementationCalls === 3)
-          return { text: '{"tool":"workspace.git_diff","args":{}}' };
+          return {
+            text: '{"tool":"workspace.run_shell","args":{"command":"git status --short && echo ==== && git --no-pager diff HEAD"}}',
+          };
+        sawInspectedPatch = messages.some(
+          (message) =>
+            message.content.includes("diff --git a/source.txt b/source.txt") &&
+            message.content.includes("-before") &&
+            message.content.includes("+after"),
+        );
         sawCheckpointFeedback = messages.some((message) =>
           message.content.includes("LoopV2SemanticReview:partial"),
         );
@@ -1666,6 +1675,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.completionReason).toBe("model_abort");
       expect(reviewCalls).toBe(1);
       expect(probeCalls).toBe(0);
+      expect(sawInspectedPatch).toBe(true);
       expect(sawCheckpointFeedback).toBe(true);
       expect(
         events.filter((event) => event.event.type === "candidate.checkpoint"),

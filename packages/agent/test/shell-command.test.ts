@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  containsExecutedGitDiffCommand,
   isGitDiffCommand,
   tokenizeCommandSegment,
 } from "../src/shell-command.js";
@@ -60,5 +61,63 @@ describe("isGitDiffCommand", () => {
       "diff",
       "repo path/file.ts",
     ]);
+  });
+});
+
+describe("containsExecutedGitDiffCommand", () => {
+  test("accepts the successful foreground chain used by real coding runs", () => {
+    expect(
+      containsExecutedGitDiffCommand(
+        "cd /testbed && git status --short && echo ==== && git --no-pager diff HEAD",
+      ),
+    ).toBe(true);
+    expect(
+      containsExecutedGitDiffCommand(
+        "cd repo && git status --short && git --no-pager diff -- src/a.ts",
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects chains that can skip, transform, hide, or background the diff", () => {
+    expect(containsExecutedGitDiffCommand("true || git --no-pager diff")).toBe(
+      false,
+    );
+    expect(containsExecutedGitDiffCommand("git --no-pager diff | head")).toBe(
+      false,
+    );
+    expect(containsExecutedGitDiffCommand("git --no-pager diff; true")).toBe(
+      false,
+    );
+    expect(
+      containsExecutedGitDiffCommand("git --no-pager diff && echo reviewed"),
+    ).toBe(false);
+    expect(
+      containsExecutedGitDiffCommand("git status --short\ngit --no-pager diff"),
+    ).toBe(false);
+    expect(
+      containsExecutedGitDiffCommand("git --no-pager diff > review.txt"),
+    ).toBe(false);
+    expect(
+      containsExecutedGitDiffCommand("git --no-pager diff & echo done"),
+    ).toBe(false);
+    expect(containsExecutedGitDiffCommand("echo $(git --no-pager diff)")).toBe(
+      false,
+    );
+    expect(containsExecutedGitDiffCommand("echo 'git --no-pager diff'")).toBe(
+      false,
+    );
+    expect(
+      containsExecutedGitDiffCommand("echo ok # comment && git diff"),
+    ).toBe(false);
+    for (const hidden of [
+      "git diff --output=review.txt",
+      "git diff --output review.txt",
+      "git diff --no-patch",
+      "git diff --quiet",
+      "git diff -s",
+      "git diff --stat",
+    ]) {
+      expect(containsExecutedGitDiffCommand(hidden)).toBe(false);
+    }
   });
 });

@@ -12,6 +12,52 @@ export function isGitDiffCommand(command: string): boolean {
   return tokens ? tokensStartGitDiff(tokens) : false;
 }
 
+/**
+ * Recognize a real `git diff` inside a successful, foreground command chain.
+ *
+ * The coding toolset exposes `workspace.run_shell`, not a dedicated diff
+ * tool, so agents commonly inspect with `cd ... && git status && git diff`.
+ * A successful chain made only of `&&`, with `git diff` as its final segment,
+ * proves the diff itself ran successfully in the foreground. Pipes,
+ * fallbacks, sequential separators, later commands, background jobs,
+ * substitutions, and redirections remain deliberately ineligible because
+ * they can skip, hide, truncate, or mask a failed diff inspection.
+ */
+export function containsExecutedGitDiffCommand(command: string): boolean {
+  if (/[<>$`]/.test(command) || hasUnquotedShellComment(command)) return false;
+  const segments = parseCommandChain(command);
+  if (!segments?.length) return false;
+  if (segments.slice(0, -1).some((segment) => segment.connectorAfter !== "&&"))
+    return false;
+  const finalSegment = segments.at(-1);
+  return finalSegment ? tokensExposeGitDiff(finalSegment.tokens) : false;
+}
+
+function hasUnquotedShellComment(command: string): boolean {
+  let quote: "'" | '"' | undefined;
+  let escaped = false;
+  for (const character of command) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      continue;
+    }
+    if (character === "#") return true;
+  }
+  return false;
+}
+
 const GIT_GLOBAL_FLAGS = new Set([
   "--paginate",
   "--no-pager",
@@ -35,23 +81,23 @@ const GIT_GLOBAL_VALUE_OPTIONS = new Set([
   "--super-prefix",
 ]);
 
-function tokensStartGitDiff(tokens: readonly string[]): boolean {
+function gitDiffSubcommandIndex(tokens: readonly string[]): number | undefined {
   const executable = tokens[0]?.toLocaleLowerCase();
-  if (executable !== "git" && executable !== "git.exe") return false;
+  if (executable !== "git" && executable !== "git.exe") return undefined;
 
   let index = 1;
   while (index < tokens.length) {
     const token = tokens[index];
-    if (!token) return false;
+    if (!token) return undefined;
     if (!token.startsWith("-")) {
-      return token.toLocaleLowerCase() === "diff";
+      return token.toLocaleLowerCase() === "diff" ? index : undefined;
     }
     if (GIT_GLOBAL_FLAGS.has(token)) {
       index += 1;
       continue;
     }
     if (GIT_GLOBAL_VALUE_OPTIONS.has(token)) {
-      if (!tokens[index + 1]) return false;
+      if (!tokens[index + 1]) return undefined;
       index += 2;
       continue;
     }
@@ -62,9 +108,42 @@ function tokensStartGitDiff(tokens: readonly string[]): boolean {
       index += 1;
       continue;
     }
-    return false;
+    return undefined;
   }
-  return false;
+  return undefined;
+}
+
+function tokensStartGitDiff(tokens: readonly string[]): boolean {
+  return gitDiffSubcommandIndex(tokens) !== undefined;
+}
+
+const HIDDEN_GIT_DIFF_FLAGS = new Set([
+  "--check",
+  "--help",
+  "--name-only",
+  "--name-status",
+  "--no-patch",
+  "--numstat",
+  "--quiet",
+  "--raw",
+  "--shortstat",
+  "--stat",
+  "--summary",
+  "-h",
+  "-s",
+]);
+
+function tokensExposeGitDiff(tokens: readonly string[]): boolean {
+  const subcommandIndex = gitDiffSubcommandIndex(tokens);
+  if (subcommandIndex === undefined) return false;
+  return !tokens.slice(subcommandIndex + 1).some((token) => {
+    const normalized = token.toLocaleLowerCase();
+    return (
+      HIDDEN_GIT_DIFF_FLAGS.has(normalized) ||
+      normalized === "--output" ||
+      normalized.startsWith("--output=")
+    );
+  });
 }
 
 function isAttachedLongGitOption(token: string): boolean {
