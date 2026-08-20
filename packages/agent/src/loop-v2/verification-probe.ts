@@ -6,6 +6,7 @@ import { type ModelTokenUsage, atomicWrite } from "@paw/core";
 import {
   type ShellSandboxConfig,
   type ToolRunResult,
+  isShellSandboxEnabled,
   runShellInWorkspace,
 } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
@@ -30,13 +31,19 @@ import { sha256Canonical } from "./canonical.js";
  * 不可见；改动波及但未被修改的下游代码（如未改行消费了被改变类型的
  * 值）恰恰是自测盲区。独立视角选测试从机制上收窄该盲区。
  */
-const MAX_PROBES = 2 as const;
+const MAX_PROBES = 1 as const;
 const PROBE_TIMEOUT_MS = 180_000 as const;
 const PROBE_OUTPUT_CHARS = 1_200 as const;
-const DIFF_BUDGET_CHARS = 48_000 as const;
-const PROBE_PLANNER_MAX_OUTPUT_TOKENS = 4_096 as const;
-const PROBE_ADJUDICATOR_MAX_OUTPUT_TOKENS = 2_048 as const;
-const PROBE_POLICY_VERSION = "paw.loop-v2-verification-probe-v2" as const;
+const DIFF_BUDGET_CHARS = 24_000 as const;
+const PROBE_PLANNER_MAX_OUTPUT_TOKENS = 1_536 as const;
+const PROBE_ADJUDICATOR_MAX_OUTPUT_TOKENS = 1_024 as const;
+const PROBE_COMMAND_CHARS = 512 as const;
+const PROBE_RATIONALE_CHARS = 160 as const;
+const PROBE_ORACLE_CHARS = 160 as const;
+const PROBE_MAX_GROUNDING_REFS = 2 as const;
+const PROBE_RISK_EVIDENCE_CHARS = 320 as const;
+const PROBE_PROMPT_MAX_CHARS = 42_000 as const;
+const PROBE_POLICY_VERSION = "paw.loop-v2-verification-probe-v3" as const;
 
 export type VerificationProbeKindV2 = "repository_test" | "inline_contract";
 
@@ -98,6 +105,19 @@ export interface VerificationProbeOnceResultV2 {
   /** A durable claim existed without a settled record; never re-execute it. */
   readonly interrupted?: true;
   readonly usage?: ModelTokenUsage;
+  readonly plannerDiagnostics?: ProbePlannerDiagnosticsV3;
+}
+
+export interface ProbePlannerDiagnosticsV3 {
+  readonly policyVersion: typeof PROBE_POLICY_VERSION;
+  readonly finishReason: string;
+  readonly promptChars: number;
+  readonly promptHash: string;
+  readonly visibleChars: number;
+  readonly visibleHash: string;
+  readonly thinkingChars: number;
+  readonly thinkingHash: string;
+  readonly diagnosticsHash: string;
 }
 
 export interface VerificationProbeGateDecisionV1 {
@@ -295,6 +315,112 @@ function isInsideExtensionPointV1(
   });
 }
 
+function clipDiffChunkAtLineBoundariesV1(
+  chunk: string,
+  budget: number,
+): string {
+  const marker = "\n... (middle of this diff hunk omitted) ...\n";
+  const maxLineChars = Math.max(120, budget - marker.length - 80);
+  const lines = chunk
+    .split(/\r?\n/)
+    .map((line) =>
+      line.length <= maxLineChars
+        ? line
+        : `... (oversized diff line omitted chars=${line.length} hash=${sha256Canonical({ line })}) ...`,
+    );
+  const normalized = lines.join("\n");
+  if (normalized.length <= budget) return normalized;
+  const available = Math.max(200, budget - marker.length);
+  const headTarget = Math.floor(available * 0.6);
+  const tailTarget = available - headTarget;
+  const head: string[] = [];
+  let headChars = 0;
+  for (const line of lines) {
+    const cost = line.length + (head.length > 0 ? 1 : 0);
+    if (headChars + cost > headTarget) break;
+    head.push(line);
+    headChars += cost;
+  }
+  const tail: string[] = [];
+  let tailChars = 0;
+  for (let index = lines.length - 1; index >= head.length; index -= 1) {
+    const line = lines[index] ?? "";
+    const cost = line.length + (tail.length > 0 ? 1 : 0);
+    if (tailChars + cost > tailTarget) break;
+    tail.unshift(line);
+    tailChars += cost;
+  }
+  return `${head.join("\n")}${marker}${tail.join("\n")}`;
+}
+
+/**
+ * Bounded, hunk-aware terminal diff projection for the auxiliary planner.
+ * Large diffs retain uniformly-spaced first/middle/last hunks instead of only
+ * the leading file; oversized individual hunks preserve both boundary sides.
+ */
+export function sampleVerificationProbeDiffV1(
+  diff: string,
+  budget: number = DIFF_BUDGET_CHARS,
+): string {
+  if (!Number.isSafeInteger(budget) || budget < 1_000) {
+    throw new Error("verification probe diff budget is invalid");
+  }
+  if (diff.length <= budget) return diff;
+
+  const chunks: string[] = [];
+  let fileHeader: string[] = [];
+  let hunk: string[] = [];
+  const flushHunk = () => {
+    if (hunk.length > 0) chunks.push([...fileHeader, ...hunk].join("\n"));
+    hunk = [];
+  };
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      flushHunk();
+      fileHeader = [line];
+      continue;
+    }
+    if (line.startsWith("@@ ")) {
+      flushHunk();
+      hunk = [line];
+      continue;
+    }
+    if (hunk.length > 0) hunk.push(line);
+    else if (fileHeader.length > 0) fileHeader.push(line);
+  }
+  flushHunk();
+  if (chunks.length === 0) {
+    return clipDiffChunkAtLineBoundariesV1(diff, budget);
+  }
+
+  const targetCount = Math.min(
+    chunks.length,
+    Math.max(3, Math.floor(budget / 1_200)),
+  );
+  const indices = new Set<number>();
+  if (targetCount === 1) indices.add(0);
+  else {
+    for (let index = 0; index < targetCount; index += 1) {
+      indices.add(
+        Math.round((index * (chunks.length - 1)) / (targetCount - 1)),
+      );
+    }
+  }
+  const selected = [...indices].sort((left, right) => left - right);
+  const separator = "\n... (other diff hunks omitted) ...\n";
+  const perChunk = Math.max(
+    300,
+    Math.floor(
+      (budget - separator.length * (selected.length - 1)) / selected.length,
+    ),
+  );
+  return selected
+    .map((index) =>
+      clipDiffChunkAtLineBoundariesV1(chunks[index] ?? "", perChunk),
+    )
+    .join(separator);
+}
+
 export function buildVerificationProbePromptV1(input: {
   readonly goal: string;
   readonly diff: string;
@@ -304,10 +430,11 @@ export function buildVerificationProbePromptV1(input: {
   /** Nearby repository-owned handler/dispatch/registry mechanisms. */
   readonly extensionPointHints?: readonly string[];
 }): string {
-  const diffText =
-    input.diff.length > DIFF_BUDGET_CHARS
-      ? `${input.diff.slice(0, DIFF_BUDGET_CHARS)}\n... (diff truncated)`
-      : input.diff;
+  const boundedEvidence = (value: string): string =>
+    value.length <= PROBE_RISK_EVIDENCE_CHARS
+      ? value
+      : `${value.slice(0, PROBE_RISK_EVIDENCE_CHARS - 80)}... [chars=${value.length} hash=${sha256Canonical({ value })}]`;
+  const diffText = sampleVerificationProbeDiffV1(input.diff);
   // 检测 diff 中的正则/模式改动，提取行为收窄风险
   const narrowingRisk = detectRegexNarrowing(input.diff);
   const protocolFallbackRisk = detectProtocolFallbackRisk(input.diff);
@@ -326,14 +453,53 @@ export function buildVerificationProbePromptV1(input: {
     /\b(?:out(?:put)?|in[-_ ]?place|reflected)\b|__r[a-z_]+__/i.test(
       `${input.goal}\n${input.diff}`,
     );
-  return [
-    "You are an adversarial verification engineer. Another engineer claims the change below completes the stated task. Your ONLY job is to try to BREAK the candidate change before it ships.",
+  const riskBrief = protocolFallbackRisk
+    ? [
+        "## Highest-priority risk: protocol fallback ownership",
+        `CATCH: ${boundedEvidence(protocolFallbackRisk.broadCatch)}`,
+        `FALLBACK: ${boundedEvidence(protocolFallbackRisk.fallback)}`,
+        "Probe one ownership boundary: compare a real competing protocol participant with a look-alike lacking that handler. The sentinel must appear only when another implementation can own the operation.",
+        ...(protocolVariantVisible
+          ? [
+              "Cover the single most relevant visible out/in-place/reflected variant.",
+            ]
+          : []),
+      ]
+    : extensionPointRisk
+      ? [
+          "## Highest-priority risk: existing extension point",
+          `Nearby mechanisms: ${boundedEvidence(
+            extensionPointHints
+              .slice(0, 8)
+              .map((hint) => boundedEvidence(hint))
+              .join(", "),
+          )}`,
+          "Probe the earliest public dispatch/evaluation path that distinguishes the candidate base-class change from the smallest registered handler/plugin.",
+          ...(simplifyVisible
+            ? [
+                "Prefer direct construction/evaluation over simplify-only evidence.",
+              ]
+            : []),
+        ]
+      : narrowingRisk
+        ? [
+            "## Highest-priority risk: behavioral narrowing",
+            `OLD: ${boundedEvidence(narrowingRisk.oldPattern)}`,
+            `NEW: ${boundedEvidence(narrowingRisk.newPattern)}`,
+            "Probe one input accepted by the old pattern near the changed boundary.",
+          ]
+        : [];
+  const prompt = [
+    "You are an adversarial verification planner. Return one short executable probe most likely to falsify this candidate. Do not explain your reasoning outside the JSON.",
     "",
     "## Task",
     input.goal.slice(0, 4_000),
     "",
     "## Changed files",
-    input.changedFiles.slice(0, 40).join(", ") || "(none)",
+    input.changedFiles
+      .slice(0, 20)
+      .map((file) => boundedEvidence(file))
+      .join(", ") || "(none)",
     ...(input.impactedTests && input.impactedTests.length > 0
       ? [
           "",
@@ -341,53 +507,13 @@ export function buildVerificationProbePromptV1(input: {
           "These tests already exist in the repository and are linked to the files you changed. They represent known behavioral contracts — probe whether the change breaks them:",
           ...input.impactedTests
             .slice(0, 8)
-            .map((t) => `- repository_test:${t}`),
+            .map((t) => `- repository_test:${boundedEvidence(t)}`),
           ...(input.impactedTests.length > 8
             ? [`(and ${input.impactedTests.length - 8} more)`]
             : []),
         ]
       : []),
-    ...(narrowingRisk
-      ? [
-          "",
-          "## ⚠ Behavioral narrowing risk detected",
-          "The diff modifies a pattern/regex. The OLD pattern accepted inputs that the NEW pattern might reject:",
-          `  OLD: ${narrowingRisk.oldPattern}`,
-          `  NEW: ${narrowingRisk.newPattern}`,
-          "",
-          "Generate probe commands that test inputs the OLD pattern accepted. If the NEW pattern rejects any previously-accepted input without the task explicitly requiring it, that is a blocking defect.",
-        ]
-      : []),
-    ...(protocolFallbackRisk
-      ? [
-          "",
-          "## ⚠ Protocol fallback ownership risk detected",
-          "The diff adds a broad exception boundary that returns a protocol fallback sentinel:",
-          `  CATCH: ${protocolFallbackRisk.broadCatch}`,
-          `  FALLBACK: ${protocolFallbackRisk.fallback}`,
-          "",
-          "Generate a minimal ownership matrix, not only the happy path: (1) a participant that really implements the competing protocol and (2) a look-alike with similar metadata but no explicit protocol handler. Verify the fallback occurs only when another implementation can own the operation, and that only expected conversion/type exceptions are caught.",
-          ...(protocolVariantVisible
-            ? [
-                "The visible protocol also exposes an out/output, in-place, reflected, or related dispatch variant; cover each applicable path.",
-              ]
-            : []),
-        ]
-      : []),
-    ...(extensionPointRisk
-      ? [
-          "",
-          "## ⚠ Existing extension-point bypass risk detected",
-          "The repository has these nearby candidate handler/dispatch/registry mechanisms:",
-          ...extensionPointHints.slice(0, 12).map((hint) => `- ${hint}`),
-          "First determine whether one of these mechanisms owns the changed behavior. If it does, compare the candidate with the smallest registered handler/plugin instead of assuming a broad base-class special case is necessary. Probe the earliest public dispatch/evaluation path and any downstream normalization or post-processing path visible in the task or diff.",
-          ...(simplifyVisible
-            ? [
-                "Simplification is visible in this candidate: explicitly compare direct construction/evaluation with the simplify/post-processing path; passing only the latter can hide a wrong dispatch layer.",
-              ]
-            : []),
-        ]
-      : []),
+    ...(riskBrief.length > 0 ? ["", ...riskBrief] : []),
     "",
     "## Candidate diff",
     "```diff",
@@ -395,22 +521,26 @@ export function buildVerificationProbePromptV1(input: {
     "```",
     "",
     "## Your mission",
-    "Write 1-2 minimal executable probe commands that are MOST LIKELY to expose a defect in THIS diff — especially:",
-    "- boundary conditions the diff's author would not think to test (empty/zero/one inputs, unknown categories, extreme dtypes or values);",
-    "- unchanged downstream code that now consumes a changed value type or shape (the diff may break lines it never touched);",
-    "- contract regressions for existing callers.",
-    "Prefer exercising the changed code paths end-to-end (e.g. a `python - <<'EOF'` or `python -c` snippet that imports and drives the changed API, or a targeted `python -m pytest <existing repo test> -k ...` run).",
+    "Choose exactly one end-to-end boundary, downstream-consumer, or old-caller contract that the implementing agent did not already verify.",
+    "Prefer a short inline Python/Node assertion. A repository_test command must be exactly one bare impacted selector, for example `python -m pytest tests/test_file.py::test_name`, with no options or additional targets.",
     "",
     "## Hard constraints",
     "- Offline only: no network, no package installation, no git remote operations.",
     "- Do not create or modify files in the repository; inline snippets only.",
-    "- Each command must be a single self-contained shell invocation that exits non-zero on failure.",
+    `- Return exactly one probe. command<=${PROBE_COMMAND_CHARS} chars; rationale<=${PROBE_RATIONALE_CHARS}; oracle<=${PROBE_ORACLE_CHARS}; groundingRefs<=${PROBE_MAX_GROUNDING_REFS}.`,
+    "- The command must be one self-contained shell invocation that exits non-zero on failure.",
     "- Only probe what the diff could plausibly affect; do not restate the happy path the author already verified.",
     "- kind=repository_test is allowed only for an existing repository test named below; cite it as repository_test:<path>.",
     "- kind=inline_contract must cite task_goal and/or terminal_diff and must state a behavioral oracle. Pure delimiter counts, formatting balance, or syntax-shape checks are invalid unless the task explicitly defines that exact contract.",
     "",
-    'Reply with ONLY a JSON object: {"probes":[{"command":"<shell command>","rationale":"<why this can expose a task-relevant defect>","oracle":"<observable expected behavior>","kind":"repository_test|inline_contract","groundingRefs":["task_goal","terminal_diff","repository_test:<path>"]}]}',
+    'Reply ONLY: {"probes":[{"command":"...","rationale":"...","oracle":"...","kind":"repository_test|inline_contract","groundingRefs":["task_goal","terminal_diff"]}]}',
   ].join("\n");
+  if (prompt.length > PROBE_PROMPT_MAX_CHARS) {
+    throw new Error(
+      `verification probe prompt exceeded bounded material (${prompt.length} > ${PROBE_PROMPT_MAX_CHARS})`,
+    );
+  }
+  return prompt;
 }
 
 export function parseVerificationProbePlanV1(
@@ -455,13 +585,19 @@ export function parseVerificationProbePlanV1(
     )
       continue;
     const trimmed = command.trim();
-    if (trimmed.length > 2_000) continue;
+    if (
+      trimmed.length > PROBE_COMMAND_CHARS ||
+      rationale.trim().length > PROBE_RATIONALE_CHARS ||
+      oracle.trim().length > PROBE_ORACLE_CHARS ||
+      groundingRefs.length > PROBE_MAX_GROUNDING_REFS
+    )
+      continue;
     if (PROBE_COMMAND_DENYLIST.test(trimmed)) continue;
     items.push({
       probeId: `probe_${items.length + 1}`,
       command: trimmed,
-      rationale: rationale.trim().slice(0, 600),
-      oracle: oracle.trim().slice(0, 600),
+      rationale: rationale.trim(),
+      oracle: oracle.trim(),
       kind,
       groundingRefs: [...new Set(groundingRefs.map((ref) => ref.trim()))],
     });
@@ -472,11 +608,20 @@ export function parseVerificationProbePlanV1(
 export function executeVerificationProbesV1(input: {
   readonly workspaceRoot: string;
   readonly shellSandbox?: ShellSandboxConfig;
+  /** Host-owned dependency seam for deterministic tests; never model input. */
+  readonly hostShellRunner?: typeof runShellInWorkspace;
   readonly probes: readonly VerificationProbePlanItemV1[];
   readonly impactedTests?: readonly string[];
   readonly changedFiles?: readonly string[];
   readonly verificationAuthority?: "local" | "external" | "not_required";
 }): readonly VerificationProbeResultV1[] {
+  const probeSandbox = isShellSandboxEnabled(input.shellSandbox)
+    ? {
+        ...input.shellSandbox,
+        network: "deny" as const,
+        workspaceReadOnly: true,
+      }
+    : undefined;
   const impactedTests = new Set(
     (input.impactedTests ?? []).map((test) => test.replace(/\\/g, "/")),
   );
@@ -535,11 +680,36 @@ export function executeVerificationProbesV1(input: {
       });
       continue;
     }
-    const shell = runShellInWorkspace(input.workspaceRoot, probe.command, {
-      timeoutMs: PROBE_TIMEOUT_MS,
-      ...(input.shellSandbox ? { shellSandbox: input.shellSandbox } : {}),
-      skipApprovalGate: true,
-    });
+    if (!probeSandbox) {
+      const output =
+        "probe could not execute: a container sandbox with a read-only workspace is required";
+      results.push({
+        probeId: probe.probeId,
+        plan: probe,
+        execution: {
+          status: "environment_error",
+          output,
+          outputHash: sha256Canonical({ output }),
+        },
+        disposition: "environment_error",
+        adjudication: {
+          source: "host",
+          summary:
+            "probe runner refused to execute model-generated shell outside a read-only container",
+          evidenceRefs: [],
+        },
+      });
+      continue;
+    }
+    const shell = (input.hostShellRunner ?? runShellInWorkspace)(
+      input.workspaceRoot,
+      probe.command,
+      {
+        timeoutMs: PROBE_TIMEOUT_MS,
+        shellSandbox: probeSandbox,
+        skipApprovalGate: true,
+      },
+    );
     if (shell.error) {
       const output = `probe could not execute: ${shell.error}`.slice(
         0,
@@ -1163,7 +1333,10 @@ function parseProbeRecordV2(value: unknown): ProbeRecordV2 | undefined {
     (result.interrupted === true &&
       (result.verdict !== "interrupted" ||
         result.modelCalls !== 0 ||
-        result.probes.length !== 0)) ||
+        result.probes.length !== 0 ||
+        result.plannerDiagnostics !== undefined)) ||
+    (!result.interrupted &&
+      !isProbePlannerDiagnosticsV3(result.plannerDiagnostics)) ||
     (!result.interrupted &&
       result.verdict !==
         (result.probes.some((probe) => probe.disposition === "candidate_defect")
@@ -1223,12 +1396,16 @@ function isVerificationProbeResultV2(
     plan.probeId !== probe.probeId ||
     typeof plan.command !== "string" ||
     !plan.command.trim() ||
+    plan.command.length > PROBE_COMMAND_CHARS ||
     typeof plan.rationale !== "string" ||
     !plan.rationale.trim() ||
+    plan.rationale.length > PROBE_RATIONALE_CHARS ||
     typeof plan.oracle !== "string" ||
     !plan.oracle.trim() ||
+    plan.oracle.length > PROBE_ORACLE_CHARS ||
     !["repository_test", "inline_contract"].includes(plan.kind) ||
     !Array.isArray(plan.groundingRefs) ||
+    plan.groundingRefs.length > PROBE_MAX_GROUNDING_REFS ||
     !plan.groundingRefs.every(
       (reference) => typeof reference === "string" && reference.trim(),
     ) ||
@@ -1303,6 +1480,65 @@ function isVerificationProbeResultV2(
   return true;
 }
 
+function buildProbePlannerDiagnosticsV3(input: {
+  readonly prompt: string;
+  readonly text: string;
+  readonly thinking?: string;
+  readonly finishReason?: string;
+}): ProbePlannerDiagnosticsV3 {
+  const thinking = input.thinking ?? "";
+  const withoutHash = {
+    policyVersion: PROBE_POLICY_VERSION,
+    finishReason: input.finishReason?.trim() || "unknown",
+    promptChars: input.prompt.length,
+    promptHash: sha256Canonical({ content: input.prompt }),
+    visibleChars: input.text.length,
+    visibleHash: sha256Canonical({ content: input.text }),
+    thinkingChars: thinking.length,
+    thinkingHash: sha256Canonical({ content: thinking }),
+  };
+  return {
+    ...withoutHash,
+    diagnosticsHash: sha256Canonical(withoutHash),
+  };
+}
+
+function isProbePlannerDiagnosticsV3(
+  value: unknown,
+): value is ProbePlannerDiagnosticsV3 {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const diagnostics = value as Partial<ProbePlannerDiagnosticsV3>;
+  const withoutHash = {
+    policyVersion: diagnostics.policyVersion,
+    finishReason: diagnostics.finishReason,
+    promptChars: diagnostics.promptChars,
+    promptHash: diagnostics.promptHash,
+    visibleChars: diagnostics.visibleChars,
+    visibleHash: diagnostics.visibleHash,
+    thinkingChars: diagnostics.thinkingChars,
+    thinkingHash: diagnostics.thinkingHash,
+  };
+  return (
+    diagnostics.policyVersion === PROBE_POLICY_VERSION &&
+    typeof diagnostics.finishReason === "string" &&
+    diagnostics.finishReason.trim().length > 0 &&
+    Number.isSafeInteger(diagnostics.promptChars) &&
+    (diagnostics.promptChars ?? -1) >= 0 &&
+    typeof diagnostics.promptHash === "string" &&
+    diagnostics.promptHash.length === 64 &&
+    Number.isSafeInteger(diagnostics.visibleChars) &&
+    (diagnostics.visibleChars ?? -1) >= 0 &&
+    typeof diagnostics.visibleHash === "string" &&
+    diagnostics.visibleHash.length === 64 &&
+    Number.isSafeInteger(diagnostics.thinkingChars) &&
+    (diagnostics.thinkingChars ?? -1) >= 0 &&
+    typeof diagnostics.thinkingHash === "string" &&
+    diagnostics.thinkingHash.length === 64 &&
+    typeof diagnostics.diagnosticsHash === "string" &&
+    diagnostics.diagnosticsHash === sha256Canonical(withoutHash)
+  );
+}
+
 function readProbeJsonV1(
   filePath: string,
 ):
@@ -1361,6 +1597,8 @@ export async function runVerificationProbeOnceV2(input: {
   readonly mutationRevision: number;
   readonly verificationAuthority?: "local" | "external" | "not_required";
   readonly shellSandbox?: ShellSandboxConfig;
+  /** Host-owned dependency seam for deterministic tests; never model input. */
+  readonly hostShellRunner?: typeof runShellInWorkspace;
   readonly signal?: AbortSignal;
   readonly onUsage?: (modelLabel: string, usage: ModelTokenUsage) => void;
 }): Promise<VerificationProbeOnceResultV2> {
@@ -1514,25 +1752,28 @@ export async function runVerificationProbeOnceV2(input: {
     throw new Error("Verification probe claim failed strict reread");
   }
 
+  const plannerPrompt = buildVerificationProbePromptV1({
+    goal: input.goal,
+    diff: input.diff,
+    changedFiles: input.changedFiles,
+    ...(input.impactedTests ? { impactedTests: input.impactedTests } : {}),
+    extensionPointHints: discoverRepositoryExtensionPointsV1(
+      input.workspaceRoot,
+      input.changedFiles,
+    ),
+  });
   const completion = await input.model.complete(
     [
       {
         role: "user",
-        content: buildVerificationProbePromptV1({
-          goal: input.goal,
-          diff: input.diff,
-          changedFiles: input.changedFiles,
-          ...(input.impactedTests
-            ? { impactedTests: input.impactedTests }
-            : {}),
-          extensionPointHints: discoverRepositoryExtensionPointsV1(
-            input.workspaceRoot,
-            input.changedFiles,
-          ),
-        }),
+        content: plannerPrompt,
       },
     ],
-    { signal: input.signal, maxOutputTokens: PROBE_PLANNER_MAX_OUTPUT_TOKENS },
+    {
+      ...(input.signal ? { signal: input.signal } : {}),
+      maxOutputTokens: PROBE_PLANNER_MAX_OUTPUT_TOKENS,
+      thinkingEnabled: false,
+    },
   );
   if (input.onUsage && completion.usage) {
     input.onUsage(input.model.label, completion.usage);
@@ -1548,6 +1789,9 @@ export async function runVerificationProbeOnceV2(input: {
     : executeVerificationProbesV1({
         workspaceRoot: input.workspaceRoot,
         ...(input.shellSandbox ? { shellSandbox: input.shellSandbox } : {}),
+        ...(input.hostShellRunner
+          ? { hostShellRunner: input.hostShellRunner }
+          : {}),
         probes: plan,
         ...(input.impactedTests ? { impactedTests: input.impactedTests } : {}),
         changedFiles: input.changedFiles,
@@ -1581,8 +1825,9 @@ export async function runVerificationProbeOnceV2(input: {
         },
       ],
       {
-        signal: input.signal,
+        ...(input.signal ? { signal: input.signal } : {}),
         maxOutputTokens: PROBE_ADJUDICATOR_MAX_OUTPUT_TOKENS,
+        thinkingEnabled: false,
       },
     );
     modelCalls += 1;
@@ -1618,6 +1863,16 @@ export async function runVerificationProbeOnceV2(input: {
       ),
     );
   const usage = sumProbeUsageV2([completion.usage, adjudicatorUsage]);
+  const plannerDiagnostics = buildProbePlannerDiagnosticsV3({
+    prompt: plannerPrompt,
+    text: completion.text,
+    ...(completion.thinking !== undefined
+      ? { thinking: completion.thinking }
+      : {}),
+    ...(completion.finishReason !== undefined
+      ? { finishReason: completion.finishReason }
+      : {}),
+  });
   const result: VerificationProbeOnceResultV2 = {
     candidateInputHash: input.candidateInputHash,
     mutationRevision: input.mutationRevision,
@@ -1635,6 +1890,7 @@ export async function runVerificationProbeOnceV2(input: {
         }
       : {}),
     modelCalls,
+    plannerDiagnostics,
     ...(usage ? { usage } : {}),
   };
   // Once claimed, every outcome is settled atomically. Retrying an environment

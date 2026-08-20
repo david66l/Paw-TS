@@ -19,7 +19,11 @@
 
 import { type ModelTokenUsage, isNativeToolTurnV1 } from "@paw/core";
 
-import type { LanguageModel, ModelCapabilities } from "./language-model.js";
+import type {
+  LanguageModel,
+  ModelCapabilities,
+  ModelRuntimeProfile,
+} from "./language-model.js";
 import { buildOpenAiMessageContent } from "./message-content.js";
 import {
   type ModelCompleteOptions,
@@ -43,12 +47,38 @@ export interface OpenAICompatibleOptions {
   readonly capabilities?: ModelCapabilities;
   readonly thinkingEnabled?: boolean;
   readonly reasoningEffort?: "high" | "max";
+  /** Endpoint accepts DeepSeek's non-standard `thinking` request field. */
+  readonly supportsThinkingToggle?: boolean;
 }
 
 function abortError(): Error {
   const e = new Error("The operation was aborted");
   e.name = "AbortError";
   return e;
+}
+
+function resolveRequestThinkingV1(
+  profile: ModelRuntimeProfile,
+  options: ModelCompleteOptions | undefined,
+  supportsThinkingToggle: boolean,
+): Readonly<{
+  enabled: boolean | undefined;
+  effort: "high" | "max" | undefined;
+}> {
+  const enabled =
+    options?.thinkingEnabled === false
+      ? supportsThinkingToggle
+        ? false
+        : undefined
+      : (options?.thinkingEnabled ?? profile.thinkingEnabled);
+  return {
+    enabled,
+    // Explicitly disabling reasoning for a bounded auxiliary call must also
+    // suppress the configured effort knob; sending both is contradictory on
+    // DeepSeek-compatible endpoints.
+    effort:
+      options?.thinkingEnabled === false ? undefined : profile.reasoningEffort,
+  };
 }
 
 /**
@@ -63,6 +93,7 @@ export class OpenAICompatibleModel implements LanguageModel {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly model: string;
+  private readonly supportsThinkingToggle: boolean;
 
   constructor(opts: OpenAICompatibleOptions) {
     if (opts.thinkingEnabled === false && opts.reasoningEffort !== undefined) {
@@ -76,6 +107,8 @@ export class OpenAICompatibleModel implements LanguageModel {
       "",
     );
     this.model = opts.model;
+    this.supportsThinkingToggle =
+      opts.supportsThinkingToggle ?? opts.thinkingEnabled !== undefined;
     this.label = opts.baseUrl?.includes("dashscope")
       ? `qwen:${opts.model}`
       : opts.baseUrl?.includes("deepseek")
@@ -105,11 +138,16 @@ export class OpenAICompatibleModel implements LanguageModel {
       throw abortError();
     }
     const url = `${this.baseUrl}/chat/completions`;
+    const requestThinking = resolveRequestThinkingV1(
+      this.runtimeProfile,
+      options,
+      this.supportsThinkingToggle,
+    );
     const body: Record<string, unknown> = {
       model: this.model,
       messages: serializeOpenAiMessages(messages),
-      ...(this.runtimeProfile.thinkingEnabled === true ||
-      this.runtimeProfile.reasoningEffort !== undefined
+      ...(requestThinking.enabled === true ||
+      requestThinking.effort !== undefined
         ? {}
         : { temperature: 0.2 }),
     };
@@ -119,13 +157,13 @@ export class OpenAICompatibleModel implements LanguageModel {
         this.capabilities?.maxOutputTokens,
       );
     }
-    if (this.runtimeProfile.thinkingEnabled !== undefined) {
+    if (requestThinking.enabled !== undefined) {
       body.thinking = {
-        type: this.runtimeProfile.thinkingEnabled ? "enabled" : "disabled",
+        type: requestThinking.enabled ? "enabled" : "disabled",
       };
     }
-    if (this.runtimeProfile.reasoningEffort !== undefined) {
-      body.reasoning_effort = this.runtimeProfile.reasoningEffort;
+    if (requestThinking.effort !== undefined) {
+      body.reasoning_effort = requestThinking.effort;
     }
     if (options?.tools && options.tools.length > 0) {
       body.tools = options.tools;
@@ -246,11 +284,16 @@ export class OpenAICompatibleModel implements LanguageModel {
     }
     const url = `${this.baseUrl}/chat/completions`;
     const messagesPayload = serializeOpenAiMessages(messages);
+    const requestThinking = resolveRequestThinkingV1(
+      this.runtimeProfile,
+      options,
+      this.supportsThinkingToggle,
+    );
     const baseStreamBody: Record<string, unknown> = {
       model: this.model,
       messages: messagesPayload,
-      ...(this.runtimeProfile.thinkingEnabled === true ||
-      this.runtimeProfile.reasoningEffort !== undefined
+      ...(requestThinking.enabled === true ||
+      requestThinking.effort !== undefined
         ? {}
         : { temperature: 0.2 }),
       stream: true as const,
@@ -261,13 +304,13 @@ export class OpenAICompatibleModel implements LanguageModel {
         this.capabilities?.maxOutputTokens,
       );
     }
-    if (this.runtimeProfile.thinkingEnabled !== undefined) {
+    if (requestThinking.enabled !== undefined) {
       baseStreamBody.thinking = {
-        type: this.runtimeProfile.thinkingEnabled ? "enabled" : "disabled",
+        type: requestThinking.enabled ? "enabled" : "disabled",
       };
     }
-    if (this.runtimeProfile.reasoningEffort !== undefined) {
-      baseStreamBody.reasoning_effort = this.runtimeProfile.reasoningEffort;
+    if (requestThinking.effort !== undefined) {
+      baseStreamBody.reasoning_effort = requestThinking.effort;
     }
     if (options?.tools && options.tools.length > 0) {
       baseStreamBody.tools = options.tools;

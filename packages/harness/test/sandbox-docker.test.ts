@@ -75,6 +75,7 @@ describe("buildDockerShellExecSpec", () => {
         containerWorkspaceRoot: "/testbed",
         commandShell: "bash",
         pullPolicy: "never",
+        workspaceReadOnly: true,
       },
       {
         workspaceRoot,
@@ -93,6 +94,12 @@ describe("buildDockerShellExecSpec", () => {
     expect(spec.args).toContain("--network");
     expect(spec.args).toContain("none");
     expect(spec.args).toContain("--read-only");
+    expect(
+      spec.args.some(
+        (argument) =>
+          argument.startsWith("type=bind,") && argument.endsWith(",readonly"),
+      ),
+    ).toBeTrue();
     expect(spec.containerName).toStartWith("paw-shell-");
     expect(spec.args).toContain(spec.containerName);
     expect(spec.args).toContain("--pull");

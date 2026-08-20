@@ -1317,7 +1317,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       expect(result.status).toBe("completed");
       expect(reviewCalls).toBe(1);
-      expect(probeCalls).toBe(2);
+      // The production seam has no container sandbox in this fixture. The
+      // planner runs once, then shell execution fails closed before the
+      // adjudicator rather than executing model-generated code on the host.
+      expect(probeCalls).toBe(1);
       expect(model.callCount).toBe(5);
       expect(
         events.filter((event) => event.event.type === "candidate.checkpoint"),
@@ -1354,15 +1357,15 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(probes[0]).toMatchObject({
         type: "candidate.probe",
         stage: "checkpoint",
-        verdict: "pass",
-        outcome: "clear",
-        modelCalls: 2,
+        verdict: "error",
+        outcome: "inconclusive",
+        modelCalls: 1,
       });
       expect(probes[1]).toMatchObject({
         type: "candidate.probe",
         stage: "final_submission",
-        verdict: "pass",
-        outcome: "clear",
+        verdict: "error",
+        outcome: "inconclusive",
         externalVerification: "not_configured",
         modelCalls: 0,
       });
@@ -1420,7 +1423,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         semanticReview: { verdict: "pass" },
         verificationProbe: {
           candidateId: candidate.assessment.candidateId,
-          outcome: "clear",
+          outcome: "inconclusive",
         },
       });
       expect(
@@ -1435,7 +1438,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       ).toMatchObject({
         type: "verification_probe.recorded",
         candidateId: candidate.assessment.candidateId,
-        outcome: "clear",
+        outcome: "inconclusive",
       });
 
       // A real agent may submit final_answer immediately after the stable
@@ -2211,7 +2214,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         completionReason: "external_verification_pending",
       });
       expect(reviewCalls).toBe(1);
-      expect(probeCalls).toBe(2);
+      expect(probeCalls).toBe(1);
       expect(reviewMaterial).toContain('"authority":"external"');
       expect(reviewMaterial).toContain(
         '"localEvidenceRole":"diagnostic_not_acceptance"',
@@ -2241,7 +2244,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         verdict: "error",
         outcome: "inconclusive",
         externalVerification: "pending",
-        modelCalls: 2,
+        modelCalls: 1,
       });
       const checkpoint = parseLoopV2ProjectionCheckpointV1(
         fs.readFileSync(

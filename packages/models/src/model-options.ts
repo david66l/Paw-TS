@@ -40,6 +40,11 @@ export interface ModelCompleteOptions {
   /** Per-request positive output-token cap for bounded auxiliary protocols. */
   readonly maxOutputTokens?: number;
   /**
+   * Per-request reasoning override for bounded machine-readable protocols.
+   * Undefined preserves the model's configured runtime profile.
+   */
+  readonly thinkingEnabled?: boolean;
+  /**
    * 工具定义列表，供支持原生函数调用（native function calling）的提供商使用。
    * 不支持的提供商可以忽略此字段。
    */

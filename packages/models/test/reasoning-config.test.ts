@@ -151,6 +151,99 @@ describe("reasoning configuration", () => {
     expect(anthropicCaptured[0]?.output_config).toEqual({ effort: "max" });
   });
 
+  test("bounded auxiliary calls can disable configured reasoning per request", async () => {
+    const completeCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureJsonResponse(
+      { choices: [{ message: { content: "{}" }, finish_reason: "stop" }] },
+      completeCaptured,
+    );
+    const openAi = new OpenAICompatibleModel({
+      apiKey: "test",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-v4-flash",
+      thinkingEnabled: true,
+      reasoningEffort: "max",
+    });
+    await openAi.complete([{ role: "user", content: "short JSON" }], {
+      thinkingEnabled: false,
+      maxOutputTokens: 1_024,
+    });
+    expect(completeCaptured[0]).toMatchObject({
+      thinking: { type: "disabled" },
+      temperature: 0.2,
+      max_tokens: 1_024,
+    });
+    expect(completeCaptured[0]).not.toHaveProperty("reasoning_effort");
+
+    const streamCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureStreamResponse(
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+      streamCaptured,
+    );
+    for await (const _chunk of openAi.completeStream(
+      [{ role: "user", content: "short JSON" }],
+      { thinkingEnabled: false, maxOutputTokens: 1_024 },
+    )) {
+      // drain stream
+    }
+    expect(streamCaptured[0]).toMatchObject({
+      thinking: { type: "disabled" },
+      temperature: 0.2,
+      max_tokens: 1_024,
+    });
+    expect(streamCaptured[0]).not.toHaveProperty("reasoning_effort");
+
+    const anthropicCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureJsonResponse(
+      { content: [{ type: "text", text: "{}" }], stop_reason: "end_turn" },
+      anthropicCaptured,
+    );
+    const anthropic = new AnthropicCompatibleModel({
+      apiKey: "test",
+      model: "deepseek-v4-flash",
+      reasoningEffort: "max",
+    });
+    await anthropic.complete([{ role: "user", content: "short JSON" }], {
+      thinkingEnabled: false,
+      maxOutputTokens: 1_024,
+    });
+    expect(anthropicCaptured[0]?.max_tokens).toBe(1_024);
+    expect(anthropicCaptured[0]).not.toHaveProperty("output_config");
+  });
+
+  test("generic OpenAI-compatible requests do not gain a nonstandard thinking field", async () => {
+    const completeCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureJsonResponse(
+      { choices: [{ message: { content: "{}" }, finish_reason: "stop" }] },
+      completeCaptured,
+    );
+    const generic = new OpenAICompatibleModel({
+      apiKey: "test",
+      baseUrl: "https://generic-openai-compatible.invalid/v1",
+      model: "generic-chat",
+    });
+    await generic.complete([{ role: "user", content: "short JSON" }], {
+      thinkingEnabled: false,
+      maxOutputTokens: 512,
+    });
+    expect(completeCaptured[0]).not.toHaveProperty("thinking");
+    expect(completeCaptured[0]).not.toHaveProperty("reasoning_effort");
+
+    const streamCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureStreamResponse(
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+      streamCaptured,
+    );
+    for await (const _chunk of generic.completeStream(
+      [{ role: "user", content: "short JSON" }],
+      { thinkingEnabled: false, maxOutputTokens: 512 },
+    )) {
+      // drain stream
+    }
+    expect(streamCaptured[0]).not.toHaveProperty("thinking");
+    expect(streamCaptured[0]).not.toHaveProperty("reasoning_effort");
+  });
+
   test("per-request output caps are provider-symmetric and cannot exceed capabilities", async () => {
     const openAiCaptured: Array<Record<string, unknown>> = [];
     global.fetch = captureJsonResponse(
@@ -322,7 +415,7 @@ describe("reasoning configuration", () => {
 
     for await (const _chunk of model.completeStream(
       [{ role: "assistant", content: "tool action", thinking: "audit only" }],
-      { maxOutputTokens: 512 },
+      { maxOutputTokens: 512, thinkingEnabled: false },
     )) {
       // drain stream
     }
@@ -332,6 +425,9 @@ describe("reasoning configuration", () => {
       const requestMessages = body.messages as Array<Record<string, unknown>>;
       expect(requestMessages[0]).not.toHaveProperty("reasoning_content");
       expect(body.max_tokens).toBe(512);
+      expect(body.thinking).toEqual({ type: "disabled" });
+      expect(body).not.toHaveProperty("reasoning_effort");
+      expect(body.temperature).toBe(0.2);
     }
   });
 

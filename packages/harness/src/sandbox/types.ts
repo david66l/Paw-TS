@@ -37,6 +37,8 @@ export interface ShellSandboxConfig {
   readonly commandShell?: "sh" | "bash";
   /** Image acquisition policy (default `missing`; locked evals use `never`). */
   readonly pullPolicy?: "missing" | "never";
+  /** Mount the host workspace read-only inside the container. */
+  readonly workspaceReadOnly?: boolean;
 }
 
 /** 默认沙箱镜像：Debian Bookworm Slim（体积小、工具全） */

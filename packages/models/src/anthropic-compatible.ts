@@ -120,7 +120,10 @@ export class AnthropicCompatibleModel implements LanguageModel {
         4096,
       ),
     };
-    if (this.runtimeProfile.reasoningEffort !== undefined) {
+    if (
+      options?.thinkingEnabled !== false &&
+      this.runtimeProfile.reasoningEffort !== undefined
+    ) {
       body.output_config = { effort: this.runtimeProfile.reasoningEffort };
     }
     if (system) {
@@ -182,7 +185,10 @@ export class AnthropicCompatibleModel implements LanguageModel {
       ),
       stream: true,
     };
-    if (this.runtimeProfile.reasoningEffort !== undefined) {
+    if (
+      options?.thinkingEnabled !== false &&
+      this.runtimeProfile.reasoningEffort !== undefined
+    ) {
       body.output_config = { effort: this.runtimeProfile.reasoningEffort };
     }
     if (system) {

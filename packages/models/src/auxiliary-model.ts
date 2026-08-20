@@ -67,6 +67,13 @@ export function createDeepSeekFlashModel(
         baseUrl: flash.baseUrl?.trim() || "https://api.deepseek.com",
         model: flash.model.trim(),
         capabilities: { contextWindow: 1_000_000, maxOutputTokens: 384_000 },
+        supportsThinkingToggle: true,
+        ...(flash.thinkingEnabled !== undefined
+          ? { thinkingEnabled: flash.thinkingEnabled }
+          : {}),
+        ...(flash.reasoningEffort !== undefined
+          ? { reasoningEffort: flash.reasoningEffort }
+          : {}),
       });
     }
 
@@ -88,6 +95,7 @@ export function createDeepSeekFlashModel(
       baseUrl: baseUrl || "https://api.deepseek.com",
       model: DEEPSEEK_FLASH_MODEL,
       capabilities: { contextWindow: 1_000_000, maxOutputTokens: 384_000 },
+      supportsThinkingToggle: true,
     });
   } catch {
     // 任何异常（文件不存在、JSON 解析失败等）都安全返回 undefined

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { type ShellSandboxConfig, runShellInWorkspace } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
 
 import { sha256Canonical } from "../src/loop-v2/canonical.js";
@@ -12,10 +13,47 @@ import {
   detectProtocolFallbackRisk,
   discoverRepositoryExtensionPointsV1,
   evaluateVerificationProbeGateV1,
-  executeVerificationProbesV1,
+  executeVerificationProbesV1 as executeVerificationProbesProductionV1,
   parseVerificationProbePlanV1,
-  runVerificationProbeOnceV2,
+  runVerificationProbeOnceV2 as runVerificationProbeOnceProductionV2,
+  sampleVerificationProbeDiffV1,
 } from "../src/loop-v2/verification-probe.js";
+
+const TEST_PROBE_SANDBOX: ShellSandboxConfig = {
+  mode: "workspace",
+  network: "deny",
+  image: "test-only",
+};
+
+const TEST_PROBE_EXECUTION = {
+  shellSandbox: TEST_PROBE_SANDBOX,
+  hostShellRunner: (
+    workspaceRoot: string,
+    command: string,
+    options: Parameters<typeof runShellInWorkspace>[2],
+  ) => {
+    const { shellSandbox: _readOnlyContract, ...hostOptions } = options ?? {};
+    return runShellInWorkspace(workspaceRoot, command, hostOptions);
+  },
+} as const;
+
+function executeVerificationProbesV1(
+  input: Parameters<typeof executeVerificationProbesProductionV1>[0],
+) {
+  return executeVerificationProbesProductionV1({
+    ...input,
+    ...TEST_PROBE_EXECUTION,
+  });
+}
+
+function runVerificationProbeOnceV2(
+  input: Parameters<typeof runVerificationProbeOnceProductionV2>[0],
+) {
+  return runVerificationProbeOnceProductionV2({
+    ...input,
+    ...TEST_PROBE_EXECUTION,
+  });
+}
 
 function fakeModel(responses: readonly string[]): LanguageModel & {
   readonly calls: () => number;
@@ -125,8 +163,82 @@ describe("Loop v2 adversarial verification probe", () => {
     expect(prompt).toContain("cast_to_ndarray");
     expect(prompt).toContain("sklearn/base.py");
     expect(prompt).toContain("no network");
-    expect(prompt).toContain("unchanged downstream code");
+    expect(prompt).toContain("downstream-consumer");
     expect(prompt).toContain('{"probes"');
+    expect(prompt).not.toContain(" -k ");
+  });
+
+  test("large diffs retain uniformly spaced first, middle, and last hunks", () => {
+    const diff = Array.from({ length: 9 }, (_, index) =>
+      [
+        `diff --git a/file_${index}.py b/file_${index}.py`,
+        `--- a/file_${index}.py`,
+        `+++ b/file_${index}.py`,
+        `@@ -1 +1 @@ hunk_${index}`,
+        `+HUNK_${index}_${"x".repeat(700)}`,
+      ].join("\n"),
+    ).join("\n");
+    const sampled = sampleVerificationProbeDiffV1(diff, 3_000);
+    expect(sampled.length).toBeLessThanOrEqual(3_000);
+    expect(sampled).toContain("HUNK_0_");
+    expect(sampled).toContain("HUNK_4_");
+    expect(sampled).toContain("HUNK_8_");
+    expect(sampled).toContain("other diff hunks omitted");
+
+    const oversizedLine = sampleVerificationProbeDiffV1(
+      `diff --git a/large.py b/large.py\n@@ -1 +1 @@\n+${"z".repeat(5_000)}`,
+      1_000,
+    );
+    expect(oversizedLine.length).toBeLessThanOrEqual(1_000);
+    expect(oversizedLine).toContain("oversized diff line omitted");
+    expect(oversizedLine).toContain("hash=");
+    expect(oversizedLine).not.toContain("z".repeat(200));
+  });
+
+  test("planner presents only the highest-priority detected risk", () => {
+    const prompt = buildVerificationProbePromptV1({
+      goal: "Keep protocol fallback behavior while registering a handler",
+      diff: [
+        "diff --git a/pkg/base.py b/pkg/base.py",
+        "@@ -1,2 +1,5 @@",
+        "-pattern = r'[a-z]+'",
+        "+pattern = r'[a-z]{2,3}'",
+        "+try:",
+        "+    convert(value)",
+        "+except Exception:",
+        "+    return NotImplemented",
+        "+def convert(value):",
+        "+    return value",
+      ].join("\n"),
+      changedFiles: ["pkg/base.py"],
+      extensionPointHints: ["pkg/handlers"],
+    });
+    expect(prompt).toContain(
+      "Highest-priority risk: protocol fallback ownership",
+    );
+    expect(prompt).not.toContain(
+      "Highest-priority risk: existing extension point",
+    );
+    expect(prompt.match(/Highest-priority risk:/g)).toHaveLength(1);
+  });
+
+  test("planner prompt remains bounded when risk evidence contains huge lines", () => {
+    const hugePattern = "x".repeat(100_000);
+    const prompt = buildVerificationProbePromptV1({
+      goal: "Preserve the existing accepted input language",
+      diff: [
+        "diff --git a/parser.py b/parser.py",
+        "@@ -1 +1 @@",
+        `- pattern = r'${hugePattern}'`,
+        "+ pattern = r'[a-z]+'",
+      ].join("\n"),
+      changedFiles: ["parser.py"],
+    });
+    expect(prompt.length).toBeLessThanOrEqual(42_000);
+    expect(prompt).toContain("Highest-priority risk: behavioral narrowing");
+    expect(prompt).toContain("chars=");
+    expect(prompt).toContain("Reply ONLY:");
+    expect(prompt).not.toContain("x".repeat(1_000));
   });
 
   test("protocol fallback risk requests handler ownership and input/out counterexamples", () => {
@@ -148,12 +260,12 @@ describe("Loop v2 adversarial verification probe", () => {
       broadCatch: "except Exception:",
       fallback: "return NotImplemented",
     });
-    expect(prompt).toContain("Protocol fallback ownership risk");
-    expect(prompt).toContain("really implements the competing protocol");
     expect(prompt).toContain(
-      "similar metadata but no explicit protocol handler",
+      "Highest-priority risk: protocol fallback ownership",
     );
-    expect(prompt).toContain("out/output");
+    expect(prompt).toContain("real competing protocol participant");
+    expect(prompt).toContain("look-alike lacking that handler");
+    expect(prompt).toContain("out/in-place/reflected");
     expect(
       detectProtocolFallbackRisk(
         "+        except (TypeError, ValueError):\n+            return NotImplemented",
@@ -179,8 +291,10 @@ describe("Loop v2 adversarial verification probe", () => {
       diff: "+except Exception:\n+    return NotImplemented",
       changedFiles: ["pkg/equality.py"],
     });
-    expect(equalityPrompt).toContain("Protocol fallback ownership risk");
-    expect(equalityPrompt).not.toContain("out/output");
+    expect(equalityPrompt).toContain(
+      "Highest-priority risk: protocol fallback ownership",
+    );
+    expect(equalityPrompt).not.toContain("out/in-place/reflected");
   });
 
   test("nearby handler directories trigger extension-point comparison for base behavior", async () => {
@@ -210,10 +324,12 @@ describe("Loop v2 adversarial verification probe", () => {
       });
 
       expect(hints).toContain("sympy/sets/handlers");
-      expect(prompt).toContain("Existing extension-point bypass risk");
+      expect(prompt).toContain(
+        "Highest-priority risk: existing extension point",
+      );
       expect(prompt).toContain("sympy/sets/handlers");
       expect(prompt).toContain("direct construction/evaluation");
-      expect(prompt).toContain("simplify/post-processing");
+      expect(prompt).toContain("simplify-only");
 
       const topLevelPrompt = buildVerificationProbePromptV1({
         goal: "Register a new conversion",
@@ -221,7 +337,9 @@ describe("Loop v2 adversarial verification probe", () => {
         changedFiles: ["sympy/sets/sets.py"],
         extensionPointHints: hints,
       });
-      expect(topLevelPrompt).toContain("Existing extension-point bypass risk");
+      expect(topLevelPrompt).toContain(
+        "Highest-priority risk: existing extension point",
+      );
 
       const insideHandlerPrompt = buildVerificationProbePromptV1({
         goal: "Add the registered comparison handler",
@@ -235,7 +353,7 @@ describe("Loop v2 adversarial verification probe", () => {
         extensionPointHints: hints,
       });
       expect(insideHandlerPrompt).not.toContain(
-        "Existing extension-point bypass risk",
+        "Highest-priority risk: existing extension point",
       );
 
       let captured = "";
@@ -256,7 +374,9 @@ describe("Loop v2 adversarial verification probe", () => {
         candidateInputHash: "extension-candidate",
         mutationRevision: 1,
       });
-      expect(captured).toContain("Existing extension-point bypass risk");
+      expect(captured).toContain(
+        "Highest-priority risk: existing extension point",
+      );
       expect(captured).toContain("sympy/sets/handlers");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -272,9 +392,24 @@ describe("Loop v2 adversarial verification probe", () => {
         '{"command":"python -c \'assert x(1) == 1\'","rationale":"one","oracle":"x(1) is one","kind":"inline_contract","groundingRefs":["terminal_diff"]},' +
         '{"command":"","rationale":"empty","oracle":"no","kind":"inline_contract","groundingRefs":["task_goal"]}]}',
     );
-    expect(plan).toHaveLength(2);
+    expect(plan).toHaveLength(1);
     expect(plan[0]?.command).toContain("assert x(0)");
     expect(plan.every((p) => !/curl|pip/.test(p.command))).toBeTrue();
+    expect(
+      parseVerificationProbePlanV1(
+        JSON.stringify({
+          probes: [
+            {
+              command: `python -c '${"x".repeat(600)}'`,
+              rationale: "too long",
+              oracle: "never executes",
+              kind: "inline_contract",
+              groundingRefs: ["task_goal"],
+            },
+          ],
+        }),
+      ),
+    ).toHaveLength(0);
   });
 
   test("malformed planner output yields zero probes for inconclusive settlement", () => {
@@ -284,7 +419,7 @@ describe("Loop v2 adversarial verification probe", () => {
   test("executor surfaces exit code and output for real commands", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-exec-"));
     try {
-      const results = executeVerificationProbesV1({
+      const results = executeVerificationProbesProductionV1({
         workspaceRoot: dir,
         probes: [
           {
@@ -305,13 +440,48 @@ describe("Loop v2 adversarial verification probe", () => {
           },
         ],
       });
-      expect(results[0]?.execution.status).toBe("completed");
-      expect(results[0]?.execution.output).toContain("boundary-ok");
-      expect(results[1]?.execution.status).toBe("completed");
-      expect(results[1]?.execution.exitCode).not.toBe(0);
+      expect(results[0]?.execution.status).toBe("environment_error");
+      expect(results[0]?.execution.output).toContain("read-only workspace");
+      expect(results[1]?.execution.status).toBe("environment_error");
       expect(
-        results.every((result) => result.disposition === "inconclusive"),
+        results.every((result) => result.disposition === "environment_error"),
       ).toBeTrue();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("executor never runs model-generated writes without read-only isolation", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-readonly-"));
+    try {
+      const targets = ["python-write.txt", "node-write.txt", "redirect.txt"];
+      const commands = [
+        `python -c ${JSON.stringify("from pathlib import Path; Path('python-write.txt').write_text('changed')")}`,
+        `node -e ${JSON.stringify("require('node:fs').writeFileSync('node-write.txt','changed')")}`,
+        "echo changed > redirect.txt",
+      ];
+      const results = executeVerificationProbesProductionV1({
+        workspaceRoot: dir,
+        probes: commands.map((command, index) => ({
+          probeId: `probe_${index + 1}`,
+          command,
+          rationale: "attempt a write",
+          oracle: "the candidate contract remains unchanged",
+          kind: "inline_contract" as const,
+          groundingRefs: ["task_goal"],
+        })),
+      });
+      expect(results).toHaveLength(3);
+      expect(
+        results.every(
+          (result) =>
+            result.execution.status === "environment_error" &&
+            result.disposition === "environment_error",
+        ),
+      ).toBeTrue();
+      for (const target of targets) {
+        expect(fs.existsSync(path.join(dir, target))).toBeFalse();
+      }
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -728,7 +898,10 @@ describe("Loop v2 adversarial verification probe", () => {
   test("planner and adjudicator use bounded output caps and invalid Matplotlib probes do not demand mutation", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-invalid-"));
     try {
-      const options: Array<{ maxOutputTokens?: number }> = [];
+      const options: Array<{
+        maxOutputTokens?: number;
+        thinkingEnabled?: boolean;
+      }> = [];
       const responses = [
         inlinePlanJson(
           `python -c ${JSON.stringify("from matplotlib.dates import DateFormatter; assert DateFormatter.nonexistent_probe_api()")}`,
@@ -741,7 +914,10 @@ describe("Loop v2 adversarial verification probe", () => {
         label: "matplotlib-invalid-probe",
         async complete(
           _messages: unknown,
-          callOptions?: { maxOutputTokens?: number },
+          callOptions?: {
+            maxOutputTokens?: number;
+            thinkingEnabled?: boolean;
+          },
         ) {
           options.push(callOptions ?? {});
           const text = responses[calls] ?? "{}";
@@ -761,8 +937,8 @@ describe("Loop v2 adversarial verification probe", () => {
         verificationAuthority: "external",
       });
       expect(options).toEqual([
-        { maxOutputTokens: 4_096 },
-        { maxOutputTokens: 2_048 },
+        { maxOutputTokens: 1_536, thinkingEnabled: false },
+        { maxOutputTokens: 1_024, thinkingEnabled: false },
       ]);
       expect(result.verdict).toBe("inconclusive");
       expect(result.probes[0]?.disposition).toBe("invalid_probe");
@@ -784,12 +960,17 @@ describe("Loop v2 adversarial verification probe", () => {
       let calls = 0;
       const model = {
         label: "truncated-planner",
-        async complete() {
+        async complete(
+          _messages: unknown,
+          options?: { thinkingEnabled?: boolean },
+        ) {
           calls += 1;
+          expect(options?.thinkingEnabled).toBeFalse();
           return {
             text: inlinePlanJson(
               `python -c ${JSON.stringify(`from pathlib import Path; Path(${JSON.stringify(sentinel)}).write_text('ran')`)}`,
             ),
+            thinking: "hidden planner reasoning",
             finishReason: "length",
           };
         },
@@ -808,7 +989,41 @@ describe("Loop v2 adversarial verification probe", () => {
       expect(result.verdict).toBe("inconclusive");
       expect(result.probes).toHaveLength(0);
       expect(result.note).toContain("truncated");
+      expect(result.plannerDiagnostics).toMatchObject({
+        policyVersion: "paw.loop-v2-verification-probe-v3",
+        finishReason: "length",
+        thinkingChars: "hidden planner reasoning".length,
+      });
+      expect(result.plannerDiagnostics?.visibleChars).toBeGreaterThan(0);
+      expect(result.plannerDiagnostics?.visibleHash).toHaveLength(64);
+      expect(result.plannerDiagnostics?.diagnosticsHash).toHaveLength(64);
       expect(fs.existsSync(sentinel)).toBeFalse();
+
+      const runFolder = onlyProbeRunFolder(dir);
+      const recordPath = path.join(
+        dir,
+        ".paw",
+        "loop-v2",
+        "runs",
+        runFolder,
+        "verification-probe-v2.json",
+      );
+      const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+      record.result.plannerDiagnostics.visibleChars += 1;
+      fs.writeFileSync(recordPath, JSON.stringify(record));
+      const replayModel = fakeModel(["{}"]);
+      const replay = await runVerificationProbeOnceV2({
+        model: replayModel,
+        runId: "truncated-planner",
+        workspaceRoot: dir,
+        goal: "goal",
+        diff: "+1",
+        changedFiles: ["a.py"],
+        candidateInputHash: "truncated",
+        mutationRevision: 1,
+      });
+      expect(replay.interrupted).toBeTrue();
+      expect(replayModel.calls()).toBe(0);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

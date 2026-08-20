@@ -242,7 +242,9 @@ export function buildDockerShellExecSpec(
     "-w", // 设置容器内工作目录
     containerCwd,
     "--mount", // Bind only the exact trusted workspace into the container.
-    `type=bind,source=${workspaceRoot},target=${containerWorkspaceRoot}`,
+    `type=bind,source=${workspaceRoot},target=${containerWorkspaceRoot}${
+      config.workspaceReadOnly ? ",readonly" : ""
+    }`,
     "--pids-limit",
     "256", // 限制最大进程数（防 fork bomb）
     "--memory",
