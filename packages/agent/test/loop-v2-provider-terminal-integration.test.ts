@@ -17,10 +17,12 @@ import {
   type LoopV2LiveCandidateAssessmentV1,
   LoopV2LiveReviewRuntimeV1,
   assessLoopV2AuthorityEligibilityV1,
+  buildLoopV2LiveCandidateArtifactV1,
   buildLoopV2LiveReviewArtifactV1,
   buildLoopV2LiveReviewClaimV1,
   buildLoopV2LiveReviewPayloadV1,
   createInterruptedSemanticReviewRecordV2,
+  createLoopV2ShadowObserver,
   createSemanticReviewLedgerV2,
   loopV2LiveArtifactPath,
   loopV2LiveReviewArtifactPath,
@@ -1435,6 +1437,60 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         candidateId: candidate.assessment.candidateId,
         outcome: "clear",
       });
+
+      // A real agent may submit final_answer immediately after the stable
+      // checkpoint. The checkpoint/review/probe audit facts then change the
+      // candidate container hash while the semantic review key stays exact.
+      // Rebind the settled record without inventing a same-key reuse edge or
+      // invoking the reviewer again.
+      const controlOnlyObserver = createLoopV2ShadowObserver(
+        runId,
+        candidate.report,
+      );
+      controlOnlyObserver.observe({
+        runId,
+        seq: candidate.report.sourceThroughSeq + 1,
+        ts: Date.now(),
+        event: { type: "run.metrics" },
+      });
+      const controlOnlyCandidate = buildLoopV2LiveCandidateArtifactV1(
+        controlOnlyObserver.snapshot(),
+        candidate.policy,
+      );
+      expect(controlOnlyCandidate.artifactHash).not.toBe(
+        candidate.artifactHash,
+      );
+      expect(controlOnlyCandidate.assessment.candidateInputHash).toBe(
+        candidate.assessment.candidateInputHash,
+      );
+      let controlOnlyReviewCalls = 0;
+      const controlOnlyRuntime = new LoopV2LiveReviewRuntimeV1({
+        workspaceRoot,
+        runId,
+        model: {
+          label: "must-not-repeat-control-only-review",
+          async complete() {
+            controlOnlyReviewCalls += 1;
+            return { text: "{}" };
+          },
+        },
+      });
+      controlOnlyRuntime.restoreCandidate(candidate);
+      controlOnlyRuntime.persistCandidate(controlOnlyCandidate);
+      expect(await controlOnlyRuntime.reviewCandidate()).toMatchObject({
+        modelCalls: 0,
+        reviewKey: review.reviewKey,
+      });
+      expect(controlOnlyReviewCalls).toBe(0);
+      const controlOnlyReview = parseLoopV2LiveReviewArtifactV1(
+        fs.readFileSync(
+          loopV2LiveReviewArtifactPath(workspaceRoot, runId),
+          "utf8",
+        ),
+        controlOnlyCandidate,
+      );
+      expect(controlOnlyReview.reviewKey).toBe(review.reviewKey);
+      expect(controlOnlyReview.reuse).toEqual(review.reuse);
 
       // Claim-only migration uses the same write ordering: a future
       // interrupted record is durable before the candidate commit. Exercise

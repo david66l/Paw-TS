@@ -10,6 +10,7 @@ import {
   createSemanticReviewSubjectChangedRecordV2,
   rebindSemanticReviewRecordV2,
   reviewCandidateOnceV2,
+  semanticReviewKeyV2,
   semanticReviewSubjectHashV2,
 } from "./candidate-certification.js";
 import {
@@ -163,12 +164,27 @@ export class LoopV2LiveReviewRuntimeV1 {
           previousPayload,
           nextPayload,
         );
+        const nextReviewKey = semanticReviewKeyV2(
+          nextPayload.input.mutationRevision,
+          nextPayload.candidateInputHash,
+        );
         futureReview = this.persistReview(
           artifact,
-          buildLoopV2LiveReviewArtifactV1(artifact, rebound, {
-            fromReviewKey: priorReview.reviewKey,
-            semanticSubjectHash: nextSubject,
-          }),
+          buildLoopV2LiveReviewArtifactV1(
+            artifact,
+            rebound,
+            // Control-only report growth can change the candidate artifact
+            // hash without changing the semantic review identity. In that
+            // case the settled record is already bound to the exact key and
+            // only needs rebinding to the new container; a reuse edge must
+            // point to a different review key.
+            priorReview.reviewKey === nextReviewKey
+              ? priorReview.reuse
+              : {
+                  fromReviewKey: priorReview.reviewKey,
+                  semanticSubjectHash: nextSubject,
+                },
+          ),
         );
       } else if (priorClaim) {
         const interrupted =
