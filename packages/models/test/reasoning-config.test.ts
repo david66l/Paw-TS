@@ -151,6 +151,96 @@ describe("reasoning configuration", () => {
     expect(anthropicCaptured[0]?.output_config).toEqual({ effort: "max" });
   });
 
+  test("per-request output caps are provider-symmetric and cannot exceed capabilities", async () => {
+    const openAiCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureJsonResponse(
+      { choices: [{ message: { content: "{}" }, finish_reason: "stop" }] },
+      openAiCaptured,
+    );
+    const openAi = new OpenAICompatibleModel({
+      apiKey: "test",
+      model: "deepseek-v4-flash",
+      capabilities: { contextWindow: 128_000, maxOutputTokens: 8_192 },
+    });
+    await openAi.complete([{ role: "user", content: "bounded protocol" }], {
+      maxOutputTokens: 2_048,
+    });
+    expect(openAiCaptured[0]?.max_tokens).toBe(2_048);
+
+    const openAiStreamCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureStreamResponse(
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+      openAiStreamCaptured,
+    );
+    for await (const _chunk of openAi.completeStream(
+      [{ role: "user", content: "bounded protocol" }],
+      { maxOutputTokens: 2_048 },
+    )) {
+      // drain stream
+    }
+    expect(openAiStreamCaptured[0]?.max_tokens).toBe(2_048);
+
+    const anthropicCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureJsonResponse(
+      { content: [{ type: "text", text: "{}" }], stop_reason: "end_turn" },
+      anthropicCaptured,
+    );
+    const anthropic = new AnthropicCompatibleModel({
+      apiKey: "test",
+      model: "claude",
+      capabilities: { contextWindow: 128_000, maxOutputTokens: 1_024 },
+    });
+    await anthropic.complete([{ role: "user", content: "bounded protocol" }], {
+      maxOutputTokens: 2_048,
+    });
+    expect(anthropicCaptured[0]?.max_tokens).toBe(1_024);
+
+    const anthropicStreamCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureStreamResponse(
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n\n',
+      anthropicStreamCaptured,
+    );
+    for await (const _chunk of anthropic.completeStream(
+      [{ role: "user", content: "bounded protocol" }],
+      { maxOutputTokens: 2_048 },
+    )) {
+      // drain stream
+    }
+    expect(anthropicStreamCaptured[0]?.max_tokens).toBe(1_024);
+    await expect(
+      openAi.complete([{ role: "user", content: "invalid" }], {
+        maxOutputTokens: 0,
+      }),
+    ).rejects.toThrow("positive safe integer");
+  });
+
+  test("OpenAI leaves provider output defaults untouched without a per-request cap", async () => {
+    const completeCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureJsonResponse(
+      { choices: [{ message: { content: "{}" }, finish_reason: "stop" }] },
+      completeCaptured,
+    );
+    const model = new OpenAICompatibleModel({
+      apiKey: "test",
+      model: "deepseek-v4-flash",
+      capabilities: { contextWindow: 128_000, maxOutputTokens: 384_000 },
+    });
+    await model.complete([{ role: "user", content: "use provider default" }]);
+    expect(completeCaptured[0]).not.toHaveProperty("max_tokens");
+
+    const streamCaptured: Array<Record<string, unknown>> = [];
+    global.fetch = captureStreamResponse(
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+      streamCaptured,
+    );
+    for await (const _chunk of model.completeStream([
+      { role: "user", content: "use provider default" },
+    ])) {
+      // drain stream
+    }
+    expect(streamCaptured[0]).not.toHaveProperty("max_tokens");
+  });
+
   test("OpenAI requests never replay historical audit thinking", async () => {
     const completeCaptured: Array<Record<string, unknown>> = [];
     global.fetch = captureJsonResponse(
@@ -230,9 +320,10 @@ describe("reasoning configuration", () => {
       thinkingEnabled: true,
     });
 
-    for await (const _chunk of model.completeStream([
-      { role: "assistant", content: "tool action", thinking: "audit only" },
-    ])) {
+    for await (const _chunk of model.completeStream(
+      [{ role: "assistant", content: "tool action", thinking: "audit only" }],
+      { maxOutputTokens: 512 },
+    )) {
       // drain stream
     }
 
@@ -240,6 +331,7 @@ describe("reasoning configuration", () => {
     for (const body of captured) {
       const requestMessages = body.messages as Array<Record<string, unknown>>;
       expect(requestMessages[0]).not.toHaveProperty("reasoning_content");
+      expect(body.max_tokens).toBe(512);
     }
   });
 

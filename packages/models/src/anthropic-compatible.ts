@@ -22,7 +22,10 @@ import {
   type AnthropicContentBlock,
   buildAnthropicUserContent,
 } from "./message-content.js";
-import type { ModelCompleteOptions } from "./model-options.js";
+import {
+  type ModelCompleteOptions,
+  resolveRequestMaxOutputTokens,
+} from "./model-options.js";
 import type {
   ChatMessage,
   ModelCompletionResult,
@@ -111,7 +114,11 @@ export class AnthropicCompatibleModel implements LanguageModel {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: msgs,
-      max_tokens: this.capabilities?.maxOutputTokens ?? 4096,
+      max_tokens: resolveRequestMaxOutputTokens(
+        options?.maxOutputTokens,
+        this.capabilities?.maxOutputTokens,
+        4096,
+      ),
     };
     if (this.runtimeProfile.reasoningEffort !== undefined) {
       body.output_config = { effort: this.runtimeProfile.reasoningEffort };
@@ -168,7 +175,11 @@ export class AnthropicCompatibleModel implements LanguageModel {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: msgs,
-      max_tokens: this.capabilities?.maxOutputTokens ?? 4096,
+      max_tokens: resolveRequestMaxOutputTokens(
+        options?.maxOutputTokens,
+        this.capabilities?.maxOutputTokens,
+        4096,
+      ),
       stream: true,
     };
     if (this.runtimeProfile.reasoningEffort !== undefined) {

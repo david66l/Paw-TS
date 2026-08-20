@@ -37,9 +37,30 @@ export interface ToolDefinition {
 export interface ModelCompleteOptions {
   /** 用于取消正在进行的模型请求的 AbortSignal */
   readonly signal?: AbortSignal;
+  /** Per-request positive output-token cap for bounded auxiliary protocols. */
+  readonly maxOutputTokens?: number;
   /**
    * 工具定义列表，供支持原生函数调用（native function calling）的提供商使用。
    * 不支持的提供商可以忽略此字段。
    */
   readonly tools?: readonly ToolDefinition[];
+}
+
+export function resolveRequestMaxOutputTokens(
+  requested: number | undefined,
+  capability: number | undefined,
+  fallback?: number,
+): number | undefined {
+  if (
+    requested !== undefined &&
+    (!Number.isSafeInteger(requested) || requested <= 0)
+  ) {
+    throw new Error("maxOutputTokens must be a positive safe integer");
+  }
+  if (requested !== undefined) {
+    return capability === undefined
+      ? requested
+      : Math.min(requested, capability);
+  }
+  return capability ?? fallback;
 }

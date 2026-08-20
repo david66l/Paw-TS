@@ -17,11 +17,14 @@
  *   需要在客户端拼接完整 JSON 后才 yield
  */
 
-import { isNativeToolTurnV1, type ModelTokenUsage } from "@paw/core";
+import { type ModelTokenUsage, isNativeToolTurnV1 } from "@paw/core";
 
 import type { LanguageModel, ModelCapabilities } from "./language-model.js";
 import { buildOpenAiMessageContent } from "./message-content.js";
-import type { ModelCompleteOptions } from "./model-options.js";
+import {
+  type ModelCompleteOptions,
+  resolveRequestMaxOutputTokens,
+} from "./model-options.js";
 import {
   parseOpenAiChatCompletionStreamDataPayload,
   parseOpenAiUsageJson,
@@ -110,6 +113,12 @@ export class OpenAICompatibleModel implements LanguageModel {
         ? {}
         : { temperature: 0.2 }),
     };
+    if (options?.maxOutputTokens !== undefined) {
+      body.max_tokens = resolveRequestMaxOutputTokens(
+        options.maxOutputTokens,
+        this.capabilities?.maxOutputTokens,
+      );
+    }
     if (this.runtimeProfile.thinkingEnabled !== undefined) {
       body.thinking = {
         type: this.runtimeProfile.thinkingEnabled ? "enabled" : "disabled",
@@ -246,6 +255,12 @@ export class OpenAICompatibleModel implements LanguageModel {
         : { temperature: 0.2 }),
       stream: true as const,
     };
+    if (options?.maxOutputTokens !== undefined) {
+      baseStreamBody.max_tokens = resolveRequestMaxOutputTokens(
+        options.maxOutputTokens,
+        this.capabilities?.maxOutputTokens,
+      );
+    }
     if (this.runtimeProfile.thinkingEnabled !== undefined) {
       baseStreamBody.thinking = {
         type: this.runtimeProfile.thinkingEnabled ? "enabled" : "disabled",
