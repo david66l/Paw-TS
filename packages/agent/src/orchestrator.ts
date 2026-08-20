@@ -4635,6 +4635,8 @@ export class AgentOrchestrator {
               ...(impactedForProbe ? { impactedTests: impactedForProbe } : {}),
               candidateInputHash: assessment.candidateInputHash,
               mutationRevision: assessment.mutationRevision,
+              verificationAuthority:
+                assessment.policy.verificationAuthority ?? "local",
               ...(this.shellSandbox ? { shellSandbox: this.shellSandbox } : {}),
               ...(spec.abortSignal ? { signal: spec.abortSignal } : {}),
               onUsage: (modelLabel, usage) =>
@@ -4644,7 +4646,7 @@ export class AgentOrchestrator {
               ? result.probes
                   .map(
                     (probe) =>
-                      `${probe.status.toUpperCase()} exit=${probe.exitCode ?? "?"} ${probe.command.slice(0, 200)}`,
+                      `${probe.disposition.toUpperCase()} exit=${probe.execution.exitCode ?? "?"} ${probe.plan.command.slice(0, 200)} :: ${probe.adjudication.summary.slice(0, 300)}`,
                   )
                   .join("\n")
                   .slice(0, 4_000)
@@ -4654,7 +4656,12 @@ export class AgentOrchestrator {
               candidateId: assessment.candidateId,
               mutationRevision: assessment.mutationRevision,
               probeKey: `probe:${assessment.candidateInputHash}`,
-              verdict: result.verdict,
+              verdict:
+                result.verdict === "candidate_defect"
+                  ? "fail"
+                  : result.verdict === "clear"
+                    ? "pass"
+                    : "error",
               summary,
               modelCalls: result.modelCalls,
               stage,

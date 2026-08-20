@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type { LanguageModel } from "@paw/models";
 
+import { sha256Canonical } from "../src/loop-v2/canonical.js";
 import {
   type VerificationProbeOnceResultV2,
   buildVerificationProbePromptV1,
@@ -42,24 +43,75 @@ function onlyProbeRunFolder(workspaceRoot: string): string {
 }
 
 function probeResult(
-  verdict: "pass" | "fail" | "error",
+  verdict: "clear" | "candidate_defect" | "inconclusive",
   command = "python -c 'assert True'",
 ): VerificationProbeOnceResultV2 {
+  const disposition =
+    verdict === "clear"
+      ? "pass"
+      : verdict === "candidate_defect"
+        ? "candidate_defect"
+        : "inconclusive";
   return {
     candidateInputHash: "hash-a",
     mutationRevision: 1,
     probes: [
       {
-        command,
-        status:
-          verdict === "pass" ? "pass" : verdict === "fail" ? "fail" : "error",
-        exitCode: 0,
-        output: "ok",
+        probeId: "probe_1",
+        plan: {
+          probeId: "probe_1",
+          command,
+          rationale: "exercise the visible task contract",
+          oracle: "the command must satisfy its assertion",
+          kind: "inline_contract",
+          groundingRefs: ["task_goal", "terminal_diff"],
+        },
+        execution: {
+          status: "completed",
+          exitCode: verdict === "candidate_defect" ? 1 : 0,
+          output: "ok",
+          outputHash: "output-hash",
+        },
+        disposition,
+        adjudication: {
+          source: "model",
+          summary: "visible task evidence supports this disposition",
+          evidenceRefs: ["task_goal", "terminal_diff"],
+        },
       },
     ],
     verdict,
     modelCalls: 1,
   };
+}
+
+function inlinePlanJson(command: string, oracle = "assert visible behavior") {
+  return JSON.stringify({
+    probes: [
+      {
+        command,
+        rationale: "exercise a task-and-diff grounded boundary",
+        oracle,
+        kind: "inline_contract",
+        groundingRefs: ["task_goal", "terminal_diff"],
+      },
+    ],
+  });
+}
+
+function adjudicationJson(
+  disposition: "pass" | "candidate_defect" | "invalid_probe" | "inconclusive",
+) {
+  return JSON.stringify({
+    dispositions: [
+      {
+        probeId: "probe_1",
+        disposition,
+        summary: "the visible task and terminal diff ground this result",
+        evidenceRefs: ["task_goal", "terminal_diff"],
+      },
+    ],
+  });
 }
 
 describe("Loop v2 adversarial verification probe", () => {
@@ -214,18 +266,18 @@ describe("Loop v2 adversarial verification probe", () => {
   test("parse extracts a bounded plan and drops dangerous commands", () => {
     const plan = parseVerificationProbePlanV1(
       'noise {"probes":[' +
-        '{"command":"python -c \'assert x(0) == 0\'","rationale":"empty input"},' +
-        '{"command":"curl http://evil.example","rationale":"no"},' +
-        '{"command":"pip install sneaky","rationale":"no"},' +
-        '{"command":"python -c \'assert x(1) == 1\'","rationale":"one"},' +
-        '{"command":"","rationale":"empty"}]}',
+        '{"command":"python -c \'assert x(0) == 0\'","rationale":"empty input","oracle":"x(0) is zero","kind":"inline_contract","groundingRefs":["task_goal"]},' +
+        '{"command":"curl http://evil.example","rationale":"no","oracle":"no","kind":"inline_contract","groundingRefs":["task_goal"]},' +
+        '{"command":"pip install sneaky","rationale":"no","oracle":"no","kind":"inline_contract","groundingRefs":["task_goal"]},' +
+        '{"command":"python -c \'assert x(1) == 1\'","rationale":"one","oracle":"x(1) is one","kind":"inline_contract","groundingRefs":["terminal_diff"]},' +
+        '{"command":"","rationale":"empty","oracle":"no","kind":"inline_contract","groundingRefs":["task_goal"]}]}',
     );
     expect(plan).toHaveLength(2);
     expect(plan[0]?.command).toContain("assert x(0)");
     expect(plan.every((p) => !/curl|pip/.test(p.command))).toBeTrue();
   });
 
-  test("malformed model output yields zero probes (bounded fail-open)", () => {
+  test("malformed planner output yields zero probes for inconclusive settlement", () => {
     expect(parseVerificationProbePlanV1("the diff looks good")).toHaveLength(0);
   });
 
@@ -235,17 +287,31 @@ describe("Loop v2 adversarial verification probe", () => {
       const results = executeVerificationProbesV1({
         workspaceRoot: dir,
         probes: [
-          { command: "python -c \"print('boundary-ok')\"", rationale: "" },
           {
+            probeId: "probe_1",
+            command: "python -c \"print('boundary-ok')\"",
+            rationale: "exercise output",
+            oracle: "prints boundary-ok",
+            kind: "inline_contract",
+            groundingRefs: ["task_goal"],
+          },
+          {
+            probeId: "probe_2",
             command: "python -c \"raise SystemExit('boundary-broken')\"",
-            rationale: "",
+            rationale: "exercise failure",
+            oracle: "exits successfully",
+            kind: "inline_contract",
+            groundingRefs: ["terminal_diff"],
           },
         ],
       });
-      expect(results[0]?.status).toBe("pass");
-      expect(results[0]?.output).toContain("boundary-ok");
-      expect(results[1]?.status).toBe("fail");
-      expect(results[1]?.exitCode).not.toBe(0);
+      expect(results[0]?.execution.status).toBe("completed");
+      expect(results[0]?.execution.output).toContain("boundary-ok");
+      expect(results[1]?.execution.status).toBe("completed");
+      expect(results[1]?.execution.exitCode).not.toBe(0);
+      expect(
+        results.every((result) => result.disposition === "inconclusive"),
+      ).toBeTrue();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -253,7 +319,10 @@ describe("Loop v2 adversarial verification probe", () => {
 
   test("gate: fail blocks certification with actionable feedback; pass accepts", () => {
     const fail = evaluateVerificationProbeGateV1({
-      result: probeResult("fail", "python -c 'sel.transform(empty)'"),
+      result: probeResult(
+        "candidate_defect",
+        "python -c 'sel.transform(empty)'",
+      ),
       noRoomForAnotherTurn: false,
     });
     expect(fail.type).toBe("feedback");
@@ -264,21 +333,21 @@ describe("Loop v2 adversarial verification probe", () => {
     expect(fail.message).toContain("identical resubmission");
 
     const pass = evaluateVerificationProbeGateV1({
-      result: probeResult("pass"),
+      result: probeResult("clear"),
       noRoomForAnotherTurn: false,
     });
     expect(pass.type).toBe("accept");
 
     // 环境类失败不冒充代码缺陷：不拦截
     const errored = evaluateVerificationProbeGateV1({
-      result: probeResult("error", "python -c 'anything'"),
+      result: probeResult("inconclusive", "python -c 'anything'"),
       noRoomForAnotherTurn: false,
     });
     expect(errored.type).toBe("accept");
 
     // 唯一退出边界：运行预算耗尽
     const noBudget = evaluateVerificationProbeGateV1({
-      result: probeResult("fail"),
+      result: probeResult("candidate_defect"),
       noRoomForAnotherTurn: true,
     });
     expect(noBudget.type).toBe("incomplete");
@@ -286,7 +355,7 @@ describe("Loop v2 adversarial verification probe", () => {
 
     // 相同候选重交：不再有任何计数语义，仍然回弹（at-most-once 记录使重放免费）
     const resubmitted = evaluateVerificationProbeGateV1({
-      result: probeResult("fail"),
+      result: probeResult("candidate_defect"),
       noRoomForAnotherTurn: false,
     });
     expect(resubmitted.type).toBe("feedback");
@@ -296,7 +365,8 @@ describe("Loop v2 adversarial verification probe", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-once-"));
     try {
       const model = fakeModel([
-        `{"probes":[{"command":"python -c ${JSON.stringify("assert True")}","rationale":"r"}]}`,
+        inlinePlanJson(`python -c ${JSON.stringify("assert True")}`),
+        adjudicationJson("pass"),
       ]);
       const first = await runVerificationProbeOnceV2({
         model,
@@ -308,13 +378,14 @@ describe("Loop v2 adversarial verification probe", () => {
         candidateInputHash: "hash-x",
         mutationRevision: 1,
       });
-      expect(first.verdict).toBe("pass");
-      expect(model.calls()).toBe(1);
+      expect(first.verdict).toBe("clear");
+      expect(model.calls()).toBe(2);
 
       // 第二个模型（若被调用会返回必挂探针）不应被调用：命中持久化记录
       const failingProbeCommand = `python -c ${JSON.stringify("raise SystemExit(1)")}`;
       const secondModel = fakeModel([
-        `{"probes":[{"command":${JSON.stringify(failingProbeCommand)},"rationale":"r"}]}`,
+        inlinePlanJson(failingProbeCommand),
+        adjudicationJson("candidate_defect"),
       ]);
       const second = await runVerificationProbeOnceV2({
         model: secondModel,
@@ -326,7 +397,22 @@ describe("Loop v2 adversarial verification probe", () => {
         candidateInputHash: "hash-x",
         mutationRevision: 1,
       });
-      expect(second.verdict).toBe("pass");
+      expect(second.verdict).toBe("clear");
+      expect(secondModel.calls()).toBe(0);
+
+      const evidenceDrift = await runVerificationProbeOnceV2({
+        model: secondModel,
+        runId: "probe-once",
+        workspaceRoot: dir,
+        goal: "goal",
+        diff: "+1",
+        changedFiles: ["a.py"],
+        candidateInputHash: "hash-evidence-drift",
+        mutationRevision: 1,
+      });
+      expect(evidenceDrift.verdict).toBe("clear");
+      expect(evidenceDrift.candidateInputHash).toBe("hash-evidence-drift");
+      expect(evidenceDrift.modelCalls).toBe(0);
       expect(secondModel.calls()).toBe(0);
 
       // 新候选（不同 hash）会重新探针
@@ -340,8 +426,8 @@ describe("Loop v2 adversarial verification probe", () => {
         candidateInputHash: "hash-y",
         mutationRevision: 2,
       });
-      expect(third.verdict).toBe("fail");
-      expect(secondModel.calls()).toBe(1);
+      expect(third.verdict).toBe("candidate_defect");
+      expect(secondModel.calls()).toBe(2);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -365,7 +451,7 @@ describe("Loop v2 adversarial verification probe", () => {
                   "loop-v2",
                   "runs",
                   runFolder,
-                  "verification-probe-claim-v1.json",
+                  "verification-probe-claim-v2.json",
                 ),
                 "utf8",
               ),
@@ -389,7 +475,7 @@ describe("Loop v2 adversarial verification probe", () => {
       expect(crashingCalls).toBe(1);
 
       const replayModel = fakeModel([
-        `{"probes":[{"command":"python -c ${JSON.stringify("raise SystemExit(1)")}","rationale":"must not run"}]}`,
+        inlinePlanJson(`python -c ${JSON.stringify("raise SystemExit(1)")}`),
       ]);
       const replay = await runVerificationProbeOnceV2({
         model: replayModel,
@@ -412,6 +498,71 @@ describe("Loop v2 adversarial verification probe", () => {
       ).toBe("feedback");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("legacy v1 pass/fail/error records migrate without model or shell replay", async () => {
+    for (const legacyStatus of ["pass", "fail", "error"] as const) {
+      const dir = fs.mkdtempSync(
+        path.join(os.tmpdir(), `paw-probe-legacy-${legacyStatus}-`),
+      );
+      try {
+        const runId = `legacy-${legacyStatus}`;
+        const runFolder = path.join(
+          dir,
+          ".paw",
+          "loop-v2",
+          "runs",
+          sha256Canonical({ runId }),
+        );
+        fs.mkdirSync(runFolder, { recursive: true });
+        fs.writeFileSync(
+          path.join(runFolder, "verification-probe-v1.json"),
+          JSON.stringify({
+            schemaVersion: 1,
+            kind: "paw.loop-v2-verification-probe",
+            candidateInputHash: "legacy-candidate",
+            mutationRevision: 1,
+            result: {
+              candidateInputHash: "legacy-candidate",
+              mutationRevision: 1,
+              probes: [
+                {
+                  command: "python -c 'must not replay'",
+                  status: legacyStatus,
+                  ...(legacyStatus === "pass" ? { exitCode: 0 } : {}),
+                  ...(legacyStatus === "fail" ? { exitCode: 1 } : {}),
+                  output: legacyStatus,
+                },
+              ],
+              verdict: legacyStatus,
+              modelCalls: 1,
+            },
+          }),
+        );
+        const neverModel = fakeModel(["{}"]);
+        const migrated = await runVerificationProbeOnceV2({
+          model: neverModel,
+          runId,
+          workspaceRoot: dir,
+          goal: "goal",
+          diff: "+candidate",
+          changedFiles: ["a.py"],
+          candidateInputHash: "legacy-candidate",
+          mutationRevision: 1,
+        });
+        expect(neverModel.calls()).toBe(0);
+        expect(migrated.modelCalls).toBe(0);
+        expect(migrated.verdict).toBe(
+          legacyStatus === "pass" ? "clear" : "inconclusive",
+        );
+        expect(migrated.probes[0]?.adjudication.source).toBe("legacy");
+        if (legacyStatus === "fail") {
+          expect(migrated.probes[0]?.disposition).toBe("inconclusive");
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
   });
 
@@ -446,7 +597,7 @@ describe("Loop v2 adversarial verification probe", () => {
           "loop-v2",
           "runs",
           runFolder,
-          "verification-probe-claim-v1.json",
+          "verification-probe-claim-v2.json",
         ),
         "{broken",
       );
@@ -490,11 +641,13 @@ describe("Loop v2 adversarial verification probe", () => {
           "loop-v2",
           "runs",
           runFolder,
-          "verification-probe-v1.json",
+          "verification-probe-v2.json",
         ),
         JSON.stringify({
-          schemaVersion: 1,
+          schemaVersion: 2,
           kind: "paw.loop-v2-verification-probe",
+          policyVersion: "paw.loop-v2-verification-probe-v2",
+          verificationAuthority: "local",
           candidateInputHash: "hash-record",
           mutationRevision: 1,
           result: {
@@ -521,6 +674,427 @@ describe("Loop v2 adversarial verification probe", () => {
     }
   });
 
+  test("semantically inconsistent settled JSON fails closed instead of upgrading a probe", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-tamper-"));
+    try {
+      const model = fakeModel([
+        inlinePlanJson(`python -c ${JSON.stringify("assert True")}`),
+        adjudicationJson("pass"),
+      ]);
+      const first = await runVerificationProbeOnceV2({
+        model,
+        runId: "tampered-record",
+        workspaceRoot: dir,
+        goal: "goal",
+        diff: "+candidate",
+        changedFiles: ["a.py"],
+        candidateInputHash: "tampered-record",
+        mutationRevision: 1,
+      });
+      expect(first.verdict).toBe("clear");
+      const runFolder = onlyProbeRunFolder(dir);
+      const recordPath = path.join(
+        dir,
+        ".paw",
+        "loop-v2",
+        "runs",
+        runFolder,
+        "verification-probe-v2.json",
+      );
+      const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+      record.result.verdict = "candidate_defect";
+      record.result.probes[0].disposition = "candidate_defect";
+      fs.writeFileSync(recordPath, JSON.stringify(record));
+
+      const neverModel = fakeModel(["{}"]);
+      const replay = await runVerificationProbeOnceV2({
+        model: neverModel,
+        runId: "tampered-record",
+        workspaceRoot: dir,
+        goal: "goal",
+        diff: "+candidate",
+        changedFiles: ["a.py"],
+        candidateInputHash: "tampered-record",
+        mutationRevision: 1,
+      });
+      expect(replay.verdict).toBe("interrupted");
+      expect(replay.interrupted).toBeTrue();
+      expect(neverModel.calls()).toBe(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("planner and adjudicator use bounded output caps and invalid Matplotlib probes do not demand mutation", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-invalid-"));
+    try {
+      const options: Array<{ maxOutputTokens?: number }> = [];
+      const responses = [
+        inlinePlanJson(
+          `python -c ${JSON.stringify("from matplotlib.dates import DateFormatter; assert DateFormatter.nonexistent_probe_api()")}`,
+          "the nonexistent API should report a balanced dollar-sign count",
+        ),
+        adjudicationJson("invalid_probe"),
+      ];
+      let calls = 0;
+      const model = {
+        label: "matplotlib-invalid-probe",
+        async complete(
+          _messages: unknown,
+          callOptions?: { maxOutputTokens?: number },
+        ) {
+          options.push(callOptions ?? {});
+          const text = responses[calls] ?? "{}";
+          calls += 1;
+          return { text };
+        },
+      } as unknown as LanguageModel;
+      const result = await runVerificationProbeOnceV2({
+        model,
+        runId: "matplotlib-invalid-probe",
+        workspaceRoot: dir,
+        goal: "Escape TeX date labels without breaking existing formatters",
+        diff: "+ return label.replace(':', '{:}')",
+        changedFiles: ["lib/matplotlib/dates.py"],
+        candidateInputHash: "matplotlib-candidate",
+        mutationRevision: 1,
+        verificationAuthority: "external",
+      });
+      expect(options).toEqual([
+        { maxOutputTokens: 4_096 },
+        { maxOutputTokens: 2_048 },
+      ]);
+      expect(result.verdict).toBe("inconclusive");
+      expect(result.probes[0]?.disposition).toBe("invalid_probe");
+      expect(
+        evaluateVerificationProbeGateV1({
+          result,
+          noRoomForAnotherTurn: false,
+        }).type,
+      ).toBe("accept");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("truncated planner settles inconclusive without executing shell", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-truncated-"));
+    try {
+      const sentinel = path.join(dir, "must-not-exist.txt");
+      let calls = 0;
+      const model = {
+        label: "truncated-planner",
+        async complete() {
+          calls += 1;
+          return {
+            text: inlinePlanJson(
+              `python -c ${JSON.stringify(`from pathlib import Path; Path(${JSON.stringify(sentinel)}).write_text('ran')`)}`,
+            ),
+            finishReason: "length",
+          };
+        },
+      } as unknown as LanguageModel;
+      const result = await runVerificationProbeOnceV2({
+        model,
+        runId: "truncated-planner",
+        workspaceRoot: dir,
+        goal: "goal",
+        diff: "+1",
+        changedFiles: ["a.py"],
+        candidateInputHash: "truncated",
+        mutationRevision: 1,
+      });
+      expect(calls).toBe(1);
+      expect(result.verdict).toBe("inconclusive");
+      expect(result.probes).toHaveLength(0);
+      expect(result.note).toContain("truncated");
+      expect(fs.existsSync(sentinel)).toBeFalse();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("truncated adjudicator cannot turn an ambiguous failure into a defect", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-judge-cut-"));
+    try {
+      let calls = 0;
+      const model = {
+        label: "truncated-adjudicator",
+        async complete() {
+          calls += 1;
+          return calls === 1
+            ? {
+                text: inlinePlanJson(
+                  `python -c ${JSON.stringify("raise AssertionError('ambiguous')")}`,
+                ),
+                finishReason: "stop",
+              }
+            : {
+                text: adjudicationJson("candidate_defect"),
+                finishReason: "max_tokens",
+              };
+        },
+      } as unknown as LanguageModel;
+      const result = await runVerificationProbeOnceV2({
+        model,
+        runId: "truncated-adjudicator",
+        workspaceRoot: dir,
+        goal: "goal",
+        diff: "+candidate",
+        changedFiles: ["a.py"],
+        candidateInputHash: "truncated-adjudicator",
+        mutationRevision: 1,
+      });
+      expect(calls).toBe(2);
+      expect(result.verdict).toBe("inconclusive");
+      expect(result.probes[0]?.disposition).toBe("inconclusive");
+      expect(result.probes[0]?.adjudication.summary).toContain("truncated");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("local tracked repository regression is host-hard, while external authority adjudicates it", async () => {
+    const makeRepository = () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-tracked-"));
+      fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "tests", "test_contract.js"),
+        "throw new Error('visible regression');\n",
+      );
+      fs.writeFileSync(
+        path.join(dir, "tests", "test_discovery.js"),
+        "process.exit(5);\n",
+      );
+      Bun.spawnSync(["git", "init", "-q"], { cwd: dir });
+      Bun.spawnSync(["git", "add", "tests"], { cwd: dir });
+      Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=Paw Test",
+          "-c",
+          "user.email=paw@example.invalid",
+          "commit",
+          "-qm",
+          "baseline",
+        ],
+        { cwd: dir },
+      );
+      return dir;
+    };
+    const repositoryPlan = JSON.stringify({
+      probes: [
+        {
+          command: "node tests/test_contract.js",
+          rationale: "run the impacted tracked contract test",
+          oracle: "the tracked contract test exits zero",
+          kind: "repository_test",
+          groundingRefs: ["repository_test:tests/test_contract.js"],
+        },
+      ],
+    });
+
+    const localDir = makeRepository();
+    try {
+      const localModel = fakeModel([repositoryPlan]);
+      const local = await runVerificationProbeOnceV2({
+        model: localModel,
+        runId: "local-tracked",
+        workspaceRoot: localDir,
+        goal: "preserve the tracked contract",
+        diff: "+candidate",
+        changedFiles: ["product.py"],
+        impactedTests: ["tests/test_contract.js"],
+        candidateInputHash: "local-tracked",
+        mutationRevision: 1,
+        verificationAuthority: "local",
+      });
+      expect(localModel.calls()).toBe(1);
+      expect(local.verdict).toBe("candidate_defect");
+      expect(local.probes[0]?.adjudication.source).toBe("host");
+
+      const repositoryProbe = (
+        probeId: string,
+        command: string,
+        repositoryPath: string,
+      ) => ({
+        probeId,
+        command,
+        rationale: "run a tracked repository contract",
+        oracle: "the tracked contract exits zero",
+        kind: "repository_test" as const,
+        groundingRefs: [`repository_test:${repositoryPath}`],
+      });
+      const spoofed = executeVerificationProbesV1({
+        workspaceRoot: localDir,
+        impactedTests: ["tests/test_contract.js"],
+        probes: [
+          repositoryProbe(
+            "probe_spoof",
+            `python -c ${JSON.stringify("raise SystemExit(7)")} tests/test_contract.js`,
+            "tests/test_contract.js",
+          ),
+        ],
+      });
+      expect(spoofed[0]?.execution.status).toBe("not_run");
+      expect(spoofed[0]?.disposition).toBe("invalid_probe");
+
+      fs.writeFileSync(
+        path.join(localDir, "smoke-test.js"),
+        "throw new Error('candidate-owned runner');\n",
+      );
+      const nodeArgumentSpoof = executeVerificationProbesV1({
+        workspaceRoot: localDir,
+        impactedTests: ["tests/test_contract.js"],
+        probes: [
+          repositoryProbe(
+            "probe_node_argument_spoof",
+            "node smoke-test.js tests/test_contract.js",
+            "tests/test_contract.js",
+          ),
+        ],
+      });
+      expect(nodeArgumentSpoof[0]?.execution.status).toBe("not_run");
+      expect(nodeArgumentSpoof[0]?.disposition).toBe("invalid_probe");
+
+      const pytestMultiTargetSpoof = executeVerificationProbesV1({
+        workspaceRoot: localDir,
+        impactedTests: ["tests/test_contract.js"],
+        probes: [
+          repositoryProbe(
+            "probe_pytest_multi_target",
+            "pytest candidate_owned_failing_test.py tests/test_contract.js",
+            "tests/test_contract.js",
+          ),
+        ],
+      });
+      expect(pytestMultiTargetSpoof[0]?.execution.status).toBe("not_run");
+      expect(pytestMultiTargetSpoof[0]?.disposition).toBe("invalid_probe");
+
+      const pytestSemanticOptionSpoof = executeVerificationProbesV1({
+        workspaceRoot: localDir,
+        impactedTests: ["tests/test_contract.js"],
+        probes: [
+          repositoryProbe(
+            "probe_pytest_semantic_option",
+            "pytest tests/test_contract.js --runxfail",
+            "tests/test_contract.js",
+          ),
+        ],
+      });
+      expect(pytestSemanticOptionSpoof[0]?.execution.status).toBe("not_run");
+      expect(pytestSemanticOptionSpoof[0]?.disposition).toBe("invalid_probe");
+
+      const discovery = executeVerificationProbesV1({
+        workspaceRoot: localDir,
+        impactedTests: ["tests/test_discovery.js"],
+        probes: [
+          repositoryProbe(
+            "probe_discovery",
+            "node tests/test_discovery.js",
+            "tests/test_discovery.js",
+          ),
+        ],
+      });
+      expect(discovery[0]?.disposition).toBe("environment_error");
+      expect(discovery[0]?.adjudication.summary).toContain("test_discovery");
+
+      fs.writeFileSync(
+        path.join(localDir, "tests", "test_contract.js"),
+        "process.exit(0);\n",
+      );
+      const modified = executeVerificationProbesV1({
+        workspaceRoot: localDir,
+        impactedTests: ["tests/test_contract.js"],
+        probes: [
+          repositoryProbe(
+            "probe_modified",
+            "node tests/test_contract.js",
+            "tests/test_contract.js",
+          ),
+        ],
+      });
+      expect(modified[0]?.execution.status).toBe("not_run");
+      expect(modified[0]?.disposition).toBe("invalid_probe");
+
+      fs.writeFileSync(
+        path.join(localDir, "tests", "test_candidate_added.js"),
+        "throw new Error('candidate-owned test');\n",
+      );
+      Bun.spawnSync(["git", "add", "tests/test_candidate_added.js"], {
+        cwd: localDir,
+      });
+      const staged = executeVerificationProbesV1({
+        workspaceRoot: localDir,
+        impactedTests: ["tests/test_candidate_added.js"],
+        probes: [
+          repositoryProbe(
+            "probe_staged",
+            "node tests/test_candidate_added.js",
+            "tests/test_candidate_added.js",
+          ),
+        ],
+      });
+      expect(staged[0]?.execution.status).toBe("not_run");
+      expect(staged[0]?.disposition).toBe("invalid_probe");
+    } finally {
+      fs.rmSync(localDir, { recursive: true, force: true });
+    }
+
+    const externalDir = makeRepository();
+    try {
+      const externalModel = fakeModel([
+        repositoryPlan,
+        adjudicationJson("inconclusive"),
+      ]);
+      const external = await runVerificationProbeOnceV2({
+        model: externalModel,
+        runId: "external-tracked",
+        workspaceRoot: externalDir,
+        goal: "the configured external verifier owns the final contract",
+        diff: "+candidate",
+        changedFiles: ["product.py"],
+        impactedTests: ["tests/test_contract.js"],
+        candidateInputHash: "external-tracked",
+        mutationRevision: 1,
+        verificationAuthority: "external",
+      });
+      expect(externalModel.calls()).toBe(2);
+      expect(external.verdict).toBe("inconclusive");
+      expect(external.probes[0]?.disposition).toBe("inconclusive");
+    } finally {
+      fs.rmSync(externalDir, { recursive: true, force: true });
+    }
+  });
+
+  test("malformed adjudication cannot upgrade an inline failure to candidate defect", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-bad-judge-"));
+    try {
+      const model = fakeModel([
+        inlinePlanJson(
+          `python -c ${JSON.stringify("raise AssertionError('ambiguous')")}`,
+        ),
+        '{"dispositions":[{"probeId":"probe_1","disposition":"candidate_defect","summary":"trust me","evidenceRefs":["invented:hidden-test"]}]}',
+      ]);
+      const result = await runVerificationProbeOnceV2({
+        model,
+        runId: "bad-adjudication",
+        workspaceRoot: dir,
+        goal: "goal",
+        diff: "+candidate",
+        changedFiles: ["a.py"],
+        candidateInputHash: "bad-adjudication",
+        mutationRevision: 1,
+      });
+      expect(result.verdict).toBe("inconclusive");
+      expect(result.probes[0]?.disposition).toBe("inconclusive");
+      expect(result.probes[0]?.adjudication.source).toBe("protocol");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("sklearn signature: boundary probe on unchanged downstream code blocks a certified candidate", () => {
     // sklearn-25102 签名场景：补丁让 transform 保留 DataFrame（类型变化），
     // 但未改的下游 np.empty(0, dtype=X.dtype) 在零特征分支崩溃。
@@ -543,28 +1117,57 @@ describe("Loop v2 adversarial verification probe", () => {
         workspaceRoot: dir,
         probes: [
           {
+            probeId: "probe_1",
             command:
               'python -c "import selector; selector.transform([[1.0, 2.0]], [False, False])"',
             rationale:
               "k=0 with a container lacking .dtype hits the untouched downstream line",
+            oracle: "zero selected features must not access a missing dtype",
+            kind: "inline_contract",
+            groundingRefs: ["task_goal", "terminal_diff"],
           },
           {
+            probeId: "probe_2",
             command:
               'python -c "import selector; assert selector.transform([[1.0, 2.0]], [True, False]) == [[1.0, 2.0]]"',
             rationale: "happy path already verified by the implementer",
+            oracle: "selected rows remain unchanged",
+            kind: "inline_contract",
+            groundingRefs: ["task_goal"],
           },
         ],
       });
       // 快乐路径通过、零特征边界失败：正是自测盲区的形状
-      expect(results[1]?.status).toBe("pass");
-      expect(results[0]?.status).toBe("fail");
-      expect(results[0]?.output).toContain("dtype");
+      expect(results[1]?.execution.exitCode).toBe(0);
+      expect(results[0]?.execution.exitCode).not.toBe(0);
+      expect(results[0]?.execution.output).toContain("dtype");
       const gate = evaluateVerificationProbeGateV1({
         result: {
           candidateInputHash: "sklearn-sig",
           mutationRevision: 3,
-          probes: results,
-          verdict: "fail",
+          probes: results.map((result, index) =>
+            index === 0
+              ? {
+                  ...result,
+                  disposition: "candidate_defect" as const,
+                  adjudication: {
+                    source: "model" as const,
+                    summary:
+                      "the zero-feature task contract reaches unchanged downstream dtype access",
+                    evidenceRefs: ["task_goal", "terminal_diff"],
+                  },
+                }
+              : {
+                  ...result,
+                  disposition: "pass" as const,
+                  adjudication: {
+                    source: "model" as const,
+                    summary: "happy path passed",
+                    evidenceRefs: ["task_goal"],
+                  },
+                },
+          ),
+          verdict: "candidate_defect",
           modelCalls: 1,
         },
         noRoomForAnotherTurn: false,

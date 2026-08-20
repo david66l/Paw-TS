@@ -972,14 +972,14 @@ export function hasVerificationRetryAvailable(state: TaskState): boolean {
   );
 }
 
-interface VerificationClassification {
+export interface VerificationClassification {
   readonly outcome: "passed" | "code_failed" | "harness_failed";
   readonly failureKind?: TestResultSummary["failureKind"];
   readonly retryability?: TestResultSummary["retryability"];
   readonly summary?: string;
 }
 
-function classifyVerificationOutcome(
+export function classifyVerificationOutcome(
   result: ToolRunResult,
   filesChanged: readonly string[],
   intent: VerificationCommandIntent,

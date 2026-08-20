@@ -1254,7 +1254,32 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       async complete() {
         probeCalls += 1;
         expect(model.callCount).toBe(3);
-        return { text: '{"probes":[]}', finishReason: "stop" };
+        return {
+          text:
+            probeCalls === 1
+              ? JSON.stringify({
+                  probes: [
+                    {
+                      command: "node smoke-test.js",
+                      rationale: "exercise the visible verified behavior",
+                      oracle: "the smoke test exits zero",
+                      kind: "inline_contract",
+                      groundingRefs: ["task_goal", "terminal_diff"],
+                    },
+                  ],
+                })
+              : JSON.stringify({
+                  dispositions: [
+                    {
+                      probeId: "probe_1",
+                      disposition: "pass",
+                      summary: "the task-grounded smoke behavior passed",
+                      evidenceRefs: ["task_goal", "terminal_diff"],
+                    },
+                  ],
+                }),
+          finishReason: "stop",
+        };
       },
     };
     const events: RunEventEnvelope[] = [];
@@ -1290,7 +1315,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       expect(result.status).toBe("completed");
       expect(reviewCalls).toBe(1);
-      expect(probeCalls).toBe(1);
+      expect(probeCalls).toBe(2);
       expect(model.callCount).toBe(5);
       expect(
         events.filter((event) => event.event.type === "candidate.checkpoint"),
@@ -1328,7 +1353,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         type: "candidate.probe",
         stage: "checkpoint",
         verdict: "pass",
-        modelCalls: 1,
+        modelCalls: 2,
       });
       expect(probes[1]).toMatchObject({
         type: "candidate.probe",
@@ -2044,7 +2069,33 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       label: "external-code-failed-probe",
       async complete() {
         probeCalls += 1;
-        return { text: '{"probes":[]}', finishReason: "stop" };
+        return {
+          text:
+            probeCalls === 1
+              ? JSON.stringify({
+                  probes: [
+                    {
+                      command: "node smoke-test.js",
+                      rationale: "exercise the visible changed behavior",
+                      oracle: "the smoke test exits zero",
+                      kind: "inline_contract",
+                      groundingRefs: ["task_goal", "terminal_diff"],
+                    },
+                  ],
+                })
+              : JSON.stringify({
+                  dispositions: [
+                    {
+                      probeId: "probe_1",
+                      disposition: "inconclusive",
+                      summary:
+                        "the local base-checkout failure is diagnostic under external authority",
+                      evidenceRefs: ["task_goal", "terminal_diff"],
+                    },
+                  ],
+                }),
+          finishReason: "stop",
+        };
       },
     };
     const orchestrator = new AgentOrchestrator({
@@ -2073,7 +2124,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         completionReason: "external_verification_pending",
       });
       expect(reviewCalls).toBe(1);
-      expect(probeCalls).toBe(1);
+      expect(probeCalls).toBe(2);
       expect(reviewMaterial).toContain('"authority":"external"');
       expect(reviewMaterial).toContain(
         '"localEvidenceRole":"diagnostic_not_acceptance"',
@@ -2100,8 +2151,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         events.find((event) => event.event.type === "candidate.probe")?.event,
       ).toMatchObject({
         type: "candidate.probe",
-        verdict: "pass",
-        modelCalls: 1,
+        verdict: "error",
+        modelCalls: 2,
       });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
