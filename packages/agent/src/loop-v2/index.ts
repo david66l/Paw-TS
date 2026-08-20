@@ -216,6 +216,7 @@ export {
 } from "./semantic-review-gate.js";
 export {
   buildVerificationProbePromptV1,
+  collectVerificationProbeRepositoryTargetsV1,
   evaluateVerificationProbeGateV1,
   executeVerificationProbesV1,
   parseVerificationProbePlanV1,

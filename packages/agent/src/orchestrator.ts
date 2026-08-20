@@ -123,6 +123,7 @@ import {
   buildLoopV2LiveCandidateArtifactV1,
   buildLoopV2ProjectionCheckpointV1,
   canonicalJson,
+  collectVerificationProbeRepositoryTargetsV1,
   createLoopV2ShadowObserver,
   createProviderTerminalStateV2,
   evaluateLoopV2SemanticReviewGateV1,
@@ -4625,10 +4626,20 @@ export class AgentOrchestrator {
             // （闭包内就地构建；文件扫描 <1s，与主循环的实例独立）
             const changedFilesForProbe = taskState.snapshot().filesChanged;
             const probeTestMap = buildTestMapV1(workspaceRoot);
-            const impactedForProbe = findImpactedTests(
+            const staticImpactedForProbe = findImpactedTests(
               probeTestMap,
               changedFilesForProbe,
             ).map((t) => t.testFile);
+            const projectedVerification = Object.values(
+              loopV2Projection?.snapshot().state.verification ?? {},
+            );
+            const impactedForProbe =
+              collectVerificationProbeRepositoryTargetsV1({
+                staticImpactedTests: staticImpactedForProbe,
+                verificationRecords: projectedVerification,
+                hostAcceptanceCriteria: spec.initialAcceptanceCriteria,
+                mutationRevision: assessment.mutationRevision,
+              });
             const result = await runVerificationProbeOnceV2({
               model: this.loopV2VerificationProbeModel!,
               runId,
@@ -4636,7 +4647,9 @@ export class AgentOrchestrator {
               goal: spec.goal,
               diff,
               changedFiles: changedFilesForProbe,
-              ...(impactedForProbe ? { impactedTests: impactedForProbe } : {}),
+              ...(impactedForProbe.length > 0
+                ? { impactedTests: impactedForProbe }
+                : {}),
               candidateInputHash: assessment.candidateInputHash,
               mutationRevision: assessment.mutationRevision,
               verificationAuthority:

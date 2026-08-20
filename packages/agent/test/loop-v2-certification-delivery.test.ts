@@ -336,6 +336,69 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
     ).toThrow("reserved task-goal review id");
   });
 
+  test("long semantic-review goals expose a bounded tail-focused reproduction anchor", () => {
+    const base = djangoPayload();
+    const longGoal = [
+      "HOST RULE: preserve regressions",
+      `PASS_TO_PASS\n${"test_contract\n".repeat(800)}`,
+      "BUG REPRODUCTION: value=2020-01-01 00:00:00 has unclear TeX spacing",
+    ].join("\n");
+    const messages = buildSemanticReviewMessagesV2({
+      ...base,
+      goal: longGoal,
+    });
+    const material = JSON.parse(
+      messages[1]?.content.split("\n\n").at(-1) ?? "{}",
+    ) as {
+      goal: string;
+      goalFocus?: string;
+    };
+    expect(material.goal).toBe(longGoal);
+    expect(material.goalFocus).toContain("HOST RULE: preserve regressions");
+    expect(material.goalFocus).toContain(
+      "BUG REPRODUCTION: value=2020-01-01 00:00:00 has unclear TeX spacing",
+    );
+    expect(material.goalFocus).toContain("middle of task goal omitted");
+    expect(messages[0]?.content).toContain(
+      "internally enumerate the distinct observable behavior classes",
+    );
+  });
+
+  test("goal focus never displaces bounded final-source evidence", () => {
+    const base = djangoPayload();
+    const payload = {
+      ...base,
+      goal: [
+        "HOST RULE: preserve regressions",
+        `PASS_TO_PASS\n${"test_contract\n".repeat(800)}`,
+        "BUG REPRODUCTION: preserve the concrete tail value",
+      ].join("\n"),
+    };
+    const spacious = JSON.parse(
+      buildSemanticReviewMessagesV2(payload)[1]?.content.split("\n\n").at(-1) ??
+        "{}",
+    ) as {
+      goalFocus?: string;
+      sourceContext: unknown;
+      [key: string]: unknown;
+    };
+    expect(spacious.goalFocus).toBeDefined();
+    const withoutFocus = Object.fromEntries(
+      Object.entries(spacious).filter(([key]) => key !== "goalFocus"),
+    );
+    const tightBudget = JSON.stringify(withoutFocus).length;
+    const tight = JSON.parse(
+      buildSemanticReviewMessagesV2(payload, tightBudget)[1]
+        ?.content.split("\n\n")
+        .at(-1) ?? "{}",
+    ) as {
+      goalFocus?: string;
+      sourceContext: unknown;
+    };
+    expect(tight.goalFocus).toBeUndefined();
+    expect(tight.sourceContext).toEqual(spacious.sourceContext);
+  });
+
   test("R04 binds the widened public state and requires a smaller alternative", async () => {
     const payload = djangoPayload();
     let calls = 0;

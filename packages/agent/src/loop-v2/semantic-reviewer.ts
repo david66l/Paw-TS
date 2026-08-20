@@ -1,4 +1,5 @@
 import { parsePatch } from "diff";
+import { projectAuxiliaryGoalV1 } from "./auxiliary-goal.js";
 import type {
   CandidateReviewPayloadV2,
   SemanticReviewerV2,
@@ -91,7 +92,7 @@ export function buildSemanticReviewMessagesV2(
     {
       role: "system",
       content:
-        "You are an independent, read-only semantic reviewer. You have no tools. Judge only the supplied complete goal and contract, the baseline-to-terminal consolidated patch, host facts, mutation manifest, and bounded final-source windows. Historical intermediate patch bodies are intentionally absent because they may describe code that was later reverted. The implementing agent's final summary and hidden reasoning are also absent. Source-window omissions are explicit; do not claim to have seen omitted source. Verification context is mandatory: when authority=external, local verification is diagnostic evidence, not a pass and not final acceptance authority; a local code_failed record alone is not a blocking finding because the configured external verifier owns the final contract. You may still block a concrete semantic defect visible in the supplied patch/contract. Do not infer failure from hypothetical hidden tests. The host-owned task-goal criterion is always supplied, even when the repository has no explicit criteria or invariants; bind a visible omission of the stated task to that criterion. Every blocking finding must bind a supplied criterion or invariant and visible evidence. When a public or unknown surface changed, compare it with a materially smaller alternative. Return one JSON object and no prose.",
+        "You are an independent, read-only semantic reviewer. You have no tools. Judge only the supplied complete goal and contract, the baseline-to-terminal consolidated patch, host facts, mutation manifest, and bounded final-source windows. Historical intermediate patch bodies are intentionally absent because they may describe code that was later reverted. The implementing agent's final summary and hidden reasoning are also absent. Source-window omissions are explicit; do not claim to have seen omitted source. If goalFocus is present, read it first, then use the complete goal as authority. Before choosing a verdict, internally enumerate the distinct observable behavior classes and concrete reproduction values in the visible task, then map each one to exact diff or source-window evidence. A passing verdict requires that every visible task class is covered or visibly irrelevant; a concrete omission is not speculation about hidden tests. Verification context is mandatory: when authority=external, local verification is diagnostic evidence, not a pass and not final acceptance authority; a local code_failed record alone is not a blocking finding because the configured external verifier owns the final contract. You may still block a concrete semantic defect visible in the supplied patch/contract. Do not infer failure from hypothetical hidden tests. The host-owned task-goal criterion is always supplied, even when the repository has no explicit criteria or invariants; bind a visible omission of the stated task to that criterion. Every blocking finding must bind a supplied criterion or invariant and visible evidence. When a public or unknown surface changed, compare it with a materially smaller alternative. Return one JSON object and no prose.",
     },
     {
       role: "user",
@@ -127,7 +128,7 @@ function buildBoundedSemanticReviewMaterialV2(
   payload: CandidateReviewPayloadV2,
   maxInputChars: number,
 ): string {
-  const mandatory = {
+  const mandatoryBase = {
     candidateInputHash: payload.candidateInputHash,
     mutationRevision: payload.input.mutationRevision,
     goal: payload.goal,
@@ -158,8 +159,12 @@ function buildBoundedSemanticReviewMaterialV2(
       historicalPatchBodies: "omitted_by_design",
     },
   };
+  const goalFocus =
+    payload.goal.length > 6_000
+      ? projectAuxiliaryGoalV1(payload.goal, 6_000)
+      : undefined;
   const mandatoryOnly = canonicalJson({
-    ...mandatory,
+    ...mandatoryBase,
     sourceContext: { windows: [], omissions: [] },
   });
   if (mandatoryOnly.length > maxInputChars) {
@@ -173,7 +178,7 @@ function buildBoundedSemanticReviewMaterialV2(
     ({ expanded: _expanded, minimum: _minimum, ...omission }) => omission,
   );
   let rendered = canonicalJson({
-    ...mandatory,
+    ...mandatoryBase,
     sourceContext: { windows, omissions },
   });
   if (rendered.length > maxInputChars) {
@@ -189,7 +194,7 @@ function buildBoundedSemanticReviewMaterialV2(
         (omission) => !sameSourceRangeV2(omission, candidate),
       );
       const next = canonicalJson({
-        ...mandatory,
+        ...mandatoryBase,
         sourceContext: { windows: nextWindows, omissions: nextOmissions },
       });
       if (next.length <= maxInputChars) {
@@ -199,6 +204,17 @@ function buildBoundedSemanticReviewMaterialV2(
         break;
       }
     }
+  }
+  // goalFocus duplicates the complete goal only to improve attention. It may
+  // consume otherwise unused space, but must never displace a final-source
+  // window or turn an otherwise reviewable candidate into an oversize error.
+  if (goalFocus) {
+    const focused = canonicalJson({
+      ...mandatoryBase,
+      goalFocus,
+      sourceContext: { windows, omissions },
+    });
+    if (focused.length <= maxInputChars) return focused;
   }
   return rendered;
 }

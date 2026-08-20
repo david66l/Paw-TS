@@ -2126,6 +2126,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     let reviewCalls = 0;
     let reviewMaterial = "";
     let probeCalls = 0;
+    let probePlannerPrompt = "";
     const reviewModel: LanguageModel = {
       label: "external-code-failed-review",
       async complete(messages) {
@@ -2157,8 +2158,11 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     const events: RunEventEnvelope[] = [];
     const probeModel: LanguageModel = {
       label: "external-code-failed-probe",
-      async complete() {
+      async complete(messages) {
         probeCalls += 1;
+        if (probeCalls === 1) {
+          probePlannerPrompt = messages.at(-1)?.content ?? "";
+        }
         return {
           text:
             probeCalls === 1
@@ -2206,6 +2210,14 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         goal: "Change source.txt; official acceptance belongs to the external verifier.",
         workspaceRoot,
         maxSteps: 5,
+        initialAcceptanceCriteria: [
+          {
+            text: "FAIL_TO_PASS must pass: tests/test_visible.py::test_contract",
+            source: "verification",
+            ref: "tests/test_visible.py::test_contract",
+            verificationAuthority: "external",
+          },
+        ],
       });
 
       expect(result).toMatchObject({
@@ -2215,6 +2227,9 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       expect(reviewCalls).toBe(1);
       expect(probeCalls).toBe(1);
+      expect(probePlannerPrompt).toContain(
+        "repository_test:tests/test_visible.py::test_contract",
+      );
       expect(reviewMaterial).toContain('"authority":"external"');
       expect(reviewMaterial).toContain(
         '"localEvidenceRole":"diagnostic_not_acceptance"',

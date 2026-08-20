@@ -14,6 +14,7 @@ import type { LanguageModel } from "@paw/models";
 import { parseCommandChain } from "../shell-command.js";
 import { classifyVerificationOutcome } from "../task-state.js";
 import { analyzeVerificationInvocation } from "../verification-command.js";
+import { projectAuxiliaryGoalV1 } from "./auxiliary-goal.js";
 import { sha256Canonical } from "./canonical.js";
 
 /**
@@ -43,7 +44,9 @@ const PROBE_ORACLE_CHARS = 160 as const;
 const PROBE_MAX_GROUNDING_REFS = 2 as const;
 const PROBE_RISK_EVIDENCE_CHARS = 320 as const;
 const PROBE_PROMPT_MAX_CHARS = 42_000 as const;
-const PROBE_POLICY_VERSION = "paw.loop-v2-verification-probe-v3" as const;
+const PROBE_POLICY_VERSION = "paw.loop-v2-verification-probe-v4" as const;
+const PREVIOUS_PROBE_POLICY_VERSION =
+  "paw.loop-v2-verification-probe-v3" as const;
 
 export type VerificationProbeKindV2 = "repository_test" | "inline_contract";
 
@@ -88,6 +91,79 @@ export interface VerificationProbeResultV1 {
     readonly summary: string;
     readonly evidenceRefs: readonly string[];
   }>;
+}
+
+export interface VerificationProbeRepositoryTargetSourceV1 {
+  readonly staticImpactedTests?: readonly string[];
+  readonly verificationRecords?: readonly Readonly<{
+    readonly authoritative: boolean;
+    readonly mutationRevision: number;
+    readonly scope: readonly string[];
+  }>[];
+  /** Trusted caller seeds, not the mixed model-updatable runtime ledger. */
+  readonly hostAcceptanceCriteria?: readonly Readonly<{
+    readonly text: string;
+    readonly source: string;
+    readonly ref?: string;
+  }>[];
+  readonly mutationRevision: number;
+  readonly maxTargets?: number;
+}
+
+/**
+ * Host-owned repository-test allowlist for the fresh probe.
+ *
+ * Static dependency maps are useful but incomplete in large/old repositories.
+ * Current candidate verification scopes and trusted acceptance metadata are
+ * equally valid discovery facts. They only authorize a selector for later
+ * HEAD-owned, unmodified, read-only execution; they never make its result pass.
+ */
+export function collectVerificationProbeRepositoryTargetsV1(
+  input: VerificationProbeRepositoryTargetSourceV1,
+): readonly string[] {
+  const maxTargets = input.maxTargets ?? 64;
+  if (!Number.isSafeInteger(maxTargets) || maxTargets < 1 || maxTargets > 256) {
+    throw new Error("Verification probe maxTargets must be within 1..256");
+  }
+  const targets: string[] = [];
+  const add = (raw: string | undefined) => {
+    const target = raw?.trim().replaceAll("\\", "/");
+    if (
+      !target ||
+      path.isAbsolute(target) ||
+      target.split("/").includes("..") ||
+      targets.includes(target) ||
+      targets.length >= maxTargets
+    )
+      return;
+    targets.push(target);
+  };
+
+  const criteria = input.hostAcceptanceCriteria ?? [];
+  const addCriteria = (expectedPrefix: "FAIL_TO_PASS" | "PASS_TO_PASS") => {
+    for (const criterion of criteria) {
+      if (
+        criterion.source === "verification" &&
+        criterion.text.startsWith(expectedPrefix)
+      ) {
+        add(criterion.ref);
+      }
+    }
+  };
+  // Failing acceptance selectors must be visible in the prompt's first eight
+  // entries even when a large static/observed set exists.
+  addCriteria("FAIL_TO_PASS");
+  for (const target of input.staticImpactedTests ?? []) add(target);
+  for (const record of input.verificationRecords ?? []) {
+    if (
+      record.authoritative &&
+      record.mutationRevision === input.mutationRevision
+    ) {
+      for (const target of record.scope) add(target);
+    }
+  }
+  addCriteria("PASS_TO_PASS");
+  return targets;
 }
 
 export interface VerificationProbeOnceResultV2 {
@@ -425,7 +501,7 @@ export function buildVerificationProbePromptV1(input: {
   readonly goal: string;
   readonly diff: string;
   readonly changedFiles: readonly string[];
-  /** Layer 3 增强：受影响的既有测试清单（来自代码-测试依赖图）。 */
+  /** Host-authorized repository selectors from trusted discovery facts. */
   readonly impactedTests?: readonly string[];
   /** Nearby repository-owned handler/dispatch/registry mechanisms. */
   readonly extensionPointHints?: readonly string[];
@@ -493,7 +569,7 @@ export function buildVerificationProbePromptV1(input: {
     "You are an adversarial verification planner. Return one short executable probe most likely to falsify this candidate. Do not explain your reasoning outside the JSON.",
     "",
     "## Task",
-    input.goal.slice(0, 4_000),
+    projectAuxiliaryGoalV1(input.goal, 4_000),
     "",
     "## Changed files",
     input.changedFiles
@@ -503,8 +579,8 @@ export function buildVerificationProbePromptV1(input: {
     ...(input.impactedTests && input.impactedTests.length > 0
       ? [
           "",
-          "## Existing tests linked to the change surface (from the code-test dependency map)",
-          "These tests already exist in the repository and are linked to the files you changed. They represent known behavioral contracts — probe whether the change breaks them:",
+          "## Host-authorized repository test selectors",
+          "These selectors come from trusted acceptance metadata, static dependency discovery, or current verification scope. They authorize one read-only attempt only; they do not prove a dependency, availability in this checkout, or a passing result:",
           ...input.impactedTests
             .slice(0, 8)
             .map((t) => `- repository_test:${boundedEvidence(t)}`),
@@ -522,6 +598,9 @@ export function buildVerificationProbePromptV1(input: {
     "",
     "## Your mission",
     "Choose exactly one end-to-end boundary, downstream-consumer, or old-caller contract that the implementing agent did not already verify.",
+    "When the task contains a concrete reproduction value and the diff adds normalization or escaping, compare every visible token/separator class in that value; probe a visible class that the patch handles inconsistently or omits.",
+    "Any omitted or inconsistent behavior named in rationale/oracle must be exercised by the command's assertion itself. Do not merely mention a suspected gap while asserting only already-handled behavior.",
+    "For formatting or serialization behavior, assert the exact output representation required by the visible library/protocol convention; checking that raw input characters merely remain present is not a behavioral oracle.",
     "Prefer a short inline Python/Node assertion. A repository_test command must be exactly one bare impacted selector, for example `python -m pytest tests/test_file.py::test_name`, with no options or additional targets.",
     "",
     "## Hard constraints",
@@ -809,6 +888,8 @@ function trustedRepositoryTestInvocationV2(
     repositoryPath.split(/[\\/]/).includes("..")
   )
     return undefined;
+  const repositoryFile = repositoryPath.split("::", 1)[0];
+  if (!repositoryFile) return undefined;
   const chain = parseCommandChain(command);
   const invocation = analyzeVerificationInvocation(command);
   if (
@@ -820,7 +901,7 @@ function trustedRepositoryTestInvocationV2(
     return undefined;
   const headOwned = spawnSync(
     "git",
-    ["cat-file", "-e", `HEAD:${repositoryPath}`],
+    ["cat-file", "-e", `HEAD:${repositoryFile}`],
     {
       cwd: workspaceRoot,
       encoding: "utf8",
@@ -830,12 +911,12 @@ function trustedRepositoryTestInvocationV2(
   if (headOwned.status !== 0) return undefined;
   const worktreeUnchanged = spawnSync(
     "git",
-    ["diff", "--quiet", "HEAD", "--", repositoryPath],
+    ["diff", "--quiet", "HEAD", "--", repositoryFile],
     { cwd: workspaceRoot, windowsHide: true },
   );
   const indexUnchanged = spawnSync(
     "git",
-    ["diff", "--cached", "--quiet", "HEAD", "--", repositoryPath],
+    ["diff", "--cached", "--quiet", "HEAD", "--", repositoryFile],
     { cwd: workspaceRoot, windowsHide: true },
   );
   return worktreeUnchanged.status === 0 && indexUnchanged.status === 0
@@ -902,7 +983,7 @@ function buildProbeAdjudicationPromptV2(input: {
     "candidate_defect requires a completed non-zero execution plus concrete supplied evidence. pass requires a completed zero exit and a valid behavioral oracle. Unknown evidence references, malformed output, or insufficient evidence must become inconclusive.",
     "",
     "## Task goal (task_goal)",
-    input.goal.slice(0, 4_000),
+    projectAuxiliaryGoalV1(input.goal, 4_000),
     "",
     "## Terminal diff (terminal_diff)",
     input.diff.slice(0, DIFF_BUDGET_CHARS),
@@ -1303,7 +1384,14 @@ function parseLegacyProbeClaimV1(
   };
 }
 
-function parseProbeRecordV2(value: unknown): ProbeRecordV2 | undefined {
+type ProbePolicyVersionV2 =
+  | typeof PROBE_POLICY_VERSION
+  | typeof PREVIOUS_PROBE_POLICY_VERSION;
+
+function parseProbeRecordForPolicyV2(
+  value: unknown,
+  expectedPolicyVersion: ProbePolicyVersionV2,
+): ProbeRecordV2 | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return undefined;
   const record = value as Partial<ProbeRecordV2>;
@@ -1311,7 +1399,7 @@ function parseProbeRecordV2(value: unknown): ProbeRecordV2 | undefined {
   if (
     record.schemaVersion !== 2 ||
     record.kind !== "paw.loop-v2-verification-probe" ||
-    record.policyVersion !== PROBE_POLICY_VERSION ||
+    record.policyVersion !== expectedPolicyVersion ||
     !["local", "external", "not_required"].includes(
       String(record.verificationAuthority),
     ) ||
@@ -1336,7 +1424,10 @@ function parseProbeRecordV2(value: unknown): ProbeRecordV2 | undefined {
         result.probes.length !== 0 ||
         result.plannerDiagnostics !== undefined)) ||
     (!result.interrupted &&
-      !isProbePlannerDiagnosticsV3(result.plannerDiagnostics)) ||
+      !isProbePlannerDiagnosticsForPolicyV3(
+        result.plannerDiagnostics,
+        expectedPolicyVersion,
+      )) ||
     (!result.interrupted &&
       result.verdict !==
         (result.probes.some((probe) => probe.disposition === "candidate_defect")
@@ -1353,14 +1444,21 @@ function parseProbeRecordV2(value: unknown): ProbeRecordV2 | undefined {
   return record as ProbeRecordV2;
 }
 
-function parseProbeClaimV2(value: unknown): ProbeClaimV2 | undefined {
+function parseProbeRecordV2(value: unknown): ProbeRecordV2 | undefined {
+  return parseProbeRecordForPolicyV2(value, PROBE_POLICY_VERSION);
+}
+
+function parseProbeClaimForPolicyV2(
+  value: unknown,
+  expectedPolicyVersion: ProbePolicyVersionV2,
+): ProbeClaimV2 | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return undefined;
   const claim = value as Partial<ProbeClaimV2>;
   if (
     claim.schemaVersion !== 2 ||
     claim.kind !== "paw.loop-v2-verification-probe-claim" ||
-    claim.policyVersion !== PROBE_POLICY_VERSION ||
+    claim.policyVersion !== expectedPolicyVersion ||
     !["local", "external", "not_required"].includes(
       String(claim.verificationAuthority),
     ) ||
@@ -1371,7 +1469,7 @@ function parseProbeClaimV2(value: unknown): ProbeClaimV2 | undefined {
     typeof claim.claimKey !== "string" ||
     claim.claimKey !==
       sha256Canonical({
-        policy: PROBE_POLICY_VERSION,
+        policy: expectedPolicyVersion,
         verificationAuthority: claim.verificationAuthority,
         candidateInputHash: claim.candidateInputHash,
         mutationRevision: claim.mutationRevision,
@@ -1379,6 +1477,10 @@ function parseProbeClaimV2(value: unknown): ProbeClaimV2 | undefined {
   )
     return undefined;
   return claim as ProbeClaimV2;
+}
+
+function parseProbeClaimV2(value: unknown): ProbeClaimV2 | undefined {
+  return parseProbeClaimForPolicyV2(value, PROBE_POLICY_VERSION);
 }
 
 function isVerificationProbeResultV2(
@@ -1503,8 +1605,9 @@ function buildProbePlannerDiagnosticsV3(input: {
   };
 }
 
-function isProbePlannerDiagnosticsV3(
+function isProbePlannerDiagnosticsForPolicyV3(
   value: unknown,
+  expectedPolicyVersion: ProbePolicyVersionV2,
 ): value is ProbePlannerDiagnosticsV3 {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const diagnostics = value as Partial<ProbePlannerDiagnosticsV3>;
@@ -1519,7 +1622,7 @@ function isProbePlannerDiagnosticsV3(
     thinkingHash: diagnostics.thinkingHash,
   };
   return (
-    diagnostics.policyVersion === PROBE_POLICY_VERSION &&
+    diagnostics.policyVersion === expectedPolicyVersion &&
     typeof diagnostics.finishReason === "string" &&
     diagnostics.finishReason.trim().length > 0 &&
     Number.isSafeInteger(diagnostics.promptChars) &&
@@ -1610,6 +1713,23 @@ export async function runVerificationProbeOnceV2(input: {
     recordRead.state === "parsed"
       ? parseProbeRecordV2(recordRead.value)
       : undefined;
+  const supersededRecord =
+    recordRead.state === "parsed"
+      ? parseProbeRecordForPolicyV2(
+          recordRead.value,
+          PREVIOUS_PROBE_POLICY_VERSION,
+        )
+      : undefined;
+  if (
+    supersededRecord &&
+    supersededRecord.mutationRevision >= input.mutationRevision
+  ) {
+    return interruptedProbeResultV2({
+      candidateInputHash: input.candidateInputHash,
+      mutationRevision: input.mutationRevision,
+      note: "prior-policy verification probe may already have executed for this revision; execution was not repeated",
+    });
+  }
   if (existing) {
     if (
       existing.verificationAuthority === verificationAuthority &&
@@ -1649,6 +1769,23 @@ export async function runVerificationProbeOnceV2(input: {
     claimRead.state === "parsed"
       ? parseProbeClaimV2(claimRead.value)
       : undefined;
+  const supersededClaim =
+    claimRead.state === "parsed"
+      ? parseProbeClaimForPolicyV2(
+          claimRead.value,
+          PREVIOUS_PROBE_POLICY_VERSION,
+        )
+      : undefined;
+  if (
+    supersededClaim &&
+    supersededClaim.mutationRevision >= input.mutationRevision
+  ) {
+    return interruptedProbeResultV2({
+      candidateInputHash: input.candidateInputHash,
+      mutationRevision: input.mutationRevision,
+      note: "prior-policy verification probe claim may have executed for this revision; execution was not repeated",
+    });
+  }
   if (existingClaim) {
     if (
       existingClaim.verificationAuthority === verificationAuthority &&
@@ -1722,9 +1859,9 @@ export async function runVerificationProbeOnceV2(input: {
   }
   if (
     recordRead.state === "corrupt" ||
-    (recordRead.state === "parsed" && !existing) ||
+    (recordRead.state === "parsed" && !existing && !supersededRecord) ||
     claimRead.state === "corrupt" ||
-    (claimRead.state === "parsed" && !existingClaim)
+    (claimRead.state === "parsed" && !existingClaim && !supersededClaim)
   ) {
     return interruptedProbeResultV2({
       candidateInputHash: input.candidateInputHash,

@@ -10,6 +10,7 @@ import { sha256Canonical } from "../src/loop-v2/canonical.js";
 import {
   type VerificationProbeOnceResultV2,
   buildVerificationProbePromptV1,
+  collectVerificationProbeRepositoryTargetsV1,
   detectProtocolFallbackRisk,
   discoverRepositoryExtensionPointsV1,
   evaluateVerificationProbeGateV1,
@@ -166,6 +167,66 @@ describe("Loop v2 adversarial verification probe", () => {
     expect(prompt).toContain("downstream-consumer");
     expect(prompt).toContain('{"probes"');
     expect(prompt).not.toContain(" -k ");
+  });
+
+  test("long task projection retains tail reproduction instead of prefix-only test lists", () => {
+    const prompt = buildVerificationProbePromptV1({
+      goal: [
+        "HOST RULE: make a minimal change",
+        `PASS_TO_PASS\n${"test_contract\n".repeat(800)}`,
+        "BUG REPRODUCTION: value=2020-01-01 00:00:00 must keep clear TeX spacing",
+      ].join("\n"),
+      diff: "+value = value.replace(':', '{:}')",
+      changedFiles: ["dates.py"],
+    });
+    expect(prompt).toContain("HOST RULE: make a minimal change");
+    expect(prompt).toContain(
+      "BUG REPRODUCTION: value=2020-01-01 00:00:00 must keep clear TeX spacing",
+    );
+    expect(prompt).toContain("middle of task goal omitted");
+    expect(prompt).toContain("compare every visible token/separator class");
+    expect(prompt).toContain(
+      "must be exercised by the command's assertion itself",
+    );
+    expect(prompt).toContain("assert the exact output representation");
+    expect(prompt.length).toBeLessThan(42_000);
+  });
+
+  test("repository-test targets merge static, current verification, and trusted acceptance facts", () => {
+    const targets = collectVerificationProbeRepositoryTargetsV1({
+      staticImpactedTests: ["tests/test_static.py"],
+      verificationRecords: [
+        {
+          authoritative: true,
+          mutationRevision: 2,
+          scope: ["tests/test_observed.py::test_current"],
+        },
+        {
+          authoritative: true,
+          mutationRevision: 1,
+          scope: ["tests/test_stale.py"],
+        },
+      ],
+      hostAcceptanceCriteria: [
+        {
+          text: "PASS_TO_PASS must remain passing: tests/test_regression.py",
+          source: "verification",
+          ref: "tests/test_regression.py",
+        },
+        {
+          text: "FAIL_TO_PASS must pass: tests/test_bug.py::test_case[param]",
+          source: "verification",
+          ref: "tests/test_bug.py::test_case[param]",
+        },
+      ],
+      mutationRevision: 2,
+    });
+    expect(targets).toEqual([
+      "tests/test_bug.py::test_case[param]",
+      "tests/test_static.py",
+      "tests/test_observed.py::test_current",
+      "tests/test_regression.py",
+    ]);
   });
 
   test("large diffs retain uniformly spaced first, middle, and last hunks", () => {
@@ -844,6 +905,170 @@ describe("Loop v2 adversarial verification probe", () => {
     }
   });
 
+  test("v3 durable state blocks the same revision but does not poison a newer source revision", async () => {
+    const v3Policy = "paw.loop-v2-verification-probe-v3";
+    const seedV3Record = (
+      workspaceRoot: string,
+      runId: string,
+      mutationRevision: number,
+      corrupt = false,
+    ) => {
+      const folder = path.join(
+        workspaceRoot,
+        ".paw",
+        "loop-v2",
+        "runs",
+        sha256Canonical({ runId }),
+      );
+      fs.mkdirSync(folder, { recursive: true });
+      const prompt = "p";
+      const visible = "{}";
+      const thinking = "";
+      const diagnosticsWithoutHash = {
+        policyVersion: v3Policy,
+        finishReason: "stop",
+        promptChars: prompt.length,
+        promptHash: sha256Canonical({ content: prompt }),
+        visibleChars: visible.length,
+        visibleHash: sha256Canonical({ content: visible }),
+        thinkingChars: thinking.length,
+        thinkingHash: sha256Canonical({ content: thinking }),
+      };
+      fs.writeFileSync(
+        path.join(folder, "verification-probe-v2.json"),
+        JSON.stringify({
+          schemaVersion: 2,
+          kind: "paw.loop-v2-verification-probe",
+          policyVersion: v3Policy,
+          verificationAuthority: "local",
+          candidateInputHash: "prior-candidate",
+          mutationRevision,
+          result: corrupt
+            ? { deliberately: "not a valid settled v3 result" }
+            : {
+                candidateInputHash: "prior-candidate",
+                mutationRevision,
+                probes: [],
+                verdict: "inconclusive",
+                note: "v3 fixture",
+                modelCalls: 1,
+                plannerDiagnostics: {
+                  ...diagnosticsWithoutHash,
+                  diagnosticsHash: sha256Canonical(diagnosticsWithoutHash),
+                },
+              },
+        }),
+      );
+    };
+
+    const seedCorruptV3Claim = (
+      workspaceRoot: string,
+      runId: string,
+      mutationRevision: number,
+    ) => {
+      const folder = path.join(
+        workspaceRoot,
+        ".paw",
+        "loop-v2",
+        "runs",
+        sha256Canonical({ runId }),
+      );
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(
+        path.join(folder, "verification-probe-claim-v2.json"),
+        JSON.stringify({
+          schemaVersion: 2,
+          kind: "paw.loop-v2-verification-probe-claim",
+          policyVersion: v3Policy,
+          verificationAuthority: "local",
+          candidateInputHash: "prior-candidate",
+          mutationRevision,
+          claimKey: "0".repeat(64),
+        }),
+      );
+    };
+
+    const sameDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-probe-v3-same-"),
+    );
+    const newerDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-probe-v3-newer-"),
+    );
+    const corruptRecordDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-probe-v3-corrupt-record-"),
+    );
+    const corruptClaimDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "paw-probe-v3-corrupt-claim-"),
+    );
+    try {
+      seedV3Record(sameDir, "v3-same", 1);
+      const sameModel = fakeModel(['{"probes":[]}']);
+      const same = await runVerificationProbeOnceV2({
+        model: sameModel,
+        runId: "v3-same",
+        workspaceRoot: sameDir,
+        goal: "goal",
+        diff: "+candidate",
+        changedFiles: ["a.py"],
+        candidateInputHash: "current-candidate",
+        mutationRevision: 1,
+      });
+      expect(same.interrupted).toBeTrue();
+      expect(sameModel.calls()).toBe(0);
+
+      seedV3Record(newerDir, "v3-newer", 1);
+      const newerModel = fakeModel(['{"probes":[]}']);
+      const newer = await runVerificationProbeOnceV2({
+        model: newerModel,
+        runId: "v3-newer",
+        workspaceRoot: newerDir,
+        goal: "goal",
+        diff: "+new candidate",
+        changedFiles: ["a.py"],
+        candidateInputHash: "newer-candidate",
+        mutationRevision: 2,
+      });
+      expect(newer.interrupted).toBeUndefined();
+      expect(newer.verdict).toBe("inconclusive");
+      expect(newerModel.calls()).toBe(1);
+
+      seedV3Record(corruptRecordDir, "v3-corrupt-record", 1, true);
+      const corruptRecordModel = fakeModel(['{"probes":[]}']);
+      const corruptRecord = await runVerificationProbeOnceV2({
+        model: corruptRecordModel,
+        runId: "v3-corrupt-record",
+        workspaceRoot: corruptRecordDir,
+        goal: "goal",
+        diff: "+new candidate",
+        changedFiles: ["a.py"],
+        candidateInputHash: "newer-candidate",
+        mutationRevision: 2,
+      });
+      expect(corruptRecord.interrupted).toBeTrue();
+      expect(corruptRecordModel.calls()).toBe(0);
+
+      seedCorruptV3Claim(corruptClaimDir, "v3-corrupt-claim", 1);
+      const corruptClaimModel = fakeModel(['{"probes":[]}']);
+      const corruptClaim = await runVerificationProbeOnceV2({
+        model: corruptClaimModel,
+        runId: "v3-corrupt-claim",
+        workspaceRoot: corruptClaimDir,
+        goal: "goal",
+        diff: "+new candidate",
+        changedFiles: ["a.py"],
+        candidateInputHash: "newer-candidate",
+        mutationRevision: 2,
+      });
+      expect(corruptClaim.interrupted).toBeTrue();
+      expect(corruptClaimModel.calls()).toBe(0);
+    } finally {
+      fs.rmSync(sameDir, { recursive: true, force: true });
+      fs.rmSync(newerDir, { recursive: true, force: true });
+      fs.rmSync(corruptRecordDir, { recursive: true, force: true });
+      fs.rmSync(corruptClaimDir, { recursive: true, force: true });
+    }
+  });
+
   test("semantically inconsistent settled JSON fails closed instead of upgrading a probe", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-tamper-"));
     try {
@@ -990,7 +1215,7 @@ describe("Loop v2 adversarial verification probe", () => {
       expect(result.probes).toHaveLength(0);
       expect(result.note).toContain("truncated");
       expect(result.plannerDiagnostics).toMatchObject({
-        policyVersion: "paw.loop-v2-verification-probe-v3",
+        policyVersion: "paw.loop-v2-verification-probe-v4",
         finishReason: "length",
         thinkingChars: "hidden planner reasoning".length,
       });
@@ -1128,6 +1353,53 @@ describe("Loop v2 adversarial verification probe", () => {
       expect(localModel.calls()).toBe(1);
       expect(local.verdict).toBe("candidate_defect");
       expect(local.probes[0]?.adjudication.source).toBe("host");
+
+      fs.writeFileSync(
+        path.join(localDir, "tests", "test_selector.py"),
+        "def test_visible():\n    assert True\n",
+      );
+      Bun.spawnSync(["git", "add", "tests/test_selector.py"], {
+        cwd: localDir,
+      });
+      Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=Paw Test",
+          "-c",
+          "user.email=paw@example.invalid",
+          "commit",
+          "-qm",
+          "add selector fixture",
+        ],
+        { cwd: localDir },
+      );
+      const exactSelector = "tests/test_selector.py::test_visible";
+      const exactSelectorResult = executeVerificationProbesProductionV1({
+        workspaceRoot: localDir,
+        shellSandbox: TEST_PROBE_SANDBOX,
+        hostShellRunner: () =>
+          ({
+            exit_code: 0,
+            stdout: "1 passed",
+            stderr: "",
+            timed_out: false,
+          }) as ReturnType<typeof runShellInWorkspace>,
+        impactedTests: [exactSelector],
+        probes: [
+          {
+            probeId: "probe_exact_selector",
+            command: `python -m pytest ${exactSelector}`,
+            rationale: "run the exact host acceptance selector",
+            oracle: "the exact tracked selector exits zero",
+            kind: "repository_test",
+            groundingRefs: [`repository_test:${exactSelector}`],
+          },
+        ],
+        verificationAuthority: "local",
+      });
+      expect(exactSelectorResult[0]?.execution.status).toBe("completed");
+      expect(exactSelectorResult[0]?.disposition).toBe("pass");
 
       const repositoryProbe = (
         probeId: string,
