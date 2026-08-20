@@ -167,12 +167,34 @@ describe("Loop Kernel v2 shadow migration", () => {
         runId,
       ),
     );
+    observer.observe(
+      legacyEnvelope(
+        5,
+        {
+          type: "candidate.probe",
+          candidateId: checkpoint.id,
+          mutationRevision: 1,
+          probeKey: "probe-checkpoint",
+          verdict: "pass",
+          outcome: "clear",
+          externalVerification: "not_configured",
+          stage: "checkpoint",
+          summary: "pass",
+          modelCalls: 1,
+        },
+        runId,
+      ),
+    );
     const report = observer.snapshot();
     expect(report.controlState?.status).toBe("running");
     expect(report.controlState?.semanticReview).toBeUndefined();
-    expect(report.diagnostics.at(-1)).toMatchObject({
+    expect(report.diagnostics.at(-2)).toMatchObject({
       disposition: "ignored",
       reason: "semantic_review_checkpoint_ignored",
+    });
+    expect(report.diagnostics.at(-1)).toMatchObject({
+      disposition: "ignored",
+      reason: "verification_probe_checkpoint_ignored",
     });
     expect(() => assertLoopV2ShadowReportIntegrity(report)).not.toThrow();
   });

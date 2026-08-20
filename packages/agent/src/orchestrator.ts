@@ -4429,7 +4429,8 @@ export class AgentOrchestrator {
             event.type === "provider.turn_stopped" ||
             event.type === "candidate.checkpoint" ||
             event.type === "candidate.readiness" ||
-            (event.type === "candidate.review" && event.candidateId)
+            (event.type === "candidate.review" && event.candidateId) ||
+            event.type === "candidate.probe"
           ) {
             persistLoopV2ProjectionCheckpoint();
           }
@@ -4531,6 +4532,9 @@ export class AgentOrchestrator {
             mutationRevision: result.review.mutationRevision,
             reviewKey: result.reviewKey,
             verdict: result.review.verdict,
+            verificationProbe: this.loopV2VerificationProbeModel
+              ? "required"
+              : "not_required",
             externalVerification:
               assessment.policy.verificationAuthority === "external"
                 ? "pending"
@@ -4651,6 +4655,9 @@ export class AgentOrchestrator {
                   .join("\n")
                   .slice(0, 4_000)
               : (result.note ?? "no probes");
+            const semanticReviewKey =
+              loopV2Projection?.snapshot().controlState?.semanticReview
+                ?.reviewKey;
             emit({
               type: "candidate.probe",
               candidateId: assessment.candidateId,
@@ -4662,6 +4669,28 @@ export class AgentOrchestrator {
                   : result.verdict === "clear"
                     ? "pass"
                     : "error",
+              outcome: result.verdict,
+              externalVerification:
+                assessment.policy.verificationAuthority === "external"
+                  ? "pending"
+                  : "not_configured",
+              ...(stage === "final_submission"
+                ? semanticReviewKey
+                  ? { semanticReviewKey }
+                  : { semanticReviewNotRequired: true as const }
+                : {}),
+              probes: result.probes.map((probe) => ({
+                probeId: probe.probeId,
+                kind: probe.plan.kind,
+                executionStatus: probe.execution.status,
+                ...(probe.execution.exitCode !== undefined
+                  ? { exitCode: probe.execution.exitCode }
+                  : {}),
+                outputHash: probe.execution.outputHash,
+                disposition: probe.disposition,
+                adjudicationSource: probe.adjudication.source,
+                evidenceRefs: probe.adjudication.evidenceRefs,
+              })),
               summary,
               modelCalls: result.modelCalls,
               stage,

@@ -1,12 +1,13 @@
 import { sha256Canonical } from "./canonical.js";
 import type { LoopV2Envelope, VerificationRecordV2 } from "./schema.js";
 
-export const CONTROL_STATE_SCHEMA_VERSION = 1 as const;
+export const CONTROL_STATE_SCHEMA_VERSION = 2 as const;
 
 export type ControlStatusV1 =
   | "running"
   | "candidate"
   | "repair_required"
+  | "incomplete"
   | "completed"
   | "external_pending";
 
@@ -47,12 +48,23 @@ export interface ControlStateV1 {
   readonly mutationRevision: number;
   readonly candidate?: ControlCandidateV1;
   readonly readyCandidateId?: string;
+  readonly candidateRequirements?: Readonly<{
+    semanticReview: "required" | "not_required";
+    verificationProbe: "required" | "not_required";
+    externalVerification: "not_configured" | "pending";
+  }>;
   readonly openRepairObligation?: RepairObligationV1;
   readonly semanticReview?: Readonly<{
     candidateId: string;
     mutationRevision: number;
     reviewKey: string;
     verdict: "pass" | "fail" | "partial";
+  }>;
+  readonly verificationProbe?: Readonly<{
+    candidateId: string;
+    mutationRevision: number;
+    probeKey: string;
+    outcome: "clear" | "candidate_defect" | "inconclusive" | "interrupted";
   }>;
 }
 
@@ -75,6 +87,7 @@ export type ControlFactV1 =
         | Readonly<{
             kind: "ready";
             semanticReview?: "required" | "not_required";
+            verificationProbe?: "required" | "not_required";
             externalVerification?: "not_configured" | "pending";
           }>
         | Readonly<{
@@ -97,6 +110,17 @@ export type ControlFactV1 =
       mutationRevision: number;
       reviewKey: string;
       verdict: "pass" | "fail" | "partial";
+      verificationProbe?: "required" | "not_required";
+      externalVerification: "not_configured" | "pending";
+    }>
+  | Readonly<{
+      type: "verification_probe.observed";
+      candidateId: string;
+      mutationRevision: number;
+      probeKey: string;
+      outcome: "clear" | "candidate_defect" | "inconclusive" | "interrupted";
+      semanticReviewKey?: string;
+      semanticReviewNotRequired?: true;
       externalVerification: "not_configured" | "pending";
     }>
   | Readonly<{
@@ -128,6 +152,14 @@ export type ControlEffectV1 =
   | Readonly<{
       type: "request_readiness";
       candidateId: string;
+    }>
+  | Readonly<{
+      type: "request_probe";
+      candidateId: string;
+    }>
+  | Readonly<{
+      type: "commit_incomplete";
+      reason: "verification_probe_interrupted";
     }>
   | Readonly<{
       type: "commit_terminal";
@@ -235,6 +267,9 @@ export function reduceControlStateV1(
           status: "candidate",
           candidate: fact.candidate,
           readyCandidateId: undefined,
+          candidateRequirements: undefined,
+          semanticReview: undefined,
+          verificationProbe: undefined,
           consecutiveNoActionStops: 0,
         },
         effects: [
@@ -244,10 +279,28 @@ export function reduceControlStateV1(
     }
     case "readiness.evaluated": {
       assertCurrentCandidate(prior, fact.candidateId, fact.mutationRevision);
+      if (
+        prior.status !== "candidate" ||
+        prior.readyCandidateId !== undefined ||
+        prior.candidateRequirements !== undefined
+      ) {
+        throw new Error(
+          "Readiness may be evaluated only once per submitted candidate",
+        );
+      }
       if (fact.result.kind === "ready") {
-        if (fact.result.semanticReview === "not_required") {
+        const requirements = {
+          semanticReview: fact.result.semanticReview ?? "required",
+          verificationProbe: fact.result.verificationProbe ?? "required",
+          externalVerification:
+            fact.result.externalVerification ?? "not_configured",
+        } as const;
+        if (
+          requirements.semanticReview === "not_required" &&
+          requirements.verificationProbe === "not_required"
+        ) {
           const status =
-            fact.result.externalVerification === "pending"
+            requirements.externalVerification === "pending"
               ? "external_pending"
               : "completed";
           return {
@@ -255,6 +308,7 @@ export function reduceControlStateV1(
               ...base,
               status,
               readyCandidateId: fact.candidateId,
+              candidateRequirements: requirements,
             },
             effects: [
               {
@@ -269,8 +323,15 @@ export function reduceControlStateV1(
           };
         }
         return {
-          state: { ...base, readyCandidateId: fact.candidateId },
-          effects: [],
+          state: {
+            ...base,
+            readyCandidateId: fact.candidateId,
+            candidateRequirements: requirements,
+          },
+          effects:
+            requirements.semanticReview === "not_required"
+              ? [{ type: "request_probe", candidateId: fact.candidateId }]
+              : [],
         };
       }
       const obligation = openRepairObligation(
@@ -283,6 +344,9 @@ export function reduceControlStateV1(
           ...base,
           status: "repair_required",
           readyCandidateId: undefined,
+          candidateRequirements: undefined,
+          semanticReview: undefined,
+          verificationProbe: undefined,
           openRepairObligation: obligation,
         },
         effects: [{ type: "call_model", reason: "repair_required" }],
@@ -290,6 +354,16 @@ export function reduceControlStateV1(
     }
     case "semantic_review.observed": {
       assertCurrentCandidate(prior, fact.candidateId, fact.mutationRevision);
+      if (
+        prior.status !== "candidate" ||
+        prior.semanticReview !== undefined ||
+        prior.verificationProbe !== undefined ||
+        prior.openRepairObligation !== undefined
+      ) {
+        throw new Error(
+          "Semantic review may be recorded only once per ready candidate",
+        );
+      }
       if (prior.readyCandidateId !== fact.candidateId) {
         throw new Error("Semantic review fact requires a ready candidate");
       }
@@ -299,6 +373,17 @@ export function reduceControlStateV1(
         reviewKey: fact.reviewKey,
         verdict: fact.verdict,
       } as const;
+      const requirements = prior.candidateRequirements;
+      if (!requirements || requirements.semanticReview !== "required") {
+        throw new Error("Semantic review fact was not requested");
+      }
+      if (
+        requirements.verificationProbe !==
+          (fact.verificationProbe ?? "required") ||
+        requirements.externalVerification !== fact.externalVerification
+      ) {
+        throw new Error("Semantic review requirements do not match readiness");
+      }
       if (fact.verdict !== "pass") {
         const obligation = openRepairObligation(prior.runId, input.seq, {
           kind: "material_change",
@@ -314,12 +399,107 @@ export function reduceControlStateV1(
           effects: [{ type: "call_model", reason: "repair_required" }],
         };
       }
+      if (requirements.verificationProbe === "required") {
+        return {
+          state: { ...base, semanticReview },
+          effects: [{ type: "request_probe", candidateId: fact.candidateId }],
+        };
+      }
       const status =
-        fact.externalVerification === "pending"
+        requirements.externalVerification === "pending"
           ? "external_pending"
           : "completed";
       return {
         state: { ...base, status, semanticReview },
+        effects: [
+          {
+            type: "commit_terminal",
+            status,
+            reason:
+              status === "external_pending"
+                ? "external_verification_pending"
+                : "candidate_certified",
+          },
+        ],
+      };
+    }
+    case "verification_probe.observed": {
+      assertCurrentCandidate(prior, fact.candidateId, fact.mutationRevision);
+      if (
+        prior.status !== "candidate" ||
+        prior.verificationProbe !== undefined ||
+        prior.openRepairObligation !== undefined
+      ) {
+        throw new Error(
+          "Verification probe may be recorded only once per ready candidate",
+        );
+      }
+      if (prior.readyCandidateId !== fact.candidateId) {
+        throw new Error("Verification probe fact requires a ready candidate");
+      }
+      const requirements = prior.candidateRequirements;
+      if (!requirements || requirements.verificationProbe !== "required") {
+        throw new Error("Verification probe fact was not requested");
+      }
+      if (requirements.externalVerification !== fact.externalVerification) {
+        throw new Error(
+          "Verification probe authority does not match readiness",
+        );
+      }
+      if (requirements.semanticReview === "not_required") {
+        if (fact.semanticReviewNotRequired !== true) {
+          throw new Error("Verification probe lacks not-required provenance");
+        }
+        if (fact.semanticReviewKey !== undefined || prior.semanticReview) {
+          throw new Error("Verification probe semantic provenance conflicts");
+        }
+      } else if (
+        !fact.semanticReviewKey ||
+        prior.semanticReview?.verdict !== "pass" ||
+        prior.semanticReview.reviewKey !== fact.semanticReviewKey
+      ) {
+        throw new Error(
+          "Verification probe requires a passing semantic review",
+        );
+      }
+      const verificationProbe = {
+        candidateId: fact.candidateId,
+        mutationRevision: fact.mutationRevision,
+        probeKey: fact.probeKey,
+        outcome: fact.outcome,
+      } as const;
+      if (fact.outcome === "candidate_defect") {
+        const obligation = openRepairObligation(prior.runId, input.seq, {
+          kind: "material_change",
+          afterRevision: fact.mutationRevision,
+        });
+        return {
+          state: {
+            ...base,
+            status: "repair_required",
+            verificationProbe,
+            openRepairObligation: obligation,
+          },
+          effects: [{ type: "call_model", reason: "repair_required" }],
+        };
+      }
+      if (fact.outcome === "interrupted") {
+        return {
+          state: { ...base, status: "incomplete", verificationProbe },
+          effects: [
+            {
+              type: "commit_incomplete",
+              reason: "verification_probe_interrupted",
+            },
+          ],
+        };
+      }
+      const status =
+        requirements.externalVerification === "pending"
+          ? "external_pending"
+          : "completed";
+      return {
+        state: { ...base, status, verificationProbe },
         effects: [
           {
             type: "commit_terminal",
@@ -468,6 +648,19 @@ export function controlInputFromLoopV2EnvelopeV1(
         mutationRevision: event.mutationRevision,
         reviewKey: event.reviewKey,
         verdict: event.verdict,
+        verificationProbe: event.verificationProbe,
+        externalVerification: event.externalVerification,
+      };
+      break;
+    case "verification_probe.recorded":
+      fact = {
+        type: "verification_probe.observed",
+        candidateId: event.candidateId,
+        mutationRevision: event.mutationRevision,
+        probeKey: event.probeKey,
+        outcome: event.outcome,
+        semanticReviewKey: event.semanticReviewKey,
+        semanticReviewNotRequired: event.semanticReviewNotRequired,
         externalVerification: event.externalVerification,
       };
       break;
@@ -550,7 +743,9 @@ function reduceMutation(
         mutationRevision: revision,
         candidate: undefined,
         readyCandidateId: undefined,
+        candidateRequirements: undefined,
         semanticReview: undefined,
+        verificationProbe: undefined,
         openRepairObligation: { ...obligation, revision },
       },
       effects: [{ type: "call_model", reason: "repair_required" }],
@@ -567,7 +762,9 @@ function reduceMutation(
       mutationRevision: revision,
       candidate: undefined,
       readyCandidateId: undefined,
+      candidateRequirements: undefined,
       semanticReview: undefined,
+      verificationProbe: undefined,
       ...(clearsMaterial ? { openRepairObligation: undefined } : {}),
     },
     effects: [],

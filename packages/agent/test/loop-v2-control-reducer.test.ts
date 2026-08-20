@@ -9,6 +9,7 @@ import {
   createControlStateV1,
   reduceControlStateV1,
   replayControlFactsV1,
+  restoreControlStateV1,
 } from "../src/loop-v2/index.js";
 
 const RUN_ID = "control-reducer-v1";
@@ -69,14 +70,21 @@ function directRepairState(): ControlStateV1 {
   ).state;
 }
 
-function readyCandidateState(): ControlStateV1 {
+function readyCandidateState(
+  externalVerification: "not_configured" | "pending" = "not_configured",
+): ControlStateV1 {
   return reduceControlStateV1(
     candidateState(),
     input(4, {
       type: "readiness.evaluated",
       candidateId: "candidate-1",
       mutationRevision: 1,
-      result: { kind: "ready" },
+      result: {
+        kind: "ready",
+        semanticReview: "required",
+        verificationProbe: "required",
+        externalVerification,
+      },
     }),
   ).state;
 }
@@ -124,7 +132,7 @@ describe("Loop v2 pure control reducer", () => {
     ]);
   });
 
-  test("only a passing semantic review lets the reducer finish the run", () => {
+  test("semantic pass requests a probe and only a clear probe finishes", () => {
     const ready = { state: readyCandidateState(), effects: [] } as const;
     const completed = reduceControlStateV1(
       ready.state,
@@ -134,14 +142,32 @@ describe("Loop v2 pure control reducer", () => {
         mutationRevision: 1,
         reviewKey: "review-1",
         verdict: "pass",
+        verificationProbe: "required",
         externalVerification: "not_configured",
       }),
     );
 
     expect(ready.state.status).toBe("candidate");
     expect(ready.effects).toEqual([]);
-    expect(completed.state.status).toBe("completed");
+    expect(completed.state.status).toBe("candidate");
     expect(completed.effects).toEqual([
+      { type: "request_probe", candidateId: "candidate-1" },
+    ]);
+
+    const probed = reduceControlStateV1(
+      completed.state,
+      input(6, {
+        type: "verification_probe.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        probeKey: "probe-1",
+        outcome: "clear",
+        semanticReviewKey: "review-1",
+        externalVerification: "not_configured",
+      }),
+    );
+    expect(probed.state.status).toBe("completed");
+    expect(probed.effects).toEqual([
       {
         type: "commit_terminal",
         status: "completed",
@@ -151,14 +177,32 @@ describe("Loop v2 pure control reducer", () => {
   });
 
   test("external verification stays pending even after semantic review passes", () => {
-    const reduced = reduceControlStateV1(
-      readyCandidateState(),
+    const reviewed = reduceControlStateV1(
+      readyCandidateState("pending"),
       input(5, {
         type: "semantic_review.observed",
         candidateId: "candidate-1",
         mutationRevision: 1,
         reviewKey: "review-external",
         verdict: "pass",
+        verificationProbe: "required",
+        externalVerification: "pending",
+      }),
+    );
+    expect(reviewed.state.status).toBe("candidate");
+    expect(reviewed.effects).toEqual([
+      { type: "request_probe", candidateId: "candidate-1" },
+    ]);
+
+    const reduced = reduceControlStateV1(
+      reviewed.state,
+      input(6, {
+        type: "verification_probe.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        probeKey: "probe-external",
+        outcome: "inconclusive",
+        semanticReviewKey: "review-external",
         externalVerification: "pending",
       }),
     );
@@ -173,6 +217,263 @@ describe("Loop v2 pure control reducer", () => {
     ]);
   });
 
+  test("a candidate defect opens repair and an interrupted probe is incomplete", () => {
+    const reviewed = reduceControlStateV1(
+      readyCandidateState(),
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-pass",
+        verdict: "pass",
+        verificationProbe: "required",
+        externalVerification: "not_configured",
+      }),
+    );
+    const defect = reduceControlStateV1(
+      reviewed.state,
+      input(6, {
+        type: "verification_probe.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        probeKey: "probe-defect",
+        outcome: "candidate_defect",
+        semanticReviewKey: "review-pass",
+        externalVerification: "not_configured",
+      }),
+    );
+    expect(defect.state.status).toBe("repair_required");
+    expect(defect.state.openRepairObligation).toMatchObject({
+      kind: "material_change",
+      afterRevision: 1,
+    });
+
+    const interrupted = reduceControlStateV1(
+      reviewed.state,
+      input(7, {
+        type: "verification_probe.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        probeKey: "probe-interrupted",
+        outcome: "interrupted",
+        semanticReviewKey: "review-pass",
+        externalVerification: "not_configured",
+      }),
+    );
+    expect(interrupted.state.status).toBe("incomplete");
+    expect(interrupted.effects).toEqual([
+      {
+        type: "commit_incomplete",
+        reason: "verification_probe_interrupted",
+      },
+    ]);
+  });
+
+  test("readiness requirements cannot be weakened by later review or probe facts", () => {
+    const externalReady = readyCandidateState("pending");
+    expect(() =>
+      reduceControlStateV1(
+        externalReady,
+        input(5, {
+          type: "readiness.evaluated",
+          candidateId: "candidate-1",
+          mutationRevision: 1,
+          result: {
+            kind: "ready",
+            semanticReview: "not_required",
+            verificationProbe: "not_required",
+            externalVerification: "not_configured",
+          },
+        }),
+      ),
+    ).toThrow("only once per submitted candidate");
+    expect(() =>
+      reduceControlStateV1(
+        externalReady,
+        input(5, {
+          type: "semantic_review.observed",
+          candidateId: "candidate-1",
+          mutationRevision: 1,
+          reviewKey: "forged-review",
+          verdict: "pass",
+          verificationProbe: "not_required",
+          externalVerification: "not_configured",
+        }),
+      ),
+    ).toThrow("requirements do not match readiness");
+
+    const reviewed = reduceControlStateV1(
+      externalReady,
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-external",
+        verdict: "pass",
+        verificationProbe: "required",
+        externalVerification: "pending",
+      }),
+    );
+    expect(() =>
+      reduceControlStateV1(
+        reviewed.state,
+        input(6, {
+          type: "verification_probe.observed",
+          candidateId: "candidate-1",
+          mutationRevision: 1,
+          probeKey: "forged-probe",
+          outcome: "clear",
+          semanticReviewNotRequired: true,
+          externalVerification: "not_configured",
+        }),
+      ),
+    ).toThrow("authority does not match readiness");
+  });
+
+  test("failed review or probe cannot be overwritten without a new candidate", () => {
+    const failedReview = reduceControlStateV1(
+      readyCandidateState(),
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-fail",
+        verdict: "fail",
+        verificationProbe: "required",
+        externalVerification: "not_configured",
+      }),
+    );
+    expect(() =>
+      reduceControlStateV1(
+        failedReview.state,
+        input(6, {
+          type: "semantic_review.observed",
+          candidateId: "candidate-1",
+          mutationRevision: 1,
+          reviewKey: "review-pass",
+          verdict: "pass",
+          verificationProbe: "required",
+          externalVerification: "not_configured",
+        }),
+      ),
+    ).toThrow("only once per ready candidate");
+
+    const reviewed = reduceControlStateV1(
+      readyCandidateState(),
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "review-pass",
+        verdict: "pass",
+        verificationProbe: "required",
+        externalVerification: "not_configured",
+      }),
+    );
+    const failedProbe = reduceControlStateV1(
+      reviewed.state,
+      input(6, {
+        type: "verification_probe.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        probeKey: "probe-fail",
+        outcome: "candidate_defect",
+        semanticReviewKey: "review-pass",
+        externalVerification: "not_configured",
+      }),
+    );
+    expect(() =>
+      reduceControlStateV1(
+        failedProbe.state,
+        input(7, {
+          type: "verification_probe.observed",
+          candidateId: "candidate-1",
+          mutationRevision: 1,
+          probeKey: "probe-clear",
+          outcome: "clear",
+          semanticReviewKey: "review-pass",
+          externalVerification: "not_configured",
+        }),
+      ),
+    ).toThrow("only once per ready candidate");
+    expect(failedProbe.effects).not.toContainEqual(
+      expect.objectContaining({ type: "commit_terminal" }),
+    );
+  });
+
+  test("a probe can certify without semantic review only when readiness says not required", () => {
+    const ready = reduceControlStateV1(
+      candidateState(),
+      input(4, {
+        type: "readiness.evaluated",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        result: {
+          kind: "ready",
+          semanticReview: "not_required",
+          verificationProbe: "required",
+          externalVerification: "not_configured",
+        },
+      }),
+    );
+    expect(ready.effects).toEqual([
+      { type: "request_probe", candidateId: "candidate-1" },
+    ]);
+    const completed = reduceControlStateV1(
+      ready.state,
+      input(5, {
+        type: "verification_probe.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        probeKey: "probe-no-review",
+        outcome: "clear",
+        semanticReviewNotRequired: true,
+        externalVerification: "not_configured",
+      }),
+    );
+    expect(completed.state.status).toBe("completed");
+    expect(completed.effects).toEqual([
+      {
+        type: "commit_terminal",
+        status: "completed",
+        reason: "candidate_certified",
+      },
+    ]);
+  });
+
+  test("legacy missing probe requirements fail closed instead of certifying", () => {
+    const legacyReady = reduceControlStateV1(
+      candidateState(),
+      input(4, {
+        type: "readiness.evaluated",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        result: { kind: "ready" },
+      }),
+    );
+    const legacyReview = reduceControlStateV1(
+      legacyReady.state,
+      input(5, {
+        type: "semantic_review.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        reviewKey: "legacy-review",
+        verdict: "pass",
+        externalVerification: "not_configured",
+      }),
+    );
+    expect(legacyReview.state.status).toBe("candidate");
+    expect(legacyReview.effects).toEqual([
+      { type: "request_probe", candidateId: "candidate-1" },
+    ]);
+    expect(() =>
+      restoreControlStateV1(RUN_ID, {
+        ...legacyReview.state,
+        schemaVersion: 1,
+      } as unknown as ControlStateV1),
+    ).toThrow("Unsupported control state schema: 1");
+  });
+
   test("failed semantic review opens a repair that only a later mutation clears", () => {
     const failed = reduceControlStateV1(
       readyCandidateState(),
@@ -182,6 +483,7 @@ describe("Loop v2 pure control reducer", () => {
         mutationRevision: 1,
         reviewKey: "review-failed",
         verdict: "fail",
+        verificationProbe: "required",
         externalVerification: "not_configured",
       }),
     );
@@ -439,6 +741,22 @@ describe("Loop v2 pure control reducer", () => {
         mutationRevision: 1,
         reviewKey: "review-1",
         verdict: "pass",
+        verificationProbe: "required",
+        externalVerification: "not_configured",
+      },
+    });
+    const probe = controlInputFromLoopV2EnvelopeV1({
+      schemaVersion: 2,
+      runId: RUN_ID,
+      seq: 6,
+      ts: 6,
+      event: {
+        type: "verification_probe.recorded",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        probeKey: "probe-1",
+        outcome: "clear",
+        semanticReviewKey: "review-1",
         externalVerification: "not_configured",
       },
     });
@@ -465,6 +783,18 @@ describe("Loop v2 pure control reducer", () => {
         mutationRevision: 1,
         reviewKey: "review-1",
         verdict: "pass",
+        verificationProbe: "required",
+        externalVerification: "not_configured",
+      }),
+    );
+    expect(probe).toEqual(
+      input(6, {
+        type: "verification_probe.observed",
+        candidateId: "candidate-1",
+        mutationRevision: 1,
+        probeKey: "probe-1",
+        outcome: "clear",
+        semanticReviewKey: "review-1",
         externalVerification: "not_configured",
       }),
     );

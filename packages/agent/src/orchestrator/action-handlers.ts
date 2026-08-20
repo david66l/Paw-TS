@@ -783,6 +783,10 @@ async function handleFinalAnswer(
             assessment.mutationRevision > 0 && ctx.reviewLoopV2Candidate
               ? "required"
               : "not_required",
+          verificationProbe:
+            assessment.mutationRevision > 0 && ctx.probeLoopV2Candidate
+              ? "required"
+              : "not_required",
           externalVerification:
             assessment.policy.verificationAuthority === "external"
               ? "pending"
@@ -967,7 +971,9 @@ function projectLoopV2ReducerTerminalToLegacyDecision(
     !terminal ||
     reduction?.state.candidate?.id !== assessment.candidateId ||
     (reduction.state.semanticReview !== undefined &&
-      reduction.state.semanticReview.verdict !== "pass")
+      reduction.state.semanticReview.verdict !== "pass") ||
+    (reduction.state.candidateRequirements?.verificationProbe === "required" &&
+      !reduction.state.verificationProbe)
   ) {
     throw new Error(
       "Loop v2 completion is missing a reducer-owned certified terminal",
@@ -1107,6 +1113,20 @@ async function checkLoopV2VerificationProbeGate(
   if (revision === 0) return undefined;
 
   const result = await ctx.probeLoopV2Candidate();
+  if (result.verdict === "interrupted") {
+    return {
+      state: {
+        type: "decided",
+        decision: decideIncomplete({
+          reason: "loop_v2_verification_probe_interrupted",
+          message:
+            "[VerificationProbe:interrupted] A durable probe claim exists without a settled result. The host will not replay model or shell side effects for this candidate. A new source mutation is required before another probe can run.",
+          taskState: ctx.taskState.snapshot(),
+        }),
+      },
+      flags,
+    };
+  }
   const gate = evaluateVerificationProbeGateV1({
     result,
     noRoomForAnotherTurn,
@@ -1830,9 +1850,7 @@ async function handleToolCalls(
       const blocked = blockedResult(index);
       if (blocked) {
         mutationCaptures.push(
-          ctx.captureLoopV2Facts
-            ? createLoopV2NoMutationCapture()
-            : undefined,
+          ctx.captureLoopV2Facts ? createLoopV2NoMutationCapture() : undefined,
         );
         return blocked;
       }

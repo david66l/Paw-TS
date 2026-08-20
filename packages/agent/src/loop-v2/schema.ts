@@ -75,6 +75,7 @@ export type LoopV2Event =
         | {
             readonly kind: "ready";
             readonly semanticReview?: "required" | "not_required";
+            readonly verificationProbe?: "required" | "not_required";
             readonly externalVerification?: "not_configured" | "pending";
           }
         | {
@@ -99,6 +100,21 @@ export type LoopV2Event =
       readonly mutationRevision: number;
       readonly reviewKey: string;
       readonly verdict: "pass" | "fail" | "partial";
+      readonly verificationProbe?: "required" | "not_required";
+      readonly externalVerification: "not_configured" | "pending";
+    }
+  | {
+      readonly type: "verification_probe.recorded";
+      readonly candidateId: string;
+      readonly mutationRevision: number;
+      readonly probeKey: string;
+      readonly outcome:
+        | "clear"
+        | "candidate_defect"
+        | "inconclusive"
+        | "interrupted";
+      readonly semanticReviewKey?: string;
+      readonly semanticReviewNotRequired?: true;
       readonly externalVerification: "not_configured" | "pending";
     }
   | {
@@ -447,6 +463,53 @@ export function assertLoopV2Envelope(
         ["pass", "fail", "partial"],
         "event.verdict",
       );
+      if (value.event.verificationProbe !== undefined) {
+        assertOneOf(
+          value.event.verificationProbe,
+          ["required", "not_required"],
+          "event.verificationProbe",
+        );
+      }
+      assertOneOf(
+        value.event.externalVerification,
+        ["not_configured", "pending"],
+        "event.externalVerification",
+      );
+      return;
+    case "verification_probe.recorded":
+      assertNonEmptyString(value.event.candidateId, "event.candidateId");
+      assertSafeInteger(
+        value.event.mutationRevision,
+        "event.mutationRevision",
+        0,
+      );
+      assertNonEmptyString(value.event.probeKey, "event.probeKey");
+      assertOneOf(
+        value.event.outcome,
+        ["clear", "candidate_defect", "inconclusive", "interrupted"],
+        "event.outcome",
+      );
+      if (value.event.semanticReviewKey !== undefined) {
+        assertNonEmptyString(
+          value.event.semanticReviewKey,
+          "event.semanticReviewKey",
+        );
+      }
+      if (value.event.semanticReviewNotRequired !== undefined) {
+        assertExact(
+          value.event.semanticReviewNotRequired,
+          true,
+          "event.semanticReviewNotRequired",
+        );
+      }
+      if (
+        (value.event.semanticReviewKey === undefined) ===
+        (value.event.semanticReviewNotRequired !== true)
+      ) {
+        throw new Error(
+          "event verification probe must bind exactly one semantic provenance",
+        );
+      }
       assertOneOf(
         value.event.externalVerification,
         ["not_configured", "pending"],
@@ -658,6 +721,13 @@ function assertReadiness(value: Record<string, unknown>): void {
         value.result.semanticReview,
         ["required", "not_required"],
         `${label}.result.semanticReview`,
+      );
+    }
+    if (value.result.verificationProbe !== undefined) {
+      assertOneOf(
+        value.result.verificationProbe,
+        ["required", "not_required"],
+        `${label}.result.verificationProbe`,
       );
     }
     if (value.result.externalVerification !== undefined) {

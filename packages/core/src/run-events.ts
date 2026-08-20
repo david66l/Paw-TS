@@ -189,6 +189,7 @@ export type RunEvent =
       readonly candidateId?: string;
       readonly reviewKey?: string;
       readonly externalVerification?: "not_configured" | "pending";
+      readonly verificationProbe?: "required" | "not_required";
       /** Checkpoint reviews are audit/feedback only; final is the legacy default. */
       readonly stage?: "checkpoint" | "final_submission";
       readonly reportGrounding?: "pass" | "fail" | "unknown";
@@ -203,6 +204,30 @@ export type RunEvent =
       readonly mutationRevision: number;
       readonly probeKey: string;
       readonly verdict: "pass" | "fail" | "error";
+      /** Structured reducer input. Missing only on pre-v2 durable journals. */
+      readonly outcome?:
+        | "clear"
+        | "candidate_defect"
+        | "inconclusive"
+        | "interrupted";
+      readonly externalVerification?: "not_configured" | "pending";
+      readonly semanticReviewKey?: string;
+      readonly semanticReviewNotRequired?: true;
+      readonly probes?: readonly Readonly<{
+        probeId: string;
+        kind: "repository_test" | "inline_contract";
+        executionStatus: "not_run" | "completed" | "environment_error";
+        exitCode?: number;
+        outputHash: string;
+        disposition:
+          | "pass"
+          | "candidate_defect"
+          | "invalid_probe"
+          | "environment_error"
+          | "inconclusive";
+        adjudicationSource: "host" | "model" | "protocol" | "legacy";
+        evidenceRefs: readonly string[];
+      }>[];
       /** Checkpoint probes are audit/feedback only; final is the legacy default. */
       readonly stage?: "checkpoint" | "final_submission";
       readonly summary: string;
@@ -218,6 +243,7 @@ export type RunEvent =
         | {
             readonly kind: "ready";
             readonly semanticReview?: "required" | "not_required";
+            readonly verificationProbe?: "required" | "not_required";
             readonly externalVerification?: "not_configured" | "pending";
           }
         | {

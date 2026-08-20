@@ -1353,12 +1353,15 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         type: "candidate.probe",
         stage: "checkpoint",
         verdict: "pass",
+        outcome: "clear",
         modelCalls: 2,
       });
       expect(probes[1]).toMatchObject({
         type: "candidate.probe",
         stage: "final_submission",
         verdict: "pass",
+        outcome: "clear",
+        externalVerification: "not_configured",
         modelCalls: 0,
       });
       expect(
@@ -1404,6 +1407,34 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(
         assessLoopV2AuthorityEligibilityV1(terminal, candidate, review),
       ).toEqual({ eligible: true, reasons: [] });
+      const reducerCheckpoint = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
+          "utf8",
+        ),
+      );
+      expect(reducerCheckpoint.report.controlState).toMatchObject({
+        status: "completed",
+        semanticReview: { verdict: "pass" },
+        verificationProbe: {
+          candidateId: candidate.assessment.candidateId,
+          outcome: "clear",
+        },
+      });
+      expect(
+        reducerCheckpoint.report.controlState?.candidateRequirements,
+      ).toEqual({
+        semanticReview: "required",
+        verificationProbe: "required",
+        externalVerification: "not_configured",
+      });
+      expect(
+        reducerCheckpoint.report.projectedEvents.at(-1)?.event,
+      ).toMatchObject({
+        type: "verification_probe.recorded",
+        candidateId: candidate.assessment.candidateId,
+        outcome: "clear",
+      });
 
       // Claim-only migration uses the same write ordering: a future
       // interrupted record is durable before the candidate commit. Exercise
@@ -2152,7 +2183,27 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       ).toMatchObject({
         type: "candidate.probe",
         verdict: "error",
+        outcome: "inconclusive",
+        externalVerification: "pending",
         modelCalls: 2,
+      });
+      const checkpoint = parseLoopV2ProjectionCheckpointV1(
+        fs.readFileSync(
+          loopV2ProjectionCheckpointPath(
+            workspaceRoot,
+            "v2-external-code-failed",
+          ),
+          "utf8",
+        ),
+      );
+      expect(checkpoint.report.controlState).toMatchObject({
+        status: "external_pending",
+        candidateRequirements: {
+          semanticReview: "required",
+          verificationProbe: "required",
+          externalVerification: "pending",
+        },
+        verificationProbe: { outcome: "inconclusive" },
       });
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });

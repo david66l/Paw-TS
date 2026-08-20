@@ -345,6 +345,36 @@ describe("Loop Kernel v2 event projector", () => {
         ]),
       ),
     ).toThrow("event.result.requirement.scope must be an array");
+    expect(
+      parseLoopV2EventLog(
+        JSON.stringify([
+          envelope(1, {
+            type: "verification_probe.recorded",
+            candidateId: "candidate-1",
+            mutationRevision: 1,
+            probeKey: "probe-1",
+            outcome: "inconclusive",
+            semanticReviewNotRequired: true,
+            externalVerification: "pending",
+          }),
+        ]),
+      ),
+    ).toHaveLength(1);
+    expect(() =>
+      parseLoopV2EventLog(
+        JSON.stringify([
+          envelope(1, {
+            type: "verification_probe.recorded",
+            candidateId: "candidate-1",
+            mutationRevision: 1,
+            probeKey: "probe-1",
+            outcome: "invented" as "clear",
+            semanticReviewNotRequired: true,
+            externalVerification: "pending",
+          }),
+        ]),
+      ),
+    ).toThrow("event.outcome must be one of");
   });
 
   test("kernel version is explicit and defaults to v1", () => {

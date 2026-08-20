@@ -73,6 +73,7 @@ export function projectLoopV2Event(
     case "readiness.evaluated":
       return { state: base, delta: EMPTY_DELTA };
     case "semantic_review.recorded":
+    case "verification_probe.recorded":
       return { state: base, delta: EMPTY_DELTA };
     case "evidence.observed": {
       const fingerprint = evidenceFingerprint(event.observation);

@@ -62,6 +62,9 @@ export type LoopV2ShadowReason =
   | "readiness_evaluated_projected"
   | "semantic_review_projected"
   | "semantic_review_checkpoint_ignored"
+  | "verification_probe_projected"
+  | "verification_probe_checkpoint_ignored"
+  | "verification_probe_legacy_unstructured"
   | "non_decision_event";
 
 export interface LoopV2ShadowDiagnostic {
@@ -538,6 +541,7 @@ export function createLoopV2ShadowObserver(
           mutationRevision: number;
           reviewKey?: string;
           verdict: "pass" | "fail" | "partial";
+          verificationProbe?: "required" | "not_required";
           externalVerification?: "not_configured" | "pending";
           stage?: "checkpoint" | "final_submission";
         }>;
@@ -561,6 +565,7 @@ export function createLoopV2ShadowObserver(
               mutationRevision: review.mutationRevision,
               reviewKey: review.reviewKey,
               verdict: review.verdict,
+              verificationProbe: review.verificationProbe,
               externalVerification: review.externalVerification,
             },
           };
@@ -568,6 +573,54 @@ export function createLoopV2ShadowObserver(
           record(envelope, "projected", "semantic_review_projected");
           return;
         }
+      }
+
+      if (envelope.event.type === "candidate.probe") {
+        const probe = envelope.event as unknown as Readonly<{
+          candidateId: string;
+          mutationRevision: number;
+          probeKey: string;
+          outcome?:
+            | "clear"
+            | "candidate_defect"
+            | "inconclusive"
+            | "interrupted";
+          semanticReviewKey?: string;
+          semanticReviewNotRequired?: true;
+          externalVerification?: "not_configured" | "pending";
+          stage?: "checkpoint" | "final_submission";
+        }>;
+        if (probe.stage === "checkpoint") {
+          record(envelope, "ignored", "verification_probe_checkpoint_ignored");
+          return;
+        }
+        if (!probe.outcome || !probe.externalVerification) {
+          record(envelope, "gap", "verification_probe_legacy_unstructured");
+          return;
+        }
+        const projected: LoopV2Envelope = {
+          schemaVersion: LOOP_V2_SCHEMA_VERSION,
+          runId,
+          seq: projectedEvents.length + 1,
+          ts: envelope.ts,
+          event: {
+            type: "verification_probe.recorded",
+            candidateId: probe.candidateId,
+            mutationRevision: probe.mutationRevision,
+            probeKey: probe.probeKey,
+            outcome: probe.outcome,
+            ...(probe.semanticReviewKey
+              ? { semanticReviewKey: probe.semanticReviewKey }
+              : {}),
+            ...(probe.semanticReviewNotRequired === true
+              ? { semanticReviewNotRequired: true as const }
+              : {}),
+            externalVerification: probe.externalVerification,
+          },
+        };
+        appendProjected(projected);
+        record(envelope, "projected", "verification_probe_projected");
+        return;
       }
 
       const classification = classifyLegacyEvent(envelope.event);
