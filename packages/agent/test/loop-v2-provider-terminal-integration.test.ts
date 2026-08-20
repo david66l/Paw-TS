@@ -12,6 +12,7 @@ import { FakeLanguageModel, type LanguageModel } from "@paw/models";
 
 import type { ToolEffectPolicy } from "../src/execution-policy.js";
 import {
+  HOST_TASK_GOAL_REVIEW_CRITERION_ID,
   type LoopV2LiveCandidateArtifactV1,
   type LoopV2LiveCandidateAssessmentV1,
   LoopV2LiveReviewRuntimeV1,
@@ -1631,7 +1632,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
             message.content.includes("+after"),
         );
         sawCheckpointFeedback = messages.some((message) =>
-          message.content.includes("LoopV2SemanticReview:partial"),
+          message.content.includes("LoopV2SemanticReview:fail"),
         );
         return { text: '{"action":"abort","reason":"fixture complete"}' };
       },
@@ -1639,9 +1640,29 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     let reviewCalls = 0;
     const reviewModel: LanguageModel = {
       label: "stable-block-review",
-      async complete() {
+      async complete(messages) {
         reviewCalls += 1;
-        return { text: "{}" };
+        const material = JSON.parse(
+          messages.at(-1)?.content.split("\n\n").at(-1) ?? "{}",
+        ) as { candidateInputHash: string; mutationRevision: number };
+        return {
+          text: JSON.stringify({
+            candidateInputHash: material.candidateInputHash,
+            mutationRevision: material.mutationRevision,
+            verdict: "fail",
+            findings: [
+              {
+                severity: "blocking",
+                criterionId: HOST_TASK_GOAL_REVIEW_CRITERION_ID,
+                file: "source.txt",
+                observedChange:
+                  "The terminal value does not satisfy the complete task goal.",
+                risk: "The requested observable behavior remains incomplete.",
+                evidenceRefs: ["snapshot:source.txt"],
+              },
+            ],
+          }),
+        };
       },
     };
     let probeCalls = 0;
@@ -1686,7 +1707,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         expect.objectContaining({
           event: expect.objectContaining({
             stage: "checkpoint",
-            verdict: "partial",
+            verdict: "fail",
             modelCalls: 1,
           }),
         }),

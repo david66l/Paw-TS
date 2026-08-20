@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  HOST_TASK_GOAL_REVIEW_CRITERION_ID,
   LOOP_V2_SCHEMA_VERSION,
   type LoopV2Event,
   type SemanticReviewModelV2,
@@ -241,6 +242,98 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
     expect(captured).not.toContain("proposedSummary");
     expect(captured).not.toContain("deliberation");
     expect(captured).not.toContain("final_answer");
+  });
+
+  test("an empty repository contract can still block a visible task-goal omission", async () => {
+    const base = djangoPayload();
+    const payload = buildCandidateReviewPayloadV2(
+      { ...djangoCandidateState(), criteria: {}, invariants: {} },
+      base.snapshots,
+      base.terminalPatch,
+    );
+    const messages = buildSemanticReviewMessagesV2(payload);
+    const material = JSON.parse(
+      messages[1]?.content.split("\n\n").at(-1) ?? "{}",
+    ) as {
+      criteria: Array<{
+        id: string;
+        sourceHash: string;
+        goalRef: string;
+      }>;
+    };
+    expect(material.criteria).toEqual([
+      expect.objectContaining({
+        id: HOST_TASK_GOAL_REVIEW_CRITERION_ID,
+        sourceHash: payload.input.goalSourceHash,
+        goalRef: "goal",
+      }),
+    ]);
+    const rendered = messages.map((message) => message.content).join("\n");
+    expect(rendered.split(payload.goal)).toHaveLength(2);
+
+    const reviewed = await reviewCandidateOnceV2(
+      createSemanticReviewLedgerV2(),
+      payload,
+      async () => ({
+        candidateInputHash: payload.candidateInputHash,
+        mutationRevision: payload.input.mutationRevision,
+        verdict: "fail",
+        findings: [
+          {
+            severity: "blocking",
+            criterionId: HOST_TASK_GOAL_REVIEW_CRITERION_ID,
+            file: "django/urls/resolvers.py",
+            observedChange:
+              "The terminal patch changes public state instead of limiting the requested behavior to repr.",
+            risk: "The complete task goal remains observably unsatisfied.",
+            evidenceRefs: ["snapshot:django/urls/resolvers.py"],
+          },
+        ],
+      }),
+    );
+    expect(reviewed.review).toMatchObject({
+      verdict: "fail",
+      findings: [{ criterionId: HOST_TASK_GOAL_REVIEW_CRITERION_ID }],
+    });
+
+    const unknownBinding = await reviewCandidateOnceV2(
+      createSemanticReviewLedgerV2(),
+      payload,
+      async () => ({
+        candidateInputHash: payload.candidateInputHash,
+        mutationRevision: payload.input.mutationRevision,
+        verdict: "fail",
+        findings: [
+          {
+            severity: "blocking",
+            criterionId: "host:invented-contract",
+            observedChange: "Invented binding.",
+            risk: "This must not be admitted.",
+            evidenceRefs: ["snapshot:django/urls/resolvers.py"],
+          },
+        ],
+      }),
+    );
+    expect(unknownBinding.review.verdict).toBe("partial");
+
+    const stateWithCollision = djangoCandidateState();
+    const existingCriterion = Object.values(stateWithCollision.criteria)[0];
+    if (!existingCriterion) throw new Error("missing criterion fixture");
+    expect(() =>
+      buildCandidateReviewPayloadV2(
+        {
+          ...stateWithCollision,
+          criteria: {
+            [HOST_TASK_GOAL_REVIEW_CRITERION_ID]: {
+              ...existingCriterion,
+              id: HOST_TASK_GOAL_REVIEW_CRITERION_ID,
+            },
+          },
+        },
+        base.snapshots,
+        base.terminalPatch,
+      ),
+    ).toThrow("reserved task-goal review id");
   });
 
   test("R04 binds the widened public state and requires a smaller alternative", async () => {

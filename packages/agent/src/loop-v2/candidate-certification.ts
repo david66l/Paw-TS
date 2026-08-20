@@ -10,6 +10,10 @@ import {
   type WorkingDecisionStateV2,
 } from "./schema.js";
 
+/** Review-only binding for a defect visible against the complete task goal. */
+export const HOST_TASK_GOAL_REVIEW_CRITERION_ID =
+  "paw.review.task_goal.v1" as const;
+
 export interface CandidateSnapshotV2 {
   readonly path: string;
   readonly contentHash: string;
@@ -293,6 +297,15 @@ export function buildCandidateReviewPayloadV2(
     }
   }
   const input = buildCandidateInputV2(state, snapshots);
+  if (
+    input.criteria.some(
+      (criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID,
+    )
+  ) {
+    throw new Error(
+      "Candidate criterion uses the reserved task-goal review id",
+    );
+  }
   if (!terminalPatch.patch.trim()) {
     throw new Error("Candidate terminal patch must not be empty");
   }
@@ -879,7 +892,9 @@ function parseFinding(
     );
   }
   const criterionIds = new Set(
-    payload.input.criteria.map((criterion) => criterion.id),
+    payload.input.criteria
+      .map((criterion) => criterion.id)
+      .concat(HOST_TASK_GOAL_REVIEW_CRITERION_ID),
   );
   const invariantIds = new Set(
     payload.input.invariants.map((invariant) => invariant.id),
@@ -964,6 +979,15 @@ function parseFinding(
 }
 
 function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
+  if (
+    payload.input.criteria.some(
+      (criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID,
+    )
+  ) {
+    throw new Error(
+      "Candidate criterion uses the reserved task-goal review id",
+    );
+  }
   const expectedEvidenceRole =
     payload.verificationContext.authority === "external"
       ? "diagnostic_not_acceptance"

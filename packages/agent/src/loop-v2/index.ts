@@ -43,6 +43,7 @@ export { materializeTerminalCandidateSnapshotsV2 } from "./candidate-snapshots.j
 export {
   buildCandidateInputV2,
   buildCandidateReviewPayloadV2,
+  HOST_TASK_GOAL_REVIEW_CRITERION_ID,
   candidateInputHashV2,
   candidateSnapshotHashV2,
   createSemanticReviewLedgerV2,

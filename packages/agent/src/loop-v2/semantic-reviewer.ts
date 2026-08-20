@@ -3,6 +3,7 @@ import type {
   CandidateReviewPayloadV2,
   SemanticReviewerV2,
 } from "./candidate-certification.js";
+import { HOST_TASK_GOAL_REVIEW_CRITERION_ID } from "./candidate-certification.js";
 import { canonicalJson } from "./canonical.js";
 
 export interface SemanticReviewUsageV2 {
@@ -76,12 +77,21 @@ export function buildSemanticReviewMessagesV2(
   if (!Number.isSafeInteger(maxInputChars) || maxInputChars < 1_000) {
     throw new Error("Semantic reviewer maxInputChars must be at least 1000");
   }
+  if (
+    payload.input.criteria.some(
+      (criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID,
+    )
+  ) {
+    throw new Error(
+      "Candidate criterion uses the reserved task-goal review id",
+    );
+  }
   const material = buildBoundedSemanticReviewMaterialV2(payload, maxInputChars);
   return [
     {
       role: "system",
       content:
-        "You are an independent, read-only semantic reviewer. You have no tools. Judge only the supplied complete goal and contract, the baseline-to-terminal consolidated patch, host facts, mutation manifest, and bounded final-source windows. Historical intermediate patch bodies are intentionally absent because they may describe code that was later reverted. The implementing agent's final summary and hidden reasoning are also absent. Source-window omissions are explicit; do not claim to have seen omitted source. Verification context is mandatory: when authority=external, local verification is diagnostic evidence, not a pass and not final acceptance authority; a local code_failed record alone is not a blocking finding because the configured external verifier owns the final contract. You may still block a concrete semantic defect visible in the supplied patch/contract. Do not infer failure from hypothetical hidden tests. Every blocking finding must bind a supplied criterion or invariant and visible evidence. When a public or unknown surface changed, compare it with a materially smaller alternative. Return one JSON object and no prose.",
+        "You are an independent, read-only semantic reviewer. You have no tools. Judge only the supplied complete goal and contract, the baseline-to-terminal consolidated patch, host facts, mutation manifest, and bounded final-source windows. Historical intermediate patch bodies are intentionally absent because they may describe code that was later reverted. The implementing agent's final summary and hidden reasoning are also absent. Source-window omissions are explicit; do not claim to have seen omitted source. Verification context is mandatory: when authority=external, local verification is diagnostic evidence, not a pass and not final acceptance authority; a local code_failed record alone is not a blocking finding because the configured external verifier owns the final contract. You may still block a concrete semantic defect visible in the supplied patch/contract. Do not infer failure from hypothetical hidden tests. The host-owned task-goal criterion is always supplied, even when the repository has no explicit criteria or invariants; bind a visible omission of the stated task to that criterion. Every blocking finding must bind a supplied criterion or invariant and visible evidence. When a public or unknown surface changed, compare it with a materially smaller alternative. Return one JSON object and no prose.",
     },
     {
       role: "user",
@@ -122,7 +132,15 @@ function buildBoundedSemanticReviewMaterialV2(
     mutationRevision: payload.input.mutationRevision,
     goal: payload.goal,
     verificationContext: payload.verificationContext,
-    criteria: payload.input.criteria,
+    criteria: [
+      {
+        id: HOST_TASK_GOAL_REVIEW_CRITERION_ID,
+        source: "host_task_goal",
+        sourceHash: payload.input.goalSourceHash,
+        goalRef: "goal",
+      },
+      ...payload.input.criteria,
+    ],
     invariants: payload.input.invariants,
     changedPublicSurface: payload.input.changedPublicSurface,
     currentVerification: payload.input.currentVerification,
