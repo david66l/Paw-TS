@@ -19,13 +19,46 @@ import path from "node:path";
 
 /** 读/列表操作中阻断的路径段（V2 路径守卫）。 */
 export const SENSITIVE_PATH_SEGMENTS = new Set([
-  ".git", ".paw", ".env", ".ssh",
-  "id_rsa", "id_ed25519", "credentials", "secrets",
-  ".aws", ".gcloud", ".netrc", ".npmrc",
-  "authorized_keys", "known_hosts",
+  ".git",
+  ".paw",
+  ".env",
+  ".ssh",
+  "id_rsa",
+  "id_ed25519",
+  "credentials",
+  "secrets",
+  ".aws",
+  ".gcloud",
+  ".netrc",
+  ".npmrc",
+  "authorized_keys",
+  "known_hosts",
 ]);
 
-export type PathRisk = "safe" | "sensitive" | "escaped" | "invalid";
+export type PathRisk =
+  | "safe"
+  | "sensitive"
+  | "escaped"
+  | "out_of_scope"
+  | "invalid";
+
+export type WorkspacePathOperationV1 = "read" | "write";
+
+/**
+ * Optional run-scoped authority layered on top of the workspace containment
+ * guard. Paths are workspace-relative unless absolute and never expand the
+ * workspace root itself.
+ */
+export interface WorkspacePathPolicyV1 {
+  readonly readRoots: readonly string[];
+  readonly writeRoots: readonly string[];
+  readonly denyPaths?: readonly string[];
+}
+
+export interface WorkspacePathCheckOptionsV1 {
+  readonly operation?: WorkspacePathOperationV1;
+  readonly policy?: WorkspacePathPolicyV1;
+}
 
 export interface PathDecision {
   readonly allowed: boolean;
@@ -94,6 +127,7 @@ function hasSensitiveSegment(absPath: string): string | undefined {
 export function checkWorkspacePath(
   workspaceRoot: string,
   userPath: string,
+  options: WorkspacePathCheckOptionsV1 = {},
 ): PathDecision {
   let rootAbs: string;
   let rootReal: string;
@@ -101,7 +135,12 @@ export function checkWorkspacePath(
     rootAbs = path.resolve(workspaceRoot);
     rootReal = realpathExisting(rootAbs);
   } catch {
-    return { allowed: false, resolvedPath: "", risk: "invalid", reason: "Workspace root could not be resolved" };
+    return {
+      allowed: false,
+      resolvedPath: "",
+      risk: "invalid",
+      reason: "Workspace root could not be resolved",
+    };
   }
 
   let candidate: string;
@@ -110,12 +149,22 @@ export function checkWorkspacePath(
       ? path.resolve(userPath)
       : path.resolve(rootAbs, userPath);
   } catch {
-    return { allowed: false, resolvedPath: "", risk: "invalid", reason: "Path could not be resolved" };
+    return {
+      allowed: false,
+      resolvedPath: "",
+      risk: "invalid",
+      reason: "Path could not be resolved",
+    };
   }
 
   // 检查：路径不能通过 .. 跳出工作区
   if (!isPathInsideRoot(rootAbs, candidate)) {
-    return { allowed: false, resolvedPath: candidate, risk: "escaped", reason: `Path escapes workspace root: ${rootAbs}` };
+    return {
+      allowed: false,
+      resolvedPath: candidate,
+      risk: "escaped",
+      reason: `Path escapes workspace root: ${rootAbs}`,
+    };
   }
 
   // 符号链接检查：防止通过 symlink 绕过工作区
@@ -123,17 +172,91 @@ export function checkWorkspacePath(
     const existing = nearestExistingPath(candidate, rootAbs);
     const existingReal = realpathExisting(existing);
     if (!isPathInsideRoot(rootReal, existingReal)) {
-      return { allowed: false, resolvedPath: candidate, risk: "escaped", reason: `Path escapes workspace root via symlink: ${rootReal}` };
+      return {
+        allowed: false,
+        resolvedPath: candidate,
+        risk: "escaped",
+        reason: `Path escapes workspace root via symlink: ${rootReal}`,
+      };
     }
   } catch {
-    return { allowed: false, resolvedPath: candidate, risk: "invalid", reason: "Path could not be checked against real workspace path" };
+    return {
+      allowed: false,
+      resolvedPath: candidate,
+      risk: "invalid",
+      reason: "Path could not be checked against real workspace path",
+    };
   }
 
+  const policyDecision = checkPathPolicy(
+    rootAbs,
+    candidate,
+    options.operation ?? "read",
+    options.policy,
+  );
+  if (policyDecision) return policyDecision;
+
   // 敏感路径检查
-  const bad = hasSensitiveSegment(candidate);
+  // Sensitive segments are scoped to the workspace-relative path. A workspace
+  // may itself live below an internal directory (for example a recoverable
+  // verifier worktree under `.paw/`); ancestors of the authority root must not
+  // make every path inside that workspace sensitive.
+  const bad = hasSensitiveSegment(path.relative(rootAbs, candidate));
   if (bad) {
-    return { allowed: false, resolvedPath: candidate, risk: "sensitive", reason: `Path contains sensitive segment: ${bad}` };
+    return {
+      allowed: false,
+      resolvedPath: candidate,
+      risk: "sensitive",
+      reason: `Path contains sensitive segment: ${bad}`,
+    };
   }
 
   return { allowed: true, resolvedPath: candidate, risk: "safe", reason: "" };
+}
+
+function checkPathPolicy(
+  workspaceRoot: string,
+  candidate: string,
+  operation: WorkspacePathOperationV1,
+  policy: WorkspacePathPolicyV1 | undefined,
+): PathDecision | undefined {
+  if (!policy) return undefined;
+  const resolvePolicyPath = (value: string): string =>
+    path.isAbsolute(value)
+      ? path.resolve(value)
+      : path.resolve(workspaceRoot, value);
+  const denyPaths = policy.denyPaths ?? [];
+  for (const denied of denyPaths) {
+    const deniedPath = resolvePolicyPath(denied);
+    if (
+      isPathInsideRoot(deniedPath, candidate) ||
+      path.resolve(deniedPath) === path.resolve(candidate)
+    ) {
+      return {
+        allowed: false,
+        resolvedPath: candidate,
+        risk: "out_of_scope",
+        reason: `Path is denied by the active workspace boundary: ${denied}`,
+      };
+    }
+  }
+
+  const roots =
+    operation === "write"
+      ? policy.writeRoots
+      : [...policy.readRoots, ...policy.writeRoots];
+  const allowed = roots.some((root) => {
+    const boundary = resolvePolicyPath(root);
+    return (
+      path.resolve(boundary) === path.resolve(candidate) ||
+      isPathInsideRoot(boundary, candidate)
+    );
+  });
+  if (allowed) return undefined;
+  return {
+    allowed: false,
+    resolvedPath: candidate,
+    risk: "out_of_scope",
+    reason: `Path is outside the active ${operation} boundary`,
+  };
 }

@@ -102,26 +102,77 @@ export interface PolicyConfig {
 
 /** 安全命令列表 — 只读且无副作用，可直接放行 */
 const BUILTIN_SAFE_COMMANDS = [
-  "ls", "cat", "head", "tail", "grep", "rg", "find", "echo", "printf",
-  "pwd", "env", "printenv", "which", "whereis", "date", "id", "whoami",
-  "wc", "stat", "file", "strings", "jq", "awk", "cut", "sort", "uniq",
-  "tr", "sed", "less", "more", "true", "false",
+  "ls",
+  "cat",
+  "head",
+  "tail",
+  "grep",
+  "rg",
+  "find",
+  "echo",
+  "printf",
+  "pwd",
+  "env",
+  "printenv",
+  "which",
+  "whereis",
+  "date",
+  "id",
+  "whoami",
+  "wc",
+  "stat",
+  "file",
+  "strings",
+  "jq",
+  "awk",
+  "cut",
+  "sort",
+  "uniq",
+  "tr",
+  "sed",
+  "less",
+  "more",
+  "true",
+  "false",
 ];
 
 /** 谨慎命令列表 — 有写操作但通常是正常使用，需要用户确认 */
 const BUILTIN_CAUTION_COMMANDS = [
-  "rm", "cp", "mv", "mkdir", "rmdir", "touch", "chmod", "chown", "ln",
+  "rm",
+  "cp",
+  "mv",
+  "mkdir",
+  "rmdir",
+  "touch",
+  "chmod",
+  "chown",
+  "ln",
 ];
 
 /** 危险命令列表 — 系统级破坏性操作，完全禁止 */
 const BUILTIN_DANGEROUS_COMMANDS = [
-  "sudo", "su", "mkfs", "mkfs.ext4", "mkfs.ext3", "mkfs.ntfs",
-  "shred", "dd", "fdisk", "parted",
+  "sudo",
+  "su",
+  "mkfs",
+  "mkfs.ext4",
+  "mkfs.ext3",
+  "mkfs.ntfs",
+  "shred",
+  "dd",
+  "fdisk",
+  "parted",
 ];
 
 /** 网络命令列表 — 可能泄露数据或下载恶意内容，需要确认 */
 const BUILTIN_NETWORK_COMMANDS = [
-  "curl", "wget", "nc", "ncat", "netcat", "ssh", "scp", "sftp",
+  "curl",
+  "wget",
+  "nc",
+  "ncat",
+  "netcat",
+  "ssh",
+  "scp",
+  "sftp",
 ];
 
 /**
@@ -158,67 +209,253 @@ function builtinRules(): PolicyConfig {
       reason: "potentially mutating command",
     })),
     // ---- 根目录删除：最高危，直接 deny ----
-    { pattern: "rm -rf /", action: "deny" as const, reason: "destructive: root deletion" },
-    { pattern: "rm -r /", action: "deny" as const, reason: "destructive: root deletion" },
-    { pattern: "rm -rf /*", action: "deny" as const, reason: "destructive: root glob" },
-    { pattern: "rm -r /*", action: "deny" as const, reason: "destructive: root glob" },
+    {
+      pattern: "rm -rf /",
+      action: "deny" as const,
+      reason: "destructive: root deletion",
+    },
+    {
+      pattern: "rm -r /",
+      action: "deny" as const,
+      reason: "destructive: root deletion",
+    },
+    {
+      pattern: "rm -rf /*",
+      action: "deny" as const,
+      reason: "destructive: root glob",
+    },
+    {
+      pattern: "rm -r /*",
+      action: "deny" as const,
+      reason: "destructive: root glob",
+    },
     // ---- 系统目录删除：禁止触碰 /etc, /usr, /bin, /sbin, /lib, /var, /sys, /proc, /dev ----
-    { pattern: "rm -rf /etc*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /etc*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /etc*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -rf /usr*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /usr*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /usr*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -rf /bin*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /bin*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /bin*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -rf /sbin*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /sbin*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /sbin*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -rf /lib*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /lib*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /lib*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -rf /var*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /var*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /var*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -rf /sys*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /sys*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /sys*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -rf /proc*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /proc*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /proc*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -rf /dev*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm -r /dev*", action: "deny" as const, reason: "destructive: system path" },
-    { pattern: "rm /dev*", action: "deny" as const, reason: "destructive: system path" },
+    {
+      pattern: "rm -rf /etc*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /etc*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /etc*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -rf /usr*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /usr*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /usr*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -rf /bin*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /bin*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /bin*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -rf /sbin*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /sbin*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /sbin*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -rf /lib*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /lib*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /lib*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -rf /var*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /var*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /var*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -rf /sys*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /sys*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /sys*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -rf /proc*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /proc*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /proc*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -rf /dev*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm -r /dev*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
+    {
+      pattern: "rm /dev*",
+      action: "deny" as const,
+      reason: "destructive: system path",
+    },
     // ---- 家目录删除：高危，至少 ask ----
-    { pattern: "rm -rf ~", action: "ask" as const, reason: "destructive: home directory" },
-    { pattern: "rm -rf ~/.*", action: "ask" as const, reason: "destructive: hidden files in home" },
+    {
+      pattern: "rm -rf ~",
+      action: "ask" as const,
+      reason: "destructive: home directory",
+    },
+    {
+      pattern: "rm -rf ~/.*",
+      action: "ask" as const,
+      reason: "destructive: hidden files in home",
+    },
     // ---- 高危 git 操作 ----
-    { pattern: "git push --force*", action: "deny" as const, reason: "destructive git operation" },
-    { pattern: "git push -f*", action: "deny" as const, reason: "destructive git operation" },
-    { pattern: "git reset --hard*", action: "deny" as const, reason: "destructive git operation" },
-    { pattern: "git clean -f*", action: "deny" as const, reason: "destructive git operation" },
+    {
+      pattern: "git push --force*",
+      action: "deny" as const,
+      reason: "destructive git operation",
+    },
+    {
+      pattern: "git push -f*",
+      action: "deny" as const,
+      reason: "destructive git operation",
+    },
+    {
+      pattern: "git reset --hard*",
+      action: "deny" as const,
+      reason: "destructive git operation",
+    },
+    {
+      pattern: "git clean -f*",
+      action: "deny" as const,
+      reason: "destructive git operation",
+    },
     // ---- 容器/集群危险操作 ----
-    { pattern: "docker rm*", action: "deny" as const, reason: "destructive docker operation" },
-    { pattern: "docker rmi*", action: "deny" as const, reason: "destructive docker operation" },
-    { pattern: "docker system prune*", action: "deny" as const, reason: "destructive docker operation" },
-    { pattern: "kubectl delete*", action: "deny" as const, reason: "destructive k8s operation" },
+    {
+      pattern: "docker rm*",
+      action: "deny" as const,
+      reason: "destructive docker operation",
+    },
+    {
+      pattern: "docker rmi*",
+      action: "deny" as const,
+      reason: "destructive docker operation",
+    },
+    {
+      pattern: "docker system prune*",
+      action: "deny" as const,
+      reason: "destructive docker operation",
+    },
+    {
+      pattern: "kubectl delete*",
+      action: "deny" as const,
+      reason: "destructive k8s operation",
+    },
     // ---- 包管理器的卸载操作 ----
-    { pattern: "pip uninstall*", action: "deny" as const, reason: "package removal" },
-    { pattern: "npm uninstall*", action: "deny" as const, reason: "package removal" },
+    {
+      pattern: "pip uninstall*",
+      action: "deny" as const,
+      reason: "package removal",
+    },
+    {
+      pattern: "npm uninstall*",
+      action: "deny" as const,
+      reason: "package removal",
+    },
     { pattern: "npm rm*", action: "deny" as const, reason: "package removal" },
-    { pattern: "cargo uninstall*", action: "deny" as const, reason: "package removal" },
+    {
+      pattern: "cargo uninstall*",
+      action: "deny" as const,
+      reason: "package removal",
+    },
     // ---- 带删除的 find ----
-    { pattern: "find* -delete*", action: "deny" as const, reason: "destructive find" },
-    { pattern: "find* -exec rm*", action: "deny" as const, reason: "destructive find" },
+    {
+      pattern: "find* -delete*",
+      action: "deny" as const,
+      reason: "destructive find",
+    },
+    {
+      pattern: "find* -exec rm*",
+      action: "deny" as const,
+      reason: "destructive find",
+    },
   ];
 
   /** 危险命令规则 — 全部 deny */
-  const dangerousRules: PolicyRule[] = BUILTIN_DANGEROUS_COMMANDS.map((cmd) => ({
-    pattern: `${cmd}*`,
-    action: "deny" as const,
-    reason: "dangerous command",
-  }));
+  const dangerousRules: PolicyRule[] = BUILTIN_DANGEROUS_COMMANDS.map(
+    (cmd) => ({
+      pattern: `${cmd}*`,
+      action: "deny" as const,
+      reason: "dangerous command",
+    }),
+  );
 
   /** 网络命令规则 — 默认 ask + 上传数据的 deny 覆盖 */
   const networkRules: PolicyRule[] = [
@@ -229,8 +466,16 @@ function builtinRules(): PolicyConfig {
     })),
     // 带数据上传标志的网络命令直接禁止
     { pattern: "curl*--data*", action: "deny" as const, reason: "data upload" },
-    { pattern: "curl*--data-binary*", action: "deny" as const, reason: "data upload" },
-    { pattern: "curl*--data-raw*", action: "deny" as const, reason: "data upload" },
+    {
+      pattern: "curl*--data-binary*",
+      action: "deny" as const,
+      reason: "data upload",
+    },
+    {
+      pattern: "curl*--data-raw*",
+      action: "deny" as const,
+      reason: "data upload",
+    },
     { pattern: "wget*--post*", action: "deny" as const, reason: "data upload" },
   ];
 
@@ -245,39 +490,109 @@ function builtinRules(): PolicyConfig {
           ...cautionRules,
           ...dangerousRules,
           ...networkRules,
-          // 额外的特权提升/系统修改模式
-          { pattern: "*sudo*", action: "deny" as const, reason: "privilege escalation" },
-          { pattern: "*su*", action: "deny" as const, reason: "privilege escalation" },
-          { pattern: "*chmod*", action: "ask" as const, reason: "permission change" },
-          { pattern: "*chown*", action: "ask" as const, reason: "ownership change" },
+          // 权限与系统修改模式。sudo/su 由 AST 命令级规则精确拦截。
+          {
+            pattern: "*chmod*",
+            action: "ask" as const,
+            reason: "permission change",
+          },
+          {
+            pattern: "*chown*",
+            action: "ask" as const,
+            reason: "ownership change",
+          },
           // 块设备覆写重定向
-          { pattern: "> /dev/sd*", action: "deny" as const, reason: "block device overwrite" },
-          { pattern: "> /dev/hd*", action: "deny" as const, reason: "block device overwrite" },
+          {
+            pattern: "> /dev/sd*",
+            action: "deny" as const,
+            reason: "block device overwrite",
+          },
+          {
+            pattern: "> /dev/hd*",
+            action: "deny" as const,
+            reason: "block device overwrite",
+          },
         ],
       },
       read: {
         defaultAction: "allow",
         rules: [
-          { pattern: "*.env", action: "ask" as const, reason: "sensitive file" },
-          { pattern: "*.env.*", action: "ask" as const, reason: "sensitive file" },
-          { pattern: "*id_rsa*", action: "deny" as const, reason: "private key" },
-          { pattern: "*id_ed25519*", action: "deny" as const, reason: "private key" },
-          { pattern: "*.pem", action: "ask" as const, reason: "certificate/key file" },
+          {
+            pattern: "*.env",
+            action: "ask" as const,
+            reason: "sensitive file",
+          },
+          {
+            pattern: "*.env.*",
+            action: "ask" as const,
+            reason: "sensitive file",
+          },
+          {
+            pattern: "*id_rsa*",
+            action: "deny" as const,
+            reason: "private key",
+          },
+          {
+            pattern: "*id_ed25519*",
+            action: "deny" as const,
+            reason: "private key",
+          },
+          {
+            pattern: "*.pem",
+            action: "ask" as const,
+            reason: "certificate/key file",
+          },
           { pattern: "*.key", action: "ask" as const, reason: "key file" },
-          { pattern: "*secret*", action: "ask" as const, reason: "potential secret" },
-          { pattern: "*password*", action: "ask" as const, reason: "potential secret" },
-          { pattern: "*token*", action: "ask" as const, reason: "potential secret" },
-          { pattern: "*credential*", action: "ask" as const, reason: "potential secret" },
+          {
+            pattern: "*secret*",
+            action: "ask" as const,
+            reason: "potential secret",
+          },
+          {
+            pattern: "*password*",
+            action: "ask" as const,
+            reason: "potential secret",
+          },
+          {
+            pattern: "*token*",
+            action: "ask" as const,
+            reason: "potential secret",
+          },
+          {
+            pattern: "*credential*",
+            action: "ask" as const,
+            reason: "potential secret",
+          },
         ],
       },
       edit: {
         defaultAction: "ask",
         rules: [
-          { pattern: "*.env", action: "deny" as const, reason: "sensitive file" },
-          { pattern: "*.env.*", action: "deny" as const, reason: "sensitive file" },
-          { pattern: "*id_rsa*", action: "deny" as const, reason: "private key" },
-          { pattern: "*id_ed25519*", action: "deny" as const, reason: "private key" },
-          { pattern: "*.pem", action: "deny" as const, reason: "certificate/key file" },
+          {
+            pattern: "*.env",
+            action: "deny" as const,
+            reason: "sensitive file",
+          },
+          {
+            pattern: "*.env.*",
+            action: "deny" as const,
+            reason: "sensitive file",
+          },
+          {
+            pattern: "*id_rsa*",
+            action: "deny" as const,
+            reason: "private key",
+          },
+          {
+            pattern: "*id_ed25519*",
+            action: "deny" as const,
+            reason: "private key",
+          },
+          {
+            pattern: "*.pem",
+            action: "deny" as const,
+            reason: "certificate/key file",
+          },
           { pattern: "*.key", action: "deny" as const, reason: "key file" },
         ],
       },
@@ -312,7 +627,7 @@ function globToRegex(pattern: string): RegExp {
     else re += ch;
   }
   re += "$";
-  return new RegExp(re, "i");  // 忽略大小写
+  return new RegExp(re, "i"); // 忽略大小写
 }
 
 /**
@@ -372,7 +687,7 @@ export function evaluatePolicy(
   let lastMatch: PolicyRule | undefined;
   for (const rule of toolPolicy.rules) {
     if (matchPattern(rule.pattern, commandText)) {
-      lastMatch = rule;  // 覆盖之前的匹配，保留最后一条
+      lastMatch = rule; // 覆盖之前的匹配，保留最后一条
     }
   }
 

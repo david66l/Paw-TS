@@ -56,10 +56,12 @@ import {
   JOB_WAIT,
   LIST,
   LSP,
+  MCP_PROXY,
   MEMORY_LIST,
   MEMORY_READ,
   MEMORY_SAVE,
   NOTEBOOK_EDIT,
+  PROGRESS_READ,
   READ,
   RUN_AGENT,
   RUN_SKILL,
@@ -67,8 +69,8 @@ import {
   SHELL,
   SYMBOL_SEARCH,
   TODO_WRITE,
-  UNDO_LAST_EDIT,
   type ToolRunResult,
+  UNDO_LAST_EDIT,
   WEBFETCH,
   WEBSEARCH,
   WRITE,
@@ -137,7 +139,15 @@ function matchesJsonType(value: unknown, expected: string): boolean {
   return true;
 }
 
-function validateArgs(tool: string, args: unknown): ToolRunResult | null {
+/**
+ * Strictly validate one built-in tool argument object against the canonical
+ * schema returned by `toolDefinitions`. A null result means validation passed;
+ * failures use the same model-facing ToolRunResult as `executeTool`.
+ */
+export function validateToolArguments(
+  tool: string,
+  args: unknown,
+): ToolRunResult | null {
   const schema = schemaForTool(tool);
   if (!schema) {
     return null;
@@ -309,25 +319,15 @@ export async function executeTool(
   tool: string,
   args: unknown,
 ): Promise<ToolRunResult> {
-  // MCP tools take priority if present.
-  if (ctx.mcp?.isMcpTool(tool)) {
-    const parsed = ctx.mcp.parseToolId(tool);
-    if (!parsed) {
-      return {
-        ok: false,
-        payload: { error: `invalid MCP tool id: ${tool}` },
-        summary: `invalid MCP tool id: ${tool}`,
-      };
-    }
-    return ctx.mcp.callTool(parsed.serverName, parsed.toolName, args);
-  }
-
-  const schemaError = validateArgs(tool, args);
+  const schemaError = validateToolArguments(tool, args);
   if (schemaError) {
     return schemaError;
   }
 
   const rec = asRecord(args) ?? {};
+  if (tool === MCP_PROXY) {
+    return executeMcpProxy(ctx, rec);
+  }
   if (tool === READ) {
     const path = typeof rec.path === "string" ? rec.path : "";
     if (!path) {
@@ -668,8 +668,9 @@ export async function executeTool(
     };
   }
   if (tool === UNDO_LAST_EDIT) {
-    const runId = ctx.parentRunId?.trim();
-    if (!runId) {
+    const checkpointNamespaceId =
+      ctx.checkpointNamespaceId?.trim() ?? ctx.parentRunId?.trim();
+    if (!checkpointNamespaceId) {
       return toolErrorResult(
         "undo_last_edit",
         "E_USER",
@@ -678,7 +679,7 @@ export async function executeTool(
     }
     const undone = undoLastSafeFileMutationCheckpoint(
       ctx.workspaceRoot,
-      runId,
+      checkpointNamespaceId,
     );
     if (undone.status === "none") {
       return toolErrorResult(
@@ -899,14 +900,21 @@ export async function executeTool(
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       ...(ctx.shellSandbox ? { shellSandbox: ctx.shellSandbox } : {}),
       ...(ctx.shellCommandPreApproved ? { skipApprovalGate: true } : {}),
+      ...(ctx.abortSignal ? { signal: ctx.abortSignal } : {}),
     };
     const onChunk = ctx.onShellChunk;
-    const r = onChunk
-      ? await runShellInWorkspaceStreaming(ctx.workspaceRoot, cmd, {
-          ...shellOpts,
-          onChunk: (chunk, isStderr) => onChunk(tool, chunk, isStderr),
-        })
-      : runShellInWorkspace(ctx.workspaceRoot, cmd, shellOpts);
+    const r =
+      onChunk || ctx.abortSignal
+        ? await runShellInWorkspaceStreaming(ctx.workspaceRoot, cmd, {
+            ...shellOpts,
+            ...(onChunk
+              ? {
+                  onChunk: (chunk: string, isStderr: boolean) =>
+                    onChunk(tool, chunk, isStderr),
+                }
+              : {}),
+          })
+        : runShellInWorkspace(ctx.workspaceRoot, cmd, shellOpts);
     if (r.error) {
       const msg = r.timed_out ? "timeout" : r.error;
       const code: ToolErrorCode = r.timed_out
@@ -937,6 +945,24 @@ export async function executeTool(
     const url = typeof rec.url === "string" ? rec.url : "";
     const maxLength =
       num(rec.max_length, undefined) ?? num(rec.maxLength, undefined);
+    if (ctx.webAccess) {
+      const outcome = await ctx.webAccess.fetch(
+        { url, ...(maxLength === undefined ? {} : { maxLength }) },
+        ctx.abortSignal,
+      );
+      if (!outcome.ok) {
+        return {
+          ok: false,
+          payload: { error: outcome.reason },
+          summary: `web_fetch: ${outcome.reason}`,
+        };
+      }
+      return {
+        ok: true,
+        payload: outcome.value,
+        summary: `web_fetch: ${outcome.value.title ?? outcome.value.finalUrl} (${outcome.value.content.length} chars)`,
+      };
+    }
     const r = await fetchWebPage({
       url,
       ...(maxLength !== undefined ? { maxLength } : {}),
@@ -962,6 +988,24 @@ export async function executeTool(
     }
     const maxResults =
       num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
+    if (ctx.webAccess) {
+      const outcome = await ctx.webAccess.search(
+        { query, ...(maxResults === undefined ? {} : { maxResults }) },
+        ctx.abortSignal,
+      );
+      if (!outcome.ok) {
+        return {
+          ok: false,
+          payload: { error: outcome.reason },
+          summary: `web_search: ${outcome.reason}`,
+        };
+      }
+      return {
+        ok: true,
+        payload: outcome.value,
+        summary: `web_search: ${outcome.value.results.length} result(s)`,
+      };
+    }
     const r = await searchWeb({
       query,
       ...(maxResults !== undefined ? { maxResults } : {}),
@@ -1007,14 +1051,6 @@ export async function executeTool(
   }
   if (tool === TODO_WRITE) {
     const todos = Array.isArray(rec.todos) ? rec.todos : [];
-    const todoStore = ctx.todoStore;
-    if (!todoStore) {
-      return {
-        ok: false,
-        payload: { error: "todo store not configured" },
-        summary: "todo_write: todo store not configured",
-      };
-    }
     const items = todos
       .map((t: unknown): import("@paw/core").TodoItem | null => {
         if (t === null || typeof t !== "object") return null;
@@ -1037,11 +1073,50 @@ export async function executeTool(
         return { id, content, status, ...(priority ? { priority } : {}) };
       })
       .filter((t): t is import("@paw/core").TodoItem => t !== null);
+    if (ctx.taskProgress) {
+      const outcome = await ctx.taskProgress.write(items, ctx.abortSignal);
+      if (!outcome.ok) {
+        return toolErrorResult("todo_write", "E_USER", outcome.reason);
+      }
+      return {
+        ok: true,
+        payload: outcome.value,
+        summary: `todo_write: ${items.length} task(s), ${outcome.value.percent}% complete`,
+      };
+    }
+    const todoStore = ctx.todoStore;
+    if (!todoStore) {
+      return {
+        ok: false,
+        payload: { error: "todo store not configured" },
+        summary: "todo_write: todo store not configured",
+      };
+    }
     todoStore.set(items);
     return {
       ok: true,
       payload: { count: items.length },
       summary: `todo_write: ${items.length} task(s)`,
+    };
+  }
+  if (tool === PROGRESS_READ) {
+    if (!ctx.taskProgress) {
+      return toolErrorResult(
+        "progress_read",
+        "E_FATAL",
+        "task progress service not configured",
+      );
+    }
+    const outcome = await ctx.taskProgress.read(ctx.abortSignal);
+    if (!outcome.ok) {
+      return toolErrorResult("progress_read", "E_USER", outcome.reason);
+    }
+    return {
+      ok: true,
+      payload: outcome.value,
+      summary: outcome.value.snapshot
+        ? `progress_read: ${outcome.value.snapshot.percent}% complete, ${outcome.value.activities.length} background job(s)`
+        : `progress_read: no task list, ${outcome.value.activities.length} background job(s)`,
     };
   }
   if (tool === NOTEBOOK_EDIT) {
@@ -1167,6 +1242,7 @@ export async function executeTool(
       sharedContext,
       signal: ctx.abortSignal,
       parentRunId: ctx.parentRunId,
+      agentId: ctx.currentToolCallId,
     });
     const agentId =
       typeof rec.agent_id === "string"
@@ -1354,7 +1430,7 @@ export async function executeTool(
         summary: `lsp: no LSP server for ${path.extname(filePath)}`,
       };
     }
-    const client = new LspClient(`file://${ctx.workspaceRoot}`);
+    const client = new LspClient(ctx.workspaceRoot);
     try {
       await client.start({
         command: cmd.command,
@@ -1382,7 +1458,6 @@ export async function executeTool(
             summary: `lsp: unknown method ${method}`,
           };
       }
-      await client.stop();
       return {
         ok: true,
         payload: result,
@@ -1395,6 +1470,8 @@ export async function executeTool(
         payload: { error: msg },
         summary: `lsp: ${msg}`,
       };
+    } finally {
+      await client.stop();
     }
   }
   if (tool === APPLY_PATCH) {
@@ -1602,18 +1679,41 @@ export async function executeTool(
         summary: "context.recall: missing id",
       };
     }
-    const registry = ctx.artifactRegistry;
-    if (!registry) {
-      return {
-        ok: false,
-        payload: { error: "artifact registry not configured" },
-        summary: "context.recall: artifact registry not configured",
-      };
-    }
     const part =
       rec.part === "tail" || rec.part === "chunk" ? rec.part : "head";
     const offset = num(rec.offset, undefined) ?? 0;
     const limit = num(rec.limit, undefined) ?? 8000;
+    if (ctx.payloadRecall) {
+      const outcome = await ctx.payloadRecall.recall(
+        { id, part, offset, limit },
+        ctx.abortSignal,
+      );
+      if (!outcome.ok) {
+        return {
+          ok: false,
+          payload: { error: outcome.reason },
+          summary: `context.recall: ${outcome.reason}`,
+        };
+      }
+      const head = [
+        `[recalled output id=${outcome.id}, tool=${outcome.tool}, call=${outcome.callId}]`,
+        `[window ${outcome.part} offset=${outcome.offset} len=${outcome.length} total=${outcome.total}]`,
+        "--- content ---",
+      ].join("\n");
+      return {
+        ok: true,
+        payload: `${head}\n${outcome.content}`,
+        summary: `context.recall: ${outcome.tool} (${outcome.length}/${outcome.total} chars)`,
+      };
+    }
+    const registry = ctx.artifactRegistry;
+    if (!registry) {
+      return {
+        ok: false,
+        payload: { error: "recall service not configured" },
+        summary: "context.recall: recall service not configured",
+      };
+    }
     const outcome = registry.tryRecall(id, { part, offset, limit });
     if (!outcome.ok) {
       // 预算拒绝 / 无效 ID：返回候选列表（不静默失败）
@@ -1648,5 +1748,126 @@ export async function executeTool(
     ok: false,
     payload: { error: `unknown tool: ${tool}` },
     summary: `unknown tool: ${tool}`,
+  };
+}
+
+async function executeMcpProxy(
+  ctx: HarnessContext,
+  args: Record<string, unknown>,
+): Promise<ToolRunResult> {
+  const provenance = Object.freeze({
+    source: "mcp",
+    trust: "external_untrusted_data",
+    taint: "external_content",
+    instructionAuthority: "none",
+    permissionAuthority: "none",
+  });
+  const action = args.action;
+  if (action === "search") {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    const requestedLimit =
+      typeof args.limit === "number" && Number.isInteger(args.limit)
+        ? args.limit
+        : 8;
+    const limit = Math.min(Math.max(requestedLimit, 1), 20);
+    const terms = query
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}_./:-]+/u)
+      .filter((term) => term.length > 0);
+    const exact = query.toLowerCase().startsWith("select:")
+      ? query.slice("select:".length).trim().toLowerCase()
+      : "";
+    const allowedTargets = new Set(ctx.mcpAllowedTools ?? []);
+    const ranked = (ctx.mcp?.listTools() ?? [])
+      .map((candidate) => {
+        const id = `mcp:${candidate.serverName}/${candidate.toolName}`;
+        const haystack = `${id} ${candidate.description}`.toLowerCase();
+        const score =
+          exact && id.toLowerCase() === exact
+            ? 10_000
+            : terms.reduce(
+                (total, term) => total + (haystack.includes(term) ? 1 : 0),
+                0,
+              );
+        return { candidate, id, score };
+      })
+      .filter((entry) => allowedTargets.has(entry.id))
+      .filter((entry) => query.length === 0 || entry.score > 0)
+      .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+    const matches = ranked.slice(0, limit).map(({ candidate, id }) => ({
+      id,
+      description: candidate.description,
+      inputSchema: candidate.inputSchema,
+    }));
+    return {
+      ok: true,
+      payload: {
+        schemaVersion: "paw.mcp-capability-search.v1",
+        provenance,
+        query,
+        totalMatches: ranked.length,
+        returned: matches.length,
+        hasMore: ranked.length > matches.length,
+        tools: matches,
+      },
+      summary: `mcp search: ${matches.length}/${ranked.length} tools`,
+    };
+  }
+
+  if (action === "call") {
+    const id = typeof args.tool === "string" ? args.tool.trim() : "";
+    const parsed = ctx.mcp?.parseToolId(id);
+    if (!ctx.mcp) {
+      return {
+        ok: false,
+        payload: { error: "MCP is not configured" },
+        summary: "mcp proxy: no servers configured",
+      };
+    }
+    if (!parsed) {
+      return {
+        ok: false,
+        payload: {
+          error: "action=call requires an exact mcp:<server>/<tool> id",
+        },
+        summary: "mcp proxy: invalid tool id",
+      };
+    }
+    if (!ctx.mcpAllowedTools?.includes(id)) {
+      return {
+        ok: false,
+        payload: { error: `MCP tool is outside the run allowlist: ${id}` },
+        summary: "mcp proxy: tool not in allowlist",
+      };
+    }
+    const callArgs = asRecord(args.arguments);
+    if (!callArgs) {
+      return {
+        ok: false,
+        payload: { error: "action=call requires object arguments" },
+        summary: "mcp proxy: invalid arguments",
+      };
+    }
+    const result = await ctx.mcp.callTool(
+      parsed.serverName,
+      parsed.toolName,
+      callArgs,
+      ctx.abortSignal ? { signal: ctx.abortSignal } : undefined,
+    );
+    return {
+      ...result,
+      payload: {
+        schemaVersion: "paw.mcp-capability-result.v1",
+        provenance,
+        tool: id,
+        content: result.payload,
+      },
+    };
+  }
+
+  return {
+    ok: false,
+    payload: { error: "action must be search or call" },
+    summary: "mcp proxy: invalid action",
   };
 }

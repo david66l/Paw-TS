@@ -62,19 +62,31 @@ export type {
 // ============================================================
 export {
   ContextManager,
+  isNativeToolTurn,
   isNativeToolTurnV1,
+  isNativeToolTurnV2,
   type Attachment,
   type ChatMessage,
   type ContextManagerOptions,
   type NativeToolTurnCallV1,
+  type NativeToolTurn,
   type NativeToolTurnResultV1,
+  type NativeToolTurnResultV2,
   type NativeToolTurnV1,
+  type NativeToolTurnV2,
 } from "./context/manager.js";
 export {
   flattenContextTurnsV1,
   groupContextTurnsV1,
   type ContextTurnV1,
 } from "./context/turns.js";
+export {
+  materializeModelRequestMessagesV1,
+  type ModelContextSectionV1,
+  type ModelRequestOptionsV1,
+  type ModelRequestV1,
+  type ToolDefinition,
+} from "./model-request.js";
 
 // ============================================================
 // 应用状态
@@ -391,6 +403,7 @@ export {
   listCheckpoints,
   restoreCheckpoint,
   saveCheckpoint,
+  requiresToolCheckpointV1,
   undoLastCheckpoint,
   undoLastSafeFileMutationCheckpoint,
   type CheckpointEntry,

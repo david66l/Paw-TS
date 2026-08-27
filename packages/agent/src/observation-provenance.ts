@@ -38,7 +38,7 @@ function provenance(
 export function observationProvenanceForToolV1(
   tool: string,
 ): ObservationProvenanceV1 {
-  if (tool.startsWith("mcp:")) {
+  if (tool.startsWith("mcp:") || tool === "workspace.use_mcp") {
     return provenance({
       source: "mcp",
       trust: "external_untrusted_data",

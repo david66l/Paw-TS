@@ -14,6 +14,9 @@ describe("isGitDiffCommand", () => {
     expect(isGitDiffCommand('git -C "repo path" --work-tree=. diff')).toBe(
       true,
     );
+    expect(isGitDiffCommand("git -c core.autocrlf=false diff -- a.py")).toBe(
+      true,
+    );
     expect(isGitDiffCommand("git.exe --no-optional-locks diff --stat")).toBe(
       true,
     );
@@ -74,6 +77,11 @@ describe("containsExecutedGitDiffCommand", () => {
     expect(
       containsExecutedGitDiffCommand(
         "cd repo && git status --short && git --no-pager diff -- src/a.ts",
+      ),
+    ).toBe(true);
+    expect(
+      containsExecutedGitDiffCommand(
+        "git -c core.autocrlf=false diff --numstat -- src/a.ts && git -c core.autocrlf=false diff -- src/a.ts",
       ),
     ).toBe(true);
   });

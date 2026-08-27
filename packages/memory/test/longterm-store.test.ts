@@ -125,6 +125,29 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
     expect((dup[0] as { n: number }).n).toBe(1);
   });
 
+  it("getMany 按请求顺序批量补水、保留重复并忽略缺失项", async () => {
+    const first = makeFact("Bulk hydration preserves the first requested entry");
+    const second = makeFact("Bulk hydration preserves the second requested entry");
+    const firstId = deriveEntryId(first);
+    const secondId = deriveEntryId(second);
+    createdIds.push(firstId, secondId);
+    await engine.put(first);
+    await engine.put(second);
+
+    const hydrated = await engine.getMany([
+      secondId,
+      "semantic-0000000000000000",
+      firstId,
+      secondId,
+    ]);
+
+    expect(hydrated.map((entry) => entry.id)).toEqual([
+      secondId,
+      firstId,
+      secondId,
+    ]);
+  });
+
   it("episodic 条目的 whenToUse 落入 when_to_use 列", async () => {
     const now = new Date().toISOString();
     const exp: EpisodicExperience = {

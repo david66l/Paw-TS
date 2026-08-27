@@ -143,18 +143,19 @@ describe("coding factory defaults", () => {
         if (inventory?.event.type !== "capability.inventory") {
           throw new Error("capability inventory missing");
         }
-        expect(inventory.event.fullToolCount).toBe(3);
+        expect(inventory.event.fullToolCount).toBe(4);
         expect(inventory.event.executableTools).toEqual(
           expect.arrayContaining([
             "workspace.run_shell",
             "workspace.read_file",
             "workspace.edit_file",
+            "workspace.undo_last_edit",
           ]),
         );
         expect(inventory.event.executableTools).not.toContain(
           "workspace.run_agent",
         );
-        expect(providerToolNames).toHaveLength(3);
+        expect(providerToolNames).toHaveLength(4);
         expect(providerToolNames).toEqual(
           expect.arrayContaining(
             inventory.event.executableTools?.map((name) =>

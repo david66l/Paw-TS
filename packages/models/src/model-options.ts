@@ -24,31 +24,26 @@
  * `parameters` 使用 JSON Schema 格式描述函数的输入参数结构，
  * 例如：`{type:"object", properties:{path:{type:"string"}}, required:["path"]}`
  */
-export interface ToolDefinition {
-  readonly type: "function";
-  readonly function: {
-    readonly name: string;
-    readonly description: string;
-    readonly parameters: Record<string, unknown>;
-  };
-}
+import type {
+  ToolDefinition as CoreToolDefinition,
+  ModelRequestOptionsV1,
+} from "@paw/core";
+
+export type ToolDefinition = CoreToolDefinition;
 
 /** 单次模型完成调用的选项 */
-export interface ModelCompleteOptions {
+export interface ModelCompleteOptions extends ModelRequestOptionsV1 {
   /** 用于取消正在进行的模型请求的 AbortSignal */
   readonly signal?: AbortSignal;
   /** Per-request positive output-token cap for bounded auxiliary protocols. */
-  readonly maxOutputTokens?: number;
   /**
    * Per-request reasoning override for bounded machine-readable protocols.
    * Undefined preserves the model's configured runtime profile.
    */
-  readonly thinkingEnabled?: boolean;
   /**
    * 工具定义列表，供支持原生函数调用（native function calling）的提供商使用。
    * 不支持的提供商可以忽略此字段。
    */
-  readonly tools?: readonly ToolDefinition[];
 }
 
 export function resolveRequestMaxOutputTokens(

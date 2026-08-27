@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { ChatMessage } from "../src/context/manager.js";
 import {
   ApproximateEstimator,
+  FastEstimator,
   TiktokenEstimator,
 } from "../src/token-estimator.js";
 
@@ -55,6 +56,87 @@ describe("TiktokenEstimator", () => {
     ];
     const tokens = estimator.countMessages(messages);
     expect(tokens).toBeGreaterThanOrEqual(4 + 4 + 1000 + 2); // overhead + content + image + priming
+  });
+
+  it("counts plain reasoning passback and every native tool request field", () => {
+    const fast = new FastEstimator();
+    const plain = fast.countMessages([
+      {
+        role: "assistant",
+        content: "answer",
+        reasoningPassback: "provider-state",
+      },
+    ]);
+    expect(plain).toBe(fast.count("answer") + fast.count("provider-state"));
+
+    const native = fast.countMessages([
+      {
+        role: "assistant",
+        content: "assistant-visible",
+        nativeToolTurn: {
+          schemaVersion: 2,
+          protocol: "provider-neutral",
+          assistantContent: "assistant-visible",
+          reasoningPassback: "native-state",
+          calls: [
+            {
+              callId: "call-1",
+              providerName: "workspace_edit_file",
+              rawArguments: '{"path":"large-file.ts"}',
+            },
+          ],
+          results: [
+            {
+              callId: "call-1",
+              status: "failed",
+              isError: true,
+              content: "tool failure evidence",
+            },
+          ],
+        },
+      },
+    ]);
+    const expectedFields = [
+      "assistant-visible",
+      "native-state",
+      "call-1",
+      "workspace_edit_file",
+      '{"path":"large-file.ts"}',
+      "call-1",
+      "failed",
+      "true",
+      "tool failure evidence",
+    ];
+    expect(native).toBe(
+      expectedFields.reduce((total, field) => total + fast.count(field), 0),
+    );
+    // assistantContent is the same carrier as message.content, not a second copy.
+    expect(native).toBeLessThan(
+      expectedFields.reduce((total, field) => total + fast.count(field), 0) +
+        fast.count("assistant-visible"),
+    );
+  });
+
+  it("counts attachment metadata as well as attachment content", () => {
+    const fast = new FastEstimator();
+    const message: ChatMessage = {
+      role: "user",
+      content: "inspect",
+      attachments: [
+        {
+          type: "file",
+          name: "trace.log",
+          mimeType: "text/plain",
+          content: "payload",
+        },
+      ],
+    };
+    expect(fast.countMessages([message])).toBe(
+      ["inspect", "trace.log", "text/plain", "payload"].reduce(
+        (total, field) => total + fast.count(field),
+        0,
+      ),
+    );
   });
 });
 

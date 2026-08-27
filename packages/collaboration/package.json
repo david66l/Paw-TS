@@ -1,0 +1,20 @@
+{
+  "name": "@paw/collaboration",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "test": "bun test test"
+  },
+  "dependencies": {
+    "@paw/core": "workspace:*",
+    "@paw/harness": "workspace:*",
+    "@paw/protocol": "workspace:*",
+    "@paw/runtime": "workspace:*",
+    "@paw/workspace": "workspace:*"
+  }
+}

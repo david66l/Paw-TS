@@ -36,6 +36,7 @@ id: bianmu
 name: 边牧
 role: 代码实现
 emoji: 🐕
+capabilities: implementation, integration
 tools: read_file, write_file, run_shell
 childPolicy: read_write
 model: flash
@@ -47,13 +48,15 @@ kind: worker
 `;
     const spec = parseAgentMarkdown(md, "fallback");
     expect(spec).not.toBeNull();
-    expect(spec!.id).toBe("bianmu");
-    expect(spec!.name).toBe("边牧");
-    expect(spec!.tools).not.toBe("inherit");
-    expect(spec!.tools).toContain("workspace.read_file");
-    expect(spec!.tools).toContain("workspace.write_file");
-    expect(spec!.childPolicy).toBe("read_write");
-    expect(spec!.canSpawn).toBe(false);
+    if (!spec) throw new Error("AgentSpec was not parsed");
+    expect(spec.id).toBe("bianmu");
+    expect(spec.name).toBe("边牧");
+    expect(spec.tools).not.toBe("inherit");
+    expect(spec.tools).toContain("workspace.read_file");
+    expect(spec.tools).toContain("workspace.write_file");
+    expect(spec.childPolicy).toBe("read_write");
+    expect(spec.capabilities).toEqual(["implementation", "integration"]);
+    expect(spec.canSpawn).toBe(false);
   });
 
   test("rejects unknown tools", () => {
@@ -64,7 +67,8 @@ tools: not_a_real_tool
 ---
 body
 `;
-    const spec = parseAgentMarkdown(md, "bad")!;
+    const spec = parseAgentMarkdown(md, "bad");
+    if (!spec) throw new Error("AgentSpec was not parsed");
     const v = validateAgentSpec(spec);
     expect(v.ok).toBe(false);
     expect(v.errors.some((e) => e.field === "tools")).toBe(true);
@@ -113,7 +117,9 @@ describe("AgentRegistry seeds", () => {
     });
     expect(r.ok).toBe(true);
     expect(reg.has("frontend-specialist")).toBe(true);
-    const mat = materializeAgent(reg.get("frontend-specialist")!, "build button");
+    const created = reg.get("frontend-specialist");
+    if (!created) throw new Error("Created AgentSpec was not registered");
+    const mat = materializeAgent(created, "build button");
     expect(mat.allowedTools).toContain("workspace.write_file");
     expect(mat.allowedTools).not.toContain("workspace.run_agent");
     expect(mat.sharedContext.task).toBe("build button");

@@ -206,7 +206,11 @@ import {
   type CapabilitySetV1,
   resolveCapabilitySetV1,
 } from "./capability-set.js";
-import { buildChildSystemPrompt } from "./child-system-prompt.js";
+import {
+  buildChildSystemPrompt,
+  buildChildTaskMessage,
+  isChildTaskMessageV1,
+} from "./child-system-prompt.js";
 import { runCompressionAgent } from "./compression-agent.js";
 import { runConstraintReconcile } from "./constraint-reconcile.js";
 import {
@@ -4838,6 +4842,10 @@ export class AgentOrchestrator {
       definitions: toolDefinitions(mcp, { shellSandbox }),
       toolNameMap,
       configuredTools: this.allowedTools ?? null,
+      availableMcpToolNames:
+        mcp?.listTools().map(
+          (tool) => `mcp:${tool.serverName}/${tool.toolName}`,
+        ) ?? [],
     });
     const toolDefs = capabilitySet.modelToolDefinitions;
     const capabilityExposure = new CapabilityExposureShadowV1({
@@ -4871,9 +4879,12 @@ export class AgentOrchestrator {
         })
         .join("\n");
       const systemContent = buildChildSystemPrompt({
-        sharedContext: this.sharedContext,
         toolCatalog: childCatalog,
         workspaceRoot,
+      });
+      const taskMessage = buildChildTaskMessage({
+        sharedContext: this.sharedContext,
+        goal: spec.goal,
       });
 
       if (spec.resumeFromState) {
@@ -4881,14 +4892,23 @@ export class AgentOrchestrator {
         const s = spec.resumeFromState;
         startTurn = s.turn;
         ctxMgr.setSystem(systemContent);
-        const history = stripLegacyContextProjectionsV1(s.messages).filter(
+        let history = stripLegacyContextProjectionsV1(s.messages).filter(
           (m) => m.role !== "system",
         );
-        if (history.length > 0) ctxMgr.replaceHistory(history);
+        const firstMessage = history[0];
+        if (
+          firstMessage?.role !== "user" ||
+          !isChildTaskMessageV1(firstMessage.content)
+        ) {
+          // Legacy child checkpoints stored delegated context only in system.
+          // Recreate the protected task envelope before restoring history.
+          history = [{ role: "user", content: taskMessage }, ...history];
+        }
+        ctxMgr.replaceHistory(history);
         if (s.todos && this.todoStore) this.todoStore.set(s.todos);
       } else {
         ctxMgr.setSystem(systemContent);
-        ctxMgr.addUser(spec.goal);
+        ctxMgr.addUser(taskMessage);
       }
 
       const initBudget = AgentOrchestrator.measureBudget(

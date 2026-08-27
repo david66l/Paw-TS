@@ -87,7 +87,17 @@ export function sessionMemoryDir(workspaceRoot: string): string {
  * 存储 agent 运行过程中的状态快照。
  */
 export function checkpointsDir(workspaceRoot: string, runId: string): string {
-  return path.join(workspaceRoot, ".paw", "checkpoints", sanitizeRunId(runId));
+  // Checkpoint namespaces are authoritative storage identities. Silently
+  // sanitizing them would let distinct runs alias the same physical directory
+  // (and `.` / `..` could escape the run directory entirely). Callers must use
+  // an already-canonical, case-stable identifier; Paw Next derives one from the
+  // canonical workspace/session/run identity.
+  if (!/^[a-z0-9_-]+$/.test(runId)) {
+    throw new Error(
+      "checkpoint namespace must contain only lowercase letters, digits, '_' or '-'",
+    );
+  }
+  return path.join(workspaceRoot, ".paw", "checkpoints", runId);
 }
 
 /**

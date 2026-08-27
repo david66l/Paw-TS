@@ -68,6 +68,24 @@ export interface NativeToolTurnResultV1 {
 }
 
 /**
+ * Provider-neutral result paired to one native tool call.
+ *
+ * `status` preserves the runtime settlement truth. `isError` is the smaller
+ * provider-facing signal used by APIs such as Anthropic tool_result blocks.
+ */
+export interface NativeToolTurnResultV2 {
+  readonly callId: string;
+  readonly status:
+    | "completed"
+    | "failed"
+    | "rejected"
+    | "cancelled"
+    | "unknown";
+  readonly isError: boolean;
+  readonly content: string;
+}
+
+/**
  * Atomic OpenAI-compatible assistant tool-call turn plus its ordered results.
  * Keeping the pair in one history entry prevents message-level truncation from
  * orphaning an assistant tool call or its tool result before P0.3 lands.
@@ -81,13 +99,32 @@ export interface NativeToolTurnV1 {
   readonly results: readonly NativeToolTurnResultV1[];
 }
 
+/**
+ * One provider-neutral, atomic assistant/tool-result turn.
+ *
+ * Provider clients expand this carrier into their own wire format. Keeping the
+ * assistant calls and every ordered result together prevents context eviction
+ * from retaining a result while dropping the call that produced it.
+ */
+export interface NativeToolTurnV2 {
+  readonly schemaVersion: 2;
+  readonly protocol: "provider-neutral";
+  readonly assistantContent: string;
+  /** Exact provider reasoning payload when it is valid request passback data. */
+  readonly reasoningPassback?: string;
+  readonly calls: readonly NativeToolTurnCallV1[];
+  readonly results: readonly NativeToolTurnResultV2[];
+}
+
+export type NativeToolTurn = NativeToolTurnV1 | NativeToolTurnV2;
+
 /** Remove provider audit reasoning before a message enters request history. */
 function stripAuditThinking(message: ChatMessage): ChatMessage {
   const { thinking: _thinking, ...requestMessage } = message;
   const nativeTurn = requestMessage.nativeToolTurn;
   if (
     nativeTurn !== undefined &&
-    (requestMessage.role !== "assistant" || !isNativeToolTurnV1(nativeTurn))
+    (requestMessage.role !== "assistant" || !isNativeToolTurn(nativeTurn))
   ) {
     const { nativeToolTurn: _invalid, ...fallbackMessage } = requestMessage;
     return fallbackMessage;
@@ -149,6 +186,77 @@ export function isNativeToolTurnV1(value: unknown): value is NativeToolTurnV1 {
     ids.add(callId);
   }
   return true;
+}
+
+/** Runtime validator for the provider-neutral native turn carrier. */
+export function isNativeToolTurnV2(value: unknown): value is NativeToolTurnV2 {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const turn = value as Record<string, unknown>;
+  const calls = turn.calls;
+  const results = turn.results;
+  if (
+    turn.schemaVersion !== 2 ||
+    turn.protocol !== "provider-neutral" ||
+    typeof turn.assistantContent !== "string" ||
+    (turn.reasoningPassback !== undefined &&
+      typeof turn.reasoningPassback !== "string") ||
+    !Array.isArray(calls) ||
+    !Array.isArray(results) ||
+    calls.length === 0 ||
+    calls.length !== results.length
+  ) {
+    return false;
+  }
+  const ids = new Set<string>();
+  const statuses = new Set([
+    "completed",
+    "failed",
+    "rejected",
+    "cancelled",
+    "unknown",
+  ]);
+  for (let index = 0; index < calls.length; index += 1) {
+    const call = calls[index];
+    const result = results[index];
+    if (
+      call === null ||
+      typeof call !== "object" ||
+      Array.isArray(call) ||
+      result === null ||
+      typeof result !== "object" ||
+      Array.isArray(result)
+    ) {
+      return false;
+    }
+    const callRecord = call as Record<string, unknown>;
+    const resultRecord = result as Record<string, unknown>;
+    const callId = callRecord.callId;
+    if (
+      typeof callId !== "string" ||
+      callId.trim().length === 0 ||
+      typeof callRecord.providerName !== "string" ||
+      callRecord.providerName.trim().length === 0 ||
+      typeof callRecord.rawArguments !== "string" ||
+      resultRecord.callId !== callId ||
+      typeof resultRecord.content !== "string" ||
+      typeof resultRecord.isError !== "boolean" ||
+      typeof resultRecord.status !== "string" ||
+      !statuses.has(resultRecord.status) ||
+      (resultRecord.status !== "completed" && resultRecord.isError !== true) ||
+      ids.has(callId)
+    ) {
+      return false;
+    }
+    ids.add(callId);
+  }
+  return true;
+}
+
+/** Validate either the legacy OpenAI-only carrier or the canonical v2 carrier. */
+export function isNativeToolTurn(value: unknown): value is NativeToolTurn {
+  return isNativeToolTurnV1(value) || isNativeToolTurnV2(value);
 }
 
 /**
@@ -488,8 +596,10 @@ export interface ChatMessage {
   readonly content: string;
   /** 推理/思考内容（来自支持 extended thinking 的模型，如 Claude）。 */
   readonly thinking?: string;
+  /** Exact provider request state; valid only on a plain assistant message. */
+  readonly reasoningPassback?: string;
   /** 用户消息的附件（图片、文件等）。 */
   readonly attachments?: readonly Attachment[];
   /** Atomic provider-native tool turn used only by protocol serializers. */
-  readonly nativeToolTurn?: NativeToolTurnV1;
+  readonly nativeToolTurn?: NativeToolTurn;
 }

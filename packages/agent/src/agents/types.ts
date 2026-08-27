@@ -30,6 +30,8 @@ export interface AgentSpec {
   readonly childPolicy: ChildPolicy;
   readonly model: AgentModelPref;
   readonly outputFormat: string;
+  /** Stable capability tags used by schedulers; names stay independent of role labels. */
+  readonly capabilities?: readonly string[];
   /** 是否允许再 spawn 子 Agent（workspace.run_agent） */
   readonly canSpawn: boolean;
   readonly maxSteps: number;
@@ -51,6 +53,7 @@ export interface AgentSummary {
   readonly childPolicy: ChildPolicy;
   readonly canSpawn: boolean;
   readonly tools: "inherit" | readonly string[];
+  readonly capabilities?: readonly string[];
 }
 
 /** 创建/更新 Agent 时的输入（表单或狸花 create_agent） */
@@ -65,6 +68,7 @@ export interface CreateAgentInput {
   readonly childPolicy?: ChildPolicy;
   readonly model?: AgentModelPref;
   readonly outputFormat?: string;
+  readonly capabilities?: readonly string[] | string;
   readonly canSpawn?: boolean;
   readonly maxSteps?: number;
   readonly kind?: AgentRunKind;

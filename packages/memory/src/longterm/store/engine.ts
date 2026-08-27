@@ -136,6 +136,19 @@ export interface ScoredId {
   score: number;
 }
 
+/**
+ * Model identity is part of the derived-index contract. Two providers that
+ * happen to emit the same number of dimensions must never share vectors.
+ */
+export interface MemoryEmbeddingService {
+  readonly dimensions: number;
+  readonly model: string;
+  readonly version: string;
+  embed(text: string): Promise<number[]>;
+  /** Optional bulk aperture. Implementations must preserve input order. */
+  embedMany?(texts: readonly string[]): Promise<readonly (readonly number[])[]>;
+}
+
 export interface LedgerEntry {
   freq: number;
   utility: number;
@@ -174,6 +187,12 @@ export interface MemoryStoreEngine {
   /** 新增/覆盖；entry.id 为空时按内容+scope 哈希派生（同 scope 幂等） */
   put(entry: MemoryEntry): Promise<void>;
   get(id: string): Promise<MemoryEntry | null>;
+  /**
+   * Optional bulk hydration aperture for deep discovery. Implementations must
+   * return entries in input order, preserve duplicate ids, and omit misses.
+   * Callers must remain compatible with engines that only implement get().
+   */
+  getMany?(ids: readonly string[]): Promise<MemoryEntry[]>;
   /** 软失效：写 t_invalid */
   invalidate(id: string, tInvalid: string): Promise<void>;
   /** 物理删除（仅 gc） */

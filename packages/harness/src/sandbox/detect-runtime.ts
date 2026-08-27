@@ -28,6 +28,29 @@
 import { spawnSync } from "node:child_process";
 
 /**
+ * 进程内探测缓存。
+ *
+ * 真实故障复盘（2026-08-21，SWE 真实运行）：每条 shell 命令都重新探测
+ * `docker version`，Windows npipe 在负载下偶发超过 5 秒，导致间歇性
+ * "neither docker nor podman is available"（32/48 条命令误报），模型把
+ * 大量回合浪费在探测"环境是否损坏"上。容器运行时在进程生命周期内不会
+ * 真实消失，首次成功后直接复用；失败时放宽超时并重试一次再判不可用。
+ */
+let cachedRuntime: "docker" | "podman" | undefined;
+
+function probeRuntime(runtime: "docker" | "podman"): boolean {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const probe = spawnSync(runtime, ["version"], {
+      encoding: "utf8",
+      timeout: 20_000,
+      windowsHide: true,
+    });
+    if (probe.status === 0) return true;
+  }
+  return false;
+}
+
+/**
  * 检测宿主机上第一个可用的容器运行时。
  *
  * 探测策略：
@@ -42,6 +65,7 @@ import { spawnSync } from "node:child_process";
 export function detectContainerRuntime(
   preferred?: "docker" | "podman",
 ): string | undefined {
+  if (cachedRuntime) return cachedRuntime;
   // 构建探测顺序：偏好优先，未指定则 Docker 优先
   const order: ("docker" | "podman")[] = preferred
     ? preferred === "docker"
@@ -49,15 +73,11 @@ export function detectContainerRuntime(
       : ["podman", "docker"]   // 偏好 podman → [podman, docker]
     : ["docker", "podman"];    // 无偏好 → [docker, podman]
 
-  // 依次探测每个运行时
+  // 依次探测每个运行时；成功后缓存，进程内不再重复探测
   for (const runtime of order) {
-    const probe = spawnSync(runtime, ["version"], {
-      encoding: "utf8",
-      timeout: 5000,  // 5 秒超时，防止守护进程挂起
-    });
-    // 返回码为 0 表示该运行时可用
-    if (probe.status === 0) {
-      return runtime;
+    if (probeRuntime(runtime)) {
+      cachedRuntime = runtime;
+      return cachedRuntime;
     }
   }
   // 所有候选运行时都不可用

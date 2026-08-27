@@ -81,7 +81,7 @@ export function buildSweAgentGoal(probe: SweBenchLiteInstance): string {
     "After editing, run the narrowest relevant tests before final_answer.",
     "Do not call final_answer until at least one existing source file has been modified.",
     failToPass.length > 0
-      ? `External FAIL_TO_PASS acceptance tests (read-only; run these when feasible):\n${failToPass.map((test) => `- ${test}`).join("\n")}`
+      ? `External evaluator acceptance tests (read-only):\nThe evaluator may apply updated or additional assertions that are not present in this checkout. A local test with the same identifier may therefore already pass; treat these identifiers as behavioral targets, not proof that the current checkout reproduces the failure. Do not modify test files. Run locally available versions when feasible.\n${failToPass.map((test) => `- ${test}`).join("\n")}`
       : "No explicit FAIL_TO_PASS identifiers are available; locate the narrowest relevant existing test.",
     passToPass.length > 0
       ? `Regression tests that must remain passing (read-only):\n${passToPass

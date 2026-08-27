@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@paw/core": "workspace:*",
-    "@paw/models": "workspace:*",
     "@paw/workspace": "workspace:*",
     "unbash": "^3.0.0"
   },

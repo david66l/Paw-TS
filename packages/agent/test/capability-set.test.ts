@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CORE_MODEL_ACTIONS,
   CORE_MODEL_EXECUTABLE_TOOLS,
+  MCP_PROXY,
   toolDefinitions,
   toolNameReverseMap,
 } from "@paw/harness";
@@ -76,6 +77,71 @@ describe("CapabilitySetV1", () => {
     expect(set.modelToolDefinitions).toHaveLength(definitions.length);
     expect(set.internalToolNames).toEqual([]);
     expect(set.knownToolNames.has("workspace.list_dir")).toBe(true);
+  });
+
+  test("maps legacy exact MCP grants to one proxy without widening target scope", () => {
+    const set = resolveCapabilitySetV1({
+      definitions,
+      toolNameMap,
+      configuredTools: ["workspace.read_file", "mcp:github/search_code"],
+      availableMcpToolNames: [
+        "mcp:github/create_issue",
+        "mcp:github/search_code",
+      ],
+    });
+
+    expect(set.modelToolNames).toEqual(["workspace.read_file", MCP_PROXY]);
+    expect(set.mcpToolNames).toEqual(["mcp:github/search_code"]);
+    expect(set.knownToolNames.has("mcp:github/search_code")).toBe(false);
+    expect(set.knownToolNames.has(MCP_PROXY)).toBe(true);
+    expect(
+      parseAgentActionFromModelText(
+        '{"tool":"mcp:github/search_code","args":{"query":"cache"}}',
+        { knownTools: set.knownToolNames },
+      ),
+    ).toBeNull();
+    expect(
+      parseAgentActionFromModelText(
+        '{"tool":"workspace.use_mcp","args":{"action":"search","query":"cache"}}',
+        { knownTools: set.knownToolNames },
+      ),
+    ).toMatchObject({ type: "tool_call", tool: MCP_PROXY });
+  });
+
+  test("read-only children may discover MCP tools but cannot invoke them", async () => {
+    const events: import("@paw/core").RunEvent[] = [];
+    const result = await executeToolCalls(
+      [
+        {
+          type: "tool_call",
+          tool: MCP_PROXY,
+          args: { action: "search", query: "code" },
+        },
+        {
+          type: "tool_call",
+          tool: MCP_PROXY,
+          args: {
+            action: "call",
+            tool: "mcp:github/search_code",
+            arguments: { query: "cache" },
+          },
+        },
+      ],
+      {
+        workspaceRoot: process.cwd(),
+        runId: "read-only-mcp-proxy",
+        emit: (event) => events.push(event),
+        checkpointSeq: { n: 0 },
+        childPolicy: "read_only",
+        allowedTools: [MCP_PROXY],
+        mcpAllowedTools: ["mcp:github/search_code"],
+      },
+      {},
+    );
+
+    expect(result.results[0]?.ok).toBe(true);
+    expect(result.results[1]?.ok).toBe(false);
+    expect(result.results[1]?.summary).toContain("read-only child agent");
   });
 
   test("keeps an empty allowlist empty at the executor boundary", async () => {

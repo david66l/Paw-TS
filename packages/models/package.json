@@ -7,7 +7,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@paw/agent-loop": "workspace:*",
     "@paw/core": "workspace:*",
+    "@paw/protocol": "workspace:*",
     "@paw/settings": "workspace:*"
   },
   "scripts": {

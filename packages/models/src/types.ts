@@ -10,32 +10,12 @@
  * NativeToolCall：provider 原生返回的工具调用（非文本解析）。
  */
 
-import type { ModelTokenUsage, NativeToolTurnV1 } from "@paw/core";
+import type { ModelTokenUsage } from "@paw/core";
+
+/** Core owns the one shared message carrier used by Runtime and providers. */
+export type { Attachment, ChatMessage } from "@paw/core";
 
 export type ChatRole = "system" | "user" | "assistant";
-
-/** 用户消息的文件或图片附件。 */
-export interface Attachment {
-  readonly type: "image" | "file";
-  readonly name: string;
-  readonly content: string;
-  readonly mimeType?: string;
-}
-
-/**
- * 富文本消息类型：支持 thinking 块、附件和进度。
- * 向后兼容：旧代码使用 {role, content} 仍然有效。
- */
-export interface ChatMessage {
-  readonly role: ChatRole;
-  readonly content: string;
-  /** 推理/思考内容（来自支持 extended thinking 的模型，如 Claude）。 */
-  readonly thinking?: string;
-  /** 用户消息的附件（图片、文件等）。 */
-  readonly attachments?: readonly Attachment[];
-  /** Atomic provider-native assistant/tool-result turn for request replay. */
-  readonly nativeToolTurn?: NativeToolTurnV1;
-}
 
 /** 非流式模型调用结果。 */
 export interface ModelCompletionResult {
@@ -83,6 +63,8 @@ export type ModelStreamChunk =
       readonly id: string;
       readonly name: string;
       readonly input: string;
+      /** Provider source order after the provider adapter has assembled deltas. */
+      readonly sourceIndex?: number;
     }
   | {
       readonly type: "done";

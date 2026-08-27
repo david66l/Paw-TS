@@ -19,6 +19,9 @@ describe("McpClientManager", () => {
     const mcp = new McpClientManager();
     expect(mcp.parseToolId("workspace.read_file")).toBeNull();
     expect(mcp.parseToolId("mcp:server-only")).toBeNull();
+    expect(mcp.parseToolId("mcp:/tool")).toBeNull();
+    expect(mcp.parseToolId("mcp:server/")).toBeNull();
+    expect(mcp.parseToolId("mcp:server/tool/extra")).toBeNull();
     expect(mcp.parseToolId("")).toBeNull();
   });
 

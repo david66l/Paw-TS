@@ -81,6 +81,14 @@ const GIT_GLOBAL_VALUE_OPTIONS = new Set([
   "--super-prefix",
 ]);
 
+/**
+ * Git's generic `-c` option is deliberately not accepted here: settings such
+ * as `diff.external` can replace the diff implementation. Keep this list to
+ * output-neutral values Paw has observed agents use to make a normal patch
+ * visible across host/container line-ending differences.
+ */
+const SAFE_GIT_DIFF_CONFIG = new Set(["core.autocrlf=false"]);
+
 function gitDiffSubcommandIndex(tokens: readonly string[]): number | undefined {
   const executable = tokens[0]?.toLocaleLowerCase();
   if (executable !== "git" && executable !== "git.exe") return undefined;
@@ -98,6 +106,12 @@ function gitDiffSubcommandIndex(tokens: readonly string[]): number | undefined {
     }
     if (GIT_GLOBAL_VALUE_OPTIONS.has(token)) {
       if (!tokens[index + 1]) return undefined;
+      index += 2;
+      continue;
+    }
+    if (token === "-c") {
+      const config = tokens[index + 1]?.toLocaleLowerCase();
+      if (!config || !SAFE_GIT_DIFF_CONFIG.has(config)) return undefined;
       index += 2;
       continue;
     }

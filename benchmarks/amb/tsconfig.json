@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@paw/agent-loop": ["packages/agent-loop/src/index.ts"],
+      "@paw/core": ["packages/core/src/index.ts"],
+      "@paw/memory": ["packages/memory/src/index.ts"],
+      "@paw/memory/longterm": ["packages/memory/src/longterm/index.ts"],
+      "@paw/memory-plugin": ["packages/memory-plugin/src/index.ts"],
+      "@paw/protocol": ["packages/protocol/src/index.ts"],
+      "@paw/runtime": ["packages/runtime/src/index.ts"]
+    }
+  },
+  "include": ["*.ts"]
+}

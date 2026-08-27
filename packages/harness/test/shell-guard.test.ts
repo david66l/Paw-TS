@@ -37,9 +37,9 @@ describe("validateShellCommand", () => {
   test("allows dangerous-looking text inside string literals", () => {
     expect(validateShellCommand('echo "rm -rf /"').allowed).toBe(true);
     expect(validateShellCommand("echo 'rm -rf /'").allowed).toBe(true);
-    expect(
-      validateShellCommand('echo "Here is how to rm -rf /"').allowed,
-    ).toBe(true);
+    expect(validateShellCommand('echo "Here is how to rm -rf /"').allowed).toBe(
+      true,
+    );
   });
 
   // ------------------------------------------------------------------
@@ -75,12 +75,10 @@ describe("validateShellCommand", () => {
   // find variants
   // ------------------------------------------------------------------
   test("allows benign find", () => {
-    expect(
-      validateShellCommand("find . -name '*.js'").allowed,
-    ).toBe(true);
-    expect(
-      validateShellCommand('find . -name "*.ts" -type f').allowed,
-    ).toBe(true);
+    expect(validateShellCommand("find . -name '*.js'").allowed).toBe(true);
+    expect(validateShellCommand('find . -name "*.ts" -type f').allowed).toBe(
+      true,
+    );
   });
 
   test("blocks destructive find variants", () => {
@@ -95,38 +93,30 @@ describe("validateShellCommand", () => {
   // ------------------------------------------------------------------
   test("blocks destructive inline scripts", () => {
     expect(
-      validateShellCommand('python -c "import shutil; shutil.rmtree(\'../x\')"')
+      validateShellCommand("python -c \"import shutil; shutil.rmtree('../x')\"")
         .allowed,
     ).toBe(false);
     expect(
       validateShellCommand(
-        'node -e "require(\'fs\').rmSync(\'../x\', { recursive: true })"',
+        "node -e \"require('fs').rmSync('../x', { recursive: true })\"",
       ).allowed,
     ).toBe(false);
   });
 
   test("allows benign inline scripts", () => {
-    expect(
-      validateShellCommand('python -c "print(1+1)"').allowed,
-    ).toBe(true);
-    expect(
-      validateShellCommand('node -e "console.log(42)"').allowed,
-    ).toBe(true);
+    expect(validateShellCommand('python -c "print(1+1)"').allowed).toBe(true);
+    expect(validateShellCommand('node -e "console.log(42)"').allowed).toBe(
+      true,
+    );
   });
 
   // ------------------------------------------------------------------
   // Pipeline semantics
   // ------------------------------------------------------------------
   test("allows benign pipelines", () => {
-    expect(
-      validateShellCommand("cat file | grep pattern").allowed,
-    ).toBe(true);
-    expect(
-      validateShellCommand("ls -la | wc -l").allowed,
-    ).toBe(true);
-    expect(
-      validateShellCommand("ps aux | grep node").allowed,
-    ).toBe(true);
+    expect(validateShellCommand("cat file | grep pattern").allowed).toBe(true);
+    expect(validateShellCommand("ls -la | wc -l").allowed).toBe(true);
+    expect(validateShellCommand("ps aux | grep node").allowed).toBe(true);
   });
 
   test("blocks pipe-to-network exfiltration", () => {
@@ -153,12 +143,8 @@ describe("validateShellCommand", () => {
   // Env-var prefixes
   // ------------------------------------------------------------------
   test("allows commands with env-var prefixes", () => {
-    expect(
-      validateShellCommand("FOO=bar echo ok").allowed,
-    ).toBe(true);
-    expect(
-      validateShellCommand("NODE_ENV=test npm test").allowed,
-    ).toBe(true);
+    expect(validateShellCommand("FOO=bar echo ok").allowed).toBe(true);
+    expect(validateShellCommand("NODE_ENV=test npm test").allowed).toBe(true);
   });
 
   // ------------------------------------------------------------------
@@ -181,6 +167,13 @@ describe("validateShellCommand", () => {
   test("blocks sudo and su", () => {
     expect(validateShellCommand("sudo whoami").allowed).toBe(false);
     expect(validateShellCommand("su - root").allowed).toBe(false);
+  });
+
+  test("does not treat su inside an argument as privilege escalation", () => {
+    const result = validateShellCommand(
+      "python tests/runtests.py i18n.tests.MiscTests.test_get_supported_language_variant_null",
+    );
+    expect(result.allowed).toBe(true);
   });
 
   test("blocks mkfs and shred", () => {

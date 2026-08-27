@@ -204,8 +204,9 @@ export function buildDockerShellExecSpec(
   );
   if ("error" in containerRoot) return containerRoot;
 
-  // 1. 检测可用的容器运行时
-  const runtime = detectContainerRuntime(config.runtime);
+  // An explicit runtime is an execution choice, not a discovery hint. Avoid
+  // re-probing a configured Docker daemon on every shell command.
+  const runtime = config.runtime ?? detectContainerRuntime();
   if (!runtime) {
     return {
       error:
@@ -269,7 +270,13 @@ export function buildDockerShellExecSpec(
   }
 
   // 6. 末尾追加镜像名和要执行的命令
-  args.push(image, commandShell, "-lc", input.command);
+  args.push(
+    image,
+    commandShell,
+    ...(commandShell === "bash" ? ["-o", "pipefail"] : []),
+    "-lc",
+    input.command,
+  );
 
   return {
     runtime,

@@ -15,7 +15,7 @@
  * - system 消息处理：Anthropic 有顶层 system 参数（非 messages 数组中的 role:system）
  */
 
-import type { ModelTokenUsage } from "@paw/core";
+import { type ModelTokenUsage, isNativeToolTurnV2 } from "@paw/core";
 
 import type { LanguageModel, ModelCapabilities } from "./language-model.js";
 import {
@@ -24,12 +24,14 @@ import {
 } from "./message-content.js";
 import {
   type ModelCompleteOptions,
+  type ToolDefinition,
   resolveRequestMaxOutputTokens,
 } from "./model-options.js";
 import type {
   ChatMessage,
   ModelCompletionResult,
   ModelStreamChunk,
+  NativeToolCall,
 } from "./types.js";
 
 export interface AnthropicCompatibleOptions {
@@ -46,30 +48,106 @@ function abortError(): Error {
   return e;
 }
 
+/** Convert the shared OpenAI-shaped tool definition to Anthropic's wire shape. */
+function toAnthropicTools(tools: readonly ToolDefinition[]): Array<{
+  readonly name: string;
+  readonly description: string;
+  readonly input_schema: Record<string, unknown>;
+}> {
+  return tools.map((tool) => ({
+    name: tool.function.name,
+    description: tool.function.description,
+    input_schema: tool.function.parameters,
+  }));
+}
+
 /** Convert Paw ChatMessage[] to Anthropic message format. */
 function toAnthropicMessages(messages: readonly ChatMessage[]): {
   system: string | undefined;
   messages: Array<{
     role: "user" | "assistant";
-    content: string | AnthropicContentBlock[];
+    content: string | AnthropicRequestContentBlock[];
   }>;
 } {
   let system: string | undefined;
   const out: Array<{
     role: "user" | "assistant";
-    content: string | AnthropicContentBlock[];
+    content: string | AnthropicRequestContentBlock[];
   }> = [];
   for (const m of messages) {
     if (m.role === "system") {
       system = system ? `${system}\n\n${m.content}` : m.content;
     } else if (m.role === "user") {
       out.push({ role: "user", content: buildAnthropicUserContent(m) });
+    } else if (isNativeToolTurnV2(m.nativeToolTurn)) {
+      const turn = m.nativeToolTurn;
+      if (turn.reasoningPassback !== undefined) {
+        throw new Error(
+          "Anthropic-compatible history cannot replay string reasoningPassback",
+        );
+      }
+      const assistant: AnthropicRequestContentBlock[] = [];
+      if (turn.assistantContent) {
+        assistant.push({ type: "text", text: turn.assistantContent });
+      }
+      for (const call of turn.calls) {
+        let input: unknown;
+        try {
+          input = JSON.parse(call.rawArguments);
+        } catch {
+          throw new Error(`Native tool call ${call.callId} has invalid JSON`);
+        }
+        if (
+          input === null ||
+          typeof input !== "object" ||
+          Array.isArray(input)
+        ) {
+          throw new Error(
+            `Native tool call ${call.callId} arguments must be an object`,
+          );
+        }
+        assistant.push({
+          type: "tool_use",
+          id: call.callId,
+          name: call.providerName,
+          input: input as Record<string, unknown>,
+        });
+      }
+      out.push({ role: "assistant", content: assistant });
+      out.push({
+        role: "user",
+        content: turn.results.map((result) => ({
+          type: "tool_result" as const,
+          tool_use_id: result.callId,
+          content: result.content || "(no output)",
+          is_error: result.isError,
+        })),
+      });
+    } else if (m.reasoningPassback !== undefined) {
+      throw new Error(
+        "Anthropic-compatible history cannot replay string reasoningPassback",
+      );
     } else {
       out.push({ role: "assistant", content: m.content });
     }
   }
   return { system, messages: out };
 }
+
+type AnthropicRequestContentBlock =
+  | AnthropicContentBlock
+  | Readonly<{
+      type: "tool_use";
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+    }>
+  | Readonly<{
+      type: "tool_result";
+      tool_use_id: string;
+      content: string;
+      is_error: boolean;
+    }>;
 
 /**
  * Minimal Anthropic Messages API client (HTTPS fetch).
@@ -129,6 +207,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
     if (system) {
       body.system = system;
     }
+    if (options?.tools && options.tools.length > 0) {
+      body.tools = toAnthropicTools(options.tools);
+    }
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -153,15 +234,17 @@ export class AnthropicCompatibleModel implements LanguageModel {
       parsed !== null && typeof parsed === "object"
         ? (parsed as Record<string, unknown>)
         : null;
-    const { text, thinking } = extractAnthropicContent(root);
+    const { text, thinking, toolCalls } = extractAnthropicContent(root);
     const usage = parseAnthropicUsage(root?.usage);
     const finishReason =
       typeof root?.stop_reason === "string" ? root.stop_reason : undefined;
     const result: ModelCompletionResult = {
       text,
+      ...(toolCalls.length > 0 ? { nativeAssistantContent: text } : {}),
       ...(usage !== undefined ? { usage } : {}),
       ...(thinking ? { thinking } : {}),
       ...(finishReason ? { finishReason } : {}),
+      ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
     return result;
   }
@@ -194,6 +277,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
     if (system) {
       body.system = system;
     }
+    if (options?.tools && options.tools.length > 0) {
+      body.tools = toAnthropicTools(options.tools);
+    }
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -219,8 +305,73 @@ export class AnthropicCompatibleModel implements LanguageModel {
     let buffer = "";
     let lastUsage: ModelTokenUsage | undefined;
     let lastFinishReason: string | undefined;
-    let currentToolUse: { id: string; name: string; input: string } | null =
-      null;
+    let sawMessageStop = false;
+    const toolUseByBlockIndex = new Map<
+      number,
+      {
+        readonly id: string;
+        readonly name: string;
+        input: string;
+        stopped: boolean;
+      }
+    >();
+    const processPart = (part: AnthropicStreamPart): ModelStreamChunk[] => {
+      if (sawMessageStop) {
+        throw new Error("Anthropic stream emitted data after message_stop");
+      }
+      const chunks: ModelStreamChunk[] = [];
+      if (part.textDelta.length > 0) {
+        chunks.push({ type: "text", delta: part.textDelta });
+      }
+      if (part.thinkingDelta.length > 0) {
+        chunks.push({ type: "thinking", delta: part.thinkingDelta });
+      }
+      if (part.toolUseStart) {
+        const { blockIndex, id, name, initialInput } = part.toolUseStart;
+        if (toolUseByBlockIndex.has(blockIndex)) {
+          throw new Error(
+            `Anthropic duplicate tool_use block index ${blockIndex}`,
+          );
+        }
+        toolUseByBlockIndex.set(blockIndex, {
+          id,
+          name,
+          input: initialInput,
+          stopped: false,
+        });
+      }
+      if (part.toolUseDelta) {
+        const { blockIndex, partialJson } = part.toolUseDelta;
+        const toolUse = toolUseByBlockIndex.get(blockIndex);
+        if (!toolUse || toolUse.stopped) {
+          throw new Error(
+            `Anthropic orphan tool_use delta at block index ${blockIndex}`,
+          );
+        }
+        toolUse.input += partialJson;
+      }
+      if (part.toolUseStopIndex !== undefined) {
+        const toolUse = toolUseByBlockIndex.get(part.toolUseStopIndex);
+        if (toolUse) {
+          if (toolUse.stopped) {
+            throw new Error(
+              `Anthropic duplicate tool_use stop at block index ${part.toolUseStopIndex}`,
+            );
+          }
+          toolUse.stopped = true;
+        }
+      }
+      if (part.usage !== undefined) {
+        lastUsage = mergeAnthropicUsage(lastUsage, part.usage);
+      }
+      if (part.finishReason !== undefined) {
+        lastFinishReason = part.finishReason;
+      }
+      if (part.messageStopped) {
+        sawMessageStop = true;
+      }
+      return chunks;
+    };
     try {
       while (true) {
         if (options?.signal?.aborted) {
@@ -238,36 +389,8 @@ export class AnthropicCompatibleModel implements LanguageModel {
           }
           const payload = trimmed.slice(6);
           const part = parseAnthropicStreamPayload(payload);
-          if (part.textDelta.length > 0) {
-            yield { type: "text", delta: part.textDelta };
-          }
-          if (part.thinkingDelta.length > 0) {
-            yield { type: "thinking", delta: part.thinkingDelta };
-          }
-          if (part.toolUseStart) {
-            currentToolUse = {
-              id: part.toolUseStart.id,
-              name: part.toolUseStart.name,
-              input: "",
-            };
-          }
-          if (part.toolUseDelta && currentToolUse) {
-            currentToolUse.input += part.toolUseDelta;
-          }
-          if (part.toolUseStop && currentToolUse) {
-            yield {
-              type: "tool_use",
-              id: currentToolUse.id,
-              name: currentToolUse.name,
-              input: currentToolUse.input,
-            };
-            currentToolUse = null;
-          }
-          if (part.usage !== undefined) {
-            lastUsage = part.usage;
-          }
-          if (part.finishReason !== undefined) {
-            lastFinishReason = part.finishReason;
+          for (const chunk of processPart(part)) {
+            yield chunk;
           }
         }
         if (done) {
@@ -279,22 +402,42 @@ export class AnthropicCompatibleModel implements LanguageModel {
         if (trimmed.startsWith("data: ")) {
           const payload = trimmed.slice(6);
           const part = parseAnthropicStreamPayload(payload);
-          if (part.textDelta.length > 0) {
-            yield { type: "text", delta: part.textDelta };
-          }
-          if (part.thinkingDelta.length > 0) {
-            yield { type: "thinking", delta: part.thinkingDelta };
-          }
-          if (part.usage !== undefined) {
-            lastUsage = part.usage;
-          }
-          if (part.finishReason !== undefined) {
-            lastFinishReason = part.finishReason;
+          for (const chunk of processPart(part)) {
+            yield chunk;
           }
         }
       }
     } finally {
       reader.releaseLock();
+    }
+    if (!sawMessageStop && !lastFinishReason) {
+      throw new Error(
+        "Anthropic stream ended without message_stop or stop_reason",
+      );
+    }
+    const completedToolUses = [...toolUseByBlockIndex.entries()].sort(
+      ([left], [right]) => left - right,
+    );
+    const callIds = new Set<string>();
+    for (const [sourceIndex, [, toolUse]] of completedToolUses.entries()) {
+      if (
+        !toolUse.stopped ||
+        !toolUse.id.trim() ||
+        !toolUse.name.trim() ||
+        callIds.has(toolUse.id)
+      ) {
+        throw new Error(
+          `Anthropic invalid tool_use identity at source index ${sourceIndex}`,
+        );
+      }
+      callIds.add(toolUse.id);
+      yield {
+        type: "tool_use",
+        id: toolUse.id,
+        name: toolUse.name,
+        input: toolUse.input,
+        sourceIndex,
+      };
     }
     yield {
       type: "done",
@@ -309,13 +452,16 @@ export class AnthropicCompatibleModel implements LanguageModel {
 function extractAnthropicContent(root: Record<string, unknown> | null): {
   text: string;
   thinking?: string;
+  toolCalls: readonly NativeToolCall[];
 } {
   const content = root?.content;
   if (!Array.isArray(content)) {
-    return { text: "" };
+    return { text: "", toolCalls: [] };
   }
   const textParts: string[] = [];
   const thinkingParts: string[] = [];
+  const toolCalls: NativeToolCall[] = [];
+  const callIds = new Set<string>();
   for (const block of content) {
     if (block !== null && typeof block === "object") {
       const b = block as Record<string, unknown>;
@@ -329,16 +475,70 @@ function extractAnthropicContent(root: Record<string, unknown> | null): {
         if (typeof t === "string") {
           thinkingParts.push(t);
         }
+      } else if (b.type === "tool_use") {
+        const id = typeof b.id === "string" ? b.id : "";
+        const name = typeof b.name === "string" ? b.name : "";
+        if (!id.trim() || !name.trim() || callIds.has(id)) {
+          throw new Error(
+            `Anthropic invalid tool_use identity at source index ${toolCalls.length}`,
+          );
+        }
+        callIds.add(id);
+        toolCalls.push(
+          toNativeToolCall(id, name, b.input, toolCalls.length, "complete"),
+        );
       }
     }
   }
-  const result: { text: string; thinking?: string } = {
+  const result: {
+    text: string;
+    thinking?: string;
+    toolCalls: readonly NativeToolCall[];
+  } = {
     text: textParts.join(""),
+    toolCalls,
   };
   if (thinkingParts.length > 0) {
     result.thinking = thinkingParts.join("");
   }
   return result;
+}
+
+function toNativeToolCall(
+  id: string,
+  name: string,
+  input: unknown,
+  sourceIndex: number,
+  source: "complete" | "stream",
+): NativeToolCall {
+  const rawArguments =
+    source === "stream"
+      ? typeof input === "string"
+        ? input
+        : ""
+      : typeof input === "string"
+        ? input
+        : JSON.stringify(input ?? null);
+  let parsedInput: unknown = input;
+  if (source === "stream") {
+    try {
+      parsedInput = JSON.parse(rawArguments);
+    } catch {
+      parsedInput = undefined;
+    }
+  }
+  const argumentsValid =
+    parsedInput !== null &&
+    typeof parsedInput === "object" &&
+    !Array.isArray(parsedInput);
+  return {
+    id,
+    name,
+    arguments: argumentsValid ? (parsedInput as Record<string, unknown>) : {},
+    rawArguments,
+    sourceIndex,
+    argumentsValid,
+  };
 }
 
 function parseAnthropicUsage(raw: unknown): ModelTokenUsage | undefined {
@@ -348,58 +548,127 @@ function parseAnthropicUsage(raw: unknown): ModelTokenUsage | undefined {
   const u = raw as Record<string, unknown>;
   const inputTokens = pickNum(u.input_tokens ?? u.promptTokens);
   const outputTokens = pickNum(u.output_tokens ?? u.completionTokens);
-  if (inputTokens === undefined && outputTokens === undefined) {
+  const cachedPromptTokens = pickNum(
+    u.cache_read_input_tokens ?? u.cachedPromptTokens,
+  );
+  const totalTokens =
+    inputTokens !== undefined && outputTokens !== undefined
+      ? inputTokens + outputTokens
+      : undefined;
+  if (
+    inputTokens === undefined &&
+    outputTokens === undefined &&
+    cachedPromptTokens === undefined
+  ) {
     return undefined;
   }
   return {
     ...(inputTokens !== undefined ? { promptTokens: inputTokens } : {}),
     ...(outputTokens !== undefined ? { completionTokens: outputTokens } : {}),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+    ...(cachedPromptTokens !== undefined ? { cachedPromptTokens } : {}),
   };
 }
 
-function parseAnthropicStreamPayload(raw: string): {
+function mergeAnthropicUsage(
+  current: ModelTokenUsage | undefined,
+  incoming: ModelTokenUsage,
+): ModelTokenUsage {
+  const promptTokens = incoming.promptTokens ?? current?.promptTokens;
+  const completionTokens =
+    incoming.completionTokens ?? current?.completionTokens;
+  const cachedPromptTokens =
+    incoming.cachedPromptTokens ?? current?.cachedPromptTokens;
+  const totalTokens =
+    incoming.totalTokens ??
+    (promptTokens !== undefined && completionTokens !== undefined
+      ? promptTokens + completionTokens
+      : current?.totalTokens);
+  return {
+    ...(promptTokens !== undefined ? { promptTokens } : {}),
+    ...(completionTokens !== undefined ? { completionTokens } : {}),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+    ...(cachedPromptTokens !== undefined ? { cachedPromptTokens } : {}),
+  };
+}
+
+interface AnthropicStreamPart {
   readonly textDelta: string;
   readonly thinkingDelta: string;
-  readonly toolUseStart?: { id: string; name: string };
-  readonly toolUseDelta?: string;
-  readonly toolUseStop: boolean;
+  readonly toolUseStart?: {
+    readonly blockIndex: number;
+    readonly id: string;
+    readonly name: string;
+    readonly initialInput: string;
+  };
+  readonly toolUseDelta?: {
+    readonly blockIndex: number;
+    readonly partialJson: string;
+  };
+  readonly toolUseStopIndex?: number;
   readonly usage?: ModelTokenUsage;
   readonly finishReason?: string;
-} {
+  readonly messageStopped?: boolean;
+}
+
+function emptyAnthropicStreamPart(): AnthropicStreamPart {
+  return { textDelta: "", thinkingDelta: "" };
+}
+
+function parseAnthropicStreamPayload(raw: string): AnthropicStreamPart {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { textDelta: "", thinkingDelta: "", toolUseStop: false };
+    throw new Error("Anthropic invalid JSON stream payload");
   }
-  const root =
-    parsed !== null && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : null;
-  if (!root) {
-    return { textDelta: "", thinkingDelta: "", toolUseStop: false };
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Anthropic stream payload must be a JSON object");
   }
+  const root = parsed as Record<string, unknown>;
 
   const type = root.type;
 
-  // message_delta carries usage + stop_reason at end of stream
-  if (type === "message_delta" || type === "message_stop") {
-    const usage = parseAnthropicUsage(root.usage);
-    const finishReason =
-      typeof root.stop_reason === "string" ? root.stop_reason : undefined;
+  if (type === "message_start") {
+    const message =
+      root.message !== null && typeof root.message === "object"
+        ? (root.message as Record<string, unknown>)
+        : undefined;
+    const usage = parseAnthropicUsage(message?.usage);
     return {
-      textDelta: "",
-      thinkingDelta: "",
-      toolUseStop: false,
+      ...emptyAnthropicStreamPart(),
+      ...(usage !== undefined ? { usage } : {}),
+    };
+  }
+
+  // message_delta carries usage at the root and stop_reason inside delta.
+  if (type === "message_delta") {
+    const usage = parseAnthropicUsage(root.usage);
+    const delta =
+      root.delta !== null && typeof root.delta === "object"
+        ? (root.delta as Record<string, unknown>)
+        : undefined;
+    const finishReason =
+      typeof delta?.stop_reason === "string" && delta.stop_reason.trim()
+        ? delta.stop_reason
+        : undefined;
+    return {
+      ...emptyAnthropicStreamPart(),
       ...(usage !== undefined ? { usage } : {}),
       ...(finishReason ? { finishReason } : {}),
     };
   }
 
+  if (type === "message_stop") {
+    return { ...emptyAnthropicStreamPart(), messageStopped: true };
+  }
+
   // content_block_start signals beginning of a block
   if (type === "content_block_start") {
+    const blockIndex = pickNonNegativeInteger(root.index);
     const contentBlock = root.content_block;
     if (
+      blockIndex !== undefined &&
       contentBlock !== null &&
       typeof contentBlock === "object" &&
       (contentBlock as Record<string, unknown>).type === "tool_use"
@@ -407,11 +676,16 @@ function parseAnthropicStreamPayload(raw: string): {
       const cb = contentBlock as Record<string, unknown>;
       const id = typeof cb.id === "string" ? cb.id : "";
       const name = typeof cb.name === "string" ? cb.name : "";
+      const initialInput =
+        cb.input !== null &&
+        typeof cb.input === "object" &&
+        !Array.isArray(cb.input) &&
+        Object.keys(cb.input as Record<string, unknown>).length > 0
+          ? JSON.stringify(cb.input)
+          : "";
       return {
-        textDelta: "",
-        thinkingDelta: "",
-        toolUseStart: { id, name },
-        toolUseStop: false,
+        ...emptyAnthropicStreamPart(),
+        toolUseStart: { blockIndex, id, name, initialInput },
       };
     }
     // thinking block start may carry initial text
@@ -425,14 +699,14 @@ function parseAnthropicStreamPayload(raw: string): {
       return {
         textDelta: "",
         thinkingDelta: typeof t === "string" ? t : "",
-        toolUseStop: false,
       };
     }
-    return { textDelta: "", thinkingDelta: "", toolUseStop: false };
+    return emptyAnthropicStreamPart();
   }
 
   // content_block_delta carries deltas
   if (type === "content_block_delta") {
+    const blockIndex = pickNonNegativeInteger(root.index);
     const delta = root.delta;
     if (delta !== null && typeof delta === "object") {
       const d = delta as Record<string, unknown>;
@@ -442,7 +716,6 @@ function parseAnthropicStreamPayload(raw: string): {
         return {
           textDelta: text,
           thinkingDelta: "",
-          toolUseStop: false,
         };
       }
       // thinking delta
@@ -451,17 +724,14 @@ function parseAnthropicStreamPayload(raw: string): {
         return {
           textDelta: "",
           thinkingDelta: thinking,
-          toolUseStop: false,
         };
       }
       // tool_use partial_json delta
       const partialJson = d.partial_json;
-      if (typeof partialJson === "string") {
+      if (typeof partialJson === "string" && blockIndex !== undefined) {
         return {
-          textDelta: "",
-          thinkingDelta: "",
-          toolUseDelta: partialJson,
-          toolUseStop: false,
+          ...emptyAnthropicStreamPart(),
+          toolUseDelta: { blockIndex, partialJson },
         };
       }
     }
@@ -469,10 +739,14 @@ function parseAnthropicStreamPayload(raw: string): {
 
   // content_block_stop signals end of a block
   if (type === "content_block_stop") {
-    return { textDelta: "", thinkingDelta: "", toolUseStop: true };
+    const blockIndex = pickNonNegativeInteger(root.index);
+    return {
+      ...emptyAnthropicStreamPart(),
+      ...(blockIndex !== undefined ? { toolUseStopIndex: blockIndex } : {}),
+    };
   }
 
-  return { textDelta: "", thinkingDelta: "", toolUseStop: false };
+  return emptyAnthropicStreamPart();
 }
 
 function pickNum(v: unknown): number | undefined {
@@ -480,4 +754,10 @@ function pickNum(v: unknown): number | undefined {
     return v;
   }
   return undefined;
+}
+
+function pickNonNegativeInteger(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isSafeInteger(v) && v >= 0
+    ? v
+    : undefined;
 }

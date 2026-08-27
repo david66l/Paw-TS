@@ -51,6 +51,9 @@ export interface CostSnapshot {
   readonly promptTokens: number;
   readonly completionTokens: number;
   readonly totalTokens: number;
+  readonly cachedPromptTokens: number;
+  readonly cacheMissPromptTokens: number;
+  readonly cacheHitRate: number;
   /** 估算费用（当前货币） */
   readonly estimatedCost: number;
   readonly costCurrency: CostCurrency;
@@ -66,6 +69,8 @@ export interface UsageRecord {
   readonly completionTokens?: number;
   /** 命中缓存的 prompt token 数 */
   readonly cachedPromptTokens?: number;
+  /** 提供方报告或模型适配器推导的缓存未命中 prompt token 数 */
+  readonly cacheMissPromptTokens?: number;
 }
 
 // ═══════════════════════════════════════════════════
@@ -192,7 +197,8 @@ export function resolveModelPricing(
   const key = normalizeModelKey(modelLabel);
 
   // 1. DeepSeek 精确匹配
-  if (DEEPSEEK_PRICING[key]) return DEEPSEEK_PRICING[key]!;
+  const deepSeekPricing = DEEPSEEK_PRICING[key];
+  if (deepSeekPricing) return deepSeekPricing;
 
   // 2. DeepSeek 关键词推断
   if (key.includes("deepseek")) {
@@ -202,7 +208,8 @@ export function resolveModelPricing(
   }
 
   // 3. 自定义定价表精确匹配
-  if (custom[key]) return custom[key]!;
+  const customPricing = custom[key];
+  if (customPricing) return customPricing;
 
   // 4. 模糊匹配（双向外键包含）
   for (const [name, pricing] of Object.entries(custom)) {
@@ -278,6 +285,8 @@ export class CostTracker {
   private readonly pricing: Record<string, ModelPricing>;
   private promptTokens = 0;
   private completionTokens = 0;
+  private cachedPromptTokens = 0;
+  private cacheMissPromptTokens = 0;
   private totalCost = 0;
   private costCurrency: CostCurrency = "USD";
 
@@ -294,10 +303,18 @@ export class CostTracker {
       this.pricing,
     );
     this.totalCost += cost;
-    this.costCurrency = currency;  // 以最后一次调用的货币类型为准（假设同一次运行用同一货币）
+    this.costCurrency = currency; // 以最后一次调用的货币类型为准（假设同一次运行用同一货币）
     if (usage.promptTokens) {
       this.promptTokens += usage.promptTokens;
     }
+    const prompt = Math.max(0, usage.promptTokens ?? 0);
+    const cached = Math.min(Math.max(usage.cachedPromptTokens ?? 0, 0), prompt);
+    const missed = Math.min(
+      Math.max(usage.cacheMissPromptTokens ?? prompt - cached, 0),
+      prompt - cached,
+    );
+    this.cachedPromptTokens += cached;
+    this.cacheMissPromptTokens += missed;
     if (usage.completionTokens) {
       this.completionTokens += usage.completionTokens;
     }
@@ -306,12 +323,16 @@ export class CostTracker {
   /** 获取当前累计的成本快照 */
   snapshot(): CostSnapshot {
     const totalTokens = this.promptTokens + this.completionTokens;
-    const estimatedCost =
-      Math.round(this.totalCost * 1_000_000) / 1_000_000;
+    const estimatedCost = Math.round(this.totalCost * 1_000_000) / 1_000_000;
+    const cacheHitRate =
+      this.promptTokens === 0 ? 0 : this.cachedPromptTokens / this.promptTokens;
     return {
       promptTokens: this.promptTokens,
       completionTokens: this.completionTokens,
       totalTokens,
+      cachedPromptTokens: this.cachedPromptTokens,
+      cacheMissPromptTokens: this.cacheMissPromptTokens,
+      cacheHitRate,
       estimatedCost,
       costCurrency: this.costCurrency,
       estimatedCostUsd: estimatedCost,
@@ -322,6 +343,8 @@ export class CostTracker {
   reset(): void {
     this.promptTokens = 0;
     this.completionTokens = 0;
+    this.cachedPromptTokens = 0;
+    this.cacheMissPromptTokens = 0;
     this.totalCost = 0;
     this.costCurrency = "USD";
   }
@@ -330,6 +353,10 @@ export class CostTracker {
   summary(): string {
     const s = this.snapshot();
     const sym = s.costCurrency === "CNY" ? "¥" : "$";
-    return `${s.totalTokens.toLocaleString()} tokens (~${sym}${s.estimatedCost.toFixed(4)})`;
+    const cache =
+      s.promptTokens > 0
+        ? `, cache ${(s.cacheHitRate * 100).toFixed(1)}% (${s.cachedPromptTokens.toLocaleString()} hit / ${s.cacheMissPromptTokens.toLocaleString()} miss)`
+        : "";
+    return `${s.totalTokens.toLocaleString()} tokens${cache} (~${sym}${s.estimatedCost.toFixed(4)})`;
   }
 }

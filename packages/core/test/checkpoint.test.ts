@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import {
   existsSync,
@@ -18,6 +19,7 @@ import {
   inspectLastSafeFileMutationCheckpoint,
   isMutatingTool,
   listCheckpoints,
+  restoreCheckpoint,
   saveCheckpoint,
   undoLastCheckpoint,
   undoLastSafeFileMutationCheckpoint,
@@ -60,6 +62,227 @@ describe("checkpoint", () => {
     expect(undone).not.toBeNull();
     expect(undone?.tool).toBe("workspace.write_file");
     expect(readFileSync(path.join(root, "a.txt"), "utf8")).toBe("original");
+  });
+
+  test("checkpoint sequence targets are no-overwrite physical slots", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-cp-no-overwrite-"));
+    writeFileSync(path.join(root, "a.txt"), "before", "utf8");
+    saveCheckpoint(root, "run-1", 1, "workspace.edit_file", {
+      path: "a.txt",
+    });
+    const metaPath = path.join(
+      root,
+      ".paw",
+      "checkpoints",
+      "run-1",
+      "1",
+      "_meta.json",
+    );
+    const originalMeta = readFileSync(metaPath, "utf8");
+
+    writeFileSync(path.join(root, "a.txt"), "later", "utf8");
+    expect(() =>
+      saveCheckpoint(root, "run-1", 1, "workspace.edit_file", {
+        path: "a.txt",
+      }),
+    ).toThrow("checkpoint sequence target already exists: 1");
+    expect(readFileSync(metaPath, "utf8")).toBe(originalMeta);
+  });
+
+  test("checkpoint allocation permits journal-authorized sequence gaps", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-cp-gap-"));
+    writeFileSync(path.join(root, "a.txt"), "before", "utf8");
+
+    expect(
+      saveCheckpoint(root, "run-gap", 2, "workspace.edit_file", {
+        path: "a.txt",
+      }).seq,
+    ).toBe(2);
+    expect(
+      existsSync(path.join(root, ".paw", "checkpoints", "run-gap", "1")),
+    ).toBe(false);
+  });
+
+  test("checkpoint storage refuses a redirected Paw directory", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "paw-cp-state-link-"));
+    const root = path.join(base, "work");
+    const outside = path.join(base, "outside");
+    mkdirSync(root);
+    mkdirSync(outside);
+    writeFileSync(path.join(root, "a.txt"), "before", "utf8");
+    symlinkSync(outside, path.join(root, ".paw"), "junction");
+
+    expect(() =>
+      saveCheckpoint(root, "run-link", 1, "workspace.edit_file", {
+        path: "a.txt",
+      }),
+    ).toThrow("checkpoint storage path is not a safe directory");
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  test("post-save namespace redirection cannot read, finalize, restore, or delete outside state", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "paw-cp-late-run-link-"));
+    const root = path.join(base, "work");
+    const outside = path.join(base, "outside");
+    mkdirSync(root);
+    writeFileSync(path.join(root, "a.txt"), "before", "utf8");
+    saveCheckpoint(root, "late-run", 1, "workspace.edit_file", {
+      path: "a.txt",
+    });
+    writeFileSync(path.join(root, "a.txt"), "agent", "utf8");
+    const runDir = path.join(root, ".paw", "checkpoints", "late-run");
+    fs.renameSync(runDir, outside);
+    symlinkSync(outside, runDir, "junction");
+    const outsideMeta = path.join(outside, "1", "_meta.json");
+    const originalMeta = readFileSync(outsideMeta, "utf8");
+
+    expect(() => finalizeCheckpoint(root, "late-run", 1)).toThrow(
+      "checkpoint storage path is not a safe directory",
+    );
+    expect(() =>
+      inspectLastSafeFileMutationCheckpoint(root, "late-run"),
+    ).toThrow("checkpoint storage path is not a safe directory");
+    expect(() => undoLastSafeFileMutationCheckpoint(root, "late-run")).toThrow(
+      "checkpoint storage path is not a safe directory",
+    );
+    expect(() => undoLastCheckpoint(root, "late-run")).toThrow(
+      "checkpoint storage path is not a safe directory",
+    );
+    expect(() => restoreCheckpoint(root, "late-run", 1)).toThrow(
+      "checkpoint storage path is not a safe directory",
+    );
+    expect(() => listCheckpoints(root, "late-run")).toThrow(
+      "checkpoint storage path is not a safe directory",
+    );
+    expect(readFileSync(outsideMeta, "utf8")).toBe(originalMeta);
+    expect(readFileSync(path.join(root, "a.txt"), "utf8")).toBe("agent");
+  });
+
+  test("post-save sequence-directory redirection fails before touching outside metadata", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "paw-cp-late-seq-link-"));
+    const root = path.join(base, "work");
+    const outside = path.join(base, "outside-seq");
+    mkdirSync(root);
+    writeFileSync(path.join(root, "a.txt"), "before", "utf8");
+    saveCheckpoint(root, "late-seq", 1, "workspace.edit_file", {
+      path: "a.txt",
+    });
+    const seqDir = path.join(root, ".paw", "checkpoints", "late-seq", "1");
+    fs.renameSync(seqDir, outside);
+    symlinkSync(outside, seqDir, "junction");
+    const outsideMeta = path.join(outside, "_meta.json");
+    const originalMeta = readFileSync(outsideMeta, "utf8");
+
+    expect(() => finalizeCheckpoint(root, "late-seq", 1)).toThrow(
+      "checkpoint storage path is not a safe directory",
+    );
+    expect(() =>
+      inspectLastSafeFileMutationCheckpoint(root, "late-seq"),
+    ).toThrow("checkpoint storage path is not a safe directory");
+    expect(readFileSync(outsideMeta, "utf8")).toBe(originalMeta);
+  });
+
+  test("checkpoint sequence slots reject pre-existing files and links", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "paw-cp-slot-types-"));
+    const outside = path.join(base, "outside");
+    mkdirSync(outside);
+
+    const fileRoot = path.join(base, "file-root");
+    const fileRunDir = path.join(fileRoot, ".paw", "checkpoints", "run-file");
+    mkdirSync(fileRunDir, { recursive: true });
+    writeFileSync(path.join(fileRunDir, "1"), "occupied", "utf8");
+    expect(() =>
+      saveCheckpoint(fileRoot, "run-file", 1, "workspace.run_shell", {
+        command: "echo no-op",
+      }),
+    ).toThrow("checkpoint sequence target already exists: 1");
+    expect(readFileSync(path.join(fileRunDir, "1"), "utf8")).toBe("occupied");
+
+    const linkRoot = path.join(base, "link-root");
+    const linkRunDir = path.join(linkRoot, ".paw", "checkpoints", "run-link");
+    mkdirSync(linkRunDir, { recursive: true });
+    symlinkSync(outside, path.join(linkRunDir, "1"), "junction");
+    expect(() =>
+      saveCheckpoint(linkRoot, "run-link", 1, "workspace.run_shell", {
+        command: "echo no-op",
+      }),
+    ).toThrow("checkpoint sequence target already exists: 1");
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  test("two real processes cannot both own one checkpoint sequence slot", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-cp-race-"));
+    const readyOne = path.join(root, "ready-one");
+    const readyTwo = path.join(root, "ready-two");
+    const barrier = path.join(root, "go");
+    const first = runCheckpointChild([root, readyOne, barrier, "first"]);
+    const second = runCheckpointChild([root, readyTwo, barrier, "second"]);
+    await waitForCheckpointChildren(
+      () => existsSync(readyOne) && existsSync(readyTwo),
+    );
+    writeFileSync(barrier, "go", "utf8");
+
+    const results = await Promise.all([first, second]);
+    expect(results.filter((item) => item.status === "saved")).toHaveLength(1);
+    expect(results.filter((item) => item.status === "rejected")).toHaveLength(
+      1,
+    );
+    expect(
+      results.find((item) => item.status === "rejected")?.message,
+    ).toContain("checkpoint sequence target already exists: 1");
+    expect(
+      existsSync(
+        path.join(
+          root,
+          ".paw",
+          "checkpoints",
+          "concurrent-run",
+          "1",
+          "_meta.json",
+        ),
+      ),
+    ).toBe(true);
+  }, 15_000);
+
+  test("a partially written checkpoint consumes its physical sequence slot", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-cp-partial-"));
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+
+    expect(() =>
+      saveCheckpoint(root, "run-partial", 1, "workspace.run_shell", cyclic),
+    ).toThrow();
+    expect(
+      existsSync(path.join(root, ".paw", "checkpoints", "run-partial", "1")),
+    ).toBe(true);
+    expect(() =>
+      saveCheckpoint(root, "run-partial", 1, "workspace.run_shell", {
+        command: "echo retry",
+      }),
+    ).toThrow("checkpoint sequence target already exists: 1");
+  });
+
+  test("invalid checkpoint sequences fail before creating Paw storage", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "paw-cp-bad-seq-"));
+
+    expect(() =>
+      saveCheckpoint(root, "run-invalid", 0, "workspace.run_shell", {
+        command: "echo no-op",
+      }),
+    ).toThrow("checkpoint sequence must be a positive safe integer");
+    expect(existsSync(path.join(root, ".paw"))).toBe(false);
+  });
+
+  test("checkpoint namespaces reject traversal and physical aliases", () => {
+    for (const namespace of ["..", "a/b", "a?b", "Run-A", "."]) {
+      const root = mkdtempSync(path.join(tmpdir(), "paw-cp-bad-namespace-"));
+      expect(() =>
+        saveCheckpoint(root, namespace, 1, "workspace.run_shell", {
+          command: "echo no-op",
+        }),
+      ).toThrow("checkpoint namespace must contain only lowercase letters");
+      expect(existsSync(path.join(root, ".paw"))).toBe(false);
+    }
   });
 
   test("undo deletes created files", () => {
@@ -187,7 +410,10 @@ describe("checkpoint", () => {
     let injected = false;
     Object.defineProperty(fs, "writeFileSync", {
       configurable: true,
-      value(file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView) {
+      value(
+        file: fs.PathOrFileDescriptor,
+        data: string | NodeJS.ArrayBufferView,
+      ) {
         const result = originalWrite(file, data);
         if (!injected && path.resolve(String(file)) === path.resolve(aPath)) {
           injected = true;
@@ -206,7 +432,7 @@ describe("checkpoint", () => {
       });
     }
 
-    expect(undone!.status).toBe("conflict");
+    expect(undone?.status).toBe("conflict");
     expect(readFileSync(aPath, "utf8")).toBe("a1");
     expect(readFileSync(bPath, "utf8")).toBe("EXTERNAL");
     expect(listCheckpoints(root, "run-mid-restore")).toHaveLength(1);
@@ -348,9 +574,9 @@ describe("checkpoint", () => {
       "run-malformed",
     );
     expect(inspected.status).toBe("invalid");
-    expect(undoLastSafeFileMutationCheckpoint(root, "run-malformed").status).toBe(
-      "invalid",
-    );
+    expect(
+      undoLastSafeFileMutationCheckpoint(root, "run-malformed").status,
+    ).toBe("invalid");
     expect(readFileSync(filePath, "utf8")).toBe("agent");
     expect(listCheckpoints(root, "run-malformed")).toHaveLength(1);
   });
@@ -375,7 +601,8 @@ describe("checkpoint", () => {
       (name) => !name.startsWith(".") && name !== "_meta.json",
     );
     expect(snapshot).toBeDefined();
-    writeFileSync(path.join(checkpointDir, snapshot!), "corrupt", "utf8");
+    if (!snapshot) throw new Error("expected checkpoint snapshot");
+    writeFileSync(path.join(checkpointDir, snapshot), "corrupt", "utf8");
 
     const undone = undoLastSafeFileMutationCheckpoint(root, "run-tamper");
 
@@ -486,7 +713,9 @@ describe("checkpoint", () => {
     const { restoreCheckpoint } = require("../src/checkpoint.js");
     restoreCheckpoint(root, "run-bk", 1, { backup: true });
 
-    const backupDirs = existsSync(path.join(root, ".paw", "checkpoints", "run-bk", ".backup"));
+    const backupDirs = existsSync(
+      path.join(root, ".paw", "checkpoints", "run-bk", ".backup"),
+    );
     expect(backupDirs).toBe(true);
   });
 
@@ -507,7 +736,14 @@ describe("checkpoint", () => {
 
     const shellMeta = JSON.parse(
       readFileSync(
-        path.join(root, ".paw", "checkpoints", "run-shell", "1", ".shell-meta.json"),
+        path.join(
+          root,
+          ".paw",
+          "checkpoints",
+          "run-shell",
+          "1",
+          ".shell-meta.json",
+        ),
         "utf8",
       ),
     );
@@ -515,3 +751,54 @@ describe("checkpoint", () => {
     expect(shellMeta.args).toEqual({ command: "echo hello" });
   });
 });
+
+interface CheckpointChildResult {
+  readonly status: "saved" | "rejected";
+  readonly label: string;
+  readonly message?: string;
+}
+
+function runCheckpointChild(
+  args: readonly string[],
+): Promise<CheckpointChildResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [
+        path.join(import.meta.dir, "fixtures", "checkpoint-save-child.ts"),
+        ...args,
+      ],
+      {
+        cwd: path.resolve(import.meta.dir, ".."),
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(JSON.parse(stdout) as CheckpointChildResult);
+      } else {
+        reject(new Error(`checkpoint child exited ${code}: ${stderr}`));
+      }
+    });
+  });
+}
+
+async function waitForCheckpointChildren(check: () => boolean): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (!check()) {
+    if (Date.now() >= deadline)
+      throw new Error("checkpoint child barrier timeout");
+    await Bun.sleep(5);
+  }
+}

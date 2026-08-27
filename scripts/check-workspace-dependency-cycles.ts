@@ -7,7 +7,9 @@ type DependencyMap = ReadonlyMap<string, readonly string[]>;
 export interface SourceImportViolation {
   readonly rule:
     | "core_must_not_import_memory"
-    | "protocol_relative_imports_only";
+    | "protocol_relative_imports_only"
+    | "agent_loop_protocol_only"
+    | "runtime_allowed_dependencies_only";
   readonly file: string;
   readonly specifier: string;
 }
@@ -74,7 +76,7 @@ function moduleSpecifiers(source: string): string[] {
   return specifiers;
 }
 
-/** Check only the two source boundaries required by WP1a. */
+/** Check the narrow production-source dependency boundaries adopted so far. */
 export function findWp1aSourceImportViolations(
   root: string,
 ): SourceImportViolation[] {
@@ -92,12 +94,47 @@ export function findWp1aSourceImportViolations(
       forbidden: (specifier: string) =>
         !specifier.startsWith("./") && !specifier.startsWith("../"),
     },
+    {
+      directory: path.join(root, "packages", "agent-loop", "src"),
+      rule: "agent_loop_protocol_only" as const,
+      forbidden: (specifier: string) =>
+        !specifier.startsWith("./") &&
+        !specifier.startsWith("../") &&
+        specifier !== "@paw/protocol" &&
+        !specifier.startsWith("@paw/protocol/"),
+    },
+    {
+      directory: path.join(root, "packages", "runtime", "src"),
+      rule: "runtime_allowed_dependencies_only" as const,
+      forbidden: (specifier: string) => {
+        if (specifier.startsWith("./") || specifier.startsWith("../")) {
+          return false;
+        }
+        if (specifier.startsWith("node:")) return false;
+        return ![
+          "@paw/agent-loop",
+          "@paw/core",
+          "@paw/harness",
+          "@paw/protocol",
+          "@paw/workspace",
+        ].some(
+          (allowed) =>
+            specifier === allowed || specifier.startsWith(`${allowed}/`),
+        );
+      },
+    },
   ];
 
   for (const check of checks) {
     for (const file of productionTypeScriptFiles(check.directory)) {
       for (const specifier of moduleSpecifiers(readFileSync(file, "utf8"))) {
-        if (!check.forbidden(specifier)) continue;
+        const relativeEscape =
+          (specifier.startsWith("./") || specifier.startsWith("../")) &&
+          !isWithinDirectory(
+            check.directory,
+            path.resolve(path.dirname(file), specifier),
+          );
+        if (!relativeEscape && !check.forbidden(specifier)) continue;
         violations.push({
           rule: check.rule,
           file: path.relative(root, file).replaceAll(path.sep, "/"),
@@ -108,6 +145,19 @@ export function findWp1aSourceImportViolations(
   }
 
   return violations;
+}
+
+function isWithinDirectory(directory: string, candidate: string): boolean {
+  const relative = path.relative(
+    path.resolve(directory),
+    path.resolve(candidate),
+  );
+  return (
+    relative === "" ||
+    (!path.isAbsolute(relative) &&
+      relative !== ".." &&
+      !relative.startsWith(`..${path.sep}`))
+  );
 }
 
 /** Build the runtime workspace dependency graph from package manifests. */

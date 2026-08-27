@@ -24,9 +24,24 @@
       },
       "dependencies": {
         "@paw/agent": "workspace:*",
+        "@paw/agent-loop": "workspace:*",
+        "@paw/collaboration": "workspace:*",
+        "@paw/completion-review": "workspace:*",
+        "@paw/context-compaction": "workspace:*",
+        "@paw/core": "workspace:*",
         "@paw/eval": "workspace:*",
+        "@paw/harness": "workspace:*",
         "@paw/memory": "workspace:*",
+        "@paw/memory-plugin": "workspace:*",
+        "@paw/model-output-recovery": "workspace:*",
+        "@paw/models": "workspace:*",
+        "@paw/output-recall": "workspace:*",
+        "@paw/progress-advisor": "workspace:*",
+        "@paw/protocol": "workspace:*",
+        "@paw/runtime": "workspace:*",
         "@paw/settings": "workspace:*",
+        "@paw/task-progress": "workspace:*",
+        "@paw/web-access": "workspace:*",
         "@paw/workspace": "workspace:*",
       },
     },
@@ -93,6 +108,41 @@
         "@types/diff": "^8.0.0",
       },
     },
+    "packages/agent-loop": {
+      "name": "@paw/agent-loop",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/protocol": "workspace:*",
+      },
+    },
+    "packages/collaboration": {
+      "name": "@paw/collaboration",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/core": "workspace:*",
+        "@paw/harness": "workspace:*",
+        "@paw/protocol": "workspace:*",
+        "@paw/runtime": "workspace:*",
+        "@paw/workspace": "workspace:*",
+      },
+    },
+    "packages/completion-review": {
+      "name": "@paw/completion-review",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/agent-loop": "workspace:*",
+        "@paw/protocol": "workspace:*",
+      },
+    },
+    "packages/context-compaction": {
+      "name": "@paw/context-compaction",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/agent-loop": "workspace:*",
+        "@paw/protocol": "workspace:*",
+        "@paw/runtime": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@paw/core",
       "version": "0.0.1",
@@ -123,7 +173,6 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/core": "workspace:*",
-        "@paw/models": "workspace:*",
         "@paw/workspace": "workspace:*",
         "unbash": "^3.0.0",
       },
@@ -141,17 +190,71 @@
         "@types/node": "^22.10.0",
       },
     },
+    "packages/memory-plugin": {
+      "name": "@paw/memory-plugin",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/agent-loop": "workspace:*",
+        "@paw/core": "workspace:*",
+        "@paw/harness": "workspace:*",
+        "@paw/memory": "workspace:*",
+        "@paw/protocol": "workspace:*",
+        "@paw/runtime": "workspace:*",
+      },
+    },
+    "packages/model-output-recovery": {
+      "name": "@paw/model-output-recovery",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/agent-loop": "workspace:*",
+        "@paw/core": "workspace:*",
+        "@paw/models": "workspace:*",
+      },
+    },
     "packages/models": {
       "name": "@paw/models",
       "version": "0.0.1",
       "dependencies": {
+        "@paw/agent-loop": "workspace:*",
         "@paw/core": "workspace:*",
+        "@paw/protocol": "workspace:*",
         "@paw/settings": "workspace:*",
+      },
+    },
+    "packages/output-recall": {
+      "name": "@paw/output-recall",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/core": "workspace:*",
+        "@paw/harness": "workspace:*",
+        "@paw/protocol": "workspace:*",
+        "@paw/runtime": "workspace:*",
+      },
+    },
+    "packages/progress-advisor": {
+      "name": "@paw/progress-advisor",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/agent-loop": "workspace:*",
+        "@paw/completion-review": "workspace:*",
+        "@paw/core": "workspace:*",
+        "@paw/protocol": "workspace:*",
       },
     },
     "packages/protocol": {
       "name": "@paw/protocol",
       "version": "0.0.1",
+    },
+    "packages/runtime": {
+      "name": "@paw/runtime",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/agent-loop": "workspace:*",
+        "@paw/core": "workspace:*",
+        "@paw/harness": "workspace:*",
+        "@paw/protocol": "workspace:*",
+        "@paw/workspace": "workspace:*",
+      },
     },
     "packages/settings": {
       "name": "@paw/settings",
@@ -164,6 +267,25 @@
     "packages/store": {
       "name": "@paw/store",
       "version": "0.0.1",
+    },
+    "packages/task-progress": {
+      "name": "@paw/task-progress",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/core": "workspace:*",
+        "@paw/harness": "workspace:*",
+        "@paw/protocol": "workspace:*",
+        "@paw/runtime": "workspace:*",
+      },
+    },
+    "packages/web-access": {
+      "name": "@paw/web-access",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/core": "workspace:*",
+        "@paw/harness": "workspace:*",
+        "@paw/runtime": "workspace:*",
+      },
     },
     "packages/workspace": {
       "name": "@paw/workspace",
@@ -355,7 +477,15 @@
 
     "@paw/agent": ["@paw/agent@workspace:packages/agent"],
 
+    "@paw/agent-loop": ["@paw/agent-loop@workspace:packages/agent-loop"],
+
     "@paw/cli": ["@paw/cli@workspace:apps/cli"],
+
+    "@paw/collaboration": ["@paw/collaboration@workspace:packages/collaboration"],
+
+    "@paw/completion-review": ["@paw/completion-review@workspace:packages/completion-review"],
+
+    "@paw/context-compaction": ["@paw/context-compaction@workspace:packages/context-compaction"],
 
     "@paw/core": ["@paw/core@workspace:packages/core"],
 
@@ -367,15 +497,29 @@
 
     "@paw/memory": ["@paw/memory@workspace:packages/memory"],
 
+    "@paw/memory-plugin": ["@paw/memory-plugin@workspace:packages/memory-plugin"],
+
+    "@paw/model-output-recovery": ["@paw/model-output-recovery@workspace:packages/model-output-recovery"],
+
     "@paw/models": ["@paw/models@workspace:packages/models"],
 
+    "@paw/output-recall": ["@paw/output-recall@workspace:packages/output-recall"],
+
+    "@paw/progress-advisor": ["@paw/progress-advisor@workspace:packages/progress-advisor"],
+
     "@paw/protocol": ["@paw/protocol@workspace:packages/protocol"],
+
+    "@paw/runtime": ["@paw/runtime@workspace:packages/runtime"],
 
     "@paw/settings": ["@paw/settings@workspace:packages/settings"],
 
     "@paw/store": ["@paw/store@workspace:packages/store"],
 
+    "@paw/task-progress": ["@paw/task-progress@workspace:packages/task-progress"],
+
     "@paw/tui": ["@paw/tui@workspace:apps/tui"],
+
+    "@paw/web-access": ["@paw/web-access@workspace:packages/web-access"],
 
     "@paw/workspace": ["@paw/workspace@workspace:packages/workspace"],
 

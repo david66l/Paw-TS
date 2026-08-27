@@ -49,13 +49,15 @@ export interface TemporaryWorktree {
 function runGit(
   cwd: string,
   args: string[],
+  input?: string,
 ): { ok: true; stdout: string } | { ok: false; error: string } {
   try {
     const result = spawnSync("git", args, {
       cwd,
       encoding: "utf8",
+      ...(input === undefined ? {} : { input }),
       timeout: 15_000, // 15 秒超时，防止 git 操作挂起
-      maxBuffer: 1024 * 1024, // 1MB 输出上限
+      maxBuffer: 64 * 1024 * 1024,
     });
     if (result.error) {
       return { ok: false, error: result.error.message };
@@ -160,4 +162,212 @@ export function createTemporaryWorktree(
   };
 
   return { worktreeRoot, cleanup };
+}
+
+export interface RecoverableWorktreeOptionsV1 {
+  /** Identity of the source snapshot, persisted across crash recovery. */
+  readonly snapshotIdentity?: string;
+}
+
+export interface RecoverableWorktreeV1 extends TemporaryWorktree {
+  /** Snapshot identity captured when this worktree was first materialized. */
+  readonly snapshotIdentity?: string;
+  /** True when an already-registered worktree was reopened. */
+  readonly recovered: boolean;
+}
+
+/**
+ * Create or reopen a stable, ignored worktree for a durable child run.
+ *
+ * Unlike `createTemporaryWorktree`, this worktree lives below the repository's
+ * `.paw/collaboration/worktrees` directory so package resolution can still walk
+ * up to the parent repository's dependency installation. On first creation it
+ * overlays tracked and untracked user changes onto detached HEAD. A crash leaves
+ * the registered worktree in place; the same key reopens it without rebuilding
+ * a different source snapshot.
+ */
+export function createRecoverableWorktreeV1(
+  originalRoot: string,
+  key: string,
+  options: RecoverableWorktreeOptionsV1 = {},
+): RecoverableWorktreeV1 {
+  if (!/^[a-zA-Z0-9._-]{1,96}$/.test(key)) {
+    throw new Error("Recoverable worktree key is invalid");
+  }
+  const gitRoot = findGitRoot(originalRoot);
+  if (!gitRoot) {
+    throw new Error(
+      `Not a git repository (or any of the parent directories): ${originalRoot}`,
+    );
+  }
+  const sourceRoot = fs.realpathSync.native(path.resolve(originalRoot));
+  const resolvedGitRoot = fs.realpathSync.native(path.resolve(gitRoot));
+  const workspaceRelative = path.relative(resolvedGitRoot, sourceRoot);
+  if (
+    workspaceRelative === ".." ||
+    workspaceRelative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(workspaceRelative)
+  ) {
+    throw new Error("Workspace root is outside its resolved git repository");
+  }
+
+  const checkoutRoot = path.join(
+    resolvedGitRoot,
+    ".paw",
+    "collaboration",
+    "worktrees",
+    key,
+  );
+  const metadataPath = `${checkoutRoot}.json`;
+  const worktreeRoot = path.join(checkoutRoot, workspaceRelative);
+  const readMetadata = (): string | undefined => {
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as {
+      snapshotIdentity?: unknown;
+    };
+    return typeof metadata.snapshotIdentity === "string"
+      ? metadata.snapshotIdentity
+      : undefined;
+  };
+  const isRegistered = (): boolean => {
+    const listed = runGit(resolvedGitRoot, ["worktree", "list", "--porcelain"]);
+    if (!listed.ok)
+      throw new Error(`git worktree list failed: ${listed.error}`);
+    return listed.stdout
+      .split(/\r?\n/u)
+      .filter((line) => line.startsWith("worktree "))
+      .some(
+        (line) =>
+          path.resolve(line.slice("worktree ".length)) ===
+          path.resolve(checkoutRoot),
+      );
+  };
+  const removeRegistered = (): void => {
+    const removed = runGit(resolvedGitRoot, [
+      "worktree",
+      "remove",
+      "--force",
+      checkoutRoot,
+    ]);
+    if (!removed.ok) {
+      throw new Error(`git worktree remove failed: ${removed.error}`);
+    }
+  };
+  const createHandle = (
+    recovered: boolean,
+    snapshotIdentity: string | undefined,
+  ): RecoverableWorktreeV1 => {
+    let cleaned = false;
+    return Object.freeze({
+      worktreeRoot,
+      ...(snapshotIdentity === undefined ? {} : { snapshotIdentity }),
+      recovered,
+      cleanup() {
+        if (cleaned) return;
+        cleaned = true;
+        if (isRegistered()) removeRegistered();
+      },
+    });
+  };
+
+  if (isRegistered()) {
+    try {
+      return createHandle(true, readMetadata());
+    } catch {
+      // A registered tree without committed metadata was interrupted during
+      // initialization, before it could have been handed to a child.
+      removeRegistered();
+    }
+  } else if (fs.existsSync(checkoutRoot)) {
+    throw new Error(
+      `Recoverable worktree path exists but is not registered: ${checkoutRoot}`,
+    );
+  }
+
+  const metadataExisted = fs.existsSync(metadataPath);
+  const anchoredSnapshotIdentity = metadataExisted
+    ? readMetadata()
+    : options.snapshotIdentity;
+  if (
+    metadataExisted &&
+    options.snapshotIdentity !== undefined &&
+    anchoredSnapshotIdentity !== undefined &&
+    options.snapshotIdentity !== anchoredSnapshotIdentity
+  ) {
+    throw new Error(
+      "Parent workspace changed since the recoverable child snapshot was created",
+    );
+  }
+
+  fs.mkdirSync(path.dirname(checkoutRoot), { recursive: true });
+  const added = runGit(resolvedGitRoot, [
+    "worktree",
+    "add",
+    "--detach",
+    checkoutRoot,
+    "HEAD",
+  ]);
+  if (!added.ok) {
+    throw new Error(`git worktree add failed: ${added.error}`);
+  }
+  try {
+    const diff = runGit(sourceRoot, ["diff", "--binary", "HEAD", "--", "."]);
+    if (!diff.ok) throw new Error(`git diff failed: ${diff.error}`);
+    if (diff.stdout.length > 0) {
+      const applied = runGit(
+        checkoutRoot,
+        ["apply", "--whitespace=nowarn", "-"],
+        diff.stdout,
+      );
+      if (!applied.ok) throw new Error(`git apply failed: ${applied.error}`);
+    }
+
+    const listed = runGit(sourceRoot, [
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      ".",
+    ]);
+    if (!listed.ok) throw new Error(`git ls-files failed: ${listed.error}`);
+    for (const relative of listed.stdout.split("\0").filter(Boolean)) {
+      const source = path.resolve(sourceRoot, relative);
+      const destination = path.resolve(worktreeRoot, relative);
+      const relativeDestination = path.relative(worktreeRoot, destination);
+      if (
+        relativeDestination === ".." ||
+        relativeDestination.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativeDestination)
+      ) {
+        throw new Error(`Untracked path escapes workspace: ${relative}`);
+      }
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.cpSync(source, destination, {
+        recursive: true,
+        dereference: false,
+        errorOnExist: false,
+        force: true,
+      });
+    }
+    if (!metadataExisted) {
+      fs.writeFileSync(
+        metadataPath,
+        `${JSON.stringify({ snapshotIdentity: anchoredSnapshotIdentity })}\n`,
+        "utf8",
+      );
+    }
+    return createHandle(metadataExisted, anchoredSnapshotIdentity);
+  } catch (error) {
+    const removed = runGit(resolvedGitRoot, [
+      "worktree",
+      "remove",
+      "--force",
+      checkoutRoot,
+    ]);
+    if (!metadataExisted) fs.rmSync(metadataPath, { force: true });
+    if (!removed.ok && error instanceof Error) {
+      error.message += `; cleanup failed: ${removed.error}`;
+    }
+    throw error;
+  }
 }

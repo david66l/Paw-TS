@@ -47,7 +47,8 @@ describe("estimateMessageTokens", () => {
       content: "look",
       attachments: [{ type: "image", name: "pic.png", content: "base64" }],
     };
-    expect(estimateMessageTokens(msg)).toBe(1001); // 4/4 + 1000 for image
+    // message 1 + attachment name 2 + fixed image cost 1000
+    expect(estimateMessageTokens(msg)).toBe(1003);
   });
 
   test("user with file attachment", () => {
@@ -57,9 +58,10 @@ describe("estimateMessageTokens", () => {
       attachments: [{ type: "file", name: "doc.txt", content: "hello world" }],
     };
     // content: "read" = 4 chars → 1 token
+    // attachment name: "doc.txt" = 7 chars → 2 tokens
     // attachment content: "hello world" = 11 chars → 3 tokens
-    // total = 1 + 3 = 4
-    expect(estimateMessageTokens(msg)).toBe(4);
+    // total = 1 + 2 + 3 = 6
+    expect(estimateMessageTokens(msg)).toBe(6);
   });
 });
 

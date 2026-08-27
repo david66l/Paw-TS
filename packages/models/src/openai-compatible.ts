@@ -17,7 +17,7 @@
  *   需要在客户端拼接完整 JSON 后才 yield
  */
 
-import { type ModelTokenUsage, isNativeToolTurnV1 } from "@paw/core";
+import { type ModelTokenUsage, isNativeToolTurn } from "@paw/core";
 
 import type {
   LanguageModel,
@@ -360,6 +360,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     let buffer = "";
     let lastUsage: ModelTokenUsage | undefined;
     let lastFinishReason: string | undefined;
+    let sawDoneMarker = false;
     // Accumulate tool calls by index
     const toolCallAcc: Map<
       number,
@@ -380,9 +381,15 @@ export class OpenAICompatibleModel implements LanguageModel {
           if (!trimmed.startsWith("data: ")) {
             continue;
           }
+          if (sawDoneMarker) {
+            throw new Error(
+              "OpenAI-compatible stream emitted data after [DONE]",
+            );
+          }
           const payload = trimmed.slice(6);
           const part = parseOpenAiChatCompletionStreamDataPayload(payload);
           if (part.isDoneMarker) {
+            sawDoneMarker = true;
             continue;
           }
           if (part.textDelta.length > 0) {
@@ -441,8 +448,16 @@ export class OpenAICompatibleModel implements LanguageModel {
       if (buffer.trim()) {
         const trimmed = buffer.replace(/\r$/, "").trim();
         if (trimmed.startsWith("data: ")) {
+          if (sawDoneMarker) {
+            throw new Error(
+              "OpenAI-compatible stream emitted data after [DONE]",
+            );
+          }
           const payload = trimmed.slice(6);
           const part = parseOpenAiChatCompletionStreamDataPayload(payload);
+          if (part.isDoneMarker) {
+            sawDoneMarker = true;
+          }
           if (!part.isDoneMarker && part.textDelta.length > 0) {
             yield { type: "text", delta: part.textDelta };
           }
@@ -501,6 +516,11 @@ export class OpenAICompatibleModel implements LanguageModel {
     } finally {
       reader.releaseLock();
     }
+    if (!sawDoneMarker && !lastFinishReason?.trim()) {
+      throw new Error(
+        "OpenAI-compatible stream ended without a terminal marker or finish reason",
+      );
+    }
     const completedCalls = [...toolCallAcc.entries()].sort(
       ([left], [right]) => left - right,
     );
@@ -520,6 +540,7 @@ export class OpenAICompatibleModel implements LanguageModel {
         id: call.id,
         name: call.name,
         input: call.arguments,
+        sourceIndex: index,
       };
     }
     yield {
@@ -586,7 +607,7 @@ function serializeOpenAiMessages(
   const out: Array<Record<string, unknown>> = [];
   for (const message of messages) {
     const nativeTurn = message.nativeToolTurn;
-    if (message.role === "assistant" && isNativeToolTurnV1(nativeTurn)) {
+    if (message.role === "assistant" && isNativeToolTurn(nativeTurn)) {
       out.push({
         role: "assistant",
         content: nativeTurn.assistantContent,
@@ -617,9 +638,15 @@ function serializeOpenAiMessages(
       continue;
     }
     // Historical thinking is audit data, not generic request state.
+    if (message.reasoningPassback && message.role !== "assistant") {
+      throw new Error("reasoningPassback is valid only on assistant messages");
+    }
     out.push({
       role: message.role,
       content: buildOpenAiMessageContent(message),
+      ...(message.role === "assistant" && message.reasoningPassback
+        ? { reasoning_content: message.reasoningPassback }
+        : {}),
     });
   }
   return out;

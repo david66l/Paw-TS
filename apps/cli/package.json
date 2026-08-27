@@ -8,14 +8,31 @@
   },
   "dependencies": {
     "@paw/agent": "workspace:*",
+    "@paw/agent-loop": "workspace:*",
+    "@paw/core": "workspace:*",
+    "@paw/context-compaction": "workspace:*",
+    "@paw/completion-review": "workspace:*",
+    "@paw/collaboration": "workspace:*",
     "@paw/eval": "workspace:*",
+    "@paw/harness": "workspace:*",
     "@paw/memory": "workspace:*",
+    "@paw/memory-plugin": "workspace:*",
+    "@paw/model-output-recovery": "workspace:*",
+    "@paw/models": "workspace:*",
+    "@paw/output-recall": "workspace:*",
+    "@paw/protocol": "workspace:*",
+    "@paw/progress-advisor": "workspace:*",
+    "@paw/runtime": "workspace:*",
     "@paw/settings": "workspace:*",
+    "@paw/task-progress": "workspace:*",
+    "@paw/web-access": "workspace:*",
     "@paw/workspace": "workspace:*"
   },
   "scripts": {
     "test": "bun test test",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "smoke:kv-cache": "bun test/paw-next-kv-cache-smoke.driver.ts",
+    "smoke:kv-cache:child-prefix": "bun test/paw-child-prefix-cache-smoke.driver.ts",
     "start": "bun run src/main.ts"
   }
 }

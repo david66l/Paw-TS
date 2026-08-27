@@ -78,10 +78,19 @@ export class McpClientManager {
       version: "0.0.1",
     });
 
-    await client.connect(transport);
-
-    const toolsResult = await client.listTools();
-    const tools = toolsResult.tools ?? [];
+    let tools: readonly McpTool[];
+    try {
+      await client.connect(transport);
+      const toolsResult = await client.listTools();
+      tools = toolsResult.tools ?? [];
+    } catch (error) {
+      try {
+        await client.close();
+      } catch {
+        // Preserve the original connection/discovery failure.
+      }
+      throw error;
+    }
 
     this.servers.set(config.name, {
       name: config.name,
@@ -131,6 +140,7 @@ export class McpClientManager {
     serverName: string,
     toolName: string,
     args: unknown,
+    options?: { readonly signal?: AbortSignal },
   ): Promise<McpCallResult> {
     const conn = this.servers.get(serverName);
     if (!conn) {
@@ -151,18 +161,25 @@ export class McpClientManager {
     }
 
     try {
-      const result = await conn.client.callTool({
-        name: toolName,
-        arguments: args as Record<string, unknown>,
-      });
+      const result = await conn.client.callTool(
+        {
+          name: toolName,
+          arguments: args as Record<string, unknown>,
+        },
+        undefined,
+        options?.signal ? { signal: options.signal } : undefined,
+      );
 
       // 从 result.content 中提取文本
       let text = "";
       if (Array.isArray(result.content)) {
         for (const item of result.content) {
           if (
-            item && typeof item === "object" && "type" in item &&
-            item.type === "text" && "text" in item &&
+            item &&
+            typeof item === "object" &&
+            "type" in item &&
+            item.type === "text" &&
+            "text" in item &&
             typeof item.text === "string"
           ) {
             text += item.text;
@@ -171,10 +188,13 @@ export class McpClientManager {
       }
 
       const payload = text || (result.content as unknown) || { result: "done" };
+      const failed = result.isError === true;
       return {
-        ok: true,
+        ok: !failed,
         payload,
-        summary: `mcp: ${serverName}/${toolName} → ${String(text).slice(0, 80)}`,
+        summary: failed
+          ? `mcp: ${serverName}/${toolName} reported an error: ${String(text).slice(0, 80)}`
+          : `mcp: ${serverName}/${toolName} → ${String(text).slice(0, 80)}`,
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -193,9 +213,12 @@ export class McpClientManager {
     const rest = toolId.slice(prefix.length);
     const slashIdx = rest.indexOf("/");
     if (slashIdx < 0) return null;
+    const serverName = rest.slice(0, slashIdx);
+    const toolName = rest.slice(slashIdx + 1);
+    if (!serverName || !toolName || toolName.includes("/")) return null;
     return {
-      serverName: rest.slice(0, slashIdx),
-      toolName: rest.slice(slashIdx + 1),
+      serverName,
+      toolName,
     };
   }
 

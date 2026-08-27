@@ -48,8 +48,15 @@ node_modules/
 简历*.md
 大厂筛选*.md
 
-# Local design / research docs (not product source)
-文档/
+# Local design / research docs (not product source). Product architecture
+# authorities are opt-in exceptions so new RFCs cannot be silently omitted.
+文档/*
+!文档/架构/
+文档/架构/*
+!文档/架构/RFC-003-Paw-Next-单运行时与Agent-Loop-Engineering.md
+!文档/架构/RFC-004-Paw-Next-上下文与记忆联合架构.md
+!文档/架构/Paw-Next-Memory-Plugin-实施日志.md
+!文档/架构/TencentDB-Agent-Memory-源码分析与Paw优化路线.md
 
 # Local sandboxes and scratch projects
 personal-site/
@@ -89,12 +96,16 @@ benchmarks/swe-compare/runtime/
 /preflight-*.swecompare-preflight-*.json
 /swe-compare-paw.*.json
 /swe-compare-claude.*.json
+/paw-next-v3-*.json
+/paw-v3-completion-gate*.json
 
 # Generated benchmark logs / reports (source harnesses and fixtures are kept)
 logs/
 benchmarks/**/*.log
 benchmarks/memory-agent-bench/last-run*.json
 benchmarks/memory-mechanism/last-run.json
+benchmarks/amb/upstream/
+benchmarks/amb/runs/
 /paw-capability-first*.json
 /paw-ts-memory-*.json
 

@@ -360,6 +360,10 @@ function sumUsage(
       (sum, usage) => sum + (usage.cachedPromptTokens ?? 0),
       0,
     ),
+    cacheMissPromptTokens: usages.reduce(
+      (sum, usage) => sum + (usage.cacheMissPromptTokens ?? 0),
+      0,
+    ),
   };
 }
 

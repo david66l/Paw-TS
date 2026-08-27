@@ -12,11 +12,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
-import type { LanguageModel } from "@paw/models";
+import type { ChatMessage, LanguageModel } from "@paw/models";
 import { AgentRegistry } from "../src/agents/registry.js";
 import { writeAgentFile } from "../src/agents/write.js";
-import { AgentOrchestrator } from "../src/orchestrator.js";
 import { createRunOrchestrator } from "../src/orchestrator-factory.js";
+import { AgentOrchestrator } from "../src/orchestrator.js";
 import { createPersistentSession } from "../src/session.js";
 import { DefaultSubAgentLauncher } from "../src/sub-agent-launcher.js";
 import { cleanup, tmpDir, writeFileMemorySettings } from "./fixtures.js";
@@ -140,7 +140,7 @@ describe("断点2: trace.messages 恒空", () => {
 // ─────────────────────────────────────────────────────────────
 
 describe("断点3: Spec 路径丢弃父级 constraints/state", () => {
-  it("父级 must/never 约束与进度状态合入子 Agent system prompt", async () => {
+  it("父级上下文合入首条 user task envelope 且不污染稳定 system", async () => {
     const dir = ws("paw-fix-constraints-");
     writeFileMemorySettings(dir);
 
@@ -184,17 +184,87 @@ describe("断点3: Spec 路径丢弃父级 constraints/state", () => {
 
     expect(result.status).toBe("completed");
     const systemMsg = result.trace?.messages?.find((m) => m.role === "system");
+    const firstUserMsg = result.trace?.messages?.find((m) => m.role === "user");
     expect(systemMsg).toBeDefined();
-    const sys = systemMsg!.content;
+    expect(firstUserMsg).toBeDefined();
+    const sys = systemMsg?.content ?? "";
+    const task = firstUserMsg?.content ?? "";
+    expect(task).toStartWith(
+      '<paw-subagent-task schema="paw.subagent-task.v1">',
+    );
     // 父级约束合入（修复前会被 Spec 物化整体覆盖丢弃）
-    expect(sys).toContain("NEVER touch production DB");
+    expect(task).toContain("NEVER touch production DB");
     // Spec 自带安全约束仍在
-    expect(sys).toContain("Do not modify files outside the workspace.");
+    expect(task).toContain("Do not modify files outside the workspace.");
     // 父级进度状态合入
-    expect(sys).toContain("step-1 已完成");
-    expect(sys).toContain("step-2 待办");
+    expect(task).toContain("step-1 已完成");
+    expect(task).toContain("step-2 待办");
     // 父级 facts 合入
-    expect(sys).toContain("fact-from-parent");
+    expect(task).toContain("fact-from-parent");
+    // 动态父级上下文不得进入 provider-visible system 前缀
+    expect(sys).not.toContain("NEVER touch production DB");
+    expect(sys).not.toContain("step-1 已完成");
+    expect(sys).not.toContain("fact-from-parent");
+  });
+
+  it("恢复旧 child checkpoint 时重建 v1 task envelope", async () => {
+    const dir = ws("paw-fix-child-resume-");
+    let providerMessages: readonly ChatMessage[] = [];
+    const sharedContext = {
+      role: "恢复调查员",
+      task: "恢复后继续定位故障",
+      facts: ["legacy-system-only-fact"],
+      constraints: ["NEVER lose the delegated constraint"],
+      artifacts: [],
+      state: { completed: [], pending: ["继续检查日志"] },
+      outputFormat: "返回结论",
+    } as const;
+    const orch = new AgentOrchestrator({
+      model: makeFakeModel(),
+      runMode: "child",
+      sharedContext,
+      memoryExtraction: "off",
+      evalHooks: {
+        beforeModelCall: ({ messages }) => {
+          providerMessages = messages;
+        },
+      },
+    });
+
+    const result = await orch.run({
+      runId: "legacy-child-resume",
+      goal: "恢复后继续定位故障",
+      workspaceRoot: dir,
+      maxSteps: 2,
+      resumeFromState: {
+        runId: "legacy-child-resume",
+        goal: "恢复后继续定位故障",
+        workspaceRoot: dir,
+        turn: 1,
+        maxSteps: 2,
+        savedAt: Date.now(),
+        messages: [
+          {
+            role: "system",
+            content:
+              "old child system containing legacy-system-only-fact and task context",
+          },
+          { role: "user", content: "legacy raw goal" },
+          { role: "assistant", content: "partial investigation" },
+        ],
+      },
+    });
+
+    expect(result.status).toBe("completed");
+    const system = providerMessages.find((m) => m.role === "system");
+    const users = providerMessages.filter((m) => m.role === "user");
+    expect(system?.content).not.toContain("legacy-system-only-fact");
+    expect(users[0]?.content).toStartWith(
+      '<paw-subagent-task schema="paw.subagent-task.v1">',
+    );
+    expect(users[0]?.content).toContain("legacy-system-only-fact");
+    expect(users[0]?.content).toContain("NEVER lose the delegated constraint");
+    expect(users[1]?.content).toBe("legacy raw goal");
   });
 });
 

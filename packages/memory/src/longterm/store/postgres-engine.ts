@@ -20,6 +20,7 @@ import { appendOpLog } from "../observability/op-log.js";
 import {
   LEDGER_UTILITY_MAX,
   type LedgerEntry,
+  type MemoryEmbeddingService,
   type MemoryEntry,
   type MemoryFilter,
   type MemoryStoreEngine,
@@ -27,10 +28,7 @@ import {
   type ScoredId,
 } from "./engine.js";
 import { deriveEntryId } from "./id.js";
-import {
-  createMemoryScopeKey,
-  type MemoryScopeKey,
-} from "./scope-key.js";
+import { type MemoryScopeKey, createMemoryScopeKey } from "./scope-key.js";
 
 /** memory_embeddings.embedding 列为 vector(1536)（V008），embedding 服务统一使用该维度 */
 const EMBEDDING_DIMENSIONS = MEMORY_EMBEDDING_DIMENSIONS;
@@ -123,12 +121,191 @@ function parseVector(raw: unknown): number[] {
   return [];
 }
 
+export function createNGramMemoryEmbeddingServiceV1(
+  dimensions = EMBEDDING_DIMENSIONS,
+): MemoryEmbeddingService {
+  const embedder = new NGramEmbeddingService(dimensions);
+  return Object.freeze({
+    dimensions,
+    model: `ngram-${dimensions}`,
+    version: "1.0",
+    embed: embedder.embed.bind(embedder),
+  });
+}
+
+function assertEmbeddingIdentity(service: MemoryEmbeddingService): void {
+  if (
+    service.dimensions !== EMBEDDING_DIMENSIONS ||
+    typeof service.model !== "string" ||
+    !service.model.trim() ||
+    typeof service.version !== "string" ||
+    !service.version.trim() ||
+    typeof service.embed !== "function"
+  ) {
+    throw new Error(
+      `Memory embedding service must provide ${EMBEDDING_DIMENSIONS} dimensions and a stable model identity`,
+    );
+  }
+}
+
+function assertEmbeddingVector(
+  vector: readonly number[],
+  service: MemoryEmbeddingService,
+): void {
+  if (
+    vector.length !== EMBEDDING_DIMENSIONS ||
+    vector.some((value) => !Number.isFinite(value))
+  ) {
+    throw new Error(
+      `Memory embedding ${service.model}@${service.version} returned an invalid vector`,
+    );
+  }
+}
+
 export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
   readonly scope?: MemoryScopeKey;
-  private readonly embedder = new NGramEmbeddingService(EMBEDDING_DIMENSIONS);
+  private readonly embedder: MemoryEmbeddingService;
 
-  constructor(scope?: MemoryScopeKey) {
+  constructor(
+    scope?: MemoryScopeKey,
+    options: { readonly embedding?: MemoryEmbeddingService } = {},
+  ) {
     this.scope = scope ? createMemoryScopeKey(scope) : undefined;
+    this.embedder = options.embedding ?? createNGramMemoryEmbeddingServiceV1();
+    assertEmbeddingIdentity(this.embedder);
+  }
+
+  /**
+   * Cheap, scope-sealed freshness token for read-through retrieval caches.
+   * It deliberately excludes the usage ledger because M1 retrieval is read-only
+   * and does not score by freq/utility.
+   */
+  async retrievalRevisionToken(): Promise<string> {
+    if (!this.scope) {
+      throw new Error(
+        "A scoped store is required for a retrieval revision token",
+      );
+    }
+    const sql = getSql();
+    const rows = await sql`
+      SELECT
+        COUNT(*)::text AS item_count,
+        COALESCE(SUM(m.version), 0)::text AS version_sum,
+        MAX(m.updated_at) AS max_updated_at,
+        COUNT(e.memory_id)::text AS embedding_count,
+        COALESCE(SUM(e.index_revision), 0)::text AS embedding_revision_sum
+      FROM memory_items m
+      LEFT JOIN memory_embeddings e ON e.memory_id = m.id
+      WHERE m.scope->>'tenantId' = ${this.scope.tenantId}
+        AND m.scope->>'userId' = ${this.scope.userId}
+        AND m.scope->>'workspaceId' = ${this.scope.workspaceId}
+        AND m.scope->>'repositoryId' = ${this.scope.repositoryId}
+    `;
+    const row = rows[0] as
+      | {
+          item_count?: unknown;
+          version_sum?: unknown;
+          max_updated_at?: unknown;
+          embedding_count?: unknown;
+          embedding_revision_sum?: unknown;
+        }
+      | undefined;
+    return [
+      this.embedder.model,
+      this.embedder.version,
+      String(row?.item_count ?? "0"),
+      String(row?.version_sum ?? "0"),
+      row?.max_updated_at == null ? "none" : toIso(row.max_updated_at),
+      String(row?.embedding_count ?? "0"),
+      String(row?.embedding_revision_sum ?? "0"),
+    ].join(":");
+  }
+
+  /**
+   * Verify that a caller-owned set of derived-index entries is complete inside
+   * this exact physical scope. Reusable benchmark indexes call this before
+   * skipping ingestion so a partial or stale dense index cannot silently fall
+   * back to lexical retrieval.
+   */
+  async inspectDerivedIndexCoverage(input: {
+    readonly ids: readonly string[];
+    readonly requireEmbedding: boolean;
+  }): Promise<{
+    readonly schemaVersion: "paw.memory-derived-index-coverage.v1";
+    readonly expectedCount: number;
+    readonly itemCount: number;
+    readonly embeddingCount: number;
+    readonly embeddingRequired: boolean;
+    readonly embeddingModel: string;
+    readonly embeddingVersion: string;
+    readonly missingItemIds: readonly string[];
+    readonly missingEmbeddingIds: readonly string[];
+    readonly complete: boolean;
+  }> {
+    if (!this.scope) {
+      throw new Error(
+        "A scoped store is required for derived-index inspection",
+      );
+    }
+    const ids = [
+      ...new Set(
+        input.ids.map((id) => id.trim()).filter((id) => id.length > 0),
+      ),
+    ];
+    if (ids.length === 0) {
+      return Object.freeze({
+        schemaVersion: "paw.memory-derived-index-coverage.v1",
+        expectedCount: 0,
+        itemCount: 0,
+        embeddingCount: 0,
+        embeddingRequired: input.requireEmbedding,
+        embeddingModel: this.embedder.model,
+        embeddingVersion: this.embedder.version,
+        missingItemIds: Object.freeze([]),
+        missingEmbeddingIds: Object.freeze([]),
+        complete: true,
+      });
+    }
+    const sql = getSql();
+    const rows = (await sql`
+      SELECT
+        m.id,
+        (e.memory_id IS NOT NULL AND e.embedding IS NOT NULL) AS embedding_present
+      FROM memory_items m
+      LEFT JOIN memory_embeddings e
+        ON e.memory_id = m.id
+       AND e.embedding_model = ${this.embedder.model}
+       AND e.embedding_version = ${this.embedder.version}
+      WHERE m.id = ANY(${textArrayLiteral(ids)}::text[])
+        AND m.scope->>'tenantId' = ${this.scope.tenantId}
+        AND m.scope->>'userId' = ${this.scope.userId}
+        AND m.scope->>'workspaceId' = ${this.scope.workspaceId}
+        AND m.scope->>'repositoryId' = ${this.scope.repositoryId}
+    `) as unknown as Array<{ id: string; embedding_present: boolean }>;
+    const presentItems = new Set(rows.map((row) => row.id));
+    const presentEmbeddings = new Set(
+      rows.filter((row) => row.embedding_present).map((row) => row.id),
+    );
+    const missingItemIds = Object.freeze(
+      ids.filter((id) => !presentItems.has(id)),
+    );
+    const missingEmbeddingIds = Object.freeze(
+      input.requireEmbedding
+        ? ids.filter((id) => !presentEmbeddings.has(id))
+        : [],
+    );
+    return Object.freeze({
+      schemaVersion: "paw.memory-derived-index-coverage.v1",
+      expectedCount: ids.length,
+      itemCount: presentItems.size,
+      embeddingCount: presentEmbeddings.size,
+      embeddingRequired: input.requireEmbedding,
+      embeddingModel: this.embedder.model,
+      embeddingVersion: this.embedder.version,
+      missingItemIds,
+      missingEmbeddingIds,
+      complete: missingItemIds.length === 0 && missingEmbeddingIds.length === 0,
+    });
   }
 
   async put(entry: MemoryEntry): Promise<void> {
@@ -209,7 +386,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     // 派生索引：embedding 失败不阻塞写入（spec §9.6 降级总则）
     try {
       const vec = await this.embedder.embed(embeddingInput(entry));
-      await storeEmbedding(id, "1", vec, `ngram-${EMBEDDING_DIMENSIONS}`);
+      assertEmbeddingVector(vec, this.embedder);
+      await storeEmbedding(
+        id,
+        "1",
+        vec,
+        this.embedder.model,
+        this.embedder.version,
+      );
     } catch {
       /* embedding 失败不影响条目写入 */
     }
@@ -220,12 +404,45 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const rows = await sql`
       SELECT * FROM memory_items
       WHERE id = ${id}
-        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+        ${
+          this.scope
+            ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
           AND scope->>'userId' = ${this.scope.userId}
           AND scope->>'workspaceId' = ${this.scope.workspaceId}
-          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+            : sql``
+        }
     `;
     return rows.length > 0 ? rowToEntry(rows[0] as Row) : null;
+  }
+
+  async getMany(ids: readonly string[]): Promise<MemoryEntry[]> {
+    if (ids.length === 0) return [];
+    const uniqueIds = [...new Set(ids.filter((id) => id.trim()))];
+    if (uniqueIds.length === 0) return [];
+    const sql = getSql();
+    const rows = await sql`
+      SELECT * FROM memory_items
+      WHERE id = ANY(${textArrayLiteral(uniqueIds)}::text[])
+        ${
+          this.scope
+            ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          AND scope->>'userId' = ${this.scope.userId}
+          AND scope->>'workspaceId' = ${this.scope.workspaceId}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+            : sql``
+        }
+    `;
+    const byId = new Map(
+      rows.map((row) => {
+        const entry = rowToEntry(row as Row);
+        return [entry.id, entry] as const;
+      }),
+    );
+    return ids.flatMap((id) => {
+      const entry = byId.get(id);
+      return entry ? [entry] : [];
+    });
   }
 
   async invalidate(id: string, tInvalid: string): Promise<void> {
@@ -233,10 +450,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     await sql`
       UPDATE memory_items SET t_invalid = ${tInvalid}, updated_at = now()
       WHERE id = ${id}
-        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+        ${
+          this.scope
+            ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
           AND scope->>'userId' = ${this.scope.userId}
           AND scope->>'workspaceId' = ${this.scope.workspaceId}
-          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+            : sql``
+        }
     `;
   }
 
@@ -245,10 +466,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     // memory_embeddings ON DELETE CASCADE（V008），无需显式清理
     await sql`
       DELETE FROM memory_items WHERE id = ${id}
-        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+        ${
+          this.scope
+            ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
           AND scope->>'userId' = ${this.scope.userId}
           AND scope->>'workspaceId' = ${this.scope.workspaceId}
-          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+            : sql``
+        }
     `;
   }
 
@@ -298,7 +523,11 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     return rows.map((r) => rowToEntry(r as Row));
   }
 
-  async searchText(queryText: string, k: number, repo?: string): Promise<ScoredId[]> {
+  async searchText(
+    queryText: string,
+    k: number,
+    repo?: string,
+  ): Promise<ScoredId[]> {
     const sql = getSql();
     // 三路全文取最大 rank：V013 search_tsv（'english'）+ V027 when_to_use_tsv（'simple'）
     // + V032 search_tsv_simple（'simple'，含 title/summary/when_to_use——中文场景句兜底，
@@ -338,9 +567,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     }));
   }
 
-  async searchVector(queryText: string, k: number, repo?: string): Promise<ScoredId[]> {
+  async searchVector(
+    queryText: string,
+    k: number,
+    repo?: string,
+  ): Promise<ScoredId[]> {
     const sql = getSql();
     const queryVec = await this.embedder.embed(queryText);
+    assertEmbeddingVector(queryVec, this.embedder);
     const formatted = `[${queryVec.join(",")}]`;
     // repo 可选：注入路径 repo 密封（否则共享库中同内容异仓库条目竞争 top-k）
     const repoCond = repo ? sql`AND m.scope->>'repositoryId' = ${repo}` : sql``;
@@ -360,6 +594,8 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         WHERE m.t_invalid IS NULL
           AND m.verification_status != 'invalidated'
           AND COALESCE(m.payload->>'degraded', 'false') != 'true'
+          AND e.embedding_model = ${this.embedder.model}
+          AND e.embedding_version = ${this.embedder.version}
           ${scopeCond}
           ${repoCond}
         ORDER BY e.embedding <=> ${formatted}::vector ASC
@@ -378,6 +614,8 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         WHERE m.t_invalid IS NULL
           AND m.verification_status != 'invalidated'
           AND COALESCE(m.payload->>'degraded', 'false') != 'true'
+          AND e.embedding_model = ${this.embedder.model}
+          AND e.embedding_version = ${this.embedder.version}
           ${scopeCond}
           ${repoCond}
       `;
@@ -396,10 +634,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const sql = getSql();
     const rows = await sql`
       SELECT freq, utility FROM memory_items WHERE id = ${id}
-        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+        ${
+          this.scope
+            ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
           AND scope->>'userId' = ${this.scope.userId}
           AND scope->>'workspaceId' = ${this.scope.workspaceId}
-          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+            : sql``
+        }
     `;
     if (rows.length === 0) return null;
     const row = rows[0] as { freq: number; utility: number };
@@ -411,20 +653,28 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     if (field === "freq") {
       await sql`
         UPDATE memory_items SET freq = freq + 1 WHERE id = ${id}
-          ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          ${
+            this.scope
+              ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
             AND scope->>'userId' = ${this.scope.userId}
             AND scope->>'workspaceId' = ${this.scope.workspaceId}
-            AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+            AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+              : sql``
+          }
       `;
     } else {
       // utility 封顶（红队修复：utility farming 防御）——所有递增路径（含 settleRunOutcome/
       // recordTaskSuccess 聚合结算与 bumpLedger 直调）都汇聚到这一个 SQL，统一 clamp
       await sql`
         UPDATE memory_items SET utility = LEAST(utility + 1, ${LEDGER_UTILITY_MAX}) WHERE id = ${id}
-          ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+          ${
+            this.scope
+              ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
             AND scope->>'userId' = ${this.scope.userId}
             AND scope->>'workspaceId' = ${this.scope.workspaceId}
-            AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+            AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+              : sql``
+          }
       `;
     }
   }
@@ -436,10 +686,14 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       SELECT * FROM memory_items
       WHERE t_invalid IS NULL
         AND COALESCE(payload->>'degraded', 'false') != 'true'
-        ${this.scope ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
+        ${
+          this.scope
+            ? sql`AND scope->>'tenantId' = ${this.scope.tenantId}
           AND scope->>'userId' = ${this.scope.userId}
           AND scope->>'workspaceId' = ${this.scope.workspaceId}
-          AND scope->>'repositoryId' = ${this.scope.repositoryId}` : sql``}
+          AND scope->>'repositoryId' = ${this.scope.repositoryId}`
+            : sql``
+        }
     `;
     let indexed = 0;
     let failed = 0;
@@ -449,11 +703,13 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         const entry = rowToEntry(raw);
         entries.push(entry);
         const vec = await this.embedder.embed(embeddingInput(entry));
+        assertEmbeddingVector(vec, this.embedder);
         await storeEmbedding(
           entry.id,
           "1",
           vec,
-          `ngram-${EMBEDDING_DIMENSIONS}`,
+          this.embedder.model,
+          this.embedder.version,
         );
         indexed += 1;
       } catch {

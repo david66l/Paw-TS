@@ -358,6 +358,9 @@ describe("agent control-plane preflight/checkpoint", () => {
     });
     expect(goal).toContain("tests/test_cache.py::test_rotation");
     expect(goal).toContain("tests/test_cache.py::test_baseline");
+    expect(goal).toContain("updated or additional assertions");
+    expect(goal).toContain("may therefore already pass");
+    expect(goal).not.toContain("These tests currently fail");
     expect(goal).toContain("Do not modify unrelated files or any test files");
     expect(goal).not.toContain("[coding_phase_budget]");
     expect(goal).not.toContain("GOLD_PATCH_MUST_NOT_LEAK");

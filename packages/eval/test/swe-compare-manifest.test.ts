@@ -484,6 +484,9 @@ describe("SWE compare manifest", () => {
     });
     expect(goal).toContain("checked-out repository");
     expect(goal).toContain("tests/test_cache.py::test_fix");
+    expect(goal).toContain("updated or additional assertions");
+    expect(goal).toContain("may therefore already pass");
+    expect(goal).not.toContain("These tests currently fail");
     expect(goal).not.toContain("workspace.edit_file");
     expect(goal).not.toContain("Claude");
     expect(goal).not.toContain("Paw");

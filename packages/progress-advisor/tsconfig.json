@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "outDir": "dist",
+    "noEmit": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@paw/agent-loop": ["packages/agent-loop/src/index.ts"],
+      "@paw/completion-review": ["packages/completion-review/src/index.ts"],
+      "@paw/core": ["packages/core/src/index.ts"],
+      "@paw/protocol": ["packages/protocol/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

@@ -213,6 +213,27 @@ const PROVIDERS: Record<CredentialProvider, ProviderEntry> = {
 function detectProvider(
   settings: ReturnType<typeof loadPawSettingsLocal>,
 ): CredentialProvider | undefined {
+  const hasConfiguredApiKey = (provider: CredentialProvider): boolean => {
+    const nested = settings.models?.[provider]?.apiKey;
+    if (typeof nested === "string" && nested.trim().length > 0) return true;
+    const legacyField = `${provider}_api_key` as keyof PawSettingsLocal;
+    const legacy = settings[legacyField];
+    return typeof legacy === "string" && legacy.trim().length > 0;
+  };
+
+  // Workspace settings are intentional configuration. They must win over
+  // unrelated provider credentials inherited from the host environment.
+  if (hasConfiguredApiKey("anthropic")) return "anthropic";
+  if (hasConfiguredApiKey("deepseek")) return "deepseek";
+  if (hasConfiguredApiKey("openai")) {
+    const openaiBaseUrl = resolveBaseUrl(settings, "openai");
+    if (openaiBaseUrl?.includes("deepseek")) return "deepseek";
+    return "openai";
+  }
+  if (hasConfiguredApiKey("qwen")) return "qwen";
+
+  // With no configured key, fall back to credentials supplied by the
+  // process environment using the historical provider priority.
   if (hasApiKey(settings, "anthropic")) return "anthropic";
   if (hasApiKey(settings, "deepseek")) return "deepseek";
   if (hasApiKey(settings, "openai")) {

@@ -34,4 +34,10 @@ export interface ModelTokenUsage {
    * Tokens served from the provider's prefix cache.
    */
   readonly cachedPromptTokens?: number;
+  /**
+   * 由提供方明确报告或根据 promptTokens - cachedPromptTokens 推导出的
+   * 前缀缓存未命中 token 数。记录该字段便于持久日志直接审计 hit/miss，
+   * 而不依赖之后重新解释供应商原始响应。
+   */
+  readonly cacheMissPromptTokens?: number;
 }

@@ -2,14 +2,18 @@
  * AgentSpec 合规校验：工具 ⊆ 已知工具、spawn 与 kind 一致性等。
  */
 
+import { createInputToMarkdown, parseAgentMarkdown } from "./parse.js";
+import {
+  knownBuiltinTools,
+  parseToolsField,
+  resolveAllowedTools,
+} from "./resolve-tools.js";
 import type {
   AgentSpec,
   AgentValidationError,
   AgentValidationResult,
   CreateAgentInput,
 } from "./types.js";
-import { knownBuiltinTools, parseToolsField, resolveAllowedTools } from "./resolve-tools.js";
-import { parseAgentMarkdown, createInputToMarkdown } from "./parse.js";
 
 export function validateAgentSpec(spec: AgentSpec): AgentValidationResult {
   const errors: AgentValidationError[] = [];
@@ -29,6 +33,15 @@ export function validateAgentSpec(spec: AgentSpec): AgentValidationResult {
   }
   if (spec.maxSteps < 1 || spec.maxSteps > 200) {
     errors.push({ field: "maxSteps", message: "maxSteps 须在 1–200" });
+  }
+  const invalidCapabilities = (spec.capabilities ?? []).filter(
+    (capability) => !/^[a-z][a-z0-9_-]{0,63}$/.test(capability),
+  );
+  if (invalidCapabilities.length > 0) {
+    errors.push({
+      field: "capabilities",
+      message: `无效能力标签: ${invalidCapabilities.join(", ")}`,
+    });
   }
 
   const known = new Set(knownBuiltinTools());
@@ -61,7 +74,9 @@ export function validateAgentSpec(spec: AgentSpec): AgentValidationResult {
       spec.tools.includes("workspace.run_agent") ||
       resolvedTools?.includes("workspace.run_agent");
     if (!hasRun) {
-      warnings.push("canSpawn=true 但 tools 未含 workspace.run_agent，将无法调度子 Agent");
+      warnings.push(
+        "canSpawn=true 但 tools 未含 workspace.run_agent，将无法调度子 Agent",
+      );
     }
   }
 
@@ -74,7 +89,9 @@ export function validateAgentSpec(spec: AgentSpec): AgentValidationResult {
 }
 
 /** 校验创建输入（会先合成临时 Spec） */
-export function validateCreateInput(input: CreateAgentInput): AgentValidationResult {
+export function validateCreateInput(
+  input: CreateAgentInput,
+): AgentValidationResult {
   const md = createInputToMarkdown(input);
   const spec = parseAgentMarkdown(md, input.id);
   if (!spec) {

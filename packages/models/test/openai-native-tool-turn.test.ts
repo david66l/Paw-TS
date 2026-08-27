@@ -116,6 +116,7 @@ describe("OpenAI native tool turns", () => {
       id: string;
       name: string;
       input: string;
+      sourceIndex?: number;
     }> = [];
 
     for await (const chunk of model.completeStream([
@@ -125,8 +126,20 @@ describe("OpenAI native tool turns", () => {
     }
 
     expect(calls).toEqual([
-      { type: "tool_use", id: "a", name: "one", input: '{"x":1}' },
-      { type: "tool_use", id: "b", name: "two", input: '{"y":2}' },
+      {
+        type: "tool_use",
+        id: "a",
+        name: "one",
+        input: '{"x":1}',
+        sourceIndex: 0,
+      },
+      {
+        type: "tool_use",
+        id: "b",
+        name: "two",
+        input: '{"y":2}',
+        sourceIndex: 1,
+      },
     ]);
   });
 
@@ -298,8 +311,8 @@ describe("OpenAI native tool turns", () => {
         role: "assistant" as const,
         content: "fallback transcript",
         nativeToolTurn: {
-          schemaVersion: 1 as const,
-          protocol: "openai-compatible" as const,
+          schemaVersion: 2 as const,
+          protocol: "provider-neutral" as const,
           assistantContent: "checking",
           reasoningPassback: "need both",
           calls: [
@@ -315,8 +328,18 @@ describe("OpenAI native tool turns", () => {
             },
           ],
           results: [
-            { callId: "a", content: "A" },
-            { callId: "b", content: "B" },
+            {
+              callId: "a",
+              status: "completed" as const,
+              isError: false,
+              content: "A",
+            },
+            {
+              callId: "b",
+              status: "unknown" as const,
+              isError: true,
+              content: "B",
+            },
           ],
         },
       },
@@ -375,6 +398,36 @@ describe("OpenAI native tool turns", () => {
     for (const body of captured) {
       expect(body.messages).toEqual(expectedMessages);
     }
+  });
+
+  test("replays exact reasoning state on a plain assistant continuation", async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    global.fetch = mockJson(
+      { choices: [{ message: { content: "done" }, finish_reason: "stop" }] },
+      captured,
+    );
+    const model = new OpenAICompatibleModel({
+      apiKey: "test",
+      model: "deepseek-v4-flash",
+    });
+
+    await model.complete([
+      {
+        role: "assistant",
+        content: "I need one more turn",
+        reasoningPassback: "provider-exact-state",
+      },
+      { role: "user", content: "continue" },
+    ]);
+
+    const messages = captured[0]?.messages as
+      | Array<Record<string, unknown>>
+      | undefined;
+    expect(messages?.[0]).toEqual({
+      role: "assistant",
+      content: "I need one more turn",
+      reasoning_content: "provider-exact-state",
+    });
   });
 
   test("serializer degrades corrupt persisted native metadata to plain fallback text", async () => {

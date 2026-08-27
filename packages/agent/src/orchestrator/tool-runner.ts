@@ -50,6 +50,7 @@ import {
   JOB_READ,
   JOB_START,
   JOB_WAIT,
+  MCP_PROXY,
   UNDO_LAST_EDIT,
   toolRequiresApproval,
 } from "@paw/harness";
@@ -97,6 +98,20 @@ function isManagedJobControlTool(tool: string): boolean {
     tool === JOB_WAIT ||
     tool === JOB_KILL
   );
+}
+
+function isBlockedByReadOnlyChildPolicy(
+  tool: string,
+  args: unknown,
+): boolean {
+  if (isMutatingTool(tool) || tool.startsWith("mcp:")) return true;
+  if (tool !== MCP_PROXY) return false;
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    return true;
+  }
+  // MCP schemas cannot reliably prove remote side-effect freedom. Discovery
+  // is safe; every invocation stays blocked for read-only children.
+  return (args as Record<string, unknown>).action !== "search";
 }
 
 /**
@@ -251,6 +266,8 @@ export interface ToolExecutionContext {
   readonly createAgent?: HarnessContext["createAgent"];
   /** 工具白名单硬裁（与 Orchestrator.allowedTools 一致） */
   readonly allowedTools?: readonly string[] | null;
+  /** Exact dynamic MCP targets authorized behind the stable proxy. */
+  readonly mcpAllowedTools?: readonly string[];
   /** P3 冷库：会话级可寻址归档（context.recall 执行 + 截断全文归档） */
   readonly artifactRegistry?: ArtifactRegistry;
   /** Trusted policy gate, evaluated before approval, checkpoint, or execution. */
@@ -386,7 +403,10 @@ export async function executeToolCalls(
       : new Set(toolCtx.allowedTools);
   const policyBlocks = await Promise.all(
     calls.map(async (call) => {
-      if (toolCtx.childPolicy === "read_only" && isMutatingTool(call.tool)) {
+      if (
+        toolCtx.childPolicy === "read_only" &&
+        isBlockedByReadOnlyChildPolicy(call.tool, call.args)
+      ) {
         return {
           reason: "read_only_policy",
           message: `Tool ${call.tool} is unavailable in a read-only child agent.`,
@@ -397,6 +417,24 @@ export async function executeToolCalls(
           reason: "tool_not_in_allowlist",
           message: `Tool ${call.tool} is not in this agent's tool allowlist.`,
         };
+      }
+      if (
+        call.tool === MCP_PROXY &&
+        call.args !== null &&
+        typeof call.args === "object" &&
+        !Array.isArray(call.args) &&
+        (call.args as Record<string, unknown>).action === "call"
+      ) {
+        const target = (call.args as Record<string, unknown>).tool;
+        if (
+          typeof target !== "string" ||
+          !toolCtx.mcpAllowedTools?.includes(target)
+        ) {
+          return {
+            reason: "mcp_tool_not_in_allowlist",
+            message: `MCP target ${typeof target === "string" ? target : "<missing>"} is not authorized for this run.`,
+          };
+        }
       }
       // job_start delegates authorization to ManagedJobController under the
       // canonical workspace.run_shell identity after the normal approval gate.
@@ -665,6 +703,7 @@ export async function executeToolCalls(
       {
         workspaceRoot: toolCtx.workspaceRoot,
         mcp: toolCtx.mcp,
+        mcpAllowedTools: toolCtx.mcpAllowedTools,
         todoStore: toolCtx.todoStore,
         acceptanceLedger: toolCtx.acceptanceLedger,
         subAgentLauncher: toolCtx.subAgentLauncher,

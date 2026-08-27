@@ -31,6 +31,8 @@ export interface RunShellOptions {
    * Deny rules still apply.
    */
   readonly skipApprovalGate?: boolean;
+  /** Cancels foreground execution. Cancellation rejects with `AbortError`. */
+  readonly signal?: AbortSignal;
 }
 
 export interface RunShellStreamingOptions extends RunShellOptions {
@@ -159,6 +161,9 @@ export function runShellInWorkspace(
   command: string,
   options: RunShellOptions = {},
 ): RunShellResult {
+  if (options.signal?.aborted) {
+    throw abortError(options.signal.reason);
+  }
   const guard = validateShellCommand(command);
   if (!guard.allowed) {
     return { error: guard.reason ?? "command rejected by shell guard" };
@@ -253,7 +258,11 @@ export function runShellInWorkspaceStreaming(
   command: string,
   options: RunShellStreamingOptions = {},
 ): Promise<RunShellResult> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    if (options.signal?.aborted) {
+      reject(abortError(options.signal.reason));
+      return;
+    }
     const guard = validateShellCommand(command);
     if (!guard.allowed) {
       resolve({ error: guard.reason ?? "command rejected by shell guard" });
@@ -298,6 +307,9 @@ export function runShellInWorkspaceStreaming(
     let killedByTimeout = false;
     let totalBytes = 0;
     let killedByOutputLimit = false;
+    let killedByAbort = false;
+    let settled = false;
+    let abortForceTimer: ReturnType<typeof setTimeout> | undefined;
     let sandboxCleanupStarted = false;
     const cleanupSandbox = (): void => {
       if (sandboxCleanupStarted) return;
@@ -307,10 +319,39 @@ export function runShellInWorkspaceStreaming(
 
     const proc = spawn(spawnTarget.command, [...spawnTarget.args], {
       cwd: isShellSandboxEnabled(options.shellSandbox) ? undefined : cwdPath,
+      ...(!win && !spawnTarget.sandbox ? { detached: true } : {}),
       ...(win && !spawnTarget.sandbox
         ? { windowsHide: true, windowsVerbatimArguments: true }
         : {}),
     });
+
+    const finishResolve = (result: RunShellResult): void => {
+      if (settled) return;
+      settled = true;
+      if (abortForceTimer) clearTimeout(abortForceTimer);
+      options.signal?.removeEventListener("abort", abortListener);
+      resolve(result);
+    };
+    const finishReject = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      if (abortForceTimer) clearTimeout(abortForceTimer);
+      options.signal?.removeEventListener("abort", abortListener);
+      reject(error);
+    };
+    const abortListener = (): void => {
+      if (settled || killedByAbort) return;
+      killedByAbort = true;
+      cleanupSandbox();
+      terminateProcessTreeV1(proc.pid ?? 0, "TERM");
+      abortForceTimer = setTimeout(
+        () => terminateProcessTreeV1(proc.pid ?? 0, "KILL"),
+        1_000,
+      );
+      abortForceTimer.unref?.();
+    };
+    options.signal?.addEventListener("abort", abortListener, { once: true });
+    if (options.signal?.aborted) abortListener();
 
     const timeoutId = setTimeout(() => {
       killedByTimeout = true;
@@ -347,7 +388,11 @@ export function runShellInWorkspaceStreaming(
     proc.on("error", (err: Error) => {
       clearTimeout(timeoutId);
       cleanupSandbox();
-      resolve({
+      if (killedByAbort) {
+        finishReject(abortError(options.signal?.reason));
+        return;
+      }
+      finishResolve({
         error: err.message,
         timed_out: killedByTimeout,
         cwd: cwdPath,
@@ -356,6 +401,11 @@ export function runShellInWorkspaceStreaming(
 
     proc.on("close", (code) => {
       clearTimeout(timeoutId);
+      if (killedByAbort) {
+        cleanupSandbox();
+        finishReject(abortError(options.signal?.reason));
+        return;
+      }
       const result: RunShellResult = {
         exit_code: code ?? undefined,
         stdout: chunks.join(""),
@@ -367,9 +417,21 @@ export function runShellInWorkspaceStreaming(
           : undefined,
         ...(spawnTarget.sandbox ? { sandbox: spawnTarget.sandbox } : {}),
       };
-      resolve(result);
+      finishResolve(result);
     });
   });
+}
+
+function abortError(reason: unknown): Error {
+  const message =
+    reason instanceof Error
+      ? reason.message
+      : typeof reason === "string" && reason.trim()
+        ? reason
+        : "shell execution aborted";
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
 }
 
 class BoundedOutputCursorV1 {

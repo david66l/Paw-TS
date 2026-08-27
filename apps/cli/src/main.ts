@@ -45,6 +45,59 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  if (argv[0] === "paw-next" && argv[1] === "--startup-scan") {
+    const { runPawNextStartupCliV1 } = await import(
+      "./paw-next/startup-cli.js"
+    );
+    const result = await runPawNextStartupCliV1(argv.slice(1));
+    if (result.stream === "stdout") console.log(result.text);
+    else console.error(result.text);
+    process.exit(result.exitCode);
+  }
+
+  if (argv[0] === "paw-next" && argv[1] === "--startup-scan-v2") {
+    const { runPawNextStartupCliV2 } = await import(
+      "./paw-next/startup-cli-v2.js"
+    );
+    const result = await runPawNextStartupCliV2(argv.slice(1));
+    if (result.stream === "stdout") console.log(result.text);
+    else console.error(result.text);
+    process.exit(result.exitCode);
+  }
+
+  if (argv[0] === "paw-next" && argv[1] === "--startup-scan-v3") {
+    const { runPawNextStartupCliV3 } = await import(
+      "./paw-next/startup-cli-v3.js"
+    );
+    const result = await runPawNextStartupCliV3(argv.slice(1));
+    if (result.stream === "stdout") console.log(result.text);
+    else console.error(result.text);
+    process.exit(result.exitCode);
+  }
+
+  if (argv[0] === "paw-next" && argv[1] === "--new-work-v3") {
+    const { runPawNextNewWorkCliV3 } = await import(
+      "./paw-next/new-work-cli-v3.js"
+    );
+    const result = await runPawNextNewWorkCliV3(argv.slice(1), {
+      stdin: process.stdin,
+      stdinIsTTY: process.stdin.isTTY === true,
+    });
+    if (result.stream === "stdout") console.log(result.text);
+    else console.error(result.text);
+    process.exit(result.exitCode);
+  }
+
+  if (argv[0] === "paw-next" && argv[1] === "--legacy-export-v1") {
+    const { runPawNextLegacyExportCliV1 } = await import(
+      "./paw-next/legacy-run-cli.js"
+    );
+    const result = await runPawNextLegacyExportCliV1(argv.slice(1));
+    if (result.stream === "stdout") console.log(result.text);
+    else console.error(result.text);
+    process.exit(result.exitCode);
+  }
+
   if (argv[0] === "doctor") {
     const root = parseRootFromArgv(process.cwd(), argv);
     const r = await formatDoctorOutput(root);
@@ -82,12 +135,14 @@ async function main(): Promise<void> {
     const settingsPath = defaultSettingsPath(root);
     const getIdx = argv.indexOf("--get");
     const setIdx = argv.indexOf("--set");
+    const getKey = getIdx === -1 ? undefined : argv[getIdx + 1];
+    const setKey = setIdx === -1 ? undefined : argv[setIdx + 1];
+    const setRawValue = setIdx === -1 ? undefined : argv[setIdx + 2];
 
-    if (getIdx !== -1 && argv[getIdx + 1]) {
-      const key = argv[getIdx + 1]!;
+    if (getKey) {
       try {
         const s = loadPawSettingsLocal(settingsPath);
-        const value = (s as Record<string, unknown>)[key];
+        const value = (s as Record<string, unknown>)[getKey];
         console.log(value !== undefined ? JSON.stringify(value) : "(not set)");
         process.exit(0);
       } catch (e) {
@@ -96,9 +151,8 @@ async function main(): Promise<void> {
       }
     }
 
-    if (setIdx !== -1 && argv[setIdx + 1] && argv[setIdx + 2]) {
-      const key = argv[setIdx + 1]!;
-      const rawValue = argv[setIdx + 2]!;
+    if (setKey && setRawValue) {
+      const rawValue = setRawValue;
       let value: unknown = rawValue;
       // Try to parse as JSON for numbers, booleans, arrays, objects
       try {
@@ -113,12 +167,12 @@ async function main(): Promise<void> {
         } catch {
           s = {};
         }
-        s[key] = value;
+        s[setKey] = value;
         savePawSettingsLocal(
           settingsPath,
           s as Parameters<typeof savePawSettingsLocal>[1],
         );
-        console.log(`Set ${key}`);
+        console.log(`Set ${setKey}`);
         process.exit(0);
       } catch (e) {
         console.error(e instanceof Error ? e.message : String(e));
@@ -150,8 +204,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     const msgIdx = argv.indexOf("--message");
-    const message =
-      msgIdx !== -1 && argv[msgIdx + 1] ? argv[msgIdx + 1]! : "chore: update";
+    const messageArg = msgIdx === -1 ? undefined : argv[msgIdx + 1];
+    const message = messageArg || "chore: update";
     const result = gitCommit(root, message);
     if (!result.ok) {
       console.error(`git commit failed: ${result.error}`);
@@ -207,8 +261,7 @@ async function main(): Promise<void> {
     const reportIdx = argv.indexOf("--report");
     const reportPath = reportIdx !== -1 ? argv[reportIdx + 1] : undefined;
     const suiteRunIdx = argv.indexOf("--suite-run-id");
-    const suiteRunId =
-      suiteRunIdx !== -1 ? argv[suiteRunIdx + 1] : undefined;
+    const suiteRunId = suiteRunIdx !== -1 ? argv[suiteRunIdx + 1] : undefined;
     const skipHarness = argv.includes("--skip-harness");
     const maxStepsIdx = argv.indexOf("--max-steps");
     const maxStepsRaw =

@@ -63,6 +63,56 @@ export interface TokenEstimator {
 }
 
 /**
+ * Count every field that can materially enter a provider request.
+ *
+ * `message.content` already carries `nativeToolTurn.assistantContent`, so the
+ * latter is deliberately not counted a second time. Audit-only thinking is
+ * retained for legacy callers; Paw Next strips it before request assembly.
+ */
+function countMessageRequestFields(
+  message: ChatMessage,
+  count: (text: string) => number,
+): number {
+  let tokens = count(message.content);
+  if (message.thinking) tokens += count(message.thinking);
+
+  const nativeTurn = message.nativeToolTurn;
+  if (nativeTurn) {
+    if (nativeTurn.reasoningPassback) {
+      tokens += count(nativeTurn.reasoningPassback);
+    }
+    for (const call of nativeTurn.calls) {
+      tokens += count(call.callId);
+      tokens += count(call.providerName);
+      tokens += count(call.rawArguments);
+    }
+    for (const result of nativeTurn.results) {
+      tokens += count(result.callId);
+      tokens += count(result.content);
+      if ("status" in result) {
+        tokens += count(result.status);
+        tokens += count(result.isError ? "true" : "false");
+      }
+    }
+  } else if (message.reasoningPassback) {
+    tokens += count(message.reasoningPassback);
+  }
+
+  if (message.attachments) {
+    for (const attachment of message.attachments) {
+      tokens += count(attachment.name);
+      if (attachment.mimeType) tokens += count(attachment.mimeType);
+      if (attachment.type === "image") {
+        tokens += IMAGE_TOKEN_ESTIMATE;
+      } else {
+        tokens += count(attachment.content);
+      }
+    }
+  }
+  return tokens;
+}
+
+/**
  * 全局共享 encoding 的单例缓存
  *
  * tiktoken 的 get_encoding("cl100k_base") 会加载 WASM 模块（~5MB），
@@ -141,31 +191,16 @@ export class TiktokenEstimator implements TokenEstimator {
    * 每条消息计入：
    * - 4 token 的固定格式开销（消息角色标记、换行等）
    * - 消息主体文本的 token
-   * - thinking 文本的 token（如果存在）
-   * - 附件的 token：图片固定 1000 token/张，其他附件按文本估算
+   * - thinking 与 provider reasoning passback（如果存在）
+   * - 原生工具调用的 ID、名称、原始参数和全部结果字段
+   * - 附件名称、MIME 和内容；图片本体固定估算 1000 token/张
    * 最后加 2 token 作为回复 priming 开销
    */
   countMessages(messages: readonly ChatMessage[]): number {
     let tokens = 0;
     for (const msg of messages) {
       tokens += 4; // 每条消息的固定格式开销（角色标记、分隔符等）
-      tokens += this.count(msg.content);
-      if (msg.thinking) {
-        tokens += this.count(msg.thinking);
-      }
-      if (msg.nativeToolTurn?.reasoningPassback) {
-        tokens += this.count(msg.nativeToolTurn.reasoningPassback);
-      }
-      if (msg.attachments) {
-        for (const att of msg.attachments) {
-          if (att.type === "image") {
-            // 图片统一按 1000 token 估算（大部分模型的图片 token 定价接近此值）
-            tokens += 1_000;
-          } else {
-            tokens += this.count(att.content);
-          }
-        }
-      }
+      tokens += countMessageRequestFields(msg, (text) => this.count(text));
     }
     tokens += 2; // 回复 priming：模型开始生成前的上下文标记
     return tokens;
@@ -216,22 +251,7 @@ export class FastEstimator implements TokenEstimator {
   countMessages(messages: readonly ChatMessage[]): number {
     let total = 0;
     for (const msg of messages) {
-      total += this.count(msg.content);
-      if (msg.thinking) {
-        total += this.count(msg.thinking);
-      }
-      if (msg.nativeToolTurn?.reasoningPassback) {
-        total += this.count(msg.nativeToolTurn.reasoningPassback);
-      }
-      if (msg.attachments) {
-        for (const att of msg.attachments) {
-          if (att.type === "image") {
-            total += IMAGE_TOKEN_ESTIMATE;
-          } else {
-            total += this.count(att.content);
-          }
-        }
-      }
+      total += countMessageRequestFields(msg, (text) => this.count(text));
     }
     return total;
   }

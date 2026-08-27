@@ -1,4 +1,4 @@
-import { CORE_MODEL_ACTIONS } from "@paw/harness";
+import { CORE_MODEL_ACTIONS, MCP_PROXY } from "@paw/harness";
 import type { ToolDefinition } from "@paw/models";
 
 export const CAPABILITY_SET_SCHEMA_V1 = "paw.capability-set.v1" as const;
@@ -7,10 +7,12 @@ export interface CapabilitySetV1 {
   readonly schemaVersion: typeof CAPABILITY_SET_SCHEMA_V1;
   /** Provider tool schema visible to the model. */
   readonly modelToolDefinitions: readonly ToolDefinition[];
-  /** Original MCP names represented by modelToolDefinitions. */
+  /** Original provider-visible names represented by modelToolDefinitions. */
   readonly modelToolNames: readonly string[];
   /** The only tool names accepted from model-originated actions. */
   readonly executableToolNames: readonly string[];
+  /** Exact dynamic MCP targets callable through the stable proxy. */
+  readonly mcpToolNames: readonly string[];
   /** Registered capabilities reserved for trusted host/internal callers. */
   readonly internalToolNames: readonly string[];
   /** Agent control actions; never sent as MCP tool definitions. */
@@ -24,6 +26,8 @@ export function resolveCapabilitySetV1(input: {
   readonly toolNameMap: ReadonlyMap<string, string>;
   /** null = explicitly expose all; arrays are exact deployment policy. */
   readonly configuredTools: readonly string[] | null;
+  /** Dynamic MCP inventory connected for this run; never provider-visible. */
+  readonly availableMcpToolNames?: readonly string[];
 }): CapabilitySetV1 {
   const entries = input.definitions.map((definition) => ({
     definition,
@@ -33,8 +37,25 @@ export function resolveCapabilitySetV1(input: {
       definition.function.name,
   }));
   const available = new Set(entries.map((entry) => entry.originalName));
+  const availableMcpTools = new Set(input.availableMcpToolNames ?? []);
+  const proxyExplicitlyRequested =
+    input.configuredTools === null || input.configuredTools.includes(MCP_PROXY);
+  const mcpToolNames = Object.freeze(
+    proxyExplicitlyRequested
+      ? [...availableMcpTools].sort()
+      : (input.configuredTools ?? [])
+          .filter((toolName) => availableMcpTools.has(toolName))
+          .sort(),
+  );
   const requested =
-    input.configuredTools === null ? available : new Set(input.configuredTools);
+    input.configuredTools === null
+      ? available
+      : new Set([
+          ...input.configuredTools.filter(
+            (toolName) => !toolName.startsWith("mcp:"),
+          ),
+          ...(mcpToolNames.length > 0 ? [MCP_PROXY] : []),
+        ]);
   const selected = new Set(
     [...requested].filter((toolName) => available.has(toolName)),
   );
@@ -57,6 +78,7 @@ export function resolveCapabilitySetV1(input: {
     ),
     modelToolNames,
     executableToolNames: modelToolNames,
+    mcpToolNames,
     internalToolNames: Object.freeze(
       entries
         .filter((entry) => !selected.has(entry.originalName))

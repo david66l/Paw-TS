@@ -19,6 +19,7 @@ export const SEED_LIHUA: CreateAgentInput = {
   memoryExtraction: "background",
   tools: "inherit",
   outputFormat: "用简洁中文汇报：做了什么、调度了谁、结果摘要、未完成项。",
+  capabilities: ["integration"],
   prompt: `你是狸花，Paw 的总控 Agent（Root）。
 
 职责：
@@ -51,6 +52,7 @@ export const SEED_BIANMU: CreateAgentInput = {
   memoryExtraction: "off",
   tools: CODING_TOOLS,
   outputFormat: "Return a one-paragraph summary of changes and files touched.",
+  capabilities: ["implementation", "integration"],
   prompt: `你是边牧，代码实现专家。
 只修改分配给你的文件，不碰其他文件。
 写完整、类型安全的代码。不执行破坏性 shell 命令。`,
@@ -70,6 +72,7 @@ export const SEED_DEMU: CreateAgentInput = {
   memoryExtraction: "off",
   tools: CODING_TOOLS,
   outputFormat: "Return a one-paragraph summary of changes and files touched.",
+  capabilities: ["implementation", "integration"],
   prompt: `你是德牧，代码实现专家。
 只修改分配给你的文件，不碰其他文件。
 写完整、类型安全的代码。不执行破坏性 shell 命令。`,
@@ -89,6 +92,7 @@ export const SEED_SAMO: CreateAgentInput = {
   memoryExtraction: "off",
   tools: CODING_TOOLS,
   outputFormat: "Return a one-paragraph summary of changes and files touched.",
+  capabilities: ["implementation", "integration"],
   prompt: `你是萨摩，代码实现专家。
 只修改分配给你的文件，不碰其他文件。
 写完整、类型安全的代码。不执行破坏性 shell 命令。`,
@@ -110,6 +114,7 @@ export const SEED_KEJI: CreateAgentInput = {
     "read_file, list_dir, search, glob, grep, git_status, git_diff, git_log, symbol_search, lsp",
   outputFormat:
     "Return a short review: blocking issues first, then nits. If all good, say so.",
+  capabilities: ["review"],
   prompt: `你是柯基，代码审查员。
 只读审查，不修改文件。关注正确性、类型安全与集成问题。简洁输出。`,
 };
@@ -129,6 +134,7 @@ export const SEED_XIANLUO: CreateAgentInput = {
   tools:
     "read_file, list_dir, search, glob, grep, web_fetch, web_search, git_status",
   outputFormat: "Return a concise research note: packages, key APIs, pitfalls.",
+  capabilities: ["investigation"],
   prompt: `你是暹罗，技术调研员。
 只读检索，不写代码。关注包名、API 模式、已知坑与最佳实践。`,
 };
@@ -141,7 +147,7 @@ export const SEED_BUOU: CreateAgentInput = {
   description: "跑测试或给出测试建议（尽量只读）",
   kind: "worker",
   canSpawn: false,
-  childPolicy: "read_only",
+  childPolicy: "read_write",
   model: "flash",
   maxSteps: 12,
   memoryExtraction: "off",
@@ -149,6 +155,7 @@ export const SEED_BUOU: CreateAgentInput = {
     "read_file, list_dir, search, glob, grep, run_shell, git_status, git_diff",
   outputFormat:
     "Return test results (pass/fail) if suite exists; else 2–4 suggested cases.",
+  capabilities: ["testing"],
   prompt: `你是布偶，QA。
 尽量只读：可运行测试命令并报告结果；不要改业务代码。若无测试，给出建议用例。`,
 };
@@ -167,6 +174,7 @@ export const SEED_JINMAO: CreateAgentInput = {
   memoryExtraction: "off",
   tools: "read_file, list_dir, write_file, edit_file, search, glob, grep",
   outputFormat: "Return a summary of documentation added or updated.",
+  capabilities: ["documentation"],
   prompt: `你是金毛，技术文档作者。
 只写文档（README、docs、JSDoc），不改业务实现逻辑。简洁有用。`,
 };
@@ -187,6 +195,7 @@ export const SEED_BIGE: CreateAgentInput = {
     "read_file, list_dir, search, glob, grep, symbol_search, git_status, git_diff, git_log, lsp",
   outputFormat:
     "Return: hypothesis verdict (supported/rejected/unknown), key evidence as file:line refs, and the single most useful next investigation step.",
+  capabilities: ["investigation"],
   prompt: `你是比格，代码调查员（只读）。
 每次只验证一个明确假设：给出 verdict（supported/rejected/unknown），
 证据必须带 file:line 引用，禁止猜测。不改任何文件。

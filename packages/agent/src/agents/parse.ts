@@ -3,6 +3,7 @@
  */
 
 import { parseYamlFrontmatter, splitFrontmatter } from "@paw/core";
+import { parseToolsField } from "./resolve-tools.js";
 import type {
   AgentModelPref,
   AgentRunKind,
@@ -11,7 +12,6 @@ import type {
   CreateAgentInput,
   MemoryExtractionMode,
 } from "./types.js";
-import { parseToolsField } from "./resolve-tools.js";
 
 function asChildPolicy(v: string | undefined): ChildPolicy {
   return v === "read_write" ? "read_write" : "read_only";
@@ -66,6 +66,7 @@ export function parseAgentMarkdown(
   const kind = asKind(fm.kind);
   const tools = parseToolsField(fm.tools);
   const canSpawn = asBool(fm.canSpawn ?? fm.can_spawn, kind === "root");
+  const capabilities = parseCapabilities(fm.capabilities);
 
   return {
     id,
@@ -80,11 +81,14 @@ export function parseAgentMarkdown(
     outputFormat:
       (fm.outputFormat ?? fm.output_format)?.trim() ||
       "Return a clear summary of what you did.",
+    ...(capabilities.length > 0 ? { capabilities } : {}),
     canSpawn,
     maxSteps: asInt(fm.maxSteps ?? fm.max_steps, kind === "root" ? 24 : 12),
     kind,
     memoryExtraction: asMemory(
-      fm.memoryExtraction ?? fm.memory_extraction ?? (kind === "root" ? "background" : "off"),
+      fm.memoryExtraction ??
+        fm.memory_extraction ??
+        (kind === "root" ? "background" : "off"),
     ),
     ...(sourcePath ? { sourcePath } : {}),
   };
@@ -117,15 +121,25 @@ export function createInputToMarkdown(input: CreateAgentInput): string {
     .replace(/\n/g, " ")
     .trim();
   lines.push(`outputFormat: ${of}`);
+  const capabilities = parseCapabilities(input.capabilities);
+  if (capabilities.length > 0) {
+    lines.push(`capabilities: ${capabilities.join(", ")}`);
+  }
   lines.push(`canSpawn: ${input.canSpawn === true ? "true" : "false"}`);
   lines.push(`maxSteps: ${String(input.maxSteps ?? 12)}`);
   lines.push(`kind: ${input.kind ?? "worker"}`);
-  lines.push(
-    `memoryExtraction: ${input.memoryExtraction ?? "off"}`,
-  );
+  lines.push(`memoryExtraction: ${input.memoryExtraction ?? "off"}`);
   lines.push("---");
   lines.push("");
   lines.push(input.prompt.trim());
   lines.push("");
   return lines.join("\n");
+}
+
+function parseCapabilities(
+  value: string | readonly string[] | undefined,
+): string[] {
+  if (value === undefined) return [];
+  const items = Array.isArray(value) ? value : String(value).split(/[,|]/);
+  return [...new Set(items.map((item) => String(item).trim()).filter(Boolean))];
 }

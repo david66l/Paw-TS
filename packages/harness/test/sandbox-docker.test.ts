@@ -57,6 +57,22 @@ describe("containerPathToHostPath", () => {
 });
 
 describe("buildDockerShellExecSpec", () => {
+  test("uses an explicitly configured runtime without discovery", () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-sandbox-"));
+    const spec = buildDockerShellExecSpec(
+      {
+        mode: "workspace",
+        network: "deny",
+        image: "local-only:test",
+        runtime: "docker",
+      },
+      { workspaceRoot, cwdPath: workspaceRoot, command: "pwd" },
+    );
+
+    expect("runtime" in spec).toBe(true);
+    if ("runtime" in spec) expect(spec.runtime).toBe("docker");
+  });
+
   test("builds strict sandbox args when runtime exists", () => {
     const runtime = detectContainerRuntime("docker");
     if (!runtime) {
@@ -105,8 +121,9 @@ describe("buildDockerShellExecSpec", () => {
     expect(spec.args).toContain("--pull");
     expect(spec.args).toContain("never");
     expect(spec.args.some((a) => a.startsWith("--tmpfs"))).toBe(true);
-    expect(spec.args.at(-4)).toBe("debian:bookworm-slim");
-    expect(spec.args.at(-3)).toBe("bash");
+    expect(spec.args.at(-6)).toBe("debian:bookworm-slim");
+    expect(spec.args.at(-5)).toBe("bash");
+    expect(spec.args.slice(-4, -2)).toEqual(["-o", "pipefail"]);
     expect(spec.args.at(-1)).toBe("pwd");
   });
 

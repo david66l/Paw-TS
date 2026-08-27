@@ -1718,6 +1718,7 @@ async function handleToolCalls(
     memoryTaskId: opts.memoryTaskId ?? ctx.memoryTaskId,
     createAgent: opts.createAgent,
     allowedTools: ctx.capabilitySet.executableToolNames,
+    mcpAllowedTools: ctx.capabilitySet.mcpToolNames,
     fileLock: opts.fileLock,
     artifactRegistry: ctx.artifactRegistry,
     toolExecutionPolicy: opts.toolExecutionPolicy,

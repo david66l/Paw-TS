@@ -28,6 +28,12 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const DEFAULT_LSP_REQUEST_TIMEOUT_MS = 10_000;
+const MAX_LSP_HOVER_CHARS = 20_000;
+const MAX_LSP_LOCATIONS = 200;
+const MAX_LSP_COMPLETIONS = 100;
 
 /** LSP JSON-RPC 2.0 消息结构 */
 interface LspMessage {
@@ -86,7 +92,11 @@ export class LspClient {
   /** 等待响应的 Promise 映射表，key 为请求 ID */
   private pending = new Map<
     number,
-    { resolve: (v: unknown) => void; reject: (e: Error) => void }
+    {
+      resolve: (v: unknown) => void;
+      reject: (e: Error) => void;
+      timeout: ReturnType<typeof setTimeout>;
+    }
   >();
   /** 是否已完成初始化握手 */
   private initialized = false;
@@ -94,9 +104,21 @@ export class LspClient {
   private _rootUri: string;
   /** 初始化超时定时器（100ms 延迟后发送 initialize） */
   private initTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly requestTimeoutMs: number;
 
-  constructor(rootUri: string) {
-    this._rootUri = rootUri;
+  constructor(
+    rootPathOrUri: string,
+    requestTimeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+  ) {
+    if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
+      throw new TypeError(
+        "LSP request timeout must be a positive safe integer",
+      );
+    }
+    this._rootUri = rootPathOrUri.startsWith("file:")
+      ? rootPathOrUri
+      : pathToFileURL(path.resolve(rootPathOrUri)).href;
+    this.requestTimeoutMs = requestTimeoutMs;
   }
 
   /**
@@ -112,7 +134,7 @@ export class LspClient {
   async start(opts: LspClientOptions): Promise<void> {
     // 先杀掉之前的进程，确保状态干净
     if (this.proc) {
-      this.killProcess();
+      await this.killProcess();
     }
 
     return new Promise((resolve, reject) => {
@@ -209,7 +231,13 @@ export class LspClient {
     } else if (contents !== null && typeof contents === "object") {
       text = String((contents as Record<string, unknown>).value ?? "");
     }
-    return { contents: text, range: r.range };
+    return {
+      contents:
+        text.length > MAX_LSP_HOVER_CHARS
+          ? `${text.slice(0, MAX_LSP_HOVER_CHARS)}\n[truncated]`
+          : text,
+      range: r.range,
+    };
   }
 
   /** 跳转到指定位置符号的定义 */
@@ -269,6 +297,7 @@ export class LspClient {
         (i): i is Record<string, unknown> =>
           i !== null && typeof i === "object",
       )
+      .slice(0, MAX_LSP_COMPLETIONS)
       .map((i) => ({
         label: typeof i.label === "string" ? i.label : "",
         kind: typeof i.kind === "number" ? i.kind : undefined,
@@ -292,13 +321,17 @@ export class LspClient {
       this.initialized = false;
       return;
     }
+    if (!this.initialized) {
+      await this.killProcess();
+      return;
+    }
     try {
       await this.sendRequest("shutdown", {});
     } catch {
       // 即使 shutdown 失败也要继续发送 exit
     }
     this.sendNotification("exit", {});
-    this.killProcess();
+    await this.killProcess();
     this.initialized = false;
   }
 
@@ -310,25 +343,41 @@ export class LspClient {
    * - reject 所有 pending 请求（防止 Promise 永久挂起）
    * - 清空接收缓冲区
    */
-  private killProcess(): void {
+  private async killProcess(): Promise<void> {
     if (this.initTimer) {
       clearTimeout(this.initTimer);
       this.initTimer = null;
     }
     if (!this.proc) return;
+    const proc = this.proc;
     // 移除 stdout/stderr 监听器，防止泄漏
-    this.proc.stdout?.removeAllListeners("data");
-    this.proc.stderr?.removeAllListeners("data");
-    this.proc.removeAllListeners("error");
-    this.proc.removeAllListeners("exit");
-    this.proc.kill();
+    proc.stdout?.removeAllListeners("data");
+    proc.stderr?.removeAllListeners("data");
+    proc.removeAllListeners("error");
+    proc.removeAllListeners("exit");
     this.proc = null;
     // Reject 所有等待中的请求，防止它们永久挂起
     for (const [id, pending] of this.pending) {
+      clearTimeout(pending.timeout);
       pending.reject(new Error("LSP client stopped"));
       this.pending.delete(id);
     }
     this.buffer = "";
+    if (proc.exitCode !== null || proc.signalCode !== null) return;
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        proc.removeListener("exit", finish);
+        resolve();
+      };
+      const timeout = setTimeout(finish, 2_000);
+      timeout.unref?.();
+      proc.once("exit", finish);
+      proc.kill();
+    });
   }
 
   /** 是否已完成初始化 */
@@ -360,7 +409,12 @@ export class LspClient {
         this.buffer = this.buffer.slice(headerEnd + 4);
         continue;
       }
-      const contentLength = Number.parseInt(contentLengthMatch[1]!, 10);
+      const contentLengthText = contentLengthMatch[1];
+      if (!contentLengthText) {
+        this.buffer = this.buffer.slice(headerEnd + 4);
+        continue;
+      }
+      const contentLength = Number.parseInt(contentLengthText, 10);
       const messageStart = headerEnd + 4;
       if (this.buffer.length < messageStart + contentLength) {
         return; // 数据尚未接收完整，等待更多数据
@@ -392,6 +446,7 @@ export class LspClient {
       const pending = this.pending.get(msg.id);
       if (pending) {
         this.pending.delete(msg.id);
+        clearTimeout(pending.timeout);
         if (msg.error) {
           pending.reject(new Error(msg.error.message));
         } else {
@@ -408,7 +463,13 @@ export class LspClient {
   private sendRequest(method: string, params: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
-      this.pending.set(id, { resolve, reject });
+      const timeout = setTimeout(() => {
+        if (!this.pending.delete(id)) return;
+        reject(
+          new Error(`LSP ${method} timed out after ${this.requestTimeoutMs}ms`),
+        );
+      }, this.requestTimeoutMs);
+      this.pending.set(id, { resolve, reject, timeout });
       const msg = JSON.stringify({ jsonrpc: "2.0", id, method, params });
       this.write(msg);
     });
@@ -439,13 +500,14 @@ export class LspClient {
    * 支持相对路径和绝对路径，相对路径会基于 _rootUri 拼接。
    */
   private fileToUri(filePath: string): string {
-    if (filePath.startsWith("file://")) {
+    if (filePath.startsWith("file:")) {
       return filePath;
     }
+    const rootPath = fileURLToPath(this._rootUri);
     const absolute = path.isAbsolute(filePath)
       ? filePath
-      : path.join(this._rootUri.replace("file://", ""), filePath);
-    return `file://${absolute}`;
+      : path.join(rootPath, filePath);
+    return pathToFileURL(absolute).href;
   }
 
   /**
@@ -466,7 +528,8 @@ export class LspClient {
         uri: typeof i.uri === "string" ? i.uri : "",
         range: i.range as LspLocation["range"],
       }))
-      .filter((l) => l.uri);
+      .filter((l) => l.uri)
+      .slice(0, MAX_LSP_LOCATIONS);
   }
 }
 

@@ -37,9 +37,15 @@ describe("run_agent tool", () => {
 
   test("delegates to launcher", async () => {
     let launched = false;
+    let launchedAgentId: string | undefined;
     const launcher = {
-      launch: async (goal: string, _maxSteps?: number) => {
+      launch: async (
+        goal: string,
+        _maxSteps?: number,
+        options?: { readonly agentId?: string },
+      ) => {
         launched = true;
+        launchedAgentId = options?.agentId;
         return {
           summary: `Done: ${goal}`,
           status: "completed" as const,
@@ -51,11 +57,16 @@ describe("run_agent tool", () => {
       }),
     };
     const r = await executeTool(
-      { workspaceRoot: "/tmp", subAgentLauncher: launcher },
+      {
+        workspaceRoot: "/tmp",
+        subAgentLauncher: launcher,
+        currentToolCallId: "parent-call-7",
+      },
       "workspace.run_agent",
       { goal: "hello", max_steps: 5 },
     );
     expect(launched).toBe(true);
+    expect(launchedAgentId).toBe("parent-call-7");
     expect(r.ok).toBe(true);
     expect(r.summary).toContain("completed");
   });

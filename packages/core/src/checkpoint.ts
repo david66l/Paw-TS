@@ -178,6 +178,11 @@ export function extractCheckpointTargets(
   }
 }
 
+/** One shared predicate for canonical allocation and physical preparation. */
+export function requiresToolCheckpointV1(tool: string): boolean {
+  return isMutatingTool(tool) && tool !== "workspace.undo_last_edit";
+}
+
 import { createHash } from "node:crypto";
 
 /**
@@ -198,6 +203,9 @@ export function saveCheckpoint(
   tool: string,
   args: unknown,
 ): CheckpointEntry {
+  if (!Number.isSafeInteger(seq) || seq <= 0) {
+    throw new TypeError("checkpoint sequence must be a positive safe integer");
+  }
   const targets = [...new Set(extractCheckpointTargets(tool, args))];
   const fileTargets = targets.filter((target) => target !== "__shell_cmd__");
   const snapshotKeys = fileTargets.map((target) => sanitizeFileName(target));
@@ -212,11 +220,26 @@ export function saveCheckpoint(
       throw new Error(`checkpoint target is reserved Paw state: ${target}`);
     }
   }
-  const checkpointDir = path.join(
-    checkpointsDir(workspaceRoot, runId),
-    String(seq),
-  );
-  fs.mkdirSync(checkpointDir, { recursive: true });
+  const runCheckpointsDir = checkpointsDir(workspaceRoot, runId);
+  ensureCheckpointParentDirectory(workspaceRoot, runCheckpointsDir);
+  const checkpointDir = path.join(runCheckpointsDir, String(seq));
+  try {
+    // The canonical journal allocates sequence numbers. A pre-existing physical
+    // target is therefore a conflict, never evidence that the number may be
+    // reused. In particular, do not follow a symlink or merge into a partial
+    // directory left by a crashed writer.
+    fs.mkdirSync(checkpointDir);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as NodeJS.ErrnoException).code === "EEXIST"
+    ) {
+      throw new Error(`checkpoint sequence target already exists: ${seq}`);
+    }
+    throw error;
+  }
+  assertSafeCheckpointDirectory(workspaceRoot, checkpointDir);
 
   const savedTargets: string[] = [];
   for (const rel of targets) {
@@ -235,7 +258,8 @@ export function saveCheckpoint(
       continue;
     }
 
-    const full = resolveCheckpointTarget(workspaceRoot, rel)!;
+    const full = resolveCheckpointTarget(workspaceRoot, rel);
+    if (!full) throw new Error(`unsafe checkpoint target: ${rel}`);
 
     if (fs.existsSync(full) && fs.statSync(full).isFile()) {
       const content = fs.readFileSync(full);
@@ -272,6 +296,163 @@ export function saveCheckpoint(
   return meta;
 }
 
+function ensureCheckpointParentDirectory(
+  workspaceRoot: string,
+  directory: string,
+): void {
+  const root = path.resolve(workspaceRoot);
+  const relative = path.relative(root, path.resolve(directory));
+  if (
+    !relative ||
+    path.isAbsolute(relative) ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`)
+  ) {
+    throw new Error("checkpoint storage escapes workspace");
+  }
+
+  const rootReal = fs.realpathSync(root);
+  let current = root;
+  for (const segment of relative.split(path.sep)) {
+    current = path.join(current, segment);
+    try {
+      fs.mkdirSync(current);
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        (error as NodeJS.ErrnoException).code !== "EEXIST"
+      ) {
+        throw error;
+      }
+    }
+    assertSafeCheckpointDirectory(rootReal, current);
+  }
+}
+
+function assertSafeCheckpointDirectory(
+  workspaceRoot: string,
+  directory: string,
+): void {
+  const stats = fs.lstatSync(directory);
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw new Error(
+      `checkpoint storage path is not a safe directory: ${directory}`,
+    );
+  }
+  const rootReal = fs.realpathSync(workspaceRoot);
+  const directoryReal = fs.realpathSync(directory);
+  const relative = path.relative(rootReal, directoryReal);
+  if (
+    path.isAbsolute(relative) ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`)
+  ) {
+    throw new Error("checkpoint storage escapes workspace");
+  }
+}
+
+function resolveExistingCheckpointDirectory(
+  workspaceRoot: string,
+  runId: string,
+  seq?: number,
+): string | undefined {
+  const runDir = checkpointsDir(workspaceRoot, runId);
+  if (!assertExistingCheckpointDirectory(workspaceRoot, runDir)) {
+    return undefined;
+  }
+  if (seq === undefined) return runDir;
+  const checkpointDir = path.join(runDir, String(seq));
+  return assertExistingCheckpointDirectory(workspaceRoot, checkpointDir)
+    ? checkpointDir
+    : undefined;
+}
+
+function assertExistingCheckpointDirectory(
+  workspaceRoot: string,
+  directory: string,
+): boolean {
+  const root = path.resolve(workspaceRoot);
+  const relative = path.relative(root, path.resolve(directory));
+  if (
+    !relative ||
+    path.isAbsolute(relative) ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`)
+  ) {
+    throw new Error("checkpoint storage escapes workspace");
+  }
+  const rootReal = fs.realpathSync(root);
+  let current = root;
+  for (const segment of relative.split(path.sep)) {
+    current = path.join(current, segment);
+    let stats: fs.Stats;
+    try {
+      stats = fs.lstatSync(current);
+    } catch (error) {
+      if (isMissingPathError(error)) return false;
+      throw error;
+    }
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      throw new Error(
+        `checkpoint storage path is not a safe directory: ${current}`,
+      );
+    }
+    const currentReal = fs.realpathSync(current);
+    const currentRelative = path.relative(rootReal, currentReal);
+    if (
+      path.isAbsolute(currentRelative) ||
+      currentRelative === ".." ||
+      currentRelative.startsWith(`..${path.sep}`)
+    ) {
+      throw new Error("checkpoint storage escapes workspace");
+    }
+  }
+  return true;
+}
+
+function checkpointFileExists(
+  workspaceRoot: string,
+  filePath: string,
+): boolean {
+  if (
+    !assertExistingCheckpointDirectory(workspaceRoot, path.dirname(filePath))
+  ) {
+    return false;
+  }
+  let stats: fs.Stats;
+  try {
+    stats = fs.lstatSync(filePath);
+  } catch (error) {
+    if (isMissingPathError(error)) return false;
+    throw error;
+  }
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw new Error(
+      `checkpoint storage file is not a safe regular file: ${filePath}`,
+    );
+  }
+  return true;
+}
+
+function readCheckpointDirectoryNames(
+  workspaceRoot: string,
+  directory: string,
+): string[] {
+  if (!assertExistingCheckpointDirectory(workspaceRoot, directory)) {
+    throw new Error(`checkpoint storage directory is missing: ${directory}`);
+  }
+  return fs.readdirSync(directory);
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "ENOENT"
+  );
+}
+
 /**
  * 内部函数：对单个检查点目录执行恢复操作。
  *
@@ -284,8 +465,11 @@ function applyCheckpointRestore(
   checkpointDir: string,
   workspaceRoot: string,
 ): CheckpointEntry | null {
+  if (!assertExistingCheckpointDirectory(workspaceRoot, checkpointDir)) {
+    return null;
+  }
   const metaPath = path.join(checkpointDir, "_meta.json");
-  if (!fs.existsSync(metaPath)) return null;
+  if (!checkpointFileExists(workspaceRoot, metaPath)) return null;
 
   const meta: CheckpointEntry = JSON.parse(
     fs.readFileSync(metaPath, "utf8"),
@@ -314,7 +498,7 @@ function applyCheckpointRestore(
       checkpointDir,
       `.create-${sanitizeFileName(rel)}`,
     );
-    if (fs.existsSync(createMarker)) {
+    if (checkpointFileExists(workspaceRoot, createMarker)) {
       // 文件是由工具调用创建的 → 撤销时删除它
       try {
         fs.unlinkSync(full);
@@ -326,11 +510,14 @@ function applyCheckpointRestore(
 
     // 查找快照文件：文件名以 sanitized 路径结尾
     const prefix = sanitizeFileName(rel);
-    const snapshotFiles = fs
-      .readdirSync(checkpointDir)
-      .filter((n) => n.endsWith(`-${prefix}`));
-    if (snapshotFiles.length > 0) {
-      const snapshotFile = path.join(checkpointDir, snapshotFiles[0]!);
+    const snapshotFiles = readCheckpointDirectoryNames(
+      workspaceRoot,
+      checkpointDir,
+    ).filter((n) => n.endsWith(`-${prefix}`));
+    const firstSnapshot = snapshotFiles[0];
+    if (firstSnapshot) {
+      const snapshotFile = path.join(checkpointDir, firstSnapshot);
+      if (!checkpointFileExists(workspaceRoot, snapshotFile)) return null;
       fs.copyFileSync(snapshotFile, full);
     }
   }
@@ -355,22 +542,31 @@ function checkpointTargetState(
 }
 
 function checkpointBeforeState(
+  workspaceRoot: string,
   checkpointDir: string,
   rel: string,
 ): CheckpointTargetStateV1 | undefined {
   const sanitized = sanitizeFileName(rel);
-  if (fs.existsSync(path.join(checkpointDir, `.create-${sanitized}`))) {
+  if (
+    checkpointFileExists(
+      workspaceRoot,
+      path.join(checkpointDir, `.create-${sanitized}`),
+    )
+  ) {
     return { path: rel, state: "missing" };
   }
-  const snapshot = fs
-    .readdirSync(checkpointDir)
-    .find((name) => name.endsWith(`-${sanitized}`));
+  const snapshot = readCheckpointDirectoryNames(
+    workspaceRoot,
+    checkpointDir,
+  ).find((name) => name.endsWith(`-${sanitized}`));
   if (!snapshot) return undefined;
+  const snapshotPath = path.join(checkpointDir, snapshot);
+  if (!checkpointFileExists(workspaceRoot, snapshotPath)) return undefined;
   return {
     path: rel,
     state: "file",
     sha256: createHash("sha256")
-      .update(fs.readFileSync(path.join(checkpointDir, snapshot)))
+      .update(fs.readFileSync(snapshotPath))
       .digest("hex"),
   };
 }
@@ -397,14 +593,20 @@ export function finalizeCheckpoint(
   seq: number,
   options: { readonly toolSucceeded?: boolean } = {},
 ): CheckpointEntry | null {
-  const checkpointDir = path.join(
-    checkpointsDir(workspaceRoot, runId),
-    String(seq),
+  const checkpointDir = resolveExistingCheckpointDirectory(
+    workspaceRoot,
+    runId,
+    seq,
   );
+  if (!checkpointDir) return null;
   const metaPath = path.join(checkpointDir, "_meta.json");
-  if (!fs.existsSync(metaPath)) return null;
-  const entry = JSON.parse(fs.readFileSync(metaPath, "utf8")) as CheckpointEntry;
-  const fileTargets = entry.targets.filter((target) => target !== "__shell_cmd__");
+  if (!checkpointFileExists(workspaceRoot, metaPath)) return null;
+  const entry = JSON.parse(
+    fs.readFileSync(metaPath, "utf8"),
+  ) as CheckpointEntry;
+  const fileTargets = entry.targets.filter(
+    (target) => target !== "__shell_cmd__",
+  );
   const snapshotKeys = fileTargets.map((target) => sanitizeFileName(target));
   if (new Set(snapshotKeys).size !== snapshotKeys.length) {
     throw new Error("checkpoint targets collide after path sanitization");
@@ -415,8 +617,10 @@ export function finalizeCheckpoint(
     return state;
   });
   const materiallyChanged = fileTargets.some((target, index) => {
-    const before = checkpointBeforeState(checkpointDir, target);
-    return !before || !targetStatesEqual(before, after[index]!);
+    const before = checkpointBeforeState(workspaceRoot, checkpointDir, target);
+    const afterState = after[index];
+    if (!afterState) throw new Error(`missing checkpoint state: ${target}`);
+    return !before || !targetStatesEqual(before, afterState);
   });
   const finalized: CheckpointEntry = {
     ...entry,
@@ -427,6 +631,9 @@ export function finalizeCheckpoint(
       after,
     },
   };
+  if (!checkpointFileExists(workspaceRoot, metaPath)) {
+    throw new Error("checkpoint metadata disappeared before finalization");
+  }
   atomicWrite(metaPath, JSON.stringify(finalized, null, 2));
   return finalized;
 }
@@ -500,8 +707,7 @@ function validateSafeCheckpointOutcome(
       }
       if (state.state === "missing") return state.sha256 !== undefined;
       return (
-        state.state !== "file" ||
-        !/^[0-9a-f]{64}$/.test(state.sha256 ?? "")
+        state.state !== "file" || !/^[0-9a-f]{64}$/.test(state.sha256 ?? "")
       );
     })
   ) {
@@ -515,17 +721,27 @@ export function inspectLastSafeFileMutationCheckpoint(
   workspaceRoot: string,
   runId: string,
 ): SafeFileMutationCheckpointInspection {
-  const runDir = checkpointsDir(workspaceRoot, runId);
-  if (!fs.existsSync(runDir)) return { status: "none" };
-  const dirs = fs
-    .readdirSync(runDir)
+  const runDir = resolveExistingCheckpointDirectory(workspaceRoot, runId);
+  if (!runDir) return { status: "none" };
+  const dirs = readCheckpointDirectoryNames(workspaceRoot, runDir)
     .filter((name) => /^\d+$/.test(name))
     .map((name) => ({ name, seq: Number.parseInt(name, 10) }))
     .sort((left, right) => right.seq - left.seq);
   let entry: CheckpointEntry | undefined;
   for (const dir of dirs) {
-    const metaPath = path.join(runDir, dir.name, "_meta.json");
-    if (!fs.existsSync(metaPath)) {
+    const checkpointDir = resolveExistingCheckpointDirectory(
+      workspaceRoot,
+      runId,
+      dir.seq,
+    );
+    if (!checkpointDir) {
+      return {
+        status: "invalid",
+        reason: `checkpoint ${dir.seq} directory is missing`,
+      };
+    }
+    const metaPath = path.join(checkpointDir, "_meta.json");
+    if (!checkpointFileExists(workspaceRoot, metaPath)) {
       return {
         status: "invalid",
         reason: `checkpoint ${dir.seq} metadata is missing`,
@@ -567,12 +783,10 @@ export function inspectLastSafeFileMutationCheckpoint(
     }
   }
   const conflicts = entry.outcome.after
-    .filter(
-      (expected) => {
-        const current = checkpointTargetState(workspaceRoot, expected.path);
-        return !current || !targetStatesEqual(expected, current);
-      },
-    )
+    .filter((expected) => {
+      const current = checkpointTargetState(workspaceRoot, expected.path);
+      return !current || !targetStatesEqual(expected, current);
+    })
     .map((state) => state.path);
   return conflicts.length > 0
     ? { status: "conflict", entry, conflictingPaths: conflicts }
@@ -590,10 +804,17 @@ export function undoLastSafeFileMutationCheckpoint(
 ): SafeFileMutationCheckpointInspection {
   const inspected = inspectLastSafeFileMutationCheckpoint(workspaceRoot, runId);
   if (inspected.status !== "ready") return inspected;
-  const checkpointDir = path.join(
-    checkpointsDir(workspaceRoot, runId),
-    String(inspected.entry.seq),
+  const checkpointDir = resolveExistingCheckpointDirectory(
+    workspaceRoot,
+    runId,
+    inspected.entry.seq,
   );
+  if (!checkpointDir) {
+    return {
+      status: "invalid",
+      reason: `checkpoint ${inspected.entry.seq} directory is missing`,
+    };
+  }
   const actions: Array<{
     readonly path: string;
     readonly full: string;
@@ -606,7 +827,10 @@ export function undoLastSafeFileMutationCheckpoint(
       if (rel === "__shell_cmd__") continue;
       const full = resolveCheckpointTarget(workspaceRoot, rel);
       if (!full) {
-        return { status: "invalid", reason: `unsafe checkpoint target: ${rel}` };
+        return {
+          status: "invalid",
+          reason: `unsafe checkpoint target: ${rel}`,
+        };
       }
       const expected = inspected.entry.outcome?.after.find(
         (state) => state.path === rel,
@@ -628,10 +852,11 @@ export function undoLastSafeFileMutationCheckpoint(
         `.create-${sanitizeFileName(rel)}`,
       );
       const suffix = `-${sanitizeFileName(rel)}`;
-      const snapshots = fs
-        .readdirSync(checkpointDir)
-        .filter((name) => name.endsWith(suffix));
-      const hasCreateMarker = fs.existsSync(createMarker);
+      const snapshots = readCheckpointDirectoryNames(
+        workspaceRoot,
+        checkpointDir,
+      ).filter((name) => name.endsWith(suffix));
+      const hasCreateMarker = checkpointFileExists(workspaceRoot, createMarker);
       if (Number(hasCreateMarker) + snapshots.length !== 1) {
         return {
           status: "invalid",
@@ -640,8 +865,22 @@ export function undoLastSafeFileMutationCheckpoint(
       }
       let restore: Buffer | null = null;
       if (!hasCreateMarker) {
-        restore = fs.readFileSync(path.join(checkpointDir, snapshots[0]!));
-        const encodedHash = snapshots[0]!.slice(0, -suffix.length);
+        const snapshotName = snapshots[0];
+        if (!snapshotName) {
+          return {
+            status: "invalid",
+            reason: `checkpoint ${inspected.entry.seq} is missing a snapshot for ${rel}`,
+          };
+        }
+        const snapshotPath = path.join(checkpointDir, snapshotName);
+        if (!checkpointFileExists(workspaceRoot, snapshotPath)) {
+          return {
+            status: "invalid",
+            reason: `checkpoint ${inspected.entry.seq} snapshot is not a safe file for ${rel}`,
+          };
+        }
+        restore = fs.readFileSync(snapshotPath);
+        const encodedHash = snapshotName.slice(0, -suffix.length);
         if (encodedHash !== hashBytes(restore)) {
           return {
             status: "invalid",
@@ -710,11 +949,29 @@ export function undoLastSafeFileMutationCheckpoint(
     };
   }
 
-  const runCheckpointsDir = checkpointsDir(workspaceRoot, runId);
-  for (const candidate of fs.readdirSync(runCheckpointsDir)) {
+  const runCheckpointsDir = resolveExistingCheckpointDirectory(
+    workspaceRoot,
+    runId,
+  );
+  if (!runCheckpointsDir) {
+    return {
+      status: "invalid",
+      reason: "checkpoint storage disappeared before cleanup",
+    };
+  }
+  for (const candidate of readCheckpointDirectoryNames(
+    workspaceRoot,
+    runCheckpointsDir,
+  )) {
     if (!/^\d+$/.test(candidate)) continue;
     if (Number.parseInt(candidate, 10) < inspected.entry.seq) continue;
-    fs.rmSync(path.join(runCheckpointsDir, candidate), {
+    const candidateDir = resolveExistingCheckpointDirectory(
+      workspaceRoot,
+      runId,
+      Number.parseInt(candidate, 10),
+    );
+    if (!candidateDir) continue;
+    fs.rmSync(candidateDir, {
       recursive: true,
       force: true,
     });
@@ -731,21 +988,31 @@ export function undoLastCheckpoint(
   workspaceRoot: string,
   runId: string,
 ): CheckpointEntry | null {
-  const runCheckpointsDir = checkpointsDir(workspaceRoot, runId);
-  if (!fs.existsSync(runCheckpointsDir)) return null;
+  const runCheckpointsDir = resolveExistingCheckpointDirectory(
+    workspaceRoot,
+    runId,
+  );
+  if (!runCheckpointsDir) return null;
 
   // 按 seq 降序排列，找到最新的检查点
-  const dirs = fs
-    .readdirSync(runCheckpointsDir)
+  const dirs = readCheckpointDirectoryNames(workspaceRoot, runCheckpointsDir)
     .filter((n) => /^\d+$/.test(n))
     .map((n) => ({ name: n, seq: Number.parseInt(n, 10) }))
     .sort((a, b) => b.seq - a.seq);
 
   for (const d of dirs) {
-    const checkpointDir = path.join(runCheckpointsDir, d.name);
+    const checkpointDir = resolveExistingCheckpointDirectory(
+      workspaceRoot,
+      runId,
+      d.seq,
+    );
+    if (!checkpointDir) continue;
     const meta = applyCheckpointRestore(checkpointDir, workspaceRoot);
     if (meta) {
       // 恢复成功后删除该检查点目录
+      if (!assertExistingCheckpointDirectory(workspaceRoot, checkpointDir)) {
+        return null;
+      }
       fs.rmSync(checkpointDir, { recursive: true, force: true });
       return meta;
     }
@@ -771,32 +1038,38 @@ export function restoreCheckpoint(
   seq: number,
   opts?: { backup?: boolean },
 ): CheckpointEntry | null {
-  const runCheckpointsDir = checkpointsDir(workspaceRoot, runId);
-  if (!fs.existsSync(runCheckpointsDir)) return null;
+  const runCheckpointsDir = resolveExistingCheckpointDirectory(
+    workspaceRoot,
+    runId,
+  );
+  if (!runCheckpointsDir) return null;
 
-  const targetDir = path.join(runCheckpointsDir, String(seq));
-  if (!fs.existsSync(targetDir)) return null;
+  const targetDir = resolveExistingCheckpointDirectory(
+    workspaceRoot,
+    runId,
+    seq,
+  );
+  if (!targetDir) return null;
 
   const meta = applyCheckpointRestore(targetDir, workspaceRoot);
   if (!meta) return null;
 
   // 删除目标检查点及所有比它更新的检查点
-  const dirs = fs
-    .readdirSync(runCheckpointsDir)
+  const dirs = readCheckpointDirectoryNames(workspaceRoot, runCheckpointsDir)
     .filter((n) => /^\d+$/.test(n))
     .map((n) => Number.parseInt(n, 10))
     .filter((n) => n >= seq);
 
   if (opts?.backup) {
     // 最佳尽力备份：将待删除的检查点复制到 .backup 目录
-    const backupDir = path.join(
-      runCheckpointsDir,
-      ".backup",
-      String(Date.now()),
-    );
-    fs.mkdirSync(backupDir, { recursive: true });
+    const backupRoot = path.join(runCheckpointsDir, ".backup");
+    ensureCheckpointParentDirectory(workspaceRoot, backupRoot);
+    const backupDir = path.join(backupRoot, String(Date.now()));
+    fs.mkdirSync(backupDir);
+    assertSafeCheckpointDirectory(workspaceRoot, backupDir);
     for (const s of dirs) {
-      const src = path.join(runCheckpointsDir, String(s));
+      const src = resolveExistingCheckpointDirectory(workspaceRoot, runId, s);
+      if (!src) continue;
       const dst = path.join(backupDir, String(s));
       try {
         fs.cpSync(src, dst, { recursive: true });
@@ -807,7 +1080,8 @@ export function restoreCheckpoint(
   }
 
   for (const s of dirs) {
-    const dir = path.join(runCheckpointsDir, String(s));
+    const dir = resolveExistingCheckpointDirectory(workspaceRoot, runId, s);
+    if (!dir) continue;
     try {
       fs.rmSync(dir, { recursive: true, force: true });
     } catch {
@@ -825,14 +1099,26 @@ export function listCheckpoints(
   workspaceRoot: string,
   runId: string,
 ): CheckpointEntry[] {
-  const runCheckpointsDir = checkpointsDir(workspaceRoot, runId);
-  if (!fs.existsSync(runCheckpointsDir)) return [];
+  const runCheckpointsDir = resolveExistingCheckpointDirectory(
+    workspaceRoot,
+    runId,
+  );
+  if (!runCheckpointsDir) return [];
 
   const out: CheckpointEntry[] = [];
-  for (const name of fs.readdirSync(runCheckpointsDir)) {
+  for (const name of readCheckpointDirectoryNames(
+    workspaceRoot,
+    runCheckpointsDir,
+  )) {
     if (!/^\d+$/.test(name)) continue;
-    const metaPath = path.join(runCheckpointsDir, name, "_meta.json");
-    if (!fs.existsSync(metaPath)) continue;
+    const checkpointDir = resolveExistingCheckpointDirectory(
+      workspaceRoot,
+      runId,
+      Number.parseInt(name, 10),
+    );
+    if (!checkpointDir) continue;
+    const metaPath = path.join(checkpointDir, "_meta.json");
+    if (!checkpointFileExists(workspaceRoot, metaPath)) continue;
     try {
       const meta = JSON.parse(
         fs.readFileSync(metaPath, "utf8"),

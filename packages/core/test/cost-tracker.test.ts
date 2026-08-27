@@ -12,6 +12,9 @@ describe("CostTracker", () => {
     expect(snap.promptTokens).toBe(0);
     expect(snap.completionTokens).toBe(0);
     expect(snap.totalTokens).toBe(0);
+    expect(snap.cachedPromptTokens).toBe(0);
+    expect(snap.cacheMissPromptTokens).toBe(0);
+    expect(snap.cacheHitRate).toBe(0);
     expect(snap.estimatedCost).toBe(0);
   });
 
@@ -156,10 +159,15 @@ describe("CostTracker", () => {
       promptTokens: 8313,
       completionTokens: 47,
       cachedPromptTokens: 8192,
+      cacheMissPromptTokens: 121,
     });
     const snap = tracker.snapshot();
     expect(snap.costCurrency).toBe("CNY");
     expect(snap.estimatedCost).toBeCloseTo(0.00038, 4);
+    expect(snap.cachedPromptTokens).toBe(8192);
+    expect(snap.cacheMissPromptTokens).toBe(121);
+    expect(snap.cacheHitRate).toBeCloseTo(8192 / 8313, 8);
+    expect(tracker.summary()).toContain("cache 98.5%");
   });
 
   it("resolveModelPricing maps deepseek variants", () => {

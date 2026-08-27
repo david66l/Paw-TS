@@ -118,7 +118,12 @@ function originalName(
 }
 
 function categoryForTool(name: string): CapabilityCategoryV1 {
-  if (name.startsWith("mcp:") || name.includes("web_")) return "external";
+  if (
+    name.startsWith("mcp:") ||
+    name === "workspace.use_mcp" ||
+    name.includes("web_")
+  )
+    return "external";
   if (name.startsWith("memory.") || name === "context.recall") {
     return "context";
   }

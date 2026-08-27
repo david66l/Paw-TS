@@ -34,6 +34,16 @@ export { OpenAICompatibleModel } from "./openai-compatible.js";
 export type { OpenAICompatibleOptions } from "./openai-compatible.js";
 export { AnthropicCompatibleModel } from "./anthropic-compatible.js";
 export type { AnthropicCompatibleOptions } from "./anthropic-compatible.js";
+export {
+  createAgentLoopModelAdapter,
+  toDurableModelResponseV1,
+} from "./agent-loop-adapter.js";
+export type {
+  PawAgentLoopModel,
+  PawModelRequest,
+  PawModelTransport,
+  PawProviderProtocol,
+} from "./agent-loop-adapter.js";
 
 // ── 核心类型 ──
 export type {

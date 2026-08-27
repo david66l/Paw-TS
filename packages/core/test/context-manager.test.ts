@@ -326,6 +326,42 @@ describe("ContextManager", () => {
     expect(cm.buildMessages()[1]?.content).toBe("malformed fallback");
   });
 
+  test("raw resume preserves a provider-neutral native turn as one message", () => {
+    const valid = {
+      schemaVersion: 2 as const,
+      protocol: "provider-neutral" as const,
+      assistantContent: "inspect",
+      calls: [
+        {
+          callId: "a",
+          providerName: "read_file",
+          rawArguments: '{"path":"a.ts"}',
+        },
+      ],
+      results: [
+        {
+          callId: "a",
+          status: "unknown" as const,
+          isError: true,
+          content: "execution result was not proven",
+        },
+      ],
+    };
+    const cm = new ContextManager();
+    cm.setHistoryRaw([
+      {
+        role: "assistant",
+        content: "fallback",
+        thinking: "audit only",
+        nativeToolTurn: valid,
+      },
+    ]);
+
+    expect(cm.buildMessages()).toEqual([
+      { role: "assistant", content: "fallback", nativeToolTurn: valid },
+    ]);
+  });
+
   test("raw resume never throws on corrupt native envelope shapes", () => {
     const corruptTurns: unknown[] = [
       null,

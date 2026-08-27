@@ -220,6 +220,41 @@ describe("TaskStateManager", () => {
     expect(state.snapshot().diffInspectedRevision).toBe(1);
   });
 
+  test("records a visible diff with Paw's safe line-ending config", () => {
+    const state = new TaskStateManager("inspect the final patch");
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.edit_file",
+        args: { path: "src/one.ts" },
+      },
+      {
+        ok: true,
+        summary: "edited",
+        payload: { path: "src/one.ts", linesAdded: 1, linesRemoved: 1 },
+      },
+    );
+    state.recordToolResult(
+      {
+        type: "tool_call",
+        tool: "workspace.run_shell",
+        args: {
+          command:
+            "git -c core.autocrlf=false diff --numstat -- src/one.ts && git -c core.autocrlf=false diff -- src/one.ts",
+        },
+      },
+      {
+        ok: true,
+        summary: "run_shell: exit 0",
+        payload: {
+          stdout:
+            "1\t1\tsrc/one.ts\ndiff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-before\n+after",
+        },
+      },
+    );
+    expect(state.snapshot().diffInspectedRevision).toBe(1);
+  });
+
   test("restores legacy snapshots with an empty acceptance ledger", () => {
     const current = new TaskStateManager("fix bug").snapshot();
     const { acceptanceCriteria: _removed, ...legacy } = current;

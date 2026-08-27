@@ -43,6 +43,134 @@ export type ArtifactRegistryLike = Pick<
   "tryRecall" | "toStub" | "markCited" | "search" | "get"
 >;
 
+export interface PayloadRecallRequestV1 {
+  readonly id: string;
+  readonly part: "head" | "tail" | "chunk";
+  readonly offset: number;
+  readonly limit: number;
+}
+
+export type PayloadRecallOutcomeV1 =
+  | {
+      readonly ok: true;
+      readonly id: string;
+      readonly tool: string;
+      readonly callId: string;
+      readonly content: string;
+      readonly part: PayloadRecallRequestV1["part"];
+      readonly offset: number;
+      readonly length: number;
+      readonly total: number;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: string;
+    };
+
+/** Neutral async port used by context.recall; storage ownership stays external. */
+export interface PayloadRecallServiceV1 {
+  recall(
+    input: PayloadRecallRequestV1,
+    signal?: AbortSignal,
+  ): Promise<PayloadRecallOutcomeV1>;
+}
+
+export interface WebFetchRequestV1 {
+  readonly url: string;
+  readonly maxLength?: number;
+}
+
+export interface WebFetchPayloadV1 {
+  readonly url: string;
+  readonly finalUrl: string;
+  readonly status: number;
+  readonly contentType: string;
+  readonly title?: string;
+  readonly content: string;
+  readonly truncated: boolean;
+  readonly untrusted: true;
+}
+
+export interface WebSearchRequestV1 {
+  readonly query: string;
+  readonly maxResults?: number;
+}
+
+export interface WebSearchPayloadV1 {
+  readonly query: string;
+  readonly results: readonly {
+    readonly title: string;
+    readonly url: string;
+    readonly snippet: string;
+  }[];
+  readonly untrusted: true;
+}
+
+export type WebAccessOutcomeV1<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly reason: string };
+
+/** Neutral async web port. URL policy and provider ownership stay external. */
+export interface WebAccessServiceV1 {
+  fetch(
+    input: WebFetchRequestV1,
+    signal?: AbortSignal,
+  ): Promise<WebAccessOutcomeV1<WebFetchPayloadV1>>;
+  search(
+    input: WebSearchRequestV1,
+    signal?: AbortSignal,
+  ): Promise<WebAccessOutcomeV1<WebSearchPayloadV1>>;
+}
+
+export interface TaskProgressItemV1 {
+  readonly id: string;
+  readonly content: string;
+  readonly status: "pending" | "in_progress" | "done";
+  readonly priority?: "low" | "medium" | "high";
+}
+
+export interface TaskProgressSnapshotV1 {
+  readonly schemaVersion: "paw.task-progress.v1";
+  readonly revision: number;
+  readonly items: readonly TaskProgressItemV1[];
+  readonly total: number;
+  readonly completed: number;
+  readonly percent: number;
+  readonly status: "empty" | "pending" | "in_progress" | "completed";
+  readonly current?: string;
+}
+
+export interface TaskProgressActivityV1 {
+  readonly id: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly status: ManagedJobSnapshotV1["status"];
+  readonly startedAt: number;
+  readonly finishedAt?: number;
+  readonly elapsedMs: number;
+  readonly detail?: string;
+}
+
+export interface TaskProgressViewV1 {
+  readonly snapshot?: TaskProgressSnapshotV1;
+  readonly activities: readonly TaskProgressActivityV1[];
+}
+
+export type TaskProgressOutcomeV1<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly reason: string };
+
+/** Neutral async port; Journal projection and live-activity ownership stay external. */
+export interface TaskProgressServiceV1 {
+  write(
+    items: readonly TaskProgressItemV1[],
+    signal?: AbortSignal,
+  ): Promise<TaskProgressOutcomeV1<TaskProgressSnapshotV1>>;
+  read(
+    signal?: AbortSignal,
+  ): Promise<TaskProgressOutcomeV1<TaskProgressViewV1>>;
+}
+
 export interface SubAgentArtifact {
   readonly type: "file" | "code" | "test_result" | "search_result";
   readonly path?: string;
@@ -50,15 +178,56 @@ export interface SubAgentArtifact {
   readonly summary: string;
 }
 
+export interface SubAgentCommandEvidenceV1 {
+  readonly command: string;
+  readonly cwd?: string;
+  readonly exitCode?: number;
+  readonly timedOut: boolean;
+  readonly passed: boolean;
+  readonly summary: string;
+}
+
+/** Program-projected child evidence. Free-form assistant text is not authority. */
+export interface SubAgentOutcomeV1 {
+  readonly schemaVersion: "paw.sub-agent-outcome.v1";
+  readonly effectProfile: "inspect" | "execute" | "mutate" | "mixed";
+  readonly verdict: "pass" | "fail" | "partial" | "not_applicable";
+  readonly commands: readonly SubAgentCommandEvidenceV1[];
+  readonly artifactRefs: readonly string[];
+  readonly sourceRevision?: string;
+}
+
 export interface SubAgentResult {
   readonly status: "completed" | "failed";
   readonly summary: string;
+  /** Durable child-run locator returned to the parent tool result. */
+  readonly childRun?: {
+    readonly runtime: "paw_next_v3";
+    readonly sessionId: string;
+    readonly runId: string;
+    readonly parentCallId: string;
+    readonly configHash: string;
+    readonly tailSeq: number;
+  };
+  /** Durable parent-run task identity owned by the collaboration plugin. */
+  readonly collaborationTask?: {
+    readonly schemaVersion: "paw.collaboration-task.v2";
+    readonly taskId: string;
+    readonly agentId: string;
+    readonly role: string;
+    readonly effectProfile: "inspect" | "execute" | "mutate";
+    readonly childPolicy: "read_only" | "read_write";
+    readonly status: "completed" | "failed";
+  };
   readonly findings?: readonly string[];
   readonly changedFiles?: readonly string[];
   readonly testsRun?: readonly {
     readonly name: string;
     readonly passed: boolean;
+    readonly exitCode?: number;
+    readonly timedOut?: boolean;
   }[];
+  readonly outcome?: SubAgentOutcomeV1;
   readonly errors?: readonly string[];
   readonly artifacts?: readonly SubAgentArtifact[];
   /** 完整追踪数据：调试/回放/TUI 用 — 不注入父 Agent 上下文。 */
@@ -124,7 +293,10 @@ export interface SubAgentLauncher {
 export interface HarnessContext {
   readonly workspaceRoot: string;
   readonly mcp?: McpClientManager;
+  /** Exact host-authorized MCP targets visible through workspace.use_mcp. */
+  readonly mcpAllowedTools?: readonly string[];
   readonly todoStore?: TodoStore;
+  readonly taskProgress?: TaskProgressServiceV1;
   /**
    * Session-owned acceptance ledger. The agent layer injects the durable
    * implementation so harness can expose a native tool without depending on
@@ -154,6 +326,10 @@ export interface HarnessContext {
   readonly watcher?: WorkspaceWatcher;
   readonly abortSignal?: AbortSignal;
   readonly parentRunId?: string;
+  /** Stable identity of the currently executing parent tool call. */
+  readonly currentToolCallId?: string;
+  /** Paw Next physical checkpoint namespace; distinct from the product run id. */
+  readonly checkpointNamespaceId?: string;
   /** 构建子 Agent 共享上下文的回调 */
   readonly buildSubAgentSharedContext?: (input: {
     readonly goal: string;
@@ -221,10 +397,7 @@ export interface HarnessContext {
    * memory.list/read/save 唯一在线入口。
    */
   readonly memoryRuntime?: {
-    listMemories(query?: {
-      limit?: number;
-      type?: string;
-    }): Promise<
+    listMemories(query?: { limit?: number; type?: string }): Promise<
       readonly {
         id: string;
         title: string;
@@ -260,4 +433,8 @@ export interface HarnessContext {
   readonly memoryTaskId?: string;
   /** P3 冷库：可寻址归档注册表（context.recall 工具的执行后端） */
   readonly artifactRegistry?: ArtifactRegistryLike;
+  /** Durable/remote recall backend. Preferred over the legacy in-memory registry. */
+  readonly payloadRecall?: PayloadRecallServiceV1;
+  /** Policy-owning web backend. Preferred over the legacy direct fetch helpers. */
+  readonly webAccess?: WebAccessServiceV1;
 }

@@ -218,8 +218,8 @@ function parseToolCallDelta(
  * - OpenAI 官方：`prompt_tokens`, `completion_tokens`, `total_tokens`
  * - 某些兼容实现：`promptTokens`, `completionTokens`, `totalTokens`
  *
- * 额外解析 `prompt_tokens_details.cached_tokens` 用于追踪 prompt caching 的命中量
- * （OpenAI/DeepSeek 兼容的缓存功能）。
+ * 额外解析 OpenAI 的 `prompt_tokens_details.cached_tokens`，以及 DeepSeek 的
+ * `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`，用于持久化前缀缓存日志。
  *
  * @param raw - usage 字段的原始 JSON 值
  * @returns 结构化的 token 用量对象，若无法解析则返回 undefined
@@ -235,25 +235,51 @@ export function parseOpenAiUsageJson(
   const promptTokens = pickNum(u.prompt_tokens ?? u.promptTokens);
   const completionTokens = pickNum(u.completion_tokens ?? u.completionTokens);
   const totalTokens = pickNum(u.total_tokens ?? u.totalTokens);
-  if (
-    promptTokens === undefined &&
-    completionTokens === undefined &&
-    totalTokens === undefined
-  ) {
-    return undefined;
-  }
-  // 提取 prompt_tokens_details 中的缓存 token 数（OpenAI / DeepSeek 兼容）
-  let cachedPromptTokens: number | undefined;
+  // DeepSeek 在 usage 根节点报告 hit/miss；OpenAI 在 details 中报告 hit。
+  let cachedPromptTokens = pickNum(
+    u.prompt_cache_hit_tokens ?? u.promptCacheHitTokens,
+  );
+  let cacheMissPromptTokens = pickNum(
+    u.prompt_cache_miss_tokens ?? u.promptCacheMissTokens,
+  );
   const details = u.prompt_tokens_details ?? u.promptTokensDetails;
-  if (details !== null && typeof details === "object") {
+  if (
+    cachedPromptTokens === undefined &&
+    details !== null &&
+    typeof details === "object"
+  ) {
     const d = details as Record<string, unknown>;
     cachedPromptTokens = pickNum(d.cached_tokens ?? d.cachedTokens);
   }
+  if (
+    cacheMissPromptTokens === undefined &&
+    promptTokens !== undefined &&
+    cachedPromptTokens !== undefined
+  ) {
+    cacheMissPromptTokens = Math.max(0, promptTokens - cachedPromptTokens);
+  }
+  const resolvedPromptTokens =
+    promptTokens ??
+    (cachedPromptTokens !== undefined && cacheMissPromptTokens !== undefined
+      ? cachedPromptTokens + cacheMissPromptTokens
+      : undefined);
+  if (
+    resolvedPromptTokens === undefined &&
+    completionTokens === undefined &&
+    totalTokens === undefined &&
+    cachedPromptTokens === undefined &&
+    cacheMissPromptTokens === undefined
+  ) {
+    return undefined;
+  }
   return {
-    ...(promptTokens !== undefined ? { promptTokens } : {}),
+    ...(resolvedPromptTokens !== undefined
+      ? { promptTokens: resolvedPromptTokens }
+      : {}),
     ...(completionTokens !== undefined ? { completionTokens } : {}),
     ...(totalTokens !== undefined ? { totalTokens } : {}),
     ...(cachedPromptTokens !== undefined ? { cachedPromptTokens } : {}),
+    ...(cacheMissPromptTokens !== undefined ? { cacheMissPromptTokens } : {}),
   };
 }
 

@@ -17,7 +17,7 @@ export function buildSweCompareGoal(probe: SweBenchLiteInstance): string {
     "After editing, run the narrowest relevant tests that are feasible in this environment.",
     "Finish only after inspecting the final diff and reporting the verification performed.",
     failToPass.length > 0
-      ? `These tests currently fail and must pass after your fix. Test names describe behavior, not which function to modify — do not change a function just because its name appears here. Verify by running tests.\n${failToPass.map((name) => `- ${name}`).join("\n")}`
+      ? `External evaluator acceptance tests (read-only):\nThe evaluator may apply updated or additional assertions that are not present in this checkout. A local test with the same identifier may therefore already pass; treat these identifiers as behavioral targets, not proof that the current checkout reproduces the failure. Do not modify test files. Run locally available versions when feasible.\n${failToPass.map((name) => `- ${name}`).join("\n")}`
       : "No explicit FAIL_TO_PASS identifiers are available; locate the narrowest relevant existing test.",
     passToPass.length > 0
       ? `Regression tests that must remain passing (read-only):\n${passToPass

@@ -26,6 +26,9 @@ export {
   SENSITIVE_PATH_SEGMENTS,
   type PathDecision,
   type PathRisk,
+  type WorkspacePathCheckOptionsV1,
+  type WorkspacePathOperationV1,
+  type WorkspacePathPolicyV1,
 } from "./path-guard.js";
 
 // ---- 本地文件操作（只读）----
@@ -144,7 +147,10 @@ export {
 
 // ---- Git worktree 隔离 — 从 cli-core 移入 ----
 export {
+  createRecoverableWorktreeV1,
   createTemporaryWorktree,
   findGitRoot,
+  type RecoverableWorktreeOptionsV1,
+  type RecoverableWorktreeV1,
   type TemporaryWorktree,
 } from "./worktree.js";

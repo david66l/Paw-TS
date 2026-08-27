@@ -12,6 +12,7 @@ describe("observation provenance v1", () => {
     ["workspace.run_shell", "process", "process_output", "none"],
     ["workspace.web_fetch", "web", "external_content", "none"],
     ["mcp:github:read", "mcp", "external_content", "none"],
+    ["workspace.use_mcp", "mcp", "external_content", "none"],
     ["memory.read", "memory", "memory_content", "none"],
     ["context.recall", "memory", "memory_content", "none"],
     ["workspace.run_agent", "subagent", "delegated_content", "none"],
