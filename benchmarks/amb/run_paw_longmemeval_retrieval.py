@@ -492,6 +492,8 @@ RELEASE_PROVIDER_ENV = {
     "PAW_AMB_EMBEDDING_VERSION": "window-mean-v1",
     "PAW_AMB_DENSE_INDEX_LEVEL": "turn",
     "PAW_AMB_EMBEDDING_CACHE_ENTRIES": "2048",
+    "PAW_AMB_EMBEDDING_STREAM_BATCH_SIZE": "64",
+    "PAW_AMB_EMBEDDING_STORE_CONCURRENCY": "8",
     "PAW_AMB_EMBEDDING_MAX_ATTEMPTS": "3",
     "PAW_AMB_EMBEDDING_RETRY_BASE_MS": "200",
     "PAW_AMB_ATOM_SOURCE_MAX_CHARS": "14000",
@@ -516,7 +518,7 @@ def local_embedding_artifact() -> dict:
         "dimensions": 1536,
         "windowWords": 180,
         "windowOverlapWords": 30,
-        "torchThreads": 1,
+        "torchThreads": 8,
         "transportMode": "single-thread-bounded",
     }
     if not isinstance(payload, dict) or any(

@@ -106,6 +106,10 @@ import {
 } from "./atom-ingest-control.js";
 import { decideAmbEmbeddingPrewarmV1 } from "./embedding-prewarm-policy.js";
 import {
+  planAmbEmbeddingWavesV1,
+  streamAmbEmbeddingBatchesV1,
+} from "./embedding-stream.js";
+import {
   isAmbDocumentVisibleAtQueryV1,
   parseAmbQueryTimeCutoffV1,
 } from "./query-time-cutoff.js";
@@ -292,6 +296,20 @@ const embeddingRetryBaseDelayMs = readBoundedInteger(
   0,
   5_000,
   "PAW_AMB_EMBEDDING_RETRY_BASE_MS",
+);
+const embeddingStreamBatchSize = readBoundedInteger(
+  process.env.PAW_AMB_EMBEDDING_STREAM_BATCH_SIZE,
+  64,
+  1,
+  64,
+  "PAW_AMB_EMBEDDING_STREAM_BATCH_SIZE",
+);
+const embeddingStoreConcurrency = readBoundedInteger(
+  process.env.PAW_AMB_EMBEDDING_STORE_CONCURRENCY,
+  8,
+  1,
+  8,
+  "PAW_AMB_EMBEDDING_STORE_CONCURRENCY",
 );
 if (embeddingBaseUrl && retrievalPolicy !== "rrf") {
   throw new Error("Dense embedding is supported only by the RRF AMB policy");
@@ -1243,6 +1261,52 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
   let resumedSources = 0;
   let topicOrganizationFailures = 0;
   let topicDossierProjectionFailures = 0;
+  let embeddingStreamBatches = 0;
+  let embeddingStreamItems = 0;
+  let embeddingDocumentWaves = 0;
+  let embeddingWaveItems = 0;
+
+  function l0EmbeddingTexts(document: NormalizedAmbDocumentV1): string[] {
+    return [
+      ...(sourceChunkEmbedding
+        ? (sourceChunksByDocument.get(`${document.userId}\0${document.id}`) ?? [])
+        : []),
+      ...(sourceSpanEmbedding
+        ? (
+            evidenceWindowsByDocument.get(
+              `${document.userId}\0${document.id}`,
+            ) ?? []
+          ).flatMap((window) => window.source.map((source) => source.content))
+        : []),
+    ];
+  }
+
+  async function putL0Entries(
+    engine: PostgresMemoryStoreEngine,
+    entries: readonly EpisodicExperience[],
+    denseEmbeddingEnabled: boolean,
+  ): Promise<void> {
+    if (entries.length === 0) return;
+    if (!denseEmbeddingEnabled || !embedding?.embedMany) {
+      for (const entry of entries) await engine.put(entry);
+      return;
+    }
+    const report = await streamAmbEmbeddingBatchesV1({
+      items: entries,
+      batchSize: embeddingStreamBatchSize,
+      text: (entry) => entry.whenToUse,
+      prewarm: (texts) => embedding.embedMany!(texts),
+      persistBatch: (batch) =>
+        runKeyedInOrderV1({
+          items: batch,
+          concurrency: embeddingStoreConcurrency,
+          key: (entry) => entry.id,
+          run: (entry) => engine.put(entry),
+        }),
+    });
+    embeddingStreamBatches += report.batchCount;
+    embeddingStreamItems += report.itemCount;
+  }
 
   async function ingestDocument(
     document: NormalizedAmbDocumentV1,
@@ -1281,7 +1345,7 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
       // Keep an exact L0 copy for conservative routes. L2/L3 projections are
       // intentionally user-grounded, but a fallback must retain the complete
       // conversation (including assistant turns) to match raw retrieval.
-      for (const [index, chunk] of sourceChunks.entries()) {
+      const sourceChunkEntries = sourceChunks.map((chunk, index) => {
         const sourceEntry: EpisodicExperience = {
           id: sourceChunkId(userId, documentId, index),
           kind: "episodic",
@@ -1300,15 +1364,16 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
           issueType: "AmbBenchmarkSourceTimelineChunk",
           taskId: `amb-source-${sha(documentId).slice(0, 20)}`,
         };
-        await sourceChunkEngineFor(userId).put(sourceEntry);
-        storedSourceChunks += 1;
-      }
-      for (const [index, window] of evidenceWindows.entries()) {
-        const sourceFromSeq = window.source[0]?.seq;
-        const sourceThroughSeq = window.source.at(-1)?.seq;
-        if (sourceFromSeq === undefined || sourceThroughSeq === undefined)
-          continue;
-        for (const source of window.source) {
+        return sourceEntry;
+      });
+      await putL0Entries(
+        sourceChunkEngineFor(userId),
+        sourceChunkEntries,
+        sourceChunkEmbedding !== undefined,
+      );
+      storedSourceChunks += sourceChunkEntries.length;
+      const sourceBlockEntries = evidenceWindows.flatMap((window) =>
+        window.source.map((source) => {
           const sourceEntry: EpisodicExperience = {
             id: sourceBlockId(userId, documentId, source.seq),
             kind: "episodic",
@@ -1324,14 +1389,23 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
             whenToUse: source.content,
             perspective: "",
             modification: [],
-            // Persist the L0 trust boundary in the evidence-address index.
-            // Older benchmark stores are supported by sourceKindByUser above.
             issueType: source.kind,
             taskId: `amb-source-${sha(documentId).slice(0, 20)}`,
           };
-          await sourceEngineFor(userId).put(sourceEntry);
-          storedSourceBlocks += 1;
-        }
+          return sourceEntry;
+        }),
+      );
+      await putL0Entries(
+        sourceEngineFor(userId),
+        sourceBlockEntries,
+        sourceSpanEmbedding !== undefined,
+      );
+      storedSourceBlocks += sourceBlockEntries.length;
+      for (const [index, window] of evidenceWindows.entries()) {
+        const sourceFromSeq = window.source[0]?.seq;
+        const sourceThroughSeq = window.source.at(-1)?.seq;
+        if (sourceFromSeq === undefined || sourceThroughSeq === undefined)
+          continue;
         const sourceHash = sha(JSON.stringify(window.source));
         const writeId = sha(
           `${atomWriterIdentityHash}\n${runKey}\n${userId}\n${documentId}\n${sourceHash}\natom\n${index}`,
@@ -1531,26 +1605,44 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
   }
 
   if (ingestMode === "atom") {
-    await runKeyedInOrderV1({
-      items: documents,
-      concurrency: atomLimits.concurrency,
-      key: (document) => document.userId,
-      run: async (document) => {
-        try {
-          await ingestDocument(document);
-        } catch (error) {
-          log("atom_document_failed", {
-            userFingerprint: sha(document.userId).slice(0, 20),
-            documentHash: sha(document.id),
-            code: error instanceof Error ? error.name : "UnknownError",
-            errorFingerprint:
-              error instanceof Error ? sha(error.message).slice(0, 20) : null,
-            checkpoint: atomCheckpoint?.snapshot() ?? null,
-          });
-          throw error;
+    const waves = embedding?.embedMany
+      ? planAmbEmbeddingWavesV1({
+          items: documents,
+          weight: (document) => l0EmbeddingTexts(document).length,
+          maxWeight: embeddingCacheMaxEntries,
+          maxItems: 64,
+        })
+      : [documents];
+    for (const wave of waves) {
+      if (embedding?.embedMany) {
+        const texts = wave.flatMap(l0EmbeddingTexts);
+        if (texts.length <= embeddingCacheMaxEntries) {
+          await embedding.embedMany(texts);
+          embeddingDocumentWaves += 1;
+          embeddingWaveItems += texts.length;
         }
-      },
-    });
+      }
+      await runKeyedInOrderV1({
+        items: wave,
+        concurrency: atomLimits.concurrency,
+        key: (document) => document.userId,
+        run: async (document) => {
+          try {
+            await ingestDocument(document);
+          } catch (error) {
+            log("atom_document_failed", {
+              userFingerprint: sha(document.userId).slice(0, 20),
+              documentHash: sha(document.id),
+              code: error instanceof Error ? error.name : "UnknownError",
+              errorFingerprint:
+                error instanceof Error ? sha(error.message).slice(0, 20) : null,
+              checkpoint: atomCheckpoint?.snapshot() ?? null,
+            });
+            throw error;
+          }
+        },
+      });
+    }
   } else {
     for (const document of documents) await ingestDocument(document);
   }
@@ -1568,6 +1660,12 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
     resumedSources,
     topicOrganizationFailures,
     topicDossierProjectionFailures,
+    embeddingStreamBatches,
+    embeddingStreamItems,
+    embeddingStreamBatchSize,
+    embeddingStoreConcurrency,
+    embeddingDocumentWaves,
+    embeddingWaveItems,
     budget: ingestMode === "atom" ? atomBudget.snapshot() : null,
     checkpoint: atomCheckpoint?.snapshot() ?? null,
   });
@@ -3933,6 +4031,8 @@ log("bridge_start", {
         version: embedding.version,
         dimensions: embedding.dimensions,
         cacheMaxEntries: embeddingCacheMaxEntries,
+        streamBatchSize: embeddingStreamBatchSize,
+        storeConcurrency: embeddingStoreConcurrency,
         maxAttempts: embeddingMaxAttempts,
         retryBaseDelayMs: embeddingRetryBaseDelayMs,
       }
