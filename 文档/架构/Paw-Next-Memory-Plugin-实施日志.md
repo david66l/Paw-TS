@@ -1002,3 +1002,10 @@ Artifacts:
 - AMB `runs` 中的历史实验暂时保留：该目录同时包含密封账本、v5 baseline/treatment/comparison、原始 stdout/stderr 和 v9 pre-license source bundle。在最终 license 与源码冻结完成前，不用整目录清理破坏审计链。
 - `.gitignore` 新增 Paw Next 和 completion-gate 根目录诊断产物规则，避免同类临时 JSON 再次污染工作树。
 - 清理后回归：`bun test benchmarks/amb` 为 14 pass / 0 fail / 51 expectations；Python `unittest discover` 为 27 pass / 0 fail。未发现因删除运行产物造成的 fixture 或 harness 缺失。
+
+### M7：LongMemEval-S 500 题全量运行预检
+
+- 为现有分层盲测 runner 新增 `--full-split`，只负责选择官方 LongMemEval-S 全集，不改变检索、回答或裁判逻辑。入口要求数据集恰好包含 500 个唯一 query ID、500 个非空隔离 user ID 和完整官方题型集合，否则在 ingest 或远程调用前 fail closed。
+- 全量模式禁止结合旧 holdout exclusion；清单显式写入 `fullSplit=true`、真实题型计数和 `official-full-split-seeded-order-v1`，把“公开全量回归”与“未见 holdout”分开。
+- 本地预检确认 pinned 数据为 500 queries / 500 users / 23,867 documents；题型分布为 70/56/133/133/78/30。PostgreSQL 端口和 pinned embedding server 均可用，embedding revision 与 artifact SHA 校验通过。
+- 回归测试：Python AMB suite 29 pass / 0 fail；TypeScript AMB suite 14 pass / 0 fail / 51 expectations。下一步在干净 commit 上生成 source-bound release plan，再以独立 cold cache 执行 DeepSeek treatment 全量运行。

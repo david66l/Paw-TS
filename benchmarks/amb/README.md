@@ -6,6 +6,12 @@ The retained local paired blind run scored 95/120 (79.2%) versus 80/120 (66.7%)
 for the bounded baseline, with an exact paired p-value of 0.0026. It is a
 project-local release gate, not an official AMB leaderboard submission.
 
+For an official-split-scale local run, use `--full-split`. The runner fails
+closed unless the pinned LongMemEval-S artifact exposes exactly 500 unique
+queries and 500 isolated users. Full-split mode cannot be combined with prior
+holdout exclusions; it is a public full-suite regression, not a new unseen
+holdout.
+
 This adapter runs Paw M1 retrieval against Vectorize's public Agent Memory
 Benchmark without modifying Paw's runtime or the upstream benchmark package.
 

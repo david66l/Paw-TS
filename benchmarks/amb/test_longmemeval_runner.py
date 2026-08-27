@@ -13,6 +13,7 @@ from run_paw_longmemeval_retrieval import (
     experiment_protocol,
     public_report,
     resolved_release_provider_env,
+    select_full_split_queries,
     select_queries,
     source_artifact_paths,
     source_artifact_sha256,
@@ -146,6 +147,57 @@ class LongMemEvalRunnerTest(unittest.TestCase):
         selected_ids = {query.id for query in selected}
         self.assertIn("first-only", selected_ids)
         self.assertIn("second-shared", selected_ids)
+
+    def test_full_split_requires_exact_unique_official_identity(self) -> None:
+        queries = [
+            SimpleNamespace(
+                id=f"query-{index}",
+                user_id=f"user-{index}",
+                meta={"question_type": QUESTION_TYPES[index % len(QUESTION_TYPES)]},
+            )
+            for index in range(500)
+        ]
+
+        class FullDataset:
+            def load_queries(self, split: str):
+                self.observed_split = split
+                return queries
+
+        dataset = FullDataset()
+        selected = select_full_split_queries(dataset, seed="full-seed")
+
+        self.assertEqual("s", dataset.observed_split)
+        self.assertEqual(500, len(selected))
+        self.assertEqual(500, len({query.id for query in selected}))
+        self.assertEqual(500, len({query.user_id for query in selected}))
+        self.assertEqual(
+            [query.id for query in selected],
+            [query.id for query in select_full_split_queries(dataset, seed="full-seed")],
+        )
+
+    def test_full_split_rejects_partial_or_shared_user_data(self) -> None:
+        class PartialDataset:
+            def load_queries(self, _split: str):
+                return []
+
+        with self.assertRaisesRegex(ValueError, "expected 500"):
+            select_full_split_queries(PartialDataset(), seed="full-seed")
+
+        queries = [
+            SimpleNamespace(
+                id=f"query-{index}",
+                user_id="shared" if index < 2 else f"user-{index}",
+                meta={"question_type": QUESTION_TYPES[index % len(QUESTION_TYPES)]},
+            )
+            for index in range(500)
+        ]
+
+        class SharedUserDataset:
+            def load_queries(self, _split: str):
+                return queries
+
+        with self.assertRaisesRegex(ValueError, "one non-empty isolated user"):
+            select_full_split_queries(SharedUserDataset(), seed="full-seed")
 
     def test_public_report_removes_per_query_or_reversible_identifiers(self) -> None:
         sealed = {

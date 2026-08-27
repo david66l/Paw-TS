@@ -29,6 +29,7 @@ QUESTION_TYPES = (
     "knowledge-update",
     "single-session-preference",
 )
+EXPECTED_LONGMEMEVAL_S_QUERY_COUNT = 500
 RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v9:cost-audited-cache-envelope"
 MEMORY_POLICY = "paw.amb-evidence-first.v19:fail-closed-triaged-closure"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
@@ -457,6 +458,29 @@ def select_queries(
     return selected
 
 
+def select_full_split_queries(dataset, *, seed: str) -> list[object]:
+    queries = list(dataset.load_queries("s"))
+    if len(queries) != EXPECTED_LONGMEMEVAL_S_QUERY_COUNT:
+        raise ValueError(
+            "LongMemEval-S full split identity is incompatible: "
+            f"expected {EXPECTED_LONGMEMEVAL_S_QUERY_COUNT} queries, "
+            f"found {len(queries)}"
+        )
+    query_ids = [query.id for query in queries]
+    user_ids = [query.user_id for query in queries]
+    if len(set(query_ids)) != len(query_ids):
+        raise ValueError("LongMemEval-S full split contains duplicate query IDs")
+    if any(not user_id for user_id in user_ids) or len(set(user_ids)) != len(user_ids):
+        raise ValueError(
+            "LongMemEval-S full split must contain one non-empty isolated user per query"
+        )
+    observed_types = {query.meta.get("question_type") for query in queries}
+    if observed_types != set(QUESTION_TYPES):
+        raise ValueError("LongMemEval-S full split question types are incompatible")
+    queries.sort(key=lambda query: sha(f"{seed}\nfull-split\n{query.id}"))
+    return queries
+
+
 RELEASE_PROVIDER_ENV = {
     "DATABASE_URL": "postgresql://postgres@127.0.0.1:54329/paw_memory_test",
     "PAW_AMB_RETRIEVAL_POLICY": "rrf",
@@ -834,22 +858,30 @@ def run(args: argparse.Namespace) -> dict:
         "excludedQueryCount": len(excluded_fingerprints),
         "excludedUserCount": len(excluded_user_ids),
     }
-    count_by_type = {
-        question_type: (
-            args.preference_count
-            if question_type == "single-session-preference"
-            and args.preference_count is not None
-            else args.per_type
+    if args.full_split:
+        queries = select_full_split_queries(dataset, seed=args.seed)
+        count_by_type = dict(
+            Counter(query.meta["question_type"] for query in queries)
         )
-        for question_type in QUESTION_TYPES
-    }
-    queries = select_queries(
-        dataset,
-        count_by_type=count_by_type,
-        seed=args.seed,
-        excluded_fingerprints=excluded_fingerprints,
-        excluded_user_ids=excluded_user_ids,
-    )
+        selection_policy = "official-full-split-seeded-order-v1"
+    else:
+        count_by_type = {
+            question_type: (
+                args.preference_count
+                if question_type == "single-session-preference"
+                and args.preference_count is not None
+                else args.per_type
+            )
+            for question_type in QUESTION_TYPES
+        }
+        queries = select_queries(
+            dataset,
+            count_by_type=count_by_type,
+            seed=args.seed,
+            excluded_fingerprints=excluded_fingerprints,
+            excluded_user_ids=excluded_user_ids,
+        )
+        selection_policy = "sha256-seeded-global-persona-bipartite-matching-v3"
     user_ids = {query.user_id for query in queries if query.user_id}
     documents = dataset.load_documents("s", user_ids=user_ids)
     document_counts = Counter(document.user_id for document in documents)
@@ -860,7 +892,8 @@ def run(args: argparse.Namespace) -> dict:
         "seed": args.seed,
         "seedCommitment": eval_hmac(f"seed:{args.seed}", args.eval_hmac_key),
         "evalKeyId": eval_key_id,
-        "perQuestionType": args.per_type,
+        "perQuestionType": None if args.full_split else args.per_type,
+        "fullSplit": args.full_split,
         "questionTypeTargets": count_by_type,
         "queryCount": len(queries),
         "documentCount": len(documents),
@@ -870,7 +903,7 @@ def run(args: argparse.Namespace) -> dict:
         ),
         "questionTypeCounts": dict(Counter(query.meta["question_type"] for query in queries)),
         "historyDocumentCounts": sorted(document_counts.values()),
-        "selectionPolicy": "sha256-seeded-global-persona-bipartite-matching-v3",
+        "selectionPolicy": selection_policy,
         "retrievalProfile": RETRIEVAL_PROFILE,
         "evaluationMode": "static-initial-evidence-packet",
         "partialRecoveryExecuted": False,
@@ -1133,6 +1166,11 @@ def main() -> None:
     )
     parser.add_argument("--per-type", type=int, default=2)
     parser.add_argument(
+        "--full-split",
+        action="store_true",
+        help="Run all 500 queries in the pinned official LongMemEval-S split.",
+    )
+    parser.add_argument(
         "--preference-count",
         type=int,
         help="Optional explicit target for the smaller preference category.",
@@ -1199,6 +1237,8 @@ def main() -> None:
         raise ValueError("--recover-claimed-arm requires --blind-plan")
     if args.release_blind and args.dry_run and not args.answer:
         raise ValueError("release blind plan must bind an answered evaluation")
+    if args.full_split and (args.exclude_report or args.exclude_ledger):
+        raise ValueError("--full-split cannot be combined with exclusion reports")
     if args.eval_key_file is None:
         args.eval_key_file = (
             Path("benchmarks/amb/runs/.secrets/longmemeval-eval-hmac.key")
