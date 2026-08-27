@@ -4,9 +4,13 @@
 
 - Memory is installed by CLI composition through runtime context/input/tool
   ports; `@paw/runtime` has no dependency on `@paw/memory-plugin`.
-- Product composition imports the narrow `@paw/memory-plugin/evidence-first`
-  subpath. Its tested runtime dependency closure includes lightweight state
-  reduction but excludes the root barrel, Aspect, Facet, and temporal graph.
+- `packages/memory-core` is a self-contained package boundary with no `@paw/*`
+  dependency. It includes structural storage/model ports, a deterministic
+  in-memory reference adapter, its own README, TypeScript config, package
+  metadata, and 56 standalone tests.
+- Product composition keeps importing `@paw/memory-plugin/evidence-first`, a
+  compatibility alias of the standalone core. Aspect, Facet, temporal graph,
+  PostgreSQL, and Paw Runtime stay outside the core dependency closure.
 - Tenant, user, workspace, repository, dossier, raw archive, provider, and
   physical storage-cache boundaries fail closed.
 - L0 and L1 can degrade independently, while any degraded evidence channel
@@ -30,9 +34,10 @@
 
 - Choose and add a repository license. Source availability alone grants no
   reuse rights.
-- Decide whether this is repository-source-only or an npm package. The package
-  remains `private: true`; npm publication requires a separate package surface,
-  build output, exports, provenance, and publish-policy review.
+- Decide whether the core is repository-source-only or an npm package. Its
+  package surface and exports exist, but it remains `private: true`; npm
+  publication still requires build output, provenance, and publish-policy
+  review.
 - Freeze the final package/source metadata, generate and archive the
   deterministic source bundle, and retain its public manifest with the release.
 - Run the final targeted test matrix after the license/package decision.
@@ -50,6 +55,8 @@
 ## Current verification commands
 
 ```powershell
+bun run typecheck:memory-core
+bun test packages/memory-core
 bun run typecheck:memory-plugin
 bun test packages/memory-plugin/test packages/memory/test/longterm-embedding-provider.test.ts
 bunx tsc --noEmit -p benchmarks/amb/tsconfig.json

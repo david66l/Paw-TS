@@ -17,10 +17,26 @@ from deepseek_llm import (  # noqa: E402
     StructuredOutputError,
     _memory_tool_definitions,
     _parse_json_object,
+    _structured_messages,
 )
 
 
 class DeepSeekToolProfileTest(unittest.TestCase):
+    def test_structured_schema_is_a_stable_prefix(self) -> None:
+        schema = {
+            "type": "object",
+            "properties": {"answer": {"type": "string"}},
+            "required": ["answer"],
+            "additionalProperties": False,
+        }
+        first = _structured_messages("first question", schema)
+        second = _structured_messages("second question", schema)
+
+        self.assertEqual(first[0], second[0])
+        self.assertEqual("system", first[0]["role"])
+        self.assertEqual("first question", first[1]["content"])
+        self.assertNotIn('"properties"', first[1]["content"])
+
     def test_l0_control_exposes_only_conversation_search(self) -> None:
         tools = _memory_tool_definitions(False, "l0_only")
         self.assertEqual(
@@ -74,7 +90,7 @@ class DeepSeekToolProfileTest(unittest.TestCase):
                 "promptCacheMissTokens": 75,
             }
             first = DeepSeekFlashLLM()
-            first._generate_remote = lambda _prompt: (  # type: ignore[method-assign]
+            first._generate_remote = lambda _messages: (  # type: ignore[method-assign]
                 {"answer": "ok"},
                 usage,
                 {"memoryToolCalls": 0},
@@ -82,6 +98,7 @@ class DeepSeekToolProfileTest(unittest.TestCase):
             self.assertEqual({"answer": "ok"}, first.generate("question", schema))
             self.assertEqual(130, first.stats()["workloadTotalTokens"])
             self.assertTrue(first.stats()["costEvidenceComplete"])
+            self.assertIn("stable-schema-prefix", first.stats()["structuredMessagePolicy"])
 
             second = DeepSeekFlashLLM()
             self.assertEqual({"answer": "ok"}, second.generate("question", schema))

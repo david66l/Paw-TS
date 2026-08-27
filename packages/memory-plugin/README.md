@@ -5,6 +5,10 @@ Paw Next. It is composed outside `@paw/runtime`: the runtime owns execution,
 while this package owns memory scope, retrieval, evidence validation, temporal
 projection, caching, and model-facing context.
 
+The runtime-independent algorithm now lives in [`../memory-core`](../memory-core).
+The plugin keeps Paw storage/composition adapters and compatibility exports;
+the core directory is the source boundary intended for a separate repository.
+
 See [OPEN_SOURCE_READINESS.md](./OPEN_SOURCE_READINESS.md) for the exact release
 gate, completed safeguards, and remaining publication decisions.
 
@@ -116,11 +120,11 @@ in `benchmarks/amb/LONGMEMEVAL_RELEASE_REPORT.md`. The blind plan must bind the
 same source hash and serialize the project gate thresholds before either arm
 is consumed.
 
-Product composition imports `@paw/memory-plugin/evidence-first`, a narrow
-subpath whose dependency closure excludes the legacy/shadow Aspect, Facet, and
-temporal-graph modules. The root entrypoint retains those exports for research
-and migration compatibility, but they are not prerequisites of global L0/L1
-evidence discovery or lightweight state reduction.
+Product composition imports `@paw/memory-plugin/evidence-first`, now a thin
+alias of `@paw/memory-core`. The core's tested dependency closure contains no
+Paw runtime package and excludes the legacy/shadow Aspect, Facet, and temporal
+graph. The plugin root retains those exports for research and migration
+compatibility.
 
 ## Known preview limits
 

@@ -1,4 +1,4 @@
-import type { MemoryWriterModelV1 } from "./atom-extractor.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_QUERY_EXPANDER_VERSION_V1 =
   "paw.memory-query-expander.v1:bounded-operands-and-aliases" as const;

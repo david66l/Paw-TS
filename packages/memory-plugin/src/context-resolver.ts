@@ -3,11 +3,25 @@ import type {
   InputFactV1,
   JsonValue,
   MemoryCardV1,
-  MemoryRawEvidenceSpanV1,
   MemoryTopicEvidenceStateV1,
 } from "@paw/protocol";
 
 import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
+import {
+  type MemoryContextResolverV1,
+  type MemoryRawEvidenceSpanV1,
+  type MemoryResolvedContextEvidenceV1,
+  type MemoryResolvedContextPacketV1,
+  type MemoryResolvedContextTopicV1,
+  PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
+} from "./context-contract.js";
+export {
+  type MemoryContextResolverV1,
+  type MemoryResolvedContextEvidenceV1,
+  type MemoryResolvedContextPacketV1,
+  type MemoryResolvedContextTopicV1,
+  PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
+} from "./context-contract.js";
 import {
   type MemoryEvidenceCoveragePlanV1,
   type MemoryEvidenceCoveragePlannerV1,
@@ -28,74 +42,11 @@ import {
   createMemorySearchTextsV1,
 } from "./retrieval-input-port.js";
 import type { MemoryTopicDossierStoreV1 } from "./topic-dossier-store.js";
-import type { MemoryTopicDossierV1 } from "./topic-dossier.js";
 import {
   type MemoryTopicEvidenceCatalogItemV1,
   planMemoryTopicEvidenceV1,
 } from "./topic-evidence-planner.js";
 import type { MemoryTopicEvidenceStoreV1 } from "./topic-evidence-store.js";
-
-export const PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1 =
-  "paw.memory-context-resolver.v4:requirement-grounded-l0-audit" as const;
-
-export interface MemoryResolvedContextEvidenceV1 {
-  readonly memoryId: string;
-  readonly layer: "L0" | "L1" | "L2";
-  readonly statement: string;
-  readonly state?: "current" | "historical";
-  readonly supportRole?: "supporting" | "contradicting" | "contextual";
-  readonly validFrom?: string;
-  readonly evidenceRefs: readonly string[];
-}
-
-export interface MemoryResolvedContextTopicV1 {
-  readonly topicId: string;
-  readonly name: string;
-  readonly family: string;
-  readonly dossierId: string;
-  readonly currentConclusions: MemoryTopicDossierV1["currentConclusions"];
-  readonly evolutions: MemoryTopicDossierV1["evolutions"];
-  readonly conflicts: MemoryTopicDossierV1["conflicts"];
-}
-
-export interface MemoryResolvedContextPacketV1 {
-  readonly schemaVersion: "paw.memory-resolved-context.v1";
-  readonly resolverVersion: typeof PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1;
-  readonly packetRevision: string;
-  readonly mode: "planned" | "deterministic_fallback";
-  readonly stop: "sufficient" | "partial" | "missing";
-  readonly requirements: readonly Readonly<{
-    requirementId: string;
-    description: string;
-    priority: "required" | "supporting";
-    minimumEvidence: number;
-    status: "covered" | "partial" | "missing";
-    selectedEvidenceCount: number;
-    supportingMemoryIds: readonly string[];
-    contradictingMemoryIds: readonly string[];
-    unknownMemoryIds: readonly string[];
-  }>[];
-  readonly verification: Readonly<{
-    status: "verified" | "not_configured" | "failed";
-    verifierVersion?: string;
-    verificationRevision?: string;
-    supportingCount: number;
-    contradictionCount: number;
-    unknownCount: number;
-    reasonCode?: string;
-  }>;
-  readonly evidence: readonly MemoryResolvedContextEvidenceV1[];
-  readonly topics: readonly MemoryResolvedContextTopicV1[];
-  readonly spans: readonly MemoryRawEvidenceSpanV1[];
-}
-
-export interface MemoryContextResolverV1 {
-  readonly resolverVersion: typeof PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1;
-  resolve(
-    query: string,
-    signal: AbortSignal,
-  ): Promise<MemoryResolvedContextPacketV1>;
-}
 
 export interface MemoryContextResolverEventV1 {
   readonly schemaVersion: "paw.memory-context-resolver-event.v1";

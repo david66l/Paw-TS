@@ -16,7 +16,7 @@ import {
   defaultMemoryAspectSubjectKeyV1,
   measureMemoryAspectGraphV1,
 } from "./aspect-graph.js";
-import type { MemoryWriterModelV1 } from "./atom-extractor.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import {
   type PawNextMemoryScopeV1,

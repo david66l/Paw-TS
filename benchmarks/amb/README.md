@@ -12,6 +12,40 @@ queries and 500 isolated users. Full-split mode cannot be combined with prior
 holdout exclusions; it is a public full-suite regression, not a new unseen
 holdout.
 
+## Local LongMemEval-S workspace
+
+The complete pinned dataset lives at
+`benchmarks/amb/upstream/.datasets/longmemeval/longmemeval_s_cleaned.json`.
+It is intentionally gitignored. Verify its byte size, SHA-256, upstream commit,
+500 queries, 500 isolated users, 23,867 documents, and six category counts
+without starting PostgreSQL, embeddings, or an LLM:
+
+```powershell
+uv run --project benchmarks/amb/upstream --no-sync -- python `
+  benchmarks/amb/local_longmemeval.py verify
+```
+
+Local retrieval requires PostgreSQL on `127.0.0.1:54329` and the pinned
+embedding service on `127.0.0.1:18081`. Start the embedding service in a second
+terminal, then run a six-question engineering smoke:
+
+```powershell
+uv run --project benchmarks/amb/upstream --no-sync -- python `
+  benchmarks/amb/local_embedding_server.py
+
+uv run --project benchmarks/amb/upstream --no-sync -- python `
+  benchmarks/amb/local_longmemeval.py run --mode smoke
+```
+
+Use `--mode full` for all 500 questions, `--retrieval-only` to avoid answer and
+judge calls, and `--reuse-index` only after the same local mode has completed a
+clean index build. Reuse validates every expected item and required embedding
+before any query runs. The launcher stores its selection seed under the ignored
+local run directory and never prints it. Outputs, response caches, stores, and
+sealed ledgers stay under `benchmarks/amb/runs/longmemeval/local/`; the runner
+keeps content-free retrieval logs under the repository-wide `logs/amb/`
+convention.
+
 This adapter runs Paw M1 retrieval against Vectorize's public Agent Memory
 Benchmark without modifying Paw's runtime or the upstream benchmark package.
 

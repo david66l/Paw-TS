@@ -6,8 +6,8 @@ import type {
 
 import type {
   MemoryConflictCandidateV1,
-  MemoryWriterModelV1,
 } from "./atom-extractor.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 import type { MemoryAtomWriterStoreV1 } from "./atom-store.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
 

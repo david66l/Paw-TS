@@ -8,6 +8,9 @@ import {
 } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
+
+export type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_ATOM_EXTRACTOR_VERSION_V1 =
   "paw.memory-atom-extractor.json.v5:atomic-state" as const;
@@ -53,19 +56,6 @@ export interface MemoryAtomExtractorV1 {
     input: MemoryAtomExtractionInputV1,
     signal: AbortSignal,
   ): Promise<readonly MemoryAtomProposalV1[]>;
-}
-
-export interface MemoryWriterModelV1 {
-  complete(
-    request: Readonly<{ system: string; user: string }>,
-    options: Readonly<{ signal: AbortSignal }>,
-  ): Promise<
-    | Readonly<{ status: "completed"; text: string }>
-    | Readonly<{
-        status: "failed" | "cancelled" | "truncated";
-        errorCode: string;
-      }>
-  >;
 }
 
 export function createJsonMemoryAtomExtractorV1(input: {

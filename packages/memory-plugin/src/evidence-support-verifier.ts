@@ -1,6 +1,6 @@
 import type { MemoryRawEvidenceSpanV1 } from "@paw/protocol";
 
-import type { MemoryWriterModelV1 } from "./atom-extractor.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_VERIFIER_VERSION_V1 =

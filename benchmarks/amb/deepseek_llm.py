@@ -11,10 +11,30 @@ from memory_bench.llm.base import LLM, Schema
 
 
 CACHE_ENTRY_SCHEMA = "paw.amb-llm-cache-entry.v2"
+STRUCTURED_MESSAGE_POLICY = "paw.amb-structured-messages.v1:stable-schema-prefix"
 
 
 class StructuredOutputError(ValueError):
     """The provider returned a final answer that violates the JSON contract."""
+
+
+def _structured_messages(prompt: str, schema_json: dict) -> list[dict]:
+    """Place the reusable response contract before query-specific content."""
+    contract = (
+        f"Structured output policy: {STRUCTURED_MESSAGE_POLICY}\n"
+        "Return exactly one valid JSON object matching the schema below. "
+        "Do not wrap it in markdown.\n"
+        + json.dumps(
+            schema_json,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return [
+        {"role": "system", "content": contract},
+        {"role": "user", "content": prompt},
+    ]
 
 
 class DeepSeekFlashLLM(LLM):
@@ -100,6 +120,7 @@ class DeepSeekFlashLLM(LLM):
             "thinking": "enabled",
             "reasoningEffort": "max",
             "toolProfile": self._tool_profile,
+            "structuredMessagePolicy": STRUCTURED_MESSAGE_POLICY,
         }
 
     @property
@@ -113,13 +134,14 @@ class DeepSeekFlashLLM(LLM):
             "required": schema.required,
             "additionalProperties": False,
         }
-        structured_prompt = (
-            f"{prompt}\n\n"
-            "Return exactly one valid JSON object matching this schema. "
-            "Do not wrap it in markdown.\n"
-            f"{json.dumps(schema_json, ensure_ascii=False)}"
-        )
-        prompt_hash = hashlib.sha256(structured_prompt.encode("utf-8")).hexdigest()
+        initial_messages = _structured_messages(prompt, schema_json)
+        prompt_hash = hashlib.sha256(
+            json.dumps(
+                initial_messages,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
         cache_key = hashlib.sha256(
             json.dumps(
                 {
@@ -130,11 +152,11 @@ class DeepSeekFlashLLM(LLM):
                             else (
                                 "paw.amb-llm-cache.v11-l0-control"
                                 if self._tool_profile == "l0_only"
-                                else "paw.amb-llm-cache.v23-focused-l0-fallback"
+                                else "paw.amb-llm-cache.v24-stable-schema-prefix"
                             )
                         )
                         if self._memory_provider is not None
-                        else "paw.amb-llm-cache.v1"
+                        else "paw.amb-llm-cache.v2-stable-schema-prefix"
                     ),
                     "model": self.model_id,
                     "promptHash": prompt_hash,
@@ -209,6 +231,7 @@ class DeepSeekFlashLLM(LLM):
                         ),
                         "costEvidenceComplete": cached_usage is not None,
                         "memoryToolProfile": self._tool_profile,
+                        "structuredMessagePolicy": STRUCTURED_MESSAGE_POLICY,
                     },
                 )
                 return cached_result
@@ -217,7 +240,7 @@ class DeepSeekFlashLLM(LLM):
         for attempt in range(6):
             try:
                 result, usage_totals, tool_stats = self._generate_remote(
-                    structured_prompt
+                    initial_messages
                 )
                 missing = [key for key in schema.required if key not in result]
                 if missing:
@@ -256,6 +279,7 @@ class DeepSeekFlashLLM(LLM):
                         **usage_totals,
                         **tool_stats,
                         "memoryToolProfile": self._tool_profile,
+                        "structuredMessagePolicy": STRUCTURED_MESSAGE_POLICY,
                     },
                 )
                 return result
@@ -278,14 +302,17 @@ class DeepSeekFlashLLM(LLM):
                         "promptHash": prompt_hash,
                         "durationMs": round((time.perf_counter() - started) * 1000, 1),
                         "errorCode": error.__class__.__name__,
+                        "structuredMessagePolicy": STRUCTURED_MESSAGE_POLICY,
                         **({"httpStatus": status} if status is not None else {}),
                     },
                 )
                 raise
         raise RuntimeError("DeepSeek retries exhausted")
 
-    def _generate_remote(self, structured_prompt: str) -> tuple[dict, dict, dict]:
-        messages: list[dict] = [{"role": "user", "content": structured_prompt}]
+    def _generate_remote(
+        self, initial_messages: list[dict]
+    ) -> tuple[dict, dict, dict]:
+        messages = [dict(message) for message in initial_messages]
         all_tools = (
             _memory_tool_definitions(self._evidence_ledger, self._tool_profile)
             if self._memory_provider is not None

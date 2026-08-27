@@ -17,6 +17,8 @@ Do not import Python code or depend on `../src/paw` from this tree.
 |------|------|
 | `packages/core` | Session store, context manager, run events, system prompt |
 | `packages/memory` | **MemoryRuntime** + Postgres modules + legacy file store |
+| `packages/memory-core` | Runtime-independent evidence-first memory; standalone repository boundary |
+| `packages/memory-plugin` | Paw storage, composition, and migration adapters for memory |
 | `packages/agent` | `AgentOrchestrator`, compression & sub-agents |
 | `packages/harness` | Tool registry, MCP, shell guard |
 | `packages/workspace` | File/git/LSP tools |
@@ -48,6 +50,11 @@ RUN_OLLAMA_E2E=1 bun test packages/agent/test/e2e-ollama.test.ts
 Without `RUN_OLLAMA_E2E=1`, the test is **skipped** (default in CI).
 
 ## Memory
+
+The independently reusable evidence-first algorithm is in
+[`packages/memory-core`](packages/memory-core). It has no Paw runtime
+dependency, includes a zero-service example, and can be uploaded as a separate
+repository after an explicit license is chosen.
 
 | Backend | Notes |
 |---------|--------|

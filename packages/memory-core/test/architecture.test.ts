@@ -8,10 +8,10 @@ import {
   createJsonMemoryEvidenceSupportSelectorV1,
   createMemoryEvidenceResolverV1,
   createProductMemoryEvidenceIndexV1,
-} from "@paw/memory-plugin/evidence-first";
+} from "../src/index.js";
 
 const sourceRoot = resolve(import.meta.dir, "../src");
-const productEntry = resolve(sourceRoot, "evidence-first-product.ts");
+const productEntry = resolve(sourceRoot, "index.ts");
 
 describe("evidence-first product architecture", () => {
   test("exposes the complete product read path through a narrow subpath", () => {
@@ -33,12 +33,26 @@ describe("evidence-first product architecture", () => {
         /(^|\/)temporal-graph\.ts$/u.test(file),
     );
     expect(files).toContain("state-observation.ts");
-    expect(files).not.toContain("index.ts");
     expect(forbidden).toEqual([]);
+  });
+
+  test("keeps the complete standalone closure free of Paw package imports", () => {
+    const closure = localDependencyClosure(productEntry, true);
+    const violations = closure.flatMap((file) => {
+      const source = readFileSync(file, "utf8");
+      return [...source.matchAll(/from\s+["'](@paw\/[^"']+)["']/gu)].map(
+        (match) =>
+          `${relative(sourceRoot, file).replaceAll("\\", "/")}: ${match[1]}`,
+      );
+    });
+    expect(violations).toEqual([]);
   });
 });
 
-function localDependencyClosure(entry: string): readonly string[] {
+function localDependencyClosure(
+  entry: string,
+  includeTypeOnly = false,
+): readonly string[] {
   const pending = [entry];
   const visited = new Set<string>();
   while (pending.length > 0) {
@@ -46,7 +60,7 @@ function localDependencyClosure(entry: string): readonly string[] {
     if (!current || visited.has(current)) continue;
     visited.add(current);
     const source = readFileSync(current, "utf8");
-    for (const specifier of runtimeRelativeSpecifiers(source)) {
+    for (const specifier of relativeSpecifiers(source, includeTypeOnly)) {
       const dependency = resolveTypeScriptImport(current, specifier);
       if (dependency && !visited.has(dependency)) pending.push(dependency);
     }
@@ -54,14 +68,19 @@ function localDependencyClosure(entry: string): readonly string[] {
   return Object.freeze([...visited].sort());
 }
 
-function runtimeRelativeSpecifiers(source: string): readonly string[] {
+function relativeSpecifiers(
+  source: string,
+  includeTypeOnly: boolean,
+): readonly string[] {
   const values: string[] = [];
   const fromPattern =
     /(?:^|\n)\s*(?:import|export)\s+([\s\S]*?)\s+from\s+["'](\.[^"']+)["'];?/gu;
   for (const match of source.matchAll(fromPattern)) {
     const clause = match[1]?.trim();
     const value = match[2];
-    if (!clause || !value || isTypeOnlyClause(clause)) continue;
+    if (!clause || !value || (!includeTypeOnly && isTypeOnlyClause(clause))) {
+      continue;
+    }
     values.push(value);
   }
   const barePattern = /(?:^|\n)\s*import\s+["'](\.[^"']+)["'];?/gu;

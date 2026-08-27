@@ -12,7 +12,7 @@ import {
   measureMemoryAspectGraphV1,
 } from "./aspect-graph.js";
 import { deriveMemoryAspectLinkStatementHashV1 } from "./aspect-linker.js";
-import type { MemoryWriterModelV1 } from "./atom-extractor.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import {
   type PawNextMemoryScopeV1,

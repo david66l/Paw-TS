@@ -71,9 +71,16 @@ describe("requirement-bound evidence support selector v1", () => {
     });
 
     const payload = JSON.parse(request.user) as {
-      candidates: Array<{ content: string; turnOrder: number }>;
+      candidates: Array<{
+        content: string;
+        evidenceRef: string;
+        sourceId?: string;
+        turnOrder: number;
+      }>;
     };
     expect(payload.candidates[0]?.content).toContain("27. Sound effects");
+    expect(payload.candidates[0]?.evidenceRef).toBe("e1");
+    expect(payload.candidates[0]?.sourceId).toBeUndefined();
     expect(payload.candidates[0]?.turnOrder).toBe(3);
     expect(request.system).toContain(
       "later assistant response after user feedback",
@@ -202,13 +209,13 @@ describe("requirement-bound evidence support selector v1", () => {
               assessments: [
                 {
                   requirementId: "requirement-1",
-                  supportingEvidenceRefs: ["japan#turn-1"],
+                  supportingEvidenceRefs: ["e1"],
                   contradictingEvidenceRefs: [],
                   unknownEvidenceRefs: [],
                 },
                 {
                   requirementId: "requirement-2",
-                  supportingEvidenceRefs: ["chicago#turn-1"],
+                  supportingEvidenceRefs: ["e2"],
                   contradictingEvidenceRefs: [],
                   unknownEvidenceRefs: [],
                 },

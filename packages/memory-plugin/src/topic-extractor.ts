@@ -1,6 +1,6 @@
 import { scanForSecrets } from "@paw/memory/longterm";
 
-import type { MemoryWriterModelV1 } from "./atom-extractor.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 import type { PawNextMemoryScopeV1 } from "./profile.js";
 import {
   type MemoryTopicFamilyV1,

@@ -6,6 +6,8 @@
     "noEmit": true,
     "baseUrl": "../..",
     "paths": {
+      "@paw/memory-core": ["packages/memory-core/src/index.ts"],
+      "@paw/memory-core/*": ["packages/memory-core/src/*.ts"],
       "@paw/agent-loop": ["packages/agent-loop/src/index.ts"],
       "@paw/core": ["packages/core/src/index.ts"],
       "@paw/harness": ["packages/harness/src/index.ts"],

@@ -1019,3 +1019,19 @@ Artifacts:
 - 云端复用完整索引完成 24 题同题集开发 A/B。预算隔离 smoke 中 memory helper 40/40 完成、0 次预算错误；精确配对的 baseline 为 16/24，紧凑 answer contract 为 17/24，转换为 1 题错转对、0 题对转错，检索指标保持相同。紧凑版与较早 verbose contract 正确性逐题相同，同时答案模型总 token 少 6,395（下降 7.3%）。
 - 以上 24 题只是开发诊断，不能替代新的 500 题正式成绩；目前对外可比成绩仍为 75.6%。下一次 release-blind 全量重跑必须绑定新的干净 Git 提交和独立冷缓存，用于验证预算饥饿是否消失、六类准确率是否稳定提升。后续结构瓶颈仍包括 multi-session 答案综合、preference 推断与 `eventKey` 覆盖，不应通过扩大 prompt 临时掩盖。
 - 本地验证覆盖 AMB TypeScript 20 pass、memory-plugin 全量 236 pass、Python compare 2 pass，以及 memory-plugin / AMB TypeScript typecheck；云端 smoke stderr 均为空。所有正式与开发运行均保留独立 stdout、stderr、检索 JSONL、输出报告和密封账本，日志不写密封种子、题目标识或原始 benchmark 内容。
+
+### M9：LongMemEval-S 本地可复现工作区
+
+- 云端与本地 LongMemEval-S 原始文件逐字节校验一致：277,383,467 bytes，固定 SHA-256 为 `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`，AMB upstream 固定提交为 `62364d7ead2dc1a7225d6daf4ae23f303b925b40`。本地文件继续位于 upstream 约定的 gitignored `.datasets/longmemeval/`，不复制第二份大文件。
+- 新增 `local_longmemeval.py`。`verify` 在不启动数据库、embedding 或 LLM 的情况下校验文件大小、哈希、上游提交、500 个唯一 query、500 个隔离 user、23,867 个 document 及六类题目数量；`run --mode smoke|full` 统一做本地服务预检、私密 seed 管理和 runner 参数装配，不把 seed 输出到命令行或日志。
+- 本地 Windows PostgreSQL `127.0.0.1:54329` 与固定 embedding 服务 `127.0.0.1:18081` 完成端到端验证。首次 retrieval-only smoke 处理 6 用户 / 277 文档，约 84 秒完成 3,007 个必需 embedding，6 题命中 gold 文档 5 题，hit rate / macro recall 均为 83.3%，未调用 DeepSeek。
+- 相同 smoke 使用 `--reuse-index` 再跑时，覆盖门禁确认 3,799/3,799 个派生条目、3,007/3,007 个必需 embedding、0 个不完整用户；索引复用阶段约 0.84 秒，证明本地可以在首次小规模建库后快速迭代。结果、store、cache 与密封账本位于 gitignored local run 目录，content-free 检索日志沿用 `logs/amb/`。
+
+### M10：独立 Memory Core、稳定 KV 前缀与紧凑证据地址
+
+- 将 evidence-first 的唯一实现下沉到 `packages/memory-core`，Paw 插件原路径改为一行兼容转发。Core 完整依赖闭包不含任何 `@paw/*` 包，独立拥有 package/tsconfig/README、结构端口和 56 个测试，可作为单独 Git 仓库上传；许可证仍由仓库所有者显式选择，当前保持 `private: true`。
+- `MemoryWriterModelV1`、context packet contract、product scope/provider/archive ports 从运行时实现中拆出。新增确定性的内存参考 store，独立用户无需 PostgreSQL 或 Paw Runtime 即可写入 L0/L1 并跑通 L1 导航到 L0 hydration；同一 evidenceRef 的冲突改写 fail closed。
+- 核心源码经过 Biome 整理并移除 non-null assertion，`memory-core` 与 `memory-plugin` 分别 typecheck 通过，记忆相关回归 240/240 通过。独立 core 源码 lint 0 diagnostics。
+- AMB answer/judge 适配器将稳定 JSON schema 从变化的 user prompt 尾部移到 system 前缀，缓存策略随语义升级，测试保证不同题目共享完全相同的 schema 前缀。该改动不改变模型、工具或答案契约，需在新冷缓存运行中量化 provider KV 收益。
+- evidence-support selector 使用 `e1..eN` 的短期 opaque 地址替代模型可见的长 evidence path，并删除冗余 sourceId；代码在模型返回后映射回权威 evidenceRef，仍拒绝虚构或重复地址。既有长地址解析保持兼容，便于读取旧缓存。新 selector 版本单独失效语义缓存。
+- 正在运行的云端 v3 正式 500 题仍绑定旧干净提交，未受本地重构影响；192/500 阶段值为 154/192=80.21%，仅作进度观察，不作为最终成绩。

@@ -12,6 +12,7 @@
     "test": "bun test test"
   },
   "dependencies": {
+    "@paw/memory-core": "workspace:*",
     "@paw/agent-loop": "workspace:*",
     "@paw/core": "workspace:*",
     "@paw/harness": "workspace:*",
