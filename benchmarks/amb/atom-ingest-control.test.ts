@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import {
+  createAmbMemoryLlmBudgetPortfolioV1,
   createAtomIngestBudgetV1,
   createAtomIngestCheckpointStoreV1,
   parseAmbCachedMemoryUsageV1,
   projectAmbMemoryEvidenceV1,
+  readAmbMemoryLlmBudgetLimitsV1,
   readAtomIngestLimitsV1,
   runKeyedInOrderV1,
   selectAmbSourceChunksV1,
@@ -189,6 +191,106 @@ describe("AMB atom ingest controls", () => {
     expect(() =>
       readAtomIngestLimitsV1({ PAW_AMB_ATOM_CONCURRENCY: "9" }),
     ).toThrow("PAW_AMB_ATOM_CONCURRENCYInvalid");
+  });
+
+  test("gives online evidence workloads independent bounded defaults", () => {
+    const limits = readAmbMemoryLlmBudgetLimitsV1({
+      PAW_AMB_ATOM_MAX_REMOTE_CALLS: "7",
+      PAW_AMB_QUERY_PLAN_MAX_REMOTE_CALLS: "11",
+      PAW_AMB_EVIDENCE_SUPPORT_MAX_PROMPT_TOKENS: "123456",
+    });
+    expect(limits["memory-write"].maxRemoteCalls).toBe(7);
+    expect(limits["query-plan"]).toMatchObject({
+      maxRemoteCalls: 11,
+      maxPromptTokens: 750_000,
+      maxCompletionTokens: 150_000,
+    });
+    expect(limits["evidence-support"]).toMatchObject({
+      maxRemoteCalls: 600,
+      maxPromptTokens: 123_456,
+      maxCompletionTokens: 200_000,
+    });
+    expect(() =>
+      readAmbMemoryLlmBudgetLimitsV1({
+        PAW_AMB_QUERY_PLAN_CONCURRENCY: "0",
+      }),
+    ).toThrow("PAW_AMB_QUERY_PLAN_CONCURRENCYInvalid");
+  });
+
+  test("does not let one memory LLM purpose starve another", () => {
+    const portfolio = createAmbMemoryLlmBudgetPortfolioV1({
+      "memory-write": {
+        maxRemoteCalls: 1,
+        maxPromptTokens: 100,
+        maxCompletionTokens: 50,
+        concurrency: 1,
+      },
+      "query-plan": {
+        maxRemoteCalls: 2,
+        maxPromptTokens: 200,
+        maxCompletionTokens: 100,
+        concurrency: 1,
+      },
+      "evidence-support": {
+        maxRemoteCalls: 3,
+        maxPromptTokens: 300,
+        maxCompletionTokens: 150,
+        concurrency: 1,
+      },
+    });
+    const memoryWrite = portfolio.budgetFor("memory-write");
+    const writeReservation = memoryWrite.reserveRemoteCall({
+      promptTokenUpperBound: 100,
+      completionTokenUpperBound: 50,
+    });
+    memoryWrite.settleRemoteCall(writeReservation, {
+      promptTokens: 80,
+      completionTokens: 20,
+    });
+    expect(() =>
+      memoryWrite.reserveRemoteCall({
+        promptTokenUpperBound: 1,
+        completionTokenUpperBound: 1,
+      }),
+    ).toThrow("AtomIngestRemoteCallBudgetExceeded");
+
+    const queryPlan = portfolio.budgetFor("query-plan");
+    const queryReservation = queryPlan.reserveRemoteCall({
+      promptTokenUpperBound: 120,
+      completionTokenUpperBound: 40,
+    });
+    queryPlan.settleRemoteCall(queryReservation, {
+      promptTokens: 90,
+      completionTokens: 30,
+      providerCacheHitTokens: 50,
+      providerCacheMissTokens: 40,
+    });
+    portfolio.budgetFor("evidence-support").recordCacheHit({
+      promptTokens: 70,
+      completionTokens: 10,
+      providerCacheHitTokens: 20,
+      providerCacheMissTokens: 50,
+    });
+
+    const snapshot = portfolio.snapshot();
+    expect(snapshot.byPurpose["memory-write"].remoteCalls).toBe(1);
+    expect(snapshot.byPurpose["query-plan"]).toMatchObject({
+      remoteCalls: 1,
+      promptTokens: 90,
+      completionTokens: 30,
+    });
+    expect(snapshot.byPurpose["evidence-support"].cacheHits).toBe(1);
+    expect(snapshot.aggregate).toMatchObject({
+      maxRemoteCalls: 6,
+      remoteCalls: 2,
+      cacheHits: 1,
+      promptTokens: 170,
+      completionTokens: 50,
+      workloadPromptTokens: 240,
+      workloadCompletionTokens: 60,
+      workloadTotalTokens: 300,
+      costEvidenceComplete: true,
+    });
   });
 
   test("accepts only complete non-negative cache-origin usage", () => {

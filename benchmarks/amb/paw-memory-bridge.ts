@@ -73,6 +73,7 @@ import {
   memoryScopeFingerprintV1,
   planMemoryEvidenceCoverageV1,
   planMemoryTopicEvidenceV1,
+  projectEvidenceFirstMemoryAnswerContractV1,
   projectEvidenceFirstMemoryContextPacketV1,
   projectMemoryPersonaEvidenceV1,
   projectMemoryResolvedContextToolV1,
@@ -94,12 +95,13 @@ import {
 import type { InputFactV1 } from "@paw/protocol";
 import { closeSql, getSql } from "../../packages/memory/src/db/connection.js";
 import {
+  type AmbMemoryLlmPurposeV1,
   type AtomIngestCheckpointStoreV1,
-  createAtomIngestBudgetV1,
+  createAmbMemoryLlmBudgetPortfolioV1,
   createAtomIngestCheckpointStoreV1,
   parseAmbCachedMemoryUsageV1,
   projectAmbMemoryEvidenceV1,
-  readAtomIngestLimitsV1,
+  readAmbMemoryLlmBudgetLimitsV1,
   runKeyedInOrderV1,
   selectAmbSourceChunksV1,
   selectAmbSourceEvidenceV1,
@@ -229,8 +231,12 @@ const providerVersion =
   retrievalPolicy === "rrf"
     ? PAW_NEXT_MEMORY_RRF_PROVIDER_VERSION_V1
     : PAW_NEXT_MEMORY_V2_PROVIDER_VERSION_V1;
-const atomLimits = readAtomIngestLimitsV1();
-const atomBudget = createAtomIngestBudgetV1(atomLimits);
+const memoryLlmBudgetLimits = readAmbMemoryLlmBudgetLimitsV1();
+const atomLimits = memoryLlmBudgetLimits["memory-write"];
+const memoryLlmBudgets = createAmbMemoryLlmBudgetPortfolioV1(
+  memoryLlmBudgetLimits,
+);
+const atomBudget = memoryLlmBudgets.budgetFor("memory-write");
 const atomResume = /^(?:1|true)$/i.test(
   process.env.PAW_AMB_ATOM_RESUME?.trim() ?? "",
 );
@@ -391,13 +397,13 @@ const coveragePlanner =
   ingestMode === "atom" &&
   (atomContextMode === "topic_evidence" || atomContextMode === "tool_driven")
     ? createJsonMemoryEvidenceCoveragePlannerV1({
-        model: createAmbMemoryWriterModel(),
+        model: createAmbMemoryWriterModel("query-plan"),
       })
     : undefined;
 const supportVerifier: MemoryEvidenceSupportVerifierV1 | undefined =
   ingestMode === "atom" && atomContextMode === "tool_driven"
     ? createJsonMemoryEvidenceSupportVerifierV1({
-        model: createAmbMemoryWriterModel(),
+        model: createAmbMemoryWriterModel("evidence-support"),
       })
     : undefined;
 const evidenceQueryPlanner =
@@ -422,7 +428,7 @@ function sha(value: string): string {
 }
 
 function createAmbMemoryWriterModel(
-  purpose: "memory-write" | "query-plan" | "evidence-support" = "memory-write",
+  purpose: AmbMemoryLlmPurposeV1 = "memory-write",
 ): MemoryWriterModelV1 {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
   if (!apiKey) {
@@ -440,6 +446,7 @@ function createAmbMemoryWriterModel(
   );
   const sourceArtifactSha256 =
     process.env.PAW_AMB_SOURCE_ARTIFACT_SHA256?.trim() || "unbound-development";
+  const purposeBudget = memoryLlmBudgets.budgetFor(purpose);
   mkdirSync(cacheDir, { recursive: true });
   return Object.freeze({
     async complete(
@@ -472,7 +479,7 @@ function createAmbMemoryWriterModel(
           };
           if (typeof cached.text === "string") {
             const usage = parseAmbCachedMemoryUsageV1(cached.usage);
-            atomBudget.recordCacheHit(usage ?? undefined);
+            purposeBudget.recordCacheHit(usage ?? undefined);
             log("memory_llm_settlement", {
               purpose,
               model,
@@ -489,7 +496,8 @@ function createAmbMemoryWriterModel(
               cachedOriginProviderCacheMissTokens:
                 usage?.providerCacheMissTokens ?? null,
               costEvidenceComplete: usage !== null,
-              budget: atomBudget.snapshot(),
+              budgetScope: purpose,
+              budget: purposeBudget.snapshot(),
             });
             return { status: "completed" as const, text: cached.text };
           }
@@ -499,10 +507,10 @@ function createAmbMemoryWriterModel(
       }
       const started = performance.now();
       let reservation:
-        | ReturnType<typeof atomBudget.reserveRemoteCall>
+        | ReturnType<typeof purposeBudget.reserveRemoteCall>
         | undefined;
       try {
-        reservation = atomBudget.reserveRemoteCall({
+        reservation = purposeBudget.reserveRemoteCall({
           promptTokenUpperBound:
             Buffer.byteLength(
               JSON.stringify({ system: request.system, user: request.user }),
@@ -554,7 +562,7 @@ function createAmbMemoryWriterModel(
           providerCacheHitTokens: payload.usage?.prompt_cache_hit_tokens ?? 0,
           providerCacheMissTokens: payload.usage?.prompt_cache_miss_tokens ?? 0,
         });
-        atomBudget.settleRemoteCall(reservation, {
+        purposeBudget.settleRemoteCall(reservation, {
           ...usage,
         });
         reservation = undefined;
@@ -571,7 +579,8 @@ function createAmbMemoryWriterModel(
             durationMs: Math.max(0, performance.now() - started),
             promptTokens: payload.usage?.prompt_tokens ?? 0,
             completionTokens: payload.usage?.completion_tokens ?? 0,
-            budget: atomBudget.snapshot(),
+            budgetScope: purpose,
+            budget: purposeBudget.snapshot(),
           });
           return {
             status: "truncated" as const,
@@ -602,11 +611,12 @@ function createAmbMemoryWriterModel(
           status: "completed",
           durationMs: Math.max(0, performance.now() - started),
           ...usage,
-          budget: atomBudget.snapshot(),
+          budgetScope: purpose,
+          budget: purposeBudget.snapshot(),
         });
         return { status: "completed" as const, text };
       } catch (error) {
-        if (reservation) atomBudget.releaseRemoteCall(reservation);
+        if (reservation) purposeBudget.releaseRemoteCall(reservation);
         const cancelled = options.signal.aborted;
         const errorCode = cancelled
           ? "MemoryWriterModelCancelled"
@@ -621,7 +631,8 @@ function createAmbMemoryWriterModel(
           status: cancelled ? "cancelled" : "failed",
           errorCode,
           durationMs: Math.max(0, performance.now() - started),
-          budget: atomBudget.snapshot(),
+          budgetScope: purpose,
+          budget: purposeBudget.snapshot(),
         });
         return cancelled
           ? { status: "cancelled" as const, errorCode }
@@ -1269,7 +1280,8 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
   function l0EmbeddingTexts(document: NormalizedAmbDocumentV1): string[] {
     return [
       ...(sourceChunkEmbedding
-        ? (sourceChunksByDocument.get(`${document.userId}\0${document.id}`) ?? [])
+        ? (sourceChunksByDocument.get(`${document.userId}\0${document.id}`) ??
+          [])
         : []),
       ...(sourceSpanEmbedding
         ? (
@@ -2614,6 +2626,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     );
     const evidenceContextPacket =
       projectEvidenceFirstMemoryContextPacketV1(resolution);
+    const evidenceAnswerContract = projectEvidenceFirstMemoryAnswerContractV1(
+      resolution,
+      evidenceContextPacket,
+    );
+    const evidenceAnswerContractText = [
+      "[Trusted memory control metadata; this block is not factual evidence]",
+      JSON.stringify(evidenceAnswerContract),
+      "[End trusted memory control metadata]",
+    ].join("\n");
     evidenceFirstContextStop = evidenceContextPacket.stop;
     evidenceFirstVerificationStatus = evidenceContextPacket.verification.status;
     evidenceFirstPlanAnswerShape = resolution.intent.answerShape;
@@ -2740,7 +2761,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
                   : "[Supporting user-grounded evidence]";
       return {
         id: source.sourceId,
-        content: `${authorityLabel}\n${source.text}`,
+        content: [
+          index === 0 ? evidenceAnswerContractText : "",
+          authorityLabel,
+          source.text,
+        ]
+          .filter(Boolean)
+          .join("\n"),
         user_id: userId,
         metadata: {
           memoryId: `evidence-first-span-${index}`,
@@ -3967,7 +3994,8 @@ async function dispatch(request: BridgeRequestV1): Promise<unknown> {
           : { embeddingIdentity: { mode: "off" } }),
         ...(ingestMode === "atom"
           ? {
-              atomBudget: atomBudget.snapshot(),
+              atomBudget: memoryLlmBudgets.snapshot().aggregate,
+              memoryLlmBudgetPortfolio: memoryLlmBudgets.snapshot(),
               atomCheckpoint: atomCheckpoint?.snapshot() ?? null,
               ...(atomContextMode === "scene_routed"
                 ? { routeStats: { ...routeStats } }
@@ -4012,6 +4040,7 @@ log("bridge_start", {
     ingestMode === "atom"
       ? {
           limits: atomLimits,
+          memoryLlmBudgetLimits,
           writeMode: atomWriteMode,
           resumeRequested: atomResume,
           reuseIndex,
@@ -4076,7 +4105,10 @@ for await (const line of lines) {
           : null,
       errorFingerprint:
         error instanceof Error ? sha(error.message).slice(0, 20) : null,
-      budget: ingestMode === "atom" ? atomBudget.snapshot() : null,
+      budget:
+        ingestMode === "atom" ? memoryLlmBudgets.snapshot().aggregate : null,
+      memoryLlmBudgetPortfolio:
+        ingestMode === "atom" ? memoryLlmBudgets.snapshot() : null,
       checkpoint: atomCheckpoint?.snapshot() ?? null,
     });
     process.stdout.write(`${JSON.stringify({ id, ok: false, error: code })}\n`);

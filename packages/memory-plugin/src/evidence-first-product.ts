@@ -8,7 +8,10 @@
  */
 export {
   createEvidenceFirstMemoryContextResolverV1,
+  PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1,
+  projectEvidenceFirstMemoryAnswerContractV1,
   projectEvidenceFirstMemoryContextPacketV1,
+  type MemoryEvidenceAnswerContractV1,
 } from "./evidence-context-adapter.js";
 export {
   PAW_MEMORY_PRODUCT_EVIDENCE_INDEX_VERSION_V1,

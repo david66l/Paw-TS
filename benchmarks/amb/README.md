@@ -107,6 +107,28 @@ $env:PAW_AMB_ATOM_MAX_COMPLETION_TOKENS = '50000'
 $env:PAW_AMB_ATOM_CONCURRENCY = '2' # 1..8; each user remains strictly ordered
 ```
 
+Online query planning and evidence verification use independent fail-closed
+budgets, so exhausting offline atom ingest cannot starve later benchmark
+questions. Their defaults are 600 calls / 750,000 prompt / 150,000 completion
+tokens and 600 calls / 4,000,000 prompt / 200,000 completion tokens,
+respectively, with concurrency two. Override them with the corresponding
+purpose prefix:
+
+```powershell
+$env:PAW_AMB_QUERY_PLAN_MAX_REMOTE_CALLS = '600'
+$env:PAW_AMB_QUERY_PLAN_MAX_PROMPT_TOKENS = '750000'
+$env:PAW_AMB_QUERY_PLAN_MAX_COMPLETION_TOKENS = '150000'
+$env:PAW_AMB_QUERY_PLAN_CONCURRENCY = '2'
+
+$env:PAW_AMB_EVIDENCE_SUPPORT_MAX_REMOTE_CALLS = '600'
+$env:PAW_AMB_EVIDENCE_SUPPORT_MAX_PROMPT_TOKENS = '4000000'
+$env:PAW_AMB_EVIDENCE_SUPPORT_MAX_COMPLETION_TOKENS = '200000'
+$env:PAW_AMB_EVIDENCE_SUPPORT_CONCURRENCY = '2'
+```
+
+Logs and provider statistics expose both an aggregate budget snapshot for
+backward compatibility and a `memoryLlmBudgetPortfolio` breakdown by purpose.
+
 After each successfully applied source window, Paw atomically writes a
 hash-only `paw-m2a-atom-checkpoint.v1.json` under the AMB store directory. If a
 run is interrupted, rerun the same command with the exact model/config and:

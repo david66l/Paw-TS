@@ -70,6 +70,31 @@ export interface AtomIngestBudgetV1 {
   snapshot(): AtomIngestBudgetSnapshotV1;
 }
 
+export const AMB_MEMORY_LLM_PURPOSES_V1 = [
+  "memory-write",
+  "query-plan",
+  "evidence-support",
+] as const;
+
+export type AmbMemoryLlmPurposeV1 = (typeof AMB_MEMORY_LLM_PURPOSES_V1)[number];
+
+export type AmbMemoryLlmBudgetLimitsV1 = Readonly<
+  Record<AmbMemoryLlmPurposeV1, AtomIngestLimitsV1>
+>;
+
+export interface AmbMemoryLlmBudgetPortfolioSnapshotV1 {
+  readonly schemaVersion: "paw.amb-memory-llm-budget-portfolio.v1";
+  readonly aggregate: AtomIngestBudgetSnapshotV1;
+  readonly byPurpose: Readonly<
+    Record<AmbMemoryLlmPurposeV1, AtomIngestBudgetSnapshotV1>
+  >;
+}
+
+export interface AmbMemoryLlmBudgetPortfolioV1 {
+  budgetFor(purpose: AmbMemoryLlmPurposeV1): AtomIngestBudgetV1;
+  snapshot(): AmbMemoryLlmBudgetPortfolioSnapshotV1;
+}
+
 export type AmbCachedMemoryUsageV1 = Readonly<{
   promptTokens: number;
   completionTokens: number;
@@ -136,6 +161,144 @@ export function readAtomIngestLimitsV1(
       8,
       "PAW_AMB_ATOM_CONCURRENCY",
     ),
+  });
+}
+
+/**
+ * Keeps offline memory writing and online evidence work on independent quotas.
+ * A full benchmark may legitimately spend its entire ingest allowance before
+ * the first query, so sharing that allowance with query planning starves later
+ * queries based solely on their position in the run.
+ */
+export function readAmbMemoryLlmBudgetLimitsV1(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): AmbMemoryLlmBudgetLimitsV1 {
+  return Object.freeze({
+    "memory-write": readAtomIngestLimitsV1(env),
+    "query-plan": readPurposeLimitsV1({
+      env,
+      prefix: "PAW_AMB_QUERY_PLAN",
+      defaults: {
+        maxRemoteCalls: 600,
+        maxPromptTokens: 750_000,
+        maxCompletionTokens: 150_000,
+        concurrency: 2,
+      },
+    }),
+    "evidence-support": readPurposeLimitsV1({
+      env,
+      prefix: "PAW_AMB_EVIDENCE_SUPPORT",
+      defaults: {
+        maxRemoteCalls: 600,
+        maxPromptTokens: 4_000_000,
+        maxCompletionTokens: 200_000,
+        concurrency: 2,
+      },
+    }),
+  });
+}
+
+export function createAmbMemoryLlmBudgetPortfolioV1(
+  limits: AmbMemoryLlmBudgetLimitsV1,
+): AmbMemoryLlmBudgetPortfolioV1 {
+  const budgets: Record<AmbMemoryLlmPurposeV1, AtomIngestBudgetV1> = {
+    "memory-write": createAtomIngestBudgetV1(limits["memory-write"]),
+    "query-plan": createAtomIngestBudgetV1(limits["query-plan"]),
+    "evidence-support": createAtomIngestBudgetV1(limits["evidence-support"]),
+  };
+  return Object.freeze({
+    budgetFor(purpose: AmbMemoryLlmPurposeV1) {
+      return budgets[purpose];
+    },
+    snapshot() {
+      const byPurpose = Object.freeze({
+        "memory-write": budgets["memory-write"].snapshot(),
+        "query-plan": budgets["query-plan"].snapshot(),
+        "evidence-support": budgets["evidence-support"].snapshot(),
+      });
+      return Object.freeze({
+        schemaVersion: "paw.amb-memory-llm-budget-portfolio.v1" as const,
+        aggregate: aggregateBudgetSnapshotsV1(Object.values(byPurpose)),
+        byPurpose,
+      });
+    },
+  });
+}
+
+function readPurposeLimitsV1(input: {
+  readonly env: Readonly<Record<string, string | undefined>>;
+  readonly prefix: string;
+  readonly defaults: AtomIngestLimitsV1;
+}): AtomIngestLimitsV1 {
+  return Object.freeze({
+    maxRemoteCalls: boundedEnvInteger(
+      input.env[`${input.prefix}_MAX_REMOTE_CALLS`],
+      input.defaults.maxRemoteCalls,
+      0,
+      100_000,
+      `${input.prefix}_MAX_REMOTE_CALLS`,
+    ),
+    maxPromptTokens: boundedEnvInteger(
+      input.env[`${input.prefix}_MAX_PROMPT_TOKENS`],
+      input.defaults.maxPromptTokens,
+      0,
+      100_000_000,
+      `${input.prefix}_MAX_PROMPT_TOKENS`,
+    ),
+    maxCompletionTokens: boundedEnvInteger(
+      input.env[`${input.prefix}_MAX_COMPLETION_TOKENS`],
+      input.defaults.maxCompletionTokens,
+      0,
+      100_000_000,
+      `${input.prefix}_MAX_COMPLETION_TOKENS`,
+    ),
+    concurrency: boundedEnvInteger(
+      input.env[`${input.prefix}_CONCURRENCY`],
+      input.defaults.concurrency,
+      1,
+      8,
+      `${input.prefix}_CONCURRENCY`,
+    ),
+  });
+}
+
+function aggregateBudgetSnapshotsV1(
+  snapshots: readonly AtomIngestBudgetSnapshotV1[],
+): AtomIngestBudgetSnapshotV1 {
+  const sum = (key: keyof AtomIngestBudgetSnapshotV1): number =>
+    snapshots.reduce((total, snapshot) => {
+      const value = snapshot[key];
+      return total + (typeof value === "number" ? value : 0);
+    }, 0);
+  return Object.freeze({
+    maxRemoteCalls: sum("maxRemoteCalls"),
+    maxPromptTokens: sum("maxPromptTokens"),
+    maxCompletionTokens: sum("maxCompletionTokens"),
+    concurrency: sum("concurrency"),
+    remoteCalls: sum("remoteCalls"),
+    cacheHits: sum("cacheHits"),
+    cacheHitsWithOriginUsage: sum("cacheHitsWithOriginUsage"),
+    cacheHitsWithoutOriginUsage: sum("cacheHitsWithoutOriginUsage"),
+    promptTokens: sum("promptTokens"),
+    completionTokens: sum("completionTokens"),
+    providerCacheHitTokens: sum("providerCacheHitTokens"),
+    providerCacheMissTokens: sum("providerCacheMissTokens"),
+    cachedOriginPromptTokens: sum("cachedOriginPromptTokens"),
+    cachedOriginCompletionTokens: sum("cachedOriginCompletionTokens"),
+    cachedOriginProviderCacheHitTokens: sum(
+      "cachedOriginProviderCacheHitTokens",
+    ),
+    cachedOriginProviderCacheMissTokens: sum(
+      "cachedOriginProviderCacheMissTokens",
+    ),
+    workloadPromptTokens: sum("workloadPromptTokens"),
+    workloadCompletionTokens: sum("workloadCompletionTokens"),
+    workloadTotalTokens: sum("workloadTotalTokens"),
+    costEvidenceComplete: snapshots.every(
+      (snapshot) => snapshot.costEvidenceComplete,
+    ),
+    reservedPromptTokens: sum("reservedPromptTokens"),
+    reservedCompletionTokens: sum("reservedCompletionTokens"),
   });
 }
 

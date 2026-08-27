@@ -8,6 +8,27 @@ import {
 } from "./context-resolver.js";
 import type { MemoryEvidenceResolutionV1 } from "./evidence-resolver.js";
 
+export const PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1 =
+  "paw.memory-evidence-answer-contract.v1" as const;
+
+export interface MemoryEvidenceAnswerContractV1 {
+  readonly schemaVersion: typeof PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1;
+  readonly answerShape: MemoryEvidenceResolutionV1["intent"]["answerShape"];
+  readonly temporalMode: MemoryEvidenceResolutionV1["intent"]["temporalMode"];
+  readonly roleConstraint: MemoryEvidenceResolutionV1["intent"]["roleConstraint"];
+  readonly evidenceStatus: MemoryResolvedContextPacketV1["stop"];
+  readonly guidance: string;
+  readonly requirements: readonly Readonly<{
+    requirementId: string;
+    description: string;
+    relation: string;
+    coverageMode: string;
+    minimumEvidence: number;
+    status: "covered" | "partial" | "missing";
+    selectedEvidenceCount: number;
+  }>[];
+}
+
 export function createEvidenceFirstMemoryContextResolverV1(input: {
   readonly evidenceResolver: Readonly<{
     resolve(
@@ -221,6 +242,51 @@ export function projectEvidenceFirstMemoryContextPacketV1(
     evidence,
     topics: Object.freeze([]),
     spans,
+  });
+}
+
+/**
+ * Preserve the typed evidence plan at the final model boundary. The contract
+ * contains control metadata only; factual content remains in immutable L0
+ * evidence. This prevents a generic RAG adapter from flattening a verified
+ * multi-requirement packet back into an unstructured list of documents.
+ */
+export function projectEvidenceFirstMemoryAnswerContractV1(
+  resolution: MemoryEvidenceResolutionV1,
+  packet: MemoryResolvedContextPacketV1 = projectEvidenceFirstMemoryContextPacketV1(
+    resolution,
+  ),
+): MemoryEvidenceAnswerContractV1 {
+  const packetRequirements = new Map(
+    packet.requirements.map((requirement) => [
+      requirement.requirementId,
+      requirement,
+    ]),
+  );
+  return Object.freeze({
+    schemaVersion: PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1,
+    answerShape: resolution.intent.answerShape,
+    temporalMode: resolution.intent.temporalMode,
+    roleConstraint: resolution.intent.roleConstraint,
+    evidenceStatus: packet.stop,
+    guidance:
+      "Control metadata is not evidence. Organize exact facts by covered requirement ID; never guess a partial or missing requirement.",
+    requirements: Object.freeze(
+      resolution.requirements.map((requirement) => {
+        const projected = packetRequirements.get(requirement.requirementId);
+        return Object.freeze({
+          requirementId: requirement.requirementId,
+          description: requirement.label,
+          relation: requirement.relation ?? "direct",
+          coverageMode:
+            requirement.coverageMode ??
+            (requirement.temporalMode === "latest" ? "latest" : "any"),
+          minimumEvidence: requirement.minimumEvidence ?? 1,
+          status: projected?.status ?? "missing",
+          selectedEvidenceCount: projected?.selectedEvidenceCount ?? 0,
+        });
+      }),
+    ),
   });
 }
 

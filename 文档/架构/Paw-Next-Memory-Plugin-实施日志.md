@@ -1010,3 +1010,12 @@ Artifacts:
 - 本地预检确认 pinned 数据为 500 queries / 500 users / 23,867 documents；题型分布为 70/56/133/133/78/30。PostgreSQL 端口和 pinned embedding server 均可用，embedding revision 与 artifact SHA 校验通过。
 - 回归测试：Python AMB suite 29 pass / 0 fail；TypeScript AMB suite 14 pass / 0 fail / 51 expectations。下一步在干净 commit 上生成 source-bound release plan，再以独立 cold cache 执行 DeepSeek treatment 全量运行。
 - 第一次计划预检在任何 DeepSeek 调用前发现 embedding OpenAI base URL 的 `/v1` 被错误用于 health 路由，形成不存在的 `/v1/health`。runner 现将健康检查规范化到服务根 `/health`，并覆盖带/不带 `/v1` 两种地址；Python suite 更新为 30 pass / 0 fail。
+
+### M8：全量结果诊断、按用途预算隔离与答案契约保真
+
+- LongMemEval-S 500 题 release-blind 运行得到 378/500=75.6%。检索命中率为 95.2%，但 842 次 memory helper 调用中有 715 次因共享的 atom prompt-token 总预算耗尽而失败：离线记忆写入先消耗额度，后续 query plan 与 evidence support 被题目顺序意外饿死。planner 完成题的正确率为 82.2%，fallback 题为 68.7%，确认这不是单纯的检索召回问题。
+- 将单个共享预算改为 `memory-write`、`query-plan`、`evidence-support` 三个独立 fail-closed 配额。每个用途单独做并发、调用数和 token 预留/结算；旧 `atomBudget` 指标继续提供三者聚合值，新增 `memoryLlmBudgetPortfolio` 与 `budgetScope` 日志用于逐用途审计。这样离线建库即使合法耗尽，也不会再让在线证据规划失效。
+- 在 memory plugin 增加结构化 answer contract，把 evidence resolver 已确认的回答形状、时态、角色限制、证据覆盖状态和 requirement ID 保留到最终模型边界。契约只包含控制元数据，不复制或生成事实，不改变检索文档及其排序；最终回答仍只能引用不可变 L0 证据。紧凑版将契约只附在第一条 source，避免每条文档重复。
+- 云端复用完整索引完成 24 题同题集开发 A/B。预算隔离 smoke 中 memory helper 40/40 完成、0 次预算错误；精确配对的 baseline 为 16/24，紧凑 answer contract 为 17/24，转换为 1 题错转对、0 题对转错，检索指标保持相同。紧凑版与较早 verbose contract 正确性逐题相同，同时答案模型总 token 少 6,395（下降 7.3%）。
+- 以上 24 题只是开发诊断，不能替代新的 500 题正式成绩；目前对外可比成绩仍为 75.6%。下一次 release-blind 全量重跑必须绑定新的干净 Git 提交和独立冷缓存，用于验证预算饥饿是否消失、六类准确率是否稳定提升。后续结构瓶颈仍包括 multi-session 答案综合、preference 推断与 `eventKey` 覆盖，不应通过扩大 prompt 临时掩盖。
+- 本地验证覆盖 AMB TypeScript 20 pass、memory-plugin 全量 236 pass、Python compare 2 pass，以及 memory-plugin / AMB TypeScript typecheck；云端 smoke stderr 均为空。所有正式与开发运行均保留独立 stdout、stderr、检索 JSONL、输出报告和密封账本，日志不写密封种子、题目标识或原始 benchmark 内容。

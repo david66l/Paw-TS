@@ -10,6 +10,7 @@ import {
   createMemoryEvidenceResolverV1,
   createProductMemoryEvidenceIndexV1,
   evidenceSourceIdV1,
+  projectEvidenceFirstMemoryAnswerContractV1,
   projectEvidenceFirstMemoryContextPacketV1,
 } from "../src/index.js";
 
@@ -608,5 +609,32 @@ describe("product evidence adapter", () => {
     expect(packet.requirements[0]?.supportingMemoryIds).not.toEqual(
       packet.requirements[1]?.supportingMemoryIds,
     );
+
+    const contract = projectEvidenceFirstMemoryAnswerContractV1(
+      await evidenceResolver.resolve(
+        "How many alpha and beta items are there?",
+        new AbortController().signal,
+      ),
+    );
+    expect(contract).toMatchObject({
+      answerShape: "aggregate",
+      temporalMode: "any",
+      roleConstraint: "user",
+      evidenceStatus: "partial",
+    });
+    expect(contract.requirements).toEqual([
+      expect.objectContaining({
+        requirementId: "alpha",
+        status: "covered",
+        selectedEvidenceCount: 1,
+      }),
+      expect.objectContaining({
+        requirementId: "beta",
+        status: "covered",
+        selectedEvidenceCount: 1,
+      }),
+    ]);
+    expect(contract.guidance).toContain("covered requirement ID");
+    expect(JSON.stringify(contract)).not.toContain("alpha evidence");
   });
 });
