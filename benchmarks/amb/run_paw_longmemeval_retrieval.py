@@ -504,8 +504,10 @@ PINNED_EMBEDDING_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 
 
 def local_embedding_artifact() -> dict:
-    endpoint = RELEASE_PROVIDER_ENV["PAW_AMB_EMBEDDING_BASE_URL"].rstrip("/")
-    with urllib.request.urlopen(f"{endpoint}/health", timeout=10) as response:
+    health_url = local_embedding_health_url(
+        RELEASE_PROVIDER_ENV["PAW_AMB_EMBEDDING_BASE_URL"]
+    )
+    with urllib.request.urlopen(health_url, timeout=10) as response:
         payload = json.loads(response.read())
     expected = {
         "status": "ok",
@@ -544,6 +546,13 @@ def resolved_release_provider_env(embedding_artifact: dict) -> dict[str, str]:
         "PAW_AMB_EMBEDDING_REVISION": PINNED_EMBEDDING_REVISION,
         "PAW_AMB_EMBEDDING_ARTIFACT_SHA256": artifact_sha256,
     }
+
+
+def local_embedding_health_url(base_url: str) -> str:
+    endpoint = base_url.rstrip("/")
+    if endpoint.endswith("/v1"):
+        endpoint = endpoint[:-3]
+    return f"{endpoint}/health"
 
 
 def experiment_protocol(

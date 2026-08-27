@@ -11,6 +11,7 @@ from run_paw_longmemeval_retrieval import (
     complete_blind_arm,
     consume_blind_arm,
     experiment_protocol,
+    local_embedding_health_url,
     public_report,
     resolved_release_provider_env,
     select_full_split_queries,
@@ -112,6 +113,16 @@ class LongMemEvalRunnerTest(unittest.TestCase):
 
         self.assertIn("1110a243fdf4706b3f48f1d95db1a4f5529b4d41", environment["PAW_AMB_EMBEDDING_VERSION"])
         self.assertTrue(environment["PAW_AMB_EMBEDDING_VERSION"].endswith("a" * 64))
+
+    def test_embedding_health_url_uses_server_root_not_openai_v1(self) -> None:
+        self.assertEqual(
+            "http://127.0.0.1:18081/health",
+            local_embedding_health_url("http://127.0.0.1:18081/v1"),
+        )
+        self.assertEqual(
+            "http://127.0.0.1:18081/health",
+            local_embedding_health_url("http://127.0.0.1:18081"),
+        )
 
     def test_selection_keeps_users_unique_across_question_types(self) -> None:
         selected = select_queries(

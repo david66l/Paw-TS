@@ -1009,3 +1009,4 @@ Artifacts:
 - 全量模式禁止结合旧 holdout exclusion；清单显式写入 `fullSplit=true`、真实题型计数和 `official-full-split-seeded-order-v1`，把“公开全量回归”与“未见 holdout”分开。
 - 本地预检确认 pinned 数据为 500 queries / 500 users / 23,867 documents；题型分布为 70/56/133/133/78/30。PostgreSQL 端口和 pinned embedding server 均可用，embedding revision 与 artifact SHA 校验通过。
 - 回归测试：Python AMB suite 29 pass / 0 fail；TypeScript AMB suite 14 pass / 0 fail / 51 expectations。下一步在干净 commit 上生成 source-bound release plan，再以独立 cold cache 执行 DeepSeek treatment 全量运行。
+- 第一次计划预检在任何 DeepSeek 调用前发现 embedding OpenAI base URL 的 `/v1` 被错误用于 health 路由，形成不存在的 `/v1/health`。runner 现将健康检查规范化到服务根 `/health`，并覆盖带/不带 `/v1` 两种地址；Python suite 更新为 30 pass / 0 fail。
