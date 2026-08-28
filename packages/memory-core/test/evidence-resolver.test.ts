@@ -235,6 +235,10 @@ describe("shared evidence resolver v1", () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: {
         indexVersion: "test-index.v1",
+        evidenceRefBelongsToSource(sourceId, evidenceRef) {
+          const match = /^amb:document\/(.+?)#/.exec(evidenceRef);
+          return match?.[1] === sourceId;
+        },
         async search() {
           return {
             lists: [
@@ -246,7 +250,7 @@ describe("shared evidence resolver v1", () => {
                   {
                     candidateId: "user-ref",
                     sourceId: "user-source",
-                    evidenceRef: "user-source#turn-1",
+                    evidenceRef: "amb:document/user-source#derived-1",
                     sourceKind: "derived_atom" as const,
                     authority: "derived" as const,
                   },
@@ -260,21 +264,21 @@ describe("shared evidence resolver v1", () => {
                   {
                     candidateId: "cross-source-duplicate-ref",
                     sourceId: "escape-source",
-                    evidenceRef: "assistant-source#turn-2",
+                    evidenceRef: "amb:document/assistant-source#source-2",
                     sourceKind: "assistant_output" as const,
                     authority: "context_only" as const,
                   },
                   {
                     candidateId: "mismatched-ref-family",
                     sourceId: "family-escape-source",
-                    evidenceRef: "different-source#turn-2",
+                    evidenceRef: "amb:document/different-source#source-2",
                     sourceKind: "assistant_output" as const,
                     authority: "context_only" as const,
                   },
                   {
                     candidateId: "assistant-source-request",
                     sourceId: "assistant-source",
-                    evidenceRef: "assistant-source#turn-1",
+                    evidenceRef: "amb:document/assistant-source#source-1",
                     sourceKind: "user_input" as const,
                     authority: "user_asserted" as const,
                   },

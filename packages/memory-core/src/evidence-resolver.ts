@@ -43,7 +43,7 @@ import {
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v14:source-level-dialogue-discovery" as const;
+  "paw.memory-evidence-resolver.v15:adapter-owned-source-address" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -55,6 +55,15 @@ export interface MemoryEvidenceIndexSearchResultV1 {
 
 export interface MemoryEvidenceIndexV1 {
   readonly indexVersion: string;
+  /**
+   * Adapter-owned address boundary. Implementations with namespaced evidence
+   * refs must prove source membership without teaching the core their schema.
+   * The indexVersion must change when this mapping changes.
+   */
+  readonly evidenceRefBelongsToSource?: (
+    sourceId: string,
+    evidenceRef: string,
+  ) => boolean;
   search(
     query: string,
     signal: AbortSignal,
@@ -456,6 +465,7 @@ async function resolveEvidencePass(input: {
             result: buildCertifiedAssistantDialogueSourceDiscoveryV1(
               input.primaryUnfiltered,
               sourceIds,
+              input.index.evidenceRefBelongsToSource,
             ),
           },
           ...input.requirements.flatMap((requirement, index) =>
@@ -467,6 +477,7 @@ async function resolveEvidencePass(input: {
                     result: buildCertifiedAssistantDialogueSourceDiscoveryV1(
                       supplementalUnfiltered[index] ?? input.primaryUnfiltered,
                       sourceIds,
+                      input.index.evidenceRefBelongsToSource,
                     ),
                   },
                 ],
@@ -1073,8 +1084,11 @@ function filterEvidenceSearchResultForRole(
 function buildCertifiedAssistantDialogueSourceDiscoveryV1(
   result: MemoryEvidenceIndexSearchResultV1,
   primarySourceIds: readonly string[],
+  addressBelongsToSource: MemoryEvidenceIndexV1["evidenceRefBelongsToSource"],
 ): MemoryEvidenceIndexSearchResultV1 {
   const primarySources = new Set(primarySourceIds);
+  const ownsAddress =
+    addressBelongsToSource ?? defaultEvidenceRefBelongsToSource;
   return Object.freeze({
     ...result,
     lists: Object.freeze(
@@ -1088,9 +1102,10 @@ function buildCertifiedAssistantDialogueSourceDiscoveryV1(
                   list.candidates.filter(
                     (candidate) =>
                       !primarySources.has(candidate.sourceId) &&
-                      evidenceRefMatchesSource(
-                        candidate.evidenceRef,
+                      evidenceRefBelongsToSource(
+                        ownsAddress,
                         candidate.sourceId,
+                        candidate.evidenceRef,
                       ),
                   ),
                 ),
@@ -1102,15 +1117,23 @@ function buildCertifiedAssistantDialogueSourceDiscoveryV1(
   });
 }
 
-function evidenceRefMatchesSource(
-  evidenceRef: string,
+function evidenceRefBelongsToSource(
+  ownsAddress: (sourceId: string, evidenceRef: string) => boolean,
   sourceId: string,
+  evidenceRef: string,
 ): boolean {
   try {
-    return evidenceSourceIdV1(evidenceRef) === sourceId;
+    return ownsAddress(sourceId, evidenceRef) === true;
   } catch {
     return false;
   }
+}
+
+function defaultEvidenceRefBelongsToSource(
+  sourceId: string,
+  evidenceRef: string,
+): boolean {
+  return evidenceSourceIdV1(evidenceRef) === sourceId;
 }
 
 function enforceSelectedEvidenceAuthority(input: {

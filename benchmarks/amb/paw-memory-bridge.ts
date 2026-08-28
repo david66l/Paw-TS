@@ -2949,7 +2949,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     }
     const sharedResolver = createMemoryEvidenceResolverV1({
       index: {
-        indexVersion: "paw.amb-turn-evidence-index.v1",
+        indexVersion: "paw.amb-turn-evidence-index.v2:namespaced-source-address",
+        evidenceRefBelongsToSource(sourceId, evidenceRef) {
+          return sourceDocumentIdFromEvidenceV1(evidenceRef) === sourceId;
+        },
         async search(searchText) {
           const result = await searchEvidenceIndex(searchText);
           return { lists: result.lists, hits: result.hits };
