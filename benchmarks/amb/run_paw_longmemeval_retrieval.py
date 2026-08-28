@@ -932,6 +932,7 @@ def run(args: argparse.Namespace) -> dict:
         "selectionPolicy": selection_policy,
         "retrievalProfile": RETRIEVAL_PROFILE,
         "evaluationMode": "static-initial-evidence-packet",
+        "answerProtocol": args.answer_protocol,
         "partialRecoveryExecuted": False,
         "eventIdentityMode": "episode-fallback",
         "eventKeyCoverageRate": 0.0,
@@ -1120,13 +1121,18 @@ def run(args: argparse.Namespace) -> dict:
                 )
 
                 def prompt_fn(question: str, packet: str, meta=None) -> str:
-                    return EVIDENCE_ANSWER_PROTOCOL + dataset.build_rag_prompt(
+                    base_prompt = dataset.build_rag_prompt(
                         question,
                         packet,
                         "open",
                         "s",
                         query.meta["question_type"],
                         meta,
+                    )
+                    return (
+                        EVIDENCE_ANSWER_PROTOCOL + base_prompt
+                        if args.answer_protocol == "evidence_policy"
+                        else base_prompt
                     )
 
                 answer = answer_mode.answer_from_context(
@@ -1206,6 +1212,12 @@ def main() -> None:
     parser.add_argument("--reuse-index", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--answer", action="store_true")
+    parser.add_argument(
+        "--answer-protocol",
+        choices=("upstream", "evidence_policy"),
+        default="evidence_policy",
+        help="Select the final answer synthesis protocol without changing retrieval.",
+    )
     parser.add_argument("--sealed-ledger", type=Path)
     parser.add_argument("--eval-key-file", type=Path)
     parser.add_argument(
