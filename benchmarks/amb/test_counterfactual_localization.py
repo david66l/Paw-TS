@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from counterfactual_localization import (
+    CONDITIONS,
     Turn,
     content_safe_event,
     lexical_score,
@@ -63,11 +64,7 @@ class CounterfactualLocalizationTest(unittest.TestCase):
                     "contextTokens": 10,
                 }
             )
-            for condition in (
-                "source_locked",
-                "oracle_span",
-                "structured_synthesis",
-            ):
+            for condition in CONDITIONS[1:]:
                 rows.append(
                     {
                         "caseIndex": case_index,
@@ -91,12 +88,7 @@ class CounterfactualLocalizationTest(unittest.TestCase):
     def test_summary_requires_all_nineteen_cases_for_the_oracle_decision(self) -> None:
         rows = []
         for case_index in range(1, 20):
-            for condition in (
-                "current_packet",
-                "source_locked",
-                "oracle_span",
-                "structured_synthesis",
-            ):
+            for condition in CONDITIONS:
                 rows.append(
                     {
                         "caseIndex": case_index,

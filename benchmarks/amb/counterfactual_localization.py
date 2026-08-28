@@ -4,6 +4,7 @@ This is a diagnostic harness, not a benchmark runner. It reconstructs only the
 incorrect rows from a sealed baseline ledger and evaluates four paired arms:
 
 * current_packet: frozen production retrieval with the upstream answer prompt;
+* current_gold_filtered: current packet with non-gold sources removed (post-hoc);
 * source_locked: gold documents with query-only deterministic turn ranking;
 * oracle_span: gold documents with answer-aware deterministic turn ranking;
 * structured_synthesis: the current packet with Paw's evidence answer policy.
@@ -37,10 +38,11 @@ UPSTREAM_SRC = HERE / "upstream" / "src"
 sys.path.insert(0, str(UPSTREAM_SRC))
 sys.path.insert(0, str(HERE))
 
-SCHEMA_VERSION = "paw.longmemeval-counterfactual-localization.v1"
+SCHEMA_VERSION = "paw.longmemeval-counterfactual-localization.v2"
 RANKER_VERSION = "paw.counterfactual-turn-ranker.v1:dense-lexical-role-window"
 CONDITIONS = (
     "current_packet",
+    "current_gold_filtered",
     "source_locked",
     "oracle_span",
     "structured_synthesis",
@@ -329,11 +331,13 @@ def summarize(rows: Sequence[dict]) -> dict:
     oracle = by_condition["oracle_span"]
     source = by_condition["source_locked"]
     structured = by_condition["structured_synthesis"]
+    filtered = by_condition["current_gold_filtered"]
     diagnosis = {
         "turnLocalizationHypothesisSupported": (
             oracle["completed"] == 19 and oracle["netWinsVsCurrent"] >= 4
         ),
         "sourceLockSignal": source["netWinsVsCurrent"],
+        "distractorFilterSignal": filtered["netWinsVsCurrent"],
         "oracleSpanSignal": oracle["netWinsVsCurrent"],
         "synthesisSignal": structured["netWinsVsCurrent"],
         "decisionRule": (
@@ -447,6 +451,7 @@ def run(args: argparse.Namespace) -> dict:
         "baselineCommit": args.baseline_commit,
         "caseCount": len(cases),
         "conditions": list(CONDITIONS),
+        "studyDesign": "four-arm-registered-plus-posthoc-distractor-filter",
         "answerTools": False,
         "rankerVersion": RANKER_VERSION,
         "maxContextChars": MAX_CONTEXT_CHARS,
@@ -486,6 +491,7 @@ def run(args: argparse.Namespace) -> dict:
     )
     provider.prepare(store_dir, unit_ids=selected_users, reset=False)
     provider.ingest(selected_documents)
+    provider_stats = None
     try:
         for case_index, (baseline_row, query) in enumerate(cases, start=1):
             query_key = eval_hmac(query.id, key)
@@ -506,6 +512,14 @@ def run(args: argparse.Namespace) -> dict:
             current_context = "\n\n".join(
                 f"## Memory {index + 1}\n{document.content}"
                 for index, document in enumerate(current_documents)
+            )
+            gold_ids = set(query.gold_ids)
+            current_gold_documents = [
+                document for document in current_documents if document.id in gold_ids
+            ]
+            current_gold_context = "\n\n".join(
+                f"## Memory {index + 1}\n{document.content}"
+                for index, document in enumerate(current_gold_documents)
             )
             if gold_documents:
                 source_context, source_meta = build_ranked_context(
@@ -535,6 +549,14 @@ def run(args: argparse.Namespace) -> dict:
                 oracle_meta = {**absence_meta, "answerAware": True}
             condition_inputs = {
                 "current_packet": (current_context, "", {}),
+                "current_gold_filtered": (
+                    current_gold_context,
+                    "",
+                    {
+                        "currentSourceCount": len(current_documents),
+                        "retainedGoldSourceCount": len(current_gold_documents),
+                    },
+                ),
                 "source_locked": (source_context, "", source_meta),
                 "oracle_span": (oracle_context, "", oracle_meta),
                 "structured_synthesis": (
@@ -600,6 +622,7 @@ def run(args: argparse.Namespace) -> dict:
                         "totalRows": len(cases) * len(CONDITIONS),
                     },
                 )
+        provider_stats = provider.stats()
     finally:
         provider.cleanup()
 
@@ -608,6 +631,7 @@ def run(args: argparse.Namespace) -> dict:
     checkpoint["summary"] = summarize(checkpoint["rows"])
     checkpoint["answerLlmStats"] = answer_llm.stats()
     checkpoint["judgeLlmStats"] = judge_llm.stats()
+    checkpoint["providerStats"] = provider_stats
     save_checkpoint(args.sealed_checkpoint, checkpoint)
     sealed_sha = file_sha256(args.sealed_checkpoint)
     public = {
@@ -623,11 +647,14 @@ def run(args: argparse.Namespace) -> dict:
         "summary": checkpoint["summary"],
         "answerLlmStats": checkpoint["answerLlmStats"],
         "judgeLlmStats": checkpoint["judgeLlmStats"],
+        "providerStats": checkpoint["providerStats"],
         "note": (
             "Diagnostic use only. The 19 cases were selected from known baseline "
             "errors and are not an unseen benchmark result. The oracle-span arm "
             "uses accepted answers only to rank hidden gold-document turns; accepted "
-            "answers are never included in the answer-model context."
+            "answers are never included in the answer-model context. The "
+            "current-gold-filtered arm is a declared post-hoc discriminator between "
+            "distractor removal and source-local turn ranking."
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
