@@ -2081,6 +2081,19 @@ function sourceDocumentIdFromEvidenceV1(ref: string): string | undefined {
   return documentId || undefined;
 }
 
+function isMemoryConversationTurnKindV1(
+  value: string,
+): value is MemoryConversationTurnKindV1 {
+  return (
+    value === "user_input" ||
+    value === "assistant_output" ||
+    value === "tool_observation" ||
+    value === "verification" ||
+    value === "outcome" ||
+    value === "source_document"
+  );
+}
+
 async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   const queryText = asString(params.query, "query");
   const queryTimeCutoff = parseAmbQueryTimeCutoffV1(params.queryTimestamp);
@@ -2615,45 +2628,56 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       sourceIds: readonly string[],
     ) {
       const allowed = new Set(sourceIds);
-      const ranked = documents
-        .filter(
-          (document) =>
-            allowed.has(document.id) && documentVisibleAtQuery(document.id),
-        )
-        .flatMap((document) => {
-          const turns = new Map<
-            number,
-            Readonly<{
-              seq: number;
-              kind: MemoryConversationTurnKindV1;
-              content: string;
-            }>
-          >();
-          for (const window of projectAmbMemoryEvidenceV1(document.content)) {
-            for (const turn of window.source) turns.set(turn.seq, turn);
-          }
-          return [...turns.values()]
-            .filter(
-              (turn) =>
-                turn.kind !== "assistant_output" || allowAssistantContext,
-            )
-            .map((turn) => ({
-              documentId: document.id,
-              sourceSeq: turn.seq,
-              sourceKind: turn.kind,
+      // Read the immutable source-block archive, not `documents`: at this point
+      // that variable contains projected atom documents rather than raw L0.
+      // The archive is already sealed to this user scope; code filters the
+      // discovered source IDs before any content is scored or exposed.
+      const sourceEntries = await sourceEngineFor(userId).query({
+        includeInvalidated: false,
+        includeDegraded: false,
+        limit: 100_000,
+      });
+      const ranked = sourceEntries
+        .flatMap((entry) => {
+          if (entry.kind !== "episodic" || !entry.whenToUse.trim()) return [];
+          const evidenceRef = entry.evidence.find((ref) => {
+            const documentId = sourceDocumentIdFromEvidenceV1(ref);
+            return (
+              documentId !== undefined &&
+              allowed.has(documentId) &&
+              documentVisibleAtQuery(documentId) &&
+              /#source-\d+$/.test(ref)
+            );
+          });
+          if (!evidenceRef) return [];
+          const documentId = sourceDocumentIdFromEvidenceV1(evidenceRef);
+          const sourceSeq = Number(/#source-(\d+)$/.exec(evidenceRef)?.[1]);
+          if (!documentId || !Number.isSafeInteger(sourceSeq) || sourceSeq < 1)
+            return [];
+          const sourceKind = isMemoryConversationTurnKindV1(entry.issueType)
+            ? entry.issueType
+            : "source_document";
+          if (sourceKind === "assistant_output" && !allowAssistantContext)
+            return [];
+          return [
+            {
+              documentId,
+              sourceSeq,
+              sourceKind,
               authority:
-                turn.kind === "user_input"
+                sourceKind === "user_input"
                   ? ("user_asserted" as const)
-                  : turn.kind === "assistant_output"
+                  : sourceKind === "assistant_output"
                     ? ("context_only" as const)
                     : ("mixed" as const),
               content: projectMemoryEvidenceExcerptV1(
-                turn.content,
+                entry.whenToUse,
                 searchText,
                 8_192,
               ),
-              score: memoryEvidenceSupportScoreV1(searchText, turn.content),
-            }));
+              score: memoryEvidenceSupportScoreV1(searchText, entry.whenToUse),
+            },
+          ];
         })
         .sort(
           (left, right) =>
