@@ -998,6 +998,7 @@ def run(args: argparse.Namespace) -> dict:
         "answerProtocol": args.answer_protocol,
         "answerReview": args.answer_review,
         "answerTools": args.answer_tools,
+        "answerToolsRequired": args.answer_tools_required,
         "partialRecoveryExecuted": False,
         "eventIdentityMode": "episode-fallback",
         "eventKeyCoverageRate": 0.0,
@@ -1201,7 +1202,18 @@ def run(args: argparse.Namespace) -> dict:
                     )
 
                 if args.answer_tools:
-                    answer_llm.bind_memory_tools(provider, query.user_id)
+                    force_resolve = False
+                    if args.answer_tools_required:
+                        from evidence_answer_review import (
+                            requires_evidence_answer_review,
+                        )
+
+                        force_resolve = requires_evidence_answer_review(context)
+                    answer_llm.bind_memory_tools(
+                        provider,
+                        query.user_id,
+                        force_resolve=force_resolve,
+                    )
                 try:
                     answer = answer_mode.answer_from_context(
                         query.query,
@@ -1320,6 +1332,7 @@ def main() -> None:
     parser.add_argument("--answer", action="store_true")
     parser.add_argument("--answer-review", action="store_true")
     parser.add_argument("--answer-tools", action="store_true")
+    parser.add_argument("--answer-tools-required", action="store_true")
     parser.add_argument(
         "--answer-protocol",
         choices=("upstream", "evidence_policy"),
@@ -1377,6 +1390,8 @@ def main() -> None:
         args.seed = args.seed_file.read_text(encoding="utf-8").strip()
     if not args.seed or len(args.seed) < 32:
         raise ValueError("selection seed must contain at least 32 characters")
+    if args.answer_tools_required and not args.answer_tools:
+        raise ValueError("--answer-tools-required requires --answer-tools")
     if (args.blind_plan is None) != (args.blind_arm is None):
         raise ValueError("--blind-plan and --blind-arm must be supplied together")
     if args.dry_run and args.blind_plan is not None:
