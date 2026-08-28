@@ -224,7 +224,7 @@ describe("Paw Next memory plugin", () => {
         async resolve() {
           resolverCalls += 1;
           return {
-            schemaVersion: "paw.memory-resolved-context.v1",
+            schemaVersion: "paw.memory-resolved-context.v2",
             resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
             packetRevision: "packet-auto-1",
             mode: "planned",
@@ -242,6 +242,7 @@ describe("Paw Next memory plugin", () => {
                 layer: "L0",
                 statement: "The user explicitly confirmed the event.",
                 supportRole: "supporting",
+                evidenceUse: "fact",
                 evidenceRefs: ["conversation:event"],
               },
             ],

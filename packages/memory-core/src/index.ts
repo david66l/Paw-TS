@@ -13,6 +13,11 @@ export {
   type MemoryEvidenceAnswerPolicyV1,
 } from "./evidence-answer-policy.js";
 export {
+  classifyMemoryEvidenceRefsUseV1,
+  renderMemoryEvidenceAuthorityHeaderV1,
+  type MemoryEvidencePresentationAnswerRoleV1,
+} from "./evidence-authority-presentation.js";
+export {
   createEvidenceFirstMemoryContextResolverV1,
   PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1,
   projectEvidenceFirstMemoryAnswerContractV1,
@@ -71,6 +76,7 @@ export {
   parseMemoryEvidenceQueryPlanV3,
   type MemoryEvidenceAnswerShapeV3,
   type MemoryAssistantOriginApertureV1,
+  type MemoryEvidenceUseV1,
   type MemoryEvidenceQueryIntentV3,
   type MemoryEvidenceQueryPlanV3,
   type MemoryEvidenceQueryPlannerV3,

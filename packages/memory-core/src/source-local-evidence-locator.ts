@@ -12,7 +12,7 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
 
 export const PAW_MEMORY_SOURCE_LOCAL_EVIDENCE_LOCATOR_PORT_VERSION_V1 =
-  "paw.memory-source-local-evidence-locator-port.v2:assistant-origin-policy" as const;
+  "paw.memory-source-local-evidence-locator-port.v3:reported-assistant-assertion" as const;
 
 export interface MemorySourceLocalEvidenceBudgetV1 {
   readonly maxAnchors: number;
@@ -24,7 +24,8 @@ export interface MemorySourceLocalEvidenceBudgetV1 {
 
 export type MemoryAssistantOriginPolicyV1 =
   | "addressed_reply_only"
-  | "allow_session_opening_artifact";
+  | "allow_session_opening_artifact"
+  | "allow_session_opening_reported_assertion";
 
 export interface MemorySourceLocalEvidenceRequestV1 {
   readonly requirement: MemoryEvidenceRequirementV3;
@@ -286,7 +287,9 @@ export function hasMemorySourceLocalAssistantOriginCertificateV1(
   );
   return (
     hasAssistantAnchor &&
-    ((policy === "allow_session_opening_artifact" && anchorTurnOrder === 1) ||
+    (((policy === "allow_session_opening_artifact" ||
+      policy === "allow_session_opening_reported_assertion") &&
+      anchorTurnOrder === 1) ||
       hasMemorySourceLocalDialogueCertificateV1(turns, anchorTurnOrder))
   );
 }
@@ -422,7 +425,18 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
   const allowed = new Set(input.request.lockedSourceIds);
   if (
     input.request.assistantOriginPolicy !== "addressed_reply_only" &&
-    input.request.assistantOriginPolicy !== "allow_session_opening_artifact"
+    input.request.assistantOriginPolicy !== "allow_session_opening_artifact" &&
+    input.request.assistantOriginPolicy !==
+      "allow_session_opening_reported_assertion"
+  ) {
+    throw namedError("MemorySourceLocalEvidencePolicyInvalid");
+  }
+  const reportedAssistantAssertion =
+    input.request.requirement.evidenceUse === "reported_assistant_assertion";
+  if (
+    (input.request.assistantOriginPolicy ===
+      "allow_session_opening_reported_assertion") !==
+    reportedAssistantAssertion
   ) {
     throw namedError("MemorySourceLocalEvidencePolicyInvalid");
   }
@@ -515,7 +529,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       throw namedError("MemorySourceLocalEvidenceAnchorMissing");
     }
     if (
-      input.request.requirement.roleConstraint === "any" &&
+      input.request.requirement.roleConstraint !== "assistant" &&
       !hasMemorySourceLocalAssistantOriginCertificateV1(
         hit.includedTurns,
         anchorTurnOrder as number,

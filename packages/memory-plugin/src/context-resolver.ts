@@ -298,6 +298,7 @@ async function materializePacket(
         memoryId: card.id,
         layer: "L1",
         statement: card.statement.slice(0, 2_048),
+        evidenceUse: "fact",
         ...(card.validFrom === undefined ? {} : { validFrom: card.validFrom }),
         evidenceRefs: Object.freeze(
           card.sources.map((source) => source.ref).slice(0, 8),
@@ -355,6 +356,7 @@ async function materializePacket(
             memoryId,
             layer: "L0" as const,
             statement: result.content.slice(0, 900),
+            evidenceUse: "fact" as const,
             validFrom: result.createdAt,
             evidenceRefs: Object.freeze([result.evidenceRef]),
           }),
@@ -469,6 +471,7 @@ async function materializePacket(
         description: requirement.description,
         priority: requirement.priority,
         minimumEvidence: requirement.minimumEvidence,
+        evidenceUse: "fact" as const,
         status: coverage?.status ?? "missing",
         selectedEvidenceCount:
           (coverage?.memoryIds.length ?? 0) +
@@ -534,6 +537,7 @@ async function materializePacket(
           description: requirement.description,
           priority: requirement.priority,
           minimumEvidence: requirement.minimumEvidence,
+          evidenceUse: requirement.evidenceUse,
           status: requirement.status,
           selectedEvidenceCount: requirement.selectedEvidenceCount,
           supportingMemoryIds: requirement.candidateMemoryIds,
@@ -547,6 +551,7 @@ async function materializePacket(
           description: requirement.description,
           priority: requirement.priority,
           minimumEvidence: requirement.minimumEvidence,
+          evidenceUse: requirement.evidenceUse,
           status:
             requirement.selectedEvidenceCount > 0
               ? ("partial" as const)
@@ -644,7 +649,7 @@ async function materializePacket(
           ? ("missing" as const)
           : ("partial" as const);
   const body = {
-    schemaVersion: "paw.memory-resolved-context.v1" as const,
+    schemaVersion: "paw.memory-resolved-context.v2" as const,
     resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
     mode: input.plan
       ? ("planned" as const)
@@ -676,6 +681,7 @@ function verifiedRequirement(
     description: string;
     priority: "required" | "supporting";
     minimumEvidence: number;
+    evidenceUse: "fact";
     status: "covered" | "partial" | "missing";
     selectedEvidenceCount: number;
     candidateMemoryIds: readonly string[];
@@ -695,6 +701,7 @@ function verifiedRequirement(
     description: requirement.description,
     priority: requirement.priority,
     minimumEvidence: requirement.minimumEvidence,
+    evidenceUse: requirement.evidenceUse,
     status,
     selectedEvidenceCount: requirement.selectedEvidenceCount,
     supportingMemoryIds: assessment.supportingMemoryIds,
@@ -809,6 +816,7 @@ function topicStateEvidence(
     memoryId: state.memoryId,
     layer: "L2",
     statement: state.statement,
+    evidenceUse: "fact",
     state: state.state,
     evidenceRefs: state.evidenceRefs,
   });

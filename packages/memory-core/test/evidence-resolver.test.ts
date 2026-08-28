@@ -5,6 +5,7 @@ import {
   type MemoryEvidenceIndexV1,
   createJsonMemoryEvidenceSupportSelectorV1,
   createMemoryEvidenceResolverV1,
+  projectEvidenceFirstMemoryAnswerContractV1,
   projectEvidenceFirstMemoryContextPacketV1,
 } from "../src/index.js";
 
@@ -439,6 +440,275 @@ describe("shared evidence resolver v1", () => {
     ).toContain("Northstar");
   });
 
+  test("keeps a session-opening assistant assertion reported end to end", async () => {
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        evidenceRefBelongsToSource(sourceId, evidenceRef) {
+          return evidenceRef.startsWith(`${sourceId}#`);
+        },
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l1" as const,
+                retrieverId: "primary-user",
+                weight: 1.1,
+                candidates: [
+                  {
+                    candidateId: "user-derived",
+                    sourceId: "user-source",
+                    evidenceRef: "user-source#derived-1",
+                    sourceKind: "derived_atom" as const,
+                    authority: "derived" as const,
+                  },
+                ],
+              },
+              {
+                channel: "l0" as const,
+                retrieverId: "assistant-discovery",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "assistant-opening",
+                    sourceId: "assistant-source",
+                    evidenceRef: "assistant-source#turn-1",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "user-source",
+                evidenceRef: "user-source#derived-1",
+                content: "A related user-side navigation claim.",
+                authority: "derived" as const,
+              },
+              {
+                sourceId: "assistant-source",
+                evidenceRef: "assistant-source#turn-1",
+                content: "The cover was blue.",
+                authority: "context_only" as const,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      maxSources: 1,
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate(request) {
+          expect(request.assistantOriginPolicy).toBe(
+            "allow_session_opening_reported_assertion",
+          );
+          const content = "The cover was blue.";
+          return {
+            locatorVersion: "test-source-local.v1",
+            locatorRevision: "reported-opening",
+            hits: [
+              {
+                sourceId: "assistant-source",
+                evidenceRef: "assistant-source#turn-1",
+                anchorEvidenceRef: "assistant-source#turn-1",
+                contextEvidenceRefs: ["assistant-source#turn-1"],
+                sourceKind: "assistant_output" as const,
+                content,
+                authority: "context_only" as const,
+                turnOrder: 1,
+                includedTurns: [
+                  {
+                    evidenceRef: "assistant-source#turn-1",
+                    sourceKind: "assistant_output" as const,
+                    turnOrder: 1,
+                  },
+                ],
+              },
+            ],
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: 1,
+              denseCandidates: 1,
+              anchorCount: 1,
+              includedTurnCount: 1,
+              renderedChars: content.length,
+              cacheHit: false,
+              durationMs: 1,
+            },
+          };
+        },
+      },
+      sourceLocalHydrator: {
+        hydratorVersion: "test-hydrator.v1",
+        async hydrate() {
+          const content = "The cover was blue.";
+          return [
+            {
+              evidenceRef: "assistant-source#turn-1",
+              sourceKind: "assistant_output" as const,
+              turnOrder: 1,
+              content,
+              contentHash: hashTextV1(content),
+            },
+          ];
+        },
+      },
+      supportSelector: createJsonMemoryEvidenceSupportSelectorV1({
+        model: {
+          async complete(request) {
+            const payload = JSON.parse(request.user) as {
+              requirements: Array<{
+                requirementId: string;
+                evidenceUse: string;
+              }>;
+              candidates: Array<{
+                evidenceRef: string;
+                reportedAssistantAssertion?: boolean;
+              }>;
+            };
+            expect(payload.requirements).toHaveLength(1);
+            expect(payload.requirements[0]?.evidenceUse).toBe(
+              "reported_assistant_assertion",
+            );
+            const reported = payload.candidates.find(
+              (candidate) => candidate.reportedAssistantAssertion,
+            );
+            const ordinary = payload.candidates.find(
+              (candidate) => !candidate.reportedAssistantAssertion,
+            );
+            expect(reported).toBeDefined();
+            expect(ordinary).toBeDefined();
+            return {
+              status: "completed" as const,
+              text: JSON.stringify({
+                assessments: [
+                  {
+                    requirementId: payload.requirements[0]?.requirementId,
+                    supportingEvidenceRefs: [
+                      reported?.evidenceRef,
+                      ordinary?.evidenceRef,
+                    ],
+                    contradictingEvidenceRefs: [],
+                    unknownEvidenceRefs: [],
+                  },
+                ],
+              }),
+            };
+          },
+        },
+      }),
+    });
+
+    const result = await resolver.resolve(
+      "Do you remember what was the color of the cover?",
+      new AbortController().signal,
+    );
+    expect(result.requirements[0]?.evidenceUse).toBe(
+      "reported_assistant_assertion",
+    );
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).toContain("blue");
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).not.toContain("navigation claim");
+    const packet = projectEvidenceFirstMemoryContextPacketV1(result);
+    expect(packet.schemaVersion).toBe("paw.memory-resolved-context.v2");
+    expect(packet.requirements[0]?.evidenceUse).toBe(
+      "reported_assistant_assertion",
+    );
+    expect(packet.evidence[0]?.evidenceUse).toBe(
+      "reported_assistant_assertion",
+    );
+    const contract = projectEvidenceFirstMemoryAnswerContractV1(result);
+    expect(contract.answerPolicy.operations).toContain(
+      "frame_reported_assistant_assertion",
+    );
+    expect(contract.requirements[0]?.evidenceUse).toBe(
+      "reported_assistant_assertion",
+    );
+    expect(contract.guidance).toContain("previously said");
+  });
+
+  test("keeps reported assistant assertions closed without a working selector", async () => {
+    const primaryIndex: MemoryEvidenceIndexV1 = {
+      indexVersion: "test-index.v1",
+      async search() {
+        return {
+          lists: [
+            {
+              channel: "l1" as const,
+              retrieverId: "mixed-primary",
+              weight: 1,
+              candidates: [
+                {
+                  candidateId: "user-fact",
+                  sourceId: "user-source",
+                  evidenceRef: "user-source#derived-1",
+                  sourceKind: "derived_atom" as const,
+                  authority: "derived" as const,
+                },
+                {
+                  candidateId: "assistant-opening",
+                  sourceId: "assistant-source",
+                  evidenceRef: "assistant-source#turn-1",
+                  sourceKind: "assistant_output" as const,
+                  authority: "context_only" as const,
+                },
+              ],
+            },
+          ],
+          hits: [
+            {
+              sourceId: "user-source",
+              evidenceRef: "user-source#derived-1",
+              content: "A related user fact.",
+              authority: "derived" as const,
+            },
+            {
+              sourceId: "assistant-source",
+              evidenceRef: "assistant-source#turn-1",
+              content: "The cover was blue.",
+              authority: "context_only" as const,
+              turnOrder: 1,
+            },
+          ],
+        };
+      },
+    };
+    const failingSelector = {
+      selectorVersion: "failing-selector.v1",
+      async select() {
+        throw new Error("selector unavailable");
+      },
+    };
+
+    for (const supportSelector of [undefined, failingSelector]) {
+      const resolver = createMemoryEvidenceResolverV1({
+        index: primaryIndex,
+        ...(supportSelector ? { supportSelector } : {}),
+      });
+      const result = await resolver.resolve(
+        "Do you remember what was the color of the cover?",
+        new AbortController().signal,
+      );
+      expect(result.requirements).toHaveLength(1);
+      expect(result.requirements[0]?.evidenceUse).toBe(
+        "reported_assistant_assertion",
+      );
+      expect(result.packetSources).toHaveLength(0);
+      const packet = projectEvidenceFirstMemoryContextPacketV1(result);
+      expect(packet.stop).toBe("missing");
+      expect(packet.evidence).toHaveLength(0);
+      const contract = projectEvidenceFirstMemoryAnswerContractV1(result);
+      expect(contract.answerPolicy.operations).toContain(
+        "frame_reported_assistant_assertion",
+      );
+    }
+  });
+
   test("rejects requirement authority drift from a custom planner port", async () => {
     let locatedRole = "";
     const resolver = createMemoryEvidenceResolverV1({
@@ -517,6 +787,47 @@ describe("shared evidence resolver v1", () => {
     expect(result.requirements[0]?.requirementId).toBe("root-requirement");
     expect(result.requirements[0]?.roleConstraint).toBe("any");
     expect(locatedRole).toBe("any");
+  });
+
+  test("rejects custom planner attempts to assign code-owned evidence use", async () => {
+    const resolver = createMemoryEvidenceResolverV1({
+      index: index(),
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "any" as const,
+            needsPlanning: true,
+            requirements: [
+              {
+                requirementId: "injected-use",
+                label: "injected use",
+                searchText: "prior assistant statement",
+                temporalMode: "any" as const,
+                roleConstraint: "any" as const,
+                evidenceUse: "reported_assistant_assertion" as const,
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "Could you repeat the item from our earlier conversation?",
+      new AbortController().signal,
+    );
+    expect(result.plannerStatus).toBe("fallback");
+    expect(
+      result.requirements.every(
+        (requirement) => requirement.evidenceUse === undefined,
+      ),
+    ).toBe(true);
   });
 
   test("fails closed when a custom selector omits a requirement", async () => {

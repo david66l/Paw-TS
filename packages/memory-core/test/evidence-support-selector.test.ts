@@ -195,6 +195,50 @@ describe("requirement-bound evidence support selector v1", () => {
     ).toThrow("MemoryEvidenceSupportCertificateInvalid");
   });
 
+  test("binds reported assistant assertions to their dedicated requirement", () => {
+    const assistant = {
+      sourceId: "session",
+      evidenceRef: "session#assistant-1",
+      content: "The cover was blue.",
+      authority: "context_only" as const,
+      sourceKind: "assistant_output" as const,
+      contextEvidenceRefs: ["session#assistant-1"],
+      turnOrder: 1,
+    };
+    const reportedRequirement = {
+      ...requirements[0]!,
+      evidenceUse: "reported_assistant_assertion" as const,
+    };
+    const request = buildMemoryEvidenceSupportSelectionRequestV1({
+      query: "Do you remember what was the color of the cover?",
+      requirements: [reportedRequirement],
+      candidates: [assistant],
+      reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
+      sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
+    });
+    const payload = JSON.parse(request.user) as {
+      requirements: Array<{ evidenceUse: string }>;
+      candidates: Array<{ reportedAssistantAssertion: boolean }>;
+    };
+    expect(payload.requirements[0]?.evidenceUse).toBe(
+      "reported_assistant_assertion",
+    );
+    expect(payload.candidates[0]?.reportedAssistantAssertion).toBe(true);
+    expect(request.system).toContain(
+      "not the truth of the underlying user, shared, third-party, or world fact",
+    );
+
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "What is my address?",
+        requirements: [requirements[0]!],
+        candidates: [assistant],
+        reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
+        sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
+      }),
+    ).toThrow("MemoryEvidenceSupportCertificateInvalid");
+  });
+
   test("accepts only supplied evidence addresses for every requirement", () => {
     expect(
       parseMemoryEvidenceSupportSelectionV1(

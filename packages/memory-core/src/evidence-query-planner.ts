@@ -20,7 +20,10 @@ export type MemoryEvidenceTemporalModeV3 =
 export type MemoryAssistantOriginApertureV1 =
   | "closed"
   | "addressed_reply_only"
-  | "session_opening_assistant_artifact";
+  | "session_opening_assistant_artifact"
+  | "session_opening_reported_assistant_assertion";
+
+export type MemoryEvidenceUseV1 = "fact" | "reported_assistant_assertion";
 
 export type MemoryEvidenceRoleConstraintV3 = "user" | "assistant" | "any";
 export type MemoryEvidenceRelationV3 =
@@ -55,6 +58,8 @@ export interface MemoryEvidenceRequirementV3 {
   readonly relation?: MemoryEvidenceRelationV3;
   readonly coverageMode?: MemoryEvidenceCoverageModeV3;
   readonly minimumEvidence?: number;
+  /** Code-owned evidence semantics; model planner output cannot set this. */
+  readonly evidenceUse?: MemoryEvidenceUseV1;
 }
 
 export interface MemoryEvidenceQueryPlanV3 extends MemoryEvidenceQueryIntentV3 {
@@ -510,9 +515,8 @@ export function needsMemoryEvidenceRoleResolutionV1(query: string): boolean {
 export function allowsMemorySessionOpeningAssistantOriginV1(
   query: string,
 ): boolean {
-  return (
-    classifyMemoryAssistantOriginApertureV1(query) ===
-    "session_opening_assistant_artifact"
+  return classifyMemoryAssistantOriginApertureV1(query).startsWith(
+    "session_opening_",
   );
 }
 
@@ -576,6 +580,9 @@ export function classifyMemoryAssistantOriginApertureV1(
   ) {
     return "session_opening_assistant_artifact";
   }
+  if (isUnownedRecallCopularAssistantAssertionV1(value, provenance)) {
+    return "session_opening_reported_assistant_assertion";
+  }
   if (provenance === "unowned" || provenance === "passive_unresolved") {
     return "addressed_reply_only";
   }
@@ -584,11 +591,7 @@ export function classifyMemoryAssistantOriginApertureV1(
     : "closed";
 }
 
-type MemoryOutputOwnerV1 =
-  | "user"
-  | "assistant"
-  | "shared"
-  | "third_party";
+type MemoryOutputOwnerV1 = "user" | "assistant" | "shared" | "third_party";
 
 function classifyOutputPredicateOwnerV1(
   query: string,
@@ -618,9 +621,7 @@ function classifyOutputPredicateOwnerV1(
   return "third_party";
 }
 
-function outputOwnerFromEnglishSubjectV1(
-  subject: string,
-): MemoryOutputOwnerV1 {
+function outputOwnerFromEnglishSubjectV1(subject: string): MemoryOutputOwnerV1 {
   const value = subject.toLocaleLowerCase("en-US");
   if (value === "i") return "user";
   if (value === "you") return "assistant";
@@ -680,6 +681,27 @@ function isUnownedPriorAssistantArtifactQueryV1(query: string): boolean {
       query,
     );
   return english || chinese;
+}
+
+function isUnownedRecallCopularAssistantAssertionV1(
+  query: string,
+  provenance: MemoryRecallProvenanceV1 | undefined,
+): boolean {
+  if (provenance !== "unowned") return false;
+  const answer = memoryRecallAnswerClauseV1(query);
+  if (!answer || answer.language !== "en") return false;
+  if (
+    !/^\s*(?:what|which|where|when|how|who|whether)\s+(?:was|were|is|are)\s+(?:the|a|an)\b/iu.test(
+      answer.text,
+    )
+  ) {
+    return false;
+  }
+  const explicitOwnerOrSource =
+    /\b(?:i|we|my|our|ours|us)\b|\b(?:by|from|according\s+to)\b|(?:来自|根据|按照|被)/iu.test(
+      answer.text,
+    );
+  return !explicitOwnerOrSource && !isSharedDialogueOutcomeQueryV1(answer.text);
 }
 
 function classifyAssistantArtifactTargetOwnerV1(
@@ -760,7 +782,11 @@ function classifyAssistantOutputArtifactAuthorshipV1(
       : "third_party";
   }
 
-  if (/^(?:被|曾被).{0,24}(?:推荐|建议|提议|回答|回复|提供|列出|起草|草拟|总结|生成|写出|创建|创作|措辞|命名)/u.test(answer.text.trim())) {
+  if (
+    /^(?:被|曾被).{0,24}(?:推荐|建议|提议|回答|回复|提供|列出|起草|草拟|总结|生成|写出|创建|创作|措辞|命名)/u.test(
+      answer.text.trim(),
+    )
+  ) {
     return "assistant_artifact";
   }
   const active =
@@ -781,11 +807,11 @@ function classifyAssistantOutputArtifactAuthorshipV1(
 
 function isSharedDialogueOutcomeQueryV1(query: string): boolean {
   const englishOutcome =
-    /\b(?:decid(?:e|ed|ing)|decision|agree(?:d|ment)?|cho(?:ose|se|sen)|select(?:ed|ion)?|settle(?:d|ment)?|final(?:ize|ized|ised|\s+choice)|adopt(?:ed|ion)?|commit(?:ted|ment)?)\b/iu.test(
+    /\b(?:decid(?:e|ed|ing)|decision|agree(?:d|ment)?|cho(?:ose|se|sen)|select(?:ed|ion)?|settle(?:d|ment)?|final(?:ize|ized|ised|\s+choice)|adopt(?:ed|ion)?|commit(?:ted|ment)?|approv(?:e|ed|al)|confirm(?:ed|ation)?|pick(?:ed|ing)?|resolution)\b/iu.test(
       query,
     );
   const chineseOutcome =
-    /(?:决定|决策|同意|一致|达成|选择|选定|敲定|确定|最终方案|共同方案)/u.test(
+    /(?:决定|决策|同意|一致|达成|选择|选定|敲定|确定|确认|通过|最终方案|共同方案)/u.test(
       query,
     );
   return englishOutcome || chineseOutcome;

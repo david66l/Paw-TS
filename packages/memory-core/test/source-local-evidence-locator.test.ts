@@ -81,6 +81,19 @@ describe("source-local evidence locator boundary", () => {
       hasMemorySourceLocalAssistantOriginCertificateV1(
         [
           {
+            evidenceRef: "session#turn-1",
+            sourceKind: "assistant_output",
+            turnOrder: 1,
+          },
+        ],
+        1,
+        "allow_session_opening_reported_assertion",
+      ),
+    ).toBe(true);
+    expect(
+      hasMemorySourceLocalAssistantOriginCertificateV1(
+        [
+          {
             evidenceRef: "session#turn-2",
             sourceKind: "assistant_output",
             turnOrder: 2,
@@ -103,6 +116,60 @@ describe("source-local evidence locator boundary", () => {
         "addressed_reply_only",
       ),
     ).toBe(false);
+  });
+
+  test("binds the reported assertion policy to a reported requirement", () => {
+    const locator = {
+      locatorVersion: "test-locator.v1",
+      async locate() {
+        throw new Error("unused");
+      },
+    };
+    const emptyResult = {
+      locatorVersion: locator.locatorVersion,
+      locatorRevision: "empty",
+      hits: [] as const,
+      degradedChannels: [] as const,
+      telemetry: {
+        lexicalCandidates: 0,
+        denseCandidates: 0,
+        anchorCount: 0,
+        includedTurnCount: 0,
+        renderedChars: 0,
+        cacheHit: false,
+        durationMs: 0,
+      },
+    };
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request: {
+          requirement,
+          assistantOriginPolicy:
+            "allow_session_opening_reported_assertion" as const,
+          lockedSourceIds: ["session"],
+          budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+        },
+        result: emptyResult,
+      }),
+    ).toThrow("MemorySourceLocalEvidencePolicyInvalid");
+    expect(
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request: {
+          requirement: {
+            ...requirement,
+            roleConstraint: "user" as const,
+            evidenceUse: "reported_assistant_assertion" as const,
+          },
+          assistantOriginPolicy:
+            "allow_session_opening_reported_assertion" as const,
+          lockedSourceIds: ["session"],
+          budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+        },
+        result: emptyResult,
+      }),
+    ).toHaveLength(0);
   });
 
   test("opens only bounded assistant direct-lookup requirements", () => {

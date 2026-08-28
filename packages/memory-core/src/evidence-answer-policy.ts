@@ -5,7 +5,7 @@ import type {
 } from "./evidence-query-planner.js";
 
 export const PAW_MEMORY_EVIDENCE_ANSWER_POLICY_VERSION_V1 =
-  "paw.memory-evidence-answer-policy.v1" as const;
+  "paw.memory-evidence-answer-policy.v2:reported-assistant-assertion" as const;
 
 export type MemoryEvidenceAnswerOperationV1 =
   | "bind_requirements"
@@ -14,7 +14,8 @@ export type MemoryEvidenceAnswerOperationV1 =
   | "resolve_latest"
   | "deduplicate_entities"
   | "compare_sides"
-  | "infer_preferences";
+  | "infer_preferences"
+  | "frame_reported_assistant_assertion";
 
 export interface MemoryEvidenceAnswerPolicyV1 {
   readonly policyVersion: typeof PAW_MEMORY_EVIDENCE_ANSWER_POLICY_VERSION_V1;
@@ -33,9 +34,13 @@ export function createMemoryEvidenceAnswerPolicyV1(input: {
   readonly roleConstraint: MemoryEvidenceRoleConstraintV3;
   readonly requirementCount: number;
   readonly evidenceStatus: "sufficient" | "partial" | "missing";
+  readonly reportedAssistantAssertionCount?: number;
 }): MemoryEvidenceAnswerPolicyV1 {
   const operations: MemoryEvidenceAnswerOperationV1[] = ["bind_requirements"];
   operations.push("enforce_role");
+  if ((input.reportedAssistantAssertionCount ?? 0) > 0) {
+    operations.push("frame_reported_assistant_assertion");
+  }
   if (input.temporalMode !== "any") operations.push("order_events");
   if (input.temporalMode === "latest" || input.temporalMode === "as_of") {
     operations.push("resolve_latest");

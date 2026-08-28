@@ -13,10 +13,11 @@ import {
   type MemoryEvidenceAnswerPolicyV1,
   createMemoryEvidenceAnswerPolicyV1,
 } from "./evidence-answer-policy.js";
+import { classifyMemoryEvidenceRefsUseV1 } from "./evidence-authority-presentation.js";
 import type { MemoryEvidenceResolutionV1 } from "./evidence-resolver.js";
 
 export const PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1 =
-  "paw.memory-evidence-answer-contract.v1" as const;
+  "paw.memory-evidence-answer-contract.v2:reported-assistant-assertion" as const;
 
 export interface MemoryEvidenceAnswerContractV1 {
   readonly schemaVersion: typeof PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1;
@@ -32,6 +33,7 @@ export interface MemoryEvidenceAnswerContractV1 {
     relation: string;
     coverageMode: string;
     minimumEvidence: number;
+    evidenceUse: "fact" | "reported_assistant_assertion";
     status: "covered" | "partial" | "missing";
     selectedEvidenceCount: number;
   }>[];
@@ -103,6 +105,11 @@ export function projectEvidenceFirstMemoryContextPacketV1(
           source.answerRole === "candidate" || source.answerRole === "mixed"
             ? ("contextual" as const)
             : ("supporting" as const),
+        evidenceUse: classifyMemoryEvidenceRefsUseV1({
+          requirements: resolution.requirements,
+          coverage: resolution.notebook.coverage,
+          evidenceRefs: source.evidenceRefs,
+        }),
         evidenceRefs: source.evidenceRefs,
       }),
     ),
@@ -163,6 +170,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
         description: requirement.label,
         priority: "required" as const,
         minimumEvidence,
+        evidenceUse: requirement.evidenceUse ?? "fact",
         status,
         selectedEvidenceCount: coverage?.closureEvidenceCount ?? 0,
         supportingMemoryIds,
@@ -225,7 +233,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
     ),
   ]);
   return Object.freeze({
-    schemaVersion: "paw.memory-resolved-context.v1",
+    schemaVersion: "paw.memory-resolved-context.v2",
     resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
     packetRevision: resolution.resolutionRevision,
     mode:
@@ -292,9 +300,17 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
       roleConstraint: resolution.intent.roleConstraint,
       requirementCount: resolution.requirements.length,
       evidenceStatus: packet.stop,
+      reportedAssistantAssertionCount: resolution.requirements.filter(
+        (requirement) =>
+          requirement.evidenceUse === "reported_assistant_assertion",
+      ).length,
     }),
-    guidance:
-      "Control metadata is not evidence. Organize exact facts by covered requirement ID; never guess a partial or missing requirement.",
+    guidance: resolution.requirements.some(
+      (requirement) =>
+        requirement.evidenceUse === "reported_assistant_assertion",
+    )
+      ? "Control metadata is not evidence. For reported_assistant_assertion, state only that the assistant previously said the selected content; do not present the underlying claim as independently verified. Never guess a partial or missing requirement."
+      : "Control metadata is not evidence. Organize exact facts by covered requirement ID; never guess a partial or missing requirement.",
     requirements: Object.freeze(
       resolution.requirements.map((requirement) => {
         const projected = packetRequirements.get(requirement.requirementId);
@@ -306,6 +322,7 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
             requirement.coverageMode ??
             (requirement.temporalMode === "latest" ? "latest" : "any"),
           minimumEvidence: requirement.minimumEvidence ?? 1,
+          evidenceUse: requirement.evidenceUse ?? "fact",
           status: projected?.status ?? "missing",
           selectedEvidenceCount: projected?.selectedEvidenceCount ?? 0,
         });

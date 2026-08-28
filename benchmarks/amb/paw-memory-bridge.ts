@@ -49,6 +49,7 @@ import {
   type PawNextMemoryScopeV1,
   boundMemoryRawEvidenceSpansV1,
   buildMemoryConversationTurnBundleV1,
+  classifyMemoryEvidenceRefsUseV1,
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryAtomConflictResolverV1,
   createJsonMemoryAtomExtractorV1,
@@ -92,6 +93,7 @@ import {
   rankMemorySourceLocalAnchorCandidatesV1,
   reciprocalRankFusionV1,
   reconcileMemoryAtomsV1,
+  renderMemoryEvidenceAuthorityHeaderV1,
   resolveMemoryTopicIdV1,
   routeMemoryQueryV1,
   selectMemorySceneEvidenceV1,
@@ -3527,20 +3529,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     rawEvidenceSpanCount = resolution.packetSources.length;
     memoryRoute = "evidence_first_spans";
     const output = resolution.packetSources.map((source, index) => {
-      const authorityLabel =
-        resolution.intent.roleConstraint === "assistant"
-          ? "[Assistant-output evidence]\nAuthority rule: use only to recall the assistant's prior output or action; never as a user fact."
-          : resolution.intent.roleConstraint === "any"
-            ? "[Shared-dialogue evidence]\nAuthority rule: assistant output may answer only a directly requested shared artifact or prior answer whose neighboring user request establishes its provenance; never treat it as a user fact."
-            : source.answerRole === "current"
-              ? "[Current user-grounded evidence]"
-              : source.answerRole === "ambiguous"
-                ? "[Ambiguous user-grounded evidence]"
-                : source.answerRole === "candidate"
-                  ? "[Unverified candidate L0 evidence]\nUse only if it directly answers a missing requirement; relevance alone is not support."
-                  : source.answerRole === "mixed"
-                    ? "[Mixed verified and candidate L0 evidence]\nRequirement-bound evidence is followed by bounded candidates; verify candidate text before use."
-                    : "[Supporting user-grounded evidence]";
+      const authorityLabel = renderMemoryEvidenceAuthorityHeaderV1({
+        evidenceUse: classifyMemoryEvidenceRefsUseV1({
+          requirements: resolution.requirements,
+          coverage: resolution.notebook.coverage,
+          evidenceRefs: source.evidenceRefs,
+        }),
+        roleConstraint: resolution.intent.roleConstraint,
+        answerRole: source.answerRole,
+      });
       return {
         id: source.sourceId,
         content: [

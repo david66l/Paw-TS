@@ -33,6 +33,26 @@ describe("evidence answer policy", () => {
     });
   });
 
+  test("frames a reported assistant assertion instead of promoting it to fact", () => {
+    expect(
+      createMemoryEvidenceAnswerPolicyV1({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirementCount: 1,
+        evidenceStatus: "sufficient",
+        reportedAssistantAssertionCount: 1,
+      }),
+    ).toMatchObject({
+      mode: "synthesize",
+      operations: [
+        "bind_requirements",
+        "enforce_role",
+        "frame_reported_assistant_assertion",
+      ],
+    });
+  });
+
   test("turns aggregate history into an explicit synthesis program", () => {
     expect(
       createMemoryEvidenceAnswerPolicyV1({

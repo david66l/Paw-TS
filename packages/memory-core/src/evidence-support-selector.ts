@@ -7,7 +7,7 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1 =
-  "paw.memory-evidence-support-selector.json.v8:source-local-candidate-certificate" as const;
+  "paw.memory-evidence-support-selector.json.v9:reported-assistant-assertion" as const;
 
 export interface MemoryEvidenceSupportSelectionInputV1 {
   readonly query: string;
@@ -18,6 +18,8 @@ export interface MemoryEvidenceSupportSelectionInputV1 {
    * This is caller-owned policy input, never model-produced authority.
    */
   readonly certifiedAssistantDialogueEvidenceRefs?: readonly string[];
+  /** Session-opening assistant statements usable only as reported assertions. */
+  readonly reportedAssistantAssertionEvidenceRefs?: readonly string[];
   /** Every locator-added assistant candidate, for per-candidate model context. */
   readonly sourceLocalAssistantEvidenceRefs?: readonly string[];
 }
@@ -99,6 +101,13 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
                 ),
               }
             : {}),
+          ...(selection.reportedAssistantAssertionEvidenceRefs?.length
+            ? {
+                reportedAssistantAssertionEvidenceRefs: Object.freeze(
+                  [...selection.reportedAssistantAssertionEvidenceRefs].sort(),
+                ),
+              }
+            : {}),
           candidateEvidenceRefs: selection.candidates.map(
             (candidate: MemoryEvidenceNotebookHitV1) => candidate.evidenceRef,
           ),
@@ -119,6 +128,9 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
   );
   const sourceLocalAssistantEvidenceRefs = new Set(
     input.sourceLocalAssistantEvidenceRefs ?? [],
+  );
+  const reportedAssistantAssertionEvidenceRefs = new Set(
+    input.reportedAssistantAssertionEvidenceRefs ?? [],
   );
   const projectionQuery = [
     input.query,
@@ -148,6 +160,11 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
             "For roleConstraint=user with certifiedAssistantDialogueCandidate=true, preserve user facts as the primary authority. A candidate marked certifiedAssistantDialogue=true may support only the requested prior-dialogue artifact whose author is unresolved; it must never establish a user's fact, preference, possession, action, or experience.",
           ]
         : []),
+      ...(reportedAssistantAssertionEvidenceRefs.size > 0
+        ? [
+            "A candidate marked reportedAssistantAssertion=true may support only a requirement with evidenceUse=reported_assistant_assertion. It establishes only what the assistant previously stated, not the truth of the underlying user, shared, third-party, or world fact.",
+          ]
+        : []),
       "It is valid to return no support for a requirement. Prefer missing evidence over a merely related passage.",
       'Return exactly one JSON object: {"assessments":[{"requirementId":"...","supportingEvidenceRefs":["..."],"contradictingEvidenceRefs":[],"unknownEvidenceRefs":[]}]}. Include every supplied requirement exactly once and keep the three arrays disjoint.',
     ].join("\n"),
@@ -164,6 +181,7 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
           requirement.coverageMode ??
           (requirement.temporalMode === "latest" ? "latest" : "any"),
         minimumEvidence: requirement.minimumEvidence ?? 1,
+        evidenceUse: requirement.evidenceUse ?? "fact",
         ...(certifiedAssistantDialogueEvidenceRefs.size > 0
           ? { certifiedAssistantDialogueCandidate: true }
           : {}),
@@ -184,6 +202,14 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
           ? {
               sourceLocalAssistantOriginCertified:
                 sourceLocalAssistantEvidenceRefs.has(candidate.evidenceRef),
+            }
+          : {}),
+        ...(reportedAssistantAssertionEvidenceRefs.size > 0
+          ? {
+              reportedAssistantAssertion:
+                reportedAssistantAssertionEvidenceRefs.has(
+                  candidate.evidenceRef,
+                ),
             }
           : {}),
         contextEvidenceRefs: candidate.contextEvidenceRefs,
@@ -368,6 +394,11 @@ function assertSelectionInput(
       }
     }
   }
+  const reported = input.reportedAssistantAssertionEvidenceRefs ?? [];
+  const reportedRefs = new Set(reported);
+  if (reportedRefs.size !== reported.length) {
+    throw namedError("MemoryEvidenceSupportCertificateInvalid");
+  }
   const sourceLocal = input.sourceLocalAssistantEvidenceRefs ?? [];
   const sourceLocalRefs = new Set(sourceLocal);
   if (sourceLocalRefs.size !== sourceLocal.length) {
@@ -385,8 +416,9 @@ function assertSelectionInput(
       ) ||
       (input.requirements.length === 1 &&
         input.requirements[0]?.roleConstraint === "user" &&
-        [...sourceLocalRefs].every((evidenceRef) =>
-          certifiedRefs.has(evidenceRef),
+        [...sourceLocalRefs].every(
+          (evidenceRef) =>
+            certifiedRefs.has(evidenceRef) || reportedRefs.has(evidenceRef),
         ));
     if (!roleEligible) {
       throw namedError("MemoryEvidenceSupportCertificateInvalid");
@@ -397,6 +429,29 @@ function assertSelectionInput(
         candidate?.authority !== "context_only" ||
         candidate.sourceKind !== "assistant_output" ||
         !candidate.contextEvidenceRefs?.length
+      ) {
+        throw namedError("MemoryEvidenceSupportCertificateInvalid");
+      }
+    }
+  }
+  if (reportedRefs.size > 0) {
+    const candidatesByRef = new Map(
+      input.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
+    );
+    if (
+      input.requirements.length !== 1 ||
+      input.requirements[0]?.evidenceUse !== "reported_assistant_assertion" ||
+      input.requirements[0]?.roleConstraint !== "user"
+    ) {
+      throw namedError("MemoryEvidenceSupportCertificateInvalid");
+    }
+    for (const evidenceRef of reportedRefs) {
+      const candidate = candidatesByRef.get(evidenceRef);
+      if (
+        candidate?.authority !== "context_only" ||
+        candidate.sourceKind !== "assistant_output" ||
+        !candidate.contextEvidenceRefs?.length ||
+        !sourceLocalRefs.has(evidenceRef)
       ) {
         throw namedError("MemoryEvidenceSupportCertificateInvalid");
       }

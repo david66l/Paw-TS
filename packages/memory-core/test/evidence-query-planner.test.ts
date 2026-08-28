@@ -129,9 +129,7 @@ describe("typed evidence query planner v3", () => {
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
-        "之前对话里的建议是什么？",
-      ),
+      allowsMemorySessionOpeningAssistantOriginV1("之前对话里的建议是什么？"),
     ).toBe(true);
     expect(
       allowsMemorySessionOpeningAssistantOriginV1(
@@ -151,6 +149,11 @@ describe("typed evidence query planner v3", () => {
     expect(
       allowsMemorySessionOpeningAssistantOriginV1(
         "Do you remember what was recommended by you?",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "Do you remember what was the color of the cover?",
       ),
     ).toBe(true);
     expect(
@@ -189,6 +192,9 @@ describe("typed evidence query planner v3", () => {
       "What was the recommendation from Alex in our previous conversation?",
       "Which suggestion came from my doctor in the previous conversation?",
       "What was the recommendation according to Alex in our previous conversation?",
+      "Do you remember what was the address I gave you?",
+      "Do you remember what was the plan Alex approved?",
+      "Do you remember what was the diagnosis according to my doctor?",
       "What was our recommendation in the previous conversation?",
       "What was our response to your message in the previous conversation?",
       "我们上次聊天最终选择了哪个方案？",
