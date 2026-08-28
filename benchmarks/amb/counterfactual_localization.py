@@ -383,7 +383,10 @@ def configure_baseline_provider(baseline_root: Path, output: Path, ledger: dict)
     artifact = ledger["manifest"]["artifactBinding"]["retrievalSourceArtifactSha256"]
     runner.configure_provider(
         output,
-        resume=False,
+        # The frozen bridge requires resume together with reuse-index. This
+        # rehydrates process-local maps from the existing checkpoint; it does
+        # not rebuild or mutate the completed index because write mode is off.
+        resume=True,
         reuse_index=True,
         query_expansion=True,
         strict=True,
