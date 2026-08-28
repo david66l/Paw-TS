@@ -74,6 +74,7 @@ export const AMB_MEMORY_LLM_PURPOSES_V1 = [
   "memory-write",
   "query-plan",
   "evidence-support",
+  "closure-audit",
 ] as const;
 
 export type AmbMemoryLlmPurposeV1 = (typeof AMB_MEMORY_LLM_PURPOSES_V1)[number];
@@ -195,6 +196,16 @@ export function readAmbMemoryLlmBudgetLimitsV1(
         concurrency: 2,
       },
     }),
+    "closure-audit": readPurposeLimitsV1({
+      env,
+      prefix: "PAW_AMB_CLOSURE_AUDIT",
+      defaults: {
+        maxRemoteCalls: 180,
+        maxPromptTokens: 450_000,
+        maxCompletionTokens: 90_000,
+        concurrency: 2,
+      },
+    }),
   });
 }
 
@@ -205,6 +216,7 @@ export function createAmbMemoryLlmBudgetPortfolioV1(
     "memory-write": createAtomIngestBudgetV1(limits["memory-write"]),
     "query-plan": createAtomIngestBudgetV1(limits["query-plan"]),
     "evidence-support": createAtomIngestBudgetV1(limits["evidence-support"]),
+    "closure-audit": createAtomIngestBudgetV1(limits["closure-audit"]),
   };
   return Object.freeze({
     budgetFor(purpose: AmbMemoryLlmPurposeV1) {
@@ -215,6 +227,7 @@ export function createAmbMemoryLlmBudgetPortfolioV1(
         "memory-write": budgets["memory-write"].snapshot(),
         "query-plan": budgets["query-plan"].snapshot(),
         "evidence-support": budgets["evidence-support"].snapshot(),
+        "closure-audit": budgets["closure-audit"].snapshot(),
       });
       return Object.freeze({
         schemaVersion: "paw.amb-memory-llm-budget-portfolio.v1" as const,

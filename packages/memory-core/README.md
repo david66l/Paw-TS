@@ -9,9 +9,10 @@ can become its own Git repository without copying Paw's agent runtime.
 ```text
 scoped query
   -> L0/L1 discovery
-  -> source lock
   -> typed evidence requirements
   -> requirement-bound support selection
+  -> independent closure audit
+       -> at most one bounded repair search and full re-selection
   -> deterministic state reduction
   -> canonical evidence packet
 ```
@@ -20,6 +21,11 @@ scoped query
 - L1 memories are navigation hints and must hydrate back to L0 before use.
 - The LLM can decompose a query and bind supplied evidence addresses, but it
   cannot change scope, invent evidence, write memory, or decide temporal order.
+- A separate closure auditor checks the original query against the plan and
+  selected L0 evidence. It may propose at most two search obligations for one
+  repair pass; it cannot answer the query or insert evidence.
+- A deterministic single-source certificate bypasses planner, selector, and
+  auditor calls for clear direct lookups.
 - Storage, model, and runtime integrations are structural ports.
 - IDs, hashing, ranking, budgets, temporal reduction, and packet construction
   are deterministic code.

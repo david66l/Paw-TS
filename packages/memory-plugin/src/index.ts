@@ -8,6 +8,16 @@ export {
   type MemoryEvidenceSupportSelectorV1,
 } from "./evidence-support-selector.js";
 export {
+  PAW_MEMORY_EVIDENCE_CLOSURE_AUDITOR_VERSION_V1,
+  buildMemoryEvidenceClosureAuditRequestV1,
+  createJsonMemoryEvidenceClosureAuditorV1,
+  parseMemoryEvidenceClosureAuditV1,
+  type MemoryEvidenceClosureAuditInputV1,
+  type MemoryEvidenceClosureAuditV1,
+  type MemoryEvidenceClosureAuditorV1,
+  type MemoryEvidenceClosureVerdictV1,
+} from "./evidence-closure-auditor.js";
+export {
   PAW_MEMORY_ATOM_CONFLICT_REPAIR_POLICY_VERSION_V1,
   PAW_MEMORY_ATOM_CONFLICT_RESOLVER_VERSION_V1,
   buildMemoryAtomConflictRepairRequestV1,

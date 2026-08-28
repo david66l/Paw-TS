@@ -1,4 +1,8 @@
 import { type JsonValue, hashCanonicalJsonV1 } from "./canonical.js";
+import type {
+  MemoryEvidenceClosureAuditorV1,
+  MemoryEvidenceClosureVerdictV1,
+} from "./evidence-closure-auditor.js";
 import {
   type MemoryEvidenceCandidateFusionV2,
   type MemoryEvidenceCandidateRankListV2,
@@ -24,7 +28,7 @@ import type {
 } from "./evidence-support-selector.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v6:direct-certificate-authority" as const;
+  "paw.memory-evidence-resolver.v7:bounded-closure-repair" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -56,6 +60,15 @@ export interface MemoryEvidenceResolutionV1 {
     | "not_configured"
     | "completed"
     | "fallback";
+  readonly closureAuditStatus:
+    | "not_needed"
+    | "not_configured"
+    | "completed"
+    | "fallback";
+  readonly closureVerdict?: MemoryEvidenceClosureVerdictV1;
+  readonly closureRepairCount: 0 | 1;
+  readonly closureAuditRevision?: string;
+  readonly closureAuditorVersion?: string;
   readonly supportSelectionRevision?: string;
   readonly supportSelectorVersion?: string;
   readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
@@ -85,6 +98,7 @@ export function createMemoryEvidenceResolverV1(input: {
   readonly index: MemoryEvidenceIndexV1;
   readonly planner?: MemoryEvidenceQueryPlannerV3;
   readonly supportSelector?: MemoryEvidenceSupportSelectorV1;
+  readonly closureAuditor?: MemoryEvidenceClosureAuditorV1;
   readonly maxSources?: number;
   /** Exact addresses retained inside each selected source before hydration. */
   readonly maxEvidencePerSource?: number;
@@ -161,163 +175,119 @@ export function createMemoryEvidenceResolverV1(input: {
       // unverified "sufficient" packet. Keep a one-source exact fast path;
       // otherwise bind the original question as one root requirement and run
       // the same support gate used by decomposed queries.
-      if (requirements.length === 0 && input.supportSelector) {
+      if (
+        requirements.length === 0 &&
+        input.supportSelector &&
+        directCertificateStatus !== "deterministic_direct"
+      ) {
         requirements = Object.freeze([
           createRootEvidenceRequirement(value, intent),
         ]);
       }
-      const supplemental = await Promise.all(
-        requirements.map((requirement) =>
-          requirement.searchText === value
-            ? Promise.resolve(primary)
-            : input.index.search(requirement.searchText, signal),
-        ),
-      );
-      const discoveryResults: Array<
-        Readonly<{
-          searchText: string;
-          result: MemoryEvidenceIndexSearchResultV1;
-        }>
-      > = [{ searchText: value, result: primary }];
-      const seenDiscoveryTexts = new Set([value]);
-      for (const [index, requirement] of requirements.entries()) {
-        if (seenDiscoveryTexts.has(requirement.searchText)) continue;
-        const result = supplemental[index];
-        if (!result) throw namedError("MemoryEvidenceDiscoveryMissing");
-        seenDiscoveryTexts.add(requirement.searchText);
-        discoveryResults.push({
-          searchText: requirement.searchText,
-          result,
-        });
-      }
-      const fusion = rankMemoryEvidenceCandidatesV2({
-        lists: discoveryResults.flatMap(({ result }, searchIndex) =>
-          result.lists.map((list, listIndex) => ({
-            ...list,
-            retrieverId: `${list.retrieverId}:discovery-${searchIndex}-${listIndex}`,
-            // The caller query remains authoritative while repeated support
-            // across bounded obligations can promote an otherwise missed source.
-            weight: list.weight * (searchIndex === 0 ? 1 : 0.8),
-          })),
-        ),
+      let pass = await resolveEvidencePass({
+        index: input.index,
+        supportSelector: input.supportSelector,
+        query: value,
+        intent,
+        primary,
+        requirements,
         maxSources,
         maxEvidencePerSource,
+        maxHitsPerRequirement,
+        maxNotebookChars,
+        directCertificateStatus,
+        signal,
       });
-      const degradedChannels = Object.freeze(
-        [
-          ...new Set(
-            discoveryResults.flatMap(
-              ({ result }) => result.degradedChannels ?? [],
-            ),
-          ),
-        ].sort(),
-      ) as readonly ("l0" | "l1")[];
-      const sourceIds = fusion.sources.map((source) => source.sourceId);
-      const requirementHits = requirements.map((_, index) =>
-        mergeEvidenceHits(supplemental[index]?.hits ?? [], primary.hits),
-      );
-      let supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"] =
-        requirements.length === 0
-          ? "not_needed"
-          : input.supportSelector
-            ? "fallback"
-            : "not_configured";
-      let supportSelectionRevision: string | undefined;
-      let supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] =
-        Object.freeze([]);
-      let selectedRefsByRequirement:
-        | ReadonlyMap<string, ReadonlySet<string>>
-        | undefined;
-      if (requirements.length > 0 && input.supportSelector) {
-        const candidates = selectSupportCandidates(
-          requirementHits,
-          sourceIds,
-          intent.roleConstraint === "assistant",
-          32,
+      let closureAuditStatus: MemoryEvidenceResolutionV1["closureAuditStatus"] =
+        input.closureAuditor ? "not_needed" : "not_configured";
+      let closureVerdict: MemoryEvidenceClosureVerdictV1 | undefined;
+      let closureRepairCount: 0 | 1 = 0;
+      let closureAuditRevision: string | undefined;
+      const shouldAudit =
+        input.closureAuditor !== undefined &&
+        requirements.length > 0 &&
+        pass.notebook.coverage.every((item) => item.status === "covered") &&
+        (intent.roleConstraint === "assistant" ||
+          intent.temporalMode !== "any" ||
+          intent.answerShape !== "lookup" ||
+          requirements.length > 1 ||
+          (directCertificateStatus === "missing" &&
+            pass.fusion.sources.length > 1));
+      if (shouldAudit && input.closureAuditor) {
+        const selectedEvidence = selectedNotebookEvidence(
+          pass.requirementHits,
+          pass.notebook,
         );
-        if (candidates.length > 0) {
-          try {
-            const selection = await input.supportSelector.select(
-              { query: value, requirements, candidates },
+        try {
+          const audit = await input.closureAuditor.audit(
+            {
+              query: value,
+              intent,
+              requirements,
+              selectedEvidence,
+              maxMissingRequirements: Math.min(2, 4 - requirements.length),
+            },
+            signal,
+          );
+          closureAuditStatus = "completed";
+          closureVerdict = audit.verdict;
+          closureAuditRevision = audit.auditRevision;
+          if (
+            audit.verdict === "repair" &&
+            audit.missingRequirements.length > 0
+          ) {
+            closureRepairCount = 1;
+            requirements = Object.freeze([
+              ...requirements,
+              ...audit.missingRequirements,
+            ]);
+            pass = await resolveEvidencePass({
+              index: input.index,
+              supportSelector: input.supportSelector,
+              query: value,
+              intent,
+              primary,
+              requirements,
+              maxSources,
+              maxEvidencePerSource,
+              maxHitsPerRequirement,
+              maxNotebookChars,
+              directCertificateStatus,
+              excludedEvidenceRefs: new Set(audit.rejectedEvidenceRefs),
+              signal,
+            });
+            const repairedEvidence = selectedNotebookEvidence(
+              pass.requirementHits,
+              pass.notebook,
+            );
+            const finalAudit = await input.closureAuditor.audit(
+              {
+                query: value,
+                intent,
+                requirements,
+                selectedEvidence: repairedEvidence,
+                maxMissingRequirements: 0,
+              },
               signal,
             );
-            selectedRefsByRequirement = new Map(
-              selection.assessments.map((assessment) => [
-                assessment.requirementId,
-                new Set(assessment.supportingEvidenceRefs),
-              ]),
-            );
-            supportAssessments = selection.assessments;
-            supportSelectionRevision = selection.selectionRevision;
-            supportSelectorStatus = "completed";
-          } catch (error) {
-            if (signal.aborted || isAbort(error)) throw abortError();
-            supportSelectorStatus = "fallback";
+            closureVerdict =
+              finalAudit.verdict === "pass" ? "pass" : "insufficient";
+            closureAuditRevision = finalAudit.auditRevision;
           }
+        } catch (error) {
+          if (signal.aborted || isAbort(error)) throw abortError();
+          closureAuditStatus = "fallback";
         }
       }
-      const notebook = buildMemoryEvidenceNotebookV1({
-        requirements: requirements.map((requirement, index) => ({
-          requirementId: requirement.requirementId,
-          label: requirement.label,
-          searchText: requirement.searchText,
-          selection:
-            requirement.temporalMode === "latest" ? "latest" : "ranked",
-          relation: requirement.relation ?? "direct",
-          coverageMode:
-            requirement.coverageMode ??
-            (requirement.temporalMode === "latest" ? "latest" : "any"),
-          minimumEvidence: requirement.minimumEvidence ?? 1,
-          hits: filterRequirementHits(
-            requirementHits[index] ?? [],
-            selectedRefsByRequirement?.get(requirement.requirementId),
-          ),
-        })),
-        allowedSourceIds: sourceIds,
-        maxHitsPerRequirement,
-        maxChars: maxNotebookChars,
-        allowContextOnly: intent.roleConstraint === "assistant",
-      });
-      const nonSupportingRefs = new Set(
-        supportAssessments.flatMap((assessment) => [
-          ...assessment.contradictingEvidenceRefs,
-          ...assessment.unknownEvidenceRefs,
-        ]),
-      );
-      const packetFallbackHits = mergeEvidenceHits(
-        requirementHits
-          .flat()
-          .filter((hit) => nonSupportingRefs.has(hit.evidenceRef)),
-        primary.hits,
-      );
-      const packetSources =
-        requirements.length > 0
-          ? buildPlannedEvidencePacketSources({
-              query: value,
-              notebook,
-              primaryHits: packetFallbackHits,
-              selectedSourceIds: sourceIds,
-              allowContextOnly: intent.roleConstraint === "assistant",
-              includeFallback:
-                intent.temporalMode !== "latest" ||
-                notebook.coverage.some((item) => item.status !== "covered") ||
-                nonSupportingRefs.size > 0,
-              fallbackAnswerRole:
-                directCertificateStatus === "deterministic_direct"
-                  ? "supporting"
-                  : "candidate",
-              maxFallbackChars: maxNotebookChars,
-            })
-          : buildPrimaryEvidencePacketSources(
-              primary.hits,
-              sourceIds,
-              intent.roleConstraint === "assistant",
-              2,
-              maxNotebookChars,
-              new Set(),
-              "supporting",
-              value,
-            );
+      const {
+        fusion,
+        degradedChannels,
+        supportSelectorStatus,
+        supportSelectionRevision,
+        supportAssessments,
+        notebook,
+        packetSources,
+      } = pass;
       const revisionBody = {
         resolverVersion: PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1,
         indexVersion: input.index.indexVersion,
@@ -327,6 +297,9 @@ export function createMemoryEvidenceResolverV1(input: {
         directCertificateStatus,
         plannerStatus,
         supportSelectorStatus,
+        closureAuditStatus,
+        closureVerdict,
+        closureRepairCount,
         supportAssessments,
         degradedChannels,
         ...(input.supportSelector === undefined
@@ -335,6 +308,10 @@ export function createMemoryEvidenceResolverV1(input: {
         ...(supportSelectionRevision === undefined
           ? {}
           : { supportSelectionRevision }),
+        ...(input.closureAuditor === undefined
+          ? {}
+          : { closureAuditorVersion: input.closureAuditor.auditorVersion }),
+        ...(closureAuditRevision === undefined ? {} : { closureAuditRevision }),
         requirements: requirements.map(({ searchText, ...requirement }) => ({
           ...requirement,
           searchTextHash: hashCanonicalJsonV1(searchText as JsonValue),
@@ -356,6 +333,9 @@ export function createMemoryEvidenceResolverV1(input: {
         directCertificateStatus,
         plannerStatus,
         supportSelectorStatus,
+        closureAuditStatus,
+        ...(closureVerdict === undefined ? {} : { closureVerdict }),
+        closureRepairCount,
         supportAssessments,
         degradedChannels,
         ...(input.supportSelector === undefined
@@ -364,6 +344,10 @@ export function createMemoryEvidenceResolverV1(input: {
         ...(supportSelectionRevision === undefined
           ? {}
           : { supportSelectionRevision }),
+        ...(input.closureAuditor === undefined
+          ? {}
+          : { closureAuditorVersion: input.closureAuditor.auditorVersion }),
+        ...(closureAuditRevision === undefined ? {} : { closureAuditRevision }),
         requirements,
         sources: fusion.sources,
         primaryHits: primary.hits,
@@ -376,6 +360,205 @@ export function createMemoryEvidenceResolverV1(input: {
       });
     },
   });
+}
+
+interface MemoryEvidenceResolutionPassV1 {
+  readonly fusion: MemoryEvidenceCandidateFusionV2;
+  readonly degradedChannels: readonly ("l0" | "l1")[];
+  readonly requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[];
+  readonly supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"];
+  readonly supportSelectionRevision?: string;
+  readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
+  readonly notebook: MemoryEvidenceNotebookV1;
+  readonly packetSources: MemoryEvidenceResolutionV1["packetSources"];
+}
+
+async function resolveEvidencePass(input: {
+  readonly index: MemoryEvidenceIndexV1;
+  readonly supportSelector?: MemoryEvidenceSupportSelectorV1;
+  readonly query: string;
+  readonly intent: MemoryEvidenceQueryIntentV3;
+  readonly primary: MemoryEvidenceIndexSearchResultV1;
+  readonly requirements: readonly MemoryEvidenceRequirementV3[];
+  readonly maxSources: number;
+  readonly maxEvidencePerSource: number;
+  readonly maxHitsPerRequirement: number;
+  readonly maxNotebookChars: number;
+  readonly directCertificateStatus: MemoryEvidenceResolutionV1["directCertificateStatus"];
+  readonly excludedEvidenceRefs?: ReadonlySet<string>;
+  readonly signal: AbortSignal;
+}): Promise<MemoryEvidenceResolutionPassV1> {
+  const supplemental = await Promise.all(
+    input.requirements.map((requirement) =>
+      requirement.searchText === input.query
+        ? Promise.resolve(input.primary)
+        : input.index.search(requirement.searchText, input.signal),
+    ),
+  );
+  const discoveryResults: Array<
+    Readonly<{
+      searchText: string;
+      result: MemoryEvidenceIndexSearchResultV1;
+    }>
+  > = [{ searchText: input.query, result: input.primary }];
+  const seenDiscoveryTexts = new Set([input.query]);
+  for (const [index, requirement] of input.requirements.entries()) {
+    if (seenDiscoveryTexts.has(requirement.searchText)) continue;
+    const result = supplemental[index];
+    if (!result) throw namedError("MemoryEvidenceDiscoveryMissing");
+    seenDiscoveryTexts.add(requirement.searchText);
+    discoveryResults.push({ searchText: requirement.searchText, result });
+  }
+  const fusion = rankMemoryEvidenceCandidatesV2({
+    lists: discoveryResults.flatMap(({ result }, searchIndex) =>
+      result.lists.map((list, listIndex) => ({
+        ...list,
+        retrieverId: `${list.retrieverId}:discovery-${searchIndex}-${listIndex}`,
+        weight: list.weight * (searchIndex === 0 ? 1 : 0.8),
+      })),
+    ),
+    maxSources: input.maxSources,
+    maxEvidencePerSource: input.maxEvidencePerSource,
+  });
+  const degradedChannels = Object.freeze(
+    [
+      ...new Set(
+        discoveryResults.flatMap(({ result }) => result.degradedChannels ?? []),
+      ),
+    ].sort(),
+  ) as readonly ("l0" | "l1")[];
+  const sourceIds = fusion.sources.map((source) => source.sourceId);
+  const requirementHits = input.requirements.map((_, index) =>
+    mergeEvidenceHits(
+      supplemental[index]?.hits ?? [],
+      input.primary.hits,
+    ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef)),
+  );
+  let supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"] =
+    input.requirements.length === 0
+      ? "not_needed"
+      : input.supportSelector
+        ? "fallback"
+        : "not_configured";
+  let supportSelectionRevision: string | undefined;
+  let supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] =
+    Object.freeze([]);
+  let selectedRefsByRequirement:
+    | ReadonlyMap<string, ReadonlySet<string>>
+    | undefined;
+  if (input.requirements.length > 0 && input.supportSelector) {
+    const candidates = selectSupportCandidates(
+      requirementHits,
+      sourceIds,
+      input.intent.roleConstraint === "assistant",
+      32,
+    );
+    if (candidates.length > 0) {
+      try {
+        const selection = await input.supportSelector.select(
+          { query: input.query, requirements: input.requirements, candidates },
+          input.signal,
+        );
+        selectedRefsByRequirement = new Map(
+          selection.assessments.map((assessment) => [
+            assessment.requirementId,
+            new Set(assessment.supportingEvidenceRefs),
+          ]),
+        );
+        supportAssessments = selection.assessments;
+        supportSelectionRevision = selection.selectionRevision;
+        supportSelectorStatus = "completed";
+      } catch (error) {
+        if (input.signal.aborted || isAbort(error)) throw abortError();
+        supportSelectorStatus = "fallback";
+      }
+    }
+  }
+  const notebook = buildMemoryEvidenceNotebookV1({
+    requirements: input.requirements.map((requirement, index) => ({
+      requirementId: requirement.requirementId,
+      label: requirement.label,
+      searchText: requirement.searchText,
+      selection: requirement.temporalMode === "latest" ? "latest" : "ranked",
+      relation: requirement.relation ?? "direct",
+      coverageMode:
+        requirement.coverageMode ??
+        (requirement.temporalMode === "latest" ? "latest" : "any"),
+      minimumEvidence: requirement.minimumEvidence ?? 1,
+      hits: filterRequirementHits(
+        requirementHits[index] ?? [],
+        selectedRefsByRequirement?.get(requirement.requirementId),
+      ),
+    })),
+    allowedSourceIds: sourceIds,
+    maxHitsPerRequirement: input.maxHitsPerRequirement,
+    maxChars: input.maxNotebookChars,
+    allowContextOnly: input.intent.roleConstraint === "assistant",
+  });
+  const nonSupportingRefs = new Set(
+    supportAssessments.flatMap((assessment) => [
+      ...assessment.contradictingEvidenceRefs,
+      ...assessment.unknownEvidenceRefs,
+    ]),
+  );
+  const packetFallbackHits = mergeEvidenceHits(
+    requirementHits
+      .flat()
+      .filter((hit) => nonSupportingRefs.has(hit.evidenceRef)),
+    input.primary.hits,
+  ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));
+  const packetSources =
+    input.requirements.length > 0
+      ? buildPlannedEvidencePacketSources({
+          query: input.query,
+          notebook,
+          primaryHits: packetFallbackHits,
+          selectedSourceIds: sourceIds,
+          allowContextOnly: input.intent.roleConstraint === "assistant",
+          includeFallback:
+            input.intent.temporalMode !== "latest" ||
+            notebook.coverage.some((item) => item.status !== "covered") ||
+            nonSupportingRefs.size > 0,
+          fallbackAnswerRole:
+            input.directCertificateStatus === "deterministic_direct"
+              ? "supporting"
+              : "candidate",
+          maxFallbackChars: input.maxNotebookChars,
+        })
+      : buildPrimaryEvidencePacketSources(
+          input.primary.hits,
+          sourceIds,
+          input.intent.roleConstraint === "assistant",
+          2,
+          input.maxNotebookChars,
+          new Set(),
+          "supporting",
+          input.query,
+        );
+  return Object.freeze({
+    fusion,
+    degradedChannels,
+    requirementHits,
+    supportSelectorStatus,
+    ...(supportSelectionRevision === undefined
+      ? {}
+      : { supportSelectionRevision }),
+    supportAssessments,
+    notebook,
+    packetSources,
+  });
+}
+
+function selectedNotebookEvidence(
+  requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[],
+  notebook: MemoryEvidenceNotebookV1,
+): readonly MemoryEvidenceNotebookHitV1[] {
+  const selectedRefs = new Set(
+    notebook.coverage.flatMap((item) => item.selectedEvidenceRefs),
+  );
+  return mergeEvidenceHits(requirementHits.flat(), []).filter((hit) =>
+    selectedRefs.has(hit.evidenceRef),
+  );
 }
 
 function createRootEvidenceRequirement(

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   type MemoryEvidenceIndexV1,
   createMemoryEvidenceResolverV1,
+  projectEvidenceFirstMemoryContextPacketV1,
 } from "../src/index.js";
 
 function index(): MemoryEvidenceIndexV1 {
@@ -115,7 +116,8 @@ describe("shared evidence resolver v1", () => {
     );
   });
 
-  test("keeps deterministically certified L0 authoritative when semantic triage misses it", async () => {
+  test("keeps deterministically certified L0 on the zero-model-call fast path", async () => {
+    let selectorCalls = 0;
     const resolver = createMemoryEvidenceResolverV1({
       index: {
         indexVersion: "direct-certificate.v1",
@@ -151,6 +153,7 @@ describe("shared evidence resolver v1", () => {
       supportSelector: {
         selectorVersion: "test-support-selector.v1",
         async select(input) {
+          selectorCalls += 1;
           return {
             selectorVersion: "test-support-selector.v1",
             selectionRevision: "missed-direct-revision",
@@ -173,8 +176,13 @@ describe("shared evidence resolver v1", () => {
     );
 
     expect(result.directCertificateStatus).toBe("deterministic_direct");
-    expect(result.notebook.coverage[0]?.status).toBe("missing");
+    expect(result.supportSelectorStatus).toBe("not_needed");
+    expect(result.notebook.coverage).toHaveLength(0);
     expect(result.packetSources[0]?.answerRole).toBe("supporting");
+    expect(projectEvidenceFirstMemoryContextPacketV1(result).stop).toBe(
+      "sufficient",
+    );
+    expect(selectorCalls).toBe(0);
   });
 
   test("plans an ambiguous simple lookup only when primary discovery spans sources", async () => {
@@ -664,5 +672,147 @@ describe("shared evidence resolver v1", () => {
     expect(result.packetSources[0]?.answerRole).toBe("mixed");
     expect(result.packetSources[0]?.text).toContain("Bounded primary fallback");
     expect(result.packetSources[0]?.text).toContain("27. Sound effects");
+  });
+
+  test("audits tentative closure and performs at most one bounded repair pass", async () => {
+    const searchTexts: string[] = [];
+    let selectorCalls = 0;
+    let auditorCalls = 0;
+    const oldRequirement = {
+      requirementId: "old",
+      label: "Old commute",
+      searchText: "old commute",
+      temporalMode: "history" as const,
+      roleConstraint: "user" as const,
+      relation: "comparative" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+    };
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search(searchText) {
+          searchTexts.push(searchText);
+          const current = searchText === "current commute";
+          const sourceId = current ? "current-session" : "old-session";
+          const evidenceRef = current ? "current-ref" : "old-ref";
+          return {
+            lists: [
+              {
+                retrieverId: `lexical-${sourceId}`,
+                channel: "l0" as const,
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: evidenceRef,
+                    sourceId,
+                    evidenceRef,
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId,
+                evidenceRef,
+                content: current
+                  ? "My current commute is a fifteen minute train ride."
+                  : "My old commute was a forty minute bus ride.",
+                authority: "user_asserted" as const,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+            answerShape: "compare" as const,
+            temporalMode: "history" as const,
+            roleConstraint: "user" as const,
+            needsPlanning: true,
+            requirements: [oldRequirement],
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          selectorCalls += 1;
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: `selection-${selectorCalls}`,
+            assessments: input.requirements.map((requirement) => ({
+              requirementId: requirement.requirementId,
+              supportingEvidenceRefs: [
+                requirement.requirementId === "old" ? "old-ref" : "current-ref",
+              ],
+              contradictingEvidenceRefs: [],
+              unknownEvidenceRefs: [],
+            })),
+          };
+        },
+      },
+      closureAuditor: {
+        auditorVersion: "test-auditor.v1",
+        async audit() {
+          auditorCalls += 1;
+          return auditorCalls === 1
+            ? {
+                auditorVersion: "test-auditor.v1",
+                auditRevision: "repair-audit",
+                verdict: "repair" as const,
+                missingRequirements: [
+                  {
+                    requirementId: "closure-repair-1",
+                    label: "Current commute",
+                    searchText: "current commute",
+                    temporalMode: "history" as const,
+                    roleConstraint: "user" as const,
+                    relation: "comparative" as const,
+                    coverageMode: "any" as const,
+                    minimumEvidence: 1,
+                  },
+                ],
+                rejectedEvidenceRefs: [],
+              }
+            : {
+                auditorVersion: "test-auditor.v1",
+                auditRevision: "pass-audit",
+                verdict: "pass" as const,
+                missingRequirements: [],
+                rejectedEvidenceRefs: [],
+              };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "What is the difference between my old and current commute?",
+      new AbortController().signal,
+    );
+
+    expect(result.notebook.coverage.map((item) => item.status)).toEqual([
+      "covered",
+      "covered",
+    ]);
+    expect(result.closureAuditStatus).toBe("completed");
+    expect(result.closureVerdict).toBe("pass");
+    expect(result.closureRepairCount).toBe(1);
+    expect(result.requirements).toHaveLength(2);
+    expect(
+      result.notebook.coverage.every((item) => item.status === "covered"),
+    ).toBe(true);
+    expect(selectorCalls).toBe(2);
+    expect(auditorCalls).toBe(2);
+    expect(
+      searchTexts.filter((text) => text === "current commute"),
+    ).toHaveLength(1);
   });
 });

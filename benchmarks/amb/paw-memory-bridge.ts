@@ -49,6 +49,7 @@ import {
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryAtomConflictResolverV1,
   createJsonMemoryAtomExtractorV1,
+  createJsonMemoryEvidenceClosureAuditorV1,
   createJsonMemoryEvidenceCoveragePlannerV1,
   createJsonMemoryEvidenceQueryPlannerV3,
   createJsonMemoryEvidenceSupportSelectorV1,
@@ -421,6 +422,14 @@ const evidenceSupportSelector =
   /^(?:1|true)$/iu.test(process.env.PAW_AMB_QUERY_EXPANSION?.trim() ?? "")
     ? createJsonMemoryEvidenceSupportSelectorV1({
         model: createAmbMemoryWriterModel("evidence-support"),
+      })
+    : undefined;
+const evidenceClosureAuditor =
+  ingestMode === "atom" &&
+  atomContextMode === "evidence_first" &&
+  /^(?:1|true)$/iu.test(process.env.PAW_AMB_QUERY_EXPANSION?.trim() ?? "")
+    ? createJsonMemoryEvidenceClosureAuditorV1({
+        model: createAmbMemoryWriterModel("closure-audit"),
       })
     : undefined;
 
@@ -2191,6 +2200,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     ? "not_needed"
     : "disabled";
   let evidenceFirstDirectCertificateStatus = "not_evaluated";
+  let evidenceFirstClosureAuditStatus = evidenceClosureAuditor
+    ? "not_evaluated"
+    : "not_configured";
+  let evidenceFirstClosureVerdict = "not_evaluated";
+  let evidenceFirstClosureRepairCount = 0;
   let evidenceFirstContextStop = "not_evaluated";
   let evidenceFirstVerificationStatus = "not_evaluated";
   const evidenceIntent = classifyMemoryEvidenceQueryV3(queryText);
@@ -2608,6 +2622,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ...(evidenceSupportSelector === undefined
         ? {}
         : { supportSelector: evidenceSupportSelector }),
+      ...(evidenceClosureAuditor === undefined
+        ? {}
+        : { closureAuditor: evidenceClosureAuditor }),
       maxSources: Math.min(8, Math.max(4, k)),
       maxEvidencePerSource: 8,
       maxHitsPerRequirement: 4,
@@ -2643,6 +2660,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstQueryExpansionStatus = resolution.plannerStatus;
     evidenceFirstSupportSelectorStatus = resolution.supportSelectorStatus;
     evidenceFirstDirectCertificateStatus = resolution.directCertificateStatus;
+    evidenceFirstClosureAuditStatus = resolution.closureAuditStatus;
+    evidenceFirstClosureVerdict = resolution.closureVerdict ?? "not_evaluated";
+    evidenceFirstClosureRepairCount = resolution.closureRepairCount;
     const searchResults = [...searchResultByText.values()];
     const l0Spans = searchResults.flatMap((result) => result.spans);
     const conversationSpans = searchResults.flatMap(
@@ -2736,6 +2756,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         closureEvidenceCount: requirement.closureEvidenceCount,
         unresolvedEvidenceCount: requirement.unresolvedEvidenceRefs.length,
       })),
+    });
+    log("evidence_closure_audit", {
+      queryHash: sha(queryText),
+      status: resolution.closureAuditStatus,
+      verdict: resolution.closureVerdict ?? "not_evaluated",
+      repairCount: resolution.closureRepairCount,
+      finalRequirementCount: resolution.requirements.length,
+      finalCoveredCount: evidenceFirstNotebookCoveredCount,
     });
     expandedSourceDocuments = new Set(
       resolution.packetSources.map((source) => source.sourceId),
@@ -3809,6 +3837,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstQueryExpansionStatus,
       evidenceFirstSupportSelectorStatus,
       evidenceFirstDirectCertificateStatus,
+      evidenceFirstClosureAuditStatus,
+      evidenceFirstClosureVerdict,
+      evidenceFirstClosureRepairCount,
       evidenceFirstContextStop,
       evidenceFirstVerificationStatus,
       evidenceFirstPlanAnswerShape,
@@ -3903,6 +3934,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstQueryExpansionStatus,
     evidenceFirstSupportSelectorStatus,
     evidenceFirstDirectCertificateStatus,
+    evidenceFirstClosureAuditStatus,
+    evidenceFirstClosureVerdict,
+    evidenceFirstClosureRepairCount,
     evidenceFirstContextStop,
     evidenceFirstVerificationStatus,
     evidenceFirstPlanAnswerShape,

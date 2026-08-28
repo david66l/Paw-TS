@@ -9,11 +9,11 @@ import {
   type MemoryResolvedContextPacketV1,
   PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
 } from "./context-contract.js";
-import type { MemoryEvidenceResolutionV1 } from "./evidence-resolver.js";
 import {
-  createMemoryEvidenceAnswerPolicyV1,
   type MemoryEvidenceAnswerPolicyV1,
+  createMemoryEvidenceAnswerPolicyV1,
 } from "./evidence-answer-policy.js";
+import type { MemoryEvidenceResolutionV1 } from "./evidence-resolver.js";
 
 export const PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1 =
   "paw.memory-evidence-answer-contract.v1" as const;
@@ -188,14 +188,24 @@ export function projectEvidenceFirstMemoryContextPacketV1(
     resolution.supportSelectorStatus === "completed" &&
     resolution.supportSelectionRevision !== undefined &&
     resolution.degradedChannels.length === 0;
+  const independentClosureVerified =
+    resolution.closureAuditStatus === "not_configured" ||
+    resolution.closureAuditStatus === "not_needed" ||
+    (resolution.closureAuditStatus === "completed" &&
+      resolution.closureVerdict === "pass");
   const plannedClosureVerified =
     resolution.requirements.length > 0 &&
     requiredCovered &&
     supportVerified &&
+    independentClosureVerified &&
     !(
       resolution.intent.needsPlanning &&
       resolution.plannerStatus !== "completed"
     );
+  const directClosureVerified =
+    resolution.requirements.length === 0 &&
+    resolution.directCertificateStatus === "deterministic_direct" &&
+    resolution.degradedChannels.length === 0;
   const supportingRefs = new Set(
     resolution.notebook.coverage.flatMap(
       (requirement) => requirement.selectedEvidenceRefs,
@@ -225,7 +235,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
     stop:
       evidence.length === 0
         ? "missing"
-        : plannedClosureVerified
+        : plannedClosureVerified || directClosureVerified
           ? "sufficient"
           : "partial",
     requirements,
