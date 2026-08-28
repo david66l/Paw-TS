@@ -101,7 +101,7 @@ describe("postgres source-local assistant locator", () => {
         label: "prior answer",
         searchText: "memorable color cobalt answer",
         temporalMode: "any" as const,
-        roleConstraint: "assistant" as const,
+        roleConstraint: "any" as const,
         relation: "direct" as const,
         coverageMode: "any" as const,
         minimumEvidence: 1,

@@ -73,6 +73,7 @@ import {
   createPostgresMemoryTopicDossierStoreV1,
   createPostgresMemoryTopicEvidenceStoreV1,
   createPostgresMemoryTopicOrganizerStoreV1,
+  hasMemorySourceLocalDialogueCertificateV1,
   memoryScopeFingerprintV1,
   memorySourceLocalEvidenceCacheKeyV1,
   needsMemoryEvidenceRoleResolutionV1,
@@ -2668,7 +2669,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       );
       const turnIndexRevision = await engine.retrievalRevisionToken();
       const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
-        locatorVersion: "paw.amb-source-local-locator.v1:filtered-rrf",
+        locatorVersion: "paw.amb-source-local-locator.v2:certified-filtered-rrf",
         scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
         turnIndexRevision,
         embeddingIdentity: sourceSpanEmbedding
@@ -2771,18 +2772,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         }
         return [{ documentId, sourceSeq, evidenceRef }];
       });
-      const selected: typeof anchors = [];
       const perSource = new Map<string, number>();
-      for (const anchor of anchors) {
-        const count = perSource.get(anchor.documentId) ?? 0;
-        if (count >= request.budget.maxAnchorsPerSource) continue;
-        selected.push(anchor);
-        perSource.set(anchor.documentId, count + 1);
-        if (selected.length >= request.budget.maxAnchors) break;
-      }
       const hits = [];
       let renderedChars = 0;
-      for (const anchor of selected) {
+      let uncertifiedAnchorCount = 0;
+      for (const anchor of anchors) {
+        if (hits.length >= request.budget.maxAnchors) break;
+        const sourceCount = perSource.get(anchor.documentId) ?? 0;
+        if (sourceCount >= request.budget.maxAnchorsPerSource) continue;
         const remaining = request.budget.maxChars - renderedChars;
         if (remaining < 256) break;
         const neighborEntries = (
@@ -2827,6 +2824,16 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           query: locatorQuery,
           maxChars: Math.min(2_400, remaining),
         });
+        if (
+          request.requirement.roleConstraint === "any" &&
+          !hasMemorySourceLocalDialogueCertificateV1(
+            bundle.includedEvidence,
+            anchor.sourceSeq,
+          )
+        ) {
+          uncertifiedAnchorCount += 1;
+          continue;
+        }
         hits.push(
           Object.freeze({
             sourceId: anchor.documentId,
@@ -2855,6 +2862,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             ),
           }),
         );
+        perSource.set(anchor.documentId, sourceCount + 1);
         renderedChars += bundle.text.length;
       }
       const degradedChannels = Object.freeze([
@@ -2862,7 +2870,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ...(dense.failed ? (["dense"] as const) : []),
       ]);
       const result = Object.freeze({
-        locatorVersion: "paw.amb-source-local-locator.v1:filtered-rrf",
+        locatorVersion: "paw.amb-source-local-locator.v2:certified-filtered-rrf",
         locatorRevision: sha(
           JSON.stringify({
             turnIndexRevision,
@@ -2902,6 +2910,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         denseCandidateCount: dense.hits.length,
         anchorCount: hits.length,
         includedTurnCount: result.telemetry.includedTurnCount,
+        uncertifiedAnchorCount,
         renderedChars,
         cacheHit: false,
         durationMs: result.telemetry.durationMs,
@@ -2925,7 +2934,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ...(sourceLocalLocatorEnabled
         ? {
             sourceLocalLocator: Object.freeze({
-              locatorVersion: "paw.amb-source-local-locator.v1:filtered-rrf",
+              locatorVersion:
+                "paw.amb-source-local-locator.v2:certified-filtered-rrf",
               locate(request: MemorySourceLocalEvidenceRequestV1) {
                 return locateEvidenceWithinSources(request);
               },

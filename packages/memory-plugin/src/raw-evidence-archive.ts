@@ -13,6 +13,7 @@ import {
   type MemorySourceLocalEvidenceRequestV1,
   type MemorySourceLocalEvidenceResultV1,
   type MemorySourceLocalHydratedEvidenceV1,
+  hasMemorySourceLocalDialogueCertificateV1,
   memorySourceLocalEvidenceCacheKeyV1,
 } from "./source-local-evidence-locator.js";
 
@@ -107,7 +108,8 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
   }>,
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
-  const locatorVersion = "paw.memory-postgres-source-local-locator.v1:lexical";
+  const locatorVersion =
+    "paw.memory-postgres-source-local-locator.v2:certified-lexical";
   const hydratorVersion = "paw.memory-postgres-source-local-hydrator.v1";
   const rankerVersion =
     "paw.memory-source-local-ranker.v2:term-coverage-then-lexical-idf";
@@ -573,21 +575,15 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
               String(right.row.evidence_ref),
             ),
         );
-      const anchors: (typeof ranked)[number][] = [];
       const perSource = new Map<string, number>();
-      for (const candidate of ranked) {
-        const sourceId = evidenceRefFamily(String(candidate.row.evidence_ref));
-        const count = perSource.get(sourceId) ?? 0;
-        if (count >= request.budget.maxAnchorsPerSource) continue;
-        anchors.push(candidate);
-        perSource.set(sourceId, count + 1);
-        if (anchors.length >= request.budget.maxAnchors) break;
-      }
       const hits = [];
       let renderedChars = 0;
-      for (const anchor of anchors) {
+      for (const anchor of ranked) {
+        if (hits.length >= request.budget.maxAnchors) break;
         const evidenceRef = String(anchor.row.evidence_ref);
         const sourceId = evidenceRefFamily(evidenceRef);
+        const sourceCount = perSource.get(sourceId) ?? 0;
+        if (sourceCount >= request.budget.maxAnchorsPerSource) continue;
         const sourceSeq = Number(anchor.row.source_seq);
         const remaining = request.budget.maxChars - renderedChars;
         if (remaining < 256) break;
@@ -623,6 +619,15 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           query: normalized,
           maxChars: Math.min(2_400, remaining),
         });
+        if (
+          request.requirement.roleConstraint === "any" &&
+          !hasMemorySourceLocalDialogueCertificateV1(
+            bundle.includedEvidence,
+            sourceSeq,
+          )
+        ) {
+          continue;
+        }
         hits.push(
           Object.freeze({
             sourceId,
@@ -648,6 +653,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
             ),
           }),
         );
+        perSource.set(sourceId, sourceCount + 1);
         renderedChars += bundle.text.length;
       }
       const telemetry = Object.freeze({

@@ -4,6 +4,7 @@ import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
   type MemorySourceLocalEvidenceHitV1,
   type MemorySourceLocalEvidenceResultV1,
+  hasMemorySourceLocalDialogueCertificateV1,
   isMemorySourceLocalEvidenceEligibleV1,
   memorySourceLocalEvidenceCacheKeyV1,
   validateMemorySourceLocalEvidenceResultV1,
@@ -21,6 +22,43 @@ const requirement = Object.freeze({
 });
 
 describe("source-local evidence locator boundary", () => {
+  test("certifies only an exact preceding user request", () => {
+    expect(
+      hasMemorySourceLocalDialogueCertificateV1(
+        [
+          {
+            evidenceRef: "session#turn-1",
+            sourceKind: "user_input",
+            turnOrder: 1,
+          },
+          {
+            evidenceRef: "session#turn-2",
+            sourceKind: "assistant_output",
+            turnOrder: 2,
+          },
+        ],
+        2,
+      ),
+    ).toBe(true);
+    expect(
+      hasMemorySourceLocalDialogueCertificateV1(
+        [
+          {
+            evidenceRef: "session#turn-1",
+            sourceKind: "assistant_output",
+            turnOrder: 1,
+          },
+          {
+            evidenceRef: "session#turn-2",
+            sourceKind: "assistant_output",
+            turnOrder: 2,
+          },
+        ],
+        2,
+      ),
+    ).toBe(false);
+  });
+
   test("opens only bounded assistant direct-lookup requirements", () => {
     expect(
       isMemorySourceLocalEvidenceEligibleV1({

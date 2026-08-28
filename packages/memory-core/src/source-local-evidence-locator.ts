@@ -117,6 +117,25 @@ export const DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1 = Object.freeze({
 }) satisfies MemorySourceLocalEvidenceBudgetV1;
 
 /**
+ * A shared-dialogue assistant turn is a candidate answer only when the exact
+ * preceding turn is a user request. This proves dialogue provenance, not the
+ * truth of the assistant prose; the semantic selector remains authoritative.
+ */
+export function hasMemorySourceLocalDialogueCertificateV1(
+  turns: readonly MemorySourceLocalIncludedTurnV1[],
+  anchorTurnOrder: number,
+): boolean {
+  return (
+    Number.isSafeInteger(anchorTurnOrder) &&
+    turns.some(
+      (turn) =>
+        turn.sourceKind === "user_input" &&
+        turn.turnOrder === anchorTurnOrder - 1,
+    )
+  );
+}
+
+/**
  * First release gate. It deliberately excludes temporal, comparative and
  * convergent requests until those capabilities have their own evidence. A
  * lookup may contain several direct assistant-grounded requirements; the
@@ -218,7 +237,6 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     const includedRefs = new Set<string>();
     const anchorFamily = evidenceRefFamily(hit.anchorEvidenceRef);
     let anchorCount = 0;
-    let addressedUserRequest = false;
     if (
       !Array.isArray(hit.contextEvidenceRefs) ||
       hit.contextEvidenceRefs.length !== hit.includedTurns.length ||
@@ -247,12 +265,6 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
         throw namedError("MemorySourceLocalEvidenceTraceInvalid");
       }
       includedRefs.add(turn.evidenceRef);
-      if (
-        turn.sourceKind === "user_input" &&
-        turn.turnOrder === (anchorTurnOrder as number) - 1
-      ) {
-        addressedUserRequest = true;
-      }
       if (turn.evidenceRef === hit.anchorEvidenceRef) {
         if (
           turn.sourceKind !== "assistant_output" ||
@@ -269,7 +281,10 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     }
     if (
       input.request.requirement.roleConstraint === "any" &&
-      !addressedUserRequest
+      !hasMemorySourceLocalDialogueCertificateV1(
+        hit.includedTurns,
+        anchorTurnOrder as number,
+      )
     ) {
       throw namedError("MemorySourceLocalEvidenceProvenanceInvalid");
     }

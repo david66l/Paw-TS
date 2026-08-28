@@ -143,6 +143,7 @@ export {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
   PAW_MEMORY_SOURCE_LOCAL_EVIDENCE_LOCATOR_PORT_VERSION_V1,
   isMemorySourceLocalEvidenceEligibleV1,
+  hasMemorySourceLocalDialogueCertificateV1,
   hydrateMemorySourceLocalEvidenceResultV1,
   memorySourceLocalEvidenceCacheKeyV1,
   validateMemorySourceLocalEvidenceResultV1,
