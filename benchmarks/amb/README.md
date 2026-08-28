@@ -7,6 +7,12 @@ The current immutable project baseline is documented in
 profile, architectural gaps, and promotion gates. This is a Paw engineering
 baseline, not an official public leaderboard result.
 
+The follow-up failure-localization study is recorded in
+[LONGMEMEVAL_COUNTERFACTUAL_LOCALIZATION.md](./LONGMEMEVAL_COUNTERFACTUAL_LOCALIZATION.md).
+It shows that source-local turn retrieval, especially for assistant recall, is
+the next capability to test; prompt-only synthesis and indiscriminate context
+filtering were counterproductive on the known-error analysis set.
+
 The current evidence-first LongMemEval release-gate result and its limitations
 are recorded in [LONGMEMEVAL_RELEASE_REPORT.md](./LONGMEMEVAL_RELEASE_REPORT.md).
 The retained local paired blind run scored 95/120 (79.2%) versus 80/120 (66.7%)
