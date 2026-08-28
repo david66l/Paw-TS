@@ -2,7 +2,7 @@ import { isAssistantMemoryQueryV1 } from "./evidence-first.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3 =
-  "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance" as const;
+  "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate" as const;
 
 export type MemoryEvidenceAnswerShapeV3 =
   | "lookup"
@@ -97,6 +97,9 @@ export function classifyMemoryEvidenceQueryV3(
             : needsMemoryEvidenceRoleResolutionV1(value)
               ? "any"
               : "user";
+  const certifiedAssistantDialogueCandidate =
+    roleConstraint === "user" &&
+    needsCertifiedAssistantDialogueCandidateV1(value);
   const answerShape: MemoryEvidenceAnswerShapeV3 =
     /\b(?:recommend|recommendation|suggest|suggestion|what\s+should\s+i|any\s+(?:tips|ideas)|good\s+(?:options|activities|recipes?))\b|(?:推荐|建议|有什么(?:好)?(?:办法|选择|活动|食谱)|我应该)/iu.test(
       value,
@@ -140,7 +143,8 @@ export function classifyMemoryEvidenceQueryV3(
     needsPlanning:
       answerShape !== "lookup" ||
       temporalMode !== "any" ||
-      roleConstraint !== "user",
+      roleConstraint !== "user" ||
+      certifiedAssistantDialogueCandidate,
   });
 }
 
@@ -493,6 +497,40 @@ export function needsMemoryEvidenceRoleResolutionV1(query: string): boolean {
   );
 }
 
+/**
+ * Some recall questions establish that the answer lives in prior dialogue but
+ * do not establish who authored it. Keep the primary user authority boundary
+ * intact and open only a separately certified assistant-candidate channel.
+ *
+ * A nominative subject in the answer clause is explicit provenance. Possessive
+ * objects such as "my plan" are not: the plan may have been supplied by either
+ * participant. Prior-conversation references without a recall verb are the
+ * same unresolved case.
+ */
+export function needsCertifiedAssistantDialogueCandidateV1(
+  query: string,
+): boolean {
+  const value = boundedQuery(query);
+  const answer = memoryRecallAnswerClauseV1(value);
+  if (answer) {
+    // Reuse the complete provenance classifier. In particular, possessive
+    // user facts such as "my address" have no nominative subject but are not
+    // unresolved dialogue artifacts and must remain closed to assistant text.
+    return classifyMemoryRecallProvenanceV1(value) === "unowned";
+  }
+  if (isExplicitUserOriginMemoryQueryV1(value)) return false;
+  const priorDialogueReference =
+    /\b(?:previous|earlier|prior|last)\b.{0,64}\b(?:conversation|chat|discussion|exchange|talk)\b|\b(?:conversation|chat|discussion|exchange|talk)\b.{0,64}\b(?:previous|earlier|prior|last)\b|(?:之前|上次|此前|先前|过去).{0,48}(?:对话|聊天|讨论|交流)|(?:对话|聊天|讨论|交流).{0,48}(?:之前|上次|此前|先前|过去)/iu.test(
+      value,
+    );
+  return (
+    priorDialogueReference &&
+    /\b(?:what|which|where|when|how|who|whether)\b|(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/iu.test(
+      value,
+    )
+  );
+}
+
 function isExplicitSharedDialogueQueryV1(query: string): boolean {
   const value = boundedQuery(query);
   const sharedStatement =
@@ -555,6 +593,7 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
       "Answer shape and temporal mode are independent immutable axes supplied by the caller. Return them unchanged.",
       "Role constraint is an immutable authority boundary supplied by deterministic code. Return it unchanged.",
       "roleConstraint=any means the current question establishes a prior-dialogue answer but cannot establish whether the requested artifact came from the user, assistant, or a shared exchange. Preserve any; do not guess or upgrade it.",
+      "certifiedAssistantDialogueCandidate=true keeps roleConstraint=user as the primary authority while allowing a separate, certificate-gated assistant candidate path. Do not rewrite the role or assume the assistant authored the answer.",
       "For recommend requests, separately search likely possessions or ingredients, goals, constraints, routines, prior attempts, and explicit likes or dislikes that could constrain a useful recommendation.",
       "For compare or aggregate requests, create one requirement and search per independent operand.",
       "Do not split one operand into separate identity, value, threshold, status, or background requirements when one concrete memory can establish it.",
@@ -574,6 +613,9 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
       answerShape: intent.answerShape,
       temporalMode: intent.temporalMode,
       roleConstraint: intent.roleConstraint,
+      certifiedAssistantDialogueCandidate:
+        intent.roleConstraint === "user" &&
+        needsCertifiedAssistantDialogueCandidateV1(value),
       maxRequirements: 4,
       maxItemChars: 192,
     }),

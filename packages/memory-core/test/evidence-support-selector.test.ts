@@ -117,6 +117,46 @@ describe("requirement-bound evidence support selector v1", () => {
     expect(request.system).toContain("distinct observations");
   });
 
+  test("exposes only structurally certified assistant dialogue candidates", () => {
+    const assistant = {
+      sourceId: "session",
+      evidenceRef: "session#assistant-2",
+      content: "The proposed label was Northstar.",
+      authority: "context_only" as const,
+      sourceKind: "assistant_output" as const,
+      contextEvidenceRefs: ["session#user-1", "session#assistant-2"],
+      turnOrder: 2,
+    };
+    const request = buildMemoryEvidenceSupportSelectionRequestV1({
+      query: "What was the label from our previous conversation?",
+      requirements: [requirements[0]!],
+      candidates: [assistant],
+      certifiedAssistantDialogueEvidenceRefs: [assistant.evidenceRef],
+    });
+    const payload = JSON.parse(request.user) as {
+      requirements: Array<{
+        certifiedAssistantDialogueCandidate: boolean;
+      }>;
+      candidates: Array<{ certifiedAssistantDialogue: boolean }>;
+    };
+    expect(payload.requirements[0]?.certifiedAssistantDialogueCandidate).toBe(
+      true,
+    );
+    expect(payload.candidates[0]?.certifiedAssistantDialogue).toBe(true);
+    expect(request.system).toContain(
+      "roleConstraint=user with certifiedAssistantDialogueCandidate=true",
+    );
+
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "What is my address?",
+        requirements,
+        candidates,
+        certifiedAssistantDialogueEvidenceRefs: ["japan#turn-1"],
+      }),
+    ).toThrow("MemoryEvidenceSupportCertificateInvalid");
+  });
+
   test("accepts only supplied evidence addresses for every requirement", () => {
     expect(
       parseMemoryEvidenceSupportSelectionV1(

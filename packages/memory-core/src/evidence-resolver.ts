@@ -21,6 +21,7 @@ import {
   type MemoryEvidenceQueryPlannerV3,
   type MemoryEvidenceRequirementV3,
   classifyMemoryEvidenceQueryV3,
+  needsCertifiedAssistantDialogueCandidateV1,
 } from "./evidence-query-planner.js";
 import type {
   MemoryEvidenceSupportSelectorV1,
@@ -41,7 +42,7 @@ import {
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v11:certified-shared-dialogue" as const;
+  "paw.memory-evidence-resolver.v12:certified-dialogue-candidate" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -152,6 +153,9 @@ export function createMemoryEvidenceResolverV1(input: {
       const value = boundedQuery(query);
       let intent: MemoryEvidenceQueryIntentV3 =
         classifyMemoryEvidenceQueryV3(value);
+      const certifiedAssistantDialogueCandidate =
+        intent.roleConstraint === "user" &&
+        needsCertifiedAssistantDialogueCandidateV1(value);
       const primary = filterEvidenceSearchResultForRole(
         await input.index.search(value, signal),
         intent.roleConstraint,
@@ -227,6 +231,7 @@ export function createMemoryEvidenceResolverV1(input: {
         sourceLocalBudget:
           input.sourceLocalBudget ??
           DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+        certifiedAssistantDialogueCandidate,
         evidenceTimeUpperBound: input.evidenceTimeUpperBound,
         signal,
       });
@@ -386,6 +391,7 @@ async function resolveEvidencePass(input: {
   readonly sourceLocalLocator?: MemorySourceLocalEvidenceLocatorV1;
   readonly sourceLocalHydrator?: MemorySourceLocalEvidenceHydratorV1;
   readonly sourceLocalBudget?: MemorySourceLocalEvidenceBudgetV1;
+  readonly certifiedAssistantDialogueCandidate: boolean;
   readonly evidenceTimeUpperBound?: string;
   readonly excludedEvidenceRefs?: ReadonlySet<string>;
   readonly signal: AbortSignal;
@@ -455,6 +461,8 @@ async function resolveEvidencePass(input: {
     roleConstraint: input.intent.roleConstraint,
     requirements: input.requirements,
     supportSelectorConfigured: input.supportSelector !== undefined,
+    certifiedAssistantDialogueCandidate:
+      input.certifiedAssistantDialogueCandidate,
   });
   if (localEligible && sourceIds.length > 0) {
     if (!input.sourceLocalLocator) {
@@ -481,8 +489,16 @@ async function resolveEvidencePass(input: {
           }>
         > = [];
         for (const requirement of input.requirements) {
+          const locatorRequirement =
+            input.certifiedAssistantDialogueCandidate &&
+            requirement.roleConstraint === "user"
+              ? Object.freeze({
+                  ...requirement,
+                  roleConstraint: "any" as const,
+                })
+              : requirement;
           const request = Object.freeze({
-            requirement,
+            requirement: locatorRequirement,
             lockedSourceIds: Object.freeze([...sourceIds]),
             ...(input.evidenceTimeUpperBound === undefined
               ? {}
@@ -613,13 +629,26 @@ async function resolveEvidencePass(input: {
     const candidates = selectSupportCandidates(
       requirementHits,
       sourceIds,
-      input.intent.roleConstraint !== "user",
+      input.intent.roleConstraint !== "user" ||
+        input.certifiedAssistantDialogueCandidate,
       32,
     );
     if (candidates.length > 0) {
       try {
         const selection = await input.supportSelector.select(
-          { query: input.query, requirements: input.requirements, candidates },
+          {
+            query: input.query,
+            requirements: input.requirements,
+            candidates,
+            ...(input.certifiedAssistantDialogueCandidate &&
+            localEvidenceRefs.size > 0
+              ? {
+                  certifiedAssistantDialogueEvidenceRefs: Object.freeze([
+                    ...localEvidenceRefs,
+                  ]),
+                }
+              : {}),
+          },
           input.signal,
         );
         supportAssessments = enforceSelectedEvidenceAuthority({
@@ -631,6 +660,8 @@ async function resolveEvidencePass(input: {
           requirementHits,
           roleConstraint: input.intent.roleConstraint,
           certifiedSharedDialogueRefs: localEvidenceRefs,
+          certifiedAssistantDialogueCandidate:
+            input.certifiedAssistantDialogueCandidate,
         });
         selectedRefsByRequirement = new Map(
           supportAssessments.map((assessment) => [
@@ -675,6 +706,8 @@ async function resolveEvidencePass(input: {
   const allowSelectedContextOnly =
     input.intent.roleConstraint === "assistant" ||
     (input.intent.roleConstraint === "any" &&
+      supportSelectorStatus === "completed") ||
+    (input.certifiedAssistantDialogueCandidate &&
       supportSelectorStatus === "completed");
   const allowFallbackContextOnly = input.intent.roleConstraint === "assistant";
   const notebook = buildMemoryEvidenceNotebookV1({
@@ -993,6 +1026,7 @@ function enforceSelectedEvidenceAuthority(input: {
   readonly requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[];
   readonly roleConstraint: MemoryEvidenceQueryIntentV3["roleConstraint"];
   readonly certifiedSharedDialogueRefs: ReadonlySet<string>;
+  readonly certifiedAssistantDialogueCandidate: boolean;
 }): readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] {
   const requiredIds = new Set(
     input.requirements.map((requirement) => requirement.requirementId),
@@ -1043,6 +1077,8 @@ function enforceSelectedEvidenceAuthority(input: {
             (hit.authority !== "context_only" ||
               input.roleConstraint === "assistant" ||
               (input.roleConstraint === "any" &&
+                input.certifiedSharedDialogueRefs.has(evidenceRef)) ||
+              (input.certifiedAssistantDialogueCandidate &&
                 input.certifiedSharedDialogueRefs.has(evidenceRef)));
           if (!allowed) rejected.push(evidenceRef);
           return allowed;

@@ -4,6 +4,7 @@ export {
   createJsonMemoryEvidenceSupportSelectorV1,
   parseMemoryEvidenceSupportSelectionV1,
   type MemoryEvidenceSupportSelectionV1,
+  type MemoryEvidenceSupportSelectionInputV1,
   type MemoryEvidenceTriageAssessmentV1,
   type MemoryEvidenceSupportSelectorV1,
 } from "./evidence-support-selector.js";
@@ -172,6 +173,7 @@ export {
   buildMemoryEvidenceQueryPlanRequestV3,
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryEvidenceQueryPlannerV3,
+  needsCertifiedAssistantDialogueCandidateV1,
   needsMemoryEvidenceRoleResolutionV1,
   parseMemoryEvidenceQueryPlanV3,
   type MemoryEvidenceAnswerShapeV3,

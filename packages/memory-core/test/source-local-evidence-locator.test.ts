@@ -82,6 +82,43 @@ describe("source-local evidence locator boundary", () => {
       isMemorySourceLocalEvidenceEligibleV1({
         answerShape: "lookup",
         temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [{ ...requirement, roleConstraint: "user" }],
+        supportSelectorConfigured: true,
+        certifiedAssistantDialogueCandidate: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [
+          { ...requirement, roleConstraint: "user" },
+          {
+            ...requirement,
+            requirementId: "explicit-user-fact",
+            searchText: "the user's address",
+            roleConstraint: "user",
+          },
+        ],
+        supportSelectorConfigured: true,
+        certifiedAssistantDialogueCandidate: true,
+      }),
+    ).toBe(false);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [{ ...requirement, roleConstraint: "user" }],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(false);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "lookup",
+        temporalMode: "any",
         roleConstraint: "assistant",
         requirements: [
           requirement,

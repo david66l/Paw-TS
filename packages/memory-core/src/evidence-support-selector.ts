@@ -7,7 +7,18 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1 =
-  "paw.memory-evidence-support-selector.json.v6:unresolved-dialogue-authority" as const;
+  "paw.memory-evidence-support-selector.json.v7:certified-dialogue-authority" as const;
+
+export interface MemoryEvidenceSupportSelectionInputV1 {
+  readonly query: string;
+  readonly requirements: readonly MemoryEvidenceRequirementV3[];
+  readonly candidates: readonly MemoryEvidenceNotebookHitV1[];
+  /**
+   * Assistant anchors certified by deterministic source-local validation.
+   * This is caller-owned policy input, never model-produced authority.
+   */
+  readonly certifiedAssistantDialogueEvidenceRefs?: readonly string[];
+}
 
 export interface MemoryEvidenceTriageAssessmentV1 {
   readonly requirementId: string;
@@ -25,11 +36,7 @@ export interface MemoryEvidenceSupportSelectionV1 {
 export interface MemoryEvidenceSupportSelectorV1 {
   readonly selectorVersion: string;
   select(
-    input: Readonly<{
-      query: string;
-      requirements: readonly MemoryEvidenceRequirementV3[];
-      candidates: readonly MemoryEvidenceNotebookHitV1[];
-    }>,
+    input: Readonly<MemoryEvidenceSupportSelectionInputV1>,
     signal: AbortSignal,
   ): Promise<MemoryEvidenceSupportSelectionV1>;
 }
@@ -54,11 +61,7 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
   return Object.freeze({
     selectorVersion,
     async select(
-      selection: Readonly<{
-        query: string;
-        requirements: readonly MemoryEvidenceRequirementV3[];
-        candidates: readonly MemoryEvidenceNotebookHitV1[];
-      }>,
+      selection: Readonly<MemoryEvidenceSupportSelectionInputV1>,
       signal: AbortSignal,
     ) {
       assertSelectionInput(selection);
@@ -80,6 +83,11 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
           selectorVersion,
           query: selection.query,
           requirements: selection.requirements,
+          certifiedAssistantDialogueEvidenceRefs: Object.freeze(
+            [
+              ...(selection.certifiedAssistantDialogueEvidenceRefs ?? []),
+            ].sort(),
+          ),
           candidateEvidenceRefs: selection.candidates.map(
             (candidate: MemoryEvidenceNotebookHitV1) => candidate.evidenceRef,
           ),
@@ -92,13 +100,12 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
 }
 
 export function buildMemoryEvidenceSupportSelectionRequestV1(
-  input: Readonly<{
-    query: string;
-    requirements: readonly MemoryEvidenceRequirementV3[];
-    candidates: readonly MemoryEvidenceNotebookHitV1[];
-  }>,
+  input: Readonly<MemoryEvidenceSupportSelectionInputV1>,
 ): Readonly<{ system: string; user: string }> {
   assertSelectionInput(input);
+  const certifiedAssistantDialogueEvidenceRefs = new Set(
+    input.certifiedAssistantDialogueEvidenceRefs ?? [],
+  );
   const projectionQuery = [
     input.query,
     ...input.requirements.map((requirement) => requirement.searchText),
@@ -122,6 +129,7 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
       "For latest-state requirements, older or differently valued observations remain supporting inputs for deterministic chronology; do not call them contradictory merely because their values differ.",
       "Assistant output is context only for user facts. It may directly support roleConstraint=assistant only when the query explicitly asks for the assistant's prior words or actions.",
       "For roleConstraint=any, assistant output may support only a requested prior-dialogue artifact or answer whose author is unresolved, and only when the exact assistant turn and its addressed user request establish that provenance. Never use an assistant assertion as evidence of a user's fact, preference, possession, action, or experience.",
+      "For roleConstraint=user with certifiedAssistantDialogueCandidate=true, preserve user facts as the primary authority. A candidate marked certifiedAssistantDialogue=true may support only the requested prior-dialogue artifact whose author is unresolved; it must never establish a user's fact, preference, possession, action, or experience.",
       "It is valid to return no support for a requirement. Prefer missing evidence over a merely related passage.",
       'Return exactly one JSON object: {"assessments":[{"requirementId":"...","supportingEvidenceRefs":["..."],"contradictingEvidenceRefs":[],"unknownEvidenceRefs":[]}]}. Include every supplied requirement exactly once and keep the three arrays disjoint.',
     ].join("\n"),
@@ -138,11 +146,16 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
           requirement.coverageMode ??
           (requirement.temporalMode === "latest" ? "latest" : "any"),
         minimumEvidence: requirement.minimumEvidence ?? 1,
+        certifiedAssistantDialogueCandidate:
+          certifiedAssistantDialogueEvidenceRefs.size > 0,
       })),
       candidates: input.candidates.map((candidate, index) => ({
         evidenceRef: compactEvidenceRef(index),
         authority: candidate.authority,
         sourceKind: candidate.sourceKind,
+        certifiedAssistantDialogue: certifiedAssistantDialogueEvidenceRefs.has(
+          candidate.evidenceRef,
+        ),
         contextEvidenceRefs: candidate.contextEvidenceRefs,
         observedAt: candidate.observedAt,
         episodeOrder: candidate.episodeOrder,
@@ -160,11 +173,7 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
 
 export function parseMemoryEvidenceSupportSelectionV1(
   text: string,
-  input: Readonly<{
-    query: string;
-    requirements: readonly MemoryEvidenceRequirementV3[];
-    candidates: readonly MemoryEvidenceNotebookHitV1[];
-  }>,
+  input: Readonly<MemoryEvidenceSupportSelectionInputV1>,
 ): readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] {
   assertSelectionInput(input);
   const parsed = extractJsonObject(text);
@@ -255,11 +264,7 @@ function compactEvidenceRef(index: number): string {
 }
 
 function assertSelectionInput(
-  input: Readonly<{
-    query: string;
-    requirements: readonly MemoryEvidenceRequirementV3[];
-    candidates: readonly MemoryEvidenceNotebookHitV1[];
-  }>,
+  input: Readonly<MemoryEvidenceSupportSelectionInputV1>,
 ): void {
   boundedText(input.query, 512, "MemoryEvidenceSupportQueryInvalid");
   if (
@@ -298,6 +303,40 @@ function assertSelectionInput(
       );
     }
     refs.add(evidenceRef);
+  }
+  const certified = input.certifiedAssistantDialogueEvidenceRefs ?? [];
+  const certifiedRefs = new Set(certified);
+  if (certifiedRefs.size !== certified.length) {
+    throw namedError("MemoryEvidenceSupportCertificateInvalid");
+  }
+  if (certifiedRefs.size > 0) {
+    const requirement = input.requirements[0];
+    if (
+      input.requirements.length !== 1 ||
+      requirement?.roleConstraint !== "user" ||
+      requirement.temporalMode !== "any" ||
+      (requirement.relation !== undefined &&
+        requirement.relation !== "direct") ||
+      (requirement.coverageMode !== undefined &&
+        requirement.coverageMode !== "any") ||
+      (requirement.minimumEvidence !== undefined &&
+        requirement.minimumEvidence !== 1)
+    ) {
+      throw namedError("MemoryEvidenceSupportCertificateInvalid");
+    }
+    const candidatesByRef = new Map(
+      input.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
+    );
+    for (const evidenceRef of certifiedRefs) {
+      const candidate = candidatesByRef.get(evidenceRef);
+      if (
+        candidate?.authority !== "context_only" ||
+        candidate.sourceKind !== "assistant_output" ||
+        !candidate.contextEvidenceRefs?.length
+      ) {
+        throw namedError("MemoryEvidenceSupportCertificateInvalid");
+      }
+    }
   }
 }
 

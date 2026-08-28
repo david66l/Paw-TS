@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { hashTextV1 } from "../src/canonical.js";
 import {
   type MemoryEvidenceIndexV1,
+  createJsonMemoryEvidenceSupportSelectorV1,
   createMemoryEvidenceResolverV1,
   projectEvidenceFirstMemoryContextPacketV1,
 } from "../src/index.js";
@@ -229,17 +230,164 @@ describe("shared evidence resolver v1", () => {
     ).not.toContain("invented city");
   });
 
+  test("opens a certified assistant candidate without weakening primary user authority", async () => {
+    let locatorCalls = 0;
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "user-ref",
+                    sourceId: "session",
+                    evidenceRef: "session#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session",
+                evidenceRef: "session#turn-1",
+                content: "Please propose a label for the plan.",
+                authority: "user_asserted" as const,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate(request) {
+          locatorCalls += 1;
+          expect(request.requirement.roleConstraint).toBe("any");
+          expect(request.lockedSourceIds).toEqual(["session"]);
+          const content = "The proposed label was Northstar.";
+          return {
+            locatorVersion: "test-source-local.v1",
+            locatorRevision: "certified-dialogue-candidate",
+            hits: [
+              {
+                sourceId: "session",
+                evidenceRef: "session#turn-2",
+                anchorEvidenceRef: "session#turn-2",
+                contextEvidenceRefs: ["session#turn-1", "session#turn-2"],
+                sourceKind: "assistant_output" as const,
+                content,
+                authority: "context_only" as const,
+                turnOrder: 2,
+                includedTurns: [
+                  {
+                    evidenceRef: "session#turn-1",
+                    sourceKind: "user_input" as const,
+                    turnOrder: 1,
+                  },
+                  {
+                    evidenceRef: "session#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    turnOrder: 2,
+                  },
+                ],
+              },
+            ],
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: 1,
+              denseCandidates: 1,
+              anchorCount: 1,
+              includedTurnCount: 2,
+              renderedChars: content.length,
+              cacheHit: false,
+              durationMs: 1,
+            },
+          };
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({
+        "session#turn-1": "Please propose a label for the plan.",
+        "session#turn-2": "The proposed label was Northstar.",
+      }),
+      supportSelector: createJsonMemoryEvidenceSupportSelectorV1({
+        model: {
+          async complete(request) {
+            const payload = JSON.parse(request.user) as {
+              requirements: Array<{
+                requirementId: string;
+                roleConstraint: string;
+                certifiedAssistantDialogueCandidate: boolean;
+              }>;
+              candidates: Array<{
+                evidenceRef: string;
+                sourceKind: string;
+                certifiedAssistantDialogue: boolean;
+              }>;
+            };
+            expect(payload.requirements).toHaveLength(1);
+            expect(payload.requirements[0]).toMatchObject({
+              roleConstraint: "user",
+              certifiedAssistantDialogueCandidate: true,
+            });
+            const certified = payload.candidates.find(
+              (candidate) => candidate.certifiedAssistantDialogue,
+            );
+            expect(certified).toMatchObject({
+              sourceKind: "assistant_output",
+            });
+            return {
+              status: "completed" as const,
+              text: JSON.stringify({
+                assessments: [
+                  {
+                    requirementId: payload.requirements[0]?.requirementId,
+                    supportingEvidenceRefs: [certified?.evidenceRef],
+                    contradictingEvidenceRefs: [],
+                    unknownEvidenceRefs: [],
+                  },
+                ],
+              }),
+            };
+          },
+        },
+      }),
+    });
+
+    const result = await resolver.resolve(
+      "What amount was in the plan from our previous conversation?",
+      new AbortController().signal,
+    );
+
+    expect(result.intent.roleConstraint).toBe("user");
+    expect(locatorCalls).toBe(1);
+    expect(result.sources.map((source) => source.sourceId)).toEqual([
+      "session",
+    ]);
+    expect(result.sourceLocalization).toMatchObject({
+      status: "completed",
+      selectedCandidateCount: 1,
+    });
+    expect(result.packetSources[0]?.text).toContain("Northstar");
+  });
+
   test("rejects requirement authority drift from a custom planner port", async () => {
     let locatedRole = "";
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -324,11 +472,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -433,11 +581,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -541,11 +689,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -682,11 +830,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -792,11 +940,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -989,11 +1137,11 @@ describe("shared evidence resolver v1", () => {
         },
         planner: {
           plannerVersion:
-            "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+            "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
           async plan() {
             return {
               plannerVersion:
-                "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+                "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
               answerShape: "lookup" as const,
               temporalMode: "any" as const,
               roleConstraint: "assistant" as const,
@@ -1106,11 +1254,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -1243,7 +1391,7 @@ describe("shared evidence resolver v1", () => {
     const forceValues: Array<boolean | undefined> = [];
     const planner = {
       plannerVersion:
-        "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance" as const,
+        "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate" as const,
       async plan(
         _query: string,
         _signal: AbortSignal,
@@ -1252,7 +1400,7 @@ describe("shared evidence resolver v1", () => {
         forceValues.push(options?.force);
         return {
           plannerVersion:
-            "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance" as const,
+            "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate" as const,
           answerShape: "lookup" as const,
           temporalMode: "any" as const,
           roleConstraint: "user" as const,
@@ -1339,12 +1487,12 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           plannerCalls += 1;
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup",
             temporalMode: "any",
             roleConstraint: "user",
@@ -1381,11 +1529,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -1503,11 +1651,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -1570,11 +1718,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup",
             temporalMode: "latest",
             roleConstraint: "user",
@@ -1682,11 +1830,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -1781,11 +1929,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "compare" as const,
             temporalMode: "history" as const,
             roleConstraint: "user" as const,

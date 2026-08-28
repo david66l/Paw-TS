@@ -192,13 +192,19 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
   readonly roleConstraint: string;
   readonly requirements: readonly MemoryEvidenceRequirementV3[];
   readonly supportSelectorConfigured: boolean;
+  readonly certifiedAssistantDialogueCandidate?: boolean;
 }): boolean {
+  const certifiedUserCandidate =
+    input.roleConstraint === "user" &&
+    input.certifiedAssistantDialogueCandidate === true;
   if (
-    !new Set(["assistant", "any"]).has(input.roleConstraint) ||
+    (!new Set(["assistant", "any"]).has(input.roleConstraint) &&
+      !certifiedUserCandidate) ||
     input.answerShape !== "lookup" ||
     input.temporalMode !== "any" ||
     input.requirements.length < 1 ||
     input.requirements.length > 4 ||
+    (certifiedUserCandidate && input.requirements.length !== 1) ||
     !input.supportSelectorConfigured
   ) {
     return false;

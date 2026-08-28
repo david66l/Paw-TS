@@ -4,6 +4,7 @@ import {
   PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryEvidenceQueryPlannerV3,
+  needsCertifiedAssistantDialogueCandidateV1,
   parseMemoryEvidenceQueryPlanV3,
 } from "../src/index.js";
 
@@ -175,7 +176,7 @@ describe("typed evidence query planner v3", () => {
       answerShape: "lookup",
       temporalMode: "any",
       roleConstraint: "user",
-      needsPlanning: false,
+      needsPlanning: true,
     });
     expect(
       classifyMemoryEvidenceQueryV3(
@@ -308,6 +309,33 @@ describe("typed evidence query planner v3", () => {
       "Do you recall who reviewed the draft you created?",
     ]) {
       expect(classifyMemoryEvidenceQueryV3(query).roleConstraint).toBe("any");
+    }
+  });
+
+  test("keeps unresolved assistant evidence as a certified secondary candidate", () => {
+    for (const query of [
+      "Can you remind me what the final label was?",
+      "I am trying to recall what the title on my draft was.",
+      "In our previous conversation, what did the consultant say about the plan?",
+    ]) {
+      expect(needsCertifiedAssistantDialogueCandidateV1(query)).toBe(true);
+    }
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "What amount was in the plan from our previous conversation?",
+      ),
+    ).toMatchObject({ roleConstraint: "user", needsPlanning: true });
+
+    for (const query of [
+      "Which city did I visit?",
+      "Can you remind me what I said about the itinerary?",
+      "Do you remember where I left the keys?",
+      "Can you remind me what my address is?",
+      "Can you remind me what my preference is?",
+      "Can you remind me what my job is?",
+      "What did you recommend last time?",
+    ]) {
+      expect(needsCertifiedAssistantDialogueCandidateV1(query)).toBe(false);
     }
   });
 

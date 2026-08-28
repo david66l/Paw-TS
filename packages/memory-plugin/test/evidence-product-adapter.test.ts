@@ -331,7 +331,7 @@ describe("product evidence adapter", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           throw Object.assign(new Error("planner failed"), {
             name: "PlannerFailed",
@@ -412,11 +412,11 @@ describe("product evidence adapter", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "recommend",
             temporalMode: "any",
             roleConstraint: "user",
@@ -564,11 +564,11 @@ describe("product evidence adapter", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
             answerShape: "aggregate" as const,
             temporalMode: "any" as const,
             roleConstraint: "user" as const,
