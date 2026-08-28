@@ -159,6 +159,7 @@ describe("postgres source-local assistant locator", () => {
         coverageMode: "any" as const,
         minimumEvidence: 1,
       },
+      assistantOriginPolicy: "addressed_reply_only" as const,
       lockedSourceIds: ["journal:session-1"],
       evidenceTimeUpperBound: "2026-01-02T00:00:00.000Z",
       budget: {
@@ -215,6 +216,7 @@ describe("postgres source-local assistant locator", () => {
           ...request.requirement,
           requirementId: "request-worded-differently",
           searchText: "quartz harbor protocol",
+          roleConstraint: "assistant" as const,
         },
         lockedSourceIds: ["journal:session-3"],
       },
@@ -244,12 +246,26 @@ describe("postgres source-local assistant locator", () => {
     );
     expect(nonAdjacent.hits).toEqual([]);
 
-    const sessionOpening = await locator.locate(
+    const deniedSessionOpening = await locator.locate(
       {
         ...request,
         requirement: {
           ...request.requirement,
           requirementId: "session-opening-assistant",
+          searchText: "luminous orchid token",
+        },
+        lockedSourceIds: ["journal:session-5"],
+      },
+      controller.signal,
+    );
+    expect(deniedSessionOpening.hits).toEqual([]);
+    const sessionOpening = await locator.locate(
+      {
+        ...request,
+        assistantOriginPolicy: "allow_session_opening_artifact",
+        requirement: {
+          ...request.requirement,
+          requirementId: "allowed-session-opening-assistant",
           searchText: "luminous orchid token",
         },
         lockedSourceIds: ["journal:session-5"],

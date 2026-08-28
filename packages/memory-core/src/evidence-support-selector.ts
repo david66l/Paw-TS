@@ -7,7 +7,7 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1 =
-  "paw.memory-evidence-support-selector.json.v7:certified-dialogue-authority" as const;
+  "paw.memory-evidence-support-selector.json.v8:source-local-candidate-certificate" as const;
 
 export interface MemoryEvidenceSupportSelectionInputV1 {
   readonly query: string;
@@ -18,6 +18,8 @@ export interface MemoryEvidenceSupportSelectionInputV1 {
    * This is caller-owned policy input, never model-produced authority.
    */
   readonly certifiedAssistantDialogueEvidenceRefs?: readonly string[];
+  /** Every locator-added assistant candidate, for per-candidate model context. */
+  readonly sourceLocalAssistantEvidenceRefs?: readonly string[];
 }
 
 export interface MemoryEvidenceTriageAssessmentV1 {
@@ -90,6 +92,13 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
                 ),
               }
             : {}),
+          ...(selection.sourceLocalAssistantEvidenceRefs?.length
+            ? {
+                sourceLocalAssistantEvidenceRefs: Object.freeze(
+                  [...selection.sourceLocalAssistantEvidenceRefs].sort(),
+                ),
+              }
+            : {}),
           candidateEvidenceRefs: selection.candidates.map(
             (candidate: MemoryEvidenceNotebookHitV1) => candidate.evidenceRef,
           ),
@@ -107,6 +116,9 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
   assertSelectionInput(input);
   const certifiedAssistantDialogueEvidenceRefs = new Set(
     input.certifiedAssistantDialogueEvidenceRefs ?? [],
+  );
+  const sourceLocalAssistantEvidenceRefs = new Set(
+    input.sourceLocalAssistantEvidenceRefs ?? [],
   );
   const projectionQuery = [
     input.query,
@@ -130,7 +142,7 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
       "Partition only evidence that bears on a requirement: supporting establishes it, contradicting explicitly challenges it, and unknown is relevant but leaves the required fact unresolved. Omit unrelated candidates from all three arrays.",
       "For latest-state requirements, older or differently valued observations remain supporting inputs for deterministic chronology; do not call them contradictory merely because their values differ.",
       "Assistant output is context only for user facts. It may directly support roleConstraint=assistant only when the query explicitly asks for the assistant's prior words or actions.",
-      "For roleConstraint=any, assistant output may support only a requested prior-dialogue artifact or answer whose author is unresolved, and only when source-local validation proves either an exact addressed reply or an exact session-opening assistant turn. Never use an assistant assertion as evidence of a user's fact, preference, possession, action, or experience.",
+      "For roleConstraint=any, assistant output may support only a requested prior-dialogue artifact or answer whose author is unresolved, and only when that candidate is marked sourceLocalAssistantOriginCertified=true. Never use an assistant assertion as evidence of a user's fact, preference, possession, action, shared decision, or experience.",
       ...(certifiedAssistantDialogueEvidenceRefs.size > 0
         ? [
             "For roleConstraint=user with certifiedAssistantDialogueCandidate=true, preserve user facts as the primary authority. A candidate marked certifiedAssistantDialogue=true may support only the requested prior-dialogue artifact whose author is unresolved; it must never establish a user's fact, preference, possession, action, or experience.",
@@ -166,6 +178,12 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
                 certifiedAssistantDialogueEvidenceRefs.has(
                   candidate.evidenceRef,
                 ),
+            }
+          : {}),
+        ...(sourceLocalAssistantEvidenceRefs.size > 0
+          ? {
+              sourceLocalAssistantOriginCertified:
+                sourceLocalAssistantEvidenceRefs.has(candidate.evidenceRef),
             }
           : {}),
         contextEvidenceRefs: candidate.contextEvidenceRefs,
@@ -340,6 +358,40 @@ function assertSelectionInput(
       input.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
     );
     for (const evidenceRef of certifiedRefs) {
+      const candidate = candidatesByRef.get(evidenceRef);
+      if (
+        candidate?.authority !== "context_only" ||
+        candidate.sourceKind !== "assistant_output" ||
+        !candidate.contextEvidenceRefs?.length
+      ) {
+        throw namedError("MemoryEvidenceSupportCertificateInvalid");
+      }
+    }
+  }
+  const sourceLocal = input.sourceLocalAssistantEvidenceRefs ?? [];
+  const sourceLocalRefs = new Set(sourceLocal);
+  if (sourceLocalRefs.size !== sourceLocal.length) {
+    throw namedError("MemoryEvidenceSupportCertificateInvalid");
+  }
+  if (sourceLocalRefs.size > 0) {
+    const candidatesByRef = new Map(
+      input.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
+    );
+    const roleEligible =
+      input.requirements.every(
+        (requirement) =>
+          requirement.roleConstraint === "assistant" ||
+          requirement.roleConstraint === "any",
+      ) ||
+      (input.requirements.length === 1 &&
+        input.requirements[0]?.roleConstraint === "user" &&
+        [...sourceLocalRefs].every((evidenceRef) =>
+          certifiedRefs.has(evidenceRef),
+        ));
+    if (!roleEligible) {
+      throw namedError("MemoryEvidenceSupportCertificateInvalid");
+    }
+    for (const evidenceRef of sourceLocalRefs) {
       const candidate = candidatesByRef.get(evidenceRef);
       if (
         candidate?.authority !== "context_only" ||

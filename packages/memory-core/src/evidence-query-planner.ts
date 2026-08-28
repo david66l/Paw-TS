@@ -498,6 +498,26 @@ export function needsMemoryEvidenceRoleResolutionV1(query: string): boolean {
 }
 
 /**
+ * Opens session-start assistant evidence only for an explicit assistant answer
+ * or an author-unresolved dialogue artifact. Shared decisions remain limited
+ * to addressed replies because an unsolicited proposal is not an agreement.
+ */
+export function allowsMemorySessionOpeningAssistantOriginV1(
+  query: string,
+): boolean {
+  const value = boundedQuery(query);
+  const provenance = classifyMemoryRecallProvenanceV1(value);
+  return (
+    provenance === "assistant" ||
+    provenance === "unowned" ||
+    provenance === "passive_unresolved" ||
+    (provenance === undefined &&
+      isAssistantMemoryQueryV1(value) &&
+      !isExplicitSharedDialogueQueryV1(value))
+  );
+}
+
+/**
  * Some recall questions establish that the answer lives in prior dialogue but
  * do not establish who authored it. Keep the primary user authority boundary
  * intact and open only a separately certified assistant-candidate channel.

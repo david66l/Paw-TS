@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
+  allowsMemorySessionOpeningAssistantOriginV1,
   buildMemoryEvidenceQueryPlanRequestV3,
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryEvidenceQueryPlannerV3,
@@ -109,6 +110,27 @@ describe("typed evidence query planner v3", () => {
         "any",
       );
     }
+  });
+
+  test("keeps session-opening assistant authority limited to dialogue artifacts", () => {
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "Do you remember what you recommended?",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "Do you remember what was proposed in the earlier chat?",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "What name did we come up with?",
+      ),
+    ).toBe(false);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1("Which city did I visit?"),
+    ).toBe(false);
   });
 
   test("does not let the model rewrite a fixed evidence authority", () => {

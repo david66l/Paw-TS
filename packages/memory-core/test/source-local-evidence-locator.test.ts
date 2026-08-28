@@ -8,6 +8,7 @@ import {
   hasMemorySourceLocalDialogueCertificateV1,
   isMemorySourceLocalEvidenceEligibleV1,
   memorySourceLocalEvidenceCacheKeyV1,
+  rankMemorySourceLocalAnchorCandidatesV1,
   validateMemorySourceLocalEvidenceResultV1,
 } from "../src/index.js";
 
@@ -71,6 +72,7 @@ describe("source-local evidence locator boundary", () => {
           },
         ],
         1,
+        "allow_session_opening_artifact",
       ),
     ).toBe(true);
     expect(
@@ -83,6 +85,20 @@ describe("source-local evidence locator boundary", () => {
           },
         ],
         2,
+        "allow_session_opening_artifact",
+      ),
+    ).toBe(false);
+    expect(
+      hasMemorySourceLocalAssistantOriginCertificateV1(
+        [
+          {
+            evidenceRef: "session#turn-1",
+            sourceKind: "assistant_output",
+            turnOrder: 1,
+          },
+        ],
+        1,
+        "addressed_reply_only",
       ),
     ).toBe(false);
   });
@@ -197,6 +213,28 @@ describe("source-local evidence locator boundary", () => {
     ).toBe(false);
   });
 
+  test("reserves later-source capacity after two primary-source anchors", () => {
+    const ranked = rankMemorySourceLocalAnchorCandidatesV1({
+      candidates: [
+        { evidenceRef: "s1#turn-1", sourceId: "s1", score: 9 },
+        { evidenceRef: "s1#turn-2", sourceId: "s1", score: 8 },
+        { evidenceRef: "s1#turn-3", sourceId: "s1", score: 7 },
+        { evidenceRef: "s1#turn-4", sourceId: "s1", score: 6 },
+        { evidenceRef: "s2#turn-1", sourceId: "s2", score: 5 },
+        { evidenceRef: "s3#turn-1", sourceId: "s3", score: 4 },
+      ],
+      lockedSourceIds: ["s1", "s2", "s3"],
+      maxCandidates: 4,
+      maxCandidatesPerSource: 4,
+    });
+    expect(ranked.map((candidate) => candidate.evidenceRef)).toEqual([
+      "s1#turn-1",
+      "s1#turn-2",
+      "s2#turn-1",
+      "s3#turn-1",
+    ]);
+  });
+
   test("rejects source escape, wrong-role anchors and missing trace addresses", () => {
     const locator = {
       locatorVersion: "test-locator.v1",
@@ -206,6 +244,7 @@ describe("source-local evidence locator boundary", () => {
     };
     const request = {
       requirement,
+      assistantOriginPolicy: "addressed_reply_only" as const,
       lockedSourceIds: ["session-1"],
       budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
     };
@@ -260,6 +299,7 @@ describe("source-local evidence locator boundary", () => {
     };
     const request = {
       requirement,
+      assistantOriginPolicy: "addressed_reply_only" as const,
       lockedSourceIds: ["session-1"],
       evidenceTimeUpperBound: "2026-01-02T00:00:00.000Z",
       budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
@@ -407,6 +447,7 @@ describe("source-local evidence locator boundary", () => {
       turnIndexRevision: "r1",
       request: {
         requirement,
+        assistantOriginPolicy: "addressed_reply_only" as const,
         lockedSourceIds: ["session-1"],
         evidenceTimeUpperBound: "2026-01-01T00:00:00.000Z",
         budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
@@ -437,6 +478,15 @@ describe("source-local evidence locator boundary", () => {
             ...base.request.requirement,
             searchText: "THE ANSWER YOU GAVE",
           },
+        },
+      }),
+    ).not.toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          assistantOriginPolicy: "allow_session_opening_artifact",
         },
       }),
     ).not.toBe(first);

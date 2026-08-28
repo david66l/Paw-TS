@@ -15,6 +15,7 @@ import {
   type MemorySourceLocalHydratedEvidenceV1,
   hasMemorySourceLocalAssistantOriginCertificateV1,
   memorySourceLocalEvidenceCacheKeyV1,
+  rankMemorySourceLocalAnchorCandidatesV1,
 } from "./source-local-evidence-locator.js";
 
 export type MemoryRawEvidenceSourceKindV1 =
@@ -110,10 +111,10 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
   const locatorVersion =
-    "paw.memory-postgres-source-local-locator.v4:source-priority-assistant-origin";
+    "paw.memory-postgres-source-local-locator.v5:bounded-source-priority-origin";
   const hydratorVersion = "paw.memory-postgres-source-local-hydrator.v1";
   const rankerVersion =
-    "paw.memory-source-local-ranker.v4:source-priority-term-coverage-then-lexical-idf";
+    "paw.memory-source-local-ranker.v5:shared-bounded-anchor-allocation";
   const resultCache = new Map<string, MemorySourceLocalEvidenceResultV1>();
   return Object.freeze({
     scope,
@@ -509,10 +510,17 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         )
         .slice(0, 8);
       const includeRequestMatches =
-        request.requirement.roleConstraint === "any";
+        request.requirement.roleConstraint !== "user";
+      const searchedRoleCount = includeRequestMatches ? 2 : 1;
       const perSourceCandidateLimit = Math.min(
         8,
-        request.budget.maxCandidatesPerChannel,
+        Math.max(
+          1,
+          Math.floor(
+            request.budget.maxCandidatesPerChannel /
+              (lockedSourceIds.length * searchedRoleCount),
+          ),
+        ),
       );
       const rows =
         lexicalTerms.length === 0
@@ -599,13 +607,12 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         queryTerms,
         candidates.map((candidate) => candidate.terms),
       );
-      const sourcePriority = new Map(
-        lockedSourceIds.map((sourceId, index) => [sourceId, index]),
-      );
-      const rankedCandidates = candidates
+      const scoredCandidates = candidates
         .map((candidate) => ({
           row: candidate.row,
           requestDerived: candidate.requestDerived,
+          evidenceRef: String(candidate.row.evidence_ref),
+          sourceId: evidenceRefFamily(String(candidate.row.evidence_ref)),
           score: conversationRelevanceScore({
             query: searchableText(normalized),
             queryTerms,
@@ -615,25 +622,15 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
             documentCount: candidates.length,
           }),
         }))
-        .filter((candidate) => candidate.score > 0)
-        .sort(
-          (left, right) =>
-            (sourcePriority.get(evidenceRefFamily(left.row.evidence_ref)) ??
-              Number.MAX_SAFE_INTEGER) -
-              (sourcePriority.get(evidenceRefFamily(right.row.evidence_ref)) ??
-                Number.MAX_SAFE_INTEGER) ||
-            right.score - left.score ||
-            Number(left.row.source_seq) - Number(right.row.source_seq) ||
-            String(left.row.evidence_ref).localeCompare(
-              String(right.row.evidence_ref),
-            ),
-        );
-      const seenAnchors = new Set<string>();
-      const ranked = rankedCandidates.filter((candidate) => {
-        const evidenceRef = String(candidate.row.evidence_ref);
-        if (seenAnchors.has(evidenceRef)) return false;
-        seenAnchors.add(evidenceRef);
-        return true;
+        .filter((candidate) => candidate.score > 0);
+      const ranked = rankMemorySourceLocalAnchorCandidatesV1({
+        candidates: scoredCandidates,
+        lockedSourceIds,
+        maxCandidates: request.budget.maxCandidatesPerChannel,
+        maxCandidatesPerSource: Math.max(
+          2,
+          perSourceCandidateLimit * searchedRoleCount,
+        ),
       });
       const perSource = new Map<string, number>();
       const hits = [];
@@ -685,6 +682,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           !hasMemorySourceLocalAssistantOriginCertificateV1(
             bundle.includedEvidence,
             sourceSeq,
+            request.assistantOriginPolicy,
           )
         ) {
           continue;

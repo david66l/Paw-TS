@@ -145,20 +145,45 @@ describe("requirement-bound evidence support selector v1", () => {
       requirements: [requirements[0]!],
       candidates: [assistant],
       certifiedAssistantDialogueEvidenceRefs: [assistant.evidenceRef],
+      sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
     });
     const payload = JSON.parse(request.user) as {
       requirements: Array<{
         certifiedAssistantDialogueCandidate: boolean;
       }>;
-      candidates: Array<{ certifiedAssistantDialogue: boolean }>;
+      candidates: Array<{
+        certifiedAssistantDialogue: boolean;
+        sourceLocalAssistantOriginCertified: boolean;
+      }>;
     };
     expect(payload.requirements[0]?.certifiedAssistantDialogueCandidate).toBe(
       true,
     );
     expect(payload.candidates[0]?.certifiedAssistantDialogue).toBe(true);
+    expect(payload.candidates[0]?.sourceLocalAssistantOriginCertified).toBe(
+      true,
+    );
     expect(request.system).toContain(
       "roleConstraint=user with certifiedAssistantDialogueCandidate=true",
     );
+
+    const unresolved = buildMemoryEvidenceSupportSelectionRequestV1({
+      query: "What was proposed in the earlier chat?",
+      requirements: [
+        {
+          ...requirements[0]!,
+          roleConstraint: "any",
+        },
+      ],
+      candidates: [assistant],
+      sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
+    });
+    const unresolvedPayload = JSON.parse(unresolved.user) as {
+      candidates: Array<{ sourceLocalAssistantOriginCertified: boolean }>;
+    };
+    expect(
+      unresolvedPayload.candidates[0]?.sourceLocalAssistantOriginCertified,
+    ).toBe(true);
 
     expect(() =>
       buildMemoryEvidenceSupportSelectionRequestV1({

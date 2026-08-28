@@ -20,6 +20,7 @@ import {
   type MemoryEvidenceQueryIntentV3,
   type MemoryEvidenceQueryPlannerV3,
   type MemoryEvidenceRequirementV3,
+  allowsMemorySessionOpeningAssistantOriginV1,
   classifyMemoryEvidenceQueryV3,
   needsCertifiedAssistantDialogueCandidateV1,
 } from "./evidence-query-planner.js";
@@ -43,7 +44,7 @@ import {
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v15:adapter-owned-source-address" as const;
+  "paw.memory-evidence-resolver.v16:typed-assistant-origin-policy" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -555,6 +556,11 @@ async function resolveEvidencePass(input: {
               : requirement;
           const request = Object.freeze({
             requirement: locatorRequirement,
+            assistantOriginPolicy: allowsMemorySessionOpeningAssistantOriginV1(
+              input.query,
+            )
+              ? ("allow_session_opening_artifact" as const)
+              : ("addressed_reply_only" as const),
             lockedSourceIds: Object.freeze([...sourceLocalLockedIds]),
             ...(input.evidenceTimeUpperBound === undefined
               ? {}
@@ -700,6 +706,13 @@ async function resolveEvidencePass(input: {
             localEvidenceRefs.size > 0
               ? {
                   certifiedAssistantDialogueEvidenceRefs: Object.freeze([
+                    ...localEvidenceRefs,
+                  ]),
+                }
+              : {}),
+            ...(localEvidenceRefs.size > 0
+              ? {
+                  sourceLocalAssistantEvidenceRefs: Object.freeze([
                     ...localEvidenceRefs,
                   ]),
                 }

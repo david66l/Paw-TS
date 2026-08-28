@@ -87,6 +87,7 @@ import {
   projectMemoryTopicToolStatesV1,
   projectSourceGroundedMemoryScenesV1,
   projectSourceGroundedPersonaV1,
+  rankMemorySourceLocalAnchorCandidatesV1,
   reciprocalRankFusionV1,
   reconcileMemoryAtomsV1,
   resolveMemoryTopicIdV1,
@@ -2717,7 +2718,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const turnIndexRevision = await engine.retrievalRevisionToken();
       const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
         locatorVersion:
-          "paw.amb-source-local-locator.v5:source-priority-assistant-origin",
+          "paw.amb-source-local-locator.v6:bounded-source-priority-origin",
         scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
         turnIndexRevision,
         embeddingIdentity: sourceSpanEmbedding
@@ -2727,7 +2728,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         adjacencyPolicyVersion:
           PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
         rankerVersion:
-          "paw.amb-source-local-ranker.v2:source-priority-role-interleave-rrf",
+          "paw.memory-source-local-ranker.v5:shared-bounded-anchor-allocation",
       });
       const cached = sourceLocalLocatorCache.get(cacheKey);
       if (cached) {
@@ -2762,6 +2763,19 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         });
         return replay;
       }
+      const includeRequestMatches =
+        request.requirement.roleConstraint !== "user";
+      const searchedRoleCount = includeRequestMatches ? 2 : 1;
+      const perSourceCandidateLimit = Math.min(
+        8,
+        Math.max(
+          1,
+          Math.floor(
+            request.budget.maxCandidatesPerChannel /
+              (request.lockedSourceIds.length * searchedRoleCount),
+          ),
+        ),
+      );
       async function searchRoleWithinSources(
         issueType: "assistant_output" | "user_input",
         enabled = true,
@@ -2771,14 +2785,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             sources: [],
             lexicalCandidateCount: 0,
             denseCandidateCount: 0,
-            lexicalFailed: false,
-            denseFailed: false,
+            lexicalFailureCount: 0,
+            denseFailureCount: 0,
+            unavailable: false,
           };
         }
-        const perSourceLimit = Math.min(
-          8,
-          request.budget.maxCandidatesPerChannel,
-        );
         const sources = await Promise.all(
           request.lockedSourceIds.map(async (documentId) => {
             const filter = {
@@ -2792,7 +2803,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
               engine
                 .searchText(
                   locatorQuery,
-                  perSourceLimit,
+                  perSourceCandidateLimit,
                   sourceScopeFor(userId).repositoryId,
                   filter,
                 )
@@ -2802,7 +2813,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
                 ? engine
                     .searchVector(
                       locatorQuery,
-                      perSourceLimit,
+                      perSourceCandidateLimit,
                       sourceScopeFor(userId).repositoryId,
                       filter,
                     )
@@ -2823,7 +2834,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             ]);
             return {
               documentId,
-              rankedIds: ranked.map((item) => item.id),
+              rankedCandidates: ranked.map((item) => ({
+                id: item.id,
+                score: item.score,
+              })),
               lexicalCandidateCount: lexical.hits.length,
               denseCandidateCount: dense.hits.length,
               lexicalFailed: lexical.failed,
@@ -2841,36 +2855,36 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             (total, source) => total + source.denseCandidateCount,
             0,
           ),
-          lexicalFailed: sources.some((source) => source.lexicalFailed),
-          denseFailed: sources.some((source) => source.denseFailed),
+          lexicalFailureCount: sources.filter((source) => source.lexicalFailed)
+            .length,
+          denseFailureCount: sources.filter((source) => source.denseFailed)
+            .length,
+          unavailable: sources.some(
+            (source) =>
+              source.lexicalFailed &&
+              (sourceSpanEmbedding === undefined || source.denseFailed),
+          ),
         };
       }
-      const includeRequestMatches =
-        request.requirement.roleConstraint === "any";
       const [assistantSearch, requestSearch] = await Promise.all([
         searchRoleWithinSources("assistant_output"),
         searchRoleWithinSources("user_input", includeRequestMatches),
       ]);
-      const assistantBySource = new Map(
-        assistantSearch.sources.map((source) => [source.documentId, source]),
-      );
-      const requestBySource = new Map(
-        requestSearch.sources.map((source) => [source.documentId, source]),
-      );
-      const rankedIds: string[] = [];
-      const seenRankedIds = new Set<string>();
-      for (const documentId of request.lockedSourceIds) {
-        const assistantIds = assistantBySource.get(documentId)?.rankedIds ?? [];
-        const requestIds = requestBySource.get(documentId)?.rankedIds ?? [];
-        const sourceDepth = Math.max(assistantIds.length, requestIds.length);
-        for (let index = 0; index < sourceDepth; index += 1) {
-          for (const id of [assistantIds[index], requestIds[index]]) {
-            if (!id || seenRankedIds.has(id)) continue;
-            seenRankedIds.add(id);
-            rankedIds.push(id);
-          }
-        }
-      }
+      const matchedCandidates = [
+        ...assistantSearch.sources.flatMap((source) =>
+          source.rankedCandidates.map((candidate) => ({
+            ...candidate,
+            issueType: "assistant_output" as const,
+          })),
+        ),
+        ...requestSearch.sources.flatMap((source) =>
+          source.rankedCandidates.map((candidate) => ({
+            ...candidate,
+            issueType: "user_input" as const,
+          })),
+        ),
+      ];
+      const rankedIds = [...new Set(matchedCandidates.map(({ id }) => id))];
       const loadedEntries = engine.getMany
         ? await engine.getMany(rankedIds)
         : (await Promise.all(rankedIds.map((id) => engine.get(id)))).filter(
@@ -2879,14 +2893,12 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const entryById = new Map(
         loadedEntries.map((entry) => [entry.id, entry]),
       );
-      const entries = rankedIds.flatMap((id) => {
-        const entry = entryById.get(id);
-        return entry ? [entry] : [];
-      });
       const anchors = (
         await Promise.all(
-          entries.map(async (entry) => {
+          matchedCandidates.map(async (candidate) => {
+            const entry = entryById.get(candidate.id);
             if (
+              !entry ||
               entry.kind !== "episodic" ||
               (entry.issueType !== "assistant_output" &&
                 entry.issueType !== "user_input") ||
@@ -2905,6 +2917,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             if (entry.issueType === "assistant_output") {
               return {
                 ...matched,
+                evidenceRef: matched.evidenceRef,
+                sourceId: matched.documentId,
+                score: candidate.score,
                 matchedEvidenceRef: matched.evidenceRef,
                 requestDerived: false,
               };
@@ -2928,6 +2943,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             }
             return {
               ...replyAddress,
+              evidenceRef: replyAddress.evidenceRef,
+              sourceId: replyAddress.documentId,
+              score: candidate.score,
               matchedEvidenceRef: matched.evidenceRef,
               requestDerived: true,
             };
@@ -2936,11 +2954,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ).filter((anchor): anchor is NonNullable<typeof anchor> =>
         Boolean(anchor),
       );
-      const seenAnchorRefs = new Set<string>();
-      const uniqueAnchors = anchors.filter((anchor) => {
-        if (seenAnchorRefs.has(anchor.evidenceRef)) return false;
-        seenAnchorRefs.add(anchor.evidenceRef);
-        return true;
+      const uniqueAnchors = rankMemorySourceLocalAnchorCandidatesV1({
+        candidates: anchors,
+        lockedSourceIds: request.lockedSourceIds,
+        maxCandidates: request.budget.maxCandidatesPerChannel,
+        maxCandidatesPerSource: Math.max(
+          2,
+          perSourceCandidateLimit * searchedRoleCount,
+        ),
       });
       const perSource = new Map<string, number>();
       const hits = [];
@@ -3003,6 +3024,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           !hasMemorySourceLocalAssistantOriginCertificateV1(
             bundle.includedEvidence,
             anchor.sourceSeq,
+            request.assistantOriginPolicy,
           )
         ) {
           uncertifiedAnchorCount += 1;
@@ -3041,16 +3063,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         renderedChars += bundle.text.length;
       }
       const degradedChannels = Object.freeze([
-        ...(assistantSearch.lexicalFailed || requestSearch.lexicalFailed
+        ...(assistantSearch.unavailable || requestSearch.unavailable
           ? (["lexical"] as const)
-          : []),
-        ...(assistantSearch.denseFailed || requestSearch.denseFailed
-          ? (["dense"] as const)
           : []),
       ]);
       const result = Object.freeze({
         locatorVersion:
-          "paw.amb-source-local-locator.v5:source-priority-assistant-origin",
+          "paw.amb-source-local-locator.v6:bounded-source-priority-origin",
         locatorRevision: sha(
           JSON.stringify({
             turnIndexRevision,
@@ -3098,6 +3117,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         denseCandidateCount:
           assistantSearch.denseCandidateCount +
           requestSearch.denseCandidateCount,
+        lexicalFailureCount:
+          assistantSearch.lexicalFailureCount +
+          requestSearch.lexicalFailureCount,
+        denseFailureCount:
+          assistantSearch.denseFailureCount + requestSearch.denseFailureCount,
         anchorCount: hits.length,
         requestDerivedAnchorCount,
         requestMatchedEvidenceRefHashes: contentFreeHashes(
@@ -3144,7 +3168,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ? {
             sourceLocalLocator: Object.freeze({
               locatorVersion:
-                "paw.amb-source-local-locator.v5:source-priority-assistant-origin",
+                "paw.amb-source-local-locator.v6:bounded-source-priority-origin",
               locate(request: MemorySourceLocalEvidenceRequestV1) {
                 return locateEvidenceWithinSources(request);
               },
