@@ -2750,6 +2750,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           sourceSetDigest: sha([...allowed].sort().join("\n")),
           lockedSourceCount: allowed.size,
           roleConstraint: request.requirement.roleConstraint,
+          assistantOriginPolicy: request.assistantOriginPolicy,
           lockedSourceHashes: contentFreeHashes(allowed),
           anchorCount: replay.hits.length,
           anchorSourceHashes: contentFreeHashes(
@@ -3110,6 +3111,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         sourceSetDigest: sha([...allowed].sort().join("\n")),
         lockedSourceCount: allowed.size,
         roleConstraint: request.requirement.roleConstraint,
+        assistantOriginPolicy: request.assistantOriginPolicy,
         lockedSourceHashes: contentFreeHashes(allowed),
         lexicalCandidateCount:
           assistantSearch.lexicalCandidateCount +
@@ -3133,6 +3135,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           uniqueAnchors
             .filter((anchor) => anchor.requestDerived)
             .map((anchor) => anchor.evidenceRef),
+        ),
+        rankedAnchorEvidenceRefHashes: contentFreeHashes(
+          uniqueAnchors.map((anchor) => anchor.evidenceRef),
         ),
         anchorSourceHashes: contentFreeHashes(hits.map((hit) => hit.sourceId)),
         anchorEvidenceRefHashes: contentFreeHashes(
