@@ -1193,8 +1193,12 @@ def main() -> None:
     parser.add_argument("--store-key", default="paw-longmemeval-retrieval-v1")
     parser.add_argument(
         "--seed",
-        required=True,
         help="High-entropy secret selection seed; never publish before split retirement.",
+    )
+    parser.add_argument(
+        "--seed-file",
+        type=Path,
+        help="Read the selection seed from a private file so it is absent from process listings.",
     )
     parser.add_argument("--per-type", type=int, default=2)
     parser.add_argument(
@@ -1263,6 +1267,12 @@ def main() -> None:
         default=True,
     )
     args = parser.parse_args()
+    if (args.seed is None) == (args.seed_file is None):
+        raise ValueError("provide exactly one of --seed or --seed-file")
+    if args.seed_file is not None:
+        args.seed = args.seed_file.read_text(encoding="utf-8").strip()
+    if not args.seed or len(args.seed) < 32:
+        raise ValueError("selection seed must contain at least 32 characters")
     if (args.blind_plan is None) != (args.blind_arm is None):
         raise ValueError("--blind-plan and --blind-arm must be supplied together")
     if args.dry_run and args.blind_plan is not None:
