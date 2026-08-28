@@ -125,9 +125,91 @@ describe("typed evidence query planner v3", () => {
     ).toBe(true);
     expect(
       allowsMemorySessionOpeningAssistantOriginV1(
+        "What was the recommendation in our previous conversation?",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "之前对话里的建议是什么？",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "What was your response to our message in the previous conversation?",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "What did you say about my recommendation?",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "Which points did you add to our draft?",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "Do you remember what was recommended by you?",
+      ),
+    ).toBe(true);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
         "What name did we come up with?",
       ),
     ).toBe(false);
+    expect(
+      allowsMemorySessionOpeningAssistantOriginV1(
+        "Which option did we decide on in our previous conversation?",
+      ),
+    ).toBe(false);
+    for (const sharedOutcome of [
+      "What decision did we reach in our previous conversation?",
+      "What was our agreed plan in the previous conversation?",
+      "Which option was chosen in our previous conversation?",
+      "Do you remember what was agreed?",
+      "Do you remember which option was finally decided on?",
+      "Do you remember which plan was selected last time?",
+      "Do you remember what was confirmed?",
+      "Do you remember which option was picked?",
+      "Do you remember what was approved?",
+      "Do you remember what resolution was reached?",
+      "Do you remember what Alex recommended?",
+      "Do you remember what my doctor suggested?",
+      "Do you remember what the team proposed?",
+      "Do you remember what was recommended by Alex?",
+      "Do you remember what was suggested by my doctor?",
+      "Do you remember what was recommended by me?",
+      "Do you remember what was recommended by us?",
+      "What was Alex's recommendation in the previous conversation?",
+      "What was my doctor's suggestion in the previous conversation?",
+      "What was the recommendation by Alex in our previous conversation?",
+      "What was the recommendation by me in our previous conversation?",
+      "What was the recommendation by us in our previous conversation?",
+      "What was the recommendation from Alex in our previous conversation?",
+      "Which suggestion came from my doctor in the previous conversation?",
+      "What was the recommendation according to Alex in our previous conversation?",
+      "What was our recommendation in the previous conversation?",
+      "What was our response to your message in the previous conversation?",
+      "我们上次聊天最终选择了哪个方案？",
+      "我们之前对话里达成的方案是什么？",
+      "你还记得上次最后选定的是哪个方案吗？",
+      "你记得之前同意的是什么吗？",
+      "你还记得最后确认的是哪个方案吗？",
+      "你还记得最后通过的是哪个方案吗？",
+      "你还记得医生建议了什么吗？",
+      "你还记得小王推荐了什么吗？",
+      "医生的建议是什么？",
+      "小王的推荐是什么？",
+      "之前对话里小王的建议是什么？",
+      "之前对话里的建议是小王的吗？",
+      "之前对话中来自小王的建议是什么？",
+      "我们的建议是什么？",
+    ]) {
+      expect(allowsMemorySessionOpeningAssistantOriginV1(sharedOutcome)).toBe(
+        false,
+      );
+    }
     expect(
       allowsMemorySessionOpeningAssistantOriginV1("Which city did I visit?"),
     ).toBe(false);
