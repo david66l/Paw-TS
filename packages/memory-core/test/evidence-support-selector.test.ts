@@ -101,7 +101,7 @@ describe("requirement-bound evidence support selector v1", () => {
   });
 
   test("passes typed inference closure to the bounded selector", () => {
-    const request = buildMemoryEvidenceSupportSelectionRequestV1({
+    const input = {
       query: "What kind of exercise do I seem to prefer?",
       requirements: [
         {
@@ -112,12 +112,14 @@ describe("requirement-bound evidence support selector v1", () => {
         },
       ],
       candidates,
-    });
+    } as const;
+    const request = buildMemoryEvidenceSupportSelectionRequestV1(input);
     const payload = JSON.parse(request.user) as {
       requirements: Array<{
         relation: string;
         coverageMode: string;
         minimumEvidence: number;
+        evidenceUse?: string;
       }>;
     };
 
@@ -126,6 +128,13 @@ describe("requirement-bound evidence support selector v1", () => {
       coverageMode: "convergent",
       minimumEvidence: 2,
     });
+    expect(payload.requirements[0]).not.toHaveProperty("evidenceUse");
+    expect(
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        ...input,
+        requirements: [{ ...input.requirements[0], evidenceUse: "fact" }],
+      }),
+    ).toEqual(request);
     expect(request.system).toContain("relation=inferred");
     expect(request.system).toContain("distinct observations");
   });

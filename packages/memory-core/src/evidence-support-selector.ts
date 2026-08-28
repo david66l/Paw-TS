@@ -181,7 +181,9 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
           requirement.coverageMode ??
           (requirement.temporalMode === "latest" ? "latest" : "any"),
         minimumEvidence: requirement.minimumEvidence ?? 1,
-        evidenceUse: requirement.evidenceUse ?? "fact",
+        ...(requirement.evidenceUse === "reported_assistant_assertion"
+          ? { evidenceUse: requirement.evidenceUse }
+          : {}),
         ...(certifiedAssistantDialogueEvidenceRefs.size > 0
           ? { certifiedAssistantDialogueCandidate: true }
           : {}),
