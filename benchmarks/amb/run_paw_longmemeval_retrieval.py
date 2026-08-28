@@ -780,6 +780,21 @@ def summarize_answers(rows: list[dict]) -> dict | None:
     }
 
 
+def summarize_answer_reviews(rows: list[dict]) -> dict:
+    attempted = [row for row in rows if row.get("answerReviewAttempted") is True]
+    return {
+        "enabled": any("answerReviewAttempted" in row for row in rows),
+        "attempted": len(attempted),
+        "changed": sum(row.get("answerReviewChanged") is True for row in attempted),
+        "highConfidence": sum(
+            row.get("answerReviewConfidence") == "high" for row in attempted
+        ),
+        "reviseDecisions": sum(
+            row.get("answerReviewDecision") == "revise" for row in attempted
+        ),
+    }
+
+
 def run(args: argparse.Namespace) -> dict:
     from memory_bench.dataset import get_dataset
     from paw_provider import PawMemoryProvider
@@ -933,6 +948,7 @@ def run(args: argparse.Namespace) -> dict:
         "retrievalProfile": RETRIEVAL_PROFILE,
         "evaluationMode": "static-initial-evidence-packet",
         "answerProtocol": args.answer_protocol,
+        "answerReview": args.answer_review,
         "partialRecoveryExecuted": False,
         "eventIdentityMode": "episode-fallback",
         "eventKeyCoverageRate": 0.0,
@@ -1141,6 +1157,24 @@ def run(args: argparse.Namespace) -> dict:
                     task_type="open",
                     meta={**query.meta, "_prompt_fn": prompt_fn},
                 )
+                answer_review = None
+                if args.answer_review:
+                    from evidence_answer_review import review_evidence_answer
+
+                    answer_review = review_evidence_answer(
+                        answer_llm,
+                        question=query.query,
+                        question_date=query.meta.get("query_timestamp"),
+                        context=context,
+                        candidate_answer=answer.answer,
+                    )
+                    answer = answer.__class__(
+                        answer=answer_review.answer,
+                        reasoning=answer.reasoning,
+                        context=answer.context,
+                        retrieve_time_ms=answer.retrieve_time_ms,
+                        raw_response=answer.raw_response,
+                    )
                 prompt = dataset.get_judge_prompt_fn(
                     query.meta["question_type"], query.meta
                 )
@@ -1155,6 +1189,18 @@ def run(args: argparse.Namespace) -> dict:
                         "answerCorrect": judgment.correct,
                         "answerHash": sha(answer.answer),
                         "answerChars": len(answer.answer),
+                        "answerReviewAttempted": (
+                            answer_review.attempted if answer_review else False
+                        ),
+                        "answerReviewChanged": (
+                            answer_review.changed if answer_review else False
+                        ),
+                        "answerReviewDecision": (
+                            answer_review.decision if answer_review else "disabled"
+                        ),
+                        "answerReviewConfidence": (
+                            answer_review.confidence if answer_review else "none"
+                        ),
                         "judgeReasonHash": sha(judgment.reason),
                     }
                 )
@@ -1173,6 +1219,7 @@ def run(args: argparse.Namespace) -> dict:
         "ingestionMs": round(ingestion_ms, 1),
         "metrics": summarize(rows),
         "answerMetrics": summarize_answers(rows),
+        "answerReviewMetrics": summarize_answer_reviews(rows),
         "providerStats": stats,
         "answerLlmStats": answer_llm.stats() if answer_llm is not None else None,
         "judgeLlmStats": judge_llm.stats() if judge_llm is not None else None,
@@ -1216,6 +1263,7 @@ def main() -> None:
     parser.add_argument("--reuse-index", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--answer", action="store_true")
+    parser.add_argument("--answer-review", action="store_true")
     parser.add_argument(
         "--answer-protocol",
         choices=("upstream", "evidence_policy"),
