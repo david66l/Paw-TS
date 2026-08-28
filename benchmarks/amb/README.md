@@ -1,5 +1,12 @@
 # Paw on Agent Memory Benchmark (AMB)
 
+The current immutable project baseline is documented in
+[LONGMEMEVAL_DEV120_BASELINE.md](./LONGMEMEVAL_DEV120_BASELINE.md): 101/120
+(84.17%) on a persona-disjoint LongMemEval-S development split at clean tag
+`memory-longmemeval-dev120-84.17-baseline`. It includes the content-free error
+profile, architectural gaps, and promotion gates. This is a Paw engineering
+baseline, not an official public leaderboard result.
+
 The current evidence-first LongMemEval release-gate result and its limitations
 are recorded in [LONGMEMEVAL_RELEASE_REPORT.md](./LONGMEMEVAL_RELEASE_REPORT.md).
 The retained local paired blind run scored 95/120 (79.2%) versus 80/120 (66.7%)

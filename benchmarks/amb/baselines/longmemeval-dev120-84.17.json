@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "paw.longmemeval-project-baseline.v1",
+  "status": "official-project-baseline-not-public-leaderboard",
+  "name": "paw-memory-longmemeval-dev120-84.17",
+  "git": {
+    "tag": "memory-longmemeval-dev120-84.17-baseline",
+    "commit": "a7ad6b5168544a27d16ce9a679273cf04a457668",
+    "dirty": false
+  },
+  "artifacts": {
+    "publicResultSha256": "a6ade080464c62909fe74cfed350a82e9f3ced6c4e8af7b7a220ce0ad1ad732e",
+    "sealedLedgerPublicBindingSha256": "8dfa60d3098d36e098a77bc3f88d8dc2ef592a083fddaaa024b9e96098b19d6e",
+    "sourceArtifactSha256": "e7a8a4637a63b3f718d106ed5486566b4d8f95c678d18bac3ec2d1d769c48a96",
+    "retrievalSourceArtifactSha256": "9edf8cef38b2130d2c5859b4682e8717d2d7fe0609d1978d951aaa66eb2f33d7",
+    "datasetArtifactSha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442"
+  },
+  "protocol": {
+    "claimLevel": "development",
+    "queryCount": 120,
+    "isolatedUserCount": 120,
+    "queriesPerQuestionType": 20,
+    "k": 8,
+    "answerProtocol": "upstream",
+    "answerTools": true,
+    "answerReview": false,
+    "errorAudit": true,
+    "prebuiltIndexPolicy": "complete-id-and-embedding-coverage-v2"
+  },
+  "answer": {
+    "correct": 101,
+    "queries": 120,
+    "accuracy": 0.8416666666666667,
+    "byQuestionType": {
+      "single-session-user": 1.0,
+      "single-session-assistant": 0.75,
+      "multi-session": 0.7,
+      "temporal-reasoning": 0.7,
+      "knowledge-update": 1.0,
+      "single-session-preference": 0.9
+    }
+  },
+  "retrieval": {
+    "answerableQueries": 114,
+    "goldSourceHitRate": 0.9736842105263158,
+    "macroGoldSourceRecall": 0.9410818713450292,
+    "meanReciprocalRank": 0.8772765246449458,
+    "evidenceClosureRate": 0.725,
+    "incorrectDespiteEvidenceClosure": 10,
+    "averageRetrieveMs": 1635.8383333333334,
+    "averageContextTokens": 1458.8916666666667
+  },
+  "memoryCost": {
+    "remoteCalls": 196,
+    "responseCacheHits": 52,
+    "remoteCallsPerQuery": 1.6333333333333333,
+    "responseCacheHitRate": 0.20967741935483872,
+    "workloadTokens": 634045,
+    "workloadTokensPerQuery": 5283.708333333333,
+    "providerPromptCacheHitTokens": 78080,
+    "providerPromptCacheMissTokens": 408082
+  },
+  "contentFreeErrorProfile": {
+    "incorrect": 19,
+    "answerableIncorrect": 17,
+    "unanswerableIncorrect": 2,
+    "retrievalStage": 10,
+    "evidenceSelectionStage": 2,
+    "answerSynthesisStage": 4,
+    "evaluationStage": 3,
+    "allGoldDocumentsRecalled": 10,
+    "partialGoldDocumentsRecalled": 4,
+    "noGoldDocumentRecalled": 3,
+    "incorrectMarkedEvidenceClosed": 10,
+    "missingRelevantEvidence": 13
+  }
+}
