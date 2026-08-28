@@ -459,6 +459,16 @@ function sha(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function contentFreeSourceHashes(
+  sourceIds: Iterable<string>,
+): readonly string[] {
+  return Object.freeze(
+    [...new Set(sourceIds)]
+      .sort()
+      .map((sourceId) => sha(sourceId).slice(0, 20)),
+  );
+}
+
 function createAmbMemoryWriterModel(
   purpose: AmbMemoryLlmPurposeV1 = "memory-write",
 ): MemoryWriterModelV1 {
@@ -2704,7 +2714,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           ),
           sourceSetDigest: sha([...allowed].sort().join("\n")),
           lockedSourceCount: allowed.size,
+          lockedSourceHashes: contentFreeSourceHashes(allowed),
           anchorCount: replay.hits.length,
+          anchorSourceHashes: contentFreeSourceHashes(
+            replay.hits.map((hit) => hit.sourceId),
+          ),
           cacheHit: true,
           durationMs: replay.telemetry.durationMs,
         });
@@ -2918,9 +2932,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         requirementIdHash: sha(request.requirement.requirementId).slice(0, 20),
         sourceSetDigest: sha([...allowed].sort().join("\n")),
         lockedSourceCount: allowed.size,
+        lockedSourceHashes: contentFreeSourceHashes(allowed),
         lexicalCandidateCount: lexical.hits.length,
         denseCandidateCount: dense.hits.length,
         anchorCount: hits.length,
+        anchorSourceHashes: contentFreeSourceHashes(
+          hits.map((hit) => hit.sourceId),
+        ),
         includedTurnCount: result.telemetry.includedTurnCount,
         uncertifiedAnchorCount,
         renderedChars,
