@@ -10,7 +10,6 @@ import {
   buildMemoryEvidenceNotebookV1,
   memoryEvidenceOrdinalAnchorScoreV1,
   memoryEvidenceSupportScoreV1,
-  projectMemoryEvidenceExcerptV1,
   rankMemoryEvidenceCandidatesV2,
 } from "./evidence-first.js";
 import {
@@ -25,7 +24,7 @@ import type {
 } from "./evidence-support-selector.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v5:planned-discovery-source-lock" as const;
+  "paw.memory-evidence-resolver.v6:direct-certificate-authority" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -303,6 +302,10 @@ export function createMemoryEvidenceResolverV1(input: {
                 intent.temporalMode !== "latest" ||
                 notebook.coverage.some((item) => item.status !== "covered") ||
                 nonSupportingRefs.size > 0,
+              fallbackAnswerRole:
+                directCertificateStatus === "deterministic_direct"
+                  ? "supporting"
+                  : "candidate",
               maxFallbackChars: maxNotebookChars,
             })
           : buildPrimaryEvidencePacketSources(
@@ -445,7 +448,6 @@ function buildPrimaryEvidencePacketSources(
   excludedEvidenceRefs: ReadonlySet<string> = new Set(),
   answerRole: "supporting" | "candidate" = "supporting",
   query = "",
-  fairShare = false,
 ): readonly Readonly<{
   sourceId: string;
   text: string;
@@ -459,18 +461,7 @@ function buildPrimaryEvidencePacketSources(
     answerRole: "supporting" | "candidate";
   }> = [];
   let chars = 0;
-  const eligibleSourceIds = selectedSourceIds.filter((sourceId) =>
-    hits.some(
-      (hit) =>
-        hit.sourceId === sourceId &&
-        !excludedEvidenceRefs.has(hit.evidenceRef) &&
-        (hit.authority !== "context_only" || allowContextOnly),
-    ),
-  );
-  const fairSourceBudget = fairShare
-    ? Math.floor(maxChars / Math.max(1, eligibleSourceIds.length))
-    : maxChars;
-  for (const sourceId of eligibleSourceIds) {
+  for (const sourceId of selectedSourceIds) {
     const selected = hits
       .filter(
         (hit) =>
@@ -489,32 +480,11 @@ function buildPrimaryEvidencePacketSources(
       )
       .slice(0, maxHitsPerSource);
     if (selected.length === 0) continue;
-    const fixedParts = selected.map(
-      ({ hit }) =>
-        `[authority=${hit.authority}; observed=${hit.observedAt ?? "unknown"}; evidence=${hit.evidenceRef}]`,
-    );
-    const fixedChars =
-      "[Primary exact memory evidence]".length +
-      fixedParts.reduce((total, part) => total + part.length, 0) +
-      selected.length * 3 +
-      Math.max(0, selected.length - 1) * 2;
-    const contentBudget = Math.max(
-      128,
-      Math.floor((fairSourceBudget - fixedChars) / selected.length),
-    );
     const text = [
       "[Primary exact memory evidence]",
       ...selected.map(
-        ({ hit }, index) =>
-          `${fixedParts[index]}\n${
-            fairShare
-              ? projectMemoryEvidenceExcerptV1(
-                  hit.content,
-                  query,
-                  Math.min(16_384, contentBudget),
-                )
-              : hit.content
-          }`,
+        ({ hit }) =>
+          `[authority=${hit.authority}; observed=${hit.observedAt ?? "unknown"}; evidence=${hit.evidenceRef}]\n${hit.content}`,
       ),
     ].join("\n\n");
     if (chars + text.length > maxChars) continue;
@@ -536,6 +506,7 @@ function buildPlannedEvidencePacketSources(input: {
   readonly selectedSourceIds: readonly string[];
   readonly allowContextOnly: boolean;
   readonly includeFallback: boolean;
+  readonly fallbackAnswerRole: "supporting" | "candidate";
   readonly maxFallbackChars: number;
 }): MemoryEvidenceResolutionV1["packetSources"] {
   if (!input.includeFallback) return input.notebook.sources;
@@ -549,9 +520,8 @@ function buildPlannedEvidencePacketSources(input: {
     1,
     input.maxFallbackChars,
     selectedRefs,
-    "candidate",
+    input.fallbackAnswerRole,
     input.query,
-    true,
   );
   const bySource = new Map<
     string,
