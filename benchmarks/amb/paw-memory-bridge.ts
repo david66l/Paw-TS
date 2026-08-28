@@ -2841,6 +2841,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             if (entry.issueType === "assistant_output") {
               return {
                 ...matched,
+                matchedEvidenceRef: matched.evidenceRef,
                 requestDerived: false,
               };
             }
@@ -2863,6 +2864,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             }
             return {
               ...replyAddress,
+              matchedEvidenceRef: matched.evidenceRef,
               requestDerived: true,
             };
           }),
@@ -3031,6 +3033,16 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           assistantSearch.dense.hits.length + requestSearch.dense.hits.length,
         anchorCount: hits.length,
         requestDerivedAnchorCount,
+        requestMatchedEvidenceRefHashes: contentFreeHashes(
+          uniqueAnchors
+            .filter((anchor) => anchor.requestDerived)
+            .map((anchor) => anchor.matchedEvidenceRef),
+        ),
+        requestDerivedEvidenceRefHashes: contentFreeHashes(
+          uniqueAnchors
+            .filter((anchor) => anchor.requestDerived)
+            .map((anchor) => anchor.evidenceRef),
+        ),
         anchorSourceHashes: contentFreeHashes(hits.map((hit) => hit.sourceId)),
         anchorEvidenceRefHashes: contentFreeHashes(
           hits.map((hit) => hit.evidenceRef),
