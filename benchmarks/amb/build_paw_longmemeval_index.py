@@ -64,7 +64,7 @@ def main() -> None:
         reuse_index=False,
         query_expansion=True,
         strict=True,
-        source_artifact_sha256=artifacts["sourceArtifactSha256"],
+        source_artifact_sha256=artifacts["retrievalSourceArtifactSha256"],
         retrieval_environment=resolved_release_provider_env(embedding_artifact),
     )
 

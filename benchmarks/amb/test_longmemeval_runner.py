@@ -14,6 +14,8 @@ from run_paw_longmemeval_retrieval import (
     local_embedding_health_url,
     public_report,
     resolved_release_provider_env,
+    retrieval_source_artifact_paths,
+    retrieval_source_artifact_sha256,
     select_full_split_queries,
     select_queries,
     source_artifact_paths,
@@ -85,7 +87,6 @@ class LongMemEvalRunnerTest(unittest.TestCase):
             source_artifact_sha256="source-artifact",
             retrieval_environment={"PAW_AMB_EMBEDDING_VERSION": "pinned"},
         )
-
         self.assertEqual(
             "paw.longmemeval-paired-experiment.v4",
             protocol["schemaVersion"],
@@ -104,6 +105,22 @@ class LongMemEvalRunnerTest(unittest.TestCase):
                 "sourceArtifactSha256": "source-artifact",
             },
             protocol["common"]["llmCachePolicy"],
+        )
+
+    def test_retrieval_cache_artifact_excludes_answer_only_code(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        paths = retrieval_source_artifact_paths()
+        relative = {path.relative_to(root).as_posix() for path in paths}
+        self.assertIn("benchmarks/amb/paw-memory-bridge.ts", relative)
+        self.assertIn("packages/memory-core/src/evidence-resolver.ts", relative)
+        self.assertNotIn("benchmarks/amb/evidence_answer_review.py", relative)
+        self.assertNotIn("benchmarks/amb/run_paw_longmemeval_retrieval.py", relative)
+        bridge = next(path for path in paths if path.name == "paw-memory-bridge.ts")
+        self.assertNotEqual(
+            retrieval_source_artifact_sha256(paths),
+            retrieval_source_artifact_sha256(
+                tuple(path for path in paths if path != bridge)
+            ),
         )
 
     def test_embedding_version_binds_revision_and_artifact(self) -> None:

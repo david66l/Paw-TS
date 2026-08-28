@@ -309,6 +309,9 @@ def file_sha256(path: Path) -> str:
 
 
 SOURCE_ARTIFACT_POLICY = "paw.longmemeval-source-bundle.v2:transitive-workspace"
+RETRIEVAL_SOURCE_ARTIFACT_POLICY = (
+    "paw.longmemeval-retrieval-source-bundle.v1:memory-runtime-only"
+)
 
 
 def source_artifact_paths() -> tuple[Path, ...]:
@@ -350,10 +353,49 @@ def source_artifact_paths() -> tuple[Path, ...]:
 
 def source_artifact_sha256(paths: tuple[Path, ...] | None = None) -> str:
     files = paths or source_artifact_paths()
+    return source_paths_sha256(files, SOURCE_ARTIFACT_POLICY)
+
+
+def retrieval_source_artifact_paths() -> tuple[Path, ...]:
+    files: set[Path] = set()
+    for package_src in (ROOT / "packages").glob("*/src"):
+        files.update(package_src.rglob("*.ts"))
+        files.update(package_src.rglob("*.tsx"))
+        package_json = package_src.parent / "package.json"
+        if package_json.exists():
+            files.add(package_json)
+        files.update(package_src.parent.glob("tsconfig*.json"))
+        files.update(package_src.rglob("*.sql"))
+    for path in (
+        HERE / "paw-memory-bridge.ts",
+        HERE / "atom-ingest-control.ts",
+        ROOT / "package.json",
+        ROOT / "bun.lock",
+        ROOT / "tsconfig.base.json",
+        HERE / "tsconfig.json",
+    ):
+        if path.exists():
+            files.add(path)
+    return tuple(
+        sorted(
+            (path.resolve() for path in files if path.is_file()),
+            key=lambda path: path.as_posix(),
+        )
+    )
+
+
+def retrieval_source_artifact_sha256(
+    paths: tuple[Path, ...] | None = None,
+) -> str:
+    files = paths or retrieval_source_artifact_paths()
+    return source_paths_sha256(files, RETRIEVAL_SOURCE_ARTIFACT_POLICY)
+
+
+def source_paths_sha256(paths: tuple[Path, ...], policy: str) -> str:
     digest = hashlib.sha256()
-    digest.update(SOURCE_ARTIFACT_POLICY.encode("utf-8"))
+    digest.update(policy.encode("utf-8"))
     digest.update(b"\0")
-    for path in files:
+    for path in paths:
         relative = path.resolve().relative_to(ROOT.resolve()).as_posix()
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
@@ -365,6 +407,7 @@ def source_artifact_sha256(paths: tuple[Path, ...] | None = None) -> str:
 def artifact_binding(dataset, embedding_artifact: dict) -> dict:
     data_path = Path(dataset._data_path()).resolve()
     source_paths = source_artifact_paths()
+    retrieval_source_paths = retrieval_source_artifact_paths()
     try:
         commit = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -391,6 +434,11 @@ def artifact_binding(dataset, embedding_artifact: dict) -> dict:
         "sourceArtifactPolicy": SOURCE_ARTIFACT_POLICY,
         "sourceArtifactFileCount": len(source_paths),
         "sourceArtifactSha256": source_artifact_sha256(source_paths),
+        "retrievalSourceArtifactPolicy": RETRIEVAL_SOURCE_ARTIFACT_POLICY,
+        "retrievalSourceArtifactFileCount": len(retrieval_source_paths),
+        "retrievalSourceArtifactSha256": retrieval_source_artifact_sha256(
+            retrieval_source_paths
+        ),
         "embeddingArtifact": embedding_artifact,
         "datasetArtifactSha256": file_sha256(data_path),
         "datasetArtifactBytes": data_path.stat().st_size,
@@ -819,7 +867,7 @@ def run(args: argparse.Namespace) -> dict:
     artifacts = artifact_binding(dataset, embedding_artifact)
     protocol = experiment_protocol(
         args,
-        source_artifact_sha256=artifacts["sourceArtifactSha256"],
+        source_artifact_sha256=artifacts["retrievalSourceArtifactSha256"],
         retrieval_environment=retrieval_environment,
     )
     excluded_fingerprints: set[str] = set()
@@ -1012,7 +1060,7 @@ def run(args: argparse.Namespace) -> dict:
         reuse_index=args.reuse_index,
         query_expansion=args.query_expansion,
         strict=args.release_blind,
-        source_artifact_sha256=artifacts["sourceArtifactSha256"],
+        source_artifact_sha256=artifacts["retrievalSourceArtifactSha256"],
         retrieval_environment=retrieval_environment,
     )
     provider = PawMemoryProvider()
