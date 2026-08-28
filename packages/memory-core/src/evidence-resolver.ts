@@ -24,7 +24,7 @@ import type {
 } from "./evidence-support-selector.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v8:synthesis-obligation-source-lock" as const;
+  "paw.memory-evidence-resolver.v9:scoped-synthesis-source-lock" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -587,10 +587,8 @@ function exactFallbackHitsPerSource(input: {
   const synthesis =
     input.intent.answerShape === "aggregate" ||
     input.intent.answerShape === "compare";
-  if (synthesis || input.directCertificateStatus === "missing") {
-    return 2;
-  }
-  if (incomplete) return 1;
+  if (synthesis) return 2;
+  if (incomplete || input.directCertificateStatus === "missing") return 1;
   return input.intent.temporalMode !== "latest" ||
     input.nonSupportingRefs.size > 0
     ? 1

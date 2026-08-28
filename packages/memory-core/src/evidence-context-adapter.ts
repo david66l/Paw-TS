@@ -192,7 +192,6 @@ export function projectEvidenceFirstMemoryContextPacketV1(
     resolution.requirements.length > 0 &&
     requiredCovered &&
     supportVerified &&
-    resolution.directCertificateStatus !== "missing" &&
     !(
       resolution.intent.needsPlanning &&
       resolution.plannerStatus !== "completed"
