@@ -83,7 +83,14 @@ class LongMemEvalRunnerTest(unittest.TestCase):
 
     def test_semantic_cache_protocol_binds_the_source_artifact(self) -> None:
         protocol = experiment_protocol(
-            SimpleNamespace(k=8, store_key="test-store"),
+            SimpleNamespace(
+                k=8,
+                store_key="test-store",
+                answer_protocol="upstream",
+                answer_review=False,
+                answer_tools=True,
+                error_audit=False,
+            ),
             source_artifact_sha256="source-artifact",
             retrieval_environment={"PAW_AMB_EMBEDDING_VERSION": "pinned"},
         )
@@ -106,6 +113,8 @@ class LongMemEvalRunnerTest(unittest.TestCase):
             },
             protocol["common"]["llmCachePolicy"],
         )
+        self.assertEqual("upstream", protocol["common"]["answerProtocol"])
+        self.assertTrue(protocol["common"]["answerTools"])
 
     def test_retrieval_cache_artifact_excludes_answer_only_code(self) -> None:
         root = Path(__file__).resolve().parents[2]

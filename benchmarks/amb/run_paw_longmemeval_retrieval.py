@@ -116,6 +116,10 @@ def public_report(sealed: dict, ledger_sha256: str) -> dict:
         "selectionPolicy",
         "retrievalProfile",
         "evaluationMode",
+        "answerProtocol",
+        "answerReview",
+        "answerTools",
+        "errorAudit",
         "partialRecoveryExecuted",
         "eventIdentityMode",
         "eventKeyCoverageRate",
@@ -635,6 +639,10 @@ def experiment_protocol(
         "common": {
             "k": args.k,
             "answerRequired": True,
+            "answerProtocol": args.answer_protocol,
+            "answerReview": args.answer_review,
+            "answerTools": args.answer_tools,
+            "errorAudit": args.error_audit,
             "storeKey": args.store_key,
             "retrievalEnvironment": {
                 key: value
@@ -843,17 +851,17 @@ def summarize_answer_reviews(rows: list[dict]) -> dict:
     }
 
 
-def summarize_answer_resolutions(rows: list[dict]) -> dict:
-    attempted = [row for row in rows if row.get("answerResolutionAttempted") is True]
+def summarize_error_audits(rows: list[dict]) -> dict:
+    audited = [row for row in rows if row.get("errorAuditAttempted") is True]
     return {
-        "enabled": any("answerResolutionAttempted" in row for row in rows),
-        "attempted": len(attempted),
-        "sufficient": sum(
-            row.get("answerResolutionStop") == "sufficient" for row in attempted
+        "enabled": any("errorAuditAttempted" in row for row in rows),
+        "attempted": len(audited),
+        "byPrimaryCause": dict(Counter(row["errorAuditPrimaryCause"] for row in audited)),
+        "byRepairStage": dict(Counter(row["errorAuditRepairStage"] for row in audited)),
+        "byEvidenceStatus": dict(
+            Counter(row["errorAuditEvidenceStatus"] for row in audited)
         ),
-        "resultChars": sum(
-            int(row.get("answerResolutionChars", 0)) for row in attempted
-        ),
+        "byConfidence": dict(Counter(row["errorAuditConfidence"] for row in audited)),
     }
 
 
@@ -863,6 +871,7 @@ def run(args: argparse.Namespace) -> dict:
 
     answer_llm = None
     judge_llm = None
+    error_audit_llm = None
     answer_mode = None
     judge = None
     if args.answer:
@@ -872,6 +881,7 @@ def run(args: argparse.Namespace) -> dict:
 
         answer_llm = DeepSeekFlashLLM()
         judge_llm = DeepSeekFlashLLM()
+        error_audit_llm = DeepSeekFlashLLM() if args.error_audit else None
         answer_mode = RAGMode(answer_llm)
         judge = GeminiJudge(judge_llm)
 
@@ -1012,7 +1022,7 @@ def run(args: argparse.Namespace) -> dict:
         "answerProtocol": args.answer_protocol,
         "answerReview": args.answer_review,
         "answerTools": args.answer_tools,
-        "answerToolsRequired": args.answer_tools_required,
+        "errorAudit": args.error_audit,
         "partialRecoveryExecuted": False,
         "eventIdentityMode": "episode-fallback",
         "eventKeyCoverageRate": 0.0,
@@ -1215,22 +1225,8 @@ def run(args: argparse.Namespace) -> dict:
                         else base_prompt
                     )
 
-                prefetched_resolution = None
                 if args.answer_tools:
-                    if args.answer_tools_required:
-                        from evidence_answer_review import (
-                            prefetch_evidence_resolution,
-                        )
-
-                        prefetched_resolution = prefetch_evidence_resolution(
-                            provider,
-                            question=query.query,
-                            user_id=query.user_id,
-                            context=context,
-                        )
-                        context = prefetched_resolution.context
-                    if prefetched_resolution is None or not prefetched_resolution.attempted:
-                        answer_llm.bind_memory_tools(provider, query.user_id)
+                    answer_llm.bind_memory_tools(provider, query.user_id)
                 try:
                     answer = answer_mode.answer_from_context(
                         query.query,
@@ -1268,25 +1264,36 @@ def run(args: argparse.Namespace) -> dict:
                     query.gold_answers,
                     prompt,
                 )
+                error_audit = None
+                if args.error_audit and not judgment.correct:
+                    from evidence_error_audit import audit_evidence_error
+
+                    error_audit = audit_evidence_error(
+                        error_audit_llm,
+                        question=query.query,
+                        question_type=query.meta["question_type"],
+                        context=context,
+                        candidate_answer=answer.answer,
+                        accepted_answers=query.gold_answers,
+                        judge_reason=judgment.reason,
+                    )
                 row.update(
                     {
                         "answerCorrect": judgment.correct,
                         "answerHash": sha(answer.answer),
                         "answerChars": len(answer.answer),
-                        "answerResolutionAttempted": (
-                            prefetched_resolution.attempted
-                            if args.answer_tools and prefetched_resolution is not None
-                            else False
+                        "errorAuditAttempted": error_audit is not None,
+                        "errorAuditPrimaryCause": (
+                            error_audit.primary_cause if error_audit else "not_needed"
                         ),
-                        "answerResolutionChars": (
-                            prefetched_resolution.result_chars
-                            if args.answer_tools and prefetched_resolution is not None
-                            else 0
+                        "errorAuditRepairStage": (
+                            error_audit.repair_stage if error_audit else "not_needed"
                         ),
-                        "answerResolutionStop": (
-                            prefetched_resolution.stop
-                            if args.answer_tools and prefetched_resolution is not None
-                            else "disabled"
+                        "errorAuditEvidenceStatus": (
+                            error_audit.evidence_status if error_audit else "not_needed"
+                        ),
+                        "errorAuditConfidence": (
+                            error_audit.confidence if error_audit else "not_needed"
                         ),
                         "answerReviewAttempted": (
                             answer_review.attempted if answer_review else False
@@ -1318,11 +1325,14 @@ def run(args: argparse.Namespace) -> dict:
         "ingestionMs": round(ingestion_ms, 1),
         "metrics": summarize(rows),
         "answerMetrics": summarize_answers(rows),
-        "answerResolutionMetrics": summarize_answer_resolutions(rows),
+        "errorAuditMetrics": summarize_error_audits(rows),
         "answerReviewMetrics": summarize_answer_reviews(rows),
         "providerStats": stats,
         "answerLlmStats": answer_llm.stats() if answer_llm is not None else None,
         "judgeLlmStats": judge_llm.stats() if judge_llm is not None else None,
+        "errorAuditLlmStats": (
+            error_audit_llm.stats() if error_audit_llm is not None else None
+        ),
         "rows": rows,
         "dryRun": False,
         "note": (
@@ -1365,7 +1375,7 @@ def main() -> None:
     parser.add_argument("--answer", action="store_true")
     parser.add_argument("--answer-review", action="store_true")
     parser.add_argument("--answer-tools", action="store_true")
-    parser.add_argument("--answer-tools-required", action="store_true")
+    parser.add_argument("--error-audit", action="store_true")
     parser.add_argument(
         "--answer-protocol",
         choices=("upstream", "evidence_policy"),
@@ -1423,8 +1433,8 @@ def main() -> None:
         args.seed = args.seed_file.read_text(encoding="utf-8").strip()
     if not args.seed or len(args.seed) < 32:
         raise ValueError("selection seed must contain at least 32 characters")
-    if args.answer_tools_required and not args.answer_tools:
-        raise ValueError("--answer-tools-required requires --answer-tools")
+    if args.error_audit and not args.answer:
+        raise ValueError("--error-audit requires --answer")
     if (args.blind_plan is None) != (args.blind_arm is None):
         raise ValueError("--blind-plan and --blind-arm must be supplied together")
     if args.dry_run and args.blind_plan is not None:
