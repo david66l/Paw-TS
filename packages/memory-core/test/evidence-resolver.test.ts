@@ -239,24 +239,24 @@ describe("shared evidence resolver v1", () => {
           return {
             lists: [
               {
-                channel: "l0" as const,
-                retrieverId: "global",
-                weight: 1,
+                channel: "l1" as const,
+                retrieverId: "primary-derived",
+                weight: 1.1,
                 candidates: [
                   {
                     candidateId: "user-ref",
                     sourceId: "user-source",
                     evidenceRef: "user-source#turn-1",
-                    sourceKind: "user_input" as const,
-                    authority: "user_asserted" as const,
+                    sourceKind: "derived_atom" as const,
+                    authority: "derived" as const,
                   },
-                  {
-                    candidateId: "assistant-ref",
-                    sourceId: "assistant-source",
-                    evidenceRef: "assistant-source#turn-2",
-                    sourceKind: "assistant_output" as const,
-                    authority: "context_only" as const,
-                  },
+                ],
+              },
+              {
+                channel: "l0" as const,
+                retrieverId: "dialogue-source-discovery",
+                weight: 1,
+                candidates: [
                   {
                     candidateId: "cross-source-duplicate-ref",
                     sourceId: "escape-source",
@@ -270,6 +270,13 @@ describe("shared evidence resolver v1", () => {
                     evidenceRef: "different-source#turn-2",
                     sourceKind: "assistant_output" as const,
                     authority: "context_only" as const,
+                  },
+                  {
+                    candidateId: "assistant-source-request",
+                    sourceId: "assistant-source",
+                    evidenceRef: "assistant-source#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
                   },
                 ],
               },
@@ -307,14 +314,15 @@ describe("shared evidence resolver v1", () => {
           };
         },
       },
+      maxSources: 1,
       sourceLocalLocator: {
         locatorVersion: "test-source-local.v1",
         async locate(request) {
           locatorCalls += 1;
           expect(request.requirement.roleConstraint).toBe("any");
           expect(request.lockedSourceIds).toEqual([
-            "assistant-source",
             "user-source",
+            "assistant-source",
           ]);
           const content = "The proposed label was Northstar.";
           return {
