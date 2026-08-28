@@ -408,6 +408,8 @@ def run(args: argparse.Namespace) -> dict:
         raise ValueError("evaluation key does not match the baseline ledger")
     dataset = get_dataset("longmemeval")
     cases = load_incorrect_queries(dataset, ledger, key)
+    if args.case_limit is not None:
+        cases = cases[: args.case_limit]
 
     baseline_deepseek = load_module(
         "paw_counterfactual_baseline_deepseek",
@@ -651,9 +653,12 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--sealed-checkpoint", required=True, type=Path)
     parser.add_argument("--log", required=True, type=Path)
+    parser.add_argument("--case-limit", type=int)
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9a-f]{40}", args.baseline_commit):
         raise ValueError("baseline commit must be a full lowercase Git hash")
+    if args.case_limit is not None and not 1 <= args.case_limit <= 19:
+        raise ValueError("case limit must be between 1 and 19")
     report = run(args)
     print(json.dumps(report, ensure_ascii=False))
 
