@@ -10,6 +10,7 @@ import {
   buildMemoryEvidenceNotebookV1,
   memoryEvidenceOrdinalAnchorScoreV1,
   memoryEvidenceSupportScoreV1,
+  projectMemoryEvidenceExcerptV1,
   rankMemoryEvidenceCandidatesV2,
 } from "./evidence-first.js";
 import {
@@ -444,6 +445,7 @@ function buildPrimaryEvidencePacketSources(
   excludedEvidenceRefs: ReadonlySet<string> = new Set(),
   answerRole: "supporting" | "candidate" = "supporting",
   query = "",
+  fairShare = false,
 ): readonly Readonly<{
   sourceId: string;
   text: string;
@@ -457,7 +459,18 @@ function buildPrimaryEvidencePacketSources(
     answerRole: "supporting" | "candidate";
   }> = [];
   let chars = 0;
-  for (const sourceId of selectedSourceIds) {
+  const eligibleSourceIds = selectedSourceIds.filter((sourceId) =>
+    hits.some(
+      (hit) =>
+        hit.sourceId === sourceId &&
+        !excludedEvidenceRefs.has(hit.evidenceRef) &&
+        (hit.authority !== "context_only" || allowContextOnly),
+    ),
+  );
+  const fairSourceBudget = fairShare
+    ? Math.floor(maxChars / Math.max(1, eligibleSourceIds.length))
+    : maxChars;
+  for (const sourceId of eligibleSourceIds) {
     const selected = hits
       .filter(
         (hit) =>
@@ -476,11 +489,32 @@ function buildPrimaryEvidencePacketSources(
       )
       .slice(0, maxHitsPerSource);
     if (selected.length === 0) continue;
+    const fixedParts = selected.map(
+      ({ hit }) =>
+        `[authority=${hit.authority}; observed=${hit.observedAt ?? "unknown"}; evidence=${hit.evidenceRef}]`,
+    );
+    const fixedChars =
+      "[Primary exact memory evidence]".length +
+      fixedParts.reduce((total, part) => total + part.length, 0) +
+      selected.length * 3 +
+      Math.max(0, selected.length - 1) * 2;
+    const contentBudget = Math.max(
+      128,
+      Math.floor((fairSourceBudget - fixedChars) / selected.length),
+    );
     const text = [
       "[Primary exact memory evidence]",
       ...selected.map(
-        ({ hit }) =>
-          `[authority=${hit.authority}; observed=${hit.observedAt ?? "unknown"}; evidence=${hit.evidenceRef}]\n${hit.content}`,
+        ({ hit }, index) =>
+          `${fixedParts[index]}\n${
+            fairShare
+              ? projectMemoryEvidenceExcerptV1(
+                  hit.content,
+                  query,
+                  Math.min(16_384, contentBudget),
+                )
+              : hit.content
+          }`,
       ),
     ].join("\n\n");
     if (chars + text.length > maxChars) continue;
@@ -517,6 +551,7 @@ function buildPlannedEvidencePacketSources(input: {
     selectedRefs,
     "candidate",
     input.query,
+    true,
   );
   const bySource = new Map<
     string,

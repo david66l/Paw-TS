@@ -441,6 +441,93 @@ describe("shared evidence resolver v1", () => {
     );
   });
 
+  test("shares fallback hydration budget across selected sources", async () => {
+    const sourceIds = ["source-a", "source-b", "source-c"];
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "fair-hydration.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "source-chunks",
+                weight: 1,
+                candidates: sourceIds.map((sourceId) => ({
+                  candidateId: `${sourceId}-chunk`,
+                  sourceId,
+                  evidenceRef: `${sourceId}#chunk-1`,
+                  sourceKind: "source_chunk" as const,
+                  authority: "mixed" as const,
+                })),
+              },
+            ],
+            hits: sourceIds.map((sourceId) => ({
+              sourceId,
+              evidenceRef: `${sourceId}#chunk-1`,
+              content: `shared clue ${sourceId} ${"detail ".repeat(160)}`,
+              authority: "mixed" as const,
+            })),
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+            answerShape: "aggregate",
+            temporalMode: "any",
+            roleConstraint: "user",
+            needsPlanning: true,
+            requirements: [
+              {
+                requirementId: "shared",
+                label: "shared clue",
+                searchText: "shared clue",
+                temporalMode: "any",
+                roleConstraint: "user",
+              },
+            ],
+          } as const;
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-support-selector.v1",
+        async select() {
+          return {
+            selectorVersion: "test-support-selector.v1",
+            selectionRevision: "fair-hydration-revision",
+            assessments: [
+              {
+                requirementId: "shared",
+                supportingEvidenceRefs: [],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+      maxSources: 3,
+      maxNotebookChars: 900,
+    });
+
+    const result = await resolver.resolve(
+      "What is the combined shared clue?",
+      new AbortController().signal,
+    );
+
+    expect(result.packetSources.map((source) => source.sourceId)).toEqual(
+      sourceIds,
+    );
+    expect(
+      result.packetSources.reduce((total, source) => total + source.text.length, 0),
+    ).toBeLessThanOrEqual(900);
+  });
+
   test("keeps bounded candidates when latest-state support is still missing", async () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
