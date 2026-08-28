@@ -83,11 +83,13 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
           selectorVersion,
           query: selection.query,
           requirements: selection.requirements,
-          certifiedAssistantDialogueEvidenceRefs: Object.freeze(
-            [
-              ...(selection.certifiedAssistantDialogueEvidenceRefs ?? []),
-            ].sort(),
-          ),
+          ...(selection.certifiedAssistantDialogueEvidenceRefs?.length
+            ? {
+                certifiedAssistantDialogueEvidenceRefs: Object.freeze(
+                  [...selection.certifiedAssistantDialogueEvidenceRefs].sort(),
+                ),
+              }
+            : {}),
           candidateEvidenceRefs: selection.candidates.map(
             (candidate: MemoryEvidenceNotebookHitV1) => candidate.evidenceRef,
           ),
@@ -129,7 +131,11 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
       "For latest-state requirements, older or differently valued observations remain supporting inputs for deterministic chronology; do not call them contradictory merely because their values differ.",
       "Assistant output is context only for user facts. It may directly support roleConstraint=assistant only when the query explicitly asks for the assistant's prior words or actions.",
       "For roleConstraint=any, assistant output may support only a requested prior-dialogue artifact or answer whose author is unresolved, and only when the exact assistant turn and its addressed user request establish that provenance. Never use an assistant assertion as evidence of a user's fact, preference, possession, action, or experience.",
-      "For roleConstraint=user with certifiedAssistantDialogueCandidate=true, preserve user facts as the primary authority. A candidate marked certifiedAssistantDialogue=true may support only the requested prior-dialogue artifact whose author is unresolved; it must never establish a user's fact, preference, possession, action, or experience.",
+      ...(certifiedAssistantDialogueEvidenceRefs.size > 0
+        ? [
+            "For roleConstraint=user with certifiedAssistantDialogueCandidate=true, preserve user facts as the primary authority. A candidate marked certifiedAssistantDialogue=true may support only the requested prior-dialogue artifact whose author is unresolved; it must never establish a user's fact, preference, possession, action, or experience.",
+          ]
+        : []),
       "It is valid to return no support for a requirement. Prefer missing evidence over a merely related passage.",
       'Return exactly one JSON object: {"assessments":[{"requirementId":"...","supportingEvidenceRefs":["..."],"contradictingEvidenceRefs":[],"unknownEvidenceRefs":[]}]}. Include every supplied requirement exactly once and keep the three arrays disjoint.',
     ].join("\n"),
@@ -146,16 +152,22 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
           requirement.coverageMode ??
           (requirement.temporalMode === "latest" ? "latest" : "any"),
         minimumEvidence: requirement.minimumEvidence ?? 1,
-        certifiedAssistantDialogueCandidate:
-          certifiedAssistantDialogueEvidenceRefs.size > 0,
+        ...(certifiedAssistantDialogueEvidenceRefs.size > 0
+          ? { certifiedAssistantDialogueCandidate: true }
+          : {}),
       })),
       candidates: input.candidates.map((candidate, index) => ({
         evidenceRef: compactEvidenceRef(index),
         authority: candidate.authority,
         sourceKind: candidate.sourceKind,
-        certifiedAssistantDialogue: certifiedAssistantDialogueEvidenceRefs.has(
-          candidate.evidenceRef,
-        ),
+        ...(certifiedAssistantDialogueEvidenceRefs.size > 0
+          ? {
+              certifiedAssistantDialogue:
+                certifiedAssistantDialogueEvidenceRefs.has(
+                  candidate.evidenceRef,
+                ),
+            }
+          : {}),
         contextEvidenceRefs: candidate.contextEvidenceRefs,
         observedAt: candidate.observedAt,
         episodeOrder: candidate.episodeOrder,

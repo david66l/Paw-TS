@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
+  buildMemoryEvidenceQueryPlanRequestV3,
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryEvidenceQueryPlannerV3,
   needsCertifiedAssistantDialogueCandidateV1,
@@ -325,6 +326,25 @@ describe("typed evidence query planner v3", () => {
         "What amount was in the plan from our previous conversation?",
       ),
     ).toMatchObject({ roleConstraint: "user", needsPlanning: true });
+
+    const ordinaryRequest = buildMemoryEvidenceQueryPlanRequestV3(
+      "What is my current address?",
+    );
+    expect(ordinaryRequest.system).not.toContain(
+      "certifiedAssistantDialogueCandidate=true",
+    );
+    expect(JSON.parse(ordinaryRequest.user)).not.toHaveProperty(
+      "certifiedAssistantDialogueCandidate",
+    );
+    const certifiedRequest = buildMemoryEvidenceQueryPlanRequestV3(
+      "What amount was in the plan from our previous conversation?",
+    );
+    expect(certifiedRequest.system).toContain(
+      "certifiedAssistantDialogueCandidate=true",
+    );
+    expect(JSON.parse(certifiedRequest.user)).toMatchObject({
+      certifiedAssistantDialogueCandidate: true,
+    });
 
     for (const query of [
       "Which city did I visit?",

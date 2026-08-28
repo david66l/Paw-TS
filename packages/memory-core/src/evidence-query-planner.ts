@@ -586,6 +586,9 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
   intent = classifyMemoryEvidenceQueryV3(query),
 ): Readonly<{ system: string; user: string }> {
   const value = boundedQuery(query);
+  const certifiedAssistantDialogueCandidate =
+    intent.roleConstraint === "user" &&
+    needsCertifiedAssistantDialogueCandidateV1(value);
   return Object.freeze({
     system: [
       "You plan retrieval requirements, not the answer.",
@@ -593,7 +596,11 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
       "Answer shape and temporal mode are independent immutable axes supplied by the caller. Return them unchanged.",
       "Role constraint is an immutable authority boundary supplied by deterministic code. Return it unchanged.",
       "roleConstraint=any means the current question establishes a prior-dialogue answer but cannot establish whether the requested artifact came from the user, assistant, or a shared exchange. Preserve any; do not guess or upgrade it.",
-      "certifiedAssistantDialogueCandidate=true keeps roleConstraint=user as the primary authority while allowing a separate, certificate-gated assistant candidate path. Do not rewrite the role or assume the assistant authored the answer.",
+      ...(certifiedAssistantDialogueCandidate
+        ? [
+            "certifiedAssistantDialogueCandidate=true keeps roleConstraint=user as the primary authority while allowing a separate, certificate-gated assistant candidate path. Do not rewrite the role or assume the assistant authored the answer.",
+          ]
+        : []),
       "For recommend requests, separately search likely possessions or ingredients, goals, constraints, routines, prior attempts, and explicit likes or dislikes that could constrain a useful recommendation.",
       "For compare or aggregate requests, create one requirement and search per independent operand.",
       "Do not split one operand into separate identity, value, threshold, status, or background requirements when one concrete memory can establish it.",
@@ -613,9 +620,9 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
       answerShape: intent.answerShape,
       temporalMode: intent.temporalMode,
       roleConstraint: intent.roleConstraint,
-      certifiedAssistantDialogueCandidate:
-        intent.roleConstraint === "user" &&
-        needsCertifiedAssistantDialogueCandidateV1(value),
+      ...(certifiedAssistantDialogueCandidate
+        ? { certifiedAssistantDialogueCandidate: true }
+        : {}),
       maxRequirements: 4,
       maxItemChars: 192,
     }),

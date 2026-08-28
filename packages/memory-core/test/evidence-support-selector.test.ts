@@ -76,12 +76,25 @@ describe("requirement-bound evidence support selector v1", () => {
         evidenceRef: string;
         sourceId?: string;
         turnOrder: number;
+        certifiedAssistantDialogue?: boolean;
+      }>;
+      requirements: Array<{
+        certifiedAssistantDialogueCandidate?: boolean;
       }>;
     };
     expect(payload.candidates[0]?.content).toContain("27. Sound effects");
     expect(payload.candidates[0]?.evidenceRef).toBe("e1");
     expect(payload.candidates[0]?.sourceId).toBeUndefined();
     expect(payload.candidates[0]?.turnOrder).toBe(3);
+    expect(payload.candidates[0]).not.toHaveProperty(
+      "certifiedAssistantDialogue",
+    );
+    expect(payload.requirements[0]).not.toHaveProperty(
+      "certifiedAssistantDialogueCandidate",
+    );
+    expect(request.system).not.toContain(
+      "roleConstraint=user with certifiedAssistantDialogueCandidate=true",
+    );
     expect(request.system).toContain(
       "later assistant response after user feedback",
     );
