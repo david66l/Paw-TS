@@ -1,12 +1,33 @@
+const IMMUTABLE_DOCUMENT_PREFIX = "amb:document/";
+
+/** Convert a physical AMB archive address into the core's source-local family. */
+export function logicalSourceLocalEvidenceRefV1(
+  evidenceRef: string,
+): string | undefined {
+  const match = /^amb:document\/([^#]+)#source-(\d+)$/u.exec(evidenceRef);
+  if (!match || !match[1] || !match[2]) return undefined;
+  return `${match[1]}#source-${match[2]}`;
+}
+
+/** Resolve a logical source-local address to the current immutable alias. */
+export function immutableSourceTurnEvidenceRefV1(
+  evidenceRef: string,
+): string | undefined {
+  if (evidenceRef.startsWith(IMMUTABLE_DOCUMENT_PREFIX)) return undefined;
+  const match = /^([^#]+)#source-(\d+)$/u.exec(evidenceRef);
+  if (!match || !match[1] || !match[2]) return undefined;
+  return `${IMMUTABLE_DOCUMENT_PREFIX}${match[1]}#source-${match[2]}`;
+}
+
 /**
- * Old AMB indexes archived immutable turns as `#atom-N`. Source-local search
- * addresses the same turns as `#source-N`. Keep this compatibility mapping
- * exact and content-free; all prose still comes from the immutable archive.
+ * Old AMB indexes archived immutable turns as `#atom-N`. Keep this exact
+ * logical-to-physical compatibility mapping content-free.
  */
 export function legacyImmutableTurnEvidenceRefV1(
   evidenceRef: string,
 ): string | undefined {
-  const match = /^(.*)#source-(\d+)$/u.exec(evidenceRef);
+  if (evidenceRef.startsWith(IMMUTABLE_DOCUMENT_PREFIX)) return undefined;
+  const match = /^([^#]+)#source-(\d+)$/u.exec(evidenceRef);
   if (!match || !match[1] || !match[2]) return undefined;
-  return `${match[1]}#atom-${match[2]}`;
+  return `${IMMUTABLE_DOCUMENT_PREFIX}${match[1]}#atom-${match[2]}`;
 }

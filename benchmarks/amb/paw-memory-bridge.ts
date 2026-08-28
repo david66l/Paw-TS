@@ -117,7 +117,11 @@ import {
   planAmbEmbeddingWavesV1,
   streamAmbEmbeddingBatchesV1,
 } from "./embedding-stream.js";
-import { legacyImmutableTurnEvidenceRefV1 } from "./immutable-evidence-address.js";
+import {
+  immutableSourceTurnEvidenceRefV1,
+  legacyImmutableTurnEvidenceRefV1,
+  logicalSourceLocalEvidenceRefV1,
+} from "./immutable-evidence-address.js";
 import { buildAmbMemoryLlmReplayCacheKeyV1 } from "./memory-llm-replay-cache.js";
 import {
   isAmbDocumentVisibleAtQueryV1,
@@ -2670,7 +2674,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const turnIndexRevision = await engine.retrievalRevisionToken();
       const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
         locatorVersion:
-          "paw.amb-source-local-locator.v2:certified-filtered-rrf",
+          "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
         scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
         turnIndexRevision,
         embeddingIdentity: sourceSpanEmbedding
@@ -2754,11 +2758,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ) {
           return [];
         }
-        const evidenceRef = entry.evidence.find((ref) =>
+        const physicalEvidenceRef = entry.evidence.find((ref) =>
           /#source-\d+$/.test(ref),
         );
-        const documentId = evidenceRef
-          ? sourceDocumentIdFromEvidenceV1(evidenceRef)
+        const documentId = physicalEvidenceRef
+          ? sourceDocumentIdFromEvidenceV1(physicalEvidenceRef)
+          : undefined;
+        const evidenceRef = physicalEvidenceRef
+          ? logicalSourceLocalEvidenceRefV1(physicalEvidenceRef)
           : undefined;
         const sourceSeq = Number(/#source-(\d+)$/.exec(evidenceRef ?? "")?.[1]);
         if (
@@ -2803,9 +2810,12 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         );
         const turns = neighborEntries.flatMap((entry) => {
           if (entry.kind !== "episodic") return [];
-          const evidenceRef = entry.evidence.find((ref) =>
+          const physicalEvidenceRef = entry.evidence.find((ref) =>
             /#source-\d+$/.test(ref),
           );
+          const evidenceRef = physicalEvidenceRef
+            ? logicalSourceLocalEvidenceRefV1(physicalEvidenceRef)
+            : undefined;
           const sourceSeq = Number(
             /#source-(\d+)$/.exec(evidenceRef ?? "")?.[1],
           );
@@ -2872,7 +2882,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ]);
       const result = Object.freeze({
         locatorVersion:
-          "paw.amb-source-local-locator.v2:certified-filtered-rrf",
+          "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
         locatorRevision: sha(
           JSON.stringify({
             turnIndexRevision,
@@ -2937,14 +2947,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ? {
             sourceLocalLocator: Object.freeze({
               locatorVersion:
-                "paw.amb-source-local-locator.v2:certified-filtered-rrf",
+                "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
               locate(request: MemorySourceLocalEvidenceRequestV1) {
                 return locateEvidenceWithinSources(request);
               },
             }),
             sourceLocalHydrator: Object.freeze({
               hydratorVersion:
-                "paw.amb-source-local-hydrator.v2:immutable-raw-archive",
+                "paw.amb-source-local-hydrator.v3:logical-immutable-archive",
               async hydrate(
                 evidenceRefs: readonly string[],
                 signal: AbortSignal,
@@ -2956,14 +2966,32 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
                     "immutable raw evidence hydration unavailable",
                   );
                 }
+                const currentAddresses = evidenceRefs.flatMap((evidenceRef) => {
+                  const physicalRef =
+                    immutableSourceTurnEvidenceRefV1(evidenceRef);
+                  return physicalRef ? [{ evidenceRef, physicalRef }] : [];
+                });
                 const directlyHydrated = await archive.hydrate(
-                  evidenceRefs,
+                  currentAddresses.map((item) => item.physicalRef),
                   signal,
                 );
-                const directByRef = new Map(
+                const directByPhysicalRef = new Map(
                   directlyHydrated.map(
                     (row) => [row.evidenceRef, row] as const,
                   ),
+                );
+                const directByRef = new Map(
+                  currentAddresses.flatMap(({ evidenceRef, physicalRef }) => {
+                    const row = directByPhysicalRef.get(physicalRef);
+                    return row
+                      ? [
+                          [
+                            evidenceRef,
+                            Object.freeze({ ...row, evidenceRef }),
+                          ] as const,
+                        ]
+                      : [];
+                  }),
                 );
                 // Existing 500-user indexes predate the source-ref alias. The
                 // corresponding atom-ref points at the same immutable L0 turn,
@@ -3005,11 +3033,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
                       ? "completed"
                       : "incomplete",
                   hydratorVersion:
-                    "paw.amb-source-local-hydrator.v2:immutable-raw-archive",
+                    "paw.amb-source-local-hydrator.v3:logical-immutable-archive",
                   requestedCount: evidenceRefs.length,
                   returnedCount: hydrated.length,
-                  directCount: directlyHydrated.length,
-                  legacyMappedCount: hydrated.length - directlyHydrated.length,
+                  directCount: directByRef.size,
+                  legacyMappedCount: hydrated.length - directByRef.size,
                   cacheHit: false,
                   durationMs: Date.now() - started,
                 });
