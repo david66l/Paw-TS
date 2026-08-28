@@ -684,8 +684,20 @@ describe("shared evidence resolver v1", () => {
         throw new Error("selector unavailable");
       },
     };
+    const invalidRequirementSelector = {
+      selectorVersion: "invalid-requirement-selector.v1",
+      async select() {
+        const error = new Error("private model output");
+        error.name = "MemoryEvidenceSupportRequirementInvalid";
+        throw error;
+      },
+    };
 
-    for (const supportSelector of [undefined, failingSelector]) {
+    for (const [supportSelector, expectedFailureCode] of [
+      [undefined, undefined],
+      [failingSelector, "MemoryEvidenceSupportSelectorFailed"],
+      [invalidRequirementSelector, "MemoryEvidenceSupportRequirementInvalid"],
+    ] as const) {
       const resolver = createMemoryEvidenceResolverV1({
         index: primaryIndex,
         ...(supportSelector ? { supportSelector } : {}),
@@ -699,6 +711,7 @@ describe("shared evidence resolver v1", () => {
         "reported_assistant_assertion",
       );
       expect(result.packetSources).toHaveLength(0);
+      expect(result.supportSelectorFailureCode).toBe(expectedFailureCode);
       const packet = projectEvidenceFirstMemoryContextPacketV1(result);
       expect(packet.stop).toBe("missing");
       expect(packet.evidence).toHaveLength(0);

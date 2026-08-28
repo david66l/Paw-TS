@@ -5,6 +5,7 @@ import {
   type MemoryEvidenceRequirementV3,
   buildMemoryEvidenceSupportSelectionRequestV1,
   createJsonMemoryEvidenceSupportSelectorV1,
+  memoryEvidenceSupportFailureCodeV1,
   parseMemoryEvidenceSupportSelectionV1,
 } from "../src/index.js";
 
@@ -47,6 +48,22 @@ const candidates: readonly MemoryEvidenceNotebookHitV1[] = [
 ];
 
 describe("requirement-bound evidence support selector v1", () => {
+  test("exposes only content-free selector failure codes", () => {
+    const known = new Error("invalid output");
+    known.name = "MemoryEvidenceSupportRequirementInvalid";
+    expect(memoryEvidenceSupportFailureCodeV1(known)).toBe(
+      "MemoryEvidenceSupportRequirementInvalid",
+    );
+    expect(
+      memoryEvidenceSupportFailureCodeV1(new Error("private detail")),
+    ).toBe("MemoryEvidenceSupportSelectorFailed");
+    const untrusted = new Error("private detail");
+    untrusted.name = "MemoryEvidenceSupportPrivateDetail";
+    expect(memoryEvidenceSupportFailureCodeV1(untrusted)).toBe(
+      "MemoryEvidenceSupportSelectorFailed",
+    );
+  });
+
   test("projects ordinal evidence and exposes turn order for revised outputs", () => {
     const request = buildMemoryEvidenceSupportSelectionRequestV1({
       query: "What was the 27th item in the second output?",

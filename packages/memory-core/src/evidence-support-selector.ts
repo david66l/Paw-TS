@@ -294,6 +294,40 @@ export function parseMemoryEvidenceSupportSelectionV1(
   return Object.freeze(assessments);
 }
 
+const MEMORY_EVIDENCE_SUPPORT_FAILURE_CODES_V1 = [
+  "MemoryEvidenceSupportAddressInvalid",
+  "MemoryEvidenceSupportAddressesInvalid",
+  "MemoryEvidenceSupportAssessmentFieldsInvalid",
+  "MemoryEvidenceSupportAssessmentInvalid",
+  "MemoryEvidenceSupportCandidateDuplicate",
+  "MemoryEvidenceSupportCandidateInvalid",
+  "MemoryEvidenceSupportCertificateInvalid",
+  "MemoryEvidenceSupportOutputInvalid",
+  "MemoryEvidenceSupportQueryInvalid",
+  "MemoryEvidenceSupportRequirementInvalid",
+  "MemoryEvidenceSupportSelectionInputInvalid",
+  "MemoryEvidenceSupportSelectionShapeInvalid",
+  "MemoryEvidenceSupportSelectorFailed",
+  "MemoryEvidenceSupportSelectorModelInvalid",
+  "MemoryEvidenceSupportSelectorVersionInvalid",
+] as const;
+
+export type MemoryEvidenceSupportFailureCodeV1 =
+  (typeof MEMORY_EVIDENCE_SUPPORT_FAILURE_CODES_V1)[number];
+
+const memoryEvidenceSupportFailureCodesV1: ReadonlySet<string> = new Set(
+  MEMORY_EVIDENCE_SUPPORT_FAILURE_CODES_V1,
+);
+
+export function memoryEvidenceSupportFailureCodeV1(
+  error: unknown,
+): MemoryEvidenceSupportFailureCodeV1 {
+  const name = error instanceof Error ? error.name : undefined;
+  return name && memoryEvidenceSupportFailureCodesV1.has(name)
+    ? (name as MemoryEvidenceSupportFailureCodeV1)
+    : "MemoryEvidenceSupportSelectorFailed";
+}
+
 function boundedEvidencePartition(
   values: readonly unknown[],
   allowed: ReadonlyMap<string, string>,

@@ -26,9 +26,11 @@ import {
   needsCertifiedAssistantDialogueCandidateV1,
 } from "./evidence-query-planner.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
-import type {
-  MemoryEvidenceSupportSelectorV1,
-  MemoryEvidenceTriageAssessmentV1,
+import {
+  type MemoryEvidenceSupportFailureCodeV1,
+  type MemoryEvidenceSupportSelectorV1,
+  type MemoryEvidenceTriageAssessmentV1,
+  memoryEvidenceSupportFailureCodeV1,
 } from "./evidence-support-selector.js";
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
@@ -45,7 +47,7 @@ import {
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v17:reported-assistant-assertion" as const;
+  "paw.memory-evidence-resolver.v18:support-failure-telemetry" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -96,6 +98,7 @@ export interface MemoryEvidenceResolutionV1 {
   readonly closureAuditRevision?: string;
   readonly closureAuditorVersion?: string;
   readonly supportSelectionRevision?: string;
+  readonly supportSelectorFailureCode?: MemoryEvidenceSupportFailureCodeV1;
   readonly supportSelectorVersion?: string;
   readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
   readonly sourceLocalization: MemorySourceLocalizationReportV1;
@@ -318,6 +321,7 @@ export function createMemoryEvidenceResolverV1(input: {
         degradedChannels,
         supportSelectorStatus,
         supportSelectionRevision,
+        supportSelectorFailureCode,
         supportAssessments,
         sourceLocalization,
         notebook,
@@ -332,6 +336,9 @@ export function createMemoryEvidenceResolverV1(input: {
         directCertificateStatus,
         plannerStatus,
         supportSelectorStatus,
+        ...(supportSelectorFailureCode === undefined
+          ? {}
+          : { supportSelectorFailureCode }),
         closureAuditStatus,
         closureVerdict,
         closureRepairCount,
@@ -369,6 +376,9 @@ export function createMemoryEvidenceResolverV1(input: {
         directCertificateStatus,
         plannerStatus,
         supportSelectorStatus,
+        ...(supportSelectorFailureCode === undefined
+          ? {}
+          : { supportSelectorFailureCode }),
         closureAuditStatus,
         ...(closureVerdict === undefined ? {} : { closureVerdict }),
         closureRepairCount,
@@ -405,6 +415,7 @@ interface MemoryEvidenceResolutionPassV1 {
   readonly requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[];
   readonly supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"];
   readonly supportSelectionRevision?: string;
+  readonly supportSelectorFailureCode?: MemoryEvidenceSupportFailureCodeV1;
   readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
   readonly sourceLocalization: MemorySourceLocalizationReportV1;
   readonly notebook: MemoryEvidenceNotebookV1;
@@ -705,6 +716,9 @@ async function resolveEvidencePass(input: {
         ? "fallback"
         : "not_configured";
   let supportSelectionRevision: string | undefined;
+  let supportSelectorFailureCode:
+    | MemoryEvidenceSupportFailureCodeV1
+    | undefined;
   let supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] =
     Object.freeze([]);
   const reportedAssistantAssertionOnly =
@@ -794,6 +808,7 @@ async function resolveEvidencePass(input: {
       } catch (error) {
         if (input.signal.aborted || isAbort(error)) throw abortError();
         supportSelectorStatus = "fallback";
+        supportSelectorFailureCode = memoryEvidenceSupportFailureCodeV1(error);
         if (localEvidenceRefs.size > 0) {
           requirementHits = baselineRequirementHits;
           localEvidenceRefs = new Set();
@@ -907,6 +922,9 @@ async function resolveEvidencePass(input: {
     ...(supportSelectionRevision === undefined
       ? {}
       : { supportSelectionRevision }),
+    ...(supportSelectorFailureCode === undefined
+      ? {}
+      : { supportSelectorFailureCode }),
     supportAssessments,
     sourceLocalization,
     notebook,

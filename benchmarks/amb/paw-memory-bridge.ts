@@ -49,8 +49,8 @@ import {
   type PawNextMemoryScopeV1,
   boundMemoryRawEvidenceSpansV1,
   buildMemoryConversationTurnBundleV1,
-  classifyMemoryEvidenceRefsUseV1,
   classifyMemoryEvidenceQueryV3,
+  classifyMemoryEvidenceRefsUseV1,
   createJsonMemoryAtomConflictResolverV1,
   createJsonMemoryAtomExtractorV1,
   createJsonMemoryEvidenceClosureAuditorV1,
@@ -2308,6 +2308,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstSupportSelectorStatus: string = evidenceSupportSelector
     ? "not_needed"
     : "disabled";
+  let evidenceFirstSupportSelectorFailureCode: string | null = null;
   let evidenceFirstDirectCertificateStatus = "not_evaluated";
   let evidenceFirstClosureAuditStatus = evidenceClosureAuditor
     ? "not_evaluated"
@@ -3392,6 +3393,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     ).length;
     evidenceFirstQueryExpansionStatus = resolution.plannerStatus;
     evidenceFirstSupportSelectorStatus = resolution.supportSelectorStatus;
+    evidenceFirstSupportSelectorFailureCode =
+      resolution.supportSelectorFailureCode ?? null;
     evidenceFirstDirectCertificateStatus = resolution.directCertificateStatus;
     evidenceFirstClosureAuditStatus = resolution.closureAuditStatus;
     evidenceFirstClosureVerdict = resolution.closureVerdict ?? "not_evaluated";
@@ -4591,6 +4594,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstQueryExpansionCount,
       evidenceFirstQueryExpansionStatus,
       evidenceFirstSupportSelectorStatus,
+      evidenceFirstSupportSelectorFailureCode,
       evidenceFirstDirectCertificateStatus,
       evidenceFirstClosureAuditStatus,
       evidenceFirstClosureVerdict,
@@ -4690,6 +4694,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstQueryExpansionCount,
     evidenceFirstQueryExpansionStatus,
     evidenceFirstSupportSelectorStatus,
+    evidenceFirstSupportSelectorFailureCode,
     evidenceFirstDirectCertificateStatus,
     evidenceFirstClosureAuditStatus,
     evidenceFirstClosureVerdict,
