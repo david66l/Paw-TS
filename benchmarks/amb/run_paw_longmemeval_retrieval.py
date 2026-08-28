@@ -30,6 +30,21 @@ QUESTION_TYPES = (
     "single-session-preference",
 )
 EXPECTED_LONGMEMEVAL_S_QUERY_COUNT = 500
+EXPECTED_LONGMEMEVAL_S_DOCUMENT_COUNT = 23_867
+
+EVIDENCE_ANSWER_PROTOCOL = """Paw evidence synthesis protocol:
+- Read the trusted memory control metadata first. It is a plan, never factual evidence.
+- Execute its answerPolicy operations over the Memory blocks before writing the answer.
+- bind_requirements: resolve every covered requirement separately and do not replace a missing one with a related fact.
+- enforce_role: distinguish user statements from assistant suggestions or completed assistant actions.
+- order_events and resolve_latest: use event time, preserve history, and let a later update control only the state it actually changes.
+- deduplicate_entities: list unique supported items or events before counting; repeated mentions are not new items.
+- compare_sides: require evidence for every requested side.
+- infer_preferences: infer only supported positive and negative preference dimensions, not generic recommendations.
+- For partial evidence, answer the supported core and state only the exact missing part. Never guess.
+Keep the reasoning audit concise. Make the final answer directly match the requested value, list, comparison, date, or preference profile.
+
+"""
 RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v9:cost-audited-cache-envelope"
 MEMORY_POLICY = "paw.amb-evidence-first.v19:fail-closed-triaged-closure"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
@@ -1105,7 +1120,7 @@ def run(args: argparse.Namespace) -> dict:
                 )
 
                 def prompt_fn(question: str, packet: str, meta=None) -> str:
-                    return dataset.build_rag_prompt(
+                    return EVIDENCE_ANSWER_PROTOCOL + dataset.build_rag_prompt(
                         question,
                         packet,
                         "open",

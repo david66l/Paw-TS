@@ -7,6 +7,12 @@
  * them from its backwards-compatible root entrypoint.
  */
 export {
+  createMemoryEvidenceAnswerPolicyV1,
+  PAW_MEMORY_EVIDENCE_ANSWER_POLICY_VERSION_V1,
+  type MemoryEvidenceAnswerOperationV1,
+  type MemoryEvidenceAnswerPolicyV1,
+} from "./evidence-answer-policy.js";
+export {
   createEvidenceFirstMemoryContextResolverV1,
   PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1,
   projectEvidenceFirstMemoryAnswerContractV1,

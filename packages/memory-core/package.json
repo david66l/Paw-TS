@@ -9,6 +9,7 @@
     "./canonical": "./src/canonical.ts",
     "./context-contract": "./src/context-contract.ts",
     "./evidence-context-adapter": "./src/evidence-context-adapter.ts",
+    "./evidence-answer-policy": "./src/evidence-answer-policy.ts",
     "./evidence-first": "./src/evidence-first.ts",
     "./evidence-index-adapter": "./src/evidence-index-adapter.ts",
     "./evidence-query-planner": "./src/evidence-query-planner.ts",

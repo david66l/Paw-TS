@@ -10,6 +10,10 @@ import {
   PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
 } from "./context-contract.js";
 import type { MemoryEvidenceResolutionV1 } from "./evidence-resolver.js";
+import {
+  createMemoryEvidenceAnswerPolicyV1,
+  type MemoryEvidenceAnswerPolicyV1,
+} from "./evidence-answer-policy.js";
 
 export const PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1 =
   "paw.memory-evidence-answer-contract.v1" as const;
@@ -20,6 +24,7 @@ export interface MemoryEvidenceAnswerContractV1 {
   readonly temporalMode: MemoryEvidenceResolutionV1["intent"]["temporalMode"];
   readonly roleConstraint: MemoryEvidenceResolutionV1["intent"]["roleConstraint"];
   readonly evidenceStatus: MemoryResolvedContextPacketV1["stop"];
+  readonly answerPolicy: MemoryEvidenceAnswerPolicyV1;
   readonly guidance: string;
   readonly requirements: readonly Readonly<{
     requirementId: string;
@@ -271,6 +276,13 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
     temporalMode: resolution.intent.temporalMode,
     roleConstraint: resolution.intent.roleConstraint,
     evidenceStatus: packet.stop,
+    answerPolicy: createMemoryEvidenceAnswerPolicyV1({
+      answerShape: resolution.intent.answerShape,
+      temporalMode: resolution.intent.temporalMode,
+      roleConstraint: resolution.intent.roleConstraint,
+      requirementCount: resolution.requirements.length,
+      evidenceStatus: packet.stop,
+    }),
     guidance:
       "Control metadata is not evidence. Organize exact facts by covered requirement ID; never guess a partial or missing requirement.",
     requirements: Object.freeze(
