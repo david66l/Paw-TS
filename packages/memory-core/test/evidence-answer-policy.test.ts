@@ -18,6 +18,21 @@ describe("evidence answer policy", () => {
     });
   });
 
+  test("keeps provenance enforcement for ambiguous shared dialogue", () => {
+    expect(
+      createMemoryEvidenceAnswerPolicyV1({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "any",
+        requirementCount: 1,
+        evidenceStatus: "sufficient",
+      }),
+    ).toMatchObject({
+      mode: "direct",
+      operations: ["bind_requirements", "enforce_role"],
+    });
+  });
+
   test("turns aggregate history into an explicit synthesis program", () => {
     expect(
       createMemoryEvidenceAnswerPolicyV1({

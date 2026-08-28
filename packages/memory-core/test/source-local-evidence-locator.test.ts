@@ -21,7 +21,7 @@ const requirement = Object.freeze({
 });
 
 describe("source-local evidence locator boundary", () => {
-  test("opens only the first assistant direct-lookup route", () => {
+  test("opens only bounded assistant direct-lookup requirements", () => {
     expect(
       isMemorySourceLocalEvidenceEligibleV1({
         answerShape: "lookup",
@@ -31,6 +31,49 @@ describe("source-local evidence locator boundary", () => {
         supportSelectorConfigured: true,
       }),
     ).toBe(true);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "any",
+        requirements: [{ ...requirement, roleConstraint: "any" }],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "assistant",
+        requirements: [
+          requirement,
+          {
+            ...requirement,
+            requirementId: "assistant-answer-2",
+            searchText: "the second answer you gave",
+          },
+        ],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "assistant",
+        requirements: [
+          requirement,
+          {
+            ...requirement,
+            requirementId: "assistant-inference",
+            relation: "inferred",
+            coverageMode: "convergent",
+            minimumEvidence: 2,
+          },
+        ],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(false);
     expect(
       isMemorySourceLocalEvidenceEligibleV1({
         answerShape: "lookup",
@@ -208,6 +251,50 @@ describe("source-local evidence locator boundary", () => {
         }),
       }),
     ).toThrow("MemorySourceLocalEvidenceAnchorRoleInvalid");
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result: resultFor({
+          ...validHit,
+          turnOrder: 0,
+          includedTurns: [{ ...validAnchor, turnOrder: 0 }],
+        }),
+      }),
+    ).toThrow("MemorySourceLocalEvidenceHitInvalid");
+
+    const sharedDialogueRequest = {
+      ...request,
+      requirement: { ...requirement, roleConstraint: "any" as const },
+    };
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request: sharedDialogueRequest,
+        result: resultFor(validHit),
+      }),
+    ).toThrow("MemorySourceLocalEvidenceProvenanceInvalid");
+    const userRequestRef = "session-1#thread#turn-1";
+    const certifiedSharedDialogueHit: MemorySourceLocalEvidenceHitV1 = {
+      ...validHit,
+      contextEvidenceRefs: [userRequestRef, validHit.evidenceRef],
+      includedTurns: [
+        {
+          evidenceRef: userRequestRef,
+          sourceKind: "user_input",
+          observedAt: "2026-01-01T00:00:00.000Z",
+          turnOrder: 1,
+        },
+        validAnchor,
+      ],
+    };
+    expect(
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request: sharedDialogueRequest,
+        result: resultFor(certifiedSharedDialogueHit),
+      }),
+    ).toHaveLength(1);
   });
 
   test("partitions result caches by source set, role, cutoff and index revision", () => {

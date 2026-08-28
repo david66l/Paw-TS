@@ -1,7 +1,12 @@
-import { type JsonValue, hashCanonicalJsonV1 } from "./canonical.js";
-import type {
-  MemoryConversationTurnKindV1,
-  MemoryEvidenceNotebookHitV1,
+import {
+  type JsonValue,
+  hashCanonicalJsonV1,
+  hashTextV1,
+} from "./canonical.js";
+import {
+  type MemoryConversationTurnKindV1,
+  type MemoryEvidenceNotebookHitV1,
+  buildMemoryConversationTurnBundleV1,
 } from "./evidence-first.js";
 import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
@@ -66,6 +71,24 @@ export interface MemorySourceLocalEvidenceLocatorV1 {
   ): Promise<MemorySourceLocalEvidenceResultV1>;
 }
 
+export interface MemorySourceLocalHydratedEvidenceV1 {
+  readonly evidenceRef: string;
+  readonly sourceKind: MemoryConversationTurnKindV1;
+  readonly turnOrder: number;
+  readonly observedAt?: string;
+  readonly content: string;
+  readonly contentHash: string;
+}
+
+/** Exact immutable L0 read port, intentionally separate from the ranker. */
+export interface MemorySourceLocalEvidenceHydratorV1 {
+  readonly hydratorVersion: string;
+  hydrate(
+    evidenceRefs: readonly string[],
+    signal: AbortSignal,
+  ): Promise<readonly MemorySourceLocalHydratedEvidenceV1[]>;
+}
+
 export type MemorySourceLocalizationStatusV1 =
   | "not_needed"
   | "not_configured"
@@ -79,6 +102,7 @@ export interface MemorySourceLocalizationReportV1 {
   readonly reasonCode: string;
   readonly locatorVersion?: string;
   readonly locatorRevision?: string;
+  readonly hydratorVersion?: string;
   readonly telemetry?: MemorySourceLocalEvidenceTelemetryV1;
   readonly addedCandidateCount: number;
   readonly selectedCandidateCount: number;
@@ -94,7 +118,10 @@ export const DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1 = Object.freeze({
 
 /**
  * First release gate. It deliberately excludes temporal, comparative and
- * convergent requests until those capabilities have their own evidence.
+ * convergent requests until those capabilities have their own evidence. A
+ * lookup may contain several direct assistant-grounded requirements; the
+ * resolver invokes the locator once per requirement and commits the local
+ * supplement atomically.
  */
 export function isMemorySourceLocalEvidenceEligibleV1(input: {
   readonly answerShape: string;
@@ -104,24 +131,25 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
   readonly supportSelectorConfigured: boolean;
 }): boolean {
   if (
-    input.roleConstraint !== "assistant" ||
+    !new Set(["assistant", "any"]).has(input.roleConstraint) ||
     input.answerShape !== "lookup" ||
     input.temporalMode !== "any" ||
-    input.requirements.length !== 1 ||
+    input.requirements.length < 1 ||
+    input.requirements.length > 4 ||
     !input.supportSelectorConfigured
   ) {
     return false;
   }
-  const requirement = input.requirements[0];
-  return (
-    requirement !== undefined &&
-    requirement.roleConstraint === "assistant" &&
-    requirement.temporalMode === "any" &&
-    (requirement.relation === undefined || requirement.relation === "direct") &&
-    (requirement.coverageMode === undefined ||
-      requirement.coverageMode === "any") &&
-    (requirement.minimumEvidence === undefined ||
-      requirement.minimumEvidence === 1)
+  return input.requirements.every(
+    (requirement) =>
+      requirement.roleConstraint === input.roleConstraint &&
+      requirement.temporalMode === "any" &&
+      (requirement.relation === undefined ||
+        requirement.relation === "direct") &&
+      (requirement.coverageMode === undefined ||
+        requirement.coverageMode === "any") &&
+      (requirement.minimumEvidence === undefined ||
+        requirement.minimumEvidence === 1),
   );
 }
 
@@ -173,6 +201,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       !hit.content.trim() ||
       refs.has(hit.evidenceRef) ||
       !Number.isSafeInteger(anchorTurnOrder) ||
+      (anchorTurnOrder as number) < 1 ||
       hitObservedAt === "invalid" ||
       (cutoff !== undefined &&
         (hitObservedAt === undefined || hitObservedAt > cutoff))
@@ -189,6 +218,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     const includedRefs = new Set<string>();
     const anchorFamily = evidenceRefFamily(hit.anchorEvidenceRef);
     let anchorCount = 0;
+    let addressedUserRequest = false;
     if (
       !Array.isArray(hit.contextEvidenceRefs) ||
       hit.contextEvidenceRefs.length !== hit.includedTurns.length ||
@@ -207,6 +237,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
         includedRefs.has(turn.evidenceRef) ||
         !isConversationTurnKind(turn.sourceKind) ||
         !Number.isSafeInteger(turn.turnOrder) ||
+        turn.turnOrder < 1 ||
         turnObservedAt === "invalid" ||
         (cutoff !== undefined &&
           (turnObservedAt === undefined || turnObservedAt > cutoff)) ||
@@ -216,6 +247,12 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
         throw namedError("MemorySourceLocalEvidenceTraceInvalid");
       }
       includedRefs.add(turn.evidenceRef);
+      if (
+        turn.sourceKind === "user_input" &&
+        turn.turnOrder === (anchorTurnOrder as number) - 1
+      ) {
+        addressedUserRequest = true;
+      }
       if (turn.evidenceRef === hit.anchorEvidenceRef) {
         if (
           turn.sourceKind !== "assistant_output" ||
@@ -229,6 +266,12 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     }
     if (anchorCount !== 1) {
       throw namedError("MemorySourceLocalEvidenceAnchorMissing");
+    }
+    if (
+      input.request.requirement.roleConstraint === "any" &&
+      !addressedUserRequest
+    ) {
+      throw namedError("MemorySourceLocalEvidenceProvenanceInvalid");
     }
   }
   if (
@@ -244,6 +287,127 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     throw namedError("MemorySourceLocalEvidenceTelemetryInvalid");
   }
   return Object.freeze([...input.result.hits]);
+}
+
+/**
+ * Discard locator-authored prose and rebuild every bundle from exact immutable
+ * L0 reads. The locator chooses bounded addresses; it never owns factual text.
+ */
+export async function hydrateMemorySourceLocalEvidenceResultV1(input: {
+  readonly hydrator: MemorySourceLocalEvidenceHydratorV1;
+  readonly request: MemorySourceLocalEvidenceRequestV1;
+  readonly result: MemorySourceLocalEvidenceResultV1;
+  readonly signal: AbortSignal;
+}): Promise<MemorySourceLocalEvidenceResultV1> {
+  if (!input.hydrator.hydratorVersion.trim()) {
+    throw namedError("MemorySourceLocalEvidenceHydratorInvalid");
+  }
+  const requestedRefs = [
+    ...new Set(
+      input.result.hits.flatMap((hit) =>
+        hit.includedTurns.map((turn) => turn.evidenceRef),
+      ),
+    ),
+  ];
+  if (requestedRefs.length === 0) return input.result;
+  const hydrated = await input.hydrator.hydrate(requestedRefs, input.signal);
+  if (input.signal.aborted) throw abortError();
+  const byRef = new Map<string, MemorySourceLocalHydratedEvidenceV1>();
+  for (const item of hydrated) {
+    const observedAt = parseOptionalTimestamp(item.observedAt);
+    if (
+      !requestedRefs.includes(item.evidenceRef) ||
+      byRef.has(item.evidenceRef) ||
+      !isConversationTurnKind(item.sourceKind) ||
+      !Number.isSafeInteger(item.turnOrder) ||
+      item.turnOrder < 1 ||
+      observedAt === "invalid" ||
+      !item.content.trim() ||
+      hashTextV1(item.content) !== item.contentHash
+    ) {
+      throw namedError("MemorySourceLocalEvidenceHydrationInvalid");
+    }
+    byRef.set(item.evidenceRef, item);
+  }
+  if (byRef.size !== requestedRefs.length) {
+    throw namedError("MemorySourceLocalEvidenceHydrationIncomplete");
+  }
+  const hits: MemorySourceLocalEvidenceHitV1[] = [];
+  let renderedChars = 0;
+  for (const hit of input.result.hits) {
+    const contextEvidenceRefs = hit.contextEvidenceRefs;
+    if (!contextEvidenceRefs) {
+      throw namedError("MemorySourceLocalEvidenceHydrationTraceInvalid");
+    }
+    const remaining = input.request.budget.maxChars - renderedChars;
+    if (remaining < 256) {
+      throw namedError("MemorySourceLocalEvidenceBudgetExceeded");
+    }
+    const turns = hit.includedTurns.map((turn) => {
+      const item = byRef.get(turn.evidenceRef);
+      if (!item)
+        throw namedError("MemorySourceLocalEvidenceHydrationIncomplete");
+      if (
+        item.sourceKind !== turn.sourceKind ||
+        item.turnOrder !== turn.turnOrder ||
+        item.observedAt !== turn.observedAt
+      ) {
+        throw namedError("MemorySourceLocalEvidenceHydrationTraceInvalid");
+      }
+      return {
+        evidenceRef: item.evidenceRef,
+        sourceKind: item.sourceKind,
+        sourceSeq: item.turnOrder,
+        content: item.content,
+        hit: item.evidenceRef === hit.anchorEvidenceRef,
+      };
+    });
+    const bundle = buildMemoryConversationTurnBundleV1({
+      turns,
+      query: input.request.requirement.searchText,
+      maxChars: Math.min(2_400, remaining),
+    });
+    if (
+      bundle.hitSeq !== hit.turnOrder ||
+      bundle.includedEvidence.length !== contextEvidenceRefs.length ||
+      bundle.includedEvidence.some(
+        (turn, index) =>
+          turn.evidenceRef !== contextEvidenceRefs[index] ||
+          turn.sourceKind !== hit.includedTurns[index]?.sourceKind ||
+          turn.turnOrder !== hit.includedTurns[index]?.turnOrder,
+      )
+    ) {
+      throw namedError("MemorySourceLocalEvidenceHydrationTraceInvalid");
+    }
+    hits.push(
+      Object.freeze({
+        ...hit,
+        content: bundle.text,
+        authority: bundle.authority,
+      }),
+    );
+    renderedChars += bundle.text.length;
+  }
+  return Object.freeze({
+    ...input.result,
+    locatorRevision: hashCanonicalJsonV1({
+      schemaVersion: "paw.memory-source-local-hydrated-result.v1",
+      locatorRevision: input.result.locatorRevision,
+      hydratorVersion: input.hydrator.hydratorVersion,
+      evidence: requestedRefs.map((evidenceRef) => ({
+        evidenceRef,
+        contentHash: byRef.get(evidenceRef)?.contentHash ?? "missing",
+        sourceKind: byRef.get(evidenceRef)?.sourceKind ?? "missing",
+        turnOrder: byRef.get(evidenceRef)?.turnOrder ?? -1,
+        observedAt: byRef.get(evidenceRef)?.observedAt ?? "unknown",
+      })),
+    }),
+    hits: Object.freeze(hits),
+    telemetry: Object.freeze({
+      ...input.result.telemetry,
+      renderedChars,
+    }),
+  });
 }
 
 export function memorySourceLocalEvidenceCacheKeyV1(input: {
@@ -302,6 +466,10 @@ function namedError(name: string): Error {
   const error = new Error(name);
   error.name = name;
   return error;
+}
+
+function abortError(): Error {
+  return namedError("AbortError");
 }
 
 function evidenceRefFamily(value: string): string {

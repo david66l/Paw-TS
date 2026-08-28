@@ -29,14 +29,18 @@ import type {
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
   type MemorySourceLocalEvidenceBudgetV1,
+  type MemorySourceLocalEvidenceHitV1,
+  type MemorySourceLocalEvidenceHydratorV1,
   type MemorySourceLocalEvidenceLocatorV1,
+  type MemorySourceLocalEvidenceResultV1,
   type MemorySourceLocalizationReportV1,
+  hydrateMemorySourceLocalEvidenceResultV1,
   isMemorySourceLocalEvidenceEligibleV1,
   validateMemorySourceLocalEvidenceResultV1,
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v9:source-local-assistant-supplement" as const;
+  "paw.memory-evidence-resolver.v11:certified-shared-dialogue" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -109,6 +113,7 @@ export function createMemoryEvidenceResolverV1(input: {
   readonly planner?: MemoryEvidenceQueryPlannerV3;
   readonly supportSelector?: MemoryEvidenceSupportSelectorV1;
   readonly sourceLocalLocator?: MemorySourceLocalEvidenceLocatorV1;
+  readonly sourceLocalHydrator?: MemorySourceLocalEvidenceHydratorV1;
   readonly sourceLocalBudget?: MemorySourceLocalEvidenceBudgetV1;
   readonly evidenceTimeUpperBound?: string;
   readonly closureAuditor?: MemoryEvidenceClosureAuditorV1;
@@ -144,8 +149,12 @@ export function createMemoryEvidenceResolverV1(input: {
     resolverVersion: PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1,
     async resolve(query: string, signal: AbortSignal) {
       const value = boundedQuery(query);
-      const intent = classifyMemoryEvidenceQueryV3(value);
-      const primary = await input.index.search(value, signal);
+      let intent: MemoryEvidenceQueryIntentV3 =
+        classifyMemoryEvidenceQueryV3(value);
+      const primary = filterEvidenceSearchResultForRole(
+        await input.index.search(value, signal),
+        intent.roleConstraint,
+      );
       const primaryFusion = rankMemoryEvidenceCandidatesV2({
         lists: primary.lists,
         maxSources,
@@ -174,9 +183,17 @@ export function createMemoryEvidenceResolverV1(input: {
           const plan = await input.planner.plan(value, signal, {
             force: !intent.needsPlanning,
           });
-          if (plan.requirements.length === 0) {
-            throw namedError("MemoryEvidenceQueryPlanRequirementsEmpty");
-          }
+          validateMemoryEvidenceQueryPlanBoundary({
+            plan,
+            intent,
+            plannerVersion: input.planner.plannerVersion,
+          });
+          intent = Object.freeze({
+            answerShape: plan.answerShape,
+            temporalMode: plan.temporalMode,
+            roleConstraint: plan.roleConstraint,
+            needsPlanning: plan.needsPlanning,
+          });
           requirements = plan.requirements;
           plannerStatus = "completed";
         } catch (error) {
@@ -205,6 +222,7 @@ export function createMemoryEvidenceResolverV1(input: {
         maxNotebookChars,
         directCertificateStatus,
         sourceLocalLocator: input.sourceLocalLocator,
+        sourceLocalHydrator: input.sourceLocalHydrator,
         sourceLocalBudget:
           input.sourceLocalBudget ??
           DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
@@ -220,7 +238,7 @@ export function createMemoryEvidenceResolverV1(input: {
         input.closureAuditor !== undefined &&
         requirements.length > 0 &&
         pass.notebook.coverage.every((item) => item.status === "covered") &&
-        (intent.roleConstraint === "assistant" ||
+        (intent.roleConstraint !== "user" ||
           intent.temporalMode !== "any" ||
           intent.answerShape !== "lookup" ||
           requirements.length > 1 ||
@@ -365,17 +383,22 @@ async function resolveEvidencePass(input: {
   readonly maxNotebookChars: number;
   readonly directCertificateStatus: MemoryEvidenceResolutionV1["directCertificateStatus"];
   readonly sourceLocalLocator?: MemorySourceLocalEvidenceLocatorV1;
+  readonly sourceLocalHydrator?: MemorySourceLocalEvidenceHydratorV1;
   readonly sourceLocalBudget?: MemorySourceLocalEvidenceBudgetV1;
   readonly evidenceTimeUpperBound?: string;
   readonly excludedEvidenceRefs?: ReadonlySet<string>;
   readonly signal: AbortSignal;
 }): Promise<MemoryEvidenceResolutionPassV1> {
-  const supplemental = await Promise.all(
-    input.requirements.map((requirement) =>
-      requirement.searchText === input.query
-        ? Promise.resolve(input.primary)
-        : input.index.search(requirement.searchText, input.signal),
-    ),
+  const supplemental = (
+    await Promise.all(
+      input.requirements.map((requirement) =>
+        requirement.searchText === input.query
+          ? Promise.resolve(input.primary)
+          : input.index.search(requirement.searchText, input.signal),
+      ),
+    )
+  ).map((result) =>
+    filterEvidenceSearchResultForRole(result, input.intent.roleConstraint),
   );
   const discoveryResults: Array<
     Readonly<{
@@ -440,41 +463,112 @@ async function resolveEvidencePass(input: {
         addedCandidateCount: 0,
         selectedCandidateCount: 0,
       });
-    } else {
-      const requirement = input.requirements[0];
-      if (!requirement) throw namedError("MemorySourceLocalRequirementMissing");
-      const request = Object.freeze({
-        requirement,
-        lockedSourceIds: Object.freeze([...sourceIds]),
-        ...(input.evidenceTimeUpperBound === undefined
-          ? {}
-          : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
-        budget:
-          input.sourceLocalBudget ??
-          DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+    } else if (!input.sourceLocalHydrator) {
+      sourceLocalization = Object.freeze({
+        status: "not_configured",
+        reasonCode: "hydrator_missing",
+        locatorVersion: input.sourceLocalLocator.locatorVersion,
+        addedCandidateCount: 0,
+        selectedCandidateCount: 0,
       });
+    } else {
       try {
-        const result = await input.sourceLocalLocator.locate(
-          request,
-          input.signal,
+        const located: Array<
+          Readonly<{
+            result: MemorySourceLocalEvidenceResultV1;
+            hits: readonly MemorySourceLocalEvidenceHitV1[];
+          }>
+        > = [];
+        for (const requirement of input.requirements) {
+          const request = Object.freeze({
+            requirement,
+            lockedSourceIds: Object.freeze([...sourceIds]),
+            ...(input.evidenceTimeUpperBound === undefined
+              ? {}
+              : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
+            budget:
+              input.sourceLocalBudget ??
+              DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+          });
+          const locatedResult = await input.sourceLocalLocator.locate(
+            request,
+            input.signal,
+          );
+          validateMemorySourceLocalEvidenceResultV1({
+            locator: input.sourceLocalLocator,
+            request,
+            result: locatedResult,
+          });
+          const result = await hydrateMemorySourceLocalEvidenceResultV1({
+            hydrator: input.sourceLocalHydrator,
+            request,
+            result: locatedResult,
+            signal: input.signal,
+          });
+          const hits = validateMemorySourceLocalEvidenceResultV1({
+            locator: input.sourceLocalLocator,
+            request,
+            result,
+          });
+          located.push(Object.freeze({ result, hits }));
+        }
+        localEvidenceRefs = new Set(
+          located.flatMap(({ hits }) => hits.map((hit) => hit.evidenceRef)),
         );
-        const hits = validateMemorySourceLocalEvidenceResultV1({
-          locator: input.sourceLocalLocator,
-          request,
-          result,
+        requirementHits = Object.freeze(
+          baselineRequirementHits.map((hits, index) =>
+            mergeEvidenceHits(located[index]?.hits ?? [], hits),
+          ),
+        );
+        const results = located.map(({ result }) => result);
+        const locatorRevisions = results.map(
+          (result) => result.locatorRevision,
+        );
+        const telemetry = Object.freeze({
+          lexicalCandidates: results.reduce(
+            (total, result) => total + result.telemetry.lexicalCandidates,
+            0,
+          ),
+          denseCandidates: results.reduce(
+            (total, result) => total + result.telemetry.denseCandidates,
+            0,
+          ),
+          anchorCount: results.reduce(
+            (total, result) => total + result.telemetry.anchorCount,
+            0,
+          ),
+          includedTurnCount: results.reduce(
+            (total, result) => total + result.telemetry.includedTurnCount,
+            0,
+          ),
+          renderedChars: results.reduce(
+            (total, result) => total + result.telemetry.renderedChars,
+            0,
+          ),
+          cacheHit: results.every((result) => result.telemetry.cacheHit),
+          durationMs: results.reduce(
+            (total, result) => total + result.telemetry.durationMs,
+            0,
+          ),
         });
-        localEvidenceRefs = new Set(hits.map((hit) => hit.evidenceRef));
-        requirementHits = Object.freeze([
-          mergeEvidenceHits(hits, baselineRequirementHits[0] ?? []),
-        ]);
         sourceLocalization = Object.freeze({
-          status: hits.length === 0 ? "completed_empty" : "completed",
+          status:
+            localEvidenceRefs.size === 0 ? "completed_empty" : "completed",
           reasonCode:
-            hits.length === 0 ? "no_anchor" : "assistant_anchor_found",
-          locatorVersion: result.locatorVersion,
-          locatorRevision: result.locatorRevision,
-          telemetry: result.telemetry,
-          addedCandidateCount: hits.length,
+            localEvidenceRefs.size === 0
+              ? "no_anchor"
+              : "assistant_anchor_found",
+          locatorVersion: input.sourceLocalLocator.locatorVersion,
+          hydratorVersion: input.sourceLocalHydrator.hydratorVersion,
+          locatorRevision:
+            locatorRevisions.length === 1
+              ? locatorRevisions[0]
+              : hashCanonicalJsonV1({
+                  schemaVersion: "paw.memory-source-local-batch-revision.v1",
+                  revisions: locatorRevisions,
+                }),
+          telemetry,
+          addedCandidateCount: localEvidenceRefs.size,
           selectedCandidateCount: 0,
         });
       } catch (error) {
@@ -486,6 +580,7 @@ async function resolveEvidencePass(input: {
           status: invalid ? "invalid_result" : "fallback",
           reasonCode: invalid ? "result_rejected" : "locator_failed",
           locatorVersion: input.sourceLocalLocator.locatorVersion,
+          hydratorVersion: input.sourceLocalHydrator.hydratorVersion,
           addedCandidateCount: 0,
           selectedCandidateCount: 0,
         });
@@ -505,10 +600,19 @@ async function resolveEvidencePass(input: {
     | ReadonlyMap<string, ReadonlySet<string>>
     | undefined;
   if (input.requirements.length > 0 && input.supportSelector) {
+    // A configured selector is an authority gate. Start closed so an empty
+    // candidate set, malformed plugin result, or selector failure can never
+    // make `undefined` mean "accept every hit" downstream.
+    selectedRefsByRequirement = new Map(
+      input.requirements.map((requirement) => [
+        requirement.requirementId,
+        new Set<string>(),
+      ]),
+    );
     const candidates = selectSupportCandidates(
       requirementHits,
       sourceIds,
-      input.intent.roleConstraint === "assistant",
+      input.intent.roleConstraint !== "user",
       32,
     );
     if (candidates.length > 0) {
@@ -517,13 +621,22 @@ async function resolveEvidencePass(input: {
           { query: input.query, requirements: input.requirements, candidates },
           input.signal,
         );
+        supportAssessments = enforceSelectedEvidenceAuthority({
+          assessments: selection.assessments,
+          requirements: input.requirements,
+          candidateEvidenceRefs: new Set(
+            candidates.map((candidate) => candidate.evidenceRef),
+          ),
+          requirementHits,
+          roleConstraint: input.intent.roleConstraint,
+          certifiedSharedDialogueRefs: localEvidenceRefs,
+        });
         selectedRefsByRequirement = new Map(
-          selection.assessments.map((assessment) => [
+          supportAssessments.map((assessment) => [
             assessment.requirementId,
             new Set(assessment.supportingEvidenceRefs),
           ]),
         );
-        supportAssessments = selection.assessments;
         supportSelectionRevision = selection.selectionRevision;
         supportSelectorStatus = "completed";
       } catch (error) {
@@ -543,15 +656,26 @@ async function resolveEvidencePass(input: {
       }
     }
   }
-  const selectedLocalCount = [...(selectedRefsByRequirement?.values() ?? [])]
-    .flatMap((refs) => [...refs])
-    .filter((ref) => localEvidenceRefs.has(ref)).length;
+  const selectedLocalCount = new Set(
+    [...(selectedRefsByRequirement?.values() ?? [])]
+      .flatMap((refs) => [...refs])
+      .filter((ref) => localEvidenceRefs.has(ref)),
+  ).size;
   if (sourceLocalization.status === "completed") {
     sourceLocalization = Object.freeze({
       ...sourceLocalization,
       selectedCandidateCount: selectedLocalCount,
     });
   }
+  // An ambiguous dialogue query may open assistant evidence only after the
+  // selector has bound exact evidence refs. Unselected fallback context stays
+  // closed even after a successful selection, and all assistant context stays
+  // closed when selection fails.
+  const allowSelectedContextOnly =
+    input.intent.roleConstraint === "assistant" ||
+    (input.intent.roleConstraint === "any" &&
+      supportSelectorStatus === "completed");
+  const allowFallbackContextOnly = input.intent.roleConstraint === "assistant";
   const notebook = buildMemoryEvidenceNotebookV1({
     requirements: input.requirements.map((requirement, index) => ({
       requirementId: requirement.requirementId,
@@ -571,7 +695,7 @@ async function resolveEvidencePass(input: {
     allowedSourceIds: sourceIds,
     maxHitsPerRequirement: input.maxHitsPerRequirement,
     maxChars: input.maxNotebookChars,
-    allowContextOnly: input.intent.roleConstraint === "assistant",
+    allowContextOnly: allowSelectedContextOnly,
   });
   const nonSupportingRefs = new Set(
     supportAssessments.flatMap((assessment) => [
@@ -596,7 +720,7 @@ async function resolveEvidencePass(input: {
           notebook,
           primaryHits: packetFallbackHits,
           selectedSourceIds: sourceIds,
-          allowContextOnly: input.intent.roleConstraint === "assistant",
+          allowContextOnly: allowFallbackContextOnly,
           includeFallback:
             input.intent.temporalMode !== "latest" ||
             notebook.coverage.some((item) => item.status !== "covered") ||
@@ -610,7 +734,7 @@ async function resolveEvidencePass(input: {
       : buildPrimaryEvidencePacketSources(
           input.primary.hits,
           sourceIds,
-          input.intent.roleConstraint === "assistant",
+          allowFallbackContextOnly,
           2,
           input.maxNotebookChars,
           new Set(),
@@ -834,6 +958,166 @@ function singleAnswerRole<T extends string>(
   roles: ReadonlySet<T>,
 ): T | "mixed" {
   return roles.size === 1 ? (roles.values().next().value ?? "mixed") : "mixed";
+}
+
+function filterEvidenceSearchResultForRole(
+  result: MemoryEvidenceIndexSearchResultV1,
+  roleConstraint: MemoryEvidenceQueryIntentV3["roleConstraint"],
+): MemoryEvidenceIndexSearchResultV1 {
+  if (roleConstraint !== "user") return result;
+  return Object.freeze({
+    ...result,
+    lists: Object.freeze(
+      result.lists.map((list) =>
+        Object.freeze({
+          ...list,
+          candidates: Object.freeze(
+            list.candidates.filter(
+              (candidate) => candidate.authority !== "context_only",
+            ),
+          ),
+        }),
+      ),
+    ),
+    hits: Object.freeze(
+      result.hits.filter((hit) => hit.authority !== "context_only"),
+    ),
+  });
+}
+
+function enforceSelectedEvidenceAuthority(input: {
+  readonly assessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
+  readonly requirements: readonly MemoryEvidenceRequirementV3[];
+  readonly candidateEvidenceRefs: ReadonlySet<string>;
+  readonly requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[];
+  readonly roleConstraint: MemoryEvidenceQueryIntentV3["roleConstraint"];
+  readonly certifiedSharedDialogueRefs: ReadonlySet<string>;
+}): readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] {
+  const requiredIds = new Set(
+    input.requirements.map((requirement) => requirement.requirementId),
+  );
+  if (
+    requiredIds.size !== input.requirements.length ||
+    input.assessments.length !== input.requirements.length
+  ) {
+    throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
+  }
+  const assessedIds = new Set<string>();
+  const hitByRef = new Map(
+    input.requirementHits.flat().map((hit) => [hit.evidenceRef, hit] as const),
+  );
+  return Object.freeze(
+    input.assessments.map((assessment) => {
+      if (
+        !requiredIds.has(assessment.requirementId) ||
+        assessedIds.has(assessment.requirementId) ||
+        !Array.isArray(assessment.supportingEvidenceRefs) ||
+        !Array.isArray(assessment.contradictingEvidenceRefs) ||
+        !Array.isArray(assessment.unknownEvidenceRefs)
+      ) {
+        throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
+      }
+      assessedIds.add(assessment.requirementId);
+      const partition = [
+        ...assessment.supportingEvidenceRefs,
+        ...assessment.contradictingEvidenceRefs,
+        ...assessment.unknownEvidenceRefs,
+      ];
+      if (
+        new Set(partition).size !== partition.length ||
+        partition.some(
+          (evidenceRef) =>
+            typeof evidenceRef !== "string" ||
+            !input.candidateEvidenceRefs.has(evidenceRef),
+        )
+      ) {
+        throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
+      }
+      const rejected: string[] = [];
+      const supporting = assessment.supportingEvidenceRefs.filter(
+        (evidenceRef) => {
+          const hit = hitByRef.get(evidenceRef);
+          const allowed =
+            hit !== undefined &&
+            (hit.authority !== "context_only" ||
+              input.roleConstraint === "assistant" ||
+              (input.roleConstraint === "any" &&
+                input.certifiedSharedDialogueRefs.has(evidenceRef)));
+          if (!allowed) rejected.push(evidenceRef);
+          return allowed;
+        },
+      );
+      return Object.freeze({
+        requirementId: assessment.requirementId,
+        supportingEvidenceRefs: Object.freeze(supporting),
+        contradictingEvidenceRefs: Object.freeze([
+          ...assessment.contradictingEvidenceRefs,
+        ]),
+        unknownEvidenceRefs: Object.freeze([
+          ...new Set([...assessment.unknownEvidenceRefs, ...rejected]),
+        ]),
+      });
+    }),
+  );
+}
+
+function validateMemoryEvidenceQueryPlanBoundary(input: {
+  readonly plan: Awaited<ReturnType<MemoryEvidenceQueryPlannerV3["plan"]>>;
+  readonly intent: MemoryEvidenceQueryIntentV3;
+  readonly plannerVersion: string;
+}): void {
+  const { plan, intent } = input;
+  if (
+    plan.plannerVersion !== input.plannerVersion ||
+    plan.answerShape !== intent.answerShape ||
+    plan.temporalMode !== intent.temporalMode ||
+    plan.roleConstraint !== intent.roleConstraint ||
+    plan.needsPlanning !== intent.needsPlanning
+  ) {
+    throw namedError("MemoryEvidenceQueryPlanAuthorityInvalid");
+  }
+  if (
+    !Array.isArray(plan.requirements) ||
+    plan.requirements.length < 1 ||
+    plan.requirements.length > 4
+  ) {
+    throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
+  }
+  const ids = new Set<string>();
+  const relations = new Set(["direct", "temporal", "comparative", "inferred"]);
+  const coverageModes = new Set(["any", "all", "latest", "convergent"]);
+  for (const requirement of plan.requirements) {
+    const minimumEvidence = requirement.minimumEvidence ?? 1;
+    const relation = requirement.relation ?? "direct";
+    const coverageMode =
+      requirement.coverageMode ??
+      (requirement.temporalMode === "latest" ? "latest" : "any");
+    if (
+      typeof requirement.requirementId !== "string" ||
+      requirement.requirementId.trim() !== requirement.requirementId ||
+      requirement.requirementId.length < 1 ||
+      requirement.requirementId.length > 96 ||
+      ids.has(requirement.requirementId) ||
+      typeof requirement.label !== "string" ||
+      requirement.label.trim().length < 1 ||
+      requirement.label.length > 192 ||
+      typeof requirement.searchText !== "string" ||
+      requirement.searchText.trim().length < 1 ||
+      requirement.searchText.length > 512 ||
+      requirement.temporalMode !== intent.temporalMode ||
+      requirement.roleConstraint !== intent.roleConstraint ||
+      !relations.has(relation) ||
+      !coverageModes.has(coverageMode) ||
+      !Number.isSafeInteger(minimumEvidence) ||
+      minimumEvidence < 1 ||
+      minimumEvidence > 3 ||
+      ((coverageMode === "all" || coverageMode === "convergent") &&
+        minimumEvidence < 2)
+    ) {
+      throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
+    }
+    ids.add(requirement.requirementId);
+  }
 }
 
 function mergeEvidenceHits(

@@ -1,10 +1,37 @@
 import { describe, expect, test } from "bun:test";
 
+import { hashTextV1 } from "../src/canonical.js";
 import {
   type MemoryEvidenceIndexV1,
   createMemoryEvidenceResolverV1,
   projectEvidenceFirstMemoryContextPacketV1,
 } from "../src/index.js";
+
+function sourceLocalHydrator(contents: Readonly<Record<string, string>>) {
+  return {
+    hydratorVersion: "test-source-local-hydrator.v1",
+    async hydrate(evidenceRefs: readonly string[]) {
+      return evidenceRefs.flatMap((evidenceRef) => {
+        const content = contents[evidenceRef];
+        const turnOrder = Number(/turn-(\d+)$/.exec(evidenceRef)?.[1]);
+        return content === undefined
+          ? []
+          : [
+              {
+                evidenceRef,
+                sourceKind:
+                  turnOrder % 2 === 0
+                    ? ("assistant_output" as const)
+                    : ("user_input" as const),
+                turnOrder,
+                content,
+                contentHash: hashTextV1(content),
+              },
+            ];
+      });
+    },
+  };
+}
 
 function index(): MemoryEvidenceIndexV1 {
   return {
@@ -47,6 +74,412 @@ function index(): MemoryEvidenceIndexV1 {
 }
 
 describe("shared evidence resolver v1", () => {
+  test("filters assistant-only candidates before locking sources for user facts", async () => {
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "assistant-ref",
+                    sourceId: "assistant-session",
+                    evidenceRef: "assistant-session#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
+                  {
+                    candidateId: "user-ref",
+                    sourceId: "user-session",
+                    evidenceRef: "user-session#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "assistant-session",
+                evidenceRef: "assistant-session#turn-2",
+                content: "assistant invented city",
+                authority: "context_only" as const,
+              },
+              {
+                sourceId: "user-session",
+                evidenceRef: "user-session#turn-1",
+                content: "I visited Porto.",
+                authority: "user_asserted" as const,
+              },
+            ],
+          };
+        },
+      },
+      maxSources: 1,
+    });
+
+    const result = await resolver.resolve(
+      "Which city did I visit?",
+      new AbortController().signal,
+    );
+
+    expect(result.intent.roleConstraint).toBe("user");
+    expect(result.sources.map((source) => source.sourceId)).toEqual([
+      "user-session",
+    ]);
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).not.toContain("assistant invented city");
+  });
+
+  test("keeps explicit user-origin history closed even beside an assistant repetition", async () => {
+    let locatorCalls = 0;
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "user-ref",
+                    sourceId: "session",
+                    evidenceRef: "session#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                  {
+                    candidateId: "assistant-ref",
+                    sourceId: "session",
+                    evidenceRef: "session#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session",
+                evidenceRef: "session#turn-1",
+                content: "I said I visited Porto.",
+                authority: "user_asserted" as const,
+                turnOrder: 1,
+              },
+              {
+                sourceId: "session",
+                evidenceRef: "session#turn-2",
+                content: "You visited a different invented city.",
+                authority: "context_only" as const,
+                turnOrder: 2,
+              },
+            ],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate() {
+          locatorCalls += 1;
+          throw new Error("must not be called for an explicit user fact");
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({}),
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          expect(
+            input.candidates.map((candidate) => candidate.evidenceRef),
+          ).toEqual(["session#turn-1"]);
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "user-origin-selection",
+            assessments: input.requirements.map((requirement) => ({
+              requirementId: requirement.requirementId,
+              supportingEvidenceRefs: ["session#turn-1"],
+              contradictingEvidenceRefs: [],
+              unknownEvidenceRefs: [],
+            })),
+          };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "What city did I say I visited in our last conversation?",
+      new AbortController().signal,
+    );
+
+    expect(result.intent.roleConstraint).toBe("user");
+    expect(locatorCalls).toBe(0);
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).toContain("Porto");
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).not.toContain("invented city");
+  });
+
+  test("rejects requirement authority drift from a custom planner port", async () => {
+    let locatedRole = "";
+    const resolver = createMemoryEvidenceResolverV1({
+      index: index(),
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "any" as const,
+            needsPlanning: true,
+            requirements: [
+              {
+                requirementId: "drifted",
+                label: "drifted authority",
+                searchText: "prior assistant output",
+                temporalMode: "any" as const,
+                roleConstraint: "assistant" as const,
+                relation: "direct" as const,
+                coverageMode: "any" as const,
+                minimumEvidence: 1,
+              },
+            ],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate(request) {
+          locatedRole = request.requirement.roleConstraint;
+          return {
+            locatorVersion: "test-source-local.v1",
+            locatorRevision: "empty",
+            hits: [],
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: 0,
+              denseCandidates: 0,
+              anchorCount: 0,
+              includedTurnCount: 0,
+              renderedChars: 0,
+              cacheHit: false,
+              durationMs: 0,
+            },
+          };
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({}),
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "root-selection",
+            assessments: input.requirements.map((requirement) => ({
+              requirementId: requirement.requirementId,
+              supportingEvidenceRefs: [],
+              contradictingEvidenceRefs: [],
+              unknownEvidenceRefs: [],
+            })),
+          };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "Could you repeat the item from our earlier conversation?",
+      new AbortController().signal,
+    );
+
+    expect(result.plannerStatus).toBe("fallback");
+    expect(result.requirements[0]?.requirementId).toBe("root-requirement");
+    expect(result.requirements[0]?.roleConstraint).toBe("any");
+    expect(locatedRole).toBe("any");
+  });
+
+  test("fails closed when a custom selector omits a requirement", async () => {
+    const requirements = ["first", "second"].map((requirementId) => ({
+      requirementId,
+      label: requirementId,
+      searchText: `${requirementId} earlier item`,
+      temporalMode: "any" as const,
+      roleConstraint: "any" as const,
+      relation: "direct" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+    }));
+    const resolver = createMemoryEvidenceResolverV1({
+      index: index(),
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "any" as const,
+            needsPlanning: true,
+            requirements,
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "broken-selector.v1",
+        async select(input) {
+          return {
+            selectorVersion: "broken-selector.v1",
+            selectionRevision: "missing-assessment",
+            assessments: [
+              {
+                requirementId: input.requirements[0]!.requirementId,
+                supportingEvidenceRefs: [input.candidates[0]!.evidenceRef],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "Could you repeat the two items from our earlier conversation?",
+      new AbortController().signal,
+    );
+
+    expect(result.supportSelectorStatus).toBe("fallback");
+    expect(result.supportAssessments).toEqual([]);
+    expect(result.notebook.coverage.map((item) => item.status)).toEqual([
+      "missing",
+      "missing",
+    ]);
+    expect(result.packetSources.length).toBeGreaterThan(0);
+    expect(
+      result.packetSources.every((source) => source.answerRole === "candidate"),
+    ).toBe(true);
+  });
+
+  test("does not let a selector promote uncertified assistant context for any", async () => {
+    const requirement = {
+      requirementId: "shared-item",
+      label: "shared dialogue item",
+      searchText: "item from earlier conversation",
+      temporalMode: "any" as const,
+      roleConstraint: "any" as const,
+      relation: "direct" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+    };
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "user-ref",
+                    sourceId: "session",
+                    evidenceRef: "session#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                  {
+                    candidateId: "assistant-ref",
+                    sourceId: "session",
+                    evidenceRef: "session#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session",
+                evidenceRef: "session#turn-1",
+                content: "Please create a name.",
+                authority: "user_asserted" as const,
+                turnOrder: 1,
+              },
+              {
+                sourceId: "session",
+                evidenceRef: "session#turn-2",
+                content: "uncertified assistant name",
+                authority: "context_only" as const,
+                turnOrder: 2,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "any" as const,
+            needsPlanning: true,
+            requirements: [requirement],
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select() {
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "wrong-assistant-selection",
+            assessments: [
+              {
+                requirementId: requirement.requirementId,
+                supportingEvidenceRefs: ["session#turn-2"],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "Could you repeat the item from our earlier conversation?",
+      new AbortController().signal,
+    );
+    expect(result.supportSelectorStatus).toBe("completed");
+    expect(result.notebook.coverage[0]?.status).toBe("missing");
+    expect(result.supportAssessments[0]?.supportingEvidenceRefs).toEqual([]);
+    expect(result.supportAssessments[0]?.unknownEvidenceRefs).toContain(
+      "session#turn-2",
+    );
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).not.toContain("uncertified assistant name");
+  });
+
   test("supplements an eligible assistant lookup after source lock without changing fusion", async () => {
     const requirement = {
       requirementId: "assistant-answer",
@@ -77,6 +510,13 @@ describe("shared evidence resolver v1", () => {
                     sourceKind: "user_input" as const,
                     authority: "user_asserted" as const,
                   },
+                  {
+                    candidateId: "unselected-assistant-ref",
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-9",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
                 ],
               },
             ],
@@ -88,17 +528,24 @@ describe("shared evidence resolver v1", () => {
                 authority: "user_asserted" as const,
                 turnOrder: 1,
               },
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-9",
+                content: "unselected assistant fallback must stay closed",
+                authority: "context_only" as const,
+                turnOrder: 9,
+              },
             ],
           };
         },
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -111,7 +558,7 @@ describe("shared evidence resolver v1", () => {
         locatorVersion: "test-source-local.v1",
         async locate(request) {
           lockedSources = request.lockedSourceIds;
-          const content = "[assistant_output hit] The answer was cobalt.";
+          const content = "forged locator prose";
           return {
             locatorVersion: "test-source-local.v1",
             locatorRevision: "local-revision",
@@ -147,6 +594,9 @@ describe("shared evidence resolver v1", () => {
           };
         },
       },
+      sourceLocalHydrator: sourceLocalHydrator({
+        "session-1#turn-2": "The answer was cobalt.",
+      }),
       supportSelector: {
         selectorVersion: "test-selector.v1",
         async select(input) {
@@ -182,6 +632,218 @@ describe("shared evidence resolver v1", () => {
       selectedCandidateCount: 1,
     });
     expect(result.packetSources[0]?.text).toContain("cobalt");
+    expect(result.packetSources[0]?.text).not.toContain("forged locator prose");
+  });
+
+  test("locates every direct assistant requirement and commits the batch together", async () => {
+    const requirements = [
+      {
+        requirementId: "assistant-answer-1",
+        label: "first prior assistant answer",
+        searchText: "first answer you gave",
+        temporalMode: "any" as const,
+        roleConstraint: "any" as const,
+        relation: "direct" as const,
+        coverageMode: "any" as const,
+        minimumEvidence: 1,
+      },
+      {
+        requirementId: "assistant-answer-2",
+        label: "second prior assistant answer",
+        searchText: "second answer you gave",
+        temporalMode: "any" as const,
+        roleConstraint: "any" as const,
+        relation: "direct" as const,
+        coverageMode: "any" as const,
+        minimumEvidence: 1,
+      },
+    ];
+    const located: string[] = [];
+    let failSecond = false;
+    let selectorCandidateRefs: readonly string[] = [];
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "global-ref",
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-1",
+                content: "Please answer both questions.",
+                authority: "user_asserted" as const,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "any" as const,
+            needsPlanning: true,
+            requirements,
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate(request) {
+          located.push(request.requirement.requirementId);
+          if (
+            failSecond &&
+            request.requirement.requirementId === "assistant-answer-2"
+          ) {
+            throw new Error("second locator failed");
+          }
+          const suffix = request.requirement.requirementId.endsWith("1")
+            ? "2"
+            : "4";
+          const userTurn = Number(suffix) - 1;
+          const content = `assistant answer ${suffix}`;
+          const evidenceRef = `session-1#turn-${suffix}`;
+          return {
+            locatorVersion: "test-source-local.v1",
+            locatorRevision: `local-revision-${suffix}`,
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef,
+                anchorEvidenceRef: evidenceRef,
+                contextEvidenceRefs: [
+                  `session-1#turn-${userTurn}`,
+                  evidenceRef,
+                ],
+                sourceKind: "assistant_output" as const,
+                content,
+                authority: "context_only" as const,
+                turnOrder: Number(suffix),
+                includedTurns: [
+                  {
+                    evidenceRef: `session-1#turn-${userTurn}`,
+                    sourceKind: "user_input" as const,
+                    turnOrder: userTurn,
+                  },
+                  {
+                    evidenceRef,
+                    sourceKind: "assistant_output" as const,
+                    turnOrder: Number(suffix),
+                  },
+                ],
+              },
+            ],
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: 1,
+              denseCandidates: 1,
+              anchorCount: 1,
+              includedTurnCount: 2,
+              renderedChars: content.length,
+              cacheHit: false,
+              durationMs: 2,
+            },
+          };
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({
+        "session-1#turn-1": "Please answer the first question.",
+        "session-1#turn-2": "assistant answer 2",
+        "session-1#turn-3": "Please answer the second question.",
+        "session-1#turn-4": "assistant answer 4",
+      }),
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          selectorCandidateRefs = input.candidates.map(
+            (candidate) => candidate.evidenceRef,
+          );
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "selected-local-batch",
+            assessments: requirements.map((requirement, index) => ({
+              requirementId: requirement.requirementId,
+              supportingEvidenceRefs: [
+                failSecond
+                  ? "session-1#turn-1"
+                  : `session-1#turn-${index === 0 ? 2 : 4}`,
+              ],
+              contradictingEvidenceRefs: [],
+              unknownEvidenceRefs: [],
+            })),
+          };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "Could you repeat the two items from our earlier conversation?",
+      new AbortController().signal,
+    );
+
+    expect(located).toEqual(["assistant-answer-1", "assistant-answer-2"]);
+    expect(result.sourceLocalization).toMatchObject({
+      status: "completed",
+      addedCandidateCount: 2,
+      selectedCandidateCount: 2,
+      telemetry: {
+        lexicalCandidates: 2,
+        denseCandidates: 2,
+        anchorCount: 2,
+        includedTurnCount: 4,
+        cacheHit: false,
+        durationMs: 4,
+      },
+    });
+    expect(result.packetSources[0]?.text).toContain("assistant answer 2");
+    expect(result.packetSources[0]?.text).toContain("assistant answer 4");
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).not.toContain("unselected assistant fallback must stay closed");
+
+    failSecond = true;
+    located.length = 0;
+    const fallback = await resolver.resolve(
+      "Could you repeat the two items from our earlier conversation?",
+      new AbortController().signal,
+    );
+
+    expect(located).toEqual(["assistant-answer-1", "assistant-answer-2"]);
+    expect(selectorCandidateRefs).not.toContain("session-1#turn-2");
+    expect(selectorCandidateRefs).not.toContain("session-1#turn-4");
+    expect(fallback.sourceLocalization).toMatchObject({
+      status: "fallback",
+      reasonCode: "locator_failed",
+      addedCandidateCount: 0,
+      selectedCandidateCount: 0,
+    });
+    expect(fallback.packetSources[0]?.text).not.toContain("assistant answer 2");
+    expect(fallback.packetSources[0]?.text).not.toContain("assistant answer 4");
+    expect(
+      fallback.packetSources.map((source) => source.text).join("\n"),
+    ).not.toContain("unselected assistant fallback must stay closed");
   });
 
   test("drops local candidates when the selector rejects them or fails", async () => {
@@ -231,11 +893,11 @@ describe("shared evidence resolver v1", () => {
         },
         planner: {
           plannerVersion:
-            "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+            "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
           async plan() {
             return {
               plannerVersion:
-                "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+                "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
               answerShape: "lookup" as const,
               temporalMode: "any" as const,
               roleConstraint: "assistant" as const,
@@ -283,6 +945,9 @@ describe("shared evidence resolver v1", () => {
             };
           },
         },
+        sourceLocalHydrator: sourceLocalHydrator({
+          "session-1#turn-2": "local secret answer",
+        }),
       };
     const selector = {
       selectorVersion: "test-selector.v1",
@@ -345,11 +1010,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -482,7 +1147,7 @@ describe("shared evidence resolver v1", () => {
     const forceValues: Array<boolean | undefined> = [];
     const planner = {
       plannerVersion:
-        "paw.memory-evidence-query-planner.v6:typed-evidence-closure" as const,
+        "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates" as const,
       async plan(
         _query: string,
         _signal: AbortSignal,
@@ -491,7 +1156,7 @@ describe("shared evidence resolver v1", () => {
         forceValues.push(options?.force);
         return {
           plannerVersion:
-            "paw.memory-evidence-query-planner.v6:typed-evidence-closure" as const,
+            "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates" as const,
           answerShape: "lookup" as const,
           temporalMode: "any" as const,
           roleConstraint: "user" as const,
@@ -578,12 +1243,12 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
         async plan() {
           plannerCalls += 1;
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
             answerShape: "lookup",
             temporalMode: "any",
             roleConstraint: "user",
@@ -620,11 +1285,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -742,11 +1407,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -809,11 +1474,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
             answerShape: "lookup",
             temporalMode: "latest",
             roleConstraint: "user",
@@ -856,7 +1521,6 @@ describe("shared evidence resolver v1", () => {
       "What is my current city?",
       new AbortController().signal,
     );
-
     expect(result.notebook.coverage[0]?.status).toBe("missing");
     expect(result.packetSources.length).toBeGreaterThan(0);
     expect(result.packetSources[0]?.answerRole).toBe("candidate");
@@ -922,11 +1586,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -1021,11 +1685,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
             answerShape: "compare" as const,
             temporalMode: "history" as const,
             roleConstraint: "user" as const,

@@ -221,6 +221,11 @@ describe("evidence-first conversational bundles", () => {
     expect(
       isAssistantMemoryQueryV1("How have my travel preferences changed?"),
     ).toBe(false);
+    expect(
+      isAssistantMemoryQueryV1(
+        "What amount was in the plan from our previous conversation?",
+      ),
+    ).toBe(false);
   });
 
   test("preserves chronological roles around a user-confirmed assistant antecedent", () => {

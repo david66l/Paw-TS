@@ -5,6 +5,7 @@ import { closeSql, getSql, ping } from "@paw/memory/db";
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
   createPostgresMemoryRawEvidenceArchiveV1,
+  hydrateMemorySourceLocalEvidenceResultV1,
   validateMemorySourceLocalEvidenceResultV1,
 } from "../src/index.js";
 
@@ -84,8 +85,15 @@ describe("postgres source-local assistant locator", () => {
     );
     expect(archive.locate).toBeFunction();
     expect(archive.locatorVersion).toBeString();
-    if (!archive.locate || !archive.locatorVersion) {
-      throw new Error("Postgres source-local locator is unavailable");
+    expect(archive.hydrate).toBeFunction();
+    expect(archive.hydratorVersion).toBeString();
+    if (
+      !archive.locate ||
+      !archive.locatorVersion ||
+      !archive.hydrate ||
+      !archive.hydratorVersion
+    ) {
+      throw new Error("Postgres source-local evidence ports are unavailable");
     }
     const request = {
       requirement: {
@@ -125,6 +133,19 @@ describe("postgres source-local assistant locator", () => {
       "journal:session-1#turn-3",
     ]);
     expect(first.telemetry.cacheHit).toBe(false);
+    const hydrated = await hydrateMemorySourceLocalEvidenceResultV1({
+      hydrator: {
+        hydratorVersion: archive.hydratorVersion,
+        hydrate: archive.hydrate.bind(archive),
+      },
+      request,
+      result: first,
+      signal: controller.signal,
+    });
+    expect(hydrated.hits[0]?.content).toContain(
+      "The memorable color answer was cobalt.",
+    );
+    expect(events.some((event) => event.type === "hydrate")).toBe(true);
 
     const replay = await locator.locate(request, controller.signal);
     expect(replay.telemetry.cacheHit).toBe(true);

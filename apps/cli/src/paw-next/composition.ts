@@ -5644,6 +5644,16 @@ function createProductMemoryContextResolverV1(
             ),
           })
         : undefined;
+    const sourceLocalHydrator =
+      memory.rawEvidenceArchive.hydratorVersion &&
+      memory.rawEvidenceArchive.hydrate
+        ? Object.freeze({
+            hydratorVersion: memory.rawEvidenceArchive.hydratorVersion,
+            hydrate: memory.rawEvidenceArchive.hydrate.bind(
+              memory.rawEvidenceArchive,
+            ),
+          })
+        : undefined;
     const evidenceResolver = createMemoryEvidenceResolverV1({
       index: createProductMemoryEvidenceIndexV1({
         profile: memory.profile,
@@ -5662,7 +5672,9 @@ function createProductMemoryContextResolverV1(
           "MemoryEvidenceSupportSelectorModelFailed",
         ),
       }),
-      ...(sourceLocalLocator === undefined ? {} : { sourceLocalLocator }),
+      ...(sourceLocalLocator === undefined || sourceLocalHydrator === undefined
+        ? {}
+        : { sourceLocalLocator, sourceLocalHydrator }),
       maxSources: Math.min(8, memory.profile.maxCards),
       maxHitsPerRequirement: 4,
       maxNotebookChars: 4_096,

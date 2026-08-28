@@ -73,9 +73,9 @@ import {
   createPostgresMemoryTopicDossierStoreV1,
   createPostgresMemoryTopicEvidenceStoreV1,
   createPostgresMemoryTopicOrganizerStoreV1,
-  isAssistantMemoryQueryV1,
   memoryScopeFingerprintV1,
   memorySourceLocalEvidenceCacheKeyV1,
+  needsMemoryEvidenceRoleResolutionV1,
   planMemoryEvidenceCoverageV1,
   planMemoryTopicEvidenceV1,
   projectEvidenceFirstMemoryAnswerContractV1,
@@ -116,6 +116,7 @@ import {
   planAmbEmbeddingWavesV1,
   streamAmbEmbeddingBatchesV1,
 } from "./embedding-stream.js";
+import { legacyImmutableTurnEvidenceRefV1 } from "./immutable-evidence-address.js";
 import { buildAmbMemoryLlmReplayCacheKeyV1 } from "./memory-llm-replay-cache.js";
 import {
   isAmbDocumentVisibleAtQueryV1,
@@ -1464,13 +1465,15 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
         // L1 atoms happened to be selected. Preserve the complete bounded
         // window, including assistant context, before any resumable L1 work.
         await rawEvidenceArchiveFor(userId).put(
-          window.archiveSource.map((source) => ({
-            evidenceRef: `amb:document/${documentId}#atom-${source.seq}`,
-            sourceKind: source.kind,
-            sourceSeq: source.seq,
-            content: source.content,
-            createdAt: created,
-          })),
+          window.archiveSource.flatMap((source) =>
+            ["atom", "source"].map((addressKind) => ({
+              evidenceRef: `amb:document/${documentId}#${addressKind}-${source.seq}`,
+              sourceKind: source.kind,
+              sourceSeq: source.seq,
+              content: source.content,
+              createdAt: created,
+            })),
+          ),
           new AbortController().signal,
         );
         if (atomCheckpoint.has(writeId)) {
@@ -2254,6 +2257,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstContextStop = "not_evaluated";
   let evidenceFirstVerificationStatus = "not_evaluated";
   const evidenceIntent = classifyMemoryEvidenceQueryV3(queryText);
+  const evidenceFirstInitialRoleConstraint = evidenceIntent.roleConstraint;
+  const evidenceFirstRoleResolutionRequested =
+    evidenceIntent.roleConstraint === "any" &&
+    needsMemoryEvidenceRoleResolutionV1(queryText);
+  let evidenceFirstRoleResolutionStatus = evidenceFirstRoleResolutionRequested
+    ? "pending"
+    : "not_needed";
   let evidenceFirstPlanAnswerShape: string = evidenceIntent.answerShape;
   let evidenceFirstPlanTemporalMode: string = evidenceIntent.temporalMode;
   let evidenceFirstPlanRoleConstraint: string = evidenceIntent.roleConstraint;
@@ -2505,7 +2515,6 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     }));
   }
   async function buildEvidenceFirstDocuments() {
-    const allowAssistantContext = isAssistantMemoryQueryV1(queryText);
     type AmbEvidenceIndexSearch = Readonly<{
       candidates: Awaited<ReturnType<typeof searchL0SourceChunks>>;
       spans: Awaited<ReturnType<typeof searchL0SourceSpans>>;
@@ -2561,41 +2570,31 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
               channel: "l0" as const,
               retrieverId: "source-span",
               weight: 1,
-              candidates: spans
-                .filter(
-                  (span) =>
-                    span.authority !== "context_only" || allowAssistantContext,
-                )
-                .map((span) => ({
-                  candidateId: span.evidenceRef,
-                  sourceId: span.documentId,
-                  evidenceRef: span.evidenceRef,
-                  sourceKind: span.sourceKind,
-                  authority: span.authority,
-                  observedAt: documentCreatedByUser
-                    .get(userId)
-                    ?.get(span.documentId),
-                })),
+              candidates: spans.map((span) => ({
+                candidateId: span.evidenceRef,
+                sourceId: span.documentId,
+                evidenceRef: span.evidenceRef,
+                sourceKind: span.sourceKind,
+                authority: span.authority,
+                observedAt: documentCreatedByUser
+                  .get(userId)
+                  ?.get(span.documentId),
+              })),
             },
             {
               channel: "l0" as const,
               retrieverId: "conversation-span",
               weight: 1.05,
-              candidates: conversations
-                .filter(
-                  (span) =>
-                    span.authority !== "context_only" || allowAssistantContext,
-                )
-                .map((span) => ({
-                  candidateId: span.evidenceRef,
-                  sourceId: span.documentId,
-                  evidenceRef: span.evidenceRef,
-                  sourceKind: span.sourceKind,
-                  authority: span.authority,
-                  observedAt: documentCreatedByUser
-                    .get(userId)
-                    ?.get(span.documentId),
-                })),
+              candidates: conversations.map((span) => ({
+                candidateId: span.evidenceRef,
+                sourceId: span.documentId,
+                evidenceRef: span.evidenceRef,
+                sourceKind: span.sourceKind,
+                authority: span.authority,
+                observedAt: documentCreatedByUser
+                  .get(userId)
+                  ?.get(span.documentId),
+              })),
             },
             {
               channel: "l1" as const,
@@ -2693,6 +2692,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         log("source_local_locator", {
           status: "cache_hit",
           locatorVersion: replay.locatorVersion,
+          requirementIdHash: sha(request.requirement.requirementId).slice(
+            0,
+            20,
+          ),
           sourceSetDigest: sha([...allowed].sort().join("\n")),
           lockedSourceCount: allowed.size,
           anchorCount: replay.hits.length,
@@ -2892,6 +2895,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       log("source_local_locator", {
         status: degradedChannels.length === 0 ? "completed" : "degraded",
         locatorVersion: result.locatorVersion,
+        requirementIdHash: sha(request.requirement.requirementId).slice(0, 20),
         sourceSetDigest: sha([...allowed].sort().join("\n")),
         lockedSourceCount: allowed.size,
         lexicalCandidateCount: lexical.hits.length,
@@ -2924,6 +2928,80 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
               locatorVersion: "paw.amb-source-local-locator.v1:filtered-rrf",
               locate(request: MemorySourceLocalEvidenceRequestV1) {
                 return locateEvidenceWithinSources(request);
+              },
+            }),
+            sourceLocalHydrator: Object.freeze({
+              hydratorVersion:
+                "paw.amb-source-local-hydrator.v2:immutable-raw-archive",
+              async hydrate(
+                evidenceRefs: readonly string[],
+                signal: AbortSignal,
+              ) {
+                const started = Date.now();
+                const archive = rawEvidenceArchiveFor(userId);
+                if (!archive.hydrate) {
+                  throw new Error(
+                    "immutable raw evidence hydration unavailable",
+                  );
+                }
+                const directlyHydrated = await archive.hydrate(
+                  evidenceRefs,
+                  signal,
+                );
+                const directByRef = new Map(
+                  directlyHydrated.map(
+                    (row) => [row.evidenceRef, row] as const,
+                  ),
+                );
+                // Existing 500-user indexes predate the source-ref alias. The
+                // corresponding atom-ref points at the same immutable L0 turn,
+                // so map the address without reading the mutable search index.
+                const legacyAddresses = evidenceRefs.flatMap((evidenceRef) => {
+                  if (directByRef.has(evidenceRef)) return [];
+                  const legacyRef =
+                    legacyImmutableTurnEvidenceRefV1(evidenceRef);
+                  return legacyRef ? [{ evidenceRef, legacyRef }] : [];
+                });
+                const legacyHydrated =
+                  legacyAddresses.length === 0
+                    ? []
+                    : await archive.hydrate(
+                        legacyAddresses.map((item) => item.legacyRef),
+                        signal,
+                      );
+                const legacyByRef = new Map(
+                  legacyHydrated.map((row) => [row.evidenceRef, row] as const),
+                );
+                const hydrated = Object.freeze(
+                  evidenceRefs.flatMap((evidenceRef) => {
+                    const direct = directByRef.get(evidenceRef);
+                    if (direct) return [direct];
+                    const legacyRef = legacyAddresses.find(
+                      (item) => item.evidenceRef === evidenceRef,
+                    )?.legacyRef;
+                    const legacy = legacyRef
+                      ? legacyByRef.get(legacyRef)
+                      : undefined;
+                    return legacy
+                      ? [Object.freeze({ ...legacy, evidenceRef })]
+                      : [];
+                  }),
+                );
+                log("source_local_hydrator", {
+                  status:
+                    hydrated.length === evidenceRefs.length
+                      ? "completed"
+                      : "incomplete",
+                  hydratorVersion:
+                    "paw.amb-source-local-hydrator.v2:immutable-raw-archive",
+                  requestedCount: evidenceRefs.length,
+                  returnedCount: hydrated.length,
+                  directCount: directlyHydrated.length,
+                  legacyMappedCount: hydrated.length - directlyHydrated.length,
+                  cacheHit: false,
+                  durationMs: Date.now() - started,
+                });
+                return hydrated;
               },
             }),
           }
@@ -2962,6 +3040,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstPlanAnswerShape = resolution.intent.answerShape;
     evidenceFirstPlanTemporalMode = resolution.intent.temporalMode;
     evidenceFirstPlanRoleConstraint = resolution.intent.roleConstraint;
+    evidenceFirstRoleResolutionStatus = evidenceFirstRoleResolutionRequested
+      ? resolution.plannerStatus !== "completed"
+        ? "fallback"
+        : "preserved"
+      : "not_needed";
     evidenceFirstPlanRequirementCount = resolution.requirements.length;
     evidenceFirstQueryExpansionCount = resolution.requirements.filter(
       (requirement) => requirement.searchText !== queryText,
@@ -2999,13 +3082,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     const selectedConversationSpans = conversationSpans.filter((span) =>
       selectedEvidenceRefs.has(span.evidenceRef),
     );
-    const assistantRecallSourceId = allowAssistantContext
-      ? selectedConversationSpans.find(
-          (span) =>
-            span.sourceKind === "assistant_output" &&
-            span.authority === "context_only",
-        )?.documentId
-      : undefined;
+    const assistantRecallSourceId =
+      resolution.intent.roleConstraint !== "user"
+        ? selectedConversationSpans.find(
+            (span) =>
+              span.sourceKind === "assistant_output" &&
+              span.authority === "context_only",
+          )?.documentId
+        : undefined;
     evidenceFirstAssistantRecallCount = assistantRecallSourceId ? 1 : 0;
     evidenceFirstL1CandidateCount = fusion.telemetry.l1CandidateCount;
     evidenceFirstFusedCandidateCount = fusion.telemetry.fusedCandidateCount;
@@ -3079,6 +3163,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       status: resolution.sourceLocalization.status,
       reasonCode: resolution.sourceLocalization.reasonCode,
       locatorVersion: resolution.sourceLocalization.locatorVersion ?? null,
+      hydratorVersion: resolution.sourceLocalization.hydratorVersion ?? null,
       localInvoked: new Set([
         "completed",
         "completed_empty",
@@ -3089,7 +3174,12 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       addedCandidateCount: resolution.sourceLocalization.addedCandidateCount,
       baselineSourceSetUnchanged: true,
       packetChanged: resolution.sourceLocalization.selectedCandidateCount > 0,
-      extraLlmCalls: 0,
+      extraLlmCalls:
+        evidenceFirstRoleResolutionRequested &&
+        resolution.plannerStatus === "completed"
+          ? 1
+          : 0,
+      locatorExtraLlmCalls: 0,
     });
     expandedSourceDocuments = new Set(
       resolution.packetSources.map((source) => source.sourceId),
@@ -3100,15 +3190,17 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const authorityLabel =
         resolution.intent.roleConstraint === "assistant"
           ? "[Assistant-output evidence]\nAuthority rule: use only to recall the assistant's prior output or action; never as a user fact."
-          : source.answerRole === "current"
-            ? "[Current user-grounded evidence]"
-            : source.answerRole === "ambiguous"
-              ? "[Ambiguous user-grounded evidence]"
-              : source.answerRole === "candidate"
-                ? "[Unverified candidate L0 evidence]\nUse only if it directly answers a missing requirement; relevance alone is not support."
-                : source.answerRole === "mixed"
-                  ? "[Mixed verified and candidate L0 evidence]\nRequirement-bound evidence is followed by bounded candidates; verify candidate text before use."
-                  : "[Supporting user-grounded evidence]";
+          : resolution.intent.roleConstraint === "any"
+            ? "[Shared-dialogue evidence]\nAuthority rule: assistant output may answer only a directly requested shared artifact or prior answer whose neighboring user request establishes its provenance; never treat it as a user fact."
+            : source.answerRole === "current"
+              ? "[Current user-grounded evidence]"
+              : source.answerRole === "ambiguous"
+                ? "[Ambiguous user-grounded evidence]"
+                : source.answerRole === "candidate"
+                  ? "[Unverified candidate L0 evidence]\nUse only if it directly answers a missing requirement; relevance alone is not support."
+                  : source.answerRole === "mixed"
+                    ? "[Mixed verified and candidate L0 evidence]\nRequirement-bound evidence is followed by bounded candidates; verify candidate text before use."
+                    : "[Supporting user-grounded evidence]";
       return {
         id: source.sourceId,
         content: [
@@ -4171,6 +4263,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstPlanAnswerShape,
       evidenceFirstPlanTemporalMode,
       evidenceFirstPlanRoleConstraint,
+      evidenceFirstInitialRoleConstraint,
+      evidenceFirstRoleResolutionStatus,
       evidenceFirstPlanRequirementCount,
       evidenceFirstNotebookCoveredCount,
       evidenceFirstNotebookPartialCount,
@@ -4268,6 +4362,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstPlanAnswerShape,
     evidenceFirstPlanTemporalMode,
     evidenceFirstPlanRoleConstraint,
+    evidenceFirstInitialRoleConstraint,
+    evidenceFirstRoleResolutionStatus,
     evidenceFirstPlanRequirementCount,
     evidenceFirstNotebookCoveredCount,
     evidenceFirstNotebookPartialCount,

@@ -34,10 +34,8 @@ export function createMemoryEvidenceAnswerPolicyV1(input: {
   readonly requirementCount: number;
   readonly evidenceStatus: "sufficient" | "partial" | "missing";
 }): MemoryEvidenceAnswerPolicyV1 {
-  const operations: MemoryEvidenceAnswerOperationV1[] = [
-    "bind_requirements",
-  ];
-  if (input.roleConstraint !== "any") operations.push("enforce_role");
+  const operations: MemoryEvidenceAnswerOperationV1[] = ["bind_requirements"];
+  operations.push("enforce_role");
   if (input.temporalMode !== "any") operations.push("order_events");
   if (input.temporalMode === "latest" || input.temporalMode === "as_of") {
     operations.push("resolve_latest");

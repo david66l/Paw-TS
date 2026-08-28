@@ -7,7 +7,7 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1 =
-  "paw.memory-evidence-support-selector.json.v4:compact-evidence-addresses" as const;
+  "paw.memory-evidence-support-selector.json.v5:shared-dialogue-authority" as const;
 
 export interface MemoryEvidenceTriageAssessmentV1 {
   readonly requirementId: string;
@@ -120,7 +120,8 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
       "For latest, as-of, and history requirements, retain all directly matching state observations; deterministic code will resolve chronology.",
       "Partition only evidence that bears on a requirement: supporting establishes it, contradicting explicitly challenges it, and unknown is relevant but leaves the required fact unresolved. Omit unrelated candidates from all three arrays.",
       "For latest-state requirements, older or differently valued observations remain supporting inputs for deterministic chronology; do not call them contradictory merely because their values differ.",
-      "Assistant output is context only for user facts. It may directly support a requirement whose roleConstraint is assistant and whose query explicitly asks to recall the assistant's prior words or actions.",
+      "Assistant output is context only for user facts. It may directly support roleConstraint=assistant only when the query explicitly asks for the assistant's prior words or actions.",
+      "For roleConstraint=any, assistant output may support only a requested shared-dialogue artifact or answer when the exact assistant turn and its addressed user request establish that provenance. Never use an assistant assertion as evidence of a user's fact, preference, possession, action, or experience.",
       "It is valid to return no support for a requirement. Prefer missing evidence over a merely related passage.",
       'Return exactly one JSON object: {"assessments":[{"requirementId":"...","supportingEvidenceRefs":["..."],"contradictingEvidenceRefs":[],"unknownEvidenceRefs":[]}]}. Include every supplied requirement exactly once and keep the three arrays disjoint.',
     ].join("\n"),

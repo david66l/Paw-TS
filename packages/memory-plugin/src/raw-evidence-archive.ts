@@ -12,6 +12,7 @@ import type { PawNextMemoryScopeV1 } from "./profile.js";
 import {
   type MemorySourceLocalEvidenceRequestV1,
   type MemorySourceLocalEvidenceResultV1,
+  type MemorySourceLocalHydratedEvidenceV1,
   memorySourceLocalEvidenceCacheKeyV1,
 } from "./source-local-evidence-locator.js";
 
@@ -79,11 +80,17 @@ export interface MemoryRawEvidenceArchiveV1 {
     request: MemorySourceLocalEvidenceRequestV1,
     signal: AbortSignal,
   ): Promise<MemorySourceLocalEvidenceResultV1>;
+  /** Exact immutable L0 hydration, separate from source-local ranking. */
+  readonly hydratorVersion?: string;
+  hydrate?(
+    evidenceRefs: readonly string[],
+    signal: AbortSignal,
+  ): Promise<readonly MemorySourceLocalHydratedEvidenceV1[]>;
 }
 
 export interface MemoryRawEvidenceArchiveEventV1 {
   readonly schemaVersion: "paw.memory-raw-evidence-archive-event.v1";
-  readonly type: "put" | "resolve" | "search" | "locate";
+  readonly type: "put" | "resolve" | "search" | "locate" | "hydrate";
   readonly requestedCount: number;
   readonly returnedCount: number;
   readonly durationMs: number;
@@ -101,12 +108,14 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
   const locatorVersion = "paw.memory-postgres-source-local-locator.v1:lexical";
+  const hydratorVersion = "paw.memory-postgres-source-local-hydrator.v1";
   const rankerVersion =
     "paw.memory-source-local-ranker.v2:term-coverage-then-lexical-idf";
   const resultCache = new Map<string, MemorySourceLocalEvidenceResultV1>();
   return Object.freeze({
     scope,
     locatorVersion,
+    hydratorVersion,
     async put(
       spans: readonly MemoryRawEvidenceArchiveInputV1[],
       signal: AbortSignal,
@@ -206,6 +215,65 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         durationMs: Date.now() - started,
       });
       return Object.freeze(spans);
+    },
+    async hydrate(evidenceRefs: readonly string[], signal: AbortSignal) {
+      const started = Date.now();
+      const refs = [...new Set(evidenceRefs.map((ref) => ref.trim()))];
+      if (
+        refs.length !== evidenceRefs.length ||
+        refs.length < 1 ||
+        refs.length > 64 ||
+        refs.some((ref) => !ref)
+      ) {
+        throw namedError("MemoryRawEvidenceHydrationRequestInvalid");
+      }
+      if (signal.aborted) throw abortError();
+      const sql = getSql();
+      const rows = await sql`
+        SELECT evidence_ref, source_kind, source_seq, content, content_hash,
+               created_at
+        FROM memory_raw_evidence_spans
+        WHERE scope->>'tenantId' = ${scope.tenantId}
+          AND scope->>'userId' = ${scope.userId}
+          AND scope->>'workspaceId' = ${scope.workspaceId}
+          AND scope->>'repositoryId' = ${scope.repositoryId}
+          AND evidence_ref = ANY(${sql.array(refs)})
+      `;
+      const byRef = new Map(
+        rows.flatMap((row) => {
+          if (
+            typeof row.evidence_ref !== "string" ||
+            typeof row.content !== "string" ||
+            typeof row.content_hash !== "string" ||
+            hashTextV1(row.content) !== row.content_hash
+          ) {
+            return [];
+          }
+          return [[String(row.evidence_ref), row] as const];
+        }),
+      );
+      const hydrated = refs.flatMap((evidenceRef) => {
+        const row = byRef.get(evidenceRef);
+        if (!row) return [];
+        return [
+          Object.freeze({
+            evidenceRef,
+            sourceKind: sourceKind(row.source_kind),
+            turnOrder: Number(row.source_seq),
+            observedAt: toIso(row.created_at),
+            content: String(row.content),
+            contentHash: String(row.content_hash),
+          }),
+        ];
+      });
+      emit(input.onEvent, {
+        schemaVersion: "paw.memory-raw-evidence-archive-event.v1",
+        type: "hydrate",
+        requestedCount: refs.length,
+        returnedCount: hydrated.length,
+        durationMs: Date.now() - started,
+      });
+      return Object.freeze(hydrated);
     },
     async search(query: MemoryConversationSearchV1, signal: AbortSignal) {
       const started = Date.now();
@@ -364,7 +432,9 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
       if (signal.aborted) throw abortError();
       const lockedSourceIds = [...new Set(request.lockedSourceIds)];
       if (
-        request.requirement.roleConstraint !== "assistant" ||
+        !new Set(["assistant", "any"]).has(
+          request.requirement.roleConstraint,
+        ) ||
         request.requirement.temporalMode !== "any" ||
         lockedSourceIds.length === 0 ||
         lockedSourceIds.length > 8

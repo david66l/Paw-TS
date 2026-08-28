@@ -217,15 +217,15 @@ export function isAssistantMemoryQueryV1(query: string): boolean {
   const normalized = query.trim().replace(/\s+/gu, " ");
   if (!normalized || normalized.length > 512) return false;
   const explicitAssistantAction =
-    /\b(?:what|which|how)\b.{0,80}\b(?:did|have)\s+you\b|\b(?:you|your)\s+(?:said|told|recommended|suggested|wrote|created|generated|showed|booked|scheduled|provided|listed|gave|produced|composed|answered)\b|(?:你(?:之前|上次|此前)?|(?:之前|上次|此前)你)(?:说|告诉|推荐|建议|写|创建|生成|展示|提供|列出|给出|回答|预订|安排)(?:了|过|的)?/iu.test(
+    /\b(?:what|which|how)\b.{0,80}\b(?:did|have)\s+you\b|\b(?:you|your)\s+(?:said|told|recommended|suggested|wrote|created|generated|showed|booked|scheduled|provided|listed|gave|produced|composed|answered|mentioned|shared|replied|responded|came\s+up\s+with)\b|(?:你(?:之前|上次|此前)?|(?:之前|上次|此前)你)(?:说|告诉|推荐|建议|写|创建|生成|展示|提供|列出|给出|回答|回复|提到|分享|预订|安排)(?:了|过|的)?/iu.test(
       normalized,
     );
   const explicitPriorResponse =
-    /\b(?:previous|earlier|last)\s+(?:conversation|response|answer|message)\b|(?:之前|上次|此前)(?:的)?(?:对话|回复|回答|消息)/iu.test(
+    /\byour\s+(?:previous|earlier|last)\s+(?:response|answer|message|reply)\b|(?:你之前|你上次|你此前)(?:的)?(?:回复|回答|消息)/iu.test(
       normalized,
     );
   const explicitReminder =
-    /\bremind\s+me\b.{0,80}\b(?:conversation|response|answer|message|you)\b|提醒我.{0,40}(?:对话|回复|回答|消息|你)/iu.test(
+    /\bremind\s+me\b.{0,80}\bwhat\s+you\s+(?:said|answered|recommended|suggested|mentioned|provided|listed)\b|提醒我.{0,40}你(?:说|回答|推荐|建议|提到|提供|列出)(?:了|过|的)?/iu.test(
       normalized,
     );
   return explicitAssistantAction || explicitPriorResponse || explicitReminder;

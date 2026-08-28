@@ -68,6 +68,146 @@ describe("typed evidence query planner v3", () => {
     expect(calls).toBe(0);
   });
 
+  test("preserves ambiguous dialogue authority as any", () => {
+    const query = "Could you repeat the item from our earlier conversation?";
+    expect(classifyMemoryEvidenceQueryV3(query)).toEqual({
+      answerShape: "lookup",
+      temporalMode: "any",
+      roleConstraint: "any",
+      needsPlanning: true,
+    });
+
+    const plan = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "any",
+        requirements: [
+          {
+            label: "prior shared dialogue item",
+            searchText: "item from earlier conversation",
+            relation: "direct",
+            coverageMode: "any",
+            minimumEvidence: 1,
+          },
+        ],
+      }),
+      query,
+    );
+
+    expect(plan.roleConstraint).toBe("any");
+    expect(plan.requirements[0]?.roleConstraint).toBe("any");
+    for (const sharedQuestion of [
+      "What name did we come up with?",
+      "What topic did we discuss?",
+      "Which option did we decide on?",
+      "What title did you and I choose?",
+    ]) {
+      expect(classifyMemoryEvidenceQueryV3(sharedQuestion).roleConstraint).toBe(
+        "any",
+      );
+    }
+  });
+
+  test("does not let the model rewrite a fixed evidence authority", () => {
+    expect(() =>
+      parseMemoryEvidenceQueryPlanV3(
+        JSON.stringify({
+          answerShape: "lookup",
+          temporalMode: "any",
+          roleConstraint: "assistant",
+          requirements: [
+            {
+              label: "visited city",
+              searchText: "city the user visited",
+              relation: "direct",
+              coverageMode: "any",
+              minimumEvidence: 1,
+            },
+          ],
+        }),
+        "Which city did I visit?",
+      ),
+    ).toThrow("MemoryEvidenceQueryPlanShapeInvalid");
+
+    const userFactQuery = "Do you remember which city I visited?";
+    expect(classifyMemoryEvidenceQueryV3(userFactQuery)).toEqual({
+      answerShape: "lookup",
+      temporalMode: "any",
+      roleConstraint: "user",
+      needsPlanning: false,
+    });
+    expect(() =>
+      parseMemoryEvidenceQueryPlanV3(
+        JSON.stringify({
+          answerShape: "lookup",
+          temporalMode: "any",
+          roleConstraint: "assistant",
+          requirements: [
+            {
+              label: "city",
+              searchText: "visited city",
+              relation: "direct",
+              coverageMode: "any",
+              minimumEvidence: 1,
+            },
+          ],
+        }),
+        userFactQuery,
+      ),
+    ).toThrow("MemoryEvidenceQueryPlanShapeInvalid");
+
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "Can you remind me what that preference was?",
+      ),
+    ).toEqual({
+      answerShape: "lookup",
+      temporalMode: "any",
+      roleConstraint: "user",
+      needsPlanning: false,
+    });
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "What amount was in the plan from our previous conversation?",
+      ),
+    ).toEqual({
+      answerShape: "lookup",
+      temporalMode: "any",
+      roleConstraint: "user",
+      needsPlanning: false,
+    });
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "What city did I say I visited in our last conversation?",
+      ).roleConstraint,
+    ).toBe("user");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "What was my preference in the previous chat?",
+      ).roleConstraint,
+    ).toBe("user");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "What did I describe about my vacation in the previous chat?",
+      ).roleConstraint,
+    ).toBe("user");
+    expect(
+      classifyMemoryEvidenceQueryV3("上次对话里本人提过的爱好是什么？")
+        .roleConstraint,
+    ).toBe("user");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "What was my preference when we discussed the options?",
+      ).roleConstraint,
+    ).toBe("user");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "Which city did I mention when we discussed travel?",
+      ).roleConstraint,
+    ).toBe("user");
+  });
+
   test("fails closed when a required model plan returns no requirements", async () => {
     const planner = createJsonMemoryEvidenceQueryPlannerV3({
       model: {

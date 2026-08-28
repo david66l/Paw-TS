@@ -2,7 +2,7 @@ import { isAssistantMemoryQueryV1 } from "./evidence-first.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3 =
-  "paw.memory-evidence-query-planner.v6:typed-evidence-closure" as const;
+  "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates" as const;
 
 export type MemoryEvidenceAnswerShapeV3 =
   | "lookup"
@@ -71,7 +71,22 @@ export function classifyMemoryEvidenceQueryV3(
   query: string,
 ): MemoryEvidenceQueryIntentV3 {
   const value = boundedQuery(query);
-  const roleConstraint = isAssistantMemoryQueryV1(value) ? "assistant" : "user";
+  const explicitSharedDialogue = isExplicitSharedDialogueQueryV1(value);
+  const explicitAssistant = isAssistantMemoryQueryV1(value);
+  const explicitUserOrigin = isExplicitUserOriginMemoryQueryV1(value);
+  const roleNeedsResolution =
+    !explicitUserOrigin &&
+    (explicitSharedDialogue ||
+      (!explicitAssistant && needsMemoryEvidenceRoleResolutionV1(value)));
+  const roleConstraint: MemoryEvidenceRoleConstraintV3 = explicitUserOrigin
+    ? "user"
+    : explicitSharedDialogue
+      ? "any"
+      : explicitAssistant
+        ? "assistant"
+        : roleNeedsResolution
+          ? "any"
+          : "user";
   const answerShape: MemoryEvidenceAnswerShapeV3 =
     /\b(?:recommend|recommendation|suggest|suggestion|what\s+should\s+i|any\s+(?:tips|ideas)|good\s+(?:options|activities|recipes?))\b|(?:推荐|建议|有什么(?:好)?(?:办法|选择|活动|食谱)|我应该)/iu.test(
       value,
@@ -91,7 +106,7 @@ export function classifyMemoryEvidenceQueryV3(
       value,
     );
   const explicitCurrentState =
-    /\bcurrent\s+(?:count|number|status|balance|level|value|total|amount|location|address|job|role|preference|plan)\b|当前(?:数量|数值|状态|余额|等级|级别|总数|金额|位置|地址|工作|角色|偏好|计划)/iu.test(
+    /\bcurrent\s+(?:count|number|status|balance|level|value|total|amount|location|city|address|job|role|preference|plan)\b|当前(?:数量|数值|状态|余额|等级|级别|总数|金额|位置|城市|地址|工作|角色|偏好|计划)/iu.test(
       value,
     );
   const temporalMode: MemoryEvidenceTemporalModeV3 =
@@ -115,8 +130,73 @@ export function classifyMemoryEvidenceQueryV3(
     needsPlanning:
       answerShape !== "lookup" ||
       temporalMode !== "any" ||
-      roleConstraint === "assistant",
+      roleConstraint !== "user",
   });
+}
+
+function isExplicitUserOriginMemoryQueryV1(query: string): boolean {
+  const value = boundedQuery(query);
+  const firstPersonFact =
+    /\b(?:i|me|my|mine)\b.{0,120}\b(?:said|mentioned|told|did|visited|went|traveled|preferred|preference|liked|owned|possessed|had|bought|chose|selected|planned|wanted|needed|worked|lived|city|address|job|role)\b/iu.test(
+      value,
+    );
+  const firstPersonQuestion =
+    /\b(?:what|which|where|when|how)\b.{0,100}\b(?:did|have|was|were|do|am)\s+(?:i|my)\b/iu.test(
+      value,
+    );
+  const chineseUserFact =
+    /(?:我|我的).{0,80}(?:说|提到|告诉|做|去|访问|旅行|偏好|喜欢|拥有|买|选择|计划|想要|需要|工作|居住|城市|地址|职位|角色)/u.test(
+      value,
+    );
+  return firstPersonFact || firstPersonQuestion || chineseUserFact;
+}
+
+/**
+ * Opens semantic role resolution only for dialogue-deictic questions. The
+ * deterministic assistant classifier remains the high-precision fast path;
+ * this gate catches ambiguous reminders, repetitions and references to prior
+ * generated output without declaring them assistant-grounded itself.
+ */
+export function needsMemoryEvidenceRoleResolutionV1(query: string): boolean {
+  const value = boundedQuery(query);
+  const hasSecondPerson = /\b(?:you|your|yours)\b|(?:你|你的)/iu.test(value);
+  const hasPriorCue =
+    /\b(?:again|before|earlier|last|previous|previously|prior)\b|(?:再次|以前|之前|上次|此前)/iu.test(
+      value,
+    );
+  const hasOutputAction =
+    /\b(?:repeat|reproduce|restate|provide|share|give|tell|show|write|create|generate|recommend|suggest|list|answer|respond|mention|helped)\b|(?:重复|复述|提供|分享|告诉|展示|写|创建|生成|推荐|建议|列出|回答|回复|提到|帮)/iu.test(
+      value,
+    );
+  const secondPersonPriorAction =
+    hasSecondPerson && hasPriorCue && hasOutputAction;
+  const priorOutputReference =
+    /\b(?:again|earlier|previous|previously|prior|last\s+time|before|originally)\b.{0,120}\b(?:response|answer|reply|message|option|idea|suggestion|recommendation|list|plan|draft|summary|name|wording|advice)\b|(?:再次|以前|之前|上次|此前|原来).{0,80}(?:回复|回答|消息|选项|想法|建议|推荐|列表|计划|草稿|摘要|名称|措辞)/iu.test(
+      value,
+    );
+  const passiveGeneratedOutput =
+    /\bwas\s+(?:generated|suggested|recommended|listed|provided|created|written|answered)\b|(?:被|曾经).{0,40}(?:生成|建议|推荐|列出|提供|创建|写出|回答)/iu.test(
+      value,
+    );
+  return (
+    secondPersonPriorAction ||
+    priorOutputReference ||
+    isExplicitSharedDialogueQueryV1(value) ||
+    passiveGeneratedOutput
+  );
+}
+
+function isExplicitSharedDialogueQueryV1(query: string): boolean {
+  const value = boundedQuery(query);
+  const sharedStatement =
+    /\b(?:we|our)\b.{0,80}\b(?:talked\s+about|discussed|decided|named|called|came\s+up\s+with)\b|(?:我们|咱们).{0,80}(?:聊过|讨论|决定|取名|命名|想到)/iu.test(
+      value,
+    );
+  const sharedQuestion =
+    /\b(?:what|which|where|when|how)\b.{0,80}\bdid\s+(?:we|you\s+and\s+i)\s+(?:talk\s+about|discuss|decide(?:\s+on)?|name|call|come\s+up\s+with|agree\s+on|choose|select|create|write|draft)\b/iu.test(
+      value,
+    );
+  return sharedStatement || sharedQuestion;
 }
 
 export function createJsonMemoryEvidenceQueryPlannerV3(input: {
@@ -166,6 +246,8 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
       "You plan retrieval requirements, not the answer.",
       "The memory store contains concrete past dialogue, so bridge the current wording to concrete clues that may have been stated earlier.",
       "Answer shape and temporal mode are independent immutable axes supplied by the caller. Return them unchanged.",
+      "Role constraint is an immutable authority boundary supplied by deterministic code. Return it unchanged.",
+      "roleConstraint=any means the current question alone cannot establish whether the requested shared-dialogue artifact came from the user or assistant. Preserve any; do not guess or upgrade it.",
       "For recommend requests, separately search likely possessions or ingredients, goals, constraints, routines, prior attempts, and explicit likes or dislikes that could constrain a useful recommendation.",
       "For compare or aggregate requests, create one requirement and search per independent operand.",
       "Do not split one operand into separate identity, value, threshold, status, or background requirements when one concrete memory can establish it.",
