@@ -111,6 +111,7 @@ import {
   planAmbEmbeddingWavesV1,
   streamAmbEmbeddingBatchesV1,
 } from "./embedding-stream.js";
+import { buildAmbMemoryLlmReplayCacheKeyV1 } from "./memory-llm-replay-cache.js";
 import {
   isAmbDocumentVisibleAtQueryV1,
   parseAmbQueryTimeCutoffV1,
@@ -456,19 +457,13 @@ function createAmbMemoryWriterModel(
       const promptHash = sha(
         JSON.stringify({ system: request.system, user: request.user }),
       );
-      const cacheKey = sha(
-        JSON.stringify({
-          policy:
-            "paw.amb-memory-write-cache.v3:source-artifact-usage-envelope",
-          model,
-          baseUrl,
-          promptHash,
-          sourceArtifactSha256,
-          temperature: 0,
-          thinking: "disabled",
-          maxTokens: atomMaxOutputTokens,
-        }),
-      );
+      const cacheKey = buildAmbMemoryLlmReplayCacheKeyV1({
+        purpose,
+        model,
+        baseUrl,
+        promptHash,
+        maxTokens: atomMaxOutputTokens,
+      });
       const cachePath = resolve(cacheDir, `${cacheKey}.json`);
       if (existsSync(cachePath)) {
         try {
@@ -599,6 +594,7 @@ function createAmbMemoryWriterModel(
             schemaVersion: "paw.amb-memory-llm-cache-entry.v1",
             text,
             usage,
+            sourceArtifactSha256,
           }),
           "utf8",
         );
