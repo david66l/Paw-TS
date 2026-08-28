@@ -160,9 +160,10 @@ export const DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1 = Object.freeze({
 }) satisfies MemorySourceLocalEvidenceBudgetV1;
 
 /**
- * A shared-dialogue assistant turn is a candidate answer only when the exact
- * preceding turn is a user request. This proves dialogue provenance, not the
- * truth of the assistant prose; the semantic selector remains authoritative.
+ * An assistant turn may answer a shared or provenance-unresolved dialogue
+ * request only when the exact preceding turn is a user request. This proves
+ * dialogue provenance, not the truth of the assistant prose; the semantic
+ * selector remains authoritative.
  */
 export function hasMemorySourceLocalDialogueCertificateV1(
   turns: readonly MemorySourceLocalIncludedTurnV1[],

@@ -2,7 +2,7 @@ import { isAssistantMemoryQueryV1 } from "./evidence-first.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3 =
-  "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates" as const;
+  "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance" as const;
 
 export type MemoryEvidenceAnswerShapeV3 =
   | "lookup"
@@ -71,22 +71,32 @@ export function classifyMemoryEvidenceQueryV3(
   query: string,
 ): MemoryEvidenceQueryIntentV3 {
   const value = boundedQuery(query);
+  const recallProvenance = classifyMemoryRecallProvenanceV1(value);
   const explicitSharedDialogue = isExplicitSharedDialogueQueryV1(value);
   const explicitAssistant = isAssistantMemoryQueryV1(value);
   const explicitUserOrigin = isExplicitUserOriginMemoryQueryV1(value);
-  const roleNeedsResolution =
-    !explicitUserOrigin &&
-    (explicitSharedDialogue ||
-      (!explicitAssistant && needsMemoryEvidenceRoleResolutionV1(value)));
-  const roleConstraint: MemoryEvidenceRoleConstraintV3 = explicitUserOrigin
-    ? "user"
-    : explicitSharedDialogue
-      ? "any"
-      : explicitAssistant
+  const roleConstraint: MemoryEvidenceRoleConstraintV3 = recallProvenance
+    ? recallProvenance === "user"
+      ? "user"
+      : recallProvenance === "assistant"
         ? "assistant"
-        : roleNeedsResolution
+        : recallProvenance === "shared" ||
+            recallProvenance === "passive_unresolved" ||
+            recallProvenance === "ambiguous_subject" ||
+            isUnresolvedDialogueRecallQueryV1(value)
           ? "any"
-          : "user";
+          : "user"
+    : isUnresolvedPassiveDialogueQueryV1(value)
+      ? "any"
+      : explicitUserOrigin
+        ? "user"
+        : explicitSharedDialogue
+          ? "any"
+          : explicitAssistant
+            ? "assistant"
+            : needsMemoryEvidenceRoleResolutionV1(value)
+              ? "any"
+              : "user";
   const answerShape: MemoryEvidenceAnswerShapeV3 =
     /\b(?:recommend|recommendation|suggest|suggestion|what\s+should\s+i|any\s+(?:tips|ideas)|good\s+(?:options|activities|recipes?))\b|(?:推荐|建议|有什么(?:好)?(?:办法|选择|活动|食谱)|我应该)/iu.test(
       value,
@@ -136,19 +146,316 @@ export function classifyMemoryEvidenceQueryV3(
 
 function isExplicitUserOriginMemoryQueryV1(query: string): boolean {
   const value = boundedQuery(query);
-  const firstPersonFact =
-    /\b(?:i|me|my|mine)\b.{0,120}\b(?:said|mentioned|told|did|visited|went|traveled|preferred|preference|liked|owned|possessed|had|bought|chose|selected|planned|wanted|needed|worked|lived|city|address|job|role)\b/iu.test(
-      value,
-    );
   const firstPersonQuestion =
-    /\b(?:what|which|where|when|how)\b.{0,100}\b(?:did|have|was|were|do|am)\s+(?:i|my)\b/iu.test(
+    /\b(?:what|which|where|when|how|who)\b.{0,100}\b(?:did|do|have|has|had|was|were|am)\s+i\b/iu.test(
       value,
     );
-  const chineseUserFact =
-    /(?:我|我的).{0,80}(?:说|提到|告诉|做|去|访问|旅行|偏好|喜欢|拥有|买|选择|计划|想要|需要|工作|居住|城市|地址|职位|角色)/u.test(
+  const possessiveUserState =
+    /\b(?:what|which|where|when|how)\b.{0,80}\b(?:is|are|was|were|has|have|had)\s+(?:my|mine)\b|\b(?:what|which)\s+my\s+[\p{L}\p{N}_-]{1,48}\s+(?:is|are|was|were|has|have|had)\b/iu.test(
       value,
     );
-  return firstPersonFact || firstPersonQuestion || chineseUserFact;
+  const chineseFirstPersonQuestion =
+    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁).{0,64}(?:是我|我(?:曾经|之前|上次|此前)?(?:在|于|有|做|说|提|去|把|将|给|从|向|选择|决定))/u.test(
+      value,
+    );
+  const chinesePossessive =
+    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|多少).{0,64}(?:我的|本人(?:的)?)/u.test(
+      value,
+    );
+  return (
+    firstPersonQuestion ||
+    possessiveUserState ||
+    chineseFirstPersonQuestion ||
+    chinesePossessive
+  );
+}
+
+type MemoryRecallProvenanceV1 =
+  | "user"
+  | "assistant"
+  | "shared"
+  | "unowned"
+  | "ambiguous_subject"
+  | "passive_unresolved";
+
+function memoryRecallAnswerClauseV1(
+  query: string,
+): Readonly<{ language: "en" | "zh"; text: string }> | undefined {
+  const english =
+    /\b(?:remember|recall|remind\s+me)\b.{0,32}?(?<answer>\b(?:what|which|where|when|how|who|whether)\b.{0,160})/iu.exec(
+      query,
+    );
+  if (english?.groups?.answer) {
+    return Object.freeze({ language: "en", text: english.groups.answer });
+  }
+  const chinese = /(?:记得|回忆|提醒我|想不起来)(?<answer>.{0,120})/u.exec(
+    query,
+  );
+  if (
+    chinese?.groups?.answer &&
+    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/u.test(
+      chinese.groups.answer,
+    )
+  ) {
+    return Object.freeze({ language: "zh", text: chinese.groups.answer });
+  }
+  return undefined;
+}
+
+function classifyMemoryRecallProvenanceV1(
+  query: string,
+): MemoryRecallProvenanceV1 | undefined {
+  const answer = memoryRecallAnswerClauseV1(query);
+  if (!answer) return undefined;
+  const subject = firstAnswerClauseSubjectV1(answer.text, answer.language);
+  if (subject === "ambiguous") return "ambiguous_subject";
+  if (subject) {
+    if (
+      isPassiveAnswerSubjectV1(
+        answer.text,
+        subject.index,
+        subject.owner,
+        answer.language,
+      )
+    ) {
+      return "passive_unresolved";
+    }
+    return subject.owner;
+  }
+  if (isUnresolvedPassiveDialogueQueryV1(answer.text)) {
+    return "passive_unresolved";
+  }
+  return copularPossessiveOwnerV1(answer.text, answer.language) ?? "unowned";
+}
+
+/** Possessive determiners are objects; only nominative pronouns compete here. */
+function firstAnswerClauseSubjectV1(
+  clause: string,
+  language: "en" | "zh",
+):
+  | Readonly<{
+      owner: "user" | "assistant" | "shared";
+      index: number;
+    }>
+  | "ambiguous"
+  | undefined {
+  if (language === "zh") {
+    const joint = /(?:你和我|我和你|我们|咱们)/u.exec(clause);
+    const withoutJoint = clause
+      .replace(/(?:你和我|我和你|我们|咱们)/gu, (text) =>
+        " ".repeat(text.length),
+      )
+      .replace(/(?:给|向|对|为|跟)(?:本人|我|您|你)/gu, (text) =>
+        " ".repeat(text.length),
+      );
+    const user = /(?:本人|我)(?!的)/u.exec(withoutJoint);
+    const assistant = /(?:您|你)(?!的)/u.exec(withoutJoint);
+    const subject = earliestAnswerSubjectV1({
+      user: user?.index,
+      assistant: assistant?.index,
+      shared: joint?.index,
+    });
+    return subject !== "ambiguous" &&
+      subject?.owner === "assistant" &&
+      !isCanonicalChineseAssistantSubjectV1(clause)
+      ? "ambiguous"
+      : subject;
+  }
+
+  const joint = /\b(?:you\s+and\s+i|i\s+and\s+you|we)\b/iu.exec(clause);
+  const withoutJoint = clause
+    .replace(/\b(?:you\s+and\s+i|i\s+and\s+you|we)\b/giu, (text) =>
+      " ".repeat(text.length),
+    )
+    .replace(/\b(?:for|to|by|with|about|from|of)\s+(?:i|you)\b/giu, (text) =>
+      " ".repeat(text.length),
+    );
+  const user = /\bi\b/iu.exec(withoutJoint);
+  const assistant = /\byou\b/iu.exec(withoutJoint);
+  const subject = earliestAnswerSubjectV1({
+    user: user?.index,
+    assistant: assistant?.index,
+    shared: joint?.index,
+  });
+  if (subject !== "ambiguous") {
+    return subject?.owner === "assistant" &&
+      canonicalEnglishAnswerSubjectV1(clause) !== "assistant"
+      ? "ambiguous"
+      : subject;
+  }
+  const canonicalOwner = canonicalEnglishAnswerSubjectV1(clause);
+  const canonicalIndex = canonicalOwner
+    ? { user: user?.index, assistant: assistant?.index, shared: joint?.index }[
+        canonicalOwner
+      ]
+    : undefined;
+  return canonicalOwner !== undefined && canonicalIndex !== undefined
+    ? Object.freeze({ owner: canonicalOwner, index: canonicalIndex })
+    : "ambiguous";
+}
+
+function earliestAnswerSubjectV1(input: {
+  readonly user?: number;
+  readonly assistant?: number;
+  readonly shared?: number;
+}):
+  | Readonly<{
+      owner: "user" | "assistant" | "shared";
+      index: number;
+    }>
+  | "ambiguous"
+  | undefined {
+  const owners = (["user", "assistant", "shared"] as const)
+    .map((owner) => ({ owner, index: input[owner] }))
+    .filter(
+      (
+        entry,
+      ): entry is { owner: "user" | "assistant" | "shared"; index: number } =>
+        entry.index !== undefined,
+    )
+    .sort((left, right) => left.index - right.index);
+  if (owners.length <= 1) return owners[0];
+  return "ambiguous";
+}
+
+function canonicalEnglishAnswerSubjectV1(
+  clause: string,
+): "user" | "assistant" | "shared" | undefined {
+  const match =
+    /^\s*(?:what|which|where|when|how|who|whether)\b(?:\s+(?:did|do|does|was|were|is|are|has|have|had|can|could|would|will))?\s+(you\s+and\s+i|i\s+and\s+you|i|you|we)\b/iu.exec(
+      clause,
+    );
+  const subject = match?.[1]?.toLocaleLowerCase("en-US");
+  return subject === "i"
+    ? "user"
+    : subject === "you"
+      ? "assistant"
+      : subject === "we" || subject === "you and i" || subject === "i and you"
+        ? "shared"
+        : undefined;
+}
+
+function isCanonicalChineseAssistantSubjectV1(clause: string): boolean {
+  if (!/^\s*(?:您|你)(?!的)/u.test(clause)) return false;
+  const questionWord =
+    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/u.exec(clause);
+  return !clause.slice(0, questionWord?.index ?? clause.length).includes("的");
+}
+
+function isPassiveAnswerSubjectV1(
+  clause: string,
+  subjectIndex: number,
+  owner: "user" | "assistant" | "shared",
+  language: "en" | "zh",
+): boolean {
+  if (language === "zh") {
+    const subject =
+      owner === "user"
+        ? "(?:本人|我)"
+        : owner === "assistant"
+          ? "(?:您|你)"
+          : "(?:我们|咱们|你和我|我和你)";
+    return new RegExp(
+      `^${subject}被.{0,32}(?:告诉|给|展示|推荐|建议|告知|提醒|发送|提供)`,
+      "u",
+    ).test(clause.slice(subjectIndex));
+  }
+  const before = clause.slice(0, subjectIndex);
+  const after = clause.slice(subjectIndex);
+  const subject =
+    owner === "user"
+      ? "i"
+      : owner === "assistant"
+        ? "you"
+        : "(?:we|you\\s+and\\s+i|i\\s+and\\s+you)";
+  const outputParticiple =
+    "(?:told|given|shown|recommended|suggested|advised|informed|asked|sent|offered|assigned|provided)";
+  return (
+    new RegExp(
+      `^${subject}\\s+(?:(?:was|were|am|have\\s+been|had\\s+been)\\s+)${outputParticiple}\\b`,
+      "iu",
+    ).test(after) ||
+    (/(?:was|were|am|have\s+been|had\s+been)\s*$/iu.test(before) &&
+      new RegExp(`^${subject}\\s+${outputParticiple}\\b`, "iu").test(after))
+  );
+}
+
+function copularPossessiveOwnerV1(
+  clause: string,
+  language: "en" | "zh",
+): "user" | "assistant" | "shared" | undefined {
+  if (language === "zh") {
+    const match =
+      /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否).{0,24}(我的|你的|我们的)|(?:我的|你的|我们的).{0,32}(?:是什么|是多少|在哪|如何|怎么)/u.exec(
+        clause,
+      );
+    const owner = match?.[1] ?? match?.[0]?.match(/我的|你的|我们的/u)?.[0];
+    return owner === "我的"
+      ? "user"
+      : owner === "你的"
+        ? "assistant"
+        : owner === "我们的"
+          ? "shared"
+          : undefined;
+  }
+  const match =
+    /\b(?:what|which|where|when|how|who)\b.{0,32}\b(?:is|are|was|were|has|have|had)\s+(my|your|our)\b|\b(?:what|which)\s+(my|your|our)\s+[\p{L}\p{N}_-]{1,48}\s+(?:is|are|was|were|has|have|had)\b/iu.exec(
+      clause,
+    );
+  const owner = match?.[1] ?? match?.[2];
+  return owner === "my"
+    ? "user"
+    : owner === "your"
+      ? "assistant"
+      : owner === "our"
+        ? "shared"
+        : undefined;
+}
+
+function isUnresolvedPassiveDialogueQueryV1(query: string): boolean {
+  return (
+    /\b(?:what|which|where|when|how|who)\b.{0,48}\b(?:was|were|am|have\s+been|had\s+been)\s+i\s+(?:told|given|shown|recommended|suggested|advised|informed|asked|sent|offered|assigned|provided)\b/iu.test(
+      query,
+    ) ||
+    /\b(?:what|which|where|when|how|who)\b.{0,32}\b(?:was|were)\s+(?:ultimately|finally|eventually)?\s*(?:said|told|given|shown|recommended|suggested|advised|proposed|decided|chosen|selected|named|called|written|created|provided|answered)\b/iu.test(
+      query,
+    )
+  );
+}
+
+/**
+ * A memory speech act can establish that an answer belongs to prior dialogue
+ * without establishing who authored it. This opens a certified dialogue
+ * search aperture while preserving `any` as unresolved authority.
+ */
+function isUnresolvedDialogueRecallQueryV1(query: string): boolean {
+  const value = boundedQuery(query);
+  const englishRecall =
+    /\b(?:do|can|could|would|will)\s+you\s+(?:remember|recall)\b|\b(?:can|could|would|will)\s+you\s+remind\s+me\b|\bi\s+(?:cannot|can't|cant|do\s+not|don't|dont)\s+(?:remember|recall)\b/iu.test(
+      value,
+    );
+  const englishAnswerComplement =
+    /\b(?:remember|recall|remind\s+me)\b.{0,96}\b(?:what|which|where|when|how|who|whether)\b/iu.test(
+      value,
+    );
+  const englishPriorOrDeictic =
+    /\b(?:that|those|it|one|ones|earlier|previous|previously|prior|last|before|chat|conversation|discussion)\b|\b(?:was|were)\s+(?:ultimately|finally|eventually)?\s*(?:proposed|decided|chosen|selected|named|called|written|created|recommended|suggested|provided|answered)\b/iu.test(
+      value,
+    );
+  const chineseRecall =
+    /(?:你还?记得|你能?回忆|提醒我|我(?:不|没)记得|我想不起来)/u.test(value);
+  const chineseAnswerComplement =
+    /(?:记得|回忆|提醒我|想不起来).{0,64}(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/u.test(
+      value,
+    );
+  const chinesePriorOrDeictic =
+    /(?:当时|那个|那些|它|之前|上次|此前|过去|聊天|对话|讨论|说过|提过)/u.test(
+      value,
+    );
+  return (
+    (englishRecall && englishAnswerComplement && englishPriorOrDeictic) ||
+    (chineseRecall && chineseAnswerComplement && chinesePriorOrDeictic)
+  );
 }
 
 /**
@@ -247,7 +554,7 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
       "The memory store contains concrete past dialogue, so bridge the current wording to concrete clues that may have been stated earlier.",
       "Answer shape and temporal mode are independent immutable axes supplied by the caller. Return them unchanged.",
       "Role constraint is an immutable authority boundary supplied by deterministic code. Return it unchanged.",
-      "roleConstraint=any means the current question alone cannot establish whether the requested shared-dialogue artifact came from the user or assistant. Preserve any; do not guess or upgrade it.",
+      "roleConstraint=any means the current question establishes a prior-dialogue answer but cannot establish whether the requested artifact came from the user, assistant, or a shared exchange. Preserve any; do not guess or upgrade it.",
       "For recommend requests, separately search likely possessions or ingredients, goals, constraints, routines, prior attempts, and explicit likes or dislikes that could constrain a useful recommendation.",
       "For compare or aggregate requests, create one requirement and search per independent operand.",
       "Do not split one operand into separate identity, value, threshold, status, or background requirements when one concrete memory can establish it.",

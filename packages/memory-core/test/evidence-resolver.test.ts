@@ -235,11 +235,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -324,11 +324,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -433,11 +433,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -541,11 +541,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -682,11 +682,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -792,11 +792,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -989,11 +989,11 @@ describe("shared evidence resolver v1", () => {
         },
         planner: {
           plannerVersion:
-            "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+            "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
           async plan() {
             return {
               plannerVersion:
-                "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+                "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
               answerShape: "lookup" as const,
               temporalMode: "any" as const,
               roleConstraint: "assistant" as const,
@@ -1106,11 +1106,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -1243,7 +1243,7 @@ describe("shared evidence resolver v1", () => {
     const forceValues: Array<boolean | undefined> = [];
     const planner = {
       plannerVersion:
-        "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates" as const,
+        "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance" as const,
       async plan(
         _query: string,
         _signal: AbortSignal,
@@ -1252,7 +1252,7 @@ describe("shared evidence resolver v1", () => {
         forceValues.push(options?.force);
         return {
           plannerVersion:
-            "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates" as const,
+            "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance" as const,
           answerShape: "lookup" as const,
           temporalMode: "any" as const,
           roleConstraint: "user" as const,
@@ -1339,12 +1339,12 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           plannerCalls += 1;
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup",
             temporalMode: "any",
             roleConstraint: "user",
@@ -1381,11 +1381,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -1503,11 +1503,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -1570,11 +1570,11 @@ describe("shared evidence resolver v1", () => {
       index: index(),
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup",
             temporalMode: "latest",
             roleConstraint: "user",
@@ -1682,11 +1682,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -1715,7 +1715,7 @@ describe("shared evidence resolver v1", () => {
     });
 
     const result = await resolver.resolve(
-      "Can you remind me what was the 27th parameter on the list you provided?",
+      "Can you remind me what you provided as the 27th parameter on the list?",
       new AbortController().signal,
     );
 
@@ -1781,11 +1781,11 @@ describe("shared evidence resolver v1", () => {
       },
       planner: {
         plannerVersion:
-          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+          "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
         async plan() {
           return {
             plannerVersion:
-              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+              "paw.memory-evidence-query-planner.v9:unresolved-dialogue-provenance",
             answerShape: "compare" as const,
             temporalMode: "history" as const,
             roleConstraint: "user" as const,

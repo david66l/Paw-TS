@@ -164,8 +164,8 @@ describe("typed evidence query planner v3", () => {
     ).toEqual({
       answerShape: "lookup",
       temporalMode: "any",
-      roleConstraint: "user",
-      needsPlanning: false,
+      roleConstraint: "any",
+      needsPlanning: true,
     });
     expect(
       classifyMemoryEvidenceQueryV3(
@@ -206,6 +206,109 @@ describe("typed evidence query planner v3", () => {
         "Which city did I mention when we discussed travel?",
       ).roleConstraint,
     ).toBe("user");
+  });
+
+  test("separates explicit ownership from unresolved dialogue recall", () => {
+    for (const query of [
+      "Do you remember which city I visited?",
+      "Can you remind me what I said about the itinerary?",
+      "Can you remind me what I said you recommended?",
+      "Do you remember which of your suggestions I chose last time?",
+      "Do you remember which gift for you I chose last time?",
+      "I cannot recall which option I chose before.",
+      "Do you recall where I left the keys before dinner?",
+      "Do you remember who I met last time?",
+      "Can you remind me where I put that file?",
+      "Do you remember what I said when you and I were chatting?",
+      "提醒我我之前说过的城市是什么？",
+    ]) {
+      expect(classifyMemoryEvidenceQueryV3(query).roleConstraint).toBe("user");
+    }
+
+    for (const query of [
+      "What did you recommend for my trip?",
+      "Can you remind me what you said about the itinerary?",
+      "Can you remind me what you recommended for my trip last time?",
+      "Can you remind me what you said about my itinerary before?",
+      "Can you remind me what you said I preferred?",
+      "你上次推荐了什么？",
+      "提醒我你上次给我推荐了什么？",
+    ]) {
+      expect(classifyMemoryEvidenceQueryV3(query).roleConstraint).toBe(
+        "assistant",
+      );
+    }
+
+    for (const query of [
+      "I lost track during our chat. Can you remind me how the final label was formed?",
+      "Can you remind me what was ultimately proposed?",
+      "Do you recall which one we discussed before?",
+      "Can you remind me which of my ideas we chose?",
+      "Do you remember what I was told last time?",
+      "你还记得当时讨论的名称是什么吗？",
+      "提醒我当时最终讨论的名称是什么？",
+      "提醒我我的想法我们选了哪个？",
+    ]) {
+      expect(classifyMemoryEvidenceQueryV3(query)).toMatchObject({
+        roleConstraint: "any",
+        needsPlanning: true,
+      });
+    }
+
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "Can you remind me what the capital of France is?",
+      ).roleConstraint,
+    ).toBe("user");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "Can you remind me what the capital of France was?",
+      ).roleConstraint,
+    ).toBe("user");
+    for (const query of [
+      "What was I told last time?",
+      "What was I recommended in our previous chat?",
+      "Do you remember what I was told I should do last time?",
+      "Do you remember what I was told?",
+      "Do you remember what I was shown?",
+      "Do you remember what you were told last time?",
+      "Can you remind me what you were shown before?",
+      "提醒我你被告知了什么？",
+    ]) {
+      expect(classifyMemoryEvidenceQueryV3(query).roleConstraint).toBe("any");
+    }
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "Do you remember what you said after I was told to wait?",
+      ).roleConstraint,
+    ).toBe("assistant");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "Do you remember what I said after I was told to wait?",
+      ).roleConstraint,
+    ).toBe("user");
+    expect(
+      classifyMemoryEvidenceQueryV3("提醒我你的建议我采纳了哪个？")
+        .roleConstraint,
+    ).toBe("user");
+    for (const query of [
+      "Can you remind me which of my proposals you selected?",
+      "提醒我我的方案你改了什么？",
+      "Can you remind me which option that you described I selected?",
+      "Do you remember what the idea I proposed made you change?",
+      "提醒我你给我的建议我采纳了哪个？",
+      "Do you remember what the medicine you recommended did to me?",
+      "Can you remind me what the recipe you suggested tasted like to me?",
+      "Do you recall which restaurant you recommended had outdoor seating?",
+      "Can you remind me what the person you recommended told me?",
+      "提醒我你推荐的药对我有什么影响？",
+      "提醒我你给我的药有什么影响？",
+      "提醒我你选的餐厅有什么特色？",
+      "Can you remind me what happened to the report you wrote?",
+      "Do you recall who reviewed the draft you created?",
+    ]) {
+      expect(classifyMemoryEvidenceQueryV3(query).roleConstraint).toBe("any");
+    }
   });
 
   test("fails closed when a required model plan returns no requirements", async () => {
