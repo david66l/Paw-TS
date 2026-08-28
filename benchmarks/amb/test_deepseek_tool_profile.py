@@ -15,7 +15,6 @@ sys.path.insert(0, str(HERE))
 from deepseek_llm import (  # noqa: E402
     DeepSeekFlashLLM,
     StructuredOutputError,
-    _memory_tool_choice,
     _memory_tool_definitions,
     _parse_json_object,
     _structured_messages,
@@ -68,25 +67,6 @@ class DeepSeekToolProfileTest(unittest.TestCase):
     def test_malformed_final_answer_is_retryable_contract_error(self) -> None:
         with self.assertRaises(StructuredOutputError):
             _parse_json_object("not json")
-
-    def test_forced_resolve_is_scoped_to_an_active_memory_binding(self) -> None:
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}, clear=False):
-            llm = DeepSeekFlashLLM()
-            llm.bind_memory_tools(object(), "user", force_resolve=True)
-            self.assertTrue(llm._force_memory_resolve)
-            llm.bind_memory_tools(None, None, force_resolve=True)
-            self.assertFalse(llm._force_memory_resolve)
-
-    def test_forced_resolve_only_applies_to_the_first_tool_round(self) -> None:
-        self.assertEqual(
-            {
-                "type": "function",
-                "function": {"name": "memory_resolve_context"},
-            },
-            _memory_tool_choice(True, 0),
-        )
-        self.assertEqual("auto", _memory_tool_choice(True, 1))
-        self.assertEqual("auto", _memory_tool_choice(False, 0))
 
     def test_cache_envelope_preserves_origin_usage_for_cost_accounting(self) -> None:
         with TemporaryDirectory() as directory, patch.dict(

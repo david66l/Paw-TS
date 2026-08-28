@@ -843,6 +843,20 @@ def summarize_answer_reviews(rows: list[dict]) -> dict:
     }
 
 
+def summarize_answer_resolutions(rows: list[dict]) -> dict:
+    attempted = [row for row in rows if row.get("answerResolutionAttempted") is True]
+    return {
+        "enabled": any("answerResolutionAttempted" in row for row in rows),
+        "attempted": len(attempted),
+        "sufficient": sum(
+            row.get("answerResolutionStop") == "sufficient" for row in attempted
+        ),
+        "resultChars": sum(
+            int(row.get("answerResolutionChars", 0)) for row in attempted
+        ),
+    }
+
+
 def run(args: argparse.Namespace) -> dict:
     from memory_bench.dataset import get_dataset
     from paw_provider import PawMemoryProvider
@@ -1201,19 +1215,22 @@ def run(args: argparse.Namespace) -> dict:
                         else base_prompt
                     )
 
+                prefetched_resolution = None
                 if args.answer_tools:
-                    force_resolve = False
                     if args.answer_tools_required:
                         from evidence_answer_review import (
-                            requires_evidence_answer_review,
+                            prefetch_evidence_resolution,
                         )
 
-                        force_resolve = requires_evidence_answer_review(context)
-                    answer_llm.bind_memory_tools(
-                        provider,
-                        query.user_id,
-                        force_resolve=force_resolve,
-                    )
+                        prefetched_resolution = prefetch_evidence_resolution(
+                            provider,
+                            question=query.query,
+                            user_id=query.user_id,
+                            context=context,
+                        )
+                        context = prefetched_resolution.context
+                    if prefetched_resolution is None or not prefetched_resolution.attempted:
+                        answer_llm.bind_memory_tools(provider, query.user_id)
                 try:
                     answer = answer_mode.answer_from_context(
                         query.query,
@@ -1256,6 +1273,21 @@ def run(args: argparse.Namespace) -> dict:
                         "answerCorrect": judgment.correct,
                         "answerHash": sha(answer.answer),
                         "answerChars": len(answer.answer),
+                        "answerResolutionAttempted": (
+                            prefetched_resolution.attempted
+                            if args.answer_tools and prefetched_resolution is not None
+                            else False
+                        ),
+                        "answerResolutionChars": (
+                            prefetched_resolution.result_chars
+                            if args.answer_tools and prefetched_resolution is not None
+                            else 0
+                        ),
+                        "answerResolutionStop": (
+                            prefetched_resolution.stop
+                            if args.answer_tools and prefetched_resolution is not None
+                            else "disabled"
+                        ),
                         "answerReviewAttempted": (
                             answer_review.attempted if answer_review else False
                         ),
@@ -1286,6 +1318,7 @@ def run(args: argparse.Namespace) -> dict:
         "ingestionMs": round(ingestion_ms, 1),
         "metrics": summarize(rows),
         "answerMetrics": summarize_answers(rows),
+        "answerResolutionMetrics": summarize_answer_resolutions(rows),
         "answerReviewMetrics": summarize_answer_reviews(rows),
         "providerStats": stats,
         "answerLlmStats": answer_llm.stats() if answer_llm is not None else None,

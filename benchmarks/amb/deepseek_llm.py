@@ -70,7 +70,6 @@ class DeepSeekFlashLLM(LLM):
         )
         self._memory_provider = None
         self._memory_user_id: str | None = None
-        self._force_memory_resolve = False
         self._stats = {
             "calls": 0,
             "cacheHitCalls": 0,
@@ -100,13 +99,10 @@ class DeepSeekFlashLLM(LLM):
         self,
         provider,
         user_id: str | None,
-        *,
-        force_resolve: bool = False,
     ) -> None:
         """Bind one query's scope; the provider never accepts tenant IDs from the model."""
         self._memory_provider = provider
         self._memory_user_id = user_id
-        self._force_memory_resolve = bool(provider is not None and force_resolve)
 
     def stats(self) -> dict:
         workload_prompt_tokens = (
@@ -174,7 +170,6 @@ class DeepSeekFlashLLM(LLM):
                     "reasoningEffort": "max",
                     "memoryTools": self._memory_provider is not None,
                     "memoryToolProfile": self._tool_profile,
-                    "forceMemoryResolve": self._force_memory_resolve,
                     "cacheFormat": CACHE_ENTRY_SCHEMA,
                 },
                 sort_keys=True,
@@ -366,10 +361,7 @@ class DeepSeekFlashLLM(LLM):
             }
             if tools is not None and not tools_exhausted:
                 kwargs["tools"] = tools
-                kwargs["tool_choice"] = _memory_tool_choice(
-                    self._force_memory_resolve,
-                    _round,
-                )
+                kwargs["tool_choice"] = "auto"
             response = self._client.chat.completions.create(**kwargs)
             usage = response.usage
             totals["promptTokens"] += int(getattr(usage, "prompt_tokens", 0) or 0)
@@ -505,15 +497,6 @@ class DeepSeekFlashLLM(LLM):
                 if tool_calls >= 6 or 24_000 - tool_result_chars < 256:
                     tools_exhausted = True
         raise ValueError("memory tool round budget exceeded")
-
-
-def _memory_tool_choice(force_resolve: bool, round_index: int):
-    if force_resolve and round_index == 0:
-        return {
-            "type": "function",
-            "function": {"name": "memory_resolve_context"},
-        }
-    return "auto"
 
 
 def _memory_tool_definitions(
