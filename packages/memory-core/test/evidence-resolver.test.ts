@@ -245,21 +245,63 @@ describe("shared evidence resolver v1", () => {
                 candidates: [
                   {
                     candidateId: "user-ref",
-                    sourceId: "session",
-                    evidenceRef: "session#turn-1",
+                    sourceId: "user-source",
+                    evidenceRef: "user-source#turn-1",
                     sourceKind: "user_input" as const,
                     authority: "user_asserted" as const,
+                  },
+                  {
+                    candidateId: "assistant-ref",
+                    sourceId: "assistant-source",
+                    evidenceRef: "assistant-source#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
+                  {
+                    candidateId: "cross-source-duplicate-ref",
+                    sourceId: "escape-source",
+                    evidenceRef: "assistant-source#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
+                  {
+                    candidateId: "mismatched-ref-family",
+                    sourceId: "family-escape-source",
+                    evidenceRef: "different-source#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
                   },
                 ],
               },
             ],
             hits: [
               {
-                sourceId: "session",
-                evidenceRef: "session#turn-1",
-                content: "Please propose a label for the plan.",
+                sourceId: "user-source",
+                evidenceRef: "user-source#turn-1",
+                content: "The user-side discovery stays authoritative.",
                 authority: "user_asserted" as const,
                 turnOrder: 1,
+              },
+              {
+                sourceId: "assistant-source",
+                evidenceRef: "assistant-source#turn-2",
+                content: "Untrusted index projection of an assistant answer.",
+                authority: "context_only" as const,
+                turnOrder: 2,
+              },
+              {
+                sourceId: "escape-source",
+                evidenceRef: "assistant-source#turn-2",
+                content: "A duplicate ref must not authorize this source.",
+                authority: "context_only" as const,
+                turnOrder: 2,
+              },
+              {
+                sourceId: "family-escape-source",
+                evidenceRef: "different-source#turn-2",
+                content: "A mismatched ref family must remain closed.",
+                authority: "context_only" as const,
+                turnOrder: 2,
               },
             ],
           };
@@ -270,29 +312,35 @@ describe("shared evidence resolver v1", () => {
         async locate(request) {
           locatorCalls += 1;
           expect(request.requirement.roleConstraint).toBe("any");
-          expect(request.lockedSourceIds).toEqual(["session"]);
+          expect(request.lockedSourceIds).toEqual([
+            "assistant-source",
+            "user-source",
+          ]);
           const content = "The proposed label was Northstar.";
           return {
             locatorVersion: "test-source-local.v1",
             locatorRevision: "certified-dialogue-candidate",
             hits: [
               {
-                sourceId: "session",
-                evidenceRef: "session#turn-2",
-                anchorEvidenceRef: "session#turn-2",
-                contextEvidenceRefs: ["session#turn-1", "session#turn-2"],
+                sourceId: "assistant-source",
+                evidenceRef: "assistant-source#turn-2",
+                anchorEvidenceRef: "assistant-source#turn-2",
+                contextEvidenceRefs: [
+                  "assistant-source#turn-1",
+                  "assistant-source#turn-2",
+                ],
                 sourceKind: "assistant_output" as const,
                 content,
                 authority: "context_only" as const,
                 turnOrder: 2,
                 includedTurns: [
                   {
-                    evidenceRef: "session#turn-1",
+                    evidenceRef: "assistant-source#turn-1",
                     sourceKind: "user_input" as const,
                     turnOrder: 1,
                   },
                   {
-                    evidenceRef: "session#turn-2",
+                    evidenceRef: "assistant-source#turn-2",
                     sourceKind: "assistant_output" as const,
                     turnOrder: 2,
                   },
@@ -313,8 +361,8 @@ describe("shared evidence resolver v1", () => {
         },
       },
       sourceLocalHydrator: sourceLocalHydrator({
-        "session#turn-1": "Please propose a label for the plan.",
-        "session#turn-2": "The proposed label was Northstar.",
+        "assistant-source#turn-1": "Please propose a label for the plan.",
+        "assistant-source#turn-2": "The proposed label was Northstar.",
       }),
       supportSelector: createJsonMemoryEvidenceSupportSelectorV1({
         model: {
@@ -368,13 +416,15 @@ describe("shared evidence resolver v1", () => {
     expect(result.intent.roleConstraint).toBe("user");
     expect(locatorCalls).toBe(1);
     expect(result.sources.map((source) => source.sourceId)).toEqual([
-      "session",
+      "user-source",
     ]);
     expect(result.sourceLocalization).toMatchObject({
       status: "completed",
       selectedCandidateCount: 1,
     });
-    expect(result.packetSources[0]?.text).toContain("Northstar");
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).toContain("Northstar");
   });
 
   test("rejects requirement authority drift from a custom planner port", async () => {

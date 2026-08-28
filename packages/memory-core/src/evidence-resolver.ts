@@ -23,6 +23,7 @@ import {
   classifyMemoryEvidenceQueryV3,
   needsCertifiedAssistantDialogueCandidateV1,
 } from "./evidence-query-planner.js";
+import { evidenceSourceIdV1 } from "./evidence-ref.js";
 import type {
   MemoryEvidenceSupportSelectorV1,
   MemoryEvidenceTriageAssessmentV1,
@@ -42,7 +43,7 @@ import {
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v12:certified-dialogue-candidate" as const;
+  "paw.memory-evidence-resolver.v13:parallel-dialogue-discovery" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -156,8 +157,9 @@ export function createMemoryEvidenceResolverV1(input: {
       const certifiedAssistantDialogueCandidate =
         intent.roleConstraint === "user" &&
         needsCertifiedAssistantDialogueCandidateV1(value);
+      const primaryUnfiltered = await input.index.search(value, signal);
       const primary = filterEvidenceSearchResultForRole(
-        await input.index.search(value, signal),
+        primaryUnfiltered,
         intent.roleConstraint,
       );
       const primaryFusion = rankMemoryEvidenceCandidatesV2({
@@ -220,6 +222,7 @@ export function createMemoryEvidenceResolverV1(input: {
         query: value,
         intent,
         primary,
+        primaryUnfiltered,
         requirements,
         maxSources,
         maxEvidencePerSource,
@@ -382,6 +385,8 @@ async function resolveEvidencePass(input: {
   readonly query: string;
   readonly intent: MemoryEvidenceQueryIntentV3;
   readonly primary: MemoryEvidenceIndexSearchResultV1;
+  /** Same index response before the primary user-authority projection. */
+  readonly primaryUnfiltered: MemoryEvidenceIndexSearchResultV1;
   readonly requirements: readonly MemoryEvidenceRequirementV3[];
   readonly maxSources: number;
   readonly maxEvidencePerSource: number;
@@ -396,15 +401,14 @@ async function resolveEvidencePass(input: {
   readonly excludedEvidenceRefs?: ReadonlySet<string>;
   readonly signal: AbortSignal;
 }): Promise<MemoryEvidenceResolutionPassV1> {
-  const supplemental = (
-    await Promise.all(
-      input.requirements.map((requirement) =>
-        requirement.searchText === input.query
-          ? Promise.resolve(input.primary)
-          : input.index.search(requirement.searchText, input.signal),
-      ),
-    )
-  ).map((result) =>
+  const supplementalUnfiltered = await Promise.all(
+    input.requirements.map((requirement) =>
+      requirement.searchText === input.query
+        ? Promise.resolve(input.primaryUnfiltered)
+        : input.index.search(requirement.searchText, input.signal),
+    ),
+  );
+  const supplemental = supplementalUnfiltered.map((result) =>
     filterEvidenceSearchResultForRole(result, input.intent.roleConstraint),
   );
   const discoveryResults: Array<
@@ -440,6 +444,50 @@ async function resolveEvidencePass(input: {
     ].sort(),
   ) as readonly ("l0" | "l1")[];
   const sourceIds = fusion.sources.map((source) => source.sourceId);
+  // A provenance-unresolved dialogue artifact needs a second discovery view.
+  // Reuse the exact same index responses, but retain only assistant anchors.
+  // This view cannot change the primary user source fusion; it may only widen
+  // the locked input of the certificate-gated source-local locator below.
+  const dialogueCandidateSourceIds = input.certifiedAssistantDialogueCandidate
+    ? rankMemoryEvidenceCandidatesV2({
+        lists: [
+          {
+            searchText: input.query,
+            result:
+              filterEvidenceSearchResultForCertifiedAssistantDialogueV1(
+                input.primaryUnfiltered,
+              ),
+          },
+          ...input.requirements.flatMap((requirement, index) =>
+            requirement.searchText === input.query
+              ? []
+              : [
+                  {
+                    searchText: requirement.searchText,
+                    result:
+                      filterEvidenceSearchResultForCertifiedAssistantDialogueV1(
+                        supplementalUnfiltered[index] ??
+                          input.primaryUnfiltered,
+                      ),
+                  },
+                ],
+          ),
+        ].flatMap(({ result }, searchIndex) =>
+          result.lists.map((list, listIndex) => ({
+            ...list,
+            retrieverId: `${list.retrieverId}:dialogue-${searchIndex}-${listIndex}`,
+            weight: list.weight * (searchIndex === 0 ? 1 : 0.8),
+          })),
+        ),
+        maxSources: input.maxSources,
+        maxEvidencePerSource: input.maxEvidencePerSource,
+      }).sources.map((source) => source.sourceId)
+    : Object.freeze([]);
+  const sourceLocalLockedIds = input.certifiedAssistantDialogueCandidate
+    ? Object.freeze([
+        ...new Set([...dialogueCandidateSourceIds, ...sourceIds]),
+      ])
+    : sourceIds;
   const baselineRequirementHits = input.requirements.map((_, index) =>
     mergeEvidenceHits(
       supplemental[index]?.hits ?? [],
@@ -464,7 +512,7 @@ async function resolveEvidencePass(input: {
     certifiedAssistantDialogueCandidate:
       input.certifiedAssistantDialogueCandidate,
   });
-  if (localEligible && sourceIds.length > 0) {
+  if (localEligible && sourceLocalLockedIds.length > 0) {
     if (!input.sourceLocalLocator) {
       sourceLocalization = Object.freeze({
         status: "not_configured",
@@ -499,7 +547,7 @@ async function resolveEvidencePass(input: {
               : requirement;
           const request = Object.freeze({
             requirement: locatorRequirement,
-            lockedSourceIds: Object.freeze([...sourceIds]),
+            lockedSourceIds: Object.freeze([...sourceLocalLockedIds]),
             ...(input.evidenceTimeUpperBound === undefined
               ? {}
               : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
@@ -628,7 +676,7 @@ async function resolveEvidencePass(input: {
     );
     const candidates = selectSupportCandidates(
       requirementHits,
-      sourceIds,
+      sourceLocalLockedIds,
       input.intent.roleConstraint !== "user" ||
         input.certifiedAssistantDialogueCandidate,
       32,
@@ -726,7 +774,7 @@ async function resolveEvidencePass(input: {
         selectedRefsByRequirement?.get(requirement.requirementId),
       ),
     })),
-    allowedSourceIds: sourceIds,
+    allowedSourceIds: sourceLocalLockedIds,
     maxHitsPerRequirement: input.maxHitsPerRequirement,
     maxChars: input.maxNotebookChars,
     allowContextOnly: allowSelectedContextOnly,
@@ -1017,6 +1065,71 @@ function filterEvidenceSearchResultForRole(
       result.hits.filter((hit) => hit.authority !== "context_only"),
     ),
   });
+}
+
+/**
+ * Builds a non-authoritative discovery view for a certified dialogue-artifact
+ * route. Candidate metadata decides eligibility; exact text is still rebuilt
+ * by the source-local hydrator before the semantic selector can see it.
+ */
+function filterEvidenceSearchResultForCertifiedAssistantDialogueV1(
+  result: MemoryEvidenceIndexSearchResultV1,
+): MemoryEvidenceIndexSearchResultV1 {
+  const allowedEvidencePairs = new Set(
+    result.lists.flatMap((list) =>
+      list.candidates.flatMap((candidate) =>
+        candidate.sourceKind === "assistant_output" &&
+        candidate.authority === "context_only" &&
+        evidenceRefMatchesSource(candidate.evidenceRef, candidate.sourceId)
+          ? [evidencePairKey(candidate.sourceId, candidate.evidenceRef)]
+          : [],
+      ),
+    ),
+  );
+  return Object.freeze({
+    ...result,
+    lists: Object.freeze(
+      result.lists.map((list) =>
+        Object.freeze({
+          ...list,
+          candidates: Object.freeze(
+            list.candidates.filter(
+              (candidate) =>
+                candidate.sourceKind === "assistant_output" &&
+                candidate.authority === "context_only" &&
+                allowedEvidencePairs.has(
+                  evidencePairKey(candidate.sourceId, candidate.evidenceRef),
+                ),
+            ),
+          ),
+        }),
+      ),
+    ),
+    hits: Object.freeze(
+      result.hits.filter(
+        (hit) =>
+          allowedEvidencePairs.has(
+            evidencePairKey(hit.sourceId, hit.evidenceRef),
+          ) &&
+          hit.authority === "context_only",
+      ),
+    ),
+  });
+}
+
+function evidenceRefMatchesSource(
+  evidenceRef: string,
+  sourceId: string,
+): boolean {
+  try {
+    return evidenceSourceIdV1(evidenceRef) === sourceId;
+  } catch {
+    return false;
+  }
+}
+
+function evidencePairKey(sourceId: string, evidenceRef: string): string {
+  return `${sourceId}\u0000${evidenceRef}`;
 }
 
 function enforceSelectedEvidenceAuthority(input: {
