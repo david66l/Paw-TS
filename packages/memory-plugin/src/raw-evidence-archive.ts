@@ -14,6 +14,7 @@ import {
   type MemorySourceLocalEvidenceResultV1,
   type MemorySourceLocalHydratedEvidenceV1,
   hasMemorySourceLocalAssistantOriginCertificateV1,
+  memorySourceLocalDiverseCandidateCapV1,
   memorySourceLocalEvidenceCacheKeyV1,
   rankMemorySourceLocalAnchorCandidatesV1,
 } from "./source-local-evidence-locator.js";
@@ -111,10 +112,10 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
   const locatorVersion =
-    "paw.memory-postgres-source-local-locator.v5:bounded-source-priority-origin";
+    "paw.memory-postgres-source-local-locator.v6:confidence-first-origin";
   const hydratorVersion = "paw.memory-postgres-source-local-hydrator.v1";
   const rankerVersion =
-    "paw.memory-source-local-ranker.v5:shared-bounded-anchor-allocation";
+    "paw.memory-source-local-ranker.v6:confidence-first-diverse";
   const resultCache = new Map<string, MemorySourceLocalEvidenceResultV1>();
   return Object.freeze({
     scope,
@@ -511,14 +512,12 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         .slice(0, 8);
       const includeRequestMatches =
         request.requirement.roleConstraint !== "user";
-      const searchedRoleCount = includeRequestMatches ? 2 : 1;
       const perSourceCandidateLimit = Math.min(
         8,
         Math.max(
-          1,
+          2,
           Math.floor(
-            request.budget.maxCandidatesPerChannel /
-              (lockedSourceIds.length * searchedRoleCount),
+            request.budget.maxCandidatesPerChannel / lockedSourceIds.length,
           ),
         ),
       );
@@ -627,10 +626,11 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         candidates: scoredCandidates,
         lockedSourceIds,
         maxCandidates: request.budget.maxCandidatesPerChannel,
-        maxCandidatesPerSource: Math.max(
-          2,
-          perSourceCandidateLimit * searchedRoleCount,
-        ),
+        maxCandidatesPerSource: memorySourceLocalDiverseCandidateCapV1({
+          lockedSourceCount: lockedSourceIds.length,
+          maxAnchors: request.budget.maxAnchors,
+          maxAnchorsPerSource: request.budget.maxAnchorsPerSource,
+        }),
       });
       const perSource = new Map<string, number>();
       const hits = [];

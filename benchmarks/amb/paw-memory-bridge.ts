@@ -75,6 +75,8 @@ import {
   createPostgresMemoryTopicOrganizerStoreV1,
   hasMemorySourceLocalAssistantOriginCertificateV1,
   memoryScopeFingerprintV1,
+  memorySourceLocalBackfillSourceIdsV1,
+  memorySourceLocalDiverseCandidateCapV1,
   memorySourceLocalEvidenceCacheKeyV1,
   needsMemoryEvidenceRoleResolutionV1,
   planMemoryEvidenceCoverageV1,
@@ -128,6 +130,10 @@ import {
   isAmbDocumentVisibleAtQueryV1,
   parseAmbQueryTimeCutoffV1,
 } from "./query-time-cutoff.js";
+import {
+  ambSourceLocalBackfillScoreV1,
+  hasAmbSourceLocalBackfillFailureV1,
+} from "./source-local-backfill-policy.js";
 
 interface BridgeRequestV1 {
   readonly id: number;
@@ -2718,7 +2724,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const turnIndexRevision = await engine.retrievalRevisionToken();
       const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
         locatorVersion:
-          "paw.amb-source-local-locator.v6:bounded-source-priority-origin",
+          "paw.amb-source-local-locator.v7:global-confidence-origin",
         scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
         turnIndexRevision,
         embeddingIdentity: sourceSpanEmbedding
@@ -2728,7 +2734,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         adjacencyPolicyVersion:
           PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
         rankerVersion:
-          "paw.memory-source-local-ranker.v5:shared-bounded-anchor-allocation",
+          "paw.memory-source-local-ranker.v6:confidence-first-diverse",
       });
       const cached = sourceLocalLocatorCache.get(cacheKey);
       if (cached) {
@@ -2766,124 +2772,187 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       }
       const includeRequestMatches =
         request.requirement.roleConstraint !== "user";
-      const searchedRoleCount = includeRequestMatches ? 2 : 1;
-      const perSourceCandidateLimit = Math.min(
-        8,
-        Math.max(
-          1,
-          Math.floor(
-            request.budget.maxCandidatesPerChannel /
-              (request.lockedSourceIds.length * searchedRoleCount),
+      const allowedBlockIds = request.lockedSourceIds.flatMap(
+        (documentId) => blockIdsByDocument?.get(documentId) ?? [],
+      );
+      const documentIdByBlockId = new Map(
+        request.lockedSourceIds.flatMap((documentId) =>
+          (blockIdsByDocument?.get(documentId) ?? []).map(
+            (blockId) => [blockId, documentId] as const,
           ),
         ),
       );
-      async function searchRoleWithinSources(
+      async function searchRoleAcrossSources(
         issueType: "assistant_output" | "user_input",
         enabled = true,
       ) {
         if (!enabled) {
           return {
-            sources: [],
+            rankedCandidates: [],
             lexicalCandidateCount: 0,
             denseCandidateCount: 0,
             lexicalFailureCount: 0,
             denseFailureCount: 0,
+            backfillSourceCount: 0,
             unavailable: false,
           };
         }
-        const sources = await Promise.all(
-          request.lockedSourceIds.map(async (documentId) => {
-            const filter = {
-              allowedIds: blockIdsByDocument?.get(documentId) ?? [],
-              issueType,
-              ...(request.evidenceTimeUpperBound === undefined
-                ? {}
-                : { createdAtUpperBound: request.evidenceTimeUpperBound }),
-            };
-            const [lexical, dense] = await Promise.all([
-              engine
-                .searchText(
-                  locatorQuery,
-                  perSourceCandidateLimit,
-                  sourceScopeFor(userId).repositoryId,
-                  filter,
-                )
-                .then((hits) => ({ hits, failed: false }))
-                .catch(() => ({ hits: [], failed: true })),
-              sourceSpanEmbedding
-                ? engine
-                    .searchVector(
-                      locatorQuery,
-                      perSourceCandidateLimit,
-                      sourceScopeFor(userId).repositoryId,
-                      filter,
-                    )
-                    .then((hits) => ({ hits, failed: false }))
-                    .catch(() => ({ hits: [], failed: true }))
-                : Promise.resolve({ hits: [], failed: false }),
-            ]);
-            const ranked = reciprocalRankFusionV1([
-              { weight: MEMORY_RRF_TEXT_WEIGHT_V1, hits: lexical.hits },
-              ...(sourceSpanEmbedding
-                ? [
-                    {
-                      weight: MEMORY_RRF_VECTOR_WEIGHT_V1,
-                      hits: dense.hits,
-                    },
-                  ]
-                : []),
-            ]);
+        const searchChannels = async (
+          channelAllowedIds: readonly string[],
+          limit: number,
+        ) => {
+          const filter = {
+            allowedIds: channelAllowedIds,
+            issueType,
+            ...(request.evidenceTimeUpperBound === undefined
+              ? {}
+              : { createdAtUpperBound: request.evidenceTimeUpperBound }),
+          };
+          const [lexical, dense] = await Promise.all([
+            engine
+              .searchText(
+                locatorQuery,
+                limit,
+                sourceScopeFor(userId).repositoryId,
+                filter,
+              )
+              .then((hits) => ({ hits, failed: false }))
+              .catch(() => ({ hits: [], failed: true })),
+            sourceSpanEmbedding
+              ? engine
+                  .searchVector(
+                    locatorQuery,
+                    limit,
+                    sourceScopeFor(userId).repositoryId,
+                    filter,
+                  )
+                  .then((hits) => ({ hits, failed: false }))
+                  .catch(() => ({ hits: [], failed: true }))
+              : Promise.resolve({ hits: [], failed: false }),
+          ]);
+          return { lexical, dense };
+        };
+        const global = await searchChannels(
+          allowedBlockIds,
+          request.budget.maxCandidatesPerChannel,
+        );
+        const globallyRanked = reciprocalRankFusionV1([
+          { weight: MEMORY_RRF_TEXT_WEIGHT_V1, hits: global.lexical.hits },
+          ...(sourceSpanEmbedding
+            ? [
+                {
+                  weight: MEMORY_RRF_VECTOR_WEIGHT_V1,
+                  hits: global.dense.hits,
+                },
+              ]
+            : []),
+        ]).map((item) => ({ id: item.id, score: item.score }));
+        const backfillSourceIds = memorySourceLocalBackfillSourceIdsV1({
+          candidates: globallyRanked.flatMap((candidate) => {
+            const sourceId = documentIdByBlockId.get(candidate.id);
+            return sourceId
+              ? [
+                  {
+                    evidenceRef: candidate.id,
+                    sourceId,
+                    score: candidate.score,
+                  },
+                ]
+              : [];
+          }),
+          lockedSourceIds: request.lockedSourceIds,
+          minimumCandidatesPerSource: 2,
+        });
+        const backfills = await Promise.all(
+          backfillSourceIds.map(async (documentId) => {
+            const channels = await searchChannels(
+              blockIdsByDocument?.get(documentId) ?? [],
+              2,
+            );
             return {
               documentId,
-              rankedCandidates: ranked.map((item) => ({
-                id: item.id,
-                score: item.score,
-              })),
-              lexicalCandidateCount: lexical.hits.length,
-              denseCandidateCount: dense.hits.length,
-              lexicalFailed: lexical.failed,
-              denseFailed: dense.failed,
+              channels,
+              ranked: reciprocalRankFusionV1([
+                {
+                  weight: MEMORY_RRF_TEXT_WEIGHT_V1,
+                  hits: channels.lexical.hits,
+                },
+                ...(sourceSpanEmbedding
+                  ? [
+                      {
+                        weight: MEMORY_RRF_VECTOR_WEIGHT_V1,
+                        hits: channels.dense.hits,
+                      },
+                    ]
+                  : []),
+              ]),
             };
           }),
         );
+        const rankedById = new Map(
+          globallyRanked.map((candidate) => [candidate.id, candidate]),
+        );
+        for (const backfill of backfills) {
+          const sourcePriority = request.lockedSourceIds.indexOf(
+            backfill.documentId,
+          );
+          backfill.ranked.forEach((candidate, index) => {
+            if (rankedById.has(candidate.id)) return;
+            rankedById.set(candidate.id, {
+              id: candidate.id,
+              score: ambSourceLocalBackfillScoreV1(sourcePriority, index + 1),
+            });
+          });
+        }
+        const backfillUnavailable = hasAmbSourceLocalBackfillFailureV1({
+          denseConfigured: sourceSpanEmbedding !== undefined,
+          attempts: backfills.map(({ channels }) => ({
+            lexicalFailed: channels.lexical.failed,
+            denseFailed: channels.dense.failed,
+          })),
+        });
+        const lexicalCandidateCount =
+          global.lexical.hits.length +
+          backfills.reduce(
+            (total, backfill) => total + backfill.channels.lexical.hits.length,
+            0,
+          );
+        const denseCandidateCount =
+          global.dense.hits.length +
+          backfills.reduce(
+            (total, backfill) => total + backfill.channels.dense.hits.length,
+            0,
+          );
+        const lexicalFailureCount =
+          Number(global.lexical.failed) +
+          backfills.filter((backfill) => backfill.channels.lexical.failed)
+            .length;
+        const denseFailureCount =
+          Number(global.dense.failed) +
+          backfills.filter((backfill) => backfill.channels.dense.failed).length;
         return {
-          sources,
-          lexicalCandidateCount: sources.reduce(
-            (total, source) => total + source.lexicalCandidateCount,
-            0,
-          ),
-          denseCandidateCount: sources.reduce(
-            (total, source) => total + source.denseCandidateCount,
-            0,
-          ),
-          lexicalFailureCount: sources.filter((source) => source.lexicalFailed)
-            .length,
-          denseFailureCount: sources.filter((source) => source.denseFailed)
-            .length,
-          unavailable: sources.some(
-            (source) =>
-              source.lexicalFailed &&
-              (sourceSpanEmbedding === undefined || source.denseFailed),
-          ),
+          rankedCandidates: [...rankedById.values()],
+          lexicalCandidateCount,
+          denseCandidateCount,
+          lexicalFailureCount,
+          denseFailureCount,
+          backfillSourceCount: backfillSourceIds.length,
+          unavailable: backfillUnavailable,
         };
       }
       const [assistantSearch, requestSearch] = await Promise.all([
-        searchRoleWithinSources("assistant_output"),
-        searchRoleWithinSources("user_input", includeRequestMatches),
+        searchRoleAcrossSources("assistant_output"),
+        searchRoleAcrossSources("user_input", includeRequestMatches),
       ]);
       const matchedCandidates = [
-        ...assistantSearch.sources.flatMap((source) =>
-          source.rankedCandidates.map((candidate) => ({
-            ...candidate,
-            issueType: "assistant_output" as const,
-          })),
-        ),
-        ...requestSearch.sources.flatMap((source) =>
-          source.rankedCandidates.map((candidate) => ({
-            ...candidate,
-            issueType: "user_input" as const,
-          })),
-        ),
+        ...assistantSearch.rankedCandidates.map((candidate) => ({
+          ...candidate,
+          issueType: "assistant_output" as const,
+        })),
+        ...requestSearch.rankedCandidates.map((candidate) => ({
+          ...candidate,
+          issueType: "user_input" as const,
+        })),
       ];
       const rankedIds = [...new Set(matchedCandidates.map(({ id }) => id))];
       const loadedEntries = engine.getMany
@@ -2959,10 +3028,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         candidates: anchors,
         lockedSourceIds: request.lockedSourceIds,
         maxCandidates: request.budget.maxCandidatesPerChannel,
-        maxCandidatesPerSource: Math.max(
-          2,
-          perSourceCandidateLimit * searchedRoleCount,
-        ),
+        maxCandidatesPerSource: memorySourceLocalDiverseCandidateCapV1({
+          lockedSourceCount: request.lockedSourceIds.length,
+          maxAnchors: request.budget.maxAnchors,
+          maxAnchorsPerSource: request.budget.maxAnchorsPerSource,
+        }),
       });
       const perSource = new Map<string, number>();
       const hits = [];
@@ -3070,7 +3140,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ]);
       const result = Object.freeze({
         locatorVersion:
-          "paw.amb-source-local-locator.v6:bounded-source-priority-origin",
+          "paw.amb-source-local-locator.v7:global-confidence-origin",
         locatorRevision: sha(
           JSON.stringify({
             turnIndexRevision,
@@ -3119,6 +3189,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         denseCandidateCount:
           assistantSearch.denseCandidateCount +
           requestSearch.denseCandidateCount,
+        backfillSourceCount:
+          assistantSearch.backfillSourceCount +
+          requestSearch.backfillSourceCount,
         lexicalFailureCount:
           assistantSearch.lexicalFailureCount +
           requestSearch.lexicalFailureCount,
@@ -3173,7 +3246,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ? {
             sourceLocalLocator: Object.freeze({
               locatorVersion:
-                "paw.amb-source-local-locator.v6:bounded-source-priority-origin",
+                "paw.amb-source-local-locator.v7:global-confidence-origin",
               locate(request: MemorySourceLocalEvidenceRequestV1) {
                 return locateEvidenceWithinSources(request);
               },

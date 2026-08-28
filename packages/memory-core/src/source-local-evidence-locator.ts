@@ -83,6 +83,80 @@ export interface MemorySourceLocalAnchorCandidateV1 {
   readonly score: number;
 }
 
+/**
+ * Identifies locked sources that need a bounded recall backfill before global
+ * confidence ranking. This keeps a head source from monopolizing an adapter's
+ * top-k retrieval window while leaving final evidence selection score-driven.
+ */
+export function memorySourceLocalBackfillSourceIdsV1(input: {
+  readonly candidates: readonly MemorySourceLocalAnchorCandidateV1[];
+  readonly lockedSourceIds: readonly string[];
+  readonly minimumCandidatesPerSource: number;
+}): readonly string[] {
+  if (
+    !Number.isSafeInteger(input.minimumCandidatesPerSource) ||
+    input.minimumCandidatesPerSource < 1 ||
+    input.minimumCandidatesPerSource > 8
+  ) {
+    throw namedError("MemorySourceLocalEvidenceBudgetInvalid");
+  }
+  const locked = new Set(input.lockedSourceIds);
+  if (
+    locked.size !== input.lockedSourceIds.length ||
+    input.lockedSourceIds.some((sourceId) => !sourceId.trim())
+  ) {
+    throw namedError("MemorySourceLocalEvidenceSourcesInvalid");
+  }
+  const refsBySource = new Map<string, Set<string>>(
+    input.lockedSourceIds.map((sourceId) => [sourceId, new Set<string>()]),
+  );
+  for (const candidate of input.candidates) {
+    if (
+      !candidate.evidenceRef.trim() ||
+      !locked.has(candidate.sourceId) ||
+      !Number.isFinite(candidate.score)
+    ) {
+      throw namedError("MemorySourceLocalEvidenceHitInvalid");
+    }
+    refsBySource.get(candidate.sourceId)?.add(candidate.evidenceRef);
+  }
+  return Object.freeze(
+    input.lockedSourceIds.filter(
+      (sourceId) =>
+        (refsBySource.get(sourceId)?.size ?? 0) <
+        input.minimumCandidatesPerSource,
+    ),
+  );
+}
+
+/**
+ * Keeps one final anchor slot available to another locked source whenever the
+ * request spans multiple sources. A single-source request retains its full
+ * declared per-source budget.
+ */
+export function memorySourceLocalDiverseCandidateCapV1(input: {
+  readonly lockedSourceCount: number;
+  readonly maxAnchors: number;
+  readonly maxAnchorsPerSource: number;
+}): number {
+  if (
+    !Number.isSafeInteger(input.lockedSourceCount) ||
+    input.lockedSourceCount < 1 ||
+    !Number.isSafeInteger(input.maxAnchors) ||
+    input.maxAnchors < 1 ||
+    !Number.isSafeInteger(input.maxAnchorsPerSource) ||
+    input.maxAnchorsPerSource < 1 ||
+    input.maxAnchorsPerSource > input.maxAnchors
+  ) {
+    throw namedError("MemorySourceLocalEvidenceBudgetInvalid");
+  }
+  const diverseLimit =
+    input.lockedSourceCount > 1
+      ? Math.max(1, input.maxAnchors - 1)
+      : input.maxAnchors;
+  return Math.min(input.maxAnchorsPerSource, diverseLimit);
+}
+
 export interface MemorySourceLocalHydratedEvidenceV1 {
   readonly evidenceRef: string;
   readonly sourceKind: MemoryConversationTurnKindV1;
@@ -218,10 +292,10 @@ export function hasMemorySourceLocalAssistantOriginCertificateV1(
 }
 
 /**
- * Gives the highest-ranked locked source two exact anchors, then reserves one
- * slot for each later source before filling the remaining global budget. Both
- * the product adapter and benchmark use this policy after mapping a matched
- * request to its immutable assistant reply.
+ * Ranks exact anchors by evidence confidence inside the already-locked source
+ * boundary. Source order is only a deterministic tie-break; a coarse source
+ * rank must not hide a stronger exact turn. The per-source cap prevents one
+ * conversation from consuming the whole candidate budget.
  */
 export function rankMemorySourceLocalAnchorCandidatesV1<
   Candidate extends MemorySourceLocalAnchorCandidateV1,
@@ -265,48 +339,21 @@ export function rankMemorySourceLocalAnchorCandidatesV1<
       bestByRef.set(candidate.evidenceRef, candidate);
     }
   }
-  const queues = new Map<string, Candidate[]>();
-  for (const sourceId of input.lockedSourceIds) queues.set(sourceId, []);
-  for (const candidate of bestByRef.values()) {
-    queues.get(candidate.sourceId)?.push(candidate);
-  }
-  for (const queue of queues.values()) {
-    queue.sort(
-      (left, right) =>
-        right.score - left.score ||
-        left.evidenceRef.localeCompare(right.evidenceRef),
-    );
-  }
-  const cursors = new Map(
-    input.lockedSourceIds.map((sourceId) => [sourceId, 0]),
+  const candidates = [...bestByRef.values()].sort(
+    (left, right) =>
+      right.score - left.score ||
+      (sourcePriority.get(left.sourceId) as number) -
+        (sourcePriority.get(right.sourceId) as number) ||
+      left.evidenceRef.localeCompare(right.evidenceRef),
   );
   const sourceCounts = new Map<string, number>();
   const ranked: Candidate[] = [];
-  const appendNext = (sourceId: string): boolean => {
-    if (ranked.length >= input.maxCandidates) return false;
-    const sourceCount = sourceCounts.get(sourceId) ?? 0;
-    if (sourceCount >= input.maxCandidatesPerSource) return false;
-    const queue = queues.get(sourceId) ?? [];
-    const cursor = cursors.get(sourceId) ?? 0;
-    const candidate = queue[cursor];
-    if (!candidate) return false;
-    cursors.set(sourceId, cursor + 1);
-    sourceCounts.set(sourceId, sourceCount + 1);
+  for (const candidate of candidates) {
+    if (ranked.length >= input.maxCandidates) break;
+    const sourceCount = sourceCounts.get(candidate.sourceId) ?? 0;
+    if (sourceCount >= input.maxCandidatesPerSource) continue;
+    sourceCounts.set(candidate.sourceId, sourceCount + 1);
     ranked.push(candidate);
-    return true;
-  };
-  const primarySourceId = input.lockedSourceIds[0];
-  if (primarySourceId) {
-    appendNext(primarySourceId);
-    appendNext(primarySourceId);
-  }
-  for (const sourceId of input.lockedSourceIds.slice(1)) appendNext(sourceId);
-  let advanced = true;
-  while (ranked.length < input.maxCandidates && advanced) {
-    advanced = false;
-    for (const sourceId of input.lockedSourceIds) {
-      advanced = appendNext(sourceId) || advanced;
-    }
   }
   return Object.freeze(ranked);
 }

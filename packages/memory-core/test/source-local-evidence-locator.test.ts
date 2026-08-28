@@ -7,6 +7,8 @@ import {
   hasMemorySourceLocalAssistantOriginCertificateV1,
   hasMemorySourceLocalDialogueCertificateV1,
   isMemorySourceLocalEvidenceEligibleV1,
+  memorySourceLocalBackfillSourceIdsV1,
+  memorySourceLocalDiverseCandidateCapV1,
   memorySourceLocalEvidenceCacheKeyV1,
   rankMemorySourceLocalAnchorCandidatesV1,
   validateMemorySourceLocalEvidenceResultV1,
@@ -213,25 +215,76 @@ describe("source-local evidence locator boundary", () => {
     ).toBe(false);
   });
 
-  test("reserves later-source capacity after two primary-source anchors", () => {
+  test("ranks exact evidence confidence before coarse source order", () => {
     const ranked = rankMemorySourceLocalAnchorCandidatesV1({
       candidates: [
         { evidenceRef: "s1#turn-1", sourceId: "s1", score: 9 },
         { evidenceRef: "s1#turn-2", sourceId: "s1", score: 8 },
         { evidenceRef: "s1#turn-3", sourceId: "s1", score: 7 },
         { evidenceRef: "s1#turn-4", sourceId: "s1", score: 6 },
-        { evidenceRef: "s2#turn-1", sourceId: "s2", score: 5 },
-        { evidenceRef: "s3#turn-1", sourceId: "s3", score: 4 },
+        { evidenceRef: "s2#turn-1", sourceId: "s2", score: 10 },
+        { evidenceRef: "s3#turn-1", sourceId: "s3", score: 8 },
       ],
       lockedSourceIds: ["s1", "s2", "s3"],
       maxCandidates: 4,
-      maxCandidatesPerSource: 4,
+      maxCandidatesPerSource: 2,
+    });
+    expect(ranked.map((candidate) => candidate.evidenceRef)).toEqual([
+      "s2#turn-1",
+      "s1#turn-1",
+      "s1#turn-2",
+      "s3#turn-1",
+    ]);
+  });
+
+  test("uses coarse source order only to break equal-confidence ties", () => {
+    const ranked = rankMemorySourceLocalAnchorCandidatesV1({
+      candidates: [
+        { evidenceRef: "s2#turn-1", sourceId: "s2", score: 1 },
+        { evidenceRef: "s1#turn-1", sourceId: "s1", score: 1 },
+      ],
+      lockedSourceIds: ["s1", "s2"],
+      maxCandidates: 2,
+      maxCandidatesPerSource: 1,
     });
     expect(ranked.map((candidate) => candidate.evidenceRef)).toEqual([
       "s1#turn-1",
-      "s1#turn-2",
       "s2#turn-1",
-      "s3#turn-1",
+    ]);
+  });
+
+  test("backfills sources hidden by a head source monopolizing global top-k", () => {
+    const global = Array.from({ length: 32 }, (_, index) => ({
+      evidenceRef: `s1#turn-${index + 1}`,
+      sourceId: "s1",
+      score: 32 - index,
+    }));
+    expect(
+      memorySourceLocalBackfillSourceIdsV1({
+        candidates: global,
+        lockedSourceIds: ["s1", "s2", "s3"],
+        minimumCandidatesPerSource: 2,
+      }),
+    ).toEqual(["s2", "s3"]);
+    const ranked = rankMemorySourceLocalAnchorCandidatesV1({
+      candidates: [
+        ...global,
+        { evidenceRef: "s2#turn-1", sourceId: "s2", score: -2.01 },
+        { evidenceRef: "s3#turn-1", sourceId: "s3", score: -3.01 },
+      ],
+      lockedSourceIds: ["s1", "s2", "s3"],
+      maxCandidates: 4,
+      maxCandidatesPerSource: memorySourceLocalDiverseCandidateCapV1({
+        lockedSourceCount: 3,
+        maxAnchors: 4,
+        maxAnchorsPerSource: 4,
+      }),
+    });
+    expect(ranked.map((candidate) => candidate.sourceId)).toEqual([
+      "s1",
+      "s1",
+      "s1",
+      "s2",
     ]);
   });
 

@@ -31,6 +31,8 @@ export {
   hasMemorySourceLocalAssistantOriginCertificateV1,
   hasMemorySourceLocalDialogueCertificateV1,
   hydrateMemorySourceLocalEvidenceResultV1,
+  memorySourceLocalBackfillSourceIdsV1,
+  memorySourceLocalDiverseCandidateCapV1,
   memorySourceLocalEvidenceCacheKeyV1,
   rankMemorySourceLocalAnchorCandidatesV1,
   validateMemorySourceLocalEvidenceResultV1,
