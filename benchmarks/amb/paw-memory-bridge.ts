@@ -28,6 +28,8 @@ import {
   type MemoryRetrievalCacheEventV1,
   type MemoryRrfFusionEventV1,
   type MemorySceneSnapshotV1,
+  type MemorySourceLocalEvidenceRequestV1,
+  type MemorySourceLocalEvidenceResultV1,
   type MemoryTopicDossierProjectorV1,
   type MemoryTopicDossierStoreV1,
   type MemoryTopicEvidenceStoreV1,
@@ -46,6 +48,7 @@ import {
   type PawNextMemoryPluginProfileV1,
   type PawNextMemoryScopeV1,
   boundMemoryRawEvidenceSpansV1,
+  buildMemoryConversationTurnBundleV1,
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryAtomConflictResolverV1,
   createJsonMemoryAtomExtractorV1,
@@ -71,13 +74,12 @@ import {
   createPostgresMemoryTopicEvidenceStoreV1,
   createPostgresMemoryTopicOrganizerStoreV1,
   isAssistantMemoryQueryV1,
-  memoryEvidenceSupportScoreV1,
   memoryScopeFingerprintV1,
+  memorySourceLocalEvidenceCacheKeyV1,
   planMemoryEvidenceCoverageV1,
   planMemoryTopicEvidenceV1,
   projectEvidenceFirstMemoryAnswerContractV1,
   projectEvidenceFirstMemoryContextPacketV1,
-  projectMemoryEvidenceExcerptV1,
   projectMemoryPersonaEvidenceV1,
   projectMemoryResolvedContextToolV1,
   projectMemoryTopicDossierToolV1,
@@ -148,6 +150,10 @@ mkdirSync(dirname(logPath), { recursive: true });
 const cache = createMemoryRetrievalCacheStoreV1({ maxEntries: 2_048 });
 const engines = new Map<string, PostgresMemoryStoreEngine>();
 const sourceEngines = new Map<string, PostgresMemoryStoreEngine>();
+const sourceLocalLocatorCache = new Map<
+  string,
+  MemorySourceLocalEvidenceResultV1
+>();
 const sourceChunkEngines = new Map<string, PostgresMemoryStoreEngine>();
 const providers = new Map<string, MemoryProviderV1>();
 const atomStores = new Map<string, MemoryAtomWriterStoreV1>();
@@ -160,6 +166,10 @@ const rawEvidenceArchives = new Map<string, MemoryRawEvidenceArchiveV1>();
 const documentIdsByUser = new Map<string, Set<string>>();
 const documentCreatedByUser = new Map<string, Map<string, string>>();
 const documentOrderByUser = new Map<string, Map<string, number>>();
+const sourceBlockIdsByUserDocument = new Map<
+  string,
+  Map<string, readonly string[]>
+>();
 const sourceKindByUser = new Map<
   string,
   Map<string, MemoryConversationTurnKindV1>
@@ -429,11 +439,15 @@ const evidenceSupportSelector =
 const evidenceClosureAuditor =
   ingestMode === "atom" &&
   atomContextMode === "evidence_first" &&
-  /^(?:1|true)$/iu.test(process.env.PAW_AMB_QUERY_EXPANSION?.trim() ?? "")
+  /^(?:1|true)$/iu.test(process.env.PAW_AMB_CLOSURE_AUDIT?.trim() ?? "")
     ? createJsonMemoryEvidenceClosureAuditorV1({
         model: createAmbMemoryWriterModel("closure-audit"),
       })
     : undefined;
+const sourceLocalLocatorEnabled =
+  ingestMode === "atom" &&
+  atomContextMode === "evidence_first" &&
+  /^(?:1|true)$/iu.test(process.env.PAW_AMB_SOURCE_LOCAL_LOCATOR?.trim() ?? "");
 
 function sha(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -1015,8 +1029,12 @@ async function prepare(params: Record<string, unknown>): Promise<unknown> {
   contextResolvers.clear();
   documentIdsByUser.clear();
   documentCreatedByUser.clear();
+  documentOrderByUser.clear();
+  sourceBlockIdsByUserDocument.clear();
+  sourceKindByUser.clear();
   sceneSnapshots.clear();
   cache.clear();
+  sourceLocalLocatorCache.clear();
   resetUsers.clear();
   routeStats.l0Fallback = 0;
   routeStats.sceneCausal = 0;
@@ -1096,7 +1114,20 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
     const kinds = sourceKindByUser.get(document.userId) ?? new Map();
     const windows =
       evidenceWindowsByDocument.get(`${document.userId}\0${document.id}`) ?? [];
-    for (const source of windows.flatMap((window) => window.source)) {
+    const sources = windows.flatMap((window) => window.source);
+    const blockIdsByDocument =
+      sourceBlockIdsByUserDocument.get(document.userId) ??
+      new Map<string, readonly string[]>();
+    blockIdsByDocument.set(
+      document.id,
+      Object.freeze(
+        sources.map((source) =>
+          sourceBlockId(document.userId, document.id, source.seq),
+        ),
+      ),
+    );
+    sourceBlockIdsByUserDocument.set(document.userId, blockIdsByDocument);
+    for (const source of sources) {
       kinds.set(
         `amb:document/${document.id}#source-${source.seq}`,
         source.kind,
@@ -2623,111 +2654,255 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       searchResultByText.set(searchText, await pending);
       return pending;
     }
-    async function searchEvidenceWithinSources(
-      searchText: string,
-      sourceIds: readonly string[],
-    ) {
-      const allowed = new Set(sourceIds);
-      // Read the immutable source-block archive, not `documents`: at this point
-      // that variable contains projected atom documents rather than raw L0.
-      // The archive is already sealed to this user scope; code filters the
-      // discovered source IDs before any content is scored or exposed.
-      const sourceEntries = await sourceEngineFor(userId).query({
-        includeInvalidated: false,
-        includeDegraded: false,
-        limit: 100_000,
+    async function locateEvidenceWithinSources(
+      request: MemorySourceLocalEvidenceRequestV1,
+    ): Promise<MemorySourceLocalEvidenceResultV1> {
+      const started = Date.now();
+      const locatorQuery = request.requirement.searchText
+        .replace(/\s+/gu, " ")
+        .trim();
+      const engine = sourceEngineFor(userId);
+      const allowed = new Set(request.lockedSourceIds);
+      const blockIdsByDocument = sourceBlockIdsByUserDocument.get(userId);
+      const allowedIds = request.lockedSourceIds.flatMap(
+        (documentId) => blockIdsByDocument?.get(documentId) ?? [],
+      );
+      const turnIndexRevision = await engine.retrievalRevisionToken();
+      const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
+        locatorVersion: "paw.amb-source-local-locator.v1:filtered-rrf",
+        scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
+        turnIndexRevision,
+        embeddingIdentity: sourceSpanEmbedding
+          ? `${sourceSpanEmbedding.model}@${sourceSpanEmbedding.version}`
+          : "none",
+        request,
+        adjacencyPolicyVersion:
+          PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
+        rankerVersion: "paw.amb-source-local-ranker.v1:rrf",
       });
-      const ranked = sourceEntries
-        .flatMap((entry) => {
-          if (entry.kind !== "episodic" || !entry.whenToUse.trim()) return [];
-          const evidenceRef = entry.evidence.find((ref) => {
-            const documentId = sourceDocumentIdFromEvidenceV1(ref);
-            return (
-              documentId !== undefined &&
-              allowed.has(documentId) &&
-              documentVisibleAtQuery(documentId) &&
-              /#source-\d+$/.test(ref)
-            );
-          });
-          if (!evidenceRef) return [];
-          const documentId = sourceDocumentIdFromEvidenceV1(evidenceRef);
-          const sourceSeq = Number(/#source-(\d+)$/.exec(evidenceRef)?.[1]);
-          if (!documentId || !Number.isSafeInteger(sourceSeq) || sourceSeq < 1)
-            return [];
-          const sourceKind = isMemoryConversationTurnKindV1(entry.issueType)
-            ? entry.issueType
-            : "source_document";
-          if (sourceKind === "assistant_output" && !allowAssistantContext)
-            return [];
+      const cached = sourceLocalLocatorCache.get(cacheKey);
+      if (cached) {
+        const replay = Object.freeze({
+          ...cached,
+          telemetry: Object.freeze({
+            ...cached.telemetry,
+            cacheHit: true,
+            durationMs: Date.now() - started,
+          }),
+        });
+        log("source_local_locator", {
+          status: "cache_hit",
+          locatorVersion: replay.locatorVersion,
+          sourceSetDigest: sha([...allowed].sort().join("\n")),
+          lockedSourceCount: allowed.size,
+          anchorCount: replay.hits.length,
+          cacheHit: true,
+          durationMs: replay.telemetry.durationMs,
+        });
+        return replay;
+      }
+      const filter = {
+        allowedIds,
+        issueType: "assistant_output",
+        ...(request.evidenceTimeUpperBound === undefined
+          ? {}
+          : { createdAtUpperBound: request.evidenceTimeUpperBound }),
+      };
+      const [lexical, dense] = await Promise.all([
+        engine
+          .searchText(
+            locatorQuery,
+            request.budget.maxCandidatesPerChannel,
+            sourceScopeFor(userId).repositoryId,
+            filter,
+          )
+          .then((hits) => ({ hits, failed: false as const }))
+          .catch(() => ({ hits: [], failed: true as const })),
+        sourceSpanEmbedding
+          ? engine
+              .searchVector(
+                locatorQuery,
+                request.budget.maxCandidatesPerChannel,
+                sourceScopeFor(userId).repositoryId,
+                filter,
+              )
+              .then((hits) => ({ hits, failed: false as const }))
+              .catch(() => ({ hits: [], failed: true as const }))
+          : Promise.resolve({ hits: [], failed: false as const }),
+      ]);
+      const ranked = reciprocalRankFusionV1([
+        { weight: MEMORY_RRF_TEXT_WEIGHT_V1, hits: lexical.hits },
+        ...(sourceSpanEmbedding
+          ? [{ weight: MEMORY_RRF_VECTOR_WEIGHT_V1, hits: dense.hits }]
+          : []),
+      ]);
+      const entries = engine.getMany
+        ? await engine.getMany(ranked.map((item) => item.id))
+        : (await Promise.all(ranked.map((item) => engine.get(item.id)))).filter(
+            (entry): entry is MemoryEntry => entry !== null,
+          );
+      const anchors = entries.flatMap((entry) => {
+        if (
+          entry.kind !== "episodic" ||
+          entry.issueType !== "assistant_output" ||
+          !entry.whenToUse.trim()
+        ) {
+          return [];
+        }
+        const evidenceRef = entry.evidence.find((ref) =>
+          /#source-\d+$/.test(ref),
+        );
+        const documentId = evidenceRef
+          ? sourceDocumentIdFromEvidenceV1(evidenceRef)
+          : undefined;
+        const sourceSeq = Number(/#source-(\d+)$/.exec(evidenceRef ?? "")?.[1]);
+        if (
+          !evidenceRef ||
+          !documentId ||
+          !allowed.has(documentId) ||
+          !documentVisibleAtQuery(documentId) ||
+          !Number.isSafeInteger(sourceSeq) ||
+          sourceSeq < 1
+        ) {
+          return [];
+        }
+        return [{ documentId, sourceSeq, evidenceRef }];
+      });
+      const selected: typeof anchors = [];
+      const perSource = new Map<string, number>();
+      for (const anchor of anchors) {
+        const count = perSource.get(anchor.documentId) ?? 0;
+        if (count >= request.budget.maxAnchorsPerSource) continue;
+        selected.push(anchor);
+        perSource.set(anchor.documentId, count + 1);
+        if (selected.length >= request.budget.maxAnchors) break;
+      }
+      const hits = [];
+      let renderedChars = 0;
+      for (const anchor of selected) {
+        const remaining = request.budget.maxChars - renderedChars;
+        if (remaining < 256) break;
+        const neighborEntries = (
+          await Promise.all(
+            Array.from(
+              { length: request.budget.neighborRadius * 2 + 1 },
+              (_, index) =>
+                anchor.sourceSeq - request.budget.neighborRadius + index,
+            )
+              .filter((sourceSeq) => sourceSeq > 0)
+              .map((sourceSeq) =>
+                engine.get(sourceBlockId(userId, anchor.documentId, sourceSeq)),
+              ),
+          )
+        ).filter(
+          (entry): entry is MemoryEntry =>
+            entry !== null &&
+            entry.kind === "episodic" &&
+            isMemoryConversationTurnKindV1(entry.issueType),
+        );
+        const turns = neighborEntries.flatMap((entry) => {
+          if (entry.kind !== "episodic") return [];
+          const evidenceRef = entry.evidence.find((ref) =>
+            /#source-\d+$/.test(ref),
+          );
+          const sourceSeq = Number(
+            /#source-(\d+)$/.exec(evidenceRef ?? "")?.[1],
+          );
+          if (!evidenceRef || !Number.isSafeInteger(sourceSeq)) return [];
           return [
             {
-              documentId,
+              evidenceRef,
               sourceSeq,
-              sourceKind,
-              authority:
-                sourceKind === "user_input"
-                  ? ("user_asserted" as const)
-                  : sourceKind === "assistant_output"
-                    ? ("context_only" as const)
-                    : ("mixed" as const),
-              content: projectMemoryEvidenceExcerptV1(
-                entry.whenToUse,
-                searchText,
-                8_192,
-              ),
-              score: memoryEvidenceSupportScoreV1(searchText, entry.whenToUse),
+              sourceKind: entry.issueType as MemoryConversationTurnKindV1,
+              content: entry.whenToUse,
+              hit: evidenceRef === anchor.evidenceRef,
             },
           ];
-        })
-        .sort(
-          (left, right) =>
-            right.score - left.score ||
-            left.documentId.localeCompare(right.documentId) ||
-            left.sourceSeq - right.sourceSeq,
+        });
+        const bundle = buildMemoryConversationTurnBundleV1({
+          turns,
+          query: locatorQuery,
+          maxChars: Math.min(2_400, remaining),
+        });
+        hits.push(
+          Object.freeze({
+            sourceId: anchor.documentId,
+            evidenceRef: anchor.evidenceRef,
+            anchorEvidenceRef: anchor.evidenceRef,
+            sourceKind: "assistant_output" as const,
+            content: bundle.text,
+            authority: bundle.authority,
+            observedAt: documentCreatedByUser
+              .get(userId)
+              ?.get(anchor.documentId),
+            episodeOrder: documentOrderByUser
+              .get(userId)
+              ?.get(anchor.documentId),
+            turnOrder: anchor.sourceSeq,
+            contextEvidenceRefs: Object.freeze(
+              bundle.includedEvidence.map((turn) => turn.evidenceRef),
+            ),
+            includedTurns: Object.freeze(
+              bundle.includedEvidence.map((turn) => ({
+                ...turn,
+                observedAt: documentCreatedByUser
+                  .get(userId)
+                  ?.get(anchor.documentId),
+              })),
+            ),
+          }),
         );
-      const selected: typeof ranked = [];
-      const perSource = new Map<string, number>();
-      for (const item of ranked) {
-        const sourceCount = perSource.get(item.documentId) ?? 0;
-        if (sourceCount >= 6) continue;
-        selected.push(item);
-        perSource.set(item.documentId, sourceCount + 1);
-        if (selected.length >= 32) break;
+        renderedChars += bundle.text.length;
       }
-      log("closure_source_scan", {
-        queryHash: sha(searchText),
-        requestedSourceCount: allowed.size,
-        candidateCount: ranked.length,
-        selectedCount: selected.length,
+      const degradedChannels = Object.freeze([
+        ...(lexical.failed ? (["lexical"] as const) : []),
+        ...(dense.failed ? (["dense"] as const) : []),
+      ]);
+      const result = Object.freeze({
+        locatorVersion: "paw.amb-source-local-locator.v1:filtered-rrf",
+        locatorRevision: sha(
+          JSON.stringify({
+            turnIndexRevision,
+            evidenceRefs: hits.map((hit) => hit.evidenceRef),
+            contextEvidenceRefs: hits.map((hit) => hit.contextEvidenceRefs),
+          }),
+        ),
+        hits: Object.freeze(hits),
+        degradedChannels,
+        telemetry: Object.freeze({
+          lexicalCandidates: lexical.hits.length,
+          denseCandidates: dense.hits.length,
+          anchorCount: hits.length,
+          includedTurnCount: hits.reduce(
+            (total, hit) => total + hit.includedTurns.length,
+            0,
+          ),
+          renderedChars,
+          cacheHit: false,
+          durationMs: Date.now() - started,
+        }),
+      }) satisfies MemorySourceLocalEvidenceResultV1;
+      if (degradedChannels.length === 0) {
+        sourceLocalLocatorCache.set(cacheKey, result);
+        if (sourceLocalLocatorCache.size > 2_048) {
+          const oldest = sourceLocalLocatorCache.keys().next().value;
+          if (oldest) sourceLocalLocatorCache.delete(oldest);
+        }
+      }
+      log("source_local_locator", {
+        status: degradedChannels.length === 0 ? "completed" : "degraded",
+        locatorVersion: result.locatorVersion,
+        sourceSetDigest: sha([...allowed].sort().join("\n")),
+        lockedSourceCount: allowed.size,
+        lexicalCandidateCount: lexical.hits.length,
+        denseCandidateCount: dense.hits.length,
+        anchorCount: hits.length,
+        includedTurnCount: result.telemetry.includedTurnCount,
+        renderedChars,
+        cacheHit: false,
+        durationMs: result.telemetry.durationMs,
       });
-      return {
-        lists: [
-          {
-            channel: "l0" as const,
-            retrieverId: "closure-source-scan",
-            weight: 1.2,
-            candidates: selected.map((item) => ({
-              candidateId: `amb:document/${item.documentId}#source-${item.sourceSeq}`,
-              sourceId: item.documentId,
-              evidenceRef: `amb:document/${item.documentId}#source-${item.sourceSeq}`,
-              sourceKind: item.sourceKind,
-              authority: item.authority,
-              observedAt: documentCreatedByUser
-                .get(userId)
-                ?.get(item.documentId),
-            })),
-          },
-        ],
-        hits: selected.map((item) => ({
-          sourceId: item.documentId,
-          evidenceRef: `amb:document/${item.documentId}#source-${item.sourceSeq}`,
-          content: item.content,
-          authority: item.authority,
-          observedAt: documentCreatedByUser.get(userId)?.get(item.documentId),
-          episodeOrder: documentOrderByUser.get(userId)?.get(item.documentId),
-          turnOrder: item.sourceSeq,
-        })),
-      };
+      return result;
     }
     const sharedResolver = createMemoryEvidenceResolverV1({
       index: {
@@ -2736,9 +2911,6 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           const result = await searchEvidenceIndex(searchText);
           return { lists: result.lists, hits: result.hits };
         },
-        async searchWithinSources(searchText, sourceIds) {
-          return searchEvidenceWithinSources(searchText, sourceIds);
-        },
       },
       ...(evidenceQueryPlanner === undefined
         ? {}
@@ -2746,6 +2918,19 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ...(evidenceSupportSelector === undefined
         ? {}
         : { supportSelector: evidenceSupportSelector }),
+      ...(sourceLocalLocatorEnabled
+        ? {
+            sourceLocalLocator: Object.freeze({
+              locatorVersion: "paw.amb-source-local-locator.v1:filtered-rrf",
+              locate(request: MemorySourceLocalEvidenceRequestV1) {
+                return locateEvidenceWithinSources(request);
+              },
+            }),
+          }
+        : {}),
+      ...(queryTimeCutoff === undefined
+        ? {}
+        : { evidenceTimeUpperBound: queryTimeCutoff.normalizedIso }),
       ...(evidenceClosureAuditor === undefined
         ? {}
         : { closureAuditor: evidenceClosureAuditor }),
@@ -2888,6 +3073,23 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       repairCount: resolution.closureRepairCount,
       finalRequirementCount: resolution.requirements.length,
       finalCoveredCount: evidenceFirstNotebookCoveredCount,
+    });
+    log("source_local_fusion", {
+      queryHash: sha(queryText),
+      status: resolution.sourceLocalization.status,
+      reasonCode: resolution.sourceLocalization.reasonCode,
+      locatorVersion: resolution.sourceLocalization.locatorVersion ?? null,
+      localInvoked: new Set([
+        "completed",
+        "completed_empty",
+        "fallback",
+        "invalid_result",
+      ]).has(resolution.sourceLocalization.status),
+      localSelected: resolution.sourceLocalization.selectedCandidateCount,
+      addedCandidateCount: resolution.sourceLocalization.addedCandidateCount,
+      baselineSourceSetUnchanged: true,
+      packetChanged: resolution.sourceLocalization.selectedCandidateCount > 0,
+      extraLlmCalls: 0,
     });
     expandedSourceDocuments = new Set(
       resolution.packetSources.map((source) => source.sourceId),

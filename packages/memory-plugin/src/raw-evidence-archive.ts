@@ -7,7 +7,13 @@ import {
   PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
   buildMemoryConversationTurnBundleV1,
 } from "./evidence-first.js";
+import { evidenceSourceIdV1 } from "./evidence-ref.js";
 import type { PawNextMemoryScopeV1 } from "./profile.js";
+import {
+  type MemorySourceLocalEvidenceRequestV1,
+  type MemorySourceLocalEvidenceResultV1,
+  memorySourceLocalEvidenceCacheKeyV1,
+} from "./source-local-evidence-locator.js";
 
 export type MemoryRawEvidenceSourceKindV1 =
   | "user_input"
@@ -67,14 +73,24 @@ export interface MemoryRawEvidenceArchiveV1 {
     query: MemoryConversationSearchV1,
     signal: AbortSignal,
   ): Promise<readonly MemoryConversationEvidenceV1[]>;
+  /** Optional source-locked assistant turn locator; runtime remains unaware. */
+  readonly locatorVersion?: string;
+  locate?(
+    request: MemorySourceLocalEvidenceRequestV1,
+    signal: AbortSignal,
+  ): Promise<MemorySourceLocalEvidenceResultV1>;
 }
 
 export interface MemoryRawEvidenceArchiveEventV1 {
   readonly schemaVersion: "paw.memory-raw-evidence-archive-event.v1";
-  readonly type: "put" | "resolve" | "search";
+  readonly type: "put" | "resolve" | "search" | "locate";
   readonly requestedCount: number;
   readonly returnedCount: number;
   readonly durationMs: number;
+  readonly cacheHit?: boolean;
+  readonly lexicalCandidateCount?: number;
+  readonly denseCandidateCount?: number;
+  readonly renderedChars?: number;
 }
 
 export function createPostgresMemoryRawEvidenceArchiveV1(
@@ -84,8 +100,13 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
   }>,
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
+  const locatorVersion = "paw.memory-postgres-source-local-locator.v1:lexical";
+  const rankerVersion =
+    "paw.memory-source-local-ranker.v2:term-coverage-then-lexical-idf";
+  const resultCache = new Map<string, MemorySourceLocalEvidenceResultV1>();
   return Object.freeze({
     scope,
+    locatorVersion,
     async put(
       spans: readonly MemoryRawEvidenceArchiveInputV1[],
       signal: AbortSignal,
@@ -335,6 +356,273 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
       });
       return Object.freeze(result);
     },
+    async locate(
+      request: MemorySourceLocalEvidenceRequestV1,
+      signal: AbortSignal,
+    ) {
+      const started = Date.now();
+      if (signal.aborted) throw abortError();
+      const lockedSourceIds = [...new Set(request.lockedSourceIds)];
+      if (
+        request.requirement.roleConstraint !== "assistant" ||
+        request.requirement.temporalMode !== "any" ||
+        lockedSourceIds.length === 0 ||
+        lockedSourceIds.length > 8
+      ) {
+        throw namedError("MemorySourceLocalEvidenceRequestInvalid");
+      }
+      const sql = getSql();
+      const cutoff =
+        request.evidenceTimeUpperBound ?? "9999-12-31T23:59:59.999Z";
+      if (!Number.isFinite(Date.parse(cutoff))) {
+        throw namedError("MemorySourceLocalEvidenceTimeInvalid");
+      }
+      const revisionRows = await sql`
+        SELECT COUNT(*)::int AS item_count,
+               COALESCE(MAX(created_at)::text, '') AS latest_created_at
+        FROM memory_raw_evidence_spans
+        WHERE scope->>'tenantId' = ${scope.tenantId}
+          AND scope->>'userId' = ${scope.userId}
+          AND scope->>'workspaceId' = ${scope.workspaceId}
+          AND scope->>'repositoryId' = ${scope.repositoryId}
+          AND split_part(evidence_ref, '#', 1) = ANY(${sql.array(lockedSourceIds)})
+          AND created_at <= ${cutoff}::timestamptz
+      `;
+      const turnIndexRevision = hashCanonicalJsonV1({
+        schemaVersion: "paw.memory-source-local-index-revision.v1",
+        itemCount: Number(revisionRows[0]?.item_count ?? 0),
+        latestCreatedAt: String(revisionRows[0]?.latest_created_at ?? ""),
+      });
+      const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
+        locatorVersion,
+        scopeFingerprint: hashCanonicalJsonV1(scope),
+        turnIndexRevision,
+        request,
+        adjacencyPolicyVersion:
+          PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
+        rankerVersion,
+      });
+      const cached = resultCache.get(cacheKey);
+      if (cached) {
+        const replay = Object.freeze({
+          ...cached,
+          telemetry: Object.freeze({
+            ...cached.telemetry,
+            cacheHit: true,
+            durationMs: Date.now() - started,
+          }),
+        });
+        emit(input.onEvent, {
+          schemaVersion: "paw.memory-raw-evidence-archive-event.v1",
+          type: "locate",
+          requestedCount: request.budget.maxAnchors,
+          returnedCount: replay.hits.length,
+          durationMs: Date.now() - started,
+          cacheHit: true,
+          lexicalCandidateCount: replay.telemetry.lexicalCandidates,
+          denseCandidateCount: replay.telemetry.denseCandidates,
+          renderedChars: replay.telemetry.renderedChars,
+        });
+        return replay;
+      }
+      const normalized = request.requirement.searchText
+        .trim()
+        .replace(/\s+/gu, " ");
+      const queryTerms = searchableTerms(normalized);
+      const lexicalTerms = [...queryTerms]
+        .sort(
+          (left, right) =>
+            right.length - left.length || left.localeCompare(right),
+        )
+        .slice(0, 8);
+      const rows =
+        lexicalTerms.length === 0
+          ? []
+          : await sql`
+              SELECT spans.evidence_ref, spans.source_kind, spans.source_seq,
+                     spans.content, spans.content_hash, spans.created_at
+              FROM memory_raw_evidence_spans AS spans
+              CROSS JOIN LATERAL (
+                SELECT COUNT(*)::int AS term_hits,
+                       COALESCE(SUM(length(term.value)), 0)::int AS matched_chars
+                FROM jsonb_array_elements_text(${sql.json(lexicalTerms)}) AS term(value)
+                WHERE position(term.value IN lower(spans.content)) > 0
+              ) AS lexical_score
+              WHERE spans.scope->>'tenantId' = ${scope.tenantId}
+                AND spans.scope->>'userId' = ${scope.userId}
+                AND spans.scope->>'workspaceId' = ${scope.workspaceId}
+                AND spans.scope->>'repositoryId' = ${scope.repositoryId}
+                AND split_part(spans.evidence_ref, '#', 1) = ANY(${sql.array(lockedSourceIds)})
+                AND spans.source_kind = 'assistant_output'
+                AND spans.created_at <= ${cutoff}::timestamptz
+                AND lexical_score.term_hits > 0
+              ORDER BY lexical_score.term_hits DESC,
+                       lexical_score.matched_chars DESC,
+                       spans.created_at DESC, spans.source_seq DESC, spans.id ASC
+              LIMIT ${request.budget.maxCandidatesPerChannel}
+            `;
+      const candidates = rows.flatMap((row) => {
+        if (
+          typeof row.evidence_ref !== "string" ||
+          typeof row.content !== "string" ||
+          typeof row.content_hash !== "string" ||
+          hashTextV1(row.content) !== row.content_hash
+        ) {
+          return [];
+        }
+        return [
+          {
+            row,
+            terms: searchableTerms(row.content),
+            normalized: searchableText(row.content),
+          },
+        ];
+      });
+      const documentFrequency = termDocumentFrequency(
+        queryTerms,
+        candidates.map((candidate) => candidate.terms),
+      );
+      const ranked = candidates
+        .map((candidate) => ({
+          row: candidate.row,
+          score: conversationRelevanceScore({
+            query: searchableText(normalized),
+            queryTerms,
+            candidate: candidate.normalized,
+            candidateTerms: candidate.terms,
+            documentFrequency,
+            documentCount: candidates.length,
+          }),
+        }))
+        .filter((candidate) => candidate.score > 0)
+        .sort(
+          (left, right) =>
+            right.score - left.score ||
+            Number(left.row.source_seq) - Number(right.row.source_seq) ||
+            String(left.row.evidence_ref).localeCompare(
+              String(right.row.evidence_ref),
+            ),
+        );
+      const anchors: (typeof ranked)[number][] = [];
+      const perSource = new Map<string, number>();
+      for (const candidate of ranked) {
+        const sourceId = evidenceRefFamily(String(candidate.row.evidence_ref));
+        const count = perSource.get(sourceId) ?? 0;
+        if (count >= request.budget.maxAnchorsPerSource) continue;
+        anchors.push(candidate);
+        perSource.set(sourceId, count + 1);
+        if (anchors.length >= request.budget.maxAnchors) break;
+      }
+      const hits = [];
+      let renderedChars = 0;
+      for (const anchor of anchors) {
+        const evidenceRef = String(anchor.row.evidence_ref);
+        const sourceId = evidenceRefFamily(evidenceRef);
+        const sourceSeq = Number(anchor.row.source_seq);
+        const remaining = request.budget.maxChars - renderedChars;
+        if (remaining < 256) break;
+        const neighborRows = await sql`
+          SELECT evidence_ref, source_kind, source_seq, content,
+                 content_hash, created_at
+          FROM memory_raw_evidence_spans
+          WHERE scope->>'tenantId' = ${scope.tenantId}
+            AND scope->>'userId' = ${scope.userId}
+            AND scope->>'workspaceId' = ${scope.workspaceId}
+            AND scope->>'repositoryId' = ${scope.repositoryId}
+            AND split_part(evidence_ref, '#', 1) = ${sourceId}
+            AND source_seq BETWEEN ${sourceSeq - request.budget.neighborRadius}
+                               AND ${sourceSeq + request.budget.neighborRadius}
+            AND created_at <= ${cutoff}::timestamptz
+          ORDER BY source_seq ASC, id ASC
+        `;
+        const validNeighbors = neighborRows.filter(
+          (row) =>
+            typeof row.evidence_ref === "string" &&
+            typeof row.content === "string" &&
+            typeof row.content_hash === "string" &&
+            hashTextV1(row.content) === row.content_hash,
+        );
+        const bundle = buildMemoryConversationTurnBundleV1({
+          turns: validNeighbors.map((row) => ({
+            evidenceRef: String(row.evidence_ref),
+            sourceSeq: Number(row.source_seq),
+            sourceKind: sourceKind(row.source_kind),
+            content: String(row.content),
+            hit: String(row.evidence_ref) === evidenceRef,
+          })),
+          query: normalized,
+          maxChars: Math.min(2_400, remaining),
+        });
+        hits.push(
+          Object.freeze({
+            sourceId,
+            evidenceRef,
+            anchorEvidenceRef: evidenceRef,
+            sourceKind: "assistant_output" as const,
+            content: bundle.text,
+            authority: bundle.authority,
+            observedAt: toIso(anchor.row.created_at),
+            turnOrder: sourceSeq,
+            contextEvidenceRefs: Object.freeze(
+              bundle.includedEvidence.map((turn) => turn.evidenceRef),
+            ),
+            includedTurns: Object.freeze(
+              bundle.includedEvidence.map((turn) => ({
+                ...turn,
+                observedAt: toIso(
+                  validNeighbors.find(
+                    (row) => String(row.evidence_ref) === turn.evidenceRef,
+                  )?.created_at,
+                ),
+              })),
+            ),
+          }),
+        );
+        renderedChars += bundle.text.length;
+      }
+      const telemetry = Object.freeze({
+        lexicalCandidates: ranked.length,
+        denseCandidates: 0,
+        anchorCount: hits.length,
+        includedTurnCount: hits.reduce(
+          (total, hit) => total + hit.includedTurns.length,
+          0,
+        ),
+        renderedChars,
+        cacheHit: false,
+        durationMs: Date.now() - started,
+      });
+      const result = Object.freeze({
+        locatorVersion,
+        locatorRevision: hashCanonicalJsonV1({
+          schemaVersion: "paw.memory-source-local-evidence-result.v1",
+          locatorVersion,
+          turnIndexRevision,
+          evidenceRefs: hits.map((hit) => hit.evidenceRef),
+          contextEvidenceRefs: hits.map((hit) => hit.contextEvidenceRefs),
+        }),
+        hits: Object.freeze(hits),
+        degradedChannels: Object.freeze([]),
+        telemetry,
+      }) satisfies MemorySourceLocalEvidenceResultV1;
+      resultCache.set(cacheKey, result);
+      if (resultCache.size > 512) {
+        const oldest = resultCache.keys().next().value;
+        if (oldest) resultCache.delete(oldest);
+      }
+      emit(input.onEvent, {
+        schemaVersion: "paw.memory-raw-evidence-archive-event.v1",
+        type: "locate",
+        requestedCount: request.budget.maxAnchors,
+        returnedCount: hits.length,
+        durationMs: Date.now() - started,
+        cacheHit: false,
+        lexicalCandidateCount: ranked.length,
+        denseCandidateCount: 0,
+        renderedChars,
+      });
+      return result;
+    },
   });
 }
 
@@ -410,6 +698,13 @@ function conversationSearchExcerpt(
       authority:
         hit.source_kind === "user_input" ? "user_asserted" : "context_only",
       includedTurns: 1,
+      includedEvidence: Object.freeze([
+        Object.freeze({
+          evidenceRef: hitRef,
+          sourceKind: sourceKind(hit.source_kind),
+          turnOrder: hitSeq,
+        }),
+      ]),
       chars: text.length,
     });
   }
@@ -426,8 +721,7 @@ function conversationSearchExcerpt(
 }
 
 function evidenceRefFamily(ref: string): string {
-  const fragment = ref.lastIndexOf("#");
-  return fragment < 0 ? ref : ref.slice(0, fragment);
+  return ref.trim() ? evidenceSourceIdV1(ref) : "";
 }
 
 function searchableTerms(value: string): ReadonlySet<string> {

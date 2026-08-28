@@ -26,9 +26,17 @@ import type {
   MemoryEvidenceSupportSelectorV1,
   MemoryEvidenceTriageAssessmentV1,
 } from "./evidence-support-selector.js";
+import {
+  DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+  type MemorySourceLocalEvidenceBudgetV1,
+  type MemorySourceLocalEvidenceLocatorV1,
+  type MemorySourceLocalizationReportV1,
+  isMemorySourceLocalEvidenceEligibleV1,
+  validateMemorySourceLocalEvidenceResultV1,
+} from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v8:source-deep-closure-repair" as const;
+  "paw.memory-evidence-resolver.v9:source-local-assistant-supplement" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -42,12 +50,6 @@ export interface MemoryEvidenceIndexV1 {
   readonly indexVersion: string;
   search(
     query: string,
-    signal: AbortSignal,
-  ): Promise<MemoryEvidenceIndexSearchResultV1>;
-  /** Optional second-stage drill-down inside already discovered L0 sources. */
-  searchWithinSources?(
-    query: string,
-    sourceIds: readonly string[],
     signal: AbortSignal,
   ): Promise<MemoryEvidenceIndexSearchResultV1>;
 }
@@ -78,6 +80,7 @@ export interface MemoryEvidenceResolutionV1 {
   readonly supportSelectionRevision?: string;
   readonly supportSelectorVersion?: string;
   readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
+  readonly sourceLocalization: MemorySourceLocalizationReportV1;
   readonly degradedChannels: readonly ("l0" | "l1")[];
   readonly requirements: readonly MemoryEvidenceRequirementV3[];
   readonly sources: readonly RankedMemoryEvidenceSourceV2[];
@@ -105,6 +108,9 @@ export function createMemoryEvidenceResolverV1(input: {
   readonly index: MemoryEvidenceIndexV1;
   readonly planner?: MemoryEvidenceQueryPlannerV3;
   readonly supportSelector?: MemoryEvidenceSupportSelectorV1;
+  readonly sourceLocalLocator?: MemorySourceLocalEvidenceLocatorV1;
+  readonly sourceLocalBudget?: MemorySourceLocalEvidenceBudgetV1;
+  readonly evidenceTimeUpperBound?: string;
   readonly closureAuditor?: MemoryEvidenceClosureAuditorV1;
   readonly maxSources?: number;
   /** Exact addresses retained inside each selected source before hydration. */
@@ -186,7 +192,7 @@ export function createMemoryEvidenceResolverV1(input: {
           createRootEvidenceRequirement(value, intent),
         ]);
       }
-      let pass = await resolveEvidencePass({
+      const pass = await resolveEvidencePass({
         index: input.index,
         supportSelector: input.supportSelector,
         query: value,
@@ -198,12 +204,17 @@ export function createMemoryEvidenceResolverV1(input: {
         maxHitsPerRequirement,
         maxNotebookChars,
         directCertificateStatus,
+        sourceLocalLocator: input.sourceLocalLocator,
+        sourceLocalBudget:
+          input.sourceLocalBudget ??
+          DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+        evidenceTimeUpperBound: input.evidenceTimeUpperBound,
         signal,
       });
       let closureAuditStatus: MemoryEvidenceResolutionV1["closureAuditStatus"] =
         input.closureAuditor ? "not_needed" : "not_configured";
       let closureVerdict: MemoryEvidenceClosureVerdictV1 | undefined;
-      let closureRepairCount: 0 | 1 = 0;
+      const closureRepairCount: 0 | 1 = 0;
       let closureAuditRevision: string | undefined;
       const shouldAudit =
         input.closureAuditor !== undefined &&
@@ -232,56 +243,12 @@ export function createMemoryEvidenceResolverV1(input: {
             signal,
           );
           closureAuditStatus = "completed";
-          closureVerdict = audit.verdict;
+          // The old model-driven repair loop is intentionally audit-only. It
+          // must not perform retrieval or alter source fusion; source-local
+          // evidence now enters solely through the independent locator port.
+          closureVerdict =
+            audit.verdict === "repair" ? "insufficient" : audit.verdict;
           closureAuditRevision = audit.auditRevision;
-          if (
-            audit.verdict === "repair" &&
-            audit.missingRequirements.length > 0
-          ) {
-            closureRepairCount = 1;
-            const repairIndex = await createRepairEvidenceIndexV1({
-              index: input.index,
-              missingRequirements: audit.missingRequirements,
-              sourceIds: pass.fusion.sources.map((source) => source.sourceId),
-              signal,
-            });
-            requirements = Object.freeze([
-              ...requirements,
-              ...audit.missingRequirements,
-            ]);
-            pass = await resolveEvidencePass({
-              index: repairIndex,
-              supportSelector: input.supportSelector,
-              query: value,
-              intent,
-              primary,
-              requirements,
-              maxSources,
-              maxEvidencePerSource,
-              maxHitsPerRequirement,
-              maxNotebookChars,
-              directCertificateStatus,
-              excludedEvidenceRefs: new Set(audit.rejectedEvidenceRefs),
-              signal,
-            });
-            const repairedEvidence = selectedNotebookEvidence(
-              pass.requirementHits,
-              pass.notebook,
-            );
-            const finalAudit = await input.closureAuditor.audit(
-              {
-                query: value,
-                intent,
-                requirements,
-                selectedEvidence: repairedEvidence,
-                maxMissingRequirements: 0,
-              },
-              signal,
-            );
-            closureVerdict =
-              finalAudit.verdict === "pass" ? "pass" : "insufficient";
-            closureAuditRevision = finalAudit.auditRevision;
-          }
         } catch (error) {
           if (signal.aborted || isAbort(error)) throw abortError();
           closureAuditStatus = "fallback";
@@ -293,6 +260,7 @@ export function createMemoryEvidenceResolverV1(input: {
         supportSelectorStatus,
         supportSelectionRevision,
         supportAssessments,
+        sourceLocalization,
         notebook,
         packetSources,
       } = pass;
@@ -309,6 +277,7 @@ export function createMemoryEvidenceResolverV1(input: {
         closureVerdict,
         closureRepairCount,
         supportAssessments,
+        sourceLocalization,
         degradedChannels,
         ...(input.supportSelector === undefined
           ? {}
@@ -345,6 +314,7 @@ export function createMemoryEvidenceResolverV1(input: {
         ...(closureVerdict === undefined ? {} : { closureVerdict }),
         closureRepairCount,
         supportAssessments,
+        sourceLocalization,
         degradedChannels,
         ...(input.supportSelector === undefined
           ? {}
@@ -370,60 +340,6 @@ export function createMemoryEvidenceResolverV1(input: {
   });
 }
 
-async function createRepairEvidenceIndexV1(input: {
-  readonly index: MemoryEvidenceIndexV1;
-  readonly missingRequirements: readonly MemoryEvidenceRequirementV3[];
-  readonly sourceIds: readonly string[];
-  readonly signal: AbortSignal;
-}): Promise<MemoryEvidenceIndexV1> {
-  if (!input.index.searchWithinSources || input.sourceIds.length === 0) {
-    return input.index;
-  }
-  const scopedBySearchText = new Map<
-    string,
-    MemoryEvidenceIndexSearchResultV1
-  >();
-  await Promise.all(
-    [...new Set(input.missingRequirements.map((item) => item.searchText))].map(
-      async (searchText) => {
-        const result = await input.index.searchWithinSources?.(
-          searchText,
-          input.sourceIds,
-          input.signal,
-        );
-        if (result) scopedBySearchText.set(searchText, result);
-      },
-    ),
-  );
-  return Object.freeze({
-    indexVersion: `${input.index.indexVersion}:closure-repair`,
-    async search(query: string, signal: AbortSignal) {
-      const global = await input.index.search(query, signal);
-      const scoped = scopedBySearchText.get(query);
-      if (!scoped) return global;
-      return Object.freeze({
-        lists: Object.freeze([
-          ...global.lists,
-          ...scoped.lists.map((list, index) => ({
-            ...list,
-            retrieverId: `${list.retrieverId}:closure-source-${index}`,
-          })),
-        ]),
-        hits: mergeEvidenceHits(scoped.hits, global.hits),
-        degradedChannels: Object.freeze(
-          [
-            ...new Set([
-              ...(global.degradedChannels ?? []),
-              ...(scoped.degradedChannels ?? []),
-            ]),
-          ].sort(),
-        ) as readonly ("l0" | "l1")[],
-      });
-    },
-    searchWithinSources: input.index.searchWithinSources.bind(input.index),
-  });
-}
-
 interface MemoryEvidenceResolutionPassV1 {
   readonly fusion: MemoryEvidenceCandidateFusionV2;
   readonly degradedChannels: readonly ("l0" | "l1")[];
@@ -431,6 +347,7 @@ interface MemoryEvidenceResolutionPassV1 {
   readonly supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"];
   readonly supportSelectionRevision?: string;
   readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
+  readonly sourceLocalization: MemorySourceLocalizationReportV1;
   readonly notebook: MemoryEvidenceNotebookV1;
   readonly packetSources: MemoryEvidenceResolutionV1["packetSources"];
 }
@@ -447,6 +364,9 @@ async function resolveEvidencePass(input: {
   readonly maxHitsPerRequirement: number;
   readonly maxNotebookChars: number;
   readonly directCertificateStatus: MemoryEvidenceResolutionV1["directCertificateStatus"];
+  readonly sourceLocalLocator?: MemorySourceLocalEvidenceLocatorV1;
+  readonly sourceLocalBudget?: MemorySourceLocalEvidenceBudgetV1;
+  readonly evidenceTimeUpperBound?: string;
   readonly excludedEvidenceRefs?: ReadonlySet<string>;
   readonly signal: AbortSignal;
 }): Promise<MemoryEvidenceResolutionPassV1> {
@@ -490,12 +410,88 @@ async function resolveEvidencePass(input: {
     ].sort(),
   ) as readonly ("l0" | "l1")[];
   const sourceIds = fusion.sources.map((source) => source.sourceId);
-  const requirementHits = input.requirements.map((_, index) =>
+  const baselineRequirementHits = input.requirements.map((_, index) =>
     mergeEvidenceHits(
       supplemental[index]?.hits ?? [],
       input.primary.hits,
     ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef)),
   );
+  let requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[] =
+    baselineRequirementHits;
+  let localEvidenceRefs = new Set<string>();
+  let sourceLocalization: MemorySourceLocalizationReportV1 = Object.freeze({
+    status: "not_needed",
+    reasonCode: "route_ineligible",
+    addedCandidateCount: 0,
+    selectedCandidateCount: 0,
+  });
+  const localEligible = isMemorySourceLocalEvidenceEligibleV1({
+    answerShape: input.intent.answerShape,
+    temporalMode: input.intent.temporalMode,
+    roleConstraint: input.intent.roleConstraint,
+    requirements: input.requirements,
+    supportSelectorConfigured: input.supportSelector !== undefined,
+  });
+  if (localEligible && sourceIds.length > 0) {
+    if (!input.sourceLocalLocator) {
+      sourceLocalization = Object.freeze({
+        status: "not_configured",
+        reasonCode: "locator_missing",
+        addedCandidateCount: 0,
+        selectedCandidateCount: 0,
+      });
+    } else {
+      const requirement = input.requirements[0];
+      if (!requirement) throw namedError("MemorySourceLocalRequirementMissing");
+      const request = Object.freeze({
+        requirement,
+        lockedSourceIds: Object.freeze([...sourceIds]),
+        ...(input.evidenceTimeUpperBound === undefined
+          ? {}
+          : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
+        budget:
+          input.sourceLocalBudget ??
+          DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+      });
+      try {
+        const result = await input.sourceLocalLocator.locate(
+          request,
+          input.signal,
+        );
+        const hits = validateMemorySourceLocalEvidenceResultV1({
+          locator: input.sourceLocalLocator,
+          request,
+          result,
+        });
+        localEvidenceRefs = new Set(hits.map((hit) => hit.evidenceRef));
+        requirementHits = Object.freeze([
+          mergeEvidenceHits(hits, baselineRequirementHits[0] ?? []),
+        ]);
+        sourceLocalization = Object.freeze({
+          status: hits.length === 0 ? "completed_empty" : "completed",
+          reasonCode:
+            hits.length === 0 ? "no_anchor" : "assistant_anchor_found",
+          locatorVersion: result.locatorVersion,
+          locatorRevision: result.locatorRevision,
+          telemetry: result.telemetry,
+          addedCandidateCount: hits.length,
+          selectedCandidateCount: 0,
+        });
+      } catch (error) {
+        if (input.signal.aborted || isAbort(error)) throw abortError();
+        const invalid =
+          error instanceof Error &&
+          error.name.startsWith("MemorySourceLocalEvidence");
+        sourceLocalization = Object.freeze({
+          status: invalid ? "invalid_result" : "fallback",
+          reasonCode: invalid ? "result_rejected" : "locator_failed",
+          locatorVersion: input.sourceLocalLocator.locatorVersion,
+          addedCandidateCount: 0,
+          selectedCandidateCount: 0,
+        });
+      }
+    }
+  }
   let supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"] =
     input.requirements.length === 0
       ? "not_needed"
@@ -533,8 +529,28 @@ async function resolveEvidencePass(input: {
       } catch (error) {
         if (input.signal.aborted || isAbort(error)) throw abortError();
         supportSelectorStatus = "fallback";
+        if (localEvidenceRefs.size > 0) {
+          requirementHits = baselineRequirementHits;
+          localEvidenceRefs = new Set();
+          sourceLocalization = Object.freeze({
+            ...sourceLocalization,
+            status: "fallback",
+            reasonCode: "selector_failed",
+            addedCandidateCount: 0,
+            selectedCandidateCount: 0,
+          });
+        }
       }
     }
+  }
+  const selectedLocalCount = [...(selectedRefsByRequirement?.values() ?? [])]
+    .flatMap((refs) => [...refs])
+    .filter((ref) => localEvidenceRefs.has(ref)).length;
+  if (sourceLocalization.status === "completed") {
+    sourceLocalization = Object.freeze({
+      ...sourceLocalization,
+      selectedCandidateCount: selectedLocalCount,
+    });
   }
   const notebook = buildMemoryEvidenceNotebookV1({
     requirements: input.requirements.map((requirement, index) => ({
@@ -566,7 +582,11 @@ async function resolveEvidencePass(input: {
   const packetFallbackHits = mergeEvidenceHits(
     requirementHits
       .flat()
-      .filter((hit) => nonSupportingRefs.has(hit.evidenceRef)),
+      .filter(
+        (hit) =>
+          nonSupportingRefs.has(hit.evidenceRef) &&
+          !localEvidenceRefs.has(hit.evidenceRef),
+      ),
     input.primary.hits,
   ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));
   const packetSources =
@@ -606,6 +626,7 @@ async function resolveEvidencePass(input: {
       ? {}
       : { supportSelectionRevision }),
     supportAssessments,
+    sourceLocalization,
     notebook,
     packetSources,
   });

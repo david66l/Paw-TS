@@ -203,17 +203,34 @@ export interface MemoryStoreEngine {
    * BM25/全文检索。repo 可选：提供时只检索该仓库条目（scope->>'repositoryId'）。
    * 缺省=跨仓库（Governor 相似召回保留跨 repo 去重语义，spec §5.6 已拍板）。
    */
-  searchText(query: string, k: number, repo?: string): Promise<ScoredId[]>;
+  searchText(
+    query: string,
+    k: number,
+    repo?: string,
+    filter?: MemoryStoreSearchFilterV1,
+  ): Promise<ScoredId[]>;
   /**
    * embedding 向量检索。repo 可选：提供时只检索该仓库条目——
    * 注入路径必须 repo 密封（A 仓库任务不得注入 B 仓库记忆），
    * 否则共享库中同内容异仓库条目会竞争 top-k。
    */
-  searchVector(query: string, k: number, repo?: string): Promise<ScoredId[]>;
+  searchVector(
+    query: string,
+    k: number,
+    repo?: string,
+    filter?: MemoryStoreSearchFilterV1,
+  ): Promise<ScoredId[]>;
   /** 读效用账本；条目不存在返回 null */
   ledger(id: string): Promise<LedgerEntry | null>;
   /** 账本计数 +1（utility 封顶 LEDGER_UTILITY_MAX；freq 不封顶） */
   bumpLedger(id: string, field: "freq" | "utility"): Promise<void>;
   /** 重建派生索引（embedding 等） */
   reindex(): Promise<ReindexReport>;
+}
+
+/** Hard filters applied by the database before retrieval top-k is selected. */
+export interface MemoryStoreSearchFilterV1 {
+  readonly allowedIds?: readonly string[];
+  readonly issueType?: string;
+  readonly createdAtUpperBound?: string;
 }

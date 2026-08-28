@@ -708,3 +708,25 @@ Artifacts:
 - `runs/personamem/paw-m3z-frozen-m3-persona-disjoint-test-raw-control.json`
 - `../../logs/amb/paw-m3y-frozen-m3-persona-disjoint-test-test-tool_driven.jsonl`
 - `../../logs/amb/paw-m3z-frozen-m3-persona-disjoint-test-raw-control-test-raw_chunk.jsonl`
+
+## Source-local assistant-turn experiment
+
+`PAW_AMB_SOURCE_LOCAL_LOCATOR=1` enables the source-locked assistant-turn
+locator for eligible direct lookups. The locator performs scope, source, role,
+and query-time filtering before lexical/vector top-k; it supplements candidates
+before the existing support selector and never changes source fusion.
+The strict release route also requires `PAW_AMB_QUERY_EXPANSION=1`, because that
+flag provides the existing semantic support selector; without it the locator is
+intentionally reported as ineligible and is not called.
+
+The legacy closure auditor is independently controlled by
+`PAW_AMB_CLOSURE_AUDIT=1`. Query expansion no longer enables closure auditing or
+source-local retrieval implicitly, so paired experiments can isolate one causal
+change. Content-free events are written as `source_local_locator` and
+`source_local_fusion`; they contain hashes, counts, cache state, timing, and
+status only.
+
+The benchmark adapter currently lives inside `paw-memory-bridge.ts`. Before it
+is promoted beyond controlled evaluation, extract it behind a directly testable
+adapter seam and add a synthetic bridge test covering hard filters, neighbors,
+cutoff handling, and cache telemetry.

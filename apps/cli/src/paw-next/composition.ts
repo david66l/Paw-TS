@@ -5634,6 +5634,16 @@ function createProductMemoryContextResolverV1(
     });
   };
   if (memory.rawEvidenceArchive?.search) {
+    const sourceLocalLocator =
+      memory.rawEvidenceArchive.locatorVersion &&
+      memory.rawEvidenceArchive.locate
+        ? Object.freeze({
+            locatorVersion: memory.rawEvidenceArchive.locatorVersion,
+            locate: memory.rawEvidenceArchive.locate.bind(
+              memory.rawEvidenceArchive,
+            ),
+          })
+        : undefined;
     const evidenceResolver = createMemoryEvidenceResolverV1({
       index: createProductMemoryEvidenceIndexV1({
         profile: memory.profile,
@@ -5652,6 +5662,7 @@ function createProductMemoryContextResolverV1(
           "MemoryEvidenceSupportSelectorModelFailed",
         ),
       }),
+      ...(sourceLocalLocator === undefined ? {} : { sourceLocalLocator }),
       maxSources: Math.min(8, memory.profile.maxCards),
       maxHitsPerRequirement: 4,
       maxNotebookChars: 4_096,

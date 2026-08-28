@@ -46,6 +46,31 @@ function makeFact(fact: string, keywords: string[] = ["bun", "test"]): SemanticF
   };
 }
 
+function makeEpisode(input: {
+  readonly text: string;
+  readonly issueType: string;
+  readonly created: string;
+}): EpisodicExperience {
+  return {
+    id: "",
+    kind: "episodic",
+    repo: TEST_REPO,
+    created: input.created,
+    tValid: input.created,
+    tInvalid: null,
+    source: "agent_verified",
+    confidence: 1,
+    evidence: [`test:${input.issueType}`],
+    freq: 0,
+    utility: 0,
+    whenToUse: input.text,
+    perspective: "source-local retrieval contract",
+    modification: [],
+    issueType: input.issueType,
+    taskId: `task-${input.issueType}`,
+  };
+}
+
 afterAll(async () => {
   if (dbOk) {
     const sql = getSql();
@@ -231,6 +256,47 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
     await engine.put(fact);
     const hits = await engine.searchText("zebracorn", 5);
     expect(hits.map((h) => h.id)).toContain(id);
+  });
+
+  it("applies allowed-id, role and time filters before text/vector top-k", async () => {
+    const created = new Date().toISOString();
+    const assistant = makeEpisode({
+      text: "source local cobalt answer",
+      issueType: "assistant_output",
+      created,
+    });
+    const user = makeEpisode({
+      text: "source local cobalt request",
+      issueType: "user_input",
+      created,
+    });
+    const assistantId = deriveEntryId(assistant);
+    const userId = deriveEntryId(user);
+    createdIds.push(assistantId, userId);
+    await engine.put(assistant);
+    await engine.put(user);
+
+    const filter = {
+      allowedIds: [assistantId, userId],
+      issueType: "assistant_output",
+      createdAtUpperBound: new Date(Date.parse(created) + 1_000).toISOString(),
+    };
+    expect(
+      (await engine.searchText("cobalt", 5, TEST_REPO, filter)).map(
+        (hit) => hit.id,
+      ),
+    ).toEqual([assistantId]);
+    expect(
+      (
+        await engine.searchVector("cobalt answer", 5, TEST_REPO, filter)
+      ).map((hit) => hit.id),
+    ).toEqual([assistantId]);
+    expect(
+      await engine.searchText("cobalt", 5, TEST_REPO, {
+        ...filter,
+        allowedIds: [userId],
+      }),
+    ).toEqual([]);
   });
 
   it("searchVector 返回语义相近条目", async () => {

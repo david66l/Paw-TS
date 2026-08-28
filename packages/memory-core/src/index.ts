@@ -25,6 +25,21 @@ export {
   evidenceSourceIdV1,
 } from "./evidence-index-adapter.js";
 export {
+  DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+  PAW_MEMORY_SOURCE_LOCAL_EVIDENCE_LOCATOR_PORT_VERSION_V1,
+  isMemorySourceLocalEvidenceEligibleV1,
+  memorySourceLocalEvidenceCacheKeyV1,
+  validateMemorySourceLocalEvidenceResultV1,
+  type MemorySourceLocalEvidenceBudgetV1,
+  type MemorySourceLocalEvidenceHitV1,
+  type MemorySourceLocalEvidenceLocatorV1,
+  type MemorySourceLocalEvidenceRequestV1,
+  type MemorySourceLocalEvidenceResultV1,
+  type MemorySourceLocalEvidenceTelemetryV1,
+  type MemorySourceLocalizationReportV1,
+  type MemorySourceLocalizationStatusV1,
+} from "./source-local-evidence-locator.js";
+export {
   PAW_MEMORY_EVIDENCE_CLOSURE_AUDITOR_VERSION_V1,
   buildMemoryEvidenceClosureAuditRequestV1,
   createJsonMemoryEvidenceClosureAuditorV1,

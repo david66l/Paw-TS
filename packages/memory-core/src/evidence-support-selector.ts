@@ -141,6 +141,8 @@ export function buildMemoryEvidenceSupportSelectionRequestV1(
       candidates: input.candidates.map((candidate, index) => ({
         evidenceRef: compactEvidenceRef(index),
         authority: candidate.authority,
+        sourceKind: candidate.sourceKind,
+        contextEvidenceRefs: candidate.contextEvidenceRefs,
         observedAt: candidate.observedAt,
         episodeOrder: candidate.episodeOrder,
         turnOrder: candidate.turnOrder,

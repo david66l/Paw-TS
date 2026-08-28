@@ -47,6 +47,299 @@ function index(): MemoryEvidenceIndexV1 {
 }
 
 describe("shared evidence resolver v1", () => {
+  test("supplements an eligible assistant lookup after source lock without changing fusion", async () => {
+    const requirement = {
+      requirementId: "assistant-answer",
+      label: "prior assistant answer",
+      searchText: "the answer you gave",
+      temporalMode: "any" as const,
+      roleConstraint: "assistant" as const,
+      relation: "direct" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+    };
+    let lockedSources: readonly string[] = [];
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "global-ref",
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-1",
+                content: "Please answer the question.",
+                authority: "user_asserted" as const,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "assistant" as const,
+            needsPlanning: true,
+            requirements: [requirement],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate(request) {
+          lockedSources = request.lockedSourceIds;
+          const content = "[assistant_output hit] The answer was cobalt.";
+          return {
+            locatorVersion: "test-source-local.v1",
+            locatorRevision: "local-revision",
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-2",
+                anchorEvidenceRef: "session-1#turn-2",
+                contextEvidenceRefs: ["session-1#turn-2"],
+                sourceKind: "assistant_output" as const,
+                content,
+                authority: "context_only" as const,
+                turnOrder: 2,
+                includedTurns: [
+                  {
+                    evidenceRef: "session-1#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    turnOrder: 2,
+                  },
+                ],
+              },
+            ],
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: 1,
+              denseCandidates: 1,
+              anchorCount: 1,
+              includedTurnCount: 1,
+              renderedChars: content.length,
+              cacheHit: false,
+              durationMs: 2,
+            },
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          expect(input.candidates[0]?.sourceKind).toBe("assistant_output");
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "selected-local",
+            assessments: [
+              {
+                requirementId: requirement.requirementId,
+                supportingEvidenceRefs: ["session-1#turn-2"],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "What answer did you give me?",
+      new AbortController().signal,
+    );
+
+    expect(lockedSources).toEqual(["session-1"]);
+    expect(result.sources.map((source) => source.sourceId)).toEqual([
+      "session-1",
+    ]);
+    expect(result.sourceLocalization).toMatchObject({
+      status: "completed",
+      addedCandidateCount: 1,
+      selectedCandidateCount: 1,
+    });
+    expect(result.packetSources[0]?.text).toContain("cobalt");
+  });
+
+  test("drops local candidates when the selector rejects them or fails", async () => {
+    const requirement = {
+      requirementId: "assistant-answer",
+      label: "prior assistant answer",
+      searchText: "the answer you gave",
+      temporalMode: "any" as const,
+      roleConstraint: "assistant" as const,
+      relation: "direct" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+    };
+    const resolverInput: Parameters<typeof createMemoryEvidenceResolverV1>[0] =
+      {
+        index: {
+          indexVersion: "test-index.v1",
+          async search() {
+            return {
+              lists: [
+                {
+                  channel: "l0" as const,
+                  retrieverId: "global",
+                  weight: 1,
+                  candidates: [
+                    {
+                      candidateId: "global-ref",
+                      sourceId: "session-1",
+                      evidenceRef: "session-1#turn-1",
+                      sourceKind: "user_input" as const,
+                      authority: "user_asserted" as const,
+                    },
+                  ],
+                },
+              ],
+              hits: [
+                {
+                  sourceId: "session-1",
+                  evidenceRef: "session-1#turn-1",
+                  content: "baseline only",
+                  authority: "user_asserted" as const,
+                  turnOrder: 1,
+                },
+              ],
+            };
+          },
+        },
+        planner: {
+          plannerVersion:
+            "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+          async plan() {
+            return {
+              plannerVersion:
+                "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+              answerShape: "lookup" as const,
+              temporalMode: "any" as const,
+              roleConstraint: "assistant" as const,
+              needsPlanning: true,
+              requirements: [requirement],
+            };
+          },
+        },
+        sourceLocalLocator: {
+          locatorVersion: "test-source-local.v1",
+          async locate() {
+            const content = "local secret answer";
+            return {
+              locatorVersion: "test-source-local.v1",
+              locatorRevision: "local-revision",
+              hits: [
+                {
+                  sourceId: "session-1",
+                  evidenceRef: "session-1#turn-2",
+                  anchorEvidenceRef: "session-1#turn-2",
+                  contextEvidenceRefs: ["session-1#turn-2"],
+                  sourceKind: "assistant_output" as const,
+                  content,
+                  authority: "context_only" as const,
+                  turnOrder: 2,
+                  includedTurns: [
+                    {
+                      evidenceRef: "session-1#turn-2",
+                      sourceKind: "assistant_output" as const,
+                      turnOrder: 2,
+                    },
+                  ],
+                },
+              ],
+              degradedChannels: [] as const,
+              telemetry: {
+                lexicalCandidates: 1,
+                denseCandidates: 0,
+                anchorCount: 1,
+                includedTurnCount: 1,
+                renderedChars: content.length,
+                cacheHit: false,
+                durationMs: 1,
+              },
+            };
+          },
+        },
+      };
+    const selector = {
+      selectorVersion: "test-selector.v1",
+      async select(input: {
+        readonly candidates: readonly { readonly evidenceRef: string }[];
+      }) {
+        const hasLocal = input.candidates.some(
+          (candidate) => candidate.evidenceRef === "session-1#turn-2",
+        );
+        return {
+          selectorVersion: "test-selector.v1",
+          selectionRevision: "reject-local",
+          assessments: [
+            {
+              requirementId: requirement.requirementId,
+              supportingEvidenceRefs: ["session-1#turn-1"],
+              contradictingEvidenceRefs: [],
+              unknownEvidenceRefs: hasLocal ? ["session-1#turn-2"] : [],
+            },
+          ],
+        };
+      },
+    };
+    const baseline = await createMemoryEvidenceResolverV1({
+      ...resolverInput,
+      sourceLocalLocator: undefined,
+      supportSelector: selector,
+    }).resolve("What answer did you give me?", new AbortController().signal);
+    const rejected = await createMemoryEvidenceResolverV1({
+      ...resolverInput,
+      supportSelector: selector,
+    }).resolve("What answer did you give me?", new AbortController().signal);
+    expect(rejected.sourceLocalization).toMatchObject({
+      status: "completed",
+      selectedCandidateCount: 0,
+    });
+    expect(rejected.packetSources).toEqual(baseline.packetSources);
+    expect(rejected.packetSources[0]?.text).not.toContain(
+      "local secret answer",
+    );
+
+    const result = await createMemoryEvidenceResolverV1({
+      ...resolverInput,
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select() {
+          throw new Error("selector unavailable");
+        },
+      },
+    }).resolve("What answer did you give me?", new AbortController().signal);
+    expect(result.sourceLocalization).toMatchObject({
+      status: "fallback",
+      reasonCode: "selector_failed",
+      addedCandidateCount: 0,
+    });
+    expect(result.packetSources[0]?.text).not.toContain("local secret answer");
+  });
   test("locks sources only after bounded planned discovery", async () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
@@ -674,7 +967,7 @@ describe("shared evidence resolver v1", () => {
     expect(result.packetSources[0]?.text).toContain("27. Sound effects");
   });
 
-  test("audits tentative closure and performs at most one bounded repair pass", async () => {
+  test("keeps the legacy closure auditor read-only and outside retrieval", async () => {
     const searchTexts: string[] = [];
     let selectorCalls = 0;
     let auditorCalls = 0;
@@ -693,7 +986,7 @@ describe("shared evidence resolver v1", () => {
         indexVersion: "test-index.v1",
         async search(searchText) {
           searchTexts.push(searchText);
-          const current = false;
+          const current = searchText.includes("current commute");
           const sourceId = current ? "current-session" : "old-session";
           const evidenceRef = current ? "current-ref" : "old-ref";
           return {
@@ -720,36 +1013,6 @@ describe("shared evidence resolver v1", () => {
                 content: current
                   ? "My current commute is a fifteen minute train ride."
                   : "My old commute was a forty minute bus ride.",
-                authority: "user_asserted" as const,
-              },
-            ],
-          };
-        },
-        async searchWithinSources(searchText, sourceIds) {
-          searchTexts.push(`scoped:${searchText}`);
-          expect(sourceIds).toContain("old-session");
-          return {
-            lists: [
-              {
-                retrieverId: "scoped-turns",
-                channel: "l0" as const,
-                weight: 1,
-                candidates: [
-                  {
-                    candidateId: "current-ref",
-                    sourceId: "old-session",
-                    evidenceRef: "current-ref",
-                    sourceKind: "user_input" as const,
-                    authority: "user_asserted" as const,
-                  },
-                ],
-              },
-            ],
-            hits: [
-              {
-                sourceId: "old-session",
-                evidenceRef: "current-ref",
-                content: "My current commute is a fifteen minute train ride.",
                 authority: "user_asserted" as const,
               },
             ],
@@ -793,32 +1056,24 @@ describe("shared evidence resolver v1", () => {
         auditorVersion: "test-auditor.v1",
         async audit() {
           auditorCalls += 1;
-          return auditorCalls === 1
-            ? {
-                auditorVersion: "test-auditor.v1",
-                auditRevision: "repair-audit",
-                verdict: "repair" as const,
-                missingRequirements: [
-                  {
-                    requirementId: "closure-repair-1",
-                    label: "Current commute",
-                    searchText: "current commute",
-                    temporalMode: "history" as const,
-                    roleConstraint: "user" as const,
-                    relation: "comparative" as const,
-                    coverageMode: "any" as const,
-                    minimumEvidence: 1,
-                  },
-                ],
-                rejectedEvidenceRefs: [],
-              }
-            : {
-                auditorVersion: "test-auditor.v1",
-                auditRevision: "pass-audit",
-                verdict: "pass" as const,
-                missingRequirements: [],
-                rejectedEvidenceRefs: [],
-              };
+          return {
+            auditorVersion: "test-auditor.v1",
+            auditRevision: "repair-audit",
+            verdict: "repair" as const,
+            missingRequirements: [
+              {
+                requirementId: "closure-repair-1",
+                label: "Current commute",
+                searchText: "current commute",
+                temporalMode: "history" as const,
+                roleConstraint: "user" as const,
+                relation: "comparative" as const,
+                coverageMode: "any" as const,
+                minimumEvidence: 1,
+              },
+            ],
+            rejectedEvidenceRefs: [],
+          };
         },
       },
     });
@@ -830,22 +1085,18 @@ describe("shared evidence resolver v1", () => {
 
     expect(result.notebook.coverage.map((item) => item.status)).toEqual([
       "covered",
-      "covered",
     ]);
     expect(result.closureAuditStatus).toBe("completed");
-    expect(result.closureVerdict).toBe("pass");
-    expect(result.closureRepairCount).toBe(1);
-    expect(result.requirements).toHaveLength(2);
+    expect(result.closureVerdict).toBe("insufficient");
+    expect(result.closureRepairCount).toBe(0);
+    expect(result.requirements).toHaveLength(1);
     expect(
       result.notebook.coverage.every((item) => item.status === "covered"),
     ).toBe(true);
-    expect(selectorCalls).toBe(2);
-    expect(auditorCalls).toBe(2);
+    expect(selectorCalls).toBe(1);
+    expect(auditorCalls).toBe(1);
     expect(
       searchTexts.filter((text) => text === "current commute"),
-    ).toHaveLength(1);
-    expect(
-      searchTexts.filter((text) => text === "scoped:current commute"),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
 });

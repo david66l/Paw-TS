@@ -1,0 +1,287 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+  type MemorySourceLocalEvidenceHitV1,
+  type MemorySourceLocalEvidenceResultV1,
+  isMemorySourceLocalEvidenceEligibleV1,
+  memorySourceLocalEvidenceCacheKeyV1,
+  validateMemorySourceLocalEvidenceResultV1,
+} from "../src/index.js";
+
+const requirement = Object.freeze({
+  requirementId: "assistant-answer",
+  label: "prior assistant answer",
+  searchText: "the answer you gave",
+  temporalMode: "any" as const,
+  roleConstraint: "assistant" as const,
+  relation: "direct" as const,
+  coverageMode: "any" as const,
+  minimumEvidence: 1,
+});
+
+describe("source-local evidence locator boundary", () => {
+  test("opens only the first assistant direct-lookup route", () => {
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "assistant",
+        requirements: [requirement],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "lookup",
+        temporalMode: "history",
+        roleConstraint: "assistant",
+        requirements: [{ ...requirement, temporalMode: "history" }],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(false);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "compare",
+        temporalMode: "any",
+        roleConstraint: "assistant",
+        requirements: [requirement],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects source escape, wrong-role anchors and missing trace addresses", () => {
+    const locator = {
+      locatorVersion: "test-locator.v1",
+      async locate() {
+        throw new Error("unused");
+      },
+    };
+    const request = {
+      requirement,
+      lockedSourceIds: ["session-1"],
+      budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+    };
+    const result = {
+      locatorVersion: locator.locatorVersion,
+      locatorRevision: "revision",
+      hits: [
+        {
+          sourceId: "session-2",
+          evidenceRef: "session-2#turn-2",
+          anchorEvidenceRef: "session-2#turn-2",
+          contextEvidenceRefs: ["session-2#turn-2"],
+          sourceKind: "assistant_output" as const,
+          content: "assistant answer",
+          authority: "context_only" as const,
+          turnOrder: 2,
+          includedTurns: [
+            {
+              evidenceRef: "session-2#turn-2",
+              sourceKind: "assistant_output" as const,
+              turnOrder: 2,
+            },
+          ],
+        },
+      ],
+      degradedChannels: [] as const,
+      telemetry: {
+        lexicalCandidates: 1,
+        denseCandidates: 1,
+        anchorCount: 1,
+        includedTurnCount: 1,
+        renderedChars: "assistant answer".length,
+        cacheHit: false,
+        durationMs: 1,
+      },
+    };
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result,
+      }),
+    ).toThrow("MemorySourceLocalEvidenceHitInvalid");
+  });
+
+  test("binds every trace address and timestamp to the locked source and anchor", () => {
+    const locator = {
+      locatorVersion: "test-locator.v1",
+      async locate() {
+        throw new Error("unused");
+      },
+    };
+    const request = {
+      requirement,
+      lockedSourceIds: ["session-1"],
+      evidenceTimeUpperBound: "2026-01-02T00:00:00.000Z",
+      budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+    };
+    const validHit: MemorySourceLocalEvidenceHitV1 = {
+      sourceId: "session-1",
+      evidenceRef: "session-1#thread#turn-2",
+      anchorEvidenceRef: "session-1#thread#turn-2",
+      contextEvidenceRefs: ["session-1#thread#turn-2"],
+      sourceKind: "assistant_output",
+      content: "assistant answer",
+      authority: "context_only",
+      observedAt: "2026-01-01T00:00:00.000Z",
+      turnOrder: 2,
+      includedTurns: [
+        {
+          evidenceRef: "session-1#thread#turn-2",
+          sourceKind: "assistant_output",
+          observedAt: "2026-01-01T00:00:00.000Z",
+          turnOrder: 2,
+        },
+      ],
+    };
+    const resultFor = (
+      hit: MemorySourceLocalEvidenceHitV1,
+    ): MemorySourceLocalEvidenceResultV1 => ({
+      locatorVersion: locator.locatorVersion,
+      locatorRevision: "revision",
+      hits: [hit],
+      degradedChannels: [],
+      telemetry: {
+        lexicalCandidates: 1,
+        denseCandidates: 0,
+        anchorCount: 1,
+        includedTurnCount: hit.includedTurns.length,
+        renderedChars: hit.content.length,
+        cacheHit: false,
+        durationMs: 1,
+      },
+    });
+    const validAnchor = validHit.includedTurns[0];
+    if (!validAnchor) throw new Error("valid anchor fixture is missing");
+    expect(
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result: resultFor(validHit),
+      }),
+    ).toHaveLength(1);
+    const escapedRef = "session-2#thread#turn-2";
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result: resultFor({
+          ...validHit,
+          evidenceRef: escapedRef,
+          anchorEvidenceRef: escapedRef,
+          contextEvidenceRefs: [escapedRef],
+          includedTurns: [{ ...validAnchor, evidenceRef: escapedRef }],
+        }),
+      }),
+    ).toThrow("MemorySourceLocalEvidenceHitInvalid");
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result: resultFor({
+          ...validHit,
+          observedAt: "not-a-time",
+          includedTurns: [{ ...validAnchor, observedAt: "not-a-time" }],
+        }),
+      }),
+    ).toThrow("MemorySourceLocalEvidenceHitInvalid");
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result: resultFor({
+          ...validHit,
+          contextEvidenceRefs: ["session-1#thread#turn-99"],
+        }),
+      }),
+    ).toThrow("MemorySourceLocalEvidenceTraceInvalid");
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result: resultFor({
+          ...validHit,
+          includedTurns: [{ ...validAnchor, turnOrder: 3 }],
+        }),
+      }),
+    ).toThrow("MemorySourceLocalEvidenceAnchorRoleInvalid");
+  });
+
+  test("partitions result caches by source set, role, cutoff and index revision", () => {
+    const base = {
+      locatorVersion: "test-locator.v1",
+      scopeFingerprint: "scope",
+      turnIndexRevision: "r1",
+      request: {
+        requirement,
+        lockedSourceIds: ["session-1"],
+        evidenceTimeUpperBound: "2026-01-01T00:00:00.000Z",
+        budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+      },
+      adjacencyPolicyVersion: "neighbors-v1",
+      rankerVersion: "rrf-v1",
+    };
+    const first = memorySourceLocalEvidenceCacheKeyV1(base);
+    expect(memorySourceLocalEvidenceCacheKeyV1(base)).toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          requirement: {
+            ...base.request.requirement,
+            searchText: "  the   answer you gave  ",
+          },
+        },
+      }),
+    ).toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          requirement: {
+            ...base.request.requirement,
+            searchText: "THE ANSWER YOU GAVE",
+          },
+        },
+      }),
+    ).not.toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          requirement: {
+            ...base.request.requirement,
+            searchText: "a different answer",
+          },
+        },
+      }),
+    ).not.toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: { ...base.request, lockedSourceIds: ["session-2"] },
+      }),
+    ).not.toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        turnIndexRevision: "r2",
+      }),
+    ).not.toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          evidenceTimeUpperBound: "2026-01-02T00:00:00.000Z",
+        },
+      }),
+    ).not.toBe(first);
+  });
+});

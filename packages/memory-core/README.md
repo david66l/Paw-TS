@@ -10,9 +10,10 @@ can become its own Git repository without copying Paw's agent runtime.
 scoped query
   -> L0/L1 discovery
   -> typed evidence requirements
+  -> immutable source lock
+  -> optional source-local assistant-turn locator
   -> requirement-bound support selection
-  -> independent closure audit
-       -> at most one bounded repair search and full re-selection
+  -> optional read-only closure audit
   -> deterministic state reduction
   -> canonical evidence packet
 ```
@@ -21,11 +22,13 @@ scoped query
 - L1 memories are navigation hints and must hydrate back to L0 before use.
 - The LLM can decompose a query and bind supplied evidence addresses, but it
   cannot change scope, invent evidence, write memory, or decide temporal order.
-- A separate closure auditor checks the original query against the plan and
-  selected L0 evidence. It may propose at most two search obligations for one
-  repair pass; it cannot answer the query or insert evidence.
-- A repair may inspect finer-grained L0 spans only inside sources discovered by
-  the first pass; it cannot widen user scope or pull in a new conversation.
+- An optional source-local locator can supplement a narrow assistant-recall
+  lookup after source fusion. It returns exact L0 anchors plus bounded,
+  addressable dialogue neighbors and can never widen the locked source set.
+- Local hits still pass through the existing support selector. If localization
+  or selection fails, the resolver discards them and preserves baseline output.
+- The optional closure auditor is read-only. It may challenge closure but can no
+  longer trigger retrieval or mutate the source set.
 - Storage, model, and runtime integrations are structural ports.
 - IDs, hashing, ranking, budgets, temporal reduction, and packet construction
   are deterministic code.

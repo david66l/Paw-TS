@@ -527,7 +527,10 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     queryText: string,
     k: number,
     repo?: string,
+    filter?: import("./engine.js").MemoryStoreSearchFilterV1,
   ): Promise<ScoredId[]> {
+    assertSearchFilter(filter);
+    if (filter?.allowedIds?.length === 0) return [];
     const sql = getSql();
     // 三路全文取最大 rank：V013 search_tsv（'english'）+ V027 when_to_use_tsv（'simple'）
     // + V032 search_tsv_simple（'simple'，含 title/summary/when_to_use——中文场景句兜底，
@@ -541,6 +544,15 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
           AND scope->>'workspaceId' = ${this.scope.workspaceId}
           AND scope->>'repositoryId' = ${this.scope.repositoryId}`
       : sql``;
+    const allowedIdsCond = filter?.allowedIds
+      ? sql`AND id = ANY(${textArrayLiteral([...new Set(filter.allowedIds)])}::text[])`
+      : sql``;
+    const issueTypeCond = filter?.issueType
+      ? sql`AND payload->>'issueType' = ${filter.issueType}`
+      : sql``;
+    const createdAtCond = filter?.createdAtUpperBound
+      ? sql`AND created_at <= ${filter.createdAtUpperBound}::timestamptz`
+      : sql``;
     const rows = await sql`
       SELECT id, GREATEST(
                ts_rank(search_tsv, plainto_tsquery('english', ${queryText})),
@@ -553,6 +565,9 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         AND COALESCE(payload->>'degraded', 'false') != 'true'
         ${scopeCond}
         ${repoCond}
+        ${allowedIdsCond}
+        ${issueTypeCond}
+        ${createdAtCond}
         AND (
           search_tsv @@ plainto_tsquery('english', ${queryText})
           OR when_to_use_tsv @@ plainto_tsquery('simple', ${queryText})
@@ -571,7 +586,10 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     queryText: string,
     k: number,
     repo?: string,
+    filter?: import("./engine.js").MemoryStoreSearchFilterV1,
   ): Promise<ScoredId[]> {
+    assertSearchFilter(filter);
+    if (filter?.allowedIds?.length === 0) return [];
     const sql = getSql();
     const queryVec = await this.embedder.embed(queryText);
     assertEmbeddingVector(queryVec, this.embedder);
@@ -583,6 +601,15 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
           AND m.scope->>'userId' = ${this.scope.userId}
           AND m.scope->>'workspaceId' = ${this.scope.workspaceId}
           AND m.scope->>'repositoryId' = ${this.scope.repositoryId}`
+      : sql``;
+    const allowedIdsCond = filter?.allowedIds
+      ? sql`AND m.id = ANY(${textArrayLiteral([...new Set(filter.allowedIds)])}::text[])`
+      : sql``;
+    const issueTypeCond = filter?.issueType
+      ? sql`AND m.payload->>'issueType' = ${filter.issueType}`
+      : sql``;
+    const createdAtCond = filter?.createdAtUpperBound
+      ? sql`AND m.created_at <= ${filter.createdAtUpperBound}::timestamptz`
       : sql``;
 
     // 主路：pgvector 余弦距离（V008）
@@ -598,6 +625,9 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
           AND e.embedding_version = ${this.embedder.version}
           ${scopeCond}
           ${repoCond}
+          ${allowedIdsCond}
+          ${issueTypeCond}
+          ${createdAtCond}
         ORDER BY e.embedding <=> ${formatted}::vector ASC
         LIMIT ${k}
       `;
@@ -618,6 +648,9 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
           AND e.embedding_version = ${this.embedder.version}
           ${scopeCond}
           ${repoCond}
+          ${allowedIdsCond}
+          ${issueTypeCond}
+          ${createdAtCond}
       `;
       return (rows as unknown as { memory_id: string; embedding: unknown }[])
         .map((r) => ({
@@ -769,6 +802,23 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
       /* op-log 失败不影响 reindex 结果 */
     }
     return report;
+  }
+}
+
+function assertSearchFilter(
+  filter: import("./engine.js").MemoryStoreSearchFilterV1 | undefined,
+): void {
+  if (!filter) return;
+  if (
+    (filter.allowedIds !== undefined &&
+      (filter.allowedIds.length > 4_096 ||
+        filter.allowedIds.some((id) => !id.trim() || id.length > 512))) ||
+    (filter.issueType !== undefined &&
+      (!filter.issueType.trim() || filter.issueType.length > 128)) ||
+    (filter.createdAtUpperBound !== undefined &&
+      !Number.isFinite(Date.parse(filter.createdAtUpperBound)))
+  ) {
+    throw new Error("Memory store search filter is invalid");
   }
 }
 

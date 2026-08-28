@@ -119,6 +119,7 @@ export type MemoryConversationTurnKindV1 =
   | "source_document";
 
 export interface MemoryConversationTurnV1 {
+  readonly evidenceRef?: string;
   readonly sourceSeq: number;
   readonly sourceKind: MemoryConversationTurnKindV1;
   readonly content: string;
@@ -134,6 +135,11 @@ export interface MemoryConversationTurnBundleV1 {
     | "user_confirmed_dialogue"
     | "context_only";
   readonly includedTurns: number;
+  readonly includedEvidence: readonly Readonly<{
+    evidenceRef: string;
+    sourceKind: MemoryConversationTurnKindV1;
+    turnOrder: number;
+  }>[];
   readonly chars: number;
 }
 
@@ -157,6 +163,10 @@ export interface MemoryEvidenceNotebookHitV1 {
   readonly turnOrder?: number;
   /** Optional stable event identity shared by cross-session restatements. */
   readonly eventKey?: string;
+  /** Exact role of the anchor turn when the hit came from conversational L0. */
+  readonly sourceKind?: MemoryConversationTurnKindV1;
+  /** Exact addresses of bounded neighbors rendered inside this hit. */
+  readonly contextEvidenceRefs?: readonly string[];
 }
 
 export interface MemoryEvidenceNotebookRequirementV1 {
@@ -313,6 +323,19 @@ export function buildMemoryConversationTurnBundleV1(input: {
     hitSeq: hit.sourceSeq,
     authority,
     includedTurns: turns.length,
+    includedEvidence: Object.freeze(
+      turns.flatMap((turn) =>
+        turn.evidenceRef
+          ? [
+              Object.freeze({
+                evidenceRef: turn.evidenceRef,
+                sourceKind: turn.sourceKind,
+                turnOrder: turn.sourceSeq,
+              }),
+            ]
+          : [],
+      ),
+    ),
     chars: text.length,
   });
 }

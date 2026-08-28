@@ -14,6 +14,9 @@ import type {
   MemoryProductProviderV1,
   MemoryProductScopeV1,
 } from "./product-ports.js";
+import { evidenceSourceIdV1 as evidenceSourceId } from "./evidence-ref.js";
+
+export { evidenceSourceIdV1 } from "./evidence-ref.js";
 
 export const PAW_MEMORY_PRODUCT_EVIDENCE_INDEX_VERSION_V1 =
   "paw.memory-product-evidence-index.v2:l1-navigation-l0-hydration" as const;
@@ -157,17 +160,6 @@ export function createProductMemoryEvidenceIndexV1<
       }) satisfies MemoryEvidenceIndexSearchResultV1;
     },
   });
-}
-
-export function evidenceSourceIdV1(evidenceRef: string): string {
-  return evidenceSourceId(evidenceRef);
-}
-
-function evidenceSourceId(evidenceRef: string): string {
-  const value = evidenceRef.trim();
-  if (!value) throw namedError("MemoryEvidenceRefInvalid");
-  const marker = value.indexOf("#");
-  return marker > 0 ? value.slice(0, marker) : value;
 }
 
 function namedError(name: string): Error {
