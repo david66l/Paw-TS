@@ -2014,6 +2014,14 @@ async function searchEvidenceIndexEntriesV2(input: {
     );
     return match?.[1] ? [match[1]] : [];
   });
+  const rankedEvidenceRefs = entries.flatMap((entry) => {
+    const evidence = entry.evidence.find((ref) =>
+      input.indexKind === "source_span"
+        ? /#source-\d+$/.test(ref)
+        : /#source-chunk-\d+$/.test(ref),
+    );
+    return evidence ? [evidence] : [];
+  });
   const uniqueSourceCount = new Set(rankedSourceIds).size;
   log("evidence_index_search", {
     indexKind: input.indexKind,
@@ -2030,6 +2038,7 @@ async function searchEvidenceIndexEntriesV2(input: {
     topSourceHashes: [
       ...new Set(rankedSourceIds.map((sourceId) => sha(sourceId).slice(0, 20))),
     ].slice(0, 16),
+    topEvidenceRefHashes: contentFreeHashes(rankedEvidenceRefs),
   });
   return entries;
 }
