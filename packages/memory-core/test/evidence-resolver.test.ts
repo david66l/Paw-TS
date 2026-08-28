@@ -441,6 +441,95 @@ describe("shared evidence resolver v1", () => {
     );
   });
 
+  test("hydrates two bounded exact fallbacks for synthesis closure", async () => {
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "synthesis-fallback.v1",
+        async search() {
+          const hits = [1, 2, 3].map((index) => ({
+            sourceId: "session",
+            evidenceRef: `session#turn-${index}`,
+            content: `item ${index} contributes ${index * 10}`,
+            authority: "user_asserted" as const,
+            turnOrder: index,
+          }));
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "turn-index",
+                weight: 1,
+                candidates: hits.map((hit) => ({
+                  candidateId: hit.evidenceRef,
+                  sourceId: hit.sourceId,
+                  evidenceRef: hit.evidenceRef,
+                  sourceKind: "user_input" as const,
+                  authority: hit.authority,
+                })),
+              },
+            ],
+            hits,
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+            answerShape: "aggregate",
+            temporalMode: "any",
+            roleConstraint: "user",
+            needsPlanning: true,
+            requirements: [
+              {
+                requirementId: "total",
+                label: "combined item total",
+                searchText: "item contributes",
+                temporalMode: "any",
+                roleConstraint: "user",
+                relation: "comparative",
+                coverageMode: "any",
+                minimumEvidence: 1,
+              },
+            ],
+          } as const;
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-support-selector.v1",
+        async select() {
+          return {
+            selectorVersion: "test-support-selector.v1",
+            selectionRevision: "synthesis-fallback-revision",
+            assessments: [
+              {
+                requirementId: "total",
+                supportingEvidenceRefs: ["session#turn-1"],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "What is the combined total?",
+      new AbortController().signal,
+    );
+
+    expect(result.packetSources[0]?.evidenceRefs).toEqual([
+      "session#turn-1",
+      "session#turn-2",
+      "session#turn-3",
+    ]);
+    expect(result.packetSources[0]?.text).toContain("Bounded primary fallback");
+  });
+
   test("keeps bounded candidates when latest-state support is still missing", async () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),

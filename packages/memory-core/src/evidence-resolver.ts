@@ -24,7 +24,7 @@ import type {
 } from "./evidence-support-selector.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v5:planned-discovery-source-lock" as const;
+  "paw.memory-evidence-resolver.v6:adaptive-exact-fallback" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -47,15 +47,10 @@ export interface MemoryEvidenceResolutionV1 {
   readonly indexVersion: string;
   readonly intent: MemoryEvidenceQueryIntentV3;
   readonly directCertificateStatus:
-    | "deterministic_direct"
-    | "missing"
-    | "not_applicable";
+    "deterministic_direct" | "missing" | "not_applicable";
   readonly plannerStatus: "not_needed" | "completed" | "fallback";
   readonly supportSelectorStatus:
-    | "not_needed"
-    | "not_configured"
-    | "completed"
-    | "fallback";
+    "not_needed" | "not_configured" | "completed" | "fallback";
   readonly supportSelectionRevision?: string;
   readonly supportSelectorVersion?: string;
   readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
@@ -226,8 +221,7 @@ export function createMemoryEvidenceResolverV1(input: {
       let supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] =
         Object.freeze([]);
       let selectedRefsByRequirement:
-        | ReadonlyMap<string, ReadonlySet<string>>
-        | undefined;
+        ReadonlyMap<string, ReadonlySet<string>> | undefined;
       if (requirements.length > 0 && input.supportSelector) {
         const candidates = selectSupportCandidates(
           requirementHits,
@@ -290,6 +284,12 @@ export function createMemoryEvidenceResolverV1(input: {
           .filter((hit) => nonSupportingRefs.has(hit.evidenceRef)),
         primary.hits,
       );
+      const fallbackHitsPerSource = exactFallbackHitsPerSource({
+        intent,
+        directCertificateStatus,
+        notebook,
+        nonSupportingRefs,
+      });
       const packetSources =
         requirements.length > 0
           ? buildPlannedEvidencePacketSources({
@@ -298,10 +298,7 @@ export function createMemoryEvidenceResolverV1(input: {
               primaryHits: packetFallbackHits,
               selectedSourceIds: sourceIds,
               allowContextOnly: intent.roleConstraint === "assistant",
-              includeFallback:
-                intent.temporalMode !== "latest" ||
-                notebook.coverage.some((item) => item.status !== "covered") ||
-                nonSupportingRefs.size > 0,
+              fallbackHitsPerSource,
               maxFallbackChars: maxNotebookChars,
             })
           : buildPrimaryEvidencePacketSources(
@@ -501,10 +498,10 @@ function buildPlannedEvidencePacketSources(input: {
   readonly primaryHits: readonly MemoryEvidenceNotebookHitV1[];
   readonly selectedSourceIds: readonly string[];
   readonly allowContextOnly: boolean;
-  readonly includeFallback: boolean;
+  readonly fallbackHitsPerSource: number;
   readonly maxFallbackChars: number;
 }): MemoryEvidenceResolutionV1["packetSources"] {
-  if (!input.includeFallback) return input.notebook.sources;
+  if (input.fallbackHitsPerSource === 0) return input.notebook.sources;
   const selectedRefs = new Set(
     input.notebook.coverage.flatMap((item) => item.selectedEvidenceRefs),
   );
@@ -512,7 +509,7 @@ function buildPlannedEvidencePacketSources(input: {
     input.primaryHits,
     input.selectedSourceIds,
     input.allowContextOnly,
-    1,
+    input.fallbackHitsPerSource,
     input.maxFallbackChars,
     selectedRefs,
     "candidate",
@@ -557,6 +554,32 @@ function buildPlannedEvidencePacketSources(input: {
       ];
     }),
   );
+}
+
+/**
+ * Hydrate more exact L0 only when the closure proof is structurally weak.
+ * The semantic selector remains a bounded proposer; it is never the only
+ * component allowed to hide competing evidence from the final answer model.
+ */
+function exactFallbackHitsPerSource(input: {
+  readonly intent: MemoryEvidenceQueryIntentV3;
+  readonly directCertificateStatus: MemoryEvidenceResolutionV1["directCertificateStatus"];
+  readonly notebook: MemoryEvidenceNotebookV1;
+  readonly nonSupportingRefs: ReadonlySet<string>;
+}): number {
+  const incomplete = input.notebook.coverage.some(
+    (item) => item.status !== "covered",
+  );
+  const synthesis =
+    input.intent.answerShape === "aggregate" ||
+    input.intent.answerShape === "compare";
+  if (incomplete || synthesis || input.directCertificateStatus === "missing") {
+    return 2;
+  }
+  return input.intent.temporalMode !== "latest" ||
+    input.nonSupportingRefs.size > 0
+    ? 1
+    : 0;
 }
 
 function singleAnswerRole<T extends string>(

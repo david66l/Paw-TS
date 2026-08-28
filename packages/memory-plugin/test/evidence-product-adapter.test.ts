@@ -476,6 +476,26 @@ describe("product evidence adapter", () => {
     ).toHaveLength(0);
     expect(unrenderedChallenge.verification.contradictionCount).toBe(1);
     expect(unrenderedChallenge.stop).toBe("partial");
+    const ambiguousDirect = projectEvidenceFirstMemoryContextPacketV1({
+      ...resolution,
+      directCertificateStatus: "missing" as const,
+      supportAssessments: resolution.supportAssessments.map((assessment) => ({
+        ...assessment,
+        contradictingEvidenceRefs: [],
+      })),
+      packetSources: resolution.packetSources.filter(
+        (source) => source.sourceId !== "session-b",
+      ),
+      notebook: {
+        ...resolution.notebook,
+        coverage: resolution.notebook.coverage.map((coverage) => ({
+          ...coverage,
+          unresolvedEvidenceRefs: [],
+        })),
+      },
+    });
+    expect(ambiguousDirect.requirements[0]?.status).toBe("covered");
+    expect(ambiguousDirect.stop).toBe("partial");
   });
 
   test("uses derived L1 cards for navigation but never renders them as L0", async () => {
