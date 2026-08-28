@@ -13,7 +13,7 @@ import {
   type MemorySourceLocalEvidenceRequestV1,
   type MemorySourceLocalEvidenceResultV1,
   type MemorySourceLocalHydratedEvidenceV1,
-  hasMemorySourceLocalDialogueCertificateV1,
+  hasMemorySourceLocalAssistantOriginCertificateV1,
   memorySourceLocalEvidenceCacheKeyV1,
 } from "./source-local-evidence-locator.js";
 
@@ -110,10 +110,10 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
   const locatorVersion =
-    "paw.memory-postgres-source-local-locator.v3:request-reply-certified-lexical";
+    "paw.memory-postgres-source-local-locator.v4:source-priority-assistant-origin";
   const hydratorVersion = "paw.memory-postgres-source-local-hydrator.v1";
   const rankerVersion =
-    "paw.memory-source-local-ranker.v3:role-balanced-term-coverage-then-lexical-idf";
+    "paw.memory-source-local-ranker.v4:source-priority-term-coverage-then-lexical-idf";
   const resultCache = new Map<string, MemorySourceLocalEvidenceResultV1>();
   return Object.freeze({
     scope,
@@ -508,6 +508,12 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
             right.length - left.length || left.localeCompare(right),
         )
         .slice(0, 8);
+      const includeRequestMatches =
+        request.requirement.roleConstraint === "any";
+      const perSourceCandidateLimit = Math.min(
+        8,
+        request.budget.maxCandidatesPerChannel,
+      );
       const rows =
         lexicalTerms.length === 0
           ? []
@@ -522,7 +528,8 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
                        anchor.content, anchor.content_hash, anchor.created_at,
                        lexical_score.term_hits, lexical_score.matched_chars,
                        ROW_NUMBER() OVER (
-                         PARTITION BY matched.source_kind
+                         PARTITION BY split_part(matched.evidence_ref, '#', 1),
+                                      matched.source_kind
                          ORDER BY lexical_score.term_hits DESC,
                                   lexical_score.matched_chars DESC,
                                   matched.created_at DESC,
@@ -550,7 +557,10 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
                   AND matched.scope->>'workspaceId' = ${scope.workspaceId}
                   AND matched.scope->>'repositoryId' = ${scope.repositoryId}
                   AND split_part(matched.evidence_ref, '#', 1) = ANY(${sql.array(lockedSourceIds)})
-                  AND matched.source_kind IN ('user_input', 'assistant_output')
+                  AND (
+                    matched.source_kind = 'assistant_output'
+                    OR (${includeRequestMatches} AND matched.source_kind = 'user_input')
+                  )
                   AND matched.created_at <= ${cutoff}::timestamptz
                   AND anchor.created_at <= ${cutoff}::timestamptz
                   AND lexical_score.term_hits > 0
@@ -560,7 +570,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
                      evidence_ref, source_kind, source_seq, content,
                      content_hash, created_at
               FROM role_candidates
-              WHERE role_rank <= ${request.budget.maxCandidatesPerChannel}
+              WHERE role_rank <= ${perSourceCandidateLimit}
               ORDER BY role_rank ASC, matched_source_kind ASC,
                        evidence_ref ASC
             `;
@@ -589,6 +599,9 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         queryTerms,
         candidates.map((candidate) => candidate.terms),
       );
+      const sourcePriority = new Map(
+        lockedSourceIds.map((sourceId, index) => [sourceId, index]),
+      );
       const rankedCandidates = candidates
         .map((candidate) => ({
           row: candidate.row,
@@ -605,6 +618,10 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         .filter((candidate) => candidate.score > 0)
         .sort(
           (left, right) =>
+            (sourcePriority.get(evidenceRefFamily(left.row.evidence_ref)) ??
+              Number.MAX_SAFE_INTEGER) -
+              (sourcePriority.get(evidenceRefFamily(right.row.evidence_ref)) ??
+                Number.MAX_SAFE_INTEGER) ||
             right.score - left.score ||
             Number(left.row.source_seq) - Number(right.row.source_seq) ||
             String(left.row.evidence_ref).localeCompare(
@@ -665,7 +682,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         });
         if (
           request.requirement.roleConstraint === "any" &&
-          !hasMemorySourceLocalDialogueCertificateV1(
+          !hasMemorySourceLocalAssistantOriginCertificateV1(
             bundle.includedEvidence,
             sourceSeq,
           )

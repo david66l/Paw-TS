@@ -180,6 +180,30 @@ export function hasMemorySourceLocalDialogueCertificateV1(
 }
 
 /**
+ * Proves only that an immutable assistant turn has a structurally valid origin:
+ * either it answers the immediately preceding user request, or it is the first
+ * turn of a session. It does not promote assistant prose to a user fact.
+ */
+export function hasMemorySourceLocalAssistantOriginCertificateV1(
+  turns: readonly MemorySourceLocalIncludedTurnV1[],
+  anchorTurnOrder: number,
+): boolean {
+  if (!Number.isSafeInteger(anchorTurnOrder) || anchorTurnOrder < 1) {
+    return false;
+  }
+  const hasAssistantAnchor = turns.some(
+    (turn) =>
+      turn.sourceKind === "assistant_output" &&
+      turn.turnOrder === anchorTurnOrder,
+  );
+  return (
+    hasAssistantAnchor &&
+    (anchorTurnOrder === 1 ||
+      hasMemorySourceLocalDialogueCertificateV1(turns, anchorTurnOrder))
+  );
+}
+
+/**
  * First release gate. It deliberately excludes temporal, comparative and
  * convergent requests until those capabilities have their own evidence. A
  * lookup may contain several direct assistant-grounded requirements; the
@@ -331,7 +355,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     }
     if (
       input.request.requirement.roleConstraint === "any" &&
-      !hasMemorySourceLocalDialogueCertificateV1(
+      !hasMemorySourceLocalAssistantOriginCertificateV1(
         hit.includedTurns,
         anchorTurnOrder as number,
       )

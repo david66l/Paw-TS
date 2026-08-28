@@ -119,6 +119,13 @@ describe("postgres source-local assistant locator", () => {
           content: "This non-adjacent reply must not be request-derived.",
           createdAt: "2026-01-01T00:03:00.000Z",
         },
+        {
+          evidenceRef: "journal:session-5#turn-1",
+          sourceKind: "assistant_output",
+          sourceSeq: 1,
+          content: "The luminous orchid token is 91.",
+          createdAt: "2026-01-01T00:01:00.000Z",
+        },
         ...Array.from({ length: 33 }, (_, index) => ({
           evidenceRef: `journal:session-1#turn-${index + 4}`,
           sourceKind: "assistant_output" as const,
@@ -236,5 +243,24 @@ describe("postgres source-local assistant locator", () => {
       controller.signal,
     );
     expect(nonAdjacent.hits).toEqual([]);
+
+    const sessionOpening = await locator.locate(
+      {
+        ...request,
+        requirement: {
+          ...request.requirement,
+          requirementId: "session-opening-assistant",
+          searchText: "luminous orchid token",
+        },
+        lockedSourceIds: ["journal:session-5"],
+      },
+      controller.signal,
+    );
+    expect(sessionOpening.hits).toEqual([
+      expect.objectContaining({
+        evidenceRef: "journal:session-5#turn-1",
+        authority: "context_only",
+      }),
+    ]);
   });
 });

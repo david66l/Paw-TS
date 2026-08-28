@@ -4,6 +4,7 @@ import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
   type MemorySourceLocalEvidenceHitV1,
   type MemorySourceLocalEvidenceResultV1,
+  hasMemorySourceLocalAssistantOriginCertificateV1,
   hasMemorySourceLocalDialogueCertificateV1,
   isMemorySourceLocalEvidenceEligibleV1,
   memorySourceLocalEvidenceCacheKeyV1,
@@ -48,6 +49,33 @@ describe("source-local evidence locator boundary", () => {
             sourceKind: "assistant_output",
             turnOrder: 1,
           },
+          {
+            evidenceRef: "session#turn-2",
+            sourceKind: "assistant_output",
+            turnOrder: 2,
+          },
+        ],
+        2,
+      ),
+    ).toBe(false);
+  });
+
+  test("certifies an exact session-opening assistant turn without promoting it", () => {
+    expect(
+      hasMemorySourceLocalAssistantOriginCertificateV1(
+        [
+          {
+            evidenceRef: "session#turn-1",
+            sourceKind: "assistant_output",
+            turnOrder: 1,
+          },
+        ],
+        1,
+      ),
+    ).toBe(true);
+    expect(
+      hasMemorySourceLocalAssistantOriginCertificateV1(
+        [
           {
             evidenceRef: "session#turn-2",
             sourceKind: "assistant_output",
