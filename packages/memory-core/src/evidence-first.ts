@@ -78,8 +78,7 @@ export interface MemoryEvidenceCandidateRankListV2 {
   readonly candidates: readonly MemoryEvidenceCandidateV2[];
 }
 
-export interface RankedMemoryEvidenceCandidateV2
-  extends MemoryEvidenceCandidateV2 {
+export interface RankedMemoryEvidenceCandidateV2 extends MemoryEvidenceCandidateV2 {
   readonly score: number;
   readonly listHits: number;
   readonly channels: readonly MemoryEvidenceChannelV1[];
@@ -130,9 +129,7 @@ export interface MemoryConversationTurnBundleV1 {
   readonly text: string;
   readonly hitSeq: number;
   readonly authority:
-    | "user_asserted"
-    | "user_confirmed_dialogue"
-    | "context_only";
+    "user_asserted" | "user_confirmed_dialogue" | "context_only";
   readonly includedTurns: number;
   readonly chars: number;
 }
@@ -814,6 +811,8 @@ export function rankMemoryEvidenceCandidatesV2(input: {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
   readonly maxSources: number;
   readonly maxEvidencePerSource: number;
+  /** Known source IDs that must compete inside, rather than outside, the cap. */
+  readonly reservedSourceIds?: readonly string[];
 }): MemoryEvidenceCandidateFusionV2 {
   if (!Number.isSafeInteger(input.maxSources) || input.maxSources < 1) {
     throw namedError("MemoryEvidenceCandidateSourceBudgetInvalid");
@@ -954,7 +953,24 @@ export function rankMemoryEvidenceCandidatesV2(input: {
         left.bestRank - right.bestRank ||
         left.sourceId.localeCompare(right.sourceId),
     );
-  const selected = Object.freeze(rankedSources.slice(0, input.maxSources));
+  const reserved = new Set(
+    (input.reservedSourceIds ?? [])
+      .map((sourceId) => sourceId.trim())
+      .filter(Boolean),
+  );
+  const reservedRanked = rankedSources
+    .filter((source) => reserved.has(source.sourceId))
+    .slice(0, input.maxSources);
+  const selectedIds = new Set(reservedRanked.map((source) => source.sourceId));
+  for (const source of rankedSources) {
+    if (selectedIds.size >= input.maxSources) break;
+    selectedIds.add(source.sourceId);
+  }
+  // Preserve the global fusion order after enforcing coverage. Reservations
+  // choose membership only; they do not receive an artificial answer rank.
+  const selected = Object.freeze(
+    rankedSources.filter((source) => selectedIds.has(source.sourceId)),
+  );
   return Object.freeze({
     policyVersion: PAW_MEMORY_EVIDENCE_CANDIDATE_FUSION_VERSION_V2,
     sources: selected,

@@ -99,6 +99,78 @@ describe("shared evidence resolver v1", () => {
     );
   });
 
+  test("reserves two sources for each synthesis obligation", async () => {
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "obligation-reservation.v1",
+        async search(query) {
+          const sourceIds = query.includes("focused")
+            ? ["focused-a", "focused-b", "primary-a"]
+            : ["primary-a", "primary-b", "focused-a", "focused-b"];
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: `index-${query}`,
+                weight: 1,
+                candidates: sourceIds.map((sourceId) => ({
+                  candidateId: `${query}-${sourceId}`,
+                  sourceId,
+                  evidenceRef: `${query}-${sourceId}`,
+                  sourceKind: "user_input" as const,
+                  authority: "user_asserted" as const,
+                })),
+              },
+            ],
+            hits: sourceIds.map((sourceId) => ({
+              sourceId,
+              evidenceRef: `${query}-${sourceId}`,
+              content: `${query} evidence from ${sourceId}`,
+              authority: "user_asserted" as const,
+            })),
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v6:typed-evidence-closure",
+            answerShape: "aggregate",
+            temporalMode: "any",
+            roleConstraint: "user",
+            needsPlanning: true,
+            requirements: [
+              {
+                requirementId: "focused",
+                label: "focused operand",
+                searchText: "focused operand",
+                temporalMode: "any",
+                roleConstraint: "user",
+                relation: "comparative",
+                coverageMode: "any",
+                minimumEvidence: 1,
+              },
+            ],
+          } as const;
+        },
+      },
+      maxSources: 2,
+    });
+
+    const result = await resolver.resolve(
+      "How many items are there?",
+      new AbortController().signal,
+    );
+
+    expect(result.sources.map((source) => source.sourceId)).toEqual([
+      "focused-a",
+      "focused-b",
+    ]);
+  });
+
   test("uses primary exact hits for deterministic lookups", async () => {
     const resolver = createMemoryEvidenceResolverV1({ index: index() });
     const result = await resolver.resolve(
@@ -433,9 +505,12 @@ describe("shared evidence resolver v1", () => {
       "b",
     ]);
     expect(
-      result.packetSources.find((source) => source.sourceId === "a")
-        ?.answerRole,
-    ).toBe("candidate");
+      result.packetSources.every((source) =>
+        result.sources.some(
+          (selected) => selected.sourceId === source.sourceId,
+        ),
+      ),
+    ).toBe(true);
     expect(result.notebook.coverage[0]?.selectedEvidenceRefs).not.toContain(
       "ref-a",
     );

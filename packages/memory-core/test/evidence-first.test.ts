@@ -198,6 +198,36 @@ describe("evidence-address fusion v2", () => {
       }),
     ).toThrow("MemoryEvidenceCandidateIdentityConflict");
   });
+
+  test("reserves requirement sources without exceeding the global cap", () => {
+    const fusion = rankMemoryEvidenceCandidatesV2({
+      lists: [
+        {
+          channel: "l0",
+          retrieverId: "primary",
+          weight: 1,
+          candidates: ["popular-a", "popular-b", "required-c"].map(
+            (sourceId) => ({
+              candidateId: `${sourceId}-candidate`,
+              sourceId,
+              evidenceRef: `${sourceId}#turn-1`,
+              sourceKind: "user_input" as const,
+              authority: "user_asserted" as const,
+            }),
+          ),
+        },
+      ],
+      maxSources: 2,
+      maxEvidencePerSource: 2,
+      reservedSourceIds: ["required-c"],
+    });
+
+    expect(fusion.sources.map((source) => source.sourceId)).toEqual([
+      "popular-a",
+      "required-c",
+    ]);
+    expect(fusion.telemetry.returnedSourceCount).toBe(2);
+  });
 });
 
 describe("evidence-first conversational bundles", () => {

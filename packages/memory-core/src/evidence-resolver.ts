@@ -24,7 +24,7 @@ import type {
 } from "./evidence-support-selector.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v6:adaptive-exact-fallback" as const;
+  "paw.memory-evidence-resolver.v7:obligation-balanced-source-lock" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -185,6 +185,19 @@ export function createMemoryEvidenceResolverV1(input: {
           result,
         });
       }
+      const reservationCount =
+        intent.answerShape === "aggregate" ||
+        intent.answerShape === "compare" ||
+        intent.temporalMode !== "any"
+          ? 2
+          : 1;
+      const reservedSourceIds = requirements.flatMap((_, index) =>
+        rankMemoryEvidenceCandidatesV2({
+          lists: supplemental[index]?.lists ?? [],
+          maxSources: reservationCount,
+          maxEvidencePerSource,
+        }).sources.map((source) => source.sourceId),
+      );
       const fusion = rankMemoryEvidenceCandidatesV2({
         lists: discoveryResults.flatMap(({ result }, searchIndex) =>
           result.lists.map((list, listIndex) => ({
@@ -197,6 +210,7 @@ export function createMemoryEvidenceResolverV1(input: {
         ),
         maxSources,
         maxEvidencePerSource,
+        reservedSourceIds,
       });
       const degradedChannels = Object.freeze(
         [
@@ -573,9 +587,10 @@ function exactFallbackHitsPerSource(input: {
   const synthesis =
     input.intent.answerShape === "aggregate" ||
     input.intent.answerShape === "compare";
-  if (incomplete || synthesis || input.directCertificateStatus === "missing") {
+  if (synthesis || input.directCertificateStatus === "missing") {
     return 2;
   }
+  if (incomplete) return 1;
   return input.intent.temporalMode !== "latest" ||
     input.nonSupportingRefs.size > 0
     ? 1
