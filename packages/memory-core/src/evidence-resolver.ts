@@ -24,7 +24,7 @@ import type {
 } from "./evidence-support-selector.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v7:obligation-balanced-source-lock" as const;
+  "paw.memory-evidence-resolver.v8:synthesis-obligation-source-lock" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -185,19 +185,19 @@ export function createMemoryEvidenceResolverV1(input: {
           result,
         });
       }
-      const reservationCount =
+      const requiresObligationReservations =
         intent.answerShape === "aggregate" ||
         intent.answerShape === "compare" ||
-        intent.temporalMode !== "any"
-          ? 2
-          : 1;
-      const reservedSourceIds = requirements.flatMap((_, index) =>
-        rankMemoryEvidenceCandidatesV2({
-          lists: supplemental[index]?.lists ?? [],
-          maxSources: reservationCount,
-          maxEvidencePerSource,
-        }).sources.map((source) => source.sourceId),
-      );
+        intent.temporalMode !== "any";
+      const reservedSourceIds = requiresObligationReservations
+        ? requirements.flatMap((_, index) =>
+            rankMemoryEvidenceCandidatesV2({
+              lists: supplemental[index]?.lists ?? [],
+              maxSources: 2,
+              maxEvidencePerSource,
+            }).sources.map((source) => source.sourceId),
+          )
+        : [];
       const fusion = rankMemoryEvidenceCandidatesV2({
         lists: discoveryResults.flatMap(({ result }, searchIndex) =>
           result.lists.map((list, listIndex) => ({
