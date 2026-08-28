@@ -24,8 +24,8 @@ scoped query
 - A separate closure auditor checks the original query against the plan and
   selected L0 evidence. It may propose at most two search obligations for one
   repair pass; it cannot answer the query or insert evidence.
-- A deterministic single-source certificate bypasses planner, selector, and
-  auditor calls for clear direct lookups.
+- A repair may inspect finer-grained L0 spans only inside sources discovered by
+  the first pass; it cannot widen user scope or pull in a new conversation.
 - Storage, model, and runtime integrations are structural ports.
 - IDs, hashing, ranking, budgets, temporal reduction, and packet construction
   are deterministic code.

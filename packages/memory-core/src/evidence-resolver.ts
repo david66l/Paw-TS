@@ -28,7 +28,7 @@ import type {
 } from "./evidence-support-selector.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v7:bounded-closure-repair" as const;
+  "paw.memory-evidence-resolver.v8:source-deep-closure-repair" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -42,6 +42,12 @@ export interface MemoryEvidenceIndexV1 {
   readonly indexVersion: string;
   search(
     query: string,
+    signal: AbortSignal,
+  ): Promise<MemoryEvidenceIndexSearchResultV1>;
+  /** Optional second-stage drill-down inside already discovered L0 sources. */
+  searchWithinSources?(
+    query: string,
+    sourceIds: readonly string[],
     signal: AbortSignal,
   ): Promise<MemoryEvidenceIndexSearchResultV1>;
 }
@@ -90,9 +96,10 @@ export interface MemoryEvidenceResolutionV1 {
 
 /**
  * Shared plugin-owned evidence pipeline. The caller query and bounded planner
- * requirements participate in one capped discovery fusion, after which the
- * source set is locked. The selector can bind supplied evidence addresses but
- * cannot introduce a source, address, or search of its own.
+ * requirements participate in capped discovery. Each pass locks its source
+ * set; one independently audited repair may drill into those sources but can
+ * never introduce a new source. The selector can bind supplied evidence
+ * addresses but cannot introduce a source, address, or search of its own.
  */
 export function createMemoryEvidenceResolverV1(input: {
   readonly index: MemoryEvidenceIndexV1;
@@ -171,15 +178,10 @@ export function createMemoryEvidenceResolverV1(input: {
           plannerStatus = "fallback";
         }
       }
-      // An empty requirement set must not turn a many-source lookup into an
-      // unverified "sufficient" packet. Keep a one-source exact fast path;
-      // otherwise bind the original question as one root requirement and run
-      // the same support gate used by decomposed queries.
-      if (
-        requirements.length === 0 &&
-        input.supportSelector &&
-        directCertificateStatus !== "deterministic_direct"
-      ) {
+      // An empty requirement set must not bypass semantic verification. Bind
+      // the original question as one root requirement and run the same support
+      // gate used by decomposed queries, including deterministic direct hits.
+      if (requirements.length === 0 && input.supportSelector) {
         requirements = Object.freeze([
           createRootEvidenceRequirement(value, intent),
         ]);
@@ -237,12 +239,18 @@ export function createMemoryEvidenceResolverV1(input: {
             audit.missingRequirements.length > 0
           ) {
             closureRepairCount = 1;
+            const repairIndex = await createRepairEvidenceIndexV1({
+              index: input.index,
+              missingRequirements: audit.missingRequirements,
+              sourceIds: pass.fusion.sources.map((source) => source.sourceId),
+              signal,
+            });
             requirements = Object.freeze([
               ...requirements,
               ...audit.missingRequirements,
             ]);
             pass = await resolveEvidencePass({
-              index: input.index,
+              index: repairIndex,
               supportSelector: input.supportSelector,
               query: value,
               intent,
@@ -359,6 +367,60 @@ export function createMemoryEvidenceResolverV1(input: {
         ),
       });
     },
+  });
+}
+
+async function createRepairEvidenceIndexV1(input: {
+  readonly index: MemoryEvidenceIndexV1;
+  readonly missingRequirements: readonly MemoryEvidenceRequirementV3[];
+  readonly sourceIds: readonly string[];
+  readonly signal: AbortSignal;
+}): Promise<MemoryEvidenceIndexV1> {
+  if (!input.index.searchWithinSources || input.sourceIds.length === 0) {
+    return input.index;
+  }
+  const scopedBySearchText = new Map<
+    string,
+    MemoryEvidenceIndexSearchResultV1
+  >();
+  await Promise.all(
+    [...new Set(input.missingRequirements.map((item) => item.searchText))].map(
+      async (searchText) => {
+        const result = await input.index.searchWithinSources?.(
+          searchText,
+          input.sourceIds,
+          input.signal,
+        );
+        if (result) scopedBySearchText.set(searchText, result);
+      },
+    ),
+  );
+  return Object.freeze({
+    indexVersion: `${input.index.indexVersion}:closure-repair`,
+    async search(query: string, signal: AbortSignal) {
+      const global = await input.index.search(query, signal);
+      const scoped = scopedBySearchText.get(query);
+      if (!scoped) return global;
+      return Object.freeze({
+        lists: Object.freeze([
+          ...global.lists,
+          ...scoped.lists.map((list, index) => ({
+            ...list,
+            retrieverId: `${list.retrieverId}:closure-source-${index}`,
+          })),
+        ]),
+        hits: mergeEvidenceHits(scoped.hits, global.hits),
+        degradedChannels: Object.freeze(
+          [
+            ...new Set([
+              ...(global.degradedChannels ?? []),
+              ...(scoped.degradedChannels ?? []),
+            ]),
+          ].sort(),
+        ) as readonly ("l0" | "l1")[],
+      });
+    },
+    searchWithinSources: input.index.searchWithinSources.bind(input.index),
   });
 }
 

@@ -71,11 +71,13 @@ import {
   createPostgresMemoryTopicEvidenceStoreV1,
   createPostgresMemoryTopicOrganizerStoreV1,
   isAssistantMemoryQueryV1,
+  memoryEvidenceSupportScoreV1,
   memoryScopeFingerprintV1,
   planMemoryEvidenceCoverageV1,
   planMemoryTopicEvidenceV1,
   projectEvidenceFirstMemoryAnswerContractV1,
   projectEvidenceFirstMemoryContextPacketV1,
+  projectMemoryEvidenceExcerptV1,
   projectMemoryPersonaEvidenceV1,
   projectMemoryResolvedContextToolV1,
   projectMemoryTopicDossierToolV1,
@@ -2608,12 +2610,110 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       searchResultByText.set(searchText, await pending);
       return pending;
     }
+    async function searchEvidenceWithinSources(
+      searchText: string,
+      sourceIds: readonly string[],
+    ) {
+      const allowed = new Set(sourceIds);
+      const ranked = documents
+        .filter(
+          (document) =>
+            allowed.has(document.id) && documentVisibleAtQuery(document.id),
+        )
+        .flatMap((document) => {
+          const turns = new Map<
+            number,
+            Readonly<{
+              seq: number;
+              kind: MemoryConversationTurnKindV1;
+              content: string;
+            }>
+          >();
+          for (const window of projectAmbMemoryEvidenceV1(document.content)) {
+            for (const turn of window.source) turns.set(turn.seq, turn);
+          }
+          return [...turns.values()]
+            .filter(
+              (turn) =>
+                turn.kind !== "assistant_output" || allowAssistantContext,
+            )
+            .map((turn) => ({
+              documentId: document.id,
+              sourceSeq: turn.seq,
+              sourceKind: turn.kind,
+              authority:
+                turn.kind === "user_input"
+                  ? ("user_asserted" as const)
+                  : turn.kind === "assistant_output"
+                    ? ("context_only" as const)
+                    : ("mixed" as const),
+              content: projectMemoryEvidenceExcerptV1(
+                turn.content,
+                searchText,
+                8_192,
+              ),
+              score: memoryEvidenceSupportScoreV1(searchText, turn.content),
+            }));
+        })
+        .sort(
+          (left, right) =>
+            right.score - left.score ||
+            left.documentId.localeCompare(right.documentId) ||
+            left.sourceSeq - right.sourceSeq,
+        );
+      const selected: typeof ranked = [];
+      const perSource = new Map<string, number>();
+      for (const item of ranked) {
+        const sourceCount = perSource.get(item.documentId) ?? 0;
+        if (sourceCount >= 6) continue;
+        selected.push(item);
+        perSource.set(item.documentId, sourceCount + 1);
+        if (selected.length >= 32) break;
+      }
+      log("closure_source_scan", {
+        queryHash: sha(searchText),
+        requestedSourceCount: allowed.size,
+        candidateCount: ranked.length,
+        selectedCount: selected.length,
+      });
+      return {
+        lists: [
+          {
+            channel: "l0" as const,
+            retrieverId: "closure-source-scan",
+            weight: 1.2,
+            candidates: selected.map((item) => ({
+              candidateId: `amb:document/${item.documentId}#source-${item.sourceSeq}`,
+              sourceId: item.documentId,
+              evidenceRef: `amb:document/${item.documentId}#source-${item.sourceSeq}`,
+              sourceKind: item.sourceKind,
+              authority: item.authority,
+              observedAt: documentCreatedByUser
+                .get(userId)
+                ?.get(item.documentId),
+            })),
+          },
+        ],
+        hits: selected.map((item) => ({
+          sourceId: item.documentId,
+          evidenceRef: `amb:document/${item.documentId}#source-${item.sourceSeq}`,
+          content: item.content,
+          authority: item.authority,
+          observedAt: documentCreatedByUser.get(userId)?.get(item.documentId),
+          episodeOrder: documentOrderByUser.get(userId)?.get(item.documentId),
+          turnOrder: item.sourceSeq,
+        })),
+      };
+    }
     const sharedResolver = createMemoryEvidenceResolverV1({
       index: {
         indexVersion: "paw.amb-turn-evidence-index.v1",
         async search(searchText) {
           const result = await searchEvidenceIndex(searchText);
           return { lists: result.lists, hits: result.hits };
+        },
+        async searchWithinSources(searchText, sourceIds) {
+          return searchEvidenceWithinSources(searchText, sourceIds);
         },
       },
       ...(evidenceQueryPlanner === undefined

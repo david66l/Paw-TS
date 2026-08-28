@@ -116,7 +116,7 @@ describe("shared evidence resolver v1", () => {
     );
   });
 
-  test("keeps deterministically certified L0 on the zero-model-call fast path", async () => {
+  test("keeps deterministically certified L0 authoritative when semantic triage misses it", async () => {
     let selectorCalls = 0;
     const resolver = createMemoryEvidenceResolverV1({
       index: {
@@ -176,13 +176,13 @@ describe("shared evidence resolver v1", () => {
     );
 
     expect(result.directCertificateStatus).toBe("deterministic_direct");
-    expect(result.supportSelectorStatus).toBe("not_needed");
-    expect(result.notebook.coverage).toHaveLength(0);
+    expect(result.supportSelectorStatus).toBe("completed");
+    expect(result.notebook.coverage[0]?.status).toBe("missing");
     expect(result.packetSources[0]?.answerRole).toBe("supporting");
     expect(projectEvidenceFirstMemoryContextPacketV1(result).stop).toBe(
-      "sufficient",
+      "partial",
     );
-    expect(selectorCalls).toBe(0);
+    expect(selectorCalls).toBe(1);
   });
 
   test("plans an ambiguous simple lookup only when primary discovery spans sources", async () => {
@@ -693,7 +693,7 @@ describe("shared evidence resolver v1", () => {
         indexVersion: "test-index.v1",
         async search(searchText) {
           searchTexts.push(searchText);
-          const current = searchText === "current commute";
+          const current = false;
           const sourceId = current ? "current-session" : "old-session";
           const evidenceRef = current ? "current-ref" : "old-ref";
           return {
@@ -720,6 +720,36 @@ describe("shared evidence resolver v1", () => {
                 content: current
                   ? "My current commute is a fifteen minute train ride."
                   : "My old commute was a forty minute bus ride.",
+                authority: "user_asserted" as const,
+              },
+            ],
+          };
+        },
+        async searchWithinSources(searchText, sourceIds) {
+          searchTexts.push(`scoped:${searchText}`);
+          expect(sourceIds).toContain("old-session");
+          return {
+            lists: [
+              {
+                retrieverId: "scoped-turns",
+                channel: "l0" as const,
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "current-ref",
+                    sourceId: "old-session",
+                    evidenceRef: "current-ref",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "old-session",
+                evidenceRef: "current-ref",
+                content: "My current commute is a fifteen minute train ride.",
                 authority: "user_asserted" as const,
               },
             ],
@@ -813,6 +843,9 @@ describe("shared evidence resolver v1", () => {
     expect(auditorCalls).toBe(2);
     expect(
       searchTexts.filter((text) => text === "current commute"),
+    ).toHaveLength(1);
+    expect(
+      searchTexts.filter((text) => text === "scoped:current commute"),
     ).toHaveLength(1);
   });
 });
