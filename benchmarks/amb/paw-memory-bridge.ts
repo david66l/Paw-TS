@@ -459,13 +459,11 @@ function sha(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function contentFreeSourceHashes(
-  sourceIds: Iterable<string>,
-): readonly string[] {
+function contentFreeHashes(values: Iterable<string>): readonly string[] {
   return Object.freeze(
-    [...new Set(sourceIds)]
+    [...new Set(values)]
       .sort()
-      .map((sourceId) => sha(sourceId).slice(0, 20)),
+      .map((value) => sha(value).slice(0, 20)),
   );
 }
 
@@ -2714,10 +2712,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           ),
           sourceSetDigest: sha([...allowed].sort().join("\n")),
           lockedSourceCount: allowed.size,
-          lockedSourceHashes: contentFreeSourceHashes(allowed),
+          lockedSourceHashes: contentFreeHashes(allowed),
           anchorCount: replay.hits.length,
-          anchorSourceHashes: contentFreeSourceHashes(
+          anchorSourceHashes: contentFreeHashes(
             replay.hits.map((hit) => hit.sourceId),
+          ),
+          anchorEvidenceRefHashes: contentFreeHashes(
+            replay.hits.map((hit) => hit.evidenceRef),
           ),
           cacheHit: true,
           durationMs: replay.telemetry.durationMs,
@@ -2932,12 +2933,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         requirementIdHash: sha(request.requirement.requirementId).slice(0, 20),
         sourceSetDigest: sha([...allowed].sort().join("\n")),
         lockedSourceCount: allowed.size,
-        lockedSourceHashes: contentFreeSourceHashes(allowed),
+        lockedSourceHashes: contentFreeHashes(allowed),
         lexicalCandidateCount: lexical.hits.length,
         denseCandidateCount: dense.hits.length,
         anchorCount: hits.length,
-        anchorSourceHashes: contentFreeSourceHashes(
+        anchorSourceHashes: contentFreeHashes(
           hits.map((hit) => hit.sourceId),
+        ),
+        anchorEvidenceRefHashes: contentFreeHashes(
+          hits.map((hit) => hit.evidenceRef),
         ),
         includedTurnCount: result.telemetry.includedTurnCount,
         uncertifiedAnchorCount,
