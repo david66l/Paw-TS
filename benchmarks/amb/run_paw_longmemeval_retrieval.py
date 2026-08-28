@@ -997,6 +997,7 @@ def run(args: argparse.Namespace) -> dict:
         "evaluationMode": "static-initial-evidence-packet",
         "answerProtocol": args.answer_protocol,
         "answerReview": args.answer_review,
+        "answerTools": args.answer_tools,
         "partialRecoveryExecuted": False,
         "eventIdentityMode": "episode-fallback",
         "eventKeyCoverageRate": 0.0,
@@ -1199,12 +1200,18 @@ def run(args: argparse.Namespace) -> dict:
                         else base_prompt
                     )
 
-                answer = answer_mode.answer_from_context(
-                    query.query,
-                    context,
-                    task_type="open",
-                    meta={**query.meta, "_prompt_fn": prompt_fn},
-                )
+                if args.answer_tools:
+                    answer_llm.bind_memory_tools(provider, query.user_id)
+                try:
+                    answer = answer_mode.answer_from_context(
+                        query.query,
+                        context,
+                        task_type="open",
+                        meta={**query.meta, "_prompt_fn": prompt_fn},
+                    )
+                finally:
+                    if args.answer_tools:
+                        answer_llm.bind_memory_tools(None, None)
                 answer_review = None
                 if args.answer_review:
                     from evidence_answer_review import review_evidence_answer
@@ -1312,6 +1319,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--answer", action="store_true")
     parser.add_argument("--answer-review", action="store_true")
+    parser.add_argument("--answer-tools", action="store_true")
     parser.add_argument(
         "--answer-protocol",
         choices=("upstream", "evidence_policy"),
