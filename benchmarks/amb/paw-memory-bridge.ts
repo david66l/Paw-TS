@@ -2556,10 +2556,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
               })),
             },
           ],
-          // Hydrate the notebook from exact conversation turns first, matching
-          // the product adapter's hitContent contract. Semantic source spans
-          // remain a fallback but must not hide an exact lexical turn that was
-          // already found inside a primary-selected source.
+          // Every address admitted to source fusion must remain hydratable.
+          // Exact conversation turns stay first; contiguous source chunks then
+          // recover answer-bearing text when turn/span retrieval found the
+          // right document but missed the precise passage.
           hits: [
             ...conversations.map((span) => ({
               sourceId: span.documentId,
@@ -2573,6 +2573,18 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
                 .get(userId)
                 ?.get(span.documentId),
               turnOrder: span.sourceSeq,
+            })),
+            ...candidates.map((chunk) => ({
+              sourceId: chunk.documentId,
+              evidenceRef: chunk.evidenceRef,
+              content: chunk.text,
+              authority: "mixed" as const,
+              observedAt: documentCreatedByUser
+                .get(userId)
+                ?.get(chunk.documentId),
+              episodeOrder: documentOrderByUser
+                .get(userId)
+                ?.get(chunk.documentId),
             })),
             ...spans.map((span) => ({
               sourceId: span.documentId,
