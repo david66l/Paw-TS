@@ -97,9 +97,52 @@ export type MemorySourceLocalizationStatusV1 =
   | "fallback"
   | "invalid_result";
 
+const MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODES_V1 = Object.freeze([
+  "MemorySourceLocalEvidenceAnchorMissing",
+  "MemorySourceLocalEvidenceAnchorRoleInvalid",
+  "MemorySourceLocalEvidenceBudgetExceeded",
+  "MemorySourceLocalEvidenceBudgetInvalid",
+  "MemorySourceLocalEvidenceHitInvalid",
+  "MemorySourceLocalEvidenceHydrationIncomplete",
+  "MemorySourceLocalEvidenceHydrationInvalid",
+  "MemorySourceLocalEvidenceHydrationTraceInvalid",
+  "MemorySourceLocalEvidenceHydratorInvalid",
+  "MemorySourceLocalEvidenceProvenanceInvalid",
+  "MemorySourceLocalEvidenceResultInvalid",
+  "MemorySourceLocalEvidenceSourcesInvalid",
+  "MemorySourceLocalEvidenceTelemetryInvalid",
+  "MemorySourceLocalEvidenceTimeInvalid",
+  "MemorySourceLocalEvidenceTraceInvalid",
+] as const);
+
+export type MemorySourceLocalEvidenceFailureCodeV1 =
+  | (typeof MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODES_V1)[number]
+  | "MemorySourceLocalEvidenceBoundaryRejected";
+
+const MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODE_SET_V1 = new Set<string>(
+  MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODES_V1,
+);
+
+/** Maps untrusted plugin errors to a closed, content-free diagnostic code. */
+export function memorySourceLocalEvidenceFailureCodeV1(
+  error: unknown,
+): MemorySourceLocalEvidenceFailureCodeV1 | undefined {
+  if (
+    !(error instanceof Error) ||
+    !error.name.startsWith("MemorySourceLocalEvidence")
+  ) {
+    return undefined;
+  }
+  return MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODE_SET_V1.has(error.name)
+    ? (error.name as MemorySourceLocalEvidenceFailureCodeV1)
+    : "MemorySourceLocalEvidenceBoundaryRejected";
+}
+
 export interface MemorySourceLocalizationReportV1 {
   readonly status: MemorySourceLocalizationStatusV1;
   readonly reasonCode: string;
+  /** Content-free boundary failure name; present only for rejected plugin output. */
+  readonly failureCode?: MemorySourceLocalEvidenceFailureCodeV1;
   readonly locatorVersion?: string;
   readonly locatorRevision?: string;
   readonly hydratorVersion?: string;

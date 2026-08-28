@@ -36,6 +36,7 @@ import {
   type MemorySourceLocalizationReportV1,
   hydrateMemorySourceLocalEvidenceResultV1,
   isMemorySourceLocalEvidenceEligibleV1,
+  memorySourceLocalEvidenceFailureCodeV1,
   validateMemorySourceLocalEvidenceResultV1,
 } from "./source-local-evidence-locator.js";
 
@@ -573,12 +574,12 @@ async function resolveEvidencePass(input: {
         });
       } catch (error) {
         if (input.signal.aborted || isAbort(error)) throw abortError();
-        const invalid =
-          error instanceof Error &&
-          error.name.startsWith("MemorySourceLocalEvidence");
+        const failureCode = memorySourceLocalEvidenceFailureCodeV1(error);
+        const invalid = failureCode !== undefined;
         sourceLocalization = Object.freeze({
           status: invalid ? "invalid_result" : "fallback",
           reasonCode: invalid ? "result_rejected" : "locator_failed",
+          ...(failureCode === undefined ? {} : { failureCode }),
           locatorVersion: input.sourceLocalLocator.locatorVersion,
           hydratorVersion: input.sourceLocalHydrator.hydratorVersion,
           addedCandidateCount: 0,

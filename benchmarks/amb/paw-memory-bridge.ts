@@ -2669,7 +2669,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       );
       const turnIndexRevision = await engine.retrievalRevisionToken();
       const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
-        locatorVersion: "paw.amb-source-local-locator.v2:certified-filtered-rrf",
+        locatorVersion:
+          "paw.amb-source-local-locator.v2:certified-filtered-rrf",
         scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
         turnIndexRevision,
         embeddingIdentity: sourceSpanEmbedding
@@ -2870,7 +2871,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ...(dense.failed ? (["dense"] as const) : []),
       ]);
       const result = Object.freeze({
-        locatorVersion: "paw.amb-source-local-locator.v2:certified-filtered-rrf",
+        locatorVersion:
+          "paw.amb-source-local-locator.v2:certified-filtered-rrf",
         locatorRevision: sha(
           JSON.stringify({
             turnIndexRevision,
@@ -3172,6 +3174,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       queryHash: sha(queryText),
       status: resolution.sourceLocalization.status,
       reasonCode: resolution.sourceLocalization.reasonCode,
+      failureCode: resolution.sourceLocalization.failureCode ?? null,
       locatorVersion: resolution.sourceLocalization.locatorVersion ?? null,
       hydratorVersion: resolution.sourceLocalization.hydratorVersion ?? null,
       localInvoked: new Set([

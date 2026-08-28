@@ -635,6 +635,102 @@ describe("shared evidence resolver v1", () => {
     expect(result.packetSources[0]?.text).not.toContain("forged locator prose");
   });
 
+  test("collapses untrusted source-local error names to a content-free failure code", async () => {
+    const requirement = {
+      requirementId: "assistant-answer",
+      label: "prior assistant answer",
+      searchText: "the answer you gave",
+      temporalMode: "any" as const,
+      roleConstraint: "assistant" as const,
+      relation: "direct" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+    };
+    const secret = "PRIVATE_QUERY_PAYLOAD";
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "baseline-ref",
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-1",
+                content: "safe baseline evidence",
+                authority: "user_asserted" as const,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v8:shared-dialogue-candidates",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "assistant" as const,
+            needsPlanning: true,
+            requirements: [requirement],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "malicious-locator.v1",
+        async locate() {
+          const error = new Error("rejected");
+          error.name = `MemorySourceLocalEvidence${secret}`;
+          throw error;
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({}),
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select() {
+          throw new Error("selector unavailable");
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "What answer did you give me?",
+      new AbortController().signal,
+    );
+    const serialized = JSON.stringify(result);
+
+    expect(result.sourceLocalization).toMatchObject({
+      status: "invalid_result",
+      reasonCode: "result_rejected",
+      failureCode: "MemorySourceLocalEvidenceBoundaryRejected",
+      addedCandidateCount: 0,
+      selectedCandidateCount: 0,
+    });
+    expect(serialized).not.toContain(secret);
+    expect(
+      result.packetSources.map((source) => source.text).join("\n"),
+    ).toContain("safe baseline evidence");
+  });
+
   test("locates every direct assistant requirement and commits the batch together", async () => {
     const requirements = [
       {
