@@ -454,6 +454,9 @@ const sourceLocalLocatorEnabled =
   ingestMode === "atom" &&
   atomContextMode === "evidence_first" &&
   /^(?:1|true)$/iu.test(process.env.PAW_AMB_SOURCE_LOCAL_LOCATOR?.trim() ?? "");
+const sourceLocalFairnessAuditEnabled = /^(?:1|true)$/iu.test(
+  process.env.PAW_AMB_SOURCE_LOCAL_FAIRNESS_AUDIT?.trim() ?? "",
+);
 
 function sha(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -2792,6 +2795,77 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         searchRole("assistant_output"),
         searchRole("user_input"),
       ]);
+      const fairRequestAddresses = sourceLocalFairnessAuditEnabled
+        ? await (async () => {
+            const perSourceLimit = Math.min(
+              8,
+              request.budget.maxCandidatesPerChannel,
+            );
+            const fairLists = await Promise.all(
+              request.lockedSourceIds.map(async (documentId) => {
+                const documentIds = blockIdsByDocument?.get(documentId) ?? [];
+                const filter = {
+                  allowedIds: documentIds,
+                  issueType: "user_input",
+                  ...(request.evidenceTimeUpperBound === undefined
+                    ? {}
+                    : {
+                        createdAtUpperBound: request.evidenceTimeUpperBound,
+                      }),
+                };
+                const [lexicalHits, denseHits] = await Promise.all([
+                  engine
+                    .searchText(
+                      locatorQuery,
+                      perSourceLimit,
+                      sourceScopeFor(userId).repositoryId,
+                      filter,
+                    )
+                    .catch(() => []),
+                  sourceSpanEmbedding
+                    ? engine
+                        .searchVector(
+                          locatorQuery,
+                          perSourceLimit,
+                          sourceScopeFor(userId).repositoryId,
+                          filter,
+                        )
+                        .catch(() => [])
+                    : Promise.resolve([]),
+                ]);
+                return reciprocalRankFusionV1([
+                  { weight: MEMORY_RRF_TEXT_WEIGHT_V1, hits: lexicalHits },
+                  ...(sourceSpanEmbedding
+                    ? [
+                        {
+                          weight: MEMORY_RRF_VECTOR_WEIGHT_V1,
+                          hits: denseHits,
+                        },
+                      ]
+                    : []),
+                ]);
+              }),
+            );
+            const fairIds = [
+              ...new Set(fairLists.flatMap((list) => list.map((item) => item.id))),
+            ];
+            const fairEntries = engine.getMany
+              ? await engine.getMany(fairIds)
+              : (
+                  await Promise.all(fairIds.map((id) => engine.get(id)))
+                ).filter((entry): entry is MemoryEntry => entry !== null);
+            return fairEntries.flatMap((entry) => {
+              if (
+                entry.kind !== "episodic" ||
+                entry.issueType !== "user_input"
+              ) {
+                return [];
+              }
+              const address = sourceTurnAddressFromEntryV1(entry);
+              return address ? [address] : [];
+            });
+          })()
+        : [];
       const ranked = reciprocalRankFusionV1([
         {
           weight: MEMORY_RRF_TEXT_WEIGHT_V1,
@@ -3042,6 +3116,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           uniqueAnchors
             .filter((anchor) => anchor.requestDerived)
             .map((anchor) => anchor.evidenceRef),
+        ),
+        fairRequestMatchedEvidenceRefHashes: contentFreeHashes(
+          fairRequestAddresses.map((address) => address.evidenceRef),
         ),
         anchorSourceHashes: contentFreeHashes(hits.map((hit) => hit.sourceId)),
         anchorEvidenceRefHashes: contentFreeHashes(
