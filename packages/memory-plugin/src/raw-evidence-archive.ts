@@ -98,6 +98,7 @@ export interface MemoryRawEvidenceArchiveEventV1 {
   readonly cacheHit?: boolean;
   readonly lexicalCandidateCount?: number;
   readonly denseCandidateCount?: number;
+  readonly requestDerivedAnchorCount?: number;
   readonly renderedChars?: number;
 }
 
@@ -109,10 +110,10 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
   const locatorVersion =
-    "paw.memory-postgres-source-local-locator.v2:certified-lexical";
+    "paw.memory-postgres-source-local-locator.v3:request-reply-certified-lexical";
   const hydratorVersion = "paw.memory-postgres-source-local-hydrator.v1";
   const rankerVersion =
-    "paw.memory-source-local-ranker.v2:term-coverage-then-lexical-idf";
+    "paw.memory-source-local-ranker.v3:role-balanced-term-coverage-then-lexical-idf";
   const resultCache = new Map<string, MemorySourceLocalEvidenceResultV1>();
   return Object.freeze({
     scope,
@@ -511,42 +512,76 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         lexicalTerms.length === 0
           ? []
           : await sql`
-              SELECT spans.evidence_ref, spans.source_kind, spans.source_seq,
-                     spans.content, spans.content_hash, spans.created_at
-              FROM memory_raw_evidence_spans AS spans
-              CROSS JOIN LATERAL (
-                SELECT COUNT(*)::int AS term_hits,
-                       COALESCE(SUM(length(term.value)), 0)::int AS matched_chars
-                FROM jsonb_array_elements_text(${sql.json(lexicalTerms)}) AS term(value)
-                WHERE position(term.value IN lower(spans.content)) > 0
-              ) AS lexical_score
-              WHERE spans.scope->>'tenantId' = ${scope.tenantId}
-                AND spans.scope->>'userId' = ${scope.userId}
-                AND spans.scope->>'workspaceId' = ${scope.workspaceId}
-                AND spans.scope->>'repositoryId' = ${scope.repositoryId}
-                AND split_part(spans.evidence_ref, '#', 1) = ANY(${sql.array(lockedSourceIds)})
-                AND spans.source_kind = 'assistant_output'
-                AND spans.created_at <= ${cutoff}::timestamptz
-                AND lexical_score.term_hits > 0
-              ORDER BY lexical_score.term_hits DESC,
-                       lexical_score.matched_chars DESC,
-                       spans.created_at DESC, spans.source_seq DESC, spans.id ASC
-              LIMIT ${request.budget.maxCandidatesPerChannel}
+              WITH role_candidates AS (
+                SELECT matched.evidence_ref AS matched_evidence_ref,
+                       matched.source_kind AS matched_source_kind,
+                       matched.source_seq AS matched_source_seq,
+                       matched.content AS matched_content,
+                       matched.content_hash AS matched_content_hash,
+                       anchor.evidence_ref, anchor.source_kind, anchor.source_seq,
+                       anchor.content, anchor.content_hash, anchor.created_at,
+                       lexical_score.term_hits, lexical_score.matched_chars,
+                       ROW_NUMBER() OVER (
+                         PARTITION BY matched.source_kind
+                         ORDER BY lexical_score.term_hits DESC,
+                                  lexical_score.matched_chars DESC,
+                                  matched.created_at DESC,
+                                  matched.source_seq DESC,
+                                  matched.id ASC, anchor.id ASC
+                       ) AS role_rank
+                FROM memory_raw_evidence_spans AS matched
+                JOIN memory_raw_evidence_spans AS anchor
+                  ON anchor.scope = matched.scope
+                 AND split_part(anchor.evidence_ref, '#', 1) =
+                     split_part(matched.evidence_ref, '#', 1)
+                 AND anchor.source_kind = 'assistant_output'
+                 AND anchor.source_seq = CASE matched.source_kind
+                   WHEN 'assistant_output' THEN matched.source_seq
+                   WHEN 'user_input' THEN matched.source_seq + 1
+                 END
+                CROSS JOIN LATERAL (
+                  SELECT COUNT(*)::int AS term_hits,
+                         COALESCE(SUM(length(term.value)), 0)::int AS matched_chars
+                  FROM jsonb_array_elements_text(${sql.json(lexicalTerms)}) AS term(value)
+                  WHERE position(term.value IN lower(matched.content)) > 0
+                ) AS lexical_score
+                WHERE matched.scope->>'tenantId' = ${scope.tenantId}
+                  AND matched.scope->>'userId' = ${scope.userId}
+                  AND matched.scope->>'workspaceId' = ${scope.workspaceId}
+                  AND matched.scope->>'repositoryId' = ${scope.repositoryId}
+                  AND split_part(matched.evidence_ref, '#', 1) = ANY(${sql.array(lockedSourceIds)})
+                  AND matched.source_kind IN ('user_input', 'assistant_output')
+                  AND matched.created_at <= ${cutoff}::timestamptz
+                  AND anchor.created_at <= ${cutoff}::timestamptz
+                  AND lexical_score.term_hits > 0
+              )
+              SELECT matched_evidence_ref, matched_source_kind,
+                     matched_source_seq, matched_content, matched_content_hash,
+                     evidence_ref, source_kind, source_seq, content,
+                     content_hash, created_at
+              FROM role_candidates
+              WHERE role_rank <= ${request.budget.maxCandidatesPerChannel}
+              ORDER BY role_rank ASC, matched_source_kind ASC,
+                       evidence_ref ASC
             `;
       const candidates = rows.flatMap((row) => {
         if (
           typeof row.evidence_ref !== "string" ||
           typeof row.content !== "string" ||
           typeof row.content_hash !== "string" ||
-          hashTextV1(row.content) !== row.content_hash
+          typeof row.matched_content !== "string" ||
+          typeof row.matched_content_hash !== "string" ||
+          hashTextV1(row.content) !== row.content_hash ||
+          hashTextV1(row.matched_content) !== row.matched_content_hash
         ) {
           return [];
         }
         return [
           {
             row,
-            terms: searchableTerms(row.content),
-            normalized: searchableText(row.content),
+            requestDerived: row.matched_source_kind === "user_input",
+            terms: searchableTerms(row.matched_content),
+            normalized: searchableText(row.matched_content),
           },
         ];
       });
@@ -554,9 +589,10 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         queryTerms,
         candidates.map((candidate) => candidate.terms),
       );
-      const ranked = candidates
+      const rankedCandidates = candidates
         .map((candidate) => ({
           row: candidate.row,
+          requestDerived: candidate.requestDerived,
           score: conversationRelevanceScore({
             query: searchableText(normalized),
             queryTerms,
@@ -575,9 +611,17 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
               String(right.row.evidence_ref),
             ),
         );
+      const seenAnchors = new Set<string>();
+      const ranked = rankedCandidates.filter((candidate) => {
+        const evidenceRef = String(candidate.row.evidence_ref);
+        if (seenAnchors.has(evidenceRef)) return false;
+        seenAnchors.add(evidenceRef);
+        return true;
+      });
       const perSource = new Map<string, number>();
       const hits = [];
       let renderedChars = 0;
+      let requestDerivedAnchorCount = 0;
       for (const anchor of ranked) {
         if (hits.length >= request.budget.maxAnchors) break;
         const evidenceRef = String(anchor.row.evidence_ref);
@@ -654,6 +698,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           }),
         );
         perSource.set(sourceId, sourceCount + 1);
+        if (anchor.requestDerived) requestDerivedAnchorCount += 1;
         renderedChars += bundle.text.length;
       }
       const telemetry = Object.freeze({
@@ -695,6 +740,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         cacheHit: false,
         lexicalCandidateCount: ranked.length,
         denseCandidateCount: 0,
+        requestDerivedAnchorCount,
         renderedChars,
       });
       return result;

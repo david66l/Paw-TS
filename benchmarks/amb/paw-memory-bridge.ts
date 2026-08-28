@@ -2128,6 +2128,37 @@ function sourceDocumentIdFromEvidenceV1(ref: string): string | undefined {
   return documentId || undefined;
 }
 
+interface AmbSourceTurnAddressV1 {
+  readonly documentId: string;
+  readonly sourceSeq: number;
+  readonly evidenceRef: string;
+}
+
+function sourceTurnAddressFromEntryV1(
+  entry: MemoryEntry,
+): AmbSourceTurnAddressV1 | undefined {
+  if (entry.kind !== "episodic") return undefined;
+  const physicalEvidenceRef = entry.evidence.find((ref) =>
+    /#source-\d+$/.test(ref),
+  );
+  const documentId = physicalEvidenceRef
+    ? sourceDocumentIdFromEvidenceV1(physicalEvidenceRef)
+    : undefined;
+  const evidenceRef = physicalEvidenceRef
+    ? logicalSourceLocalEvidenceRefV1(physicalEvidenceRef)
+    : undefined;
+  const sourceSeq = Number(/#source-(\d+)$/.exec(evidenceRef ?? "")?.[1]);
+  if (
+    !documentId ||
+    !evidenceRef ||
+    !Number.isSafeInteger(sourceSeq) ||
+    sourceSeq < 1
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ documentId, sourceSeq, evidenceRef });
+}
+
 function isMemoryConversationTurnKindV1(
   value: string,
 ): value is MemoryConversationTurnKindV1 {
@@ -2682,7 +2713,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const turnIndexRevision = await engine.retrievalRevisionToken();
       const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
         locatorVersion:
-          "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
+          "paw.amb-source-local-locator.v4:request-reply-certified-rrf",
         scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
         turnIndexRevision,
         embeddingIdentity: sourceSpanEmbedding
@@ -2725,39 +2756,62 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         });
         return replay;
       }
-      const filter = {
-        allowedIds,
-        issueType: "assistant_output",
-        ...(request.evidenceTimeUpperBound === undefined
-          ? {}
-          : { createdAtUpperBound: request.evidenceTimeUpperBound }),
-      };
-      const [lexical, dense] = await Promise.all([
-        engine
-          .searchText(
-            locatorQuery,
-            request.budget.maxCandidatesPerChannel,
-            sourceScopeFor(userId).repositoryId,
-            filter,
-          )
-          .then((hits) => ({ hits, failed: false as const }))
-          .catch(() => ({ hits: [], failed: true as const })),
-        sourceSpanEmbedding
-          ? engine
-              .searchVector(
-                locatorQuery,
-                request.budget.maxCandidatesPerChannel,
-                sourceScopeFor(userId).repositoryId,
-                filter,
-              )
-              .then((hits) => ({ hits, failed: false as const }))
-              .catch(() => ({ hits: [], failed: true as const }))
-          : Promise.resolve({ hits: [], failed: false as const }),
+      async function searchRole(issueType: "assistant_output" | "user_input") {
+        const filter = {
+          allowedIds,
+          issueType,
+          ...(request.evidenceTimeUpperBound === undefined
+            ? {}
+            : { createdAtUpperBound: request.evidenceTimeUpperBound }),
+        };
+        const [lexical, dense] = await Promise.all([
+          engine
+            .searchText(
+              locatorQuery,
+              request.budget.maxCandidatesPerChannel,
+              sourceScopeFor(userId).repositoryId,
+              filter,
+            )
+            .then((hits) => ({ hits, failed: false as const }))
+            .catch(() => ({ hits: [], failed: true as const })),
+          sourceSpanEmbedding
+            ? engine
+                .searchVector(
+                  locatorQuery,
+                  request.budget.maxCandidatesPerChannel,
+                  sourceScopeFor(userId).repositoryId,
+                  filter,
+                )
+                .then((hits) => ({ hits, failed: false as const }))
+                .catch(() => ({ hits: [], failed: true as const }))
+            : Promise.resolve({ hits: [], failed: false as const }),
+        ]);
+        return { lexical, dense };
+      }
+      const [assistantSearch, requestSearch] = await Promise.all([
+        searchRole("assistant_output"),
+        searchRole("user_input"),
       ]);
       const ranked = reciprocalRankFusionV1([
-        { weight: MEMORY_RRF_TEXT_WEIGHT_V1, hits: lexical.hits },
+        {
+          weight: MEMORY_RRF_TEXT_WEIGHT_V1,
+          hits: assistantSearch.lexical.hits,
+        },
+        {
+          weight: MEMORY_RRF_TEXT_WEIGHT_V1,
+          hits: requestSearch.lexical.hits,
+        },
         ...(sourceSpanEmbedding
-          ? [{ weight: MEMORY_RRF_VECTOR_WEIGHT_V1, hits: dense.hits }]
+          ? [
+              {
+                weight: MEMORY_RRF_VECTOR_WEIGHT_V1,
+                hits: assistantSearch.dense.hits,
+              },
+              {
+                weight: MEMORY_RRF_VECTOR_WEIGHT_V1,
+                hits: requestSearch.dense.hits,
+              },
+            ]
           : []),
       ]);
       const entries = engine.getMany
@@ -2765,41 +2819,69 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         : (await Promise.all(ranked.map((item) => engine.get(item.id)))).filter(
             (entry): entry is MemoryEntry => entry !== null,
           );
-      const anchors = entries.flatMap((entry) => {
-        if (
-          entry.kind !== "episodic" ||
-          entry.issueType !== "assistant_output" ||
-          !entry.whenToUse.trim()
-        ) {
-          return [];
-        }
-        const physicalEvidenceRef = entry.evidence.find((ref) =>
-          /#source-\d+$/.test(ref),
-        );
-        const documentId = physicalEvidenceRef
-          ? sourceDocumentIdFromEvidenceV1(physicalEvidenceRef)
-          : undefined;
-        const evidenceRef = physicalEvidenceRef
-          ? logicalSourceLocalEvidenceRefV1(physicalEvidenceRef)
-          : undefined;
-        const sourceSeq = Number(/#source-(\d+)$/.exec(evidenceRef ?? "")?.[1]);
-        if (
-          !evidenceRef ||
-          !documentId ||
-          !allowed.has(documentId) ||
-          !documentVisibleAtQuery(documentId) ||
-          !Number.isSafeInteger(sourceSeq) ||
-          sourceSeq < 1
-        ) {
-          return [];
-        }
-        return [{ documentId, sourceSeq, evidenceRef }];
+      const anchors = (
+        await Promise.all(
+          entries.map(async (entry) => {
+            if (
+              entry.kind !== "episodic" ||
+              (entry.issueType !== "assistant_output" &&
+                entry.issueType !== "user_input") ||
+              !entry.whenToUse.trim()
+            ) {
+              return undefined;
+            }
+            const matched = sourceTurnAddressFromEntryV1(entry);
+            if (
+              !matched ||
+              !allowed.has(matched.documentId) ||
+              !documentVisibleAtQuery(matched.documentId)
+            ) {
+              return undefined;
+            }
+            if (entry.issueType === "assistant_output") {
+              return {
+                ...matched,
+                requestDerived: false,
+              };
+            }
+            const reply = await engine.get(
+              sourceBlockId(userId, matched.documentId, matched.sourceSeq + 1),
+            );
+            if (
+              reply?.kind !== "episodic" ||
+              reply.issueType !== "assistant_output"
+            ) {
+              return undefined;
+            }
+            const replyAddress = sourceTurnAddressFromEntryV1(reply);
+            if (
+              !replyAddress ||
+              replyAddress.documentId !== matched.documentId ||
+              replyAddress.sourceSeq !== matched.sourceSeq + 1
+            ) {
+              return undefined;
+            }
+            return {
+              ...replyAddress,
+              requestDerived: true,
+            };
+          }),
+        )
+      ).filter((anchor): anchor is NonNullable<typeof anchor> =>
+        Boolean(anchor),
+      );
+      const seenAnchorRefs = new Set<string>();
+      const uniqueAnchors = anchors.filter((anchor) => {
+        if (seenAnchorRefs.has(anchor.evidenceRef)) return false;
+        seenAnchorRefs.add(anchor.evidenceRef);
+        return true;
       });
       const perSource = new Map<string, number>();
       const hits = [];
       let renderedChars = 0;
       let uncertifiedAnchorCount = 0;
-      for (const anchor of anchors) {
+      let requestDerivedAnchorCount = 0;
+      for (const anchor of uniqueAnchors) {
         if (hits.length >= request.budget.maxAnchors) break;
         const sourceCount = perSource.get(anchor.documentId) ?? 0;
         if (sourceCount >= request.budget.maxAnchorsPerSource) continue;
@@ -2889,15 +2971,20 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           }),
         );
         perSource.set(anchor.documentId, sourceCount + 1);
+        if (anchor.requestDerived) requestDerivedAnchorCount += 1;
         renderedChars += bundle.text.length;
       }
       const degradedChannels = Object.freeze([
-        ...(lexical.failed ? (["lexical"] as const) : []),
-        ...(dense.failed ? (["dense"] as const) : []),
+        ...(assistantSearch.lexical.failed && requestSearch.lexical.failed
+          ? (["lexical"] as const)
+          : []),
+        ...(assistantSearch.dense.failed && requestSearch.dense.failed
+          ? (["dense"] as const)
+          : []),
       ]);
       const result = Object.freeze({
         locatorVersion:
-          "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
+          "paw.amb-source-local-locator.v4:request-reply-certified-rrf",
         locatorRevision: sha(
           JSON.stringify({
             turnIndexRevision,
@@ -2908,8 +2995,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         hits: Object.freeze(hits),
         degradedChannels,
         telemetry: Object.freeze({
-          lexicalCandidates: lexical.hits.length,
-          denseCandidates: dense.hits.length,
+          lexicalCandidates:
+            assistantSearch.lexical.hits.length +
+            requestSearch.lexical.hits.length,
+          denseCandidates:
+            assistantSearch.dense.hits.length + requestSearch.dense.hits.length,
           anchorCount: hits.length,
           includedTurnCount: hits.reduce(
             (total, hit) => total + hit.includedTurns.length,
@@ -2934,12 +3024,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         sourceSetDigest: sha([...allowed].sort().join("\n")),
         lockedSourceCount: allowed.size,
         lockedSourceHashes: contentFreeHashes(allowed),
-        lexicalCandidateCount: lexical.hits.length,
-        denseCandidateCount: dense.hits.length,
+        lexicalCandidateCount:
+          assistantSearch.lexical.hits.length +
+          requestSearch.lexical.hits.length,
+        denseCandidateCount:
+          assistantSearch.dense.hits.length + requestSearch.dense.hits.length,
         anchorCount: hits.length,
-        anchorSourceHashes: contentFreeHashes(
-          hits.map((hit) => hit.sourceId),
-        ),
+        requestDerivedAnchorCount,
+        anchorSourceHashes: contentFreeHashes(hits.map((hit) => hit.sourceId)),
         anchorEvidenceRefHashes: contentFreeHashes(
           hits.map((hit) => hit.evidenceRef),
         ),
@@ -2972,7 +3064,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ? {
             sourceLocalLocator: Object.freeze({
               locatorVersion:
-                "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
+                "paw.amb-source-local-locator.v4:request-reply-certified-rrf",
               locate(request: MemorySourceLocalEvidenceRequestV1) {
                 return locateEvidenceWithinSources(request);
               },
