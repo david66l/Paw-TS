@@ -1497,6 +1497,7 @@ describe("shared evidence resolver v1", () => {
     let modelCalls = 0;
     let projectedLocal: Array<{
       evidenceRef: string;
+      authority: string;
       contextEvidenceRefs?: readonly string[];
       sourceLocalAssistantOriginCertified?: boolean;
     }> = [];
@@ -1570,6 +1571,7 @@ describe("shared evidence resolver v1", () => {
                     contextEvidenceRefs: [
                       "session-1#turn-3",
                       "session-1#turn-4",
+                      "session-1#turn-5",
                     ],
                     sourceKind: "assistant_output" as const,
                     content: repeatedAnswer,
@@ -1585,6 +1587,11 @@ describe("shared evidence resolver v1", () => {
                         evidenceRef: "session-1#turn-4",
                         sourceKind: "assistant_output" as const,
                         turnOrder: 4,
+                      },
+                      {
+                        evidenceRef: "session-1#turn-5",
+                        sourceKind: "user_input" as const,
+                        turnOrder: 5,
                       },
                     ],
                   },
@@ -1616,6 +1623,7 @@ describe("shared evidence resolver v1", () => {
       sourceLocalHydrator: sourceLocalHydrator({
         "session-1#turn-3": "Please repeat the second earlier answer.",
         "session-1#turn-4": repeatedAnswer,
+        "session-1#turn-5": "Yes, that is correct.",
       }),
       supportSelector: createJsonMemoryEvidenceSupportSelectorV1({
         model: {
@@ -1625,6 +1633,7 @@ describe("shared evidence resolver v1", () => {
               requirements: Array<{ requirementId: string }>;
               candidates: Array<{
                 evidenceRef: string;
+                authority: string;
                 contextEvidenceRefs?: readonly string[];
                 sourceLocalAssistantOriginCertified?: boolean;
               }>;
@@ -1660,9 +1669,11 @@ describe("shared evidence resolver v1", () => {
 
     expect(modelCalls).toBe(1);
     expect(projectedLocal).toHaveLength(1);
+    expect(projectedLocal[0]?.authority).toBe("user_confirmed_dialogue");
     expect(projectedLocal[0]?.contextEvidenceRefs).toEqual([
       "session-1#turn-3",
       "session-1#turn-4",
+      "session-1#turn-5",
     ]);
     expect(result.supportSelectorStatus).toBe("completed");
     expect(result.supportSelectorFailureCode).toBeUndefined();

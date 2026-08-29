@@ -260,6 +260,34 @@ describe("requirement-bound evidence support selector v1", () => {
       unresolvedPayload.candidates[0]?.sourceLocalAssistantOriginCertified,
     ).toBe(true);
 
+    const confirmed = buildMemoryEvidenceSupportSelectionRequestV1({
+      query: "What was confirmed in the earlier chat?",
+      requirements: [
+        {
+          ...japanRequirement,
+          roleConstraint: "any",
+        },
+      ],
+      candidates: [
+        {
+          ...assistant,
+          authority: "user_confirmed_dialogue",
+          contextEvidenceRefs: [
+            "session#user-1",
+            "session#assistant-2",
+            "session#user-3",
+          ],
+        },
+      ],
+      sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
+    });
+    const confirmedPayload = JSON.parse(confirmed.user) as {
+      candidates: Array<{ sourceLocalAssistantOriginCertified: boolean }>;
+    };
+    expect(
+      confirmedPayload.candidates[0]?.sourceLocalAssistantOriginCertified,
+    ).toBe(true);
+
     expect(() =>
       buildMemoryEvidenceSupportSelectionRequestV1({
         query: "What is my address?",

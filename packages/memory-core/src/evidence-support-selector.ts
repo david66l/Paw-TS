@@ -7,7 +7,7 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1 =
-  "paw.memory-evidence-support-selector.json.v10:candidate-input-window" as const;
+  "paw.memory-evidence-support-selector.json.v11:confirmed-dialogue-contract" as const;
 
 const MAX_MEMORY_EVIDENCE_SUPPORT_CANDIDATE_INPUT_CHARS_V1 = 16_384;
 
@@ -312,6 +312,17 @@ function isCertifiedDialogueRequirement(
   );
 }
 
+function isValidatedSourceLocalAssistantCandidate(
+  candidate: MemoryEvidenceNotebookHitV1 | undefined,
+): boolean {
+  return (
+    (candidate?.authority === "context_only" ||
+      candidate?.authority === "user_confirmed_dialogue") &&
+    candidate.sourceKind === "assistant_output" &&
+    Boolean(candidate.contextEvidenceRefs?.length)
+  );
+}
+
 const MEMORY_EVIDENCE_SUPPORT_FAILURE_CODES_V1 = [
   "MemoryEvidenceSupportAddressInvalid",
   "MemoryEvidenceSupportAddressesInvalid",
@@ -435,11 +446,7 @@ function assertSelectionInput(
     );
     for (const evidenceRef of certifiedRefs) {
       const candidate = candidatesByRef.get(evidenceRef);
-      if (
-        candidate?.authority !== "context_only" ||
-        candidate.sourceKind !== "assistant_output" ||
-        !candidate.contextEvidenceRefs?.length
-      ) {
+      if (!isValidatedSourceLocalAssistantCandidate(candidate)) {
         throw namedError("MemoryEvidenceSupportCertificateInvalid");
       }
     }
@@ -475,11 +482,7 @@ function assertSelectionInput(
     }
     for (const evidenceRef of sourceLocalRefs) {
       const candidate = candidatesByRef.get(evidenceRef);
-      if (
-        candidate?.authority !== "context_only" ||
-        candidate.sourceKind !== "assistant_output" ||
-        !candidate.contextEvidenceRefs?.length
-      ) {
+      if (!isValidatedSourceLocalAssistantCandidate(candidate)) {
         throw namedError("MemoryEvidenceSupportCertificateInvalid");
       }
     }
@@ -498,9 +501,7 @@ function assertSelectionInput(
     for (const evidenceRef of reportedRefs) {
       const candidate = candidatesByRef.get(evidenceRef);
       if (
-        candidate?.authority !== "context_only" ||
-        candidate.sourceKind !== "assistant_output" ||
-        !candidate.contextEvidenceRefs?.length ||
+        !isValidatedSourceLocalAssistantCandidate(candidate) ||
         !sourceLocalRefs.has(evidenceRef)
       ) {
         throw namedError("MemoryEvidenceSupportCertificateInvalid");

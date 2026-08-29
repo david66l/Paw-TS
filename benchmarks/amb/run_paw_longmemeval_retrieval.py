@@ -47,7 +47,7 @@ Keep the reasoning audit concise. Make the final answer directly match the reque
 
 """
 RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v9:cost-audited-cache-envelope"
-MEMORY_POLICY = "paw.amb-evidence-first.v21:candidate-universe-contract"
+MEMORY_POLICY = "paw.amb-evidence-first.v22:confirmed-dialogue-contract"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
 RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v6:dense-turn-initial-packet"
 PROJECT_RELEASE_GATE = {
