@@ -1,3 +1,8 @@
+import type {
+  MemoryEvidenceBindingV1,
+  MemoryEvidenceUseV1,
+} from "./evidence-origin.js";
+
 /** Stable contracts shared by evidence discovery, ranking, and notebook stages. */
 export const PAW_MEMORY_EVIDENCE_FIRST_POLICY_VERSION_V1 =
   "paw.memory-evidence-first.v1";
@@ -6,7 +11,7 @@ export const PAW_MEMORY_EVIDENCE_CANDIDATE_FUSION_VERSION_V2 =
 export const PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1 =
   "paw.memory-conversation-bundle.v2:explicit-assistant-output-recall";
 export const PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1 =
-  "paw.memory-evidence-notebook.v9:mode-consistent-fair-closure";
+  "paw.memory-evidence-notebook.v10:item-bound-evidence-use";
 
 export type MemoryEvidenceChannelV1 = "l0" | "l1";
 
@@ -168,6 +173,10 @@ export interface MemoryEvidenceNotebookRequirementV1 {
   readonly relation?: "direct" | "temporal" | "comparative" | "inferred";
   readonly coverageMode?: "any" | "all" | "latest" | "convergent";
   readonly minimumEvidence?: number;
+  /** Required answer provenance; defaults to user for legacy callers. */
+  readonly roleConstraint?: "user" | "assistant" | "any";
+  /** Exact refs that passed the source-local dialogue certificate. */
+  readonly certifiedDialogueEvidenceRefs?: readonly string[];
   /** Ordered best-first for this requirement. */
   readonly hits: readonly MemoryEvidenceNotebookHitV1[];
 }
@@ -178,6 +187,8 @@ export interface MemoryEvidenceNotebookV1 {
     sourceId: string;
     text: string;
     evidenceRefs: readonly string[];
+    evidenceBindings: readonly MemoryEvidenceBindingV1[];
+    evidenceUses: readonly MemoryEvidenceUseV1[];
     answerRole: "current" | "ambiguous" | "supporting" | "mixed";
   }>[];
   readonly coverage: readonly Readonly<{

@@ -5,6 +5,12 @@ import {
   PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1,
 } from "./evidence-contracts.js";
 import {
+  type MemoryEvidenceBindingV1,
+  type MemoryEvidenceUseV1,
+  classifyMemoryEvidenceUseV1,
+  renderMemoryEvidencePacketContractV1,
+} from "./evidence-origin.js";
+import {
   memoryEvidenceSupportScoreV1,
   projectMemoryEvidenceExcerptV1,
 } from "./evidence-text.js";
@@ -45,6 +51,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
     {
       parts: string[];
       evidenceRefs: string[];
+      evidenceBindings: Map<string, MemoryEvidenceUseV1>;
       answerRoles: Set<"current" | "ambiguous" | "supporting">;
     }
   >();
@@ -66,8 +73,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
     1,
     Math.floor(input.maxChars / Math.max(1, input.requirements.length)),
   );
-  const sourceHeader =
-    "[Evidence notebook: supplemental exact user evidence]\n";
+  const sourceHeader = `${renderMemoryEvidencePacketContractV1()}\n`;
   for (const [
     requirementIndex,
     rawRequirement,
@@ -123,6 +129,10 @@ export function buildMemoryEvidenceNotebookV1(input: {
       rawRequirement.coverageMode === "convergent" ||
       rawRequirement.coverageMode === "all";
     const supportText = `${label} ${searchText}`;
+    const roleConstraint = rawRequirement.roleConstraint ?? "user";
+    const certifiedDialogueEvidenceRefs = new Set(
+      rawRequirement.certifiedDialogueEvidenceRefs ?? [],
+    );
     const rankedHits = rawRequirement.hits
       .map((hit, rank) => ({
         hit,
@@ -140,8 +150,15 @@ export function buildMemoryEvidenceNotebookV1(input: {
     if (selection === "latest") {
       const eligible = rankedHits.filter(({ hit, supportScore }) => {
         const sourceId = hit.sourceId.trim();
+        const evidenceUse = classifyMemoryEvidenceUseV1({
+          roleConstraint,
+          sourceKind: hit.sourceKind,
+          authority: hit.authority,
+          dialogueCertified: certifiedDialogueEvidenceRefs.has(hit.evidenceRef),
+        });
         return (
           supportScore > 0 &&
+          evidenceUse !== undefined &&
           allowed.has(sourceId) &&
           hit.evidenceRef.trim() &&
           hit.content.trim() &&
@@ -197,10 +214,17 @@ export function buildMemoryEvidenceNotebookV1(input: {
       const sourceId = rawHit.sourceId.trim();
       const evidenceRef = rawHit.evidenceRef.trim();
       const content = rawHit.content.trim();
+      const evidenceUse = classifyMemoryEvidenceUseV1({
+        roleConstraint,
+        sourceKind: rawHit.sourceKind,
+        authority: rawHit.authority,
+        dialogueCertified: certifiedDialogueEvidenceRefs.has(evidenceRef),
+      });
       if (
         !allowed.has(sourceId) ||
         !evidenceRef ||
         !content ||
+        evidenceUse === undefined ||
         (hasRelevantHit && supportScore <= 0) ||
         seenRefs.has(evidenceRef) ||
         (rawHit.authority === "context_only" && !input.allowContextOnly)
@@ -263,8 +287,8 @@ export function buildMemoryEvidenceNotebookV1(input: {
       const requirementLine = `[Requirement: ${label}]`;
       const metadataLine =
         selection === "latest"
-          ? `[timeline=${timeline}; ${stateSemantics}; precision=${semantics.valueQualifier}; epistemic=${semantics.epistemicStatus}; authority=${rawHit.authority}; observed=${observed}; episode=${episodeOrder ?? "unknown"}; turn=${turnOrder ?? "unknown"}; evidence=${evidenceRef}]`
-          : `[evidence=${evidenceRef}; authority=${rawHit.authority}; observed=${observed}; episode=${episodeOrder ?? "unknown"}; turn=${turnOrder ?? "unknown"}; precision=${semantics.valueQualifier}; epistemic=${semantics.epistemicStatus}]`;
+          ? `[timeline=${timeline}; ${stateSemantics}; evidence_use=${evidenceUse}; precision=${semantics.valueQualifier}; epistemic=${semantics.epistemicStatus}; authority=${rawHit.authority}; observed=${observed}; episode=${episodeOrder ?? "unknown"}; turn=${turnOrder ?? "unknown"}; evidence=${evidenceRef}]`
+          : `[evidence=${evidenceRef}; evidence_use=${evidenceUse}; authority=${rawHit.authority}; observed=${observed}; episode=${episodeOrder ?? "unknown"}; turn=${turnOrder ?? "unknown"}; precision=${semantics.valueQualifier}; epistemic=${semantics.epistemicStatus}]`;
       const fixedChars = requirementLine.length + metadataLine.length + 2;
       const excerptBudget = Math.min(
         hitBudget - fixedChars,
@@ -285,10 +309,16 @@ export function buildMemoryEvidenceNotebookV1(input: {
       const state = sourceParts.get(sourceId) ?? {
         parts: [],
         evidenceRefs: [],
+        evidenceBindings: new Map<string, MemoryEvidenceUseV1>(),
         answerRoles: new Set<"current" | "ambiguous" | "supporting">(),
       };
       state.parts.push(part);
       state.evidenceRefs.push(evidenceRef);
+      const existingUse = state.evidenceBindings.get(evidenceRef);
+      if (existingUse !== undefined && existingUse !== evidenceUse) {
+        throw namedError("MemoryEvidenceBindingConflict");
+      }
+      state.evidenceBindings.set(evidenceRef, evidenceUse);
       state.answerRoles.add(
         timeline === "latest"
           ? "current"
@@ -331,10 +361,19 @@ export function buildMemoryEvidenceNotebookV1(input: {
   }
   const sources = [...sourceParts.entries()].map(([sourceId, state]) => {
     const text = `${sourceHeader}${state.parts.join("\n\n")}`;
+    const evidenceBindings: readonly MemoryEvidenceBindingV1[] = Object.freeze(
+      [...state.evidenceBindings].map(([evidenceRef, evidenceUse]) =>
+        Object.freeze({ evidenceRef, evidenceUse }),
+      ),
+    );
     return Object.freeze({
       sourceId,
       text,
       evidenceRefs: Object.freeze([...state.evidenceRefs]),
+      evidenceBindings,
+      evidenceUses: Object.freeze([
+        ...new Set(evidenceBindings.map((binding) => binding.evidenceUse)),
+      ]),
       answerRole: singleAnswerRole(state.answerRoles),
     });
   });

@@ -447,6 +447,8 @@ export async function resolveEvidencePass(input: {
         requirement.coverageMode ??
         (requirement.temporalMode === "latest" ? "latest" : "any"),
       minimumEvidence: requirement.minimumEvidence ?? 1,
+      roleConstraint: requirement.roleConstraint,
+      certifiedDialogueEvidenceRefs: Object.freeze([...localEvidenceRefs]),
       hits: filterRequirementHits(
         requirementHits[index] ?? [],
         selectedRefsByRequirement?.get(requirement.requirementId),
@@ -490,6 +492,8 @@ export async function resolveEvidencePass(input: {
               ? "supporting"
               : "candidate",
           maxFallbackChars: input.maxNotebookChars,
+          roleConstraint: input.intent.roleConstraint,
+          certifiedDialogueEvidenceRefs: localEvidenceRefs,
         })
       : buildPrimaryEvidencePacketSources(
           input.primary.hits,
@@ -500,6 +504,8 @@ export async function resolveEvidencePass(input: {
           new Set(),
           "supporting",
           input.query,
+          input.intent.roleConstraint,
+          localEvidenceRefs,
         );
   return Object.freeze({
     fusion,

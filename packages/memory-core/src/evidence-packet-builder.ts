@@ -2,6 +2,13 @@ import type {
   MemoryEvidenceNotebookHitV1,
   MemoryEvidenceNotebookV1,
 } from "./evidence-contracts.js";
+import {
+  type MemoryEvidenceBindingV1,
+  type MemoryEvidenceOriginRoleV1,
+  type MemoryEvidenceUseV1,
+  classifyMemoryEvidenceUseV1,
+  renderMemoryEvidencePacketContractV1,
+} from "./evidence-origin.js";
 import type {
   MemoryEvidenceQueryIntentV3,
   MemoryEvidenceRequirementV3,
@@ -92,16 +99,22 @@ export function buildPrimaryEvidencePacketSources(
   excludedEvidenceRefs: ReadonlySet<string> = new Set(),
   answerRole: "supporting" | "candidate" = "supporting",
   query = "",
+  roleConstraint: MemoryEvidenceOriginRoleV1 = "user",
+  certifiedDialogueEvidenceRefs: ReadonlySet<string> = new Set(),
 ): readonly Readonly<{
   sourceId: string;
   text: string;
   evidenceRefs: readonly string[];
+  evidenceBindings: readonly MemoryEvidenceBindingV1[];
+  evidenceUses: readonly MemoryEvidenceUseV1[];
   answerRole: "supporting" | "candidate";
 }>[] {
   const output: Array<{
     sourceId: string;
     text: string;
     evidenceRefs: readonly string[];
+    evidenceBindings: readonly MemoryEvidenceBindingV1[];
+    evidenceUses: readonly MemoryEvidenceUseV1[];
     answerRole: "supporting" | "candidate";
   }> = [];
   let chars = 0;
@@ -116,8 +129,18 @@ export function buildPrimaryEvidencePacketSources(
       .map((hit, rank) => ({
         hit,
         rank,
+        evidenceUse: classifyMemoryEvidenceUseV1({
+          roleConstraint,
+          sourceKind: hit.sourceKind,
+          authority: hit.authority,
+          dialogueCertified: certifiedDialogueEvidenceRefs.has(hit.evidenceRef),
+        }),
         ordinalScore: memoryEvidenceOrdinalAnchorScoreV1(hit.content, query),
       }))
+      .filter(
+        (item): item is typeof item & { evidenceUse: MemoryEvidenceUseV1 } =>
+          item.evidenceUse !== undefined,
+      )
       .sort(
         (left, right) =>
           right.ordinalScore - left.ordinalScore || left.rank - right.rank,
@@ -125,17 +148,26 @@ export function buildPrimaryEvidencePacketSources(
       .slice(0, maxHitsPerSource);
     if (selected.length === 0) continue;
     const text = [
-      "[Primary exact memory evidence]",
+      renderMemoryEvidencePacketContractV1(),
       ...selected.map(
-        ({ hit }) =>
-          `[authority=${hit.authority}; observed=${hit.observedAt ?? "unknown"}; evidence=${hit.evidenceRef}]\n${hit.content}`,
+        ({ hit, evidenceUse }) =>
+          `[evidence_use=${evidenceUse}; authority=${hit.authority}; observed=${hit.observedAt ?? "unknown"}; evidence=${hit.evidenceRef}]\n${hit.content}`,
       ),
     ].join("\n\n");
     if (chars + text.length > maxChars) continue;
+    const evidenceBindings: readonly MemoryEvidenceBindingV1[] = Object.freeze(
+      selected.map(({ hit, evidenceUse }) =>
+        Object.freeze({ evidenceRef: hit.evidenceRef, evidenceUse }),
+      ),
+    );
     output.push({
       sourceId,
       text,
       evidenceRefs: Object.freeze(selected.map(({ hit }) => hit.evidenceRef)),
+      evidenceBindings,
+      evidenceUses: Object.freeze([
+        ...new Set(evidenceBindings.map((binding) => binding.evidenceUse)),
+      ]),
       answerRole,
     });
     chars += text.length;
@@ -152,6 +184,8 @@ export function buildPlannedEvidencePacketSources(input: {
   readonly includeFallback: boolean;
   readonly fallbackAnswerRole: "supporting" | "candidate";
   readonly maxFallbackChars: number;
+  readonly roleConstraint: MemoryEvidenceOriginRoleV1;
+  readonly certifiedDialogueEvidenceRefs?: ReadonlySet<string>;
 }): MemoryEvidenceResolutionV1["packetSources"] {
   if (!input.includeFallback) return input.notebook.sources;
   const selectedRefs = new Set(
@@ -166,12 +200,15 @@ export function buildPlannedEvidencePacketSources(input: {
     selectedRefs,
     input.fallbackAnswerRole,
     input.query,
+    input.roleConstraint,
+    input.certifiedDialogueEvidenceRefs,
   );
   const bySource = new Map<
     string,
     {
       parts: string[];
       evidenceRefs: string[];
+      evidenceBindings: Map<string, MemoryEvidenceUseV1>;
       answerRoles: Set<
         "current" | "ambiguous" | "supporting" | "candidate" | "mixed"
       >;
@@ -181,10 +218,18 @@ export function buildPlannedEvidencePacketSources(input: {
     const current = bySource.get(source.sourceId) ?? {
       parts: [],
       evidenceRefs: [],
+      evidenceBindings: new Map<string, MemoryEvidenceUseV1>(),
       answerRoles: new Set(),
     };
     current.parts.push(source.text);
     current.evidenceRefs.push(...source.evidenceRefs);
+    for (const binding of source.evidenceBindings) {
+      const existingUse = current.evidenceBindings.get(binding.evidenceRef);
+      if (existingUse !== undefined && existingUse !== binding.evidenceUse) {
+        throw namedError("MemoryEvidenceBindingConflict");
+      }
+      current.evidenceBindings.set(binding.evidenceRef, binding.evidenceUse);
+    }
     current.answerRoles.add(source.answerRole);
     bySource.set(source.sourceId, current);
   }
@@ -196,11 +241,21 @@ export function buildPlannedEvidencePacketSources(input: {
     [...new Set(orderedIds)].flatMap((sourceId) => {
       const value = bySource.get(sourceId);
       if (!value) return [];
+      const evidenceBindings: readonly MemoryEvidenceBindingV1[] =
+        Object.freeze(
+          [...value.evidenceBindings].map(([evidenceRef, evidenceUse]) =>
+            Object.freeze({ evidenceRef, evidenceUse }),
+          ),
+        );
       return [
         Object.freeze({
           sourceId,
           text: value.parts.join("\n\n[Bounded primary fallback]\n"),
           evidenceRefs: Object.freeze([...new Set(value.evidenceRefs)]),
+          evidenceBindings,
+          evidenceUses: Object.freeze([
+            ...new Set(evidenceBindings.map((binding) => binding.evidenceUse)),
+          ]),
           answerRole: singleAnswerRole(value.answerRoles),
         }),
       ];
@@ -212,4 +267,10 @@ function singleAnswerRole<T extends string>(
   roles: ReadonlySet<T>,
 ): T | "mixed" {
   return roles.size === 1 ? (roles.values().next().value ?? "mixed") : "mixed";
+}
+
+function namedError(name: string): Error {
+  const error = new Error(name);
+  error.name = name;
+  return error;
 }

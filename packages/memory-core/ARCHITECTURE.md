@@ -24,6 +24,7 @@ query-plan-contracts.ts
 evidence-contracts.ts
   -> candidate-ranking.ts           deterministic L0/L1 fusion
   -> conversation-bundle.ts         role-preserving dialogue context
+  -> evidence-origin.ts             per-item use and authority boundary
   -> evidence-notebook.ts           requirement coverage and state reduction
   -> evidence-text.ts               bounded excerpts and support scoring
 ```
@@ -45,9 +46,20 @@ revalidated against the locked sources and authority policy.
 The optional closure auditor is read-only. It may report incomplete evidence,
 but cannot trigger retrieval or mutate the source set.
 
+Every selected item reaches the answer boundary with two independent labels:
+`authority` records where the claim came from, while `evidence_use` limits what
+it may answer (`user_fact`, `assistant_report`, or
+`shared_dialogue_artifact`). Assistant text can therefore answer an explicit
+prior-assistant question without ever being promoted into a user fact. The
+canonical `evidenceBindings` array keeps each immutable `evidenceRef` paired
+with its permitted use; source-level use sets are derived summaries only.
+
+An unresolved user/shared-dialogue query can open assistant output only when
+that exact evidence ref passed the source-local dialogue certificate. A
+query-level permission to search never acts as an item-level certificate.
+
 ## Failure behavior
 
 Invalid model output, missing channels, address escape, role drift, stale
 hydration, and source-local lookup failures degrade to partial or baseline
 output. They never silently upgrade evidence to sufficient.
-

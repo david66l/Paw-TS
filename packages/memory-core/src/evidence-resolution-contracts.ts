@@ -7,6 +7,10 @@ import type {
   RankedMemoryEvidenceSourceV2,
 } from "./evidence-first.js";
 import type {
+  MemoryEvidenceBindingV1,
+  MemoryEvidenceUseV1,
+} from "./evidence-origin.js";
+import type {
   MemoryEvidenceQueryIntentV3,
   MemoryEvidenceRequirementV3,
 } from "./evidence-query-planner.js";
@@ -14,7 +18,7 @@ import type { MemoryEvidenceTriageAssessmentV1 } from "./evidence-support-select
 import type { MemorySourceLocalizationReportV1 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v15:adapter-owned-source-address" as const;
+  "paw.memory-evidence-resolver.v16:item-certified-evidence-binding" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -77,6 +81,8 @@ export interface MemoryEvidenceResolutionV1 {
     sourceId: string;
     text: string;
     evidenceRefs: readonly string[];
+    evidenceBindings: readonly MemoryEvidenceBindingV1[];
+    evidenceUses: readonly MemoryEvidenceUseV1[];
     answerRole: "current" | "ambiguous" | "supporting" | "candidate" | "mixed";
   }>[];
   readonly telemetry: MemoryEvidenceCandidateFusionV2["telemetry"];

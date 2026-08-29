@@ -45,10 +45,10 @@ EVIDENCE_ANSWER_PROTOCOL = """Paw evidence synthesis protocol:
 Keep the reasoning audit concise. Make the final answer directly match the requested value, list, comparison, date, or preference profile.
 
 """
-RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v9:cost-audited-cache-envelope"
-MEMORY_POLICY = "paw.amb-evidence-first.v19:fail-closed-triaged-closure"
+RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v10:bound-capability-profile"
+MEMORY_POLICY = "paw.amb-evidence-first.v20:source-local-required"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
-RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v6:dense-turn-initial-packet"
+RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v7:dense-source-local"
 PROJECT_RELEASE_GATE = {
     "minimumTreatmentAccuracy": 0.75,
     "minimumQuestionTypeAccuracy": 0.60,
@@ -567,6 +567,10 @@ RELEASE_PROVIDER_ENV = {
     "PAW_AMB_INGEST_MODE": "atom",
     "PAW_AMB_ATOM_CONTEXT_MODE": "evidence_first",
     "PAW_AMB_ATOM_WRITE_MODE": "off",
+    # Source-local dialogue lookup is part of the retained architecture, not a
+    # shell-selected benchmark ablation. Binding it here makes a sealed run
+    # fail reproducibly instead of silently degrading to global retrieval.
+    "PAW_AMB_SOURCE_LOCAL_LOCATOR": "1",
 }
 
 PINNED_EMBEDDING_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
@@ -671,6 +675,7 @@ def experiment_protocol(
                 "sourceArtifactSha256": source_artifact_sha256,
             },
             "prebuiltIndexPolicy": "complete-id-and-embedding-coverage-v2",
+            "sourceLocalLocator": "required",
         },
         "arms": {
             "baseline": {

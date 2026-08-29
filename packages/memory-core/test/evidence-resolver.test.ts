@@ -5,6 +5,7 @@ import {
   type MemoryEvidenceIndexV1,
   createJsonMemoryEvidenceSupportSelectorV1,
   createMemoryEvidenceResolverV1,
+  projectEvidenceFirstMemoryAnswerContractV1,
   projectEvidenceFirstMemoryContextPacketV1,
 } from "../src/legacy.js";
 
@@ -289,6 +290,13 @@ describe("shared evidence resolver v1", () => {
                     sourceKind: "user_input" as const,
                     authority: "user_asserted" as const,
                   },
+                  {
+                    candidateId: "assistant-source-uncertified",
+                    sourceId: "assistant-source",
+                    evidenceRef: "amb:document/assistant-source#source-4",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
                 ],
               },
             ],
@@ -305,7 +313,16 @@ describe("shared evidence resolver v1", () => {
                 evidenceRef: "assistant-source#turn-2",
                 content: "Untrusted index projection of an assistant answer.",
                 authority: "context_only" as const,
+                sourceKind: "assistant_output" as const,
                 turnOrder: 2,
+              },
+              {
+                sourceId: "assistant-source",
+                evidenceRef: "assistant-source#turn-4",
+                content: "Uncertified assistant decoy.",
+                authority: "context_only" as const,
+                sourceKind: "assistant_output" as const,
+                turnOrder: 4,
               },
               {
                 sourceId: "escape-source",
@@ -444,6 +461,29 @@ describe("shared evidence resolver v1", () => {
     expect(
       result.packetSources.map((source) => source.text).join("\n"),
     ).toContain("Northstar");
+    expect(
+      result.packetSources.flatMap((source) => source.evidenceBindings),
+    ).toContainEqual({
+      evidenceRef: "assistant-source#turn-2",
+      evidenceUse: "shared_dialogue_artifact",
+    });
+    expect(
+      result.packetSources.flatMap((source) => source.evidenceBindings),
+    ).not.toContainEqual({
+      evidenceRef: "assistant-source#turn-4",
+      evidenceUse: "shared_dialogue_artifact",
+    });
+    const expectedBindings = result.packetSources.flatMap(
+      (source) => source.evidenceBindings,
+    );
+    expect(
+      projectEvidenceFirstMemoryContextPacketV1(result).evidence.flatMap(
+        (evidence) => evidence.evidenceBindings ?? [],
+      ),
+    ).toEqual(expectedBindings);
+    expect(
+      projectEvidenceFirstMemoryAnswerContractV1(result).evidenceBindings,
+    ).toEqual(expectedBindings);
   });
 
   test("rejects requirement authority drift from a custom planner port", async () => {
@@ -945,9 +985,7 @@ describe("shared evidence resolver v1", () => {
       selectedCandidateCount: 0,
     });
     expect(serialized).not.toContain(secret);
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).toContain("safe baseline evidence");
+    expect(result.packetSources).toEqual([]);
   });
 
   test("locates every direct assistant requirement and commits the batch together", async () => {
@@ -1300,7 +1338,7 @@ describe("shared evidence resolver v1", () => {
       selectedCandidateCount: 0,
     });
     expect(rejected.packetSources).toEqual(baseline.packetSources);
-    expect(rejected.packetSources[0]?.text).not.toContain(
+    expect(rejected.packetSources[0]?.text ?? "").not.toContain(
       "local secret answer",
     );
 
@@ -1318,7 +1356,9 @@ describe("shared evidence resolver v1", () => {
       reasonCode: "selector_failed",
       addedCandidateCount: 0,
     });
-    expect(result.packetSources[0]?.text).not.toContain("local secret answer");
+    expect(result.packetSources[0]?.text ?? "").not.toContain(
+      "local secret answer",
+    );
   });
   test("locks sources only after bounded planned discovery", async () => {
     const resolver = createMemoryEvidenceResolverV1({
@@ -1886,6 +1926,7 @@ describe("shared evidence resolver v1", () => {
                 evidenceRef: "session#user-1",
                 content: "Give me a numbered list of 100 prompt parameters.",
                 authority: "user_asserted" as const,
+                sourceKind: "user_input" as const,
                 turnOrder: 1,
               },
               {
@@ -1893,6 +1934,7 @@ describe("shared evidence resolver v1", () => {
                 evidenceRef: "session#assistant-2",
                 content: "26. Soliloquy\n27. Sound effects\n28. Music",
                 authority: "context_only" as const,
+                sourceKind: "assistant_output" as const,
                 turnOrder: 2,
               },
             ],
@@ -1938,11 +1980,8 @@ describe("shared evidence resolver v1", () => {
       new AbortController().signal,
     );
 
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual([
-      "session#user-1",
-    ]);
-    expect(result.packetSources[0]?.answerRole).toBe("mixed");
-    expect(result.packetSources[0]?.text).toContain("Bounded primary fallback");
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual([]);
+    expect(result.packetSources[0]?.answerRole).toBe("candidate");
     expect(result.packetSources[0]?.text).toContain("27. Sound effects");
   });
 

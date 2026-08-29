@@ -95,12 +95,22 @@ class PawMemoryProvider:
         reset: bool = True,
     ) -> None:
         self.initialize()
-        self._call(
+        result = self._call(
             "prepare",
             storeDir=str(store_dir.resolve()),
             unitIds=sorted(unit_ids) if unit_ids else [],
             reset=reset,
         )
+        source_local_required = os.environ.get(
+            "PAW_AMB_SOURCE_LOCAL_LOCATOR", ""
+        ).strip().lower() in {"1", "true"}
+        if source_local_required and (
+            not isinstance(result, dict)
+            or not result.get("sourceLocalLocatorConfigured", False)
+        ):
+            raise RuntimeError(
+                "Paw AMB bridge did not configure the required source-local locator"
+            )
 
     def ingest(self, documents: list[Document]) -> None:
         self._call(

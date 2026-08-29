@@ -267,6 +267,8 @@ export function createMemoryEvidenceResolverV1(input: {
         packetSources: packetSources.map((source) => ({
           sourceId: source.sourceId,
           evidenceRefs: source.evidenceRefs,
+          evidenceBindings: source.evidenceBindings,
+          evidenceUses: source.evidenceUses,
         })),
       };
       return Object.freeze({

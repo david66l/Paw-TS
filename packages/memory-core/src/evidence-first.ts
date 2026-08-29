@@ -14,6 +14,14 @@ export {
 export { buildMemoryEvidenceNotebookV1 } from "./evidence-notebook.js";
 
 export {
+  classifyMemoryEvidenceUseV1,
+  renderMemoryEvidencePacketContractV1,
+  type MemoryEvidenceBindingV1,
+  type MemoryEvidenceOriginRoleV1,
+  type MemoryEvidenceUseV1,
+} from "./evidence-origin.js";
+
+export {
   rankMemoryEvidenceCandidatesV2,
   rankMemoryEvidenceSourcesV1,
 } from "./candidate-ranking.js";

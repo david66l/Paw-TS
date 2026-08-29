@@ -1,6 +1,11 @@
+import type {
+  MemoryEvidenceBindingV1,
+  MemoryEvidenceUseV1,
+} from "./evidence-origin.js";
+
 /** Runtime-independent evidence packet contract exposed by the memory core. */
 export const PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1 =
-  "paw.memory-context-resolver.v4:requirement-grounded-l0-audit" as const;
+  "paw.memory-context-resolver.v5:item-bound-evidence-use" as const;
 
 export interface MemoryRawEvidenceSpanV1 {
   readonly evidenceRef: string;
@@ -17,6 +22,10 @@ export interface MemoryResolvedContextEvidenceV1 {
   readonly supportRole?: "supporting" | "contradicting" | "contextual";
   readonly validFrom?: string;
   readonly evidenceRefs: readonly string[];
+  /** Canonical per-item mapping on evidence-first packets. */
+  readonly evidenceBindings?: readonly MemoryEvidenceBindingV1[];
+  /** Present on evidence-first packets; legacy context adapters may omit it. */
+  readonly evidenceUses?: readonly MemoryEvidenceUseV1[];
 }
 
 export interface MemoryResolvedTopicStateV1 {

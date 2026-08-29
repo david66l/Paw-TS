@@ -115,6 +115,7 @@ class LongMemEvalRunnerTest(unittest.TestCase):
         )
         self.assertEqual("upstream", protocol["common"]["answerProtocol"])
         self.assertTrue(protocol["common"]["answerTools"])
+        self.assertEqual("required", protocol["common"]["sourceLocalLocator"])
 
     def test_retrieval_cache_artifact_excludes_answer_only_code(self) -> None:
         root = Path(__file__).resolve().parents[2]
@@ -137,6 +138,7 @@ class LongMemEvalRunnerTest(unittest.TestCase):
             {"artifactSha256": "a" * 64}
         )
 
+        self.assertEqual("1", environment["PAW_AMB_SOURCE_LOCAL_LOCATOR"])
         self.assertIn("1110a243fdf4706b3f48f1d95db1a4f5529b4d41", environment["PAW_AMB_EMBEDDING_VERSION"])
         self.assertTrue(environment["PAW_AMB_EMBEDDING_VERSION"].endswith("a" * 64))
 

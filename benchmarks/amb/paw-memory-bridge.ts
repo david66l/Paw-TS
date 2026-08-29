@@ -1093,6 +1093,7 @@ async function prepare(params: Record<string, unknown>): Promise<unknown> {
   return {
     runKey,
     reset,
+    sourceLocalLocatorConfigured: sourceLocalLocatorEnabled,
     resumed: atomCheckpoint?.resumed ?? false,
     units: unitIds.length,
     deleted,
@@ -2949,7 +2950,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     }
     const sharedResolver = createMemoryEvidenceResolverV1({
       index: {
-        indexVersion: "paw.amb-turn-evidence-index.v2:namespaced-source-address",
+        indexVersion:
+          "paw.amb-turn-evidence-index.v2:namespaced-source-address",
         evidenceRefBelongsToSource(sourceId, evidenceRef) {
           return sourceDocumentIdFromEvidenceV1(evidenceRef) === sourceId;
         },
@@ -3167,6 +3169,16 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       telemetry: fusion.telemetry,
     });
     const notebook = resolution.notebook;
+    const evidenceBindingCounts = Object.fromEntries(
+      ["user_fact", "assistant_report", "shared_dialogue_artifact"].map(
+        (use) => [
+          use,
+          resolution.packetSources
+            .flatMap((source) => source.evidenceBindings)
+            .filter((binding) => binding.evidenceUse === use).length,
+        ],
+      ),
+    );
     evidenceFirstNotebookCoveredCount = notebook.coverage.filter(
       (requirement) => requirement.status === "covered",
     ).length;
@@ -3202,6 +3214,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       unresolvedEvidenceCount: evidenceFirstNotebookUnresolvedEvidenceCount,
       sourceCount: notebook.sources.length,
       chars: notebook.chars,
+      evidenceBindingCounts,
       coverage: notebook.coverage.map((requirement) => ({
         requirementIdHash: sha(requirement.requirementId).slice(0, 20),
         status: requirement.status,
@@ -3249,25 +3262,17 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     rawEvidenceSpanCount = resolution.packetSources.length;
     memoryRoute = "evidence_first_spans";
     const output = resolution.packetSources.map((source, index) => {
-      const authorityLabel =
-        resolution.intent.roleConstraint === "assistant"
-          ? "[Assistant-output evidence]\nAuthority rule: use only to recall the assistant's prior output or action; never as a user fact."
-          : resolution.intent.roleConstraint === "any"
-            ? "[Shared-dialogue evidence]\nAuthority rule: assistant output may answer only a directly requested shared artifact or prior answer whose neighboring user request establishes its provenance; never treat it as a user fact."
-            : source.answerRole === "current"
-              ? "[Current user-grounded evidence]"
-              : source.answerRole === "ambiguous"
-                ? "[Ambiguous user-grounded evidence]"
-                : source.answerRole === "candidate"
-                  ? "[Unverified candidate L0 evidence]\nUse only if it directly answers a missing requirement; relevance alone is not support."
-                  : source.answerRole === "mixed"
-                    ? "[Mixed verified and candidate L0 evidence]\nRequirement-bound evidence is followed by bounded candidates; verify candidate text before use."
-                    : "[Supporting user-grounded evidence]";
+      const packetWarning =
+        source.answerRole === "candidate"
+          ? "[Unverified candidate L0 evidence]\nUse only if it directly answers a missing requirement; relevance alone is not support."
+          : source.answerRole === "mixed"
+            ? "[Mixed verified and candidate L0 evidence]\nRequirement-bound evidence is followed by bounded candidates; verify candidate text before use."
+            : "";
       return {
         id: source.sourceId,
         content: [
           index === 0 ? evidenceAnswerContractText : "",
-          authorityLabel,
+          packetWarning,
           source.text,
         ]
           .filter(Boolean)
@@ -3281,6 +3286,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             `amb:document/${source.sourceId}#evidence-first`,
             ...source.evidenceRefs,
           ],
+          evidenceUses: source.evidenceUses,
+          evidenceBindings: source.evidenceBindings,
         },
       };
     });
@@ -4493,6 +4500,7 @@ async function dispatch(request: BridgeRequestV1): Promise<unknown> {
       return retrieve(params);
     case "stats":
       return {
+        sourceLocalLocatorConfigured: sourceLocalLocatorEnabled,
         ...cache.snapshot(),
         ...(embedding
           ? {

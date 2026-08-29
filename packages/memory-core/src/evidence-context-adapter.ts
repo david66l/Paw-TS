@@ -13,10 +13,14 @@ import {
   type MemoryEvidenceAnswerPolicyV1,
   createMemoryEvidenceAnswerPolicyV1,
 } from "./evidence-answer-policy.js";
+import type {
+  MemoryEvidenceBindingV1,
+  MemoryEvidenceUseV1,
+} from "./evidence-origin.js";
 import type { MemoryEvidenceResolutionV1 } from "./evidence-resolver.js";
 
 export const PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1 =
-  "paw.memory-evidence-answer-contract.v1" as const;
+  "paw.memory-evidence-answer-contract.v2:item-bound-evidence-use" as const;
 
 export interface MemoryEvidenceAnswerContractV1 {
   readonly schemaVersion: typeof PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1;
@@ -25,6 +29,8 @@ export interface MemoryEvidenceAnswerContractV1 {
   readonly roleConstraint: MemoryEvidenceResolutionV1["intent"]["roleConstraint"];
   readonly evidenceStatus: MemoryResolvedContextPacketV1["stop"];
   readonly answerPolicy: MemoryEvidenceAnswerPolicyV1;
+  readonly evidenceBindings: readonly MemoryEvidenceBindingV1[];
+  readonly evidenceUses: readonly MemoryEvidenceUseV1[];
   readonly guidance: string;
   readonly requirements: readonly Readonly<{
     requirementId: string;
@@ -81,6 +87,8 @@ export function projectEvidenceFirstMemoryContextPacketV1(
         resolutionRevision: resolution.resolutionRevision,
         sourceId: source.sourceId,
         evidenceRefs: source.evidenceRefs,
+        evidenceBindings: source.evidenceBindings,
+        evidenceUses: source.evidenceUses,
       } as unknown as JsonValue),
     }),
   );
@@ -104,6 +112,8 @@ export function projectEvidenceFirstMemoryContextPacketV1(
             ? ("contextual" as const)
             : ("supporting" as const),
         evidenceRefs: source.evidenceRefs,
+        evidenceBindings: source.evidenceBindings,
+        evidenceUses: source.evidenceUses,
       }),
     ),
   );
@@ -293,6 +303,16 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
       requirementCount: resolution.requirements.length,
       evidenceStatus: packet.stop,
     }),
+    evidenceBindings: Object.freeze(
+      resolution.packetSources.flatMap((source) => source.evidenceBindings),
+    ),
+    evidenceUses: Object.freeze([
+      ...new Set(
+        resolution.packetSources.flatMap((source) =>
+          source.evidenceBindings.map((binding) => binding.evidenceUse),
+        ),
+      ),
+    ]),
     guidance:
       "Control metadata is not evidence. Organize exact facts by covered requirement ID; never guess a partial or missing requirement.",
     requirements: Object.freeze(

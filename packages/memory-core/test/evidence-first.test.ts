@@ -455,12 +455,14 @@ describe("evidence notebook v1", () => {
       requirementId: "prior-answer",
       label: "prior assistant answer",
       searchText: "what assistant said",
+      roleConstraint: "assistant" as const,
       hits: [
         {
           sourceId: "session-1",
           evidenceRef: "assistant-1",
           content: "I previously recommended the train.",
           authority: "context_only" as const,
+          sourceKind: "assistant_output" as const,
         },
       ],
     };
@@ -780,6 +782,7 @@ describe("evidence notebook v1", () => {
       evidenceRef: "game#assistant-4",
       content: `The game reached 27. Kg2 Bd5+. ${"continuation ".repeat(12)}The next move was 28. Kg3.`,
       authority: "context_only" as const,
+      sourceKind: "assistant_output" as const,
     };
     const notebook = buildMemoryEvidenceNotebookV1({
       requirements: [
@@ -787,12 +790,16 @@ describe("evidence notebook v1", () => {
           requirementId: "position",
           label: "chess position",
           searchText: "27. Kg2 Bd5+",
+          roleConstraint: "any",
+          certifiedDialogueEvidenceRefs: ["game#assistant-4"],
           hits: [shared],
         },
         {
           requirementId: "next-move",
           label: "next move",
           searchText: "move after 27. Kg2 Bd5+",
+          roleConstraint: "any",
+          certifiedDialogueEvidenceRefs: ["game#assistant-4"],
           hits: [shared],
         },
       ],
