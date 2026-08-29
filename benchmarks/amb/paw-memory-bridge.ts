@@ -50,7 +50,6 @@ import {
   boundMemoryRawEvidenceSpansV1,
   buildMemoryConversationTurnBundleV1,
   classifyMemoryEvidenceQueryV3,
-  classifyMemoryEvidenceRefsUseV1,
   createJsonMemoryAtomConflictResolverV1,
   createJsonMemoryAtomExtractorV1,
   createJsonMemoryEvidenceClosureAuditorV1,
@@ -74,10 +73,8 @@ import {
   createPostgresMemoryTopicDossierStoreV1,
   createPostgresMemoryTopicEvidenceStoreV1,
   createPostgresMemoryTopicOrganizerStoreV1,
-  hasMemorySourceLocalAssistantOriginCertificateV1,
+  hasMemorySourceLocalDialogueCertificateV1,
   memoryScopeFingerprintV1,
-  memorySourceLocalBackfillSourceIdsV1,
-  memorySourceLocalDiverseCandidateCapV1,
   memorySourceLocalEvidenceCacheKeyV1,
   needsMemoryEvidenceRoleResolutionV1,
   planMemoryEvidenceCoverageV1,
@@ -90,10 +87,8 @@ import {
   projectMemoryTopicToolStatesV1,
   projectSourceGroundedMemoryScenesV1,
   projectSourceGroundedPersonaV1,
-  rankMemorySourceLocalAnchorCandidatesV1,
   reciprocalRankFusionV1,
   reconcileMemoryAtomsV1,
-  renderMemoryEvidenceAuthorityHeaderV1,
   resolveMemoryTopicIdV1,
   routeMemoryQueryV1,
   selectMemorySceneEvidenceV1,
@@ -132,10 +127,6 @@ import {
   isAmbDocumentVisibleAtQueryV1,
   parseAmbQueryTimeCutoffV1,
 } from "./query-time-cutoff.js";
-import {
-  ambSourceLocalBackfillScoreV1,
-  hasAmbSourceLocalBackfillFailureV1,
-} from "./source-local-backfill-policy.js";
 
 interface BridgeRequestV1 {
   readonly id: number;
@@ -468,9 +459,13 @@ function sha(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function contentFreeHashes(values: Iterable<string>): readonly string[] {
+function contentFreeSourceHashes(
+  sourceIds: Iterable<string>,
+): readonly string[] {
   return Object.freeze(
-    [...new Set(values)].sort().map((value) => sha(value).slice(0, 20)),
+    [...new Set(sourceIds)]
+      .sort()
+      .map((sourceId) => sha(sourceId).slice(0, 20)),
   );
 }
 
@@ -2018,14 +2013,6 @@ async function searchEvidenceIndexEntriesV2(input: {
     );
     return match?.[1] ? [match[1]] : [];
   });
-  const rankedEvidenceRefs = entries.flatMap((entry) => {
-    const evidence = entry.evidence.find((ref) =>
-      input.indexKind === "source_span"
-        ? /#source-\d+$/.test(ref)
-        : /#source-chunk-\d+$/.test(ref),
-    );
-    return evidence ? [evidence] : [];
-  });
   const uniqueSourceCount = new Set(rankedSourceIds).size;
   log("evidence_index_search", {
     indexKind: input.indexKind,
@@ -2042,7 +2029,6 @@ async function searchEvidenceIndexEntriesV2(input: {
     topSourceHashes: [
       ...new Set(rankedSourceIds.map((sourceId) => sha(sourceId).slice(0, 20))),
     ].slice(0, 16),
-    topEvidenceRefHashes: contentFreeHashes(rankedEvidenceRefs),
   });
   return entries;
 }
@@ -2142,37 +2128,6 @@ function sourceDocumentIdFromEvidenceV1(ref: string): string | undefined {
   const fragment = value.indexOf("#");
   const documentId = (fragment < 0 ? value : value.slice(0, fragment)).trim();
   return documentId || undefined;
-}
-
-interface AmbSourceTurnAddressV1 {
-  readonly documentId: string;
-  readonly sourceSeq: number;
-  readonly evidenceRef: string;
-}
-
-function sourceTurnAddressFromEntryV1(
-  entry: MemoryEntry,
-): AmbSourceTurnAddressV1 | undefined {
-  if (entry.kind !== "episodic") return undefined;
-  const physicalEvidenceRef = entry.evidence.find((ref) =>
-    /#source-\d+$/.test(ref),
-  );
-  const documentId = physicalEvidenceRef
-    ? sourceDocumentIdFromEvidenceV1(physicalEvidenceRef)
-    : undefined;
-  const evidenceRef = physicalEvidenceRef
-    ? logicalSourceLocalEvidenceRefV1(physicalEvidenceRef)
-    : undefined;
-  const sourceSeq = Number(/#source-(\d+)$/.exec(evidenceRef ?? "")?.[1]);
-  if (
-    !documentId ||
-    !evidenceRef ||
-    !Number.isSafeInteger(sourceSeq) ||
-    sourceSeq < 1
-  ) {
-    return undefined;
-  }
-  return Object.freeze({ documentId, sourceSeq, evidenceRef });
 }
 
 function isMemoryConversationTurnKindV1(
@@ -2308,7 +2263,6 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstSupportSelectorStatus: string = evidenceSupportSelector
     ? "not_needed"
     : "disabled";
-  let evidenceFirstSupportSelectorFailureCode: string | null = null;
   let evidenceFirstDirectCertificateStatus = "not_evaluated";
   let evidenceFirstClosureAuditStatus = evidenceClosureAuditor
     ? "not_evaluated"
@@ -2724,10 +2678,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const engine = sourceEngineFor(userId);
       const allowed = new Set(request.lockedSourceIds);
       const blockIdsByDocument = sourceBlockIdsByUserDocument.get(userId);
+      const allowedIds = request.lockedSourceIds.flatMap(
+        (documentId) => blockIdsByDocument?.get(documentId) ?? [],
+      );
       const turnIndexRevision = await engine.retrievalRevisionToken();
       const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
         locatorVersion:
-          "paw.amb-source-local-locator.v7:global-confidence-origin",
+          "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
         scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
         turnIndexRevision,
         embeddingIdentity: sourceSpanEmbedding
@@ -2736,8 +2693,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         request,
         adjacencyPolicyVersion:
           PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
-        rankerVersion:
-          "paw.memory-source-local-ranker.v6:confidence-first-diverse",
+        rankerVersion: "paw.amb-source-local-ranker.v1:rrf",
       });
       const cached = sourceLocalLocatorCache.get(cacheKey);
       if (cached) {
@@ -2758,291 +2714,91 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           ),
           sourceSetDigest: sha([...allowed].sort().join("\n")),
           lockedSourceCount: allowed.size,
-          roleConstraint: request.requirement.roleConstraint,
-          assistantOriginPolicy: request.assistantOriginPolicy,
-          lockedSourceHashes: contentFreeHashes(allowed),
+          lockedSourceHashes: contentFreeSourceHashes(allowed),
           anchorCount: replay.hits.length,
-          anchorSourceHashes: contentFreeHashes(
+          anchorSourceHashes: contentFreeSourceHashes(
             replay.hits.map((hit) => hit.sourceId),
-          ),
-          anchorEvidenceRefHashes: contentFreeHashes(
-            replay.hits.map((hit) => hit.evidenceRef),
           ),
           cacheHit: true,
           durationMs: replay.telemetry.durationMs,
         });
         return replay;
       }
-      const includeRequestMatches =
-        request.requirement.roleConstraint !== "user";
-      const allowedBlockIds = request.lockedSourceIds.flatMap(
-        (documentId) => blockIdsByDocument?.get(documentId) ?? [],
-      );
-      const documentIdByBlockId = new Map(
-        request.lockedSourceIds.flatMap((documentId) =>
-          (blockIdsByDocument?.get(documentId) ?? []).map(
-            (blockId) => [blockId, documentId] as const,
-          ),
-        ),
-      );
-      async function searchRoleAcrossSources(
-        issueType: "assistant_output" | "user_input",
-        enabled = true,
-      ) {
-        if (!enabled) {
-          return {
-            rankedCandidates: [],
-            lexicalCandidateCount: 0,
-            denseCandidateCount: 0,
-            lexicalFailureCount: 0,
-            denseFailureCount: 0,
-            backfillSourceCount: 0,
-            unavailable: false,
-          };
-        }
-        const searchChannels = async (
-          channelAllowedIds: readonly string[],
-          limit: number,
-        ) => {
-          const filter = {
-            allowedIds: channelAllowedIds,
-            issueType,
-            ...(request.evidenceTimeUpperBound === undefined
-              ? {}
-              : { createdAtUpperBound: request.evidenceTimeUpperBound }),
-          };
-          const [lexical, dense] = await Promise.all([
-            engine
-              .searchText(
+      const filter = {
+        allowedIds,
+        issueType: "assistant_output",
+        ...(request.evidenceTimeUpperBound === undefined
+          ? {}
+          : { createdAtUpperBound: request.evidenceTimeUpperBound }),
+      };
+      const [lexical, dense] = await Promise.all([
+        engine
+          .searchText(
+            locatorQuery,
+            request.budget.maxCandidatesPerChannel,
+            sourceScopeFor(userId).repositoryId,
+            filter,
+          )
+          .then((hits) => ({ hits, failed: false as const }))
+          .catch(() => ({ hits: [], failed: true as const })),
+        sourceSpanEmbedding
+          ? engine
+              .searchVector(
                 locatorQuery,
-                limit,
+                request.budget.maxCandidatesPerChannel,
                 sourceScopeFor(userId).repositoryId,
                 filter,
               )
-              .then((hits) => ({ hits, failed: false }))
-              .catch(() => ({ hits: [], failed: true })),
-            sourceSpanEmbedding
-              ? engine
-                  .searchVector(
-                    locatorQuery,
-                    limit,
-                    sourceScopeFor(userId).repositoryId,
-                    filter,
-                  )
-                  .then((hits) => ({ hits, failed: false }))
-                  .catch(() => ({ hits: [], failed: true }))
-              : Promise.resolve({ hits: [], failed: false }),
-          ]);
-          return { lexical, dense };
-        };
-        const global = await searchChannels(
-          allowedBlockIds,
-          request.budget.maxCandidatesPerChannel,
-        );
-        const globallyRanked = reciprocalRankFusionV1([
-          { weight: MEMORY_RRF_TEXT_WEIGHT_V1, hits: global.lexical.hits },
-          ...(sourceSpanEmbedding
-            ? [
-                {
-                  weight: MEMORY_RRF_VECTOR_WEIGHT_V1,
-                  hits: global.dense.hits,
-                },
-              ]
-            : []),
-        ]).map((item) => ({ id: item.id, score: item.score }));
-        const backfillSourceIds = memorySourceLocalBackfillSourceIdsV1({
-          candidates: globallyRanked.flatMap((candidate) => {
-            const sourceId = documentIdByBlockId.get(candidate.id);
-            return sourceId
-              ? [
-                  {
-                    evidenceRef: candidate.id,
-                    sourceId,
-                    score: candidate.score,
-                  },
-                ]
-              : [];
-          }),
-          lockedSourceIds: request.lockedSourceIds,
-          minimumCandidatesPerSource: 2,
-        });
-        const backfills = await Promise.all(
-          backfillSourceIds.map(async (documentId) => {
-            const channels = await searchChannels(
-              blockIdsByDocument?.get(documentId) ?? [],
-              2,
-            );
-            return {
-              documentId,
-              channels,
-              ranked: reciprocalRankFusionV1([
-                {
-                  weight: MEMORY_RRF_TEXT_WEIGHT_V1,
-                  hits: channels.lexical.hits,
-                },
-                ...(sourceSpanEmbedding
-                  ? [
-                      {
-                        weight: MEMORY_RRF_VECTOR_WEIGHT_V1,
-                        hits: channels.dense.hits,
-                      },
-                    ]
-                  : []),
-              ]),
-            };
-          }),
-        );
-        const rankedById = new Map(
-          globallyRanked.map((candidate) => [candidate.id, candidate]),
-        );
-        for (const backfill of backfills) {
-          const sourcePriority = request.lockedSourceIds.indexOf(
-            backfill.documentId,
-          );
-          backfill.ranked.forEach((candidate, index) => {
-            if (rankedById.has(candidate.id)) return;
-            rankedById.set(candidate.id, {
-              id: candidate.id,
-              score: ambSourceLocalBackfillScoreV1(sourcePriority, index + 1),
-            });
-          });
-        }
-        const backfillUnavailable = hasAmbSourceLocalBackfillFailureV1({
-          denseConfigured: sourceSpanEmbedding !== undefined,
-          attempts: backfills.map(({ channels }) => ({
-            lexicalFailed: channels.lexical.failed,
-            denseFailed: channels.dense.failed,
-          })),
-        });
-        const lexicalCandidateCount =
-          global.lexical.hits.length +
-          backfills.reduce(
-            (total, backfill) => total + backfill.channels.lexical.hits.length,
-            0,
-          );
-        const denseCandidateCount =
-          global.dense.hits.length +
-          backfills.reduce(
-            (total, backfill) => total + backfill.channels.dense.hits.length,
-            0,
-          );
-        const lexicalFailureCount =
-          Number(global.lexical.failed) +
-          backfills.filter((backfill) => backfill.channels.lexical.failed)
-            .length;
-        const denseFailureCount =
-          Number(global.dense.failed) +
-          backfills.filter((backfill) => backfill.channels.dense.failed).length;
-        return {
-          rankedCandidates: [...rankedById.values()],
-          lexicalCandidateCount,
-          denseCandidateCount,
-          lexicalFailureCount,
-          denseFailureCount,
-          backfillSourceCount: backfillSourceIds.length,
-          unavailable: backfillUnavailable,
-        };
-      }
-      const [assistantSearch, requestSearch] = await Promise.all([
-        searchRoleAcrossSources("assistant_output"),
-        searchRoleAcrossSources("user_input", includeRequestMatches),
+              .then((hits) => ({ hits, failed: false as const }))
+              .catch(() => ({ hits: [], failed: true as const }))
+          : Promise.resolve({ hits: [], failed: false as const }),
       ]);
-      const matchedCandidates = [
-        ...assistantSearch.rankedCandidates.map((candidate) => ({
-          ...candidate,
-          issueType: "assistant_output" as const,
-        })),
-        ...requestSearch.rankedCandidates.map((candidate) => ({
-          ...candidate,
-          issueType: "user_input" as const,
-        })),
-      ];
-      const rankedIds = [...new Set(matchedCandidates.map(({ id }) => id))];
-      const loadedEntries = engine.getMany
-        ? await engine.getMany(rankedIds)
-        : (await Promise.all(rankedIds.map((id) => engine.get(id)))).filter(
+      const ranked = reciprocalRankFusionV1([
+        { weight: MEMORY_RRF_TEXT_WEIGHT_V1, hits: lexical.hits },
+        ...(sourceSpanEmbedding
+          ? [{ weight: MEMORY_RRF_VECTOR_WEIGHT_V1, hits: dense.hits }]
+          : []),
+      ]);
+      const entries = engine.getMany
+        ? await engine.getMany(ranked.map((item) => item.id))
+        : (await Promise.all(ranked.map((item) => engine.get(item.id)))).filter(
             (entry): entry is MemoryEntry => entry !== null,
           );
-      const entryById = new Map(
-        loadedEntries.map((entry) => [entry.id, entry]),
-      );
-      const anchors = (
-        await Promise.all(
-          matchedCandidates.map(async (candidate) => {
-            const entry = entryById.get(candidate.id);
-            if (
-              !entry ||
-              entry.kind !== "episodic" ||
-              (entry.issueType !== "assistant_output" &&
-                entry.issueType !== "user_input") ||
-              !entry.whenToUse.trim()
-            ) {
-              return undefined;
-            }
-            const matched = sourceTurnAddressFromEntryV1(entry);
-            if (
-              !matched ||
-              !allowed.has(matched.documentId) ||
-              !documentVisibleAtQuery(matched.documentId)
-            ) {
-              return undefined;
-            }
-            if (entry.issueType === "assistant_output") {
-              return {
-                ...matched,
-                evidenceRef: matched.evidenceRef,
-                sourceId: matched.documentId,
-                score: candidate.score,
-                matchedEvidenceRef: matched.evidenceRef,
-                requestDerived: false,
-              };
-            }
-            const reply = await engine.get(
-              sourceBlockId(userId, matched.documentId, matched.sourceSeq + 1),
-            );
-            if (
-              reply?.kind !== "episodic" ||
-              reply.issueType !== "assistant_output"
-            ) {
-              return undefined;
-            }
-            const replyAddress = sourceTurnAddressFromEntryV1(reply);
-            if (
-              !replyAddress ||
-              replyAddress.documentId !== matched.documentId ||
-              replyAddress.sourceSeq !== matched.sourceSeq + 1
-            ) {
-              return undefined;
-            }
-            return {
-              ...replyAddress,
-              evidenceRef: replyAddress.evidenceRef,
-              sourceId: replyAddress.documentId,
-              score: candidate.score,
-              matchedEvidenceRef: matched.evidenceRef,
-              requestDerived: true,
-            };
-          }),
-        )
-      ).filter((anchor): anchor is NonNullable<typeof anchor> =>
-        Boolean(anchor),
-      );
-      const uniqueAnchors = rankMemorySourceLocalAnchorCandidatesV1({
-        candidates: anchors,
-        lockedSourceIds: request.lockedSourceIds,
-        maxCandidates: request.budget.maxCandidatesPerChannel,
-        maxCandidatesPerSource: memorySourceLocalDiverseCandidateCapV1({
-          lockedSourceCount: request.lockedSourceIds.length,
-          maxAnchors: request.budget.maxAnchors,
-          maxAnchorsPerSource: request.budget.maxAnchorsPerSource,
-        }),
+      const anchors = entries.flatMap((entry) => {
+        if (
+          entry.kind !== "episodic" ||
+          entry.issueType !== "assistant_output" ||
+          !entry.whenToUse.trim()
+        ) {
+          return [];
+        }
+        const physicalEvidenceRef = entry.evidence.find((ref) =>
+          /#source-\d+$/.test(ref),
+        );
+        const documentId = physicalEvidenceRef
+          ? sourceDocumentIdFromEvidenceV1(physicalEvidenceRef)
+          : undefined;
+        const evidenceRef = physicalEvidenceRef
+          ? logicalSourceLocalEvidenceRefV1(physicalEvidenceRef)
+          : undefined;
+        const sourceSeq = Number(/#source-(\d+)$/.exec(evidenceRef ?? "")?.[1]);
+        if (
+          !evidenceRef ||
+          !documentId ||
+          !allowed.has(documentId) ||
+          !documentVisibleAtQuery(documentId) ||
+          !Number.isSafeInteger(sourceSeq) ||
+          sourceSeq < 1
+        ) {
+          return [];
+        }
+        return [{ documentId, sourceSeq, evidenceRef }];
       });
       const perSource = new Map<string, number>();
       const hits = [];
       let renderedChars = 0;
       let uncertifiedAnchorCount = 0;
-      let requestDerivedAnchorCount = 0;
-      for (const anchor of uniqueAnchors) {
+      for (const anchor of anchors) {
         if (hits.length >= request.budget.maxAnchors) break;
         const sourceCount = perSource.get(anchor.documentId) ?? 0;
         if (sourceCount >= request.budget.maxAnchorsPerSource) continue;
@@ -3095,10 +2851,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         });
         if (
           request.requirement.roleConstraint === "any" &&
-          !hasMemorySourceLocalAssistantOriginCertificateV1(
+          !hasMemorySourceLocalDialogueCertificateV1(
             bundle.includedEvidence,
             anchor.sourceSeq,
-            request.assistantOriginPolicy,
           )
         ) {
           uncertifiedAnchorCount += 1;
@@ -3133,17 +2888,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           }),
         );
         perSource.set(anchor.documentId, sourceCount + 1);
-        if (anchor.requestDerived) requestDerivedAnchorCount += 1;
         renderedChars += bundle.text.length;
       }
       const degradedChannels = Object.freeze([
-        ...(assistantSearch.unavailable || requestSearch.unavailable
-          ? (["lexical"] as const)
-          : []),
+        ...(lexical.failed ? (["lexical"] as const) : []),
+        ...(dense.failed ? (["dense"] as const) : []),
       ]);
       const result = Object.freeze({
         locatorVersion:
-          "paw.amb-source-local-locator.v7:global-confidence-origin",
+          "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
         locatorRevision: sha(
           JSON.stringify({
             turnIndexRevision,
@@ -3154,12 +2907,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         hits: Object.freeze(hits),
         degradedChannels,
         telemetry: Object.freeze({
-          lexicalCandidates:
-            assistantSearch.lexicalCandidateCount +
-            requestSearch.lexicalCandidateCount,
-          denseCandidates:
-            assistantSearch.denseCandidateCount +
-            requestSearch.denseCandidateCount,
+          lexicalCandidates: lexical.hits.length,
+          denseCandidates: dense.hits.length,
           anchorCount: hits.length,
           includedTurnCount: hits.reduce(
             (total, hit) => total + hit.includedTurns.length,
@@ -3183,41 +2932,12 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         requirementIdHash: sha(request.requirement.requirementId).slice(0, 20),
         sourceSetDigest: sha([...allowed].sort().join("\n")),
         lockedSourceCount: allowed.size,
-        roleConstraint: request.requirement.roleConstraint,
-        assistantOriginPolicy: request.assistantOriginPolicy,
-        lockedSourceHashes: contentFreeHashes(allowed),
-        lexicalCandidateCount:
-          assistantSearch.lexicalCandidateCount +
-          requestSearch.lexicalCandidateCount,
-        denseCandidateCount:
-          assistantSearch.denseCandidateCount +
-          requestSearch.denseCandidateCount,
-        backfillSourceCount:
-          assistantSearch.backfillSourceCount +
-          requestSearch.backfillSourceCount,
-        lexicalFailureCount:
-          assistantSearch.lexicalFailureCount +
-          requestSearch.lexicalFailureCount,
-        denseFailureCount:
-          assistantSearch.denseFailureCount + requestSearch.denseFailureCount,
+        lockedSourceHashes: contentFreeSourceHashes(allowed),
+        lexicalCandidateCount: lexical.hits.length,
+        denseCandidateCount: dense.hits.length,
         anchorCount: hits.length,
-        requestDerivedAnchorCount,
-        requestMatchedEvidenceRefHashes: contentFreeHashes(
-          uniqueAnchors
-            .filter((anchor) => anchor.requestDerived)
-            .map((anchor) => anchor.matchedEvidenceRef),
-        ),
-        requestDerivedEvidenceRefHashes: contentFreeHashes(
-          uniqueAnchors
-            .filter((anchor) => anchor.requestDerived)
-            .map((anchor) => anchor.evidenceRef),
-        ),
-        rankedAnchorEvidenceRefHashes: contentFreeHashes(
-          uniqueAnchors.map((anchor) => anchor.evidenceRef),
-        ),
-        anchorSourceHashes: contentFreeHashes(hits.map((hit) => hit.sourceId)),
-        anchorEvidenceRefHashes: contentFreeHashes(
-          hits.map((hit) => hit.evidenceRef),
+        anchorSourceHashes: contentFreeSourceHashes(
+          hits.map((hit) => hit.sourceId),
         ),
         includedTurnCount: result.telemetry.includedTurnCount,
         uncertifiedAnchorCount,
@@ -3229,8 +2949,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     }
     const sharedResolver = createMemoryEvidenceResolverV1({
       index: {
-        indexVersion:
-          "paw.amb-turn-evidence-index.v2:namespaced-source-address",
+        indexVersion: "paw.amb-turn-evidence-index.v2:namespaced-source-address",
         evidenceRefBelongsToSource(sourceId, evidenceRef) {
           return sourceDocumentIdFromEvidenceV1(evidenceRef) === sourceId;
         },
@@ -3249,7 +2968,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ? {
             sourceLocalLocator: Object.freeze({
               locatorVersion:
-                "paw.amb-source-local-locator.v7:global-confidence-origin",
+                "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
               locate(request: MemorySourceLocalEvidenceRequestV1) {
                 return locateEvidenceWithinSources(request);
               },
@@ -3393,8 +3112,6 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     ).length;
     evidenceFirstQueryExpansionStatus = resolution.plannerStatus;
     evidenceFirstSupportSelectorStatus = resolution.supportSelectorStatus;
-    evidenceFirstSupportSelectorFailureCode =
-      resolution.supportSelectorFailureCode ?? null;
     evidenceFirstDirectCertificateStatus = resolution.directCertificateStatus;
     evidenceFirstClosureAuditStatus = resolution.closureAuditStatus;
     evidenceFirstClosureVerdict = resolution.closureVerdict ?? "not_evaluated";
@@ -3532,15 +3249,20 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     rawEvidenceSpanCount = resolution.packetSources.length;
     memoryRoute = "evidence_first_spans";
     const output = resolution.packetSources.map((source, index) => {
-      const authorityLabel = renderMemoryEvidenceAuthorityHeaderV1({
-        evidenceUse: classifyMemoryEvidenceRefsUseV1({
-          requirements: resolution.requirements,
-          coverage: resolution.notebook.coverage,
-          evidenceRefs: source.evidenceRefs,
-        }),
-        roleConstraint: resolution.intent.roleConstraint,
-        answerRole: source.answerRole,
-      });
+      const authorityLabel =
+        resolution.intent.roleConstraint === "assistant"
+          ? "[Assistant-output evidence]\nAuthority rule: use only to recall the assistant's prior output or action; never as a user fact."
+          : resolution.intent.roleConstraint === "any"
+            ? "[Shared-dialogue evidence]\nAuthority rule: assistant output may answer only a directly requested shared artifact or prior answer whose neighboring user request establishes its provenance; never treat it as a user fact."
+            : source.answerRole === "current"
+              ? "[Current user-grounded evidence]"
+              : source.answerRole === "ambiguous"
+                ? "[Ambiguous user-grounded evidence]"
+                : source.answerRole === "candidate"
+                  ? "[Unverified candidate L0 evidence]\nUse only if it directly answers a missing requirement; relevance alone is not support."
+                  : source.answerRole === "mixed"
+                    ? "[Mixed verified and candidate L0 evidence]\nRequirement-bound evidence is followed by bounded candidates; verify candidate text before use."
+                    : "[Supporting user-grounded evidence]";
       return {
         id: source.sourceId,
         content: [
@@ -4594,7 +4316,6 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstQueryExpansionCount,
       evidenceFirstQueryExpansionStatus,
       evidenceFirstSupportSelectorStatus,
-      evidenceFirstSupportSelectorFailureCode,
       evidenceFirstDirectCertificateStatus,
       evidenceFirstClosureAuditStatus,
       evidenceFirstClosureVerdict,
@@ -4694,7 +4415,6 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstQueryExpansionCount,
     evidenceFirstQueryExpansionStatus,
     evidenceFirstSupportSelectorStatus,
-    evidenceFirstSupportSelectorFailureCode,
     evidenceFirstDirectCertificateStatus,
     evidenceFirstClosureAuditStatus,
     evidenceFirstClosureVerdict,

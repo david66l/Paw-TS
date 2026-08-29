@@ -5,20 +5,17 @@ import {
   type MemoryEvidenceRequirementV3,
   buildMemoryEvidenceSupportSelectionRequestV1,
   createJsonMemoryEvidenceSupportSelectorV1,
-  memoryEvidenceSupportFailureCodeV1,
   parseMemoryEvidenceSupportSelectionV1,
 } from "../src/index.js";
 
-const japanRequirement: MemoryEvidenceRequirementV3 = {
-  requirementId: "requirement-1",
-  label: "Japan trip duration",
-  searchText: "Japan trip duration",
-  temporalMode: "any",
-  roleConstraint: "user",
-};
-
 const requirements: readonly MemoryEvidenceRequirementV3[] = [
-  japanRequirement,
+  {
+    requirementId: "requirement-1",
+    label: "Japan trip duration",
+    searchText: "Japan trip duration",
+    temporalMode: "any",
+    roleConstraint: "user",
+  },
   {
     requirementId: "requirement-2",
     label: "Chicago trip duration",
@@ -50,160 +47,10 @@ const candidates: readonly MemoryEvidenceNotebookHitV1[] = [
 ];
 
 describe("requirement-bound evidence support selector v1", () => {
-  test("bounds a large raw candidate only at the model projection", () => {
-    const request = buildMemoryEvidenceSupportSelectionRequestV1({
-      query: "How long was the Japan trip?",
-      requirements: [japanRequirement],
-      candidates: [
-        {
-          sourceId: "large-source",
-          evidenceRef: "large-source#turn-1",
-          content: "Japan trip duration ".repeat(700),
-          authority: "user_asserted",
-        },
-      ],
-    });
-    const payload = JSON.parse(request.user) as {
-      candidates: readonly { content: string }[];
-    };
-    expect(payload.candidates[0]?.content.length).toBeLessThanOrEqual(2_400);
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "How long was the Japan trip?",
-        requirements: [japanRequirement],
-        candidates: [
-          {
-            sourceId: "oversized-source",
-            evidenceRef: "oversized-source#turn-1",
-            content: "Japan trip duration ".repeat(900),
-            authority: "user_asserted",
-          },
-        ],
-      }),
-    ).toThrow("MemoryEvidenceSupportCandidateInvalid");
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "How long was the Japan trip?",
-        requirements: [japanRequirement],
-        candidates: [
-          {
-            sourceId: "whitespace-source",
-            evidenceRef: "whitespace-source#turn-1",
-            content: `Japan${" ".repeat(16_384)}`,
-            authority: "user_asserted",
-          },
-        ],
-      }),
-    ).toThrow("MemoryEvidenceSupportCandidateInvalid");
-  });
-
-  test("exposes only content-free selector failure codes", () => {
-    const known = new Error("invalid output");
-    known.name = "MemoryEvidenceSupportRequirementInvalid";
-    expect(memoryEvidenceSupportFailureCodeV1(known)).toBe(
-      "MemoryEvidenceSupportRequirementInvalid",
-    );
-    expect(
-      memoryEvidenceSupportFailureCodeV1(new Error("private detail")),
-    ).toBe("MemoryEvidenceSupportSelectorFailed");
-    const untrusted = new Error("private detail");
-    untrusted.name = "MemoryEvidenceSupportPrivateDetail";
-    expect(memoryEvidenceSupportFailureCodeV1(untrusted)).toBe(
-      "MemoryEvidenceSupportSelectorFailed",
-    );
-    const certificateCodes = [
-      "MemoryEvidenceSupportCertifiedDialogueCandidateInvalid",
-      "MemoryEvidenceSupportCertifiedDialogueContractInvalid",
-      "MemoryEvidenceSupportReportedAssertionCandidateInvalid",
-      "MemoryEvidenceSupportReportedAssertionContractInvalid",
-      "MemoryEvidenceSupportSourceLocalCandidateInvalid",
-      "MemoryEvidenceSupportSourceLocalContractInvalid",
-    ] as const;
-    for (const code of certificateCodes) {
-      const error = new Error("private detail");
-      error.name = code;
-      expect(memoryEvidenceSupportFailureCodeV1(error)).toBe(code);
-    }
-  });
-
-  test("classifies certificate candidate and contract failures", () => {
-    const assistant = {
-      sourceId: "session",
-      evidenceRef: "session#assistant-1",
-      content: "The proposed label was Northstar.",
-      authority: "context_only" as const,
-      sourceKind: "assistant_output" as const,
-      contextEvidenceRefs: ["session#assistant-1"],
-      turnOrder: 1,
-    };
-    const malformedAssistant = {
-      ...assistant,
-      contextEvidenceRefs: [],
-    };
-    const anyRequirement = {
-      ...japanRequirement,
-      roleConstraint: "any" as const,
-    };
-    const reportedRequirement = {
-      ...japanRequirement,
-      evidenceUse: "reported_assistant_assertion" as const,
-    };
-
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "What was proposed?",
-        requirements: [japanRequirement],
-        candidates: [malformedAssistant],
-        certifiedAssistantDialogueEvidenceRefs: [assistant.evidenceRef],
-      }),
-    ).toThrow("MemoryEvidenceSupportCertifiedDialogueCandidateInvalid");
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "What was proposed?",
-        requirements,
-        candidates,
-        certifiedAssistantDialogueEvidenceRefs: [candidates[0]!.evidenceRef],
-      }),
-    ).toThrow("MemoryEvidenceSupportCertifiedDialogueContractInvalid");
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "What was proposed?",
-        requirements: [reportedRequirement],
-        candidates: [malformedAssistant],
-        reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
-        sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
-      }),
-    ).toThrow("MemoryEvidenceSupportReportedAssertionCandidateInvalid");
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "What was proposed?",
-        requirements: [reportedRequirement],
-        candidates: [assistant],
-        reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
-      }),
-    ).toThrow("MemoryEvidenceSupportReportedAssertionContractInvalid");
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "What was proposed?",
-        requirements: [anyRequirement],
-        candidates: [malformedAssistant],
-        sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
-      }),
-    ).toThrow("MemoryEvidenceSupportSourceLocalCandidateInvalid");
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "What was proposed?",
-        requirements: [japanRequirement],
-        candidates: [assistant],
-        sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
-      }),
-    ).toThrow("MemoryEvidenceSupportSourceLocalContractInvalid");
-  });
-
   test("projects ordinal evidence and exposes turn order for revised outputs", () => {
     const request = buildMemoryEvidenceSupportSelectionRequestV1({
       query: "What was the 27th item in the second output?",
-      requirements: [japanRequirement],
+      requirements: [requirements[0]!],
       candidates: [
         {
           sourceId: "session",
@@ -254,25 +101,23 @@ describe("requirement-bound evidence support selector v1", () => {
   });
 
   test("passes typed inference closure to the bounded selector", () => {
-    const input = {
+    const request = buildMemoryEvidenceSupportSelectionRequestV1({
       query: "What kind of exercise do I seem to prefer?",
       requirements: [
         {
-          ...japanRequirement,
+          ...requirements[0]!,
           relation: "inferred",
           coverageMode: "convergent",
           minimumEvidence: 2,
         },
       ],
       candidates,
-    } as const;
-    const request = buildMemoryEvidenceSupportSelectionRequestV1(input);
+    });
     const payload = JSON.parse(request.user) as {
       requirements: Array<{
         relation: string;
         coverageMode: string;
         minimumEvidence: number;
-        evidenceUse?: string;
       }>;
     };
 
@@ -281,13 +126,6 @@ describe("requirement-bound evidence support selector v1", () => {
       coverageMode: "convergent",
       minimumEvidence: 2,
     });
-    expect(payload.requirements[0]).not.toHaveProperty("evidenceUse");
-    expect(
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        ...input,
-        requirements: [{ ...input.requirements[0], evidenceUse: "fact" }],
-      }),
-    ).toEqual(request);
     expect(request.system).toContain("relation=inferred");
     expect(request.system).toContain("distinct observations");
   });
@@ -304,76 +142,23 @@ describe("requirement-bound evidence support selector v1", () => {
     };
     const request = buildMemoryEvidenceSupportSelectionRequestV1({
       query: "What was the label from our previous conversation?",
-      requirements: [japanRequirement],
+      requirements: [requirements[0]!],
       candidates: [assistant],
       certifiedAssistantDialogueEvidenceRefs: [assistant.evidenceRef],
-      sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
     });
     const payload = JSON.parse(request.user) as {
       requirements: Array<{
         certifiedAssistantDialogueCandidate: boolean;
       }>;
-      candidates: Array<{
-        certifiedAssistantDialogue: boolean;
-        sourceLocalAssistantOriginCertified: boolean;
-      }>;
+      candidates: Array<{ certifiedAssistantDialogue: boolean }>;
     };
     expect(payload.requirements[0]?.certifiedAssistantDialogueCandidate).toBe(
       true,
     );
     expect(payload.candidates[0]?.certifiedAssistantDialogue).toBe(true);
-    expect(payload.candidates[0]?.sourceLocalAssistantOriginCertified).toBe(
-      true,
-    );
     expect(request.system).toContain(
       "roleConstraint=user with certifiedAssistantDialogueCandidate=true",
     );
-
-    const unresolved = buildMemoryEvidenceSupportSelectionRequestV1({
-      query: "What was proposed in the earlier chat?",
-      requirements: [
-        {
-          ...japanRequirement,
-          roleConstraint: "any",
-        },
-      ],
-      candidates: [assistant],
-      sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
-    });
-    const unresolvedPayload = JSON.parse(unresolved.user) as {
-      candidates: Array<{ sourceLocalAssistantOriginCertified: boolean }>;
-    };
-    expect(
-      unresolvedPayload.candidates[0]?.sourceLocalAssistantOriginCertified,
-    ).toBe(true);
-
-    const confirmed = buildMemoryEvidenceSupportSelectionRequestV1({
-      query: "What was confirmed in the earlier chat?",
-      requirements: [
-        {
-          ...japanRequirement,
-          roleConstraint: "any",
-        },
-      ],
-      candidates: [
-        {
-          ...assistant,
-          authority: "user_confirmed_dialogue",
-          contextEvidenceRefs: [
-            "session#user-1",
-            "session#assistant-2",
-            "session#user-3",
-          ],
-        },
-      ],
-      sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
-    });
-    const confirmedPayload = JSON.parse(confirmed.user) as {
-      candidates: Array<{ sourceLocalAssistantOriginCertified: boolean }>;
-    };
-    expect(
-      confirmedPayload.candidates[0]?.sourceLocalAssistantOriginCertified,
-    ).toBe(true);
 
     expect(() =>
       buildMemoryEvidenceSupportSelectionRequestV1({
@@ -382,51 +167,7 @@ describe("requirement-bound evidence support selector v1", () => {
         candidates,
         certifiedAssistantDialogueEvidenceRefs: ["japan#turn-1"],
       }),
-    ).toThrow("MemoryEvidenceSupportCertifiedDialogueContractInvalid");
-  });
-
-  test("binds reported assistant assertions to their dedicated requirement", () => {
-    const assistant = {
-      sourceId: "session",
-      evidenceRef: "session#assistant-1",
-      content: "The cover was blue.",
-      authority: "context_only" as const,
-      sourceKind: "assistant_output" as const,
-      contextEvidenceRefs: ["session#assistant-1"],
-      turnOrder: 1,
-    };
-    const reportedRequirement = {
-      ...japanRequirement,
-      evidenceUse: "reported_assistant_assertion" as const,
-    };
-    const request = buildMemoryEvidenceSupportSelectionRequestV1({
-      query: "Do you remember what was the color of the cover?",
-      requirements: [reportedRequirement],
-      candidates: [assistant],
-      reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
-      sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
-    });
-    const payload = JSON.parse(request.user) as {
-      requirements: Array<{ evidenceUse: string }>;
-      candidates: Array<{ reportedAssistantAssertion: boolean }>;
-    };
-    expect(payload.requirements[0]?.evidenceUse).toBe(
-      "reported_assistant_assertion",
-    );
-    expect(payload.candidates[0]?.reportedAssistantAssertion).toBe(true);
-    expect(request.system).toContain(
-      "not the truth of the underlying user, shared, third-party, or world fact",
-    );
-
-    expect(() =>
-      buildMemoryEvidenceSupportSelectionRequestV1({
-        query: "What is my address?",
-        requirements: [japanRequirement],
-        candidates: [assistant],
-        reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
-        sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
-      }),
-    ).toThrow("MemoryEvidenceSupportReportedAssertionContractInvalid");
+    ).toThrow("MemoryEvidenceSupportCertificateInvalid");
   });
 
   test("accepts only supplied evidence addresses for every requirement", () => {

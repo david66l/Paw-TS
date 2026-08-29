@@ -37,7 +37,6 @@ EVIDENCE_ANSWER_PROTOCOL = """Paw evidence synthesis protocol:
 - Execute its answerPolicy operations over the Memory blocks before writing the answer.
 - bind_requirements: resolve every covered requirement separately and do not replace a missing one with a related fact.
 - enforce_role: distinguish user statements from assistant suggestions or completed assistant actions.
-- frame_reported_assistant_assertion: say only that the assistant previously stated the selected content; do not present its underlying claim as independently verified.
 - order_events and resolve_latest: use event time, preserve history, and let a later update control only the state it actually changes.
 - deduplicate_entities: list unique supported items or events before counting; repeated mentions are not new items.
 - compare_sides: require evidence for every requested side.
@@ -47,7 +46,7 @@ Keep the reasoning audit concise. Make the final answer directly match the reque
 
 """
 RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v9:cost-audited-cache-envelope"
-MEMORY_POLICY = "paw.amb-evidence-first.v24:post-plan-origin-binding"
+MEMORY_POLICY = "paw.amb-evidence-first.v19:fail-closed-triaged-closure"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
 RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v6:dense-turn-initial-packet"
 PROJECT_RELEASE_GATE = {

@@ -1,8 +1,6 @@
-import type { MemoryEvidenceUseV1 } from "./evidence-query-planner.js";
-
 /** Runtime-independent evidence packet contract exposed by the memory core. */
 export const PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1 =
-  "paw.memory-context-resolver.v5:typed-evidence-use" as const;
+  "paw.memory-context-resolver.v4:requirement-grounded-l0-audit" as const;
 
 export interface MemoryRawEvidenceSpanV1 {
   readonly evidenceRef: string;
@@ -17,7 +15,6 @@ export interface MemoryResolvedContextEvidenceV1 {
   readonly statement: string;
   readonly state?: "current" | "historical";
   readonly supportRole?: "supporting" | "contradicting" | "contextual";
-  readonly evidenceUse: MemoryEvidenceUseV1;
   readonly validFrom?: string;
   readonly evidenceRefs: readonly string[];
 }
@@ -54,7 +51,7 @@ export interface MemoryResolvedContextTopicV1 {
 }
 
 export interface MemoryResolvedContextPacketV1 {
-  readonly schemaVersion: "paw.memory-resolved-context.v2";
+  readonly schemaVersion: "paw.memory-resolved-context.v1";
   readonly resolverVersion: typeof PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1;
   readonly packetRevision: string;
   readonly mode: "planned" | "deterministic_fallback";
@@ -64,7 +61,6 @@ export interface MemoryResolvedContextPacketV1 {
     description: string;
     priority: "required" | "supporting";
     minimumEvidence: number;
-    evidenceUse: MemoryEvidenceUseV1;
     status: "covered" | "partial" | "missing";
     selectedEvidenceCount: number;
     supportingMemoryIds: readonly string[];

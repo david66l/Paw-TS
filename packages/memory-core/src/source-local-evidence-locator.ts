@@ -12,7 +12,7 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
 
 export const PAW_MEMORY_SOURCE_LOCAL_EVIDENCE_LOCATOR_PORT_VERSION_V1 =
-  "paw.memory-source-local-evidence-locator-port.v3:reported-assistant-assertion" as const;
+  "paw.memory-source-local-evidence-locator-port.v1" as const;
 
 export interface MemorySourceLocalEvidenceBudgetV1 {
   readonly maxAnchors: number;
@@ -22,15 +22,8 @@ export interface MemorySourceLocalEvidenceBudgetV1 {
   readonly maxChars: number;
 }
 
-export type MemoryAssistantOriginPolicyV1 =
-  | "addressed_reply_only"
-  | "allow_session_opening_artifact"
-  | "allow_session_opening_reported_assertion";
-
 export interface MemorySourceLocalEvidenceRequestV1 {
   readonly requirement: MemoryEvidenceRequirementV3;
-  /** Code-owned authority aperture; a model may never widen this policy. */
-  readonly assistantOriginPolicy: MemoryAssistantOriginPolicyV1;
   /** Immutable source set selected by the first-stage fusion. */
   readonly lockedSourceIds: readonly string[];
   /** Evidence newer than this instant must never be observed. */
@@ -78,86 +71,6 @@ export interface MemorySourceLocalEvidenceLocatorV1 {
   ): Promise<MemorySourceLocalEvidenceResultV1>;
 }
 
-export interface MemorySourceLocalAnchorCandidateV1 {
-  readonly evidenceRef: string;
-  readonly sourceId: string;
-  readonly score: number;
-}
-
-/**
- * Identifies locked sources that need a bounded recall backfill before global
- * confidence ranking. This keeps a head source from monopolizing an adapter's
- * top-k retrieval window while leaving final evidence selection score-driven.
- */
-export function memorySourceLocalBackfillSourceIdsV1(input: {
-  readonly candidates: readonly MemorySourceLocalAnchorCandidateV1[];
-  readonly lockedSourceIds: readonly string[];
-  readonly minimumCandidatesPerSource: number;
-}): readonly string[] {
-  if (
-    !Number.isSafeInteger(input.minimumCandidatesPerSource) ||
-    input.minimumCandidatesPerSource < 1 ||
-    input.minimumCandidatesPerSource > 8
-  ) {
-    throw namedError("MemorySourceLocalEvidenceBudgetInvalid");
-  }
-  const locked = new Set(input.lockedSourceIds);
-  if (
-    locked.size !== input.lockedSourceIds.length ||
-    input.lockedSourceIds.some((sourceId) => !sourceId.trim())
-  ) {
-    throw namedError("MemorySourceLocalEvidenceSourcesInvalid");
-  }
-  const refsBySource = new Map<string, Set<string>>(
-    input.lockedSourceIds.map((sourceId) => [sourceId, new Set<string>()]),
-  );
-  for (const candidate of input.candidates) {
-    if (
-      !candidate.evidenceRef.trim() ||
-      !locked.has(candidate.sourceId) ||
-      !Number.isFinite(candidate.score)
-    ) {
-      throw namedError("MemorySourceLocalEvidenceHitInvalid");
-    }
-    refsBySource.get(candidate.sourceId)?.add(candidate.evidenceRef);
-  }
-  return Object.freeze(
-    input.lockedSourceIds.filter(
-      (sourceId) =>
-        (refsBySource.get(sourceId)?.size ?? 0) <
-        input.minimumCandidatesPerSource,
-    ),
-  );
-}
-
-/**
- * Keeps one final anchor slot available to another locked source whenever the
- * request spans multiple sources. A single-source request retains its full
- * declared per-source budget.
- */
-export function memorySourceLocalDiverseCandidateCapV1(input: {
-  readonly lockedSourceCount: number;
-  readonly maxAnchors: number;
-  readonly maxAnchorsPerSource: number;
-}): number {
-  if (
-    !Number.isSafeInteger(input.lockedSourceCount) ||
-    input.lockedSourceCount < 1 ||
-    !Number.isSafeInteger(input.maxAnchors) ||
-    input.maxAnchors < 1 ||
-    !Number.isSafeInteger(input.maxAnchorsPerSource) ||
-    input.maxAnchorsPerSource < 1 ||
-    input.maxAnchorsPerSource > input.maxAnchors
-  ) {
-    throw namedError("MemorySourceLocalEvidenceBudgetInvalid");
-  }
-  const diverseLimit =
-    input.lockedSourceCount > 1
-      ? Math.max(1, input.maxAnchors - 1)
-      : input.maxAnchors;
-  return Math.min(input.maxAnchorsPerSource, diverseLimit);
-}
-
 export interface MemorySourceLocalHydratedEvidenceV1 {
   readonly evidenceRef: string;
   readonly sourceKind: MemoryConversationTurnKindV1;
@@ -194,7 +107,6 @@ const MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODES_V1 = Object.freeze([
   "MemorySourceLocalEvidenceHydrationInvalid",
   "MemorySourceLocalEvidenceHydrationTraceInvalid",
   "MemorySourceLocalEvidenceHydratorInvalid",
-  "MemorySourceLocalEvidencePolicyInvalid",
   "MemorySourceLocalEvidenceProvenanceInvalid",
   "MemorySourceLocalEvidenceResultInvalid",
   "MemorySourceLocalEvidenceSourcesInvalid",
@@ -268,100 +180,6 @@ export function hasMemorySourceLocalDialogueCertificateV1(
 }
 
 /**
- * Proves only that an immutable assistant turn has a structurally valid origin:
- * either it answers the immediately preceding user request, or it is the first
- * turn of a session. It does not promote assistant prose to a user fact.
- */
-export function hasMemorySourceLocalAssistantOriginCertificateV1(
-  turns: readonly MemorySourceLocalIncludedTurnV1[],
-  anchorTurnOrder: number,
-  policy: MemoryAssistantOriginPolicyV1,
-): boolean {
-  if (!Number.isSafeInteger(anchorTurnOrder) || anchorTurnOrder < 1) {
-    return false;
-  }
-  const hasAssistantAnchor = turns.some(
-    (turn) =>
-      turn.sourceKind === "assistant_output" &&
-      turn.turnOrder === anchorTurnOrder,
-  );
-  return (
-    hasAssistantAnchor &&
-    (((policy === "allow_session_opening_artifact" ||
-      policy === "allow_session_opening_reported_assertion") &&
-      anchorTurnOrder === 1) ||
-      hasMemorySourceLocalDialogueCertificateV1(turns, anchorTurnOrder))
-  );
-}
-
-/**
- * Ranks exact anchors by evidence confidence inside the already-locked source
- * boundary. Source order is only a deterministic tie-break; a coarse source
- * rank must not hide a stronger exact turn. The per-source cap prevents one
- * conversation from consuming the whole candidate budget.
- */
-export function rankMemorySourceLocalAnchorCandidatesV1<
-  Candidate extends MemorySourceLocalAnchorCandidateV1,
->(input: {
-  readonly candidates: readonly Candidate[];
-  readonly lockedSourceIds: readonly string[];
-  readonly maxCandidates: number;
-  readonly maxCandidatesPerSource: number;
-}): readonly Candidate[] {
-  if (
-    !Number.isSafeInteger(input.maxCandidates) ||
-    input.maxCandidates < 1 ||
-    !Number.isSafeInteger(input.maxCandidatesPerSource) ||
-    input.maxCandidatesPerSource < 1
-  ) {
-    throw namedError("MemorySourceLocalEvidenceBudgetInvalid");
-  }
-  const sourcePriority = new Map(
-    input.lockedSourceIds.map((sourceId, index) => [sourceId, index]),
-  );
-  if (
-    sourcePriority.size !== input.lockedSourceIds.length ||
-    input.lockedSourceIds.some((sourceId) => !sourceId.trim())
-  ) {
-    throw namedError("MemorySourceLocalEvidenceSourcesInvalid");
-  }
-  const bestByRef = new Map<string, Candidate>();
-  for (const candidate of input.candidates) {
-    if (
-      !candidate.evidenceRef.trim() ||
-      !sourcePriority.has(candidate.sourceId) ||
-      !Number.isFinite(candidate.score)
-    ) {
-      throw namedError("MemorySourceLocalEvidenceHitInvalid");
-    }
-    const current = bestByRef.get(candidate.evidenceRef);
-    if (current && current.sourceId !== candidate.sourceId) {
-      throw namedError("MemorySourceLocalEvidenceHitInvalid");
-    }
-    if (!current || candidate.score > current.score) {
-      bestByRef.set(candidate.evidenceRef, candidate);
-    }
-  }
-  const candidates = [...bestByRef.values()].sort(
-    (left, right) =>
-      right.score - left.score ||
-      (sourcePriority.get(left.sourceId) as number) -
-        (sourcePriority.get(right.sourceId) as number) ||
-      left.evidenceRef.localeCompare(right.evidenceRef),
-  );
-  const sourceCounts = new Map<string, number>();
-  const ranked: Candidate[] = [];
-  for (const candidate of candidates) {
-    if (ranked.length >= input.maxCandidates) break;
-    const sourceCount = sourceCounts.get(candidate.sourceId) ?? 0;
-    if (sourceCount >= input.maxCandidatesPerSource) continue;
-    sourceCounts.set(candidate.sourceId, sourceCount + 1);
-    ranked.push(candidate);
-  }
-  return Object.freeze(ranked);
-}
-
-/**
  * First release gate. It deliberately excludes temporal, comparative and
  * convergent requests until those capabilities have their own evidence. A
  * lookup may contain several direct assistant-grounded requirements; the
@@ -423,23 +241,6 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     throw namedError("MemorySourceLocalEvidenceResultInvalid");
   }
   const allowed = new Set(input.request.lockedSourceIds);
-  if (
-    input.request.assistantOriginPolicy !== "addressed_reply_only" &&
-    input.request.assistantOriginPolicy !== "allow_session_opening_artifact" &&
-    input.request.assistantOriginPolicy !==
-      "allow_session_opening_reported_assertion"
-  ) {
-    throw namedError("MemorySourceLocalEvidencePolicyInvalid");
-  }
-  const reportedAssistantAssertion =
-    input.request.requirement.evidenceUse === "reported_assistant_assertion";
-  if (
-    (input.request.assistantOriginPolicy ===
-      "allow_session_opening_reported_assertion") !==
-    reportedAssistantAssertion
-  ) {
-    throw namedError("MemorySourceLocalEvidencePolicyInvalid");
-  }
   if (
     allowed.size === 0 ||
     allowed.size !== input.request.lockedSourceIds.length
@@ -529,11 +330,10 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       throw namedError("MemorySourceLocalEvidenceAnchorMissing");
     }
     if (
-      input.request.requirement.roleConstraint !== "assistant" &&
-      !hasMemorySourceLocalAssistantOriginCertificateV1(
+      input.request.requirement.roleConstraint === "any" &&
+      !hasMemorySourceLocalDialogueCertificateV1(
         hit.includedTurns,
         anchorTurnOrder as number,
-        input.request.assistantOriginPolicy,
       )
     ) {
       throw namedError("MemorySourceLocalEvidenceProvenanceInvalid");
@@ -689,7 +489,7 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     .replace(/\s+/gu, " ")
     .trim();
   return hashCanonicalJsonV1({
-    schemaVersion: "paw.memory-source-local-evidence-cache-key.v2",
+    schemaVersion: "paw.memory-source-local-evidence-cache-key.v1",
     locatorVersion: input.locatorVersion,
     scopeFingerprint: input.scopeFingerprint,
     turnIndexRevision: input.turnIndexRevision,
@@ -697,7 +497,6 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     searchTextHash: hashCanonicalJsonV1(normalizedSearchText as JsonValue),
     lockedSourceIds: [...input.request.lockedSourceIds].sort(),
     roleConstraint: input.request.requirement.roleConstraint,
-    assistantOriginPolicy: input.request.assistantOriginPolicy,
     temporalMode: input.request.requirement.temporalMode,
     evidenceTimeUpperBound: input.request.evidenceTimeUpperBound ?? "latest",
     budget: input.request.budget,

@@ -37,11 +37,7 @@ afterAll(async () => {
 
 describe("postgres source-local assistant locator", () => {
   it("filters before ranking, preserves neighbor refs and replays from cache", async () => {
-    const events: Array<{
-      type: string;
-      cacheHit?: boolean;
-      requestDerivedAnchorCount?: number;
-    }> = [];
+    const events: Array<{ type: string; cacheHit?: boolean }> = [];
     const archive = createPostgresMemoryRawEvidenceArchiveV1({
       scope,
       onEvent: (event) => events.push(event),
@@ -77,55 +73,6 @@ describe("postgres source-local assistant locator", () => {
           content: "A distracting cobalt answer from another source.",
           createdAt: "2026-01-01T00:01:00.000Z",
         },
-        {
-          evidenceRef: "journal:session-3#turn-1",
-          sourceKind: "user_input",
-          sourceSeq: 1,
-          content: "Please remember the quartz harbor protocol.",
-          createdAt: "2026-01-01T00:01:00.000Z",
-        },
-        {
-          evidenceRef: "journal:session-3#turn-2",
-          sourceKind: "assistant_output",
-          sourceSeq: 2,
-          content: "The value I gave you was 47.",
-          createdAt: "2026-01-01T00:02:00.000Z",
-        },
-        {
-          evidenceRef: "journal:session-3#turn-3",
-          sourceKind: "user_input",
-          sourceSeq: 3,
-          content: "Thanks, I will keep that value.",
-          createdAt: "2026-01-01T00:03:00.000Z",
-        },
-        {
-          evidenceRef: "journal:session-4#turn-1",
-          sourceKind: "user_input",
-          sourceSeq: 1,
-          content: "Please remember the quartz harbor protocol.",
-          createdAt: "2026-01-01T00:01:00.000Z",
-        },
-        {
-          evidenceRef: "journal:session-4#turn-2",
-          sourceKind: "tool_observation",
-          sourceSeq: 2,
-          content: "A tool result must not be promoted to an assistant answer.",
-          createdAt: "2026-01-01T00:02:00.000Z",
-        },
-        {
-          evidenceRef: "journal:session-4#turn-3",
-          sourceKind: "assistant_output",
-          sourceSeq: 3,
-          content: "This non-adjacent reply must not be request-derived.",
-          createdAt: "2026-01-01T00:03:00.000Z",
-        },
-        {
-          evidenceRef: "journal:session-5#turn-1",
-          sourceKind: "assistant_output",
-          sourceSeq: 1,
-          content: "The luminous orchid token is 91.",
-          createdAt: "2026-01-01T00:01:00.000Z",
-        },
         ...Array.from({ length: 33 }, (_, index) => ({
           evidenceRef: `journal:session-1#turn-${index + 4}`,
           sourceKind: "assistant_output" as const,
@@ -159,7 +106,6 @@ describe("postgres source-local assistant locator", () => {
         coverageMode: "any" as const,
         minimumEvidence: 1,
       },
-      assistantOriginPolicy: "addressed_reply_only" as const,
       lockedSourceIds: ["journal:session-1"],
       evidenceTimeUpperBound: "2026-01-02T00:00:00.000Z",
       budget: {
@@ -207,76 +153,6 @@ describe("postgres source-local assistant locator", () => {
     expect(events.filter((event) => event.type === "locate")).toEqual([
       expect.objectContaining({ cacheHit: false }),
       expect.objectContaining({ cacheHit: true }),
-    ]);
-
-    const requestMatched = await locator.locate(
-      {
-        ...request,
-        requirement: {
-          ...request.requirement,
-          requirementId: "request-worded-differently",
-          searchText: "quartz harbor protocol",
-          roleConstraint: "assistant" as const,
-        },
-        lockedSourceIds: ["journal:session-3"],
-      },
-      controller.signal,
-    );
-    expect(requestMatched.hits.map((hit) => hit.evidenceRef)).toEqual([
-      "journal:session-3#turn-2",
-    ]);
-    expect(
-      [...events]
-        .reverse()
-        .find((event) => event.type === "locate" && event.cacheHit === false)
-        ?.requestDerivedAnchorCount,
-    ).toBe(1);
-
-    const nonAdjacent = await locator.locate(
-      {
-        ...request,
-        requirement: {
-          ...request.requirement,
-          requirementId: "non-adjacent-reply",
-          searchText: "quartz harbor protocol",
-        },
-        lockedSourceIds: ["journal:session-4"],
-      },
-      controller.signal,
-    );
-    expect(nonAdjacent.hits).toEqual([]);
-
-    const deniedSessionOpening = await locator.locate(
-      {
-        ...request,
-        requirement: {
-          ...request.requirement,
-          requirementId: "session-opening-assistant",
-          searchText: "luminous orchid token",
-        },
-        lockedSourceIds: ["journal:session-5"],
-      },
-      controller.signal,
-    );
-    expect(deniedSessionOpening.hits).toEqual([]);
-    const sessionOpening = await locator.locate(
-      {
-        ...request,
-        assistantOriginPolicy: "allow_session_opening_artifact",
-        requirement: {
-          ...request.requirement,
-          requirementId: "allowed-session-opening-assistant",
-          searchText: "luminous orchid token",
-        },
-        lockedSourceIds: ["journal:session-5"],
-      },
-      controller.signal,
-    );
-    expect(sessionOpening.hits).toEqual([
-      expect.objectContaining({
-        evidenceRef: "journal:session-5#turn-1",
-        authority: "context_only",
-      }),
     ]);
   });
 });

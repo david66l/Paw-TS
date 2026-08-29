@@ -17,21 +17,16 @@ import {
   rankMemoryEvidenceCandidatesV2,
 } from "./evidence-first.js";
 import {
-  type MemoryAssistantOriginApertureV1,
   type MemoryEvidenceQueryIntentV3,
   type MemoryEvidenceQueryPlannerV3,
   type MemoryEvidenceRequirementV3,
-  classifyMemoryAssistantOriginApertureV1,
   classifyMemoryEvidenceQueryV3,
   needsCertifiedAssistantDialogueCandidateV1,
-  reconcileMemoryAssistantOriginApertureV1,
 } from "./evidence-query-planner.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
-import {
-  type MemoryEvidenceSupportFailureCodeV1,
-  type MemoryEvidenceSupportSelectorV1,
-  type MemoryEvidenceTriageAssessmentV1,
-  memoryEvidenceSupportFailureCodeV1,
+import type {
+  MemoryEvidenceSupportSelectorV1,
+  MemoryEvidenceTriageAssessmentV1,
 } from "./evidence-support-selector.js";
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
@@ -48,7 +43,7 @@ import {
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v20:post-plan-origin-binding" as const;
+  "paw.memory-evidence-resolver.v15:adapter-owned-source-address" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -99,7 +94,6 @@ export interface MemoryEvidenceResolutionV1 {
   readonly closureAuditRevision?: string;
   readonly closureAuditorVersion?: string;
   readonly supportSelectionRevision?: string;
-  readonly supportSelectorFailureCode?: MemoryEvidenceSupportFailureCodeV1;
   readonly supportSelectorVersion?: string;
   readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
   readonly sourceLocalization: MemorySourceLocalizationReportV1;
@@ -167,8 +161,6 @@ export function createMemoryEvidenceResolverV1(input: {
     resolverVersion: PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1,
     async resolve(query: string, signal: AbortSignal) {
       const value = boundedQuery(query);
-      const assistantOriginApertureProposal =
-        classifyMemoryAssistantOriginApertureV1(value);
       let intent: MemoryEvidenceQueryIntentV3 =
         classifyMemoryEvidenceQueryV3(value);
       const certifiedAssistantDialogueCandidate =
@@ -228,33 +220,10 @@ export function createMemoryEvidenceResolverV1(input: {
       // An empty requirement set must not bypass semantic verification. Bind
       // the original question as one root requirement and run the same support
       // gate used by decomposed queries, including deterministic direct hits.
-      if (
-        requirements.length === 0 &&
-        (input.supportSelector ||
-          assistantOriginApertureProposal ===
-            "session_opening_reported_assistant_assertion")
-      ) {
+      if (requirements.length === 0 && input.supportSelector) {
         requirements = Object.freeze([
           createRootEvidenceRequirement(value, intent),
         ]);
-      }
-      const assistantOriginAperture = reconcileMemoryAssistantOriginApertureV1({
-        proposal: assistantOriginApertureProposal,
-        intent,
-        requirements,
-      });
-      if (
-        assistantOriginAperture ===
-        "session_opening_reported_assistant_assertion"
-      ) {
-        requirements = Object.freeze(
-          requirements.map((requirement) =>
-            Object.freeze({
-              ...requirement,
-              evidenceUse: "reported_assistant_assertion" as const,
-            }),
-          ),
-        );
       }
       const pass = await resolveEvidencePass({
         index: input.index,
@@ -275,7 +244,6 @@ export function createMemoryEvidenceResolverV1(input: {
           input.sourceLocalBudget ??
           DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
         certifiedAssistantDialogueCandidate,
-        assistantOriginAperture,
         evidenceTimeUpperBound: input.evidenceTimeUpperBound,
         signal,
       });
@@ -327,7 +295,6 @@ export function createMemoryEvidenceResolverV1(input: {
         degradedChannels,
         supportSelectorStatus,
         supportSelectionRevision,
-        supportSelectorFailureCode,
         supportAssessments,
         sourceLocalization,
         notebook,
@@ -342,9 +309,6 @@ export function createMemoryEvidenceResolverV1(input: {
         directCertificateStatus,
         plannerStatus,
         supportSelectorStatus,
-        ...(supportSelectorFailureCode === undefined
-          ? {}
-          : { supportSelectorFailureCode }),
         closureAuditStatus,
         closureVerdict,
         closureRepairCount,
@@ -382,9 +346,6 @@ export function createMemoryEvidenceResolverV1(input: {
         directCertificateStatus,
         plannerStatus,
         supportSelectorStatus,
-        ...(supportSelectorFailureCode === undefined
-          ? {}
-          : { supportSelectorFailureCode }),
         closureAuditStatus,
         ...(closureVerdict === undefined ? {} : { closureVerdict }),
         closureRepairCount,
@@ -421,7 +382,6 @@ interface MemoryEvidenceResolutionPassV1 {
   readonly requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[];
   readonly supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"];
   readonly supportSelectionRevision?: string;
-  readonly supportSelectorFailureCode?: MemoryEvidenceSupportFailureCodeV1;
   readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
   readonly sourceLocalization: MemorySourceLocalizationReportV1;
   readonly notebook: MemoryEvidenceNotebookV1;
@@ -446,7 +406,6 @@ async function resolveEvidencePass(input: {
   readonly sourceLocalHydrator?: MemorySourceLocalEvidenceHydratorV1;
   readonly sourceLocalBudget?: MemorySourceLocalEvidenceBudgetV1;
   readonly certifiedAssistantDialogueCandidate: boolean;
-  readonly assistantOriginAperture: MemoryAssistantOriginApertureV1;
   readonly evidenceTimeUpperBound?: string;
   readonly excludedEvidenceRefs?: ReadonlySet<string>;
   readonly signal: AbortSignal;
@@ -546,8 +505,6 @@ async function resolveEvidencePass(input: {
   let requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[] =
     baselineRequirementHits;
   let localEvidenceRefs = new Set<string>();
-  let localEvidenceByRef = new Map<string, MemoryEvidenceNotebookHitV1>();
-  let reportedAssistantAssertionRefs = new Set<string>();
   let sourceLocalization: MemorySourceLocalizationReportV1 = Object.freeze({
     status: "not_needed",
     reasonCode: "route_ineligible",
@@ -598,14 +555,6 @@ async function resolveEvidencePass(input: {
               : requirement;
           const request = Object.freeze({
             requirement: locatorRequirement,
-            assistantOriginPolicy:
-              input.assistantOriginAperture ===
-              "session_opening_assistant_artifact"
-                ? ("allow_session_opening_artifact" as const)
-                : input.assistantOriginAperture ===
-                    "session_opening_reported_assistant_assertion"
-                  ? ("allow_session_opening_reported_assertion" as const)
-                  : ("addressed_reply_only" as const),
             lockedSourceIds: Object.freeze([...sourceLocalLockedIds]),
             ...(input.evidenceTimeUpperBound === undefined
               ? {}
@@ -639,23 +588,9 @@ async function resolveEvidencePass(input: {
         localEvidenceRefs = new Set(
           located.flatMap(({ hits }) => hits.map((hit) => hit.evidenceRef)),
         );
-        localEvidenceByRef = new Map(
-          located.flatMap(({ hits }) =>
-            hits.map((hit) => [hit.evidenceRef, hit] as const),
-          ),
-        );
-        reportedAssistantAssertionRefs =
-          input.assistantOriginAperture ===
-          "session_opening_reported_assistant_assertion"
-            ? new Set(localEvidenceRefs)
-            : new Set<string>();
         requirementHits = Object.freeze(
           baselineRequirementHits.map((hits, index) =>
-            Object.freeze(
-              mergeEvidenceHits(located[index]?.hits ?? [], hits).map(
-                (hit) => localEvidenceByRef.get(hit.evidenceRef) ?? hit,
-              ),
-            ),
+            mergeEvidenceHits(located[index]?.hits ?? [], hits),
           ),
         );
         const results = located.map(({ result }) => result);
@@ -732,24 +667,11 @@ async function resolveEvidencePass(input: {
         ? "fallback"
         : "not_configured";
   let supportSelectionRevision: string | undefined;
-  let supportSelectorFailureCode:
-    | MemoryEvidenceSupportFailureCodeV1
-    | undefined;
   let supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] =
     Object.freeze([]);
-  const reportedAssistantAssertionOnly =
-    input.assistantOriginAperture ===
-    "session_opening_reported_assistant_assertion";
   let selectedRefsByRequirement:
     | ReadonlyMap<string, ReadonlySet<string>>
-    | undefined = reportedAssistantAssertionOnly
-    ? new Map(
-        input.requirements.map((requirement) => [
-          requirement.requirementId,
-          new Set<string>(),
-        ]),
-      )
-    : undefined;
+    | undefined;
   if (input.requirements.length > 0 && input.supportSelector) {
     // A configured selector is an authority gate. Start closed so an empty
     // candidate set, malformed plugin result, or selector failure can never
@@ -767,29 +689,6 @@ async function resolveEvidencePass(input: {
         input.certifiedAssistantDialogueCandidate,
       32,
     );
-    const candidateEvidenceRefs = new Set(
-      candidates.map((candidate) => candidate.evidenceRef),
-    );
-    localEvidenceRefs = intersectEvidenceRefs(
-      localEvidenceRefs,
-      candidateEvidenceRefs,
-    );
-    reportedAssistantAssertionRefs = intersectEvidenceRefs(
-      reportedAssistantAssertionRefs,
-      candidateEvidenceRefs,
-    );
-    if (sourceLocalization.status === "completed") {
-      const addedCandidateCount = localEvidenceRefs.size;
-      sourceLocalization = Object.freeze({
-        ...sourceLocalization,
-        status: addedCandidateCount === 0 ? "completed_empty" : "completed",
-        reasonCode:
-          addedCandidateCount === 0
-            ? "candidate_pruned"
-            : "assistant_anchor_found",
-        addedCandidateCount,
-      });
-    }
     if (candidates.length > 0) {
       try {
         const selection = await input.supportSelector.select(
@@ -798,24 +697,9 @@ async function resolveEvidencePass(input: {
             requirements: input.requirements,
             candidates,
             ...(input.certifiedAssistantDialogueCandidate &&
-            localEvidenceRefs.size > 0 &&
-            reportedAssistantAssertionRefs.size === 0
+            localEvidenceRefs.size > 0
               ? {
                   certifiedAssistantDialogueEvidenceRefs: Object.freeze([
-                    ...localEvidenceRefs,
-                  ]),
-                }
-              : {}),
-            ...(reportedAssistantAssertionRefs.size > 0
-              ? {
-                  reportedAssistantAssertionEvidenceRefs: Object.freeze([
-                    ...reportedAssistantAssertionRefs,
-                  ]),
-                }
-              : {}),
-            ...(localEvidenceRefs.size > 0
-              ? {
-                  sourceLocalAssistantEvidenceRefs: Object.freeze([
                     ...localEvidenceRefs,
                   ]),
                 }
@@ -826,13 +710,14 @@ async function resolveEvidencePass(input: {
         supportAssessments = enforceSelectedEvidenceAuthority({
           assessments: selection.assessments,
           requirements: input.requirements,
-          candidateEvidenceRefs,
+          candidateEvidenceRefs: new Set(
+            candidates.map((candidate) => candidate.evidenceRef),
+          ),
           requirementHits,
           roleConstraint: input.intent.roleConstraint,
           certifiedSharedDialogueRefs: localEvidenceRefs,
           certifiedAssistantDialogueCandidate:
             input.certifiedAssistantDialogueCandidate,
-          reportedAssistantAssertionRefs,
         });
         selectedRefsByRequirement = new Map(
           supportAssessments.map((assessment) => [
@@ -845,12 +730,9 @@ async function resolveEvidencePass(input: {
       } catch (error) {
         if (input.signal.aborted || isAbort(error)) throw abortError();
         supportSelectorStatus = "fallback";
-        supportSelectorFailureCode = memoryEvidenceSupportFailureCodeV1(error);
         if (localEvidenceRefs.size > 0) {
           requirementHits = baselineRequirementHits;
           localEvidenceRefs = new Set();
-          localEvidenceByRef = new Map();
-          reportedAssistantAssertionRefs = new Set();
           sourceLocalization = Object.freeze({
             ...sourceLocalization,
             status: "fallback",
@@ -911,18 +793,16 @@ async function resolveEvidencePass(input: {
       ...assessment.unknownEvidenceRefs,
     ]),
   );
-  const packetFallbackHits = reportedAssistantAssertionOnly
-    ? []
-    : mergeEvidenceHits(
-        requirementHits
-          .flat()
-          .filter(
-            (hit) =>
-              nonSupportingRefs.has(hit.evidenceRef) &&
-              !localEvidenceRefs.has(hit.evidenceRef),
-          ),
-        input.primary.hits,
-      ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));
+  const packetFallbackHits = mergeEvidenceHits(
+    requirementHits
+      .flat()
+      .filter(
+        (hit) =>
+          nonSupportingRefs.has(hit.evidenceRef) &&
+          !localEvidenceRefs.has(hit.evidenceRef),
+      ),
+    input.primary.hits,
+  ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));
   const packetSources =
     input.requirements.length > 0
       ? buildPlannedEvidencePacketSources({
@@ -932,10 +812,9 @@ async function resolveEvidencePass(input: {
           selectedSourceIds: sourceIds,
           allowContextOnly: allowFallbackContextOnly,
           includeFallback:
-            !reportedAssistantAssertionOnly &&
-            (input.intent.temporalMode !== "latest" ||
-              notebook.coverage.some((item) => item.status !== "covered") ||
-              nonSupportingRefs.size > 0),
+            input.intent.temporalMode !== "latest" ||
+            notebook.coverage.some((item) => item.status !== "covered") ||
+            nonSupportingRefs.size > 0,
           fallbackAnswerRole:
             input.directCertificateStatus === "deterministic_direct"
               ? "supporting"
@@ -960,9 +839,6 @@ async function resolveEvidencePass(input: {
     ...(supportSelectionRevision === undefined
       ? {}
       : { supportSelectionRevision }),
-    ...(supportSelectorFailureCode === undefined
-      ? {}
-      : { supportSelectorFailureCode }),
     supportAssessments,
     sourceLocalization,
     notebook,
@@ -1033,13 +909,6 @@ function selectSupportCandidates(
     if (!found) break;
   }
   return Object.freeze(output);
-}
-
-function intersectEvidenceRefs(
-  refs: ReadonlySet<string>,
-  candidateRefs: ReadonlySet<string>,
-): Set<string> {
-  return new Set([...refs].filter((ref) => candidateRefs.has(ref)));
 }
 
 function filterRequirementHits(
@@ -1275,16 +1144,9 @@ function enforceSelectedEvidenceAuthority(input: {
   readonly roleConstraint: MemoryEvidenceQueryIntentV3["roleConstraint"];
   readonly certifiedSharedDialogueRefs: ReadonlySet<string>;
   readonly certifiedAssistantDialogueCandidate: boolean;
-  readonly reportedAssistantAssertionRefs: ReadonlySet<string>;
 }): readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] {
   const requiredIds = new Set(
     input.requirements.map((requirement) => requirement.requirementId),
-  );
-  const requirementById = new Map(
-    input.requirements.map((requirement) => [
-      requirement.requirementId,
-      requirement,
-    ]),
   );
   if (
     requiredIds.size !== input.requirements.length ||
@@ -1308,10 +1170,6 @@ function enforceSelectedEvidenceAuthority(input: {
         throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
       }
       assessedIds.add(assessment.requirementId);
-      const requirement = requirementById.get(assessment.requirementId);
-      if (!requirement) {
-        throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
-      }
       const partition = [
         ...assessment.supportingEvidenceRefs,
         ...assessment.contradictingEvidenceRefs,
@@ -1331,18 +1189,14 @@ function enforceSelectedEvidenceAuthority(input: {
       const supporting = assessment.supportingEvidenceRefs.filter(
         (evidenceRef) => {
           const hit = hitByRef.get(evidenceRef);
-          const reportedAssistantAssertion =
-            requirement.evidenceUse === "reported_assistant_assertion";
           const allowed =
             hit !== undefined &&
-            (reportedAssistantAssertion
-              ? input.reportedAssistantAssertionRefs.has(evidenceRef)
-              : hit.authority !== "context_only" ||
-                input.roleConstraint === "assistant" ||
-                (input.roleConstraint === "any" &&
-                  input.certifiedSharedDialogueRefs.has(evidenceRef)) ||
-                (input.certifiedAssistantDialogueCandidate &&
-                  input.certifiedSharedDialogueRefs.has(evidenceRef)));
+            (hit.authority !== "context_only" ||
+              input.roleConstraint === "assistant" ||
+              (input.roleConstraint === "any" &&
+                input.certifiedSharedDialogueRefs.has(evidenceRef)) ||
+              (input.certifiedAssistantDialogueCandidate &&
+                input.certifiedSharedDialogueRefs.has(evidenceRef)));
           if (!allowed) rejected.push(evidenceRef);
           return allowed;
         },
@@ -1404,7 +1258,6 @@ function validateMemoryEvidenceQueryPlanBoundary(input: {
       typeof requirement.searchText !== "string" ||
       requirement.searchText.trim().length < 1 ||
       requirement.searchText.length > 512 ||
-      requirement.evidenceUse !== undefined ||
       requirement.temporalMode !== intent.temporalMode ||
       requirement.roleConstraint !== intent.roleConstraint ||
       !relations.has(relation) ||

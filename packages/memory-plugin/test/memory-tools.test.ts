@@ -145,7 +145,7 @@ describe("progressive read-only memory tools", () => {
         async resolve(query) {
           expect(query).toBe("Why Compose?");
           return {
-            schemaVersion: "paw.memory-resolved-context.v2",
+            schemaVersion: "paw.memory-resolved-context.v1",
             resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
             packetRevision: "packet-1",
             mode: "planned",
