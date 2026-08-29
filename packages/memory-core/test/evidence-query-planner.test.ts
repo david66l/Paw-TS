@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
-  allowsMemorySessionOpeningAssistantOriginV1,
   buildMemoryEvidenceQueryPlanRequestV3,
   classifyMemoryEvidenceQueryV3,
+  classifyMemoryAssistantOriginApertureV1,
   createJsonMemoryEvidenceQueryPlannerV3,
   needsCertifiedAssistantDialogueCandidateV1,
   parseMemoryEvidenceQueryPlanV3,
+  proposesMemorySessionOpeningAssistantOriginV1,
+  reconcileMemoryAssistantOriginApertureV1,
 } from "../src/index.js";
 
 describe("typed evidence query planner v3", () => {
@@ -114,55 +116,55 @@ describe("typed evidence query planner v3", () => {
 
   test("keeps session-opening assistant authority limited to dialogue artifacts", () => {
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "Do you remember what you recommended?",
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "Do you remember what was proposed in the earlier chat?",
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "What was the recommendation in our previous conversation?",
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1("之前对话里的建议是什么？"),
+      proposesMemorySessionOpeningAssistantOriginV1("之前对话里的建议是什么？"),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "What was your response to our message in the previous conversation?",
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "What did you say about my recommendation?",
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "Which points did you add to our draft?",
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "Do you remember what was recommended by you?",
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "Do you remember what was the color of the cover?",
       ),
     ).toBe(true);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "What name did we come up with?",
       ),
     ).toBe(false);
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1(
+      proposesMemorySessionOpeningAssistantOriginV1(
         "Which option did we decide on in our previous conversation?",
       ),
     ).toBe(false);
@@ -212,13 +214,66 @@ describe("typed evidence query planner v3", () => {
       "之前对话中来自小王的建议是什么？",
       "我们的建议是什么？",
     ]) {
-      expect(allowsMemorySessionOpeningAssistantOriginV1(sharedOutcome)).toBe(
+      expect(proposesMemorySessionOpeningAssistantOriginV1(sharedOutcome)).toBe(
         false,
       );
     }
     expect(
-      allowsMemorySessionOpeningAssistantOriginV1("Which city did I visit?"),
+      proposesMemorySessionOpeningAssistantOriginV1("Which city did I visit?"),
     ).toBe(false);
+  });
+
+  test("binds a reported-origin proposal only after authority is fixed", () => {
+    const query = "Do you remember what was the color earlier?";
+    const proposal = classifyMemoryAssistantOriginApertureV1(query);
+    expect(proposal).toBe("session_opening_reported_assistant_assertion");
+
+    const requirement = {
+      requirementId: "prior-color",
+      label: "prior color",
+      searchText: "color from earlier",
+      temporalMode: "any" as const,
+      roleConstraint: "user" as const,
+    };
+    const intent = {
+      answerShape: "lookup" as const,
+      temporalMode: "any" as const,
+      roleConstraint: "user" as const,
+      needsPlanning: true,
+    };
+    expect(
+      reconcileMemoryAssistantOriginApertureV1({
+        proposal,
+        intent,
+        requirements: [requirement],
+      }),
+    ).toBe("session_opening_reported_assistant_assertion");
+    expect(
+      reconcileMemoryAssistantOriginApertureV1({
+        proposal,
+        intent,
+        requirements: [
+          requirement,
+          { ...requirement, requirementId: "prior-material" },
+        ],
+      }),
+    ).toBe("closed");
+    for (const roleConstraint of ["any", "assistant"] as const) {
+      expect(
+        reconcileMemoryAssistantOriginApertureV1({
+          proposal,
+          intent: { ...intent, roleConstraint },
+          requirements: [{ ...requirement, roleConstraint }],
+        }),
+      ).toBe("session_opening_assistant_artifact");
+    }
+    expect(
+      reconcileMemoryAssistantOriginApertureV1({
+        proposal: "addressed_reply_only",
+        intent,
+        requirements: [requirement],
+      }),
+    ).toBe("addressed_reply_only");
   });
 
   test("does not let the model rewrite a fixed evidence authority", () => {

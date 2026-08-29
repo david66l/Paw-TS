@@ -508,11 +508,11 @@ export function needsMemoryEvidenceRoleResolutionV1(query: string): boolean {
 }
 
 /**
- * Opens session-start assistant evidence only for an explicit assistant answer
- * or an author-unresolved dialogue artifact. Shared decisions remain limited
- * to addressed replies because an unsolicited proposal is not an agreement.
+ * Proposes session-start assistant evidence for an explicit assistant answer
+ * or an author-unresolved dialogue artifact. This is not authorization: the
+ * resolver must reconcile it with the final immutable authority contract.
  */
-export function allowsMemorySessionOpeningAssistantOriginV1(
+export function proposesMemorySessionOpeningAssistantOriginV1(
   query: string,
 ): boolean {
   return classifyMemoryAssistantOriginApertureV1(query).startsWith(
@@ -588,6 +588,40 @@ export function classifyMemoryAssistantOriginApertureV1(
   }
   return needsCertifiedAssistantDialogueCandidateV1(value)
     ? "addressed_reply_only"
+    : "closed";
+}
+
+/**
+ * Treats query-level assistant-origin classification as a proposal until the
+ * immutable authority intent and its requirement shape are known. A reported
+ * assistant assertion is a user-role framing contract, while an unresolved or
+ * assistant-role request asks for a dialogue artifact instead.
+ */
+export function reconcileMemoryAssistantOriginApertureV1(input: {
+  readonly proposal: MemoryAssistantOriginApertureV1;
+  readonly intent: MemoryEvidenceQueryIntentV3;
+  readonly requirements: readonly MemoryEvidenceRequirementV3[];
+}): MemoryAssistantOriginApertureV1 {
+  if (input.proposal !== "session_opening_reported_assistant_assertion") {
+    return input.proposal;
+  }
+  if (
+    input.requirements.length === 0 ||
+    input.requirements.some(
+      (requirement) =>
+        requirement.roleConstraint !== input.intent.roleConstraint,
+    )
+  ) {
+    return "closed";
+  }
+  if (
+    input.intent.roleConstraint === "assistant" ||
+    input.intent.roleConstraint === "any"
+  ) {
+    return "session_opening_assistant_artifact";
+  }
+  return input.requirements.length === 1
+    ? "session_opening_reported_assistant_assertion"
     : "closed";
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { hashTextV1 } from "../src/canonical.js";
 import {
+  PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
   type MemoryEvidenceIndexV1,
   createJsonMemoryEvidenceSupportSelectorV1,
   createMemoryEvidenceResolverV1,
@@ -630,6 +631,201 @@ describe("shared evidence resolver v1", () => {
       "reported_assistant_assertion",
     );
     expect(contract.guidance).toContain("previously said");
+  });
+
+  test("rebinds unresolved reported proposals as dialogue artifacts", async () => {
+    for (const requirementCount of [1, 2]) {
+      const requirementIds = Array.from(
+        { length: requirementCount },
+        (_, index) => `artifact-${index + 1}`,
+      );
+      let locatorCalls = 0;
+      const resolver = createMemoryEvidenceResolverV1({
+        index: {
+          indexVersion: "test-index.v1",
+          evidenceRefBelongsToSource(sourceId, evidenceRef) {
+            return evidenceRef.startsWith(`${sourceId}#`);
+          },
+          async search() {
+            return {
+              lists: [
+                {
+                  channel: "l0" as const,
+                  retrieverId: "assistant-dialogue",
+                  weight: 1,
+                  candidates: [
+                    {
+                      candidateId: "assistant-opening",
+                      sourceId: "assistant-source",
+                      evidenceRef: "assistant-source#turn-1",
+                      sourceKind: "assistant_output" as const,
+                      authority: "context_only" as const,
+                    },
+                  ],
+                },
+              ],
+              hits: [
+                {
+                  sourceId: "assistant-source",
+                  evidenceRef: "assistant-source#turn-1",
+                  content: "The earlier artifact used blue.",
+                  sourceKind: "assistant_output" as const,
+                  authority: "context_only" as const,
+                  turnOrder: 1,
+                },
+              ],
+            };
+          },
+        },
+        planner: {
+          plannerVersion: PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
+          async plan() {
+            return {
+              plannerVersion: PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
+              answerShape: "lookup" as const,
+              temporalMode: "any" as const,
+              roleConstraint: "any" as const,
+              needsPlanning: true,
+              requirements: requirementIds.map((requirementId) => ({
+                requirementId,
+                label: "prior dialogue artifact",
+                searchText: "earlier artifact color",
+                temporalMode: "any" as const,
+                roleConstraint: "any" as const,
+              })),
+            };
+          },
+        },
+        sourceLocalLocator: {
+          locatorVersion: "test-source-local.v1",
+          async locate(request) {
+            locatorCalls += 1;
+            expect(request.assistantOriginPolicy).toBe(
+              "allow_session_opening_artifact",
+            );
+            expect(request.requirement.evidenceUse).toBeUndefined();
+            const content = "The earlier artifact used blue.";
+            return {
+              locatorVersion: "test-source-local.v1",
+              locatorRevision: `artifact-${locatorCalls}`,
+              hits: [
+                {
+                  sourceId: "assistant-source",
+                  evidenceRef: "assistant-source#turn-1",
+                  anchorEvidenceRef: "assistant-source#turn-1",
+                  contextEvidenceRefs: ["assistant-source#turn-1"],
+                  sourceKind: "assistant_output" as const,
+                  content,
+                  authority: "context_only" as const,
+                  turnOrder: 1,
+                  includedTurns: [
+                    {
+                      evidenceRef: "assistant-source#turn-1",
+                      sourceKind: "assistant_output" as const,
+                      turnOrder: 1,
+                    },
+                  ],
+                },
+              ],
+              degradedChannels: [] as const,
+              telemetry: {
+                lexicalCandidates: 1,
+                denseCandidates: 1,
+                anchorCount: 1,
+                includedTurnCount: 1,
+                renderedChars: content.length,
+                cacheHit: false,
+                durationMs: 1,
+              },
+            };
+          },
+        },
+        sourceLocalHydrator: {
+          hydratorVersion: "test-hydrator.v1",
+          async hydrate() {
+            const content = "The earlier artifact used blue.";
+            return [
+              {
+                evidenceRef: "assistant-source#turn-1",
+                sourceKind: "assistant_output" as const,
+                turnOrder: 1,
+                content,
+                contentHash: hashTextV1(content),
+              },
+            ];
+          },
+        },
+        supportSelector: createJsonMemoryEvidenceSupportSelectorV1({
+          model: {
+            async complete(request) {
+              const payload = JSON.parse(request.user) as {
+                requirements: Array<{
+                  requirementId: string;
+                  evidenceUse?: string;
+                }>;
+                candidates: Array<{
+                  evidenceRef: string;
+                  reportedAssistantAssertion?: boolean;
+                  sourceLocalAssistantOriginCertified?: boolean;
+                }>;
+              };
+              expect(payload.requirements).toHaveLength(requirementCount);
+              expect(
+                payload.requirements.every(
+                  (requirement) => requirement.evidenceUse === undefined,
+                ),
+              ).toBe(true);
+              expect(
+                payload.candidates.some(
+                  (candidate) => candidate.reportedAssistantAssertion,
+                ),
+              ).toBe(false);
+              const artifact = payload.candidates.find(
+                (candidate) =>
+                  candidate.sourceLocalAssistantOriginCertified === true,
+              );
+              expect(artifact).toBeDefined();
+              return {
+                status: "completed" as const,
+                text: JSON.stringify({
+                  assessments: payload.requirements.map((requirement) => ({
+                    requirementId: requirement.requirementId,
+                    supportingEvidenceRefs: [artifact?.evidenceRef],
+                    contradictingEvidenceRefs: [],
+                    unknownEvidenceRefs: [],
+                  })),
+                }),
+              };
+            },
+          },
+        }),
+      });
+
+      const result = await resolver.resolve(
+        "Do you remember what was the color earlier?",
+        new AbortController().signal,
+      );
+      expect(result.plannerStatus).toBe("completed");
+      expect(locatorCalls).toBe(requirementCount);
+      expect(result.supportSelectorStatus).toBe("completed");
+      expect(
+        result.requirements.every(
+          (requirement) => requirement.evidenceUse === undefined,
+        ),
+      ).toBe(true);
+      const contract = projectEvidenceFirstMemoryAnswerContractV1(result);
+      expect(contract.answerPolicy.operations).not.toContain(
+        "frame_reported_assistant_assertion",
+      );
+      expect(
+        contract.requirements.every(
+          (requirement) => requirement.evidenceUse === "fact",
+        ),
+      ).toBe(true);
+      expect(
+        result.packetSources.map((source) => source.text).join("\n"),
+      ).toContain("blue");
+    }
   });
 
   test("keeps reported assistant assertions closed without a working selector", async () => {

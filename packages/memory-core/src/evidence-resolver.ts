@@ -24,6 +24,7 @@ import {
   classifyMemoryAssistantOriginApertureV1,
   classifyMemoryEvidenceQueryV3,
   needsCertifiedAssistantDialogueCandidateV1,
+  reconcileMemoryAssistantOriginApertureV1,
 } from "./evidence-query-planner.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
 import {
@@ -47,7 +48,7 @@ import {
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v19:candidate-universe-contract" as const;
+  "paw.memory-evidence-resolver.v20:post-plan-origin-binding" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -166,7 +167,7 @@ export function createMemoryEvidenceResolverV1(input: {
     resolverVersion: PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1,
     async resolve(query: string, signal: AbortSignal) {
       const value = boundedQuery(query);
-      const assistantOriginAperture =
+      const assistantOriginApertureProposal =
         classifyMemoryAssistantOriginApertureV1(value);
       let intent: MemoryEvidenceQueryIntentV3 =
         classifyMemoryEvidenceQueryV3(value);
@@ -230,13 +231,18 @@ export function createMemoryEvidenceResolverV1(input: {
       if (
         requirements.length === 0 &&
         (input.supportSelector ||
-          assistantOriginAperture ===
+          assistantOriginApertureProposal ===
             "session_opening_reported_assistant_assertion")
       ) {
         requirements = Object.freeze([
           createRootEvidenceRequirement(value, intent),
         ]);
       }
+      const assistantOriginAperture = reconcileMemoryAssistantOriginApertureV1({
+        proposal: assistantOriginApertureProposal,
+        intent,
+        requirements,
+      });
       if (
         assistantOriginAperture ===
         "session_opening_reported_assistant_assertion"
