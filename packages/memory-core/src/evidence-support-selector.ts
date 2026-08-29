@@ -7,7 +7,9 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1 =
-  "paw.memory-evidence-support-selector.json.v9:reported-assistant-assertion" as const;
+  "paw.memory-evidence-support-selector.json.v10:candidate-input-window" as const;
+
+const MAX_MEMORY_EVIDENCE_SUPPORT_CANDIDATE_INPUT_CHARS_V1 = 16_384;
 
 export interface MemoryEvidenceSupportSelectionInputV1 {
   readonly query: string;
@@ -294,6 +296,22 @@ export function parseMemoryEvidenceSupportSelectionV1(
   return Object.freeze(assessments);
 }
 
+function isCertifiedDialogueRequirement(
+  requirements: readonly MemoryEvidenceRequirementV3[],
+): boolean {
+  const requirement = requirements[0];
+  return (
+    requirements.length === 1 &&
+    requirement?.roleConstraint === "user" &&
+    requirement.temporalMode === "any" &&
+    (requirement.relation === undefined || requirement.relation === "direct") &&
+    (requirement.coverageMode === undefined ||
+      requirement.coverageMode === "any") &&
+    (requirement.minimumEvidence === undefined ||
+      requirement.minimumEvidence === 1)
+  );
+}
+
 const MEMORY_EVIDENCE_SUPPORT_FAILURE_CODES_V1 = [
   "MemoryEvidenceSupportAddressInvalid",
   "MemoryEvidenceSupportAddressesInvalid",
@@ -379,9 +397,16 @@ function assertSelectionInput(
       512,
       "MemoryEvidenceSupportCandidateInvalid",
     );
+    if (
+      typeof candidate.content !== "string" ||
+      candidate.content.length >
+        MAX_MEMORY_EVIDENCE_SUPPORT_CANDIDATE_INPUT_CHARS_V1
+    ) {
+      throw namedError("MemoryEvidenceSupportCandidateInvalid");
+    }
     boundedText(
       candidate.content,
-      8_192,
+      MAX_MEMORY_EVIDENCE_SUPPORT_CANDIDATE_INPUT_CHARS_V1,
       "MemoryEvidenceSupportCandidateInvalid",
     );
     if (refs.has(evidenceRef)) {
@@ -402,18 +427,7 @@ function assertSelectionInput(
     throw namedError("MemoryEvidenceSupportCertificateInvalid");
   }
   if (certifiedRefs.size > 0) {
-    const requirement = input.requirements[0];
-    if (
-      input.requirements.length !== 1 ||
-      requirement?.roleConstraint !== "user" ||
-      requirement.temporalMode !== "any" ||
-      (requirement.relation !== undefined &&
-        requirement.relation !== "direct") ||
-      (requirement.coverageMode !== undefined &&
-        requirement.coverageMode !== "any") ||
-      (requirement.minimumEvidence !== undefined &&
-        requirement.minimumEvidence !== 1)
-    ) {
+    if (!isCertifiedDialogueRequirement(input.requirements)) {
       throw namedError("MemoryEvidenceSupportCertificateInvalid");
     }
     const candidatesByRef = new Map(

@@ -1291,6 +1291,7 @@ describe("shared evidence resolver v1", () => {
     const located: string[] = [];
     let failSecond = false;
     let selectorCandidateRefs: readonly string[] = [];
+    let selectorSourceLocalRefs: readonly string[] | undefined;
     const resolver = createMemoryEvidenceResolverV1({
       index: {
         indexVersion: "test-index.v1",
@@ -1410,6 +1411,7 @@ describe("shared evidence resolver v1", () => {
           selectorCandidateRefs = input.candidates.map(
             (candidate) => candidate.evidenceRef,
           );
+          selectorSourceLocalRefs = input.sourceLocalAssistantEvidenceRefs;
           return {
             selectorVersion: "test-selector.v1",
             selectionRevision: "selected-local-batch",
@@ -1434,6 +1436,10 @@ describe("shared evidence resolver v1", () => {
     );
 
     expect(located).toEqual(["assistant-answer-1", "assistant-answer-2"]);
+    expect(selectorSourceLocalRefs).toEqual([
+      "session-1#turn-2",
+      "session-1#turn-4",
+    ]);
     expect(result.sourceLocalization).toMatchObject({
       status: "completed",
       addedCandidateCount: 2,
@@ -1474,6 +1480,203 @@ describe("shared evidence resolver v1", () => {
     expect(
       fallback.packetSources.map((source) => source.text).join("\n"),
     ).not.toContain("unselected assistant fallback must stay closed");
+  });
+
+  test("uses one canonical source-local representation from selection through packet", async () => {
+    const requirements = ["first", "second"].map((requirementId) => ({
+      requirementId,
+      label: `${requirementId} prior answer`,
+      searchText: `${requirementId} answer from the earlier conversation`,
+      temporalMode: "any" as const,
+      roleConstraint: "any" as const,
+      relation: "direct" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+    }));
+    const repeatedAnswer = "The earlier answer was Northstar.";
+    let modelCalls = 0;
+    let projectedLocal: Array<{
+      evidenceRef: string;
+      contextEvidenceRefs?: readonly string[];
+      sourceLocalAssistantOriginCertified?: boolean;
+    }> = [];
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "user-ref",
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-4",
+                sourceKind: "assistant_output" as const,
+                content: repeatedAnswer,
+                authority: "context_only" as const,
+                turnOrder: 4,
+              },
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-1",
+                sourceKind: "user_input" as const,
+                content: "Please repeat the earlier answers.",
+                authority: "user_asserted" as const,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "any" as const,
+            needsPlanning: true,
+            requirements,
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate(request) {
+          const hits =
+            request.requirement.requirementId === "second"
+              ? [
+                  {
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-4",
+                    anchorEvidenceRef: "session-1#turn-4",
+                    contextEvidenceRefs: [
+                      "session-1#turn-3",
+                      "session-1#turn-4",
+                    ],
+                    sourceKind: "assistant_output" as const,
+                    content: repeatedAnswer,
+                    authority: "context_only" as const,
+                    turnOrder: 4,
+                    includedTurns: [
+                      {
+                        evidenceRef: "session-1#turn-3",
+                        sourceKind: "user_input" as const,
+                        turnOrder: 3,
+                      },
+                      {
+                        evidenceRef: "session-1#turn-4",
+                        sourceKind: "assistant_output" as const,
+                        turnOrder: 4,
+                      },
+                    ],
+                  },
+                ]
+              : [];
+          return {
+            locatorVersion: "test-source-local.v1",
+            locatorRevision: `local-${request.requirement.requirementId}`,
+            hits,
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: hits.length,
+              denseCandidates: 0,
+              anchorCount: hits.length,
+              includedTurnCount: hits.reduce(
+                (total, hit) => total + hit.includedTurns.length,
+                0,
+              ),
+              renderedChars: hits.reduce(
+                (total, hit) => total + hit.content.length,
+                0,
+              ),
+              cacheHit: false,
+              durationMs: 1,
+            },
+          };
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({
+        "session-1#turn-3": "Please repeat the second earlier answer.",
+        "session-1#turn-4": repeatedAnswer,
+      }),
+      supportSelector: createJsonMemoryEvidenceSupportSelectorV1({
+        model: {
+          async complete(request) {
+            modelCalls += 1;
+            const payload = JSON.parse(request.user) as {
+              requirements: Array<{ requirementId: string }>;
+              candidates: Array<{
+                evidenceRef: string;
+                contextEvidenceRefs?: readonly string[];
+                sourceLocalAssistantOriginCertified?: boolean;
+              }>;
+            };
+            projectedLocal = payload.candidates.filter(
+              (candidate) => candidate.sourceLocalAssistantOriginCertified,
+            );
+            return {
+              status: "completed" as const,
+              text: JSON.stringify({
+                assessments: payload.requirements.map((requirement) => ({
+                  requirementId: requirement.requirementId,
+                  supportingEvidenceRefs:
+                    requirement.requirementId === "first"
+                      ? projectedLocal[0]
+                        ? [projectedLocal[0].evidenceRef]
+                        : []
+                      : [],
+                  contradictingEvidenceRefs: [],
+                  unknownEvidenceRefs: [],
+                })),
+              }),
+            };
+          },
+        },
+      }),
+    });
+
+    const result = await resolver.resolve(
+      "Could you repeat the two answers from our earlier conversation?",
+      new AbortController().signal,
+    );
+
+    expect(modelCalls).toBe(1);
+    expect(projectedLocal).toHaveLength(1);
+    expect(projectedLocal[0]?.contextEvidenceRefs).toEqual([
+      "session-1#turn-3",
+      "session-1#turn-4",
+    ]);
+    expect(result.supportSelectorStatus).toBe("completed");
+    expect(result.supportSelectorFailureCode).toBeUndefined();
+    expect(result.sourceLocalization).toMatchObject({
+      status: "completed",
+      addedCandidateCount: 1,
+      selectedCandidateCount: 1,
+    });
+    expect(result.notebook.sources[0]?.text).toContain(
+      "Please repeat the second earlier answer.",
+    );
+    expect(result.packetSources[0]?.text).toContain(
+      "Please repeat the second earlier answer.",
+    );
   });
 
   test("drops local candidates when the selector rejects them or fails", async () => {

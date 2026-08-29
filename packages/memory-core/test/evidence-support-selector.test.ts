@@ -9,14 +9,16 @@ import {
   parseMemoryEvidenceSupportSelectionV1,
 } from "../src/index.js";
 
+const japanRequirement: MemoryEvidenceRequirementV3 = {
+  requirementId: "requirement-1",
+  label: "Japan trip duration",
+  searchText: "Japan trip duration",
+  temporalMode: "any",
+  roleConstraint: "user",
+};
+
 const requirements: readonly MemoryEvidenceRequirementV3[] = [
-  {
-    requirementId: "requirement-1",
-    label: "Japan trip duration",
-    searchText: "Japan trip duration",
-    temporalMode: "any",
-    roleConstraint: "user",
-  },
+  japanRequirement,
   {
     requirementId: "requirement-2",
     label: "Chicago trip duration",
@@ -48,6 +50,53 @@ const candidates: readonly MemoryEvidenceNotebookHitV1[] = [
 ];
 
 describe("requirement-bound evidence support selector v1", () => {
+  test("bounds a large raw candidate only at the model projection", () => {
+    const request = buildMemoryEvidenceSupportSelectionRequestV1({
+      query: "How long was the Japan trip?",
+      requirements: [japanRequirement],
+      candidates: [
+        {
+          sourceId: "large-source",
+          evidenceRef: "large-source#turn-1",
+          content: "Japan trip duration ".repeat(700),
+          authority: "user_asserted",
+        },
+      ],
+    });
+    const payload = JSON.parse(request.user) as {
+      candidates: readonly { content: string }[];
+    };
+    expect(payload.candidates[0]?.content.length).toBeLessThanOrEqual(2_400);
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "How long was the Japan trip?",
+        requirements: [japanRequirement],
+        candidates: [
+          {
+            sourceId: "oversized-source",
+            evidenceRef: "oversized-source#turn-1",
+            content: "Japan trip duration ".repeat(900),
+            authority: "user_asserted",
+          },
+        ],
+      }),
+    ).toThrow("MemoryEvidenceSupportCandidateInvalid");
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "How long was the Japan trip?",
+        requirements: [japanRequirement],
+        candidates: [
+          {
+            sourceId: "whitespace-source",
+            evidenceRef: "whitespace-source#turn-1",
+            content: `Japan${" ".repeat(16_384)}`,
+            authority: "user_asserted",
+          },
+        ],
+      }),
+    ).toThrow("MemoryEvidenceSupportCandidateInvalid");
+  });
+
   test("exposes only content-free selector failure codes", () => {
     const known = new Error("invalid output");
     known.name = "MemoryEvidenceSupportRequirementInvalid";
@@ -67,7 +116,7 @@ describe("requirement-bound evidence support selector v1", () => {
   test("projects ordinal evidence and exposes turn order for revised outputs", () => {
     const request = buildMemoryEvidenceSupportSelectionRequestV1({
       query: "What was the 27th item in the second output?",
-      requirements: [requirements[0]!],
+      requirements: [japanRequirement],
       candidates: [
         {
           sourceId: "session",
@@ -122,7 +171,7 @@ describe("requirement-bound evidence support selector v1", () => {
       query: "What kind of exercise do I seem to prefer?",
       requirements: [
         {
-          ...requirements[0]!,
+          ...japanRequirement,
           relation: "inferred",
           coverageMode: "convergent",
           minimumEvidence: 2,
@@ -168,7 +217,7 @@ describe("requirement-bound evidence support selector v1", () => {
     };
     const request = buildMemoryEvidenceSupportSelectionRequestV1({
       query: "What was the label from our previous conversation?",
-      requirements: [requirements[0]!],
+      requirements: [japanRequirement],
       candidates: [assistant],
       certifiedAssistantDialogueEvidenceRefs: [assistant.evidenceRef],
       sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
@@ -197,7 +246,7 @@ describe("requirement-bound evidence support selector v1", () => {
       query: "What was proposed in the earlier chat?",
       requirements: [
         {
-          ...requirements[0]!,
+          ...japanRequirement,
           roleConstraint: "any",
         },
       ],
@@ -232,7 +281,7 @@ describe("requirement-bound evidence support selector v1", () => {
       turnOrder: 1,
     };
     const reportedRequirement = {
-      ...requirements[0]!,
+      ...japanRequirement,
       evidenceUse: "reported_assistant_assertion" as const,
     };
     const request = buildMemoryEvidenceSupportSelectionRequestV1({
@@ -257,7 +306,7 @@ describe("requirement-bound evidence support selector v1", () => {
     expect(() =>
       buildMemoryEvidenceSupportSelectionRequestV1({
         query: "What is my address?",
-        requirements: [requirements[0]!],
+        requirements: [japanRequirement],
         candidates: [assistant],
         reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
         sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],

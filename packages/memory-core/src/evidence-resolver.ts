@@ -47,7 +47,7 @@ import {
 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v18:support-failure-telemetry" as const;
+  "paw.memory-evidence-resolver.v19:candidate-universe-contract" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];
@@ -540,6 +540,7 @@ async function resolveEvidencePass(input: {
   let requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[] =
     baselineRequirementHits;
   let localEvidenceRefs = new Set<string>();
+  let localEvidenceByRef = new Map<string, MemoryEvidenceNotebookHitV1>();
   let reportedAssistantAssertionRefs = new Set<string>();
   let sourceLocalization: MemorySourceLocalizationReportV1 = Object.freeze({
     status: "not_needed",
@@ -632,6 +633,11 @@ async function resolveEvidencePass(input: {
         localEvidenceRefs = new Set(
           located.flatMap(({ hits }) => hits.map((hit) => hit.evidenceRef)),
         );
+        localEvidenceByRef = new Map(
+          located.flatMap(({ hits }) =>
+            hits.map((hit) => [hit.evidenceRef, hit] as const),
+          ),
+        );
         reportedAssistantAssertionRefs =
           input.assistantOriginAperture ===
           "session_opening_reported_assistant_assertion"
@@ -639,7 +645,11 @@ async function resolveEvidencePass(input: {
             : new Set<string>();
         requirementHits = Object.freeze(
           baselineRequirementHits.map((hits, index) =>
-            mergeEvidenceHits(located[index]?.hits ?? [], hits),
+            Object.freeze(
+              mergeEvidenceHits(located[index]?.hits ?? [], hits).map(
+                (hit) => localEvidenceByRef.get(hit.evidenceRef) ?? hit,
+              ),
+            ),
           ),
         );
         const results = located.map(({ result }) => result);
@@ -751,6 +761,29 @@ async function resolveEvidencePass(input: {
         input.certifiedAssistantDialogueCandidate,
       32,
     );
+    const candidateEvidenceRefs = new Set(
+      candidates.map((candidate) => candidate.evidenceRef),
+    );
+    localEvidenceRefs = intersectEvidenceRefs(
+      localEvidenceRefs,
+      candidateEvidenceRefs,
+    );
+    reportedAssistantAssertionRefs = intersectEvidenceRefs(
+      reportedAssistantAssertionRefs,
+      candidateEvidenceRefs,
+    );
+    if (sourceLocalization.status === "completed") {
+      const addedCandidateCount = localEvidenceRefs.size;
+      sourceLocalization = Object.freeze({
+        ...sourceLocalization,
+        status: addedCandidateCount === 0 ? "completed_empty" : "completed",
+        reasonCode:
+          addedCandidateCount === 0
+            ? "candidate_pruned"
+            : "assistant_anchor_found",
+        addedCandidateCount,
+      });
+    }
     if (candidates.length > 0) {
       try {
         const selection = await input.supportSelector.select(
@@ -787,9 +820,7 @@ async function resolveEvidencePass(input: {
         supportAssessments = enforceSelectedEvidenceAuthority({
           assessments: selection.assessments,
           requirements: input.requirements,
-          candidateEvidenceRefs: new Set(
-            candidates.map((candidate) => candidate.evidenceRef),
-          ),
+          candidateEvidenceRefs,
           requirementHits,
           roleConstraint: input.intent.roleConstraint,
           certifiedSharedDialogueRefs: localEvidenceRefs,
@@ -812,6 +843,7 @@ async function resolveEvidencePass(input: {
         if (localEvidenceRefs.size > 0) {
           requirementHits = baselineRequirementHits;
           localEvidenceRefs = new Set();
+          localEvidenceByRef = new Map();
           reportedAssistantAssertionRefs = new Set();
           sourceLocalization = Object.freeze({
             ...sourceLocalization,
@@ -995,6 +1027,13 @@ function selectSupportCandidates(
     if (!found) break;
   }
   return Object.freeze(output);
+}
+
+function intersectEvidenceRefs(
+  refs: ReadonlySet<string>,
+  candidateRefs: ReadonlySet<string>,
+): Set<string> {
+  return new Set([...refs].filter((ref) => candidateRefs.has(ref)));
 }
 
 function filterRequirementHits(
