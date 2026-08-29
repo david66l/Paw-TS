@@ -111,6 +111,93 @@ describe("requirement-bound evidence support selector v1", () => {
     expect(memoryEvidenceSupportFailureCodeV1(untrusted)).toBe(
       "MemoryEvidenceSupportSelectorFailed",
     );
+    const certificateCodes = [
+      "MemoryEvidenceSupportCertifiedDialogueCandidateInvalid",
+      "MemoryEvidenceSupportCertifiedDialogueContractInvalid",
+      "MemoryEvidenceSupportReportedAssertionCandidateInvalid",
+      "MemoryEvidenceSupportReportedAssertionContractInvalid",
+      "MemoryEvidenceSupportSourceLocalCandidateInvalid",
+      "MemoryEvidenceSupportSourceLocalContractInvalid",
+    ] as const;
+    for (const code of certificateCodes) {
+      const error = new Error("private detail");
+      error.name = code;
+      expect(memoryEvidenceSupportFailureCodeV1(error)).toBe(code);
+    }
+  });
+
+  test("classifies certificate candidate and contract failures", () => {
+    const assistant = {
+      sourceId: "session",
+      evidenceRef: "session#assistant-1",
+      content: "The proposed label was Northstar.",
+      authority: "context_only" as const,
+      sourceKind: "assistant_output" as const,
+      contextEvidenceRefs: ["session#assistant-1"],
+      turnOrder: 1,
+    };
+    const malformedAssistant = {
+      ...assistant,
+      contextEvidenceRefs: [],
+    };
+    const anyRequirement = {
+      ...japanRequirement,
+      roleConstraint: "any" as const,
+    };
+    const reportedRequirement = {
+      ...japanRequirement,
+      evidenceUse: "reported_assistant_assertion" as const,
+    };
+
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "What was proposed?",
+        requirements: [japanRequirement],
+        candidates: [malformedAssistant],
+        certifiedAssistantDialogueEvidenceRefs: [assistant.evidenceRef],
+      }),
+    ).toThrow("MemoryEvidenceSupportCertifiedDialogueCandidateInvalid");
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "What was proposed?",
+        requirements,
+        candidates,
+        certifiedAssistantDialogueEvidenceRefs: [candidates[0]!.evidenceRef],
+      }),
+    ).toThrow("MemoryEvidenceSupportCertifiedDialogueContractInvalid");
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "What was proposed?",
+        requirements: [reportedRequirement],
+        candidates: [malformedAssistant],
+        reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
+        sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
+      }),
+    ).toThrow("MemoryEvidenceSupportReportedAssertionCandidateInvalid");
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "What was proposed?",
+        requirements: [reportedRequirement],
+        candidates: [assistant],
+        reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
+      }),
+    ).toThrow("MemoryEvidenceSupportReportedAssertionContractInvalid");
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "What was proposed?",
+        requirements: [anyRequirement],
+        candidates: [malformedAssistant],
+        sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
+      }),
+    ).toThrow("MemoryEvidenceSupportSourceLocalCandidateInvalid");
+    expect(() =>
+      buildMemoryEvidenceSupportSelectionRequestV1({
+        query: "What was proposed?",
+        requirements: [japanRequirement],
+        candidates: [assistant],
+        sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
+      }),
+    ).toThrow("MemoryEvidenceSupportSourceLocalContractInvalid");
   });
 
   test("projects ordinal evidence and exposes turn order for revised outputs", () => {
@@ -295,7 +382,7 @@ describe("requirement-bound evidence support selector v1", () => {
         candidates,
         certifiedAssistantDialogueEvidenceRefs: ["japan#turn-1"],
       }),
-    ).toThrow("MemoryEvidenceSupportCertificateInvalid");
+    ).toThrow("MemoryEvidenceSupportCertifiedDialogueContractInvalid");
   });
 
   test("binds reported assistant assertions to their dedicated requirement", () => {
@@ -339,7 +426,7 @@ describe("requirement-bound evidence support selector v1", () => {
         reportedAssistantAssertionEvidenceRefs: [assistant.evidenceRef],
         sourceLocalAssistantEvidenceRefs: [assistant.evidenceRef],
       }),
-    ).toThrow("MemoryEvidenceSupportCertificateInvalid");
+    ).toThrow("MemoryEvidenceSupportReportedAssertionContractInvalid");
   });
 
   test("accepts only supplied evidence addresses for every requirement", () => {

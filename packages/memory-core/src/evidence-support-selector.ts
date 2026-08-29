@@ -7,7 +7,7 @@ import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1 =
-  "paw.memory-evidence-support-selector.json.v11:confirmed-dialogue-contract" as const;
+  "paw.memory-evidence-support-selector.json.v12:certificate-diagnostics" as const;
 
 const MAX_MEMORY_EVIDENCE_SUPPORT_CANDIDATE_INPUT_CHARS_V1 = 16_384;
 
@@ -331,14 +331,20 @@ const MEMORY_EVIDENCE_SUPPORT_FAILURE_CODES_V1 = [
   "MemoryEvidenceSupportCandidateDuplicate",
   "MemoryEvidenceSupportCandidateInvalid",
   "MemoryEvidenceSupportCertificateInvalid",
+  "MemoryEvidenceSupportCertifiedDialogueCandidateInvalid",
+  "MemoryEvidenceSupportCertifiedDialogueContractInvalid",
   "MemoryEvidenceSupportOutputInvalid",
   "MemoryEvidenceSupportQueryInvalid",
+  "MemoryEvidenceSupportReportedAssertionCandidateInvalid",
+  "MemoryEvidenceSupportReportedAssertionContractInvalid",
   "MemoryEvidenceSupportRequirementInvalid",
   "MemoryEvidenceSupportSelectionInputInvalid",
   "MemoryEvidenceSupportSelectionShapeInvalid",
   "MemoryEvidenceSupportSelectorFailed",
   "MemoryEvidenceSupportSelectorModelInvalid",
   "MemoryEvidenceSupportSelectorVersionInvalid",
+  "MemoryEvidenceSupportSourceLocalCandidateInvalid",
+  "MemoryEvidenceSupportSourceLocalContractInvalid",
 ] as const;
 
 export type MemoryEvidenceSupportFailureCodeV1 =
@@ -439,7 +445,7 @@ function assertSelectionInput(
   }
   if (certifiedRefs.size > 0) {
     if (!isCertifiedDialogueRequirement(input.requirements)) {
-      throw namedError("MemoryEvidenceSupportCertificateInvalid");
+      throw namedError("MemoryEvidenceSupportCertifiedDialogueContractInvalid");
     }
     const candidatesByRef = new Map(
       input.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
@@ -447,7 +453,9 @@ function assertSelectionInput(
     for (const evidenceRef of certifiedRefs) {
       const candidate = candidatesByRef.get(evidenceRef);
       if (!isValidatedSourceLocalAssistantCandidate(candidate)) {
-        throw namedError("MemoryEvidenceSupportCertificateInvalid");
+        throw namedError(
+          "MemoryEvidenceSupportCertifiedDialogueCandidateInvalid",
+        );
       }
     }
   }
@@ -460,6 +468,27 @@ function assertSelectionInput(
   const sourceLocalRefs = new Set(sourceLocal);
   if (sourceLocalRefs.size !== sourceLocal.length) {
     throw namedError("MemoryEvidenceSupportCertificateInvalid");
+  }
+  if (reportedRefs.size > 0) {
+    const candidatesByRef = new Map(
+      input.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
+    );
+    if (
+      input.requirements.length !== 1 ||
+      input.requirements[0]?.evidenceUse !== "reported_assistant_assertion" ||
+      input.requirements[0]?.roleConstraint !== "user" ||
+      [...reportedRefs].some((evidenceRef) => !sourceLocalRefs.has(evidenceRef))
+    ) {
+      throw namedError("MemoryEvidenceSupportReportedAssertionContractInvalid");
+    }
+    for (const evidenceRef of reportedRefs) {
+      const candidate = candidatesByRef.get(evidenceRef);
+      if (!isValidatedSourceLocalAssistantCandidate(candidate)) {
+        throw namedError(
+          "MemoryEvidenceSupportReportedAssertionCandidateInvalid",
+        );
+      }
+    }
   }
   if (sourceLocalRefs.size > 0) {
     const candidatesByRef = new Map(
@@ -478,33 +507,12 @@ function assertSelectionInput(
             certifiedRefs.has(evidenceRef) || reportedRefs.has(evidenceRef),
         ));
     if (!roleEligible) {
-      throw namedError("MemoryEvidenceSupportCertificateInvalid");
+      throw namedError("MemoryEvidenceSupportSourceLocalContractInvalid");
     }
     for (const evidenceRef of sourceLocalRefs) {
       const candidate = candidatesByRef.get(evidenceRef);
       if (!isValidatedSourceLocalAssistantCandidate(candidate)) {
-        throw namedError("MemoryEvidenceSupportCertificateInvalid");
-      }
-    }
-  }
-  if (reportedRefs.size > 0) {
-    const candidatesByRef = new Map(
-      input.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
-    );
-    if (
-      input.requirements.length !== 1 ||
-      input.requirements[0]?.evidenceUse !== "reported_assistant_assertion" ||
-      input.requirements[0]?.roleConstraint !== "user"
-    ) {
-      throw namedError("MemoryEvidenceSupportCertificateInvalid");
-    }
-    for (const evidenceRef of reportedRefs) {
-      const candidate = candidatesByRef.get(evidenceRef);
-      if (
-        !isValidatedSourceLocalAssistantCandidate(candidate) ||
-        !sourceLocalRefs.has(evidenceRef)
-      ) {
-        throw namedError("MemoryEvidenceSupportCertificateInvalid");
+        throw namedError("MemoryEvidenceSupportSourceLocalCandidateInvalid");
       }
     }
   }
