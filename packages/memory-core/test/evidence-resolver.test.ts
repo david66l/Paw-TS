@@ -739,7 +739,7 @@ describe("shared evidence resolver v1", () => {
     ).not.toContain("uncertified assistant name");
   });
 
-  test("supplements an eligible assistant lookup after source lock without changing fusion", async () => {
+  test("uses bounded source-only discovery for assistant evidence without changing fusion", async () => {
     const requirement = {
       requirementId: "assistant-answer",
       label: "prior assistant answer",
@@ -776,6 +776,13 @@ describe("shared evidence resolver v1", () => {
                     sourceKind: "assistant_output" as const,
                     authority: "context_only" as const,
                   },
+                  {
+                    candidateId: "alternate-dialogue-ref",
+                    sourceId: "session-2",
+                    evidenceRef: "session-2#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
                 ],
               },
             ],
@@ -798,6 +805,7 @@ describe("shared evidence resolver v1", () => {
           };
         },
       },
+      maxSources: 1,
       planner: {
         plannerVersion:
           "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
@@ -823,17 +831,17 @@ describe("shared evidence resolver v1", () => {
             locatorRevision: "local-revision",
             hits: [
               {
-                sourceId: "session-1",
-                evidenceRef: "session-1#turn-2",
-                anchorEvidenceRef: "session-1#turn-2",
-                contextEvidenceRefs: ["session-1#turn-2"],
+                sourceId: "session-2",
+                evidenceRef: "session-2#turn-2",
+                anchorEvidenceRef: "session-2#turn-2",
+                contextEvidenceRefs: ["session-2#turn-2"],
                 sourceKind: "assistant_output" as const,
                 content,
                 authority: "context_only" as const,
                 turnOrder: 2,
                 includedTurns: [
                   {
-                    evidenceRef: "session-1#turn-2",
+                    evidenceRef: "session-2#turn-2",
                     sourceKind: "assistant_output" as const,
                     turnOrder: 2,
                   },
@@ -854,7 +862,7 @@ describe("shared evidence resolver v1", () => {
         },
       },
       sourceLocalHydrator: sourceLocalHydrator({
-        "session-1#turn-2": "The answer was cobalt.",
+        "session-2#turn-2": "The answer was cobalt.",
       }),
       supportSelector: {
         selectorVersion: "test-selector.v1",
@@ -866,7 +874,7 @@ describe("shared evidence resolver v1", () => {
             assessments: [
               {
                 requirementId: requirement.requirementId,
-                supportingEvidenceRefs: ["session-1#turn-2"],
+                supportingEvidenceRefs: ["session-2#turn-2"],
                 contradictingEvidenceRefs: [],
                 unknownEvidenceRefs: [],
               },
@@ -881,7 +889,7 @@ describe("shared evidence resolver v1", () => {
       new AbortController().signal,
     );
 
-    expect(lockedSources).toEqual(["session-1"]);
+    expect(lockedSources).toEqual(["session-1", "session-2"]);
     expect(result.sources.map((source) => source.sourceId)).toEqual([
       "session-1",
     ]);

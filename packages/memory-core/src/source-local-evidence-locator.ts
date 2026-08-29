@@ -24,7 +24,10 @@ export interface MemorySourceLocalEvidenceBudgetV1 {
 
 export interface MemorySourceLocalEvidenceRequestV1 {
   readonly requirement: MemoryEvidenceRequirementV3;
-  /** Immutable source set selected by the first-stage fusion. */
+  /**
+   * Immutable, bounded source aperture. It may include source-only discovery
+   * addresses, but never unselected evidence text.
+   */
   readonly lockedSourceIds: readonly string[];
   /** Evidence newer than this instant must never be observed. */
   readonly evidenceTimeUpperBound?: string;
@@ -180,13 +183,13 @@ export function hasMemorySourceLocalDialogueCertificateV1(
 }
 
 /**
- * First release gate. It deliberately excludes temporal, comparative and
- * convergent requests until those capabilities have their own evidence. A
- * lookup may contain several direct assistant-grounded requirements; the
- * resolver invokes the locator once per requirement and commits the local
- * supplement atomically.
+ * Opens the bounded dialogue-retrieval primitive. Answer semantics stay with
+ * the evidence notebook and coverage policy; this gate only protects the
+ * provenance aperture and rejects inference/convergence requests that cannot
+ * be proven by one source-local anchor.
  */
 export function isMemorySourceLocalEvidenceEligibleV1(input: {
+  /** Retained for V1 caller compatibility; retrieval is shape-agnostic. */
   readonly answerShape: string;
   readonly temporalMode: string;
   readonly roleConstraint: string;
@@ -200,8 +203,6 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
   if (
     (!new Set(["assistant", "any"]).has(input.roleConstraint) &&
       !certifiedUserCandidate) ||
-    input.answerShape !== "lookup" ||
-    input.temporalMode !== "any" ||
     input.requirements.length < 1 ||
     input.requirements.length > 4 ||
     (certifiedUserCandidate && input.requirements.length !== 1) ||
@@ -209,17 +210,23 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
   ) {
     return false;
   }
-  return input.requirements.every(
-    (requirement) =>
+  return input.requirements.every((requirement) => {
+    const relation = requirement.relation ?? "direct";
+    const coverageMode =
+      requirement.coverageMode ??
+      (requirement.temporalMode === "latest" ? "latest" : "any");
+    const minimumEvidence = requirement.minimumEvidence ?? 1;
+    return (
       requirement.roleConstraint === input.roleConstraint &&
-      requirement.temporalMode === "any" &&
-      (requirement.relation === undefined ||
-        requirement.relation === "direct") &&
-      (requirement.coverageMode === undefined ||
-        requirement.coverageMode === "any") &&
-      (requirement.minimumEvidence === undefined ||
-        requirement.minimumEvidence === 1),
-  );
+      requirement.temporalMode === input.temporalMode &&
+      relation !== "inferred" &&
+      coverageMode !== "convergent" &&
+      Number.isSafeInteger(minimumEvidence) &&
+      minimumEvidence >= 1 &&
+      minimumEvidence <=
+        DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1.maxAnchors
+    );
+  });
 }
 
 /**

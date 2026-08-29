@@ -37,12 +37,12 @@ export function filterEvidenceSearchResultForRole(
 }
 
 /**
- * Builds a source-only discovery view for a certified dialogue-artifact route.
+ * Builds a source-only discovery view for a dialogue-evidence route.
  * Either side of a conversation may identify the right source, but no hit text
  * crosses this boundary. Exact assistant evidence is still admitted only by
  * the source-local locator, immutable hydrator, and semantic selector.
  */
-export function buildCertifiedAssistantDialogueSourceDiscoveryV1(
+export function buildDialogueSourceDiscoveryV1(
   result: MemoryEvidenceIndexSearchResultV1,
   primarySourceIds: readonly string[],
   addressBelongsToSource: MemoryEvidenceIndexV1["evidenceRefBelongsToSource"],
@@ -77,6 +77,10 @@ export function buildCertifiedAssistantDialogueSourceDiscoveryV1(
     hits: Object.freeze([]),
   });
 }
+
+/** @deprecated Use the role-neutral source-only discovery primitive. */
+export const buildCertifiedAssistantDialogueSourceDiscoveryV1 =
+  buildDialogueSourceDiscoveryV1;
 
 function evidenceRefBelongsToSource(
   ownsAddress: (sourceId: string, evidenceRef: string) => boolean,

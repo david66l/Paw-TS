@@ -17,7 +17,7 @@ import type {
 } from "./evidence-resolution-contracts.js";
 import {
   abortError,
-  buildCertifiedAssistantDialogueSourceDiscoveryV1,
+  buildDialogueSourceDiscoveryV1,
   buildPlannedEvidencePacketSources,
   buildPrimaryEvidencePacketSources,
   enforceSelectedEvidenceAuthority,
@@ -45,6 +45,8 @@ import {
   memorySourceLocalEvidenceFailureCodeV1,
   validateMemorySourceLocalEvidenceResultV1,
 } from "./source-local-evidence-locator.js";
+
+const MAX_DIALOGUE_DISCOVERY_SOURCES_V1 = 4;
 
 export interface MemoryEvidenceResolutionPassV1 {
   readonly fusion: MemoryEvidenceCandidateFusionV2;
@@ -123,16 +125,24 @@ export async function resolveEvidencePass(input: {
     ].sort(),
   ) as readonly ("l0" | "l1")[];
   const sourceIds = fusion.sources.map((source) => source.sourceId);
-  // A provenance-unresolved dialogue artifact needs a second discovery view.
-  // Reuse the exact same L0 addresses to identify alternative conversations,
-  // but carry no hit text across the boundary. This view cannot change primary
-  // user fusion; it only widens the certificate-gated locator's source lock.
-  const dialogueCandidateSourceIds = input.certifiedAssistantDialogueCandidate
+  const localEligible = isMemorySourceLocalEvidenceEligibleV1({
+    answerShape: input.intent.answerShape,
+    temporalMode: input.intent.temporalMode,
+    roleConstraint: input.intent.roleConstraint,
+    requirements: input.requirements,
+    supportSelectorConfigured: input.supportSelector !== undefined,
+    certifiedAssistantDialogueCandidate:
+      input.certifiedAssistantDialogueCandidate,
+  });
+  // Eligible dialogue retrieval gets a bounded, source-only second view. L0
+  // addresses may widen the locator lock, but neither hit text nor extra
+  // sources enter primary fusion or the model-facing packet by themselves.
+  const dialogueCandidateSourceIds = localEligible
     ? rankMemoryEvidenceCandidatesV2({
         lists: [
           {
             searchText: input.query,
-            result: buildCertifiedAssistantDialogueSourceDiscoveryV1(
+            result: buildDialogueSourceDiscoveryV1(
               input.primaryUnfiltered,
               sourceIds,
               input.index.evidenceRefBelongsToSource,
@@ -144,7 +154,7 @@ export async function resolveEvidencePass(input: {
               : [
                   {
                     searchText: requirement.searchText,
-                    result: buildCertifiedAssistantDialogueSourceDiscoveryV1(
+                    result: buildDialogueSourceDiscoveryV1(
                       supplementalUnfiltered[index] ?? input.primaryUnfiltered,
                       sourceIds,
                       input.index.evidenceRefBelongsToSource,
@@ -159,11 +169,14 @@ export async function resolveEvidencePass(input: {
             weight: list.weight * (searchIndex === 0 ? 1 : 0.8),
           })),
         ),
-        maxSources: input.maxSources,
+        maxSources: Math.min(
+          input.maxSources,
+          MAX_DIALOGUE_DISCOVERY_SOURCES_V1,
+        ),
         maxEvidencePerSource: input.maxEvidencePerSource,
       }).sources.map((source) => source.sourceId)
     : Object.freeze([]);
-  const sourceLocalLockedIds = input.certifiedAssistantDialogueCandidate
+  const sourceLocalLockedIds = localEligible
     ? Object.freeze([...new Set([...sourceIds, ...dialogueCandidateSourceIds])])
     : sourceIds;
   const baselineRequirementHits = input.requirements.map((_, index) =>
@@ -180,15 +193,6 @@ export async function resolveEvidencePass(input: {
     reasonCode: "route_ineligible",
     addedCandidateCount: 0,
     selectedCandidateCount: 0,
-  });
-  const localEligible = isMemorySourceLocalEvidenceEligibleV1({
-    answerShape: input.intent.answerShape,
-    temporalMode: input.intent.temporalMode,
-    roleConstraint: input.intent.roleConstraint,
-    requirements: input.requirements,
-    supportSelectorConfigured: input.supportSelector !== undefined,
-    certifiedAssistantDialogueCandidate:
-      input.certifiedAssistantDialogueCandidate,
   });
   if (localEligible && sourceLocalLockedIds.length > 0) {
     if (!input.sourceLocalLocator) {

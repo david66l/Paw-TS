@@ -59,7 +59,7 @@ describe("source-local evidence locator boundary", () => {
     ).toBe(false);
   });
 
-  test("opens only bounded assistant direct-lookup requirements", () => {
+  test("opens bounded dialogue retrieval without owning answer semantics", () => {
     expect(
       isMemorySourceLocalEvidenceEligibleV1({
         answerShape: "lookup",
@@ -151,19 +151,51 @@ describe("source-local evidence locator boundary", () => {
     ).toBe(false);
     expect(
       isMemorySourceLocalEvidenceEligibleV1({
-        answerShape: "lookup",
-        temporalMode: "history",
+        answerShape: "aggregate",
+        temporalMode: "range",
         roleConstraint: "assistant",
-        requirements: [{ ...requirement, temporalMode: "history" }],
+        requirements: [
+          {
+            ...requirement,
+            temporalMode: "range",
+            relation: "temporal",
+            coverageMode: "all",
+            minimumEvidence: 2,
+          },
+        ],
         supportSelectorConfigured: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isMemorySourceLocalEvidenceEligibleV1({
         answerShape: "compare",
+        temporalMode: "history",
+        roleConstraint: "assistant",
+        requirements: [
+          {
+            ...requirement,
+            temporalMode: "history",
+            relation: "comparative",
+            coverageMode: "all",
+            minimumEvidence: 2,
+          },
+        ],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "aggregate",
         temporalMode: "any",
         roleConstraint: "assistant",
-        requirements: [requirement],
+        requirements: [
+          {
+            ...requirement,
+            relation: "inferred",
+            coverageMode: "convergent",
+            minimumEvidence: 2,
+          },
+        ],
         supportSelectorConfigured: true,
       }),
     ).toBe(false);
