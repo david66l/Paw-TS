@@ -1,0 +1,517 @@
+import { hashCanonicalJsonV1 } from "./canonical.js";
+import {
+  type MemoryEvidenceCandidateFusionV2,
+  type MemoryEvidenceNotebookHitV1,
+  type MemoryEvidenceNotebookV1,
+  buildMemoryEvidenceNotebookV1,
+  rankMemoryEvidenceCandidatesV2,
+} from "./evidence-first.js";
+import type {
+  MemoryEvidenceQueryIntentV3,
+  MemoryEvidenceRequirementV3,
+} from "./evidence-query-planner.js";
+import type {
+  MemoryEvidenceIndexSearchResultV1,
+  MemoryEvidenceIndexV1,
+  MemoryEvidenceResolutionV1,
+} from "./evidence-resolution-contracts.js";
+import {
+  abortError,
+  buildCertifiedAssistantDialogueSourceDiscoveryV1,
+  buildPlannedEvidencePacketSources,
+  buildPrimaryEvidencePacketSources,
+  enforceSelectedEvidenceAuthority,
+  filterEvidenceSearchResultForRole,
+  filterRequirementHits,
+  isAbort,
+  mergeEvidenceHits,
+  namedError,
+  selectSupportCandidates,
+} from "./evidence-resolver-helpers.js";
+import type {
+  MemoryEvidenceSupportSelectorV1,
+  MemoryEvidenceTriageAssessmentV1,
+} from "./evidence-support-selector.js";
+import {
+  DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+  type MemorySourceLocalEvidenceBudgetV1,
+  type MemorySourceLocalEvidenceHitV1,
+  type MemorySourceLocalEvidenceHydratorV1,
+  type MemorySourceLocalEvidenceLocatorV1,
+  type MemorySourceLocalEvidenceResultV1,
+  type MemorySourceLocalizationReportV1,
+  hydrateMemorySourceLocalEvidenceResultV1,
+  isMemorySourceLocalEvidenceEligibleV1,
+  memorySourceLocalEvidenceFailureCodeV1,
+  validateMemorySourceLocalEvidenceResultV1,
+} from "./source-local-evidence-locator.js";
+
+export interface MemoryEvidenceResolutionPassV1 {
+  readonly fusion: MemoryEvidenceCandidateFusionV2;
+  readonly degradedChannels: readonly ("l0" | "l1")[];
+  readonly requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[];
+  readonly supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"];
+  readonly supportSelectionRevision?: string;
+  readonly supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
+  readonly sourceLocalization: MemorySourceLocalizationReportV1;
+  readonly notebook: MemoryEvidenceNotebookV1;
+  readonly packetSources: MemoryEvidenceResolutionV1["packetSources"];
+}
+
+export async function resolveEvidencePass(input: {
+  readonly index: MemoryEvidenceIndexV1;
+  readonly supportSelector?: MemoryEvidenceSupportSelectorV1;
+  readonly query: string;
+  readonly intent: MemoryEvidenceQueryIntentV3;
+  readonly primary: MemoryEvidenceIndexSearchResultV1;
+  /** Same index response before the primary user-authority projection. */
+  readonly primaryUnfiltered: MemoryEvidenceIndexSearchResultV1;
+  readonly requirements: readonly MemoryEvidenceRequirementV3[];
+  readonly maxSources: number;
+  readonly maxEvidencePerSource: number;
+  readonly maxHitsPerRequirement: number;
+  readonly maxNotebookChars: number;
+  readonly directCertificateStatus: MemoryEvidenceResolutionV1["directCertificateStatus"];
+  readonly sourceLocalLocator?: MemorySourceLocalEvidenceLocatorV1;
+  readonly sourceLocalHydrator?: MemorySourceLocalEvidenceHydratorV1;
+  readonly sourceLocalBudget?: MemorySourceLocalEvidenceBudgetV1;
+  readonly certifiedAssistantDialogueCandidate: boolean;
+  readonly evidenceTimeUpperBound?: string;
+  readonly excludedEvidenceRefs?: ReadonlySet<string>;
+  readonly signal: AbortSignal;
+}): Promise<MemoryEvidenceResolutionPassV1> {
+  const supplementalUnfiltered = await Promise.all(
+    input.requirements.map((requirement) =>
+      requirement.searchText === input.query
+        ? Promise.resolve(input.primaryUnfiltered)
+        : input.index.search(requirement.searchText, input.signal),
+    ),
+  );
+  const supplemental = supplementalUnfiltered.map((result) =>
+    filterEvidenceSearchResultForRole(result, input.intent.roleConstraint),
+  );
+  const discoveryResults: Array<
+    Readonly<{
+      searchText: string;
+      result: MemoryEvidenceIndexSearchResultV1;
+    }>
+  > = [{ searchText: input.query, result: input.primary }];
+  const seenDiscoveryTexts = new Set([input.query]);
+  for (const [index, requirement] of input.requirements.entries()) {
+    if (seenDiscoveryTexts.has(requirement.searchText)) continue;
+    const result = supplemental[index];
+    if (!result) throw namedError("MemoryEvidenceDiscoveryMissing");
+    seenDiscoveryTexts.add(requirement.searchText);
+    discoveryResults.push({ searchText: requirement.searchText, result });
+  }
+  const fusion = rankMemoryEvidenceCandidatesV2({
+    lists: discoveryResults.flatMap(({ result }, searchIndex) =>
+      result.lists.map((list, listIndex) => ({
+        ...list,
+        retrieverId: `${list.retrieverId}:discovery-${searchIndex}-${listIndex}`,
+        weight: list.weight * (searchIndex === 0 ? 1 : 0.8),
+      })),
+    ),
+    maxSources: input.maxSources,
+    maxEvidencePerSource: input.maxEvidencePerSource,
+  });
+  const degradedChannels = Object.freeze(
+    [
+      ...new Set(
+        discoveryResults.flatMap(({ result }) => result.degradedChannels ?? []),
+      ),
+    ].sort(),
+  ) as readonly ("l0" | "l1")[];
+  const sourceIds = fusion.sources.map((source) => source.sourceId);
+  // A provenance-unresolved dialogue artifact needs a second discovery view.
+  // Reuse the exact same L0 addresses to identify alternative conversations,
+  // but carry no hit text across the boundary. This view cannot change primary
+  // user fusion; it only widens the certificate-gated locator's source lock.
+  const dialogueCandidateSourceIds = input.certifiedAssistantDialogueCandidate
+    ? rankMemoryEvidenceCandidatesV2({
+        lists: [
+          {
+            searchText: input.query,
+            result: buildCertifiedAssistantDialogueSourceDiscoveryV1(
+              input.primaryUnfiltered,
+              sourceIds,
+              input.index.evidenceRefBelongsToSource,
+            ),
+          },
+          ...input.requirements.flatMap((requirement, index) =>
+            requirement.searchText === input.query
+              ? []
+              : [
+                  {
+                    searchText: requirement.searchText,
+                    result: buildCertifiedAssistantDialogueSourceDiscoveryV1(
+                      supplementalUnfiltered[index] ?? input.primaryUnfiltered,
+                      sourceIds,
+                      input.index.evidenceRefBelongsToSource,
+                    ),
+                  },
+                ],
+          ),
+        ].flatMap(({ result }, searchIndex) =>
+          result.lists.map((list, listIndex) => ({
+            ...list,
+            retrieverId: `${list.retrieverId}:dialogue-${searchIndex}-${listIndex}`,
+            weight: list.weight * (searchIndex === 0 ? 1 : 0.8),
+          })),
+        ),
+        maxSources: input.maxSources,
+        maxEvidencePerSource: input.maxEvidencePerSource,
+      }).sources.map((source) => source.sourceId)
+    : Object.freeze([]);
+  const sourceLocalLockedIds = input.certifiedAssistantDialogueCandidate
+    ? Object.freeze([...new Set([...sourceIds, ...dialogueCandidateSourceIds])])
+    : sourceIds;
+  const baselineRequirementHits = input.requirements.map((_, index) =>
+    mergeEvidenceHits(
+      supplemental[index]?.hits ?? [],
+      input.primary.hits,
+    ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef)),
+  );
+  let requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[] =
+    baselineRequirementHits;
+  let localEvidenceRefs = new Set<string>();
+  let sourceLocalization: MemorySourceLocalizationReportV1 = Object.freeze({
+    status: "not_needed",
+    reasonCode: "route_ineligible",
+    addedCandidateCount: 0,
+    selectedCandidateCount: 0,
+  });
+  const localEligible = isMemorySourceLocalEvidenceEligibleV1({
+    answerShape: input.intent.answerShape,
+    temporalMode: input.intent.temporalMode,
+    roleConstraint: input.intent.roleConstraint,
+    requirements: input.requirements,
+    supportSelectorConfigured: input.supportSelector !== undefined,
+    certifiedAssistantDialogueCandidate:
+      input.certifiedAssistantDialogueCandidate,
+  });
+  if (localEligible && sourceLocalLockedIds.length > 0) {
+    if (!input.sourceLocalLocator) {
+      sourceLocalization = Object.freeze({
+        status: "not_configured",
+        reasonCode: "locator_missing",
+        addedCandidateCount: 0,
+        selectedCandidateCount: 0,
+      });
+    } else if (!input.sourceLocalHydrator) {
+      sourceLocalization = Object.freeze({
+        status: "not_configured",
+        reasonCode: "hydrator_missing",
+        locatorVersion: input.sourceLocalLocator.locatorVersion,
+        addedCandidateCount: 0,
+        selectedCandidateCount: 0,
+      });
+    } else {
+      try {
+        const located: Array<
+          Readonly<{
+            result: MemorySourceLocalEvidenceResultV1;
+            hits: readonly MemorySourceLocalEvidenceHitV1[];
+          }>
+        > = [];
+        for (const requirement of input.requirements) {
+          const locatorRequirement =
+            input.certifiedAssistantDialogueCandidate &&
+            requirement.roleConstraint === "user"
+              ? Object.freeze({
+                  ...requirement,
+                  roleConstraint: "any" as const,
+                })
+              : requirement;
+          const request = Object.freeze({
+            requirement: locatorRequirement,
+            lockedSourceIds: Object.freeze([...sourceLocalLockedIds]),
+            ...(input.evidenceTimeUpperBound === undefined
+              ? {}
+              : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
+            budget:
+              input.sourceLocalBudget ??
+              DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+          });
+          const locatedResult = await input.sourceLocalLocator.locate(
+            request,
+            input.signal,
+          );
+          validateMemorySourceLocalEvidenceResultV1({
+            locator: input.sourceLocalLocator,
+            request,
+            result: locatedResult,
+          });
+          const result = await hydrateMemorySourceLocalEvidenceResultV1({
+            hydrator: input.sourceLocalHydrator,
+            request,
+            result: locatedResult,
+            signal: input.signal,
+          });
+          const hits = validateMemorySourceLocalEvidenceResultV1({
+            locator: input.sourceLocalLocator,
+            request,
+            result,
+          });
+          located.push(Object.freeze({ result, hits }));
+        }
+        localEvidenceRefs = new Set(
+          located.flatMap(({ hits }) => hits.map((hit) => hit.evidenceRef)),
+        );
+        requirementHits = Object.freeze(
+          baselineRequirementHits.map((hits, index) =>
+            mergeEvidenceHits(located[index]?.hits ?? [], hits),
+          ),
+        );
+        const results = located.map(({ result }) => result);
+        const locatorRevisions = results.map(
+          (result) => result.locatorRevision,
+        );
+        const telemetry = Object.freeze({
+          lexicalCandidates: results.reduce(
+            (total, result) => total + result.telemetry.lexicalCandidates,
+            0,
+          ),
+          denseCandidates: results.reduce(
+            (total, result) => total + result.telemetry.denseCandidates,
+            0,
+          ),
+          anchorCount: results.reduce(
+            (total, result) => total + result.telemetry.anchorCount,
+            0,
+          ),
+          includedTurnCount: results.reduce(
+            (total, result) => total + result.telemetry.includedTurnCount,
+            0,
+          ),
+          renderedChars: results.reduce(
+            (total, result) => total + result.telemetry.renderedChars,
+            0,
+          ),
+          cacheHit: results.every((result) => result.telemetry.cacheHit),
+          durationMs: results.reduce(
+            (total, result) => total + result.telemetry.durationMs,
+            0,
+          ),
+        });
+        sourceLocalization = Object.freeze({
+          status:
+            localEvidenceRefs.size === 0 ? "completed_empty" : "completed",
+          reasonCode:
+            localEvidenceRefs.size === 0
+              ? "no_anchor"
+              : "assistant_anchor_found",
+          locatorVersion: input.sourceLocalLocator.locatorVersion,
+          hydratorVersion: input.sourceLocalHydrator.hydratorVersion,
+          locatorRevision:
+            locatorRevisions.length === 1
+              ? locatorRevisions[0]
+              : hashCanonicalJsonV1({
+                  schemaVersion: "paw.memory-source-local-batch-revision.v1",
+                  revisions: locatorRevisions,
+                }),
+          telemetry,
+          addedCandidateCount: localEvidenceRefs.size,
+          selectedCandidateCount: 0,
+        });
+      } catch (error) {
+        if (input.signal.aborted || isAbort(error)) throw abortError();
+        const failureCode = memorySourceLocalEvidenceFailureCodeV1(error);
+        const invalid = failureCode !== undefined;
+        sourceLocalization = Object.freeze({
+          status: invalid ? "invalid_result" : "fallback",
+          reasonCode: invalid ? "result_rejected" : "locator_failed",
+          ...(failureCode === undefined ? {} : { failureCode }),
+          locatorVersion: input.sourceLocalLocator.locatorVersion,
+          hydratorVersion: input.sourceLocalHydrator.hydratorVersion,
+          addedCandidateCount: 0,
+          selectedCandidateCount: 0,
+        });
+      }
+    }
+  }
+  let supportSelectorStatus: MemoryEvidenceResolutionV1["supportSelectorStatus"] =
+    input.requirements.length === 0
+      ? "not_needed"
+      : input.supportSelector
+        ? "fallback"
+        : "not_configured";
+  let supportSelectionRevision: string | undefined;
+  let supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] =
+    Object.freeze([]);
+  let selectedRefsByRequirement:
+    | ReadonlyMap<string, ReadonlySet<string>>
+    | undefined;
+  if (input.requirements.length > 0 && input.supportSelector) {
+    // A configured selector is an authority gate. Start closed so an empty
+    // candidate set, malformed plugin result, or selector failure can never
+    // make `undefined` mean "accept every hit" downstream.
+    selectedRefsByRequirement = new Map(
+      input.requirements.map((requirement) => [
+        requirement.requirementId,
+        new Set<string>(),
+      ]),
+    );
+    const candidates = selectSupportCandidates(
+      requirementHits,
+      sourceLocalLockedIds,
+      input.intent.roleConstraint !== "user" ||
+        input.certifiedAssistantDialogueCandidate,
+      32,
+    );
+    if (candidates.length > 0) {
+      try {
+        const selection = await input.supportSelector.select(
+          {
+            query: input.query,
+            requirements: input.requirements,
+            candidates,
+            ...(input.certifiedAssistantDialogueCandidate &&
+            localEvidenceRefs.size > 0
+              ? {
+                  certifiedAssistantDialogueEvidenceRefs: Object.freeze([
+                    ...localEvidenceRefs,
+                  ]),
+                }
+              : {}),
+          },
+          input.signal,
+        );
+        supportAssessments = enforceSelectedEvidenceAuthority({
+          assessments: selection.assessments,
+          requirements: input.requirements,
+          candidateEvidenceRefs: new Set(
+            candidates.map((candidate) => candidate.evidenceRef),
+          ),
+          requirementHits,
+          roleConstraint: input.intent.roleConstraint,
+          certifiedSharedDialogueRefs: localEvidenceRefs,
+          certifiedAssistantDialogueCandidate:
+            input.certifiedAssistantDialogueCandidate,
+        });
+        selectedRefsByRequirement = new Map(
+          supportAssessments.map((assessment) => [
+            assessment.requirementId,
+            new Set(assessment.supportingEvidenceRefs),
+          ]),
+        );
+        supportSelectionRevision = selection.selectionRevision;
+        supportSelectorStatus = "completed";
+      } catch (error) {
+        if (input.signal.aborted || isAbort(error)) throw abortError();
+        supportSelectorStatus = "fallback";
+        if (localEvidenceRefs.size > 0) {
+          requirementHits = baselineRequirementHits;
+          localEvidenceRefs = new Set();
+          sourceLocalization = Object.freeze({
+            ...sourceLocalization,
+            status: "fallback",
+            reasonCode: "selector_failed",
+            addedCandidateCount: 0,
+            selectedCandidateCount: 0,
+          });
+        }
+      }
+    }
+  }
+  const selectedLocalCount = new Set(
+    [...(selectedRefsByRequirement?.values() ?? [])]
+      .flatMap((refs) => [...refs])
+      .filter((ref) => localEvidenceRefs.has(ref)),
+  ).size;
+  if (sourceLocalization.status === "completed") {
+    sourceLocalization = Object.freeze({
+      ...sourceLocalization,
+      selectedCandidateCount: selectedLocalCount,
+    });
+  }
+  // An ambiguous dialogue query may open assistant evidence only after the
+  // selector has bound exact evidence refs. Unselected fallback context stays
+  // closed even after a successful selection, and all assistant context stays
+  // closed when selection fails.
+  const allowSelectedContextOnly =
+    input.intent.roleConstraint === "assistant" ||
+    (input.intent.roleConstraint === "any" &&
+      supportSelectorStatus === "completed") ||
+    (input.certifiedAssistantDialogueCandidate &&
+      supportSelectorStatus === "completed");
+  const allowFallbackContextOnly = input.intent.roleConstraint === "assistant";
+  const notebook = buildMemoryEvidenceNotebookV1({
+    requirements: input.requirements.map((requirement, index) => ({
+      requirementId: requirement.requirementId,
+      label: requirement.label,
+      searchText: requirement.searchText,
+      selection: requirement.temporalMode === "latest" ? "latest" : "ranked",
+      relation: requirement.relation ?? "direct",
+      coverageMode:
+        requirement.coverageMode ??
+        (requirement.temporalMode === "latest" ? "latest" : "any"),
+      minimumEvidence: requirement.minimumEvidence ?? 1,
+      hits: filterRequirementHits(
+        requirementHits[index] ?? [],
+        selectedRefsByRequirement?.get(requirement.requirementId),
+      ),
+    })),
+    allowedSourceIds: sourceLocalLockedIds,
+    maxHitsPerRequirement: input.maxHitsPerRequirement,
+    maxChars: input.maxNotebookChars,
+    allowContextOnly: allowSelectedContextOnly,
+  });
+  const nonSupportingRefs = new Set(
+    supportAssessments.flatMap((assessment) => [
+      ...assessment.contradictingEvidenceRefs,
+      ...assessment.unknownEvidenceRefs,
+    ]),
+  );
+  const packetFallbackHits = mergeEvidenceHits(
+    requirementHits
+      .flat()
+      .filter(
+        (hit) =>
+          nonSupportingRefs.has(hit.evidenceRef) &&
+          !localEvidenceRefs.has(hit.evidenceRef),
+      ),
+    input.primary.hits,
+  ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));
+  const packetSources =
+    input.requirements.length > 0
+      ? buildPlannedEvidencePacketSources({
+          query: input.query,
+          notebook,
+          primaryHits: packetFallbackHits,
+          selectedSourceIds: sourceIds,
+          allowContextOnly: allowFallbackContextOnly,
+          includeFallback:
+            input.intent.temporalMode !== "latest" ||
+            notebook.coverage.some((item) => item.status !== "covered") ||
+            nonSupportingRefs.size > 0,
+          fallbackAnswerRole:
+            input.directCertificateStatus === "deterministic_direct"
+              ? "supporting"
+              : "candidate",
+          maxFallbackChars: input.maxNotebookChars,
+        })
+      : buildPrimaryEvidencePacketSources(
+          input.primary.hits,
+          sourceIds,
+          allowFallbackContextOnly,
+          2,
+          input.maxNotebookChars,
+          new Set(),
+          "supporting",
+          input.query,
+        );
+  return Object.freeze({
+    fusion,
+    degradedChannels,
+    requirementHits,
+    supportSelectorStatus,
+    ...(supportSelectionRevision === undefined
+      ? {}
+      : { supportSelectionRevision }),
+    supportAssessments,
+    sourceLocalization,
+    notebook,
+    packetSources,
+  });
+}

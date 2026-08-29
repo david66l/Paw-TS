@@ -6,16 +6,18 @@ import {
   buildMemoryEvidenceSupportSelectionRequestV1,
   createJsonMemoryEvidenceSupportSelectorV1,
   parseMemoryEvidenceSupportSelectionV1,
-} from "../src/index.js";
+} from "../src/legacy.js";
+
+const firstRequirement: MemoryEvidenceRequirementV3 = {
+  requirementId: "requirement-1",
+  label: "Japan trip duration",
+  searchText: "Japan trip duration",
+  temporalMode: "any",
+  roleConstraint: "user",
+};
 
 const requirements: readonly MemoryEvidenceRequirementV3[] = [
-  {
-    requirementId: "requirement-1",
-    label: "Japan trip duration",
-    searchText: "Japan trip duration",
-    temporalMode: "any",
-    roleConstraint: "user",
-  },
+  firstRequirement,
   {
     requirementId: "requirement-2",
     label: "Chicago trip duration",
@@ -50,7 +52,7 @@ describe("requirement-bound evidence support selector v1", () => {
   test("projects ordinal evidence and exposes turn order for revised outputs", () => {
     const request = buildMemoryEvidenceSupportSelectionRequestV1({
       query: "What was the 27th item in the second output?",
-      requirements: [requirements[0]!],
+      requirements: [firstRequirement],
       candidates: [
         {
           sourceId: "session",
@@ -105,7 +107,7 @@ describe("requirement-bound evidence support selector v1", () => {
       query: "What kind of exercise do I seem to prefer?",
       requirements: [
         {
-          ...requirements[0]!,
+          ...firstRequirement,
           relation: "inferred",
           coverageMode: "convergent",
           minimumEvidence: 2,
@@ -142,7 +144,7 @@ describe("requirement-bound evidence support selector v1", () => {
     };
     const request = buildMemoryEvidenceSupportSelectionRequestV1({
       query: "What was the label from our previous conversation?",
-      requirements: [requirements[0]!],
+      requirements: [firstRequirement],
       candidates: [assistant],
       certifiedAssistantDialogueEvidenceRefs: [assistant.evidenceRef],
     });

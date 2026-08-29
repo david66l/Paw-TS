@@ -4,6 +4,7 @@ import {
   hashTextV1,
 } from "./canonical.js";
 import type { MemoryEvidenceKindV2 } from "./evidence-first.js";
+import { evidenceSourceIdV1 as evidenceSourceId } from "./evidence-ref.js";
 import type {
   MemoryEvidenceIndexSearchResultV1,
   MemoryEvidenceIndexV1,
@@ -14,7 +15,6 @@ import type {
   MemoryProductProviderV1,
   MemoryProductScopeV1,
 } from "./product-ports.js";
-import { evidenceSourceIdV1 as evidenceSourceId } from "./evidence-ref.js";
 
 export { evidenceSourceIdV1 } from "./evidence-ref.js";
 

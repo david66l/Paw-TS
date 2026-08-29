@@ -10,7 +10,7 @@ import {
   rankMemoryEvidenceCandidatesV2,
   rankMemoryEvidenceSourcesV1,
   selectRankedMemoryConversationBundlesV1,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 describe("evidence-first source fusion v1", () => {
   test("unions independent L0 and L1 discovery without a graph gate", () => {

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createInMemoryEvidenceStoreV1,
   createProductMemoryEvidenceIndexV1,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 const scope = Object.freeze({
   tenantId: "tenant",

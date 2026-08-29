@@ -7,7 +7,7 @@
 - `packages/memory-core` is a self-contained package boundary with no `@paw/*`
   dependency. It includes structural storage/model ports, a deterministic
   in-memory reference adapter, its own README, TypeScript config, package
-  metadata, and 56 standalone tests.
+  metadata, a narrow public API, and 86 standalone tests.
 - Product composition keeps importing `@paw/memory-plugin/evidence-first`, a
   compatibility alias of the standalone core. Aspect, Facet, temporal graph,
   PostgreSQL, and Paw Runtime stay outside the core dependency closure.
@@ -25,10 +25,9 @@
   cache savings and provider KV-cache hits can be audited independently.
 - A deterministic source ZIP, embedded file manifest, sealed per-query ledger,
   content-free public report, and paired exact comparator are available.
-- The local persona-disjoint v5 gate scored 95/120 (79.2%) versus 80/120
-  (66.7%), with 19 recoveries, 4 regressions, and exact McNemar `p=0.0025995`.
-  Its disclosed cache-binding deviation and claim limits are documented in the
-  benchmark release report.
+- The frozen V15 LongMemEval-S independent validation baseline scored 101/120
+  (84.17%). This is an internal validation result, not an official leaderboard
+  submission; claim limits are recorded in `packages/memory-core/BENCHMARKS.md`.
 
 ## Required before publishing source
 

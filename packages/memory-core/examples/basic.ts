@@ -1,6 +1,7 @@
 import {
-  createInMemoryEvidenceStoreV1,
-  createProductMemoryEvidenceIndexV1,
+  createEvidenceIndex,
+  createEvidenceResolver,
+  createInMemoryStore,
 } from "../src/index.js";
 
 const scope = {
@@ -9,7 +10,7 @@ const scope = {
   workspaceId: "workspace-1",
   repositoryId: "repository-1",
 };
-const store = createInMemoryEvidenceStoreV1({ scope });
+const store = createInMemoryStore({ scope });
 
 store.putEvidence([
   {
@@ -29,14 +30,15 @@ store.putCards([
   },
 ]);
 
-const index = createProductMemoryEvidenceIndexV1({
+const index = createEvidenceIndex({
   profile: { scope, maxCards: 8, maxInjectedTokens: 2_048 },
   provider: store,
   archive: store,
 });
-const result = await index.search(
+const memory = createEvidenceResolver({ index });
+const result = await memory.resolve(
   "How long was my Kyoto trip?",
   new AbortController().signal,
 );
 
-console.log(result.hits.map((hit) => hit.content));
+console.log(result.packetSources.map((source) => source.text));

@@ -7,7 +7,7 @@ import {
   createJsonMemoryEvidenceQueryPlannerV3,
   needsCertifiedAssistantDialogueCandidateV1,
   parseMemoryEvidenceQueryPlanV3,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 describe("typed evidence query planner v3", () => {
   test("plans explicit prior-assistant recall instead of sending raw candidates", () => {

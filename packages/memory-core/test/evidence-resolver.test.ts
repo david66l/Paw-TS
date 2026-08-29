@@ -6,7 +6,14 @@ import {
   createJsonMemoryEvidenceSupportSelectorV1,
   createMemoryEvidenceResolverV1,
   projectEvidenceFirstMemoryContextPacketV1,
-} from "../src/index.js";
+} from "../src/legacy.js";
+
+function requiredAt<T>(values: readonly T[], index: number): T {
+  const value = values[index];
+  if (value === undefined)
+    throw new Error(`Missing test value at index ${index}`);
+  return value;
+}
 
 function sourceLocalHydrator(contents: Readonly<Record<string, string>>) {
   return {
@@ -39,7 +46,7 @@ function index(): MemoryEvidenceIndexV1 {
     indexVersion: "test-index.v1",
     async search(query) {
       const supplemental = query.includes("focused");
-      const candidates = supplemental
+      const candidates: readonly (readonly [string, string])[] = supplemental
         ? [
             ["c", "ref-c"],
             ["b", "ref-b-focused"],
@@ -55,17 +62,17 @@ function index(): MemoryEvidenceIndexV1 {
             retrieverId: "test",
             weight: 1,
             candidates: candidates.map(([sourceId, evidenceRef]) => ({
-              candidateId: evidenceRef!,
-              sourceId: sourceId!,
-              evidenceRef: evidenceRef!,
+              candidateId: evidenceRef,
+              sourceId,
+              evidenceRef,
               sourceKind: "user_input",
               authority: "user_asserted",
             })),
           },
         ],
         hits: candidates.map(([sourceId, evidenceRef]) => ({
-          sourceId: sourceId!,
-          evidenceRef: evidenceRef!,
+          sourceId,
+          evidenceRef,
           content: `${query} evidence in ${sourceId}`,
           authority: "user_asserted",
         })),
@@ -555,8 +562,10 @@ describe("shared evidence resolver v1", () => {
             selectionRevision: "missing-assessment",
             assessments: [
               {
-                requirementId: input.requirements[0]!.requirementId,
-                supportingEvidenceRefs: [input.candidates[0]!.evidenceRef],
+                requirementId: requiredAt(input.requirements, 0).requirementId,
+                supportingEvidenceRefs: [
+                  requiredAt(input.candidates, 0).evidenceRef,
+                ],
                 contradictingEvidenceRefs: [],
                 unknownEvidenceRefs: [],
               },
@@ -1423,7 +1432,7 @@ describe("shared evidence resolver v1", () => {
             selectionRevision: "missed-direct-revision",
             assessments: [
               {
-                requirementId: input.requirements[0]!.requirementId,
+                requirementId: requiredAt(input.requirements, 0).requirementId,
                 supportingEvidenceRefs: [],
                 contradictingEvidenceRefs: [],
                 unknownEvidenceRefs: [],
@@ -1612,7 +1621,7 @@ describe("shared evidence resolver v1", () => {
             selectionRevision: "root-after-empty-plan",
             assessments: [
               {
-                requirementId: input.requirements[0]!.requirementId,
+                requirementId: requiredAt(input.requirements, 0).requirementId,
                 supportingEvidenceRefs: ["ref-a"],
                 contradictingEvidenceRefs: [],
                 unknownEvidenceRefs: [],

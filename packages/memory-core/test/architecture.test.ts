@@ -2,24 +2,24 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 
-import {
-  createEvidenceFirstMemoryContextResolverV1,
-  createJsonMemoryEvidenceQueryPlannerV3,
-  createJsonMemoryEvidenceSupportSelectorV1,
-  createMemoryEvidenceResolverV1,
-  createProductMemoryEvidenceIndexV1,
-} from "../src/index.js";
+import * as publicApi from "../src/index.js";
 
 const sourceRoot = resolve(import.meta.dir, "../src");
 const productEntry = resolve(sourceRoot, "index.ts");
 
 describe("evidence-first product architecture", () => {
-  test("exposes the complete product read path through a narrow subpath", () => {
-    expect(createEvidenceFirstMemoryContextResolverV1).toBeFunction();
-    expect(createJsonMemoryEvidenceQueryPlannerV3).toBeFunction();
-    expect(createJsonMemoryEvidenceSupportSelectorV1).toBeFunction();
-    expect(createMemoryEvidenceResolverV1).toBeFunction();
-    expect(createProductMemoryEvidenceIndexV1).toBeFunction();
+  test("exposes a small, stable product entrypoint", () => {
+    expect(Object.keys(publicApi).sort()).toEqual([
+      "createContextResolver",
+      "createEvidenceIndex",
+      "createEvidenceResolver",
+      "createInMemoryStore",
+      "createJsonQueryPlanner",
+      "createJsonSupportSelector",
+    ]);
+    expect(publicApi.createContextResolver).toBeFunction();
+    expect(publicApi.createEvidenceIndex).toBeFunction();
+    expect(publicApi.createEvidenceResolver).toBeFunction();
   });
 
   test("has no Aspect, Facet, or temporal-graph module in its dependency closure", () => {

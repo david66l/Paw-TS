@@ -4,7 +4,7 @@ import {
   type MemoryStateObservationV1,
   inferMemoryStateSemanticsV1,
   resolveMemoryStateObservationsV1,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 function observation(
   content: string,

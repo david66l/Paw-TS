@@ -8,7 +8,7 @@ import {
   isMemorySourceLocalEvidenceEligibleV1,
   memorySourceLocalEvidenceCacheKeyV1,
   validateMemorySourceLocalEvidenceResultV1,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 const requirement = Object.freeze({
   requirementId: "assistant-answer",
