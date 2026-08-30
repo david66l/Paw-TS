@@ -326,6 +326,24 @@ describe("typed evidence query planner v3", () => {
         "What amount was in the plan from our previous conversation?",
       ),
     ).toMatchObject({ roleConstraint: "user", needsPlanning: true });
+    expect(
+      needsCertifiedAssistantDialogueCandidateV1(
+        "Can you remind me what my previous draft title was?",
+      ),
+    ).toBe(true);
+    expect(
+      needsCertifiedAssistantDialogueCandidateV1(
+        "In our previous conversation, what was my draft title?",
+      ),
+    ).toBe(true);
+    expect(
+      needsCertifiedAssistantDialogueCandidateV1(
+        "What did I call the draft in our previous conversation?",
+      ),
+    ).toBe(false);
+    expect(
+      needsCertifiedAssistantDialogueCandidateV1("What is my current address?"),
+    ).toBe(false);
 
     const ordinaryRequest = buildMemoryEvidenceQueryPlanRequestV3(
       "What is my current address?",

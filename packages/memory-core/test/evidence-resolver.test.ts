@@ -1396,6 +1396,66 @@ describe("shared evidence resolver v1", () => {
       ambiguous.packetSources.map((source) => source.text).join("\n"),
     ).toContain("local secret answer");
 
+    const userOwnedDialogueArtifact = await createMemoryEvidenceResolverV1({
+      ...resolverInput,
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "user" as const,
+            needsPlanning: true,
+            requirements: [
+              {
+                ...requirement,
+                roleConstraint: "user" as const,
+              },
+            ],
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "user-owned-artifact-unresolved",
+            assessments: [
+              {
+                requirementId: requirement.requirementId,
+                supportingEvidenceRefs: [],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: input.candidates.map(
+                  (candidate) => candidate.evidenceRef,
+                ),
+              },
+            ],
+          };
+        },
+      },
+    }).resolve(
+      "In our previous conversation, what was my draft title?",
+      new AbortController().signal,
+    );
+    expect(userOwnedDialogueArtifact.intent.roleConstraint).toBe("user");
+    expect(userOwnedDialogueArtifact.sourceLocalization).toMatchObject({
+      status: "completed",
+      addedCandidateCount: 1,
+      selectedCandidateCount: 0,
+    });
+    expect(userOwnedDialogueArtifact.packetSources[0]?.answerRole).toBe(
+      "candidate",
+    );
+    expect(
+      userOwnedDialogueArtifact.packetSources
+        .map((source) => source.text)
+        .join("\n"),
+    ).toContain("local secret answer");
+
     const result = await createMemoryEvidenceResolverV1({
       ...resolverInput,
       supportSelector: {

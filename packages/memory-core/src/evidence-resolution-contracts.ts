@@ -18,7 +18,7 @@ import type { MemoryEvidenceTriageAssessmentV1 } from "./evidence-support-select
 import type { MemorySourceLocalizationReportV1 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v16:item-certified-evidence-binding" as const;
+  "paw.memory-evidence-resolver.v17:owner-provenance-aperture" as const;
 
 export interface MemoryEvidenceIndexSearchResultV1 {
   readonly lists: readonly MemoryEvidenceCandidateRankListV2[];

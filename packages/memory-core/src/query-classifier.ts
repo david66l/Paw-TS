@@ -102,28 +102,33 @@ function classifyMemoryEvidenceTemporalModeV1(
 
 function isExplicitUserOriginMemoryQueryV1(query: string): boolean {
   const value = boundedQuery(query);
-  const firstPersonQuestion =
-    /\b(?:what|which|where|when|how|who)\b.{0,100}\b(?:did|do|have|has|had|was|were|am)\s+i\b/iu.test(
-      value,
-    );
+  const explicitUserSubject = hasExplicitUserAnswerSubjectV1(value);
   const possessiveUserState =
     /\b(?:what|which|where|when|how)\b.{0,80}\b(?:is|are|was|were|has|have|had)\s+(?:my|mine)\b|\b(?:what|which)\s+my\s+[\p{L}\p{N}_-]{1,48}\s+(?:is|are|was|were|has|have|had)\b/iu.test(
-      value,
-    );
-  const chineseFirstPersonQuestion =
-    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁).{0,64}(?:是我|我(?:曾经|之前|上次|此前)?(?:在|于|有|做|说|提|去|把|将|给|从|向|选择|决定))/u.test(
       value,
     );
   const chinesePossessive =
     /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|多少).{0,64}(?:我的|本人(?:的)?)/u.test(
       value,
     );
-  return (
-    firstPersonQuestion ||
-    possessiveUserState ||
-    chineseFirstPersonQuestion ||
-    chinesePossessive
-  );
+  return explicitUserSubject || possessiveUserState || chinesePossessive;
+}
+
+/**
+ * A nominative user subject establishes who supplied the remembered fact.
+ * Possessive objects establish ownership only: "my draft" may still name an
+ * artifact written by the assistant in a prior exchange.
+ */
+function hasExplicitUserAnswerSubjectV1(query: string): boolean {
+  const firstPersonQuestion =
+    /\b(?:what|which|where|when|how|who)\b.{0,100}\b(?:did|do|have|has|had|was|were|am)\s+i\b/iu.test(
+      query,
+    );
+  const chineseFirstPersonQuestion =
+    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁).{0,64}(?:是我|我(?:曾经|之前|上次|此前)?(?:在|于|有|做|说|提|去|把|将|给|从|向|选择|决定))/u.test(
+      query,
+    );
+  return firstPersonQuestion || chineseFirstPersonQuestion;
 }
 
 type MemoryRecallProvenanceV1 =
@@ -465,21 +470,30 @@ export function needsCertifiedAssistantDialogueCandidateV1(
   const value = boundedQuery(query);
   const answer = memoryRecallAnswerClauseV1(value);
   if (answer) {
-    // Reuse the complete provenance classifier. In particular, possessive
-    // user facts such as "my address" have no nominative subject but are not
-    // unresolved dialogue artifacts and must remain closed to assistant text.
-    return classifyMemoryRecallProvenanceV1(value) === "unowned";
-  }
-  if (isExplicitUserOriginMemoryQueryV1(value)) return false;
-  const priorDialogueReference =
-    /\b(?:previous|earlier|prior|last)\b.{0,64}\b(?:conversation|chat|discussion|exchange|talk)\b|\b(?:conversation|chat|discussion|exchange|talk)\b.{0,64}\b(?:previous|earlier|prior|last)\b|(?:之前|上次|此前|先前|过去).{0,48}(?:对话|聊天|讨论|交流)|(?:对话|聊天|讨论|交流).{0,48}(?:之前|上次|此前|先前|过去)/iu.test(
-      value,
+    const provenance = classifyMemoryRecallProvenanceV1(value);
+    if (provenance === "unowned") return true;
+    const subject = firstAnswerClauseSubjectV1(answer.text, answer.language);
+    // A possessive object is not an author signal. Keep user authority as the
+    // primary lane, but let the existing certificate gate test whether an
+    // exact assistant turn supplied the recalled dialogue artifact.
+    return (
+      provenance === "user" &&
+      subject === undefined &&
+      isPriorDialogueReferenceV1(value)
     );
+  }
+  if (hasExplicitUserAnswerSubjectV1(value)) return false;
   return (
-    priorDialogueReference &&
+    isPriorDialogueReferenceV1(value) &&
     /\b(?:what|which|where|when|how|who|whether)\b|(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/iu.test(
       value,
     )
+  );
+}
+
+function isPriorDialogueReferenceV1(query: string): boolean {
+  return /\b(?:previous|earlier|prior|last)\b.{0,64}\b(?:conversation|chat|discussion|exchange|talk)\b|\b(?:conversation|chat|discussion|exchange|talk)\b.{0,64}\b(?:previous|earlier|prior|last)\b|(?:之前|上次|此前|先前|过去).{0,48}(?:对话|聊天|讨论|交流)|(?:对话|聊天|讨论|交流).{0,48}(?:之前|上次|此前|先前|过去)/iu.test(
+    query,
   );
 }
 

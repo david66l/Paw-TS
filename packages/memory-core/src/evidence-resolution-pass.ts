@@ -471,7 +471,8 @@ export async function resolveEvidencePass(input: {
   );
   const retainUnselectedCertifiedDialogueCandidates =
     (input.intent.roleConstraint === "assistant" ||
-      input.intent.roleConstraint === "any") &&
+      input.intent.roleConstraint === "any" ||
+      input.certifiedAssistantDialogueCandidate) &&
     supportSelectorStatus === "completed" &&
     sourceLocalization.status === "completed" &&
     notebook.coverage.some((item) => item.status !== "covered");
