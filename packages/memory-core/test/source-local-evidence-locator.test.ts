@@ -6,6 +6,7 @@ import {
   type MemorySourceLocalEvidenceResultV1,
   hasMemorySourceLocalDialogueCertificateV1,
   isMemorySourceLocalEvidenceEligibleV1,
+  memorySourceLocalAnchorKindsV1,
   memorySourceLocalEvidenceCacheKeyV1,
   validateMemorySourceLocalEvidenceResultV1,
 } from "../src/legacy.js";
@@ -22,6 +23,30 @@ const requirement = Object.freeze({
 });
 
 describe("source-local evidence locator boundary", () => {
+  test("derives one shared role aperture for every locator adapter", () => {
+    const request = {
+      requirement,
+      lockedSourceIds: ["session-1"],
+      budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+    };
+    expect(memorySourceLocalAnchorKindsV1(request)).toEqual([
+      "assistant_output",
+    ]);
+    expect(
+      memorySourceLocalAnchorKindsV1({
+        ...request,
+        requirement: { ...requirement, roleConstraint: "user" },
+      }),
+    ).toEqual(["user_input"]);
+    expect(
+      memorySourceLocalAnchorKindsV1({
+        ...request,
+        requirement: { ...requirement, roleConstraint: "user" },
+        assistantDialogueCandidate: true,
+      }),
+    ).toEqual(["user_input", "assistant_output"]);
+  });
+
   test("certifies only an exact preceding user request", () => {
     expect(
       hasMemorySourceLocalDialogueCertificateV1(
@@ -104,6 +129,39 @@ describe("source-local evidence locator boundary", () => {
         ],
         supportSelectorConfigured: true,
         certifiedAssistantDialogueCandidate: true,
+      }),
+    ).toBe(false);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "aggregate",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [
+          {
+            ...requirement,
+            roleConstraint: "user",
+            relation: "temporal",
+            coverageMode: "all",
+            minimumEvidence: 2,
+          },
+        ],
+        supportSelectorConfigured: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMemorySourceLocalEvidenceEligibleV1({
+        answerShape: "recommend",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [
+          { ...requirement, roleConstraint: "user" },
+          {
+            ...requirement,
+            requirementId: "recommendation-input-2",
+            roleConstraint: "user",
+          },
+        ],
+        supportSelectorConfigured: true,
       }),
     ).toBe(false);
     expect(
@@ -477,5 +535,113 @@ describe("source-local evidence locator boundary", () => {
         },
       }),
     ).not.toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          assistantDialogueCandidate: true,
+        },
+      }),
+    ).not.toBe(first);
+  });
+
+  test("accepts exact user anchors without opening uncertified assistant prose", () => {
+    const locator = {
+      locatorVersion: "test-locator.v2",
+      async locate() {
+        throw new Error("unused");
+      },
+    };
+    const userRequirement = {
+      ...requirement,
+      requirementId: "user-history",
+      roleConstraint: "user" as const,
+      relation: "temporal" as const,
+      coverageMode: "all" as const,
+      minimumEvidence: 2,
+    };
+    const request = {
+      requirement: userRequirement,
+      lockedSourceIds: ["session-1"],
+      budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+    };
+    const userHit: MemorySourceLocalEvidenceHitV1 = {
+      sourceId: "session-1",
+      evidenceRef: "session-1#turn-3",
+      anchorEvidenceRef: "session-1#turn-3",
+      contextEvidenceRefs: ["session-1#turn-3"],
+      sourceKind: "user_input",
+      content: "[user_input hit] the exact user statement",
+      authority: "user_asserted",
+      turnOrder: 3,
+      includedTurns: [
+        {
+          evidenceRef: "session-1#turn-3",
+          sourceKind: "user_input",
+          turnOrder: 3,
+        },
+      ],
+    };
+    const resultFor = (
+      hit: MemorySourceLocalEvidenceHitV1,
+    ): MemorySourceLocalEvidenceResultV1 => ({
+      locatorVersion: locator.locatorVersion,
+      locatorRevision: "revision",
+      hits: [hit],
+      degradedChannels: [],
+      telemetry: {
+        lexicalCandidates: 1,
+        denseCandidates: 0,
+        anchorCount: 1,
+        includedTurnCount: hit.includedTurns.length,
+        renderedChars: hit.content.length,
+        cacheHit: false,
+        durationMs: 1,
+      },
+    });
+    expect(
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result: resultFor(userHit),
+      }),
+    ).toHaveLength(1);
+
+    const assistantHit: MemorySourceLocalEvidenceHitV1 = {
+      ...userHit,
+      evidenceRef: "session-1#turn-4",
+      anchorEvidenceRef: "session-1#turn-4",
+      contextEvidenceRefs: ["session-1#turn-3", "session-1#turn-4"],
+      sourceKind: "assistant_output",
+      authority: "context_only",
+      turnOrder: 4,
+      includedTurns: [
+        {
+          evidenceRef: "session-1#turn-3",
+          sourceKind: "user_input",
+          turnOrder: 3,
+        },
+        {
+          evidenceRef: "session-1#turn-4",
+          sourceKind: "assistant_output",
+          turnOrder: 4,
+        },
+      ],
+    };
+    expect(() =>
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request,
+        result: resultFor(assistantHit),
+      }),
+    ).toThrow("MemorySourceLocalEvidenceHitInvalid");
+    expect(
+      validateMemorySourceLocalEvidenceResultV1({
+        locator,
+        request: { ...request, assistantDialogueCandidate: true },
+        result: resultFor(assistantHit),
+      }),
+    ).toHaveLength(1);
   });
 });

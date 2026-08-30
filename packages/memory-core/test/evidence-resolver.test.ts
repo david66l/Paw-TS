@@ -347,7 +347,8 @@ describe("shared evidence resolver v1", () => {
         locatorVersion: "test-source-local.v1",
         async locate(request) {
           locatorCalls += 1;
-          expect(request.requirement.roleConstraint).toBe("any");
+          expect(request.requirement.roleConstraint).toBe("user");
+          expect(request.assistantDialogueCandidate).toBe(true);
           expect(request.lockedSourceIds).toEqual([
             "user-source",
             "assistant-source",

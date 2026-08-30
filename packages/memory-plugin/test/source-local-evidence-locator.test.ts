@@ -35,7 +35,7 @@ afterAll(async () => {
   await closeSql();
 });
 
-describe("postgres source-local assistant locator", () => {
+describe("postgres source-local dialogue locator", () => {
   it("filters before ranking, preserves neighbor refs and replays from cache", async () => {
     const events: Array<{ type: string; cacheHit?: boolean }> = [];
     const archive = createPostgresMemoryRawEvidenceArchiveV1({
@@ -153,6 +153,77 @@ describe("postgres source-local assistant locator", () => {
     expect(events.filter((event) => event.type === "locate")).toEqual([
       expect.objectContaining({ cacheHit: false }),
       expect.objectContaining({ cacheHit: true }),
+    ]);
+  });
+
+  it("returns an exact user turn without adjacent assistant prose", async () => {
+    const archive = createPostgresMemoryRawEvidenceArchiveV1({ scope });
+    const controller = new AbortController();
+    await archive.put(
+      [
+        {
+          evidenceRef: "journal:user-history#turn-1",
+          sourceKind: "assistant_output",
+          sourceSeq: 1,
+          content: "An adjacent assistant statement about hiking.",
+          createdAt: "2026-02-01T00:00:00.000Z",
+        },
+        {
+          evidenceRef: "journal:user-history#turn-2",
+          sourceKind: "user_input",
+          sourceSeq: 2,
+          content: "I went hiking near the lake in spring.",
+          createdAt: "2026-02-01T00:01:00.000Z",
+        },
+        {
+          evidenceRef: "journal:user-history#turn-3",
+          sourceKind: "assistant_output",
+          sourceSeq: 3,
+          content: "Another adjacent assistant statement about hiking.",
+          createdAt: "2026-02-01T00:02:00.000Z",
+        },
+      ],
+      controller.signal,
+    );
+    if (!archive.locate || !archive.locatorVersion) {
+      throw new Error("Postgres source-local locator is unavailable");
+    }
+    const request = {
+      requirement: {
+        requirementId: "user-history",
+        label: "user history",
+        searchText: "hiking near the lake in spring",
+        temporalMode: "history" as const,
+        roleConstraint: "user" as const,
+        relation: "temporal" as const,
+        coverageMode: "all" as const,
+        minimumEvidence: 1,
+      },
+      lockedSourceIds: ["journal:user-history"],
+      budget: {
+        ...DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+        maxAnchors: 1,
+        maxAnchorsPerSource: 1,
+      },
+    };
+    const locator = {
+      locatorVersion: archive.locatorVersion,
+      locate: archive.locate.bind(archive),
+    };
+    const result = await locator.locate(request, controller.signal);
+    const hits = validateMemorySourceLocalEvidenceResultV1({
+      locator,
+      request,
+      result,
+    });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({
+      evidenceRef: "journal:user-history#turn-2",
+      sourceKind: "user_input",
+      authority: "user_asserted",
+    });
+    expect(hits[0]?.includedTurns.map((turn) => turn.evidenceRef)).toEqual([
+      "journal:user-history#turn-2",
     ]);
   });
 });

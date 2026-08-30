@@ -28,6 +28,7 @@ import {
   type MemoryRetrievalCacheEventV1,
   type MemoryRrfFusionEventV1,
   type MemorySceneSnapshotV1,
+  type MemorySourceLocalAnchorKindV1,
   type MemorySourceLocalEvidenceRequestV1,
   type MemorySourceLocalEvidenceResultV1,
   type MemoryTopicDossierProjectorV1,
@@ -74,6 +75,7 @@ import {
   createPostgresMemoryTopicEvidenceStoreV1,
   createPostgresMemoryTopicOrganizerStoreV1,
   hasMemorySourceLocalDialogueCertificateV1,
+  memorySourceLocalAnchorKindsV1,
   memoryScopeFingerprintV1,
   memorySourceLocalEvidenceCacheKeyV1,
   needsMemoryEvidenceRoleResolutionV1,
@@ -2678,6 +2680,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         .trim();
       const engine = sourceEngineFor(userId);
       const allowed = new Set(request.lockedSourceIds);
+      const anchorSourceKinds = new Set(
+        memorySourceLocalAnchorKindsV1(request),
+      );
       const blockIdsByDocument = sourceBlockIdsByUserDocument.get(userId);
       const allowedIds = request.lockedSourceIds.flatMap(
         (documentId) => blockIdsByDocument?.get(documentId) ?? [],
@@ -2685,7 +2690,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const turnIndexRevision = await engine.retrievalRevisionToken();
       const cacheKey = memorySourceLocalEvidenceCacheKeyV1({
         locatorVersion:
-          "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
+          "paw.amb-source-local-locator.v4:role-aware-logical-address-rrf",
         scopeFingerprint: sha(JSON.stringify(sourceScopeFor(userId))),
         turnIndexRevision,
         embeddingIdentity: sourceSpanEmbedding
@@ -2717,6 +2722,12 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           lockedSourceCount: allowed.size,
           lockedSourceHashes: contentFreeSourceHashes(allowed),
           anchorCount: replay.hits.length,
+          userAnchorCount: replay.hits.filter(
+            (hit) => hit.sourceKind === "user_input",
+          ).length,
+          assistantAnchorCount: replay.hits.filter(
+            (hit) => hit.sourceKind === "assistant_output",
+          ).length,
           anchorSourceHashes: contentFreeSourceHashes(
             replay.hits.map((hit) => hit.sourceId),
           ),
@@ -2727,7 +2738,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       }
       const filter = {
         allowedIds,
-        issueType: "assistant_output",
+        ...(anchorSourceKinds.size === 1
+          ? { issueType: [...anchorSourceKinds][0] }
+          : {}),
         ...(request.evidenceTimeUpperBound === undefined
           ? {}
           : { createdAtUpperBound: request.evidenceTimeUpperBound }),
@@ -2768,7 +2781,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const anchors = entries.flatMap((entry) => {
         if (
           entry.kind !== "episodic" ||
-          entry.issueType !== "assistant_output" ||
+          (entry.issueType !== "user_input" &&
+            entry.issueType !== "assistant_output") ||
+          !anchorSourceKinds.has(entry.issueType) ||
           !entry.whenToUse.trim()
         ) {
           return [];
@@ -2793,7 +2808,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ) {
           return [];
         }
-        return [{ documentId, sourceSeq, evidenceRef }];
+        return [
+          {
+            documentId,
+            sourceSeq,
+            evidenceRef,
+            sourceKind: entry.issueType as MemorySourceLocalAnchorKindV1,
+          },
+        ];
       });
       const perSource = new Map<string, number>();
       const hits = [];
@@ -2805,12 +2827,16 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         if (sourceCount >= request.budget.maxAnchorsPerSource) continue;
         const remaining = request.budget.maxChars - renderedChars;
         if (remaining < 256) break;
+        const neighborRadius =
+          anchor.sourceKind === "user_input"
+            ? 0
+            : request.budget.neighborRadius;
         const neighborEntries = (
           await Promise.all(
             Array.from(
-              { length: request.budget.neighborRadius * 2 + 1 },
+              { length: neighborRadius * 2 + 1 },
               (_, index) =>
-                anchor.sourceSeq - request.budget.neighborRadius + index,
+                anchor.sourceSeq - neighborRadius + index,
             )
               .filter((sourceSeq) => sourceSeq > 0)
               .map((sourceSeq) =>
@@ -2851,7 +2877,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           maxChars: Math.min(2_400, remaining),
         });
         if (
-          request.requirement.roleConstraint === "any" &&
+          anchor.sourceKind === "assistant_output" &&
+          (request.requirement.roleConstraint === "any" ||
+            request.assistantDialogueCandidate === true) &&
           !hasMemorySourceLocalDialogueCertificateV1(
             bundle.includedEvidence,
             anchor.sourceSeq,
@@ -2865,7 +2893,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             sourceId: anchor.documentId,
             evidenceRef: anchor.evidenceRef,
             anchorEvidenceRef: anchor.evidenceRef,
-            sourceKind: "assistant_output" as const,
+            sourceKind: anchor.sourceKind,
             content: bundle.text,
             authority: bundle.authority,
             observedAt: documentCreatedByUser
@@ -2897,7 +2925,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ]);
       const result = Object.freeze({
         locatorVersion:
-          "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
+          "paw.amb-source-local-locator.v4:role-aware-logical-address-rrf",
         locatorRevision: sha(
           JSON.stringify({
             turnIndexRevision,
@@ -2937,6 +2965,12 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         lexicalCandidateCount: lexical.hits.length,
         denseCandidateCount: dense.hits.length,
         anchorCount: hits.length,
+        userAnchorCount: hits.filter(
+          (hit) => hit.sourceKind === "user_input",
+        ).length,
+        assistantAnchorCount: hits.filter(
+          (hit) => hit.sourceKind === "assistant_output",
+        ).length,
         anchorSourceHashes: contentFreeSourceHashes(
           hits.map((hit) => hit.sourceId),
         ),
@@ -2970,7 +3004,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ? {
             sourceLocalLocator: Object.freeze({
               locatorVersion:
-                "paw.amb-source-local-locator.v3:logical-address-certified-rrf",
+                "paw.amb-source-local-locator.v4:role-aware-logical-address-rrf",
               locate(request: MemorySourceLocalEvidenceRequestV1) {
                 return locateEvidenceWithinSources(request);
               },

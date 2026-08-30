@@ -219,16 +219,11 @@ export async function resolveEvidencePass(input: {
           }>
         > = [];
         for (const requirement of input.requirements) {
-          const locatorRequirement =
-            input.certifiedAssistantDialogueCandidate &&
-            requirement.roleConstraint === "user"
-              ? Object.freeze({
-                  ...requirement,
-                  roleConstraint: "any" as const,
-                })
-              : requirement;
           const request = Object.freeze({
-            requirement: locatorRequirement,
+            requirement,
+            ...(input.certifiedAssistantDialogueCandidate
+              ? { assistantDialogueCandidate: true }
+              : {}),
             lockedSourceIds: Object.freeze([...sourceLocalLockedIds]),
             ...(input.evidenceTimeUpperBound === undefined
               ? {}
@@ -304,7 +299,7 @@ export async function resolveEvidencePass(input: {
           reasonCode:
             localEvidenceRefs.size === 0
               ? "no_anchor"
-              : "assistant_anchor_found",
+              : "evidence_anchor_found",
           locatorVersion: input.sourceLocalLocator.locatorVersion,
           hydratorVersion: input.sourceLocalHydrator.hydratorVersion,
           locatorRevision:

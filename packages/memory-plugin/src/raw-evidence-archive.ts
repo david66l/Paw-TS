@@ -14,6 +14,7 @@ import {
   type MemorySourceLocalEvidenceResultV1,
   type MemorySourceLocalHydratedEvidenceV1,
   hasMemorySourceLocalDialogueCertificateV1,
+  memorySourceLocalAnchorKindsV1,
   memorySourceLocalEvidenceCacheKeyV1,
 } from "./source-local-evidence-locator.js";
 
@@ -75,7 +76,7 @@ export interface MemoryRawEvidenceArchiveV1 {
     query: MemoryConversationSearchV1,
     signal: AbortSignal,
   ): Promise<readonly MemoryConversationEvidenceV1[]>;
-  /** Optional source-locked assistant turn locator; runtime remains unaware. */
+  /** Optional source-locked dialogue turn locator; runtime remains unaware. */
   readonly locatorVersion?: string;
   locate?(
     request: MemorySourceLocalEvidenceRequestV1,
@@ -98,6 +99,8 @@ export interface MemoryRawEvidenceArchiveEventV1 {
   readonly cacheHit?: boolean;
   readonly lexicalCandidateCount?: number;
   readonly denseCandidateCount?: number;
+  readonly userAnchorCount?: number;
+  readonly assistantAnchorCount?: number;
   readonly renderedChars?: number;
 }
 
@@ -109,7 +112,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
   const locatorVersion =
-    "paw.memory-postgres-source-local-locator.v2:certified-lexical";
+    "paw.memory-postgres-source-local-locator.v3:role-aware-certified-lexical";
   const hydratorVersion = "paw.memory-postgres-source-local-hydrator.v1";
   const rankerVersion =
     "paw.memory-source-local-ranker.v2:term-coverage-then-lexical-idf";
@@ -433,13 +436,11 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
       const started = Date.now();
       if (signal.aborted) throw abortError();
       const lockedSourceIds = [...new Set(request.lockedSourceIds)];
+      const anchorSourceKinds = memorySourceLocalAnchorKindsV1(request);
       if (
-        !new Set(["assistant", "any"]).has(
-          request.requirement.roleConstraint,
-        ) ||
-        request.requirement.temporalMode !== "any" ||
+        anchorSourceKinds.length === 0 ||
         lockedSourceIds.length === 0 ||
-        lockedSourceIds.length > 8
+        lockedSourceIds.length > 20
       ) {
         throw namedError("MemorySourceLocalEvidenceRequestInvalid");
       }
@@ -493,6 +494,12 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           cacheHit: true,
           lexicalCandidateCount: replay.telemetry.lexicalCandidates,
           denseCandidateCount: replay.telemetry.denseCandidates,
+          userAnchorCount: replay.hits.filter(
+            (hit) => hit.sourceKind === "user_input",
+          ).length,
+          assistantAnchorCount: replay.hits.filter(
+            (hit) => hit.sourceKind === "assistant_output",
+          ).length,
           renderedChars: replay.telemetry.renderedChars,
         });
         return replay;
@@ -525,7 +532,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
                 AND spans.scope->>'workspaceId' = ${scope.workspaceId}
                 AND spans.scope->>'repositoryId' = ${scope.repositoryId}
                 AND split_part(spans.evidence_ref, '#', 1) = ANY(${sql.array(lockedSourceIds)})
-                AND spans.source_kind = 'assistant_output'
+                AND spans.source_kind = ANY(${sql.array([...anchorSourceKinds])})
                 AND spans.created_at <= ${cutoff}::timestamptz
                 AND lexical_score.term_hits > 0
               ORDER BY lexical_score.term_hits DESC,
@@ -585,8 +592,19 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         const sourceCount = perSource.get(sourceId) ?? 0;
         if (sourceCount >= request.budget.maxAnchorsPerSource) continue;
         const sourceSeq = Number(anchor.row.source_seq);
+        const anchorSourceKind = sourceKind(anchor.row.source_kind);
+        if (
+          anchorSourceKind !== "user_input" &&
+          anchorSourceKind !== "assistant_output"
+        ) {
+          continue;
+        }
         const remaining = request.budget.maxChars - renderedChars;
         if (remaining < 256) break;
+        const neighborRadius =
+          anchorSourceKind === "user_input"
+            ? 0
+            : request.budget.neighborRadius;
         const neighborRows = await sql`
           SELECT evidence_ref, source_kind, source_seq, content,
                  content_hash, created_at
@@ -596,8 +614,8 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
             AND scope->>'workspaceId' = ${scope.workspaceId}
             AND scope->>'repositoryId' = ${scope.repositoryId}
             AND split_part(evidence_ref, '#', 1) = ${sourceId}
-            AND source_seq BETWEEN ${sourceSeq - request.budget.neighborRadius}
-                               AND ${sourceSeq + request.budget.neighborRadius}
+            AND source_seq BETWEEN ${sourceSeq - neighborRadius}
+                               AND ${sourceSeq + neighborRadius}
             AND created_at <= ${cutoff}::timestamptz
           ORDER BY source_seq ASC, id ASC
         `;
@@ -620,7 +638,9 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           maxChars: Math.min(2_400, remaining),
         });
         if (
-          request.requirement.roleConstraint === "any" &&
+          anchorSourceKind === "assistant_output" &&
+          (request.requirement.roleConstraint === "any" ||
+            request.assistantDialogueCandidate === true) &&
           !hasMemorySourceLocalDialogueCertificateV1(
             bundle.includedEvidence,
             sourceSeq,
@@ -633,7 +653,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
             sourceId,
             evidenceRef,
             anchorEvidenceRef: evidenceRef,
-            sourceKind: "assistant_output" as const,
+            sourceKind: anchorSourceKind,
             content: bundle.text,
             authority: bundle.authority,
             observedAt: toIso(anchor.row.created_at),
@@ -695,6 +715,12 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         cacheHit: false,
         lexicalCandidateCount: ranked.length,
         denseCandidateCount: 0,
+        userAnchorCount: hits.filter(
+          (hit) => hit.sourceKind === "user_input",
+        ).length,
+        assistantAnchorCount: hits.filter(
+          (hit) => hit.sourceKind === "assistant_output",
+        ).length,
         renderedChars,
       });
       return result;

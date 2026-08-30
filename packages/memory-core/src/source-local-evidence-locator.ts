@@ -25,6 +25,12 @@ export interface MemorySourceLocalEvidenceBudgetV1 {
 export interface MemorySourceLocalEvidenceRequestV1 {
   readonly requirement: MemoryEvidenceRequirementV3;
   /**
+   * A user-shaped question explicitly asking for a prior assistant response.
+   * The original user role remains intact; this flag only opens certified
+   * assistant anchors inside the already bounded source aperture.
+   */
+  readonly assistantDialogueCandidate?: boolean;
+  /**
    * Immutable, bounded source aperture. It may include source-only discovery
    * addresses, but never unselected evidence text.
    */
@@ -32,6 +38,24 @@ export interface MemorySourceLocalEvidenceRequestV1 {
   /** Evidence newer than this instant must never be observed. */
   readonly evidenceTimeUpperBound?: string;
   readonly budget: MemorySourceLocalEvidenceBudgetV1;
+}
+
+export type MemorySourceLocalAnchorKindV1 = "user_input" | "assistant_output";
+
+/** Code-owned role aperture shared by every locator adapter. */
+export function memorySourceLocalAnchorKindsV1(
+  request: MemorySourceLocalEvidenceRequestV1,
+): readonly MemorySourceLocalAnchorKindV1[] {
+  if (request.requirement.roleConstraint === "assistant") {
+    return Object.freeze(["assistant_output"]);
+  }
+  if (
+    request.requirement.roleConstraint === "any" ||
+    request.assistantDialogueCandidate === true
+  ) {
+    return Object.freeze(["user_input", "assistant_output"]);
+  }
+  return Object.freeze(["user_input"]);
 }
 
 export interface MemorySourceLocalIncludedTurnV1 {
@@ -43,7 +67,7 @@ export interface MemorySourceLocalIncludedTurnV1 {
 
 export interface MemorySourceLocalEvidenceHitV1
   extends MemoryEvidenceNotebookHitV1 {
-  readonly sourceKind: "assistant_output";
+  readonly sourceKind: "user_input" | "assistant_output";
   readonly anchorEvidenceRef: string;
   readonly includedTurns: readonly MemorySourceLocalIncludedTurnV1[];
 }
@@ -200,9 +224,17 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
   const certifiedUserCandidate =
     input.roleConstraint === "user" &&
     input.certifiedAssistantDialogueCandidate === true;
+  const complexUserEvidence =
+    input.roleConstraint === "user" &&
+    input.answerShape !== "recommend" &&
+    (input.answerShape === "aggregate" ||
+      input.answerShape === "compare" ||
+      input.temporalMode !== "any" ||
+      input.requirements.length > 1);
   if (
     (!new Set(["assistant", "any"]).has(input.roleConstraint) &&
-      !certifiedUserCandidate) ||
+      !certifiedUserCandidate &&
+      !complexUserEvidence) ||
     input.requirements.length < 1 ||
     input.requirements.length > 4 ||
     (certifiedUserCandidate && input.requirements.length !== 1) ||
@@ -270,10 +302,9 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       !allowed.has(hit.sourceId) ||
       evidenceRefFamily(hit.evidenceRef) !== hit.sourceId ||
       evidenceRefFamily(hit.anchorEvidenceRef) !== hit.sourceId ||
-      hit.sourceKind !== "assistant_output" ||
+      !isAllowedAnchorRole(input.request, hit.sourceKind) ||
       hit.anchorEvidenceRef !== hit.evidenceRef ||
-      (hit.authority !== "context_only" &&
-        hit.authority !== "user_confirmed_dialogue") ||
+      !isAllowedAnchorAuthority(hit.sourceKind, hit.authority) ||
       !hit.content.trim() ||
       refs.has(hit.evidenceRef) ||
       !Number.isSafeInteger(anchorTurnOrder) ||
@@ -324,7 +355,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       includedRefs.add(turn.evidenceRef);
       if (turn.evidenceRef === hit.anchorEvidenceRef) {
         if (
-          turn.sourceKind !== "assistant_output" ||
+          turn.sourceKind !== hit.sourceKind ||
           turn.turnOrder !== anchorTurnOrder ||
           turn.observedAt !== hit.observedAt
         ) {
@@ -337,7 +368,9 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       throw namedError("MemorySourceLocalEvidenceAnchorMissing");
     }
     if (
-      input.request.requirement.roleConstraint === "any" &&
+      hit.sourceKind === "assistant_output" &&
+      (input.request.requirement.roleConstraint === "any" ||
+        input.request.assistantDialogueCandidate === true) &&
       !hasMemorySourceLocalDialogueCertificateV1(
         hit.includedTurns,
         anchorTurnOrder as number,
@@ -504,6 +537,8 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     searchTextHash: hashCanonicalJsonV1(normalizedSearchText as JsonValue),
     lockedSourceIds: [...input.request.lockedSourceIds].sort(),
     roleConstraint: input.request.requirement.roleConstraint,
+    assistantDialogueCandidate:
+      input.request.assistantDialogueCandidate === true,
     temporalMode: input.request.requirement.temporalMode,
     evidenceTimeUpperBound: input.request.evidenceTimeUpperBound ?? "latest",
     budget: input.request.budget,
@@ -567,4 +602,25 @@ function isConversationTurnKind(
     value === "outcome" ||
     value === "source_document"
   );
+}
+
+function isAllowedAnchorRole(
+  request: MemorySourceLocalEvidenceRequestV1,
+  sourceKind: MemoryConversationTurnKindV1 | undefined,
+): sourceKind is "user_input" | "assistant_output" {
+  return (
+    (sourceKind === "user_input" || sourceKind === "assistant_output") &&
+    memorySourceLocalAnchorKindsV1(request).includes(sourceKind)
+  );
+}
+
+function isAllowedAnchorAuthority(
+  sourceKind: "user_input" | "assistant_output" | undefined,
+  authority: MemoryEvidenceNotebookHitV1["authority"],
+): boolean {
+  return sourceKind === "user_input"
+    ? authority === "user_asserted" || authority === "user_confirmed_dialogue"
+    : sourceKind === "assistant_output" &&
+        (authority === "context_only" ||
+          authority === "user_confirmed_dialogue");
 }
