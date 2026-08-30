@@ -80,7 +80,7 @@ export function createMemoryEvidenceResolverV1(input: {
   const maxHitsPerRequirement = boundedInteger(
     input.maxHitsPerRequirement ?? 2,
     1,
-    4,
+    8,
   );
   const maxNotebookChars = boundedInteger(
     input.maxNotebookChars ?? 4_096,
@@ -155,6 +155,10 @@ export function createMemoryEvidenceResolverV1(input: {
           createRootEvidenceRequirement(value, intent),
         ]);
       }
+      const expansiveEvidence =
+        intent.answerShape === "aggregate" ||
+        intent.temporalMode === "history" ||
+        intent.temporalMode === "range";
       const pass = await resolveEvidencePass({
         index: input.index,
         supportSelector: input.supportSelector,
@@ -165,8 +169,12 @@ export function createMemoryEvidenceResolverV1(input: {
         requirements,
         maxSources,
         maxEvidencePerSource,
-        maxHitsPerRequirement,
-        maxNotebookChars,
+        maxHitsPerRequirement: expansiveEvidence
+          ? maxHitsPerRequirement
+          : Math.min(4, maxHitsPerRequirement),
+        maxNotebookChars: expansiveEvidence
+          ? maxNotebookChars
+          : Math.min(4_096, maxNotebookChars),
         directCertificateStatus,
         sourceLocalLocator: input.sourceLocalLocator,
         sourceLocalHydrator: input.sourceLocalHydrator,

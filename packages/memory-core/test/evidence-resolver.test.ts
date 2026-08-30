@@ -1878,6 +1878,112 @@ describe("shared evidence resolver v1", () => {
     );
   });
 
+  test("expands only aggregate evidence budgets beyond the direct lookup cap", async () => {
+    const hits = Array.from({ length: 6 }, (_, index) => ({
+      sourceId: `session-${index + 1}`,
+      evidenceRef: `session-${index + 1}#turn-1`,
+      content: `Milestone ${index + 1} was completed.`,
+      authority: "user_asserted" as const,
+      sourceKind: "user_input" as const,
+      episodeOrder: index + 1,
+      turnOrder: 1,
+    }));
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "milestones",
+                weight: 1,
+                candidates: hits.map((hit) => ({
+                  candidateId: hit.evidenceRef,
+                  sourceId: hit.sourceId,
+                  evidenceRef: hit.evidenceRef,
+                  sourceKind: hit.sourceKind,
+                  authority: hit.authority,
+                })),
+              },
+            ],
+            hits,
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+        async plan(query) {
+          const aggregate = query.startsWith("How many");
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+            answerShape: aggregate
+              ? ("aggregate" as const)
+              : ("lookup" as const),
+            temporalMode: "any" as const,
+            roleConstraint: "user" as const,
+            needsPlanning: aggregate,
+            requirements: [
+              {
+                requirementId: "milestones",
+                label: "completed milestones",
+                searchText: "milestones completed",
+                temporalMode: "any" as const,
+                roleConstraint: "user" as const,
+                relation: aggregate
+                  ? ("comparative" as const)
+                  : ("direct" as const),
+                coverageMode: aggregate ? ("all" as const) : ("any" as const),
+                minimumEvidence: aggregate ? 2 : 1,
+              },
+            ],
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "all-milestones",
+            assessments: [
+              {
+                requirementId: requiredAt(input.requirements, 0).requirementId,
+                supportingEvidenceRefs: hits.map((hit) => hit.evidenceRef),
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+      maxSources: 8,
+      maxHitsPerRequirement: 8,
+      maxNotebookChars: 8_192,
+    });
+
+    const result = await resolver.resolve(
+      "How many milestones did I complete?",
+      new AbortController().signal,
+    );
+
+    expect(result.plannerStatus).toBe("completed");
+    expect(result.supportSelectorStatus).toBe("completed");
+    expect(result.supportAssessments[0]?.supportingEvidenceRefs).toHaveLength(
+      6,
+    );
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toHaveLength(6);
+    expect(result.notebook.sources).toHaveLength(6);
+
+    const direct = await resolver.resolve(
+      "Which milestones did I complete?",
+      new AbortController().signal,
+    );
+    expect(direct.notebook.coverage[0]?.selectedEvidenceRefs).toHaveLength(4);
+  });
+
   test("keeps bounded candidates when latest-state support is still missing", async () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),

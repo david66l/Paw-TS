@@ -36,7 +36,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
     input.requirements.length > 4 ||
     !Number.isSafeInteger(input.maxHitsPerRequirement) ||
     input.maxHitsPerRequirement < 1 ||
-    input.maxHitsPerRequirement > 4 ||
+    input.maxHitsPerRequirement > 8 ||
     !Number.isSafeInteger(input.maxChars) ||
     input.maxChars < 256 ||
     input.maxChars > 16_384

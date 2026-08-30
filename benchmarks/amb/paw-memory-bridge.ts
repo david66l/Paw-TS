@@ -3111,10 +3111,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         : { closureAuditor: evidenceClosureAuditor }),
       maxSources: Math.min(8, Math.max(4, k)),
       maxEvidencePerSource: 8,
-      maxHitsPerRequirement: 4,
+      maxHitsPerRequirement: 8,
       maxNotebookChars: Math.min(
-        4_096,
-        Math.max(512, Math.floor(atomSourceContextMaxChars * 0.3)),
+        8_192,
+        Math.max(512, Math.floor(atomSourceContextMaxChars * 0.6)),
       ),
     });
     const resolution = await sharedResolver.resolve(
