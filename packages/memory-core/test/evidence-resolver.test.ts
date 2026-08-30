@@ -1208,7 +1208,7 @@ describe("shared evidence resolver v1", () => {
     ).not.toContain("unselected assistant fallback must stay closed");
   });
 
-  test("keeps bounded assistant candidates after a conservative selection but drops them on selector failure", async () => {
+  test("keeps bounded certified dialogue candidates after conservative selection but drops them on selector failure", async () => {
     const requirement = {
       requirementId: "assistant-answer",
       label: "prior assistant answer",
@@ -1280,12 +1280,17 @@ describe("shared evidence resolver v1", () => {
                   sourceId: "session-1",
                   evidenceRef: "session-1#turn-2",
                   anchorEvidenceRef: "session-1#turn-2",
-                  contextEvidenceRefs: ["session-1#turn-2"],
+                  contextEvidenceRefs: ["session-1#turn-1", "session-1#turn-2"],
                   sourceKind: "assistant_output" as const,
                   content,
                   authority: "context_only" as const,
                   turnOrder: 2,
                   includedTurns: [
+                    {
+                      evidenceRef: "session-1#turn-1",
+                      sourceKind: "user_input" as const,
+                      turnOrder: 1,
+                    },
                     {
                       evidenceRef: "session-1#turn-2",
                       sourceKind: "assistant_output" as const,
@@ -1299,7 +1304,7 @@ describe("shared evidence resolver v1", () => {
                 lexicalCandidates: 1,
                 denseCandidates: 0,
                 anchorCount: 1,
-                includedTurnCount: 1,
+                includedTurnCount: 2,
                 renderedChars: content.length,
                 cacheHit: false,
                 durationMs: 1,
@@ -1308,6 +1313,7 @@ describe("shared evidence resolver v1", () => {
           },
         },
         sourceLocalHydrator: sourceLocalHydrator({
+          "session-1#turn-1": "baseline only",
           "session-1#turn-2": "local secret answer",
         }),
       };
@@ -1315,19 +1321,25 @@ describe("shared evidence resolver v1", () => {
       selectorVersion: "test-selector.v1",
       async select(input: {
         readonly candidates: readonly { readonly evidenceRef: string }[];
+        readonly requirements: readonly { readonly roleConstraint: string }[];
       }) {
         const hasLocal = input.candidates.some(
           (candidate) => candidate.evidenceRef === "session-1#turn-2",
         );
+        const ambiguous = input.requirements[0]?.roleConstraint === "any";
         return {
           selectorVersion: "test-selector.v1",
           selectionRevision: "reject-local",
           assessments: [
             {
               requirementId: requirement.requirementId,
-              supportingEvidenceRefs: ["session-1#turn-1"],
+              supportingEvidenceRefs: ambiguous ? [] : ["session-1#turn-1"],
               contradictingEvidenceRefs: [],
-              unknownEvidenceRefs: hasLocal ? ["session-1#turn-2"] : [],
+              unknownEvidenceRefs: ambiguous
+                ? input.candidates.map((candidate) => candidate.evidenceRef)
+                : hasLocal
+                  ? ["session-1#turn-2"]
+                  : [],
             },
           ],
         };
@@ -1351,6 +1363,38 @@ describe("shared evidence resolver v1", () => {
     expect(rejected.packetSources[0]?.text ?? "").toContain(
       "local secret answer",
     );
+
+    const ambiguous = await createMemoryEvidenceResolverV1({
+      ...resolverInput,
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "any" as const,
+            needsPlanning: true,
+            requirements: [{ ...requirement, roleConstraint: "any" as const }],
+          };
+        },
+      },
+      supportSelector: selector,
+    }).resolve(
+      "Can you remind me what happened to the report you wrote?",
+      new AbortController().signal,
+    );
+    expect(ambiguous.sourceLocalization).toMatchObject({
+      status: "completed",
+      addedCandidateCount: 1,
+      selectedCandidateCount: 0,
+    });
+    expect(ambiguous.packetSources[0]?.answerRole).toBe("candidate");
+    expect(
+      ambiguous.packetSources.map((source) => source.text).join("\n"),
+    ).toContain("local secret answer");
 
     const result = await createMemoryEvidenceResolverV1({
       ...resolverInput,

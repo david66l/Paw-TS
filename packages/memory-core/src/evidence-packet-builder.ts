@@ -124,7 +124,9 @@ export function buildPrimaryEvidencePacketSources(
         (hit) =>
           hit.sourceId === sourceId &&
           !excludedEvidenceRefs.has(hit.evidenceRef) &&
-          (hit.authority !== "context_only" || allowContextOnly),
+          (hit.authority !== "context_only" ||
+            allowContextOnly ||
+            certifiedDialogueEvidenceRefs.has(hit.evidenceRef)),
       )
       .map((hit, rank) => ({
         hit,

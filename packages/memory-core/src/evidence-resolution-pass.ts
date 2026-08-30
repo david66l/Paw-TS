@@ -339,8 +339,7 @@ export async function resolveEvidencePass(input: {
   let supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] =
     Object.freeze([]);
   let selectedRefsByRequirement:
-    | ReadonlyMap<string, ReadonlySet<string>>
-    | undefined;
+    ReadonlyMap<string, ReadonlySet<string>> | undefined;
   if (input.requirements.length > 0 && input.supportSelector) {
     // A configured selector is an authority gate. Start closed so an empty
     // candidate set, malformed plugin result, or selector failure can never
@@ -424,10 +423,10 @@ export async function resolveEvidencePass(input: {
       selectedCandidateCount: selectedLocalCount,
     });
   }
-  // An ambiguous dialogue query may open assistant evidence only after the
-  // selector has bound exact evidence refs. Unselected fallback context stays
-  // closed even after a successful selection, and all assistant context stays
-  // closed when selection fails.
+  // Selected dialogue evidence opens only after the selector binds exact refs.
+  // A structurally certified local ref may separately survive as a bounded
+  // candidate when selection completes but leaves a coverage gap; it never
+  // becomes supporting evidence, and selector failure still closes the lane.
   const allowSelectedContextOnly =
     input.intent.roleConstraint === "assistant" ||
     (input.intent.roleConstraint === "any" &&
@@ -469,8 +468,9 @@ export async function resolveEvidencePass(input: {
       ...refs,
     ]),
   );
-  const retainUnselectedLocalAssistantCandidates =
-    input.intent.roleConstraint === "assistant" &&
+  const retainUnselectedCertifiedDialogueCandidates =
+    (input.intent.roleConstraint === "assistant" ||
+      input.intent.roleConstraint === "any") &&
     supportSelectorStatus === "completed" &&
     sourceLocalization.status === "completed" &&
     notebook.coverage.some((item) => item.status !== "covered");
@@ -481,7 +481,7 @@ export async function resolveEvidencePass(input: {
         (hit) =>
           (nonSupportingRefs.has(hit.evidenceRef) &&
             !localEvidenceRefs.has(hit.evidenceRef)) ||
-          (retainUnselectedLocalAssistantCandidates &&
+          (retainUnselectedCertifiedDialogueCandidates &&
             localEvidenceRefs.has(hit.evidenceRef) &&
             !selectedRefs.has(hit.evidenceRef)),
       ),
