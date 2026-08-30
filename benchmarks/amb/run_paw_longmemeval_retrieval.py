@@ -46,7 +46,7 @@ Keep the reasoning audit concise. Make the final answer directly match the reque
 
 """
 RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v10:bound-capability-profile"
-MEMORY_POLICY = "paw.amb-evidence-first.v20:source-local-required"
+MEMORY_POLICY = "paw.amb-evidence-first.v21:assistant-candidate-fallback"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
 RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v7:dense-source-local"
 PROJECT_RELEASE_GATE = {

@@ -572,13 +572,26 @@ export async function resolveEvidencePass(input: {
       ...assessment.unknownEvidenceRefs,
     ]),
   );
+  const selectedRefs = new Set(
+    [...(selectedRefsByRequirement?.values() ?? [])].flatMap((refs) => [
+      ...refs,
+    ]),
+  );
+  const retainUnselectedLocalAssistantCandidates =
+    input.intent.roleConstraint === "assistant" &&
+    supportSelectorStatus === "completed" &&
+    sourceLocalization.status === "completed" &&
+    notebook.coverage.some((item) => item.status !== "covered");
   const packetFallbackHits = mergeEvidenceHits(
     requirementHits
       .flat()
       .filter(
         (hit) =>
-          nonSupportingRefs.has(hit.evidenceRef) &&
-          !localEvidenceRefs.has(hit.evidenceRef),
+          (nonSupportingRefs.has(hit.evidenceRef) &&
+            !localEvidenceRefs.has(hit.evidenceRef)) ||
+          (retainUnselectedLocalAssistantCandidates &&
+            localEvidenceRefs.has(hit.evidenceRef) &&
+            !selectedRefs.has(hit.evidenceRef)),
       ),
     input.primary.hits,
   ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));

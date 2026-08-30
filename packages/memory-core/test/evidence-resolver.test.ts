@@ -1208,7 +1208,7 @@ describe("shared evidence resolver v1", () => {
     ).not.toContain("unselected assistant fallback must stay closed");
   });
 
-  test("drops local candidates when the selector rejects them or fails", async () => {
+  test("keeps bounded assistant candidates after a conservative selection but drops them on selector failure", async () => {
     const requirement = {
       requirementId: "assistant-answer",
       label: "prior assistant answer",
@@ -1346,8 +1346,9 @@ describe("shared evidence resolver v1", () => {
       status: "completed",
       selectedCandidateCount: 0,
     });
-    expect(rejected.packetSources).toEqual(baseline.packetSources);
-    expect(rejected.packetSources[0]?.text ?? "").not.toContain(
+    expect(rejected.packetSources).not.toEqual(baseline.packetSources);
+    expect(rejected.packetSources[0]?.answerRole).toBe("candidate");
+    expect(rejected.packetSources[0]?.text ?? "").toContain(
       "local secret answer",
     );
 
