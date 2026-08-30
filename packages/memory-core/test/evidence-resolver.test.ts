@@ -1369,6 +1369,268 @@ describe("shared evidence resolver v1", () => {
       "local secret answer",
     );
   });
+
+  test("does not open user source-local evidence when baseline support is closed", async () => {
+    let selectorCalls = 0;
+    let locatorCalls = 0;
+    const requirement = {
+      requirementId: "user-history",
+      label: "user history",
+      searchText: "earlier hiking trip",
+      temporalMode: "history" as const,
+      roleConstraint: "user" as const,
+      relation: "temporal" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+    };
+    const result = await createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "user-gap-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "exact-user-turn",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "session-1#turn-1",
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-1",
+                sourceKind: "user_input" as const,
+                content: "I went hiking near the lake in spring.",
+                authority: "user_asserted" as const,
+                episodeOrder: 1,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+            answerShape: "lookup" as const,
+            temporalMode: "history" as const,
+            roleConstraint: "user" as const,
+            needsPlanning: true,
+            requirements: [requirement],
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          selectorCalls += 1;
+          const selectedRef = input.candidates[0]?.evidenceRef;
+          if (!selectedRef) throw new Error("baseline candidate missing");
+          const requirementId = requiredAt(input.requirements, 0).requirementId;
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "baseline-closed",
+            assessments: [
+              {
+                requirementId,
+                supportingEvidenceRefs: [selectedRef],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate() {
+          locatorCalls += 1;
+          throw new Error("closed baseline must not invoke the locator");
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({}),
+    }).resolve("Where did I hike before?", new AbortController().signal);
+
+    expect(selectorCalls).toBe(1);
+    expect(locatorCalls).toBe(0);
+    expect(result.sourceLocalization).toMatchObject({
+      status: "not_needed",
+      reasonCode: "baseline_closed",
+      addedCandidateCount: 0,
+    });
+    expect(result.notebook.coverage[0]?.status).toBe("covered");
+  });
+
+  test("fills only a user evidence gap and preserves baseline support", async () => {
+    let selectorCalls = 0;
+    let locatorCalls = 0;
+    const selectorCandidateRefsByCall: string[][] = [];
+    const requirement = {
+      requirementId: "user-history",
+      label: "user history",
+      searchText: "earlier hiking trips",
+      temporalMode: "history" as const,
+      roleConstraint: "user" as const,
+      relation: "temporal" as const,
+      coverageMode: "all" as const,
+      minimumEvidence: 2,
+    };
+    const result = await createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "user-gap-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "exact-user-turn",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "session-1#turn-1",
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-1",
+                sourceKind: "user_input" as const,
+                content: "I went hiking near the lake in spring.",
+                authority: "user_asserted" as const,
+                episodeOrder: 1,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion:
+          "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+        async plan() {
+          return {
+            plannerVersion:
+              "paw.memory-evidence-query-planner.v10:certified-dialogue-candidate",
+            answerShape: "lookup" as const,
+            temporalMode: "history" as const,
+            roleConstraint: "user" as const,
+            needsPlanning: true,
+            requirements: [requirement],
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          selectorCalls += 1;
+          selectorCandidateRefsByCall.push(
+            input.candidates.map((candidate) => candidate.evidenceRef),
+          );
+          const hasLocal = input.candidates.some(
+            (candidate) => candidate.evidenceRef === "session-1#turn-3",
+          );
+          const selectedRef = hasLocal
+            ? "session-1#turn-3"
+            : input.candidates[0]?.evidenceRef;
+          if (!selectedRef) throw new Error("support candidate missing");
+          const requirementId = requiredAt(input.requirements, 0).requirementId;
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: hasLocal ? "gap-repair" : "baseline-partial",
+            assessments: [
+              {
+                requirementId,
+                supportingEvidenceRefs: [selectedRef],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate() {
+          locatorCalls += 1;
+          const content =
+            "I mentioned another earlier hiking trip through the forest in autumn.";
+          return {
+            locatorVersion: "test-source-local.v1",
+            locatorRevision: "user-gap-anchor",
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-3",
+                anchorEvidenceRef: "session-1#turn-3",
+                contextEvidenceRefs: ["session-1#turn-3"],
+                sourceKind: "user_input" as const,
+                content,
+                authority: "user_asserted" as const,
+                episodeOrder: 2,
+                turnOrder: 3,
+                includedTurns: [
+                  {
+                    evidenceRef: "session-1#turn-3",
+                    sourceKind: "user_input" as const,
+                    turnOrder: 3,
+                  },
+                ],
+              },
+            ],
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: 1,
+              denseCandidates: 1,
+              anchorCount: 1,
+              includedTurnCount: 1,
+              renderedChars: content.length,
+              cacheHit: false,
+              durationMs: 2,
+            },
+          };
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({
+        "session-1#turn-3":
+          "I mentioned another earlier hiking trip through the forest in autumn.",
+      }),
+    }).resolve(
+      "List all hikes I mentioned over time.",
+      new AbortController().signal,
+    );
+
+    expect(selectorCalls).toBe(2);
+    expect(locatorCalls).toBe(1);
+    expect(selectorCandidateRefsByCall[1]).toEqual(["session-1#turn-3"]);
+    expect(result.sourceLocalization).toMatchObject({
+      status: "completed",
+      addedCandidateCount: 1,
+      selectedCandidateCount: 1,
+    });
+    expect(result.notebook.coverage[0]?.status).toBe("covered");
+    expect(new Set(result.notebook.coverage[0]?.selectedEvidenceRefs)).toEqual(
+      new Set(["session-1#turn-1", "session-1#turn-3"]),
+    );
+  });
   test("locks sources only after bounded planned discovery", async () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),

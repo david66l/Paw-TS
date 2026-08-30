@@ -20,14 +20,17 @@ import {
   buildDialogueSourceDiscoveryV1,
   buildPlannedEvidencePacketSources,
   buildPrimaryEvidencePacketSources,
-  enforceSelectedEvidenceAuthority,
   filterEvidenceSearchResultForRole,
   filterRequirementHits,
   isAbort,
   mergeEvidenceHits,
   namedError,
-  selectSupportCandidates,
 } from "./evidence-resolver-helpers.js";
+import {
+  type SupportSelectionStateV1,
+  mergeSupportSelectionsV1,
+  selectEvidenceSupportV1,
+} from "./evidence-support-pass.js";
 import type {
   MemoryEvidenceSupportSelectorV1,
   MemoryEvidenceTriageAssessmentV1,
@@ -188,13 +191,89 @@ export async function resolveEvidencePass(input: {
   let requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[] =
     baselineRequirementHits;
   let localEvidenceRefs = new Set<string>();
+  const gapFillOnly =
+    localEligible &&
+    input.intent.roleConstraint === "user" &&
+    !input.certifiedAssistantDialogueCandidate;
+  let supportSelection: SupportSelectionStateV1 | undefined;
+  let gapRequirementIndexes: readonly number[] = Object.freeze([]);
+  if (gapFillOnly && input.supportSelector) {
+    try {
+      supportSelection = await selectEvidenceSupportV1({
+        selector: input.supportSelector,
+        query: input.query,
+        requirements: input.requirements,
+        requirementHits: baselineRequirementHits,
+        selectedSourceIds: sourceLocalLockedIds,
+        roleConstraint: input.intent.roleConstraint,
+        certifiedAssistantDialogueCandidate: false,
+        localEvidenceRefs,
+        signal: input.signal,
+      });
+      if (supportSelection.status === "completed") {
+        const baselineSelection = supportSelection;
+        const baselineNotebook = buildMemoryEvidenceNotebookV1({
+          requirements: input.requirements.map((requirement, index) => ({
+            requirementId: requirement.requirementId,
+            label: requirement.label,
+            searchText: requirement.searchText,
+            selection:
+              requirement.temporalMode === "latest" ? "latest" : "ranked",
+            relation: requirement.relation ?? "direct",
+            coverageMode:
+              requirement.coverageMode ??
+              (requirement.temporalMode === "latest" ? "latest" : "any"),
+            minimumEvidence: requirement.minimumEvidence ?? 1,
+            roleConstraint: requirement.roleConstraint,
+            certifiedDialogueEvidenceRefs: Object.freeze([]),
+            hits: filterRequirementHits(
+              baselineRequirementHits[index] ?? [],
+              baselineSelection.selectedRefsByRequirement.get(
+                requirement.requirementId,
+              ),
+            ),
+          })),
+          allowedSourceIds: sourceLocalLockedIds,
+          maxHitsPerRequirement: input.maxHitsPerRequirement,
+          maxChars: input.maxNotebookChars,
+          allowContextOnly: false,
+        });
+        gapRequirementIndexes = Object.freeze(
+          baselineNotebook.coverage.flatMap((coverage, index) =>
+            coverage.status === "covered" ? [] : [index],
+          ),
+        );
+      }
+    } catch (error) {
+      if (input.signal.aborted || isAbort(error)) throw abortError();
+      supportSelection = Object.freeze({
+        status: "fallback",
+        assessments: Object.freeze([]),
+        selectedRefsByRequirement: new Map(
+          input.requirements.map((requirement) => [
+            requirement.requirementId,
+            new Set<string>(),
+          ]),
+        ),
+      });
+    }
+  }
   let sourceLocalization: MemorySourceLocalizationReportV1 = Object.freeze({
     status: "not_needed",
-    reasonCode: "route_ineligible",
+    reasonCode:
+      gapFillOnly && supportSelection?.status === "completed"
+        ? "baseline_closed"
+        : gapFillOnly
+          ? "baseline_selector_unavailable"
+          : "route_ineligible",
     addedCandidateCount: 0,
     selectedCandidateCount: 0,
   });
-  if (localEligible && sourceLocalLockedIds.length > 0) {
+  const shouldLocateLocal =
+    localEligible &&
+    sourceLocalLockedIds.length > 0 &&
+    (!gapFillOnly || gapRequirementIndexes.length > 0);
+  if (shouldLocateLocal) {
     if (!input.sourceLocalLocator) {
       sourceLocalization = Object.freeze({
         status: "not_configured",
@@ -214,11 +293,18 @@ export async function resolveEvidencePass(input: {
       try {
         const located: Array<
           Readonly<{
+            requirementIndex: number;
             result: MemorySourceLocalEvidenceResultV1;
             hits: readonly MemorySourceLocalEvidenceHitV1[];
           }>
         > = [];
-        for (const requirement of input.requirements) {
+        const requirementIndexes = gapFillOnly
+          ? gapRequirementIndexes
+          : input.requirements.map((_, index) => index);
+        for (const requirementIndex of requirementIndexes) {
+          const requirement = input.requirements[requirementIndex];
+          if (!requirement)
+            throw namedError("MemoryEvidenceRequirementMissing");
           const request = Object.freeze({
             requirement,
             ...(input.certifiedAssistantDialogueCandidate
@@ -252,14 +338,18 @@ export async function resolveEvidencePass(input: {
             request,
             result,
           });
-          located.push(Object.freeze({ result, hits }));
+          located.push(Object.freeze({ requirementIndex, result, hits }));
         }
         localEvidenceRefs = new Set(
           located.flatMap(({ hits }) => hits.map((hit) => hit.evidenceRef)),
         );
         requirementHits = Object.freeze(
           baselineRequirementHits.map((hits, index) =>
-            mergeEvidenceHits(located[index]?.hits ?? [], hits),
+            mergeEvidenceHits(
+              located.find((item) => item.requirementIndex === index)?.hits ??
+                [],
+              hits,
+            ),
           ),
         );
         const results = located.map(({ result }) => result);
@@ -342,63 +432,81 @@ export async function resolveEvidencePass(input: {
     | ReadonlyMap<string, ReadonlySet<string>>
     | undefined;
   if (input.requirements.length > 0 && input.supportSelector) {
-    // A configured selector is an authority gate. Start closed so an empty
-    // candidate set, malformed plugin result, or selector failure can never
-    // make `undefined` mean "accept every hit" downstream.
-    selectedRefsByRequirement = new Map(
-      input.requirements.map((requirement) => [
-        requirement.requirementId,
-        new Set<string>(),
-      ]),
-    );
-    const candidates = selectSupportCandidates(
-      requirementHits,
-      sourceLocalLockedIds,
-      input.intent.roleConstraint !== "user" ||
-        input.certifiedAssistantDialogueCandidate,
-      32,
-    );
-    if (candidates.length > 0) {
-      try {
-        const selection = await input.supportSelector.select(
-          {
-            query: input.query,
-            requirements: input.requirements,
-            candidates,
-            ...(input.certifiedAssistantDialogueCandidate &&
-            localEvidenceRefs.size > 0
-              ? {
-                  certifiedAssistantDialogueEvidenceRefs: Object.freeze([
-                    ...localEvidenceRefs,
-                  ]),
-                }
-              : {}),
-          },
-          input.signal,
-        );
-        supportAssessments = enforceSelectedEvidenceAuthority({
-          assessments: selection.assessments,
+    try {
+      if (!supportSelection) {
+        supportSelection = await selectEvidenceSupportV1({
+          selector: input.supportSelector,
+          query: input.query,
           requirements: input.requirements,
-          candidateEvidenceRefs: new Set(
-            candidates.map((candidate) => candidate.evidenceRef),
-          ),
           requirementHits,
+          selectedSourceIds: sourceLocalLockedIds,
           roleConstraint: input.intent.roleConstraint,
-          certifiedSharedDialogueRefs: localEvidenceRefs,
           certifiedAssistantDialogueCandidate:
             input.certifiedAssistantDialogueCandidate,
+          localEvidenceRefs,
+          signal: input.signal,
         });
+      } else if (
+        gapFillOnly &&
+        supportSelection.status === "completed" &&
+        localEvidenceRefs.size > 0 &&
+        gapRequirementIndexes.length > 0
+      ) {
+        const gapRequirements = gapRequirementIndexes.flatMap((index) => {
+          const requirement = input.requirements[index];
+          return requirement ? [requirement] : [];
+        });
+        const gapHits = gapRequirementIndexes.map((index) =>
+          (requirementHits[index] ?? []).filter((hit) =>
+            localEvidenceRefs.has(hit.evidenceRef),
+          ),
+        );
+        const repairSelection = await selectEvidenceSupportV1({
+          selector: input.supportSelector,
+          query: input.query,
+          requirements: gapRequirements,
+          requirementHits: gapHits,
+          selectedSourceIds: sourceLocalLockedIds,
+          roleConstraint: input.intent.roleConstraint,
+          certifiedAssistantDialogueCandidate: false,
+          localEvidenceRefs,
+          signal: input.signal,
+        });
+        if (repairSelection.status === "completed") {
+          supportSelection = mergeSupportSelectionsV1(
+            supportSelection,
+            repairSelection,
+          );
+        }
+      }
+      supportSelectorStatus = supportSelection.status;
+      supportSelectionRevision = supportSelection.revision;
+      supportAssessments = supportSelection.assessments;
+      selectedRefsByRequirement = supportSelection.selectedRefsByRequirement;
+    } catch (error) {
+      if (input.signal.aborted || isAbort(error)) throw abortError();
+      if (gapFillOnly && supportSelection?.status === "completed") {
+        requirementHits = baselineRequirementHits;
+        localEvidenceRefs = new Set();
+        sourceLocalization = Object.freeze({
+          ...sourceLocalization,
+          status: "fallback",
+          reasonCode: "selector_failed",
+          addedCandidateCount: 0,
+          selectedCandidateCount: 0,
+        });
+        supportSelectorStatus = supportSelection.status;
+        supportSelectionRevision = supportSelection.revision;
+        supportAssessments = supportSelection.assessments;
+        selectedRefsByRequirement = supportSelection.selectedRefsByRequirement;
+      } else {
+        supportSelectorStatus = "fallback";
         selectedRefsByRequirement = new Map(
-          supportAssessments.map((assessment) => [
-            assessment.requirementId,
-            new Set(assessment.supportingEvidenceRefs),
+          input.requirements.map((requirement) => [
+            requirement.requirementId,
+            new Set<string>(),
           ]),
         );
-        supportSelectionRevision = selection.selectionRevision;
-        supportSelectorStatus = "completed";
-      } catch (error) {
-        if (input.signal.aborted || isAbort(error)) throw abortError();
-        supportSelectorStatus = "fallback";
         if (localEvidenceRefs.size > 0) {
           requirementHits = baselineRequirementHits;
           localEvidenceRefs = new Set();
