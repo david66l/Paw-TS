@@ -1035,3 +1035,11 @@ Artifacts:
 - AMB answer/judge 适配器将稳定 JSON schema 从变化的 user prompt 尾部移到 system 前缀，缓存策略随语义升级，测试保证不同题目共享完全相同的 schema 前缀。该改动不改变模型、工具或答案契约，需在新冷缓存运行中量化 provider KV 收益。
 - evidence-support selector 使用 `e1..eN` 的短期 opaque 地址替代模型可见的长 evidence path，并删除冗余 sourceId；代码在模型返回后映射回权威 evidenceRef，仍拒绝虚构或重复地址。既有长地址解析保持兼容，便于读取旧缓存。新 selector 版本单独失效语义缓存。
 - 正在运行的云端 v3 正式 500 题仍绑定旧干净提交，未受本地重构影响；192/500 阶段值为 154/192=80.21%，仅作进度观察，不作为最终成绩。
+
+### M11：证据编译器门禁与有序相对时间意图
+
+- 固定 full500 基线为 388/500=77.6%。112 个错误中，82 个已经召回全部 gold document，说明主要缺口不是继续扩大粗粒度 source recall，而是 source 内精确证据绑定、对话角色、多个事件覆盖和时序执行。错误集中在 assistant 30、multi-session 39、temporal 29；direct user 与 knowledge update 已接近饱和。
+- V21 只允许经过 source-local 结构验证的 assistant 证据作为有界 candidate。固定 dev120 的精确受影响 assistant cohort 从 6/7 提升到 7/7、0 个直接回退，但全局冷跑为 100/120，不能用总体分数宣称晋级。V22 删除未被反事实支持的 user-gap 分支后为 98/120；相对 V17 为 2 胜 8 负，其中多数变化不经过被删除分支，证明 DeepSeek 冷跑答案存在不可忽略的方差。后续门禁必须同时报告总分和受影响路线的证据指标。
+- V23 把 candidate aperture 收紧为 per-evidence certificate：只有 source-local locator 返回、hydrator 校验且 selector 完成后仍未覆盖 requirement 的 exact dialogue ref 才能保留；selector 失败继续关闭。V24 在同一 resolver 内按 query shape 调整已有预算：direct lookup 维持 4 hits/4096 chars，aggregate/history/range 才能使用调用方上限 8 hits/8192 chars。两者均未增加 LLM、存储、索引或记忆层。
+- full500 诊断显示旧分类器把 72 个明确序数或相对时间问题仍路由为 `temporalMode=any`，其中 16 个已答错，原因以 missing evidence 和 temporal ordering 为主。V25 将 `first/second/.../earliest` 问句归为 history，将 `ago` 归为 range；`first name` 等 profile 字段显式排除，`previous conversation` 仍只是来源定位，不被误当状态历史。该能力复用现有 planner、source-local retrieval、adaptive budget 和 `order_events` answer policy，不增加新模块或模型调用。
+- V25 当前只通过合成能力门禁：memory-core 94 pass / 0 fail / 414 expectations、typecheck 与 Biome 通过，AMB Python runner 15 pass。云端独立 dev120 和 full500 尚未完成，因此本节不声明准确率收益；若受影响路线没有可复现改善，该分类扩展不得晋级正式基线。

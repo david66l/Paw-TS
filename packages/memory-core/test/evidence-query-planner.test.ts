@@ -470,6 +470,42 @@ describe("typed evidence query planner v3", () => {
     });
   });
 
+  test("classifies ordinal and relative-time questions as ordered evidence", () => {
+    expect(
+      classifyMemoryEvidenceQueryV3("Which suggestion did you mention first?"),
+    ).toEqual({
+      answerShape: "recommend",
+      temporalMode: "history",
+      roleConstraint: "assistant",
+      needsPlanning: true,
+    });
+    expect(
+      classifyMemoryEvidenceQueryV3("How many days ago did I visit that city?"),
+    ).toEqual({
+      answerShape: "aggregate",
+      temporalMode: "range",
+      roleConstraint: "user",
+      needsPlanning: true,
+    });
+    expect(classifyMemoryEvidenceQueryV3("我第一次提到的是哪个城市？")).toEqual(
+      {
+        answerShape: "lookup",
+        temporalMode: "history",
+        roleConstraint: "user",
+        needsPlanning: true,
+      },
+    );
+  });
+
+  test("does not confuse a profile field with an ordinal event", () => {
+    expect(classifyMemoryEvidenceQueryV3("What is my first name?")).toEqual({
+      answerShape: "lookup",
+      temporalMode: "any",
+      roleConstraint: "user",
+      needsPlanning: false,
+    });
+  });
+
   test("classifies the same independent intent axes in Chinese", () => {
     expect(classifyMemoryEvidenceQueryV3("我目前一共有多少粉丝？")).toEqual({
       answerShape: "aggregate",

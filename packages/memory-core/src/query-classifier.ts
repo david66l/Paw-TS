@@ -53,28 +53,7 @@ export function classifyMemoryEvidenceQueryV3(
             )
           ? "aggregate"
           : "lookup";
-  const explicitLatest =
-    /\b(?:latest|currently|most\s+recent|now|today|at\s+present)\b|(?:最新|现在|目前|最近一次|今天)/iu.test(
-      value,
-    );
-  const explicitCurrentState =
-    /\bcurrent\s+(?:count|number|status|balance|level|value|total|amount|location|city|address|job|role|preference|plan)\b|当前(?:数量|数值|状态|余额|等级|级别|总数|金额|位置|城市|地址|工作|角色|偏好|计划)/iu.test(
-      value,
-    );
-  const temporalMode: MemoryEvidenceTemporalModeV3 =
-    explicitLatest || explicitCurrentState
-      ? "latest"
-      : /\bas\s+of\b|(?:截至|截止到|到.{0,24}为止)/iu.test(value)
-        ? "as_of"
-        : /\b(?:over\s+time|changed?|history|previously|used\s+to|evolution)\b|(?:随时间|变化|历史|以前|曾经|演变|过程)/iu.test(
-              value,
-            )
-          ? "history"
-          : /\b(?:between|from\b.{0,48}\bto|since|before|after|during|within)\b|(?:从.{0,24}到|之间|以来|之前|之后|期间|以内)/iu.test(
-                value,
-              )
-            ? "range"
-            : "any";
+  const temporalMode = classifyMemoryEvidenceTemporalModeV1(value);
   return Object.freeze({
     answerShape,
     temporalMode,
@@ -85,6 +64,40 @@ export function classifyMemoryEvidenceQueryV3(
       roleConstraint !== "user" ||
       certifiedAssistantDialogueCandidate,
   });
+}
+
+function classifyMemoryEvidenceTemporalModeV1(
+  query: string,
+): MemoryEvidenceTemporalModeV3 {
+  const latest =
+    /\b(?:latest|currently|most\s+recent|now|today|at\s+present)\b|(?:最新|现在|目前|最近一次|今天)/iu.test(
+      query,
+    ) ||
+    /\bcurrent\s+(?:count|number|status|balance|level|value|total|amount|location|city|address|job|role|preference|plan)\b|当前(?:数量|数值|状态|余额|等级|级别|总数|金额|位置|城市|地址|工作|角色|偏好|计划)/iu.test(
+      query,
+    );
+  if (latest) return "latest";
+  if (/\bas\s+of\b|(?:截至|截止到|到.{0,24}为止)/iu.test(query)) {
+    return "as_of";
+  }
+  const ordinalHistory =
+    !/\b(?:first|last|family|given|middle)\s+name\b/iu.test(query) &&
+    /\b(?:what|which|where|when|how|who)\b.{0,96}\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|earliest)\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|earliest)\b.{0,96}\b(?:did|was|were|is|are|came|happened|occurred|said|mentioned|recommended|suggested|chose|selected)\b|(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁).{0,64}(?:第[一二三四五六七八九十\d]+(?:次|个|条|项|段|轮)|首次|最早)|(?:第[一二三四五六七八九十\d]+(?:次|个|条|项|段|轮)|首次|最早).{0,64}(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁)/iu.test(
+      query,
+    );
+  if (
+    ordinalHistory ||
+    /\b(?:over\s+time|changed?|history|previously|used\s+to|evolution)\b|(?:随时间|变化|历史|以前|曾经|演变|过程)/iu.test(
+      query,
+    )
+  ) {
+    return "history";
+  }
+  return /\b(?:between|from\b.{0,48}\bto|since|before|after|during|within|ago)\b|(?:从.{0,24}到|之间|以来|之前|之后|期间|以内|前(?:多久|多少(?:天|周|月|年)))/iu.test(
+    query,
+  )
+    ? "range"
+    : "any";
 }
 
 function isExplicitUserOriginMemoryQueryV1(query: string): boolean {

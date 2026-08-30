@@ -339,7 +339,8 @@ export async function resolveEvidencePass(input: {
   let supportAssessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] =
     Object.freeze([]);
   let selectedRefsByRequirement:
-    ReadonlyMap<string, ReadonlySet<string>> | undefined;
+    | ReadonlyMap<string, ReadonlySet<string>>
+    | undefined;
   if (input.requirements.length > 0 && input.supportSelector) {
     // A configured selector is an authority gate. Start closed so an empty
     // candidate set, malformed plugin result, or selector failure can never
