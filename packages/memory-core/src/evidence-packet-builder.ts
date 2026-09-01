@@ -2,6 +2,7 @@ import type {
   MemoryEvidenceNotebookHitV1,
   MemoryEvidenceNotebookV1,
 } from "./evidence-contracts.js";
+import type { MemoryEvidenceObligationShapeV1 } from "./evidence-obligation.js";
 import {
   type MemoryEvidenceBindingV1,
   type MemoryEvidenceOriginRoleV1,
@@ -16,6 +17,7 @@ import type {
 import type { MemoryEvidenceResolutionV1 } from "./evidence-resolution-contracts.js";
 import { mergeEvidenceHits } from "./evidence-resolution-validation.js";
 import { memoryEvidenceOrdinalAnchorScoreV1 } from "./evidence-text.js";
+import { compileMemoryEvidenceTemporalConstraintV1 } from "./temporal-constraint.js";
 
 export function selectedNotebookEvidence(
   requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[],
@@ -32,12 +34,19 @@ export function selectedNotebookEvidence(
 export function createRootEvidenceRequirement(
   query: string,
   intent: MemoryEvidenceQueryIntentV3,
+  obligationShape?: MemoryEvidenceObligationShapeV1,
 ): MemoryEvidenceRequirementV3 {
+  const collectiveFallback = (obligationShape?.minimumEvidenceCount ?? 0) > 1;
   return Object.freeze({
     requirementId: "root-requirement",
     label: query.slice(0, 192),
     searchText: query.slice(0, 192),
     temporalMode: intent.temporalMode,
+    temporalConstraint: compileMemoryEvidenceTemporalConstraintV1({
+      query,
+      queryEnvelopeMode: intent.temporalMode,
+      leafMode: intent.temporalMode,
+    }),
     roleConstraint: intent.roleConstraint,
     relation:
       intent.temporalMode === "latest"
@@ -45,8 +54,15 @@ export function createRootEvidenceRequirement(
         : intent.answerShape === "compare" || intent.answerShape === "aggregate"
           ? "comparative"
           : "direct",
-    coverageMode: intent.temporalMode === "latest" ? "latest" : "any",
-    minimumEvidence: 1,
+    coverageMode:
+      intent.temporalMode === "latest"
+        ? "latest"
+        : collectiveFallback
+          ? "all"
+          : "any",
+    minimumEvidence: collectiveFallback
+      ? Math.min(3, obligationShape?.minimumEvidenceCount ?? 2)
+      : 1,
   });
 }
 
@@ -186,6 +202,7 @@ export function buildPlannedEvidencePacketSources(input: {
   readonly includeFallback: boolean;
   readonly fallbackAnswerRole: "supporting" | "candidate";
   readonly maxFallbackChars: number;
+  readonly maxFallbackHitsPerSource?: number;
   readonly roleConstraint: MemoryEvidenceOriginRoleV1;
   readonly certifiedDialogueEvidenceRefs?: ReadonlySet<string>;
 }): MemoryEvidenceResolutionV1["packetSources"] {
@@ -197,7 +214,7 @@ export function buildPlannedEvidencePacketSources(input: {
     input.primaryHits,
     input.selectedSourceIds,
     input.allowContextOnly,
-    1,
+    input.maxFallbackHitsPerSource ?? 1,
     input.maxFallbackChars,
     selectedRefs,
     input.fallbackAnswerRole,

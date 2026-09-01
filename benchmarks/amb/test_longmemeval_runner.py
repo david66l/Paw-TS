@@ -1,8 +1,18 @@
 from types import SimpleNamespace
 import json
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
 import unittest
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+from longmemeval_protocol import (
+    canonicalize_longmemeval_documents,
+    load_longmemeval_protocol,
+    official_longmemeval_judge_prompt_fn,
+)
 
 from compare_paw_longmemeval_blind import DEFAULT_PROJECT_RELEASE_GATE
 from run_paw_longmemeval_retrieval import (
@@ -12,15 +22,20 @@ from run_paw_longmemeval_retrieval import (
     consume_blind_arm,
     experiment_protocol,
     local_embedding_health_url,
+    order_longmemeval_reader_documents,
     public_report,
     resolved_release_provider_env,
     retrieval_source_artifact_paths,
     retrieval_source_artifact_sha256,
+    select_category_queries,
+    select_diagnostic_queries,
     select_full_split_queries,
     select_queries,
     source_artifact_paths,
     source_artifact_sha256,
+    summarize,
     validate_blind_plan,
+    validated_diagnostic_include_manifest,
     validated_exclusion_manifest,
 )
 
@@ -46,6 +61,137 @@ class FakeDataset:
 
 
 class LongMemEvalRunnerTest(unittest.TestCase):
+    def test_reader_context_is_chronological_without_changing_retrieval_rank(self) -> None:
+        documents = [
+            SimpleNamespace(id="later", content="later"),
+            SimpleNamespace(id="unknown", content="unknown"),
+            SimpleNamespace(id="earlier", content="earlier"),
+        ]
+
+        ordered = order_longmemeval_reader_documents(
+            documents,
+            {
+                "later": "2025-01-03T00:00:00+00:00",
+                "earlier": "2025-01-01T00:00:00+00:00",
+            },
+        )
+
+        self.assertEqual(
+            ["earlier", "later", "unknown"], [item.id for item in ordered]
+        )
+        self.assertEqual(
+            ["later", "unknown", "earlier"], [item.id for item in documents]
+        )
+
+    def test_duplicate_official_session_ids_get_unique_physical_ids(self) -> None:
+        from dataclasses import dataclass
+
+        @dataclass
+        class Document:
+            id: str
+            content: str
+            user_id: str
+
+        documents, physical_to_logical, collisions = (
+            canonicalize_longmemeval_documents(
+                [
+                    Document("query_session", "first", "query"),
+                    Document("query_session", "second", "query"),
+                    Document("query_unique", "third", "query"),
+                ]
+            )
+        )
+
+        self.assertEqual(1, collisions)
+        self.assertEqual(3, len({document.id for document in documents}))
+        self.assertEqual(
+            ["query_session", "query_session", "query_unique"],
+            [physical_to_logical[document.id] for document in documents],
+        )
+
+    def test_protocol_uses_declared_sessions_and_suffix_for_abstention(self) -> None:
+        rows = [
+            {
+                "question_id": "answerable",
+                "question_type": "multi-session",
+                "answer_session_ids": ["session-a", "session-b"],
+                "haystack_session_ids": ["session-a", "session-b"],
+                "haystack_dates": ["2025-01-01", "2025-01-02"],
+                "haystack_sessions": [
+                    [{"role": "user", "content": "a", "has_answer": True}],
+                    [{"role": "assistant", "content": "b"}],
+                ],
+            },
+            {
+                "question_id": "missing_fact_abs",
+                "question_type": "single-session-user",
+                "answer_session_ids": ["session-c"],
+                "haystack_session_ids": ["session-c"],
+                "haystack_dates": ["2025-01-03"],
+                "haystack_sessions": [
+                    [{"role": "user", "content": "c"}],
+                ],
+            },
+        ]
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "longmemeval.json"
+            path.write_text(json.dumps(rows), encoding="utf-8")
+            records, audit = load_longmemeval_protocol(path)
+
+        self.assertEqual(
+            (
+                "answerable_session-a",
+                "answerable_session-b",
+            ),
+            records["answerable"].gold_document_ids,
+        )
+        self.assertFalse(records["answerable"].abstention)
+        self.assertTrue(records["missing_fact_abs"].abstention)
+        self.assertEqual((), records["missing_fact_abs"].gold_document_ids)
+        self.assertEqual(2, audit.turn_label_mismatch_count)
+        self.assertEqual(1, audit.abstention_count)
+
+    def test_abstention_judge_uses_official_unanswerable_semantics(self) -> None:
+        prompt = official_longmemeval_judge_prompt_fn(
+            question_type="multi-session", abstention=True
+        )("question", ["explanation"], "answer")
+
+        self.assertIn("unanswerable question", prompt)
+        self.assertIn("correctly identifies", prompt)
+        self.assertIn('"correct" (boolean)', prompt)
+
+    def test_retrieval_summary_excludes_abstention_from_recall_metrics(self) -> None:
+        summary = summarize(
+            [
+                {
+                    "questionType": "multi-session",
+                    "answerable": True,
+                    "goldDocumentCount": 2,
+                    "hit": True,
+                    "goldRecall": 0.5,
+                    "reciprocalRank": 1.0,
+                    "evidenceClosed": True,
+                    "retrieveMs": 10,
+                    "contextTokens": 100,
+                },
+                {
+                    "questionType": "multi-session",
+                    "answerable": False,
+                    "goldDocumentCount": 0,
+                    "hit": None,
+                    "goldRecall": None,
+                    "reciprocalRank": None,
+                    "evidenceClosed": False,
+                    "retrieveMs": 20,
+                    "contextTokens": 50,
+                },
+            ]
+        )["overall"]
+
+        self.assertEqual(1, summary["answerableQueries"])
+        self.assertEqual(1, summary["unanswerableQueries"])
+        self.assertEqual(0.5, summary["macroRecall"])
+
     def test_runner_and_comparator_share_the_exact_release_gate(self) -> None:
         self.assertEqual(DEFAULT_PROJECT_RELEASE_GATE, PROJECT_RELEASE_GATE)
 
@@ -122,6 +268,7 @@ class LongMemEvalRunnerTest(unittest.TestCase):
         paths = retrieval_source_artifact_paths()
         relative = {path.relative_to(root).as_posix() for path in paths}
         self.assertIn("benchmarks/amb/paw-memory-bridge.ts", relative)
+        self.assertIn("benchmarks/amb/evidence-execution-profile.ts", relative)
         self.assertIn("packages/memory-core/src/evidence-resolver.ts", relative)
         self.assertNotIn("benchmarks/amb/evidence_answer_review.py", relative)
         self.assertNotIn("benchmarks/amb/run_paw_longmemeval_retrieval.py", relative)
@@ -139,6 +286,7 @@ class LongMemEvalRunnerTest(unittest.TestCase):
         )
 
         self.assertEqual("1", environment["PAW_AMB_SOURCE_LOCAL_LOCATOR"])
+        self.assertEqual("research_dense", environment["PAW_AMB_EVIDENCE_PROFILE"])
         self.assertIn("1110a243fdf4706b3f48f1d95db1a4f5529b4d41", environment["PAW_AMB_EMBEDDING_VERSION"])
         self.assertTrue(environment["PAW_AMB_EMBEDDING_VERSION"].endswith("a" * 64))
 
@@ -214,6 +362,44 @@ class LongMemEvalRunnerTest(unittest.TestCase):
             [query.id for query in select_full_split_queries(dataset, seed="full-seed")],
         )
 
+    def test_category_selection_filters_the_validated_full_split(self) -> None:
+        target_type = QUESTION_TYPES[0]
+        queries = [
+            SimpleNamespace(
+                id=f"query-{index}",
+                user_id=f"user-{index}",
+                meta={"question_type": QUESTION_TYPES[index % len(QUESTION_TYPES)]},
+            )
+            for index in range(500)
+        ]
+
+        class FullDataset:
+            def load_queries(self, _split: str):
+                return queries
+
+        selected = select_category_queries(
+            FullDataset(),
+            seed="category-seed",
+            question_type=target_type,
+        )
+
+        self.assertTrue(selected)
+        self.assertTrue(
+            all(query.meta["question_type"] == target_type for query in selected)
+        )
+        self.assertEqual(
+            sum(query.meta["question_type"] == target_type for query in queries),
+            len(selected),
+        )
+
+    def test_category_selection_rejects_unknown_type(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported"):
+            select_category_queries(
+                FakeDataset(),
+                seed="category-seed",
+                question_type="unknown",
+            )
+
     def test_full_split_rejects_partial_or_shared_user_data(self) -> None:
         class PartialDataset:
             def load_queries(self, _split: str):
@@ -249,6 +435,10 @@ class LongMemEvalRunnerTest(unittest.TestCase):
                 "queryHmacs": ["query-secret"],
                 "userHmacs": ["user-secret"],
                 "historyDocumentCounts": [7],
+                "longMemEvalProtocol": {
+                    "contentFree": True,
+                    "productBehavioralParity": False,
+                },
             },
             "metrics": {"overall": {"queries": 1}},
             "rows": [{"queryHmac": "query-secret", "answerCorrect": False}],
@@ -262,6 +452,10 @@ class LongMemEvalRunnerTest(unittest.TestCase):
         self.assertNotIn("seed", public["manifest"])
         self.assertNotIn("historyDocumentCounts", public["manifest"])
         self.assertEqual("public-commitment", public["manifest"]["seedCommitment"])
+        self.assertEqual(
+            {"contentFree": True, "productBehavioralParity": False},
+            public["manifest"]["longMemEvalProtocol"],
+        )
         self.assertEqual(1, public["sealedLedger"]["rowCount"])
         self.assertFalse(
             public["sealedLedger"]["publicContainsPerQueryMetrics"]
@@ -278,6 +472,44 @@ class LongMemEvalRunnerTest(unittest.TestCase):
                         "contentFree": True,
                     }
                 }
+            )
+
+    def test_diagnostic_inclusion_validates_identity_and_selects_exact_hmacs(self) -> None:
+        from run_paw_longmemeval_retrieval import eval_hmac
+
+        key = b"k" * 32
+        queries = [
+            SimpleNamespace(id="q-1"),
+            SimpleNamespace(id="q-2"),
+            SimpleNamespace(id="q-3"),
+        ]
+        included = {eval_hmac("q-1", key), eval_hmac("q-3", key)}
+        report = {
+            "manifest": {
+                "dataset": "longmemeval",
+                "split": "s",
+                "contentFree": True,
+                "evalKeyId": "key-id",
+                "queryHmacs": sorted(included),
+                "artifactBinding": {"datasetArtifactSha256": "dataset"},
+            }
+        }
+        manifest = validated_diagnostic_include_manifest(
+            report,
+            eval_key_id="key-id",
+            dataset_artifact_sha256="dataset",
+        )
+        selected = select_diagnostic_queries(
+            queries,
+            query_hmacs=set(manifest["queryHmacs"]),
+            eval_hmac_key=key,
+        )
+        self.assertEqual(["q-1", "q-3"], [query.id for query in selected])
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            select_diagnostic_queries(
+                queries,
+                query_hmacs=included | {"missing"},
+                eval_hmac_key=key,
             )
 
     def test_blind_plan_validates_identity_and_arm_policy(self) -> None:

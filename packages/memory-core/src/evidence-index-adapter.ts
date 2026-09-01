@@ -149,6 +149,7 @@ export function createProductMemoryEvidenceIndexV1<
           evidenceRef: span.evidenceRef,
           content: span.hitContent,
           authority: span.authority,
+          sourceKind: span.sourceKind,
           observedAt: span.createdAt,
           turnOrder: span.sourceSeq,
         }),

@@ -36,7 +36,17 @@
     "./in-memory-store": "./src/in-memory-store.ts",
     "./model-port": "./src/model-port.ts",
     "./product-ports": "./src/product-ports.ts",
-    "./state-observation": "./src/state-observation.ts"
+    "./state-observation": "./src/state-observation.ts",
+    "./state-frame-v2": "./src/state-frame-v2.ts",
+    "./state-binding-certificate-v1": "./src/state-binding-certificate-v1.ts",
+    "./state-mechanical-binding-profile-v1": "./src/state-mechanical-binding-profile-v1.ts",
+    "./selector-execution-snapshot-v1": "./src/selector-execution-snapshot-v1.ts",
+    "./evidence-execution-program-v1": "./src/evidence-execution-program-v1.ts",
+    "./evidence-execution-runtime-v1": "./src/evidence-execution-runtime-v1.ts",
+    "./evidence-execution-coverage-v1": "./src/evidence-execution-coverage-v1.ts",
+    "./evidence-reader-projection-v1": "./src/evidence-reader-projection-v1.ts",
+    "./state-observation-binder-v2": "./src/state-observation-binder-v2.ts",
+    "./state-observation-verifier-v2": "./src/state-observation-verifier-v2.ts"
   },
   "scripts": {
     "check": "bun run lint && bun run typecheck && bun test",

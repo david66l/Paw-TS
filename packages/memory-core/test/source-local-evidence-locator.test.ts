@@ -4,12 +4,22 @@ import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
   type MemorySourceLocalEvidenceHitV1,
   type MemorySourceLocalEvidenceResultV1,
+  evaluateMemorySourceLocalLeafEligibilityV2,
   hasMemorySourceLocalDialogueCertificateV1,
   isMemorySourceLocalEvidenceEligibleV1,
+  isMemorySourceLocalEvidenceRouteEligibleV2,
   memorySourceLocalAnchorKindsV1,
   memorySourceLocalEvidenceCacheKeyV1,
   validateMemorySourceLocalEvidenceResultV1,
 } from "../src/legacy.js";
+import {
+  authorizeMemoryQueryAnswerOriginMaterializationV1,
+  compileMemoryQueryAnswerOriginV1,
+} from "../src/query-answer-origin.js";
+import {
+  bindMemoryEvidenceTemporalConstraintV1,
+  compileMemoryEvidenceTemporalConstraintV1,
+} from "../src/temporal-constraint.js";
 
 const requirement = Object.freeze({
   requirementId: "assistant-answer",
@@ -21,6 +31,24 @@ const requirement = Object.freeze({
   coverageMode: "any" as const,
   minimumEvidence: 1,
 });
+
+const unownedDialogueQuery = "Can you remember the earlier label for me?";
+
+function lateBindingAuthorization(requirementId = requirement.requirementId) {
+  const origin = compileMemoryQueryAnswerOriginV1(unownedDialogueQuery);
+  const authorization = authorizeMemoryQueryAnswerOriginMaterializationV1({
+    origin,
+    requirement: {
+      ...requirement,
+      requirementId,
+      roleConstraint: "user" as const,
+    },
+    effectiveRequirementRole: "any",
+    mode: "late_binding",
+  });
+  if (!authorization) throw new Error("test authorization missing");
+  return authorization;
+}
 
 describe("source-local evidence locator boundary", () => {
   test("derives one shared role aperture for every locator adapter", () => {
@@ -259,6 +287,83 @@ describe("source-local evidence locator boundary", () => {
     ).toBe(false);
   });
 
+  test("evaluates mixed temporal and recommendation leaves independently", () => {
+    const query = "Based on my history, what should I choose next?";
+    const directConstraint = compileMemoryEvidenceTemporalConstraintV1({
+      query,
+      queryEnvelopeMode: "any",
+      leafMode: "any",
+    });
+    const rangeConstraint = compileMemoryEvidenceTemporalConstraintV1({
+      query,
+      queryEnvelopeMode: "any",
+      leafMode: "range",
+    });
+    const requirements = [
+      {
+        ...requirement,
+        requirementId: "preference-input",
+        roleConstraint: "user" as const,
+        temporalConstraint: directConstraint,
+      },
+      {
+        ...requirement,
+        requirementId: "history-input",
+        roleConstraint: "user" as const,
+        temporalMode: "range" as const,
+        relation: "temporal" as const,
+        coverageMode: "all" as const,
+        temporalConstraint: rangeConstraint,
+      },
+    ];
+    const routeEligible = isMemorySourceLocalEvidenceRouteEligibleV2({
+      answerShape: "recommend",
+      temporalMode: "any",
+      roleConstraint: "user",
+      requirements,
+      supportSelectorConfigured: true,
+    });
+    expect(routeEligible).toBe(true);
+    for (const item of requirements) {
+      const bound = bindMemoryEvidenceTemporalConstraintV1({
+        query,
+        queryEnvelopeMode: "any",
+        leafMode: item.temporalMode,
+        constraint: item.temporalConstraint,
+        evidenceTimeUpperBound: "2026-01-01T00:00:00Z",
+      });
+      expect(
+        evaluateMemorySourceLocalLeafEligibilityV2({
+          requirement: item,
+          temporalBindingRevision: bound.bindingRevision,
+          routeEligible,
+          supportSelectorConfigured: true,
+        }),
+      ).toMatchObject({ eligible: true, reasonCode: "eligible" });
+    }
+    const firstRequirement = requirements[0];
+    if (!firstRequirement) throw new Error("test requirement missing");
+    const inferred = evaluateMemorySourceLocalLeafEligibilityV2({
+      requirement: {
+        ...firstRequirement,
+        relation: "inferred",
+        coverageMode: "convergent",
+      },
+      temporalBindingRevision: bindMemoryEvidenceTemporalConstraintV1({
+        query,
+        queryEnvelopeMode: "any",
+        leafMode: "any",
+        constraint: directConstraint,
+      }).bindingRevision,
+      routeEligible,
+      supportSelectorConfigured: true,
+    });
+    expect(inferred).toMatchObject({
+      eligible: false,
+      reasonCode: "relation_ineligible",
+    });
+  });
+
   test("rejects source escape, wrong-role anchors and missing trace addresses", () => {
     const locator = {
       locatorVersion: "test-locator.v1",
@@ -462,7 +567,7 @@ describe("source-local evidence locator boundary", () => {
     ).toHaveLength(1);
   });
 
-  test("partitions result caches by source set, role, cutoff and index revision", () => {
+  test("partitions result caches by acquisition, source, role, cutoff and index", () => {
     const base = {
       locatorVersion: "test-locator.v1",
       scopeFingerprint: "scope",
@@ -470,6 +575,7 @@ describe("source-local evidence locator boundary", () => {
       request: {
         requirement,
         lockedSourceIds: ["session-1"],
+        sourceAcquisitionRevision: "acquisition-v1",
         evidenceTimeUpperBound: "2026-01-01T00:00:00.000Z",
         budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
       },
@@ -478,6 +584,15 @@ describe("source-local evidence locator boundary", () => {
     };
     const first = memorySourceLocalEvidenceCacheKeyV1(base);
     expect(memorySourceLocalEvidenceCacheKeyV1(base)).toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          sourceAcquisitionRevision: "acquisition-v2",
+        },
+      }),
+    ).not.toBe(first);
     expect(
       memorySourceLocalEvidenceCacheKeyV1({
         ...base,
@@ -544,6 +659,67 @@ describe("source-local evidence locator boundary", () => {
         },
       }),
     ).not.toBe(first);
+    expect(
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          assistantDialogueCandidate: true,
+          requirement: {
+            ...base.request.requirement,
+            roleConstraint: "any" as const,
+          },
+          respondingAssistantMaterialization: {
+            originalQuery: unownedDialogueQuery,
+            sourcePriorityIds: ["session-1"],
+            maxPromptAnchorsPerSource: 1,
+            authorization: lateBindingAuthorization(),
+          },
+        },
+      }),
+    ).not.toBe(first);
+  });
+
+  test("rejects an unbounded or provenance-free responding-assistant request", () => {
+    const base = {
+      locatorVersion: "test-locator.v1",
+      scopeFingerprint: "scope",
+      turnIndexRevision: "r1",
+      request: {
+        requirement: { ...requirement, roleConstraint: "any" as const },
+        lockedSourceIds: ["session-1", "session-2", "session-3"],
+        budget: {
+          ...DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+          maxAnchors: 2,
+          maxAnchorsPerSource: 2,
+        },
+        respondingAssistantMaterialization: {
+          originalQuery: unownedDialogueQuery,
+          sourcePriorityIds: ["session-1", "session-2", "session-3"],
+          maxPromptAnchorsPerSource: 1 as const,
+          authorization: lateBindingAuthorization(),
+        },
+      },
+      adjacencyPolicyVersion: "neighbors-v1",
+      rankerVersion: "rrf-v1",
+    };
+    expect(() => memorySourceLocalEvidenceCacheKeyV1(base)).toThrow(
+      "MemorySourceLocalEvidenceAnswerOriginInvalid",
+    );
+    expect(() =>
+      memorySourceLocalEvidenceCacheKeyV1({
+        ...base,
+        request: {
+          ...base.request,
+          lockedSourceIds: ["session-1"],
+          assistantDialogueCandidate: true,
+          respondingAssistantMaterialization: {
+            ...base.request.respondingAssistantMaterialization,
+            sourcePriorityIds: ["session-1"],
+          },
+        },
+      }),
+    ).not.toThrow();
   });
 
   test("accepts exact user anchors without opening uncertified assistant prose", () => {

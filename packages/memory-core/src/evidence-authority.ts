@@ -1,4 +1,10 @@
+import { hashCanonicalJsonV1 } from "./canonical.js";
 import type { MemoryEvidenceNotebookHitV1 } from "./evidence-contracts.js";
+import {
+  type MemoryEvidenceDispositionBindingV1,
+  type MemoryEvidenceDispositionV1,
+  classifyMemoryEvidenceUseV1,
+} from "./evidence-origin.js";
 import type {
   MemoryEvidenceQueryIntentV3,
   MemoryEvidenceRequirementV3,
@@ -105,13 +111,27 @@ export function enforceSelectedEvidenceAuthority(input: {
   readonly assessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
   readonly requirements: readonly MemoryEvidenceRequirementV3[];
   readonly candidateEvidenceRefs: ReadonlySet<string>;
+  readonly candidateEvidenceRefsByRequirement: ReadonlyMap<
+    string,
+    ReadonlySet<string>
+  >;
   readonly requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[];
   readonly roleConstraint: MemoryEvidenceQueryIntentV3["roleConstraint"];
   readonly certifiedSharedDialogueRefs: ReadonlySet<string>;
+  readonly certifiedDialoguePredecessorsByAssistant: ReadonlyMap<
+    string,
+    string
+  >;
   readonly certifiedAssistantDialogueCandidate: boolean;
 }): readonly Readonly<MemoryEvidenceTriageAssessmentV1>[] {
   const requiredIds = new Set(
     input.requirements.map((requirement) => requirement.requirementId),
+  );
+  const requirementById = new Map(
+    input.requirements.map((requirement) => [
+      requirement.requirementId,
+      requirement,
+    ]),
   );
   if (
     requiredIds.size !== input.requirements.length ||
@@ -135,45 +155,148 @@ export function enforceSelectedEvidenceAuthority(input: {
         throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
       }
       assessedIds.add(assessment.requirementId);
+      const requirementRole = requirementById.get(
+        assessment.requirementId,
+      )?.roleConstraint;
+      if (requirementRole === undefined) {
+        throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
+      }
       const partition = [
         ...assessment.supportingEvidenceRefs,
         ...assessment.contradictingEvidenceRefs,
         ...assessment.unknownEvidenceRefs,
       ];
+      const scopedCandidateEvidenceRefs =
+        input.candidateEvidenceRefsByRequirement.get(assessment.requirementId);
       if (
+        scopedCandidateEvidenceRefs === undefined ||
         new Set(partition).size !== partition.length ||
         partition.some(
           (evidenceRef) =>
             typeof evidenceRef !== "string" ||
-            !input.candidateEvidenceRefs.has(evidenceRef),
+            !input.candidateEvidenceRefs.has(evidenceRef) ||
+            !scopedCandidateEvidenceRefs.has(evidenceRef),
         )
       ) {
         throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
       }
-      const rejected: string[] = [];
+      const selectedCertifiedAssistantRefs =
+        assessment.supportingEvidenceRefs.filter((evidenceRef) =>
+          input.certifiedSharedDialogueRefs.has(evidenceRef),
+        );
+      // A mixed-role `any` requirement may retrieve both the request and the
+      // assistant's certified answer. Once answer-side evidence is selected,
+      // user-authority turns in that same requirement are causal context, not
+      // interchangeable answer evidence. Keep them in the assessed partition
+      // as unknown so obligation coverage is computed from the answer side.
+      const certifiedAssistantDominatesUserAuthority =
+        requirementRole === "any" && selectedCertifiedAssistantRefs.length > 0;
+      const proofOnlyPredecessorRefs = new Set(
+        selectedCertifiedAssistantRefs.flatMap((evidenceRef) => {
+          const predecessor =
+            input.certifiedDialoguePredecessorsByAssistant.get(evidenceRef);
+          return predecessor === undefined ? [] : [predecessor];
+        }),
+      );
+      const rejected: Array<{
+        evidenceRef: string;
+        disposition: MemoryEvidenceDispositionV1;
+      }> = [];
       const supporting = assessment.supportingEvidenceRefs.filter(
         (evidenceRef) => {
           const hit = hitByRef.get(evidenceRef);
           const allowed =
             hit !== undefined &&
-            (hit.authority !== "context_only" ||
-              input.roleConstraint === "assistant" ||
-              (input.roleConstraint === "any" &&
-                input.certifiedSharedDialogueRefs.has(evidenceRef)) ||
-              (input.certifiedAssistantDialogueCandidate &&
-                input.certifiedSharedDialogueRefs.has(evidenceRef)));
-          if (!allowed) rejected.push(evidenceRef);
+            !proofOnlyPredecessorRefs.has(evidenceRef) &&
+            (requirementRole === "assistant"
+              ? hit.authority === "context_only" &&
+                hit.sourceKind === "assistant_output"
+              : (hit.authority !== "context_only" &&
+                  !(
+                    certifiedAssistantDominatesUserAuthority &&
+                    (hit.authority === "user_asserted" ||
+                      hit.authority === "user_confirmed_dialogue")
+                  )) ||
+                (requirementRole === "any" &&
+                  input.certifiedSharedDialogueRefs.has(evidenceRef)) ||
+                (input.certifiedAssistantDialogueCandidate &&
+                  input.certifiedSharedDialogueRefs.has(evidenceRef)));
+          if (!allowed) {
+            rejected.push({
+              evidenceRef,
+              disposition: proofOnlyPredecessorRefs.has(evidenceRef)
+                ? "causal_context"
+                : certifiedAssistantDominatesUserAuthority &&
+                    (hit?.authority === "user_asserted" ||
+                      hit?.authority === "user_confirmed_dialogue")
+                  ? "dominated_alternate"
+                  : "role_ineligible",
+            });
+          }
           return allowed;
         },
       );
+      const createDisposition = (
+        evidenceRef: string,
+        disposition: MemoryEvidenceDispositionV1,
+      ): Readonly<MemoryEvidenceDispositionBindingV1> => {
+        const hit = hitByRef.get(evidenceRef);
+        const certified = input.certifiedSharedDialogueRefs.has(evidenceRef);
+        const predecessor =
+          input.certifiedDialoguePredecessorsByAssistant.get(evidenceRef);
+        const evidenceUse = hit
+          ? classifyMemoryEvidenceUseV1({
+              roleConstraint: requirementRole,
+              sourceKind: hit.sourceKind,
+              authority: hit.authority,
+              dialogueCertified: certified,
+            })
+          : undefined;
+        return Object.freeze({
+          requirementId: assessment.requirementId,
+          evidenceRef,
+          disposition,
+          resolvedRole:
+            hit?.sourceKind === "user_input"
+              ? ("user" as const)
+              : hit?.sourceKind === "assistant_output"
+                ? ("assistant" as const)
+                : ("unknown" as const),
+          ...(evidenceUse === undefined ? {} : { evidenceUse }),
+          ...(certified
+            ? {
+                certificateId: hashCanonicalJsonV1({
+                  schemaVersion: "paw.memory-dialogue-certificate-id.v1",
+                  assistantEvidenceRef: evidenceRef,
+                  precedingUserEvidenceRef: predecessor ?? "unbound",
+                }),
+              }
+            : {}),
+          contextEvidenceRefs: Object.freeze([
+            ...(hit?.contextEvidenceRefs ?? []),
+          ]),
+        });
+      };
       return Object.freeze({
         requirementId: assessment.requirementId,
         supportingEvidenceRefs: Object.freeze(supporting),
         contradictingEvidenceRefs: Object.freeze([
           ...assessment.contradictingEvidenceRefs,
         ]),
-        unknownEvidenceRefs: Object.freeze([
-          ...new Set([...assessment.unknownEvidenceRefs, ...rejected]),
+        unknownEvidenceRefs: Object.freeze([...assessment.unknownEvidenceRefs]),
+        evidenceDispositions: Object.freeze([
+          ...supporting.map((evidenceRef) =>
+            createDisposition(evidenceRef, "supporting"),
+          ),
+          ...assessment.contradictingEvidenceRefs.map((evidenceRef) =>
+            createDisposition(evidenceRef, "contradicting"),
+          ),
+          ...assessment.unknownEvidenceRefs.map((evidenceRef) =>
+            createDisposition(evidenceRef, "unknown_relevant"),
+          ),
+          ...rejected.map(({ evidenceRef, disposition }) =>
+            createDisposition(evidenceRef, disposition),
+          ),
         ]),
       });
     }),

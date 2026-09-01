@@ -23,6 +23,25 @@ export interface MemoryEvidenceBindingV1 {
   readonly evidenceUse: MemoryEvidenceUseV1;
 }
 
+export type MemoryEvidenceDispositionV1 =
+  | "supporting"
+  | "contradicting"
+  | "unknown_relevant"
+  | "causal_context"
+  | "role_ineligible"
+  | "dominated_alternate";
+
+/** A code-committed requirement/evidence decision shared downstream. */
+export interface MemoryEvidenceDispositionBindingV1 {
+  readonly requirementId: string;
+  readonly evidenceRef: string;
+  readonly disposition: MemoryEvidenceDispositionV1;
+  readonly resolvedRole: "user" | "assistant" | "unknown";
+  readonly evidenceUse?: MemoryEvidenceUseV1;
+  readonly certificateId?: string;
+  readonly contextEvidenceRefs: readonly string[];
+}
+
 export function classifyMemoryEvidenceUseV1(input: {
   readonly roleConstraint: MemoryEvidenceOriginRoleV1;
   readonly sourceKind?: MemoryConversationTurnKindV1;

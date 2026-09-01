@@ -14,23 +14,22 @@ describe("independent evidence closure auditor v1", () => {
 
     expect(body.query).toBe("Compare my old and current commute.");
     expect(body.selectedEvidence[0].evidenceRef).toBe("e1");
+    expect(body.maxDeficiencies).toBe(4);
+    expect(body).not.toHaveProperty("maxDescriptionChars");
     expect(request.system).toContain(
       "filled planner checklist is not sufficient",
     );
-    expect(request.system).toContain("Do not answer the query");
+    expect(request.system).toContain("author retrieval requirements");
   });
 
-  test("accepts a bounded repair without letting the model set role or time", () => {
+  test("reports a reason-coded deficiency without authoring retrieval prose", () => {
     const parsed = parseMemoryEvidenceClosureAuditV1(
       JSON.stringify({
-        verdict: "repair",
-        missingRequirements: [
+        decision: "incomplete",
+        deficiencies: [
           {
-            label: "Current commute",
-            searchText: "current commute route and duration",
-            relation: "temporal",
-            coverageMode: "latest",
-            minimumEvidence: 1,
+            reason: "missing_operand",
+            targetRequirementId: null,
           },
         ],
         rejectedEvidenceRefs: ["e1"],
@@ -38,29 +37,55 @@ describe("independent evidence closure auditor v1", () => {
       auditInput(),
     );
 
-    expect(parsed.missingRequirements).toEqual([
-      expect.objectContaining({
-        requirementId: "closure-repair-1",
-        temporalMode: "history",
-        roleConstraint: "user",
-      }),
+    expect(parsed.deficiencies).toEqual([
+      {
+        reason: "missing_operand",
+        targetRequirementId: null,
+      },
     ]);
     expect(parsed.rejectedEvidenceRefs).toEqual(["old-commute-ref"]);
+    expect(parsed.deficiencies[0]).not.toHaveProperty("searchText");
   });
 
-  test("rejects invented evidence addresses and a second repair request", () => {
+  test("rejects invented addresses and inconsistent decisions", () => {
     expect(() =>
       parseMemoryEvidenceClosureAuditV1(
-        '{"verdict":"pass","missingRequirements":[],"rejectedEvidenceRefs":["invented"]}',
+        '{"decision":"incomplete","deficiencies":[{"reason":"missing_operand","targetRequirementId":null}],"rejectedEvidenceRefs":["invented"]}',
         auditInput(),
       ),
     ).toThrow("MemoryEvidenceClosureAuditAddressInvalid");
     expect(() =>
       parseMemoryEvidenceClosureAuditV1(
-        '{"verdict":"repair","missingRequirements":[{"label":"x","searchText":"y","relation":"direct","coverageMode":"any","minimumEvidence":1}],"rejectedEvidenceRefs":[]}',
-        { ...auditInput(), maxMissingRequirements: 0 },
+        '{"decision":"pass","deficiencies":[{"reason":"missing_operand","targetRequirementId":null}],"rejectedEvidenceRefs":[]}',
+        auditInput(),
       ),
-    ).toThrow("MemoryEvidenceClosureAuditShapeInvalid");
+    ).toThrow("MemoryEvidenceClosureAuditVerdictInvalid");
+  });
+
+  test("rejects free-form deficiency prose and unknown requirement targets", () => {
+    expect(() =>
+      parseMemoryEvidenceClosureAuditV1(
+        '{"decision":"incomplete","deficiencies":[{"description":"Current commute","reason":"missing_operand","targetRequirementId":null}],"rejectedEvidenceRefs":[]}',
+        auditInput(),
+      ),
+    ).toThrow("MemoryEvidenceClosureAuditDeficiencyInvalid");
+    expect(() =>
+      parseMemoryEvidenceClosureAuditV1(
+        '{"decision":"incomplete","deficiencies":[{"reason":"weak_support","targetRequirementId":"unknown"}],"rejectedEvidenceRefs":[]}',
+        auditInput(),
+      ),
+    ).toThrow("MemoryEvidenceClosureAuditDeficiencyInvalid");
+  });
+
+  test("allows repeated query-level reason codes to represent omitted slots", () => {
+    const parsed = parseMemoryEvidenceClosureAuditV1(
+      '{"decision":"incomplete","deficiencies":[{"reason":"missing_operand","targetRequirementId":null},{"reason":"missing_operand","targetRequirementId":null}],"rejectedEvidenceRefs":[]}',
+      auditInput(),
+    );
+    expect(parsed.deficiencies).toHaveLength(2);
+    expect(
+      parsed.deficiencies.every((item) => item.targetRequirementId === null),
+    ).toBe(true);
   });
 
   test("keeps the model behind the parsed closure boundary", async () => {
@@ -69,7 +94,7 @@ describe("independent evidence closure auditor v1", () => {
         async complete() {
           return {
             status: "completed" as const,
-            text: '{"verdict":"pass","missingRequirements":[],"rejectedEvidenceRefs":[]}',
+            text: '{"decision":"pass","deficiencies":[],"rejectedEvidenceRefs":[]}',
           };
         },
       },
@@ -78,7 +103,7 @@ describe("independent evidence closure auditor v1", () => {
       auditInput(),
       new AbortController().signal,
     );
-    expect(result.verdict).toBe("pass");
+    expect(result.decision).toBe("pass");
     expect(result.auditRevision).toHaveLength(64);
   });
 });
@@ -112,6 +137,5 @@ function auditInput(): MemoryEvidenceClosureAuditInputV1 {
         authority: "user_asserted",
       },
     ],
-    maxMissingRequirements: 2,
   };
 }

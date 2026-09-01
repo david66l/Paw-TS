@@ -1,21 +1,35 @@
 import type { MemoryEvidenceNotebookHitV1 } from "./evidence-contracts.js";
+import {
+  compileMemoryEvidenceObligationShapeV1,
+  validateMemoryEvidenceObligationsV1,
+} from "./evidence-obligation.js";
 import type {
   MemoryEvidenceQueryIntentV3,
   MemoryEvidenceQueryPlannerV3,
 } from "./evidence-query-planner.js";
-import { memoryEvidenceSupportScoreV1 } from "./evidence-text.js";
+import { classifyMemoryEvidenceIntentBoundaryV1 } from "./query-classifier.js";
+import {
+  memoryEvidenceLeafTemporalModeAllowedV1,
+  validateMemoryEvidenceTemporalConstraintV1,
+} from "./temporal-constraint.js";
 
 export function validateMemoryEvidenceQueryPlanBoundary(input: {
+  readonly query: string;
   readonly plan: Awaited<ReturnType<MemoryEvidenceQueryPlannerV3["plan"]>>;
   readonly intent: MemoryEvidenceQueryIntentV3;
   readonly plannerVersion: string;
 }): void {
   const { plan, intent } = input;
+  const boundary = classifyMemoryEvidenceIntentBoundaryV1(input.query, intent);
   if (
     plan.plannerVersion !== input.plannerVersion ||
-    plan.answerShape !== intent.answerShape ||
-    plan.temporalMode !== intent.temporalMode ||
-    plan.roleConstraint !== intent.roleConstraint ||
+    (boundary.answerShape === "fixed" &&
+      plan.answerShape !== intent.answerShape) ||
+    (boundary.temporalMode === "fixed" &&
+      plan.temporalMode !== intent.temporalMode) ||
+    (boundary.roleConstraint === "fixed" &&
+      plan.roleConstraint !== intent.roleConstraint &&
+      !isMixedRoleEnvelope(plan, intent.roleConstraint)) ||
     plan.needsPlanning !== intent.needsPlanning
   ) {
     throw namedError("MemoryEvidenceQueryPlanAuthorityInvalid");
@@ -48,20 +62,143 @@ export function validateMemoryEvidenceQueryPlanBoundary(input: {
       typeof requirement.searchText !== "string" ||
       requirement.searchText.trim().length < 1 ||
       requirement.searchText.length > 512 ||
-      requirement.temporalMode !== intent.temporalMode ||
-      requirement.roleConstraint !== intent.roleConstraint ||
+      !memoryEvidenceLeafTemporalModeAllowedV1(
+        plan.temporalMode,
+        requirement.temporalMode,
+      ) ||
+      !requirementRoleAllowed(
+        requirement.roleConstraint,
+        plan.roleConstraint,
+      ) ||
       !relations.has(relation) ||
       !coverageModes.has(coverageMode) ||
       !Number.isSafeInteger(minimumEvidence) ||
       minimumEvidence < 1 ||
       minimumEvidence > 3 ||
-      ((coverageMode === "all" || coverageMode === "convergent") &&
-        minimumEvidence < 2)
+      (coverageMode === "convergent" && minimumEvidence < 2)
     ) {
       throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
     }
+    if (requirement.temporalConstraint) {
+      try {
+        validateMemoryEvidenceTemporalConstraintV1({
+          query: input.query,
+          queryEnvelopeMode: plan.temporalMode,
+          leafMode: requirement.temporalMode,
+          constraint: requirement.temporalConstraint,
+        });
+      } catch {
+        throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
+      }
+    }
     ids.add(requirement.requirementId);
   }
+  const dagPlan = plan.requirements.some(
+    (requirement) => requirement.dependencyRelation !== undefined,
+  );
+  const requirementRoles = new Set(
+    plan.requirements.map((requirement) => requirement.roleConstraint),
+  );
+  if (
+    plan.roleConstraint === "any" &&
+    requirementRoles.size === 1 &&
+    !requirementRoles.has("any")
+  ) {
+    throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
+  }
+  if (dagPlan) {
+    const derivedEnvelope =
+      requirementRoles.size === 1
+        ? plan.requirements[0]?.roleConstraint
+        : ("any" as const);
+    if (plan.roleConstraint !== derivedEnvelope) {
+      throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
+    }
+  }
+  validateRequirementDag(plan.requirements);
+  validateMemoryEvidenceObligationsV1(
+    compileMemoryEvidenceObligationShapeV1(input.query, plan),
+    plan.requirements,
+  );
+}
+
+function isMixedRoleEnvelope(
+  plan: Awaited<ReturnType<MemoryEvidenceQueryPlannerV3["plan"]>>,
+  classifiedRole: MemoryEvidenceQueryIntentV3["roleConstraint"],
+): boolean {
+  const roles = new Set(
+    plan.requirements.map((requirement) => requirement.roleConstraint),
+  );
+  return (
+    plan.roleConstraint === "any" &&
+    roles.has("user") &&
+    roles.has("assistant") &&
+    (classifiedRole === "any" || roles.has(classifiedRole))
+  );
+}
+
+function requirementRoleAllowed(
+  requirementRole: MemoryEvidenceQueryIntentV3["roleConstraint"],
+  envelopeRole: MemoryEvidenceQueryIntentV3["roleConstraint"],
+): boolean {
+  return envelopeRole === "any" || requirementRole === envelopeRole;
+}
+
+function validateRequirementDag(
+  requirements: Awaited<
+    ReturnType<MemoryEvidenceQueryPlannerV3["plan"]>
+  >["requirements"],
+): void {
+  const withDag = requirements.filter(
+    (requirement) => requirement.dependencyRelation !== undefined,
+  );
+  if (withDag.length === 0) return;
+  const byId = new Map(
+    requirements.map((requirement) => [requirement.requirementId, requirement]),
+  );
+  if (
+    withDag.length !== requirements.length ||
+    byId.size !== requirements.length
+  ) {
+    throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
+  }
+  for (const requirement of requirements) {
+    const dependencies = requirement.dependsOnRequirementIds ?? [];
+    if (
+      new Set(dependencies).size !== dependencies.length ||
+      dependencies.some(
+        (dependency) =>
+          dependency === requirement.requirementId || !byId.has(dependency),
+      ) ||
+      (requirement.dependencyRelation === "independent") !==
+        (dependencies.length === 0) ||
+      (requirement.dependencyRelation === "responds_to" &&
+        (requirement.roleConstraint !== "assistant" ||
+          !dependencies.some(
+            (dependency) => byId.get(dependency)?.roleConstraint === "user",
+          ))) ||
+      (requirement.dependencyRelation === "supersedes" &&
+        requirement.temporalMode === "any")
+    ) {
+      throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
+    }
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (requirementId: string): void => {
+    if (visiting.has(requirementId)) {
+      throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
+    }
+    if (visited.has(requirementId)) return;
+    visiting.add(requirementId);
+    for (const dependency of byId.get(requirementId)?.dependsOnRequirementIds ??
+      []) {
+      visit(dependency);
+    }
+    visiting.delete(requirementId);
+    visited.add(requirementId);
+  };
+  for (const requirement of requirements) visit(requirement.requirementId);
 }
 
 export function mergeEvidenceHits(
@@ -88,42 +225,6 @@ export function mergeEvidenceHits(
     output.push(hit);
   }
   return Object.freeze(output);
-}
-
-export function hasDeterministicDirectCertificate(
-  query: string,
-  hits: readonly MemoryEvidenceNotebookHitV1[],
-  selectedSourceIds: readonly string[],
-  allowContextOnly: boolean,
-): boolean {
-  const allowed = new Set(selectedSourceIds);
-  const scoreBySource = new Map<string, number>();
-  for (const hit of hits) {
-    const sourceId = hit.sourceId.trim();
-    if (
-      !allowed.has(sourceId) ||
-      !hit.evidenceRef.trim() ||
-      !hit.content.trim() ||
-      (hit.authority === "context_only" && !allowContextOnly)
-    ) {
-      continue;
-    }
-    const score = memoryEvidenceSupportScoreV1(query, hit.content);
-    scoreBySource.set(
-      sourceId,
-      Math.max(scoreBySource.get(sourceId) ?? 0, score),
-    );
-  }
-  const scores = [...scoreBySource.values()].sort(
-    (left, right) => right - left,
-  );
-  const best = scores[0] ?? 0;
-  const runnerUp = scores[1] ?? 0;
-  // This is intentionally a narrow, deterministic certificate: a hydrated
-  // exact address must contain meaningful query evidence and be materially
-  // stronger than every competing source. Anything ambiguous pays for the
-  // bounded planner instead of being declared sufficient by source count.
-  return best >= 4 && (scores.length === 1 || best >= runnerUp + 2);
 }
 
 export function boundedQuery(query: string): string {

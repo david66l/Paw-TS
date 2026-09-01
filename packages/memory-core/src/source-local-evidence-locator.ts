@@ -10,6 +10,11 @@ import {
 } from "./evidence-first.js";
 import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
+import {
+  type MemoryQueryAnswerOriginAuthorizationV1,
+  validateMemoryQueryAnswerOriginAuthorizationV1,
+} from "./query-answer-origin.js";
+import { assertMemoryEvidenceTemporalConstraintIdentityV1 } from "./temporal-constraint.js";
 
 export const PAW_MEMORY_SOURCE_LOCAL_EVIDENCE_LOCATOR_PORT_VERSION_V1 =
   "paw.memory-source-local-evidence-locator-port.v1" as const;
@@ -31,10 +36,25 @@ export interface MemorySourceLocalEvidenceRequestV1 {
    */
   readonly assistantDialogueCandidate?: boolean;
   /**
+   * Bounded prompt-side discovery for a provenance-unresolved answer slot.
+   * Adapters may retrieve user prompts with both texts, but may return only
+   * strict adjacent assistant successors from the existing source lock.
+   */
+  readonly respondingAssistantMaterialization?: Readonly<{
+    readonly originalQuery: string;
+    /** Ordered primary-fusion sources; every item must remain inside the lock. */
+    readonly sourcePriorityIds: readonly string[];
+    readonly maxPromptAnchorsPerSource: 1 | 2;
+    /** Query-owned capability; provenance only, never semantic support. */
+    readonly authorization: MemoryQueryAnswerOriginAuthorizationV1;
+  }>;
+  /**
    * Immutable, bounded source aperture. It may include source-only discovery
    * addresses, but never unselected evidence text.
    */
   readonly lockedSourceIds: readonly string[];
+  /** Content-free identity of the pre-lock acquisition that created the lock. */
+  readonly sourceAcquisitionRevision?: string;
   /** Evidence newer than this instant must never be observed. */
   readonly evidenceTimeUpperBound?: string;
   readonly budget: MemorySourceLocalEvidenceBudgetV1;
@@ -116,6 +136,122 @@ export interface MemorySourceLocalEvidenceHydratorV1 {
   ): Promise<readonly MemorySourceLocalHydratedEvidenceV1[]>;
 }
 
+export interface MemoryDialoguePredecessorTargetV1 {
+  readonly sourceId: string;
+  readonly evidenceRef: string;
+}
+
+export interface MemoryDialoguePredecessorProofV1 {
+  readonly sourceId: string;
+  /** The immutable exact candidate address supplied by the caller. */
+  readonly assistant: MemorySourceLocalHydratedEvidenceV1;
+  /** The immutable turn immediately preceding `assistant`. */
+  readonly precedingUser: MemorySourceLocalHydratedEvidenceV1;
+}
+
+export interface MemoryDialoguePredecessorVerificationRequestV1 {
+  /** Existing selector candidates only; this port never discovers candidates. */
+  readonly targets: readonly MemoryDialoguePredecessorTargetV1[];
+  readonly lockedSourceIds: readonly string[];
+  readonly evidenceTimeUpperBound?: string;
+}
+
+export interface MemoryDialoguePredecessorVerificationResultV1 {
+  readonly verifierVersion: string;
+  readonly verificationRevision: string;
+  readonly proofs: readonly MemoryDialoguePredecessorProofV1[];
+}
+
+/**
+ * Exact-address provenance port. Adapters own their evidence-address schema and
+ * read immutable L0; the core never derives a predecessor by string mutation.
+ */
+export interface MemoryDialoguePredecessorVerifierV1 {
+  readonly verifierVersion: string;
+  verify(
+    request: MemoryDialoguePredecessorVerificationRequestV1,
+    signal: AbortSignal,
+  ): Promise<MemoryDialoguePredecessorVerificationResultV1>;
+}
+
+/**
+ * Validates immutable predecessor proofs without promoting them to semantic
+ * support. Missing proofs are allowed and leave the corresponding candidate
+ * uncertified; malformed or forged proofs fail the whole proof batch closed.
+ */
+export function validateMemoryDialoguePredecessorVerificationV1(input: {
+  readonly verifier: MemoryDialoguePredecessorVerifierV1;
+  readonly request: MemoryDialoguePredecessorVerificationRequestV1;
+  readonly result: MemoryDialoguePredecessorVerificationResultV1;
+  readonly evidenceRefBelongsToSource?: (
+    sourceId: string,
+    evidenceRef: string,
+  ) => boolean;
+}): readonly MemoryDialoguePredecessorProofV1[] {
+  const targets = new Map(
+    input.request.targets.map(
+      (target) => [target.evidenceRef, target] as const,
+    ),
+  );
+  const locked = new Set(input.request.lockedSourceIds);
+  const cutoff = parseOptionalTimestamp(input.request.evidenceTimeUpperBound);
+  if (
+    targets.size !== input.request.targets.length ||
+    targets.size < 1 ||
+    targets.size > 32 ||
+    locked.size !== input.request.lockedSourceIds.length ||
+    locked.size < 1 ||
+    cutoff === "invalid" ||
+    input.result.verifierVersion !== input.verifier.verifierVersion ||
+    !input.result.verificationRevision.trim() ||
+    !Array.isArray(input.result.proofs) ||
+    input.result.proofs.length > targets.size
+  ) {
+    throw namedError("MemoryDialoguePredecessorVerificationInvalid");
+  }
+  const belongs =
+    input.evidenceRefBelongsToSource ??
+    ((sourceId: string, evidenceRef: string) =>
+      evidenceRefFamily(evidenceRef) === sourceId);
+  const certified: MemoryDialoguePredecessorProofV1[] = [];
+  const seen = new Set<string>();
+  for (const proof of input.result.proofs) {
+    const target = targets.get(proof.assistant.evidenceRef);
+    const assistantTime = parseOptionalTimestamp(proof.assistant.observedAt);
+    const userTime = parseOptionalTimestamp(proof.precedingUser.observedAt);
+    if (
+      !target ||
+      seen.has(proof.assistant.evidenceRef) ||
+      proof.sourceId !== target.sourceId ||
+      !locked.has(proof.sourceId) ||
+      !belongs(proof.sourceId, proof.assistant.evidenceRef) ||
+      !belongs(proof.sourceId, proof.precedingUser.evidenceRef) ||
+      proof.assistant.sourceKind !== "assistant_output" ||
+      proof.precedingUser.sourceKind !== "user_input" ||
+      !Number.isSafeInteger(proof.assistant.turnOrder) ||
+      !Number.isSafeInteger(proof.precedingUser.turnOrder) ||
+      proof.assistant.turnOrder !== proof.precedingUser.turnOrder + 1 ||
+      assistantTime === "invalid" ||
+      userTime === "invalid" ||
+      (cutoff !== undefined &&
+        (assistantTime === undefined ||
+          userTime === undefined ||
+          assistantTime > cutoff ||
+          userTime > cutoff)) ||
+      !proof.assistant.content.trim() ||
+      !proof.precedingUser.content.trim() ||
+      hashTextV1(proof.assistant.content) !== proof.assistant.contentHash ||
+      hashTextV1(proof.precedingUser.content) !==
+        proof.precedingUser.contentHash
+    ) {
+      throw namedError("MemoryDialoguePredecessorVerificationInvalid");
+    }
+    seen.add(proof.assistant.evidenceRef);
+    certified.push(proof);
+  }
+  return Object.freeze(certified);
+}
+
 export type MemorySourceLocalizationStatusV1 =
   | "not_needed"
   | "not_configured"
@@ -127,6 +263,7 @@ export type MemorySourceLocalizationStatusV1 =
 const MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODES_V1 = Object.freeze([
   "MemorySourceLocalEvidenceAnchorMissing",
   "MemorySourceLocalEvidenceAnchorRoleInvalid",
+  "MemorySourceLocalEvidenceAnswerOriginInvalid",
   "MemorySourceLocalEvidenceBudgetExceeded",
   "MemorySourceLocalEvidenceBudgetInvalid",
   "MemorySourceLocalEvidenceHitInvalid",
@@ -175,7 +312,60 @@ export interface MemorySourceLocalizationReportV1 {
   readonly hydratorVersion?: string;
   readonly telemetry?: MemorySourceLocalEvidenceTelemetryV1;
   readonly addedCandidateCount: number;
+  /** Structurally certified candidates kept as contextual, never supporting. */
+  readonly retainedContextCandidateCount: number;
   readonly selectedCandidateCount: number;
+  /** Query-level coordinator; the two transaction policies never mix. */
+  readonly executor?: "per_leaf_v25" | "plan_scoped_v24" | "none";
+  readonly executionRouteRevision?: string;
+  readonly selectorAttempts?: 1 | 2;
+  readonly selectorCommittedAttempt?: "augmented" | "baseline" | "none";
+  /** Independent obligation-DAG groups settled after a structural batch failure. */
+  readonly selectorGroupPolicy?: string;
+  readonly selectorGroupCount?: number;
+  readonly selectorCommittedGroupCount?: number;
+  readonly selectorFailedGroupCount?: number;
+  readonly selectorTotalAttemptCount?: number;
+  /** Content-free, requirement-scoped execution trace for the V2 aperture. */
+  readonly leaves?: readonly MemorySourceLocalLeafExecutionReportV2[];
+}
+
+export const PAW_MEMORY_SOURCE_LOCAL_LEAF_ELIGIBILITY_VERSION_V2 =
+  "paw.memory-source-local-leaf-eligibility.v2" as const;
+
+export type MemorySourceLocalLeafEligibilityReasonV2 =
+  | "eligible"
+  | "route_ineligible"
+  | "selector_missing"
+  | "role_ineligible"
+  | "temporal_binding_invalid"
+  | "relation_ineligible"
+  | "coverage_ineligible"
+  | "minimum_evidence_invalid";
+
+export interface MemorySourceLocalLeafEligibilityV2 {
+  readonly requirementId: string;
+  readonly eligible: boolean;
+  readonly reasonCode: MemorySourceLocalLeafEligibilityReasonV2;
+  readonly temporalBindingRevision: string;
+  readonly roleConstraint: string;
+  readonly relation: string;
+  readonly coverageMode: string;
+  readonly eligibilityRevision: string;
+}
+
+export interface MemorySourceLocalLeafExecutionReportV2 {
+  readonly eligibility: MemorySourceLocalLeafEligibilityV2;
+  readonly status:
+    | "not_attempted"
+    | "completed"
+    | "completed_empty"
+    | "fallback"
+    | "invalid_result";
+  readonly baselineHitCount: number;
+  readonly localizedHitCount: number;
+  readonly failureCode?: MemorySourceLocalEvidenceFailureCodeV1;
+  readonly locatorRevision?: string;
 }
 
 export const DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1 = Object.freeze({
@@ -224,6 +414,9 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
   const certifiedUserCandidate =
     input.roleConstraint === "user" &&
     input.certifiedAssistantDialogueCandidate === true;
+  const dialogueAnswerLeaf = input.requirements.some((requirement) =>
+    new Set(["assistant", "any"]).has(requirement.roleConstraint),
+  );
   const complexUserEvidence =
     input.roleConstraint === "user" &&
     input.answerShape !== "recommend" &&
@@ -232,9 +425,7 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
       input.temporalMode !== "any" ||
       input.requirements.length > 1);
   if (
-    (!new Set(["assistant", "any"]).has(input.roleConstraint) &&
-      !certifiedUserCandidate &&
-      !complexUserEvidence) ||
+    (!dialogueAnswerLeaf && !certifiedUserCandidate && !complexUserEvidence) ||
     input.requirements.length < 1 ||
     input.requirements.length > 4 ||
     (certifiedUserCandidate && input.requirements.length !== 1) ||
@@ -249,7 +440,7 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
       (requirement.temporalMode === "latest" ? "latest" : "any");
     const minimumEvidence = requirement.minimumEvidence ?? 1;
     return (
-      requirement.roleConstraint === input.roleConstraint &&
+      new Set(["user", "assistant", "any"]).has(requirement.roleConstraint) &&
       requirement.temporalMode === input.temporalMode &&
       relation !== "inferred" &&
       coverageMode !== "convergent" &&
@@ -258,6 +449,124 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
       minimumEvidence <=
         DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1.maxAnchors
     );
+  });
+}
+
+/**
+ * Opens a V2 source-local route without deciding every leaf as one batch.
+ * This remains a source-aperture decision only: semantic support is still
+ * owned by the selector and notebook downstream.
+ */
+export function isMemorySourceLocalEvidenceRouteEligibleV2(input: {
+  readonly answerShape: string;
+  readonly temporalMode: string;
+  readonly roleConstraint: string;
+  readonly requirements: readonly MemoryEvidenceRequirementV3[];
+  readonly supportSelectorConfigured: boolean;
+  readonly certifiedAssistantDialogueCandidate?: boolean;
+}): boolean {
+  if (
+    !input.supportSelectorConfigured ||
+    input.requirements.length < 1 ||
+    input.requirements.length > 4
+  ) {
+    return false;
+  }
+  const certifiedUserCandidate =
+    input.roleConstraint === "user" &&
+    input.certifiedAssistantDialogueCandidate === true &&
+    input.requirements.length === 1;
+  const dialogueAnswerLeaf = input.requirements.some((requirement) =>
+    new Set(["assistant", "any"]).has(requirement.roleConstraint),
+  );
+  const structuredUserEvidence =
+    input.roleConstraint === "user" &&
+    (new Set(["aggregate", "compare", "recommend"]).has(input.answerShape) ||
+      input.temporalMode !== "any" ||
+      input.requirements.length > 1 ||
+      input.requirements.some(
+        (requirement) =>
+          (requirement.relation ?? "direct") !== "direct" ||
+          (requirement.coverageMode ?? "any") !== "any" ||
+          (requirement.minimumEvidence ?? 1) > 1,
+      ));
+  return certifiedUserCandidate || dialogueAnswerLeaf || structuredUserEvidence;
+}
+
+/**
+ * Requirement-scoped V2 eligibility. A trusted, compiler-bound temporal leaf
+ * is authoritative; it need not equal the broader query envelope. One
+ * ineligible leaf therefore cannot close the aperture for its siblings.
+ */
+export function evaluateMemorySourceLocalLeafEligibilityV2(input: {
+  readonly requirement: MemoryEvidenceRequirementV3;
+  readonly temporalBindingRevision: string;
+  readonly routeEligible: boolean;
+  readonly supportSelectorConfigured: boolean;
+}): MemorySourceLocalLeafEligibilityV2 {
+  const relation = input.requirement.relation ?? "direct";
+  const coverageMode =
+    input.requirement.coverageMode ??
+    (input.requirement.temporalMode === "latest" ? "latest" : "any");
+  const minimumEvidence = input.requirement.minimumEvidence ?? 1;
+  let reasonCode: MemorySourceLocalLeafEligibilityReasonV2 = "eligible";
+  if (!input.supportSelectorConfigured) {
+    reasonCode = "selector_missing";
+  } else if (!input.routeEligible) {
+    reasonCode = "route_ineligible";
+  } else if (
+    !new Set(["user", "assistant", "any"]).has(input.requirement.roleConstraint)
+  ) {
+    reasonCode = "role_ineligible";
+  } else if (
+    !input.temporalBindingRevision.trim() ||
+    input.requirement.temporalConstraint === undefined ||
+    input.requirement.temporalConstraint.mode !== input.requirement.temporalMode
+  ) {
+    reasonCode = "temporal_binding_invalid";
+  } else {
+    try {
+      assertMemoryEvidenceTemporalConstraintIdentityV1(
+        input.requirement.temporalConstraint,
+      );
+    } catch {
+      reasonCode = "temporal_binding_invalid";
+    }
+  }
+  if (reasonCode === "eligible" && relation === "inferred") {
+    reasonCode = "relation_ineligible";
+  }
+  if (reasonCode === "eligible" && coverageMode === "convergent") {
+    reasonCode = "coverage_ineligible";
+  }
+  if (
+    reasonCode === "eligible" &&
+    (!Number.isSafeInteger(minimumEvidence) ||
+      minimumEvidence < 1 ||
+      minimumEvidence >
+        DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1.maxAnchors)
+  ) {
+    reasonCode = "minimum_evidence_invalid";
+  }
+  const identity = {
+    eligibilityVersion: PAW_MEMORY_SOURCE_LOCAL_LEAF_ELIGIBILITY_VERSION_V2,
+    requirementId: input.requirement.requirementId,
+    temporalBindingRevision: input.temporalBindingRevision,
+    roleConstraint: input.requirement.roleConstraint,
+    relation,
+    coverageMode,
+    minimumEvidence,
+    reasonCode,
+  } as const;
+  return Object.freeze({
+    requirementId: input.requirement.requirementId,
+    eligible: reasonCode === "eligible",
+    reasonCode,
+    temporalBindingRevision: input.temporalBindingRevision,
+    roleConstraint: input.requirement.roleConstraint,
+    relation,
+    coverageMode,
+    eligibilityRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
   });
 }
 
@@ -271,6 +580,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
   readonly result: MemorySourceLocalEvidenceResultV1;
 }): readonly MemorySourceLocalEvidenceHitV1[] {
   assertBudget(input.request.budget);
+  assertRespondingAssistantMaterialization(input.request);
   if (
     input.result.locatorVersion !== input.locator.locatorVersion ||
     !input.result.locatorRevision.trim() ||
@@ -525,9 +835,25 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
   readonly rankerVersion: string;
 }): string {
   assertBudget(input.request.budget);
+  assertRespondingAssistantMaterialization(input.request);
+  if (
+    input.request.sourceAcquisitionRevision !== undefined &&
+    input.request.sourceAcquisitionRevision.trim().length === 0
+  ) {
+    throw namedError("MemorySourceLocalEvidenceAcquisitionRevisionInvalid");
+  }
+  if (input.request.requirement.temporalConstraint) {
+    assertMemoryEvidenceTemporalConstraintIdentityV1(
+      input.request.requirement.temporalConstraint,
+    );
+  }
   const normalizedSearchText = input.request.requirement.searchText
     .replace(/\s+/gu, " ")
     .trim();
+  const normalizedOriginalQuery =
+    input.request.respondingAssistantMaterialization?.originalQuery
+      .replace(/\s+/gu, " ")
+      .trim();
   return hashCanonicalJsonV1({
     schemaVersion: "paw.memory-source-local-evidence-cache-key.v1",
     locatorVersion: input.locatorVersion,
@@ -536,10 +862,33 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     embeddingIdentity: input.embeddingIdentity ?? "none",
     searchTextHash: hashCanonicalJsonV1(normalizedSearchText as JsonValue),
     lockedSourceIds: [...input.request.lockedSourceIds].sort(),
+    sourceAcquisitionRevision:
+      input.request.sourceAcquisitionRevision?.trim() ?? "legacy",
     roleConstraint: input.request.requirement.roleConstraint,
     assistantDialogueCandidate:
       input.request.assistantDialogueCandidate === true,
+    respondingAssistantMaterialization: input.request
+      .respondingAssistantMaterialization
+      ? {
+          originalQueryHash: hashCanonicalJsonV1(
+            normalizedOriginalQuery as JsonValue,
+          ),
+          maxPromptAnchorsPerSource:
+            input.request.respondingAssistantMaterialization
+              .maxPromptAnchorsPerSource,
+          // Source order is a ranking input for source-fair allocation.
+          sourcePriority: [
+            ...input.request.respondingAssistantMaterialization
+              .sourcePriorityIds,
+          ],
+          authorization:
+            input.request.respondingAssistantMaterialization.authorization,
+        }
+      : "disabled",
     temporalMode: input.request.requirement.temporalMode,
+    temporalConstraintRevision:
+      input.request.requirement.temporalConstraint?.constraintRevision ??
+      "legacy",
     evidenceTimeUpperBound: input.request.evidenceTimeUpperBound ?? "latest",
     budget: input.request.budget,
     adjacencyPolicyVersion: input.adjacencyPolicyVersion,
@@ -566,6 +915,42 @@ function assertBudget(value: MemorySourceLocalEvidenceBudgetV1): void {
     value.maxChars > 16_384
   ) {
     throw namedError("MemorySourceLocalEvidenceBudgetInvalid");
+  }
+}
+
+function assertRespondingAssistantMaterialization(
+  request: MemorySourceLocalEvidenceRequestV1,
+): void {
+  const materialization = request.respondingAssistantMaterialization;
+  if (!materialization) return;
+  const originalQuery = materialization.originalQuery
+    .replace(/\s+/gu, " ")
+    .trim();
+  const sourcePriority = materialization.sourcePriorityIds;
+  const locked = new Set(request.lockedSourceIds);
+  validateMemoryQueryAnswerOriginAuthorizationV1({
+    query: originalQuery,
+    authorization: materialization.authorization,
+    requirement: request.requirement,
+    assistantDialogueCandidate: request.assistantDialogueCandidate === true,
+  });
+  const requestedAnchors =
+    sourcePriority.length * materialization.maxPromptAnchorsPerSource;
+  const roleEligible =
+    request.requirement.roleConstraint === "assistant" ||
+    (request.requirement.roleConstraint === "any" &&
+      request.assistantDialogueCandidate === true);
+  if (
+    !roleEligible ||
+    !originalQuery ||
+    originalQuery.length > 32_768 ||
+    sourcePriority.length === 0 ||
+    new Set(sourcePriority).size !== sourcePriority.length ||
+    sourcePriority.some((sourceId) => !locked.has(sourceId)) ||
+    !new Set([1, 2]).has(materialization.maxPromptAnchorsPerSource) ||
+    requestedAnchors > request.budget.maxAnchors
+  ) {
+    throw namedError("MemorySourceLocalEvidenceMaterializationInvalid");
   }
 }
 

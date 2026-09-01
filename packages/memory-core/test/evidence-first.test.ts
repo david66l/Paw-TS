@@ -198,6 +198,103 @@ describe("evidence-address fusion v2", () => {
       }),
     ).toThrow("MemoryEvidenceCandidateIdentityConflict");
   });
+
+  test("reconciles contextual and dialogue-certified views of one assistant turn", () => {
+    const contextual = {
+      ...candidate("same-turn", "doc-a", "context_only"),
+      sourceKind: "assistant_output" as const,
+    };
+    const certified = {
+      ...contextual,
+      authority: "user_confirmed_dialogue" as const,
+    };
+
+    for (const candidates of [
+      [contextual, certified],
+      [certified, contextual],
+    ]) {
+      const result = rankMemoryEvidenceCandidatesV2({
+        lists: candidates.map((item, index) => ({
+          channel: "l0" as const,
+          retrieverId: `view-${index}`,
+          weight: 1,
+          candidates: [item],
+        })),
+        maxSources: 1,
+        maxEvidencePerSource: 1,
+      });
+
+      expect(result.sources[0]?.evidence[0]?.authority).toBe(
+        "user_confirmed_dialogue",
+      );
+      expect(result.sources[0]?.evidence[0]?.listHits).toBe(2);
+    }
+  });
+
+  test("reconciles asserted and dialogue-certified views of one user turn", () => {
+    const asserted = {
+      ...candidate("same-turn", "doc-a", "user_asserted"),
+      sourceKind: "user_input" as const,
+    };
+    const certified = {
+      ...asserted,
+      authority: "user_confirmed_dialogue" as const,
+    };
+
+    for (const candidates of [
+      [asserted, certified],
+      [certified, asserted],
+    ]) {
+      const result = rankMemoryEvidenceCandidatesV2({
+        lists: candidates.map((item, index) => ({
+          channel: "l0" as const,
+          retrieverId: `view-${index}`,
+          weight: 1,
+          candidates: [item],
+        })),
+        maxSources: 1,
+        maxEvidencePerSource: 1,
+      });
+
+      expect(result.sources[0]?.evidence[0]?.authority).toBe(
+        "user_confirmed_dialogue",
+      );
+      expect(result.sources[0]?.evidence[0]?.listHits).toBe(2);
+    }
+  });
+
+  test("still rejects incompatible authority for one evidence identity", () => {
+    const asserted = candidate("same-turn", "doc-a", "user_asserted");
+    const derived = { ...asserted, authority: "derived" as const };
+    let failure: unknown;
+    try {
+      rankMemoryEvidenceCandidatesV2({
+        lists: [asserted, derived].map((item, index) => ({
+          channel: "l0" as const,
+          retrieverId: `view-${index}`,
+          weight: 1,
+          candidates: [item],
+        })),
+        maxSources: 1,
+        maxEvidencePerSource: 1,
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).name).toBe(
+      "MemoryEvidenceCandidateIdentityConflict",
+    );
+    expect(
+      (failure as Error & { candidateConflict?: unknown }).candidateConflict,
+    ).toEqual({
+      sourceId: "same",
+      evidenceRef: "same",
+      sourceKind: ["source_span", "source_span"],
+      authority: ["user_asserted", "derived"],
+      observedAt: "same",
+    });
+  });
 });
 
 describe("evidence-first conversational bundles", () => {
@@ -293,6 +390,40 @@ describe("evidence-first conversational bundles", () => {
     expect(bundle.authority).toBe("context_only");
   });
 
+  test("preserves the hit when immutable aliases describe the same turn", () => {
+    const bundle = buildMemoryConversationTurnBundleV1({
+      query: "cobalt answer",
+      maxChars: 600,
+      turns: [
+        {
+          evidenceRef: "session#atom-4",
+          sourceSeq: 4,
+          sourceKind: "assistant_output",
+          content: "The answer was cobalt.",
+          hit: true,
+        },
+        {
+          evidenceRef: "session#source-4",
+          sourceSeq: 4,
+          sourceKind: "assistant_output",
+          content: "The answer was cobalt.",
+          hit: false,
+        },
+        {
+          evidenceRef: "session#source-5",
+          sourceSeq: 5,
+          sourceKind: "user_input",
+          content: "Yes, that is correct.",
+          hit: false,
+        },
+      ],
+    });
+
+    expect(bundle.hitSeq).toBe(4);
+    expect(bundle.includedTurns).toBe(2);
+    expect(bundle.text).toContain("cobalt");
+  });
+
   test("fails closed without exactly one hit or a valid budget", () => {
     const turn = {
       sourceSeq: 1,
@@ -374,7 +505,51 @@ describe("evidence notebook v1", () => {
     });
 
     expect(notebook.coverage[0]?.status).toBe("missing");
+    expect(notebook.budgetOmittedHitCount).toBe(1);
     expect(notebook.sources).toEqual([]);
+  });
+
+  test("budgets by selected hits instead of the configured hit ceiling", () => {
+    const notebook = buildMemoryEvidenceNotebookV1({
+      requirements: [
+        {
+          requirementId: "city",
+          label: "city visited",
+          searchText: "city visited",
+          hits: [
+            {
+              sourceId: "trip",
+              evidenceRef: `trip#${"stable-address-".repeat(8)}`,
+              content: "I visited Kyoto and enjoyed the trip.",
+              authority: "user_asserted",
+            },
+          ],
+        },
+        {
+          requirementId: "duration",
+          label: "trip duration",
+          searchText: "trip duration",
+          hits: [
+            {
+              sourceId: "trip",
+              evidenceRef: `trip#${"second-address-".repeat(8)}`,
+              content: "The Kyoto trip lasted five days.",
+              authority: "user_asserted",
+            },
+          ],
+        },
+      ],
+      allowedSourceIds: ["trip"],
+      maxHitsPerRequirement: 8,
+      maxChars: 2_048,
+    });
+
+    expect(notebook.coverage.map((item) => item.status)).toEqual([
+      "covered",
+      "covered",
+    ]);
+    expect(notebook.budgetOmittedHitCount).toBe(0);
+    expect(notebook.sources[0]?.text).toContain("Kyoto trip lasted five days");
   });
 
   test("fills independent requirements only inside primary-selected sources", () => {

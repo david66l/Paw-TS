@@ -112,6 +112,7 @@ export function createMemoryWriterControllerV1(
   const now = options.now ?? Date.now;
   const maxAtoms = options.maxAtoms ?? 8;
   const maxSourceChars = options.maxSourceChars ?? 24_000;
+  let episodeArchiveThroughSeq = 0;
   if (!Number.isSafeInteger(maxAtoms) || maxAtoms < 1 || maxAtoms > 16) {
     throw new Error("Memory writer maxAtoms is invalid");
   }
@@ -127,6 +128,35 @@ export function createMemoryWriterControllerV1(
     async settleTerminal(
       outcome: MemoryWriterTerminalOutcomeV1,
     ): Promise<MemoryWriteSettledFactV1 | undefined> {
+      if (options.evidenceArchive) {
+        const archiveStart = now();
+        const snapshot = await readSnapshot();
+        const sourceFromSeq = episodeArchiveThroughSeq + 1;
+        const spans =
+          sourceFromSeq > snapshot.tailSeq
+            ? Object.freeze([])
+            : projectMemoryEpisodeArchiveInputsV1({
+                snapshot,
+                runId: options.runId,
+                sourceFromSeq,
+                sourceThroughSeq: snapshot.tailSeq,
+                observedAt: new Date(archiveStart).toISOString(),
+              });
+        if (spans.length > 0) {
+          await options.evidenceArchive.put(spans, options.signal);
+          episodeArchiveThroughSeq = Math.max(
+            episodeArchiveThroughSeq,
+            ...spans.map((span) => span.sourceSeq),
+          );
+          emit(options.onEvent, {
+            schemaVersion: "paw.memory-writer-event.v1",
+            type: "archive",
+            evidenceSpanCount: spans.length,
+            reasonCode: "stable_episode_capture",
+            durationMs: Math.max(0, now() - archiveStart),
+          });
+        }
+      }
       const recovered = await recoverUnsettledWriteV1({
         readSnapshot,
         commitFacts,
@@ -434,23 +464,6 @@ async function applyStagedWriteV1(input: {
 }): Promise<MemoryWriteSettledFactV1> {
   const started = input.now();
   try {
-    if (input.options.evidenceArchive) {
-      const snapshot = await input.readSnapshot();
-      const spans = projectRawEvidenceArchiveInputsV1({
-        snapshot,
-        claim: input.claim,
-        staged: input.staged,
-        runId: input.options.runId,
-      });
-      await input.options.evidenceArchive.put(spans, input.options.signal);
-      emit(input.options.onEvent, {
-        schemaVersion: "paw.memory-writer-event.v1",
-        type: "archive",
-        writeId: input.claim.writeId,
-        evidenceSpanCount: spans.length,
-        durationMs: Math.max(0, input.now() - started),
-      });
-    }
     const result = await input.options.store.apply(
       {
         writeId: input.claim.writeId,
@@ -517,11 +530,44 @@ export function projectRawEvidenceArchiveInputsV1(
     runId: string;
   }>,
 ): readonly MemoryRawEvidenceArchiveInputV1[] {
+  return projectMemoryEpisodeArchiveInputsV1({
+    snapshot: input.snapshot,
+    runId: input.runId,
+    sourceFromSeq: input.claim.sourceFromSeq,
+    sourceThroughSeq: input.claim.sourceThroughSeq,
+    observedAt: new Date(input.claim.claimedAt).toISOString(),
+  });
+}
+
+/**
+ * Projects an immutable L0 episode independently of selective L1 extraction.
+ * Raw experience is captured first; semantic atoms remain optional derived
+ * navigation that may be skipped or rebuilt without losing the evidence.
+ */
+export function projectMemoryEpisodeArchiveInputsV1(
+  input: Readonly<{
+    snapshot: SessionInputSnapshot<InputFactV1>;
+    runId: string;
+    sourceFromSeq: number;
+    sourceThroughSeq: number;
+    observedAt: string;
+  }>,
+): readonly MemoryRawEvidenceArchiveInputV1[] {
+  if (
+    !input.runId.trim() ||
+    !Number.isSafeInteger(input.sourceFromSeq) ||
+    !Number.isSafeInteger(input.sourceThroughSeq) ||
+    input.sourceFromSeq < 1 ||
+    input.sourceThroughSeq < input.sourceFromSeq ||
+    !Number.isFinite(Date.parse(input.observedAt))
+  ) {
+    throw new Error("Memory episode archive range is invalid");
+  }
   const spans: MemoryRawEvidenceArchiveInputV1[] = [];
   for (const entry of input.snapshot.entries) {
     if (
-      entry.seq < input.claim.sourceFromSeq ||
-      entry.seq > input.claim.sourceThroughSeq
+      entry.seq < input.sourceFromSeq ||
+      entry.seq > input.sourceThroughSeq
     ) {
       continue;
     }
@@ -533,7 +579,7 @@ export function projectRawEvidenceArchiveInputsV1(
         sourceKind: source.kind,
         sourceSeq: entry.seq,
         content: source.content,
-        createdAt: new Date(input.claim.claimedAt).toISOString(),
+        createdAt: input.observedAt,
       }),
     );
   }

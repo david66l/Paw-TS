@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { validateMemoryEvidenceQueryPlanBoundary } from "../src/evidence-resolution-validation.js";
 import {
   PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
   buildMemoryEvidenceQueryPlanRequestV3,
+  classifyMemoryEvidenceIntentBoundaryV1,
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryEvidenceQueryPlannerV3,
   needsCertifiedAssistantDialogueCandidateV1,
@@ -10,6 +12,37 @@ import {
 } from "../src/legacy.js";
 
 describe("typed evidence query planner v3", () => {
+  test("treats all as a collection policy rather than a two-item promise", () => {
+    const intent = {
+      answerShape: "aggregate" as const,
+      temporalMode: "range" as const,
+      roleConstraint: "user" as const,
+      needsPlanning: true,
+    };
+    expect(() =>
+      validateMemoryEvidenceQueryPlanBoundary({
+        query: "How many qualifying events occurred during the period?",
+        intent,
+        plannerVersion: PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
+        plan: {
+          plannerVersion: PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
+          ...intent,
+          requirements: [
+            {
+              requirementId: "events",
+              label: "All qualifying events",
+              searchText: "qualifying events during the period",
+              temporalMode: "range",
+              roleConstraint: "user",
+              relation: "direct",
+              coverageMode: "all",
+              minimumEvidence: 1,
+            },
+          ],
+        },
+      }),
+    ).not.toThrow();
+  });
   test("plans explicit prior-assistant recall instead of sending raw candidates", () => {
     expect(
       classifyMemoryEvidenceQueryV3(
@@ -36,11 +69,43 @@ describe("typed evidence query planner v3", () => {
     expect(
       classifyMemoryEvidenceQueryV3("What did you recommend last time?"),
     ).toEqual({
-      answerShape: "recommend",
+      answerShape: "lookup",
       temporalMode: "any",
       roleConstraint: "assistant",
       needsPlanning: true,
     });
+    expect(
+      JSON.parse(
+        buildMemoryEvidenceQueryPlanRequestV3(
+          "What did you recommend last time?",
+        ).user,
+      ).intentBoundary.answerShape,
+    ).toBe("fixed");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "Can you recommend something based on what we discussed last time?",
+      ).answerShape,
+    ).toBe("recommend");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "How many recommendations did you give me last time?",
+      ).answerShape,
+    ).toBe("aggregate");
+    expect(
+      classifyMemoryEvidenceQueryV3(
+        "What was the difference between the two recommendations you gave?",
+      ).answerShape,
+    ).toBe("compare");
+    expect(
+      classifyMemoryEvidenceQueryV3("What did I recommend last time?"),
+    ).toMatchObject({ answerShape: "lookup", roleConstraint: "user" });
+    for (const query of [
+      "I've been struggling with this routine. Any advice?",
+      "Do you think it would be a good idea for me to attend?",
+      "My bike is performing better. Could there be a reason for this?",
+    ]) {
+      expect(classifyMemoryEvidenceQueryV3(query).answerShape).toBe("recommend");
+    }
   });
 
   test("keeps simple lookup deterministic and model-free", async () => {
@@ -68,6 +133,82 @@ describe("typed evidence query planner v3", () => {
       requirements: [],
     });
     expect(calls).toBe(0);
+  });
+
+  test("turns reason-coded verifier deficiencies into one replacement plan", async () => {
+    let capturedUser = "";
+    const planner = createJsonMemoryEvidenceQueryPlannerV3({
+      model: {
+        async complete(request) {
+          capturedUser = request.user;
+          return {
+            status: "completed" as const,
+            text: JSON.stringify({
+              answerShape: "lookup",
+              temporalMode: "any",
+              roleConstraint: "user",
+              requirements: [
+                {
+                  label: "Visited city",
+                  searchText: "city the user visited",
+                  relation: "direct",
+                  coverageMode: "any",
+                  minimumEvidence: 1,
+                },
+              ],
+            }),
+          };
+        },
+      },
+    });
+
+    const plan = await planner.plan(
+      "Which city did I visit?",
+      new AbortController().signal,
+      {
+        revision: {
+          currentRequirements: [
+            {
+              requirementId: "root",
+              label: "Travel fact",
+              searchText: "travel",
+              temporalMode: "any",
+              roleConstraint: "user",
+            },
+          ],
+          deficiencies: [
+            {
+              reason: "weak_support",
+              targetRequirementId: "root",
+            },
+          ],
+        },
+      },
+    );
+
+    expect(plan.requirements[0]?.searchText).toBe("city the user visited");
+    expect(JSON.parse(capturedUser).revision).toEqual({
+      currentRequirements: [
+        {
+          requirementId: "root",
+          label: "Travel fact",
+          searchText: "travel",
+          relation: "direct",
+          coverageMode: "any",
+          minimumEvidence: 1,
+          temporalMode: "any",
+          roleConstraint: "user",
+          dependencyRelation: "independent",
+          dependsOn: [],
+        },
+      ],
+      deficiencies: [
+        {
+          reason: "weak_support",
+          targetRequirementId: "root",
+        },
+      ],
+    });
   });
 
   test("preserves ambiguous dialogue authority as any", () => {
@@ -109,6 +250,231 @@ describe("typed evidence query planner v3", () => {
         "any",
       );
     }
+  });
+
+  test("normalizes only semantic intent axes", () => {
+    const ambiguousQuery =
+      "Can you remind me what was ultimately proposed in the earlier conversation?";
+    const ambiguousIntent = classifyMemoryEvidenceQueryV3(ambiguousQuery);
+    expect(classifyMemoryEvidenceIntentBoundaryV1(ambiguousQuery)).toEqual({
+      answerShape: "semantic",
+      temporalMode: "semantic",
+      roleConstraint: "semantic",
+    });
+
+    const assistantPlan = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "assistant",
+        requirements: [
+          {
+            label: "prior proposal",
+            searchText: "assistant proposal from the earlier conversation",
+            relation: "direct",
+            coverageMode: "any",
+            minimumEvidence: 1,
+          },
+        ],
+      }),
+      ambiguousQuery,
+      ambiguousIntent,
+    );
+    expect(assistantPlan.roleConstraint).toBe("assistant");
+    expect(assistantPlan.requirements[0]?.roleConstraint).toBe("assistant");
+
+    const recommendationQuery =
+      "Given my circumstances, which option fits me best?";
+    const recommendationPlan = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "recommend",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [
+          {
+            label: "personal constraints",
+            searchText: "user constraints relevant to choosing an option",
+            relation: "inferred",
+            coverageMode: "convergent",
+            minimumEvidence: 2,
+          },
+        ],
+      }),
+      recommendationQuery,
+    );
+    expect(recommendationPlan.answerShape).toBe("recommend");
+
+    const fixedQuery = "Which city did I visit?";
+    expect(classifyMemoryEvidenceIntentBoundaryV1(fixedQuery)).toMatchObject({
+      roleConstraint: "fixed",
+    });
+    const request = JSON.parse(
+      buildMemoryEvidenceQueryPlanRequestV3(ambiguousQuery).user,
+    );
+    expect(request.intentBoundary).toEqual({
+      answerShape: "semantic",
+      temporalMode: "semantic",
+      roleConstraint: "semantic",
+    });
+  });
+
+  test("models mixed dialogue recall as a typed obligation DAG", () => {
+    const query =
+      "What constraint did I give you, and what answer did you provide?";
+    const plan = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "any",
+        requirements: [
+          {
+            key: "user-request",
+            label: "user constraint",
+            searchText: "constraint the user gave in the prior dialogue",
+            temporalMode: "any",
+            roleConstraint: "user",
+            relation: "direct",
+            coverageMode: "any",
+            minimumEvidence: 1,
+            dependencyRelation: "independent",
+            dependsOn: [],
+          },
+          {
+            key: "assistant-answer",
+            label: "assistant answer",
+            searchText: "exact assistant answer following that constraint",
+            temporalMode: "any",
+            roleConstraint: "assistant",
+            relation: "direct",
+            coverageMode: "any",
+            minimumEvidence: 1,
+            dependencyRelation: "responds_to",
+            dependsOn: ["user-request"],
+          },
+        ],
+      }),
+      query,
+    );
+
+    expect(plan.roleConstraint).toBe("any");
+    expect(plan.requirements).toMatchObject([
+      {
+        requirementId: "user-request",
+        roleConstraint: "user",
+        dependencyRelation: "independent",
+        dependsOnRequirementIds: [],
+      },
+      {
+        requirementId: "assistant-answer",
+        roleConstraint: "assistant",
+        dependencyRelation: "responds_to",
+        dependsOnRequirementIds: ["user-request"],
+      },
+    ]);
+    expect(() =>
+      validateMemoryEvidenceQueryPlanBoundary({
+        query,
+        plan,
+        intent: classifyMemoryEvidenceQueryV3(query),
+        plannerVersion: PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
+      }),
+    ).not.toThrow();
+  });
+
+  test("derives the query role envelope from typed obligation leaves", () => {
+    const plan = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "any",
+        requirements: [
+          {
+            key: "assistant-answer",
+            label: "prior assistant answer",
+            searchText: "exact answer from the prior dialogue",
+            temporalMode: "any",
+            roleConstraint: "assistant",
+            relation: "direct",
+            coverageMode: "any",
+            minimumEvidence: 1,
+            dependencyRelation: "independent",
+            dependsOn: [],
+          },
+        ],
+      }),
+      "Could you repeat what was answered in our earlier conversation?",
+    );
+    expect(plan.roleConstraint).toBe("assistant");
+    expect(plan.requirements[0]?.roleConstraint).toBe("assistant");
+  });
+
+  test("rejects cyclic or wildcard obligation leaves", () => {
+    const query = "What did we each say about the project?";
+    const base = {
+      answerShape: "lookup",
+      temporalMode: "any",
+      roleConstraint: "any",
+    } as const;
+    const intent = { ...base, needsPlanning: true } as const;
+    expect(() =>
+      parseMemoryEvidenceQueryPlanV3(
+        JSON.stringify({
+          ...base,
+          requirements: [
+            {
+              key: "first",
+              label: "first turn",
+              searchText: "first prior turn",
+              temporalMode: "any",
+              roleConstraint: "user",
+              relation: "direct",
+              coverageMode: "any",
+              minimumEvidence: 1,
+              dependencyRelation: "depends_on",
+              dependsOn: ["second"],
+            },
+            {
+              key: "second",
+              label: "second turn",
+              searchText: "second prior turn",
+              temporalMode: "any",
+              roleConstraint: "assistant",
+              relation: "direct",
+              coverageMode: "any",
+              minimumEvidence: 1,
+              dependencyRelation: "depends_on",
+              dependsOn: ["first"],
+            },
+          ],
+        }),
+        query,
+        intent,
+      ),
+    ).toThrow("MemoryEvidenceQueryPlanRequirementsInvalid");
+
+    expect(() =>
+      parseMemoryEvidenceQueryPlanV3(
+        JSON.stringify({
+          ...base,
+          requirements: [
+            {
+              key: "shared",
+              label: "shared turn",
+              searchText: "prior dialogue turn",
+              temporalMode: "any",
+              roleConstraint: "any",
+              relation: "direct",
+              coverageMode: "any",
+              minimumEvidence: 1,
+              dependencyRelation: "independent",
+              dependsOn: [],
+            },
+          ],
+        }),
+        query,
+        intent,
+      ),
+    ).toThrow("MemoryEvidenceQueryPlanRequirementsInvalid");
   });
 
   test("does not let the model rewrite a fixed evidence authority", () => {
@@ -316,6 +682,7 @@ describe("typed evidence query planner v3", () => {
   test("keeps unresolved assistant evidence as a certified secondary candidate", () => {
     for (const query of [
       "Can you remind me what the final label was?",
+      "Can you remind me of the name from our previous conversation?",
       "I am trying to recall what the title on my draft was.",
       "In our previous conversation, what did the consultant say about the plan?",
     ]) {
@@ -465,6 +832,112 @@ describe("typed evidence query planner v3", () => {
     ).toThrow("MemoryEvidenceQueryPlanRequirementsInvalid");
   });
 
+  test("collapses optional recommendation dimensions into one context bundle", () => {
+    const query = "Can you suggest an activity that would suit me?";
+    const item = (key: string, searchText: string) => ({
+      key,
+      label: searchText,
+      searchText,
+      temporalMode: "any",
+      roleConstraint: "user",
+      relation: "direct",
+      coverageMode: "any",
+      minimumEvidence: 1,
+      dependencyRelation: "independent",
+      dependsOn: [],
+    });
+    const plan = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "recommend",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [
+          item("possessions", "owned equipment"),
+          item("goals", "current goals"),
+          item("constraints", "schedule constraints"),
+          item("preferences", "explicit likes and dislikes"),
+        ],
+      }),
+      query,
+    );
+    expect(plan.requirements).toHaveLength(1);
+    expect(plan.requirements[0]).toMatchObject({
+      requirementId: "personalization-context",
+      roleConstraint: "user",
+      relation: "direct",
+      coverageMode: "any",
+      minimumEvidence: 1,
+      dependencyRelation: "independent",
+      dependsOnRequirementIds: [],
+    });
+    expect(plan.requirements[0]?.searchText).toContain("owned equipment");
+    expect(plan.requirements[0]?.searchText).toContain("current goals");
+
+    const reversed = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "recommend",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [
+          item("preferences", "explicit likes and dislikes"),
+          item("constraints", "schedule constraints"),
+          item("goals", "current goals"),
+          item("possessions", "owned equipment"),
+        ],
+      }),
+      query,
+    );
+    expect(reversed.requirements[0]?.searchText).toBe(
+      plan.requirements[0]?.searchText,
+    );
+
+    const long = "x".repeat(100);
+    const uncollapsed = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "recommend",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [item("first", `${long}a`), item("second", `${long}b`)],
+      }),
+      query,
+    );
+    expect(uncollapsed.requirements).toHaveLength(2);
+
+    const explicitOperands = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "recommend",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [
+          item("owned", "fact the user explicitly asks to recall"),
+          item("recommend", "context for a new recommendation"),
+        ],
+      }),
+      "What do I own and what should I buy next?",
+    );
+    expect(explicitOperands.requirements).toHaveLength(2);
+
+    const semanticRewrite = parseMemoryEvidenceQueryPlanV3(
+      JSON.stringify({
+        answerShape: "recommend",
+        temporalMode: "any",
+        roleConstraint: "user",
+        requirements: [
+          item("first", "first proposed context"),
+          item("second", "second proposed context"),
+        ],
+      }),
+      "Tell me about the stored details.",
+      {
+        answerShape: "lookup",
+        temporalMode: "any",
+        roleConstraint: "user",
+        needsPlanning: true,
+      },
+    );
+    expect(semanticRewrite.requirements).toHaveLength(2);
+  });
+
   test("keeps answer shape and recency as independent intent axes", () => {
     expect(
       classifyMemoryEvidenceQueryV3(
@@ -492,7 +965,7 @@ describe("typed evidence query planner v3", () => {
     expect(
       classifyMemoryEvidenceQueryV3("Which suggestion did you mention first?"),
     ).toEqual({
-      answerShape: "recommend",
+      answerShape: "lookup",
       temporalMode: "history",
       roleConstraint: "assistant",
       needsPlanning: true,
@@ -532,7 +1005,7 @@ describe("typed evidence query planner v3", () => {
       needsPlanning: true,
     });
     expect(classifyMemoryEvidenceQueryV3("你上次推荐了什么？")).toEqual({
-      answerShape: "recommend",
+      answerShape: "lookup",
       temporalMode: "any",
       roleConstraint: "assistant",
       needsPlanning: true,

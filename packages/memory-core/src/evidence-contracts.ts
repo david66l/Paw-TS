@@ -11,7 +11,7 @@ export const PAW_MEMORY_EVIDENCE_CANDIDATE_FUSION_VERSION_V2 =
 export const PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1 =
   "paw.memory-conversation-bundle.v2:explicit-assistant-output-recall";
 export const PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1 =
-  "paw.memory-evidence-notebook.v10:item-bound-evidence-use";
+  "paw.memory-evidence-notebook.v11:lossless-slot-budget";
 
 export type MemoryEvidenceChannelV1 = "l0" | "l1";
 
@@ -206,6 +206,10 @@ export interface MemoryEvidenceNotebookV1 {
     /** Unresolved peers that prevent a latest-state requirement from closing. */
     unresolvedEvidenceRefs: readonly string[];
   }>[];
+  /** Bounded hits supplied to the notebook before authority and budget checks. */
+  readonly inputHitCount: number;
+  /** Otherwise valid hits omitted only because the rendered packet was full. */
+  readonly budgetOmittedHitCount: number;
   readonly selectedHitCount: number;
   readonly chars: number;
 }

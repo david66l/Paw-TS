@@ -68,6 +68,11 @@ export function buildMemoryEvidenceNotebookV1(input: {
   const seenRequirementIds = new Set<string>();
   const renderedEvidenceRefs = new Set<string>();
   let chars = 0;
+  const inputHitCount = input.requirements.reduce(
+    (total, requirement) => total + requirement.hits.length,
+    0,
+  );
+  let budgetOmittedHitCount = 0;
   let selectedHitCount = 0;
   const minimumRequirementBudget = Math.max(
     1,
@@ -100,10 +105,20 @@ export function buildMemoryEvidenceNotebookV1(input: {
     ) {
       throw namedError("MemoryEvidenceNotebookRequirementInvalid");
     }
-    // Closure is a minimum, not a rendering cap. Preserve every bounded hit
-    // the semantic selector judged useful so aggregate and temporal synthesis
-    // do not lose later operands after the first one or two matches.
-    const targetHits = input.maxHitsPerRequirement;
+    // Divide the slot budget by evidence that actually reached this notebook,
+    // not by the configured ceiling. Otherwise raising maxHits from 4 to 8 can
+    // shrink one selected excerpt below the projector minimum and erase it.
+    const targetHits = Math.max(
+      1,
+      Math.min(
+        input.maxHitsPerRequirement,
+        new Set(
+          rawRequirement.hits
+            .map((hit) => hit.evidenceRef.trim())
+            .filter(Boolean),
+        ).size,
+      ),
+    );
     const remainingRequirementReserve =
       (input.requirements.length - requirementIndex - 1) *
       minimumRequirementBudget;
@@ -298,14 +313,20 @@ export function buildMemoryEvidenceNotebookV1(input: {
       // metadata-heavy evidence address can leave 64-127 characters even
       // though the notebook itself still has space; skip that hit instead of
       // turning a bounded omission into a resolver-wide failure.
-      if (excerptBudget < 128) continue;
+      if (excerptBudget < 128) {
+        budgetOmittedHitCount += 1;
+        continue;
+      }
       const excerpt = projectMemoryEvidenceExcerptV1(
         content,
         searchText,
         excerptBudget,
       );
       const part = [requirementLine, metadataLine, excerpt].join("\n");
-      if (chars + separatorChars + part.length > input.maxChars) continue;
+      if (chars + separatorChars + part.length > input.maxChars) {
+        budgetOmittedHitCount += 1;
+        continue;
+      }
       const state = sourceParts.get(sourceId) ?? {
         parts: [],
         evidenceRefs: [],
@@ -381,6 +402,8 @@ export function buildMemoryEvidenceNotebookV1(input: {
     policyVersion: PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1,
     sources: Object.freeze(sources),
     coverage: Object.freeze(coverage.map((item) => Object.freeze(item))),
+    inputHitCount,
+    budgetOmittedHitCount,
     selectedHitCount,
     chars: sources.reduce((total, source) => total + source.text.length, 0),
   });

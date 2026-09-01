@@ -1,5 +1,6 @@
 import type {
   MemoryEvidenceBindingV1,
+  MemoryEvidenceDispositionBindingV1,
   MemoryEvidenceUseV1,
 } from "./evidence-origin.js";
 
@@ -75,6 +76,7 @@ export interface MemoryResolvedContextPacketV1 {
     supportingMemoryIds: readonly string[];
     contradictingMemoryIds: readonly string[];
     unknownMemoryIds: readonly string[];
+    evidenceDispositions?: readonly Readonly<MemoryEvidenceDispositionBindingV1>[];
   }>[];
   readonly verification: Readonly<{
     status: "verified" | "not_configured" | "failed";

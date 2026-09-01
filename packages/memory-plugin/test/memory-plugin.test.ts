@@ -39,6 +39,7 @@ import {
   createToolDrivenMemoryContextV1,
   lexicalAnchorTextsV1,
   projectCurrentMemoryQueryV1,
+  projectMemoryEpisodeArchiveInputsV1,
   projectMemoryWriteSourceV1,
   projectRawEvidenceArchiveInputsV1,
   reciprocalRankFusionV1,
@@ -59,6 +60,77 @@ const profile: PawNextMemoryPluginProfileV1 = Object.freeze({
 });
 
 describe("Paw Next memory plugin", () => {
+  test("captures a stable L0 episode even when semantic extraction is skipped", async () => {
+    const session = new FakeSession(initialSnapshot());
+    const archived: Array<{
+      readonly evidenceRef: string;
+      readonly sourceKind: string;
+      readonly sourceSeq: number;
+      readonly content: string;
+      readonly createdAt: string;
+    }> = [];
+    let extractorCalls = 0;
+    let applyCalls = 0;
+    const events: MemoryWriterEventV1[] = [];
+    const controller = createMemoryWriterControllerV1({
+      session,
+      runId: "run-ordinary-dialogue",
+      scope: profile.scope,
+      extractor: {
+        extractorVersion: "extractor-test",
+        async extract() {
+          extractorCalls += 1;
+          return [];
+        },
+      },
+      store: {
+        async recall() {
+          return [];
+        },
+        async apply() {
+          applyCalls += 1;
+          return {
+            storedIds: [],
+            invalidatedIds: [],
+            skippedAtomIds: [],
+          };
+        },
+      },
+      evidenceArchive: {
+        scope: profile.scope,
+        async put(spans) {
+          archived.push(...spans);
+        },
+        async resolve() {
+          return [];
+        },
+      },
+      signal: new AbortController().signal,
+      now: () => 1_750_000_000_000,
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(await controller.settleTerminal("completed")).toBeUndefined();
+    expect(archived).toEqual([
+      ...projectMemoryEpisodeArchiveInputsV1({
+        snapshot: initialSnapshot(),
+        runId: "run-ordinary-dialogue",
+        sourceFromSeq: 1,
+        sourceThroughSeq: 2,
+        observedAt: new Date(1_750_000_000_000).toISOString(),
+      }),
+    ]);
+    expect(extractorCalls).toBe(0);
+    expect(applyCalls).toBe(0);
+    expect(events.map((event) => [event.type, event.reasonCode])).toEqual([
+      ["archive", "stable_episode_capture"],
+      ["skip", "memory_write_no_stable_trigger"],
+    ]);
+
+    expect(await controller.settleTerminal("completed")).toBeUndefined();
+    expect(archived).toHaveLength(1);
+  });
+
   test("keeps assistant turns in L0 while treating them as extraction context only", () => {
     const snapshot: SessionInputSnapshot<InputFactV1> = Object.freeze({
       entries: Object.freeze([

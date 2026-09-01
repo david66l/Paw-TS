@@ -155,16 +155,23 @@ export function rankMemoryEvidenceCandidatesV2(input: {
       distinctRank += 1;
       channelCandidates[list.channel].add(candidate.candidateId);
       const current = candidates.get(candidate.candidateId);
-      if (current && !sameEvidenceAddressV2(current.candidate, candidate)) {
-        throw namedError("MemoryEvidenceCandidateIdentityConflict");
+      const reconciledCandidate = current
+        ? reconcileEvidenceCandidateV2(current.candidate, candidate)
+        : candidate;
+      if (!reconciledCandidate) {
+        throw evidenceCandidateIdentityConflictV2(
+          current?.candidate,
+          candidate,
+        );
       }
       const state = current ?? {
-        candidate,
+        candidate: reconciledCandidate,
         score: 0,
         lists: new Set<string>(),
         channels: new Set<MemoryEvidenceChannelV1>(),
         bestRank: Number.POSITIVE_INFINITY,
       };
+      state.candidate = reconciledCandidate;
       state.score += list.weight / (EVIDENCE_SOURCE_RRF_K + distinctRank);
       state.lists.add(retrieverId);
       state.channels.add(list.channel);
@@ -283,17 +290,59 @@ function normalizedEvidenceCandidateV2(
   });
 }
 
-function sameEvidenceAddressV2(
+function reconcileEvidenceCandidateV2(
   left: MemoryEvidenceCandidateV2,
   right: MemoryEvidenceCandidateV2,
-): boolean {
-  return (
-    left.sourceId === right.sourceId &&
-    left.evidenceRef === right.evidenceRef &&
-    left.sourceKind === right.sourceKind &&
-    left.authority === right.authority &&
-    left.observedAt === right.observedAt
-  );
+): MemoryEvidenceCandidateV2 | undefined {
+  if (
+    left.sourceId !== right.sourceId ||
+    left.evidenceRef !== right.evidenceRef ||
+    left.sourceKind !== right.sourceKind ||
+    left.observedAt !== right.observedAt
+  ) {
+    return undefined;
+  }
+  if (left.authority === right.authority) return left;
+
+  // A dialogue retriever may certify an immutable turn after a coarse span
+  // retriever has found the same address. Certification refines how that turn
+  // may be used; it does not create a second evidence identity.
+  const baseAuthority =
+    left.sourceKind === "assistant_output"
+      ? "context_only"
+      : left.sourceKind === "user_input"
+        ? "user_asserted"
+        : undefined;
+  if (
+    baseAuthority &&
+    ((left.authority === baseAuthority &&
+      right.authority === "user_confirmed_dialogue") ||
+      (right.authority === baseAuthority &&
+        left.authority === "user_confirmed_dialogue"))
+  ) {
+    return left.authority === "user_confirmed_dialogue" ? left : right;
+  }
+  return undefined;
+}
+
+function evidenceCandidateIdentityConflictV2(
+  left: MemoryEvidenceCandidateV2 | undefined,
+  right: MemoryEvidenceCandidateV2,
+): Error {
+  const error = namedError("MemoryEvidenceCandidateIdentityConflict");
+  Object.defineProperty(error, "candidateConflict", {
+    enumerable: true,
+    value: Object.freeze({
+      sourceId: left?.sourceId === right.sourceId ? "same" : "different",
+      evidenceRef:
+        left?.evidenceRef === right.evidenceRef ? "same" : "different",
+      sourceKind: Object.freeze([left?.sourceKind ?? "missing", right.sourceKind]),
+      authority: Object.freeze([left?.authority ?? "missing", right.authority]),
+      observedAt:
+        left?.observedAt === right.observedAt ? "same" : "different",
+    }),
+  });
+  return error;
 }
 
 function namedError(name: string): Error {

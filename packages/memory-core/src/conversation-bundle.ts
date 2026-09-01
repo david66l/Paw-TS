@@ -50,18 +50,22 @@ export function buildMemoryConversationTurnBundleV1(input: {
   if (!query || query.length > 512) {
     throw namedError("MemoryConversationTurnBundleQueryInvalid");
   }
-  const turns = [
-    ...new Map(
-      input.turns
-        .filter(
-          (turn) =>
-            Number.isSafeInteger(turn.sourceSeq) &&
-            turn.sourceSeq >= 0 &&
-            turn.content.trim(),
-        )
-        .map((turn) => [`${turn.sourceSeq}\0${turn.sourceKind}`, turn]),
-    ).values(),
-  ].sort(
+  const turnsByIdentity = new Map<string, MemoryConversationTurnV1>();
+  for (const turn of input.turns) {
+    if (
+      !Number.isSafeInteger(turn.sourceSeq) ||
+      turn.sourceSeq < 0 ||
+      !turn.content.trim()
+    ) {
+      continue;
+    }
+    const key = `${turn.sourceSeq}\0${turn.sourceKind}`;
+    const existing = turnsByIdentity.get(key);
+    if (!existing || preferConversationTurn(turn, existing) < 0) {
+      turnsByIdentity.set(key, turn);
+    }
+  }
+  const turns = [...turnsByIdentity.values()].sort(
     (left, right) =>
       left.sourceSeq - right.sourceSeq ||
       left.sourceKind.localeCompare(right.sourceKind),
@@ -139,6 +143,17 @@ export function buildMemoryConversationTurnBundleV1(input: {
     ),
     chars: text.length,
   });
+}
+
+function preferConversationTurn(
+  left: MemoryConversationTurnV1,
+  right: MemoryConversationTurnV1,
+): number {
+  if (left.hit !== right.hit) return left.hit ? -1 : 1;
+  const evidenceOrder = (left.evidenceRef ?? "").localeCompare(
+    right.evidenceRef ?? "",
+  );
+  return evidenceOrder || left.content.localeCompare(right.content);
 }
 
 function explicitConfirmation(content: string): boolean {

@@ -74,6 +74,10 @@ export const AMB_MEMORY_LLM_PURPOSES_V1 = [
   "memory-write",
   "query-plan",
   "evidence-support",
+  "state-binding",
+  "state-verification",
+  "state-semantic-audit-a",
+  "state-semantic-audit-b",
   "closure-audit",
 ] as const;
 
@@ -196,6 +200,46 @@ export function readAmbMemoryLlmBudgetLimitsV1(
         concurrency: 2,
       },
     }),
+    "state-binding": readPurposeLimitsV1({
+      env,
+      prefix: "PAW_AMB_STATE_BINDING",
+      defaults: {
+        maxRemoteCalls: 120,
+        maxPromptTokens: 1_000_000,
+        maxCompletionTokens: 120_000,
+        concurrency: 2,
+      },
+    }),
+    "state-verification": readPurposeLimitsV1({
+      env,
+      prefix: "PAW_AMB_STATE_VERIFICATION",
+      defaults: {
+        maxRemoteCalls: 120,
+        maxPromptTokens: 1_000_000,
+        maxCompletionTokens: 120_000,
+        concurrency: 2,
+      },
+    }),
+    "state-semantic-audit-a": readPurposeLimitsV1({
+      env,
+      prefix: "PAW_AMB_STATE_SEMANTIC_AUDIT_A",
+      defaults: {
+        maxRemoteCalls: 120,
+        maxPromptTokens: 1_500_000,
+        maxCompletionTokens: 120_000,
+        concurrency: 2,
+      },
+    }),
+    "state-semantic-audit-b": readPurposeLimitsV1({
+      env,
+      prefix: "PAW_AMB_STATE_SEMANTIC_AUDIT_B",
+      defaults: {
+        maxRemoteCalls: 120,
+        maxPromptTokens: 1_500_000,
+        maxCompletionTokens: 120_000,
+        concurrency: 2,
+      },
+    }),
     "closure-audit": readPurposeLimitsV1({
       env,
       prefix: "PAW_AMB_CLOSURE_AUDIT",
@@ -216,6 +260,16 @@ export function createAmbMemoryLlmBudgetPortfolioV1(
     "memory-write": createAtomIngestBudgetV1(limits["memory-write"]),
     "query-plan": createAtomIngestBudgetV1(limits["query-plan"]),
     "evidence-support": createAtomIngestBudgetV1(limits["evidence-support"]),
+    "state-binding": createAtomIngestBudgetV1(limits["state-binding"]),
+    "state-verification": createAtomIngestBudgetV1(
+      limits["state-verification"],
+    ),
+    "state-semantic-audit-a": createAtomIngestBudgetV1(
+      limits["state-semantic-audit-a"],
+    ),
+    "state-semantic-audit-b": createAtomIngestBudgetV1(
+      limits["state-semantic-audit-b"],
+    ),
     "closure-audit": createAtomIngestBudgetV1(limits["closure-audit"]),
   };
   return Object.freeze({
@@ -227,6 +281,10 @@ export function createAmbMemoryLlmBudgetPortfolioV1(
         "memory-write": budgets["memory-write"].snapshot(),
         "query-plan": budgets["query-plan"].snapshot(),
         "evidence-support": budgets["evidence-support"].snapshot(),
+        "state-binding": budgets["state-binding"].snapshot(),
+        "state-verification": budgets["state-verification"].snapshot(),
+        "state-semantic-audit-a": budgets["state-semantic-audit-a"].snapshot(),
+        "state-semantic-audit-b": budgets["state-semantic-audit-b"].snapshot(),
         "closure-audit": budgets["closure-audit"].snapshot(),
       });
       return Object.freeze({

@@ -1,6 +1,8 @@
 import { isAssistantMemoryQueryV1 } from "./evidence-first.js";
+import { memoryEvidenceQueryHasMultipleObligationsV1 } from "./evidence-obligation.js";
 import type {
   MemoryEvidenceAnswerShapeV3,
+  MemoryEvidenceIntentBoundaryV1,
   MemoryEvidenceQueryIntentV3,
   MemoryEvidenceRoleConstraintV3,
   MemoryEvidenceTemporalModeV3,
@@ -39,20 +41,27 @@ export function classifyMemoryEvidenceQueryV3(
   const certifiedAssistantDialogueCandidate =
     roleConstraint === "user" &&
     needsCertifiedAssistantDialogueCandidateV1(value);
-  const answerShape: MemoryEvidenceAnswerShapeV3 =
-    /\b(?:recommend|recommendation|suggest|suggestion|what\s+should\s+i|any\s+(?:tips|ideas)|good\s+(?:options|activities|recipes?))\b|(?:推荐|建议|有什么(?:好)?(?:办法|选择|活动|食谱)|我应该)/iu.test(
+  const priorRecommendationRecall = isPriorRecommendationRecallV1(value);
+  const compare =
+    /\b(?:compared\s+to|difference\s+between|both|each|respectively)\b|(?:相比|比较|区别|差异|两者|分别|各自)/iu.test(
       value,
-    )
-      ? "recommend"
-      : /\b(?:compared\s+to|difference\s+between|both|each|respectively)\b|(?:相比|比较|区别|差异|两者|分别|各自)/iu.test(
-            value,
-          )
-        ? "compare"
-        : /\b(?:how\s+(?:many|much)|what\s+percentage|percent(?:age)?\s+of|ratio\s+of|total|combined|altogether)\b|(?:多少|总共|合计|一共|加起来|百分之|占.{0,24}(?:比例|百分比))/iu.test(
-              value,
-            )
-          ? "aggregate"
-          : "lookup";
+    );
+  const aggregate =
+    /\b(?:how\s+(?:many|much)|what\s+percentage|percent(?:age)?\s+of|ratio\s+of|total|combined|altogether)\b|(?:多少|总共|合计|一共|加起来|百分之|占.{0,24}(?:比例|百分比))/iu.test(
+      value,
+    );
+  const newRecommendation =
+    !priorRecommendationRecall &&
+    /\b(?:recommend|recommendation|suggest|suggestion|what\s+should\s+i|should\s+i|any\s+(?:tips|ideas|advice)|good\s+(?:options|activities|recipes?)|what\s+do\s+you\s+think|do\s+you\s+think\s+(?:it|this|that).{0,64}good\s+idea|could\s+there\s+be\s+a\s+reason|do\s+you\s+think\s+it\s+might)\b|(?:推荐|建议|有什么(?:好)?(?:办法|选择|活动|食谱)|我应该|你觉得|你怎么看)/iu.test(
+      value,
+    );
+  const answerShape: MemoryEvidenceAnswerShapeV3 = compare
+    ? "compare"
+    : aggregate
+      ? "aggregate"
+      : newRecommendation
+        ? "recommend"
+        : "lookup";
   const temporalMode = classifyMemoryEvidenceTemporalModeV1(value);
   return Object.freeze({
     answerShape,
@@ -62,7 +71,120 @@ export function classifyMemoryEvidenceQueryV3(
       answerShape !== "lookup" ||
       temporalMode !== "any" ||
       roleConstraint !== "user" ||
-      certifiedAssistantDialogueCandidate,
+      certifiedAssistantDialogueCandidate ||
+      memoryEvidenceQueryHasMultipleObligationsV1(value),
+  });
+}
+
+/** A past recommendation is an assistant-authored artifact to recall, not a new recommendation. */
+function isPriorRecommendationRecallV1(query: string): boolean {
+  const futureRequest =
+    /\b(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:recommend|suggest)\b|\bwhat\s+should\s+i\b/iu.test(
+      query,
+    ) || /(?:请|能否|可以|帮我).{0,12}(?:推荐|建议)|我应该/u.test(query);
+  if (futureRequest) return false;
+  return (
+    /\b(?:what|which)\b.{0,64}\b(?:did|had)\s+you\b.{0,48}\b(?:recommend|suggest|mention)\b/iu.test(
+      query,
+    ) ||
+    /\b(?:what|which)\s+(?:recommendation|suggestion)\b.{0,48}\bdid\b/iu.test(
+      query,
+    ) ||
+    /\b(?:remember|recall|remind)\b.{0,128}\b(?:recommend(?:ed|ation)?|suggest(?:ed|ion)?)\b/iu.test(
+      query,
+    ) ||
+    /\b(?:recommend(?:ed)?|suggest(?:ed)?)\b.{0,64}\b(?:last|previous|previously|earlier|before|prior)\b/iu.test(
+      query,
+    ) ||
+    /(?:上次|之前|此前|曾经|还记得|记得|回忆|提醒我).{0,80}(?:推荐|建议)|(?:推荐|建议).{0,48}(?:上次|之前|此前|曾经).{0,32}(?:什么|哪个|哪些)/u.test(
+      query,
+    )
+  );
+}
+
+/**
+ * Separates explicit authority from heuristic fallback. A semantic axis is not
+ * unrestricted input: the planner still returns one bounded enum value and the
+ * port validates every requirement against that normalized value.
+ */
+export function classifyMemoryEvidenceIntentBoundaryV1(
+  query: string,
+  intent = classifyMemoryEvidenceQueryV3(query),
+): MemoryEvidenceIntentBoundaryV1 {
+  const value = boundedQuery(query);
+  const recallProvenance = classifyMemoryRecallProvenanceV1(value);
+  const explicitRole =
+    recallProvenance === "user" ||
+    recallProvenance === "assistant" ||
+    recallProvenance === "shared" ||
+    isExplicitUserOriginMemoryQueryV1(value) ||
+    isExplicitSharedDialogueQueryV1(value) ||
+    isAssistantMemoryQueryV1(value);
+  return Object.freeze({
+    answerShape:
+      intent.answerShape === "lookup" && !isPriorRecommendationRecallV1(value)
+        ? "semantic"
+        : "fixed",
+    temporalMode: intent.temporalMode === "any" ? "semantic" : "fixed",
+    roleConstraint: explicitRole ? "fixed" : "semantic",
+  });
+}
+
+/**
+ * Content-free provenance features used by the typed query-origin boundary.
+ *
+ * These signals deliberately distinguish an answer-clause author from a
+ * participant merely mentioned elsewhere in the question. In particular,
+ * first-person context does not make the user the author of a requested prior
+ * assistant artifact.
+ */
+export interface MemoryQueryAnswerProvenanceFeaturesV1 {
+  readonly secondPersonCue: boolean;
+  readonly priorDialogueCue: boolean;
+  readonly recallActionCue: boolean;
+  readonly explicitUserAnswerAuthor: boolean;
+  readonly explicitAssistantAnswerAuthor: boolean;
+  readonly explicitSharedAnswerAuthor: boolean;
+  readonly dialogueRoleResolutionCandidate: boolean;
+  readonly certifiedAssistantDialogueCandidate: boolean;
+}
+
+export function classifyMemoryQueryAnswerProvenanceFeaturesV1(
+  query: string,
+): MemoryQueryAnswerProvenanceFeaturesV1 {
+  const value = boundedQuery(query);
+  const answer = memoryRecallAnswerClauseV1(value);
+  const answerSubject = answer
+    ? firstAnswerClauseSubjectV1(answer.text, answer.language)
+    : undefined;
+  const answerSubjectOwner =
+    answerSubject && answerSubject !== "ambiguous"
+      ? answerSubject.owner
+      : undefined;
+  const recallProvenance = classifyMemoryRecallProvenanceV1(value);
+  return Object.freeze({
+    secondPersonCue: /\b(?:you|your|yours)\b|(?:你|你的)/iu.test(value),
+    priorDialogueCue:
+      /\b(?:again|before|earlier|last|previous|previously|prior)\b|(?:再次|以前|之前|上次|此前)/iu.test(
+        value,
+      ),
+    recallActionCue:
+      /\b(?:remember|recall|remind|forgot|forget)\b|(?:记得|回忆|提醒|忘记|想不起来)/iu.test(
+        value,
+      ),
+    explicitUserAnswerAuthor:
+      answerSubjectOwner === "user" || hasExplicitUserAnswerSubjectV1(value),
+    explicitAssistantAnswerAuthor:
+      answerSubjectOwner === "assistant" ||
+      (answerSubjectOwner === undefined &&
+        (recallProvenance === "assistant" || isAssistantMemoryQueryV1(value))),
+    explicitSharedAnswerAuthor:
+      answerSubjectOwner === "shared" ||
+      recallProvenance === "shared" ||
+      isExplicitSharedDialogueQueryV1(value),
+    dialogueRoleResolutionCandidate: needsMemoryEvidenceRoleResolutionV1(value),
+    certifiedAssistantDialogueCandidate:
+      needsCertifiedAssistantDialogueCandidateV1(value),
   });
 }
 
@@ -468,6 +590,19 @@ export function needsCertifiedAssistantDialogueCandidateV1(
   query: string,
 ): boolean {
   const value = boundedQuery(query);
+  // A polite request to recall an artifact from a prior exchange establishes
+  // dialogue provenance but not authorship. Keep the user lane primary and
+  // allow only the certified assistant alternative. Explicit "I said/gave"
+  // questions remain closed even when phrased as a reminder.
+  if (hasExplicitUserAnswerSubjectV1(value)) return false;
+  if (
+    isPriorDialogueReferenceV1(value) &&
+    /\b(?:can|could|would|will)\s+you\s+(?:please\s+)?remind\s+me\b|\b(?:please\s+)?remind\s+me\b.{0,80}\b(?:our|the)\s+(?:previous|earlier|prior|last)\s+(?:conversation|chat|discussion|exchange|talk)\b|(?:你能|你可以|请你|麻烦你).{0,24}提醒我/u.test(
+      value,
+    )
+  ) {
+    return true;
+  }
   const answer = memoryRecallAnswerClauseV1(value);
   if (answer) {
     const provenance = classifyMemoryRecallProvenanceV1(value);
@@ -482,7 +617,6 @@ export function needsCertifiedAssistantDialogueCandidateV1(
       isPriorDialogueReferenceV1(value)
     );
   }
-  if (hasExplicitUserAnswerSubjectV1(value)) return false;
   return (
     isPriorDialogueReferenceV1(value) &&
     /\b(?:what|which|where|when|how|who|whether)\b|(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/iu.test(

@@ -15,12 +15,13 @@ import {
 } from "./evidence-answer-policy.js";
 import type {
   MemoryEvidenceBindingV1,
+  MemoryEvidenceDispositionBindingV1,
   MemoryEvidenceUseV1,
 } from "./evidence-origin.js";
 import type { MemoryEvidenceResolutionV1 } from "./evidence-resolver.js";
 
 export const PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1 =
-  "paw.memory-evidence-answer-contract.v2:item-bound-evidence-use" as const;
+  "paw.memory-evidence-answer-contract.v3:requirement-evidence-ledger" as const;
 
 export interface MemoryEvidenceAnswerContractV1 {
   readonly schemaVersion: typeof PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1;
@@ -40,6 +41,10 @@ export interface MemoryEvidenceAnswerContractV1 {
     minimumEvidence: number;
     status: "covered" | "partial" | "missing";
     selectedEvidenceCount: number;
+    supportingEvidenceRefs: readonly string[];
+    candidateEvidenceRefs: readonly string[];
+    contradictingEvidenceRefs: readonly string[];
+    evidenceDispositions: readonly Readonly<MemoryEvidenceDispositionBindingV1>[];
   }>[];
 }
 
@@ -178,6 +183,9 @@ export function projectEvidenceFirstMemoryContextPacketV1(
         supportingMemoryIds,
         contradictingMemoryIds,
         unknownMemoryIds,
+        evidenceDispositions: Object.freeze([
+          ...(assessment?.evidenceDispositions ?? []),
+        ]),
       });
     }),
   );
@@ -203,19 +211,17 @@ export function projectEvidenceFirstMemoryContextPacketV1(
     resolution.closureAuditStatus === "not_needed" ||
     (resolution.closureAuditStatus === "completed" &&
       resolution.closureVerdict === "pass");
+  const planningExecutionVerified =
+    !resolution.intent.needsPlanning ||
+    resolution.plannerStatus === "completed" ||
+    (resolution.closureAuditStatus === "completed" &&
+      resolution.closureVerdict === "pass");
   const plannedClosureVerified =
     resolution.requirements.length > 0 &&
     requiredCovered &&
     supportVerified &&
     independentClosureVerified &&
-    !(
-      resolution.intent.needsPlanning &&
-      resolution.plannerStatus !== "completed"
-    );
-  const directClosureVerified =
-    resolution.requirements.length === 0 &&
-    resolution.directCertificateStatus === "deterministic_direct" &&
-    resolution.degradedChannels.length === 0;
+    planningExecutionVerified;
   const supportingRefs = new Set(
     resolution.notebook.coverage.flatMap(
       (requirement) => requirement.selectedEvidenceRefs,
@@ -245,7 +251,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
     stop:
       evidence.length === 0
         ? "missing"
-        : plannedClosureVerified || directClosureVerified
+        : plannedClosureVerified
           ? "sufficient"
           : "partial",
     requirements,
@@ -290,6 +296,15 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
       requirement,
     ]),
   );
+  const evidenceByRequirement = new Map(
+    resolution.requirementEvidence.map((entry) => [entry.requirementId, entry]),
+  );
+  const assessmentByRequirement = new Map(
+    resolution.supportAssessments.map((assessment) => [
+      assessment.requirementId,
+      assessment,
+    ]),
+  );
   return Object.freeze({
     schemaVersion: PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1,
     answerShape: resolution.intent.answerShape,
@@ -314,10 +329,15 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
       ),
     ]),
     guidance:
-      "Control metadata is not evidence. Organize exact facts by covered requirement ID; never guess a partial or missing requirement.",
+      "Control metadata is not evidence. Execute the typed ledger by covered requirement ID; candidates never count as verified support and a contradictory address must not be silently reassigned.",
     requirements: Object.freeze(
       resolution.requirements.map((requirement) => {
         const projected = packetRequirements.get(requirement.requirementId);
+        const evidence = evidenceByRequirement.get(requirement.requirementId);
+        const assessment = assessmentByRequirement.get(requirement.requirementId);
+        if (!evidence) {
+          throw namedError("MemoryEvidenceAnswerContractLedgerInvalid");
+        }
         return Object.freeze({
           requirementId: requirement.requirementId,
           description: requirement.label,
@@ -328,6 +348,12 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
           minimumEvidence: requirement.minimumEvidence ?? 1,
           status: projected?.status ?? "missing",
           selectedEvidenceCount: projected?.selectedEvidenceCount ?? 0,
+          supportingEvidenceRefs: evidence.supportingEvidenceRefs,
+          candidateEvidenceRefs: evidence.candidateEvidenceRefs,
+          contradictingEvidenceRefs: evidence.contradictingEvidenceRefs,
+          evidenceDispositions: Object.freeze([
+            ...(assessment?.evidenceDispositions ?? []),
+          ]),
         });
       }),
     ),

@@ -15,6 +15,13 @@ import urllib.request
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from longmemeval_protocol import (
+    canonicalize_longmemeval_documents,
+    load_longmemeval_protocol,
+    official_longmemeval_judge_prompt_fn,
+    require_protocol_records,
+)
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 UPSTREAM_SRC = HERE / "upstream" / "src"
@@ -45,10 +52,10 @@ EVIDENCE_ANSWER_PROTOCOL = """Paw evidence synthesis protocol:
 Keep the reasoning audit concise. Make the final answer directly match the requested value, list, comparison, date, or preference profile.
 
 """
-RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v10:bound-capability-profile"
-MEMORY_POLICY = "paw.amb-evidence-first.v27:owner-provenance-aperture"
+RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v11:semantic-slot-scopes"
+MEMORY_POLICY = "paw.amb-evidence-first.v31:coverage-cardinality-semantics"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
-RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v7:dense-source-local"
+RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v8:semantic-slot-local"
 PROJECT_RELEASE_GATE = {
     "minimumTreatmentAccuracy": 0.75,
     "minimumQuestionTypeAccuracy": 0.60,
@@ -100,6 +107,48 @@ def validated_exclusion_manifest(report: object) -> dict:
     return manifest
 
 
+def validated_diagnostic_include_manifest(
+    report: object,
+    *,
+    eval_key_id: str,
+    dataset_artifact_sha256: str,
+) -> dict:
+    manifest = validated_exclusion_manifest(report)
+    query_hmacs = manifest.get("queryHmacs")
+    artifact_binding = manifest.get("artifactBinding")
+    if (
+        not isinstance(query_hmacs, list)
+        or not query_hmacs
+        or len(query_hmacs) != len(set(query_hmacs))
+        or not all(isinstance(value, str) and value for value in query_hmacs)
+        or manifest.get("evalKeyId") != eval_key_id
+        or not isinstance(artifact_binding, dict)
+        or artifact_binding.get("datasetArtifactSha256")
+        != dataset_artifact_sha256
+    ):
+        raise ValueError("sealed diagnostic inclusion ledger is incompatible")
+    return manifest
+
+
+def select_diagnostic_queries(
+    queries: list,
+    *,
+    query_hmacs: set[str],
+    eval_hmac_key: bytes,
+) -> list:
+    selected = [
+        query
+        for query in queries
+        if eval_hmac(query.id, eval_hmac_key) in query_hmacs
+    ]
+    selected_hmacs = {
+        eval_hmac(query.id, eval_hmac_key) for query in selected
+    }
+    if selected_hmacs != query_hmacs:
+        raise ValueError("sealed diagnostic inclusion ledger is incomplete")
+    return selected
+
+
 def public_report(sealed: dict, ledger_sha256: str) -> dict:
     sealed_manifest = sealed["manifest"]
     public_manifest_fields = (
@@ -125,7 +174,9 @@ def public_report(sealed: dict, ledger_sha256: str) -> dict:
         "eventKeyCoverageRate",
         "experimentProtocol",
         "artifactBinding",
+        "longMemEvalProtocol",
         "exclusion",
+        "diagnosticInclusion",
         "blindPlan",
         "claimLevel",
         "contentFree",
@@ -314,7 +365,7 @@ def file_sha256(path: Path) -> str:
 
 SOURCE_ARTIFACT_POLICY = "paw.longmemeval-source-bundle.v2:transitive-workspace"
 RETRIEVAL_SOURCE_ARTIFACT_POLICY = (
-    "paw.longmemeval-retrieval-source-bundle.v1:memory-runtime-only"
+    "paw.longmemeval-retrieval-source-bundle.v2:profile-bound-memory-runtime"
 )
 
 
@@ -373,6 +424,7 @@ def retrieval_source_artifact_paths() -> tuple[Path, ...]:
     for path in (
         HERE / "paw-memory-bridge.ts",
         HERE / "atom-ingest-control.ts",
+        HERE / "evidence-execution-profile.ts",
         ROOT / "package.json",
         ROOT / "bun.lock",
         ROOT / "tsconfig.base.json",
@@ -548,6 +600,21 @@ def select_full_split_queries(dataset, *, seed: str) -> list[object]:
     return queries
 
 
+def select_category_queries(
+    dataset, *, seed: str, question_type: str
+) -> list[object]:
+    if question_type not in QUESTION_TYPES:
+        raise ValueError("unsupported LongMemEval question type")
+    queries = [
+        query
+        for query in select_full_split_queries(dataset, seed=seed)
+        if query.meta.get("question_type") == question_type
+    ]
+    if not queries:
+        raise ValueError("LongMemEval category is empty")
+    return queries
+
+
 RELEASE_PROVIDER_ENV = {
     "DATABASE_URL": "postgresql://postgres@127.0.0.1:54329/paw_memory_test",
     "PAW_AMB_RETRIEVAL_POLICY": "rrf",
@@ -571,6 +638,7 @@ RELEASE_PROVIDER_ENV = {
     # shell-selected benchmark ablation. Binding it here makes a sealed run
     # fail reproducibly instead of silently degrading to global retrieval.
     "PAW_AMB_SOURCE_LOCAL_LOCATOR": "1",
+    "PAW_AMB_EVIDENCE_PROFILE": "research_dense",
 }
 
 PINNED_EMBEDDING_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
@@ -750,7 +818,7 @@ def summarize(rows: list[dict]) -> dict:
         by_type[row["questionType"]].append(row)
 
     def metrics(items: list[dict]) -> dict:
-        answerable = [item for item in items if item["goldDocumentCount"] > 0]
+        answerable = [item for item in items if item["answerable"] is True]
         closure_eligible = [
             item for item in items if isinstance(item.get("evidenceClosed"), bool)
         ]
@@ -799,6 +867,28 @@ def summarize(rows: list[dict]) -> dict:
             for question_type in QUESTION_TYPES
         },
     }
+
+
+def order_longmemeval_reader_documents(
+    documents: list[object], timestamps_by_id: dict[str, str | None]
+) -> list[object]:
+    """Match the official reader's chronological context ordering.
+
+    Retrieval metrics retain retrieval rank. Only the model-facing packet is
+    reordered, so answer synthesis does not mistake rank for event time.
+    """
+
+    return [
+        document
+        for _, document in sorted(
+            enumerate(documents),
+            key=lambda item: (
+                timestamps_by_id.get(getattr(item[1], "id")) is None,
+                timestamps_by_id.get(getattr(item[1], "id")) or "",
+                item[0],
+            ),
+        )
+    ]
 
 
 def summarize_answers(rows: list[dict]) -> dict | None:
@@ -891,14 +981,35 @@ def run(args: argparse.Namespace) -> dict:
         judge = GeminiJudge(judge_llm)
 
     dataset = get_dataset("longmemeval")
+    protocol_records, protocol_audit = load_longmemeval_protocol(
+        Path(dataset._data_path()).resolve()
+    )
     embedding_artifact = local_embedding_artifact()
     retrieval_environment = resolved_release_provider_env(embedding_artifact)
+    retrieval_environment["PAW_AMB_EVIDENCE_PROFILE"] = args.evidence_profile
     artifacts = artifact_binding(dataset, embedding_artifact)
     protocol = experiment_protocol(
         args,
         source_artifact_sha256=artifacts["retrievalSourceArtifactSha256"],
         retrieval_environment=retrieval_environment,
     )
+    eval_key_id = hashlib.sha256(args.eval_hmac_key).hexdigest()[:20]
+    diagnostic_query_hmacs: set[str] | None = None
+    diagnostic_inclusion = None
+    if args.include_diagnostic_ledger is not None:
+        inclusion_bytes = args.include_diagnostic_ledger.read_bytes()
+        inclusion_report = json.loads(inclusion_bytes)
+        inclusion_manifest = validated_diagnostic_include_manifest(
+            inclusion_report,
+            eval_key_id=eval_key_id,
+            dataset_artifact_sha256=artifacts["datasetArtifactSha256"],
+        )
+        diagnostic_query_hmacs = set(inclusion_manifest["queryHmacs"])
+        diagnostic_inclusion = {
+            "ledgerSha256": hashlib.sha256(inclusion_bytes).hexdigest(),
+            "queryHmacCount": len(diagnostic_query_hmacs),
+            "policy": "sealed-query-hmac-intersection-v1",
+        }
     excluded_fingerprints: set[str] = set()
     excluded_query_hmacs: set[str] = set()
     excluded_user_fingerprints: set[str] = set()
@@ -930,7 +1041,6 @@ def run(args: argparse.Namespace) -> dict:
                 "userHmacCount": len(report_user_hmacs),
             }
         )
-    eval_key_id = hashlib.sha256(args.eval_hmac_key).hexdigest()[:20]
     for exclusion_path in args.exclude_ledger:
         exclusion_bytes = exclusion_path.read_bytes()
         exclusion_report = json.loads(exclusion_bytes)
@@ -976,7 +1086,17 @@ def run(args: argparse.Namespace) -> dict:
         "excludedQueryCount": len(excluded_fingerprints),
         "excludedUserCount": len(excluded_user_ids),
     }
-    if args.full_split:
+    if args.question_type is not None:
+        queries = select_category_queries(
+            dataset,
+            seed=args.seed,
+            question_type=args.question_type,
+        )
+        count_by_type = dict(
+            Counter(query.meta["question_type"] for query in queries)
+        )
+        selection_policy = "official-category-seeded-order-v1"
+    elif args.full_split:
         queries = select_full_split_queries(dataset, seed=args.seed)
         count_by_type = dict(
             Counter(query.meta["question_type"] for query in queries)
@@ -1000,8 +1120,28 @@ def run(args: argparse.Namespace) -> dict:
             excluded_user_ids=excluded_user_ids,
         )
         selection_policy = "sha256-seeded-global-persona-bipartite-matching-v3"
+    if diagnostic_query_hmacs is not None:
+        queries = select_diagnostic_queries(
+            queries,
+            query_hmacs=diagnostic_query_hmacs,
+            eval_hmac_key=args.eval_hmac_key,
+        )
+        count_by_type = dict(
+            Counter(query.meta["question_type"] for query in queries)
+        )
+        selection_policy = (
+            f"{selection_policy}+sealed-diagnostic-inclusion-v1"
+        )
+    require_protocol_records(protocol_records, (query.id for query in queries))
     user_ids = {query.user_id for query in queries if query.user_id}
-    documents = dataset.load_documents("s", user_ids=user_ids)
+    documents, physical_to_logical_document_id, document_id_collision_count = (
+        canonicalize_longmemeval_documents(
+            dataset.load_documents("s", user_ids=user_ids)
+        )
+    )
+    document_timestamp_by_id = {
+        document.id: document.timestamp for document in documents
+    }
     document_counts = Counter(document.user_id for document in documents)
     manifest = {
         "schemaVersion": "paw.longmemeval-stratified-manifest.v2",
@@ -1010,7 +1150,10 @@ def run(args: argparse.Namespace) -> dict:
         "seed": args.seed,
         "seedCommitment": eval_hmac(f"seed:{args.seed}", args.eval_hmac_key),
         "evalKeyId": eval_key_id,
-        "perQuestionType": None if args.full_split else args.per_type,
+        "perQuestionType": (
+            None if args.full_split or args.question_type is not None else args.per_type
+        ),
+        "questionTypeFilter": args.question_type,
         "fullSplit": args.full_split,
         "questionTypeTargets": count_by_type,
         "queryCount": len(queries),
@@ -1034,6 +1177,7 @@ def run(args: argparse.Namespace) -> dict:
         "experimentProtocol": protocol,
         "artifactBinding": artifacts,
         "exclusion": exclusion_manifest,
+        "diagnosticInclusion": diagnostic_inclusion,
         "claimLevel": (
             "release-blind-plan"
             if args.release_blind and args.dry_run
@@ -1042,6 +1186,38 @@ def run(args: argparse.Namespace) -> dict:
             else "development"
         ),
         "contentFree": True,
+        "longMemEvalProtocol": {
+            **protocol_audit.public_dict(),
+            "answerPrompt": "paw_evidence_policy"
+            if args.answer_protocol == "evidence_policy"
+            else "amb_longmemeval",
+            "judgeRubric": "official_longmemeval_semantics",
+            "judgeOutputAdapter": "json_boolean_reason",
+            "judgeModelComparability": "nonofficial_deepseek",
+            "readerOrdering": "official_chronological_session_order",
+            "executionProfile": {
+                "profileId": args.evidence_profile,
+                "sharedEvidenceResolver": True,
+                "evidenceIndex": "amb_turn_level_rrf",
+                "sourceLocalLocator": (
+                    "amb_lexical"
+                    if args.evidence_profile == "product_parity"
+                    else "amb_lexical_dense_rrf"
+                ),
+                "productDefaultSourceLocalLocator": "postgres_lexical",
+                "productLocatorParity": args.evidence_profile == "product_parity",
+                "closureAudit": (
+                    "disabled"
+                    if args.evidence_profile == "product_parity"
+                    else "bounded_source_locked_repair"
+                    if args.evidence_profile == "research_replan"
+                    else "observer_only"
+                ),
+                "productBehavioralParity": False,
+            },
+            "physicalDocumentIdPolicy": "collision_free_occurrence_suffix_v1",
+            "physicalDocumentIdCollisionCount": document_id_collision_count,
+        },
     }
     blind_plan_sha256 = None
     if args.blind_plan is not None:
@@ -1107,6 +1283,9 @@ def run(args: argparse.Namespace) -> dict:
         provider.ingest(documents)
         ingestion_ms = (time.perf_counter() - ingestion_started) * 1_000
         for query in queries:
+            query_protocol = protocol_records[query.id]
+            if query_protocol.question_type != query.meta["question_type"]:
+                raise ValueError("LongMemEval query category disagrees with protocol")
             started = time.perf_counter()
             recalled, raw = provider.retrieve(
                 query.query,
@@ -1115,14 +1294,19 @@ def run(args: argparse.Namespace) -> dict:
                 query_timestamp=query.meta.get("query_timestamp"),
             )
             retrieve_ms = (time.perf_counter() - started) * 1_000
-            recalled_ids = list(dict.fromkeys(document.id for document in recalled))
-            gold_ids = set(query.gold_ids)
+            recalled_ids = list(
+                dict.fromkeys(
+                    physical_to_logical_document_id.get(document.id, document.id)
+                    for document in recalled
+                )
+            )
+            gold_ids = set(query_protocol.gold_document_ids)
             matched = gold_ids.intersection(recalled_ids)
             first_rank = next(
                 (index for index, document_id in enumerate(recalled_ids, start=1) if document_id in gold_ids),
                 None,
             )
-            answerable = bool(gold_ids)
+            answerable = not query_protocol.abstention
             rows.append(
                 row := {
                     "queryHmac": eval_hmac(query.id, args.eval_hmac_key),
@@ -1131,6 +1315,7 @@ def run(args: argparse.Namespace) -> dict:
                     "recalledDocumentCount": len(recalled_ids),
                     "matchedGoldCount": len(matched),
                     "answerable": answerable,
+                    "abstention": query_protocol.abstention,
                     "hit": bool(matched) if answerable else None,
                     "goldRecall": (
                         len(matched) / len(gold_ids) if answerable else None
@@ -1186,13 +1371,115 @@ def run(args: argparse.Namespace) -> dict:
                         if isinstance(raw, dict)
                         else None
                     ),
+                    "notebookInputHitCount": (
+                        raw.get("evidenceFirstNotebookInputHitCount")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "notebookBudgetOmittedHitCount": (
+                        raw.get("evidenceFirstNotebookBudgetOmittedHitCount")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "plannerFailureCode": (
+                        raw.get("evidenceFirstPlannerFailureCode")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "planAnswerShape": (
+                        raw.get("evidenceFirstPlanAnswerShape")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "planTemporalMode": (
+                        raw.get("evidenceFirstPlanTemporalMode")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "planRoleConstraint": (
+                        raw.get("evidenceFirstPlanRoleConstraint")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "initialAnswerShape": (
+                        raw.get("evidenceFirstInitialAnswerShape")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "initialTemporalMode": (
+                        raw.get("evidenceFirstInitialTemporalMode")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "initialRoleConstraint": (
+                        raw.get("evidenceFirstInitialRoleConstraint")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "intentNormalizedAxes": (
+                        raw.get("evidenceFirstIntentNormalizedAxes")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "roleResolutionStatus": (
+                        raw.get("evidenceFirstRoleResolutionStatus")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
                     "supportSelectorStatus": (
                         raw.get("evidenceFirstSupportSelectorStatus")
                         if isinstance(raw, dict)
                         else None
                     ),
-                    "directCertificateStatus": (
-                        raw.get("evidenceFirstDirectCertificateStatus")
+                    "closureAuditStatus": (
+                        raw.get("evidenceFirstClosureAuditStatus")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureMode": (
+                        raw.get("evidenceFirstClosureMode")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureVerdict": (
+                        raw.get("evidenceFirstClosureVerdict")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairCount": (
+                        raw.get("evidenceFirstClosureRepairCount")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairMode": (
+                        raw.get("evidenceFirstClosureRepairMode")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureAuditFailureCode": (
+                        raw.get("evidenceFirstClosureAuditFailureCode")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "obligationStatus": (
+                        raw.get("evidenceFirstObligationStatus")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "obligationMinimumRequirementCount": (
+                        raw.get(
+                            "evidenceFirstObligationMinimumRequirementCount"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "obligationMinimumEvidenceCount": (
+                        raw.get("evidenceFirstObligationMinimumEvidenceCount")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "obligationReasonCodes": (
+                        raw.get("evidenceFirstObligationReasonCodes")
                         if isinstance(raw, dict)
                         else None
                     ),
@@ -1210,9 +1497,12 @@ def run(args: argparse.Namespace) -> dict:
             )
             row["evidenceClosed"] = row.get("contextStop") == "sufficient"
             if answer_mode is not None and judge is not None:
+                reader_documents = order_longmemeval_reader_documents(
+                    recalled, document_timestamp_by_id
+                )
                 context = "\n\n".join(
                     f"## Memory {index + 1}\n{document.content}"
-                    for index, document in enumerate(recalled)
+                    for index, document in enumerate(reader_documents)
                 )
 
                 def prompt_fn(question: str, packet: str, meta=None) -> str:
@@ -1260,8 +1550,9 @@ def run(args: argparse.Namespace) -> dict:
                         retrieve_time_ms=answer.retrieve_time_ms,
                         raw_response=answer.raw_response,
                     )
-                prompt = dataset.get_judge_prompt_fn(
-                    query.meta["question_type"], query.meta
+                prompt = official_longmemeval_judge_prompt_fn(
+                    question_type=query.meta["question_type"],
+                    abstention=query_protocol.abstention,
                 )
                 judgment = judge.score(
                     query.query,
@@ -1374,6 +1665,24 @@ def main() -> None:
         help="Optional explicit target for the smaller preference category.",
     )
     parser.add_argument("--k", type=int, default=8)
+    parser.add_argument(
+        "--evidence-profile",
+        choices=("product_parity", "research_dense", "research_replan"),
+        default="research_dense",
+        help=(
+            "Use product-sized lexical source-local lookup or the named dense "
+            "research profile. research_replan preserves verifier-driven repair "
+            "for paired ablation only. The selected profile is written into the manifest."
+        ),
+    )
+    parser.add_argument(
+        "--question-type",
+        choices=QUESTION_TYPES,
+        help=(
+            "Run every query from one official LongMemEval-S category. This is "
+            "a development regression slice, not an untouched leaderboard run."
+        ),
+    )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--reuse-index", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -1427,6 +1736,14 @@ def main() -> None:
         help="Exclude a prior sealed HMAC ledger; repeatable.",
     )
     parser.add_argument(
+        "--include-diagnostic-ledger",
+        type=Path,
+        help=(
+            "Intersect the official full split with a precommitted sealed query-HMAC "
+            "cohort for development diagnostics."
+        ),
+    )
+    parser.add_argument(
         "--query-expansion",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1450,10 +1767,28 @@ def main() -> None:
         raise ValueError("--blind-plan may only be consumed in --release-blind mode")
     if args.recover_claimed_arm and args.blind_plan is None:
         raise ValueError("--recover-claimed-arm requires --blind-plan")
+    if args.include_diagnostic_ledger is not None and (
+        not args.full_split
+        or args.question_type is not None
+        or args.exclude_report
+        or args.exclude_ledger
+        or args.release_blind
+        or args.dry_run
+    ):
+        raise ValueError(
+            "--include-diagnostic-ledger requires a non-release full-split run "
+            "without exclusions or dry-run"
+        )
     if args.release_blind and args.dry_run and not args.answer:
         raise ValueError("release blind plan must bind an answered evaluation")
-    if args.full_split and (args.exclude_report or args.exclude_ledger):
-        raise ValueError("--full-split cannot be combined with exclusion reports")
+    if args.full_split and args.question_type is not None:
+        raise ValueError("--full-split and --question-type are mutually exclusive")
+    if (args.full_split or args.question_type is not None) and (
+        args.exclude_report or args.exclude_ledger
+    ):
+        raise ValueError(
+            "official full/category runs cannot be combined with exclusion reports"
+        )
     if args.eval_key_file is None:
         args.eval_key_file = (
             Path("benchmarks/amb/runs/.secrets/longmemeval-eval-hmac.key")

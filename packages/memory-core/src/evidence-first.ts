@@ -17,6 +17,8 @@ export {
   classifyMemoryEvidenceUseV1,
   renderMemoryEvidencePacketContractV1,
   type MemoryEvidenceBindingV1,
+  type MemoryEvidenceDispositionBindingV1,
+  type MemoryEvidenceDispositionV1,
   type MemoryEvidenceOriginRoleV1,
   type MemoryEvidenceUseV1,
 } from "./evidence-origin.js";

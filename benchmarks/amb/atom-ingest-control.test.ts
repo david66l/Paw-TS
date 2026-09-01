@@ -210,6 +210,16 @@ describe("AMB atom ingest controls", () => {
       maxPromptTokens: 123_456,
       maxCompletionTokens: 200_000,
     });
+    expect(limits["state-semantic-audit-a"]).toMatchObject({
+      maxRemoteCalls: 120,
+      maxPromptTokens: 1_500_000,
+      maxCompletionTokens: 120_000,
+    });
+    expect(limits["state-semantic-audit-b"]).toMatchObject({
+      maxRemoteCalls: 120,
+      maxPromptTokens: 1_500_000,
+      maxCompletionTokens: 120_000,
+    });
     expect(limits["closure-audit"]).toMatchObject({
       maxRemoteCalls: 180,
       maxPromptTokens: 450_000,
@@ -240,6 +250,30 @@ describe("AMB atom ingest controls", () => {
         maxRemoteCalls: 3,
         maxPromptTokens: 300,
         maxCompletionTokens: 150,
+        concurrency: 1,
+      },
+      "state-binding": {
+        maxRemoteCalls: 3,
+        maxPromptTokens: 3_000,
+        maxCompletionTokens: 300,
+        concurrency: 1,
+      },
+      "state-verification": {
+        maxRemoteCalls: 3,
+        maxPromptTokens: 3_000,
+        maxCompletionTokens: 300,
+        concurrency: 1,
+      },
+      "state-semantic-audit-a": {
+        maxRemoteCalls: 3,
+        maxPromptTokens: 3_000,
+        maxCompletionTokens: 300,
+        concurrency: 1,
+      },
+      "state-semantic-audit-b": {
+        maxRemoteCalls: 3,
+        maxPromptTokens: 3_000,
+        maxCompletionTokens: 300,
         concurrency: 1,
       },
       "closure-audit": {
@@ -292,7 +326,7 @@ describe("AMB atom ingest controls", () => {
     });
     expect(snapshot.byPurpose["evidence-support"].cacheHits).toBe(1);
     expect(snapshot.aggregate).toMatchObject({
-      maxRemoteCalls: 9,
+      maxRemoteCalls: 21,
       remoteCalls: 2,
       cacheHits: 1,
       promptTokens: 170,
