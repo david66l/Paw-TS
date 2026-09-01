@@ -329,7 +329,7 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
       ),
     ]),
     guidance:
-      "Control metadata is not evidence. Execute the typed ledger by covered requirement ID; candidates never count as verified support and a contradictory address must not be silently reassigned. Answer protocol: open with one short line containing only the requested value (number in digits, date, name, or interval), then give a brief justification. If the question has multiple parts, answer every part. Never say you lack information when supporting evidence above addresses the question.",
+      "Control metadata is not evidence. Execute the typed ledger by covered requirement ID; candidates never count as verified support and a contradictory address must not be silently reassigned.",
     requirements: Object.freeze(
       resolution.requirements.map((requirement) => {
         const projected = packetRequirements.get(requirement.requirementId);

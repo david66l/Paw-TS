@@ -357,62 +357,39 @@ function collapseRecommendationContextV1(
   ) {
     return requirements;
   }
-  // Union requirement facets in a canonical (input-order-independent) order.
-  // When every facet fits one bounded search text, the plan collapses to one
-  // personalization-context requirement. When the union overflows the bound,
-  // facets are packed greedily into at most two context bundles instead of
-  // abandoning the collapse: an over-budget union used to silently leave
-  // fragmented four-leaf preference plans in place, and those fragmented plans
-  // diluted the answer packet. Facets that cannot fit two bundles keep the
-  // original plan.
-  const facets = [
+  // Union requirement facets in a canonical (input-order-independent) order
+  // under the bounded search-text budget. Preference30 evidence (2026-09-01):
+  // collapsing four focused facets into one compound search text blurred
+  // source discovery and dropped the slice from 60% to 30% accuracy, so the
+  // original all-or-nothing union guard is retained on purpose.
+  const searchFacets = [
     ...new Set(requirements.map((requirement) => requirement.searchText)),
   ]
     .map((facet) => facet.trim().replace(/\s+/gu, " "))
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right, "en-US"));
-  if (facets.length === 0) return requirements;
-  const bundles: string[][] = [[]];
-  let bundleChars = 0;
-  for (const facet of facets) {
-    if (facet.length > 192) return requirements;
-    const last = bundles.at(-1) ?? [];
-    const separatorChars = last.length > 0 ? 2 : 0;
-    if (bundleChars + separatorChars + facet.length > 192) {
-      if (bundles.length >= 2) return requirements;
-      bundles.push([facet]);
-      bundleChars = facet.length;
-      continue;
-    }
-    last.push(facet);
-    bundleChars += separatorChars + facet.length;
-  }
+  const searchText = searchFacets.join("; ").trim();
+  if (!searchText || searchText.length > 192) return requirements;
   const temporalMode = requirements[0]?.temporalMode ?? intent.temporalMode;
-  const temporalConstraint = compileMemoryEvidenceTemporalConstraintV1({
-    query,
-    queryEnvelopeMode: intent.temporalMode,
-    leafMode: temporalMode,
-  });
-  return Object.freeze(
-    bundles.map((bundle, index) =>
-      Object.freeze({
-        requirementId:
-          bundles.length === 1
-            ? "personalization-context"
-            : `personalization-context-${index + 1}`,
-        label: "user personalization context",
-        searchText: bundle.join("; "),
-        temporalMode,
-        roleConstraint: "user" as const,
-        relation: "direct" as const,
-        coverageMode: "any" as const,
-        minimumEvidence: 1,
-        dependencyRelation: "independent" as const,
-        dependsOnRequirementIds: Object.freeze([]),
-        temporalConstraint,
+  return Object.freeze([
+    Object.freeze({
+      requirementId: "personalization-context",
+      label: "user personalization context",
+      searchText,
+      temporalMode,
+      roleConstraint: "user" as const,
+      relation: "direct" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+      dependencyRelation: "independent" as const,
+      dependsOnRequirementIds: Object.freeze([]),
+      temporalConstraint: compileMemoryEvidenceTemporalConstraintV1({
+        query,
+        queryEnvelopeMode: intent.temporalMode,
+        leafMode: temporalMode,
       }),
-    ),
-  );
+    }),
+  ]);
 }
 
 function axisValueAllowed<T extends string>(
