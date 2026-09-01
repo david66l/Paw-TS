@@ -329,7 +329,9 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
       ),
     ]),
     guidance:
-      "Control metadata is not evidence. Execute the typed ledger by covered requirement ID; candidates never count as verified support and a contradictory address must not be silently reassigned.",
+      resolution.intent.answerShape === "recommend"
+        ? "Control metadata is not evidence. Answer the request as the assistant would: give a concrete recommendation and state which of the user's own stated preferences, constraints, or possessions you honored, in the user's own terms. Do not describe a generic popular choice."
+        : "Control metadata is not evidence. Execute the typed ledger by covered requirement ID; candidates never count as verified support and a contradictory address must not be silently reassigned.",
     requirements: Object.freeze(
       resolution.requirements.map((requirement) => {
         const projected = packetRequirements.get(requirement.requirementId);
