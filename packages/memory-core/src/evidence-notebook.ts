@@ -158,7 +158,10 @@ export function buildMemoryEvidenceNotebookV1(input: {
         (left, right) =>
           right.supportScore - left.supportScore || left.rank - right.rank,
       );
-    const hasRelevantHit = rankedHits.some((item) => item.supportScore > 0);
+    // Lexical support score orders excerpt priority; it must not gate
+    // availability. Requirement-bound hits already passed authority and
+    // selector/floor binding, and temporal or paraphrased evidence often has
+    // zero term overlap with the requirement text.
     let currentRefs = new Set<string>();
     let ambiguousRefs = new Set<string>();
     let historicalRefs = new Set<string>();
@@ -218,7 +221,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
               Number.MAX_SAFE_INTEGER) || left.rank - right.rank,
       );
     }
-    for (const { hit: rawHit, supportScore } of rankedHits) {
+    for (const { hit: rawHit } of rankedHits) {
       if (
         (requiresIndependentEpisodes
           ? independentForRequirement
@@ -240,7 +243,6 @@ export function buildMemoryEvidenceNotebookV1(input: {
         !evidenceRef ||
         !content ||
         evidenceUse === undefined ||
-        (hasRelevantHit && supportScore <= 0) ||
         seenRefs.has(evidenceRef) ||
         (rawHit.authority === "context_only" && !input.allowContextOnly)
       ) {

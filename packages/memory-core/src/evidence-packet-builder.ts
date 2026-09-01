@@ -106,6 +106,84 @@ export function filterRequirementHits(
   return Object.freeze(hits.filter((hit) => selectedRefs.has(hit.evidenceRef)));
 }
 
+export const PAW_MEMORY_DETERMINISTIC_SUPPORT_FLOOR_POLICY_V1 =
+  "paw.memory-deterministic-support-floor.v1:nonempty-requirement-packet" as const;
+
+/**
+ * Selector abstention is a precision signal, not an availability verdict.
+ * When a committed selection (or a failed selector group) leaves a requirement
+ * with zero bound evidence while deterministic retrieval produced candidates
+ * for that requirement inside the locked sources, the floor binds the top
+ * lane-ranked candidates so the answer packet can never be empty by omission.
+ *
+ * The floor is code-owned: it never invents evidence, never widens the locked
+ * source set, and never overrides a non-empty selector binding. Context-only
+ * addresses stay closed here; the notebook applies the same rule.
+ */
+export function applyMemoryDeterministicSupportFloorV1(input: {
+  readonly selectedRefsByRequirement: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly requirementIds: readonly string[];
+  readonly requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[];
+  readonly lockedSourceIds: readonly string[];
+  readonly maxFloorHitsPerRequirement: number;
+  /**
+   * Refs the selector explicitly judged contradicting or unknown. An explicit
+   * negative judgment is an exclusion decision and is honored; mere absence of
+   * a supporting selection is not an exclusion.
+   */
+  readonly excludedEvidenceRefs?: readonly ReadonlySet<string>[];
+}): {
+  selectedRefsByRequirement: ReadonlyMap<string, ReadonlySet<string>>;
+  flooredRequirementIds: readonly string[];
+  policyVersion: typeof PAW_MEMORY_DETERMINISTIC_SUPPORT_FLOOR_POLICY_V1;
+} {
+  if (
+    !Number.isSafeInteger(input.maxFloorHitsPerRequirement) ||
+    input.maxFloorHitsPerRequirement < 1 ||
+    input.maxFloorHitsPerRequirement > 8
+  ) {
+    throw namedError("MemoryDeterministicSupportFloorBudgetInvalid");
+  }
+  const locked = new Set(
+    input.lockedSourceIds.map((sourceId) => sourceId.trim()).filter(Boolean),
+  );
+  const excluded = new Set(
+    (input.excludedEvidenceRefs ?? []).flatMap((refs) => [...refs]),
+  );
+  const output = new Map(input.selectedRefsByRequirement);
+  const floored: string[] = [];
+  input.requirementIds.forEach((requirementId, index) => {
+    const selected = output.get(requirementId);
+    if (selected === undefined || selected.size > 0) return;
+    const hits = (input.requirementHits[index] ?? []).filter(
+      (hit) =>
+        locked.has(hit.sourceId.trim()) &&
+        hit.authority !== "context_only" &&
+        hit.evidenceRef.trim() &&
+        hit.content.trim() &&
+        !excluded.has(hit.evidenceRef.trim()),
+    );
+    if (hits.length === 0) return;
+    const floorRefs: string[] = [];
+    const seen = new Set<string>();
+    for (const hit of hits) {
+      if (floorRefs.length >= input.maxFloorHitsPerRequirement) break;
+      const ref = hit.evidenceRef.trim();
+      if (seen.has(ref)) continue;
+      seen.add(ref);
+      floorRefs.push(ref);
+    }
+    if (floorRefs.length === 0) return;
+    output.set(requirementId, new Set(floorRefs));
+    floored.push(requirementId);
+  });
+  return {
+    selectedRefsByRequirement: output,
+    flooredRequirementIds: Object.freeze(floored),
+    policyVersion: PAW_MEMORY_DETERMINISTIC_SUPPORT_FLOOR_POLICY_V1,
+  };
+}
+
 export function buildPrimaryEvidencePacketSources(
   hits: readonly MemoryEvidenceNotebookHitV1[],
   selectedSourceIds: readonly string[],

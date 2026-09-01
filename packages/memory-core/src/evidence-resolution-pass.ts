@@ -22,6 +22,7 @@ import type {
 } from "./evidence-resolution-contracts.js";
 import {
   abortError,
+  applyMemoryDeterministicSupportFloorV1,
   buildDialogueSourceDiscoveryV1,
   buildPlannedEvidencePacketSources,
   buildPrimaryEvidencePacketSources,
@@ -1236,6 +1237,40 @@ export async function resolveEvidencePass(input: {
     (certifiedAssistantDialogueCandidate &&
       new Set(["completed", "partial"]).has(supportSelectorStatus));
   const allowFallbackContextOnly = input.intent.roleConstraint === "assistant";
+  // Deterministic support floor: selector abstention (empty binding, failed
+  // group, or selector failure) must not collapse a requirement's packet to
+  // zero evidence while locked-source candidates exist. Exclusion requires a
+  // positive judgment; absence of one downgrades to code-owned ranking.
+  let supportFloorAppliedCount = 0;
+  if (selectedRefsByRequirement !== undefined) {
+    const floor = applyMemoryDeterministicSupportFloorV1({
+      selectedRefsByRequirement,
+      requirementIds: executionRequirements.map(
+        (requirement) => requirement.requirementId,
+      ),
+      requirementHits,
+      lockedSourceIds: sourceLocalLockedIds,
+      maxFloorHitsPerRequirement: 2,
+      excludedEvidenceRefs: supportAssessments.map(
+        (assessment) =>
+          new Set([
+            ...assessment.contradictingEvidenceRefs,
+            ...assessment.unknownEvidenceRefs,
+          ]),
+      ),
+    });
+    selectedRefsByRequirement = floor.selectedRefsByRequirement;
+    supportFloorAppliedCount = floor.flooredRequirementIds.length;
+    if (supportFloorAppliedCount > 0) {
+      sourceLocalization = Object.freeze({
+        ...sourceLocalization,
+        deterministicSupportFloor: {
+          policyVersion: floor.policyVersion,
+          flooredRequirementCount: supportFloorAppliedCount,
+        },
+      });
+    }
+  }
   const notebook = buildMemoryEvidenceNotebookV1({
     requirements: executionRequirements.map((requirement, index) => ({
       requirementId: requirement.requirementId,

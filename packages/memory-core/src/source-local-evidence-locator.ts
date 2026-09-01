@@ -326,6 +326,11 @@ export interface MemorySourceLocalizationReportV1 {
   readonly selectorCommittedGroupCount?: number;
   readonly selectorFailedGroupCount?: number;
   readonly selectorTotalAttemptCount?: number;
+  /** Code-owned floor that bound lane-ranked candidates after selector abstention. */
+  readonly deterministicSupportFloor?: Readonly<{
+    policyVersion: string;
+    flooredRequirementCount: number;
+  }>;
   /** Content-free, requirement-scoped execution trace for the V2 aperture. */
   readonly leaves?: readonly MemorySourceLocalLeafExecutionReportV2[];
 }

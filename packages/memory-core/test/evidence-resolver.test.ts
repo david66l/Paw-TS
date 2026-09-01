@@ -917,14 +917,24 @@ describe("shared evidence resolver v1", () => {
 
     expect(result.supportSelectorStatus).toBe("fallback");
     expect(result.supportAssessments).toEqual([]);
+    // Deterministic support floor: a failed selector is not an availability
+    // verdict. Requirements keep lane-ranked locked-source candidates bound,
+    // so the packet stays requirement-bound instead of collapsing to zero
+    // evidence with unbound candidate fallback.
     expect(result.notebook.coverage.map((item) => item.status)).toEqual([
-      "missing",
-      "missing",
+      "covered",
+      "covered",
     ]);
-    expect(result.packetSources.length).toBeGreaterThan(0);
     expect(
-      result.packetSources.every((source) => source.answerRole === "candidate"),
-    ).toBe(true);
+      result.sourceLocalization.deterministicSupportFloor?.policyVersion,
+    ).toBe(
+      "paw.memory-deterministic-support-floor.v1:nonempty-requirement-packet",
+    );
+    expect(
+      result.sourceLocalization.deterministicSupportFloor
+        ?.flooredRequirementCount,
+    ).toBe(2);
+    expect(result.packetSources.length).toBeGreaterThan(0);
   });
 
   test("does not let a selector promote uncertified assistant context for any", async () => {
@@ -1024,7 +1034,10 @@ describe("shared evidence resolver v1", () => {
       new AbortController().signal,
     );
     expect(result.supportSelectorStatus).toBe("completed");
-    expect(result.notebook.coverage[0]?.status).toBe("missing");
+    // The role-ineligible promotion is stripped, so the requirement binding is
+    // empty and the deterministic support floor binds the legitimate
+    // lane-ranked user turn instead. The uncertified assistant turn stays out.
+    expect(result.notebook.coverage[0]?.status).toBe("covered");
     expect(result.supportAssessments[0]?.supportingEvidenceRefs).toEqual([]);
     expect(result.supportAssessments[0]?.unknownEvidenceRefs).toEqual([]);
     expect(result.supportAssessments[0]?.evidenceDispositions).toContainEqual(
@@ -1036,6 +1049,9 @@ describe("shared evidence resolver v1", () => {
     expect(
       result.packetSources.map((source) => source.text).join("\n"),
     ).not.toContain("uncertified assistant name");
+    expect(
+      result.packetSources.flatMap((source) => source.evidenceRefs),
+    ).toContain("session#turn-1");
   });
 
   test("keeps locator-only included assistant turns closed without an exact binding", async () => {
@@ -1206,8 +1222,16 @@ describe("shared evidence resolver v1", () => {
         disposition: "role_ineligible",
       }),
     );
-    expect(result.notebook.coverage[0]?.status).toBe("missing");
-    expect(result.packetSources[0]?.answerRole).toBe("candidate");
+    // Floor binds the certified-eligible user turn; the uncertified locator
+    // assistant turn stays closed: it is never bound as requirement support
+    // (locator context rendering is unchanged by the floor).
+    expect(result.notebook.coverage[0]?.status).toBe("covered");
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual([
+      "session#turn-1",
+    ]);
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).not.toContain(
+      "session#turn-2",
+    );
   });
 
   test("late-binds a user slot to exact assistant evidence without widening discovery", async () => {
@@ -2734,9 +2758,7 @@ describe("shared evidence resolver v1", () => {
                     groupId: group.groupId,
                     status: "fallback" as const,
                     assessments: [],
-                    failureCodes: [
-                      "MemoryEvidenceSupportAddressInvalid",
-                    ],
+                    failureCodes: ["MemoryEvidenceSupportAddressInvalid"],
                   }
                 : {
                     groupId: group.groupId,
@@ -2765,11 +2787,13 @@ describe("shared evidence resolver v1", () => {
     expect(strictCalls).toBe(0);
     expect(groupedCalls).toBe(1);
     expect(result.supportSelectorStatus).toBe("partial");
-    expect(result.supportAssessments.map((item) => item.requirementId)).toEqual([
-      "independent-b",
-    ]);
+    expect(result.supportAssessments.map((item) => item.requirementId)).toEqual(
+      ["independent-b"],
+    );
+    // The failed group's requirement keeps lane-ranked candidates bound by the
+    // deterministic support floor; the committed group keeps its selection.
     expect(result.notebook.coverage.map((item) => item.status)).toEqual([
-      "missing",
+      "covered",
       "covered",
     ]);
     expect(result.sourceLocalization).toMatchObject({
@@ -2778,6 +2802,10 @@ describe("shared evidence resolver v1", () => {
       selectorFailedGroupCount: 1,
       selectorTotalAttemptCount: 1,
     });
+    expect(
+      result.sourceLocalization.deterministicSupportFloor
+        ?.flooredRequirementCount,
+    ).toBe(1);
   });
 
   test("rolls back an ordinary plan-scoped localization as one transaction", async () => {
@@ -3588,9 +3616,18 @@ describe("shared evidence resolver v1", () => {
       "What is my current city?",
       new AbortController().signal,
     );
-    expect(result.notebook.coverage[0]?.status).toBe("missing");
+    // Floor-bound latest-mode candidates stay requirement-bound in the packet.
+    // The code-owned state reducer — not the selector — owns latest selection:
+    // one observation resolves current, conflicting peers stay ambiguous, so
+    // coverage is partial and the answer never claims unresolved state.
+    expect(result.notebook.coverage[0]?.status).toBe("partial");
+    expect(result.packetSources.map((source) => source.answerRole)).toContain(
+      "current",
+    );
+    expect(
+      result.packetSources.map((source) => source.answerRole),
+    ).not.toContain("candidate");
     expect(result.packetSources.length).toBeGreaterThan(0);
-    expect(result.packetSources[0]?.answerRole).toBe("candidate");
     expect(result.packetSources[0]?.text).toContain(
       "Primary exact memory evidence",
     );
