@@ -1132,6 +1132,27 @@ def run(args: argparse.Namespace) -> dict:
         selection_policy = (
             f"{selection_policy}+sealed-diagnostic-inclusion-v1"
         )
+    if (
+        args.query_slice_index is not None
+        or args.query_slice_count is not None
+    ):
+        if (
+            args.query_slice_index is None
+            or args.query_slice_count is None
+            or args.query_slice_count < 2
+            or not 0 <= args.query_slice_index < args.query_slice_count
+        ):
+            raise ValueError(
+                "--query-slice-index/--query-slice-count require 0 <= index < count and count >= 2"
+            )
+        queries = queries[args.query_slice_index :: args.query_slice_count]
+        count_by_type = dict(
+            Counter(query.meta["question_type"] for query in queries)
+        )
+        selection_policy = (
+            f"{selection_policy}+query-slice-{args.query_slice_index}"
+            f"-of-{args.query_slice_count}"
+        )
     require_protocol_records(protocol_records, (query.id for query in queries))
     user_ids = {query.user_id for query in queries if query.user_id}
     documents, physical_to_logical_document_id, document_id_collision_count = (
@@ -1663,6 +1684,13 @@ def main() -> None:
         "--preference-count",
         type=int,
         help="Optional explicit target for the smaller preference category.",
+    )
+    parser.add_argument("--query-slice-index", type=int, default=None)
+    parser.add_argument(
+        "--query-slice-count",
+        type=int,
+        help="Shard the selected queries into N deterministic slices "
+        "(query[index::count]); run N processes in parallel and merge rows.",
     )
     parser.add_argument("--k", type=int, default=8)
     parser.add_argument(
