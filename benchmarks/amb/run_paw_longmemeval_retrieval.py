@@ -1153,6 +1153,24 @@ def run(args: argparse.Namespace) -> dict:
             f"{selection_policy}+query-slice-{args.query_slice_index}"
             f"-of-{args.query_slice_count}"
         )
+    if args.query_id_filter_file is not None:
+        allow = {
+            str(item)
+            for item in json.loads(
+                args.query_id_filter_file.read_text(encoding="utf-8")
+            )
+        }
+        if not allow:
+            raise ValueError("--query-id-filter-file contains no ids")
+        queries = [query for query in queries if query.id in allow]
+        if not queries:
+            raise ValueError(
+                "--query-id-filter-file matched zero selected queries"
+            )
+        count_by_type = dict(
+            Counter(query.meta["question_type"] for query in queries)
+        )
+        selection_policy = f"{selection_policy}+query-id-filter-{len(queries)}"
     require_protocol_records(protocol_records, (query.id for query in queries))
     user_ids = {query.user_id for query in queries if query.user_id}
     documents, physical_to_logical_document_id, document_id_collision_count = (
@@ -1691,6 +1709,12 @@ def main() -> None:
         type=int,
         help="Shard the selected queries into N deterministic slices "
         "(query[index::count]); run N processes in parallel and merge rows.",
+    )
+    parser.add_argument(
+        "--query-id-filter-file",
+        type=Path,
+        help="Diagnostic: restrict the run to the JSON array of query ids "
+        "in this file (must be a subset of the selected split).",
     )
     parser.add_argument("--k", type=int, default=8)
     parser.add_argument(
