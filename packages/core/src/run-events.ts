@@ -119,6 +119,16 @@ export interface ToolDecisionVerificationCaptureV1 {
  * 每个事件变体捕捉了运行中某个特定时刻的状态快照。
  */
 export type RunEvent =
+  /** MEA 独立审计员对 final_answer 的环境审计结论（shadow 与 enforce 均发）。 */
+  | {
+      readonly type: "mea.audit";
+      readonly mode: "shadow" | "enforce";
+      readonly completion: "complete" | "incomplete" | "blocked";
+      readonly integrity: "clean" | "suspect" | "violation";
+      readonly parseOk: boolean;
+      readonly summary: string;
+      readonly unmetCriteria: readonly string[];
+    }
   /** 运行开始：携带目标描述（用户输入的第一个问题/任务） */
   | { readonly type: "run.started"; readonly goal: string }
   /** 循环心跳：每个 turn 的开始时发出，报告当前 turn 号和上下文 token 数 */

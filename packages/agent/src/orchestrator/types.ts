@@ -143,6 +143,8 @@ export interface TurnFlags {
   readonly formatErrorNudges?: number;
   /** VerificationGate nudge 次数 */
   readonly verifyNudges?: number;
+  /** MEA 独立审计 nudge 次数（enforce 模式） */
+  readonly meaNudges?: number;
   /** AcceptanceGate feedback attempts, independent from plan and verification. */
   readonly acceptanceNudges?: number;
   /** Independent candidate-review feedback attempts for one source revision. */

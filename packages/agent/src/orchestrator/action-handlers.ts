@@ -81,6 +81,7 @@ import {
   evaluateVerificationProbeGateV1,
   formatRepairObligationV1,
 } from "../loop-v2/index.js";
+import { checkMeaAuditGate, resolveMeaAuditorConfig } from "../mea/index.js";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
 import {
   markPlanItemsCompleted,
@@ -135,6 +136,11 @@ interface ActionHandlerContext {
   ) => void;
   /** 子 Agent 管理器 */
   readonly agentGroup?: AgentGroup;
+  /** MEA 独立审计配置（仅顶层运行；off 时零开销） */
+  readonly meaAuditor?: import("../mea/index.js").MeaAuditorConfig;
+  /** MEA 审计所需的原始目标与运行 ID */
+  readonly meaGoal?: string;
+  readonly meaParentRunId?: string;
   /** 子 Agent 权限策略：read_only 或 read_write */
   readonly childPolicy?: "read_only" | "read_write";
   readonly subAgentLauncher?: import("@paw/harness").SubAgentLauncher;
@@ -603,7 +609,16 @@ async function handleFinalAnswer(
   flags: TurnFlags,
   text: string,
   thinking: string | undefined,
-  opts: Pick<ActionHandlerContext, "todoStore" | "planner" | "saveStateFn">,
+  opts: Pick<
+    ActionHandlerContext,
+    | "todoStore"
+    | "planner"
+    | "saveStateFn"
+    | "meaAuditor"
+    | "meaGoal"
+    | "meaParentRunId"
+    | "subAgentLauncher"
+  >,
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const plan = opts.planner.plan;
   // 仅当计划被模型/applyUpdate 推进过（revision>0）才因 pending plan 而 nudge。
@@ -878,6 +893,48 @@ async function handleFinalAnswer(
       },
       flags,
     };
+  }
+
+  // MEA 独立审计：验证门通过后、语义评审前，由只读审计员核对环境。
+  // off 模式在此处零开销（resolve 后直接放行，不发起任何子 Agent）。
+  const meaResolved = resolveMeaAuditorConfig(opts.meaAuditor);
+  if (
+    meaResolved.mode !== "off" &&
+    opts.subAgentLauncher &&
+    opts.meaParentRunId
+  ) {
+    const meaResult = await checkMeaAuditGate({
+      launcher: opts.subAgentLauncher,
+      config: opts.meaAuditor,
+      parentRunId: opts.meaParentRunId,
+      goal: opts.meaGoal ?? summary,
+      executorSummary: summary,
+      taskState: ctx.taskState,
+      emit: (event) => ctx.emit(event),
+      meaNudges: flags.meaNudges ?? 0,
+      noRoomForAnotherTurn,
+    });
+    if (meaResult.action === "nudge") {
+      const nextFlags: TurnFlags = {
+        ...flags,
+        meaNudges: meaResult.nextNudges,
+        pendingControl: {
+          kind: "completion_gate",
+          gate: "mea_audit",
+          text: meaResult.text,
+        },
+        lastTurnHadToolCall: false,
+      };
+      ctx.ctxMgr.addAssistant(text, thinking);
+      opts.saveStateFn(nextFlags);
+      return { state: { type: "continue", nextFlags }, flags: nextFlags };
+    }
+    if (meaResult.action === "force_incomplete") {
+      return {
+        state: { type: "decided", decision: meaResult.decision },
+        flags,
+      };
+    }
   }
 
   const loopV2SemanticGate = await checkLoopV2SemanticReviewGate(

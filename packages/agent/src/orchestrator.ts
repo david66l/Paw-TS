@@ -154,6 +154,7 @@ import {
   toolDefinitions,
   toolNameReverseMap,
 } from "@paw/harness";
+import type { MeaAuditorConfig } from "./mea/index.js";
 
 // ─────────────────────────────────────────────────────────────
 // @paw/models：LLM 适配层 — 模型抽象、消息类型、流式解析
@@ -469,6 +470,8 @@ export interface AgentOrchestratorOptions {
   readonly contextManager?: ContextManager;
   /** 子 Agent 启动器：用于探索、压缩、记忆提取等子任务 */
   readonly subAgentLauncher?: SubAgentLauncher;
+  /** MEA 独立审计配置（off/shadow/enforce）；仅顶层运行启用，子运行不继承。 */
+  readonly meaAuditor?: MeaAuditorConfig;
   /** 并行子 Agent 的文件锁（仅子 Agent orchestrator 注入；root 不传） */
   readonly fileLock?: import("@paw/harness").FileLockLike;
   /** 应用状态存储：用于断点续跑（resume） */
@@ -667,6 +670,7 @@ export class AgentOrchestrator {
   private readonly todoStore?: TodoStore;
   private readonly contextManager?: ContextManager;
   private readonly subAgentLauncher?: SubAgentLauncher;
+  private readonly meaAuditor?: MeaAuditorConfig;
   private readonly appStateStore?: AppStateStore;
   private readonly skillRegistry: SkillRegistryType;
   private readonly costTracker?: CostTracker;
@@ -781,6 +785,7 @@ export class AgentOrchestrator {
     this.todoStore = opts?.todoStore;
     this.contextManager = opts?.contextManager;
     this.subAgentLauncher = opts?.subAgentLauncher;
+    this.meaAuditor = opts?.meaAuditor;
     this.appStateStore = opts?.appStateStore;
     // Skill 注册表如果未提供则创建空实例
     this.skillRegistry = opts?.skillRegistry ?? new SkillRegistry();
@@ -3026,6 +3031,7 @@ export class AgentOrchestrator {
         agentGroup,
         childPolicy: this.childPolicy,
         subAgentLauncher: this.subAgentLauncher,
+        meaAuditor: this.meaAuditor,
         skillRegistry: this.skillRegistry,
         watcher: this.watcher,
         evalHooks: this.evalHooks,
@@ -4843,9 +4849,9 @@ export class AgentOrchestrator {
       toolNameMap,
       configuredTools: this.allowedTools ?? null,
       availableMcpToolNames:
-        mcp?.listTools().map(
-          (tool) => `mcp:${tool.serverName}/${tool.toolName}`,
-        ) ?? [],
+        mcp
+          ?.listTools()
+          .map((tool) => `mcp:${tool.serverName}/${tool.toolName}`) ?? [],
     });
     const toolDefs = capabilitySet.modelToolDefinitions;
     const capabilityExposure = new CapabilityExposureShadowV1({

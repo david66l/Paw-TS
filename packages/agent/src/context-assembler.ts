@@ -43,7 +43,8 @@ export type CompletionGateKindV1 =
   | "semantic_review"
   | "verification_probe"
   | "candidate_review"
-  | "acceptance";
+  | "acceptance"
+  | "mea_audit";
 
 export type ToolGuidanceTopicV1 =
   | "idle_fuse"
