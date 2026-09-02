@@ -131,6 +131,60 @@ class DeepSeekFlashLLM(LLM):
     def model_id(self) -> str:
         return f"deepseek:{self._model}"
 
+    def _create_with_content_filter_resilience(self, kwargs: dict):
+        """Retry provider content-filter refusals, then degrade explicitly.
+
+        Provider-side content filters (for example Zhipu error 1301) can trip
+        on benign roleplay-style benchmark conversations. A refusal is a
+        per-request event, not a fatal harness error: retry briefly, then
+        return a parseable cannot-answer payload so the evaluation continues
+        and the affected item is scored on its merits.
+        """
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                return self._client.chat.completions.create(**kwargs)
+            except Exception as exc:  # noqa: BLE001 - provider error bodies vary
+                text = str(exc)
+                if "1301" not in text and "contentFilter" not in text:
+                    raise
+                last_error = exc
+                time.sleep(2 * (attempt + 1))
+        assert last_error is not None
+        print(
+            "content_filter_refusal",
+            json.dumps({"attempts": 3, "error": str(last_error)[:200]}),
+        )
+        return self._synthetic_content_filter_response()
+
+    def _synthetic_content_filter_response(self):
+        from openai.types.chat import ChatCompletion, ChatCompletionMessage
+        from openai.types.chat.chat_completion import Choice
+
+        return ChatCompletion(
+            id="content-filter-refusal",
+            model=self._model,
+            object="chat.completion",
+            created=int(time.time()),
+            choices=[
+                Choice(
+                    finish_reason="stop",
+                    index=0,
+                    message=ChatCompletionMessage(
+                        role="assistant",
+                        content=json.dumps(
+                            {
+                                "answer": "Based on the available memory, I cannot answer this question.",
+                                "correct": False,
+                                "reason": "provider content filter refused the request",
+                            }
+                        ),
+                    ),
+                )
+            ],
+            usage=None,
+        )
+
     def generate(self, prompt: str, schema: Schema) -> dict:
         schema_json = {
             "type": "object",
@@ -362,7 +416,7 @@ class DeepSeekFlashLLM(LLM):
             if tools is not None and not tools_exhausted:
                 kwargs["tools"] = tools
                 kwargs["tool_choice"] = "auto"
-            response = self._client.chat.completions.create(**kwargs)
+            response = self._create_with_content_filter_resilience(kwargs)
             usage = response.usage
             totals["promptTokens"] += int(getattr(usage, "prompt_tokens", 0) or 0)
             totals["completionTokens"] += int(
