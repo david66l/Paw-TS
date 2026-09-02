@@ -114,6 +114,8 @@ export async function checkMeaAuditGate(
     budget: { maxSteps: resolved.maxSteps, timeoutMs: resolved.timeoutMs },
     signal: input.signal,
   });
+  // 审计事实立即落状态（completed 必须带审计证据；硬转移规则）。
+  input.taskState.applyMeaAuditReport(outcome.report);
   input.emit({
     type: "mea.audit",
     mode: resolved.mode,

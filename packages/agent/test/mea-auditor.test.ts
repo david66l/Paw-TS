@@ -250,3 +250,52 @@ describe("resolveMeaAuditorConfig", () => {
     ).toBe("off");
   });
 });
+
+describe("MEA state records: hard transition rule", () => {
+  test("executor claims start untrusted and never self-promote", async () => {
+    const { meaRecordsFromExecutorClaims, mergeMeaStateRecords } = await import(
+      "../src/mea/state-records.js"
+    );
+    const manager = new TaskStateManager("g");
+    manager.applyMeaExecutorClaims([
+      { kind: "artifact", text: "修复了 src/index.ts" },
+    ]);
+    let snapshot = manager.snapshot();
+    expect(snapshot.meaRecords?.[0]?.status).toBe("untrusted");
+    // 再来一份同样的声明（模拟执行者重复声明）依然是 untrusted
+    manager.applyMeaExecutorClaims([
+      { kind: "artifact", text: "修复了 src/index.ts" },
+    ]);
+    snapshot = manager.snapshot();
+    expect(snapshot.meaRecords?.[0]?.status).toBe("untrusted");
+    void meaRecordsFromExecutorClaims;
+    void mergeMeaStateRecords;
+  });
+
+  test("audit facts land as completed with audit evidence and upgrade claims", async () => {
+    const manager = new TaskStateManager("g");
+    manager.applyMeaExecutorClaims([{ kind: "fact", text: "测试全部通过" }]);
+    const report = (
+      await import("../src/mea/audit-report.js")
+    ).parseMeaAuditReportV1(
+      '```json\n{"completion":"complete","integrity":"clean","unmetCriteria":[],"verifiedFacts":[{"statement":"测试全部通过","evidence":{"commands":["bun test"]}}],"summary":"ok"}\n```',
+    ).report;
+    manager.applyMeaAuditReport(report);
+    const snapshot = manager.snapshot();
+    const record = snapshot.meaRecords?.find((r) => r.text === "测试全部通过");
+    expect(record?.status).toBe("completed");
+    expect(record?.evidence?.auditId).toMatch(/^mea-audit-[0-9a-f]{8}$/);
+    expect(record?.evidence?.commands).toEqual(["bun test"]);
+  });
+
+  test("legacy snapshots without meaRecords restore to empty", () => {
+    const manager = new TaskStateManager("g", {
+      goal: "g",
+      filesRead: [],
+      filesChanged: [],
+      commandsRun: [],
+      testResults: [],
+    } as never);
+    expect(manager.snapshot().meaRecords).toEqual([]);
+  });
+});

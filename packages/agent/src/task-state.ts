@@ -9,6 +9,12 @@ import {
   decomposeVerificationFailuresV2,
   verificationRunHasOwnedFailures,
 } from "./loop-v2/failure-records.js";
+import {
+  type MeaStateRecordV1,
+  meaRecordsFromAuditReport,
+  meaRecordsFromExecutorClaims,
+  mergeMeaStateRecords,
+} from "./mea/state-records.js";
 import { containsExecutedGitDiffCommand } from "./shell-command.js";
 import {
   type TaskGraphEventV1,
@@ -143,6 +149,8 @@ export interface TaskState {
   readonly plan: readonly string[];
   /** Append-only, host-validated source for the advisory task graph. */
   readonly taskGraphEvents?: readonly TaskGraphEventV1[];
+  /** MEA 状态记录：requirement/artifact/fact；completed 必须带审计证据。 */
+  readonly meaRecords?: readonly MeaStateRecordV1[];
   readonly filesRead: readonly string[];
   /** Successful exact reads by normalized path; absent in legacy snapshots. */
   readonly fileReadCounts?: Readonly<Record<string, number>>;
@@ -190,6 +198,9 @@ export class TaskStateManager {
           ? restored.fileLockConflicts
           : [],
         taskGraphEvents: parseTaskGraphEventsV1(restored.taskGraphEvents),
+        meaRecords: Array.isArray(restored.meaRecords)
+          ? restored.meaRecords
+          : [],
       };
     } else {
       this.state = {
@@ -202,6 +213,7 @@ export class TaskStateManager {
         acceptanceCriteria: [],
         plan: [],
         taskGraphEvents: [],
+        meaRecords: [],
         filesRead: [],
         fileReadCounts: {},
         filesChanged: [],
@@ -439,6 +451,41 @@ export class TaskStateManager {
       plan: items.map((item) => summarizePlanItem(item)),
       taskGraphEvents: appendTaskGraphPlanV1(this.state.taskGraphEvents, items),
       updatedAt: Date.now(),
+    };
+  }
+
+  /** MEA：合并审计产出的 completed facts（唯一的 completed 升级路径）。 */
+  applyMeaAuditReport(
+    report: import("./mea/index.js").MeaAuditReportV1,
+    now: number = Date.now(),
+  ): void {
+    this.state = {
+      ...this.state,
+      meaRecords: mergeMeaStateRecords(
+        this.state.meaRecords ?? [],
+        meaRecordsFromAuditReport(report, now),
+        now,
+      ),
+      updatedAt: now,
+    };
+  }
+
+  /** MEA：登记执行者声明（一律 untrusted；只有审计能升级）。 */
+  applyMeaExecutorClaims(
+    claims: readonly {
+      kind: import("./mea/index.js").MeaStateRecordKindV1;
+      text: string;
+    }[],
+    now: number = Date.now(),
+  ): void {
+    this.state = {
+      ...this.state,
+      meaRecords: mergeMeaStateRecords(
+        this.state.meaRecords ?? [],
+        meaRecordsFromExecutorClaims(claims, now),
+        now,
+      ),
+      updatedAt: now,
     };
   }
 
@@ -1217,3 +1264,4 @@ function summarizePlanItem(item: unknown): string {
     .filter(Boolean)
     .join(" ");
 }
+
