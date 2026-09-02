@@ -299,3 +299,68 @@ describe("MEA state records: hard transition rule", () => {
     expect(manager.snapshot().meaRecords).toEqual([]);
   });
 });
+
+describe("MEA manager", () => {
+  const port = (text: string) => ({
+    complete: async () => ({
+      status: "completed" as const,
+      text,
+    }),
+  });
+
+  test("execute decision requires a contract objective", async () => {
+    const { runMeaManager } = await import("../src/mea/manager.js");
+    const decision = await runMeaManager(
+      port(
+        '{"action":"execute","contract":{"objective":"补齐缺失测试","acceptanceCriteria":["bun test 通过"],"boundaryConstraints":["不得改 src/核心"]}}',
+      ),
+      {
+        goal: "修复模块",
+        round: 1,
+        maxRounds: 8,
+        openRecords: [{ kind: "fact", text: "测试失败", status: "untrusted" }],
+      },
+    );
+    expect(decision.action).toBe("execute");
+    expect(decision.contract?.objective).toBe("补齐缺失测试");
+    expect(decision.contract?.acceptanceCriteria).toEqual(["bun test 通过"]);
+  });
+
+  test("execute without contract escalates to ask", async () => {
+    const { runMeaManager } = await import("../src/mea/manager.js");
+    const decision = await runMeaManager(port('{"action":"execute"}'), {
+      goal: "g",
+      round: 1,
+      maxRounds: 8,
+      openRecords: [],
+    });
+    expect(decision.action).toBe("ask");
+    expect(decision.reason).toBe("manager_output_unparseable");
+  });
+
+  test("round budget vetoes execute", async () => {
+    const { runMeaManager } = await import("../src/mea/manager.js");
+    const decision = await runMeaManager(
+      port('{"action":"execute","contract":{"objective":"继续"}}'),
+      {
+        goal: "g",
+        round: 9,
+        maxRounds: 8,
+        openRecords: [],
+      },
+    );
+    expect(decision.action).toBe("blocked");
+    expect(decision.reason).toBe("round_budget_exhausted");
+  });
+
+  test("unparseable output conservatively escalates to ask, never execute/done", async () => {
+    const { runMeaManager } = await import("../src/mea/manager.js");
+    const decision = await runMeaManager(port("我觉得可以done了"), {
+      goal: "g",
+      round: 2,
+      maxRounds: 8,
+      openRecords: [],
+    });
+    expect(decision.action).toBe("ask");
+  });
+});

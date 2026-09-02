@@ -19,6 +19,15 @@ export {
   mergeMeaStateRecords,
 } from "./state-records.js";
 export {
+  type MeaManagerActionV1,
+  type MeaManagerContextInput,
+  type MeaManagerDecisionV1,
+  type MeaManagerModelV1,
+  type MeaSubtaskContractV1,
+  renderMeaManagerPrompt,
+  runMeaManager,
+} from "./manager.js";
+export {
   DEFAULT_MEA_AUDITOR_BUDGET,
   type MeaAuditRunInput,
   type MeaAuditRunResult,
