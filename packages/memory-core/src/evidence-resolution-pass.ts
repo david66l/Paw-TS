@@ -49,6 +49,7 @@ import {
   memoryQueryAnswerOriginAllowsLateBindingV1,
 } from "./query-answer-origin.js";
 import type { MemoryEvidenceBoundTemporalConstraintV1 } from "./query-plan-contracts.js";
+import { extractRelativeTimeWindowV1 } from "./relative-time-anchor.js";
 import {
   type MemoryRequirementFairAcquisitionReportV1,
   buildMemoryRequirementFairAcquisitionV1,
@@ -1271,10 +1272,32 @@ export async function resolveEvidencePass(input: {
       });
     }
   }
+  // 相对时间翻译官:问题含强信号时间短语时,把换算出的绝对窗口注入
+  // 需求标签(仅显示层;非时间问题 extract 返回 null,标签字节级不变)。
+  let meaTimeWindowSuffix = "";
+  try {
+    const cutoffMs = input.evidenceTimeUpperBound
+      ? Date.parse(input.evidenceTimeUpperBound)
+      : undefined;
+    if (cutoffMs !== undefined && Number.isFinite(cutoffMs)) {
+      const window = extractRelativeTimeWindowV1(input.query, cutoffMs);
+      if (window) {
+        const startDay = new Date(window.startMs).toISOString().slice(0, 10);
+        const endDay = new Date(window.endMs - 1).toISOString().slice(0, 10);
+        meaTimeWindowSuffix = ` [时间窗:${window.resolvedText};${startDay}~${endDay}]`;
+      }
+    }
+  } catch {
+    meaTimeWindowSuffix = "";
+  }
   const notebook = buildMemoryEvidenceNotebookV1({
     requirements: executionRequirements.map((requirement, index) => ({
       requirementId: requirement.requirementId,
-      label: requirement.label,
+      label:
+        meaTimeWindowSuffix === ""
+          ? requirement.label
+          : requirement.label.slice(0, 192 - meaTimeWindowSuffix.length) +
+            meaTimeWindowSuffix,
       searchText: requirement.searchText,
       selection: requirement.temporalMode === "latest" ? "latest" : "ranked",
       relation: requirement.relation ?? "direct",
