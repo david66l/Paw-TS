@@ -9,7 +9,7 @@ import {
 } from "./state-frame-v2.js";
 
 export const PAW_MEMORY_STATE_OBSERVATION_BINDER_VERSION_V2 =
-  "paw.memory-state-observation-binder.json.v2:grouped-exact-spans" as const;
+  "paw.memory-state-observation-binder.json.v2:grouped-exact-spans-source-relative-time" as const;
 
 export interface MemoryStateObservationBindingInputV2 {
   readonly query: string;
@@ -302,11 +302,12 @@ function buildRequest(
       "Use update when the evidence changes a prior state, retract for explicit withdrawal, confirm for confirmation, and prefer/disprefer only for explicit preference evidence. Otherwise use assert.",
       "Bind older and newer observations separately. Deterministic code, not you, resolves chronology and conflicts.",
       "When the evidence states the event date or year, quote it in eventTimeSpans and use eventTimeBasis=explicit_span. Code, not you, normalizes the quoted time.",
-      "Use eventTimeBasis=source_session_contemporaneous only when the claim itself describes an event or state occurring contemporaneously with this memory session. The host supplies the immutable session timestamp. Do not use it for a remembered earlier event, future plan, forecast, relative-time statement, or unclear timing. Otherwise use eventTimeBasis=unbound with an empty eventTimeSpans array.",
+      "Use eventTimeBasis=source_session_relative_span only when one or more exact eventTimeSpans are an unambiguous relative-time phrase in the same evidence (for example, 'two weeks ago', 'last Saturday', or 'past weekend'). The host, not you, resolves that phrase only against the immutable observedAt timestamp of this exact source session. Do not use it for an unclear phrase, a different clause's date, a future plan, or a remembered time with no quoted relative anchor.",
+      "Use eventTimeBasis=source_session_contemporaneous only when the claim itself describes an event or state occurring contemporaneously with this memory session. The host supplies the immutable session timestamp. Do not use it for a remembered earlier event, future intent, forecast, relative-time statement, or unclear timing. Otherwise use eventTimeBasis=unbound with an empty eventTimeSpans array.",
       "For a duration query, bind each observation to durationEndpointRole=start or end for a between-events question, or evidence for an event-to-query-time question. Use not_applicable outside a duration query. Never use one occurrence for both roles.",
       "For update, retract, or confirm, use lifecycleRelation=supersedes, retracts, or confirms and point lifecycleTargetEvidenceRef to the exact earlier supplied evidence item whose claim is affected. Use lifecycleRelation=none and a null target for other predicates. Do not guess a target outside the supplied evidence.",
       "Return at least one observation for every supplied slot when its scoped evidence contains a directly stated value. If it does not, omit that slot; code will keep it unresolved.",
-      'Return exactly one JSON object: {"observations":[{"slotId":"...","evidenceRef":"e0","valueSpans":[{"text":"exact quote","occurrence":0}],"eventTimeSpans":[],"eventTimeBasis":"explicit_span|source_session_contemporaneous|unbound","durationEndpointRole":"start|end|evidence|not_applicable","lifecycleRelation":"none|retracts|supersedes|confirms","lifecycleTargetEvidenceRef":null,"predicateKind":"assert|update|retract|confirm|prefer|disprefer","polarity":"positive|negative","modality":"observed|goal|plan|forecast"}]}.',
+      'Return exactly one JSON object: {"observations":[{"slotId":"...","evidenceRef":"e0","valueSpans":[{"text":"exact quote","occurrence":0}],"eventTimeSpans":[],"eventTimeBasis":"explicit_span|source_session_relative_span|source_session_contemporaneous|unbound","durationEndpointRole":"start|end|evidence|not_applicable","lifecycleRelation":"none|retracts|supersedes|confirms","lifecycleTargetEvidenceRef":null,"predicateKind":"assert|update|retract|confirm|prefer|disprefer","polarity":"positive|negative","modality":"observed|goal|plan|forecast"}]}.',
     ].join("\n"),
     user: JSON.stringify({
       schemaVersion: "paw.memory-state-observation-binding-input.v2",
@@ -445,6 +446,7 @@ function parseProposal(
     (hasTypedTemporalFields &&
       !new Set([
         "explicit_span",
+        "source_session_relative_span",
         "source_session_contemporaneous",
         "unbound",
       ]).has(raw.eventTimeBasis as string)) ||

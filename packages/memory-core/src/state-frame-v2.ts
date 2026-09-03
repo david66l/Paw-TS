@@ -13,6 +13,7 @@ import {
   type MemoryQueryAnswerOriginV1,
   compileMemoryQueryAnswerOriginV1,
 } from "./query-answer-origin.js";
+import { extractRelativeTimeWindowV1 } from "./relative-time-anchor.js";
 import type {
   MemoryEvidenceBoundTemporalConstraintV1,
   MemoryEvidenceQueryIntentV3,
@@ -22,7 +23,7 @@ import type {
 export const PAW_MEMORY_STATE_SLOT_COMPILER_VERSION_V2 =
   "paw.memory-state-slot-compiler.v2:query-bound-obligations" as const;
 export const PAW_MEMORY_STATE_BINDER_VERSION_V2 =
-  "paw.memory-state-binder.v2:locked-exact-spans-value-composition" as const;
+  "paw.memory-state-binder.v2:locked-exact-spans-source-relative-event-time" as const;
 export const PAW_MEMORY_STATE_REDUCER_VERSION_V2 =
   "paw.memory-state-reducer.v2:slot-isolated-proof-carrying" as const;
 export const PAW_MEMORY_STATE_AUTHORITY_POLICY_VERSION_V2 =
@@ -126,6 +127,12 @@ export interface MemoryStateEventTimeIntervalV2 {
 
 export type MemoryStateEventTimeBasisV2 =
   | "explicit_span"
+  /**
+   * A quoted relative-time phrase is mechanically resolved against the
+   * immutable timestamp of this exact source session. It is never inferred
+   * from the query time or wall clock.
+   */
+  | "source_session_relative_span"
   | "source_session_contemporaneous"
   | "unbound";
 
@@ -148,8 +155,9 @@ export interface MemoryStateObservationProposalV2 {
   readonly eventTimeSpans?: readonly Readonly<{ start: number; end: number }>[];
   /**
    * The model may select a temporal basis, but never supplies the timestamp.
-   * `source_session_contemporaneous` is materialized only from immutable source
-   * metadata and still requires semantic-verifier acceptance.
+   * Source-session bases are materialized only from immutable source metadata
+   * and still require semantic-verifier acceptance. The relative basis also
+   * requires an exact relative-time phrase in `eventTimeSpans`.
    */
   readonly eventTimeBasis?: MemoryStateEventTimeBasisV2;
   /** Query-relative semantic endpoint role; never an opaque model event id. */
@@ -488,14 +496,20 @@ export function bindMemoryStateObservationV2(input: {
     (eventTimeSpans.length > 0 ? "explicit_span" : "unbound");
   if (
     proposedEventTimeBasis !== undefined &&
-    ((eventTimeBasis === "explicit_span" && eventTimeSpans.length === 0) ||
-      (eventTimeBasis !== "explicit_span" && eventTimeSpans.length > 0))
+    ((eventTimeBasis === "explicit_span" ||
+      eventTimeBasis === "source_session_relative_span") &&
+      eventTimeSpans.length === 0) ||
+      (eventTimeBasis !== "explicit_span" &&
+        eventTimeBasis !== "source_session_relative_span" &&
+        eventTimeSpans.length > 0)
   ) {
     throw namedError("MemoryStateObservationTemporalBasisInvalid");
   }
   const normalizedEventTime =
     eventTimeBasis === "explicit_span"
       ? normalizeEventTime(eventTimeSpans)
+      : eventTimeBasis === "source_session_relative_span"
+        ? normalizeSourceRelativeEventTime(eventTimeSpans, item.observedAt)
       : eventTimeBasis === "source_session_contemporaneous"
         ? normalizeSourceSessionTime(item.observedAt)
         : undefined;
@@ -1244,6 +1258,49 @@ function normalizeSourceSessionTime(observedAt: string | undefined):
       upper,
       precision: "instant" as const,
     }),
+  });
+}
+
+/**
+ * Resolve one or more quoted relative expressions against their own immutable
+ * source-session timestamp. Every quote must resolve to the same interval so a
+ * binder cannot smuggle an ambiguous multi-date claim into typed execution.
+ */
+function normalizeSourceRelativeEventTime(
+  spans: readonly MemoryStateExactSpanV2[],
+  observedAt: string | undefined,
+):
+  | Readonly<{
+      eventTime: string;
+      eventTimePrecision: "day";
+      eventTimeInterval: MemoryStateEventTimeIntervalV2;
+    }>
+  | undefined {
+  if (observedAt === undefined) return undefined;
+  const anchorMs = Date.parse(observedAt);
+  if (!Number.isFinite(anchorMs)) return undefined;
+  const windows = spans.map((span) =>
+    extractRelativeTimeWindowV1(span.text, anchorMs),
+  );
+  if (windows.some((window) => window === null)) return undefined;
+  const first = windows[0];
+  if (
+    !first ||
+    windows.some(
+      (window) =>
+        window === null ||
+        window.startMs !== first.startMs ||
+        window.endMs !== first.endMs,
+    )
+  ) {
+    return undefined;
+  }
+  const lower = new Date(first.startMs).toISOString();
+  const upper = new Date(first.endMs).toISOString();
+  return Object.freeze({
+    eventTime: lower,
+    eventTimePrecision: "day" as const,
+    eventTimeInterval: Object.freeze({ lower, upper, precision: "day" }),
   });
 }
 
