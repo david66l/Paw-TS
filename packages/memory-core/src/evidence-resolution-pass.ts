@@ -51,7 +51,10 @@ import {
   authorizeMemoryQueryAnswerOriginMaterializationV1,
   memoryQueryAnswerOriginAllowsLateBindingV1,
 } from "./query-answer-origin.js";
-import type { MemoryEvidenceBoundTemporalConstraintV1 } from "./query-plan-contracts.js";
+import type {
+  MemoryEvidenceBoundTemporalConstraintV1,
+  MemoryEvidenceBoundTemporalWindowV2,
+} from "./query-plan-contracts.js";
 import {
   type MemoryRequirementFairAcquisitionReportV1,
   buildMemoryRequirementFairAcquisitionV1,
@@ -88,9 +91,30 @@ import { bindMemoryEvidenceTemporalConstraintV1 } from "./temporal-constraint.js
 
 const MAX_DIALOGUE_DISCOVERY_SOURCES_V1 = 4;
 const MAX_RESPONDING_ASSISTANT_CANDIDATES_V1 = 8;
+const TEMPORAL_SOURCE_APERTURE_RESERVE_V1 = 2;
 // The adapter now allocates one pair-level slot per locked source before any
 // source receives a second slot. Keep all eight primary sources in aperture.
 const RESPONDING_ASSISTANT_PROMPT_ANCHORS_PER_SOURCE_V1 = 1 as const;
+
+/**
+ * A temporal operation frequently needs evidence from more than one session.
+ * Keep the semantic acquisition prefix intact and append a small, bounded
+ * source aperture before source-local localization. A locked repair must not
+ * widen its immutable source set.
+ */
+export function temporalSourceApertureMaxSourcesV1(input: {
+  readonly maxSources: number;
+  readonly temporalWindows: readonly MemoryEvidenceBoundTemporalWindowV2[];
+  readonly sourceLockActive: boolean;
+}): number {
+  if (
+    input.sourceLockActive ||
+    !input.temporalWindows.some((window) => window.kind !== "unbounded")
+  ) {
+    return input.maxSources;
+  }
+  return Math.min(16, input.maxSources + TEMPORAL_SOURCE_APERTURE_RESERVE_V1);
+}
 
 export interface MemoryEvidenceResolutionPassV1 {
   /** Query answer slots after evidence-grounded role alternatives are bound. */
@@ -186,6 +210,11 @@ export async function resolveEvidencePass(input: {
       ? {}
       : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
     applyQueryScope: input.intent.temporalMode === "range",
+  });
+  const sourceApertureMaxSources = temporalSourceApertureMaxSourcesV1({
+    maxSources: input.maxSources,
+    temporalWindows: boundTemporalConstraints.map((binding) => binding.window),
+    sourceLockActive: input.sourceLock !== undefined,
   });
   const temporalWindow = (binding: MemoryEvidenceBoundTemporalConstraintV1) =>
     binding.window.kind === "range"
@@ -304,7 +333,7 @@ export async function resolveEvidencePass(input: {
             result,
           });
         }),
-        maxSources: input.maxSources,
+        maxSources: sourceApertureMaxSources,
         maxEvidencePerSource: input.maxEvidencePerSource,
       });
   const fusion = acquisition.fusion;

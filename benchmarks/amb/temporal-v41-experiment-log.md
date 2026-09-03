@@ -119,3 +119,31 @@ slice (133 questions) as a comparable treatment.
   trusted query cutoff. The first evaluation is a deliberately contaminated
   21-query diagnostic; only a subsequent clean sealed 133-query treatment may
   establish a comparable score.
+
+## v43 diagnostic result and v44 hypothesis
+
+- The v43 21-query diagnostic recovered **3/21** former v42 misses, with no
+  answer regression inside that all-wrong diagnostic cohort. One recovery
+  gained a correct session in the selected source set; the other two retained
+  the same session-level recall and changed downstream evidence use.
+- The treatment is not a formal score: projecting its three recoveries onto
+  v42 reaches only 115/133 (86.47%), still below the release target. A full
+  sealed 133-question run is therefore deferred until a stronger hypothesis
+  clears the paired diagnostic and a clean control.
+- Session-hash telemetry shows that six of the remaining 18 wrong answers had
+  one or more gold sessions in logged raw top-16 discovery but not in the
+  fixed eight-source pre-lock aperture. The other twelve retained their
+  available gold sessions and require source-local turn localization, state
+  resolution, or answer synthesis work instead.
+- v43's observed-time reordering also dropped two gold sessions for one
+  already-wrong query. It did not create an answer regression, but confirms
+  that a global rank reorder is not a monotonic source-acquisition strategy.
+- v44 therefore adds a host-bound **two-source temporal aperture reserve**:
+  when at least one bound leaf has a non-unbounded temporal operation, source
+  acquisition grows from 8 to 10 before the immutable source lock. The
+  semantic prefix is retained and the two slots are appended by the existing
+  deterministic fair allocator; reader/notebook budgets, authority rules,
+  temporal event-time semantics, and locked repair apertures are unchanged.
+- First gate: rerun the same 21-query diagnostic with fresh answer cache, then
+  run a clean control set of prior temporal successes before deciding whether a
+  sealed 133-question treatment is warranted.

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { hashTextV1 } from "../src/canonical.js";
 import type { MemoryEvidenceIndexSearchResultV1 } from "../src/evidence-resolution-contracts.js";
 import { createMemoryEvidenceResolverV1 } from "../src/evidence-resolver.js";
+import { temporalSourceApertureMaxSourcesV1 } from "../src/evidence-resolution-pass.js";
 import {
   PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_REVISION_V1,
   buildMemoryRequirementFairAcquisitionV1,
@@ -88,6 +89,59 @@ function acquire(input: {
 }
 
 describe("requirement-fair pre-lock acquisition v1", () => {
+  test("reserves two additional source slots only for an unlocked temporal aperture", () => {
+    const ordinary = temporalSourceApertureMaxSourcesV1({
+      maxSources: 8,
+      temporalWindows: [{ kind: "unbounded", evidenceCutoff: null }],
+      sourceLockActive: false,
+    });
+    const temporal = temporalSourceApertureMaxSourcesV1({
+      maxSources: 8,
+      temporalWindows: [
+        {
+          kind: "history_through",
+          cutoff: "2025-05-20T00:00:00.000Z",
+          clockPolicy: "event_then_observed_if_uniform",
+        },
+      ],
+      sourceLockActive: false,
+    });
+    const lockedTemporal = temporalSourceApertureMaxSourcesV1({
+      maxSources: 8,
+      temporalWindows: [
+        {
+          kind: "latest_before",
+          cutoff: "2025-05-20T00:00:00.000Z",
+          clockPolicy: "event_then_observed_if_uniform",
+        },
+      ],
+      sourceLockActive: true,
+    });
+
+    expect(ordinary).toBe(8);
+    expect(temporal).toBe(10);
+    expect(lockedTemporal).toBe(8);
+    expect(
+      temporalSourceApertureMaxSourcesV1({
+        maxSources: 16,
+        temporalWindows: [
+          {
+            kind: "range",
+            interval: {
+              lower: "2025-05-01T00:00:00.000Z",
+              upper: "2025-06-01T00:00:00.000Z",
+              precision: "day",
+            },
+            cutoff: "2025-05-20T00:00:00.000Z",
+            inclusion: "overlaps",
+            clockPolicy: "event_then_observed_if_uniform",
+          },
+        ],
+        sourceLockActive: false,
+      }),
+    ).toBe(16);
+  });
+
   test("adding an independent leaf cannot evict the original-query primary reservation", () => {
     const initial = acquire({
       maxSources: 2,
