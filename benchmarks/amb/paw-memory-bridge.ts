@@ -284,6 +284,13 @@ const evidenceExecutionProfile = resolveAmbEvidenceExecutionProfileV1(
 const temporalRoundFrontierRequested = /^(?:1|true)$/iu.test(
   process.env.PAW_AMB_TEMPORAL_ROUND_FRONTIER?.trim() ?? "",
 );
+// Diagnostic only.  This changes ordering solely among exact turns that are
+// already inside the pre-locked source aperture; baseline anchors remain
+// reserved.  It is deliberately opt-in until a paired sealed evaluation proves
+// that its extra recall does not regress answer quality.
+const temporalExactBm25Requested = /^(?:1|true)$/iu.test(
+  process.env.PAW_AMB_TEMPORAL_EXACT_BM25?.trim() ?? "",
+);
 // Capability versions stay byte-identical while the feature is idle. The
 // frontier ranker version enters only repair requests through their cache key.
 const sourceLocalLocatorVersion = evidenceExecutionProfile.sourceLocalDense
@@ -3026,7 +3033,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         adjacencyPolicyVersion:
           PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
         rankerVersion: request.temporalFrontier
-          ? `${sourceLocalRankerVersion}+${AMB_TEMPORAL_ROUND_FRONTIER_RANKER_VERSION_V1}`
+          ? `${sourceLocalRankerVersion}+${AMB_TEMPORAL_ROUND_FRONTIER_RANKER_VERSION_V1}+${temporalExactBm25Requested ? "exact-bm25" : "baseline"}`
           : sourceLocalRankerVersion,
       });
       const cached = sourceLocalLocatorCache.get(cacheKey);
@@ -3268,6 +3275,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             ],
             sourcePriorityIds: request.lockedSourceIds,
             maxAnchors: request.budget.maxAnchors,
+            candidateRankingMode: temporalExactBm25Requested
+              ? "exact_bm25"
+              : "baseline",
           })
         : undefined;
       const effectiveDirectAnchors = frontierRanking?.anchors ?? directAnchors;
@@ -5744,6 +5754,10 @@ log("bridge_start", {
   stateFrameShadowEnabled,
   executionReaderProjectionInjectEnabled,
   stateSemanticAuditEnabled,
+  temporalRoundFrontierRequested,
+  temporalCandidateRankingMode: temporalExactBm25Requested
+    ? "exact_bm25"
+    : "baseline",
   atomContextMode: ingestMode === "atom" ? atomContextMode : null,
   atomSourceContextMaxChars:
     ingestMode === "atom" && atomContextMode !== "atom_only"

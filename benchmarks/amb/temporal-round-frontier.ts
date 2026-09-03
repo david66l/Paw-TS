@@ -13,7 +13,7 @@ type TemporalIntervalV1 = Readonly<{
 }>;
 
 export const AMB_TEMPORAL_ROUND_FRONTIER_RANKER_VERSION_V1 =
-  "paw.amb-temporal-round-frontier-ranker.v3:baseline-monotonic-source-fair-dual-lane-immutable-authority" as const;
+  "paw.amb-temporal-round-frontier-ranker.v4:baseline-monotonic-source-fair-dual-lane-exact-bm25-immutable-authority" as const;
 
 export interface AmbTemporalRoundCandidateV1 {
   readonly anchor: AmbDialogueAnchorV1;
@@ -32,6 +32,16 @@ export interface AmbTemporalRoundFrontierRankingV1 {
   readonly frontierEvidenceRefs: readonly string[];
   readonly baselineReservedEvidenceRefs: readonly string[];
 }
+
+/**
+ * The default retains the previously released lane ordering byte-for-byte.
+ * `exact_bm25` is an opt-in diagnostic mode: it ranks only the already
+ * enumerated immutable turns inside the locked source aperture.  It never
+ * changes source acquisition, baseline reservations, or evidence authority.
+ */
+export type AmbTemporalRoundCandidateRankingModeV1 =
+  | "baseline"
+  | "exact_bm25";
 
 /**
  * Compiles frontier identity from immutable L0. Candidate content remains a
@@ -107,6 +117,7 @@ export function rankAmbTemporalRoundFrontierV1(input: {
   readonly lanes: readonly AmbTemporalRoundLaneV1[];
   readonly sourcePriorityIds: readonly string[];
   readonly maxAnchors: number;
+  readonly candidateRankingMode?: AmbTemporalRoundCandidateRankingModeV1;
 }): AmbTemporalRoundFrontierRankingV1 {
   if (
     !Number.isSafeInteger(input.maxAnchors) ||
@@ -133,10 +144,17 @@ export function rankAmbTemporalRoundFrontierV1(input: {
     ]),
   );
   const queryTerms = terms(`${input.originalQuery}\n${input.requirementText}`);
+  const candidateRankingMode = input.candidateRankingMode ?? "baseline";
+  const exactBm25Scores =
+    candidateRankingMode === "exact_bm25"
+      ? bm25Scores(input.candidates, queryTerms)
+      : new Map<string, number>();
   const ranked = [...input.candidates].sort((left, right) => {
     const leftLaneRanks = laneRanks(left.anchor.evidenceRef, ranksByLane);
     const rightLaneRanks = laneRanks(right.anchor.evidenceRef, ranksByLane);
     return (
+      (exactBm25Scores.get(right.anchor.evidenceRef) ?? 0) -
+        (exactBm25Scores.get(left.anchor.evidenceRef) ?? 0) ||
       rightLaneRanks.length - leftLaneRanks.length ||
       windowRank(right, input.queryScopeInterval) -
         windowRank(left, input.queryScopeInterval) ||
@@ -254,6 +272,49 @@ function lexicalCoverage(
     if (contentTerms.has(term)) matched += 1;
   }
   return matched / queryTerms.size;
+}
+
+/**
+ * Exact-turn BM25 is deliberately computed only after the source lock has
+ * been frozen.  It treats the raw immutable user turn as a retrieval signal,
+ * not an event claim: no timestamp, support, or closure authority is inferred
+ * from this score.
+ */
+function bm25Scores(
+  candidates: readonly AmbTemporalRoundCandidateV1[],
+  queryTerms: ReadonlySet<string>,
+): ReadonlyMap<string, number> {
+  if (candidates.length === 0 || queryTerms.size === 0) return new Map();
+  const tokenLists = candidates.map((candidate) => terms(candidate.content));
+  const documentFrequency = new Map<string, number>();
+  for (const documentTerms of tokenLists) {
+    for (const term of documentTerms) {
+      documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
+    }
+  }
+  const averageLength =
+    tokenLists.reduce((total, documentTerms) => total + documentTerms.size, 0) /
+    candidates.length;
+  const scores = new Map<string, number>();
+  for (const [index, candidate] of candidates.entries()) {
+    const documentTerms = tokenLists[index] ?? new Set<string>();
+    const length = documentTerms.size;
+    let score = 0;
+    for (const term of queryTerms) {
+      if (!documentTerms.has(term)) continue;
+      const frequency = documentFrequency.get(term) ?? 0;
+      const inverseFrequency = Math.log(
+        1 + (candidates.length - frequency + 0.5) / (frequency + 0.5),
+      );
+      const k1 = 1.2;
+      const b = 0.75;
+      const normalization =
+        k1 * (1 - b + b * (length / Math.max(1, averageLength)));
+      score += (1 * (k1 + 1) * inverseFrequency) / (1 + normalization);
+    }
+    scores.set(candidate.anchor.evidenceRef, score);
+  }
+  return scores;
 }
 
 function sourceFairRoundRobin(
