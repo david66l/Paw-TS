@@ -7,7 +7,8 @@
  * - 没有匹配到强信号短语时返回 null——调用方对 null 必须零处理,
  *   这保证非时间问题的行为与过去完全一致;
  * - 单日表达("上周六"/"10 days ago")给 [当日 00:00, 当日 24:00) 窗口;
- *   跨度表达("过去两周")给 [cutoff-跨度, cutoff] 窗口。
+ *   跨度表达("过去两周")给 [cutoff-跨度, cutoff] 窗口;
+ * - 会话时间戳是 UTC ISO,因此窗口按 UTC 日对齐。
  */
 
 export interface MeaRelativeTimeWindowV1 {
@@ -19,23 +20,12 @@ export interface MeaRelativeTimeWindowV1 {
   readonly matchedPhrase: string;
   /** 人类可读的换算结果(注入证据包标签)。 */
   readonly resolvedText: string;
-  /** 换算所用时区偏移(分钟),来自截止时间本身。 */
-  readonly cutoffOffsetMinutes: number;
 }
 
 const DAY_MS = 86_400_000;
 
-function startOfDayLocal(ms: number, offsetMinutes: number): number {
-  const shifted = ms + offsetMinutes * 60_000;
-  const dayStartShifted = Math.floor(shifted / DAY_MS) * DAY_MS;
-  return dayStartShifted - offsetMinutes * 60_000;
-}
-
-/** cutoff 当天的本地时区偏移(以 UTC 午夜采样,避免 DST 边界)。 */
-function cutoffOffsetMs(cutoffMs: number): number {
-  const utcMidnight = Math.floor(cutoffMs / DAY_MS) * DAY_MS;
-  const date = new Date(utcMidnight);
-  return -date.getTimezoneOffset() * 60_000;
+function startOfDayUtc(ms: number): number {
+  return Math.floor(ms / DAY_MS) * DAY_MS;
 }
 
 const WEEKDAYS_EN: readonly (readonly string[])[] = [
@@ -48,15 +38,7 @@ const WEEKDAYS_EN: readonly (readonly string[])[] = [
   ["saturday", "sat"],
 ];
 
-const WEEKDAYS_ZH: readonly string[] = [
-  "日",
-  "一",
-  "二",
-  "三",
-  "四",
-  "五",
-  "六",
-];
+const WEEKDAYS_ZH: readonly string[] = ["日", "一", "二", "三", "四", "五", "六"];
 
 function weekdayIndexEn(word: string): number | null {
   const normalized = word.toLowerCase().replace(/\.$/, "");
@@ -67,15 +49,9 @@ function weekdayIndexEn(word: string): number | null {
 }
 
 /** 最近一个“小于 cutoff 日”的指定星期几(不含 cutoff 当天)。 */
-function lastWeekdayBefore(
-  cutoffMs: number,
-  weekday: number,
-  offsetMinutes: number,
-): number {
-  const cutoffDayStart = startOfDayLocal(cutoffMs, offsetMinutes);
-  const cutoffDow = new Date(
-    cutoffDayStart + offsetMinutes * 60_000,
-  ).getUTCDay();
+function lastWeekdayBefore(cutoffMs: number, weekday: number): number {
+  const cutoffDayStart = startOfDayUtc(cutoffMs);
+  const cutoffDow = new Date(cutoffDayStart).getUTCDay();
   let delta = (cutoffDow - weekday + 7) % 7;
   if (delta === 0) delta = 7;
   return cutoffDayStart - delta * DAY_MS;
@@ -123,23 +99,18 @@ interface PatternRule {
   readonly build: (
     match: RegExpMatchArray,
     cutoffMs: number,
-    offsetMinutes: number,
-  ) => Omit<MeaRelativeTimeWindowV1, "cutoffOffsetMinutes"> | null;
+  ) => Omit<MeaRelativeTimeWindowV1, "never"> | null;
 }
 
-/**
- * 规则表:按优先级排列(具体weekday > N-unit-ago > last/past N-unit > yesterday)。
- * 全部为强信号短语;弱匹配(如裸 "recently")一律不识别,保持保守。
- */
+/** 规则表:强信号短语;弱匹配(裸 "recently")一律不识别。 */
 const RULES: readonly PatternRule[] = [
-  // last <weekday> / this past <weekday> / 上周<X> / 上<X>
   {
     regex:
       /\b(?:this\s+past\s+|last\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thurs|fri|sat)\b/i,
-    build: (match, cutoffMs, offset) => {
+    build: (match, cutoffMs) => {
       const weekday = weekdayIndexEn(match[1] ?? "");
       if (weekday === null) return null;
-      const start = lastWeekdayBefore(cutoffMs, weekday, offset);
+      const start = lastWeekdayBefore(cutoffMs, weekday);
       return {
         startMs: start,
         endMs: start + DAY_MS,
@@ -150,10 +121,10 @@ const RULES: readonly PatternRule[] = [
   },
   {
     regex: /上(?:周|个星期)([一二三四五六日天])/,
-    build: (match, cutoffMs, offset) => {
+    build: (match, cutoffMs) => {
       const weekday = WEEKDAYS_ZH.indexOf((match[1] ?? "").replace("天", "日"));
       if (weekday < 0) return null;
-      const start = lastWeekdayBefore(cutoffMs, weekday, offset);
+      const start = lastWeekdayBefore(cutoffMs, weekday);
       return {
         startMs: start,
         endMs: start + DAY_MS,
@@ -162,17 +133,15 @@ const RULES: readonly PatternRule[] = [
       };
     },
   },
-  // N day(s)/week(s)/month(s) ago / N天前、N周(星期)前、N个月前
   {
     regex:
       /\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(day|week|month)s?\s+ago\b/i,
-    build: (match, cutoffMs, offset) => {
+    build: (match, cutoffMs) => {
       const count = parseCount(match[1] ?? "");
       if (count === null) return null;
       const unit = (match[2] ?? "").toLowerCase();
       const multiplier = unit === "day" ? 1 : unit === "week" ? 7 : 30;
-      const day =
-        startOfDayLocal(cutoffMs, offset) - count * multiplier * DAY_MS;
+      const day = startOfDayUtc(cutoffMs) - count * multiplier * DAY_MS;
       return {
         startMs: day,
         endMs: day + DAY_MS,
@@ -182,8 +151,8 @@ const RULES: readonly PatternRule[] = [
     },
   },
   {
-    regex: /(\d{1,3}|[一二两三四五六七八九十]+)\s*(天|周|个?星期|个月|月)前/,
-    build: (match, cutoffMs, offset) => {
+    regex: /(\d{1,3}|[一二两三四五六七八九十]+)\s*(天|周|个?星期|个月)前/,
+    build: (match, cutoffMs) => {
       const count = parseCount(match[1] ?? "");
       if (count === null) return null;
       const unit = match[2] ?? "";
@@ -192,8 +161,7 @@ const RULES: readonly PatternRule[] = [
         : unit.includes("月")
           ? 30
           : 7;
-      const day =
-        startOfDayLocal(cutoffMs, offset) - count * multiplier * DAY_MS;
+      const day = startOfDayUtc(cutoffMs) - count * multiplier * DAY_MS;
       return {
         startMs: day,
         endMs: day + DAY_MS,
@@ -202,14 +170,13 @@ const RULES: readonly PatternRule[] = [
       };
     },
   },
-  // past/last N day(s)/week(s)/month(s) / 过去/最近 N 天/周/个月
   {
     regex: /\b(?:past|last)\s+(\d{1,3})\s+(day|week|month)s?\b/i,
-    build: (match, cutoffMs, offset) => {
+    build: (match, cutoffMs) => {
       const count = Number(match[1]);
       const unit = (match[2] ?? "").toLowerCase();
       const multiplier = unit === "day" ? 1 : unit === "week" ? 7 : 30;
-      const end = startOfDayLocal(cutoffMs, offset) + DAY_MS;
+      const end = startOfDayUtc(cutoffMs) + DAY_MS;
       return {
         startMs: end - count * multiplier * DAY_MS,
         endMs: end,
@@ -221,7 +188,7 @@ const RULES: readonly PatternRule[] = [
   {
     regex:
       /(?:过去|最近)(\d{1,3}|[一二两三四五六七八九十]+)\s*(天|周|个?星期|个?月)/,
-    build: (match, cutoffMs, offset) => {
+    build: (match, cutoffMs) => {
       const count = parseCount(match[1] ?? "");
       if (count === null) return null;
       const unit = match[2] ?? "";
@@ -230,7 +197,7 @@ const RULES: readonly PatternRule[] = [
         : unit.includes("月")
           ? 30
           : 7;
-      const end = startOfDayLocal(cutoffMs, offset) + DAY_MS;
+      const end = startOfDayUtc(cutoffMs) + DAY_MS;
       return {
         startMs: end - count * multiplier * DAY_MS,
         endMs: end,
@@ -239,11 +206,10 @@ const RULES: readonly PatternRule[] = [
       };
     },
   },
-  // yesterday / 昨天
   {
     regex: /\byesterday\b/i,
-    build: (match, cutoffMs, offset) => {
-      const start = startOfDayLocal(cutoffMs, offset) - DAY_MS;
+    build: (match, cutoffMs) => {
+      const start = startOfDayUtc(cutoffMs) - DAY_MS;
       return {
         startMs: start,
         endMs: start + DAY_MS,
@@ -254,8 +220,8 @@ const RULES: readonly PatternRule[] = [
   },
   {
     regex: /昨天/,
-    build: (match, cutoffMs, offset) => {
-      const start = startOfDayLocal(cutoffMs, offset) - DAY_MS;
+    build: (match, cutoffMs) => {
+      const start = startOfDayUtc(cutoffMs) - DAY_MS;
       return {
         startMs: start,
         endMs: start + DAY_MS,
@@ -268,28 +234,22 @@ const RULES: readonly PatternRule[] = [
 
 /**
  * 从问题文本抽取相对时间窗口。无强信号短语 → null(调用方零处理)。
- * 多个短语命中时取**最先出现**的(问题主旨通常由首个时间表达主导)。
+ * 多个短语命中时取最先出现的(问题主旨通常由首个时间表达主导)。
  */
 export function extractRelativeTimeWindowV1(
   query: string,
   cutoffMs: number,
 ): MeaRelativeTimeWindowV1 | null {
   if (!query.trim() || !Number.isFinite(cutoffMs)) return null;
-  const offsetMinutes = cutoffOffsetMs(cutoffMs);
-  const offset = offsetMinutes / 60_000;
   let best: (MeaRelativeTimeWindowV1 & { index: number }) | null = null;
   for (const rule of RULES) {
     const regex = new RegExp(rule.regex.source, "i");
     const match = query.match(regex);
     if (!match || match.index === undefined) continue;
-    const built = rule.build(match, cutoffMs, offset);
+    const built = rule.build(match, cutoffMs);
     if (!built) continue;
     if (best === null || match.index < best.index) {
-      best = {
-        ...built,
-        cutoffOffsetMinutes: offsetMinutes,
-        index: match.index,
-      };
+      best = { ...built, index: match.index };
     }
   }
   if (best === null) return null;

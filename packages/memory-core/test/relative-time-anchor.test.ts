@@ -5,11 +5,8 @@ import { extractRelativeTimeWindowV1 } from "../src/relative-time-anchor.js";
 const CUTOFF = Date.parse("2023-05-21T02:21:00Z");
 const DAY = 86_400_000;
 
-function alignedToLocalMidnight(
-  ms: number,
-  w: { cutoffOffsetMinutes: number },
-) {
-  return (ms + w.cutoffOffsetMinutes * 60_000) % DAY === 0;
+function alignedToUtcMidnight(ms: number) {
+  return ms % DAY === 0;
 }
 
 describe("relative time anchor v1", () => {
@@ -20,7 +17,7 @@ describe("relative time anchor v1", () => {
     );
     expect(w).not.toBeNull();
     expect(w!.endMs - w!.startMs).toBe(DAY);
-    expect(alignedToLocalMidnight(w!.startMs, w!)).toBe(true);
+    expect(alignedToUtcMidnight(w!.startMs)).toBe(true);
     // 2023-05-21 是周日 → 上一个周六 = 05-20
     expect(Math.round((CUTOFF - w!.startMs) / DAY)).toBe(1);
     expect(w!.matchedPhrase.toLowerCase()).toContain("saturday");

@@ -148,6 +148,24 @@ export function buildMemoryEvidenceNotebookV1(input: {
     const certifiedDialogueEvidenceRefs = new Set(
       rawRequirement.certifiedDialogueEvidenceRefs ?? [],
     );
+    // 相对时间翻译官:窗口内命中的 observedAt 落在换算日期窗内时优先。
+    // 这是最终排序权威——窗口外但词面重叠高的证据不能把窗口内的关键
+    // 证据挤出预算槽位。无窗口时行为与过去逐字节一致。
+    const timeWindow = rawRequirement.timeWindow;
+    const inWindow = new Set<string>();
+    if (timeWindow) {
+      for (const hit of rawRequirement.hits) {
+        const observed = hit.observedAt ? Date.parse(hit.observedAt) : undefined;
+        if (
+          observed !== undefined &&
+          Number.isFinite(observed) &&
+          observed >= timeWindow.startMs &&
+          observed < timeWindow.endMs
+        ) {
+          inWindow.add(hit.evidenceRef);
+        }
+      }
+    }
     const rankedHits = rawRequirement.hits
       .map((hit, rank) => ({
         hit,
@@ -156,7 +174,10 @@ export function buildMemoryEvidenceNotebookV1(input: {
       }))
       .sort(
         (left, right) =>
-          right.supportScore - left.supportScore || left.rank - right.rank,
+          (inWindow.has(right.hit.evidenceRef) ? 1 : 0) -
+            (inWindow.has(left.hit.evidenceRef) ? 1 : 0) ||
+          right.supportScore - left.supportScore ||
+          left.rank - right.rank,
       );
     // Lexical support score orders excerpt priority; it must not gate
     // availability. Requirement-bound hits already passed authority and

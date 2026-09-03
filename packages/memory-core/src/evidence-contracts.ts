@@ -179,6 +179,8 @@ export interface MemoryEvidenceNotebookRequirementV1 {
   readonly certifiedDialogueEvidenceRefs?: readonly string[];
   /** Ordered best-first for this requirement. */
   readonly hits: readonly MemoryEvidenceNotebookHitV1[];
+  /** 相对时间翻译官换算出的绝对窗口;命中按窗口内优先排序。 */
+  readonly timeWindow?: { readonly startMs: number; readonly endMs: number };
 }
 
 export interface MemoryEvidenceNotebookV1 {
