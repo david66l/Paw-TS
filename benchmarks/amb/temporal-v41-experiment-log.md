@@ -147,3 +147,41 @@ slice (133 questions) as a comparable treatment.
 - First gate: rerun the same 21-query diagnostic with fresh answer cache, then
   run a clean control set of prior temporal successes before deciding whether a
   sealed 133-question treatment is warranted.
+
+## v44 diagnostic result and next decision
+
+- The rerun used the canonical shared index after validating all **13,059**
+  source items and all **10,291** required dense embeddings. A first launch was
+  discarded before retrieval because its manually copied embedding-version
+  string had one extra character; the valid run derived the version directly
+  from the prior valid manifest.
+- The valid fresh-answer diagnostic completed all 21 sealed rows. Against v43,
+  it moved from **3/21** to **4/21** correct: one recovery and **no regressions**
+  within this previously-wrong cohort. The result remains a diagnostic, not a
+  133-question score.
+- The aperture change is real in the emitted telemetry: average selected
+  sources rose from 8.00 to 9.81, recalled documents from 7.62 to 9.29, and
+  reader context from 2,546 to 2,815 tokens (+10.6%). Gold-session recall rose
+  from 0.822 to 0.865. Three rows gained a gold session, but none of those three
+  became answer-correct; the one recovered answer already had its gold sessions
+  and the same notebook-hit count. Therefore the gain is too small to justify
+  widening the aperture again.
+- If the one new recovery held with no unseen regressions, the optimistic
+  projection would be 116/133 (87.22%), still below the 90% release goal. No
+  full 133 treatment is authorized from this signal alone.
+- The 17 remaining errors now cluster by audited repair stage as: 7
+  source-local/retrieval, 4 temporal state resolution, 3 evidence selection,
+  and 3 answer synthesis. Their query forms are five ordered histories, three
+  duration/interval calculations, eight cutoff-relative event lookups, and one
+  temporal abstention. This points to missing event-level provenance and typed
+  temporal operations, rather than another session-level aperture adjustment.
+- Next architecture gate: design and test an event-grounding lane that extracts
+  date-bearing, source-cited event candidates from the already locked sessions;
+  it must produce a typed timeline/interval certificate for ordering, relative
+  date lookup, duration, and abstention. It may only augment discovery and
+  reader projection; it must not treat conversation `observedAt` as event time,
+  replace the semantic source prefix, weaken authority/cutoff checks, or make
+  source-lock repair expand its source set. Before implementation, collect a
+  per-error reachability audit showing whether the exact gold turn is present
+  in the source-local candidate pool and whether an existing execution frame
+  can build a valid event-time certificate.
