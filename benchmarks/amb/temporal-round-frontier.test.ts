@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AmbDialogueAnchorV1 } from "./source-local-dialogue-projection.js";
-import { rankAmbTemporalRoundFrontierV1 } from "./temporal-round-frontier.js";
+import {
+  compileAmbImmutableTemporalRoundPostingsV1,
+  rankAmbTemporalRoundFrontierV1,
+} from "./temporal-round-frontier.js";
 
 function anchor(
   documentId: string,
@@ -17,6 +20,92 @@ function anchor(
 }
 
 describe("AMB temporal round frontier", () => {
+  test("authors posting identity from immutable L0 rather than ranking projections", () => {
+    const evidenceAnchor = anchor("session-a", 2, "assistant_output");
+    const observedAt = "2025-04-10T00:00:00.000Z";
+    const immutableDigest = "b".repeat(64);
+    const projectionVariants = [
+      "a".repeat(1_600),
+      "u".repeat(12_000),
+      "api_key=[REDACTED]",
+    ];
+    for (const content of projectionVariants) {
+      const postings = compileAmbImmutableTemporalRoundPostingsV1({
+        candidates: [{ anchor: evidenceAnchor, content, observedAt }],
+        hydrated: [
+          {
+            evidenceRef: evidenceAnchor.evidenceRef,
+            sourceKind: "assistant_output",
+            turnOrder: 2,
+            observedAt,
+            content: "final persisted immutable archive content",
+            contentHash: immutableDigest,
+          },
+        ],
+        episodeOrders: [{ sourceId: "session-a", episodeOrder: 4 }],
+      });
+      expect(postings[0]?.contentDigest).toBe(immutableDigest);
+      expect(postings[0]?.episodeOrder).toBe(4);
+    }
+  });
+
+  test("fails closed when search anchors disagree with immutable metadata", () => {
+    const evidenceAnchor = anchor("session-a", 2, "assistant_output");
+    const observedAt = "2025-04-10T00:00:00.000Z";
+    const candidate = {
+      anchor: evidenceAnchor,
+      content: "ranking",
+      observedAt,
+    };
+    const base = {
+      evidenceRef: evidenceAnchor.evidenceRef,
+      sourceKind: "assistant_output" as const,
+      turnOrder: 2,
+      observedAt,
+      content: "immutable",
+      contentHash: "c".repeat(64),
+    };
+    for (const hydrated of [
+      { ...base, sourceKind: "user_input" as const },
+      { ...base, turnOrder: 3 },
+      { ...base, observedAt: "2025-04-11T00:00:00.000Z" },
+    ]) {
+      expect(() =>
+        compileAmbImmutableTemporalRoundPostingsV1({
+          candidates: [candidate],
+          hydrated: [hydrated],
+          episodeOrders: [],
+        }),
+      ).toThrow("AmbTemporalRoundFrontierImmutableMetadataInvalid");
+    }
+  });
+
+  test("requires an exact one-to-one immutable candidate partition", () => {
+    const evidenceAnchor = anchor("session-a", 1);
+    const candidate = { anchor: evidenceAnchor, content: "ranking" };
+    expect(() =>
+      compileAmbImmutableTemporalRoundPostingsV1({
+        candidates: [candidate],
+        hydrated: [],
+        episodeOrders: [],
+      }),
+    ).toThrow("AmbTemporalRoundFrontierImmutablePartitionInvalid");
+    const row = {
+      evidenceRef: evidenceAnchor.evidenceRef,
+      sourceKind: "user_input" as const,
+      turnOrder: 1,
+      content: "immutable",
+      contentHash: "d".repeat(64),
+    };
+    expect(() =>
+      compileAmbImmutableTemporalRoundPostingsV1({
+        candidates: [candidate],
+        hydrated: [row, row],
+        episodeOrders: [],
+      }),
+    ).toThrow("AmbTemporalRoundFrontierImmutablePartitionInvalid");
+  });
+
   test("preserves baseline roles while admitting original-only and requirement-only rounds", () => {
     const baselineUser = anchor("session-a", 1);
     const baselineAssistant = anchor("session-a", 2, "assistant_output");

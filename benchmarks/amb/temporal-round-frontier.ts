@@ -1,3 +1,9 @@
+import {
+  type MemorySourceLocalHydratedEvidenceV1,
+  type MemoryTemporalRoundPostingV1,
+  createMemoryTemporalRoundPostingV1,
+} from "@paw/memory-plugin";
+
 import type { AmbDialogueAnchorV1 } from "./source-local-dialogue-projection.js";
 
 type TemporalIntervalV1 = Readonly<{
@@ -7,7 +13,7 @@ type TemporalIntervalV1 = Readonly<{
 }>;
 
 export const AMB_TEMPORAL_ROUND_FRONTIER_RANKER_VERSION_V1 =
-  "paw.amb-temporal-round-frontier-ranker.v2:baseline-monotonic-source-fair-dual-lane" as const;
+  "paw.amb-temporal-round-frontier-ranker.v3:baseline-monotonic-source-fair-dual-lane-immutable-authority" as const;
 
 export interface AmbTemporalRoundCandidateV1 {
   readonly anchor: AmbDialogueAnchorV1;
@@ -25,6 +31,66 @@ export interface AmbTemporalRoundFrontierRankingV1 {
   readonly anchors: readonly AmbDialogueAnchorV1[];
   readonly frontierEvidenceRefs: readonly string[];
   readonly baselineReservedEvidenceRefs: readonly string[];
+}
+
+/**
+ * Compiles frontier identity from immutable L0. Candidate content remains a
+ * ranking projection only and can never author a posting digest.
+ */
+export function compileAmbImmutableTemporalRoundPostingsV1(input: {
+  readonly candidates: readonly AmbTemporalRoundCandidateV1[];
+  readonly hydrated: readonly MemorySourceLocalHydratedEvidenceV1[];
+  readonly episodeOrders: readonly Readonly<{
+    sourceId: string;
+    episodeOrder: number;
+  }>[];
+}): readonly MemoryTemporalRoundPostingV1[] {
+  const candidateRefs = input.candidates.map(
+    (candidate) => candidate.anchor.evidenceRef,
+  );
+  const hydratedByRef = new Map(
+    input.hydrated.map((row) => [row.evidenceRef, row] as const),
+  );
+  const episodeOrderBySource = new Map(
+    input.episodeOrders.map((item) => [item.sourceId, item.episodeOrder]),
+  );
+  if (
+    new Set(candidateRefs).size !== candidateRefs.length ||
+    hydratedByRef.size !== input.hydrated.length ||
+    input.hydrated.length !== input.candidates.length ||
+    input.hydrated.some((row) => !candidateRefs.includes(row.evidenceRef)) ||
+    episodeOrderBySource.size !== input.episodeOrders.length
+  ) {
+    throw namedError("AmbTemporalRoundFrontierImmutablePartitionInvalid");
+  }
+  return Object.freeze(
+    input.candidates.map((candidate) => {
+      const { anchor } = candidate;
+      const row = hydratedByRef.get(anchor.evidenceRef);
+      if (
+        !row ||
+        anchor.evidenceRef !==
+          `${anchor.documentId}#source-${anchor.sourceSeq}` ||
+        row.sourceKind !== anchor.sourceKind ||
+        row.turnOrder !== anchor.sourceSeq ||
+        row.observedAt !== candidate.observedAt
+      ) {
+        throw namedError("AmbTemporalRoundFrontierImmutableMetadataInvalid");
+      }
+      const episodeOrder = episodeOrderBySource.get(anchor.documentId);
+      return createMemoryTemporalRoundPostingV1({
+        sourceId: anchor.documentId,
+        evidenceRef: anchor.evidenceRef,
+        role: row.sourceKind,
+        contentDigest: row.contentHash,
+        ...(row.observedAt === undefined ? {} : { observedAt: row.observedAt }),
+        ...(episodeOrder === undefined ? {} : { episodeOrder }),
+        turnOrder: row.turnOrder,
+        timeBasis:
+          row.observedAt === undefined ? "unbound" : "source_observed_at",
+      });
+    }),
+  );
 }
 
 /**

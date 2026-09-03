@@ -63,7 +63,6 @@ import {
   createJsonMemoryStateObservationBinderV2,
   createJsonMemoryStateObservationVerifierV2,
   createMemoryTemporalEvidenceFrontierSnapshotV1,
-  createMemoryTemporalRoundPostingV1,
   createJsonMemoryTopicDossierExtractorV1,
   createJsonMemoryTopicExtractorV1,
   createMemoryAtomWriterStoreV1,
@@ -140,11 +139,10 @@ import {
   evidenceNotebookCharsForProfileV1,
   resolveAmbEvidenceExecutionProfileV1,
 } from "./evidence-execution-profile.js";
+import { logicalSourceLocalEvidenceRefV1 } from "./immutable-evidence-address.js";
 import {
-  immutableSourceTurnEvidenceRefV1,
-  legacyImmutableTurnEvidenceRefV1,
-  logicalSourceLocalEvidenceRefV1,
-} from "./immutable-evidence-address.js";
+  hydrateAmbImmutableSourceLocalEvidenceV1,
+} from "./immutable-source-local-hydration.js";
 import { buildAmbMemoryLlmReplayCacheKeyV1 } from "./memory-llm-replay-cache.js";
 import {
   isAmbDocumentVisibleAtQueryV1,
@@ -163,6 +161,7 @@ import {
 } from "./support-selector-observer.js";
 import {
   AMB_TEMPORAL_ROUND_FRONTIER_RANKER_VERSION_V1,
+  compileAmbImmutableTemporalRoundPostingsV1,
   rankAmbTemporalRoundFrontierV1,
 } from "./temporal-round-frontier.js";
 
@@ -2969,6 +2968,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     }
     async function locateEvidenceWithinSources(
       request: MemorySourceLocalEvidenceRequestV1,
+      signal: AbortSignal,
     ): Promise<MemorySourceLocalEvidenceResultV1> {
       const started = Date.now();
       const locatorQuery = request.requirement.searchText
@@ -3656,38 +3656,46 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           (promotionSearch?.dense.failed ?? false) || sourceFairDenseDegraded,
       });
       const degradedChannels = channelHealth.resultDegradedChannels;
-      const temporalFrontier = request.temporalFrontier
-        ? createMemoryTemporalEvidenceFrontierSnapshotV1({
-            request,
-            indexRevision: turnIndexRevision,
-            postings: frontierCandidates.map((candidate) =>
-              createMemoryTemporalRoundPostingV1({
-                sourceId: candidate.anchor.documentId,
-                evidenceRef: candidate.anchor.evidenceRef,
-                role: candidate.anchor.sourceKind,
-                contentDigest: sha(candidate.content),
-                ...(candidate.observedAt === undefined
-                  ? {}
-                  : { observedAt: candidate.observedAt }),
-                ...(documentOrderByUser
-                  .get(userId)
-                  ?.get(candidate.anchor.documentId) === undefined
-                  ? {}
-                  : {
-                      episodeOrder: documentOrderByUser
-                        .get(userId)
-                        ?.get(candidate.anchor.documentId),
-                    }),
-                turnOrder: candidate.anchor.sourceSeq,
-                timeBasis:
-                  candidate.observedAt === undefined
-                    ? "unbound"
-                    : "source_observed_at",
-              }),
+      const frontierHydrationStarted = Date.now();
+      const frontierHydration = request.temporalFrontier
+        ? await hydrateAmbImmutableSourceLocalEvidenceV1({
+            archive: rawEvidenceArchiveFor(userId),
+            evidenceRefs: frontierCandidates.map(
+              (candidate) => candidate.anchor.evidenceRef,
             ),
-            returnedEvidenceRefs: hits.map((hit) => hit.evidenceRef),
+            signal,
           })
         : undefined;
+      if (frontierHydration) {
+        log("source_local_frontier_hydrator", {
+          status: "completed",
+          requestedCount: frontierCandidates.length,
+          returnedCount: frontierHydration.rows.length,
+          directCount: frontierHydration.directCount,
+          legacyMappedCount: frontierHydration.legacyMappedCount,
+          durationMs: Date.now() - frontierHydrationStarted,
+        });
+      }
+      const temporalFrontier =
+        request.temporalFrontier && frontierHydration
+          ? createMemoryTemporalEvidenceFrontierSnapshotV1({
+              request,
+              indexRevision: turnIndexRevision,
+              postings: compileAmbImmutableTemporalRoundPostingsV1({
+                candidates: frontierCandidates,
+                hydrated: frontierHydration.rows,
+                episodeOrders: request.lockedSourceIds.flatMap((sourceId) => {
+                  const episodeOrder = documentOrderByUser
+                    .get(userId)
+                    ?.get(sourceId);
+                  return episodeOrder === undefined
+                    ? []
+                    : [Object.freeze({ sourceId, episodeOrder })];
+                }),
+              }),
+              returnedEvidenceRefs: hits.map((hit) => hit.evidenceRef),
+            })
+          : undefined;
       const result = Object.freeze({
         locatorVersion: sourceLocalLocatorVersion,
         locatorRevision: sha(
@@ -3908,100 +3916,39 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ? {
             sourceLocalLocator: Object.freeze({
               locatorVersion: sourceLocalLocatorVersion,
-              locate(request: MemorySourceLocalEvidenceRequestV1) {
-                return locateEvidenceWithinSources(request);
+              locate(
+                request: MemorySourceLocalEvidenceRequestV1,
+                signal: AbortSignal,
+              ) {
+                return locateEvidenceWithinSources(request, signal);
               },
             }),
             sourceLocalHydrator: Object.freeze({
               hydratorVersion:
-                "paw.amb-source-local-hydrator.v3:logical-immutable-archive",
+                "paw.amb-source-local-hydrator.v4:shared-immutable-authority",
               async hydrate(
                 evidenceRefs: readonly string[],
                 signal: AbortSignal,
               ) {
                 const started = Date.now();
-                const archive = rawEvidenceArchiveFor(userId);
-                if (!archive.hydrate) {
-                  throw new Error(
-                    "immutable raw evidence hydration unavailable",
-                  );
-                }
-                const currentAddresses = evidenceRefs.flatMap((evidenceRef) => {
-                  const physicalRef =
-                    immutableSourceTurnEvidenceRefV1(evidenceRef);
-                  return physicalRef ? [{ evidenceRef, physicalRef }] : [];
-                });
-                const directlyHydrated = await archive.hydrate(
-                  currentAddresses.map((item) => item.physicalRef),
-                  signal,
-                );
-                const directByPhysicalRef = new Map(
-                  directlyHydrated.map(
-                    (row) => [row.evidenceRef, row] as const,
-                  ),
-                );
-                const directByRef = new Map(
-                  currentAddresses.flatMap(({ evidenceRef, physicalRef }) => {
-                    const row = directByPhysicalRef.get(physicalRef);
-                    return row
-                      ? [
-                          [
-                            evidenceRef,
-                            Object.freeze({ ...row, evidenceRef }),
-                          ] as const,
-                        ]
-                      : [];
-                  }),
-                );
-                // Existing 500-user indexes predate the source-ref alias. The
-                // corresponding atom-ref points at the same immutable L0 turn,
-                // so map the address without reading the mutable search index.
-                const legacyAddresses = evidenceRefs.flatMap((evidenceRef) => {
-                  if (directByRef.has(evidenceRef)) return [];
-                  const legacyRef =
-                    legacyImmutableTurnEvidenceRefV1(evidenceRef);
-                  return legacyRef ? [{ evidenceRef, legacyRef }] : [];
-                });
-                const legacyHydrated =
-                  legacyAddresses.length === 0
-                    ? []
-                    : await archive.hydrate(
-                        legacyAddresses.map((item) => item.legacyRef),
-                        signal,
-                      );
-                const legacyByRef = new Map(
-                  legacyHydrated.map((row) => [row.evidenceRef, row] as const),
-                );
-                const hydrated = Object.freeze(
-                  evidenceRefs.flatMap((evidenceRef) => {
-                    const direct = directByRef.get(evidenceRef);
-                    if (direct) return [direct];
-                    const legacyRef = legacyAddresses.find(
-                      (item) => item.evidenceRef === evidenceRef,
-                    )?.legacyRef;
-                    const legacy = legacyRef
-                      ? legacyByRef.get(legacyRef)
-                      : undefined;
-                    return legacy
-                      ? [Object.freeze({ ...legacy, evidenceRef })]
-                      : [];
-                  }),
-                );
+                const hydration =
+                  await hydrateAmbImmutableSourceLocalEvidenceV1({
+                    archive: rawEvidenceArchiveFor(userId),
+                    evidenceRefs,
+                    signal,
+                  });
                 log("source_local_hydrator", {
-                  status:
-                    hydrated.length === evidenceRefs.length
-                      ? "completed"
-                      : "incomplete",
+                  status: "completed",
                   hydratorVersion:
-                    "paw.amb-source-local-hydrator.v3:logical-immutable-archive",
+                    "paw.amb-source-local-hydrator.v4:shared-immutable-authority",
                   requestedCount: evidenceRefs.length,
-                  returnedCount: hydrated.length,
-                  directCount: directByRef.size,
-                  legacyMappedCount: hydrated.length - directByRef.size,
+                  returnedCount: hydration.rows.length,
+                  directCount: hydration.directCount,
+                  legacyMappedCount: hydration.legacyMappedCount,
                   cacheHit: false,
                   durationMs: Date.now() - started,
                 });
-                return hydrated;
+                return hydration.rows;
               },
             }),
             dialoguePredecessorVerifier: Object.freeze({
