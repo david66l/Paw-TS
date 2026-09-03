@@ -33,6 +33,7 @@ import {
   isAbort,
   mergeEvidenceHits,
   namedError,
+  prioritizeEvidenceSearchResultForTemporalWindowV1,
   selectSupportCandidates,
   selectSupportCandidatesPreservingBaselineV1,
 } from "./evidence-resolver-helpers.js";
@@ -62,7 +63,6 @@ import {
 } from "./selector-execution-snapshot-v1.js";
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
-  PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
   type MemoryDialoguePredecessorProofV1,
   type MemoryDialoguePredecessorVerifierV1,
   type MemorySourceLocalEvidenceBudgetV1,
@@ -73,6 +73,7 @@ import {
   type MemorySourceLocalLeafEligibilityV2,
   type MemorySourceLocalLeafExecutionReportV2,
   type MemorySourceLocalizationReportV1,
+  PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
   evaluateMemorySourceLocalLeafEligibilityV2,
   hasMemorySourceLocalDialogueCertificateV1,
   hydrateMemorySourceLocalEvidenceResultV1,
@@ -173,6 +174,33 @@ export async function resolveEvidencePass(input: {
           input.intent.temporalMode === "range"),
     }),
   );
+  // Root-lane fusion previously saw temporal scope only during a locked
+  // closure repair. Apply the same host-bound scope before initial fusion as
+  // a stable priority (never a filter), so a narrow date request does not
+  // lose its relevant source to an otherwise stronger lexical distractor.
+  const rootTemporalConstraint = bindMemoryEvidenceTemporalConstraintV1({
+    query: input.query,
+    queryEnvelopeMode: input.intent.temporalMode,
+    leafMode: input.intent.temporalMode,
+    ...(input.evidenceTimeUpperBound === undefined
+      ? {}
+      : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
+    applyQueryScope: input.intent.temporalMode === "range",
+  });
+  const temporalWindow = (binding: MemoryEvidenceBoundTemporalConstraintV1) =>
+    binding.window.kind === "range"
+      ? (binding.window.interval ?? undefined)
+      : undefined;
+  const prioritizedPrimaryUnfiltered = input.sourceLock
+    ? input.primaryUnfiltered
+    : prioritizeEvidenceSearchResultForTemporalWindowV1(
+        input.primaryUnfiltered,
+        temporalWindow(rootTemporalConstraint),
+      );
+  const prioritizedPrimary = filterEvidenceSearchResultForRole(
+    prioritizedPrimaryUnfiltered,
+    input.intent.roleConstraint,
+  );
   const sourceLocalRequirements = input.requirements.map(
     (requirement, index) => {
       const bound = boundTemporalConstraints[index];
@@ -200,7 +228,7 @@ export async function resolveEvidencePass(input: {
   const evidenceGroundedRoleBindingEligible =
     input.evidenceGroundedRoleBinding === true &&
     certifiedAssistantDialogueCandidate;
-  const supplementalUnfiltered = input.sourceLock
+  const supplementalUnfilteredRaw = input.sourceLock
     ? input.requirements.map(() => ({
         lists: Object.freeze([]),
         // A revised plan is a complete replacement, so requirement IDs cannot
@@ -212,10 +240,22 @@ export async function resolveEvidencePass(input: {
     : await Promise.all(
         input.requirements.map((requirement) =>
           requirement.searchText === input.query
-            ? Promise.resolve(input.primaryUnfiltered)
+            ? Promise.resolve(prioritizedPrimaryUnfiltered)
             : input.index.search(requirement.searchText, input.signal),
         ),
       );
+  const supplementalUnfiltered = supplementalUnfilteredRaw.map(
+    (result, index) => {
+      const binding = boundTemporalConstraints[index];
+      if (!binding) throw namedError("MemoryEvidenceTemporalBindingMissing");
+      return input.sourceLock
+        ? result
+        : prioritizeEvidenceSearchResultForTemporalWindowV1(
+            result,
+            temporalWindow(binding),
+          );
+    },
+  );
   const supplemental = supplementalUnfiltered.map((result, index) =>
     filterEvidenceSearchResultForRole(
       result,
@@ -249,8 +289,8 @@ export async function resolveEvidencePass(input: {
           ? "origin_authorized_unfiltered"
           : "role_filtered",
         original: originalLaneUsesAuthorizedUnfiltered
-          ? input.primaryUnfiltered
-          : input.primary,
+          ? prioritizedPrimaryUnfiltered
+          : prioritizedPrimary,
         requirements: input.requirements.map((requirement, index) => {
           const result = supplemental[index];
           const temporalConstraint = boundTemporalConstraints[index];
@@ -276,8 +316,8 @@ export async function resolveEvidencePass(input: {
         ...new Set(
           [
             originalLaneUsesAuthorizedUnfiltered
-              ? input.primaryUnfiltered
-              : input.primary,
+              ? prioritizedPrimaryUnfiltered
+              : prioritizedPrimary,
             ...supplemental,
           ].flatMap((result) => result.degradedChannels ?? []),
         ),
@@ -371,7 +411,7 @@ export async function resolveEvidencePass(input: {
             {
               searchText: input.query,
               result: buildDialogueSourceDiscoveryV1(
-                input.primaryUnfiltered,
+                prioritizedPrimaryUnfiltered,
                 sourceIds,
                 input.index.evidenceRefBelongsToSource,
               ),
@@ -384,7 +424,7 @@ export async function resolveEvidencePass(input: {
                       searchText: requirement.searchText,
                       result: buildDialogueSourceDiscoveryV1(
                         supplementalUnfiltered[index] ??
-                          input.primaryUnfiltered,
+                          prioritizedPrimaryUnfiltered,
                         sourceIds,
                         input.index.evidenceRefBelongsToSource,
                       ),
@@ -420,7 +460,7 @@ export async function resolveEvidencePass(input: {
       input.sourceLock
         ? []
         : filterEvidenceSearchResultForRole(
-            input.primaryUnfiltered,
+            prioritizedPrimaryUnfiltered,
             requirement.roleConstraint,
           ).hits,
     ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef)),
@@ -676,8 +716,8 @@ export async function resolveEvidencePass(input: {
           located[requirementIndex] = Object.freeze({ result, hits });
           temporalFrontierSucceededByRequirement[requirementIndex] =
             result.temporalFrontier !== undefined;
-          for (const evidenceRef of
-            result.temporalFrontier?.introducedEvidenceRefs ?? []) {
+          for (const evidenceRef of result.temporalFrontier
+            ?.introducedEvidenceRefs ?? []) {
             temporalFrontierRefsByRequirement[requirementIndex]?.add(
               evidenceRef,
             );
@@ -913,9 +953,9 @@ export async function resolveEvidencePass(input: {
     );
     const allowContextOnlyCandidates =
       assistantLeafPresent ||
-        input.intent.roleConstraint !== "user" ||
-        evidenceGroundedRoleBindingEligible ||
-        certifiedAssistantDialogueCandidate;
+      input.intent.roleConstraint !== "user" ||
+      evidenceGroundedRoleBindingEligible ||
+      certifiedAssistantDialogueCandidate;
     const frontierIntroduced = temporalFrontierRefsByRequirement.some(
       (refs) => refs.size > 0,
     );
@@ -1389,23 +1429,19 @@ export async function resolveEvidencePass(input: {
       requirementHits,
       lockedSourceIds: sourceLocalLockedIds,
       maxFloorHitsPerRequirement: 2,
-      excludedEvidenceRefs: executionRequirements.map(
-        (requirement, index) => {
-          const assessment = supportAssessments.find(
-            (item) => item.requirementId === requirement.requirementId,
-          );
-          const supporting = new Set(
-            assessment?.supportingEvidenceRefs ?? [],
-          );
-          return new Set([
-            ...(assessment?.contradictingEvidenceRefs ?? []),
-            ...(assessment?.unknownEvidenceRefs ?? []),
-            ...[...(temporalFrontierRefsByRequirement[index] ?? [])].filter(
-              (evidenceRef) => !supporting.has(evidenceRef),
-            ),
-          ]);
-        },
-      ),
+      excludedEvidenceRefs: executionRequirements.map((requirement, index) => {
+        const assessment = supportAssessments.find(
+          (item) => item.requirementId === requirement.requirementId,
+        );
+        const supporting = new Set(assessment?.supportingEvidenceRefs ?? []);
+        return new Set([
+          ...(assessment?.contradictingEvidenceRefs ?? []),
+          ...(assessment?.unknownEvidenceRefs ?? []),
+          ...[...(temporalFrontierRefsByRequirement[index] ?? [])].filter(
+            (evidenceRef) => !supporting.has(evidenceRef),
+          ),
+        ]);
+      }),
     });
     selectedRefsByRequirement = floor.selectedRefsByRequirement;
     supportFloorAppliedCount = floor.flooredRequirementIds.length;
@@ -1490,7 +1526,7 @@ export async function resolveEvidencePass(input: {
           nonSupportingRefs.has(hit.evidenceRef) &&
           !localEvidenceRefs.has(hit.evidenceRef),
       ),
-    input.primary.hits,
+    prioritizedPrimary.hits,
   ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));
   const packetSources =
     executionRequirements.length > 0
@@ -1511,7 +1547,7 @@ export async function resolveEvidencePass(input: {
           certifiedDialogueEvidenceRefs: certifiedAssistantDialogueRefs,
         })
       : buildPrimaryEvidencePacketSources(
-          input.primary.hits,
+          prioritizedPrimary.hits,
           sourceIds,
           allowFallbackContextOnly,
           2,

@@ -97,3 +97,25 @@ slice (133 questions) as a comparable treatment.
 - Next gate: package v32, run a sealed 133-question temporal treatment with
   the same store, seed, model, and answer protocol. It must first recover at
   least the v36 score before any new temporal-reasoning architecture is tried.
+
+## v42 sealed result and v43 hypothesis
+
+- The v42 shared-index treatment used the v32 semantic-advisory resolver with
+  the runner's explicit, canonical persistent index-store binding. Eight sealed
+  shards merged to 133 unique query commitments; the valid score was
+  **112/133 (84.21%)**, exactly the v36 score. This recovers the v41 regression
+  but is not an improvement.
+- The 21 remaining misses were audited by failure stage: 9 retrieval aperture,
+  7 temporal state resolution, 3 evidence selection, and 2 answer synthesis.
+  Nineteen had a retrieval hit but 20 lacked closed evidence, so the next
+  change must improve pre-fusion source ordering rather than weaken closure.
+- v43 tests one constrained architectural hypothesis: when the original query
+  and host-owned cutoff compile to a finite temporal range, stable-sort
+  candidates and exact hits observed in that range ahead of alternatives before
+  initial fusion. The operation never filters evidence, changes candidate K,
+  expands repair's immutable source lock, or accepts planner-authored dates.
+- The relative-time compiler also gains two benchmark-observed, deterministic
+  anchors: `past weekend` and `Valentine's Day`. Both bind only against the
+  trusted query cutoff. The first evaluation is a deliberately contaminated
+  21-query diagnostic; only a subsequent clean sealed 133-query treatment may
+  establish a comparable score.

@@ -24,7 +24,7 @@ import type { MemorySourceLocalizationReportV1 } from "./source-local-evidence-l
 import type { MemoryResolvedStateFrameV2 } from "./state-frame-v2.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v32:semantic-rejection-is-advisory" as const;
+  "paw.memory-evidence-resolver.v33:semantic-rejection-advisory-temporal-window-priority" as const;
 
 export type MemoryEvidenceClosureModeV1 = "disabled" | "observe" | "repair";
 

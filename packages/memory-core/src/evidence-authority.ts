@@ -16,6 +16,7 @@ import type {
 } from "./evidence-resolution-contracts.js";
 import { namedError } from "./evidence-resolution-validation.js";
 import type { MemoryEvidenceTriageAssessmentV1 } from "./evidence-support-selector.js";
+import type { MemoryEvidenceTemporalIntervalV2 } from "./query-plan-contracts.js";
 
 export function filterEvidenceSearchResultForRole(
   result: MemoryEvidenceIndexSearchResultV1,
@@ -39,6 +40,57 @@ export function filterEvidenceSearchResultForRole(
     hits: Object.freeze(
       result.hits.filter((hit) => hit.authority !== "context_only"),
     ),
+  });
+}
+
+/**
+ * Moves evidence observed inside a host-bound temporal window ahead of other
+ * candidates without discarding the latter. This is deliberately a stable
+ * priority, not a temporal filter: a later discussion can be the only record
+ * of an event inside the requested window. The caller owns compilation of the
+ * window from the original query and trusted cutoff.
+ */
+export function prioritizeEvidenceSearchResultForTemporalWindowV1(
+  result: MemoryEvidenceIndexSearchResultV1,
+  window: MemoryEvidenceTemporalIntervalV2 | undefined,
+): MemoryEvidenceIndexSearchResultV1 {
+  if (!window) return result;
+  const lower = Date.parse(window.lower);
+  const upper = Date.parse(window.upper);
+  if (!Number.isFinite(lower) || !Number.isFinite(upper) || lower >= upper) {
+    return result;
+  }
+  const inside = (observedAt: string | undefined): boolean => {
+    const value =
+      observedAt === undefined ? Number.NaN : Date.parse(observedAt);
+    return Number.isFinite(value) && value >= lower && value < upper;
+  };
+  const stablePrioritize = <T extends { readonly observedAt?: string }>(
+    values: readonly T[],
+  ): readonly T[] => {
+    if (!values.some((value) => inside(value.observedAt))) return values;
+    return Object.freeze([
+      ...values.filter((value) => inside(value.observedAt)),
+      ...values.filter((value) => !inside(value.observedAt)),
+    ]);
+  };
+  const lists = result.lists.map((list) => {
+    const candidates = stablePrioritize(list.candidates);
+    return candidates === list.candidates
+      ? list
+      : Object.freeze({ ...list, candidates });
+  });
+  const hits = stablePrioritize(result.hits);
+  if (
+    lists.every((list, index) => list === result.lists[index]) &&
+    hits === result.hits
+  ) {
+    return result;
+  }
+  return Object.freeze({
+    ...result,
+    lists: Object.freeze(lists),
+    hits,
   });
 }
 

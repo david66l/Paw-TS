@@ -23,6 +23,35 @@ describe("relative time anchor v1", () => {
     expect(w!.matchedPhrase.toLowerCase()).toContain("saturday");
   });
 
+  test("past weekend resolves to the preceding completed weekend", () => {
+    const w = extractRelativeTimeWindowV1(
+      "What did I do the past weekend?",
+      CUTOFF,
+    );
+    if (!w) throw new Error("past-weekend fixture invalid");
+    expect(new Date(w.startMs).toISOString()).toBe("2023-05-13T00:00:00.000Z");
+    expect(new Date(w.endMs).toISOString()).toBe("2023-05-15T00:00:00.000Z");
+  });
+
+  test("Valentine's Day resolves from the trusted cutoff, never wall clock", () => {
+    const afterHoliday = extractRelativeTimeWindowV1(
+      "Which airline did I fly on Valentine's Day?",
+      CUTOFF,
+    );
+    if (!afterHoliday) throw new Error("Valentine fixture invalid");
+    expect(new Date(afterHoliday.startMs).toISOString()).toBe(
+      "2023-02-14T00:00:00.000Z",
+    );
+    const beforeHoliday = extractRelativeTimeWindowV1(
+      "Which airline did I fly on Valentine’s Day?",
+      Date.parse("2023-01-10T10:00:00Z"),
+    );
+    if (!beforeHoliday) throw new Error("prior Valentine fixture invalid");
+    expect(new Date(beforeHoliday.startMs).toISOString()).toBe(
+      "2022-02-14T00:00:00.000Z",
+    );
+  });
+
   test("N days ago resolves to that single day window", () => {
     const w = extractRelativeTimeWindowV1(
       "What kitchen appliance did I buy 10 days ago?",

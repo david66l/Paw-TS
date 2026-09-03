@@ -140,6 +140,21 @@ interface PatternRule {
 /** 规则表:强信号短语;弱匹配(裸 "recently")一律不识别。 */
 const RULES: readonly PatternRule[] = [
   {
+    regex: /\b(?:the\s+)?past\s+weekend\b/i,
+    build: (match, cutoffMs) => {
+      const cutoffDay = startOfDayUtc(cutoffMs);
+      const day = new Date(cutoffDay).getUTCDay();
+      const currentMonday = cutoffDay - ((day + 6) % 7) * DAY_MS;
+      const start = currentMonday - 2 * DAY_MS;
+      return {
+        startMs: start,
+        endMs: currentMonday,
+        matchedPhrase: match[0],
+        resolvedText: "刚过去的周末",
+      };
+    },
+  },
+  {
     regex: /\blast\s+weekend\b/i,
     build: (match, cutoffMs) => {
       const cutoffDay = startOfDayUtc(cutoffMs);
@@ -166,6 +181,24 @@ const RULES: readonly PatternRule[] = [
         endMs: currentMonday,
         matchedPhrase: match[0],
         resolvedText: "上个周末",
+      };
+    },
+  },
+  {
+    regex: /\bvalentine(?:'|’)?s\s+day\b/i,
+    build: (match, cutoffMs) => {
+      const cutoffDay = startOfDayUtc(cutoffMs);
+      const cutoff = new Date(cutoffDay);
+      const thisYear = Date.UTC(cutoff.getUTCFullYear(), 1, 14);
+      const start =
+        thisYear <= cutoffDay
+          ? thisYear
+          : Date.UTC(cutoff.getUTCFullYear() - 1, 1, 14);
+      return {
+        startMs: start,
+        endMs: start + DAY_MS,
+        matchedPhrase: match[0],
+        resolvedText: "最近一个情人节(当日)",
       };
     },
   },
