@@ -263,3 +263,26 @@ slice (133 questions) as a comparable treatment.
   additive packet preserves the baseline evidence set and stays inside the
   reader token budget; it must not replace the notebook or report V46 as a
   benchmark improvement.
+
+## v47 explicit-event-cue frontier gate
+
+- V47 kept V44's session aperture, source lock, canonical shared index, answer
+  tools, answer/judge model, and 21-query cohort. It only changed the order of
+  non-baseline frontier candidates: for a temporal operation, an immutable turn
+  containing an explicit calendar, relative-time, order, or duration cue ranks
+  above a non-temporal lane hit. Baseline anchors remain reserved. The cue is a
+  retrieval signal only; it does not derive an event date from `observedAt`.
+- The clean fresh-cache run scored **5/21** versus V44's **4/21**: one recovery
+  and zero regressions in the paired cohort. Gold-session recall increased from
+  0.865 to 0.872, and mean reader context increased from 2,815 to 3,027 tokens
+  (+7.5%, within the 50% context guard). The recovery was a multi-session
+  history question whose gold sessions and notebook counts were unchanged,
+  confirming a within-session evidence-order effect rather than accidental
+  extra retrieval.
+- This is a positive but insufficient gate. The paired gain is 1/21 (4.76
+  percentage points), below the predeclared 7.5-point threshold for a broader
+  treatment. The remaining 16 errors still audit as seven missing-evidence,
+  six temporal-ordering, two judge-mismatch, and one latest-state error. The
+  default ranking change is therefore reverted after logging; V47 is retained
+  only as evidence that an eventual typed event ledger must preserve baseline
+  evidence while improving event identity and temporal operators.
