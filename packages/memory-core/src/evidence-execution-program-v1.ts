@@ -100,7 +100,7 @@ export interface MemoryEvidenceExecutionNodeV1 {
   readonly coverageMode?: NonNullable<
     MemoryEvidenceRequirementV3["coverageMode"]
   >;
-  readonly minimumIndependentEvidence?: number;
+  readonly minimumEvidence?: number;
   readonly dependencyRelation?: NonNullable<
     MemoryEvidenceRequirementV3["dependencyRelation"]
   >;
@@ -218,6 +218,9 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
             ? "state_value"
             : "ordered_history",
         operandNodeIds: Object.freeze([terminal.nodeId]),
+        requirementId: requirement.requirementId,
+        coverageMode: readNode.coverageMode,
+        minimumEvidence: readNode.minimumEvidence,
         temporalWindow: step.temporalWindow,
         operands: Object.freeze([terminal]),
       });
@@ -386,7 +389,17 @@ export function validateMemoryEvidenceExecutionProgramV1(
           } as never);
     if (
       expectedNodeId !== node.nodeId ||
-      hashCanonicalJsonV1(nodeIdentity as never) !== nodeRevision
+      hashCanonicalJsonV1(nodeIdentity as never) !== nodeRevision ||
+      (new Set([
+        "resolve_latest",
+        "resolve_as_of",
+        "restrict_range",
+        "preserve_history",
+      ]).has(node.operation) &&
+        (!node.requirementId?.trim() ||
+          !node.coverageMode ||
+          !Number.isSafeInteger(node.minimumEvidence) ||
+          (node.minimumEvidence ?? 0) < 1))
     ) {
       throw namedError("MemoryEvidenceExecutionProgramInvalid");
     }
@@ -478,7 +491,7 @@ function compileReadNode(
     coverageMode:
       requirement.coverageMode ??
       (requirement.temporalMode === "latest" ? "latest" : "any"),
-    minimumIndependentEvidence: requirement.minimumEvidence ?? 1,
+    minimumEvidence: requirement.minimumEvidence ?? 1,
     dependencyRelation: requirement.dependencyRelation ?? "independent",
     dependencyRequirementIds: Object.freeze([
       ...(requirement.dependsOnRequirementIds ?? []),
@@ -512,6 +525,11 @@ function compileDerivedNode(input: {
   readonly outputType: MemoryEvidenceExecutionOutputTypeV1;
   readonly operandNodeIds: readonly string[];
   readonly operands: readonly MemoryEvidenceExecutionNodeV1[];
+  readonly requirementId?: string;
+  readonly coverageMode?: NonNullable<
+    MemoryEvidenceRequirementV3["coverageMode"]
+  >;
+  readonly minimumEvidence?: number;
   readonly dependencyRelation?: NonNullable<
     MemoryEvidenceRequirementV3["dependencyRelation"]
   >;
@@ -536,6 +554,15 @@ function compileDerivedNode(input: {
     completionPolicy: "all_operands" as const,
     status: blocked ? ("blocked" as const) : ("ready" as const),
     ...(blocked ? { blockedReason: "operand_blocked" as const } : {}),
+    ...(input.requirementId === undefined
+      ? {}
+      : { requirementId: input.requirementId }),
+    ...(input.coverageMode === undefined
+      ? {}
+      : { coverageMode: input.coverageMode }),
+    ...(input.minimumEvidence === undefined
+      ? {}
+      : { minimumEvidence: input.minimumEvidence }),
     ...(input.dependencyRelation === undefined
       ? {}
       : { dependencyRelation: input.dependencyRelation }),

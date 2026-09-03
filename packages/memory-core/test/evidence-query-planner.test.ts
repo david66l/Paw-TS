@@ -997,6 +997,10 @@ describe("typed evidence query planner v3", () => {
       classifyMemoryEvidenceQueryV3("Who joined me last Saturday?")
         .temporalMode,
     ).toBe("range");
+    expect(
+      classifyMemoryEvidenceQueryV3("What was my most recent update last week?")
+        .temporalMode,
+    ).toBe("latest");
   });
 
   test("does not confuse a profile field with an ordinal event", () => {

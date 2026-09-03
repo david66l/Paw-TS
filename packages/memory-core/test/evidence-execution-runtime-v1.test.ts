@@ -7,6 +7,7 @@ import {
   validateMemoryEvidenceExecutionProgramV1,
 } from "../src/evidence-execution-program-v1.js";
 import { executeMemoryEvidenceProgramV1 } from "../src/evidence-execution-runtime-v1.js";
+import { memoryEvidenceIndependenceIdentityRevisionV1 } from "../src/evidence-independence.js";
 import { buildMemoryEvidenceReaderProjectionV1 } from "../src/evidence-reader-projection-v1.js";
 import { compileMemoryEvidenceSelectorGroupsV1 } from "../src/evidence-selector-groups.js";
 import { compileMemoryQueryAnswerOriginV1 } from "../src/query-answer-origin.js";
@@ -40,6 +41,9 @@ type ObservationFixture = Readonly<{
   lifecycleTargetEvidenceRef?: string;
   observedAt: string;
   eventKey?: string;
+  sourceId?: string;
+  episodeOrder?: number;
+  turnOrder?: number;
   predicateKind?:
     | "assert"
     | "update"
@@ -58,6 +62,7 @@ function executeFixture(input: {
   requirements: readonly MemoryEvidenceRequirementV3[];
   observations: readonly ObservationFixture[];
   failedRequirementIds?: ReadonlySet<string>;
+  historicalEvidenceRefs?: ReadonlySet<string>;
   closedWorld?: boolean;
 }) {
   const temporalConstraints = input.requirements.map((requirement) =>
@@ -79,7 +84,11 @@ function executeFixture(input: {
     requirements: input.requirements,
   });
   const lockedSourceIds = [
-    ...new Set(input.observations.map((item) => `source-${item.evidenceRef}`)),
+    ...new Set(
+      input.observations.map(
+        (item) => item.sourceId ?? `source-${item.evidenceRef}`,
+      ),
+    ),
   ];
   const snapshot = compileMemorySelectorExecutionSnapshotV1({
     query: input.query,
@@ -151,7 +160,7 @@ function executeFixture(input: {
       input.observations.map((item, index) => [
         item.evidenceRef,
         {
-          sourceId: `source-${item.evidenceRef}`,
+          sourceId: item.sourceId ?? `source-${item.evidenceRef}`,
           evidenceRef: item.evidenceRef,
           content:
             item.content ??
@@ -159,8 +168,8 @@ function executeFixture(input: {
           authority: "user_asserted" as const,
           role: "user" as const,
           observedAt: item.observedAt,
-          episodeOrder: index,
-          turnOrder: 1,
+          episodeOrder: item.episodeOrder ?? index,
+          turnOrder: item.turnOrder ?? 1,
           ...(item.eventKey === undefined ? {} : { eventKey: item.eventKey }),
         },
       ]),
@@ -239,10 +248,10 @@ function executeFixture(input: {
   const validatedObservations = compileMemoryStateBindingCertificatesV1(
     bindingCertificateValidationContext,
   );
-  const coverageCertificate =
+  const coverageValidationContext =
     input.closedWorld === false
       ? undefined
-      : compileMemoryEvidenceExecutionCoverageCertificateV1({
+      : ({
           intent: input.intent,
           requirements: input.requirements,
           temporalConstraints,
@@ -255,16 +264,57 @@ function executeFixture(input: {
                 candidateScopes.find(
                   (scope) => scope.requirementId === requirement.requirementId,
                 )?.evidenceRefs ?? [];
+              const historicalEvidenceRefs = refs.filter((evidenceRef) =>
+                input.historicalEvidenceRefs?.has(evidenceRef),
+              );
+              const selectedEvidenceRefs = refs.filter(
+                (evidenceRef) =>
+                  !input.historicalEvidenceRefs?.has(evidenceRef),
+              );
+              const independentEvidenceCount = new Set(
+                selectedEvidenceRefs.map((evidenceRef) => {
+                  const source = sourceLock.items.find(
+                    (item) => item.evidenceRef === evidenceRef,
+                  );
+                  if (!source) throw new Error("fixture invalid");
+                  return memoryEvidenceIndependenceIdentityRevisionV1(source);
+                }),
+              ).size;
+              const closureEvidenceCount =
+                requirement.coverageMode === "convergent"
+                  ? independentEvidenceCount
+                  : selectedEvidenceRefs.length;
+              const minimumEvidence = requirement.minimumEvidence ?? 1;
               return {
                 requirementId: requirement.requirementId,
                 status:
-                  refs.length > 0 ? ("covered" as const) : ("missing" as const),
-                selectedHitCount: refs.length,
-                independentEvidenceCount: new Set(refs).size,
-                closureEvidenceCount: refs.length,
-                selectedEvidenceRefs: refs,
-                historicalEvidenceRefs: [],
+                  closureEvidenceCount >= minimumEvidence
+                    ? ("covered" as const)
+                    : selectedEvidenceRefs.length > 0
+                      ? ("partial" as const)
+                      : ("missing" as const),
+                selectedHitCount: selectedEvidenceRefs.length,
+                independentEvidenceCount,
+                closureEvidenceCount,
+                selectedEvidenceRefs,
+                historicalEvidenceRefs,
                 unresolvedEvidenceRefs: [],
+                inputEvidenceRefs: refs,
+                budgetOmittedEvidenceRefs: [],
+                admission: refs.map((evidenceRef) => ({
+                  evidenceRef,
+                  disposition: input.historicalEvidenceRefs?.has(evidenceRef)
+                    ? ("historical" as const)
+                    : ("selected" as const),
+                  independenceIdentityRevision: (() => {
+                    const source = sourceLock.items.find(
+                      (item) => item.evidenceRef === evidenceRef,
+                    );
+                    if (!source) throw new Error("fixture invalid");
+                    return memoryEvidenceIndependenceIdentityRevisionV1(source);
+                  })(),
+                })),
+                budgetOmittedHitCount: 0,
               };
             }),
             inputHitCount: candidateScopes.reduce(
@@ -273,7 +323,12 @@ function executeFixture(input: {
             ),
             budgetOmittedHitCount: 0,
             selectedHitCount: candidateScopes.reduce(
-              (count, scope) => count + scope.evidenceRefs.length,
+              (count, scope) =>
+                count +
+                scope.evidenceRefs.filter(
+                  (evidenceRef) =>
+                    !input.historicalEvidenceRefs?.has(evidenceRef),
+                ).length,
               0,
             ),
             chars: 64,
@@ -281,7 +336,12 @@ function executeFixture(input: {
           closureAuditStatus: "completed",
           closureVerdict: "pass",
           closureAuditRevision: "closure-test",
-        });
+        } as const);
+  const coverageCertificate = coverageValidationContext
+    ? compileMemoryEvidenceExecutionCoverageCertificateV1(
+        coverageValidationContext,
+      )
+    : undefined;
   return {
     query: input.query,
     intent: input.intent,
@@ -294,6 +354,7 @@ function executeFixture(input: {
     slots,
     frame,
     coverageCertificate,
+    coverageValidationContext,
     validatedObservations,
     bindingCertificateValidationContext,
     result: executeMemoryEvidenceProgramV1({
@@ -304,7 +365,9 @@ function executeFixture(input: {
       bindingCertificateValidationContexts: [
         bindingCertificateValidationContext,
       ],
-      ...(coverageCertificate === undefined ? {} : { coverageCertificate }),
+      ...(coverageCertificate === undefined
+        ? {}
+        : { coverageCertificate, coverageValidationContext }),
     }),
   };
 }
@@ -366,7 +429,10 @@ function project(
     ],
     ...(output.coverageCertificate === undefined
       ? {}
-      : { coverageCertificate: output.coverageCertificate }),
+      : {
+          coverageCertificate: output.coverageCertificate,
+          coverageValidationContext: output.coverageValidationContext,
+        }),
     executionResult,
   });
 }
@@ -377,6 +443,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "What is the latest value?",
       intent: userIntent("lookup", "latest"),
       requirements: [requirement("value", "latest")],
+      historicalEvidenceRefs: new Set(["old"]),
       observations: [
         {
           requirementId: "value",
@@ -401,6 +468,240 @@ describe("proof-carrying evidence execution runtime v1", () => {
         (value) => value.kind === "observation" && value.valueText === "new",
       ),
     ).toBe(true);
+  });
+
+  test("keeps latest partial when a retained historical ref was not materialized", () => {
+    const output = run({
+      query: "What is the latest value?",
+      intent: userIntent("lookup", "latest"),
+      requirements: [requirement("value", "latest")],
+      historicalEvidenceRefs: new Set(["old"]),
+      observations: [
+        {
+          requirementId: "value",
+          evidenceRef: "old",
+          value: "old",
+          eventTime: "2023-01-01",
+          observedAt: "2023-01-02T00:00:00.000Z",
+          bind: false,
+        },
+        {
+          requirementId: "value",
+          evidenceRef: "current",
+          value: "current",
+          eventTime: "2024-01-01",
+          observedAt: "2024-01-02T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(nodeStatus(output.result, "read_requirement")).toMatchObject({
+      status: "partial",
+      reason: "coverage_materialization_incomplete",
+    });
+    expect(nodeStatus(output.result, "resolve_latest")).toMatchObject({
+      status: "partial",
+      reason: "coverage_materialization_incomplete",
+    });
+  });
+
+  test("rejects a self-hashed completion basis that disagrees with the program", () => {
+    const output = run({
+      query: "What is the latest value?",
+      intent: userIntent("lookup", "latest"),
+      requirements: [requirement("value", "latest")],
+      observations: [
+        {
+          requirementId: "value",
+          evidenceRef: "value-ref",
+          value: "current",
+          observedAt: "2024-12-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const certificate = output.coverageCertificate;
+    const coverage = certificate?.requirements[0];
+    if (!certificate || !coverage) throw new Error("coverage fixture invalid");
+    const { proofRevision: _proofRevision, ...coverageIdentity } = coverage;
+    const forgedCoverageIdentity = {
+      ...coverageIdentity,
+      completionBasis: "bounded_window_lookup" as const,
+    };
+    const forgedCoverage = {
+      ...forgedCoverageIdentity,
+      proofRevision: hashCanonicalJsonV1(forgedCoverageIdentity as never),
+    };
+    const {
+      certificateRevision: _certificateRevision,
+      ...certificateIdentity
+    } = certificate;
+    const forgedCertificateIdentity = {
+      ...certificateIdentity,
+      requirements: [forgedCoverage],
+    };
+    const forgedCertificate = {
+      ...forgedCertificateIdentity,
+      certificateRevision: hashCanonicalJsonV1(
+        forgedCertificateIdentity as never,
+      ),
+    };
+
+    expect(() =>
+      executeMemoryEvidenceProgramV1({
+        program: output.program,
+        slots: output.slots,
+        frame: output.frame,
+        validatedObservations: output.validatedObservations,
+        bindingCertificateValidationContexts: [
+          output.bindingCertificateValidationContext,
+        ],
+        coverageCertificate: forgedCertificate,
+        coverageValidationContext: output.coverageValidationContext,
+      }),
+    ).toThrow("MemoryEvidenceExecutionRuntimeCoverageInvalid");
+  });
+
+  test("rejects a self-hashed closed certificate when its source predicates remain open", () => {
+    const output = run({
+      query: "What is the latest value?",
+      intent: userIntent("lookup", "latest"),
+      requirements: [requirement("value", "latest")],
+      observations: [
+        {
+          requirementId: "value",
+          evidenceRef: "value-ref",
+          value: "current",
+          observedAt: "2024-12-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const context = output.coverageValidationContext;
+    if (!context) throw new Error("coverage context fixture invalid");
+    const {
+      closureAuditRevision: _closureAuditRevision,
+      ...contextWithoutAuditRevision
+    } = context;
+    const openContext = {
+      ...contextWithoutAuditRevision,
+      closureAuditStatus: "fallback" as const,
+      closureVerdict: "insufficient" as const,
+    };
+    const openCertificate =
+      compileMemoryEvidenceExecutionCoverageCertificateV1(openContext);
+    const openCoverage = openCertificate.requirements[0];
+    if (!openCoverage) throw new Error("open coverage fixture invalid");
+    const { proofRevision: _proofRevision, ...openCoverageIdentity } =
+      openCoverage;
+    const forgedCoverageIdentity = {
+      ...openCoverageIdentity,
+      status: "closed" as const,
+      reasonCodes: [] as const,
+    };
+    const forgedCoverage = {
+      ...forgedCoverageIdentity,
+      proofRevision: hashCanonicalJsonV1(forgedCoverageIdentity as never),
+    };
+    const {
+      certificateRevision: _certificateRevision,
+      ...openCertificateIdentity
+    } = openCertificate;
+    const forgedCertificateIdentity = {
+      ...openCertificateIdentity,
+      status: "closed" as const,
+      requirements: [forgedCoverage],
+    };
+    const forgedCertificate = {
+      ...forgedCertificateIdentity,
+      certificateRevision: hashCanonicalJsonV1(
+        forgedCertificateIdentity as never,
+      ),
+    };
+
+    expect(() =>
+      executeMemoryEvidenceProgramV1({
+        program: output.program,
+        slots: output.slots,
+        frame: output.frame,
+        validatedObservations: output.validatedObservations,
+        bindingCertificateValidationContexts: [
+          output.bindingCertificateValidationContext,
+        ],
+        coverageCertificate: forgedCertificate,
+        coverageValidationContext: openContext,
+      }),
+    ).toThrow("MemoryEvidenceExecutionRuntimeCoverageInvalid");
+  });
+
+  test("revalidates notebook independence identities against the source lock", () => {
+    const output = run({
+      query: "What activity do I repeatedly prefer?",
+      intent: userIntent("lookup", "any"),
+      requirements: [
+        requirement("preference", "any", {
+          coverageMode: "convergent",
+          minimumEvidence: 2,
+        }),
+      ],
+      observations: [
+        {
+          requirementId: "preference",
+          evidenceRef: "restatement-one",
+          value: "running",
+          eventKey: "same-event",
+          observedAt: "2024-01-01T00:00:00.000Z",
+        },
+        {
+          requirementId: "preference",
+          evidenceRef: "restatement-two",
+          value: "running",
+          eventKey: "same-event",
+          observedAt: "2024-01-02T00:00:00.000Z",
+        },
+      ],
+    });
+    const context = output.coverageValidationContext;
+    const row = context?.notebook.coverage[0];
+    if (!context || !row || !row.admission) throw new Error("fixture invalid");
+    const forgedContext = {
+      ...context,
+      notebook: {
+        ...context.notebook,
+        coverage: [
+          {
+            ...row,
+            status: "covered" as const,
+            independentEvidenceCount: 2,
+            closureEvidenceCount: 2,
+            admission: row.admission.map((item, index) =>
+              index === 1
+                ? {
+                    ...item,
+                    independenceIdentityRevision: hashCanonicalJsonV1(
+                      "forged-independent-event",
+                    ),
+                  }
+                : item,
+            ),
+          },
+        ],
+      },
+    };
+    const forgedCertificate =
+      compileMemoryEvidenceExecutionCoverageCertificateV1(forgedContext);
+
+    expect(() =>
+      executeMemoryEvidenceProgramV1({
+        program: output.program,
+        slots: output.slots,
+        frame: output.frame,
+        validatedObservations: output.validatedObservations,
+        bindingCertificateValidationContexts: [
+          output.bindingCertificateValidationContext,
+        ],
+        coverageCertificate: forgedCertificate,
+        coverageValidationContext: forgedContext,
+      }),
+    ).toThrow("MemoryEvidenceExecutionRuntimeCoverageInvalid");
   });
 
   test("keeps mixed event and observed clocks partial", () => {
@@ -521,6 +822,228 @@ describe("proof-carrying evidence execution runtime v1", () => {
     ).toHaveLength(1);
   });
 
+  test("keeps temporal results partial until every coverage-selected ref is materialized", () => {
+    const cases = [
+      {
+        query: "What happened last week?",
+        intent: userIntent("lookup", "range"),
+        requirement: requirement("events", "range", {
+          coverageMode: "all",
+        }),
+        operation: "restrict_range",
+        observations: [
+          {
+            requirementId: "events",
+            evidenceRef: "range-bound",
+            value: "bound event",
+            observedAt: "2024-12-28T00:00:00.000Z",
+          },
+          {
+            requirementId: "events",
+            evidenceRef: "range-unbound",
+            value: "unbound event",
+            observedAt: "2024-12-29T00:00:00.000Z",
+            bind: false,
+          },
+        ],
+      },
+      {
+        query: "Give me the complete history.",
+        intent: userIntent("lookup", "history"),
+        requirement: requirement("history", "history", {
+          coverageMode: "all",
+        }),
+        operation: "preserve_history",
+        observations: [
+          {
+            requirementId: "history",
+            evidenceRef: "history-bound",
+            value: "old state",
+            eventTime: "2023-01-01",
+            observedAt: "2023-01-02T00:00:00.000Z",
+          },
+          {
+            requirementId: "history",
+            evidenceRef: "history-unbound",
+            value: "new state",
+            eventTime: "2024-01-01",
+            observedAt: "2024-01-02T00:00:00.000Z",
+            bind: false,
+          },
+        ],
+      },
+      {
+        query: "What is the latest value?",
+        intent: userIntent("lookup", "latest"),
+        requirement: requirement("latest", "latest"),
+        operation: "resolve_latest",
+        observations: [
+          {
+            requirementId: "latest",
+            evidenceRef: "latest-bound",
+            value: "old state",
+            eventTime: "2023-01-01",
+            observedAt: "2023-01-02T00:00:00.000Z",
+          },
+          {
+            requirementId: "latest",
+            evidenceRef: "latest-unbound",
+            value: "new state",
+            eventTime: "2024-01-01",
+            observedAt: "2024-01-02T00:00:00.000Z",
+            bind: false,
+          },
+        ],
+      },
+      {
+        query: "What was the value as of 2024?",
+        intent: userIntent("lookup", "as_of"),
+        requirement: requirement("as-of", "as_of"),
+        operation: "resolve_as_of",
+        observations: [
+          {
+            requirementId: "as-of",
+            evidenceRef: "as-of-bound",
+            value: "old state",
+            eventTime: "2023-01-01",
+            observedAt: "2023-01-02T00:00:00.000Z",
+          },
+          {
+            requirementId: "as-of",
+            evidenceRef: "as-of-unbound",
+            value: "new state",
+            eventTime: "2024-01-01",
+            observedAt: "2024-01-02T00:00:00.000Z",
+            bind: false,
+          },
+        ],
+      },
+    ] as const;
+
+    for (const item of cases) {
+      const output = run({
+        query: item.query,
+        intent: item.intent,
+        requirements: [item.requirement],
+        observations: item.observations,
+      });
+      expect(nodeStatus(output.result, "read_requirement")).toMatchObject({
+        status: "partial",
+        reason: "coverage_materialization_incomplete",
+      });
+      expect(nodeStatus(output.result, item.operation)).toMatchObject({
+        status: "partial",
+        reason: "coverage_materialization_incomplete",
+      });
+    }
+  });
+
+  test("rechecks all-mode minimum evidence after range filtering", () => {
+    const output = run({
+      query: "What happened last week?",
+      intent: userIntent("lookup", "range"),
+      requirements: [
+        requirement("events", "range", {
+          coverageMode: "all",
+          minimumEvidence: 2,
+        }),
+      ],
+      observations: [
+        {
+          requirementId: "events",
+          evidenceRef: "inside",
+          value: "inside",
+          observedAt: "2024-12-28T00:00:00.000Z",
+        },
+        {
+          requirementId: "events",
+          evidenceRef: "outside",
+          value: "outside",
+          observedAt: "2024-12-10T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(nodeStatus(output.result, "restrict_range")).toMatchObject({
+      status: "partial",
+      reason: "minimum_evidence_unsatisfied",
+    });
+  });
+
+  test("rechecks convergent independence after range filtering", () => {
+    const output = run({
+      query: "What happened last week?",
+      intent: userIntent("lookup", "range"),
+      requirements: [
+        requirement("events", "range", {
+          coverageMode: "convergent",
+          minimumEvidence: 2,
+        }),
+      ],
+      observations: [
+        {
+          requirementId: "events",
+          evidenceRef: "event-a",
+          value: "same",
+          eventKey: "event-a",
+          observedAt: "2024-12-28T00:00:00.000Z",
+        },
+        {
+          requirementId: "events",
+          evidenceRef: "event-b-outside",
+          value: "same",
+          eventKey: "event-b",
+          observedAt: "2024-12-10T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(nodeStatus(output.result, "restrict_range")).toMatchObject({
+      status: "partial",
+      reason: "minimum_evidence_unsatisfied",
+    });
+  });
+
+  test("blocks range convergence when an in-window event is inconsistent", () => {
+    const output = run({
+      query: "What happened last week?",
+      intent: userIntent("lookup", "range"),
+      requirements: [
+        requirement("events", "range", {
+          coverageMode: "convergent",
+          minimumEvidence: 2,
+        }),
+      ],
+      observations: [
+        {
+          requirementId: "events",
+          evidenceRef: "event-a-one",
+          value: "alpha",
+          eventKey: "event-a",
+          observedAt: "2024-12-28T00:00:00.000Z",
+        },
+        {
+          requirementId: "events",
+          evidenceRef: "event-a-two",
+          value: "beta",
+          eventKey: "event-a",
+          observedAt: "2024-12-28T00:00:00.000Z",
+        },
+        {
+          requirementId: "events",
+          evidenceRef: "event-b",
+          value: "alpha",
+          eventKey: "event-b",
+          observedAt: "2024-12-29T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(nodeStatus(output.result, "restrict_range")).toMatchObject({
+      status: "conflict",
+    });
+  });
+
   test("measures an exact day duration without treating it as a range filter", () => {
     const output = run({
       query: "How many days elapsed between the start and the end?",
@@ -613,12 +1136,16 @@ describe("proof-carrying evidence execution runtime v1", () => {
     });
   });
 
-  test("closes two duration endpoints carried by one complete operand group", () => {
+  test("closes two duration endpoints from the same source episode", () => {
     const output = run({
       query: "How many days elapsed between the two events?",
       intent: userIntent("lookup", "range"),
-      closedWorld: false,
-      requirements: [requirement("events", "range", { coverageMode: "all" })],
+      requirements: [
+        requirement("events", "range", {
+          coverageMode: "all",
+          minimumEvidence: 2,
+        }),
+      ],
       observations: [
         {
           requirementId: "events",
@@ -626,6 +1153,9 @@ describe("proof-carrying evidence execution runtime v1", () => {
           value: "first event",
           eventTime: "2024-01-01",
           observedAt: "2024-01-01T00:00:00.000Z",
+          sourceId: "shared-session",
+          episodeOrder: 7,
+          turnOrder: 1,
         },
         {
           requirementId: "events",
@@ -633,6 +1163,9 @@ describe("proof-carrying evidence execution runtime v1", () => {
           value: "second event",
           eventTime: "2024-01-11",
           observedAt: "2024-01-11T00:00:00.000Z",
+          sourceId: "shared-session",
+          episodeOrder: 7,
+          turnOrder: 2,
         },
       ],
     });
@@ -899,7 +1432,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         ],
         ...(output.coverageCertificate === undefined
           ? {}
-          : { coverageCertificate: output.coverageCertificate }),
+          : {
+              coverageCertificate: output.coverageCertificate,
+              coverageValidationContext: output.coverageValidationContext,
+            }),
       }),
     ).toThrow("MemoryEvidenceExecutionRuntimeFrameInvalid");
   });
@@ -949,7 +1485,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         ],
         ...(output.coverageCertificate === undefined
           ? {}
-          : { coverageCertificate: output.coverageCertificate }),
+          : {
+              coverageCertificate: output.coverageCertificate,
+              coverageValidationContext: output.coverageValidationContext,
+            }),
       }),
     ).toThrow("MemoryEvidenceExecutionRuntimeCertificateInvalid");
   });
@@ -1015,7 +1554,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         ],
         ...(output.coverageCertificate === undefined
           ? {}
-          : { coverageCertificate: output.coverageCertificate }),
+          : {
+              coverageCertificate: output.coverageCertificate,
+              coverageValidationContext: output.coverageValidationContext,
+            }),
       });
     const execution = executeProjected(output.validatedObservations);
     expect(execution.stateBindingCertificates).toHaveLength(1);
@@ -1071,7 +1613,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         ],
         ...(output.coverageCertificate === undefined
           ? {}
-          : { coverageCertificate: output.coverageCertificate }),
+          : {
+              coverageCertificate: output.coverageCertificate,
+              coverageValidationContext: output.coverageValidationContext,
+            }),
       }),
     ).toThrow("MemoryEvidenceExecutionRuntimeCertificateInvalid");
   });
@@ -1124,7 +1669,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         ]),
         ...(local.coverageCertificate === undefined
           ? {}
-          : { coverageCertificate: local.coverageCertificate }),
+          : {
+              coverageCertificate: local.coverageCertificate,
+              coverageValidationContext: local.coverageValidationContext,
+            }),
       }),
     ).toThrow("MemoryEvidenceExecutionRuntimeCertificateInvalid");
   });
@@ -1173,7 +1721,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         ],
         ...(output.coverageCertificate === undefined
           ? {}
-          : { coverageCertificate: output.coverageCertificate }),
+          : {
+              coverageCertificate: output.coverageCertificate,
+              coverageValidationContext: output.coverageValidationContext,
+            }),
       }),
     ).toThrow("MemoryEvidenceExecutionRuntimeCertificateInvalid");
   });
@@ -1211,6 +1762,91 @@ describe("proof-carrying evidence execution runtime v1", () => {
       "a",
       "b",
     ]);
+  });
+
+  test("closes same-session history using retained facts instead of episode count", () => {
+    const output = run({
+      query: "Give me the complete history.",
+      intent: userIntent("lookup", "history"),
+      requirements: [
+        requirement("value", "history", {
+          coverageMode: "all",
+          minimumEvidence: 2,
+        }),
+      ],
+      observations: [
+        {
+          requirementId: "value",
+          evidenceRef: "history-a",
+          value: "a",
+          eventTime: "2023-01-01",
+          observedAt: "2023-01-02T00:00:00.000Z",
+          sourceId: "history-session",
+          episodeOrder: 4,
+          turnOrder: 1,
+        },
+        {
+          requirementId: "value",
+          evidenceRef: "history-b",
+          value: "b",
+          eventTime: "2024-01-01",
+          observedAt: "2024-01-02T00:00:00.000Z",
+          sourceId: "history-session",
+          episodeOrder: 4,
+          turnOrder: 2,
+          predicateKind: "update",
+        },
+      ],
+    });
+    const history = nodeStatus(output.result, "preserve_history");
+    expect(history).toMatchObject({ status: "complete" });
+    expect(history?.history.map((value) => value.valueText)).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  test("blocks history convergence when one event contains conflicting claims", () => {
+    const output = run({
+      query: "Give me the complete history.",
+      intent: userIntent("lookup", "history"),
+      requirements: [
+        requirement("value", "history", {
+          coverageMode: "convergent",
+          minimumEvidence: 2,
+        }),
+      ],
+      observations: [
+        {
+          requirementId: "value",
+          evidenceRef: "event-a-one",
+          value: "alpha",
+          eventKey: "event-a",
+          eventTime: "2023-01-01",
+          observedAt: "2023-01-02T00:00:00.000Z",
+        },
+        {
+          requirementId: "value",
+          evidenceRef: "event-a-two",
+          value: "beta",
+          eventKey: "event-a",
+          eventTime: "2023-01-01",
+          observedAt: "2023-01-02T00:00:00.000Z",
+        },
+        {
+          requirementId: "value",
+          evidenceRef: "event-b",
+          value: "alpha",
+          eventKey: "event-b",
+          eventTime: "2024-01-01",
+          observedAt: "2024-01-02T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(nodeStatus(output.result, "preserve_history")).toMatchObject({
+      status: "conflict",
+    });
   });
 
   test("compiles and executes dependency joins instead of flattening dependencies", () => {
@@ -1364,7 +2000,12 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const output = run({
       query: "Collect the unique events.",
       intent: userIntent("aggregate", "any"),
-      requirements: [requirement("events", "any", { coverageMode: "all" })],
+      requirements: [
+        requirement("events", "any", {
+          coverageMode: "all",
+          minimumEvidence: 2,
+        }),
+      ],
       observations: [
         {
           requirementId: "events",
@@ -1390,6 +2031,83 @@ describe("proof-carrying evidence execution runtime v1", () => {
       "aggregate_operands",
     )?.values.find((value) => value.kind === "aggregate");
     expect(aggregate).toMatchObject({ lowerBoundCount: 2, closedWorld: true });
+  });
+
+  test("keeps same-event convergent evidence below its independent minimum", () => {
+    const output = run({
+      query: "What activity do I repeatedly prefer?",
+      intent: userIntent("lookup", "any"),
+      requirements: [
+        requirement("preference", "any", {
+          coverageMode: "convergent",
+          minimumEvidence: 2,
+        }),
+      ],
+      observations: [
+        {
+          requirementId: "preference",
+          evidenceRef: "preference-one",
+          value: "running",
+          eventKey: "same-activity",
+          observedAt: "2024-01-01T00:00:00.000Z",
+        },
+        {
+          requirementId: "preference",
+          evidenceRef: "preference-two",
+          value: "running",
+          eventKey: "same-activity",
+          observedAt: "2024-01-02T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(nodeStatus(output.result, "read_requirement")).toMatchObject({
+      status: "partial",
+      reason: "minimum_evidence_unsatisfied",
+    });
+  });
+
+  test("blocks convergence when one independent event contains conflicting claims", () => {
+    const output = run({
+      query: "What activity do I repeatedly prefer?",
+      intent: userIntent("lookup", "any"),
+      requirements: [
+        requirement("preference", "any", {
+          coverageMode: "convergent",
+          minimumEvidence: 2,
+        }),
+      ],
+      observations: [
+        {
+          requirementId: "preference",
+          evidenceRef: "event-a-positive",
+          value: "running",
+          eventKey: "event-a",
+          observedAt: "2024-01-01T00:00:00.000Z",
+        },
+        {
+          requirementId: "preference",
+          evidenceRef: "event-a-conflict",
+          value: "swimming",
+          eventKey: "event-a",
+          observedAt: "2024-01-01T00:00:00.000Z",
+        },
+        {
+          requirementId: "preference",
+          evidenceRef: "event-b-positive",
+          value: "running",
+          eventKey: "event-b",
+          observedAt: "2024-02-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(nodeStatus(output.result, "read_requirement")).toMatchObject({
+      status: "conflict",
+    });
+    expect(
+      nodeStatus(output.result, "read_requirement")?.conflicts,
+    ).toHaveLength(3);
   });
 
   test("counts one event once even when it has several bound values", () => {

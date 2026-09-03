@@ -27,17 +27,25 @@ export interface MemoryEvidenceExecutionRequirementCoverageV1 {
   readonly selectedEvidenceCount: number;
   readonly independentEvidenceCount: number;
   readonly closureEvidenceCount: number;
-  readonly minimumIndependentEvidence: number;
+  /** Minimum count under the requirement's declared closure semantics. */
+  readonly minimumEvidence: number;
   readonly supportingEvidenceSetRevision: string;
   readonly selectedEvidenceSetRevision: string;
+  /** Exact set the binder must materialize: selected plus retained history. */
+  readonly executableAdmissionEvidenceCount: number;
+  readonly executableAdmissionEvidenceSetRevision: string;
   /** Binds the exact notebook row, including historical and unresolved refs. */
   readonly notebookCoverageRevision: string;
   readonly reasonCodes: readonly (
     | "selector_group_uncommitted"
     | "selector_requirement_unassessed"
+    | "selector_candidate_partition_incomplete"
+    | "notebook_admission_partition_incomplete"
     | "supporting_evidence_missing"
     | "notebook_requirement_open"
     | "notebook_unresolved_peer"
+    | "notebook_budget_omission"
+    | "notebook_coverage_count_inconsistent"
     | "minimum_evidence_unsatisfied"
     | "selected_evidence_not_supported"
     | "closure_audit_not_passed"
@@ -55,12 +63,7 @@ export interface MemoryEvidenceExecutionCoverageCertificateV1 {
   readonly certificateRevision: string;
 }
 
-/**
- * Compiles a content-free closed-world proof from three independent gates:
- * post-authority selector commitment, notebook cardinality, and a passing
- * semantic closure audit. `coverageMode=all` alone is never a certificate.
- */
-export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
+export interface MemoryEvidenceExecutionCoverageCompilationInputV1 {
   readonly intent: MemoryEvidenceQueryIntentV3;
   readonly requirements: readonly MemoryEvidenceRequirementV3[];
   readonly temporalConstraints: readonly MemoryEvidenceBoundTemporalConstraintV1[];
@@ -73,7 +76,16 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
     | "fallback";
   readonly closureVerdict?: "pass" | "repair" | "insufficient";
   readonly closureAuditRevision?: string;
-}): MemoryEvidenceExecutionCoverageCertificateV1 {
+}
+
+/**
+ * Compiles a content-free closed-world proof from three independent gates:
+ * post-authority selector commitment, notebook cardinality, and a passing
+ * semantic closure audit. `coverageMode=all` alone is never a certificate.
+ */
+export function compileMemoryEvidenceExecutionCoverageCertificateV1(
+  input: MemoryEvidenceExecutionCoverageCompilationInputV1,
+): MemoryEvidenceExecutionCoverageCertificateV1 {
   const executionByRequirement = new Map(
     input.selectorSnapshot.groups.flatMap((group) =>
       group.requirements.map(
@@ -126,6 +138,8 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
         !execution ||
         !coverage ||
         !temporal ||
+        execution.requirement.requirementRevision !==
+          hashCanonicalJsonV1(requirement as never) ||
         execution.requirement.temporalBindingRevision !==
           temporal.bindingRevision
       ) {
@@ -139,7 +153,7 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       const supporting = new Set(
         execution.requirement.assessment?.supportingEvidenceRefs ?? [],
       );
-      const minimumIndependentEvidence = requirement.minimumEvidence ?? 1;
+      const minimumEvidence = requirement.minimumEvidence ?? 1;
       const reasons: MemoryEvidenceExecutionRequirementCoverageV1["reasonCodes"][number][] =
         [];
       if (execution.groupStatus !== "committed") {
@@ -148,13 +162,128 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       if (execution.requirement.status !== "assessed") {
         reasons.push("selector_requirement_unassessed");
       }
+      if (!execution.requirement.assessmentPartitionComplete) {
+        reasons.push("selector_candidate_partition_incomplete");
+      }
       if (supporting.size === 0) reasons.push("supporting_evidence_missing");
       if (coverage.status !== "covered")
         reasons.push("notebook_requirement_open");
       if (coverage.unresolvedEvidenceRefs.length > 0) {
         reasons.push("notebook_unresolved_peer");
       }
-      if (coverage.independentEvidenceCount < minimumIndependentEvidence) {
+      const notebookInputRefs = new Set(coverage.inputEvidenceRefs ?? []);
+      const budgetOmittedRefs = new Set(
+        coverage.budgetOmittedEvidenceRefs ?? [],
+      );
+      const admission = coverage.admission ?? [];
+      const notebookAdmissionRefs = new Set(
+        admission.map((item) => item.evidenceRef),
+      );
+      const admittedSelectedRefs = new Set(
+        admission
+          .filter(
+            (item) =>
+              item.disposition === "selected" ||
+              item.disposition === "selected_unresolved",
+          )
+          .map((item) => item.evidenceRef),
+      );
+      const admittedSelectedIndependenceIdentities = new Set(
+        admission
+          .filter(
+            (item) =>
+              item.disposition === "selected" ||
+              item.disposition === "selected_unresolved",
+          )
+          .map((item) => item.independenceIdentityRevision),
+      );
+      const admittedHistoricalRefs = new Set(
+        admission
+          .filter((item) => item.disposition === "historical")
+          .map((item) => item.evidenceRef),
+      );
+      const admittedUnresolvedRefs = new Set(
+        admission
+          .filter((item) => item.disposition === "selected_unresolved")
+          .map((item) => item.evidenceRef),
+      );
+      const admittedBudgetOmittedRefs = new Set(
+        admission
+          .filter((item) => item.disposition === "budget_omitted")
+          .map((item) => item.evidenceRef),
+      );
+      const admittedRejectedRefs = new Set(
+        admission
+          .filter((item) => item.disposition === "rejected")
+          .map((item) => item.evidenceRef),
+      );
+      const admissionIsExact =
+        coverage.inputEvidenceRefs !== undefined &&
+        coverage.budgetOmittedEvidenceRefs !== undefined &&
+        coverage.admission !== undefined &&
+        hasUniqueNonEmptyRefs(coverage.inputEvidenceRefs) &&
+        hasUniqueNonEmptyRefs(coverage.selectedEvidenceRefs) &&
+        hasUniqueNonEmptyRefs(coverage.historicalEvidenceRefs) &&
+        hasUniqueNonEmptyRefs(coverage.unresolvedEvidenceRefs) &&
+        hasUniqueNonEmptyRefs(coverage.budgetOmittedEvidenceRefs) &&
+        admission.length === notebookAdmissionRefs.size &&
+        admission.every(
+          (item) =>
+            item.evidenceRef.trim().length > 0 &&
+            item.independenceIdentityRevision.trim().length > 0 &&
+            new Set([
+              "selected",
+              "selected_unresolved",
+              "historical",
+              "budget_omitted",
+              "rejected",
+            ]).has(item.disposition),
+        ) &&
+        sameSet(notebookAdmissionRefs, notebookInputRefs) &&
+        sameSet(admittedSelectedRefs, new Set(coverage.selectedEvidenceRefs)) &&
+        sameSet(
+          admittedHistoricalRefs,
+          new Set(coverage.historicalEvidenceRefs),
+        ) &&
+        sameSet(
+          admittedUnresolvedRefs,
+          new Set(coverage.unresolvedEvidenceRefs),
+        ) &&
+        sameSet(admittedBudgetOmittedRefs, budgetOmittedRefs) &&
+        admittedRejectedRefs.size === 0 &&
+        coverage.independentEvidenceCount ===
+          admittedSelectedIndependenceIdentities.size;
+      if (
+        !admissionIsExact ||
+        !sameSet(notebookInputRefs, supporting) ||
+        coverage.budgetOmittedHitCount === undefined
+      ) {
+        reasons.push("notebook_admission_partition_incomplete");
+      }
+      if (
+        coverage.budgetOmittedHitCount === undefined ||
+        coverage.budgetOmittedHitCount !== budgetOmittedRefs.size ||
+        budgetOmittedRefs.size > 0
+      ) {
+        reasons.push("notebook_budget_omission");
+      }
+      const expectedClosureEvidenceCount =
+        requirement.coverageMode === "convergent"
+          ? coverage.independentEvidenceCount
+          : coverage.selectedEvidenceRefs.length;
+      if (
+        coverage.selectedHitCount !== coverage.selectedEvidenceRefs.length ||
+        coverage.independentEvidenceCount < 0 ||
+        coverage.independentEvidenceCount >
+          coverage.selectedEvidenceRefs.length ||
+        coverage.closureEvidenceCount !== expectedClosureEvidenceCount
+      ) {
+        reasons.push("notebook_coverage_count_inconsistent");
+      }
+      // The notebook defines closureEvidenceCount per operation: only
+      // convergent claims use independent episodes; all/history/aggregate and
+      // finite operands use the number of retained facts.
+      if (coverage.closureEvidenceCount < minimumEvidence) {
         reasons.push("minimum_evidence_unsatisfied");
       }
       if (
@@ -164,9 +293,13 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       ) {
         reasons.push("selected_evidence_not_supported");
       }
+      // frontier_complete remains audit-backed until a post-binder frontier
+      // certificate can prove an exact candidate partition and comparable
+      // maxima. Only finite endpoints and one bounded lookup may close without
+      // claiming the whole source history is exhausted.
       if (
-        (completionBasis === "closed_world_collection" ||
-          completionBasis === "legacy_closed_world") &&
+        completionBasis !== "finite_endpoint_exact" &&
+        completionBasis !== "bounded_window_lookup" &&
         !closurePassed
       ) {
         reasons.push("closure_audit_not_passed");
@@ -179,6 +312,16 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       const selectedEvidenceSetRevision = hashCanonicalJsonV1({
         schemaVersion: "paw.memory-selected-evidence-set.v1",
         evidenceRefs: Object.freeze([...coverage.selectedEvidenceRefs].sort()),
+      } as never);
+      const executableAdmissionEvidenceRefs = new Set([
+        ...coverage.selectedEvidenceRefs,
+        ...coverage.historicalEvidenceRefs,
+      ]);
+      const executableAdmissionEvidenceSetRevision = hashCanonicalJsonV1({
+        schemaVersion: "paw.memory-executable-admission-evidence-set.v1",
+        evidenceRefs: Object.freeze(
+          [...executableAdmissionEvidenceRefs].sort(),
+        ),
       } as never);
       const notebookCoverageRevision = hashCanonicalJsonV1({
         schemaVersion: "paw.memory-notebook-coverage-row.v1",
@@ -200,9 +343,11 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
         selectedEvidenceCount: coverage.selectedEvidenceRefs.length,
         independentEvidenceCount: coverage.independentEvidenceCount,
         closureEvidenceCount: coverage.closureEvidenceCount,
-        minimumIndependentEvidence,
+        minimumEvidence,
         supportingEvidenceSetRevision,
         selectedEvidenceSetRevision,
+        executableAdmissionEvidenceCount: executableAdmissionEvidenceRefs.size,
+        executableAdmissionEvidenceSetRevision,
         notebookCoverageRevision,
         reasonCodes,
       };
@@ -260,15 +405,18 @@ export function validateMemoryEvidenceExecutionCoverageCertificateV1(
       ]).has(requirement.completionBasis) ||
       !requirement.supportingEvidenceSetRevision.trim() ||
       !requirement.selectedEvidenceSetRevision.trim() ||
+      !requirement.executableAdmissionEvidenceSetRevision.trim() ||
       !requirement.notebookCoverageRevision.trim() ||
       !Number.isInteger(requirement.selectedEvidenceCount) ||
       requirement.selectedEvidenceCount < 0 ||
+      !Number.isInteger(requirement.executableAdmissionEvidenceCount) ||
+      requirement.executableAdmissionEvidenceCount < 0 ||
       !Number.isInteger(requirement.independentEvidenceCount) ||
       requirement.independentEvidenceCount < 0 ||
       !Number.isInteger(requirement.closureEvidenceCount) ||
       requirement.closureEvidenceCount < 0 ||
-      !Number.isInteger(requirement.minimumIndependentEvidence) ||
-      requirement.minimumIndependentEvidence < 1 ||
+      !Number.isInteger(requirement.minimumEvidence) ||
+      requirement.minimumEvidence < 1 ||
       new Set(requirement.reasonCodes).size !==
         requirement.reasonCodes.length ||
       requirement.status !==
@@ -304,20 +452,6 @@ function executionCompletionBasis(
 ): MemoryEvidenceExecutionCompletionBasisV1 {
   if (temporal.durationRequest) return "finite_endpoint_exact";
   if (
-    requirement.temporalMode === "latest" ||
-    requirement.temporalMode === "as_of"
-  ) {
-    return "frontier_complete";
-  }
-  if (
-    temporal.queryScopeInterval &&
-    (intent.answerShape === "lookup" || intent.answerShape === "compare") &&
-    requirement.coverageMode !== "all" &&
-    requirement.coverageMode !== "convergent"
-  ) {
-    return "bounded_window_lookup";
-  }
-  if (
     requirement.temporalMode === "history" ||
     requirement.coverageMode === "all" ||
     requirement.coverageMode === "convergent" ||
@@ -325,7 +459,35 @@ function executionCompletionBasis(
   ) {
     return "closed_world_collection";
   }
+  if (
+    requirement.temporalMode === "latest" ||
+    requirement.temporalMode === "as_of"
+  ) {
+    return "frontier_complete";
+  }
+  if (
+    temporal.queryScopeInterval &&
+    (requirement.temporalMode === "range" ||
+      requirement.temporalMode === "any") &&
+    (intent.answerShape === "lookup" || intent.answerShape === "compare")
+  ) {
+    return "bounded_window_lookup";
+  }
   return "legacy_closed_world";
+}
+
+function sameSet(
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+): boolean {
+  return left.size === right.size && [...left].every((item) => right.has(item));
+}
+
+function hasUniqueNonEmptyRefs(refs: readonly string[]): boolean {
+  return (
+    refs.every((evidenceRef) => evidenceRef.trim().length > 0) &&
+    new Set(refs).size === refs.length
+  );
 }
 
 function namedError(name: string): Error {

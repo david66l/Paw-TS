@@ -4,6 +4,7 @@ import {
   hashTextV1,
 } from "./canonical.js";
 import type { MemoryEvidenceAuthorityV2 } from "./evidence-contracts.js";
+import { memoryEvidenceIndependenceKeyV1 } from "./evidence-independence.js";
 import {
   PAW_MEMORY_EVIDENCE_SELECTOR_GROUP_POLICY_V1,
   compileMemoryEvidenceSelectorGroupsV1,
@@ -28,10 +29,16 @@ export const PAW_MEMORY_STATE_AUTHORITY_POLICY_VERSION_V2 =
   "paw.memory-state-authority.v2:origin-role-certificate" as const;
 
 export type MemoryStateSlotOperationV2 =
-  "lookup" | "collect" | "resolve_latest" | "preserve_history";
+  | "lookup"
+  | "collect"
+  | "resolve_latest"
+  | "preserve_history";
 
 export type MemoryStateDerivedOperationKindV2 =
-  "compare" | "aggregate" | "infer_preference" | "dependency_join";
+  | "compare"
+  | "aggregate"
+  | "infer_preference"
+  | "dependency_join";
 
 export interface MemoryStateQueryAnchorV2 {
   readonly start: number;
@@ -48,7 +55,10 @@ export interface MemoryStateSlotSpecV2 {
   readonly operation: MemoryStateSlotOperationV2;
   /** Answer/group operation is separate from this slot's temporal leaf. */
   readonly derivedAnswerOperation:
-    "none" | "compare" | "aggregate" | "infer_preference";
+    | "none"
+    | "compare"
+    | "aggregate"
+    | "infer_preference";
   readonly queryAnchor: MemoryStateQueryAnchorV2;
   /** Planner semantics are immutable hints, never a model-authored state key. */
   readonly semanticDescriptor: Readonly<{
@@ -58,7 +68,9 @@ export interface MemoryStateSlotSpecV2 {
   }>;
   readonly roleConstraint: "user" | "assistant";
   readonly authorityMode:
-    "user_fact" | "explicit_assistant_report" | "certified_dialogue_artifact";
+    | "user_fact"
+    | "explicit_assistant_report"
+    | "certified_dialogue_artifact";
   readonly temporalMode: MemoryEvidenceBoundTemporalConstraintV1["mode"];
   readonly evidenceTimeUpperBound: string | null;
   readonly durationEndpointContractKind:
@@ -66,10 +78,13 @@ export interface MemoryStateSlotSpecV2 {
     | "evidence_to_host_anchor"
     | null;
   readonly coverageMode: "any" | "all" | "latest" | "convergent";
-  readonly minimumIndependentEvidence: number;
+  readonly minimumEvidence: number;
   readonly dependencySlotIds: readonly string[];
   readonly dependencyRelation:
-    "independent" | "depends_on" | "responds_to" | "supersedes";
+    | "independent"
+    | "depends_on"
+    | "responds_to"
+    | "supersedes";
   readonly originRevision: string;
   readonly temporalBindingRevision: string;
   readonly authorityPolicyRevision: typeof PAW_MEMORY_STATE_AUTHORITY_POLICY_VERSION_V2;
@@ -142,7 +157,12 @@ export interface MemoryStateObservationProposalV2 {
   readonly lifecycleRelation?: MemoryStateClaimLifecycleRelationV2;
   readonly lifecycleTargetEvidenceRef?: string;
   readonly predicateKind:
-    "assert" | "update" | "retract" | "confirm" | "prefer" | "disprefer";
+    | "assert"
+    | "update"
+    | "retract"
+    | "confirm"
+    | "prefer"
+    | "disprefer";
   readonly polarity: "positive" | "negative";
   readonly modality: "observed" | "goal" | "plan" | "forecast";
 }
@@ -156,7 +176,9 @@ export interface MemoryStateBoundObservationV2 {
   readonly contentDigest: string;
   readonly valueSpans: readonly MemoryStateExactSpanV2[];
   readonly valueComposition:
-    "single" | "contiguous_composite" | "ordered_tuple";
+    | "single"
+    | "contiguous_composite"
+    | "ordered_tuple";
   /** Exact source envelope for contiguous values; tuple text remains display-only. */
   readonly valueText: string;
   readonly eventTimeSpans: readonly MemoryStateExactSpanV2[];
@@ -307,7 +329,7 @@ export function compileMemoryStateSlotsV2(input: {
         coverageMode:
           requirement.coverageMode ??
           (requirement.temporalMode === "latest" ? "latest" : "any"),
-        minimumIndependentEvidence: requirement.minimumEvidence ?? 1,
+        minimumEvidence: requirement.minimumEvidence ?? 1,
         dependencySlotIds: Object.freeze(
           (requirement.dependsOnRequirementIds ?? []).map((requirementId) => {
             const dependency = slotIdByRequirement.get(requirementId);
@@ -515,7 +537,8 @@ export function bindMemoryStateObservationV2(input: {
       "supersedes",
       "confirms",
     ]).has(lifecycleRelation) ||
-    (lifecycleRelation === "none" && lifecycleTargetEvidenceRef !== undefined) ||
+    (lifecycleRelation === "none" &&
+      lifecycleTargetEvidenceRef !== undefined) ||
     (lifecycleRelation !== "none" &&
       (!lifecycleTarget ||
         lifecycleTarget.evidenceRef === item.evidenceRef ||
@@ -872,53 +895,70 @@ function resolveSlot(
       observation.modality === "observed" &&
       new Set(["assert", "update", "confirm"]).has(observation.predicateKind),
   );
-  const independent = new Map<string, MemoryStateBoundObservationV2>();
+  const independentGroups = new Map<string, MemoryStateBoundObservationV2[]>();
   for (const observation of eligible) {
-    const key = observation.eventKey?.trim()
-      ? `event:${observation.eventKey}`
-      : `source:${observation.sourceId}\0episode:${observation.episodeOrder ?? "unknown"}`;
-    if (!independent.has(key)) independent.set(key, observation);
+    const key = independenceKey(observation);
+    const group = independentGroups.get(key) ?? [];
+    group.push(observation);
+    independentGroups.set(key, group);
   }
-  const proof = [...independent.values()].map(
+  const representatives = [...independentGroups.values()].map(
+    (group) => group[0] as MemoryStateBoundObservationV2,
+  );
+  const restatements = [...independentGroups.values()].flatMap((group) =>
+    group.slice(1),
+  );
+  const proof = representatives.map(
     (observation) => observation.bindingRevision,
   );
-  const values = new Set(
-    [...independent.values()].map((observation) => spanIdentity(observation)),
+  const retainedProof = eligible.map(
+    (observation) => observation.bindingRevision,
+  );
+  const retainedEvidenceCount = new Set(
+    eligible.map((observation) => observation.evidenceRef),
+  ).size;
+  const groupInternalConflicts = [...independentGroups.values()].filter(
+    (group) => new Set(group.map(convergenceClaimIdentity)).size > 1,
   );
   if (slot.operation === "lookup") {
-    const conflict = values.size > 1;
+    const conflict = new Set(eligible.map(spanIdentity)).size > 1;
+    const ineligible = ordered.filter(
+      (observation) => !eligible.includes(observation),
+    );
     return resolvedSlot(
       slot.slotId,
       conflict
         ? "conflict"
-        : proof.length >= slot.minimumIndependentEvidence
+        : (slot.coverageMode === "convergent"
+              ? proof.length
+              : retainedEvidenceCount) >= slot.minimumEvidence
           ? "complete"
           : observations.length > 0
             ? "partial"
             : "missing",
-      conflict ? [] : [...independent.values()],
-      ordered.filter(
-        (observation) => !independent.has(independenceKey(observation)),
-      ),
-      conflict ? [...independent.values()] : [],
-      proof,
+      conflict ? [] : eligible,
+      ineligible,
+      conflict ? eligible : [],
+      slot.coverageMode === "convergent" ? proof : retainedProof,
     );
   }
   if (slot.operation === "collect" && slot.coverageMode === "convergent") {
-    const conflict = values.size > 1;
+    const crossGroupConflict =
+      new Set(representatives.map(convergenceClaimIdentity)).size > 1;
+    const conflict = groupInternalConflicts.length > 0 || crossGroupConflict;
     return resolvedSlot(
       slot.slotId,
       conflict
         ? "conflict"
-        : proof.length >= slot.minimumIndependentEvidence
+        : proof.length >= slot.minimumEvidence
           ? "complete"
           : observations.length > 0
             ? "partial"
             : "missing",
-      conflict ? [] : [...independent.values()],
-      [],
-      conflict ? [...independent.values()] : [],
-      proof,
+      conflict ? [] : representatives,
+      conflict ? [] : restatements,
+      conflict ? eligible : [],
+      conflict ? retainedProof : proof,
     );
   }
   // `all`, history/range, compare, aggregate, and preference inference need a
@@ -929,14 +969,25 @@ function resolveSlot(
     [],
     ordered,
     [],
-    proof,
+    retainedProof,
   );
 }
 
 function independenceKey(observation: MemoryStateBoundObservationV2): string {
-  return observation.eventKey?.trim()
-    ? `event:${observation.eventKey}`
-    : `source:${observation.sourceId}\0episode:${observation.episodeOrder ?? "unknown"}`;
+  return memoryEvidenceIndependenceKeyV1(observation);
+}
+
+function convergenceClaimIdentity(
+  observation: MemoryStateBoundObservationV2,
+): string {
+  return [
+    spanIdentity(observation),
+    observation.predicateKind,
+    observation.polarity,
+    observation.modality,
+    observation.lifecycleRelation,
+    observation.lifecycleTargetEvidenceRef ?? "",
+  ].join("\0");
 }
 
 function resolvedSlot(
@@ -1245,9 +1296,7 @@ function strictUtcDay(
   return Object.freeze({ lower, upper, precision: "day" as const });
 }
 
-function normalizedInterval<
-  TInterval extends MemoryStateEventTimeIntervalV2,
->(
+function normalizedInterval<TInterval extends MemoryStateEventTimeIntervalV2>(
   interval: TInterval,
 ): Readonly<{
   eventTime: string;

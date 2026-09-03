@@ -105,6 +105,7 @@ describe("typed leaf temporal constraints v1", () => {
       query: "Who joined me last Saturday?",
       queryEnvelopeMode: "range",
       leafMode: "any",
+      applyQueryScope: true,
       evidenceTimeUpperBound: "2025-01-01T00:00:00.000Z",
     });
     expect(plannerFallbackLeaf.window.kind).toBe("unbounded");
@@ -117,8 +118,41 @@ describe("typed leaf temporal constraints v1", () => {
         query: "Who joined me last Saturday?",
         queryEnvelopeMode: "range",
         leafMode: "any",
+        applyQueryScope: true,
       }).bindingRevision,
     );
+
+    const unscopedDependency = bindMemoryEvidenceTemporalConstraintV1({
+      query: "Who joined me last Saturday?",
+      queryEnvelopeMode: "range",
+      leafMode: "any",
+      evidenceTimeUpperBound: "2025-01-01T00:00:00.000Z",
+    });
+    expect(unscopedDependency.queryScopeInterval).toBeNull();
+  });
+
+  test("fails closed on incompatible temporal clauses", () => {
+    const relativeConflict = bindMemoryEvidenceTemporalConstraintV1({
+      query: "Compare what happened last Friday and last Saturday.",
+      queryEnvelopeMode: "range",
+      leafMode: "range",
+      evidenceTimeUpperBound: "2025-01-01T00:00:00.000Z",
+    });
+    expect(relativeConflict.window).toMatchObject({
+      kind: "range",
+      interval: null,
+    });
+
+    const mixedConflict = bindMemoryEvidenceTemporalConstraintV1({
+      query: "What happened last Saturday, March 4, 2024?",
+      queryEnvelopeMode: "range",
+      leafMode: "range",
+      evidenceTimeUpperBound: "2025-01-01T00:00:00.000Z",
+    });
+    expect(mixedConflict.window).toMatchObject({
+      kind: "range",
+      interval: null,
+    });
   });
 
   test("separates duration intent from temporal range filtering", () => {

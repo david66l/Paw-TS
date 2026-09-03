@@ -162,6 +162,10 @@ export async function resolveEvidencePass(input: {
       ...(input.evidenceTimeUpperBound === undefined
         ? {}
         : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
+      applyQueryScope:
+        requirement.temporalMode !== "any" ||
+        (input.requirements.length === 1 &&
+          input.intent.temporalMode === "range"),
     }),
   );
   const sourceLocalRequirements = input.requirements.map(

@@ -9,15 +9,15 @@ import {
   compileMemoryEvidenceObligationShapeV1,
   validateMemoryEvidenceObligationsV1,
 } from "./evidence-obligation.js";
+import {
+  type MemoryQueryAnswerOriginV1,
+  compileMemoryQueryAnswerOriginV1,
+} from "./query-answer-origin.js";
 import type {
   MemoryEvidenceBoundTemporalConstraintV1,
   MemoryEvidenceQueryIntentV3,
   MemoryEvidenceRequirementV3,
 } from "./query-plan-contracts.js";
-import {
-  type MemoryQueryAnswerOriginV1,
-  compileMemoryQueryAnswerOriginV1,
-} from "./query-answer-origin.js";
 import {
   type MemoryStateBindingCertificateValidationInputV1,
   type MemoryStateValidatedObservationV1,
@@ -128,9 +128,7 @@ export interface MemoryPreferenceAdmissionCertificateV1 {
   readonly certificateRevision: string;
 }
 
-export type MemoryPreferenceAdmissionGroupStatusV1 =
-  | "completed"
-  | "fallback";
+export type MemoryPreferenceAdmissionGroupStatusV1 = "completed" | "fallback";
 
 export interface MemoryPreferenceAdmissionSettlementV1 {
   readonly policyVersion: typeof PAW_MEMORY_PREFERENCE_ADMISSION_SIDECAR_POLICY_V1;
@@ -204,7 +202,9 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
     input.requirements.length > 4 ||
     input.temporalConstraints.length !== input.requirements.length ||
     input.candidateScopes.length !== input.requirements.length ||
-    input.requirements.some((requirement) => requirement.roleConstraint !== "user")
+    input.requirements.some(
+      (requirement) => requirement.roleConstraint !== "user",
+    )
   ) {
     throw namedError("MemoryPreferenceAdmissionRequirementInvalid");
   }
@@ -250,6 +250,9 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
         ...(temporal.evidenceTimeUpperBound === null
           ? {}
           : { evidenceTimeUpperBound: temporal.evidenceTimeUpperBound }),
+        applyQueryScope:
+          requirement.temporalMode !== "any" ||
+          (requirements.length === 1 && intent.temporalMode === "range"),
       });
       if (
         hashCanonicalJsonV1(expected as unknown as JsonValue) !==
@@ -351,7 +354,9 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
         scope.requirementId !== expectedRequirement.requirementId ||
         seenScopes.has(scope.requirementId) ||
         new Set(scope.evidenceRefs).size !== scope.evidenceRefs.length ||
-        scope.evidenceRefs.some((evidenceRef) => !candidateByRef.has(evidenceRef))
+        scope.evidenceRefs.some(
+          (evidenceRef) => !candidateByRef.has(evidenceRef),
+        )
       ) {
         throw namedError("MemoryPreferenceAdmissionCandidateScopeInvalid");
       }
@@ -537,9 +542,8 @@ export function createMemoryPreferenceAdmissionSidecarV1(input: {
       candidateScope: Readonly<MemoryPreferenceAdmissionScopeSnapshotV1>,
       signal: AbortSignal,
     ): Promise<MemoryPreferenceAdmissionSettlementV1> {
-      const scope = validateMemoryPreferenceAdmissionScopeSnapshotV1(
-        candidateScope,
-      );
+      const scope =
+        validateMemoryPreferenceAdmissionScopeSnapshotV1(candidateScope);
       if (signal.aborted) throw abortError();
       const bindingRequest = Object.freeze({
         query: scope.query,
@@ -619,9 +623,7 @@ export function validateMemoryPreferenceAdmissionSettlementV1(input: {
     );
     const validationInput: MemoryStateBindingCertificateValidationInputV1 = {
       query: scope.query,
-      slots: scope.slots.filter((slot) =>
-        completedGroupIds.has(slot.groupId),
-      ),
+      slots: scope.slots.filter((slot) => completedGroupIds.has(slot.groupId)),
       sourceLock: scope.sourceLock,
       proposedObservations: input.settlement.proposedObservations,
       verification,
@@ -645,7 +647,8 @@ export function validateMemoryPreferenceAdmissionSettlementV1(input: {
           status: group.status,
           observations: Object.freeze(
             input.settlement.proposedObservations.filter(
-              (observation) => observation.slotId &&
+              (observation) =>
+                observation.slotId &&
                 scope.slots.find((slot) => slot.slotId === observation.slotId)
                   ?.groupId === group.groupId,
             ),
@@ -682,7 +685,9 @@ function compileSettlement(input: {
   readonly verification?: MemoryStateObservationVerificationV2;
   readonly validated: readonly MemoryStateValidatedObservationV1[];
 }): MemoryPreferenceAdmissionSettlementV1 {
-  const slotById = new Map(input.scope.slots.map((slot) => [slot.slotId, slot]));
+  const slotById = new Map(
+    input.scope.slots.map((slot) => [slot.slotId, slot]),
+  );
   const candidateByRef = new Map(
     input.scope.candidates.map((candidate) => [
       candidate.evidenceRef,
@@ -707,8 +712,7 @@ function compileSettlement(input: {
         throw namedError("MemoryPreferenceAdmissionCertificateInvalid");
       }
       const identity = {
-        policyVersion:
-          PAW_MEMORY_PREFERENCE_ADMISSION_CERTIFICATE_POLICY_V1,
+        policyVersion: PAW_MEMORY_PREFERENCE_ADMISSION_CERTIFICATE_POLICY_V1,
         admissionScopeRevision: input.scope.scopeRevision,
         requirementId: slot.requirementId,
         slotId: slot.slotId,
@@ -728,7 +732,8 @@ function compileSettlement(input: {
           polarity: stateBinding.observation.polarity,
           modality: stateBinding.observation.modality,
         },
-        verifierVersion: stateBinding.certificate.semanticAttestation.verifierVersion,
+        verifierVersion:
+          stateBinding.certificate.semanticAttestation.verifierVersion,
         verificationRevision:
           stateBinding.certificate.semanticAttestation.verificationRevision,
         stateBinding,
@@ -744,7 +749,8 @@ function compileSettlement(input: {
   const admittedEvidenceRefsByRequirement = Object.freeze(
     input.scope.requirements.map((requirement) => {
       const matching = certificates.filter(
-        (certificate) => certificate.requirementId === requirement.requirementId,
+        (certificate) =>
+          certificate.requirementId === requirement.requirementId,
       );
       return Object.freeze({
         requirementId: requirement.requirementId,

@@ -552,6 +552,41 @@ describe("evidence notebook v1", () => {
     expect(notebook.sources[0]?.text).toContain("Kyoto trip lasted five days");
   });
 
+  test("records exact per-requirement omissions when the hit cap truncates support", () => {
+    const notebook = buildMemoryEvidenceNotebookV1({
+      requirements: [
+        {
+          requirementId: "status-history",
+          label: "status history",
+          searchText: "status history",
+          hits: ["first", "second", "third"].map((value, index) => ({
+            sourceId: "status-source",
+            evidenceRef: `status-${index + 1}`,
+            content: `${value} status history event`,
+            authority: "user_asserted" as const,
+            observedOrder: index,
+          })),
+        },
+      ],
+      allowedSourceIds: ["status-source"],
+      maxHitsPerRequirement: 2,
+      maxChars: 4_096,
+    });
+
+    expect(notebook.coverage[0]).toMatchObject({
+      inputEvidenceRefs: ["status-1", "status-2", "status-3"],
+      selectedEvidenceRefs: ["status-1", "status-2"],
+      budgetOmittedEvidenceRefs: ["status-3"],
+      admission: [
+        { evidenceRef: "status-1", disposition: "selected" },
+        { evidenceRef: "status-2", disposition: "selected" },
+        { evidenceRef: "status-3", disposition: "budget_omitted" },
+      ],
+      budgetOmittedHitCount: 1,
+    });
+    expect(notebook.budgetOmittedHitCount).toBe(1);
+  });
+
   test("fills independent requirements only inside primary-selected sources", () => {
     const notebook = buildMemoryEvidenceNotebookV1({
       allowedSourceIds: ["trip-japan", "trip-chicago"],
@@ -594,7 +629,7 @@ describe("evidence notebook v1", () => {
       ],
     });
 
-    expect(notebook.coverage).toEqual([
+    expect(notebook.coverage).toMatchObject([
       {
         requirementId: "japan-days",
         status: "covered",
@@ -604,6 +639,13 @@ describe("evidence notebook v1", () => {
         selectedEvidenceRefs: ["e1"],
         historicalEvidenceRefs: [],
         unresolvedEvidenceRefs: [],
+        inputEvidenceRefs: ["e0", "e1"],
+        budgetOmittedEvidenceRefs: [],
+        admission: [
+          { evidenceRef: "e0", disposition: "rejected" },
+          { evidenceRef: "e1", disposition: "selected" },
+        ],
+        budgetOmittedHitCount: 0,
       },
       {
         requirementId: "chicago-days",
@@ -614,6 +656,10 @@ describe("evidence notebook v1", () => {
         selectedEvidenceRefs: ["e2"],
         historicalEvidenceRefs: [],
         unresolvedEvidenceRefs: [],
+        inputEvidenceRefs: ["e2"],
+        budgetOmittedEvidenceRefs: [],
+        admission: [{ evidenceRef: "e2", disposition: "selected" }],
+        budgetOmittedHitCount: 0,
       },
     ]);
     expect(notebook.sources.map((source) => source.sourceId)).toEqual([
@@ -695,7 +741,11 @@ describe("evidence notebook v1", () => {
     });
 
     expect(oneEpisode.coverage[0]?.status).toBe("partial");
-    expect(oneEpisode.coverage[0]?.selectedHitCount).toBe(1);
+    expect(oneEpisode.coverage[0]?.selectedHitCount).toBe(2);
+    expect(oneEpisode.coverage[0]?.selectedEvidenceRefs).toEqual([
+      "a-1",
+      "a-2",
+    ]);
     expect(oneEpisode.coverage[0]?.independentEvidenceCount).toBe(1);
     expect(oneEpisode.coverage[0]?.closureEvidenceCount).toBe(1);
 
@@ -725,6 +775,7 @@ describe("evidence notebook v1", () => {
     expect(twoEpisodes.coverage[0]?.selectedEvidenceRefs).toEqual([
       "a-1",
       "b-1",
+      "a-2",
     ]);
     expect(twoEpisodes.coverage[0]?.independentEvidenceCount).toBe(2);
     expect(twoEpisodes.coverage[0]?.closureEvidenceCount).toBe(2);
@@ -764,10 +815,11 @@ describe("evidence notebook v1", () => {
     });
 
     expect(notebook.coverage[0]?.status).toBe("partial");
+    expect(notebook.coverage[0]?.selectedEvidenceRefs).toEqual(["a", "b"]);
     expect(notebook.coverage[0]?.closureEvidenceCount).toBe(1);
   });
 
-  test("uses the same distinct-episode count while scanning and closing all-mode evidence", () => {
+  test("retains distinct same-episode facts while counting independent episodes once", () => {
     const hits = [
       ...Array.from({ length: 3 }, (_, index) => ({
         sourceId: "session-a",
@@ -804,17 +856,85 @@ describe("evidence notebook v1", () => {
         },
       ],
       allowedSourceIds: ["session-a", "session-b", "session-c"],
-      maxHitsPerRequirement: 4,
+      maxHitsPerRequirement: 5,
       maxChars: 4_096,
     });
 
     expect(notebook.coverage[0]?.status).toBe("covered");
     expect(notebook.coverage[0]?.selectedEvidenceRefs).toEqual([
       "same-episode-0",
+      "same-episode-1",
+      "same-episode-2",
       "episode-b",
       "episode-c",
     ]);
-    expect(notebook.coverage[0]?.closureEvidenceCount).toBe(3);
+    expect(notebook.coverage[0]?.independentEvidenceCount).toBe(3);
+    expect(notebook.coverage[0]?.closureEvidenceCount).toBe(5);
+  });
+
+  test("keeps multiple semantic values from one event as separate evidence", () => {
+    const notebook = buildMemoryEvidenceNotebookV1({
+      requirements: [
+        {
+          requirementId: "event-members",
+          label: "all event members",
+          searchText: "event members",
+          coverageMode: "all",
+          hits: ["alpha", "beta"].map((value, index) => ({
+            sourceId: "same-session",
+            evidenceRef: `event-${value}`,
+            content: `event member ${value}`,
+            authority: "user_asserted" as const,
+            eventKey: "shared-event",
+            episodeOrder: 1,
+            turnOrder: index,
+          })),
+        },
+      ],
+      allowedSourceIds: ["same-session"],
+      maxHitsPerRequirement: 2,
+      maxChars: 2_048,
+    });
+
+    expect(notebook.coverage[0]).toMatchObject({
+      status: "covered",
+      selectedEvidenceRefs: ["event-alpha", "event-beta"],
+      independentEvidenceCount: 1,
+      closureEvidenceCount: 2,
+      admission: [
+        { evidenceRef: "event-alpha", disposition: "selected" },
+        { evidenceRef: "event-beta", disposition: "selected" },
+      ],
+    });
+  });
+
+  test("deduplicates only the same evidence address", () => {
+    const duplicate = {
+      sourceId: "session",
+      evidenceRef: "same-ref",
+      content: "same temporal fact",
+      authority: "user_asserted" as const,
+      episodeOrder: 1,
+    };
+    const notebook = buildMemoryEvidenceNotebookV1({
+      requirements: [
+        {
+          requirementId: "exact-duplicate",
+          label: "temporal fact",
+          searchText: "temporal fact",
+          hits: [duplicate, duplicate],
+        },
+      ],
+      allowedSourceIds: ["session"],
+      maxHitsPerRequirement: 2,
+      maxChars: 1_024,
+    });
+
+    expect(notebook.coverage[0]).toMatchObject({
+      selectedEvidenceRefs: ["same-ref"],
+      inputEvidenceRefs: ["same-ref"],
+      admission: [{ evidenceRef: "same-ref", disposition: "selected" }],
+    });
   });
 
   test("reserves notebook space so an early requirement cannot starve later ones", () => {

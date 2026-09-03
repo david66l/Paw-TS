@@ -1,9 +1,13 @@
 import {
-  type MemoryEvidenceNotebookHitV1,
+  type MemoryEvidenceNotebookAdmissionDispositionV1,
   type MemoryEvidenceNotebookRequirementV1,
   type MemoryEvidenceNotebookV1,
   PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1,
 } from "./evidence-contracts.js";
+import {
+  memoryEvidenceIndependenceIdentityRevisionV1,
+  memoryEvidenceIndependenceKeyV1,
+} from "./evidence-independence.js";
 import {
   type MemoryEvidenceBindingV1,
   type MemoryEvidenceUseV1,
@@ -64,6 +68,14 @@ export function buildMemoryEvidenceNotebookV1(input: {
     selectedEvidenceRefs: readonly string[];
     historicalEvidenceRefs: readonly string[];
     unresolvedEvidenceRefs: readonly string[];
+    inputEvidenceRefs: readonly string[];
+    budgetOmittedEvidenceRefs: readonly string[];
+    admission: readonly Readonly<{
+      evidenceRef: string;
+      disposition: MemoryEvidenceNotebookAdmissionDispositionV1;
+      independenceIdentityRevision: string;
+    }>[];
+    budgetOmittedHitCount: number;
   }> = [];
   const seenRequirementIds = new Set<string>();
   const renderedEvidenceRefs = new Set<string>();
@@ -138,11 +150,30 @@ export function buildMemoryEvidenceNotebookV1(input: {
     const seenRefs = new Set<string>();
     const independentKeys = new Set<string>();
     const selectedRefs: string[] = [];
+    const inputEvidenceRefs = Object.freeze([
+      ...new Set(
+        rawRequirement.hits
+          .map((hit) => hit.evidenceRef.trim())
+          .filter(Boolean),
+      ),
+    ]);
+    const independenceIdentityByRef = new Map<string, string>();
+    for (const hit of rawRequirement.hits) {
+      const evidenceRef = hit.evidenceRef.trim();
+      if (!evidenceRef || independenceIdentityByRef.has(evidenceRef)) continue;
+      independenceIdentityByRef.set(
+        evidenceRef,
+        memoryEvidenceIndependenceIdentityRevisionV1(hit),
+      );
+    }
+    const budgetOmittedRefs = new Set<string>();
     let selectedForRequirement = 0;
     let independentForRequirement = 0;
+    // Only convergence claims require distinct episodes. `all` means retain
+    // every operand, including several different facts or endpoints from one
+    // event/session; event identity is still reported for audit below.
     const requiresIndependentEpisodes =
-      rawRequirement.coverageMode === "convergent" ||
-      rawRequirement.coverageMode === "all";
+      rawRequirement.coverageMode === "convergent";
     const supportText = `${label} ${searchText}`;
     const roleConstraint = rawRequirement.roleConstraint ?? "user";
     const certifiedDialogueEvidenceRefs = new Set(
@@ -249,13 +280,6 @@ export function buildMemoryEvidenceNotebookV1(input: {
       );
     }
     for (const { hit: rawHit } of rankedHits) {
-      if (
-        (requiresIndependentEpisodes
-          ? independentForRequirement
-          : selectedForRequirement) >= targetHits
-      ) {
-        break;
-      }
       const sourceId = rawHit.sourceId.trim();
       const evidenceRef = rawHit.evidenceRef.trim();
       const content = rawHit.content.trim();
@@ -275,10 +299,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
       ) {
         continue;
       }
-      const independentKey = memoryEvidenceIndependentKey(rawHit);
-      if (requiresIndependentEpisodes && independentKeys.has(independentKey)) {
-        continue;
-      }
+      const independentKey = memoryEvidenceIndependenceKeyV1(rawHit);
       // Latest-state answers receive only the controlling current evidence (or
       // unresolved peers). Superseded observations remain addressable through
       // coverage metadata, but are not rendered as equal-rank model context.
@@ -290,6 +311,13 @@ export function buildMemoryEvidenceNotebookV1(input: {
         continue;
       }
       seenRefs.add(evidenceRef);
+      if (selectedForRequirement >= targetHits) {
+        if (!budgetOmittedRefs.has(evidenceRef)) {
+          budgetOmittedRefs.add(evidenceRef);
+          budgetOmittedHitCount += 1;
+        }
+        continue;
+      }
       if (renderedEvidenceRefs.has(evidenceRef)) {
         selectedRefs.push(evidenceRef);
         selectedForRequirement += 1;
@@ -343,7 +371,10 @@ export function buildMemoryEvidenceNotebookV1(input: {
       // though the notebook itself still has space; skip that hit instead of
       // turning a bounded omission into a resolver-wide failure.
       if (excerptBudget < 128) {
-        budgetOmittedHitCount += 1;
+        if (!budgetOmittedRefs.has(evidenceRef)) {
+          budgetOmittedRefs.add(evidenceRef);
+          budgetOmittedHitCount += 1;
+        }
         continue;
       }
       const excerpt = projectMemoryEvidenceExcerptV1(
@@ -353,7 +384,10 @@ export function buildMemoryEvidenceNotebookV1(input: {
       );
       const part = [requirementLine, metadataLine, excerpt].join("\n");
       if (chars + separatorChars + part.length > input.maxChars) {
-        budgetOmittedHitCount += 1;
+        if (!budgetOmittedRefs.has(evidenceRef)) {
+          budgetOmittedRefs.add(evidenceRef);
+          budgetOmittedHitCount += 1;
+        }
         continue;
       }
       const state = sourceParts.get(sourceId) ?? {
@@ -385,6 +419,24 @@ export function buildMemoryEvidenceNotebookV1(input: {
       independentForRequirement = independentKeys.size;
       selectedHitCount += 1;
     }
+    const selectedRefSet = new Set(selectedRefs);
+    const admission = Object.freeze(
+      inputEvidenceRefs.map((evidenceRef) =>
+        Object.freeze({
+          evidenceRef,
+          disposition: notebookAdmissionDisposition({
+            evidenceRef,
+            selectedRefs: selectedRefSet,
+            historicalRefs,
+            unresolvedRefs: ambiguousRefs,
+            budgetOmittedRefs,
+          }),
+          independenceIdentityRevision: independenceIdentityByRef.get(
+            evidenceRef,
+          ) as string,
+        }),
+      ),
+    );
     coverage.push({
       requirementId,
       status:
@@ -407,6 +459,10 @@ export function buildMemoryEvidenceNotebookV1(input: {
       selectedEvidenceRefs: Object.freeze(selectedRefs),
       historicalEvidenceRefs: Object.freeze([...historicalRefs]),
       unresolvedEvidenceRefs: Object.freeze([...ambiguousRefs]),
+      inputEvidenceRefs,
+      budgetOmittedEvidenceRefs: Object.freeze([...budgetOmittedRefs]),
+      admission,
+      budgetOmittedHitCount: budgetOmittedRefs.size,
     });
   }
   const sources = [...sourceParts.entries()].map(([sourceId, state]) => {
@@ -438,19 +494,23 @@ export function buildMemoryEvidenceNotebookV1(input: {
   });
 }
 
-function memoryEvidenceIndependentKey(
-  hit: MemoryEvidenceNotebookHitV1,
-): string {
-  const eventKey = hit.eventKey?.trim();
-  if (eventKey) return `event:${eventKey}`;
-  const sourceId = hit.sourceId.trim();
-  const episodeOrder = hit.episodeOrder ?? hit.observedOrder;
-  // A source is the safest fallback episode boundary. Treating every turn as
-  // independent would let repeated wording from one conversation fake
-  // convergence when the adapter cannot provide explicit episode metadata.
-  return episodeOrder === undefined
-    ? `source:${sourceId}`
-    : `source:${sourceId}\0episode:${episodeOrder}`;
+function notebookAdmissionDisposition(input: {
+  evidenceRef: string;
+  selectedRefs: ReadonlySet<string>;
+  historicalRefs: ReadonlySet<string>;
+  unresolvedRefs: ReadonlySet<string>;
+  budgetOmittedRefs: ReadonlySet<string>;
+}): MemoryEvidenceNotebookAdmissionDispositionV1 {
+  if (input.budgetOmittedRefs.has(input.evidenceRef)) return "budget_omitted";
+  if (input.historicalRefs.has(input.evidenceRef)) return "historical";
+  if (
+    input.selectedRefs.has(input.evidenceRef) &&
+    input.unresolvedRefs.has(input.evidenceRef)
+  ) {
+    return "selected_unresolved";
+  }
+  if (input.selectedRefs.has(input.evidenceRef)) return "selected";
+  return "rejected";
 }
 
 function inferEvidenceStateSemanticsV1(content: string, searchText: string) {

@@ -423,21 +423,28 @@ export function createMemoryEvidenceResolverV1(input: {
                     : {
                         evidenceTimeUpperBound: input.evidenceTimeUpperBound,
                       }),
+                  applyQueryScope:
+                    requirement.temporalMode !== "any" ||
+                    (resolvedRequirements.length === 1 &&
+                      intent.temporalMode === "range"),
                 }),
             );
+            const executionCoverageValidationContext = Object.freeze({
+              intent,
+              requirements: resolvedRequirements,
+              temporalConstraints: stateFrameTemporalConstraints,
+              selectorSnapshot: pass.selectorExecutionSnapshot,
+              notebook: pass.notebook,
+              closureAuditStatus,
+              ...(closureVerdict === undefined ? {} : { closureVerdict }),
+              ...(closureAuditRevision === undefined
+                ? {}
+                : { closureAuditRevision }),
+            });
             const executionCoverageCertificate =
-              compileMemoryEvidenceExecutionCoverageCertificateV1({
-                intent,
-                requirements: resolvedRequirements,
-                temporalConstraints: stateFrameTemporalConstraints,
-                selectorSnapshot: pass.selectorExecutionSnapshot,
-                notebook: pass.notebook,
-                closureAuditStatus,
-                ...(closureVerdict === undefined ? {} : { closureVerdict }),
-                ...(closureAuditRevision === undefined
-                  ? {}
-                  : { closureAuditRevision }),
-              });
+              compileMemoryEvidenceExecutionCoverageCertificateV1(
+                executionCoverageValidationContext,
+              );
             stateFrameFailureStage = "state_shadow";
             stateFrameShadow = await buildMemoryStateFrameShadowV2({
               binder: input.stateObservationBinder,
@@ -452,6 +459,7 @@ export function createMemoryEvidenceResolverV1(input: {
               lockedSourceIds: pass.lockedSourceIds,
               dialogueCertificateRegistry: pass.dialogueCertificateRegistry,
               executionCoverageCertificate,
+              executionCoverageValidationContext,
               signal,
             });
             stateFrameFailureStage = undefined;

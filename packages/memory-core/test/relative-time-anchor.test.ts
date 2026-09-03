@@ -89,6 +89,15 @@ describe("relative time anchor v1", () => {
     ).toBeNull();
   });
 
+  test("incompatible relative clauses stay unbound", () => {
+    expect(
+      extractRelativeTimeWindowV1(
+        "Compare what happened last Friday and last Saturday.",
+        CUTOFF,
+      ),
+    ).toBeNull();
+  });
+
   test("non-temporal questions return null (zero behavior change)", () => {
     expect(
       extractRelativeTimeWindowV1("What degree did I graduate with?", CUTOFF),

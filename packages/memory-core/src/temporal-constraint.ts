@@ -111,6 +111,8 @@ export function bindMemoryEvidenceTemporalConstraintV1(input: {
   readonly leafMode: MemoryEvidenceTemporalModeV3;
   readonly constraint?: MemoryEvidenceTemporalConstraintV1;
   readonly evidenceTimeUpperBound?: string;
+  /** Host-owned permission for a semantically unbounded leaf to inherit scope. */
+  readonly applyQueryScope?: boolean;
 }): MemoryEvidenceBoundTemporalConstraintV1 {
   const constraint =
     input.constraint ?? compileMemoryEvidenceTemporalConstraintV1(input);
@@ -119,10 +121,13 @@ export function bindMemoryEvidenceTemporalConstraintV1(input: {
     constraint,
   });
   const evidenceTimeUpperBound = normalizeCutoff(input.evidenceTimeUpperBound);
-  const queryScopeInterval = compileMemoryEvidenceQueryScopeIntervalV1({
-    query: input.query,
-    evidenceTimeUpperBound,
-  });
+  const queryScopeInterval =
+    input.leafMode !== "any" || input.applyQueryScope === true
+      ? compileMemoryEvidenceQueryScopeIntervalV1({
+          query: input.query,
+          evidenceTimeUpperBound,
+        })
+      : null;
   const window = compileMemoryEvidenceBoundTemporalWindowV2({
     query: input.query,
     mode: input.leafMode,
@@ -210,9 +215,17 @@ export function compileMemoryEvidenceQueryScopeIntervalV1(input: {
   const relative = input.evidenceTimeUpperBound
     ? relativeQueryInterval(query, input.evidenceTimeUpperBound)
     : null;
-  return (
-    relative ?? combineRangeIntervals(extractExplicitQueryIntervals(query))
+  const explicit = combineRangeIntervals(
+    extractExplicitQueryIntervals(query),
+    query,
   );
+  if (relative && explicit) {
+    return relative.lower === explicit.lower &&
+      relative.upper === explicit.upper
+      ? relative
+      : null;
+  }
+  return relative ?? explicit;
 }
 
 export function compileMemoryEvidenceDurationRequestV1(
@@ -426,9 +439,17 @@ function extractExplicitQueryIntervals(
 
 function combineRangeIntervals(
   intervals: readonly MemoryEvidenceTemporalIntervalV2[],
+  query: string,
 ): MemoryEvidenceTemporalIntervalV2 | null {
   if (intervals.length === 0) return null;
   if (intervals.length === 1) return intervals[0] ?? null;
+  if (
+    !/\bbetween\b.{1,192}\band\b|\bfrom\b.{1,192}\bto\b|从.{1,128}到/iu.test(
+      query,
+    )
+  ) {
+    return null;
+  }
   const lower = [...intervals].map((interval) => interval.lower).sort()[0];
   const upper = [...intervals]
     .map((interval) => interval.upper)

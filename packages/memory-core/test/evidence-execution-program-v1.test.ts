@@ -114,6 +114,58 @@ function snapshot(rightStatus: "committed" | "failed") {
   });
 }
 
+function compileProgramFixture(input: {
+  query: string;
+  intent: MemoryEvidenceQueryIntentV3;
+  requirements: readonly MemoryEvidenceRequirementV3[];
+}) {
+  const temporal = input.requirements.map((requirement) =>
+    bindMemoryEvidenceTemporalConstraintV1({
+      query: input.query,
+      queryEnvelopeMode: input.intent.temporalMode,
+      leafMode: requirement.temporalMode,
+      evidenceTimeUpperBound: "2025-01-01T00:00:00.000Z",
+    }),
+  );
+  const groups = compileMemoryEvidenceSelectorGroupsV1({
+    intent: input.intent,
+    requirements: input.requirements,
+  });
+  const selectorSnapshot = compileMemorySelectorExecutionSnapshotV1({
+    query: input.query,
+    intent: input.intent,
+    requirements: input.requirements,
+    temporalConstraints: temporal,
+    candidateScopes: input.requirements.map((requirement) => ({
+      requirementId: requirement.requirementId,
+      evidenceRefs: [`ref-${requirement.requirementId}`],
+    })),
+    lockedSourceIds: input.requirements.map(
+      (requirement) => `source-${requirement.requirementId}`,
+    ),
+    originRevision: "origin-temporal-fixture",
+    selectorVersion: "selector-temporal-fixture",
+    selectionRevision: "selection-temporal-fixture",
+    committedAttempt: "baseline",
+    attemptCount: 1,
+    groups: groups.map((group) => ({
+      groupId: group.groupId,
+      requirementIds: group.requirementIds,
+      status: "committed" as const,
+      assessments: group.requirementIds.map((requirementId) =>
+        assessment(requirementId, `ref-${requirementId}`),
+      ),
+    })),
+  });
+  return compileMemoryEvidenceExecutionProgramV1({
+    query: input.query,
+    intent: input.intent,
+    requirements: input.requirements,
+    temporalConstraints: temporal,
+    selectorSnapshot,
+  });
+}
+
 describe("typed evidence execution program v1", () => {
   test("binds aggregate operation and unit to the original query", () => {
     expect(
@@ -304,5 +356,105 @@ describe("typed evidence execution program v1", () => {
       "collect_operands",
       "render_answer",
     ]);
+  });
+
+  test("composes temporal scope with latest and history operations", () => {
+    const baseRequirement = {
+      roleConstraint: "user" as const,
+      coverageMode: "any" as const,
+      minimumEvidence: 1,
+      dependencyRelation: "independent" as const,
+      dependsOnRequirementIds: [] as const,
+    };
+    const latest = compileProgramFixture({
+      query: "What was my most recent update last week?",
+      intent: {
+        answerShape: "lookup",
+        temporalMode: "latest",
+        roleConstraint: "user",
+        needsPlanning: true,
+      },
+      requirements: [
+        {
+          ...baseRequirement,
+          requirementId: "update",
+          label: "update",
+          searchText: "most recent update",
+          temporalMode: "latest",
+        },
+      ],
+    });
+    expect(latest.nodes.map((node) => node.operation)).toEqual([
+      "read_requirement",
+      "restrict_range",
+      "resolve_latest",
+      "collect_operands",
+      "render_answer",
+    ]);
+
+    const history = compileProgramFixture({
+      query: "List my visits in chronological order last month.",
+      intent: {
+        answerShape: "lookup",
+        temporalMode: "history",
+        roleConstraint: "user",
+        needsPlanning: true,
+      },
+      requirements: [
+        {
+          ...baseRequirement,
+          requirementId: "visits",
+          label: "visits",
+          searchText: "visits",
+          temporalMode: "history",
+        },
+      ],
+    });
+    expect(history.nodes.map((node) => node.operation)).toEqual([
+      "read_requirement",
+      "restrict_range",
+      "preserve_history",
+      "collect_operands",
+      "render_answer",
+    ]);
+  });
+
+  test("does not project one bounded answer scope onto an any dependency leaf", () => {
+    const program = compileProgramFixture({
+      query: "Who joined me last Saturday and what invitation led to it?",
+      intent: {
+        answerShape: "lookup",
+        temporalMode: "range",
+        roleConstraint: "user",
+        needsPlanning: true,
+      },
+      requirements: [
+        {
+          requirementId: "companion",
+          label: "companion",
+          searchText: "joined companion",
+          temporalMode: "range",
+          roleConstraint: "user",
+          coverageMode: "any",
+          minimumEvidence: 1,
+          dependencyRelation: "independent",
+          dependsOnRequirementIds: [],
+        },
+        {
+          requirementId: "invitation",
+          label: "invitation",
+          searchText: "invitation",
+          temporalMode: "any",
+          roleConstraint: "user",
+          coverageMode: "any",
+          minimumEvidence: 1,
+          dependencyRelation: "depends_on",
+          dependsOnRequirementIds: ["companion"],
+        },
+      ],
+    });
+    expect(
+      program.nodes.filter((node) => node.operation === "restrict_range"),
+    ).toHaveLength(1);
   });
 });

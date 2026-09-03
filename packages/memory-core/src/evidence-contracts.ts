@@ -11,7 +11,14 @@ export const PAW_MEMORY_EVIDENCE_CANDIDATE_FUSION_VERSION_V2 =
 export const PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1 =
   "paw.memory-conversation-bundle.v2:explicit-assistant-output-recall";
 export const PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1 =
-  "paw.memory-evidence-notebook.v11:lossless-slot-budget";
+  "paw.memory-evidence-notebook.v13:disjoint-admission-ledger";
+
+export type MemoryEvidenceNotebookAdmissionDispositionV1 =
+  | "selected"
+  | "selected_unresolved"
+  | "historical"
+  | "budget_omitted"
+  | "rejected";
 
 export type MemoryEvidenceChannelV1 = "l0" | "l1";
 
@@ -209,6 +216,22 @@ export interface MemoryEvidenceNotebookV1 {
     historicalEvidenceRefs: readonly string[];
     /** Unresolved peers that prevent a latest-state requirement from closing. */
     unresolvedEvidenceRefs: readonly string[];
+    /** Exact de-duplicated refs supplied to this requirement's notebook slot. */
+    inputEvidenceRefs?: readonly string[];
+    /** Otherwise valid refs omitted by either the hit cap or character budget. */
+    budgetOmittedEvidenceRefs?: readonly string[];
+    /**
+     * One canonical, disjoint disposition for every input ref. Episode/event
+     * identity affects only independentEvidenceCount and never drops facts.
+     */
+    admission?: readonly Readonly<{
+      evidenceRef: string;
+      disposition: MemoryEvidenceNotebookAdmissionDispositionV1;
+      /** Host-derived, content-free event/session identity for recounting. */
+      independenceIdentityRevision: string;
+    }>[];
+    /** Count of exact refs in budgetOmittedEvidenceRefs. */
+    budgetOmittedHitCount?: number;
   }>[];
   /** Bounded hits supplied to the notebook before authority and budget checks. */
   readonly inputHitCount: number;

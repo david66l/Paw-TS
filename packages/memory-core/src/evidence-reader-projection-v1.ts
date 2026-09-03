@@ -1,19 +1,22 @@
 import { hashCanonicalJsonV1 } from "./canonical.js";
-import type { MemoryEvidenceExecutionCoverageCertificateV1 } from "./evidence-execution-coverage-v1.js";
+import type {
+  MemoryEvidenceExecutionCoverageCertificateV1,
+  MemoryEvidenceExecutionCoverageCompilationInputV1,
+} from "./evidence-execution-coverage-v1.js";
 import {
   type MemoryEvidenceExecutionProgramV1,
   compileMemoryEvidenceExecutionProgramV1,
 } from "./evidence-execution-program-v1.js";
 import {
+  type MemoryEvidenceDurationEndpointBindingCertificateV1,
   type MemoryEvidenceExecutionAggregateValueV1,
   type MemoryEvidenceExecutionDurationValueV1,
   type MemoryEvidenceExecutionNodeResultV1,
   type MemoryEvidenceExecutionObservationValueV1,
-  type MemoryEvidenceDurationEndpointBindingCertificateV1,
-  type MemoryEvidencePersonalizationCoverageCertificateV1,
   type MemoryEvidenceExecutionPersonalizationValueV1,
   type MemoryEvidenceExecutionResultV1,
   type MemoryEvidenceExecutionValueV1,
+  type MemoryEvidencePersonalizationCoverageCertificateV1,
   executeMemoryEvidenceProgramV1,
 } from "./evidence-execution-runtime-v1.js";
 import { compileMemoryQueryAnswerOriginV1 } from "./query-answer-origin.js";
@@ -24,8 +27,8 @@ import type {
 } from "./query-plan-contracts.js";
 import type { MemorySelectorExecutionSnapshotV1 } from "./selector-execution-snapshot-v1.js";
 import type {
-  MemoryStateBindingCertificateValidationInputV1,
   MemoryStateBindingCertificateV1,
+  MemoryStateBindingCertificateValidationInputV1,
   MemoryStateValidatedObservationV1,
 } from "./state-binding-certificate-v1.js";
 import {
@@ -167,6 +170,7 @@ export interface MemoryEvidenceReaderProjectionInputV1 {
   readonly validatedObservations: readonly MemoryStateValidatedObservationV1[];
   readonly bindingCertificateValidationContexts: readonly MemoryStateBindingCertificateValidationInputV1[];
   readonly coverageCertificate?: MemoryEvidenceExecutionCoverageCertificateV1;
+  readonly coverageValidationContext?: MemoryEvidenceExecutionCoverageCompilationInputV1;
   readonly executionResult: MemoryEvidenceExecutionResultV1;
 }
 
@@ -254,13 +258,18 @@ function buildProjection(
       input.bindingCertificateValidationContexts,
     ...(input.coverageCertificate === undefined
       ? {}
-      : { coverageCertificate: input.coverageCertificate }),
+      : {
+          coverageCertificate: input.coverageCertificate,
+          coverageValidationContext: input.coverageValidationContext,
+        }),
   });
   if (!same(expectedExecution, input.executionResult)) {
     reject("execution_mismatch");
   }
   if (expectedExecution.status !== "complete") reject("root_incomplete");
-  const nodeById = new Map(input.program.nodes.map((node) => [node.nodeId, node]));
+  const nodeById = new Map(
+    input.program.nodes.map((node) => [node.nodeId, node]),
+  );
   const resultById = new Map(
     expectedExecution.nodes.map((node) => [node.nodeId, node]),
   );
@@ -285,7 +294,8 @@ function buildProjection(
   const valueById = validateValueGraph(expectedExecution.nodes);
   const reachableValueIds = new Set(
     [...reachableNodeIds].flatMap(
-      (nodeId) => resultById.get(nodeId)?.values.map((value) => value.valueId) ?? [],
+      (nodeId) =>
+        resultById.get(nodeId)?.values.map((value) => value.valueId) ?? [],
     ),
   );
   const reachableValueById = new Map(
@@ -394,7 +404,9 @@ function validateSourceAndSelector(
   const lockedSourceIds = new Set(input.lockedSourceIds);
   if (
     !same(expectedLock, input.sourceLock) ||
-    input.sourceLock.items.some((item) => !lockedSourceIds.has(item.sourceId)) ||
+    input.sourceLock.items.some(
+      (item) => !lockedSourceIds.has(item.sourceId),
+    ) ||
     input.bindingCertificateValidationContexts.some(
       (context) =>
         context.query !== input.query ||
@@ -569,10 +581,7 @@ function projectPersonalization(
     reject("profile_unsafe");
   }
   const profilePartitions = new Map<
-    | "explicit_positive"
-    | "explicit_negative"
-    | "goal"
-    | "contextual",
+    "explicit_positive" | "explicit_negative" | "goal" | "contextual",
     readonly string[]
   >([
     ["explicit_positive", profile.explicitPositiveValueIds],
@@ -683,7 +692,10 @@ function projectEvidenceGroups(
       (value): value is MemoryEvidenceExecutionObservationValueV1 =>
         value.kind === "observation",
     );
-    const byRequirement = new Map<string, MemoryEvidenceExecutionObservationValueV1[]>();
+    const byRequirement = new Map<
+      string,
+      MemoryEvidenceExecutionObservationValueV1[]
+    >();
     for (const observation of observations) {
       const values = byRequirement.get(observation.requirementId) ?? [];
       values.push(observation);
@@ -708,7 +720,10 @@ function projectEvidenceGroups(
           .map((value) => {
             if (membership.has(value.valueId)) reject("dangling_value");
             membership.add(value.valueId);
-            return projectedClaim(valueById.get(value.valueId), certificateById);
+            return projectedClaim(
+              valueById.get(value.valueId),
+              certificateById,
+            );
           }),
       );
       const slotId = values[0]?.slotId;
@@ -748,8 +763,7 @@ function projectEvidenceGroups(
   }
   const comparison = comparisons[0];
   const sides =
-    answer.operation !== "compare_operands" ||
-    comparison?.kind !== "comparison"
+    answer.operation !== "compare_operands" || comparison?.kind !== "comparison"
       ? undefined
       : Object.freeze(
           operandNodeIds.map((operandNodeId, index) => {
@@ -766,7 +780,10 @@ function projectEvidenceGroups(
             if (
               !comparisonSide ||
               !operand ||
-              !same(comparisonSide.valueIds, operand.values.map((value) => value.valueId))
+              !same(
+                comparisonSide.valueIds,
+                operand.values.map((value) => value.valueId),
+              )
             ) {
               reject("dangling_value");
             }
@@ -889,7 +906,10 @@ function referencedValueIds(
 
 function collectReachableNodeIds(
   rootNodeId: string,
-  nodeById: ReadonlyMap<string, MemoryEvidenceExecutionProgramV1["nodes"][number]>,
+  nodeById: ReadonlyMap<
+    string,
+    MemoryEvidenceExecutionProgramV1["nodes"][number]
+  >,
 ): ReadonlySet<string> {
   const reachable = new Set<string>();
   const visit = (nodeId: string) => {
@@ -918,12 +938,12 @@ function collectPayloadCertificateIds(
 }
 
 function same(left: unknown, right: unknown): boolean {
-  return hashCanonicalJsonV1(left as never) === hashCanonicalJsonV1(right as never);
+  return (
+    hashCanonicalJsonV1(left as never) === hashCanonicalJsonV1(right as never)
+  );
 }
 
-function reject(
-  reason: MemoryEvidenceReaderProjectionRejectedReasonV1,
-): never {
+function reject(reason: MemoryEvidenceReaderProjectionRejectedReasonV1): never {
   const error = new Error(reason);
   error.name = "MemoryEvidenceReaderProjectionRejected";
   throw error;

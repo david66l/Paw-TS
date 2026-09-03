@@ -1,7 +1,10 @@
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import {
+  type MemoryEvidenceExecutionCompletionBasisV1,
   type MemoryEvidenceExecutionCoverageCertificateV1,
+  type MemoryEvidenceExecutionCoverageCompilationInputV1,
   type MemoryEvidenceExecutionRequirementCoverageV1,
+  compileMemoryEvidenceExecutionCoverageCertificateV1,
   validateMemoryEvidenceExecutionCoverageCertificateV1,
 } from "./evidence-execution-coverage-v1.js";
 import type {
@@ -9,25 +12,33 @@ import type {
   MemoryEvidenceExecutionProgramV1,
 } from "./evidence-execution-program-v1.js";
 import { validateMemoryEvidenceExecutionProgramV1 } from "./evidence-execution-program-v1.js";
+import {
+  memoryEvidenceIndependenceIdentityRevisionV1,
+  memoryEvidenceIndependenceKeyV1,
+} from "./evidence-independence.js";
 import { compileMemoryQueryAnswerOriginV1 } from "./query-answer-origin.js";
+import type {
+  MemoryStateBindingCertificateV1,
+  MemoryStateBindingCertificateValidationInputV1,
+  MemoryStateValidatedObservationV1,
+} from "./state-binding-certificate-v1.js";
+import { validateMemoryStateBindingCertificateV1 } from "./state-binding-certificate-v1.js";
 import type {
   MemoryResolvedStateFrameV2,
   MemoryStateBoundObservationV2,
   MemoryStateEventTimeIntervalV2,
   MemoryStateSlotSpecV2,
 } from "./state-frame-v2.js";
-import type {
-  MemoryStateBindingCertificateValidationInputV1,
-  MemoryStateBindingCertificateV1,
-  MemoryStateValidatedObservationV1,
-} from "./state-binding-certificate-v1.js";
-import { validateMemoryStateBindingCertificateV1 } from "./state-binding-certificate-v1.js";
 
 export const PAW_MEMORY_EVIDENCE_EXECUTION_RUNTIME_VERSION_V1 =
   "paw.memory-evidence-execution-runtime.v1:proof-carrying-fail-closed" as const;
 
 export type MemoryEvidenceExecutionNodeResultStatusV1 =
-  "complete" | "partial" | "missing" | "conflict" | "unsupported";
+  | "complete"
+  | "partial"
+  | "missing"
+  | "conflict"
+  | "unsupported";
 
 export type MemoryEvidenceExecutionResultReasonV1 =
   | "plan_node_blocked"
@@ -43,6 +54,7 @@ export type MemoryEvidenceExecutionResultReasonV1 =
   | "duration_end_before_start"
   | "closed_world_unproven"
   | "operand_incomplete"
+  | "coverage_materialization_incomplete"
   | "aggregate_event_conflict"
   | "aggregate_materialization_incomplete"
   | "aggregate_member_unsupported"
@@ -74,7 +86,9 @@ export interface MemoryEvidenceExecutionObservationValueV1 {
   readonly valueText: string;
   readonly valueKey: string;
   readonly valueComposition:
-    "single" | "contiguous_composite" | "ordered_tuple";
+    | "single"
+    | "contiguous_composite"
+    | "ordered_tuple";
   readonly predicateKind: MemoryStateBoundObservationV2["predicateKind"];
   readonly polarity: MemoryStateBoundObservationV2["polarity"];
   readonly modality: MemoryStateBoundObservationV2["modality"];
@@ -118,9 +132,16 @@ export interface MemoryEvidenceExecutionAggregateValueV1 {
   readonly kind: "aggregate";
   readonly valueId: string;
   readonly operator:
-    "collect_unique" | "count" | "sum" | "difference" | "ratio_percent";
+    | "collect_unique"
+    | "count"
+    | "sum"
+    | "difference"
+    | "ratio_percent";
   readonly aggregationUnit:
-    "event" | "semantic_value" | "entity" | "numeric_quantity";
+    | "event"
+    | "semantic_value"
+    | "entity"
+    | "numeric_quantity";
   readonly countBasis: "enumerated_members" | "stated_cardinality" | null;
   readonly memberValueIds: readonly string[];
   readonly lowerBoundCount: number;
@@ -156,7 +177,8 @@ export interface MemoryEvidenceDurationEndpointBindingCertificateV1 {
   readonly resolvedStateFrameRevision: string;
   readonly sourceLockDigest: string;
   readonly endpointContractKind:
-    "distinct_evidence_pair" | "evidence_to_host_anchor";
+    | "distinct_evidence_pair"
+    | "evidence_to_host_anchor";
   readonly endpointValueIds: readonly string[];
   readonly endpointClaimIdentities: readonly string[];
   readonly endpointEventIdentities: readonly string[];
@@ -327,6 +349,7 @@ export function executeMemoryEvidenceProgramV1(input: {
   readonly validatedObservations: readonly MemoryStateValidatedObservationV1[];
   readonly bindingCertificateValidationContexts: readonly MemoryStateBindingCertificateValidationInputV1[];
   readonly coverageCertificate?: MemoryEvidenceExecutionCoverageCertificateV1;
+  readonly coverageValidationContext?: MemoryEvidenceExecutionCoverageCompilationInputV1;
 }): MemoryEvidenceExecutionResultV1 {
   validateMemoryEvidenceExecutionProgramV1(input.program);
   const { frameRevision, ...resolvedFrameIdentity } = input.frame;
@@ -371,14 +394,26 @@ export function executeMemoryEvidenceProgramV1(input: {
     readyReadNodes.some(
       (node) =>
         !node.requirementId || !slotByRequirement.has(node.requirementId),
-    )
+    ) ||
+    (input.coverageCertificate === undefined) !==
+      (input.coverageValidationContext === undefined)
   ) {
     throw namedError("MemoryEvidenceExecutionRuntimeInputInvalid");
   }
+  const expectedCoverageCertificate = input.coverageValidationContext
+    ? compileMemoryEvidenceExecutionCoverageCertificateV1(
+        input.coverageValidationContext,
+      )
+    : undefined;
   if (
     input.coverageCertificate &&
-    (input.coverageCertificate.selectorSnapshotRevision !==
-      input.program.selectorSnapshotRevision ||
+    (!expectedCoverageCertificate ||
+      expectedCoverageCertificate.certificateRevision !==
+        input.coverageCertificate.certificateRevision ||
+      hashCanonicalJsonV1(expectedCoverageCertificate as never) !==
+        hashCanonicalJsonV1(input.coverageCertificate as never) ||
+      input.coverageCertificate.selectorSnapshotRevision !==
+        input.program.selectorSnapshotRevision ||
       input.coverageCertificate.requirements.length !== readNodes.length ||
       input.coverageCertificate.requirements.some((coverage) => {
         const readNode = readNodeByRequirement.get(coverage.requirementId);
@@ -389,6 +424,11 @@ export function executeMemoryEvidenceProgramV1(input: {
           coverage.requirementRevision !== readNode.requirementRevision ||
           coverage.temporalBindingRevision !==
             readNode.temporalBindingRevision ||
+          coverage.completionBasis !==
+            executionCompletionBasisForProgramV1(
+              input.program,
+              coverage.requirementId,
+            ) ||
           coverage.supportingEvidenceSetRevision !==
             hashCanonicalJsonV1({
               schemaVersion: "paw.memory-supporting-evidence-set.v1",
@@ -402,6 +442,10 @@ export function executeMemoryEvidenceProgramV1(input: {
     throw namedError("MemoryEvidenceExecutionRuntimeCoverageInvalid");
   }
   if (input.coverageCertificate) {
+    validateCoverageAdmissionIdentities(
+      input.coverageValidationContext as MemoryEvidenceExecutionCoverageCompilationInputV1,
+      input.bindingCertificateValidationContexts,
+    );
     validateMemoryEvidenceExecutionCoverageCertificateV1(
       input.coverageCertificate,
     );
@@ -432,6 +476,7 @@ export function executeMemoryEvidenceProgramV1(input: {
             slotByRequirement,
             stateSlotById,
             certificateByObservationId,
+            coverageByRequirement,
           )
         : executeDerivedNode(
             node,
@@ -485,6 +530,93 @@ export function executeMemoryEvidenceProgramV1(input: {
   });
 }
 
+function validateCoverageAdmissionIdentities(
+  coverageContext: MemoryEvidenceExecutionCoverageCompilationInputV1,
+  bindingContexts: readonly MemoryStateBindingCertificateValidationInputV1[],
+): void {
+  const sourceIdentityByEvidenceRef = new Map<string, string>();
+  for (const context of bindingContexts) {
+    for (const source of context.sourceLock.items) {
+      const revision = memoryEvidenceIndependenceIdentityRevisionV1(source);
+      const existing = sourceIdentityByEvidenceRef.get(source.evidenceRef);
+      if (existing && existing !== revision) {
+        throw namedError("MemoryEvidenceExecutionRuntimeCoverageInvalid");
+      }
+      sourceIdentityByEvidenceRef.set(source.evidenceRef, revision);
+    }
+  }
+  for (const coverage of coverageContext.notebook.coverage) {
+    for (const admission of coverage.admission ?? []) {
+      if (
+        admission.disposition !== "selected" &&
+        admission.disposition !== "selected_unresolved"
+      ) {
+        continue;
+      }
+      if (
+        sourceIdentityByEvidenceRef.get(admission.evidenceRef) !==
+        admission.independenceIdentityRevision
+      ) {
+        throw namedError("MemoryEvidenceExecutionRuntimeCoverageInvalid");
+      }
+    }
+  }
+}
+
+function executionCompletionBasisForProgramV1(
+  program: MemoryEvidenceExecutionProgramV1,
+  requirementId: string,
+): MemoryEvidenceExecutionCompletionBasisV1 {
+  const read = program.nodes.find(
+    (node) =>
+      node.operation === "read_requirement" &&
+      node.requirementId === requirementId,
+  );
+  const answer = program.nodes.find(
+    (node) => node.nodeId === program.answerNodeId,
+  );
+  if (!read || !answer) {
+    throw namedError("MemoryEvidenceExecutionRuntimeCoverageInvalid");
+  }
+  if (answer.operation === "measure_duration") return "finite_endpoint_exact";
+  if (
+    read.coverageMode === "all" ||
+    read.coverageMode === "convergent" ||
+    answer.operation === "aggregate_operands"
+  ) {
+    return "closed_world_collection";
+  }
+  const reachable = new Set([read.nodeId]);
+  const temporalOperations = new Set<
+    MemoryEvidenceExecutionNodeV1["operation"]
+  >();
+  for (const node of program.nodes) {
+    if (!node.operandNodeIds.some((nodeId) => reachable.has(nodeId))) continue;
+    reachable.add(node.nodeId);
+    if (
+      node.operation === "restrict_range" ||
+      node.operation === "preserve_history" ||
+      node.operation === "resolve_latest" ||
+      node.operation === "resolve_as_of"
+    ) {
+      temporalOperations.add(node.operation);
+    }
+  }
+  if (temporalOperations.has("preserve_history")) {
+    return "closed_world_collection";
+  }
+  if (
+    temporalOperations.has("resolve_latest") ||
+    temporalOperations.has("resolve_as_of")
+  ) {
+    return "frontier_complete";
+  }
+  if (temporalOperations.has("restrict_range")) {
+    return "bounded_window_lookup";
+  }
+  return "legacy_closed_world";
+}
+
 function executeReadNode(
   node: MemoryEvidenceExecutionNodeV1,
   slotByRequirement: ReadonlyMap<string, MemoryStateSlotSpecV2>,
@@ -495,6 +627,10 @@ function executeReadNode(
   certificateByObservationId: ReadonlyMap<
     string,
     MemoryStateBindingCertificateV1
+  >,
+  coverageByRequirement: ReadonlyMap<
+    string,
+    MemoryEvidenceExecutionRequirementCoverageV1
   >,
 ): MemoryEvidenceExecutionNodeResultV1 {
   if (node.status !== "ready") {
@@ -542,6 +678,26 @@ function executeReadNode(
         certificateByObservationId.get(observation.observationId),
       ),
     );
+  const materializedEvidenceRefs = new Set(
+    observations.map((observation) => observation.evidenceRef),
+  );
+  if (
+    !requirementMaterializationExactV1(
+      requirementId,
+      materializedEvidenceRefs,
+      coverageByRequirement,
+    )
+  ) {
+    return result(
+      node,
+      "partial",
+      values,
+      history,
+      conflicts,
+      "coverage_materialization_incomplete",
+      [...state.coverageProof],
+    );
+  }
   // Temporal leaves must expose every admitted observation to the temporal
   // executor. The state reducer's conflict is an intermediate diagnosis; only
   // the typed clock policy may decide mixed-clock partial vs real conflict.
@@ -557,8 +713,13 @@ function executeReadNode(
     return result(node, "missing", [], [], [], "state_slot_missing", []);
   }
   const independent = new Set(observations.map(independenceKey));
-  const minimum = node.minimumIndependentEvidence ?? 1;
-  if (independent.size < minimum) {
+  const materializedEvidenceCount =
+    node.coverageMode === "convergent"
+      ? independent.size
+      : new Set(observations.map((observation) => observation.evidenceRef))
+          .size;
+  const minimum = node.minimumEvidence ?? 1;
+  if (materializedEvidenceCount < minimum) {
     return result(
       node,
       "partial",
@@ -594,6 +755,27 @@ function executeDerivedNode(
   if (node.status !== "ready") {
     return result(node, "missing", [], [], [], "plan_node_blocked", []);
   }
+  if (
+    new Set([
+      "resolve_latest",
+      "resolve_as_of",
+      "restrict_range",
+      "preserve_history",
+    ]).has(node.operation) &&
+    operands.some(
+      (operand) => operand.reason === "coverage_materialization_incomplete",
+    )
+  ) {
+    return result(
+      node,
+      "partial",
+      flattenValues(operands),
+      flattenHistory(operands),
+      flattenConflicts(operands),
+      "coverage_materialization_incomplete",
+      flattenProofs(operands),
+    );
+  }
   if (node.operation === "resolve_latest")
     return executeLatest(node, operands, closedRequirementIds);
   if (node.operation === "resolve_as_of")
@@ -605,6 +787,13 @@ function executeDerivedNode(
     if (observations.length === 0)
       return incompleteFromOperands(node, operands);
     const ordered = orderHistory(observations);
+    const evidenceFailure = transformedEvidenceFailure(
+      node,
+      ordered,
+      [],
+      operands,
+    );
+    if (evidenceFailure) return evidenceFailure;
     const closed = observations.every((value) =>
       closedRequirementIds.has(value.requirementId),
     );
@@ -670,7 +859,10 @@ function executeDerivedNode(
     );
   }
   if (node.operation === "aggregate_operands") {
-    if (firstIncomplete(operands))
+    const materializationIncomplete = operands.some(
+      (operand) => operand.reason === "coverage_materialization_incomplete",
+    );
+    if (firstIncomplete(operands) && !materializationIncomplete)
       return incompleteFromOperands(node, operands);
     const request = node.aggregateRequest;
     if (!request) {
@@ -975,6 +1167,16 @@ function executeRange(
       flattenProofs(operands),
     );
   }
+  const excluded = observations.filter(
+    (observation) => !filtered.includes(observation),
+  );
+  const evidenceFailure = transformedEvidenceFailure(
+    node,
+    filtered,
+    excluded,
+    operands,
+  );
+  if (evidenceFailure) return evidenceFailure;
   const closed = filtered.every((observation) =>
     closedRequirementIds.has(observation.requirementId),
   );
@@ -982,7 +1184,7 @@ function executeRange(
     node,
     closed ? "complete" : "partial",
     orderHistory(filtered),
-    observations.filter((observation) => !filtered.includes(observation)),
+    excluded,
     [],
     closed ? undefined : "closed_world_unproven",
     flattenProofs(operands),
@@ -1063,6 +1265,16 @@ function executeLatestObservations(
       flattenProofs(operands),
     );
   }
+  const excluded = observationValues(operands).filter(
+    (observation) => !maxima.includes(observation),
+  );
+  const evidenceFailure = transformedEvidenceFailure(
+    node,
+    maxima,
+    excluded,
+    operands,
+  );
+  if (evidenceFailure) return evidenceFailure;
   const winner = maxima[0] as MemoryEvidenceExecutionObservationValueV1;
   if (winner.predicateKind === "retract") {
     return result(
@@ -1095,6 +1307,73 @@ function executeLatestObservations(
     undefined,
     [...new Set(maxima.map((value) => value.bindingRevision))],
   );
+}
+
+/**
+ * Re-applies evidence closure after every temporal transformation. A raw read
+ * may satisfy the requirement while the final time window does not.
+ */
+function transformedEvidenceFailure(
+  node: MemoryEvidenceExecutionNodeV1,
+  admitted: readonly MemoryEvidenceExecutionObservationValueV1[],
+  excluded: readonly MemoryEvidenceExecutionObservationValueV1[],
+  operands: readonly MemoryEvidenceExecutionNodeResultV1[],
+): MemoryEvidenceExecutionNodeResultV1 | null {
+  const minimum = node.minimumEvidence ?? 1;
+  const proof = [...new Set(admitted.map((value) => value.bindingRevision))];
+  if (node.coverageMode !== "convergent") {
+    const evidenceCount = new Set(admitted.map((value) => value.evidenceRef))
+      .size;
+    return evidenceCount >= minimum
+      ? null
+      : result(
+          node,
+          "partial",
+          admitted,
+          excluded,
+          [],
+          "minimum_evidence_unsatisfied",
+          proof.length > 0 ? proof : flattenProofs(operands),
+        );
+  }
+
+  const groups = new Map<string, MemoryEvidenceExecutionObservationValueV1[]>();
+  for (const observation of admitted) {
+    const key = executionIndependenceKey(observation);
+    const group = groups.get(key) ?? [];
+    group.push(observation);
+    groups.set(key, group);
+  }
+  const internallyConflicted = [...groups.values()].some(
+    (group) => new Set(group.map(convergenceExecutionIdentity)).size > 1,
+  );
+  const representatives = [...groups.values()].flatMap((group) =>
+    group[0] ? [group[0]] : [],
+  );
+  const crossGroupConflict =
+    new Set(representatives.map(convergenceExecutionIdentity)).size > 1;
+  if (internallyConflicted || crossGroupConflict) {
+    return result(
+      node,
+      "conflict",
+      admitted,
+      excluded,
+      admitted,
+      undefined,
+      proof.length > 0 ? proof : flattenProofs(operands),
+    );
+  }
+  return groups.size >= minimum
+    ? null
+    : result(
+        node,
+        "partial",
+        admitted,
+        excluded,
+        [],
+        "minimum_evidence_unsatisfied",
+        proof.length > 0 ? proof : flattenProofs(operands),
+      );
 }
 
 function executePreference(
@@ -1194,8 +1473,7 @@ function executePersonalization(
     compilePersonalizationClaimLifecycleCertificatesV1({
       observations,
       programRevision: executionIdentity.programRevision,
-      resolvedStateFrameRevision:
-        executionIdentity.resolvedStateFrameRevision,
+      resolvedStateFrameRevision: executionIdentity.resolvedStateFrameRevision,
       sourceLockDigest: executionIdentity.sourceLockDigest,
     });
   if (!lifecycleCertificates) {
@@ -1424,7 +1702,8 @@ function compilePersonalizationClaimLifecycleCertificatesV1(input: {
   const lifecycleSources = input.observations.filter((value) =>
     new Set(["update", "retract", "confirm"]).has(value.predicateKind),
   );
-  const certificates: MemoryEvidencePersonalizationClaimLifecycleCertificateV1[] = [];
+  const certificates: MemoryEvidencePersonalizationClaimLifecycleCertificateV1[] =
+    [];
   for (const source of lifecycleSources) {
     const expectedRelation =
       source.predicateKind === "retract"
@@ -1627,8 +1906,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
     claims,
   } as never);
   const lifecycleCertificateSetRevision = hashCanonicalJsonV1({
-    schemaVersion:
-      "paw.memory-personalization-lifecycle-certificate-set.v1",
+    schemaVersion: "paw.memory-personalization-lifecycle-certificate-set.v1",
     certificateRevisions: input.lifecycleCertificates.map(
       (certificate) => certificate.certificateRevision,
     ),
@@ -1994,9 +2272,10 @@ function compileDurationEndpointCertificateV1(input: {
       endpoints.map((item) => item.eventIdentity as string),
     ),
     endpointIdentityBases: Object.freeze(
-      endpoints.map((item) => item.eventIdentityBasis as
-        | "stable_event_key"
-        | "typed_role_interval"),
+      endpoints.map(
+        (item) =>
+          item.eventIdentityBasis as "stable_event_key" | "typed_role_interval",
+      ),
     ),
     endpointTimeBases: Object.freeze(
       endpoints.map((item) => item.eventTimeBasis),
@@ -2160,8 +2439,7 @@ function observationValue(
           ...(observation.eventKey?.trim()
             ? { stableEventKey: observation.eventKey.trim() }
             : {
-                typedDurationEndpointRole:
-                  observation.durationEndpointRole,
+                typedDurationEndpointRole: observation.durationEndpointRole,
                 eventTimeInterval: observation.eventTimeInterval,
               }),
         } as never)
@@ -2184,8 +2462,7 @@ function observationValue(
     ...(observation.lifecycleTargetEvidenceRef === undefined
       ? {}
       : {
-          lifecycleTargetEvidenceRef:
-            observation.lifecycleTargetEvidenceRef,
+          lifecycleTargetEvidenceRef: observation.lifecycleTargetEvidenceRef,
         }),
     valueText,
     valueKey: normalizeValue(valueText),
@@ -2238,10 +2515,10 @@ function validateExecutionBindingCertificates(
   registryRevision: string;
 }> {
   const frameObservations = frame.slots.flatMap((slot) => [
-      ...slot.current,
-      ...slot.history,
-      ...slot.conflicts,
-    ]);
+    ...slot.current,
+    ...slot.history,
+    ...slot.conflicts,
+  ]);
   const frameById = new Map(
     frameObservations.map((observation) => [
       observation.observationId,
@@ -2273,7 +2550,10 @@ function validateExecutionBindingCertificates(
   ) {
     throw namedError("MemoryEvidenceExecutionRuntimeCertificateInvalid");
   }
-  const usedContextIdentities = new Map<string, Readonly<Record<string, unknown>>>();
+  const usedContextIdentities = new Map<
+    string,
+    Readonly<Record<string, unknown>>
+  >();
   let transactionQueryRevision: string | undefined;
   for (const item of validated) {
     const frameObservation = frameById.get(item.observation.observationId);
@@ -2308,7 +2588,8 @@ function validateExecutionBindingCertificates(
     }
     if (
       !validationContext.query.trim() ||
-      validationContext.sourceLock.sourceLockDigest !== frame.sourceLockDigest ||
+      validationContext.sourceLock.sourceLockDigest !==
+        frame.sourceLockDigest ||
       contextOriginRevision !== program.originRevision ||
       contextSlotById.size !== validationContext.slots.length ||
       contextSlotById.size < 1 ||
@@ -2894,16 +3175,33 @@ function aggregateMaterializationExactV1(
     refsByRequirement.set(value.requirementId, refs);
   }
   return [...refsByRequirement].every(([requirementId, refs]) => {
-    const coverage = coverageByRequirement.get(requirementId);
-    if (!coverage || coverage.selectedEvidenceCount !== refs.size) return false;
-    return (
-      coverage.selectedEvidenceSetRevision ===
-      hashCanonicalJsonV1({
-        schemaVersion: "paw.memory-selected-evidence-set.v1",
-        evidenceRefs: Object.freeze([...refs].sort()),
-      } as never)
+    return requirementMaterializationExactV1(
+      requirementId,
+      refs,
+      coverageByRequirement,
     );
   });
+}
+
+function requirementMaterializationExactV1(
+  requirementId: string,
+  evidenceRefs: ReadonlySet<string>,
+  coverageByRequirement: ReadonlyMap<
+    string,
+    MemoryEvidenceExecutionRequirementCoverageV1
+  >,
+): boolean {
+  const coverage = coverageByRequirement.get(requirementId);
+  if (!coverage) return true;
+  if (coverage.executableAdmissionEvidenceCount !== evidenceRefs.size)
+    return false;
+  return (
+    coverage.executableAdmissionEvidenceSetRevision ===
+    hashCanonicalJsonV1({
+      schemaVersion: "paw.memory-executable-admission-evidence-set.v1",
+      evidenceRefs: Object.freeze([...evidenceRefs].sort()),
+    } as never)
+  );
 }
 
 function parseNumericQuantityV1(
@@ -3006,10 +3304,27 @@ function semanticObservationKey(
   return `${value.valueKey}\0${value.predicateKind}\0${value.polarity}`;
 }
 
+function convergenceExecutionIdentity(
+  value: MemoryEvidenceExecutionObservationValueV1,
+): string {
+  return [
+    value.valueKey,
+    value.predicateKind,
+    value.polarity,
+    value.modality,
+    value.lifecycleRelation,
+    value.lifecycleTargetEvidenceRef ?? "",
+  ].join("\0");
+}
+
+function executionIndependenceKey(
+  observation: MemoryEvidenceExecutionObservationValueV1,
+): string {
+  return memoryEvidenceIndependenceKeyV1(observation);
+}
+
 function independenceKey(observation: MemoryStateBoundObservationV2): string {
-  return observation.eventKey?.trim()
-    ? `event:${observation.eventKey}`
-    : `source:${observation.sourceId}\0episode:${observation.episodeOrder ?? "unknown"}`;
+  return memoryEvidenceIndependenceKeyV1(observation);
 }
 
 function normalizeValue(value: string): string {

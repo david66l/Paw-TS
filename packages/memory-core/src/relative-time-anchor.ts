@@ -358,18 +358,25 @@ export function extractRelativeTimeWindowV1(
   cutoffMs: number,
 ): MeaRelativeTimeWindowV1 | null {
   if (!query.trim() || !Number.isFinite(cutoffMs)) return null;
-  let best: (MeaRelativeTimeWindowV1 & { index: number }) | null = null;
+  const candidates: Array<MeaRelativeTimeWindowV1 & { index: number }> = [];
   for (const rule of RULES) {
-    const regex = new RegExp(rule.regex.source, "i");
-    const match = query.match(regex);
-    if (!match || match.index === undefined) continue;
-    const built = rule.build(match, cutoffMs);
-    if (!built) continue;
-    if (best === null || match.index < best.index) {
-      best = { ...built, index: match.index };
+    const flags = `${rule.regex.flags.replace("g", "")}g`;
+    for (const match of query.matchAll(new RegExp(rule.regex.source, flags))) {
+      if (match.index === undefined) continue;
+      const built = rule.build(match, cutoffMs);
+      if (built) candidates.push({ ...built, index: match.index });
     }
   }
-  if (best === null) return null;
+  if (candidates.length === 0) return null;
+  const distinctIntervals = new Set(
+    candidates.map((candidate) => `${candidate.startMs}\0${candidate.endMs}`),
+  );
+  // A display-oriented "first match wins" policy is unsafe once the interval
+  // enters typed execution. Incompatible relative clauses stay unbound until
+  // a future clause-to-leaf binder can prove their ownership.
+  if (distinctIntervals.size !== 1) return null;
+  const best = candidates.sort((left, right) => left.index - right.index)[0];
+  if (!best) return null;
   const { index: _index, ...window } = best;
   return window;
 }

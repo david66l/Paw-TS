@@ -321,7 +321,7 @@ function buildRequest(
           slot.durationEndpointContractKind ?? "not_applicable",
         roleConstraint: slot.roleConstraint,
         coverageMode: slot.coverageMode,
-        minimumIndependentEvidence: slot.minimumIndependentEvidence,
+        minimumEvidence: slot.minimumEvidence,
         dependencySlotIds: slot.dependencySlotIds,
         eligibleEvidenceRefs: [...(scopes.get(slot.slotId) ?? [])].map(
           (evidenceRef) => input.rawToCompactRef.get(evidenceRef),

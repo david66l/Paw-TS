@@ -202,15 +202,6 @@ function classifyMemoryEvidenceTemporalModeV1(
       query,
     );
   if (orderedHistory) return "history";
-  // Strong relative-date expressions are bounded lookups. Bare "last time"
-  // remains ordinary dialogue recall and is deliberately not matched here.
-  if (
-    /\b(?:last|this\s+past)\s+(?:weekend|month|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thurs|fri|sat)\b|\b(?:yesterday|\d{1,3}\s+(?:days?|weeks?|months?)\s+ago|(?:past|last)\s+\d{1,3}\s+(?:days?|weeks?|months?))\b|(?:上个周末|上周末|上个月|上周(?:[一二三四五六日天])?|昨天|\d{1,3}\s*(?:天|周|个?星期|个月)前|过去\s*\d{1,3}\s*(?:天|周|个?星期|个?月))/iu.test(
-      query,
-    )
-  ) {
-    return "range";
-  }
   const latest =
     /\b(?:latest|currently|most\s+recent|now|today|at\s+present)\b|(?:最新|现在|目前|最近一次|今天)/iu.test(
       query,
@@ -219,6 +210,17 @@ function classifyMemoryEvidenceTemporalModeV1(
       query,
     );
   if (latest) return "latest";
+  // Strong relative-date expressions are bounded lookup scopes. Bare "last
+  // time" remains ordinary dialogue recall. Recency is checked first so a
+  // query such as "latest update last week" keeps its latest operation and
+  // receives the week as an orthogonal bound later.
+  if (
+    /\b(?:last|this\s+past)\s+(?:weekend|month|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thurs|fri|sat)\b|\b(?:yesterday|\d{1,3}\s+(?:days?|weeks?|months?)\s+ago|(?:past|last)\s+\d{1,3}\s+(?:days?|weeks?|months?))\b|(?:上个周末|上周末|上个月|上周(?:[一二三四五六日天])?|昨天|\d{1,3}\s*(?:天|周|个?星期|个月)前|过去\s*\d{1,3}\s*(?:天|周|个?星期|个?月))/iu.test(
+      query,
+    )
+  ) {
+    return "range";
+  }
   const ordinalHistory =
     !/\b(?:first|last|family|given|middle)\s+name\b/iu.test(query) &&
     /\b(?:what|which|where|when|how|who)\b.{0,96}\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|earliest)\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|earliest)\b.{0,96}\b(?:did|was|were|is|are|came|happened|occurred|said|mentioned|recommended|suggested|chose|selected)\b|(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁).{0,64}(?:第[一二三四五六七八九十\d]+(?:次|个|条|项|段|轮)|首次|最早)|(?:第[一二三四五六七八九十\d]+(?:次|个|条|项|段|轮)|首次|最早).{0,64}(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁)/iu.test(

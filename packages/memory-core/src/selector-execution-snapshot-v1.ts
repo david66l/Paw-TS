@@ -11,7 +11,7 @@ import type {
 } from "./query-plan-contracts.js";
 
 export const PAW_MEMORY_SELECTOR_EXECUTION_SNAPSHOT_POLICY_V1 =
-  "paw.memory-selector-execution-snapshot.v1:group-atomic-commit" as const;
+  "paw.memory-selector-execution-snapshot.v2:exact-candidate-partition" as const;
 
 export type MemorySelectorExecutionGroupStatusV1 =
   | "committed"
@@ -28,6 +28,9 @@ export interface MemorySelectorExecutionRequirementV1 {
   readonly requirementRevision: string;
   readonly temporalBindingRevision: string;
   readonly candidateScopeRevision: string;
+  readonly candidateEvidenceCount: number;
+  readonly assessedEvidenceCount: number;
+  readonly assessmentPartitionComplete: boolean;
   readonly status: MemorySelectorRequirementExecutionStatusV1;
   readonly resolvedRole?: "user" | "assistant";
   readonly assessment?: Readonly<MemoryEvidenceTriageAssessmentV1>;
@@ -213,6 +216,14 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
           throw namedError("MemorySelectorExecutionSnapshotGroupInvalid");
         }
         if (assessment) validateAssessment(assessment, scope.evidenceRefs);
+        const candidateEvidenceCount = new Set(scope.evidenceRefs).size;
+        const assessedEvidenceCount = assessment
+          ? new Set([
+              ...assessment.supportingEvidenceRefs,
+              ...assessment.contradictingEvidenceRefs,
+              ...assessment.unknownEvidenceRefs,
+            ]).size
+          : 0;
         const status: MemorySelectorRequirementExecutionStatusV1 =
           group.status === "committed"
             ? "assessed"
@@ -231,6 +242,11 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
             requirementId,
             evidenceRefs: Object.freeze([...scope.evidenceRefs]),
           } as never),
+          candidateEvidenceCount,
+          assessedEvidenceCount,
+          assessmentPartitionComplete:
+            assessment !== undefined &&
+            assessedEvidenceCount === candidateEvidenceCount,
           status,
           ...(resolvedRole === undefined ? {} : { resolvedRole }),
           ...(assessment === undefined ? {} : { assessment }),
