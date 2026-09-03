@@ -13,7 +13,7 @@ type TemporalIntervalV1 = Readonly<{
 }>;
 
 export const AMB_TEMPORAL_ROUND_FRONTIER_RANKER_VERSION_V1 =
-  "paw.amb-temporal-round-frontier-ranker.v3:baseline-monotonic-source-fair-dual-lane-immutable-authority" as const;
+  "paw.amb-temporal-round-frontier-ranker.v4:baseline-monotonic-source-fair-explicit-event-cue-dual-lane-immutable-authority" as const;
 
 export interface AmbTemporalRoundCandidateV1 {
   readonly anchor: AmbDialogueAnchorV1;
@@ -137,6 +137,8 @@ export function rankAmbTemporalRoundFrontierV1(input: {
     const leftLaneRanks = laneRanks(left.anchor.evidenceRef, ranksByLane);
     const rightLaneRanks = laneRanks(right.anchor.evidenceRef, ranksByLane);
     return (
+      explicitTemporalEventCueRank(right, input.temporalMode) -
+        explicitTemporalEventCueRank(left, input.temporalMode) ||
       rightLaneRanks.length - leftLaneRanks.length ||
       windowRank(right, input.queryScopeInterval) -
         windowRank(left, input.queryScopeInterval) ||
@@ -176,6 +178,42 @@ export function rankAmbTemporalRoundFrontierV1(input: {
       baselineReserved.map((anchor) => anchor.evidenceRef),
     ),
   });
+}
+
+/**
+ * This recognizes only temporal language written in an immutable source turn.
+ * It is a retrieval preference, not an event-time resolver: in particular, it
+ * never uses a source's observedAt timestamp to manufacture event time.
+ */
+function explicitTemporalEventCueRank(
+  candidate: AmbTemporalRoundCandidateV1,
+  mode: "any" | "latest" | "as_of" | "history" | "range",
+): number {
+  if (mode === "any") return 0;
+  const content = candidate.content.toLocaleLowerCase("en-US");
+  const calendar =
+    /\b(?:yesterday|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|june|july|august|september|october|november|december)\b/u.test(
+      content,
+    );
+  const relative =
+    /\b(?:last|next|this|past)\s+(?:(?:\d+|one|two|three|four|five)\s+)?(?:day|days|week|weeks|month|months|year|years|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/u.test(
+      content,
+    ) ||
+    /\b(?:a|an|one|two|three|four|five|\d+)\s+(?:day|days|week|weeks|month|months|year|years)\s+ago\b/u.test(
+      content,
+    );
+  const orderingOrDuration =
+    /\b(?:before|after|earlier|later|first|second|third|fourth|fifth)\b/u.test(
+      content,
+    ) ||
+    /\b(?:for|within)\s+(?:a|an|one|two|three|four|five|\d+)\s+(?:day|days|week|weeks|month|months|year|years)\b/u.test(
+      content,
+    );
+  if (!calendar && !relative && !orderingOrDuration) return 0;
+  // History/range questions need complete event inventories. A single cue is
+  // enough to make a source turn a stronger frontier candidate, but baseline
+  // anchors remain reserved by the caller below.
+  return mode === "history" || mode === "range" ? 2 : 1;
 }
 
 function laneRanks(

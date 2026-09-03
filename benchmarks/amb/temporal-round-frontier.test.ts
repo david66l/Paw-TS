@@ -199,6 +199,69 @@ describe("AMB temporal round frontier", () => {
     ]);
   });
 
+  test("prefers an explicit source event cue over a non-temporal lane hit", () => {
+    const laneLeader = anchor("session-a", 1);
+    const citedEvent = anchor("session-b", 1);
+    const result = rankAmbTemporalRoundFrontierV1({
+      originalQuery: "Which event happened last Friday?",
+      requirementText: "event chronology",
+      temporalMode: "history",
+      queryScopeInterval: null,
+      baselineAnchors: [],
+      candidates: [
+        { anchor: laneLeader, content: "I discussed the event with a friend." },
+        { anchor: citedEvent, content: "I went to the concert last Friday." },
+      ],
+      lanes: [
+        {
+          kind: "original_query",
+          evidenceRefs: [laneLeader.evidenceRef],
+        },
+        { kind: "requirement", evidenceRefs: [] },
+      ],
+      sourcePriorityIds: ["session-a", "session-b"],
+      maxAnchors: 1,
+    });
+    expect(result.anchors.map((item) => item.evidenceRef)).toEqual([
+      citedEvent.evidenceRef,
+    ]);
+  });
+
+  test("does not treat a source timestamp as an explicit event cue", () => {
+    const datedSession = anchor("session-a", 1);
+    const explicitEvent = anchor("session-b", 1);
+    const result = rankAmbTemporalRoundFrontierV1({
+      originalQuery: "What happened last weekend?",
+      requirementText: "event chronology",
+      temporalMode: "range",
+      queryScopeInterval: null,
+      baselineAnchors: [],
+      candidates: [
+        {
+          anchor: datedSession,
+          content: "I discussed a project update.",
+          observedAt: "2025-04-12T00:00:00.000Z",
+        },
+        {
+          anchor: explicitEvent,
+          content: "I visited the museum last weekend.",
+        },
+      ],
+      lanes: [
+        {
+          kind: "original_query",
+          evidenceRefs: [datedSession.evidenceRef],
+        },
+        { kind: "requirement", evidenceRefs: [] },
+      ],
+      sourcePriorityIds: ["session-a", "session-b"],
+      maxAnchors: 1,
+    });
+    expect(result.anchors.map((item) => item.evidenceRef)).toEqual([
+      explicitEvent.evidenceRef,
+    ]);
+  });
+
   test("is deterministic when lane declaration order changes", () => {
     const first = anchor("session-a", 1);
     const second = anchor("session-b", 1);
