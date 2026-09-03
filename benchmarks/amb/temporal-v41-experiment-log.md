@@ -245,3 +245,21 @@ slice (133 questions) as a comparable treatment.
   construction, and emits only HMAC IDs, counts, hashes, and judge verdicts.
   Its answer result is a gate for an event-card reader lane, not a score claim
   or an authorization to change the production resolver.
+
+## Rejected v46 event-card replacement shadow
+
+- The completed 21-query shadow retained the frozen V44 returned-source union
+  and kept the candidate policy label-blind. It completed all 21 answer and
+  judge calls, with a median 21 cards per row (maximum 29) and an average card
+  payload of 4,302 characters.
+- Replacing the normal evidence notebook with those cards scored **1/21**
+  (4.76%), versus V44's **4/21** on the identical rows. The paired outcome was
+  one recovery, four regressions, and 16 rows still incorrect. This is a strong
+  negative result: a temporal event card is not a standalone reader context.
+- The result does **not** invalidate the reachability finding. It distinguishes
+  two requirements for the production design: retain the current semantic
+  evidence packet and dialogue context, then add a bounded, source-locked event
+  ledger as a supplemental typed view. Any later treatment must prove its
+  additive packet preserves the baseline evidence set and stays inside the
+  reader token budget; it must not replace the notebook or report V46 as a
+  benchmark improvement.
