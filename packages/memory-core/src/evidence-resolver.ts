@@ -21,7 +21,15 @@ import {
   compileMemoryQueryAnswerOriginV1,
   validateMemoryEvidenceQueryPlanOriginV1,
 } from "./evidence-query-planner.js";
-import { resolveEvidencePass } from "./evidence-resolution-pass.js";
+import {
+  type MemoryEvidenceRepairCommitReportV1,
+  evaluateMemoryEvidenceRepairDominanceV1,
+} from "./evidence-repair-dominance.js";
+import {
+  type MemoryEvidenceResolutionPassV1,
+  type MemoryEvidenceSourceLockV1,
+  resolveEvidencePass,
+} from "./evidence-resolution-pass.js";
 import {
   abortError,
   boundedInteger,
@@ -244,6 +252,7 @@ export function createMemoryEvidenceResolverV1(input: {
       let closureRepairCount: 0 | 1 = 0;
       let closureRepairMode: MemoryEvidenceResolutionV1["closureRepairMode"] =
         "none";
+      let closureRepairCommit: MemoryEvidenceRepairCommitReportV1 | undefined;
       let closureAuditRevision: string | undefined;
       let closureAuditFailureCode: string | undefined;
       const shouldAudit =
@@ -283,10 +292,81 @@ export function createMemoryEvidenceResolverV1(input: {
             input.planner &&
             closureMode === "repair"
           ) {
+            const initialPass = pass;
+            const initialRequirements = requirements;
+            const seedHits = mergeEvidenceHits(
+              initialPass.requirementHits.flat(),
+              primary.hits,
+            );
+            const sourceLock: MemoryEvidenceSourceLockV1 = Object.freeze({
+              fusion: initialPass.fusion,
+              degradedChannels: initialPass.degradedChannels,
+              lockedSourceIds: initialPass.lockedSourceIds,
+              seedHits,
+              sourceAcquisition: initialPass.sourceAcquisition,
+            });
+            const resolveVerifiedSanitizedBaseline = async (
+              excludedEvidenceRefs: ReadonlySet<string>,
+            ) => {
+              const sanitized = await resolveEvidencePass({
+                index: input.index,
+                supportSelector: input.supportSelector,
+                query: value,
+                intent,
+                primary,
+                primaryUnfiltered,
+                requirements: initialRequirements,
+                maxSources,
+                maxEvidencePerSource,
+                maxHitsPerRequirement: expansiveEvidence
+                  ? maxHitsPerRequirement
+                  : Math.min(4, maxHitsPerRequirement),
+                maxNotebookChars: expansiveEvidence
+                  ? maxNotebookChars
+                  : Math.min(4_096, maxNotebookChars),
+                sourceLocalLocator: input.sourceLocalLocator,
+                sourceLocalHydrator: input.sourceLocalHydrator,
+                dialoguePredecessorVerifier: input.dialoguePredecessorVerifier,
+                sourceLocalBudget:
+                  input.sourceLocalBudget ??
+                  DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+                queryAnswerOrigin,
+                evidenceGroundedRoleBinding: input.evidenceGroundedRoleBinding,
+                // Sanitization reconstructs the original proof surface only;
+                // temporal widening belongs exclusively to the proposal.
+                temporalRoundFrontier: false,
+                evidenceTimeUpperBound: input.evidenceTimeUpperBound,
+                excludedEvidenceRefs,
+                sourceLock,
+                signal,
+              });
+              validateSanitizedBaselineDominanceV1({
+                initial: initialPass,
+                sanitized,
+                rejectedEvidenceRefs: excludedEvidenceRefs,
+              });
+              return sanitized;
+            };
+            let rejectedEvidenceRefs = new Set(audit.rejectedEvidenceRefs);
+            let baselinePass = initialPass;
+            if (rejectedEvidenceRefs.size > 0) {
+              // From this point onward every catch path is fail-closed. The
+              // initial packet must never reappear after an explicit reject.
+              pass = createFailClosedRepairBaselineV1(initialPass);
+              resolvedRequirements = pass.requirements;
+              baselinePass =
+                await resolveVerifiedSanitizedBaseline(rejectedEvidenceRefs);
+              validateRejectedEvidenceAbsentV1(
+                baselinePass,
+                rejectedEvidenceRefs,
+              );
+              pass = baselinePass;
+              resolvedRequirements = pass.requirements;
+            }
             const revisedPlan = await input.planner.plan(value, signal, {
               force: true,
               revision: Object.freeze({
-                currentRequirements: requirements,
+                currentRequirements: initialRequirements,
                 deficiencies: audit.deficiencies,
               }),
             });
@@ -301,11 +381,7 @@ export function createMemoryEvidenceResolverV1(input: {
               plan: revisedPlan,
             });
             const repairedRequirements = revisedPlan.requirements;
-            const seedHits = mergeEvidenceHits(
-              pass.requirementHits.flat(),
-              primary.hits,
-            );
-            pass = await resolveEvidencePass({
+            const repairedPass = await resolveEvidencePass({
               index: input.index,
               supportSelector: input.supportSelector,
               query: value,
@@ -331,17 +407,20 @@ export function createMemoryEvidenceResolverV1(input: {
               evidenceGroundedRoleBinding: input.evidenceGroundedRoleBinding,
               temporalRoundFrontier: input.temporalRoundFrontier,
               evidenceTimeUpperBound: input.evidenceTimeUpperBound,
-              excludedEvidenceRefs: new Set(audit.rejectedEvidenceRefs),
-              sourceLock: Object.freeze({
-                fusion: pass.fusion,
-                degradedChannels: pass.degradedChannels,
-                lockedSourceIds: pass.lockedSourceIds,
-                seedHits,
-                sourceAcquisition: pass.sourceAcquisition,
-              }),
+              excludedEvidenceRefs: rejectedEvidenceRefs,
+              sourceLock,
               signal,
             });
-            requirements = repairedRequirements;
+            closureRepairCommit = evaluateMemoryEvidenceRepairDominanceV1({
+              baseline: baselinePass,
+              repaired: repairedPass,
+              rejectedEvidenceRefs,
+            });
+            pass =
+              closureRepairCommit.status === "committed"
+                ? repairedPass
+                : baselinePass;
+            requirements = pass.requirements;
             resolvedRequirements = pass.requirements;
             plannerStatus = "completed";
             plannerFailureCode = undefined;
@@ -349,21 +428,30 @@ export function createMemoryEvidenceResolverV1(input: {
             closureRepairCount = 1;
             closureRepairMode = "replan";
             const finalSelectedEvidence = selectedNotebookEvidence(
-              pass.requirementHits,
-              pass.notebook,
+              repairedPass.requirementHits,
+              repairedPass.notebook,
             );
-            if (finalSelectedEvidence.length === 0) {
+            if (closureRepairCommit.status === "rolled_back") {
               closureVerdict = "insufficient";
               closureAuditRevision = hashCanonicalJsonV1({
-                schemaVersion: "paw.memory-evidence-closure-replan.v1",
+                schemaVersion: "paw.memory-evidence-closure-replan.v2",
                 initialAuditRevision: audit.auditRevision,
+                repairCommitRevision: closureRepairCommit.reportRevision,
+                finalOutcome: "rolled_back",
+              });
+            } else if (finalSelectedEvidence.length === 0) {
+              closureVerdict = "insufficient";
+              closureAuditRevision = hashCanonicalJsonV1({
+                schemaVersion: "paw.memory-evidence-closure-replan.v2",
+                initialAuditRevision: audit.auditRevision,
+                repairCommitRevision: closureRepairCommit.reportRevision,
                 finalOutcome: "empty_evidence",
               });
             } else {
               const finalAuditInput = Object.freeze({
                 query: value,
                 intent,
-                requirements: resolvedRequirements,
+                requirements: repairedPass.requirements,
                 selectedEvidence: finalSelectedEvidence,
               });
               const finalAudit = validateMemoryEvidenceClosureAuditBoundaryV1({
@@ -374,12 +462,38 @@ export function createMemoryEvidenceResolverV1(input: {
                 auditInput: finalAuditInput,
                 auditorVersion: input.closureAuditor.auditorVersion,
               });
+              if (finalAudit.rejectedEvidenceRefs.length > 0) {
+                rejectedEvidenceRefs = new Set([
+                  ...rejectedEvidenceRefs,
+                  ...finalAudit.rejectedEvidenceRefs,
+                ]);
+                pass = createFailClosedRepairBaselineV1(initialPass);
+                resolvedRequirements = pass.requirements;
+                baselinePass =
+                  await resolveVerifiedSanitizedBaseline(rejectedEvidenceRefs);
+                validateRejectedEvidenceAbsentV1(
+                  baselinePass,
+                  rejectedEvidenceRefs,
+                );
+                closureRepairCommit = evaluateMemoryEvidenceRepairDominanceV1({
+                  baseline: baselinePass,
+                  repaired: repairedPass,
+                  rejectedEvidenceRefs,
+                });
+                pass = baselinePass;
+                requirements = pass.requirements;
+                resolvedRequirements = pass.requirements;
+              }
               closureVerdict =
-                finalAudit.decision === "pass" ? "pass" : "insufficient";
+                finalAudit.decision === "pass" &&
+                closureRepairCommit.status === "committed"
+                  ? "pass"
+                  : "insufficient";
               closureAuditRevision = hashCanonicalJsonV1({
-                schemaVersion: "paw.memory-evidence-closure-replan.v1",
+                schemaVersion: "paw.memory-evidence-closure-replan.v2",
                 initialAuditRevision: audit.auditRevision,
                 finalAuditRevision: finalAudit.auditRevision,
+                repairCommitRevision: closureRepairCommit.reportRevision,
               });
             }
           }
@@ -652,6 +766,7 @@ export function createMemoryEvidenceResolverV1(input: {
         closureDeficiencyCount,
         closureRepairCount,
         closureRepairMode,
+        ...(closureRepairCommit === undefined ? {} : { closureRepairCommit }),
         ...(closureAuditFailureCode === undefined
           ? {}
           : { closureAuditFailureCode }),
@@ -744,6 +859,7 @@ export function createMemoryEvidenceResolverV1(input: {
         closureDeficiencyCount,
         closureRepairCount,
         closureRepairMode,
+        ...(closureRepairCommit === undefined ? {} : { closureRepairCommit }),
         ...(closureAuditFailureCode === undefined
           ? {}
           : { closureAuditFailureCode }),
@@ -774,6 +890,91 @@ export function createMemoryEvidenceResolverV1(input: {
       });
     },
   });
+}
+
+function createFailClosedRepairBaselineV1(
+  initial: MemoryEvidenceResolutionPassV1,
+): MemoryEvidenceResolutionPassV1 {
+  const {
+    supportSelectionRevision: _supportSelectionRevision,
+    selectorExecutionSnapshot: _selectorExecutionSnapshot,
+    ...retained
+  } = initial;
+  const emptyCoverage = initial.requirements.map((requirement) =>
+    Object.freeze({
+      requirementId: requirement.requirementId,
+      status: "missing" as const,
+      selectedHitCount: 0,
+      independentEvidenceCount: 0,
+      closureEvidenceCount: 0,
+      selectedEvidenceRefs: Object.freeze([] as string[]),
+      historicalEvidenceRefs: Object.freeze([] as string[]),
+      unresolvedEvidenceRefs: Object.freeze([] as string[]),
+      inputEvidenceRefs: Object.freeze([] as string[]),
+      budgetOmittedEvidenceRefs: Object.freeze([] as string[]),
+      admission: Object.freeze([]),
+      budgetOmittedHitCount: 0,
+    }),
+  );
+  return Object.freeze({
+    ...retained,
+    requirementHits: Object.freeze(
+      initial.requirements.map(() => Object.freeze([])),
+    ),
+    supportSelectorStatus: "fallback",
+    supportAssessments: Object.freeze([]),
+    notebook: Object.freeze({
+      policyVersion: initial.notebook.policyVersion,
+      sources: Object.freeze([]),
+      coverage: Object.freeze(emptyCoverage),
+      inputHitCount: 0,
+      budgetOmittedHitCount: 0,
+      selectedHitCount: 0,
+      chars: 0,
+    }),
+    requirementEvidence: Object.freeze(
+      initial.requirements.map((requirement) =>
+        Object.freeze({
+          requirementId: requirement.requirementId,
+          supportingEvidenceRefs: Object.freeze([] as string[]),
+          candidateEvidenceRefs: Object.freeze([] as string[]),
+          contradictingEvidenceRefs: Object.freeze([] as string[]),
+        }),
+      ),
+    ),
+    packetSources: Object.freeze([]),
+  });
+}
+
+function validateRejectedEvidenceAbsentV1(
+  pass: MemoryEvidenceResolutionPassV1,
+  rejectedEvidenceRefs: ReadonlySet<string>,
+): void {
+  const exposedRefs = [
+    ...pass.packetSources.flatMap((source) => source.evidenceRefs),
+    ...pass.notebook.coverage.flatMap((item) => item.selectedEvidenceRefs),
+    ...pass.supportAssessments.flatMap((item) => item.supportingEvidenceRefs),
+  ];
+  if (
+    exposedRefs.some((evidenceRef) => rejectedEvidenceRefs.has(evidenceRef))
+  ) {
+    throw namedError("MemoryEvidenceRepairSanitizationFailed");
+  }
+}
+
+function validateSanitizedBaselineDominanceV1(input: {
+  initial: MemoryEvidenceResolutionPassV1;
+  sanitized: MemoryEvidenceResolutionPassV1;
+  rejectedEvidenceRefs: ReadonlySet<string>;
+}): void {
+  const report = evaluateMemoryEvidenceRepairDominanceV1({
+    baseline: input.initial,
+    repaired: input.sanitized,
+    rejectedEvidenceRefs: input.rejectedEvidenceRefs,
+  });
+  if (report.status !== "committed") {
+    throw namedError("MemoryEvidenceRepairSanitizationFailed");
+  }
 }
 
 function namedError(name: string): Error {

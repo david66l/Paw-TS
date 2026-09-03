@@ -62,7 +62,6 @@ import {
   createJsonMemoryEvidenceSupportVerifierV1,
   createJsonMemoryStateObservationBinderV2,
   createJsonMemoryStateObservationVerifierV2,
-  createMemoryTemporalEvidenceFrontierSnapshotV1,
   createJsonMemoryTopicDossierExtractorV1,
   createJsonMemoryTopicExtractorV1,
   createMemoryAtomWriterStoreV1,
@@ -70,6 +69,7 @@ import {
   createMemoryEvidenceResolverV1,
   createMemoryRetrievalCacheStoreV1,
   createMemorySceneSnapshotV1,
+  createMemoryTemporalEvidenceFrontierSnapshotV1,
   createMemoryTopicDossierProjectorV1,
   createOpenAICompatibleMemoryEmbeddingServiceV1,
   createPartitionedHybridMemoryEmbeddingServiceV1,
@@ -140,9 +140,7 @@ import {
   resolveAmbEvidenceExecutionProfileV1,
 } from "./evidence-execution-profile.js";
 import { logicalSourceLocalEvidenceRefV1 } from "./immutable-evidence-address.js";
-import {
-  hydrateAmbImmutableSourceLocalEvidenceV1,
-} from "./immutable-source-local-hydration.js";
+import { hydrateAmbImmutableSourceLocalEvidenceV1 } from "./immutable-source-local-hydration.js";
 import { buildAmbMemoryLlmReplayCacheKeyV1 } from "./memory-llm-replay-cache.js";
 import {
   isAmbDocumentVisibleAtQueryV1,
@@ -2550,6 +2548,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstClosureDeficiencyCount = 0;
   let evidenceFirstClosureRepairCount = 0;
   let evidenceFirstClosureRepairMode = "none";
+  let evidenceFirstClosureRepairCommitStatus = "not_attempted";
+  let evidenceFirstClosureRepairCommitReason = "not_attempted";
+  let evidenceFirstClosureRepairProtectedRequirementCount = 0;
+  let evidenceFirstClosureRepairRetainedRequirementCount = 0;
+  let evidenceFirstClosureRepairProtectedEvidenceCount = 0;
+  let evidenceFirstClosureRepairRetainedEvidenceCount = 0;
+  let evidenceFirstClosureRepairRejectedLeakCount = 0;
+  let evidenceFirstClosureRepairPacketEvidenceDelta = 0;
+  let evidenceFirstClosureRepairPacketCharsDelta = 0;
   let evidenceFirstClosureAuditFailureCode: string | null = null;
   let evidenceFirstObligationStatus = "not_evaluated";
   let evidenceFirstObligationMinimumRequirementCount = 0;
@@ -3162,10 +3169,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             )
           : Promise.resolve(undefined),
         request.temporalFrontier
-          ? searchAnchorChannels(
-              anchorSourceKinds,
-              frontierRequirementQuery,
-            )
+          ? searchAnchorChannels(anchorSourceKinds, frontierRequirementQuery)
           : Promise.resolve(undefined),
         request.temporalFrontier
           ? allowedIds.length === 0
@@ -3254,8 +3258,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             maxAnchors: request.budget.maxAnchors,
           })
         : undefined;
-      const effectiveDirectAnchors =
-        frontierRanking?.anchors ?? directAnchors;
+      const effectiveDirectAnchors = frontierRanking?.anchors ?? directAnchors;
       const userDiscoveries = (promotionSearch?.entries ?? []).flatMap(
         (entry) => {
           const anchor = anchorFromEntry(entry, userKinds);
@@ -3751,8 +3754,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           promotionSearch?.lexical.hits.length ?? 0,
         discoveryDenseCandidateCount: promotionSearch?.dense.hits.length ?? 0,
         temporalFrontierStatus: temporalFrontier?.status ?? "disabled",
-        temporalFrontierConsideredCount:
-          temporalFrontier?.postings.length ?? 0,
+        temporalFrontierConsideredCount: temporalFrontier?.postings.length ?? 0,
         temporalFrontierIntroducedCount:
           temporalFrontier?.introducedEvidenceRefs.length ?? 0,
         temporalFrontierBudgetOmittedCount:
@@ -4077,6 +4079,24 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstClosureDeficiencyCount = resolution.closureDeficiencyCount;
     evidenceFirstClosureRepairCount = resolution.closureRepairCount;
     evidenceFirstClosureRepairMode = resolution.closureRepairMode;
+    evidenceFirstClosureRepairCommitStatus =
+      resolution.closureRepairCommit?.status ?? "not_attempted";
+    evidenceFirstClosureRepairCommitReason =
+      resolution.closureRepairCommit?.reason ?? "not_attempted";
+    evidenceFirstClosureRepairProtectedRequirementCount =
+      resolution.closureRepairCommit?.protectedRequirementCount ?? 0;
+    evidenceFirstClosureRepairRetainedRequirementCount =
+      resolution.closureRepairCommit?.retainedRequirementCount ?? 0;
+    evidenceFirstClosureRepairProtectedEvidenceCount =
+      resolution.closureRepairCommit?.protectedEvidenceCount ?? 0;
+    evidenceFirstClosureRepairRetainedEvidenceCount =
+      resolution.closureRepairCommit?.retainedEvidenceCount ?? 0;
+    evidenceFirstClosureRepairRejectedLeakCount =
+      resolution.closureRepairCommit?.rejectedEvidenceLeakCount ?? 0;
+    evidenceFirstClosureRepairPacketEvidenceDelta =
+      resolution.closureRepairCommit?.packetEvidenceCountDelta ?? 0;
+    evidenceFirstClosureRepairPacketCharsDelta =
+      resolution.closureRepairCommit?.packetCharsDelta ?? 0;
     evidenceFirstClosureAuditFailureCode =
       resolution.closureAuditFailureCode ?? null;
     evidenceFirstObligationStatus = resolution.obligationStatus;
@@ -4221,6 +4241,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       deficiencyCount: resolution.closureDeficiencyCount,
       repairCount: resolution.closureRepairCount,
       repairMode: resolution.closureRepairMode,
+      repairCommit: resolution.closureRepairCommit ?? null,
       failureCode: resolution.closureAuditFailureCode ?? null,
       finalRequirementCount: resolution.requirements.length,
       finalCoveredCount: evidenceFirstNotebookCoveredCount,
@@ -4331,9 +4352,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
                 memoryId: "evidence-execution-reader-projection-v1",
                 memoryIds: [] as string[],
                 evidence: `amb:execution/${readerProjectionBuild.projection.packetRevision}`,
-                evidences: readerProjectionBuild.projection.stateBindingCertificateIds.map(
-                  (certificateId) => `amb:state-binding/${certificateId}`,
-                ),
+                evidences:
+                  readerProjectionBuild.projection.stateBindingCertificateIds.map(
+                    (certificateId) => `amb:state-binding/${certificateId}`,
+                  ),
                 evidenceUses: [] as string[],
                 evidenceBindings: [],
               },
@@ -5400,6 +5422,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstClosureDeficiencyCount,
       evidenceFirstClosureRepairCount,
       evidenceFirstClosureRepairMode,
+      evidenceFirstClosureRepairCommitStatus,
+      evidenceFirstClosureRepairCommitReason,
+      evidenceFirstClosureRepairProtectedRequirementCount,
+      evidenceFirstClosureRepairRetainedRequirementCount,
+      evidenceFirstClosureRepairProtectedEvidenceCount,
+      evidenceFirstClosureRepairRetainedEvidenceCount,
+      evidenceFirstClosureRepairRejectedLeakCount,
+      evidenceFirstClosureRepairPacketEvidenceDelta,
+      evidenceFirstClosureRepairPacketCharsDelta,
       evidenceFirstClosureAuditFailureCode,
       evidenceFirstObligationStatus,
       evidenceFirstObligationMinimumRequirementCount,
@@ -5513,6 +5544,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstClosureDeficiencyCount,
     evidenceFirstClosureRepairCount,
     evidenceFirstClosureRepairMode,
+    evidenceFirstClosureRepairCommitStatus,
+    evidenceFirstClosureRepairCommitReason,
+    evidenceFirstClosureRepairProtectedRequirementCount,
+    evidenceFirstClosureRepairRetainedRequirementCount,
+    evidenceFirstClosureRepairProtectedEvidenceCount,
+    evidenceFirstClosureRepairRetainedEvidenceCount,
+    evidenceFirstClosureRepairRejectedLeakCount,
+    evidenceFirstClosureRepairPacketEvidenceDelta,
+    evidenceFirstClosureRepairPacketCharsDelta,
     evidenceFirstClosureAuditFailureCode,
     evidenceFirstObligationStatus,
     evidenceFirstObligationMinimumRequirementCount,

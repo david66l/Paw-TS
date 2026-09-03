@@ -3,21 +3,21 @@ import { describe, expect, test } from "bun:test";
 import { hashTextV1 } from "../src/canonical.js";
 import { enforceSelectedEvidenceAuthority } from "../src/evidence-authority.js";
 import {
+  compileMemorySourceLocalAssistantDialogueCertificatesV1,
+  selectScopedCertifiedAssistantDialogueRefsV1,
+} from "../src/evidence-resolution-pass.js";
+import {
   mergeEvidenceHits,
   selectSupportCandidates,
   selectSupportCandidatesPreservingBaselineV1,
 } from "../src/evidence-resolver-helpers.js";
 import {
-  compileMemorySourceLocalAssistantDialogueCertificatesV1,
-  selectScopedCertifiedAssistantDialogueRefsV1,
-} from "../src/evidence-resolution-pass.js";
-import {
   type MemoryEvidenceIndexV1,
   PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
-  createMemoryTemporalEvidenceFrontierSnapshotV1,
-  createMemoryTemporalRoundPostingV1,
   createJsonMemoryEvidenceSupportSelectorV1,
   createMemoryEvidenceResolverV1,
+  createMemoryTemporalEvidenceFrontierSnapshotV1,
+  createMemoryTemporalRoundPostingV1,
   projectEvidenceFirstMemoryAnswerContractV1,
   projectEvidenceFirstMemoryContextPacketV1,
 } from "../src/legacy.js";
@@ -4055,6 +4055,12 @@ describe("shared evidence resolver v1", () => {
     expect(result.closureVerdict).toBe("insufficient");
     expect(result.closureRepairCount).toBe(1);
     expect(result.closureRepairMode).toBe("replan");
+    expect(result.closureRepairCommit).toMatchObject({
+      status: "committed",
+      reason: "dominant",
+      protectedProofOrderPreserved: true,
+      protectedReaderOrderPreserved: true,
+    });
     expect(result.requirements).toHaveLength(3);
     expect(
       result.notebook.coverage.every((item) => item.status === "covered"),
@@ -4071,7 +4077,7 @@ describe("shared evidence resolver v1", () => {
     ).toEqual(["old", "current"]);
   });
 
-  test("proposes exact temporal rounds only inside the frozen repair lock", async () => {
+  test("rolls back a temporal round proposal that replaces committed proof", async () => {
     const query = "What happened last month?";
     const observedAt = "2025-04-10T00:00:00.000Z";
     const baselineRef = "session-1#turn-1";
@@ -4160,16 +4166,14 @@ describe("shared evidence resolver v1", () => {
             assessments: [
               {
                 requirementId: "event",
-                supportingEvidenceRefs:
-                  refs.includes(frontierRef)
-                    ? [frontierRef]
-                    : [baselineRef],
+                supportingEvidenceRefs: refs.includes(frontierRef)
+                  ? [frontierRef]
+                  : [baselineRef],
                 contradictingEvidenceRefs: [],
-                unknownEvidenceRefs: refs.filter(
-                  (evidenceRef) =>
-                    refs.includes(frontierRef)
-                      ? evidenceRef !== frontierRef
-                      : evidenceRef !== baselineRef,
+                unknownEvidenceRefs: refs.filter((evidenceRef) =>
+                  refs.includes(frontierRef)
+                    ? evidenceRef !== frontierRef
+                    : evidenceRef !== baselineRef,
                 ),
               },
             ],
@@ -4191,7 +4195,7 @@ describe("shared evidence resolver v1", () => {
               anchorEvidenceRef: evidenceRef,
               contextEvidenceRefs: [evidenceRef],
               sourceKind: "user_input" as const,
-                content: contents[evidenceRef] ?? "missing test content",
+              content: contents[evidenceRef] ?? "missing test content",
               authority: "user_asserted" as const,
               observedAt,
               turnOrder,
@@ -4243,9 +4247,7 @@ describe("shared evidence resolver v1", () => {
               cacheHit: false,
               durationMs: 1,
             },
-            ...(temporalFrontier === undefined
-              ? {}
-              : { temporalFrontier }),
+            ...(temporalFrontier === undefined ? {} : { temporalFrontier }),
           };
         },
       },
@@ -4310,12 +4312,17 @@ describe("shared evidence resolver v1", () => {
       locatorRequests[0]?.lockedSourceIds,
     );
     expect(result.closureRepairCount).toBe(1);
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toContain(
-      frontierRef,
-    );
+    expect(result.closureRepairCommit).toMatchObject({
+      status: "rolled_back",
+      reason: "protected_proof_lost_or_reordered",
+    });
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual([
+      baselineRef,
+    ]);
+    expect(auditorCalls).toBe(1);
   });
 
-  test("replaces a stale single-slot latest requirement with its audited refinement", async () => {
+  test("sanitizes a rejected latest ref before rolling back a rewritten requirement", async () => {
     let selectorCalls = 0;
     let auditorCalls = 0;
     const resolver = createMemoryEvidenceResolverV1({
@@ -4457,9 +4464,14 @@ describe("shared evidence resolver v1", () => {
       failure: undefined,
       repairMode: "replan",
     });
-    expect(result.closureVerdict).toBe("pass");
+    expect(result.closureVerdict).toBe("insufficient");
+    expect(result.closureRepairCommit).toMatchObject({
+      status: "rolled_back",
+      reason: "protected_requirement_changed",
+      rejectedEvidenceLeakCount: 0,
+    });
     expect(result.requirements.map((item) => item.requirementId)).toEqual([
-      "current-location",
+      "location",
     ]);
     expect(
       result.packetSources.map((source) => source.text).join("\n"),
@@ -4467,8 +4479,8 @@ describe("shared evidence resolver v1", () => {
     expect(
       result.packetSources.map((source) => source.text).join("\n"),
     ).not.toContain("Portland");
-    expect(selectorCalls).toBe(2);
-    expect(auditorCalls).toBe(2);
+    expect(selectorCalls).toBe(3);
+    expect(auditorCalls).toBe(1);
   });
 
   test("settles an empty repaired packet without sending invalid input to the auditor", async () => {

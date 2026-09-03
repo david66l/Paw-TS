@@ -1501,6 +1501,55 @@ def run(args: argparse.Namespace) -> dict:
                         if isinstance(raw, dict)
                         else None
                     ),
+                    "closureRepairCommitStatus": (
+                        raw.get("evidenceFirstClosureRepairCommitStatus")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairCommitReason": (
+                        raw.get("evidenceFirstClosureRepairCommitReason")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairProtectedRequirementCount": (
+                        raw.get(
+                            "evidenceFirstClosureRepairProtectedRequirementCount"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairRetainedRequirementCount": (
+                        raw.get(
+                            "evidenceFirstClosureRepairRetainedRequirementCount"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairProtectedEvidenceCount": (
+                        raw.get("evidenceFirstClosureRepairProtectedEvidenceCount")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairRetainedEvidenceCount": (
+                        raw.get("evidenceFirstClosureRepairRetainedEvidenceCount")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairRejectedLeakCount": (
+                        raw.get("evidenceFirstClosureRepairRejectedLeakCount")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairPacketEvidenceDelta": (
+                        raw.get("evidenceFirstClosureRepairPacketEvidenceDelta")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureRepairPacketCharsDelta": (
+                        raw.get("evidenceFirstClosureRepairPacketCharsDelta")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
                     "closureAuditFailureCode": (
                         raw.get("evidenceFirstClosureAuditFailureCode")
                         if isinstance(raw, dict)
