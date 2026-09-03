@@ -24,6 +24,7 @@ from run_paw_longmemeval_retrieval import (
     local_embedding_health_url,
     order_longmemeval_reader_documents,
     public_report,
+    resolve_index_store_dir,
     resolved_release_provider_env,
     retrieval_source_artifact_paths,
     retrieval_source_artifact_sha256,
@@ -239,6 +240,12 @@ class LongMemEvalRunnerTest(unittest.TestCase):
             ),
             source_artifact_sha256="source-artifact",
             retrieval_environment={"PAW_AMB_EMBEDDING_VERSION": "pinned"},
+            index_store_binding={
+                "policy": "test-policy",
+                "mode": "output-local",
+                "storeKey": "test-store",
+                "directoryName": "test-store-store",
+            },
         )
         self.assertEqual(
             "paw.longmemeval-paired-experiment.v4",
@@ -262,6 +269,49 @@ class LongMemEvalRunnerTest(unittest.TestCase):
         self.assertEqual("upstream", protocol["common"]["answerProtocol"])
         self.assertTrue(protocol["common"]["answerTools"])
         self.assertEqual("required", protocol["common"]["sourceLocalLocator"])
+        self.assertEqual(
+            "output-local", protocol["common"]["indexStoreBinding"]["mode"]
+        )
+
+    def test_explicit_index_store_is_separate_from_result_directory(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            store_dir = root / "shared" / "test-store-store"
+            store_dir.mkdir(parents=True)
+            resolved, binding = resolve_index_store_dir(
+                SimpleNamespace(
+                    output=root / "results" / "report.json",
+                    store_key="test-store",
+                    index_store_dir=store_dir,
+                    reuse_index=True,
+                )
+            )
+
+        self.assertEqual(store_dir.resolve(), resolved)
+        self.assertEqual("explicit", binding["mode"])
+        self.assertEqual("test-store-store", binding["directoryName"])
+
+    def test_explicit_reuse_rejects_mismatched_or_missing_store(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, "must match"):
+                resolve_index_store_dir(
+                    SimpleNamespace(
+                        output=root / "results" / "report.json",
+                        store_key="test-store",
+                        index_store_dir=root / "wrong-store",
+                        reuse_index=True,
+                    )
+                )
+            with self.assertRaisesRegex(ValueError, "requires an existing"):
+                resolve_index_store_dir(
+                    SimpleNamespace(
+                        output=root / "results" / "report.json",
+                        store_key="test-store",
+                        index_store_dir=root / "test-store-store",
+                        reuse_index=True,
+                    )
+                )
 
     def test_retrieval_cache_artifact_excludes_answer_only_code(self) -> None:
         root = Path(__file__).resolve().parents[2]

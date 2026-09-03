@@ -56,6 +56,9 @@ RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v11:semantic-slot-scopes"
 MEMORY_POLICY = "paw.amb-evidence-first.v31:coverage-cardinality-semantics"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
 RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v8:semantic-slot-local"
+INDEX_STORE_BINDING_POLICY = (
+    "paw.longmemeval-index-store-binding.v1:explicit-reuse-with-coverage-validation"
+)
 PROJECT_RELEASE_GATE = {
     "minimumTreatmentAccuracy": 0.75,
     "minimumQuestionTypeAccuracy": 0.60,
@@ -172,6 +175,7 @@ def public_report(sealed: dict, ledger_sha256: str) -> dict:
         "partialRecoveryExecuted",
         "eventIdentityMode",
         "eventKeyCoverageRate",
+        "indexStoreBinding",
         "experimentProtocol",
         "artifactBinding",
         "longMemEvalProtocol",
@@ -695,6 +699,43 @@ def resolved_release_provider_env(embedding_artifact: dict) -> dict[str, str]:
     }
 
 
+def resolve_index_store_dir(args: argparse.Namespace) -> tuple[Path, dict[str, str]]:
+    """Resolve the persistent index location independently from result artifacts.
+
+    A result directory is intentionally ephemeral: each experiment gets its own
+    report and sealed ledger.  A completed LongMemEval index, on the other hand,
+    is reusable only when the bridge verifies every required L0 item and its
+    dense embedding.  Keep the historical output-local default, but require an
+    explicit directory for cross-experiment reuse so it cannot happen by
+    accident.
+    """
+
+    expected_name = f"{args.store_key}-store"
+    configured = getattr(args, "index_store_dir", None)
+    if configured is None:
+        store_dir = args.output.parent / expected_name
+        binding_mode = "output-local"
+    else:
+        store_dir = Path(configured).resolve()
+        binding_mode = "explicit"
+    if store_dir.name != expected_name:
+        raise ValueError(
+            "index store directory name must match the declared store key "
+            f"({expected_name})"
+        )
+    if args.reuse_index and not store_dir.is_dir():
+        raise ValueError(
+            "--reuse-index requires an existing index store directory; "
+            "build the index first or pass its explicit --index-store-dir"
+        )
+    return store_dir, {
+        "policy": INDEX_STORE_BINDING_POLICY,
+        "mode": binding_mode,
+        "storeKey": args.store_key,
+        "directoryName": expected_name,
+    }
+
+
 def local_embedding_health_url(base_url: str) -> str:
     endpoint = base_url.rstrip("/")
     if endpoint.endswith("/v1"):
@@ -707,6 +748,7 @@ def experiment_protocol(
     *,
     source_artifact_sha256: str,
     retrieval_environment: dict[str, str],
+    index_store_binding: dict[str, str],
 ) -> dict:
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
@@ -722,6 +764,7 @@ def experiment_protocol(
             "answerTools": args.answer_tools,
             "errorAudit": args.error_audit,
             "storeKey": args.store_key,
+            "indexStoreBinding": index_store_binding,
             "retrievalEnvironment": {
                 key: value
                 for key, value in retrieval_environment.items()
@@ -993,11 +1036,13 @@ def run(args: argparse.Namespace) -> dict:
     embedding_artifact = local_embedding_artifact()
     retrieval_environment = resolved_release_provider_env(embedding_artifact)
     retrieval_environment["PAW_AMB_EVIDENCE_PROFILE"] = args.evidence_profile
+    store_dir, index_store_binding = resolve_index_store_dir(args)
     artifacts = artifact_binding(dataset, embedding_artifact)
     protocol = experiment_protocol(
         args,
         source_artifact_sha256=artifacts["retrievalSourceArtifactSha256"],
         retrieval_environment=retrieval_environment,
+        index_store_binding=index_store_binding,
     )
     eval_key_id = hashlib.sha256(args.eval_hmac_key).hexdigest()[:20]
     diagnostic_query_hmacs: set[str] | None = None
@@ -1189,7 +1234,7 @@ def run(args: argparse.Namespace) -> dict:
     }
     document_counts = Counter(document.user_id for document in documents)
     manifest = {
-        "schemaVersion": "paw.longmemeval-stratified-manifest.v2",
+        "schemaVersion": "paw.longmemeval-stratified-manifest.v3",
         "dataset": "longmemeval",
         "split": "s",
         "seed": args.seed,
@@ -1220,6 +1265,7 @@ def run(args: argparse.Namespace) -> dict:
         "eventIdentityMode": "episode-fallback",
         "eventKeyCoverageRate": 0.0,
         "experimentProtocol": protocol,
+        "indexStoreBinding": index_store_binding,
         "artifactBinding": artifacts,
         "exclusion": exclusion_manifest,
         "diagnosticInclusion": diagnostic_inclusion,
@@ -1316,7 +1362,6 @@ def run(args: argparse.Namespace) -> dict:
         retrieval_environment=retrieval_environment,
     )
     provider = PawMemoryProvider()
-    store_dir = args.output.parent / f"{args.store_key}-store"
     rows: list[dict] = []
     ingestion_started = time.perf_counter()
     try:
@@ -1861,6 +1906,15 @@ def main() -> None:
     )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--reuse-index", action="store_true")
+    parser.add_argument(
+        "--index-store-dir",
+        type=Path,
+        help=(
+            "Explicit persistent directory for the declared --store-key. "
+            "Required to reuse an index owned by a different result directory; "
+            "the bridge still validates full L0 and embedding coverage."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--answer", action="store_true")
     parser.add_argument("--answer-review", action="store_true")
