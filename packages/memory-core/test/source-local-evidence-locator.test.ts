@@ -2,16 +2,22 @@ import { describe, expect, test } from "bun:test";
 
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+  PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
   type MemorySourceLocalEvidenceHitV1,
   type MemorySourceLocalEvidenceResultV1,
+  createMemoryTemporalEvidenceFrontierSnapshotV1,
+  createMemoryTemporalRoundPostingV1,
   evaluateMemorySourceLocalLeafEligibilityV2,
   hasMemorySourceLocalDialogueCertificateV1,
+  hydrateMemorySourceLocalEvidenceResultV1,
   isMemorySourceLocalEvidenceEligibleV1,
   isMemorySourceLocalEvidenceRouteEligibleV2,
   memorySourceLocalAnchorKindsV1,
   memorySourceLocalEvidenceCacheKeyV1,
+  validateMemoryTemporalEvidenceFrontierSnapshotV1,
   validateMemorySourceLocalEvidenceResultV1,
 } from "../src/legacy.js";
+import { hashTextV1 } from "../src/canonical.js";
 import {
   authorizeMemoryQueryAnswerOriginMaterializationV1,
   compileMemoryQueryAnswerOriginV1,
@@ -819,5 +825,242 @@ describe("source-local evidence locator boundary", () => {
         result: resultFor(assistantHit),
       }),
     ).toHaveLength(1);
+  });
+
+  test("binds an exact temporal frontier to the original query and locked rounds", async () => {
+    const query = "What did I do last month?";
+    const temporalConstraint = compileMemoryEvidenceTemporalConstraintV1({
+      query,
+      queryEnvelopeMode: "range",
+      leafMode: "range",
+    });
+    const temporalBinding = bindMemoryEvidenceTemporalConstraintV1({
+      query,
+      queryEnvelopeMode: "range",
+      leafMode: "range",
+      constraint: temporalConstraint,
+      evidenceTimeUpperBound: "2025-05-20T00:00:00.000Z",
+    });
+    const request = {
+      requirement: {
+        ...requirement,
+        requirementId: "last-month-event",
+        searchText: "the relevant event",
+        temporalMode: "range" as const,
+        roleConstraint: "user" as const,
+        relation: "temporal" as const,
+        coverageMode: "all" as const,
+        temporalConstraint,
+      },
+      temporalFrontier: {
+        frontierVersion: PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
+        originalQuery: query,
+        temporalBinding,
+        lanePolicy: "original_and_requirement" as const,
+        baselineEvidenceRefs: [] as const,
+      },
+      lockedSourceIds: ["session-1", "session-2"],
+      sourceAcquisitionRevision: "acquisition-v1",
+      evidenceTimeUpperBound: "2025-05-20T00:00:00.000Z",
+      budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+    };
+    const inside = createMemoryTemporalRoundPostingV1({
+      sourceId: "session-1",
+      evidenceRef: "session-1#turn-1",
+      role: "user_input",
+      contentDigest: "a".repeat(64),
+      observedAt: "2025-04-10T00:00:00.000Z",
+      episodeOrder: 1,
+      turnOrder: 1,
+      timeBasis: "source_observed_at",
+    });
+    const outside = createMemoryTemporalRoundPostingV1({
+      sourceId: "session-2",
+      evidenceRef: "session-2#turn-1",
+      role: "user_input",
+      contentDigest: "b".repeat(64),
+      observedAt: "2025-03-10T00:00:00.000Z",
+      episodeOrder: 0,
+      turnOrder: 1,
+      timeBasis: "source_observed_at",
+    });
+    const snapshot = createMemoryTemporalEvidenceFrontierSnapshotV1({
+      request,
+      indexRevision: "turn-index-v1",
+      postings: [inside, outside],
+      returnedEvidenceRefs: [inside.evidenceRef],
+    });
+    expect(snapshot).toMatchObject({
+      status: "adapter_enumerated",
+      temporalBindingRevision: temporalBinding.bindingRevision,
+      partitions: {
+        eventInsideWindowEvidenceRefs: [],
+        eventOutsideWindowEvidenceRefs: [],
+        sourceClockHintInsideEvidenceRefs: [inside.evidenceRef],
+        sourceClockHintOutsideEvidenceRefs: [outside.evidenceRef],
+        timeUnboundEvidenceRefs: [],
+      },
+      omitted: [
+        { evidenceRef: outside.evidenceRef, reason: "rank_budget" },
+      ],
+    });
+    expect(snapshot.introducedEvidenceRefs).toEqual([inside.evidenceRef]);
+    expect(() =>
+      validateMemoryTemporalEvidenceFrontierSnapshotV1({
+        request,
+        snapshot,
+        returnedEvidenceRefs: [inside.evidenceRef],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateMemoryTemporalEvidenceFrontierSnapshotV1({
+        request,
+        snapshot: { ...snapshot, introducedEvidenceRefs: [] },
+        returnedEvidenceRefs: [inside.evidenceRef],
+      }),
+    ).toThrow("MemorySourceLocalEvidenceTemporalFrontierInvalid");
+    expect(() =>
+      validateMemoryTemporalEvidenceFrontierSnapshotV1({
+        request: {
+          ...request,
+          lockedSourceIds: [...request.lockedSourceIds].reverse(),
+        },
+        snapshot,
+        returnedEvidenceRefs: [inside.evidenceRef],
+      }),
+    ).toThrow("MemorySourceLocalEvidenceTemporalFrontierInvalid");
+    const baselineSnapshot = createMemoryTemporalEvidenceFrontierSnapshotV1({
+      request: {
+        ...request,
+        temporalFrontier: {
+          ...request.temporalFrontier,
+          baselineEvidenceRefs: [inside.evidenceRef],
+        },
+      },
+      indexRevision: "turn-index-v1",
+      postings: [inside, outside],
+      returnedEvidenceRefs: [inside.evidenceRef],
+    });
+    expect(baselineSnapshot.introducedEvidenceRefs).toEqual([]);
+    expect(() =>
+      createMemoryTemporalEvidenceFrontierSnapshotV1({
+        request,
+        indexRevision: "turn-index-v1",
+        postings: [
+          createMemoryTemporalRoundPostingV1({
+            ...inside,
+            sourceId: "session-3",
+            evidenceRef: "session-3#turn-1",
+          }),
+        ],
+        returnedEvidenceRefs: [],
+      }),
+    ).toThrow("MemorySourceLocalEvidenceTemporalFrontierPostingInvalid");
+    expect(() =>
+      memorySourceLocalEvidenceCacheKeyV1({
+        locatorVersion: "test-locator.v1",
+        scopeFingerprint: "scope",
+        turnIndexRevision: "turn-index-v1",
+        request: {
+          ...request,
+          temporalFrontier: {
+            ...request.temporalFrontier,
+            originalQuery: "What did I do last week?",
+          },
+        },
+        adjacencyPolicyVersion: "neighbors-v1",
+        rankerVersion: "frontier-v1",
+      }),
+    ).toThrow("MemorySourceLocalEvidenceTemporalFrontierRequestInvalid");
+
+    const cacheInput = {
+      locatorVersion: "test-locator.v1",
+      scopeFingerprint: "scope",
+      turnIndexRevision: "turn-index-v1",
+      request,
+      adjacencyPolicyVersion: "neighbors-v1",
+      rankerVersion: "frontier-v1",
+    };
+    const cacheKey = memorySourceLocalEvidenceCacheKeyV1(cacheInput);
+    for (const changedRequest of [
+      { ...request, lockedSourceIds: [...request.lockedSourceIds].reverse() },
+      { ...request, sourceAcquisitionRevision: "acquisition-v2" },
+      {
+        ...request,
+        requirement: { ...request.requirement, label: "different lane label" },
+      },
+      {
+        ...request,
+        budget: { ...request.budget, maxAnchors: 5 },
+      },
+      {
+        ...request,
+        temporalFrontier: {
+          ...request.temporalFrontier,
+          baselineEvidenceRefs: [inside.evidenceRef],
+        },
+      },
+    ]) {
+      expect(
+        memorySourceLocalEvidenceCacheKeyV1({
+          ...cacheInput,
+          request: changedRequest,
+        }),
+      ).not.toBe(cacheKey);
+    }
+
+    const immutableContent = "the immutable omitted frontier turn";
+    const immutablePosting = createMemoryTemporalRoundPostingV1({
+      sourceId: "session-1",
+      evidenceRef: "session-1#turn-9",
+      role: "user_input",
+      contentDigest: hashTextV1(immutableContent),
+      observedAt: "2025-04-12T00:00:00.000Z",
+      turnOrder: 9,
+      timeBasis: "source_observed_at",
+    });
+    const omittedSnapshot = createMemoryTemporalEvidenceFrontierSnapshotV1({
+      request,
+      indexRevision: "turn-index-v1",
+      postings: [immutablePosting],
+      returnedEvidenceRefs: [],
+    });
+    await expect(
+      hydrateMemorySourceLocalEvidenceResultV1({
+        hydrator: {
+          hydratorVersion: "test-hydrator.v1",
+          async hydrate(evidenceRefs) {
+            return evidenceRefs.map((evidenceRef) => ({
+              evidenceRef,
+              sourceKind: "user_input" as const,
+              turnOrder: 9,
+              observedAt: "2025-04-12T00:00:00.000Z",
+              content: `${immutableContent} tampered`,
+              contentHash: hashTextV1(`${immutableContent} tampered`),
+            }));
+          },
+        },
+        request,
+        result: {
+          locatorVersion: "test-locator.v1",
+          locatorRevision: "locator-revision",
+          hits: [],
+          degradedChannels: [],
+          temporalFrontier: omittedSnapshot,
+          telemetry: {
+            lexicalCandidates: 0,
+            denseCandidates: 0,
+            anchorCount: 0,
+            includedTurnCount: 0,
+            renderedChars: 0,
+            cacheHit: false,
+            durationMs: 1,
+          },
+        },
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow(
+      "MemorySourceLocalEvidenceTemporalFrontierPostingInvalid",
+    );
   });
 });

@@ -178,7 +178,10 @@ export {
 } from "./evidence-resolver.js";
 export {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+  PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
   PAW_MEMORY_SOURCE_LOCAL_EVIDENCE_LOCATOR_PORT_VERSION_V1,
+  createMemoryTemporalEvidenceFrontierSnapshotV1,
+  createMemoryTemporalRoundPostingV1,
   isMemorySourceLocalEvidenceEligibleV1,
   hasMemorySourceLocalDialogueCertificateV1,
   hydrateMemorySourceLocalEvidenceResultV1,
@@ -186,6 +189,7 @@ export {
   memorySourceLocalEvidenceCacheKeyV1,
   validateMemoryDialoguePredecessorVerificationV1,
   validateMemorySourceLocalEvidenceResultV1,
+  validateMemoryTemporalEvidenceFrontierSnapshotV1,
   type MemoryDialoguePredecessorProofV1,
   type MemoryDialoguePredecessorTargetV1,
   type MemoryDialoguePredecessorVerificationRequestV1,
@@ -202,6 +206,12 @@ export {
   type MemorySourceLocalEvidenceTelemetryV1,
   type MemorySourceLocalizationReportV1,
   type MemorySourceLocalizationStatusV1,
+  type MemoryTemporalEvidenceFrontierRequestV1,
+  type MemoryTemporalEvidenceFrontierSnapshotV1,
+  type MemoryTemporalEvidenceOmissionV1,
+  type MemoryTemporalEvidencePartitionV1,
+  type MemoryTemporalRoundPostingV1,
+  type MemoryTemporalRoundTimeBasisV1,
 } from "./source-local-evidence-locator.js";
 export {
   PAW_MEMORY_QUERY_EXPANDER_VERSION_V1,

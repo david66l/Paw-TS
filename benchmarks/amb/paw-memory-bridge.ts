@@ -62,6 +62,8 @@ import {
   createJsonMemoryEvidenceSupportVerifierV1,
   createJsonMemoryStateObservationBinderV2,
   createJsonMemoryStateObservationVerifierV2,
+  createMemoryTemporalEvidenceFrontierSnapshotV1,
+  createMemoryTemporalRoundPostingV1,
   createJsonMemoryTopicDossierExtractorV1,
   createJsonMemoryTopicExtractorV1,
   createMemoryAtomWriterStoreV1,
@@ -159,6 +161,10 @@ import {
   observeAmbEvidenceSupportSelectorV1,
   projectAmbEvidenceSupportAssessmentsV1,
 } from "./support-selector-observer.js";
+import {
+  AMB_TEMPORAL_ROUND_FRONTIER_RANKER_VERSION_V1,
+  rankAmbTemporalRoundFrontierV1,
+} from "./temporal-round-frontier.js";
 
 interface BridgeRequestV1 {
   readonly id: number;
@@ -278,6 +284,11 @@ const atomContextMode = (() => {
 const evidenceExecutionProfile = resolveAmbEvidenceExecutionProfileV1(
   process.env.PAW_AMB_EVIDENCE_PROFILE,
 );
+const temporalRoundFrontierRequested = /^(?:1|true)$/iu.test(
+  process.env.PAW_AMB_TEMPORAL_ROUND_FRONTIER?.trim() ?? "",
+);
+// Capability versions stay byte-identical while the feature is idle. The
+// frontier ranker version enters only repair requests through their cache key.
 const sourceLocalLocatorVersion = evidenceExecutionProfile.sourceLocalDense
   ? "paw.amb-source-local-locator.v8:immutable-dialogue-pair-lexical-dense"
   : "paw.amb-source-local-locator.v8:immutable-dialogue-pair-lexical";
@@ -2972,6 +2983,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const allowedIds = request.lockedSourceIds.flatMap(
         (documentId) => blockIdsByDocument?.get(documentId) ?? [],
       );
+      if (
+        request.temporalFrontier &&
+        (allowedIds.length > 2_048 ||
+          new Set(allowedIds).size !== allowedIds.length)
+      ) {
+        throw new Error("AmbTemporalRoundFrontierApertureInvalid");
+      }
       const turnIndexRevision = sha(
         [
           await engine.retrievalRevisionToken(),
@@ -2988,7 +3006,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         request,
         adjacencyPolicyVersion:
           PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
-        rankerVersion: sourceLocalRankerVersion,
+        rankerVersion: request.temporalFrontier
+          ? `${sourceLocalRankerVersion}+${AMB_TEMPORAL_ROUND_FRONTIER_RANKER_VERSION_V1}`
+          : sourceLocalRankerVersion,
       });
       const cached = sourceLocalLocatorCache.get(cacheKey);
       if (cached) {
@@ -3113,19 +3133,129 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           sourceKind: entry.issueType,
         };
       }
-      const directSearch = await searchAnchorChannels(anchorSourceKinds);
-      const directAnchors = directSearch.entries.flatMap((entry) => {
-        const anchor = anchorFromEntry(entry, anchorSourceKinds);
-        return anchor ? [anchor] : [];
-      });
       const projectionEligible =
         request.requirement.roleConstraint === "assistant" ||
         request.requirement.roleConstraint === "any" ||
         request.assistantDialogueCandidate === true;
       const userKinds = new Set<MemorySourceLocalAnchorKindV1>(["user_input"]);
-      const promotionSearch = projectionEligible
-        ? await searchAnchorChannels(userKinds)
+      const frontierRequirementQuery = [
+        request.requirement.label,
+        request.requirement.searchText,
+      ]
+        .join("\n")
+        .trim();
+      const [
+        directSearch,
+        promotionSearch,
+        frontierOriginalSearch,
+        frontierRequirementSearch,
+        frontierExactEntries,
+      ] = await Promise.all([
+        searchAnchorChannels(anchorSourceKinds),
+        projectionEligible
+          ? searchAnchorChannels(userKinds)
+          : Promise.resolve(undefined),
+        request.temporalFrontier
+          ? searchAnchorChannels(
+              anchorSourceKinds,
+              request.temporalFrontier.originalQuery,
+            )
+          : Promise.resolve(undefined),
+        request.temporalFrontier
+          ? searchAnchorChannels(
+              anchorSourceKinds,
+              frontierRequirementQuery,
+            )
+          : Promise.resolve(undefined),
+        request.temporalFrontier
+          ? allowedIds.length === 0
+            ? Promise.resolve([] as MemoryEntry[])
+            : engine.getMany
+              ? engine.getMany(allowedIds)
+              : Promise.all(allowedIds.map((id) => engine.get(id))).then(
+                  (entries) =>
+                    entries.filter(
+                      (entry): entry is MemoryEntry => entry !== null,
+                    ),
+                )
+          : Promise.resolve([] as MemoryEntry[]),
+      ]);
+      if (request.temporalFrontier) {
+        const exactIds = new Set(frontierExactEntries.map((entry) => entry.id));
+        if (
+          frontierExactEntries.length !== allowedIds.length ||
+          exactIds.size !== new Set(allowedIds).size ||
+          allowedIds.some((id) => !exactIds.has(id))
+        ) {
+          throw new Error("AmbTemporalRoundFrontierHydrationIncomplete");
+        }
+      }
+      const directAnchors = directSearch.entries.flatMap((entry) => {
+        const anchor = anchorFromEntry(entry, anchorSourceKinds);
+        return anchor ? [anchor] : [];
+      });
+      const frontierCandidates = frontierExactEntries.flatMap((entry) => {
+        const anchor = anchorFromEntry(entry, anchorSourceKinds);
+        if (!anchor || entry.kind !== "episodic") return [];
+        return [
+          Object.freeze({
+            anchor,
+            content: entry.whenToUse,
+            observedAt: documentCreatedByUser
+              .get(userId)
+              ?.get(anchor.documentId),
+          }),
+        ];
+      });
+      const frontierCandidateByEvidenceRef = new Map(
+        frontierCandidates.map((candidate) => [
+          candidate.anchor.evidenceRef,
+          candidate,
+        ]),
+      );
+      const frontierBaselineAnchors = request.temporalFrontier
+        ? request.temporalFrontier.baselineEvidenceRefs.flatMap(
+            (evidenceRef) => {
+              const candidate = frontierCandidateByEvidenceRef.get(evidenceRef);
+              return candidate ? [candidate.anchor] : [];
+            },
+          )
+        : [];
+      const frontierRanking = request.temporalFrontier
+        ? rankAmbTemporalRoundFrontierV1({
+            originalQuery: request.temporalFrontier.originalQuery,
+            requirementText: frontierRequirementQuery,
+            temporalMode: request.requirement.temporalMode,
+            queryScopeInterval:
+              request.temporalFrontier.temporalBinding.queryScopeInterval,
+            baselineAnchors: frontierBaselineAnchors,
+            candidates: frontierCandidates,
+            lanes: [
+              {
+                kind: "original_query",
+                evidenceRefs: (frontierOriginalSearch?.entries ?? []).flatMap(
+                  (entry) => {
+                    const anchor = anchorFromEntry(entry, anchorSourceKinds);
+                    return anchor ? [anchor.evidenceRef] : [];
+                  },
+                ),
+              },
+              {
+                kind: "requirement",
+                evidenceRefs: (
+                  frontierRequirementSearch?.entries ?? []
+                ).flatMap((entry) => {
+                  const anchor = anchorFromEntry(entry, anchorSourceKinds);
+                  return anchor ? [anchor.evidenceRef] : [];
+                }),
+              },
+            ],
+            sourcePriorityIds: request.lockedSourceIds,
+            maxAnchors: request.budget.maxAnchors,
+          })
         : undefined;
+      const effectiveDirectAnchors =
+        frontierRanking?.anchors ?? directAnchors;
       const userDiscoveries = (promotionSearch?.entries ?? []).flatMap(
         (entry) => {
           const anchor = anchorFromEntry(entry, userKinds);
@@ -3320,7 +3450,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         roleConstraint: request.requirement.roleConstraint,
         certifiedAssistantDialogueCandidate:
           request.assistantDialogueCandidate === true,
-        directAnchors,
+        directAnchors: effectiveDirectAnchors,
         projections,
         sourceFairProjections,
         maxAnchors: request.budget.maxAnchors,
@@ -3479,6 +3609,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const lexicalCandidateCount =
         directSearch.lexical.hits.length +
         (promotionSearch?.lexical.hits.length ?? 0) +
+        (frontierOriginalSearch?.lexical.hits.length ?? 0) +
+        (frontierRequirementSearch?.lexical.hits.length ?? 0) +
         sourceFairSearches.reduce(
           (total, item) =>
             total +
@@ -3491,6 +3623,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const denseCandidateCount =
         directSearch.dense.hits.length +
         (promotionSearch?.dense.hits.length ?? 0) +
+        (frontierOriginalSearch?.dense.hits.length ?? 0) +
+        (frontierRequirementSearch?.dense.hits.length ?? 0) +
         sourceFairSearches.reduce(
           (total, item) =>
             total +
@@ -3500,12 +3634,18 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             ),
           0,
         );
-      const sourceFairLexicalDegraded = sourceFairSearches.some((item) =>
-        item.searches.some((lane) => lane.search.lexical.failed),
-      );
-      const sourceFairDenseDegraded = sourceFairSearches.some((item) =>
-        item.searches.some((lane) => lane.search.dense.failed),
-      );
+      const sourceFairLexicalDegraded =
+        (frontierOriginalSearch?.lexical.failed ?? false) ||
+        (frontierRequirementSearch?.lexical.failed ?? false) ||
+        sourceFairSearches.some((item) =>
+          item.searches.some((lane) => lane.search.lexical.failed),
+        );
+      const sourceFairDenseDegraded =
+        (frontierOriginalSearch?.dense.failed ?? false) ||
+        (frontierRequirementSearch?.dense.failed ?? false) ||
+        sourceFairSearches.some((item) =>
+          item.searches.some((lane) => lane.search.dense.failed),
+        );
       const channelHealth = classifyAmbSourceLocalChannelHealthV1({
         directLexicalFailed: directSearch.lexical.failed,
         directDenseFailed: directSearch.dense.failed,
@@ -3516,6 +3656,38 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           (promotionSearch?.dense.failed ?? false) || sourceFairDenseDegraded,
       });
       const degradedChannels = channelHealth.resultDegradedChannels;
+      const temporalFrontier = request.temporalFrontier
+        ? createMemoryTemporalEvidenceFrontierSnapshotV1({
+            request,
+            indexRevision: turnIndexRevision,
+            postings: frontierCandidates.map((candidate) =>
+              createMemoryTemporalRoundPostingV1({
+                sourceId: candidate.anchor.documentId,
+                evidenceRef: candidate.anchor.evidenceRef,
+                role: candidate.anchor.sourceKind,
+                contentDigest: sha(candidate.content),
+                ...(candidate.observedAt === undefined
+                  ? {}
+                  : { observedAt: candidate.observedAt }),
+                ...(documentOrderByUser
+                  .get(userId)
+                  ?.get(candidate.anchor.documentId) === undefined
+                  ? {}
+                  : {
+                      episodeOrder: documentOrderByUser
+                        .get(userId)
+                        ?.get(candidate.anchor.documentId),
+                    }),
+                turnOrder: candidate.anchor.sourceSeq,
+                timeBasis:
+                  candidate.observedAt === undefined
+                    ? "unbound"
+                    : "source_observed_at",
+              }),
+            ),
+            returnedEvidenceRefs: hits.map((hit) => hit.evidenceRef),
+          })
+        : undefined;
       const result = Object.freeze({
         locatorVersion: sourceLocalLocatorVersion,
         locatorRevision: sha(
@@ -3523,10 +3695,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             turnIndexRevision,
             evidenceRefs: hits.map((hit) => hit.evidenceRef),
             contextEvidenceRefs: hits.map((hit) => hit.contextEvidenceRefs),
+            temporalFrontierRevision:
+              temporalFrontier?.frontierRevision ?? "disabled",
           }),
         ),
         hits: Object.freeze(hits),
         degradedChannels,
+        ...(temporalFrontier === undefined ? {} : { temporalFrontier }),
         telemetry: Object.freeze({
           lexicalCandidates: lexicalCandidateCount,
           denseCandidates: denseCandidateCount,
@@ -3567,6 +3742,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         discoveryLexicalCandidateCount:
           promotionSearch?.lexical.hits.length ?? 0,
         discoveryDenseCandidateCount: promotionSearch?.dense.hits.length ?? 0,
+        temporalFrontierStatus: temporalFrontier?.status ?? "disabled",
+        temporalFrontierConsideredCount:
+          temporalFrontier?.postings.length ?? 0,
+        temporalFrontierIntroducedCount:
+          temporalFrontier?.introducedEvidenceRefs.length ?? 0,
+        temporalFrontierBudgetOmittedCount:
+          temporalFrontier?.omitted.filter(
+            (item) => item.reason === "rank_budget",
+          ).length ?? 0,
         discoveryChannelDegraded: channelHealth.discoveryChannelDegraded,
         anchorCount: hits.length,
         userAnchorCount: hits.filter((hit) => hit.sourceKind === "user_input")
@@ -3709,6 +3893,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ...(evidenceQueryPlanner === undefined
         ? {}
         : { planner: evidenceQueryPlanner }),
+      temporalRoundFrontier:
+        sourceLocalLocatorEnabled && temporalRoundFrontierRequested,
       ...(observedEvidenceSupportSelector === undefined
         ? {}
         : { supportSelector: observedEvidenceSupportSelector }),

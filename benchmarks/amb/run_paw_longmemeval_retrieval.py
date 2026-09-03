@@ -638,6 +638,12 @@ RELEASE_PROVIDER_ENV = {
     # shell-selected benchmark ablation. Binding it here makes a sealed run
     # fail reproducibly instead of silently degrading to global retrieval.
     "PAW_AMB_SOURCE_LOCAL_LOCATOR": "1",
+    "PAW_AMB_TEMPORAL_ROUND_FRONTIER": (
+        "1"
+        if os.environ.get("PAW_AMB_TEMPORAL_ROUND_FRONTIER", "").lower()
+        in {"1", "true"}
+        else "0"
+    ),
     "PAW_AMB_EVIDENCE_PROFILE": "research_dense",
 }
 

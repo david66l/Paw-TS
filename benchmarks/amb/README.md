@@ -726,6 +726,18 @@ change. Content-free events are written as `source_local_locator` and
 `source_local_fusion`; they contain hashes, counts, cache state, timing, and
 status only.
 
+`PAW_AMB_TEMPORAL_ROUND_FRONTIER=1` enables the temporal repair experiment.
+It requires the `research_replan` evidence profile and is inactive during the
+initial retrieval pass. When closure repair freezes a source lock, each bounded
+temporal leaf receives the host-bound window plus two search lanes: the original
+query and the requirement description. The adapter then enumerates every
+immutable turn address in those same locked sources, preserves the complete
+feature-idle candidate aperture, and proposes bounded exact-turn candidates to
+the existing selector. Session observation time is only a ranking hint. The
+frontier receipt is an auditable adapter enumeration, not exhaustive or
+semantic proof; it cannot expand the source lock, grant support, activate the
+deterministic support floor, or prove closure by itself.
+
 The benchmark adapter currently lives inside `paw-memory-bridge.ts`. Before it
 is promoted beyond controlled evaluation, extract it behind a directly testable
 adapter seam and add a synthetic bridge test covering hard filters, neighbors,

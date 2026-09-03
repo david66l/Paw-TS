@@ -33,6 +33,7 @@ import {
   mergeEvidenceHits,
   namedError,
   selectSupportCandidates,
+  selectSupportCandidatesPreservingBaselineV1,
 } from "./evidence-resolver-helpers.js";
 import {
   PAW_MEMORY_EVIDENCE_SELECTOR_GROUP_POLICY_V1,
@@ -60,6 +61,7 @@ import {
 } from "./selector-execution-snapshot-v1.js";
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+  PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
   type MemoryDialoguePredecessorProofV1,
   type MemoryDialoguePredecessorVerifierV1,
   type MemorySourceLocalEvidenceBudgetV1,
@@ -139,6 +141,8 @@ export async function resolveEvidencePass(input: {
   readonly queryAnswerOrigin: MemoryQueryAnswerOriginV1;
   /** Feature-gated: may widen a slot only inside the immutable source lock. */
   readonly evidenceGroundedRoleBinding?: boolean;
+  /** Feature-gated exact round proposals, only inside a frozen repair lock. */
+  readonly temporalRoundFrontier?: boolean;
   readonly evidenceTimeUpperBound?: string;
   readonly excludedEvidenceRefs?: ReadonlySet<string>;
   /**
@@ -350,6 +354,8 @@ export async function resolveEvidencePass(input: {
   });
   const planScopedLocalization =
     sourceLocalExecutionRoute.executor === "plan_scoped_v24";
+  const temporalFrontierRepairActive =
+    input.temporalRoundFrontier === true && input.sourceLock !== undefined;
   const localEligible =
     planScopedLocalization ||
     (sourceLocalExecutionRoute.executor === "per_leaf_v25" &&
@@ -421,6 +427,12 @@ export async function resolveEvidencePass(input: {
   let requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[] =
     baselineRequirementHits;
   let localEvidenceRefs = new Set<string>();
+  const temporalFrontierRefsByRequirement = input.requirements.map(
+    () => new Set<string>(),
+  );
+  const temporalFrontierSucceededByRequirement = input.requirements.map(
+    () => false,
+  );
   let certifiedAssistantDialogueRefs = new Set<string>();
   let certifiedDialoguePredecessorsByAssistant = new Map<string, string>();
   let certifiedDialogueProofsByAssistant = new Map<
@@ -501,12 +513,23 @@ export async function resolveEvidencePass(input: {
         if (!planScopedLocalization && !eligibility?.eligible) continue;
         if (!eligibility)
           throw namedError("MemorySourceLocalEligibilityMissing");
+        let temporalFrontierAttempted = false;
         try {
+          const temporalBinding = boundTemporalConstraints[requirementIndex];
+          if (!temporalBinding) {
+            throw namedError("MemoryEvidenceTemporalBindingMissing");
+          }
+          temporalFrontierAttempted =
+            temporalFrontierRepairActive &&
+            (temporalBinding.window.kind !== "unbounded" ||
+              temporalBinding.queryScopeInterval !== null);
           const locatorRequirement =
             evidenceGroundedRoleBindingEligible &&
             roleBindingRequirements[requirementIndex]
               ? roleBindingRequirements[requirementIndex]
-              : requirement;
+              : temporalFrontierAttempted
+                ? (sourceLocalRequirements[requirementIndex] ?? requirement)
+                : requirement;
           const materializationMode:
             | MemoryQueryAnswerOriginMaterializationModeV1
             | undefined = evidenceGroundedRoleBindingEligible
@@ -542,21 +565,55 @@ export async function resolveEvidencePass(input: {
             respondingAssistantSourceIds.length *
               RESPONDING_ASSISTANT_PROMPT_ANCHORS_PER_SOURCE_V1,
           );
-          const locatorBudget = respondingAssistantMaterializationEligible
+          const materializationBudget =
+            respondingAssistantMaterializationEligible
+              ? Object.freeze({
+                  ...baseBudget,
+                  maxAnchors: Math.max(
+                    baseBudget.maxAnchors,
+                    sourceFairAnchorCount,
+                  ),
+                  maxChars: Math.max(
+                    baseBudget.maxChars,
+                    Math.min(16_384, sourceFairAnchorCount * 2_048),
+                  ),
+                })
+              : baseBudget;
+          // Frontier widens only the repair proposal aperture. Notebook and
+          // selector caps remain unchanged, while baseline candidates keep
+          // priority in the global merge below.
+          const locatorBudget = temporalFrontierAttempted
             ? Object.freeze({
-                ...baseBudget,
-                maxAnchors: Math.max(
-                  baseBudget.maxAnchors,
-                  sourceFairAnchorCount,
-                ),
-                maxChars: Math.max(
-                  baseBudget.maxChars,
-                  Math.min(16_384, sourceFairAnchorCount * 2_048),
+                ...materializationBudget,
+                maxAnchors: 8,
+                maxAnchorsPerSource: 8,
+                maxCandidatesPerChannel: Math.max(
+                  8,
+                  materializationBudget.maxCandidatesPerChannel,
                 ),
               })
-            : baseBudget;
+            : materializationBudget;
+          const baselineEvidenceRefs = Object.freeze([
+            ...new Set(
+              (baselineRequirementHits[requirementIndex] ?? [])
+                .filter((hit) => sourceLocalLockedIds.includes(hit.sourceId))
+                .map((hit) => hit.evidenceRef),
+            ),
+          ]);
           const request = Object.freeze({
             requirement: locatorRequirement,
+            ...(temporalFrontierAttempted
+              ? {
+                  temporalFrontier: Object.freeze({
+                    frontierVersion:
+                      PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
+                    originalQuery: input.query,
+                    temporalBinding,
+                    lanePolicy: "original_and_requirement" as const,
+                    baselineEvidenceRefs,
+                  }),
+                }
+              : {}),
             ...(certifiedAssistantDialogueCandidate ||
             materializationAuthorization?.mode === "late_binding" ||
             materializationAuthorization?.mode === "shared_envelope" ||
@@ -605,6 +662,14 @@ export async function resolveEvidencePass(input: {
             result,
           });
           located[requirementIndex] = Object.freeze({ result, hits });
+          temporalFrontierSucceededByRequirement[requirementIndex] =
+            result.temporalFrontier !== undefined;
+          for (const evidenceRef of
+            result.temporalFrontier?.introducedEvidenceRefs ?? []) {
+            temporalFrontierRefsByRequirement[requirementIndex]?.add(
+              evidenceRef,
+            );
+          }
           leafReports[requirementIndex] = Object.freeze({
             eligibility,
             status: hits.length === 0 ? "completed_empty" : "completed",
@@ -612,11 +677,24 @@ export async function resolveEvidencePass(input: {
               baselineRequirementHits[requirementIndex]?.length ?? 0,
             localizedHitCount: hits.length,
             locatorRevision: result.locatorRevision,
+            ...(result.temporalFrontier === undefined
+              ? {}
+              : {
+                  temporalFrontierStatus: result.temporalFrontier.status,
+                  temporalFrontierConsideredCount:
+                    result.temporalFrontier.postings.length,
+                  temporalFrontierReturnedCount:
+                    result.temporalFrontier.returnedEvidenceRefs.length,
+                  temporalFrontierBudgetOmittedCount:
+                    result.temporalFrontier.omitted.filter(
+                      (item) => item.reason === "rank_budget",
+                    ).length,
+                }),
           });
         } catch (error) {
           if (input.signal.aborted || isAbort(error)) throw abortError();
           const failureCode = memorySourceLocalEvidenceFailureCodeV1(error);
-          if (planScopedLocalization) {
+          if (planScopedLocalization && !temporalFrontierAttempted) {
             located.fill(undefined);
             for (const [
               index,
@@ -666,7 +744,9 @@ export async function resolveEvidencePass(input: {
       );
       requirementHits = Object.freeze(
         baselineRequirementHits.map((hits, index) =>
-          mergeEvidenceHits(located[index]?.hits ?? [], hits),
+          temporalFrontierSucceededByRequirement[index]
+            ? mergeEvidenceHits(hits, located[index]?.hits ?? [])
+            : mergeEvidenceHits(located[index]?.hits ?? [], hits),
         ),
       );
       const results = completed.map(({ result }) => result);
@@ -785,7 +865,10 @@ export async function resolveEvidencePass(input: {
   // typed execution and cache identity. The interval is per leaf; a planner
   // can therefore mix bounded and unbounded operands without leaking one
   // query-wide display window across every requirement.
-  requirementHits = requirementHits.map((hits, index) => {
+  const orderHitsForTemporalWindow = (
+    hits: readonly MemoryEvidenceNotebookHitV1[],
+    index: number,
+  ): readonly MemoryEvidenceNotebookHitV1[] => {
     const interval = boundTemporalConstraints[index]?.queryScopeInterval;
     if (!interval) return hits;
     const startMs = Date.parse(interval.lower);
@@ -801,7 +884,11 @@ export async function resolveEvidencePass(input: {
       ...inWindow,
       ...hits.filter((hit) => !inWindowRefs.has(hit.evidenceRef)),
     ]);
-  });
+  };
+  requirementHits = requirementHits.map(orderHitsForTemporalWindow);
+  const baselineSupportHits = baselineRequirementHits.map(
+    orderHitsForTemporalWindow,
+  );
   if (input.requirements.length > 0 && input.supportSelector) {
     // A configured selector is an authority gate. Start closed so an empty
     // candidate set, malformed plugin result, or selector failure can never
@@ -812,15 +899,28 @@ export async function resolveEvidencePass(input: {
         new Set<string>(),
       ]),
     );
-    let candidates = selectSupportCandidates(
-      requirementHits,
-      sourceLocalLockedIds,
+    const allowContextOnlyCandidates =
       assistantLeafPresent ||
         input.intent.roleConstraint !== "user" ||
         evidenceGroundedRoleBindingEligible ||
-        certifiedAssistantDialogueCandidate,
-      32,
+        certifiedAssistantDialogueCandidate;
+    const frontierIntroduced = temporalFrontierRefsByRequirement.some(
+      (refs) => refs.size > 0,
     );
+    let candidates = frontierIntroduced
+      ? selectSupportCandidatesPreservingBaselineV1({
+          baselineRequirementHits: baselineSupportHits,
+          augmentedRequirementHits: requirementHits,
+          selectedSourceIds: sourceLocalLockedIds,
+          allowContextOnly: allowContextOnlyCandidates,
+          maximum: 32,
+        })
+      : selectSupportCandidates(
+          requirementHits,
+          sourceLocalLockedIds,
+          allowContextOnlyCandidates,
+          32,
+        );
     if (candidates.length > 0) {
       const candidateEvidenceRefs = new Set(
         candidates.map((candidate) => candidate.evidenceRef),
@@ -1277,12 +1377,22 @@ export async function resolveEvidencePass(input: {
       requirementHits,
       lockedSourceIds: sourceLocalLockedIds,
       maxFloorHitsPerRequirement: 2,
-      excludedEvidenceRefs: supportAssessments.map(
-        (assessment) =>
-          new Set([
-            ...assessment.contradictingEvidenceRefs,
-            ...assessment.unknownEvidenceRefs,
-          ]),
+      excludedEvidenceRefs: executionRequirements.map(
+        (requirement, index) => {
+          const assessment = supportAssessments.find(
+            (item) => item.requirementId === requirement.requirementId,
+          );
+          const supporting = new Set(
+            assessment?.supportingEvidenceRefs ?? [],
+          );
+          return new Set([
+            ...(assessment?.contradictingEvidenceRefs ?? []),
+            ...(assessment?.unknownEvidenceRefs ?? []),
+            ...[...(temporalFrontierRefsByRequirement[index] ?? [])].filter(
+              (evidenceRef) => !supporting.has(evidenceRef),
+            ),
+          ]);
+        },
       ),
     });
     selectedRefsByRequirement = floor.selectedRefsByRequirement;

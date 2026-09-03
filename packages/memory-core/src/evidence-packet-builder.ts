@@ -98,6 +98,45 @@ export function selectSupportCandidates(
   return Object.freeze(output);
 }
 
+/**
+ * Preserve the exact feature-idle candidate aperture before admitting repair
+ * additions. Requirement round-robin still ranks the additions, but can no
+ * longer evict a baseline address at the global cap.
+ */
+export function selectSupportCandidatesPreservingBaselineV1(input: {
+  readonly baselineRequirementHits: readonly (
+    readonly MemoryEvidenceNotebookHitV1[]
+  )[];
+  readonly augmentedRequirementHits: readonly (
+    readonly MemoryEvidenceNotebookHitV1[]
+  )[];
+  readonly selectedSourceIds: readonly string[];
+  readonly allowContextOnly: boolean;
+  readonly maximum: number;
+}): readonly MemoryEvidenceNotebookHitV1[] {
+  const baseline = selectSupportCandidates(
+    input.baselineRequirementHits,
+    input.selectedSourceIds,
+    input.allowContextOnly,
+    input.maximum,
+  );
+  const baselineRefs = new Set(baseline.map((hit) => hit.evidenceRef));
+  if (baseline.length >= input.maximum) return baseline;
+  const augmentedLimit = input.augmentedRequirementHits.reduce(
+    (total, hits) => total + hits.length,
+    0,
+  );
+  const additions = selectSupportCandidates(
+    input.augmentedRequirementHits,
+    input.selectedSourceIds,
+    input.allowContextOnly,
+    augmentedLimit,
+  ).filter((hit) => !baselineRefs.has(hit.evidenceRef));
+  return Object.freeze(
+    [...baseline, ...additions].slice(0, input.maximum),
+  );
+}
+
 export function filterRequirementHits(
   hits: readonly MemoryEvidenceNotebookHitV1[],
   selectedRefs: ReadonlySet<string> | undefined,

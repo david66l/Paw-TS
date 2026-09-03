@@ -9,15 +9,98 @@ import {
   buildMemoryConversationTurnBundleV1,
 } from "./evidence-first.js";
 import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
+import type {
+  MemoryEvidenceBoundTemporalConstraintV1,
+  MemoryEvidenceTemporalIntervalV2,
+} from "./query-plan-contracts.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
 import {
   type MemoryQueryAnswerOriginAuthorizationV1,
   validateMemoryQueryAnswerOriginAuthorizationV1,
 } from "./query-answer-origin.js";
-import { assertMemoryEvidenceTemporalConstraintIdentityV1 } from "./temporal-constraint.js";
+import {
+  assertMemoryEvidenceTemporalConstraintIdentityV1,
+  bindMemoryEvidenceTemporalConstraintV1,
+} from "./temporal-constraint.js";
 
 export const PAW_MEMORY_SOURCE_LOCAL_EVIDENCE_LOCATOR_PORT_VERSION_V1 =
   "paw.memory-source-local-evidence-locator-port.v1" as const;
+export const PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1 =
+  "paw.memory-temporal-evidence-frontier.v1:locked-round-exact-enumeration" as const;
+
+export interface MemoryTemporalEvidenceFrontierRequestV1 {
+  readonly frontierVersion: typeof PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1;
+  /** Immutable original query; its hash is already bound by `temporalBinding`. */
+  readonly originalQuery: string;
+  /** Host-bound authority. A locator may consume it but can never author it. */
+  readonly temporalBinding: MemoryEvidenceBoundTemporalConstraintV1;
+  readonly lanePolicy: "original_and_requirement";
+  /** Exact pre-frontier candidates that must not be silently displaced. */
+  readonly baselineEvidenceRefs: readonly string[];
+}
+
+export type MemoryTemporalRoundTimeBasisV1 =
+  | "explicit_event_interval"
+  | "source_observed_at"
+  | "unbound";
+
+/** Content-free posting for every exact role-eligible round in the lock. */
+export interface MemoryTemporalRoundPostingV1 {
+  readonly sourceId: string;
+  readonly evidenceRef: string;
+  readonly role: MemoryConversationTurnKindV1;
+  readonly contentDigest: string;
+  readonly observedAt?: string;
+  readonly episodeOrder?: number;
+  readonly turnOrder: number;
+  readonly timeBasis: MemoryTemporalRoundTimeBasisV1;
+  readonly eventInterval?: MemoryEvidenceTemporalIntervalV2;
+  readonly postingRevision: string;
+}
+
+export type MemoryTemporalEvidencePartitionV1 =
+  | "event_inside_window"
+  | "event_outside_window"
+  | "source_clock_hint_inside"
+  | "source_clock_hint_outside"
+  | "time_unbound";
+
+export interface MemoryTemporalEvidenceOmissionV1 {
+  readonly evidenceRef: string;
+  readonly reason: "rank_budget";
+}
+
+/**
+ * Exact, content-free receipt for an adapter-enumerated locked frontier. The
+ * status never claims semantic support, exhaustive proof, or evidence closure.
+ */
+export interface MemoryTemporalEvidenceFrontierSnapshotV1 {
+  readonly frontierVersion: typeof PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1;
+  readonly frontierRevision: string;
+  readonly temporalBindingRevision: string;
+  readonly sourceAcquisitionRevision: string;
+  readonly lockedSourceSetRevision: string;
+  readonly lockedSourceOrderRevision: string;
+  readonly roleApertureRevision: string;
+  readonly requirementRevision: string;
+  readonly baselineEvidenceRevision: string;
+  readonly budgetRevision: string;
+  readonly indexRevision: string;
+  /** Adapter enumeration receipt only; never evidence-closure authority. */
+  readonly status: "adapter_enumerated" | "adapter_enumerated_empty";
+  readonly postings: readonly MemoryTemporalRoundPostingV1[];
+  readonly partitions: Readonly<{
+    eventInsideWindowEvidenceRefs: readonly string[];
+    eventOutsideWindowEvidenceRefs: readonly string[];
+    sourceClockHintInsideEvidenceRefs: readonly string[];
+    sourceClockHintOutsideEvidenceRefs: readonly string[];
+    timeUnboundEvidenceRefs: readonly string[];
+  }>;
+  readonly returnedEvidenceRefs: readonly string[];
+  /** Returned solely because of frontier lanes; baseline addresses excluded. */
+  readonly introducedEvidenceRefs: readonly string[];
+  readonly omitted: readonly MemoryTemporalEvidenceOmissionV1[];
+}
 
 export interface MemorySourceLocalEvidenceBudgetV1 {
   readonly maxAnchors: number;
@@ -29,6 +112,8 @@ export interface MemorySourceLocalEvidenceBudgetV1 {
 
 export interface MemorySourceLocalEvidenceRequestV1 {
   readonly requirement: MemoryEvidenceRequirementV3;
+  /** Optional only for legacy/non-temporal callers. */
+  readonly temporalFrontier?: MemoryTemporalEvidenceFrontierRequestV1;
   /**
    * A user-shaped question explicitly asking for a prior assistant response.
    * The original user role remains intact; this flag only opens certified
@@ -108,6 +193,7 @@ export interface MemorySourceLocalEvidenceResultV1 {
   readonly hits: readonly MemorySourceLocalEvidenceHitV1[];
   readonly degradedChannels: readonly ("lexical" | "dense" | "hydrate")[];
   readonly telemetry: MemorySourceLocalEvidenceTelemetryV1;
+  readonly temporalFrontier?: MemoryTemporalEvidenceFrontierSnapshotV1;
 }
 
 export interface MemorySourceLocalEvidenceLocatorV1 {
@@ -116,6 +202,197 @@ export interface MemorySourceLocalEvidenceLocatorV1 {
     request: MemorySourceLocalEvidenceRequestV1,
     signal: AbortSignal,
   ): Promise<MemorySourceLocalEvidenceResultV1>;
+}
+
+export function createMemoryTemporalRoundPostingV1(
+  input: Omit<MemoryTemporalRoundPostingV1, "postingRevision">,
+): MemoryTemporalRoundPostingV1 {
+  const identity = {
+    sourceId: input.sourceId,
+    evidenceRef: input.evidenceRef,
+    role: input.role,
+    contentDigest: input.contentDigest,
+    ...(input.observedAt === undefined ? {} : { observedAt: input.observedAt }),
+    ...(input.episodeOrder === undefined
+      ? {}
+      : { episodeOrder: input.episodeOrder }),
+    turnOrder: input.turnOrder,
+    timeBasis: input.timeBasis,
+    ...(input.eventInterval === undefined
+      ? {}
+      : { eventInterval: input.eventInterval }),
+  } as const;
+  const posting = Object.freeze({
+    ...identity,
+    postingRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+  });
+  assertTemporalRoundPosting(posting);
+  return posting;
+}
+
+export function createMemoryTemporalEvidenceFrontierSnapshotV1(input: {
+  readonly request: MemorySourceLocalEvidenceRequestV1;
+  readonly indexRevision: string;
+  readonly postings: readonly MemoryTemporalRoundPostingV1[];
+  readonly returnedEvidenceRefs: readonly string[];
+}): MemoryTemporalEvidenceFrontierSnapshotV1 {
+  const frontier = assertTemporalFrontierRequest(input.request);
+  if (!input.indexRevision.trim() || input.postings.length > 2_048) {
+    throw namedError("MemorySourceLocalEvidenceTemporalFrontierInvalid");
+  }
+  const postingByRef = new Map<string, MemoryTemporalRoundPostingV1>();
+  for (const posting of input.postings) {
+    assertTemporalRoundPosting(posting);
+    if (
+      postingByRef.has(posting.evidenceRef) ||
+      !input.request.lockedSourceIds.includes(posting.sourceId) ||
+      evidenceRefFamily(posting.evidenceRef) !== posting.sourceId ||
+      !isAllowedAnchorRole(input.request, posting.role)
+    ) {
+      throw namedError(
+        "MemorySourceLocalEvidenceTemporalFrontierPostingInvalid",
+      );
+    }
+    const effectiveUpper = temporalPostingEffectiveUpper(posting);
+    const cutoff = frontier.temporalBinding.evidenceTimeUpperBound
+      ? Date.parse(frontier.temporalBinding.evidenceTimeUpperBound)
+      : undefined;
+    if (
+      cutoff !== undefined &&
+      (effectiveUpper === undefined || effectiveUpper > cutoff)
+    ) {
+      throw namedError("MemorySourceLocalEvidenceTemporalFrontierCutoffInvalid");
+    }
+    postingByRef.set(posting.evidenceRef, posting);
+  }
+  const returnedEvidenceRefs = [...input.returnedEvidenceRefs];
+  const baseline = new Set(frontier.baselineEvidenceRefs);
+  const introducedEvidenceRefs = returnedEvidenceRefs.filter(
+    (evidenceRef) => !baseline.has(evidenceRef),
+  );
+  if (
+    new Set(returnedEvidenceRefs).size !== returnedEvidenceRefs.length ||
+    returnedEvidenceRefs.some((evidenceRef) => !postingByRef.has(evidenceRef))
+  ) {
+    throw namedError("MemorySourceLocalEvidenceTemporalFrontierReturnedInvalid");
+  }
+  const partitions = {
+    eventInsideWindowEvidenceRefs: [] as string[],
+    eventOutsideWindowEvidenceRefs: [] as string[],
+    sourceClockHintInsideEvidenceRefs: [] as string[],
+    sourceClockHintOutsideEvidenceRefs: [] as string[],
+    timeUnboundEvidenceRefs: [] as string[],
+  };
+  const partitionByRef = new Map<string, MemoryTemporalEvidencePartitionV1>();
+  for (const posting of input.postings) {
+    const partition = partitionTemporalPosting(
+      posting,
+      frontier.temporalBinding.queryScopeInterval,
+    );
+    partitionByRef.set(posting.evidenceRef, partition);
+    if (partition === "event_inside_window")
+      partitions.eventInsideWindowEvidenceRefs.push(posting.evidenceRef);
+    else if (partition === "event_outside_window")
+      partitions.eventOutsideWindowEvidenceRefs.push(posting.evidenceRef);
+    else if (partition === "source_clock_hint_inside")
+      partitions.sourceClockHintInsideEvidenceRefs.push(posting.evidenceRef);
+    else if (partition === "source_clock_hint_outside")
+      partitions.sourceClockHintOutsideEvidenceRefs.push(posting.evidenceRef);
+    else partitions.timeUnboundEvidenceRefs.push(posting.evidenceRef);
+  }
+  const returned = new Set(returnedEvidenceRefs);
+  const omitted = input.postings
+    .filter((posting) => !returned.has(posting.evidenceRef))
+    .map((posting) => {
+      const partition = partitionByRef.get(posting.evidenceRef);
+      if (!partition)
+        throw namedError(
+          "MemorySourceLocalEvidenceTemporalFrontierPartitionInvalid",
+        );
+      return Object.freeze({
+        evidenceRef: posting.evidenceRef,
+        reason: "rank_budget" as const,
+      });
+    });
+  const identity = {
+    frontierVersion: PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
+    temporalBindingRevision: frontier.temporalBinding.bindingRevision,
+    sourceAcquisitionRevision: input.request.sourceAcquisitionRevision ?? "",
+    lockedSourceSetRevision: hashCanonicalJsonV1(
+      [...input.request.lockedSourceIds].sort() as unknown as JsonValue,
+    ),
+    lockedSourceOrderRevision: hashCanonicalJsonV1(
+      input.request.lockedSourceIds as unknown as JsonValue,
+    ),
+    roleApertureRevision: hashCanonicalJsonV1({
+      anchorKinds: memorySourceLocalAnchorKindsV1(input.request),
+      assistantDialogueCandidate:
+        input.request.assistantDialogueCandidate === true,
+      answerOriginAuthorizationRevision:
+        input.request.respondingAssistantMaterialization?.authorization
+          .authorizationRevision ?? "none",
+    } as unknown as JsonValue),
+    requirementRevision: memorySourceLocalRequirementRevisionV1(
+      input.request.requirement,
+    ),
+    baselineEvidenceRevision: hashCanonicalJsonV1(
+      frontier.baselineEvidenceRefs as unknown as JsonValue,
+    ),
+    budgetRevision: hashCanonicalJsonV1(
+      input.request.budget as unknown as JsonValue,
+    ),
+    indexRevision: input.indexRevision,
+    status:
+      input.postings.length === 0
+        ? ("adapter_enumerated_empty" as const)
+        : ("adapter_enumerated" as const),
+    postings: input.postings,
+    partitions,
+    returnedEvidenceRefs,
+    introducedEvidenceRefs,
+    omitted,
+  } as const;
+  return Object.freeze({
+    ...identity,
+    partitions: Object.freeze({
+      eventInsideWindowEvidenceRefs: Object.freeze([
+        ...partitions.eventInsideWindowEvidenceRefs,
+      ]),
+      eventOutsideWindowEvidenceRefs: Object.freeze([
+        ...partitions.eventOutsideWindowEvidenceRefs,
+      ]),
+      sourceClockHintInsideEvidenceRefs: Object.freeze([
+        ...partitions.sourceClockHintInsideEvidenceRefs,
+      ]),
+      sourceClockHintOutsideEvidenceRefs: Object.freeze([
+        ...partitions.sourceClockHintOutsideEvidenceRefs,
+      ]),
+      timeUnboundEvidenceRefs: Object.freeze([
+        ...partitions.timeUnboundEvidenceRefs,
+      ]),
+    }),
+    omitted: Object.freeze(omitted),
+    frontierRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+  });
+}
+
+export function validateMemoryTemporalEvidenceFrontierSnapshotV1(input: {
+  readonly request: MemorySourceLocalEvidenceRequestV1;
+  readonly snapshot: MemoryTemporalEvidenceFrontierSnapshotV1;
+  readonly returnedEvidenceRefs: readonly string[];
+}): void {
+  const rebuilt = createMemoryTemporalEvidenceFrontierSnapshotV1({
+    request: input.request,
+    indexRevision: input.snapshot.indexRevision,
+    postings: input.snapshot.postings,
+    returnedEvidenceRefs: input.returnedEvidenceRefs,
+  });
+  if (
+    hashCanonicalJsonV1(rebuilt as unknown as JsonValue) !==
+    hashCanonicalJsonV1(input.snapshot as unknown as JsonValue)
+  ) {
+    throw namedError("MemorySourceLocalEvidenceTemporalFrontierInvalid");
+  }
 }
 
 export interface MemorySourceLocalHydratedEvidenceV1 {
@@ -275,6 +552,12 @@ const MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODES_V1 = Object.freeze([
   "MemorySourceLocalEvidenceResultInvalid",
   "MemorySourceLocalEvidenceSourcesInvalid",
   "MemorySourceLocalEvidenceTelemetryInvalid",
+  "MemorySourceLocalEvidenceTemporalFrontierCutoffInvalid",
+  "MemorySourceLocalEvidenceTemporalFrontierInvalid",
+  "MemorySourceLocalEvidenceTemporalFrontierPartitionInvalid",
+  "MemorySourceLocalEvidenceTemporalFrontierPostingInvalid",
+  "MemorySourceLocalEvidenceTemporalFrontierRequestInvalid",
+  "MemorySourceLocalEvidenceTemporalFrontierReturnedInvalid",
   "MemorySourceLocalEvidenceTimeInvalid",
   "MemorySourceLocalEvidenceTraceInvalid",
 ] as const);
@@ -371,6 +654,12 @@ export interface MemorySourceLocalLeafExecutionReportV2 {
   readonly localizedHitCount: number;
   readonly failureCode?: MemorySourceLocalEvidenceFailureCodeV1;
   readonly locatorRevision?: string;
+  readonly temporalFrontierStatus?:
+    | "adapter_enumerated"
+    | "adapter_enumerated_empty";
+  readonly temporalFrontierConsideredCount?: number;
+  readonly temporalFrontierReturnedCount?: number;
+  readonly temporalFrontierBudgetOmittedCount?: number;
 }
 
 export const DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1 = Object.freeze({
@@ -586,11 +875,16 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
 }): readonly MemorySourceLocalEvidenceHitV1[] {
   assertBudget(input.request.budget);
   assertRespondingAssistantMaterialization(input.request);
+  if (input.request.temporalFrontier) {
+    assertTemporalFrontierRequest(input.request);
+  }
   if (
     input.result.locatorVersion !== input.locator.locatorVersion ||
     !input.result.locatorRevision.trim() ||
     input.result.degradedChannels.length > 0 ||
-    input.result.hits.length > input.request.budget.maxAnchors
+    input.result.hits.length > input.request.budget.maxAnchors ||
+    (input.request.temporalFrontier === undefined) !==
+      (input.result.temporalFrontier === undefined)
   ) {
     throw namedError("MemorySourceLocalEvidenceResultInvalid");
   }
@@ -706,6 +1000,13 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
   ) {
     throw namedError("MemorySourceLocalEvidenceTelemetryInvalid");
   }
+  if (input.result.temporalFrontier) {
+    validateMemoryTemporalEvidenceFrontierSnapshotV1({
+      request: input.request,
+      snapshot: input.result.temporalFrontier,
+      returnedEvidenceRefs: input.result.hits.map((hit) => hit.evidenceRef),
+    });
+  }
   return Object.freeze([...input.result.hits]);
 }
 
@@ -724,9 +1025,14 @@ export async function hydrateMemorySourceLocalEvidenceResultV1(input: {
   }
   const requestedRefs = [
     ...new Set(
-      input.result.hits.flatMap((hit) =>
-        hit.includedTurns.map((turn) => turn.evidenceRef),
-      ),
+      [
+        ...input.result.hits.flatMap((hit) =>
+          hit.includedTurns.map((turn) => turn.evidenceRef),
+        ),
+        ...(input.result.temporalFrontier?.postings.map(
+          (posting) => posting.evidenceRef,
+        ) ?? []),
+      ],
     ),
   ];
   if (requestedRefs.length === 0) return input.result;
@@ -751,6 +1057,20 @@ export async function hydrateMemorySourceLocalEvidenceResultV1(input: {
   }
   if (byRef.size !== requestedRefs.length) {
     throw namedError("MemorySourceLocalEvidenceHydrationIncomplete");
+  }
+  for (const posting of input.result.temporalFrontier?.postings ?? []) {
+    const item = byRef.get(posting.evidenceRef);
+    if (
+      !item ||
+      item.contentHash !== posting.contentDigest ||
+      item.sourceKind !== posting.role ||
+      item.turnOrder !== posting.turnOrder ||
+      item.observedAt !== posting.observedAt
+    ) {
+      throw namedError(
+        "MemorySourceLocalEvidenceTemporalFrontierPostingInvalid",
+      );
+    }
   }
   const hits: MemorySourceLocalEvidenceHitV1[] = [];
   let renderedChars = 0;
@@ -841,6 +1161,9 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
 }): string {
   assertBudget(input.request.budget);
   assertRespondingAssistantMaterialization(input.request);
+  if (input.request.temporalFrontier) {
+    assertTemporalFrontierRequest(input.request);
+  }
   if (
     input.request.sourceAcquisitionRevision !== undefined &&
     input.request.sourceAcquisitionRevision.trim().length === 0
@@ -855,6 +1178,9 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
   const normalizedSearchText = input.request.requirement.searchText
     .replace(/\s+/gu, " ")
     .trim();
+  const normalizedRequirementLabel = input.request.requirement.label
+    .replace(/\s+/gu, " ")
+    .trim();
   const normalizedOriginalQuery =
     input.request.respondingAssistantMaterialization?.originalQuery
       .replace(/\s+/gu, " ")
@@ -866,7 +1192,14 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     turnIndexRevision: input.turnIndexRevision,
     embeddingIdentity: input.embeddingIdentity ?? "none",
     searchTextHash: hashCanonicalJsonV1(normalizedSearchText as JsonValue),
+    requirementLabelHash: hashCanonicalJsonV1(
+      normalizedRequirementLabel as JsonValue,
+    ),
+    requirementRevision: memorySourceLocalRequirementRevisionV1(
+      input.request.requirement,
+    ),
     lockedSourceIds: [...input.request.lockedSourceIds].sort(),
+    lockedSourceOrder: [...input.request.lockedSourceIds],
     sourceAcquisitionRevision:
       input.request.sourceAcquisitionRevision?.trim() ?? "legacy",
     roleConstraint: input.request.requirement.roleConstraint,
@@ -894,6 +1227,17 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     temporalConstraintRevision:
       input.request.requirement.temporalConstraint?.constraintRevision ??
       "legacy",
+    temporalFrontier: input.request.temporalFrontier
+      ? {
+          frontierVersion: input.request.temporalFrontier.frontierVersion,
+          temporalBindingRevision:
+            input.request.temporalFrontier.temporalBinding.bindingRevision,
+          lanePolicy: input.request.temporalFrontier.lanePolicy,
+          baselineEvidenceRefs: [
+            ...input.request.temporalFrontier.baselineEvidenceRefs,
+          ],
+        }
+      : "disabled",
     evidenceTimeUpperBound: input.request.evidenceTimeUpperBound ?? "latest",
     budget: input.request.budget,
     adjacencyPolicyVersion: input.adjacencyPolicyVersion,
@@ -957,6 +1301,156 @@ function assertRespondingAssistantMaterialization(
   ) {
     throw namedError("MemorySourceLocalEvidenceMaterializationInvalid");
   }
+}
+
+function memorySourceLocalRequirementRevisionV1(
+  requirement: MemoryEvidenceRequirementV3,
+): string {
+  return hashCanonicalJsonV1({
+    ...requirement,
+    label: requirement.label.replace(/\s+/gu, " ").trim(),
+    searchText: requirement.searchText.replace(/\s+/gu, " ").trim(),
+  } as unknown as JsonValue);
+}
+
+function assertTemporalFrontierRequest(
+  request: MemorySourceLocalEvidenceRequestV1,
+): MemoryTemporalEvidenceFrontierRequestV1 {
+  const frontier = request.temporalFrontier;
+  const constraint = request.requirement.temporalConstraint;
+  if (
+    !frontier ||
+    frontier.frontierVersion !==
+      PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1 ||
+    frontier.lanePolicy !== "original_and_requirement" ||
+    !frontier.originalQuery.trim() ||
+    frontier.originalQuery.length > 32_768 ||
+    !request.sourceAcquisitionRevision?.trim() ||
+    !Array.isArray(frontier.baselineEvidenceRefs) ||
+    frontier.baselineEvidenceRefs.length > 64 ||
+    new Set(frontier.baselineEvidenceRefs).size !==
+      frontier.baselineEvidenceRefs.length ||
+    frontier.baselineEvidenceRefs.some(
+      (evidenceRef) =>
+        !evidenceRef.trim() ||
+        !request.lockedSourceIds.includes(evidenceRefFamily(evidenceRef)),
+    ) ||
+    !constraint ||
+    constraint.constraintRevision !==
+      frontier.temporalBinding.constraintRevision ||
+    request.evidenceTimeUpperBound !==
+      (frontier.temporalBinding.evidenceTimeUpperBound ?? undefined)
+  ) {
+    throw namedError("MemorySourceLocalEvidenceTemporalFrontierRequestInvalid");
+  }
+  let rebound: MemoryEvidenceBoundTemporalConstraintV1;
+  try {
+    rebound = bindMemoryEvidenceTemporalConstraintV1({
+      query: frontier.originalQuery,
+      queryEnvelopeMode: frontier.temporalBinding.queryEnvelopeMode,
+      leafMode: frontier.temporalBinding.mode,
+      constraint,
+      ...(request.evidenceTimeUpperBound === undefined
+        ? {}
+        : { evidenceTimeUpperBound: request.evidenceTimeUpperBound }),
+      applyQueryScope:
+        frontier.temporalBinding.mode === "any" &&
+        frontier.temporalBinding.queryScopeInterval !== null,
+    });
+  } catch {
+    throw namedError("MemorySourceLocalEvidenceTemporalFrontierRequestInvalid");
+  }
+  if (
+    hashCanonicalJsonV1(rebound as unknown as JsonValue) !==
+    hashCanonicalJsonV1(frontier.temporalBinding as unknown as JsonValue)
+  ) {
+    throw namedError("MemorySourceLocalEvidenceTemporalFrontierRequestInvalid");
+  }
+  return frontier;
+}
+
+function assertTemporalRoundPosting(
+  posting: MemoryTemporalRoundPostingV1,
+): void {
+  const observedAt = parseOptionalTimestamp(posting.observedAt);
+  const eventInterval = posting.eventInterval;
+  const eventLower = eventInterval ? Date.parse(eventInterval.lower) : undefined;
+  const eventUpper = eventInterval ? Date.parse(eventInterval.upper) : undefined;
+  const expectedRevision = hashCanonicalJsonV1({
+    sourceId: posting.sourceId,
+    evidenceRef: posting.evidenceRef,
+    role: posting.role,
+    contentDigest: posting.contentDigest,
+    ...(posting.observedAt === undefined
+      ? {}
+      : { observedAt: posting.observedAt }),
+    ...(posting.episodeOrder === undefined
+      ? {}
+      : { episodeOrder: posting.episodeOrder }),
+    turnOrder: posting.turnOrder,
+    timeBasis: posting.timeBasis,
+    ...(eventInterval === undefined ? {} : { eventInterval }),
+  } as unknown as JsonValue);
+  if (
+    !posting.sourceId.trim() ||
+    !posting.evidenceRef.trim() ||
+    !/^[a-f0-9]{64}$/u.test(posting.contentDigest) ||
+    !isConversationTurnKind(posting.role) ||
+    !Number.isSafeInteger(posting.turnOrder) ||
+    posting.turnOrder < 1 ||
+    (posting.episodeOrder !== undefined &&
+      (!Number.isSafeInteger(posting.episodeOrder) ||
+        posting.episodeOrder < 0)) ||
+    observedAt === "invalid" ||
+    (eventInterval !== undefined &&
+      (!Number.isFinite(eventLower) ||
+        !Number.isFinite(eventUpper) ||
+        (eventLower as number) >= (eventUpper as number))) ||
+    (posting.timeBasis === "explicit_event_interval") !==
+      (eventInterval !== undefined) ||
+    (posting.timeBasis === "source_observed_at" &&
+      observedAt === undefined) ||
+    (posting.timeBasis === "unbound" && eventInterval !== undefined) ||
+    posting.postingRevision !== expectedRevision
+  ) {
+    throw namedError("MemorySourceLocalEvidenceTemporalFrontierPostingInvalid");
+  }
+}
+
+function temporalPostingEffectiveUpper(
+  posting: MemoryTemporalRoundPostingV1,
+): number | undefined {
+  return posting.observedAt === undefined
+    ? undefined
+    : Date.parse(posting.observedAt);
+}
+
+function partitionTemporalPosting(
+  posting: MemoryTemporalRoundPostingV1,
+  interval: MemoryEvidenceTemporalIntervalV2 | null,
+): MemoryTemporalEvidencePartitionV1 {
+  if (posting.timeBasis === "unbound") return "time_unbound";
+  if (interval === null) {
+    return posting.timeBasis === "explicit_event_interval"
+      ? "event_inside_window"
+      : "source_clock_hint_inside";
+  }
+  const lower = Date.parse(interval.lower);
+  const upper = Date.parse(interval.upper);
+  if (posting.eventInterval) {
+    const eventLower = Date.parse(posting.eventInterval.lower);
+    const eventUpper = Date.parse(posting.eventInterval.upper);
+    return eventLower < upper && eventUpper > lower
+      ? "event_inside_window"
+      : "event_outside_window";
+  }
+  const observedAt = posting.observedAt
+    ? Date.parse(posting.observedAt)
+    : Number.NaN;
+  if (!Number.isFinite(observedAt)) return "time_unbound";
+  return observedAt >= lower && observedAt < upper
+    ? "source_clock_hint_inside"
+    : "source_clock_hint_outside";
 }
 
 function namedError(name: string): Error {

@@ -3,11 +3,19 @@ import { describe, expect, test } from "bun:test";
 import { hashTextV1 } from "../src/canonical.js";
 import { enforceSelectedEvidenceAuthority } from "../src/evidence-authority.js";
 import {
+  mergeEvidenceHits,
+  selectSupportCandidates,
+  selectSupportCandidatesPreservingBaselineV1,
+} from "../src/evidence-resolver-helpers.js";
+import {
   compileMemorySourceLocalAssistantDialogueCertificatesV1,
   selectScopedCertifiedAssistantDialogueRefsV1,
 } from "../src/evidence-resolution-pass.js";
 import {
   type MemoryEvidenceIndexV1,
+  PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
+  createMemoryTemporalEvidenceFrontierSnapshotV1,
+  createMemoryTemporalRoundPostingV1,
   createJsonMemoryEvidenceSupportSelectorV1,
   createMemoryEvidenceResolverV1,
   projectEvidenceFirstMemoryAnswerContractV1,
@@ -88,6 +96,44 @@ function index(): MemoryEvidenceIndexV1 {
 }
 
 describe("shared evidence resolver v1", () => {
+  test("keeps cross-requirement baseline candidates ahead of frontier omissions at the 32 cap", () => {
+    const baselineByRequirement = [1, 10, 10, 10].map(
+      (count, requirementIndex) =>
+        Array.from({ length: count }, (_, index) => ({
+          sourceId: "session-1",
+          evidenceRef: `session-1#baseline-${requirementIndex + 1}-${index + 1}`,
+          content: `baseline content ${requirementIndex + 1}-${index + 1}`,
+          authority: "user_asserted" as const,
+        })),
+    );
+    const frontier = Array.from({ length: 7 }, (_, index) => ({
+      sourceId: "session-1",
+      evidenceRef: `session-1#frontier-${index + 1}`,
+      content: `frontier content ${index + 1}`,
+      authority: "user_asserted" as const,
+    }));
+    const featureOff = selectSupportCandidates(
+      baselineByRequirement,
+      ["session-1"],
+      false,
+      32,
+    );
+    const selected = selectSupportCandidatesPreservingBaselineV1({
+      baselineRequirementHits: baselineByRequirement,
+      augmentedRequirementHits: [
+        mergeEvidenceHits(baselineByRequirement[0] ?? [], frontier),
+        ...baselineByRequirement.slice(1),
+      ],
+      selectedSourceIds: ["session-1"],
+      allowContextOnly: false,
+      maximum: 32,
+    });
+    expect(selected.slice(0, 31).map((hit) => hit.evidenceRef)).toEqual(
+      featureOff.map((hit) => hit.evidenceRef),
+    );
+    expect(selected[31]?.evidenceRef).toBe(frontier[0]?.evidenceRef);
+  });
+
   test("enforces authority independently for mixed-role obligation leaves", () => {
     const requirements = [
       {
@@ -4023,6 +4069,247 @@ describe("shared evidence resolver v1", () => {
         (lane) => lane.requirementId,
       ),
     ).toEqual(["old", "current"]);
+  });
+
+  test("proposes exact temporal rounds only inside the frozen repair lock", async () => {
+    const query = "What happened last month?";
+    const observedAt = "2025-04-10T00:00:00.000Z";
+    const baselineRef = "session-1#turn-1";
+    const frontierRef = "session-1#turn-3";
+    const contents: Readonly<Record<string, string>> = {
+      [baselineRef]: "I mentioned an unrelated appointment.",
+      [frontierRef]: "I completed the relevant renewal event.",
+    } as const;
+    const locatorRequests: Array<{
+      readonly lockedSourceIds: readonly string[];
+      readonly temporalFrontier?: unknown;
+    }> = [];
+    let selectorCalls = 0;
+    let auditorCalls = 0;
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                retrieverId: "lexical",
+                channel: "l0" as const,
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: baselineRef,
+                    sourceId: "session-1",
+                    evidenceRef: baselineRef,
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                    observedAt,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: baselineRef,
+                content: contents[baselineRef] ?? "missing test content",
+                sourceKind: "user_input" as const,
+                authority: "user_asserted" as const,
+                observedAt,
+                turnOrder: 1,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion: "test-temporal-planner.v1",
+        async plan() {
+          return {
+            plannerVersion: "test-temporal-planner.v1",
+            answerShape: "lookup" as const,
+            temporalMode: "range" as const,
+            roleConstraint: "user" as const,
+            needsPlanning: true,
+            requirements: [
+              {
+                requirementId: "event",
+                label: "relevant event",
+                searchText: "renewal event",
+                temporalMode: "range" as const,
+                roleConstraint: "user" as const,
+                relation: "temporal" as const,
+                coverageMode: "any" as const,
+                minimumEvidence: 1,
+              },
+            ],
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          selectorCalls += 1;
+          const refs = input.candidates.map((item) => item.evidenceRef);
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: `selection-${selectorCalls}`,
+            assessments: [
+              {
+                requirementId: "event",
+                supportingEvidenceRefs:
+                  refs.includes(frontierRef)
+                    ? [frontierRef]
+                    : [baselineRef],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: refs.filter(
+                  (evidenceRef) =>
+                    refs.includes(frontierRef)
+                      ? evidenceRef !== frontierRef
+                      : evidenceRef !== baselineRef,
+                ),
+              },
+            ],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-temporal-locator.v1",
+        async locate(request) {
+          locatorRequests.push(request);
+          const refs = request.temporalFrontier
+            ? [baselineRef, frontierRef]
+            : [baselineRef];
+          const hits = refs.map((evidenceRef) => {
+            const turnOrder = evidenceRef === baselineRef ? 1 : 3;
+            return {
+              sourceId: "session-1",
+              evidenceRef,
+              anchorEvidenceRef: evidenceRef,
+              contextEvidenceRefs: [evidenceRef],
+              sourceKind: "user_input" as const,
+                content: contents[evidenceRef] ?? "missing test content",
+              authority: "user_asserted" as const,
+              observedAt,
+              turnOrder,
+              includedTurns: [
+                {
+                  evidenceRef,
+                  sourceKind: "user_input" as const,
+                  observedAt,
+                  turnOrder,
+                },
+              ],
+            };
+          });
+          const temporalFrontier = request.temporalFrontier
+            ? createMemoryTemporalEvidenceFrontierSnapshotV1({
+                request,
+                indexRevision: "turn-index-v1",
+                postings: refs.map((evidenceRef) =>
+                  createMemoryTemporalRoundPostingV1({
+                    sourceId: "session-1",
+                    evidenceRef,
+                    role: "user_input",
+                    contentDigest: hashTextV1(
+                      contents[evidenceRef] ?? "missing test content",
+                    ),
+                    observedAt,
+                    episodeOrder: 0,
+                    turnOrder: evidenceRef === baselineRef ? 1 : 3,
+                    timeBasis: "source_observed_at",
+                  }),
+                ),
+                returnedEvidenceRefs: refs,
+              })
+            : undefined;
+          return {
+            locatorVersion: "test-temporal-locator.v1",
+            locatorRevision: `locator-${locatorRequests.length}`,
+            hits,
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: refs.length,
+              denseCandidates: 0,
+              anchorCount: refs.length,
+              includedTurnCount: refs.length,
+              renderedChars: hits.reduce(
+                (total, hit) => total + hit.content.length,
+                0,
+              ),
+              cacheHit: false,
+              durationMs: 1,
+            },
+            ...(temporalFrontier === undefined
+              ? {}
+              : { temporalFrontier }),
+          };
+        },
+      },
+      sourceLocalHydrator: {
+        hydratorVersion: "test-hydrator.v1",
+        async hydrate(evidenceRefs) {
+          return evidenceRefs.map((evidenceRef) => {
+            const content = contents[evidenceRef];
+            if (!content) throw new Error("missing test evidence");
+            return {
+              evidenceRef,
+              sourceKind: "user_input" as const,
+              turnOrder: evidenceRef === baselineRef ? 1 : 3,
+              observedAt,
+              content,
+              contentHash: hashTextV1(content),
+            };
+          });
+        },
+      },
+      temporalRoundFrontier: true,
+      evidenceTimeUpperBound: "2025-05-20T00:00:00.000Z",
+      closureMode: "repair",
+      closureAuditor: {
+        auditorVersion: "test-auditor.v1",
+        async audit() {
+          auditorCalls += 1;
+          return auditorCalls === 1
+            ? {
+                auditorVersion: "test-auditor.v1",
+                auditRevision: "repair-audit",
+                decision: "incomplete" as const,
+                deficiencies: [
+                  {
+                    reason: "missing_constraint" as const,
+                    targetRequirementId: "event",
+                  },
+                ],
+                rejectedEvidenceRefs: [],
+              }
+            : {
+                auditorVersion: "test-auditor.v1",
+                auditRevision: "final-audit",
+                decision: "pass" as const,
+                deficiencies: [],
+                rejectedEvidenceRefs: [],
+              };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(query, new AbortController().signal);
+
+    expect(locatorRequests).toHaveLength(2);
+    expect(locatorRequests[0]?.temporalFrontier).toBeUndefined();
+    expect(locatorRequests[1]?.temporalFrontier).toMatchObject({
+      frontierVersion: PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
+      lanePolicy: "original_and_requirement",
+      baselineEvidenceRefs: [baselineRef],
+    });
+    expect(locatorRequests[1]?.lockedSourceIds).toEqual(
+      locatorRequests[0]?.lockedSourceIds,
+    );
+    expect(result.closureRepairCount).toBe(1);
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toContain(
+      frontierRef,
+    );
   });
 
   test("replaces a stale single-slot latest requirement with its audited refinement", async () => {

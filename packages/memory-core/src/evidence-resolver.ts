@@ -91,6 +91,8 @@ export function createMemoryEvidenceResolverV1(input: {
    * exact certificate. Defaults off.
    */
   readonly evidenceGroundedRoleBinding?: boolean;
+  /** Exact temporal round proposals in the frozen closure-repair lock. Defaults off. */
+  readonly temporalRoundFrontier?: boolean;
   readonly closureAuditor?: MemoryEvidenceClosureAuditorV1;
   /** Defaults to observe so a semantic audit cannot silently rewrite evidence. */
   readonly closureMode?: Exclude<MemoryEvidenceClosureModeV1, "disabled">;
@@ -230,6 +232,7 @@ export function createMemoryEvidenceResolverV1(input: {
           DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
         queryAnswerOrigin,
         evidenceGroundedRoleBinding: input.evidenceGroundedRoleBinding,
+        temporalRoundFrontier: input.temporalRoundFrontier,
         evidenceTimeUpperBound: input.evidenceTimeUpperBound,
         signal,
       });
@@ -326,6 +329,7 @@ export function createMemoryEvidenceResolverV1(input: {
                 DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
               queryAnswerOrigin,
               evidenceGroundedRoleBinding: input.evidenceGroundedRoleBinding,
+              temporalRoundFrontier: input.temporalRoundFrontier,
               evidenceTimeUpperBound: input.evidenceTimeUpperBound,
               excludedEvidenceRefs: new Set(audit.rejectedEvidenceRefs),
               sourceLock: Object.freeze({
