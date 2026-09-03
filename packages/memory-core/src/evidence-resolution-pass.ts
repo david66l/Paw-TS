@@ -777,6 +777,38 @@ export async function resolveEvidencePass(input: {
   let selectedRefsByRequirement:
     | ReadonlyMap<string, ReadonlySet<string>>
     | undefined;
+  // 相对时间翻译官(检索层):问题含强信号时间短语时,把命中按
+  // observedAt 是否落在换算窗口内做稳定重排(窗口内优先,组内保序)。
+  // 非时间问题 extract 返回 null,重排零触发;这是软加权,不是硬过滤。
+  try {
+    const cutoffMs = input.evidenceTimeUpperBound
+      ? Date.parse(input.evidenceTimeUpperBound)
+      : undefined;
+    if (cutoffMs !== undefined && Number.isFinite(cutoffMs)) {
+      const timeWindow = extractRelativeTimeWindowV1(input.query, cutoffMs);
+      if (timeWindow) {
+        requirementHits = requirementHits.map((hits) => {
+          const inWindow = hits.filter((hit) => {
+            const observed = hit.observedAt
+              ? Date.parse(hit.observedAt)
+              : undefined;
+            return (
+              observed !== undefined &&
+              Number.isFinite(observed) &&
+              observed >= timeWindow.startMs &&
+              observed < timeWindow.endMs
+            );
+          });
+          const outWindow = hits.filter(
+            (hit) => !inWindow.includes(hit),
+          );
+          return Object.freeze([...inWindow, ...outWindow]);
+        });
+      }
+    }
+  } catch {
+    // 排序增强失败保持原序,绝不阻断主流程。
+  }
   if (input.requirements.length > 0 && input.supportSelector) {
     // A configured selector is an authority gate. Start closed so an empty
     // candidate set, malformed plugin result, or selector failure can never
