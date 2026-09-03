@@ -129,6 +129,20 @@ def required_string(value: dict[str, Any], key: str) -> str:
     return result
 
 
+def benchmark_answer_text(value: dict[str, Any]) -> str:
+    """Mirror the benchmark's permissive gold-answer interpolation.
+
+    LongMemEval contains one numeric answer in this diagnostic and abstention
+    explanations may be blank.  Neither case is malformed for the official
+    judge prompt, which renders values with normal string interpolation.
+    """
+
+    result = value.get("answer", "")
+    if isinstance(result, (str, int, float, bool)) or result is None:
+        return "" if result is None else str(result)
+    raise ValueError("LongMemEval answer has an unsupported shape")
+
+
 def chat_completion(*, prompt: str, model: str, base_url: str, api_key: str) -> str:
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}/chat/completions",
@@ -264,7 +278,7 @@ def main() -> None:
         judge = chat_completion(
             prompt=judge_prompt(
                 question,
-                required_string(item, "answer"),
+                benchmark_answer_text(item),
                 answer,
                 required_string(item, "question_id").endswith("_abs"),
             ),
