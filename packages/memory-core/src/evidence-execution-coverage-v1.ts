@@ -1,16 +1,28 @@
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import type { MemoryEvidenceNotebookV1 } from "./evidence-contracts.js";
-import type { MemoryEvidenceRequirementV3 } from "./query-plan-contracts.js";
+import type {
+  MemoryEvidenceBoundTemporalConstraintV1,
+  MemoryEvidenceQueryIntentV3,
+  MemoryEvidenceRequirementV3,
+} from "./query-plan-contracts.js";
 import type { MemorySelectorExecutionSnapshotV1 } from "./selector-execution-snapshot-v1.js";
 
 export const PAW_MEMORY_EVIDENCE_EXECUTION_COVERAGE_POLICY_V1 =
-  "paw.memory-evidence-execution-coverage.v1:selector-notebook-closure-proof" as const;
+  "paw.memory-evidence-execution-coverage.v2:operation-specific-proof" as const;
+
+export type MemoryEvidenceExecutionCompletionBasisV1 =
+  | "finite_endpoint_exact"
+  | "frontier_complete"
+  | "bounded_window_lookup"
+  | "closed_world_collection"
+  | "legacy_closed_world";
 
 export interface MemoryEvidenceExecutionRequirementCoverageV1 {
   readonly requirementId: string;
   readonly requirementRevision: string;
   readonly temporalBindingRevision: string;
   readonly windowRevision: string;
+  readonly completionBasis: MemoryEvidenceExecutionCompletionBasisV1;
   readonly status: "closed" | "open";
   readonly selectedEvidenceCount: number;
   readonly independentEvidenceCount: number;
@@ -49,7 +61,9 @@ export interface MemoryEvidenceExecutionCoverageCertificateV1 {
  * semantic closure audit. `coverageMode=all` alone is never a certificate.
  */
 export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
+  readonly intent: MemoryEvidenceQueryIntentV3;
   readonly requirements: readonly MemoryEvidenceRequirementV3[];
+  readonly temporalConstraints: readonly MemoryEvidenceBoundTemporalConstraintV1[];
   readonly selectorSnapshot: MemorySelectorExecutionSnapshotV1;
   readonly notebook: MemoryEvidenceNotebookV1;
   readonly closureAuditStatus:
@@ -77,15 +91,24 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       coverage,
     ]),
   );
+  const temporalByRequirement = new Map(
+    input.requirements.map((requirement, index) => [
+      requirement.requirementId,
+      input.temporalConstraints[index],
+    ]),
+  );
   if (
     input.requirements.length < 1 ||
     input.requirements.length > 4 ||
     executionByRequirement.size !== input.requirements.length ||
     notebookByRequirement.size !== input.requirements.length ||
+    temporalByRequirement.size !== input.requirements.length ||
+    input.temporalConstraints.length !== input.requirements.length ||
     input.requirements.some(
       (requirement) =>
         !executionByRequirement.has(requirement.requirementId) ||
-        !notebookByRequirement.has(requirement.requirementId),
+        !notebookByRequirement.has(requirement.requirementId) ||
+        !temporalByRequirement.get(requirement.requirementId),
     )
   ) {
     throw namedError("MemoryEvidenceExecutionCoverageInputInvalid");
@@ -98,9 +121,21 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
     input.requirements.map((requirement) => {
       const execution = executionByRequirement.get(requirement.requirementId);
       const coverage = notebookByRequirement.get(requirement.requirementId);
-      if (!execution || !coverage) {
+      const temporal = temporalByRequirement.get(requirement.requirementId);
+      if (
+        !execution ||
+        !coverage ||
+        !temporal ||
+        execution.requirement.temporalBindingRevision !==
+          temporal.bindingRevision
+      ) {
         throw namedError("MemoryEvidenceExecutionCoverageInputInvalid");
       }
+      const completionBasis = executionCompletionBasis(
+        input.intent,
+        requirement,
+        temporal,
+      );
       const supporting = new Set(
         execution.requirement.assessment?.supportingEvidenceRefs ?? [],
       );
@@ -129,7 +164,13 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       ) {
         reasons.push("selected_evidence_not_supported");
       }
-      if (!closurePassed) reasons.push("closure_audit_not_passed");
+      if (
+        (completionBasis === "closed_world_collection" ||
+          completionBasis === "legacy_closed_world") &&
+        !closurePassed
+      ) {
+        reasons.push("closure_audit_not_passed");
+      }
       const reasonCodes = Object.freeze([...new Set(reasons)]);
       const supportingEvidenceSetRevision = hashCanonicalJsonV1({
         schemaVersion: "paw.memory-supporting-evidence-set.v1",
@@ -153,6 +194,7 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
         requirementRevision: execution.requirement.requirementRevision,
         temporalBindingRevision: execution.requirement.temporalBindingRevision,
         windowRevision,
+        completionBasis,
         status:
           reasonCodes.length === 0 ? ("closed" as const) : ("open" as const),
         selectedEvidenceCount: coverage.selectedEvidenceRefs.length,
@@ -209,6 +251,13 @@ export function validateMemoryEvidenceExecutionCoverageCertificateV1(
       !requirement.requirementRevision.trim() ||
       !requirement.temporalBindingRevision.trim() ||
       !requirement.windowRevision.trim() ||
+      !new Set<MemoryEvidenceExecutionCompletionBasisV1>([
+        "finite_endpoint_exact",
+        "frontier_complete",
+        "bounded_window_lookup",
+        "closed_world_collection",
+        "legacy_closed_world",
+      ]).has(requirement.completionBasis) ||
       !requirement.supportingEvidenceSetRevision.trim() ||
       !requirement.selectedEvidenceSetRevision.trim() ||
       !requirement.notebookCoverageRevision.trim() ||
@@ -246,6 +295,37 @@ export function validateMemoryEvidenceExecutionCoverageCertificateV1(
   ) {
     throw namedError("MemoryEvidenceExecutionCoverageCertificateInvalid");
   }
+}
+
+function executionCompletionBasis(
+  intent: MemoryEvidenceQueryIntentV3,
+  requirement: MemoryEvidenceRequirementV3,
+  temporal: MemoryEvidenceBoundTemporalConstraintV1,
+): MemoryEvidenceExecutionCompletionBasisV1 {
+  if (temporal.durationRequest) return "finite_endpoint_exact";
+  if (
+    requirement.temporalMode === "latest" ||
+    requirement.temporalMode === "as_of"
+  ) {
+    return "frontier_complete";
+  }
+  if (
+    temporal.queryScopeInterval &&
+    (intent.answerShape === "lookup" || intent.answerShape === "compare") &&
+    requirement.coverageMode !== "all" &&
+    requirement.coverageMode !== "convergent"
+  ) {
+    return "bounded_window_lookup";
+  }
+  if (
+    requirement.temporalMode === "history" ||
+    requirement.coverageMode === "all" ||
+    requirement.coverageMode === "convergent" ||
+    intent.answerShape === "aggregate"
+  ) {
+    return "closed_world_collection";
+  }
+  return "legacy_closed_world";
 }
 
 function namedError(name: string): Error {

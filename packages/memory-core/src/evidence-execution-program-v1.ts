@@ -22,9 +22,16 @@ export const PAW_MEMORY_EVIDENCE_PERSONALIZATION_REQUEST_VERSION_V1 =
 export interface MemoryEvidenceAggregateRequestV1 {
   readonly requestVersion: typeof PAW_MEMORY_EVIDENCE_AGGREGATE_REQUEST_VERSION_V1;
   readonly operator:
-    "collect_unique" | "count" | "sum" | "difference" | "ratio_percent";
+    | "collect_unique"
+    | "count"
+    | "sum"
+    | "difference"
+    | "ratio_percent";
   readonly aggregationUnit:
-    "event" | "semantic_value" | "entity" | "numeric_quantity";
+    | "event"
+    | "semantic_value"
+    | "entity"
+    | "numeric_quantity";
   /**
    * Counting an enumerated evidence set is not the same operation as reading
    * a cardinality stated inside one piece of evidence. The latter needs a
@@ -198,18 +205,20 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
     nodes.push(readNode);
     if (readNode.status === "ready") readyRequirementCount += 1;
     let terminal = readNode;
-    for (const operation of temporalOperations(
-      requirement.temporalMode,
+    for (const step of temporalOperations(
+      requirement,
       temporal,
+      input.intent,
     )) {
       terminal = compileDerivedNode({
-        operation,
+        operation: step.operation,
         outputType:
-          operation === "resolve_latest" || operation === "resolve_as_of"
+          step.operation === "resolve_latest" ||
+          step.operation === "resolve_as_of"
             ? "state_value"
             : "ordered_history",
         operandNodeIds: Object.freeze([terminal.nodeId]),
-        temporalWindow: temporal.window,
+        temporalWindow: step.temporalWindow,
         operands: Object.freeze([terminal]),
       });
       nodes.push(terminal);
@@ -650,17 +659,61 @@ export function compileMemoryEvidenceAggregateRequestV1(
 }
 
 function temporalOperations(
-  temporalMode: MemoryEvidenceRequirementV3["temporalMode"],
+  requirement: MemoryEvidenceRequirementV3,
   temporal: MemoryEvidenceBoundTemporalConstraintV1,
-): readonly Exclude<MemoryEvidenceExecutionOperationV1, "read_requirement">[] {
+  intent: MemoryEvidenceQueryIntentV3,
+): readonly Readonly<{
+  operation: Exclude<MemoryEvidenceExecutionOperationV1, "read_requirement">;
+  temporalWindow: MemoryEvidenceBoundTemporalWindowV2;
+}>[] {
   if (temporal.durationRequest) return Object.freeze([]);
-  if (temporalMode === "latest") return Object.freeze(["resolve_latest"]);
-  if (temporalMode === "as_of") return Object.freeze(["resolve_as_of"]);
-  if (temporalMode === "history") return Object.freeze(["preserve_history"]);
-  if (temporalMode === "range") {
-    return Object.freeze(["restrict_range", "preserve_history"]);
+  const steps: Array<{
+    operation: Exclude<MemoryEvidenceExecutionOperationV1, "read_requirement">;
+    temporalWindow: MemoryEvidenceBoundTemporalWindowV2;
+  }> = [];
+  const scopeWindow: MemoryEvidenceBoundTemporalWindowV2 | undefined =
+    temporal.queryScopeInterval && temporal.window.kind !== "range"
+      ? Object.freeze({
+          kind: "range" as const,
+          interval: temporal.queryScopeInterval,
+          cutoff: temporal.evidenceTimeUpperBound,
+          inclusion: "overlaps" as const,
+          clockPolicy: "event_then_observed_if_uniform" as const,
+        })
+      : undefined;
+  if (scopeWindow && requirement.temporalMode !== "as_of") {
+    steps.push({ operation: "restrict_range", temporalWindow: scopeWindow });
   }
-  return Object.freeze([]);
+  if (requirement.temporalMode === "latest") {
+    steps.push({
+      operation: "resolve_latest",
+      temporalWindow: temporal.window,
+    });
+  } else if (requirement.temporalMode === "as_of") {
+    steps.push({ operation: "resolve_as_of", temporalWindow: temporal.window });
+  } else if (requirement.temporalMode === "history") {
+    steps.push({
+      operation: "preserve_history",
+      temporalWindow: temporal.window,
+    });
+  } else if (requirement.temporalMode === "range") {
+    steps.push({
+      operation: "restrict_range",
+      temporalWindow: temporal.window,
+    });
+    const needsClosedHistory =
+      requirement.coverageMode === "all" ||
+      requirement.coverageMode === "convergent" ||
+      intent.answerShape === "aggregate" ||
+      intent.temporalMode === "history";
+    if (needsClosedHistory) {
+      steps.push({
+        operation: "preserve_history",
+        temporalWindow: temporal.window,
+      });
+    }
+  }
+  return Object.freeze(steps.map((step) => Object.freeze(step)));
 }
 
 function answerOperationFor(

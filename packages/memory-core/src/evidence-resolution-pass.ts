@@ -49,7 +49,6 @@ import {
   memoryQueryAnswerOriginAllowsLateBindingV1,
 } from "./query-answer-origin.js";
 import type { MemoryEvidenceBoundTemporalConstraintV1 } from "./query-plan-contracts.js";
-import { extractRelativeTimeWindowV1 } from "./relative-time-anchor.js";
 import {
   type MemoryRequirementFairAcquisitionReportV1,
   buildMemoryRequirementFairAcquisitionV1,
@@ -171,6 +170,7 @@ export async function resolveEvidencePass(input: {
       if (!bound) throw namedError("MemoryEvidenceTemporalBindingMissing");
       const {
         evidenceTimeUpperBound: _evidenceTimeUpperBound,
+        queryScopeInterval: _queryScopeInterval,
         window: _window,
         durationRequest: _durationRequest,
         bindingRevision: _bindingRevision,
@@ -777,38 +777,27 @@ export async function resolveEvidencePass(input: {
   let selectedRefsByRequirement:
     | ReadonlyMap<string, ReadonlySet<string>>
     | undefined;
-  // 相对时间翻译官(检索层):问题含强信号时间短语时,把命中按
-  // observedAt 是否落在换算窗口内做稳定重排(窗口内优先,组内保序)。
-  // 非时间问题 extract 返回 null,重排零触发;这是软加权,不是硬过滤。
-  try {
-    const cutoffMs = input.evidenceTimeUpperBound
-      ? Date.parse(input.evidenceTimeUpperBound)
-      : undefined;
-    if (cutoffMs !== undefined && Number.isFinite(cutoffMs)) {
-      const timeWindow = extractRelativeTimeWindowV1(input.query, cutoffMs);
-      if (timeWindow) {
-        requirementHits = requirementHits.map((hits) => {
-          const inWindow = hits.filter((hit) => {
-            const observed = hit.observedAt
-              ? Date.parse(hit.observedAt)
-              : undefined;
-            return (
-              observed !== undefined &&
-              Number.isFinite(observed) &&
-              observed >= timeWindow.startMs &&
-              observed < timeWindow.endMs
-            );
-          });
-          const outWindow = hits.filter(
-            (hit) => !inWindow.includes(hit),
-          );
-          return Object.freeze([...inWindow, ...outWindow]);
-        });
-      }
-    }
-  } catch {
-    // 排序增强失败保持原序,绝不阻断主流程。
-  }
+  // One bound temporal authority drives retrieval ordering, notebook labels,
+  // typed execution and cache identity. The interval is per leaf; a planner
+  // can therefore mix bounded and unbounded operands without leaking one
+  // query-wide display window across every requirement.
+  requirementHits = requirementHits.map((hits, index) => {
+    const interval = boundTemporalConstraints[index]?.queryScopeInterval;
+    if (!interval) return hits;
+    const startMs = Date.parse(interval.lower);
+    const endMs = Date.parse(interval.upper);
+    const inWindow = hits.filter((hit) => {
+      const observed = hit.observedAt ? Date.parse(hit.observedAt) : Number.NaN;
+      return (
+        Number.isFinite(observed) && observed >= startMs && observed < endMs
+      );
+    });
+    const inWindowRefs = new Set(inWindow.map((hit) => hit.evidenceRef));
+    return Object.freeze([
+      ...inWindow,
+      ...hits.filter((hit) => !inWindowRefs.has(hit.evidenceRef)),
+    ]);
+  });
   if (input.requirements.length > 0 && input.supportSelector) {
     // A configured selector is an authority gate. Start closed so an empty
     // candidate set, malformed plugin result, or selector failure can never
@@ -1304,54 +1293,52 @@ export async function resolveEvidencePass(input: {
       });
     }
   }
-  // 相对时间翻译官:问题含强信号时间短语时,把换算出的绝对窗口注入
-  // 需求标签(仅显示层;非时间问题 extract 返回 null,标签字节级不变)。
-  let meaTimeWindowSuffix = "";
-  let meaTimeWindow: { readonly startMs: number; readonly endMs: number } | undefined;
-  try {
-    const cutoffMs = input.evidenceTimeUpperBound
-      ? Date.parse(input.evidenceTimeUpperBound)
-      : undefined;
-    if (cutoffMs !== undefined && Number.isFinite(cutoffMs)) {
-      const window = extractRelativeTimeWindowV1(input.query, cutoffMs);
-      if (window) {
-        meaTimeWindow = { startMs: window.startMs, endMs: window.endMs };
-        const startDay = new Date(window.startMs).toISOString().slice(0, 10);
-        const endDay = new Date(window.endMs - 1).toISOString().slice(0, 10);
-        meaTimeWindowSuffix = ` [时间窗:${window.resolvedText};${startDay}~${endDay}]`;
-      }
-    }
-  } catch {
-    meaTimeWindowSuffix = "";
-    meaTimeWindow = undefined;
-  }
   const notebook = buildMemoryEvidenceNotebookV1({
-    requirements: executionRequirements.map((requirement, index) => ({
-      requirementId: requirement.requirementId,
-      label:
-        meaTimeWindowSuffix === ""
-          ? requirement.label
-          : requirement.label.slice(0, 192 - meaTimeWindowSuffix.length) +
-            meaTimeWindowSuffix,
-      searchText: requirement.searchText,
-      ...(meaTimeWindow === undefined
-        ? {}
-        : { timeWindow: meaTimeWindow }),
-      selection: requirement.temporalMode === "latest" ? "latest" : "ranked",
-      relation: requirement.relation ?? "direct",
-      coverageMode:
-        requirement.coverageMode ??
-        (requirement.temporalMode === "latest" ? "latest" : "any"),
-      minimumEvidence: requirement.minimumEvidence ?? 1,
-      roleConstraint: requirement.roleConstraint,
-      certifiedDialogueEvidenceRefs: Object.freeze([
-        ...certifiedAssistantDialogueRefs,
-      ]),
-      hits: filterRequirementHits(
-        requirementHits[index] ?? [],
-        selectedRefsByRequirement?.get(requirement.requirementId),
-      ),
-    })),
+    requirements: executionRequirements.map((requirement, index) => {
+      const interval = boundTemporalConstraints[index]?.queryScopeInterval;
+      const startMs = interval ? Date.parse(interval.lower) : undefined;
+      const endMs = interval ? Date.parse(interval.upper) : undefined;
+      const timeWindow =
+        startMs !== undefined &&
+        endMs !== undefined &&
+        Number.isFinite(startMs) &&
+        Number.isFinite(endMs)
+          ? { startMs, endMs }
+          : undefined;
+      const timeWindowSuffix = timeWindow
+        ? ` [时间窗:${new Date(timeWindow.startMs).toISOString().slice(0, 10)}~${new Date(timeWindow.endMs - 1).toISOString().slice(0, 10)}]`
+        : "";
+      return {
+        requirementId: requirement.requirementId,
+        label:
+          timeWindowSuffix === ""
+            ? requirement.label
+            : requirement.label.slice(0, 192 - timeWindowSuffix.length) +
+              timeWindowSuffix,
+        searchText: requirement.searchText,
+        ...(timeWindow === undefined ? {} : { timeWindow }),
+        selection: requirement.temporalMode === "latest" ? "latest" : "ranked",
+        relation: requirement.relation ?? "direct",
+        coverageMode:
+          requirement.coverageMode ??
+          (requirement.temporalMode === "latest" ? "latest" : "any"),
+        minimumEvidence: requirement.minimumEvidence ?? 1,
+        roleConstraint: requirement.roleConstraint,
+        certifiedDialogueEvidenceRefs: Object.freeze([
+          ...certifiedAssistantDialogueRefs,
+        ]),
+        authorityBoundEvidenceRefs: Object.freeze(
+          supportAssessments.find(
+            (assessment) =>
+              assessment.requirementId === requirement.requirementId,
+          )?.supportingEvidenceRefs ?? [],
+        ),
+        hits: filterRequirementHits(
+          requirementHits[index] ?? [],
+          selectedRefsByRequirement?.get(requirement.requirementId),
+        ),
+      };
+    }),
     allowedSourceIds: sourceLocalLockedIds,
     maxHitsPerRequirement: input.maxHitsPerRequirement,
     maxChars: input.maxNotebookChars,

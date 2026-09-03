@@ -28,6 +28,25 @@ function startOfDayUtc(ms: number): number {
   return Math.floor(ms / DAY_MS) * DAY_MS;
 }
 
+function addUtcCalendarMonths(dayMs: number, delta: number): number {
+  const source = new Date(dayMs);
+  const targetMonthStart = new Date(
+    Date.UTC(source.getUTCFullYear(), source.getUTCMonth() + delta, 1),
+  );
+  const targetMonthEnd = new Date(
+    Date.UTC(
+      targetMonthStart.getUTCFullYear(),
+      targetMonthStart.getUTCMonth() + 1,
+      0,
+    ),
+  ).getUTCDate();
+  return Date.UTC(
+    targetMonthStart.getUTCFullYear(),
+    targetMonthStart.getUTCMonth(),
+    Math.min(source.getUTCDate(), targetMonthEnd),
+  );
+}
+
 const WEEKDAYS_EN: readonly (readonly string[])[] = [
   ["sunday", "sun"],
   ["monday", "mon"],
@@ -38,7 +57,15 @@ const WEEKDAYS_EN: readonly (readonly string[])[] = [
   ["saturday", "sat"],
 ];
 
-const WEEKDAYS_ZH: readonly string[] = ["日", "一", "二", "三", "四", "五", "六"];
+const WEEKDAYS_ZH: readonly string[] = [
+  "日",
+  "一",
+  "二",
+  "三",
+  "四",
+  "五",
+  "六",
+];
 
 function weekdayIndexEn(word: string): number | null {
   const normalized = word.toLowerCase().replace(/\.$/, "");
@@ -91,6 +118,14 @@ function parseCount(raw: string): number | null {
   if (/^\d{1,3}$/.test(trimmed)) return Number(trimmed);
   if (NUMBER_WORDS_EN[trimmed] !== undefined) return NUMBER_WORDS_EN[trimmed];
   if (NUMBER_WORDS_ZH[trimmed] !== undefined) return NUMBER_WORDS_ZH[trimmed];
+  const chinese = /^([一二两三四五六七八九])?十([一二三四五六七八九])?$/.exec(
+    trimmed,
+  );
+  if (chinese) {
+    const tens = chinese[1] ? NUMBER_WORDS_ZH[chinese[1]] : 1;
+    const ones = chinese[2] ? NUMBER_WORDS_ZH[chinese[2]] : 0;
+    return (tens ?? 0) * 10 + (ones ?? 0);
+  }
   return null;
 }
 
@@ -105,8 +140,90 @@ interface PatternRule {
 /** 规则表:强信号短语;弱匹配(裸 "recently")一律不识别。 */
 const RULES: readonly PatternRule[] = [
   {
+    regex: /\blast\s+weekend\b/i,
+    build: (match, cutoffMs) => {
+      const cutoffDay = startOfDayUtc(cutoffMs);
+      const day = new Date(cutoffDay).getUTCDay();
+      const currentMonday = cutoffDay - ((day + 6) % 7) * DAY_MS;
+      const start = currentMonday - 2 * DAY_MS;
+      return {
+        startMs: start,
+        endMs: currentMonday,
+        matchedPhrase: match[0],
+        resolvedText: "上个周末",
+      };
+    },
+  },
+  {
+    regex: /(?:上个周末|上周末)/,
+    build: (match, cutoffMs) => {
+      const cutoffDay = startOfDayUtc(cutoffMs);
+      const day = new Date(cutoffDay).getUTCDay();
+      const currentMonday = cutoffDay - ((day + 6) % 7) * DAY_MS;
+      const start = currentMonday - 2 * DAY_MS;
+      return {
+        startMs: start,
+        endMs: currentMonday,
+        matchedPhrase: match[0],
+        resolvedText: "上个周末",
+      };
+    },
+  },
+  {
+    regex: /\blast\s+month\b/i,
+    build: (match, cutoffMs) => {
+      const cutoff = new Date(startOfDayUtc(cutoffMs));
+      const end = Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth(), 1);
+      const start = addUtcCalendarMonths(end, -1);
+      return {
+        startMs: start,
+        endMs: end,
+        matchedPhrase: match[0],
+        resolvedText: "上个月",
+      };
+    },
+  },
+  {
+    regex: /上个月/,
+    build: (match, cutoffMs) => {
+      const cutoff = new Date(startOfDayUtc(cutoffMs));
+      const end = Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth(), 1);
+      const start = addUtcCalendarMonths(end, -1);
+      return {
+        startMs: start,
+        endMs: end,
+        matchedPhrase: match[0],
+        resolvedText: "上个月",
+      };
+    },
+  },
+  {
+    regex: /\blast\s+week\b/i,
+    build: (match, cutoffMs) => {
+      const cutoffDay = startOfDayUtc(cutoffMs);
+      return {
+        startMs: cutoffDay - 7 * DAY_MS,
+        endMs: cutoffDay,
+        matchedPhrase: match[0],
+        resolvedText: "上周",
+      };
+    },
+  },
+  {
+    regex: /上周(?![一二三四五六日天])|上个星期(?![一二三四五六日天])/,
+    build: (match, cutoffMs) => {
+      const cutoffDay = startOfDayUtc(cutoffMs);
+      return {
+        startMs: cutoffDay - 7 * DAY_MS,
+        endMs: cutoffDay,
+        matchedPhrase: match[0],
+        resolvedText: "上周",
+      };
+    },
+  },
+  {
     regex:
-      /\b(?:this\s+past\s+|last\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thurs|fri|sat)\b/i,
+      /\b(?:this\s+past\s+|last\s+)(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thurs|fri|sat)\b/i,
     build: (match, cutoffMs) => {
       const weekday = weekdayIndexEn(match[1] ?? "");
       if (weekday === null) return null;
@@ -140,8 +257,11 @@ const RULES: readonly PatternRule[] = [
       const count = parseCount(match[1] ?? "");
       if (count === null) return null;
       const unit = (match[2] ?? "").toLowerCase();
-      const multiplier = unit === "day" ? 1 : unit === "week" ? 7 : 30;
-      const day = startOfDayUtc(cutoffMs) - count * multiplier * DAY_MS;
+      const cutoffDay = startOfDayUtc(cutoffMs);
+      const day =
+        unit === "month"
+          ? addUtcCalendarMonths(cutoffDay, -count)
+          : cutoffDay - count * (unit === "week" ? 7 : 1) * DAY_MS;
       return {
         startMs: day,
         endMs: day + DAY_MS,
@@ -156,12 +276,10 @@ const RULES: readonly PatternRule[] = [
       const count = parseCount(match[1] ?? "");
       if (count === null) return null;
       const unit = match[2] ?? "";
-      const multiplier = unit.startsWith("天")
-        ? 1
-        : unit.includes("月")
-          ? 30
-          : 7;
-      const day = startOfDayUtc(cutoffMs) - count * multiplier * DAY_MS;
+      const cutoffDay = startOfDayUtc(cutoffMs);
+      const day = unit.includes("月")
+        ? addUtcCalendarMonths(cutoffDay, -count)
+        : cutoffDay - count * (unit.startsWith("天") ? 1 : 7) * DAY_MS;
       return {
         startMs: day,
         endMs: day + DAY_MS,
@@ -175,10 +293,12 @@ const RULES: readonly PatternRule[] = [
     build: (match, cutoffMs) => {
       const count = Number(match[1]);
       const unit = (match[2] ?? "").toLowerCase();
-      const multiplier = unit === "day" ? 1 : unit === "week" ? 7 : 30;
       const end = startOfDayUtc(cutoffMs) + DAY_MS;
       return {
-        startMs: end - count * multiplier * DAY_MS,
+        startMs:
+          unit === "month"
+            ? addUtcCalendarMonths(end, -count)
+            : end - count * (unit === "week" ? 7 : 1) * DAY_MS,
         endMs: end,
         matchedPhrase: match[0],
         resolvedText: `过去${count} ${unit}(s)`,
@@ -192,14 +312,11 @@ const RULES: readonly PatternRule[] = [
       const count = parseCount(match[1] ?? "");
       if (count === null) return null;
       const unit = match[2] ?? "";
-      const multiplier = unit.startsWith("天")
-        ? 1
-        : unit.includes("月")
-          ? 30
-          : 7;
       const end = startOfDayUtc(cutoffMs) + DAY_MS;
       return {
-        startMs: end - count * multiplier * DAY_MS,
+        startMs: unit.includes("月")
+          ? addUtcCalendarMonths(end, -count)
+          : end - count * (unit.startsWith("天") ? 1 : 7) * DAY_MS,
         endMs: end,
         matchedPhrase: match[0],
         resolvedText: `过去${count}${unit}`,

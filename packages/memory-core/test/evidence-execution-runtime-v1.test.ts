@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { hashCanonicalJsonV1 } from "../src/canonical.js";
 import { PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1 } from "../src/evidence-contracts.js";
 import { compileMemoryEvidenceExecutionCoverageCertificateV1 } from "../src/evidence-execution-coverage-v1.js";
-import { buildMemoryEvidenceReaderProjectionV1 } from "../src/evidence-reader-projection-v1.js";
 import {
   compileMemoryEvidenceExecutionProgramV1,
   validateMemoryEvidenceExecutionProgramV1,
 } from "../src/evidence-execution-program-v1.js";
 import { executeMemoryEvidenceProgramV1 } from "../src/evidence-execution-runtime-v1.js";
+import { buildMemoryEvidenceReaderProjectionV1 } from "../src/evidence-reader-projection-v1.js";
 import { compileMemoryEvidenceSelectorGroupsV1 } from "../src/evidence-selector-groups.js";
 import { compileMemoryQueryAnswerOriginV1 } from "../src/query-answer-origin.js";
 import type {
@@ -15,13 +15,13 @@ import type {
   MemoryEvidenceRequirementV3,
 } from "../src/query-plan-contracts.js";
 import { compileMemorySelectorExecutionSnapshotV1 } from "../src/selector-execution-snapshot-v1.js";
+import { compileMemoryStateBindingCertificatesV1 } from "../src/state-binding-certificate-v1.js";
 import {
   bindMemoryStateObservationV2,
   compileMemoryStateSlotsV2,
   compileMemoryStateSourceLockV2,
   resolveMemoryStateFrameV2,
 } from "../src/state-frame-v2.js";
-import { compileMemoryStateBindingCertificatesV1 } from "../src/state-binding-certificate-v1.js";
 import { bindMemoryEvidenceTemporalConstraintV1 } from "../src/temporal-constraint.js";
 
 type ObservationFixture = Readonly<{
@@ -41,7 +41,12 @@ type ObservationFixture = Readonly<{
   observedAt: string;
   eventKey?: string;
   predicateKind?:
-    "assert" | "update" | "retract" | "confirm" | "prefer" | "disprefer";
+    | "assert"
+    | "update"
+    | "retract"
+    | "confirm"
+    | "prefer"
+    | "disprefer";
   polarity?: "positive" | "negative";
   modality?: "observed" | "goal" | "plan" | "forecast";
   bind?: boolean;
@@ -196,9 +201,9 @@ function executeFixture(input: {
               ? "evidence"
               : slot.durationEndpointContractKind === "distinct_evidence_pair"
                 ? input.observations
-                      .slice(0, observationIndex)
-                      .filter((candidate) => candidate.bind !== false).length ===
-                    0
+                    .slice(0, observationIndex)
+                    .filter((candidate) => candidate.bind !== false).length ===
+                  0
                   ? "start"
                   : "end"
                 : "not_applicable"),
@@ -206,8 +211,7 @@ function executeFixture(input: {
           ...(item.lifecycleTargetEvidenceRef === undefined
             ? {}
             : {
-                lifecycleTargetEvidenceRef:
-                  item.lifecycleTargetEvidenceRef,
+                lifecycleTargetEvidenceRef: item.lifecycleTargetEvidenceRef,
               }),
           predicateKind: item.predicateKind ?? "assert",
           polarity: item.polarity ?? "positive",
@@ -239,7 +243,9 @@ function executeFixture(input: {
     input.closedWorld === false
       ? undefined
       : compileMemoryEvidenceExecutionCoverageCertificateV1({
+          intent: input.intent,
           requirements: input.requirements,
+          temporalConstraints,
           selectorSnapshot: snapshot,
           notebook: {
             policyVersion: PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1,
@@ -1785,9 +1791,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const output = run({
       query: "What would suit my goal?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("goal", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("goal", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "goal",
@@ -2010,9 +2014,9 @@ describe("proof-carrying evidence execution runtime v1", () => {
       "crowded places",
     );
     expect(output.result.stateBindingCertificates).toHaveLength(2);
-    expect(
-      projection.projection.proof.stateBindingCertificates,
-    ).toHaveLength(1);
+    expect(projection.projection.proof.stateBindingCertificates).toHaveLength(
+      1,
+    );
   });
 
   test("keeps personalization partial when a lifecycle target is unbound", () => {

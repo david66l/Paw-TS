@@ -96,6 +96,29 @@ describe("typed leaf temporal constraints v1", () => {
         upper: "2025-01-01T00:00:00.000Z",
       },
     });
+    if (relative.window.kind !== "range") {
+      throw new Error("relative range fixture invalid");
+    }
+    expect(relative.queryScopeInterval).toEqual(relative.window.interval);
+
+    const plannerFallbackLeaf = bindMemoryEvidenceTemporalConstraintV1({
+      query: "Who joined me last Saturday?",
+      queryEnvelopeMode: "range",
+      leafMode: "any",
+      evidenceTimeUpperBound: "2025-01-01T00:00:00.000Z",
+    });
+    expect(plannerFallbackLeaf.window.kind).toBe("unbounded");
+    expect(plannerFallbackLeaf.queryScopeInterval).toMatchObject({
+      lower: "2024-12-28T00:00:00.000Z",
+      upper: "2024-12-29T00:00:00.000Z",
+    });
+    expect(plannerFallbackLeaf.bindingRevision).not.toBe(
+      bindMemoryEvidenceTemporalConstraintV1({
+        query: "Who joined me last Saturday?",
+        queryEnvelopeMode: "range",
+        leafMode: "any",
+      }).bindingRevision,
+    );
   });
 
   test("separates duration intent from temporal range filtering", () => {

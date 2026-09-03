@@ -911,6 +911,34 @@ describe("evidence notebook v1", () => {
     ).toBe(false);
   });
 
+  test("keeps selector-committed latest evidence with zero lexical overlap", () => {
+    const notebook = buildMemoryEvidenceNotebookV1({
+      requirements: [
+        {
+          requirementId: "service",
+          label: "most recent provider",
+          searchText: "most recent provider",
+          selection: "latest",
+          authorityBoundEvidenceRefs: ["service-ref"],
+          hits: [
+            {
+              sourceId: "service-source",
+              evidenceRef: "service-ref",
+              content: "AquaRail.",
+              authority: "user_asserted",
+              observedAt: "2026-08-27T00:00:00.000Z",
+            },
+          ],
+        },
+      ],
+      allowedSourceIds: ["service-source"],
+      maxHitsPerRequirement: 1,
+      maxChars: 1_024,
+    });
+
+    expect(notebook.coverage[0]?.selectedEvidenceRefs).toEqual(["service-ref"]);
+  });
+
   test("keeps equal-time conflicting latest states unresolved", () => {
     const notebook = buildMemoryEvidenceNotebookV1({
       requirements: [

@@ -9,6 +9,7 @@ import {
   PAW_MEMORY_EVIDENCE_TEMPORAL_COMPATIBILITY_VERSION_V1,
   PAW_MEMORY_EVIDENCE_TEMPORAL_CONSTRAINT_VERSION_V1,
 } from "./query-plan-contracts.js";
+import { extractRelativeTimeWindowV1 } from "./relative-time-anchor.js";
 
 /**
  * Versioned compatibility matrix for answer-level temporal envelopes and
@@ -118,10 +119,15 @@ export function bindMemoryEvidenceTemporalConstraintV1(input: {
     constraint,
   });
   const evidenceTimeUpperBound = normalizeCutoff(input.evidenceTimeUpperBound);
+  const queryScopeInterval = compileMemoryEvidenceQueryScopeIntervalV1({
+    query: input.query,
+    evidenceTimeUpperBound,
+  });
   const window = compileMemoryEvidenceBoundTemporalWindowV2({
     query: input.query,
     mode: input.leafMode,
     evidenceTimeUpperBound,
+    queryScopeInterval,
   });
   const durationRequest = compileMemoryEvidenceDurationRequestV1(
     input.query,
@@ -130,6 +136,7 @@ export function bindMemoryEvidenceTemporalConstraintV1(input: {
   const identity = {
     ...constraint,
     evidenceTimeUpperBound,
+    queryScopeInterval,
     window,
     durationRequest,
   } as const;
@@ -144,6 +151,7 @@ export function compileMemoryEvidenceBoundTemporalWindowV2(input: {
   readonly query: string;
   readonly mode: MemoryEvidenceTemporalModeV3;
   readonly evidenceTimeUpperBound: string | null;
+  readonly queryScopeInterval?: MemoryEvidenceTemporalIntervalV2 | null;
 }): MemoryEvidenceBoundTemporalWindowV2 {
   const query = boundedQuery(input.query);
   const cutoff = input.evidenceTimeUpperBound;
@@ -164,12 +172,16 @@ export function compileMemoryEvidenceBoundTemporalWindowV2(input: {
       clockPolicy: "event_then_observed_if_uniform",
     });
   }
-  const intervals = extractExplicitQueryIntervals(query);
-  const relative = cutoff ? relativeQueryInterval(query, cutoff) : null;
+  const queryScopeInterval =
+    input.queryScopeInterval ??
+    compileMemoryEvidenceQueryScopeIntervalV1({
+      query,
+      evidenceTimeUpperBound: cutoff,
+    });
   if (input.mode === "as_of") {
     return Object.freeze({
       kind: "as_of",
-      anchor: relative ?? intervals[0] ?? null,
+      anchor: queryScopeInterval,
       cutoff,
       inclusion: "through_end",
       clockPolicy: "event_then_observed_if_uniform",
@@ -177,11 +189,30 @@ export function compileMemoryEvidenceBoundTemporalWindowV2(input: {
   }
   return Object.freeze({
     kind: "range",
-    interval: relative ?? combineRangeIntervals(intervals),
+    interval: queryScopeInterval,
     cutoff,
     inclusion: "overlaps",
     clockPolicy: "event_then_observed_if_uniform",
   });
+}
+
+/**
+ * The sole query-to-absolute-time compiler used by retrieval, notebook and
+ * typed execution. Relative expressions take precedence over literal dates;
+ * both are bound to the trusted host cutoff and become part of the binding
+ * revision.
+ */
+export function compileMemoryEvidenceQueryScopeIntervalV1(input: {
+  readonly query: string;
+  readonly evidenceTimeUpperBound: string | null;
+}): MemoryEvidenceTemporalIntervalV2 | null {
+  const query = boundedQuery(input.query);
+  const relative = input.evidenceTimeUpperBound
+    ? relativeQueryInterval(query, input.evidenceTimeUpperBound)
+    : null;
+  return (
+    relative ?? combineRangeIntervals(extractExplicitQueryIntervals(query))
+  );
 }
 
 export function compileMemoryEvidenceDurationRequestV1(
@@ -417,58 +448,10 @@ function relativeQueryInterval(
   query: string,
   cutoff: string,
 ): MemoryEvidenceTemporalIntervalV2 | null {
-  const anchor = new Date(cutoff);
-  const cutoffDay = new Date(
-    Date.UTC(
-      anchor.getUTCFullYear(),
-      anchor.getUTCMonth(),
-      anchor.getUTCDate(),
-    ),
-  );
-  if (/\blast\s+weekend\b|上个周末|上周末/iu.test(query)) {
-    const day = cutoffDay.getUTCDay();
-    const daysSinceMonday = (day + 6) % 7;
-    const currentMonday = addUtcDays(cutoffDay, -daysSinceMonday);
-    const upper = currentMonday;
-    const lower = addUtcDays(upper, -2);
-    return dayInterval(lower, upper);
-  }
-  if (/\blast\s+month\b|上个月/iu.test(query)) {
-    const upper = new Date(
-      Date.UTC(cutoffDay.getUTCFullYear(), cutoffDay.getUTCMonth(), 1),
-    );
-    const lower = new Date(
-      Date.UTC(upper.getUTCFullYear(), upper.getUTCMonth() - 1, 1),
-    );
-    return dayInterval(lower, upper);
-  }
-  if (/\blast\s+week\b|上周/iu.test(query)) {
-    return dayInterval(addUtcDays(cutoffDay, -7), cutoffDay);
-  }
-  const past =
-    /\b(?:past|last)\s+(\d{1,3})\s+(days?|weeks?)\b/iu.exec(query) ??
-    /过去\s*(\d{1,3})\s*(天|周)/u.exec(query);
-  if (past) {
-    const count = Number(past[1]);
-    const unit = (past[2] ?? "").toLocaleLowerCase("en-US");
-    const days = unit.startsWith("week") || unit === "周" ? count * 7 : count;
-    if (Number.isSafeInteger(days) && days > 0) {
-      return dayInterval(addUtcDays(cutoffDay, -days), cutoffDay);
-    }
-  }
-  const ago =
-    /\b(\d{1,3})\s+(days?|weeks?)\s+ago\b/iu.exec(query) ??
-    /(\d{1,3})\s*(天|周)前/u.exec(query);
-  if (ago) {
-    const count = Number(ago[1]);
-    const unit = (ago[2] ?? "").toLocaleLowerCase("en-US");
-    const days = unit.startsWith("week") || unit === "周" ? count * 7 : count;
-    if (Number.isSafeInteger(days) && days > 0) {
-      const lower = addUtcDays(cutoffDay, -days);
-      return dayInterval(lower, addUtcDays(lower, 1));
-    }
-  }
-  return null;
+  const window = extractRelativeTimeWindowV1(query, Date.parse(cutoff));
+  return window
+    ? dayInterval(new Date(window.startMs), new Date(window.endMs))
+    : null;
 }
 
 function strictUtcDay(

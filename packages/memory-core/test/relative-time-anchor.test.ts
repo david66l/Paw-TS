@@ -63,7 +63,7 @@ describe("relative time anchor v1", () => {
     expect(Math.round((CUTOFF - w!.startMs) / DAY)).toBe(1);
   });
 
-  test("chinese 过去两个月 resolves to ~60 day range", () => {
+  test("chinese 过去两个月 uses calendar-month arithmetic", () => {
     const w = extractRelativeTimeWindowV1(
       "过去两个月我买了多少件首饰?",
       CUTOFF,
@@ -71,6 +71,22 @@ describe("relative time anchor v1", () => {
     expect(w).not.toBeNull();
     expect(w!.endMs - w!.startMs).toBeGreaterThanOrEqual(59 * DAY);
     expect(w!.endMs - w!.startMs).toBeLessThanOrEqual(61 * DAY);
+  });
+
+  test("month subtraction clamps to the target calendar month", () => {
+    const w = extractRelativeTimeWindowV1(
+      "What did I buy one month ago?",
+      Date.parse("2024-03-31T15:00:00Z"),
+    );
+    if (!w) throw new Error("calendar-month fixture invalid");
+    expect(new Date(w.startMs).toISOString()).toBe("2024-02-29T00:00:00.000Z");
+    expect(new Date(w.endMs).toISOString()).toBe("2024-03-01T00:00:00.000Z");
+  });
+
+  test("bare weekdays are not silently treated as relative dates", () => {
+    expect(
+      extractRelativeTimeWindowV1("Friday is my favorite song.", CUTOFF),
+    ).toBeNull();
   });
 
   test("non-temporal questions return null (zero behavior change)", () => {

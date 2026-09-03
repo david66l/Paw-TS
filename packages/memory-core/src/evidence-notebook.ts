@@ -148,6 +148,9 @@ export function buildMemoryEvidenceNotebookV1(input: {
     const certifiedDialogueEvidenceRefs = new Set(
       rawRequirement.certifiedDialogueEvidenceRefs ?? [],
     );
+    const authorityBoundEvidenceRefs = new Set(
+      rawRequirement.authorityBoundEvidenceRefs ?? [],
+    );
     // 相对时间翻译官:窗口内命中的 observedAt 落在换算日期窗内时优先。
     // 这是最终排序权威——窗口外但词面重叠高的证据不能把窗口内的关键
     // 证据挤出预算槽位。无窗口时行为与过去逐字节一致。
@@ -155,7 +158,9 @@ export function buildMemoryEvidenceNotebookV1(input: {
     const inWindow = new Set<string>();
     if (timeWindow) {
       for (const hit of rawRequirement.hits) {
-        const observed = hit.observedAt ? Date.parse(hit.observedAt) : undefined;
+        const observed = hit.observedAt
+          ? Date.parse(hit.observedAt)
+          : undefined;
         if (
           observed !== undefined &&
           Number.isFinite(observed) &&
@@ -196,7 +201,8 @@ export function buildMemoryEvidenceNotebookV1(input: {
           dialogueCertified: certifiedDialogueEvidenceRefs.has(hit.evidenceRef),
         });
         return (
-          supportScore > 0 &&
+          (supportScore > 0 ||
+            authorityBoundEvidenceRefs.has(hit.evidenceRef)) &&
           evidenceUse !== undefined &&
           allowed.has(sourceId) &&
           hit.evidenceRef.trim() &&

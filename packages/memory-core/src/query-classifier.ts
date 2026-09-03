@@ -191,6 +191,26 @@ export function classifyMemoryQueryAnswerProvenanceFeaturesV1(
 function classifyMemoryEvidenceTemporalModeV1(
   query: string,
 ): MemoryEvidenceTemporalModeV3 {
+  if (/\bas\s+of\b|(?:截至|截止到|到.{0,24}为止)/iu.test(query)) {
+    return "as_of";
+  }
+  // Ordering is a history operation even when its wording contains "latest".
+  // This precedence prevents "earliest to latest" from collapsing to one
+  // frontier value and discarding the sequence it explicitly asks for.
+  const orderedHistory =
+    /\b(?:earliest|oldest|first)\b.{0,64}\b(?:to|through|until)\b.{0,32}\b(?:latest|newest|last|most\s+recent)\b|\b(?:chronological(?:ly)?|in\s+(?:what|which)\s+order|order\s+of)\b|(?:从|按).{0,24}(?:最早|第一次|首次).{0,24}(?:到|至|排到).{0,24}(?:最新|最近|最后)|(?:时间顺序|先后顺序|按时间排序)/iu.test(
+      query,
+    );
+  if (orderedHistory) return "history";
+  // Strong relative-date expressions are bounded lookups. Bare "last time"
+  // remains ordinary dialogue recall and is deliberately not matched here.
+  if (
+    /\b(?:last|this\s+past)\s+(?:weekend|month|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thurs|fri|sat)\b|\b(?:yesterday|\d{1,3}\s+(?:days?|weeks?|months?)\s+ago|(?:past|last)\s+\d{1,3}\s+(?:days?|weeks?|months?))\b|(?:上个周末|上周末|上个月|上周(?:[一二三四五六日天])?|昨天|\d{1,3}\s*(?:天|周|个?星期|个月)前|过去\s*\d{1,3}\s*(?:天|周|个?星期|个?月))/iu.test(
+      query,
+    )
+  ) {
+    return "range";
+  }
   const latest =
     /\b(?:latest|currently|most\s+recent|now|today|at\s+present)\b|(?:最新|现在|目前|最近一次|今天)/iu.test(
       query,
@@ -199,9 +219,6 @@ function classifyMemoryEvidenceTemporalModeV1(
       query,
     );
   if (latest) return "latest";
-  if (/\bas\s+of\b|(?:截至|截止到|到.{0,24}为止)/iu.test(query)) {
-    return "as_of";
-  }
   const ordinalHistory =
     !/\b(?:first|last|family|given|middle)\s+name\b/iu.test(query) &&
     /\b(?:what|which|where|when|how|who)\b.{0,96}\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|earliest)\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|earliest)\b.{0,96}\b(?:did|was|were|is|are|came|happened|occurred|said|mentioned|recommended|suggested|chose|selected)\b|(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁).{0,64}(?:第[一二三四五六七八九十\d]+(?:次|个|条|项|段|轮)|首次|最早)|(?:第[一二三四五六七八九十\d]+(?:次|个|条|项|段|轮)|首次|最早).{0,64}(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁)/iu.test(

@@ -223,4 +223,86 @@ describe("typed evidence execution program v1", () => {
       blockedReason: "operand_blocked",
     });
   });
+
+  test("separates bounded lookup from exhaustive range history", () => {
+    const rangeQuery = "Who joined me last Saturday?";
+    const rangeIntent: MemoryEvidenceQueryIntentV3 = {
+      answerShape: "lookup",
+      temporalMode: "range",
+      roleConstraint: "user",
+      needsPlanning: true,
+    };
+    const compile = (coverageMode: "any" | "all") => {
+      const rangeRequirements: readonly MemoryEvidenceRequirementV3[] = [
+        {
+          requirementId: "companion",
+          label: "companion",
+          searchText: "joined companion",
+          temporalMode: "range",
+          roleConstraint: "user",
+          coverageMode,
+          minimumEvidence: 1,
+          dependencyRelation: "independent",
+          dependsOnRequirementIds: [],
+        },
+      ];
+      const rangeTemporal = rangeRequirements.map((requirement) =>
+        bindMemoryEvidenceTemporalConstraintV1({
+          query: rangeQuery,
+          queryEnvelopeMode: rangeIntent.temporalMode,
+          leafMode: requirement.temporalMode,
+          evidenceTimeUpperBound: "2025-01-01T00:00:00.000Z",
+        }),
+      );
+      const rangeGroup = compileMemoryEvidenceSelectorGroupsV1({
+        intent: rangeIntent,
+        requirements: rangeRequirements,
+      })[0];
+      if (!rangeGroup) throw new Error("range fixture invalid");
+      const rangeSnapshot = compileMemorySelectorExecutionSnapshotV1({
+        query: rangeQuery,
+        intent: rangeIntent,
+        requirements: rangeRequirements,
+        temporalConstraints: rangeTemporal,
+        candidateScopes: [
+          { requirementId: "companion", evidenceRefs: ["ref-companion"] },
+        ],
+        lockedSourceIds: ["source-companion"],
+        originRevision: "origin-range",
+        selectorVersion: "selector-range",
+        selectionRevision: "selection-range",
+        committedAttempt: "baseline",
+        attemptCount: 1,
+        groups: [
+          {
+            groupId: rangeGroup.groupId,
+            requirementIds: rangeGroup.requirementIds,
+            status: "committed",
+            assessments: [assessment("companion", "ref-companion")],
+          },
+        ],
+      });
+      return compileMemoryEvidenceExecutionProgramV1({
+        query: rangeQuery,
+        intent: rangeIntent,
+        requirements: rangeRequirements,
+        temporalConstraints: rangeTemporal,
+        selectorSnapshot: rangeSnapshot,
+      });
+    };
+
+    expect(compile("any").nodes.map((node) => node.operation)).toEqual([
+      "read_requirement",
+      "restrict_range",
+      "collect_operands",
+      "render_answer",
+    ]);
+    expect(compile("all").nodes.map((node) => node.operation)).toEqual([
+      "read_requirement",
+      "restrict_range",
+      "preserve_history",
+      "collect_operands",
+      "render_answer",
+    ]);
+  });
 });

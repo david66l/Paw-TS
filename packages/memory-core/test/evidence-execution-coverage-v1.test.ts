@@ -112,7 +112,9 @@ function notebook(
 describe("execution coverage certificate v1", () => {
   test("closes only when selector, notebook, and closure audit all agree", () => {
     const certificate = compileMemoryEvidenceExecutionCoverageCertificateV1({
+      intent,
       requirements,
+      temporalConstraints,
       selectorSnapshot,
       notebook: notebook(),
       closureAuditStatus: "completed",
@@ -131,7 +133,9 @@ describe("execution coverage certificate v1", () => {
 
   test("keeps unresolved notebook peers and missing audit proof open", () => {
     const certificate = compileMemoryEvidenceExecutionCoverageCertificateV1({
+      intent,
       requirements,
+      temporalConstraints,
       selectorSnapshot,
       notebook: notebook(["ref-unresolved"]),
       closureAuditStatus: "fallback",
@@ -146,7 +150,9 @@ describe("execution coverage certificate v1", () => {
 
   test("rejects a forged closed certificate revision", () => {
     const certificate = compileMemoryEvidenceExecutionCoverageCertificateV1({
+      intent,
       requirements,
+      temporalConstraints,
       selectorSnapshot,
       notebook: notebook(),
       closureAuditStatus: "completed",
@@ -163,7 +169,9 @@ describe("execution coverage certificate v1", () => {
 
   test("binds the exact selected evidence set instead of counts alone", () => {
     const certificate = compileMemoryEvidenceExecutionCoverageCertificateV1({
+      intent,
       requirements,
+      temporalConstraints,
       selectorSnapshot,
       notebook: notebook(),
       closureAuditStatus: "completed",
@@ -183,5 +191,115 @@ describe("execution coverage certificate v1", () => {
         ],
       }),
     ).toThrow("MemoryEvidenceExecutionCoverageCertificateInvalid");
+  });
+
+  test("closes a bounded point lookup without claiming global history closure", () => {
+    const boundedQuery = "Who joined me last Saturday?";
+    const boundedIntent: MemoryEvidenceQueryIntentV3 = {
+      answerShape: "lookup",
+      temporalMode: "range",
+      roleConstraint: "user",
+      needsPlanning: true,
+    };
+    const boundedRequirements: readonly MemoryEvidenceRequirementV3[] = [
+      {
+        requirementId: "companion",
+        label: "companion",
+        searchText: "joined companion",
+        temporalMode: "range",
+        roleConstraint: "user",
+        coverageMode: "any",
+        minimumEvidence: 1,
+        dependencyRelation: "independent",
+        dependsOnRequirementIds: [],
+      },
+    ];
+    const boundedTemporal = boundedRequirements.map((requirement) =>
+      bindMemoryEvidenceTemporalConstraintV1({
+        query: boundedQuery,
+        queryEnvelopeMode: boundedIntent.temporalMode,
+        leafMode: requirement.temporalMode,
+        evidenceTimeUpperBound: "2025-01-01T00:00:00.000Z",
+      }),
+    );
+    const boundedGroup = compileMemoryEvidenceSelectorGroupsV1({
+      intent: boundedIntent,
+      requirements: boundedRequirements,
+    })[0];
+    if (!boundedGroup) throw new Error("bounded fixture invalid");
+    const boundedSnapshot = compileMemorySelectorExecutionSnapshotV1({
+      query: boundedQuery,
+      intent: boundedIntent,
+      requirements: boundedRequirements,
+      temporalConstraints: boundedTemporal,
+      candidateScopes: [
+        { requirementId: "companion", evidenceRefs: ["ref-companion"] },
+      ],
+      lockedSourceIds: ["source-companion"],
+      originRevision: "origin-bounded",
+      selectorVersion: "selector-bounded",
+      selectionRevision: "selection-bounded",
+      committedAttempt: "baseline",
+      attemptCount: 1,
+      groups: [
+        {
+          groupId: boundedGroup.groupId,
+          requirementIds: boundedGroup.requirementIds,
+          status: "committed",
+          assessments: [
+            {
+              requirementId: "companion",
+              supportingEvidenceRefs: ["ref-companion"],
+              contradictingEvidenceRefs: [],
+              unknownEvidenceRefs: [],
+              evidenceDispositions: [
+                {
+                  requirementId: "companion",
+                  evidenceRef: "ref-companion",
+                  disposition: "supporting",
+                  resolvedRole: "user",
+                  evidenceUse: "user_fact",
+                  contextEvidenceRefs: [],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const certificate = compileMemoryEvidenceExecutionCoverageCertificateV1({
+      intent: boundedIntent,
+      requirements: boundedRequirements,
+      temporalConstraints: boundedTemporal,
+      selectorSnapshot: boundedSnapshot,
+      notebook: {
+        policyVersion: PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1,
+        sources: [],
+        coverage: [
+          {
+            requirementId: "companion",
+            status: "covered",
+            selectedHitCount: 1,
+            independentEvidenceCount: 1,
+            closureEvidenceCount: 1,
+            selectedEvidenceRefs: ["ref-companion"],
+            historicalEvidenceRefs: [],
+            unresolvedEvidenceRefs: [],
+          },
+        ],
+        inputHitCount: 1,
+        budgetOmittedHitCount: 0,
+        selectedHitCount: 1,
+        chars: 64,
+      },
+      closureAuditStatus: "fallback",
+      closureVerdict: "insufficient",
+    });
+
+    expect(certificate.requirements[0]).toMatchObject({
+      completionBasis: "bounded_window_lookup",
+      status: "closed",
+      reasonCodes: [],
+    });
   });
 });

@@ -396,7 +396,9 @@ export function createMemoryEvidenceResolverV1(input: {
       let stateFrameShadow: MemoryStateFrameShadowResultV2 | undefined;
       let stateFrameFailureCode: string | undefined;
       let stateFrameFailureStage:
-        "coverage_certificate" | "state_shadow" | undefined;
+        | "coverage_certificate"
+        | "state_shadow"
+        | undefined;
       if (
         input.stateObservationBinder &&
         input.stateObservationVerifier &&
@@ -407,9 +409,27 @@ export function createMemoryEvidenceResolverV1(input: {
         } else
           try {
             stateFrameFailureStage = "coverage_certificate";
+            const stateFrameTemporalConstraints = resolvedRequirements.map(
+              (requirement) =>
+                bindMemoryEvidenceTemporalConstraintV1({
+                  query: value,
+                  queryEnvelopeMode: intent.temporalMode,
+                  leafMode: requirement.temporalMode,
+                  ...(requirement.temporalConstraint === undefined
+                    ? {}
+                    : { constraint: requirement.temporalConstraint }),
+                  ...(input.evidenceTimeUpperBound === undefined
+                    ? {}
+                    : {
+                        evidenceTimeUpperBound: input.evidenceTimeUpperBound,
+                      }),
+                }),
+            );
             const executionCoverageCertificate =
               compileMemoryEvidenceExecutionCoverageCertificateV1({
+                intent,
                 requirements: resolvedRequirements,
+                temporalConstraints: stateFrameTemporalConstraints,
                 selectorSnapshot: pass.selectorExecutionSnapshot,
                 notebook: pass.notebook,
                 closureAuditStatus,
@@ -426,21 +446,7 @@ export function createMemoryEvidenceResolverV1(input: {
               intent,
               requirements: resolvedRequirements,
               origin: queryAnswerOrigin,
-              temporalConstraints: resolvedRequirements.map((requirement) =>
-                bindMemoryEvidenceTemporalConstraintV1({
-                  query: value,
-                  queryEnvelopeMode: intent.temporalMode,
-                  leafMode: requirement.temporalMode,
-                  ...(requirement.temporalConstraint === undefined
-                    ? {}
-                    : { constraint: requirement.temporalConstraint }),
-                  ...(input.evidenceTimeUpperBound === undefined
-                    ? {}
-                    : {
-                        evidenceTimeUpperBound: input.evidenceTimeUpperBound,
-                      }),
-                }),
-              ),
+              temporalConstraints: stateFrameTemporalConstraints,
               requirementHits: pass.requirementHits,
               selectorExecutionSnapshot: pass.selectorExecutionSnapshot,
               lockedSourceIds: pass.lockedSourceIds,
@@ -557,8 +563,7 @@ export function createMemoryEvidenceResolverV1(input: {
                     : stateFrameShadow.readerProjectionBuild.status ===
                         "projected"
                       ? {
-                          executionReaderProjectionStatus:
-                            "projected" as const,
+                          executionReaderProjectionStatus: "projected" as const,
                           executionReaderProjectionKind:
                             stateFrameShadow.readerProjectionBuild.projection
                               .payload.kind,
@@ -567,8 +572,7 @@ export function createMemoryEvidenceResolverV1(input: {
                               .stateBindingCertificateIds.length,
                         }
                       : {
-                          executionReaderProjectionStatus:
-                            "rejected" as const,
+                          executionReaderProjectionStatus: "rejected" as const,
                           executionReaderProjectionRejectedReason:
                             stateFrameShadow.readerProjectionBuild
                               .rejectedReason,
@@ -890,7 +894,9 @@ function summarizeExecutionAnswerRequest(
   executionAggregateCountBasis?: string;
   executionAggregateMaterializationExact?: boolean;
   executionAggregateMaterializationState?:
-    "exact" | "inexact" | "not_materialized";
+    | "exact"
+    | "inexact"
+    | "not_materialized";
   executionDurationEndpointPolicy?: string;
   executionDurationEndpointContractKind?: string;
   executionDurationEndpointOrdering?: string;
@@ -1015,8 +1021,8 @@ function summarizeExecutionAnswerRequest(
               : 0,
           executionPersonalizationLifecycleCertificateCount:
             personalization?.kind === "personalization_profile"
-              ? (personalization.coverageCertificate
-                  ?.lifecycleCertificates.length ?? 0)
+              ? (personalization.coverageCertificate?.lifecycleCertificates
+                  .length ?? 0)
               : 0,
         }
       : {}),
