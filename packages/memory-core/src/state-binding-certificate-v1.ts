@@ -17,7 +17,7 @@ import {
 import type { MemoryStateObservationVerificationV2 } from "./state-observation-verifier-v2.js";
 
 export const PAW_MEMORY_STATE_BINDING_CERTIFICATE_POLICY_V1 =
-  "paw.memory-state-binding-certificate.v1:host-compiled-source-relative-event-time" as const;
+  "paw.memory-state-binding-certificate.v1:host-compiled-immutable-claim" as const;
 
 export interface MemoryStateBindingCertificateV1 {
   readonly policyVersion: typeof PAW_MEMORY_STATE_BINDING_CERTIFICATE_POLICY_V1;
@@ -295,10 +295,8 @@ export function compileMemoryStateBindingCertificatesV1(
             ...(observation.eventTimeCutoffStatus === undefined
               ? {}
               : { cutoffStatus: observation.eventTimeCutoffStatus }),
-            ...((observation.eventTimeBasis !==
-              "source_session_contemporaneous" &&
-              observation.eventTimeBasis !== "source_session_relative_span") ||
-            item.observedAt === undefined
+            ...(observation.eventTimeBasis !==
+              "source_session_contemporaneous" || item.observedAt === undefined
               ? {}
               : {
                   sourceSessionAnchor: {
