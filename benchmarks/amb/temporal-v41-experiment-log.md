@@ -204,3 +204,21 @@ slice (133 questions) as a comparable treatment.
   it, while the residual workload requires a set of independently cited events
   plus an order/range/duration operator. The next design must add that event
   layer rather than lower verifier standards or inject partial state frames.
+
+## Rejected v45 source-relative binder trial
+
+- Hypothesis: permit a binder to quote an unambiguous relative-time phrase from
+  a locked source and mechanically resolve it against that same source's
+  immutable session timestamp. The implementation required an exact quoted
+  phrase, used no wall clock or query-authored time, and was covered by focused
+  unit tests.
+- Result: the four-query shadow gate still produced **zero** complete execution
+  roots. The model did not reliably select and verify the newly permitted
+  relative-time spans; one lookup remained fully rejected, two hit the existing
+  coverage-identity guard, and the duration query retained no valid endpoint.
+  Changing the binder's output vocabulary is therefore not sufficient.
+- The implementation was reverted in commit `e13ea48` rather than left as an
+  unproven opt-in path. The next event-grounding design must enumerate and
+  normalize source-local date candidates deterministically before semantic
+  selection; an LLM may choose among those immutable candidates, but may not be
+  responsible for inventing the event-time representation.
