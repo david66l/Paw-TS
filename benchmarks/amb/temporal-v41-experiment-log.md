@@ -185,3 +185,22 @@ slice (133 questions) as a comparable treatment.
   per-error reachability audit showing whether the exact gold turn is present
   in the source-local candidate pool and whether an existing execution frame
   can build a valid event-time certificate.
+
+## v44 state-frame reachability audit
+
+- A separate four-query retrieval-only shadow run enabled the existing state
+  binder and verifier but did not inject its projection or invoke answer/judge
+  models. All four queries had a session-level retrieval hit; the audit is
+  therefore isolated from answer-model variation.
+- The result rules out a simple projection switch: no query produced a complete
+  execution root or a reader projection. Two cutoff-relative lookups proposed
+  one and two state observations respectively, but the verifier rejected every
+  proposal, leaving no binding certificates. A third query failed the runtime
+  coverage-identity guard before a state frame was built. The duration query
+  accepted one start observation but left it `unbound`, with no distinct end
+  event or endpoint certificate, so `measure_duration` remained partial.
+- This is not an evidence-deletion problem. It is an abstraction mismatch: the
+  current state binder tries to synthesize a single state value and then prove
+  it, while the residual workload requires a set of independently cited events
+  plus an order/range/duration operator. The next design must add that event
+  layer rather than lower verifier standards or inject partial state frames.
