@@ -14,6 +14,7 @@ import type {
   MemoryEvidenceQueryIntentV3,
   MemoryEvidenceRequirementV3,
 } from "./evidence-query-planner.js";
+import { evidenceSourceIdV1 } from "./evidence-ref.js";
 import { buildMemoryEvidenceRequirementLedgerV1 } from "./evidence-requirement-ledger.js";
 import type {
   MemoryEvidenceIndexSearchResultV1,
@@ -593,13 +594,24 @@ export async function resolveEvidencePass(input: {
                 ),
               })
             : materializationBudget;
-          const baselineEvidenceRefs = Object.freeze([
-            ...new Set(
-              (baselineRequirementHits[requirementIndex] ?? [])
-                .filter((hit) => sourceLocalLockedIds.includes(hit.sourceId))
-                .map((hit) => hit.evidenceRef),
-            ),
-          ]);
+          const baselineEvidenceRefs = temporalFrontierAttempted
+            ? Object.freeze([
+                ...new Set(
+                  (baselineRequirementHits[requirementIndex] ?? [])
+                    // Frontier snapshots operate in the source-local address
+                    // domain. Global indexes may expose an immutable physical
+                    // alias for the same turn; keep that candidate in the
+                    // normal baseline-first merge, but never pass the foreign
+                    // alias into the source-local request boundary.
+                    .filter(
+                      (hit) =>
+                        sourceLocalLockedIds.includes(hit.sourceId) &&
+                        evidenceSourceIdV1(hit.evidenceRef) === hit.sourceId,
+                    )
+                    .map((hit) => hit.evidenceRef),
+                ),
+              ])
+            : Object.freeze([]);
           const request = Object.freeze({
             requirement: locatorRequirement,
             ...(temporalFrontierAttempted

@@ -4075,9 +4075,11 @@ describe("shared evidence resolver v1", () => {
     const query = "What happened last month?";
     const observedAt = "2025-04-10T00:00:00.000Z";
     const baselineRef = "session-1#turn-1";
+    const physicalBaselineAlias = "amb:document/session-1#source-1";
     const frontierRef = "session-1#turn-3";
     const contents: Readonly<Record<string, string>> = {
       [baselineRef]: "I mentioned an unrelated appointment.",
+      [physicalBaselineAlias]: "I mentioned an unrelated appointment.",
       [frontierRef]: "I completed the relevant renewal event.",
     } as const;
     const locatorRequests: Array<{
@@ -4098,9 +4100,9 @@ describe("shared evidence resolver v1", () => {
                 weight: 1,
                 candidates: [
                   {
-                    candidateId: baselineRef,
+                    candidateId: physicalBaselineAlias,
                     sourceId: "session-1",
-                    evidenceRef: baselineRef,
+                    evidenceRef: physicalBaselineAlias,
                     sourceKind: "user_input" as const,
                     authority: "user_asserted" as const,
                     observedAt,
@@ -4111,8 +4113,9 @@ describe("shared evidence resolver v1", () => {
             hits: [
               {
                 sourceId: "session-1",
-                evidenceRef: baselineRef,
-                content: contents[baselineRef] ?? "missing test content",
+                evidenceRef: physicalBaselineAlias,
+                content:
+                  contents[physicalBaselineAlias] ?? "missing test content",
                 sourceKind: "user_input" as const,
                 authority: "user_asserted" as const,
                 observedAt,
