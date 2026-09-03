@@ -222,3 +222,26 @@ slice (133 questions) as a comparable treatment.
   normalize source-local date candidates deterministically before semantic
   selection; an LLM may choose among those immutable candidates, but may not be
   responsible for inventing the event-time representation.
+
+## v46 event-card reachability gate
+
+- The V44 trace was joined back to the pinned benchmark only through hashed
+  query, document, and evidence addresses. Across the 21-query temporal
+  diagnostic, **20/21** rows already returned at least one gold session, but
+  only **5/46** labeled answer turns were admitted to the evidence notebook.
+  For the 17 still-wrong rows the corresponding figures were 16/17 and 4/35.
+  This makes source-local turn admission, rather than another source-aperture
+  expansion, the primary bottleneck.
+- A deterministic, label-blind scan of only the V44-returned sessions found
+  explicit temporal cues on **33/46** labeled turns (and 33/41 whose sessions
+  were returned). It yielded a median of 21 candidate user events per query
+  (maximum 29); truncating each immutable event record to 256 characters needs
+  at most 6,549 characters in this diagnostic. That fits under the existing
+  8,192-character notebook ceiling without using session `observedAt` as an
+  event timestamp.
+- A content-safe V46 shadow harness is therefore running before a production
+  route is proposed. It freezes V44's returned-source union, enumerates only
+  explicit-temporal user events, does not read `has_answer` during card
+  construction, and emits only HMAC IDs, counts, hashes, and judge verdicts.
+  Its answer result is a gate for an event-card reader lane, not a score claim
+  or an authorization to change the production resolver.
