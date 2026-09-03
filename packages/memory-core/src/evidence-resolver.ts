@@ -24,6 +24,7 @@ import {
 import {
   type MemoryEvidenceRepairCommitReportV1,
   evaluateMemoryEvidenceRepairDominanceV1,
+  memoryEvidenceExecutableExposureRefsV1,
 } from "./evidence-repair-dominance.js";
 import {
   type MemoryEvidenceResolutionPassV1,
@@ -41,6 +42,13 @@ import {
   selectedNotebookEvidence,
   validateMemoryEvidenceQueryPlanBoundary,
 } from "./evidence-resolver-helpers.js";
+import {
+  type MemoryEvidenceSanitizationTransactionReportV1,
+  beginMemoryEvidenceSanitizationV1,
+  completeMemoryEvidenceSanitizationV1,
+  failMemoryEvidenceSanitizationV1,
+  projectMemoryEvidenceSanitizedBaselineV1,
+} from "./evidence-sanitization-projection.js";
 import type { MemoryEvidenceSupportSelectorV1 } from "./evidence-support-selector.js";
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
@@ -253,6 +261,9 @@ export function createMemoryEvidenceResolverV1(input: {
       let closureRepairMode: MemoryEvidenceResolutionV1["closureRepairMode"] =
         "none";
       let closureRepairCommit: MemoryEvidenceRepairCommitReportV1 | undefined;
+      let closureRepairSanitization:
+        | MemoryEvidenceSanitizationTransactionReportV1
+        | undefined;
       let closureAuditRevision: string | undefined;
       let closureAuditFailureCode: string | undefined;
       const shouldAudit =
@@ -305,61 +316,61 @@ export function createMemoryEvidenceResolverV1(input: {
               seedHits,
               sourceAcquisition: initialPass.sourceAcquisition,
             });
-            const resolveVerifiedSanitizedBaseline = async (
-              excludedEvidenceRefs: ReadonlySet<string>,
-            ) => {
-              const sanitized = await resolveEvidencePass({
-                index: input.index,
-                supportSelector: input.supportSelector,
-                query: value,
-                intent,
-                primary,
-                primaryUnfiltered,
-                requirements: initialRequirements,
-                maxSources,
-                maxEvidencePerSource,
-                maxHitsPerRequirement: expansiveEvidence
-                  ? maxHitsPerRequirement
-                  : Math.min(4, maxHitsPerRequirement),
-                maxNotebookChars: expansiveEvidence
-                  ? maxNotebookChars
-                  : Math.min(4_096, maxNotebookChars),
-                sourceLocalLocator: input.sourceLocalLocator,
-                sourceLocalHydrator: input.sourceLocalHydrator,
-                dialoguePredecessorVerifier: input.dialoguePredecessorVerifier,
-                sourceLocalBudget:
-                  input.sourceLocalBudget ??
-                  DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
-                queryAnswerOrigin,
-                evidenceGroundedRoleBinding: input.evidenceGroundedRoleBinding,
-                // Sanitization reconstructs the original proof surface only;
-                // temporal widening belongs exclusively to the proposal.
-                temporalRoundFrontier: false,
-                evidenceTimeUpperBound: input.evidenceTimeUpperBound,
-                excludedEvidenceRefs,
-                sourceLock,
-                signal,
-              });
-              validateSanitizedBaselineDominanceV1({
-                initial: initialPass,
-                sanitized,
-                rejectedEvidenceRefs: excludedEvidenceRefs,
-              });
-              return sanitized;
-            };
+            // Record the transaction before any sanitization or replan call so
+            // a fail-closed exception can never be mislabeled not_attempted.
+            closureRepairCount = 1;
+            closureRepairMode = "replan";
             let rejectedEvidenceRefs = new Set(audit.rejectedEvidenceRefs);
             let baselinePass = initialPass;
+            let sanitizationAttemptCount: 0 | 1 | 2 = 0;
+            const sanitizeBaseline = (
+              refs: ReadonlySet<string>,
+            ): MemoryEvidenceResolutionPassV1 => {
+              const attempt =
+                sanitizationAttemptCount === 0
+                  ? 1
+                  : sanitizationAttemptCount === 1
+                    ? 2
+                    : undefined;
+              if (attempt === undefined) {
+                throw namedError(
+                  "MemoryEvidenceSanitizationAttemptLimitExceeded",
+                );
+              }
+              sanitizationAttemptCount = attempt;
+              closureRepairSanitization = beginMemoryEvidenceSanitizationV1({
+                attempt,
+                rejectedEvidenceRefs: refs,
+              });
+              try {
+                const sanitization = projectMemoryEvidenceSanitizedBaselineV1({
+                  initial: initialPass,
+                  rejectedEvidenceRefs: refs,
+                });
+                validateRejectedEvidenceAbsentV1(sanitization.pass, refs);
+                closureRepairSanitization =
+                  completeMemoryEvidenceSanitizationV1({
+                    attempt,
+                    projection: sanitization.report,
+                  });
+                return sanitization.pass;
+              } catch (error) {
+                closureRepairSanitization = failMemoryEvidenceSanitizationV1({
+                  attempt,
+                  rejectedEvidenceRefs: refs,
+                  error,
+                });
+                throw namedError(
+                  closureRepairSanitization.failureCode as string,
+                );
+              }
+            };
             if (rejectedEvidenceRefs.size > 0) {
               // From this point onward every catch path is fail-closed. The
               // initial packet must never reappear after an explicit reject.
               pass = createFailClosedRepairBaselineV1(initialPass);
               resolvedRequirements = pass.requirements;
-              baselinePass =
-                await resolveVerifiedSanitizedBaseline(rejectedEvidenceRefs);
-              validateRejectedEvidenceAbsentV1(
-                baselinePass,
-                rejectedEvidenceRefs,
-              );
+              baselinePass = sanitizeBaseline(rejectedEvidenceRefs);
               pass = baselinePass;
               resolvedRequirements = pass.requirements;
             }
@@ -425,8 +436,6 @@ export function createMemoryEvidenceResolverV1(input: {
             plannerStatus = "completed";
             plannerFailureCode = undefined;
             obligationStatus = "satisfied";
-            closureRepairCount = 1;
-            closureRepairMode = "replan";
             const finalSelectedEvidence = selectedNotebookEvidence(
               repairedPass.requirementHits,
               repairedPass.notebook,
@@ -469,12 +478,7 @@ export function createMemoryEvidenceResolverV1(input: {
                 ]);
                 pass = createFailClosedRepairBaselineV1(initialPass);
                 resolvedRequirements = pass.requirements;
-                baselinePass =
-                  await resolveVerifiedSanitizedBaseline(rejectedEvidenceRefs);
-                validateRejectedEvidenceAbsentV1(
-                  baselinePass,
-                  rejectedEvidenceRefs,
-                );
+                baselinePass = sanitizeBaseline(rejectedEvidenceRefs);
                 closureRepairCommit = evaluateMemoryEvidenceRepairDominanceV1({
                   baseline: baselinePass,
                   repaired: repairedPass,
@@ -767,6 +771,9 @@ export function createMemoryEvidenceResolverV1(input: {
         closureRepairCount,
         closureRepairMode,
         ...(closureRepairCommit === undefined ? {} : { closureRepairCommit }),
+        ...(closureRepairSanitization === undefined
+          ? {}
+          : { closureRepairSanitization }),
         ...(closureAuditFailureCode === undefined
           ? {}
           : { closureAuditFailureCode }),
@@ -860,6 +867,9 @@ export function createMemoryEvidenceResolverV1(input: {
         closureRepairCount,
         closureRepairMode,
         ...(closureRepairCommit === undefined ? {} : { closureRepairCommit }),
+        ...(closureRepairSanitization === undefined
+          ? {}
+          : { closureRepairSanitization }),
         ...(closureAuditFailureCode === undefined
           ? {}
           : { closureAuditFailureCode }),
@@ -950,29 +960,12 @@ function validateRejectedEvidenceAbsentV1(
   pass: MemoryEvidenceResolutionPassV1,
   rejectedEvidenceRefs: ReadonlySet<string>,
 ): void {
-  const exposedRefs = [
-    ...pass.packetSources.flatMap((source) => source.evidenceRefs),
-    ...pass.notebook.coverage.flatMap((item) => item.selectedEvidenceRefs),
-    ...pass.supportAssessments.flatMap((item) => item.supportingEvidenceRefs),
-  ];
+  const exposedRefs = memoryEvidenceExecutableExposureRefsV1(pass);
   if (
-    exposedRefs.some((evidenceRef) => rejectedEvidenceRefs.has(evidenceRef))
+    [...exposedRefs].some((evidenceRef) =>
+      rejectedEvidenceRefs.has(evidenceRef),
+    )
   ) {
-    throw namedError("MemoryEvidenceRepairSanitizationFailed");
-  }
-}
-
-function validateSanitizedBaselineDominanceV1(input: {
-  initial: MemoryEvidenceResolutionPassV1;
-  sanitized: MemoryEvidenceResolutionPassV1;
-  rejectedEvidenceRefs: ReadonlySet<string>;
-}): void {
-  const report = evaluateMemoryEvidenceRepairDominanceV1({
-    baseline: input.initial,
-    repaired: input.sanitized,
-    rejectedEvidenceRefs: input.rejectedEvidenceRefs,
-  });
-  if (report.status !== "committed") {
     throw namedError("MemoryEvidenceRepairSanitizationFailed");
   }
 }
@@ -1003,6 +996,14 @@ function stableClosureAuditFailureCode(error: unknown): string {
   if (
     error instanceof Error &&
     /^MemoryEvidenceClosureAudit[A-Za-z0-9]+$/u.test(error.name)
+  ) {
+    return error.name;
+  }
+  if (
+    error instanceof Error &&
+    /^MemoryEvidence(?:Sanitization|RepairSanitization)[A-Za-z0-9]+$/u.test(
+      error.name,
+    )
   ) {
     return error.name;
   }

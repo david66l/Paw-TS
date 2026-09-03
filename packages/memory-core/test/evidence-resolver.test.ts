@@ -4470,16 +4470,23 @@ describe("shared evidence resolver v1", () => {
       reason: "protected_requirement_changed",
       rejectedEvidenceLeakCount: 0,
     });
+    expect(result.closureRepairSanitization).toMatchObject({
+      status: "projected",
+      attempt: 1,
+      rejectedEvidenceCount: 1,
+      contaminatedSourceCount: 1,
+      removedPacketSourceCount: 1,
+      retainedPacketSourceCount: 0,
+      rejectedEvidenceLeakCount: 0,
+    });
     expect(result.requirements.map((item) => item.requirementId)).toEqual([
       "location",
     ]);
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).toContain("Seattle");
+    expect(result.packetSources).toEqual([]);
     expect(
       result.packetSources.map((source) => source.text).join("\n"),
     ).not.toContain("Portland");
-    expect(selectorCalls).toBe(3);
+    expect(selectorCalls).toBe(2);
     expect(auditorCalls).toBe(1);
   });
 
@@ -4589,7 +4596,16 @@ describe("shared evidence resolver v1", () => {
 
     expect(result.closureAuditStatus).toBe("completed");
     expect(result.closureVerdict).toBe("insufficient");
+    expect(result.closureRepairCount).toBe(1);
     expect(result.closureRepairMode).toBe("replan");
+    expect(result.closureRepairSanitization).toMatchObject({
+      status: "projected",
+      attempt: 1,
+      rejectedEvidenceCount: 1,
+      contaminatedSourceCount: 1,
+      retainedPacketSourceCount: 0,
+      rejectedEvidenceLeakCount: 0,
+    });
     expect(result.closureAuditFailureCode).toBeUndefined();
     expect(result.packetSources).toEqual([]);
     expect(selectorCalls).toBe(1);

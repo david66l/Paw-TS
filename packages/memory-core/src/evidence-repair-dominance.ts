@@ -190,7 +190,7 @@ export function evaluateMemoryEvidenceRepairDominanceV1(input: {
     },
   ).length;
   const rejectedEvidenceLeakCount = [
-    ...executableExposureRefs(input.repaired),
+    ...memoryEvidenceExecutableExposureRefsV1(input.repaired),
   ].filter((evidenceRef) => rejected.has(evidenceRef)).length;
   const sourceLockUnchanged =
     hashCanonicalJsonV1(sourceLockIdentity(input.baseline)) ===
@@ -307,7 +307,7 @@ function hitsByRef(
 }
 
 /** Every address that can still influence reader projection or state execution. */
-function executableExposureRefs(
+export function memoryEvidenceExecutableExposureRefsV1(
   pass: MemoryEvidenceResolutionPassV1,
 ): ReadonlySet<string> {
   const refs = new Set<string>();
@@ -315,11 +315,24 @@ function executableExposureRefs(
     for (const evidenceRef of evidenceRefs) refs.add(evidenceRef);
   };
   add(pass.requirementHits.flat().map((hit) => hit.evidenceRef));
+  for (const hit of pass.requirementHits.flat()) {
+    add(hit.contextEvidenceRefs ?? []);
+  }
   for (const source of pass.packetSources) add(source.evidenceRefs);
+  for (const source of pass.packetSources) {
+    add(source.evidenceBindings.map((binding) => binding.evidenceRef));
+  }
+  for (const source of pass.notebook?.sources ?? []) {
+    add(source.evidenceRefs);
+    add(source.evidenceBindings.map((binding) => binding.evidenceRef));
+  }
   for (const coverage of pass.notebook.coverage) {
     add(coverage.selectedEvidenceRefs);
     add(coverage.historicalEvidenceRefs);
     add(coverage.unresolvedEvidenceRefs);
+    add(coverage.inputEvidenceRefs ?? []);
+    add(coverage.budgetOmittedEvidenceRefs ?? []);
+    add((coverage.admission ?? []).map((entry) => entry.evidenceRef));
   }
   for (const assessment of pass.supportAssessments) {
     add(assessment.supportingEvidenceRefs);
@@ -330,6 +343,9 @@ function executableExposureRefs(
         (disposition) => disposition.evidenceRef,
       ),
     );
+    for (const disposition of assessment.evidenceDispositions ?? []) {
+      add(disposition.contextEvidenceRefs);
+    }
   }
   for (const requirement of pass.requirementEvidence) {
     add(requirement.supportingEvidenceRefs);
@@ -343,6 +359,9 @@ function executableExposureRefs(
       add(assessment.supportingEvidenceRefs);
       add(assessment.contradictingEvidenceRefs);
       add(assessment.unknownEvidenceRefs);
+      for (const disposition of assessment.evidenceDispositions ?? []) {
+        add([disposition.evidenceRef, ...disposition.contextEvidenceRefs]);
+      }
     }
   }
   for (const certificate of pass.dialogueCertificateRegistry.certificates) {

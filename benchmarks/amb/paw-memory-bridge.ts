@@ -2557,6 +2557,17 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstClosureRepairRejectedLeakCount = 0;
   let evidenceFirstClosureRepairPacketEvidenceDelta = 0;
   let evidenceFirstClosureRepairPacketCharsDelta = 0;
+  let evidenceFirstClosureSanitizationStatus = "not_needed";
+  let evidenceFirstClosureSanitizationAttempt = 0;
+  let evidenceFirstClosureSanitizationRejectedEvidenceRevision: string | null =
+    null;
+  let evidenceFirstClosureSanitizationFailureCode: string | null = null;
+  let evidenceFirstClosureSanitizationTransactionRevision: string | null = null;
+  let evidenceFirstClosureSanitizationRejectedEvidenceCount = 0;
+  let evidenceFirstClosureSanitizationContaminatedSourceCount = 0;
+  let evidenceFirstClosureSanitizationRemovedPacketSourceCount = 0;
+  let evidenceFirstClosureSanitizationRetainedPacketSourceCount = 0;
+  let evidenceFirstClosureSanitizationRejectedLeakCount = 0;
   let evidenceFirstClosureAuditFailureCode: string | null = null;
   let evidenceFirstObligationStatus = "not_evaluated";
   let evidenceFirstObligationMinimumRequirementCount = 0;
@@ -4097,6 +4108,26 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       resolution.closureRepairCommit?.packetEvidenceCountDelta ?? 0;
     evidenceFirstClosureRepairPacketCharsDelta =
       resolution.closureRepairCommit?.packetCharsDelta ?? 0;
+    evidenceFirstClosureSanitizationStatus =
+      resolution.closureRepairSanitization?.status ?? "not_needed";
+    evidenceFirstClosureSanitizationAttempt =
+      resolution.closureRepairSanitization?.attempt ?? 0;
+    evidenceFirstClosureSanitizationRejectedEvidenceRevision =
+      resolution.closureRepairSanitization?.rejectedEvidenceRevision ?? null;
+    evidenceFirstClosureSanitizationFailureCode =
+      resolution.closureRepairSanitization?.failureCode ?? null;
+    evidenceFirstClosureSanitizationTransactionRevision =
+      resolution.closureRepairSanitization?.transactionRevision ?? null;
+    evidenceFirstClosureSanitizationRejectedEvidenceCount =
+      resolution.closureRepairSanitization?.rejectedEvidenceCount ?? 0;
+    evidenceFirstClosureSanitizationContaminatedSourceCount =
+      resolution.closureRepairSanitization?.contaminatedSourceCount ?? 0;
+    evidenceFirstClosureSanitizationRemovedPacketSourceCount =
+      resolution.closureRepairSanitization?.removedPacketSourceCount ?? 0;
+    evidenceFirstClosureSanitizationRetainedPacketSourceCount =
+      resolution.closureRepairSanitization?.retainedPacketSourceCount ?? 0;
+    evidenceFirstClosureSanitizationRejectedLeakCount =
+      resolution.closureRepairSanitization?.rejectedEvidenceLeakCount ?? 0;
     evidenceFirstClosureAuditFailureCode =
       resolution.closureAuditFailureCode ?? null;
     evidenceFirstObligationStatus = resolution.obligationStatus;
@@ -4242,6 +4273,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       repairCount: resolution.closureRepairCount,
       repairMode: resolution.closureRepairMode,
       repairCommit: resolution.closureRepairCommit ?? null,
+      sanitization: resolution.closureRepairSanitization ?? null,
       failureCode: resolution.closureAuditFailureCode ?? null,
       finalRequirementCount: resolution.requirements.length,
       finalCoveredCount: evidenceFirstNotebookCoveredCount,
@@ -5431,6 +5463,16 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstClosureRepairRejectedLeakCount,
       evidenceFirstClosureRepairPacketEvidenceDelta,
       evidenceFirstClosureRepairPacketCharsDelta,
+      evidenceFirstClosureSanitizationStatus,
+      evidenceFirstClosureSanitizationAttempt,
+      evidenceFirstClosureSanitizationRejectedEvidenceRevision,
+      evidenceFirstClosureSanitizationFailureCode,
+      evidenceFirstClosureSanitizationTransactionRevision,
+      evidenceFirstClosureSanitizationRejectedEvidenceCount,
+      evidenceFirstClosureSanitizationContaminatedSourceCount,
+      evidenceFirstClosureSanitizationRemovedPacketSourceCount,
+      evidenceFirstClosureSanitizationRetainedPacketSourceCount,
+      evidenceFirstClosureSanitizationRejectedLeakCount,
       evidenceFirstClosureAuditFailureCode,
       evidenceFirstObligationStatus,
       evidenceFirstObligationMinimumRequirementCount,
@@ -5553,6 +5595,16 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstClosureRepairRejectedLeakCount,
     evidenceFirstClosureRepairPacketEvidenceDelta,
     evidenceFirstClosureRepairPacketCharsDelta,
+    evidenceFirstClosureSanitizationStatus,
+    evidenceFirstClosureSanitizationAttempt,
+    evidenceFirstClosureSanitizationRejectedEvidenceRevision,
+    evidenceFirstClosureSanitizationFailureCode,
+    evidenceFirstClosureSanitizationTransactionRevision,
+    evidenceFirstClosureSanitizationRejectedEvidenceCount,
+    evidenceFirstClosureSanitizationContaminatedSourceCount,
+    evidenceFirstClosureSanitizationRemovedPacketSourceCount,
+    evidenceFirstClosureSanitizationRetainedPacketSourceCount,
+    evidenceFirstClosureSanitizationRejectedLeakCount,
     evidenceFirstClosureAuditFailureCode,
     evidenceFirstObligationStatus,
     evidenceFirstObligationMinimumRequirementCount,

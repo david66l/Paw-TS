@@ -1550,6 +1550,70 @@ def run(args: argparse.Namespace) -> dict:
                         if isinstance(raw, dict)
                         else None
                     ),
+                    "closureSanitizationStatus": (
+                        raw.get("evidenceFirstClosureSanitizationStatus")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationAttempt": (
+                        raw.get("evidenceFirstClosureSanitizationAttempt")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationRejectedEvidenceRevision": (
+                        raw.get(
+                            "evidenceFirstClosureSanitizationRejectedEvidenceRevision"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationFailureCode": (
+                        raw.get("evidenceFirstClosureSanitizationFailureCode")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationTransactionRevision": (
+                        raw.get(
+                            "evidenceFirstClosureSanitizationTransactionRevision"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationRejectedEvidenceCount": (
+                        raw.get(
+                            "evidenceFirstClosureSanitizationRejectedEvidenceCount"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationContaminatedSourceCount": (
+                        raw.get(
+                            "evidenceFirstClosureSanitizationContaminatedSourceCount"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationRemovedPacketSourceCount": (
+                        raw.get(
+                            "evidenceFirstClosureSanitizationRemovedPacketSourceCount"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationRetainedPacketSourceCount": (
+                        raw.get(
+                            "evidenceFirstClosureSanitizationRetainedPacketSourceCount"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
+                    "closureSanitizationRejectedLeakCount": (
+                        raw.get(
+                            "evidenceFirstClosureSanitizationRejectedLeakCount"
+                        )
+                        if isinstance(raw, dict)
+                        else None
+                    ),
                     "closureAuditFailureCode": (
                         raw.get("evidenceFirstClosureAuditFailureCode")
                         if isinstance(raw, dict)

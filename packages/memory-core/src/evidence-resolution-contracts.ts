@@ -17,13 +17,14 @@ import type {
 } from "./evidence-query-planner.js";
 import type { MemoryEvidenceReaderProjectionBuildResultV1 } from "./evidence-reader-projection-v1.js";
 import type { MemoryEvidenceRepairCommitReportV1 } from "./evidence-repair-dominance.js";
+import type { MemoryEvidenceSanitizationTransactionReportV1 } from "./evidence-sanitization-projection.js";
 import type { MemoryEvidenceTriageAssessmentV1 } from "./evidence-support-selector.js";
 import type { MemoryRequirementFairAcquisitionReportV1 } from "./requirement-fair-acquisition.js";
 import type { MemorySourceLocalizationReportV1 } from "./source-local-evidence-locator.js";
 import type { MemoryResolvedStateFrameV2 } from "./state-frame-v2.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v30:repair-commit-on-dominance" as const;
+  "paw.memory-evidence-resolver.v31:separate-deletion-sanitization" as const;
 
 export type MemoryEvidenceClosureModeV1 = "disabled" | "observe" | "repair";
 
@@ -92,6 +93,8 @@ export interface MemoryEvidenceResolutionV1 {
   readonly closureRepairMode: "none" | "replan";
   /** Content-free two-phase commit report for an attempted closure repair. */
   readonly closureRepairCommit?: MemoryEvidenceRepairCommitReportV1;
+  /** Host-only deletion projection applied before a rejected-ref repair. */
+  readonly closureRepairSanitization?: MemoryEvidenceSanitizationTransactionReportV1;
   readonly closureAuditFailureCode?: string;
   readonly closureAuditRevision?: string;
   readonly closureAuditorVersion?: string;
