@@ -4322,7 +4322,7 @@ describe("shared evidence resolver v1", () => {
     expect(auditorCalls).toBe(1);
   });
 
-  test("sanitizes a rejected latest ref before rolling back a rewritten requirement", async () => {
+  test("treats a semantic time rejection as a replan hint without deleting reader memory", async () => {
     let selectorCalls = 0;
     let auditorCalls = 0;
     const resolver = createMemoryEvidenceResolverV1({
@@ -4470,27 +4470,20 @@ describe("shared evidence resolver v1", () => {
       reason: "protected_requirement_changed",
       rejectedEvidenceLeakCount: 0,
     });
-    expect(result.closureRepairSanitization).toMatchObject({
-      status: "projected",
-      attempt: 1,
-      rejectedEvidenceCount: 1,
-      contaminatedSourceCount: 1,
-      removedPacketSourceCount: 1,
-      retainedPacketSourceCount: 0,
-      rejectedEvidenceLeakCount: 0,
-    });
+    expect(result.closureSemanticRejectedEvidenceCount).toBe(1);
+    expect(result.closureRepairSanitization).toBeUndefined();
     expect(result.requirements.map((item) => item.requirementId)).toEqual([
       "location",
     ]);
-    expect(result.packetSources).toEqual([]);
+    expect(result.packetSources).toHaveLength(1);
     expect(
       result.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("Portland");
+    ).toContain("Portland");
     expect(selectorCalls).toBe(2);
     expect(auditorCalls).toBe(1);
   });
 
-  test("settles an empty repaired packet without sending invalid input to the auditor", async () => {
+  test("keeps a semantic-rejection baseline when an empty repair cannot dominate", async () => {
     let selectorCalls = 0;
     let auditorCalls = 0;
     const resolver = createMemoryEvidenceResolverV1({
@@ -4598,17 +4591,11 @@ describe("shared evidence resolver v1", () => {
     expect(result.closureVerdict).toBe("insufficient");
     expect(result.closureRepairCount).toBe(1);
     expect(result.closureRepairMode).toBe("replan");
-    expect(result.closureRepairSanitization).toMatchObject({
-      status: "projected",
-      attempt: 1,
-      rejectedEvidenceCount: 1,
-      contaminatedSourceCount: 1,
-      retainedPacketSourceCount: 0,
-      rejectedEvidenceLeakCount: 0,
-    });
+    expect(result.closureSemanticRejectedEvidenceCount).toBe(1);
+    expect(result.closureRepairSanitization).toBeUndefined();
     expect(result.closureAuditFailureCode).toBeUndefined();
-    expect(result.packetSources).toEqual([]);
-    expect(selectorCalls).toBe(1);
+    expect(result.packetSources).toHaveLength(1);
+    expect(selectorCalls).toBe(2);
     expect(auditorCalls).toBe(1);
   });
 });

@@ -50,18 +50,50 @@ slice (133 questions) as a comparable treatment.
   model replay cache:
   `/root/autodl-tmp/paw-c666a20/runs/paw-temporal-v41-sanitization-treatment-e90e596`
 
-## Current state
+## v41 sealed result
 
-The first detached 8-shard runner launch did not remain registered in `screen`.
-No result file or merged score has been accepted from it. Before relaunch, inspect
-its master log and slice files, then launch the sealed 133-question treatment in
-an explicitly monitored detached process. Do not compare a result until all eight
-sealed slice ledgers are present and merger validation succeeds.
+- The initial launcher failure was excluded: its environment file was sourced
+  without exporting the model key, so every shard failed before a valid answer
+  run. The failure logs remain in the isolated v41 output directory.
+- The relaunch used the migrated SSH endpoint, restored the persisted Postgres
+  data directory without deleting its stale lock file, started the local
+  embedding service from the pinned local model cache, and exported the model
+  environment before spawning workers.
+- Valid treatment: eight sealed slices, all present; merge marker
+  `V41_TREATMENT_COMPLETE`; no shard-failure marker; merged artifact SHA-256
+  `d799412fc36cb145fe13a045e97872f15ea21b16beabcab79661918bd55cce9f`.
+- Score: **88/133 (66.17%)**. Retrieval hit rate was **107/127 (84.25%)**;
+  17/133 queries had evidence closure. This is a regression, not a release
+  candidate.
 
-## Connectivity note
+## v41 paired diagnosis
 
-On 2026-09-04, immediately after the initial detached-launch check, the cloud
-SSH endpoint at `connect.nmb1.seetacloud.com:20021` began refusing TCP
-connections. This is recorded as infrastructure state, not as an experiment
-result. No recovery, cleanup, or result acceptance action has been taken while
-the endpoint is unreachable.
+- All 133 query commitments exactly match v36.
+- The 78 queries where the sanitizer did not run retained **72** correct
+  answers, versus **73** in v36; their retrieval hits were unchanged at 77.
+- The 55 queries where it ran fell from **39** correct answers in v36 to
+  **16**. The semantic auditor supplied 158 rejected evidence addresses;
+  source-atomic closure removed 91 packet sources. Nineteen previously-hit
+  queries lost their hit, and 28 v36-correct queries became wrong (26 after a
+  sanitizer projection).
+- Therefore the regression is causal: the closure auditor reports semantic
+  relevance/role/time insufficiency, but v41 treated that advisory judgement as
+  a host-authoritative source invalidation and erased reader context.
+
+## v42 remediation in progress
+
+- Resolver v32 records unique semantic rejections for auditability, sends the
+  reported deficiencies to the replan, and preserves the original reader
+  packet. Semantic rejections cannot enter source-atomic deletion or the
+  hard-rejection dominance check.
+- The deletion-only sanitizer remains tested as a separate primitive, reserved
+  for a future explicit host-owned invalidation channel rather than an LLM
+  relevance judgement.
+- Local targeted verification: resolver, sanitizer, and dominance suites
+  **54/54**; AMB suite **85/85**; memory-core and memory-plugin type checks
+  passed. A full plugin-suite run also exposed one pre-existing adapter test
+  outside the closure-audit path; it is not being folded into this temporal
+  change.
+- Next gate: package v32, run a sealed 133-question temporal treatment with
+  the same store, seed, model, and answer protocol. It must first recover at
+  least the v36 score before any new temporal-reasoning architecture is tried.

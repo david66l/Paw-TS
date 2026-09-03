@@ -24,10 +24,8 @@ import {
 import {
   type MemoryEvidenceRepairCommitReportV1,
   evaluateMemoryEvidenceRepairDominanceV1,
-  memoryEvidenceExecutableExposureRefsV1,
 } from "./evidence-repair-dominance.js";
 import {
-  type MemoryEvidenceResolutionPassV1,
   type MemoryEvidenceSourceLockV1,
   resolveEvidencePass,
 } from "./evidence-resolution-pass.js";
@@ -42,13 +40,6 @@ import {
   selectedNotebookEvidence,
   validateMemoryEvidenceQueryPlanBoundary,
 } from "./evidence-resolver-helpers.js";
-import {
-  type MemoryEvidenceSanitizationTransactionReportV1,
-  beginMemoryEvidenceSanitizationV1,
-  completeMemoryEvidenceSanitizationV1,
-  failMemoryEvidenceSanitizationV1,
-  projectMemoryEvidenceSanitizedBaselineV1,
-} from "./evidence-sanitization-projection.js";
 import type { MemoryEvidenceSupportSelectorV1 } from "./evidence-support-selector.js";
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
@@ -257,13 +248,15 @@ export function createMemoryEvidenceResolverV1(input: {
         input.closureAuditor ? "not_needed" : "not_configured";
       let closureVerdict: MemoryEvidenceClosureVerdictV1 | undefined;
       let closureDeficiencyCount = 0;
+      // The closure auditor is a semantic reviewer. Its rejected refs mean
+      // "do not count this as sufficient proof for this query", not "this
+      // source is corrupt". Keep this signal for observability and replan
+      // input, but never route it into source-atomic deletion.
+      const semanticRejectedEvidenceRefs = new Set<string>();
       let closureRepairCount: 0 | 1 = 0;
       let closureRepairMode: MemoryEvidenceResolutionV1["closureRepairMode"] =
         "none";
       let closureRepairCommit: MemoryEvidenceRepairCommitReportV1 | undefined;
-      let closureRepairSanitization:
-        | MemoryEvidenceSanitizationTransactionReportV1
-        | undefined;
       let closureAuditRevision: string | undefined;
       let closureAuditFailureCode: string | undefined;
       const shouldAudit =
@@ -296,6 +289,9 @@ export function createMemoryEvidenceResolverV1(input: {
           closureAuditStatus = "completed";
           closureAuditRevision = audit.auditRevision;
           closureDeficiencyCount = audit.deficiencies.length;
+          for (const evidenceRef of audit.rejectedEvidenceRefs) {
+            semanticRejectedEvidenceRefs.add(evidenceRef);
+          }
           closureVerdict = audit.decision === "pass" ? "pass" : "insufficient";
           if (
             audit.decision === "incomplete" &&
@@ -316,64 +312,14 @@ export function createMemoryEvidenceResolverV1(input: {
               seedHits,
               sourceAcquisition: initialPass.sourceAcquisition,
             });
-            // Record the transaction before any sanitization or replan call so
-            // a fail-closed exception can never be mislabeled not_attempted.
             closureRepairCount = 1;
             closureRepairMode = "replan";
-            let rejectedEvidenceRefs = new Set(audit.rejectedEvidenceRefs);
-            let baselinePass = initialPass;
-            let sanitizationAttemptCount: 0 | 1 | 2 = 0;
-            const sanitizeBaseline = (
-              refs: ReadonlySet<string>,
-            ): MemoryEvidenceResolutionPassV1 => {
-              const attempt =
-                sanitizationAttemptCount === 0
-                  ? 1
-                  : sanitizationAttemptCount === 1
-                    ? 2
-                    : undefined;
-              if (attempt === undefined) {
-                throw namedError(
-                  "MemoryEvidenceSanitizationAttemptLimitExceeded",
-                );
-              }
-              sanitizationAttemptCount = attempt;
-              closureRepairSanitization = beginMemoryEvidenceSanitizationV1({
-                attempt,
-                rejectedEvidenceRefs: refs,
-              });
-              try {
-                const sanitization = projectMemoryEvidenceSanitizedBaselineV1({
-                  initial: initialPass,
-                  rejectedEvidenceRefs: refs,
-                });
-                validateRejectedEvidenceAbsentV1(sanitization.pass, refs);
-                closureRepairSanitization =
-                  completeMemoryEvidenceSanitizationV1({
-                    attempt,
-                    projection: sanitization.report,
-                  });
-                return sanitization.pass;
-              } catch (error) {
-                closureRepairSanitization = failMemoryEvidenceSanitizationV1({
-                  attempt,
-                  rejectedEvidenceRefs: refs,
-                  error,
-                });
-                throw namedError(
-                  closureRepairSanitization.failureCode as string,
-                );
-              }
-            };
-            if (rejectedEvidenceRefs.size > 0) {
-              // From this point onward every catch path is fail-closed. The
-              // initial packet must never reappear after an explicit reject.
-              pass = createFailClosedRepairBaselineV1(initialPass);
-              resolvedRequirements = pass.requirements;
-              baselinePass = sanitizeBaseline(rejectedEvidenceRefs);
-              pass = baselinePass;
-              resolvedRequirements = pass.requirements;
-            }
+            const baselinePass = initialPass;
+            // The only authority available in this flow is the semantic
+            // auditor above, so there are no host-invalidated addresses. A
+            // future host-owned invalidation channel may populate this set and
+            // invoke the source-atomic sanitizer independently.
+            const hardRejectedEvidenceRefs = new Set<string>();
             const revisedPlan = await input.planner.plan(value, signal, {
               force: true,
               revision: Object.freeze({
@@ -418,14 +364,14 @@ export function createMemoryEvidenceResolverV1(input: {
               evidenceGroundedRoleBinding: input.evidenceGroundedRoleBinding,
               temporalRoundFrontier: input.temporalRoundFrontier,
               evidenceTimeUpperBound: input.evidenceTimeUpperBound,
-              excludedEvidenceRefs: rejectedEvidenceRefs,
+              excludedEvidenceRefs: hardRejectedEvidenceRefs,
               sourceLock,
               signal,
             });
             closureRepairCommit = evaluateMemoryEvidenceRepairDominanceV1({
               baseline: baselinePass,
               repaired: repairedPass,
-              rejectedEvidenceRefs,
+              rejectedEvidenceRefs: hardRejectedEvidenceRefs,
             });
             pass =
               closureRepairCommit.status === "committed"
@@ -471,22 +417,8 @@ export function createMemoryEvidenceResolverV1(input: {
                 auditInput: finalAuditInput,
                 auditorVersion: input.closureAuditor.auditorVersion,
               });
-              if (finalAudit.rejectedEvidenceRefs.length > 0) {
-                rejectedEvidenceRefs = new Set([
-                  ...rejectedEvidenceRefs,
-                  ...finalAudit.rejectedEvidenceRefs,
-                ]);
-                pass = createFailClosedRepairBaselineV1(initialPass);
-                resolvedRequirements = pass.requirements;
-                baselinePass = sanitizeBaseline(rejectedEvidenceRefs);
-                closureRepairCommit = evaluateMemoryEvidenceRepairDominanceV1({
-                  baseline: baselinePass,
-                  repaired: repairedPass,
-                  rejectedEvidenceRefs,
-                });
-                pass = baselinePass;
-                requirements = pass.requirements;
-                resolvedRequirements = pass.requirements;
+              for (const evidenceRef of finalAudit.rejectedEvidenceRefs) {
+                semanticRejectedEvidenceRefs.add(evidenceRef);
               }
               closureVerdict =
                 finalAudit.decision === "pass" &&
@@ -768,12 +700,10 @@ export function createMemoryEvidenceResolverV1(input: {
         closureMode,
         closureVerdict,
         closureDeficiencyCount,
+        closureSemanticRejectedEvidenceCount: semanticRejectedEvidenceRefs.size,
         closureRepairCount,
         closureRepairMode,
         ...(closureRepairCommit === undefined ? {} : { closureRepairCommit }),
-        ...(closureRepairSanitization === undefined
-          ? {}
-          : { closureRepairSanitization }),
         ...(closureAuditFailureCode === undefined
           ? {}
           : { closureAuditFailureCode }),
@@ -864,12 +794,10 @@ export function createMemoryEvidenceResolverV1(input: {
         closureMode,
         ...(closureVerdict === undefined ? {} : { closureVerdict }),
         closureDeficiencyCount,
+        closureSemanticRejectedEvidenceCount: semanticRejectedEvidenceRefs.size,
         closureRepairCount,
         closureRepairMode,
         ...(closureRepairCommit === undefined ? {} : { closureRepairCommit }),
-        ...(closureRepairSanitization === undefined
-          ? {}
-          : { closureRepairSanitization }),
         ...(closureAuditFailureCode === undefined
           ? {}
           : { closureAuditFailureCode }),
@@ -900,74 +828,6 @@ export function createMemoryEvidenceResolverV1(input: {
       });
     },
   });
-}
-
-function createFailClosedRepairBaselineV1(
-  initial: MemoryEvidenceResolutionPassV1,
-): MemoryEvidenceResolutionPassV1 {
-  const {
-    supportSelectionRevision: _supportSelectionRevision,
-    selectorExecutionSnapshot: _selectorExecutionSnapshot,
-    ...retained
-  } = initial;
-  const emptyCoverage = initial.requirements.map((requirement) =>
-    Object.freeze({
-      requirementId: requirement.requirementId,
-      status: "missing" as const,
-      selectedHitCount: 0,
-      independentEvidenceCount: 0,
-      closureEvidenceCount: 0,
-      selectedEvidenceRefs: Object.freeze([] as string[]),
-      historicalEvidenceRefs: Object.freeze([] as string[]),
-      unresolvedEvidenceRefs: Object.freeze([] as string[]),
-      inputEvidenceRefs: Object.freeze([] as string[]),
-      budgetOmittedEvidenceRefs: Object.freeze([] as string[]),
-      admission: Object.freeze([]),
-      budgetOmittedHitCount: 0,
-    }),
-  );
-  return Object.freeze({
-    ...retained,
-    requirementHits: Object.freeze(
-      initial.requirements.map(() => Object.freeze([])),
-    ),
-    supportSelectorStatus: "fallback",
-    supportAssessments: Object.freeze([]),
-    notebook: Object.freeze({
-      policyVersion: initial.notebook.policyVersion,
-      sources: Object.freeze([]),
-      coverage: Object.freeze(emptyCoverage),
-      inputHitCount: 0,
-      budgetOmittedHitCount: 0,
-      selectedHitCount: 0,
-      chars: 0,
-    }),
-    requirementEvidence: Object.freeze(
-      initial.requirements.map((requirement) =>
-        Object.freeze({
-          requirementId: requirement.requirementId,
-          supportingEvidenceRefs: Object.freeze([] as string[]),
-          candidateEvidenceRefs: Object.freeze([] as string[]),
-          contradictingEvidenceRefs: Object.freeze([] as string[]),
-        }),
-      ),
-    ),
-    packetSources: Object.freeze([]),
-  });
-}
-
-function validateRejectedEvidenceAbsentV1(
-  pass: MemoryEvidenceResolutionPassV1,
-  rejectedEvidenceRefs: ReadonlySet<string>,
-): void {
-  const exposedRefs = memoryEvidenceExecutableExposureRefsV1(pass);
-  if (
-    [...exposedRefs].some((evidenceRef) =>
-      rejectedEvidenceRefs.has(evidenceRef),
-    )
-  ) {
-    throw namedError("MemoryEvidenceRepairSanitizationFailed");
-  }
 }
 
 function namedError(name: string): Error {

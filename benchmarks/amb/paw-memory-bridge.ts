@@ -2546,6 +2546,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     : "disabled";
   let evidenceFirstClosureVerdict = "not_evaluated";
   let evidenceFirstClosureDeficiencyCount = 0;
+  let evidenceFirstClosureSemanticRejectedEvidenceCount = 0;
   let evidenceFirstClosureRepairCount = 0;
   let evidenceFirstClosureRepairMode = "none";
   let evidenceFirstClosureRepairCommitStatus = "not_attempted";
@@ -4088,6 +4089,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstClosureMode = resolution.closureMode;
     evidenceFirstClosureVerdict = resolution.closureVerdict ?? "not_evaluated";
     evidenceFirstClosureDeficiencyCount = resolution.closureDeficiencyCount;
+    evidenceFirstClosureSemanticRejectedEvidenceCount =
+      resolution.closureSemanticRejectedEvidenceCount;
     evidenceFirstClosureRepairCount = resolution.closureRepairCount;
     evidenceFirstClosureRepairMode = resolution.closureRepairMode;
     evidenceFirstClosureRepairCommitStatus =
@@ -5452,6 +5455,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstClosureMode,
       evidenceFirstClosureVerdict,
       evidenceFirstClosureDeficiencyCount,
+      evidenceFirstClosureSemanticRejectedEvidenceCount,
       evidenceFirstClosureRepairCount,
       evidenceFirstClosureRepairMode,
       evidenceFirstClosureRepairCommitStatus,
@@ -5584,6 +5588,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstClosureMode,
     evidenceFirstClosureVerdict,
     evidenceFirstClosureDeficiencyCount,
+    evidenceFirstClosureSemanticRejectedEvidenceCount,
     evidenceFirstClosureRepairCount,
     evidenceFirstClosureRepairMode,
     evidenceFirstClosureRepairCommitStatus,

@@ -1491,6 +1491,11 @@ def run(args: argparse.Namespace) -> dict:
                         if isinstance(raw, dict)
                         else None
                     ),
+                    "closureSemanticRejectedEvidenceCount": (
+                        raw.get("evidenceFirstClosureSemanticRejectedEvidenceCount")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
                     "closureRepairCount": (
                         raw.get("evidenceFirstClosureRepairCount")
                         if isinstance(raw, dict)

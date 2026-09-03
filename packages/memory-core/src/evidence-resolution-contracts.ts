@@ -24,7 +24,7 @@ import type { MemorySourceLocalizationReportV1 } from "./source-local-evidence-l
 import type { MemoryResolvedStateFrameV2 } from "./state-frame-v2.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v31:separate-deletion-sanitization" as const;
+  "paw.memory-evidence-resolver.v32:semantic-rejection-is-advisory" as const;
 
 export type MemoryEvidenceClosureModeV1 = "disabled" | "observe" | "repair";
 
@@ -89,11 +89,20 @@ export interface MemoryEvidenceResolutionV1 {
   readonly closureVerdict?: MemoryEvidenceClosureVerdictV1;
   /** Content-free count from the initial verifier report. */
   readonly closureDeficiencyCount: number;
+  /**
+   * Unique evidence addresses that the semantic auditor considered unhelpful.
+   * This is an advisory signal for the replan; it is never an authorization to
+   * delete source memory from the reader packet.
+   */
+  readonly closureSemanticRejectedEvidenceCount: number;
   readonly closureRepairCount: 0 | 1;
   readonly closureRepairMode: "none" | "replan";
   /** Content-free two-phase commit report for an attempted closure repair. */
   readonly closureRepairCommit?: MemoryEvidenceRepairCommitReportV1;
-  /** Host-only deletion projection applied before a rejected-ref repair. */
+  /**
+   * Reserved for an explicit host-owned invalidation transaction. Semantic
+   * closure-auditor rejections never populate this field.
+   */
   readonly closureRepairSanitization?: MemoryEvidenceSanitizationTransactionReportV1;
   readonly closureAuditFailureCode?: string;
   readonly closureAuditRevision?: string;
