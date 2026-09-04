@@ -248,7 +248,7 @@ class LongMemEvalRunnerTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            "paw.longmemeval-paired-experiment.v4",
+            "paw.longmemeval-paired-experiment.v5",
             protocol["schemaVersion"],
         )
         self.assertEqual(0.75, protocol["projectReleaseGate"]["minimumTreatmentAccuracy"])
@@ -269,6 +269,15 @@ class LongMemEvalRunnerTest(unittest.TestCase):
         self.assertEqual("upstream", protocol["common"]["answerProtocol"])
         self.assertTrue(protocol["common"]["answerTools"])
         self.assertEqual("required", protocol["common"]["sourceLocalLocator"])
+        self.assertEqual(
+            {
+                "recommendationUserAuthorityMode": "off",
+                "executionReaderProjectionInject": "0",
+                "evidenceRoleLateBinding": "0",
+                "temporalRoundFrontier": "0",
+            },
+            protocol["common"]["readerFeatureFlags"],
+        )
         self.assertEqual(
             "output-local", protocol["common"]["indexStoreBinding"]["mode"]
         )

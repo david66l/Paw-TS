@@ -753,8 +753,24 @@ def experiment_protocol(
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
     temperature = float(os.environ.get("DEEPSEEK_TEMPERATURE", "0"))
+    reader_feature_flags = {
+        "recommendationUserAuthorityMode": os.environ.get(
+            "PAW_AMB_RECOMMEND_USER_AUTHORITY_MODE", "off"
+        )
+        .strip()
+        .lower(),
+        "executionReaderProjectionInject": os.environ.get(
+            "PAW_AMB_EXECUTION_READER_PROJECTION_INJECT", "0"
+        ).strip(),
+        "evidenceRoleLateBinding": os.environ.get(
+            "PAW_AMB_EVIDENCE_ROLE_LATE_BINDING", "0"
+        ).strip(),
+        "temporalRoundFrontier": os.environ.get(
+            "PAW_AMB_TEMPORAL_ROUND_FRONTIER", "0"
+        ).strip(),
+    }
     return {
-        "schemaVersion": "paw.longmemeval-paired-experiment.v4",
+        "schemaVersion": "paw.longmemeval-paired-experiment.v5",
         "projectReleaseGate": PROJECT_RELEASE_GATE,
         "common": {
             "k": args.k,
@@ -793,6 +809,7 @@ def experiment_protocol(
             },
             "prebuiltIndexPolicy": "complete-id-and-embedding-coverage-v2",
             "sourceLocalLocator": "required",
+            "readerFeatureFlags": reader_feature_flags,
         },
         "arms": {
             "baseline": {
