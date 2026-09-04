@@ -437,11 +437,18 @@ def hmac_ref(value: str, key: bytes) -> str:
     return eval_hmac(f"evidence:{value}", key)
 
 
-def save_checkpoint(path: Path, top_k: int, target_hmacs: set[str], rows: list[dict[str, Any]]) -> None:
+def save_checkpoint(
+    path: Path,
+    top_k: int,
+    source_boundary: str,
+    target_hmacs: set[str],
+    rows: list[dict[str, Any]],
+) -> None:
     payload = {
         "schemaVersion": f"{SCHEMA_VERSION}:checkpoint",
         "contentFree": True,
         "topK": top_k,
+        "sourceBoundary": source_boundary,
         "targetQueryHmacs": sorted(target_hmacs),
         "rows": sorted(rows, key=lambda row: str(row["queryHmac"])),
     }
@@ -451,7 +458,9 @@ def save_checkpoint(path: Path, top_k: int, target_hmacs: set[str], rows: list[d
     os.replace(temporary, path)
 
 
-def load_checkpoint(path: Path, top_k: int, target_hmacs: set[str]) -> list[dict[str, Any]]:
+def load_checkpoint(
+    path: Path, top_k: int, source_boundary: str, target_hmacs: set[str]
+) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     payload = load_json(path)
@@ -460,6 +469,7 @@ def load_checkpoint(path: Path, top_k: int, target_hmacs: set[str]) -> list[dict
         or payload.get("schemaVersion") != f"{SCHEMA_VERSION}:checkpoint"
         or payload.get("contentFree") is not True
         or payload.get("topK") != top_k
+        or payload.get("sourceBoundary") != source_boundary
         or set(payload.get("targetQueryHmacs", [])) != target_hmacs
         or not isinstance(payload.get("rows"), list)
     ):
@@ -478,14 +488,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--baseline-ledger", type=Path, nargs="+", required=True)
-    parser.add_argument("--retrieval-log", type=Path, nargs="+", required=True)
+    parser.add_argument("--retrieval-log", type=Path, nargs="+")
+    parser.add_argument("--temporal-source-lane-log", type=Path, nargs="+")
     parser.add_argument("--eval-hmac-key", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--top-k", type=int, default=12)
     args = parser.parse_args()
-    if not 1 <= args.top_k <= 32:
-        raise ValueError("--top-k must be between 1 and 32")
+    if not 1 <= args.top_k <= 128:
+        raise ValueError("--top-k must be between 1 and 128")
+    if bool(args.retrieval_log) == bool(args.temporal_source_lane_log):
+        raise ValueError("provide exactly one source-lock log")
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
@@ -510,9 +523,20 @@ def main() -> None:
     }
     if not baseline_errors or not baseline_errors.issubset(dataset_by_hmac):
         raise ValueError("baseline errors cannot be bound to the pinned dataset")
-    source_by_query = load_initial_retrieval_sources(args.retrieval_log)
+    source_boundary = (
+        "first_retrieve_event_frozen_source_lock"
+        if args.retrieval_log
+        else "read_only_temporal_source_lane_lock"
+    )
+    source_by_query = (
+        load_initial_retrieval_sources(args.retrieval_log)
+        if args.retrieval_log
+        else load_temporal_source_lane_sources(args.temporal_source_lane_log)
+    )
     checkpoint_path = args.checkpoint or args.output.with_suffix(args.output.suffix + ".checkpoint.json")
-    result_rows = load_checkpoint(checkpoint_path, args.top_k, baseline_errors)
+    result_rows = load_checkpoint(
+        checkpoint_path, args.top_k, source_boundary, baseline_errors
+    )
     completed_hmacs = {str(row["queryHmac"]) for row in result_rows}
     for index, query_hmac in enumerate(sorted(baseline_errors), start=1):
         if query_hmac in completed_hmacs:
@@ -550,7 +574,13 @@ def main() -> None:
             }
         )
         completed_hmacs.add(query_hmac)
-        save_checkpoint(checkpoint_path, args.top_k, baseline_errors, result_rows)
+        save_checkpoint(
+            checkpoint_path,
+            args.top_k,
+            source_boundary,
+            baseline_errors,
+            result_rows,
+        )
         print(f"completed {index}/{len(baseline_errors)}", flush=True)
     result_rows.sort(key=lambda row: str(row["queryHmac"]))
     certified_rows = [row for row in result_rows if row["certified"]]
@@ -560,7 +590,7 @@ def main() -> None:
         "diagnosticOnly": True,
         "answerPathChanged": False,
         "candidatePolicy": {
-            "sourceBoundary": "first_retrieve_event_frozen_source_lock",
+            "sourceBoundary": source_boundary,
             "role": "user_only",
             "ranker": "label_blind_exact_turn_bm25_v1",
             "topK": args.top_k,
