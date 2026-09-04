@@ -109,6 +109,37 @@ def load_initial_retrieval_sources(paths: list[Path]) -> dict[str, set[str]]:
     return output
 
 
+def load_temporal_source_lane_sources(paths: list[Path]) -> dict[str, set[str]]:
+    """Load only an explicitly read-only temporal source-lane certificate."""
+
+    output: dict[str, set[str]] = {}
+    for path in paths:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            if event.get("event") != "temporal_source_lane":
+                continue
+            detail = event.get("detail")
+            if not isinstance(detail, dict):
+                continue
+            if detail.get("answerPathChanged") is not False:
+                raise ValueError("temporal source lane is not read-only")
+            if detail.get("status") != "selected":
+                continue
+            query_hash = detail.get("queryHash")
+            sources = detail.get("selectedSourceDocumentHashes")
+            if not isinstance(query_hash, str) or not isinstance(sources, list):
+                raise ValueError("temporal source lane certificate is invalid")
+            if query_hash in output:
+                continue
+            frozen = {value for value in sources if isinstance(value, str) and value}
+            if not frozen or len(frozen) != len(sources):
+                raise ValueError("temporal source lane source lock is invalid")
+            output[query_hash] = frozen
+    return output
+
+
 def timestamp(value: str) -> str | None:
     text = value.split("(")[0].strip() if "(" in value else value.strip()
     if not text:

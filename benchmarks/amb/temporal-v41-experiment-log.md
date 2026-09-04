@@ -405,3 +405,29 @@ slice (133 questions) as a comparable treatment.
   reachability with a pinned ranker and corpus revision, then feed only its
   immutable candidate addresses to the ledger selector. No answer injection or
   full temporal treatment is authorized until this gate passes.
+
+## v52 source-cap and temporal-source-lane gate
+
+- A 21-query retrieval-only run raised the outer retrieval request from `k=8`
+  to `k=16`, with answer generation disabled. It completed with a 100% query
+  response rate, 0.821 macro source recall, and no answer-path change. The
+  final returned source set was unchanged for all **21/21** queries when
+  compared with the v48 full logs. This rejects an outer-`k` tuning treatment.
+- The cause is architectural: the evidence resolver's shared context path
+  clamps `maxSources` to eight. That guard is appropriate for the generic
+  reader, because widening its source packet would recreate the v48 context
+  displacement regression. It must not be globally relaxed for temporal work.
+- A post-retrieval, content-free audit of the frozen original-query
+  `source_span` candidates used labels only after candidate ranks were fixed.
+  It covers all user endpoint source sessions for 14/21 residuals at rank 8,
+  15/21 at rank 12, and **18/21 at rank 16**. The current v48 source lock
+  covers 15/21. Thus a read-only top-16 temporal source lock has a measured
+  source-reachability ceiling of three additional residuals; three still need
+  a different retrieval representation, not a larger source budget.
+- The approved next experiment is a source-only shadow lane: take the ranked
+  source-span channel after baseline resolution, deduplicate it to at most 16
+  document sources, bind a query/cutoff/candidate/source-lock certificate, and
+  log only hashes and counts. It produces no document, tool payload, notebook
+  change, reader injection, or answer. Its first acceptance test is that the
+  runtime lock reproduces the 18/21 source-reachability result before the
+  ledger selector is run at its valid 2,048-token bound.

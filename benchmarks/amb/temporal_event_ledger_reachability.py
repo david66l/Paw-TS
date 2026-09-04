@@ -22,6 +22,7 @@ try:  # Supports both `python file.py` and package-level smoke tests.
         canonical_session_sources,
         enumerate_locked_user_turns,
         load_initial_retrieval_sources,
+        load_temporal_source_lane_sources,
         rank_bm25,
     )
 except ImportError:
@@ -31,6 +32,7 @@ except ImportError:
         canonical_session_sources,
         enumerate_locked_user_turns,
         load_initial_retrieval_sources,
+        load_temporal_source_lane_sources,
         rank_bm25,
     )
 
@@ -135,6 +137,7 @@ def main() -> None:
     parser.add_argument("--eval-hmac-key", type=Path, required=True)
     parser.add_argument("--v36-retrieval-log", type=Path, nargs="+", required=True)
     parser.add_argument("--v48-retrieval-log", type=Path, nargs="+", required=True)
+    parser.add_argument("--temporal-source-lane-log", type=Path, nargs="+")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--top-k", type=int, nargs="+", default=[8, 12, 16, 24])
     args = parser.parse_args()
@@ -159,6 +162,10 @@ def main() -> None:
         "v36_source_lock": load_initial_retrieval_sources(args.v36_retrieval_log),
         "v48_source_lock": load_initial_retrieval_sources(args.v48_retrieval_log),
     }
+    if args.temporal_source_lane_log:
+        source_locks["temporal_source_lane_lock"] = load_temporal_source_lane_sources(
+            args.temporal_source_lane_log
+        )
     rows: list[dict[str, Any]] = []
     for query_hmac in sorted(errors):
         item = dataset_by_hmac[query_hmac]
@@ -193,7 +200,7 @@ def main() -> None:
         "rows": rows,
         "metrics": {
             scope: summarize(rows, scope, top_ks)
-            for scope in ("v36_source_lock", "v48_source_lock", "all_history")
+            for scope in (*source_locks, "all_history")
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

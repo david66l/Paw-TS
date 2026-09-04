@@ -43,6 +43,8 @@ import {
   PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
   PAW_MEMORY_EVIDENCE_CANDIDATE_FUSION_VERSION_V2,
   PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1,
+  PAW_MEMORY_TEMPORAL_SOURCE_LANE_MAX_SOURCES_V1,
+  PAW_MEMORY_TEMPORAL_SOURCE_LANE_POLICY_V1,
   PAW_MEMORY_TOPIC_DOSSIER_EXTRACTOR_VERSION_V1,
   PAW_MEMORY_TOPIC_DOSSIER_POLICY_VERSION_V1,
   PAW_NEXT_MEMORY_PLUGIN_POLICY_VERSION_V1,
@@ -52,6 +54,7 @@ import {
   type PawNextMemoryScopeV1,
   boundMemoryRawEvidenceSpansV1,
   buildMemoryConversationTurnBundleV1,
+  buildMemoryTemporalSourceLaneV1,
   classifyMemoryEvidenceQueryV3,
   createJsonMemoryAtomConflictResolverV1,
   createJsonMemoryAtomExtractorV1,
@@ -564,6 +567,15 @@ const sourceLocalLocatorEnabled =
   ingestMode === "atom" &&
   atomContextMode === "evidence_first" &&
   /^(?:1|true)$/iu.test(process.env.PAW_AMB_SOURCE_LOCAL_LOCATOR?.trim() ?? "");
+// This is strictly an observation path. It obtains an independently frozen
+// source lock and emits content-free telemetry; it never contributes a
+// document, a source, or a tool payload to the answer path below.
+const temporalSourceLaneShadowEnabled =
+  ingestMode === "atom" &&
+  atomContextMode === "evidence_first" &&
+  /^(?:1|true)$/iu.test(
+    process.env.PAW_AMB_TEMPORAL_SOURCE_LANE_SHADOW?.trim() ?? "",
+  );
 const evidenceGroundedRoleBindingEnabled =
   sourceLocalLocatorEnabled &&
   /^(?:1|true)$/iu.test(
@@ -2610,6 +2622,13 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstFusedCandidateCount = 0;
   let evidenceFirstDualChannelCount = 0;
   let evidenceFirstSelectedSourceCount = 0;
+  let temporalSourceLaneStatus = temporalSourceLaneShadowEnabled
+    ? queryTimeCutoff === undefined
+      ? "skipped_no_query_cutoff"
+      : "not_evaluated"
+    : "disabled";
+  let temporalSourceLaneCandidateCount = 0;
+  let temporalSourceLaneSelectedSourceCount = 0;
   let documents = atomDocuments;
   const grouped = new Map<
     string,
@@ -4139,6 +4158,77 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstObligationMinimumEvidenceCount =
       resolution.obligationShape.minimumEvidenceCount;
     evidenceFirstObligationReasonCodes = resolution.obligationShape.reasonCodes;
+    if (temporalSourceLaneShadowEnabled && queryTimeCutoff !== undefined) {
+      try {
+        // This call is intentionally after `sharedResolver.resolve`: its
+        // result cannot influence baseline source fusion or the reader packet.
+        const originalQuerySearch = await searchEvidenceIndex(queryText);
+        const seenEvidenceRefs = new Set<string>();
+        const candidates = originalQuerySearch.spans.flatMap((span) => {
+          if (seenEvidenceRefs.has(span.evidenceRef)) return [];
+          seenEvidenceRefs.add(span.evidenceRef);
+          return [
+            {
+              sourceId: span.documentId,
+              evidenceRef: span.evidenceRef,
+              rank: seenEvidenceRefs.size,
+              observedAt: documentCreatedByUser
+                .get(userId)
+                ?.get(span.documentId),
+            },
+          ];
+        });
+        temporalSourceLaneCandidateCount = candidates.length;
+        const lane = buildMemoryTemporalSourceLaneV1({
+          query: queryText,
+          queryTimeCutoff: queryTimeCutoff.normalizedIso,
+          candidates,
+          maxSources: PAW_MEMORY_TEMPORAL_SOURCE_LANE_MAX_SOURCES_V1,
+        });
+        temporalSourceLaneStatus = lane.status;
+        if (lane.status === "selected") {
+          temporalSourceLaneSelectedSourceCount =
+            lane.certificate.selectedSources.length;
+        }
+        log("temporal_source_lane", {
+          queryHash: sha(queryText),
+          policyVersion: PAW_MEMORY_TEMPORAL_SOURCE_LANE_POLICY_V1,
+          sourceChannel: "source_span",
+          answerPathChanged: false,
+          queryCutoffHash: sha(queryTimeCutoff.normalizedIso).slice(0, 20),
+          status: lane.status,
+          candidateCount: candidates.length,
+          ...(lane.status === "selected"
+            ? {
+                sourceLockRevisionHash: sha(
+                  lane.certificate.sourceLockRevision,
+                ).slice(0, 20),
+                candidateSetRevisionHash: sha(
+                  lane.certificate.candidateSetRevision,
+                ).slice(0, 20),
+                selectedSourceCount: lane.certificate.selectedSources.length,
+                selectedSourceDocumentHashes:
+                  lane.certificate.selectedSources.map((source) =>
+                    sha(source.sourceId),
+                  ),
+              }
+            : { rejectedReason: lane.rejectedReason }),
+        });
+      } catch (error) {
+        temporalSourceLaneStatus = "failed_closed";
+        log("temporal_source_lane", {
+          queryHash: sha(queryText),
+          policyVersion: PAW_MEMORY_TEMPORAL_SOURCE_LANE_POLICY_V1,
+          sourceChannel: "source_span",
+          answerPathChanged: false,
+          status: "failed_closed",
+          errorType:
+            error instanceof Error && error.name.trim()
+              ? error.name
+              : "unknown_error",
+        });
+      }
+    }
     const searchResults = [...searchResultByText.values()];
     const l0Spans = searchResults.flatMap((result) => result.spans);
     const conversationSpans = searchResults.flatMap(
@@ -5509,6 +5599,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstFusedCandidateCount,
       evidenceFirstDualChannelCount,
       evidenceFirstSelectedSourceCount,
+      temporalSourceLaneStatus,
+      temporalSourceLaneCandidateCount,
+      temporalSourceLaneSelectedSourceCount,
       queryCutoffApplied: queryTimeCutoff !== undefined,
       queryCutoffHash:
         queryTimeCutoff === undefined
@@ -5642,6 +5735,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     evidenceFirstFusedCandidateCount,
     evidenceFirstDualChannelCount,
     evidenceFirstSelectedSourceCount,
+    temporalSourceLaneStatus,
+    temporalSourceLaneCandidateCount,
+    temporalSourceLaneSelectedSourceCount,
     queryCutoffApplied: queryTimeCutoff !== undefined,
     queryCutoffHash:
       queryTimeCutoff === undefined

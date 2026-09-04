@@ -177,6 +177,19 @@ export {
   type MemoryEvidenceResolutionV1,
 } from "./evidence-resolver.js";
 export {
+  PAW_MEMORY_TEMPORAL_SOURCE_LANE_MAX_CANDIDATES_V1,
+  PAW_MEMORY_TEMPORAL_SOURCE_LANE_MAX_SOURCES_V1,
+  PAW_MEMORY_TEMPORAL_SOURCE_LANE_POLICY_V1,
+  buildMemoryTemporalSourceLaneV1,
+  validateMemoryTemporalSourceLaneCertificateV1,
+  type MemoryTemporalSourceLaneBuildResultV1,
+  type MemoryTemporalSourceLaneCandidateV1,
+  type MemoryTemporalSourceLaneCertificateV1,
+  type MemoryTemporalSourceLaneRejectedReasonV1,
+  type MemoryTemporalSourceLaneRequestV1,
+  type MemoryTemporalSourceLaneSourceV1,
+} from "@paw/memory-core/temporal-source-lane-v1";
+export {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
   PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
   PAW_MEMORY_SOURCE_LOCAL_EVIDENCE_LOCATOR_PORT_VERSION_V1,

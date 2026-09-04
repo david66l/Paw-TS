@@ -46,6 +46,7 @@
     "./evidence-execution-coverage-v1": "./src/evidence-execution-coverage-v1.ts",
     "./evidence-reader-projection-v1": "./src/evidence-reader-projection-v1.ts",
     "./temporal-event-ledger-v1": "./src/temporal-event-ledger-v1.ts",
+    "./temporal-source-lane-v1": "./src/temporal-source-lane-v1.ts",
     "./state-observation-binder-v2": "./src/state-observation-binder-v2.ts",
     "./state-observation-verifier-v2": "./src/state-observation-verifier-v2.ts"
   },
