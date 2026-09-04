@@ -59,7 +59,7 @@ except ImportError:
     )
 
 
-SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v4"
+SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v5"
 PLANNER_SCHEMA_VERSION = "paw.temporal-event-planner.v1"
 BINDER_SCHEMA_VERSION = "paw.temporal-event-binder.v2"
 DETERMINISTIC_PLANNER_VERSION = "paw.temporal-question-compiler.v1"
@@ -678,6 +678,33 @@ def load_checkpoint(
     return rows
 
 
+def select_target_query_hmacs(
+    baseline_rows: list[dict[str, Any]], target_scope: str
+) -> tuple[set[str], set[str]]:
+    """Choose the frozen ledger cohort without consulting labels in ledger mode."""
+    ledger_hmacs = {
+        row["queryHmac"]
+        for row in baseline_rows
+        if isinstance(row.get("queryHmac"), str) and row["queryHmac"]
+    }
+    baseline_errors = {
+        row["queryHmac"]
+        for row in baseline_rows
+        if row.get("answerCorrect") is False
+        and isinstance(row.get("queryHmac"), str)
+        and row["queryHmac"]
+    }
+    if not ledger_hmacs:
+        raise ValueError("baseline ledger contains no query HMACs")
+    if target_scope == "baseline-errors":
+        if not baseline_errors:
+            raise ValueError("baseline ledger contains no errors")
+        return baseline_errors, baseline_errors
+    if target_scope == "ledger":
+        return ledger_hmacs, baseline_errors
+    raise ValueError("target scope is invalid")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, required=True)
@@ -688,6 +715,15 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--top-k", type=int, default=48)
+    parser.add_argument(
+        "--target-scope",
+        choices=("baseline-errors", "ledger"),
+        default="baseline-errors",
+        help=(
+            "Select historical errors for residual development, or every query "
+            "address in the frozen baseline ledger for regression measurement."
+        ),
+    )
     args = parser.parse_args()
     if not 1 <= args.top_k <= 128:
         raise ValueError("--top-k must be between 1 and 128")
@@ -772,18 +808,17 @@ def main() -> None:
     dataset = load_json(args.dataset)
     if not isinstance(dataset, list):
         raise ValueError("dataset is invalid")
-    baseline_errors = {
-        row["queryHmac"]
-        for row in iter_sealed_rows(args.baseline_ledger)
-        if row.get("answerCorrect") is False and isinstance(row.get("queryHmac"), str)
-    }
+    baseline_rows = list(iter_sealed_rows(args.baseline_ledger))
+    target_hmacs, baseline_errors = select_target_query_hmacs(
+        baseline_rows, args.target_scope
+    )
     dataset_by_hmac = {
         eval_hmac(required_string(item, "question_id"), key): item
         for item in dataset
         if isinstance(item, dict)
     }
-    if not baseline_errors or not baseline_errors.issubset(dataset_by_hmac):
-        raise ValueError("baseline errors cannot be bound to the pinned dataset")
+    if not target_hmacs.issubset(dataset_by_hmac):
+        raise ValueError("target ledger rows cannot be bound to the pinned dataset")
     source_boundary = (
         "first_retrieve_event_frozen_source_lock"
         if args.retrieval_log
@@ -851,17 +886,18 @@ def main() -> None:
     run_policy = {
         "candidatePolicy": candidate_policy,
         "modelPolicy": model_policy,
-        "targetQueryHmacs": sorted(baseline_errors),
+        "targetScope": args.target_scope,
+        "targetQueryHmacs": sorted(target_hmacs),
     }
     checkpoint_path = args.checkpoint or args.output.with_suffix(
         args.output.suffix + ".checkpoint.json"
     )
-    result_rows = load_checkpoint(checkpoint_path, run_policy, baseline_errors)
+    result_rows = load_checkpoint(checkpoint_path, run_policy, target_hmacs)
     completed = {str(row["queryHmac"]) for row in result_rows}
 
-    for index, query_hmac in enumerate(sorted(baseline_errors), start=1):
+    for index, query_hmac in enumerate(sorted(target_hmacs), start=1):
         if query_hmac in completed:
-            print(f"resumed {index}/{len(baseline_errors)}", flush=True)
+            print(f"resumed {index}/{len(target_hmacs)}", flush=True)
             continue
         item = dataset_by_hmac[query_hmac]
         question = required_string(item, "question")
@@ -1125,7 +1161,7 @@ def main() -> None:
         )
         completed.add(query_hmac)
         save_checkpoint(checkpoint_path, run_policy, result_rows)
-        print(f"completed {index}/{len(baseline_errors)}", flush=True)
+        print(f"completed {index}/{len(target_hmacs)}", flush=True)
 
     result_rows.sort(key=lambda row: str(row["queryHmac"]))
     packet_sizes = sorted(int(row["selectedCandidateCount"]) for row in result_rows)
@@ -1170,7 +1206,10 @@ def main() -> None:
         },
         "rows": result_rows,
         "metrics": {
-            "baselineErrorCount": len(result_rows),
+            "targetCount": len(result_rows),
+            "baselineErrorCount": sum(
+                row["queryHmac"] in baseline_errors for row in result_rows
+            ),
             "rankedEndpointCoverageCompleteCount": sum(
                 row["rankedEndpointCoverageComplete"] for row in result_rows
             ),

@@ -9,6 +9,7 @@ from temporal_event_slot_shadow import (
     compile_plan,
     directional_slots,
     intersect_event_packet_bindings,
+    select_target_query_hmacs,
     validate_binding,
     validate_event_packet_binding,
     validate_event_packet_proposal,
@@ -31,6 +32,31 @@ def candidates(count: int) -> list[TurnCandidate]:
 
 
 class TemporalEventSlotShadowTest(unittest.TestCase):
+    def test_ledger_target_scope_does_not_filter_on_answer_correctness(self) -> None:
+        rows = [
+            {"queryHmac": "a", "answerCorrect": True},
+            {"queryHmac": "b", "answerCorrect": False},
+            {"queryHmac": "c"},
+        ]
+
+        targets, historical_errors = select_target_query_hmacs(rows, "ledger")
+
+        self.assertEqual({"a", "b", "c"}, targets)
+        self.assertEqual({"b"}, historical_errors)
+
+    def test_error_target_scope_retains_residual_development_mode(self) -> None:
+        rows = [
+            {"queryHmac": "a", "answerCorrect": True},
+            {"queryHmac": "b", "answerCorrect": False},
+        ]
+
+        targets, historical_errors = select_target_query_hmacs(
+            rows, "baseline-errors"
+        )
+
+        self.assertEqual({"b"}, targets)
+        self.assertEqual({"b"}, historical_errors)
+
     def test_deterministic_planner_compiles_two_event_since_when_interval(self) -> None:
         plan = compile_question_plan(
             "How many weeks had passed since I recovered from the flu when I went on my 10th jog outdoors?"
