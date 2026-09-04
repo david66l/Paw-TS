@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   type AmbDialogueMaterializationAuthorizedItemV1,
+  canonicalAmbDialogueEvidenceRefV1,
   canonicalizeAmbDialogueAuthorizationV1,
 } from "./dialogue-materialization-authorization.js";
-import { logicalSourceLocalEvidenceRefV1 } from "./immutable-evidence-address.js";
 
 function item(
   overrides: Partial<AmbDialogueMaterializationAuthorizedItemV1> = {},
@@ -45,7 +45,7 @@ describe("AMB dialogue materialization authorization", () => {
       [physical, logical].map((evidenceRef) =>
         item({
           evidenceRef:
-            logicalSourceLocalEvidenceRefV1(evidenceRef) ?? evidenceRef,
+            canonicalAmbDialogueEvidenceRefV1(evidenceRef) ?? evidenceRef,
         }),
       ),
     );
@@ -53,6 +53,18 @@ describe("AMB dialogue materialization authorization", () => {
     expect(canonical.status).toBe("completed");
     expect(canonical.items).toEqual([item()]);
     expect(canonical.duplicateCount).toBe(1);
+  });
+
+  test("keeps only exact source-local address families canonicalizable", () => {
+    expect(
+      canonicalAmbDialogueEvidenceRefV1("amb:document/session#atom-2"),
+    ).toBe("session#source-2");
+    expect(canonicalAmbDialogueEvidenceRefV1("session#source-2")).toBe(
+      "session#source-2",
+    );
+    expect(canonicalAmbDialogueEvidenceRefV1("session#source-2-tail")).toBe(
+      undefined,
+    );
   });
 
   test("fails the whole authorization on any same-ref semantic conflict", () => {

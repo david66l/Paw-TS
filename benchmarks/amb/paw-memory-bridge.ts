@@ -130,6 +130,7 @@ import {
 } from "./atom-ingest-control.js";
 import {
   type AmbDialogueMaterializationAuthorizedItemV1,
+  canonicalAmbDialogueEvidenceRefV1,
   canonicalizeAmbDialogueAuthorizationV1,
 } from "./dialogue-materialization-authorization.js";
 import {
@@ -4478,13 +4479,17 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           : new Set<"assistant_report" | "shared_dialogue_artifact">();
     const committedDialogueBindings = new Set(
       resolution.supportAssessments.flatMap((assessment) =>
-        (assessment.evidenceDispositions ?? []).flatMap((disposition) =>
-          disposition.disposition === "supporting" &&
-          (disposition.evidenceUse === "assistant_report" ||
-            disposition.evidenceUse === "shared_dialogue_artifact")
-            ? [`${disposition.evidenceRef}\0${disposition.evidenceUse}`]
-            : [],
-        ),
+        (assessment.evidenceDispositions ?? []).flatMap((disposition) => {
+          const canonicalRef = canonicalAmbDialogueEvidenceRefV1(
+            disposition.evidenceRef,
+          );
+          return disposition.disposition === "supporting" &&
+            canonicalRef !== undefined &&
+            (disposition.evidenceUse === "assistant_report" ||
+              disposition.evidenceUse === "shared_dialogue_artifact")
+            ? [`${canonicalRef}\0${disposition.evidenceUse}`]
+            : [];
+        }),
       ),
     );
     let dialogueAuthorizedItems: readonly AmbDialogueMaterializationAuthorizedItemV1[] =
@@ -4503,22 +4508,20 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
               evidenceFirstDialogueOriginFilteredBindingCounts.sharedDialogueArtifact += 1;
             return [];
           }
-          if (
-            !committedDialogueBindings.has(
-              `${binding.evidenceRef}\0${binding.evidenceUse}`,
-            )
-          ) {
-            evidenceFirstDialogueUncommittedBindingCount += 1;
-            return [];
-          }
-          const logicalRef =
-            logicalSourceLocalEvidenceRefV1(binding.evidenceRef) ??
-            (/^[^#]+#source-\d+$/u.test(binding.evidenceRef)
-              ? binding.evidenceRef
-              : undefined);
+          const logicalRef = canonicalAmbDialogueEvidenceRefV1(
+            binding.evidenceRef,
+          );
           const match = /^(.+)#source-(\d+)$/u.exec(logicalRef ?? "");
           if (!match?.[1] || match[1] !== source.sourceId || !match[2]) {
             evidenceFirstDialogueUnparseableBindingCount += 1;
+            return [];
+          }
+          if (
+            !committedDialogueBindings.has(
+              `${logicalRef}\0${binding.evidenceUse}`,
+            )
+          ) {
+            evidenceFirstDialogueUncommittedBindingCount += 1;
             return [];
           }
           return [
@@ -4549,18 +4552,37 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ) {
           continue;
         }
-        const key = `${disposition.evidenceRef}\0${disposition.evidenceUse}`;
+        const parentRef = canonicalAmbDialogueEvidenceRefV1(
+          disposition.evidenceRef,
+        );
+        if (!parentRef) continue;
+        const key = `${parentRef}\0${disposition.evidenceUse}`;
         const contexts = supportingDialogueContextsByParent.get(key) ?? [];
-        contexts.push(new Set(disposition.contextEvidenceRefs));
+        contexts.push(
+          new Set(
+            disposition.contextEvidenceRefs.flatMap((evidenceRef) => {
+              const canonicalRef =
+                canonicalAmbDialogueEvidenceRefV1(evidenceRef);
+              return canonicalRef ? [canonicalRef] : [];
+            }),
+          ),
+        );
         supportingDialogueContextsByParent.set(key, contexts);
       }
     }
     let authorizedPairContext = resolution.authorizedPairContext.flatMap(
       (pair) => {
+        const assistantEvidenceRef = canonicalAmbDialogueEvidenceRefV1(
+          pair.assistantEvidenceRef,
+        );
+        const predecessorEvidenceRef = canonicalAmbDialogueEvidenceRefV1(
+          pair.predecessorEvidenceRef,
+        );
+        if (!assistantEvidenceRef || !predecessorEvidenceRef) return [];
         const parent = dialogueAuthorizedItems.find(
           (item) =>
             item.sourceId === pair.sourceId &&
-            item.evidenceRef === pair.assistantEvidenceRef,
+            item.evidenceRef === assistantEvidenceRef,
         );
         const contexts = parent
           ? supportingDialogueContextsByParent.get(
@@ -4574,29 +4596,40 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           !parent ||
           !contexts?.some(
             (context) =>
-              context.has(pair.assistantEvidenceRef) &&
-              context.has(pair.predecessorEvidenceRef),
+              context.has(assistantEvidenceRef) &&
+              context.has(predecessorEvidenceRef),
           )
         ) {
           return [];
         }
-        return [pair];
+        return [
+          Object.freeze({
+            ...pair,
+            assistantEvidenceRef,
+            predecessorEvidenceRef,
+          }),
+        ];
       },
     );
     const assistantSupportingBindingKeys = new Set(
       resolution.supportAssessments.flatMap((assessment) =>
-        (assessment.evidenceDispositions ?? []).flatMap((disposition) =>
-          disposition.disposition === "supporting" &&
-          disposition.resolvedRole === "assistant" &&
-          (disposition.evidenceUse === "assistant_report" ||
-            disposition.evidenceUse === "shared_dialogue_artifact")
-            ? [`${disposition.evidenceRef}\0${disposition.evidenceUse}`]
-            : [],
-        ),
+        (assessment.evidenceDispositions ?? []).flatMap((disposition) => {
+          const canonicalRef = canonicalAmbDialogueEvidenceRefV1(
+            disposition.evidenceRef,
+          );
+          return disposition.disposition === "supporting" &&
+            disposition.resolvedRole === "assistant" &&
+            canonicalRef !== undefined &&
+            (disposition.evidenceUse === "assistant_report" ||
+              disposition.evidenceUse === "shared_dialogue_artifact")
+            ? [`${canonicalRef}\0${disposition.evidenceUse}`]
+            : [];
+        }),
       ),
     );
     const assistantParentRefs = new Set(
       dialogueAuthorizedItems.flatMap((item) =>
+        item.evidenceUse === "assistant_report" ||
         assistantSupportingBindingKeys.has(
           `${item.evidenceRef}\0${item.evidenceUse}`,
         )

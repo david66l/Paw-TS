@@ -13,6 +13,15 @@ export interface AmbCanonicalDialogueAuthorizationV1 {
   readonly conflictCount: number;
 }
 
+export function canonicalAmbDialogueEvidenceRefV1(
+  evidenceRef: string,
+): string | undefined {
+  return (
+    logicalSourceLocalEvidenceRefV1(evidenceRef) ??
+    (/^[^#]+#source-\d+$/u.test(evidenceRef) ? evidenceRef : undefined)
+  );
+}
+
 /**
  * Canonicalizes the already-validated final-packet authorization projection.
  * Exact duplicates may arise when multiple requirements commit the same
@@ -65,3 +74,4 @@ function sameAuthorizationItem(
     left.allowedModes[0] === right.allowedModes[0]
   );
 }
+import { logicalSourceLocalEvidenceRefV1 } from "./immutable-evidence-address.js";
