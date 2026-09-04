@@ -1046,3 +1046,12 @@ Artifacts:
 - V24 的同题反事实显示，aggregate 路线平均 notebook hits 从 2.13 增至 4.08、12 题拿到超过 4 条证据，但正确数仍是 34/38；因此不再把扩大 context 当作默认优化方向。V25 使用 V24 内容寻址缓存做精确配对开发门禁，107/120 个未受影响答案直接复用，13 个真实重算题由 9/13 提升到 10/13，形成 1 胜 0 负；整体 100/120 只作配对诊断，仍等待独立冷跑确认。
 - full500 的角色反事实发现，明确 assistant 角色的旧题为 18/20，而角色被解析为 `any` 的 assistant recall 仅 4/27；V21/V23 已在当前 dev120 将 `any` assistant cohort 提升到 8/10，但仍有三道 assistant 题因 possessive user object 被锁在 user-only 通道且 0/3。根因是旧分类器把“对象属于用户”和“内容由用户说出”混为同一 provenance。
 - V27 不增加记忆层、索引或模型调用：角色仍保持 user authority，只把带 prior-dialogue 线索且没有 nominative user subject 的 possessive artifact 打开到现有 certificate-gated assistant candidate aperture；只有 source-local locator、immutable hydrator 和 selector 均完成后，未解决的 exact ref 才能作为 candidate 保留，selector 失败继续关闭。memory-core 94 pass / 0 fail / 422 expectations，Python AMB 17 pass；准确率门禁尚未运行，不声明提分。
+
+### M12：多会话证据集执行器与 85% 门禁
+
+- 固定 V26 检索来源锁后，多会话综合历史成绩为 99/133=74.44%。其中 source hit 已为 119/121=98.35%，而 34 道错题里有 23 道已经召回完整 gold source；继续扩大检索不是主瓶颈，主要损失发生在跨会话成员穷举、实体/事件 join、时界过滤和最终算术。
+- 新增 query-only `SetPlan`，把多会话问题编译为 `count_members`、`sum_values`、`difference`、`average`、`ratio_percent`、`argmax/min`、`collect_unique` 或 `lookup`，并显式携带成员类型、计数口径、单位和时态模式。读取层只水合冻结来源锁内的精确 user turns，按会话时间与轮次排序，使用短证据地址；不开放检索扩张、rerank 或 memory tools。
+- 直接证据集执行器要求先从全部会话形成完整成员集，再去重、过滤与计算；跨会话关系由问题充当 join contract。紧凑证据包平均 11,858.55 字符，原始用户上下文平均 10,639.20 字符；133 题均使用相同冻结来源锁，模型为 `deepseek:glm-5.3-flash`、temperature 0、thinking max、`memoryToolsBound=false`。
+- V3 全量达到 112/133=84.21%。剩余错误显示全局追加边界说明会修复部分 join/弃答题，但也会扰动无关计数题，因此没有晋级全局 prompt。V5 改为 query-bound 路由：只在问题明确出现 before、last week、到达时间、提交日期或教育阶段时附加对应边界语义；普通问题保持 V3 prompt 字节不变。计数结果为 0 时采用通用 fail-closed：证据未枚举到成员不等于已证明真实零。
+- 同一模型、相同 133 题与相同 evidence packet 的 V3→V5 精确配对结果为 3 胜、0 负，最终 **115/133=86.47%**，通过 85% 门禁。V5 中 120/133 次答案与裁判调用复用 V3 内容寻址缓存，只有 13 次远程重算；因此该成绩不是从多轮结果中逐题挑选，而是一次固定路由策略的完整运行。三道新增正确分别来自 appointment join、教育阶段隔离和 zero-count fail-closed。
+- 六个分片合并后验证 133 个唯一 query HMAC、无重复、单一模型、零 memory tool；合并产物位于云端 `runs/paw-multi-evidence-v54-f847879/full-v5-hybrid-combined.json`，SHA-256 为 `8d7adf503a913c3450da446a5279626cfb81d957e3b13835bdd2bee065ee89d4`。实现提交为 `21e956e`；历史 99/133 与当前运行的模型版本不同，只报告绝对分数变化，不把它冒充同模型 A/B。
