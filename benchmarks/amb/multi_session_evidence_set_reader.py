@@ -54,13 +54,22 @@ EXECUTION_PROTOCOL = """MULTI_SESSION_EVIDENCE_SET_PROTOCOL
 Every SxxTxx address below is immutable user-authored evidence. Scan every
 session before concluding. Build the complete set of facts matching the query's
 entity, relation, time window, and status. Merge only repeated mentions of the
-same real event; do not merge distinct events merely because their type is the
-same. A newer statement supersedes an older one only for the same entity and
-attribute. Keep planned, completed, cancelled, returned, and active states
-distinct. Filter by event time before arithmetic; a session timestamp is not an
-event date unless the statement makes it so. Normalize compatible units, then
-count, sum, compare, or select latest. Make a second pass over all sessions. If
-the locked evidence cannot support the result, return insufficient, never a
+same real event and action; do not merge distinct events merely because their
+entity or type is the same. Member identity includes entity, action/state, and
+time, so returning an old item and picking up its replacement are distinct
+obligations. A newer statement supersedes an older one only for the same entity
+and attribute. Keep planned, completed, cancelled, returned, and active states
+distinct.
+
+The question is the join and aggregation contract. When separate sessions give
+unique, compatible facts for the entities or operands named by the question,
+join them; do not demand that one sentence restate the cross-session relation.
+For relative ranges, anchor the range at the query cutoff and use a session
+timestamp as the event time when the statement gives no more specific date.
+Filter before arithmetic and normalize compatible units. Evidence of acquiring
+or possessing an item can support an acquisition count unless contradicted.
+Count, sum, compare, or select latest only after a second scan of every session.
+If a required operand is absent or conflicts, return insufficient, never a
 guess."""
 
 

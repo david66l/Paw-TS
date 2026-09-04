@@ -180,7 +180,7 @@ def compile_set_plan(question: str) -> SetPlan | None:
     if re.search(r"\b(?:percentage|percent|ratio)\b|%|\bwhat portion\b", text):
         operator, arity, minimum = Operator.RATIO_PERCENT, 2, 2
     elif re.search(
-        r"\b(?:difference between|how much (?:more|less)|how many (?:more|fewer)|older|younger|earlier|later|faster|slower|left to|need to earn|did it take|have i been|exceed(?:ed)?|save by|saved on|subtract)\b",
+        r"\b(?:difference between|how much (?:more|less)|how many (?:more|fewer)|increase|decrease|older|younger|earlier|later|faster|slower|left to|need to earn|did it take|have i been|exceed(?:ed)?|save by|saved on|subtract)\b",
         text,
     ):
         operator, arity, minimum = Operator.DIFFERENCE, 2, 2

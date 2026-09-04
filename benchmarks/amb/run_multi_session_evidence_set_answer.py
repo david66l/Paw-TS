@@ -129,9 +129,10 @@ SET_PLAN: {plan_json}
 Return one structured extraction. The operator must exactly match SET_PLAN. Use only SxxTxx evidence IDs present in the packet. Scan every session before returning complete.
 
 Member rules:
-- One member is one real entity, event, or numeric observation, not one mention. Merge repeated mentions of the same event into one member and cite every supporting evidence ID.
+- One member is one real entity, event/action, or numeric observation, not one mention. Merge repeated mentions only when entity, action/state, and event identity match; the same item may have distinct return and pickup obligations. Cite every supporting evidence ID.
 - Keep distinct real events as distinct members even if their names or types match.
-- Apply the query's entity, time window, state, and completion constraints before including members. Do not count planned or cancelled events when the question requires completed events.
+- Apply the query's entity, time window, state, and completion constraints before including members. For relative windows, anchor at the query cutoff and use session time if the statement has no more specific event time. Do not count planned or cancelled events when the question requires completed events.
+- Treat the question as the join contract: join unique compatible facts from separate sessions when they supply its named entities or operands; one sentence need not restate the cross-session relation. Acquisition or possession evidence can support an acquisition count unless contradicted.
 - For count_members with enumerated_members, value and unit are null. For stated_cardinality, give each supported numeric subtotal and one common normalized unit.
 - For sum_values, average, argmax, and argmin, give every included member a numeric value and one common normalized unit. Convert minutes/hours and other compatible units to the requested unit first.
 - For difference and ratio_percent, return exactly two members: disposition left is the requested minuend/numerator and disposition right is the subtrahend/denominator.
@@ -154,10 +155,13 @@ def judge_values(item: dict[str, Any]) -> tuple[list[str], str, bool]:
     accepted = item.get("answer")
     question_type = item.get("question_type")
     question_id = required_string(item, "question_id")
-    if isinstance(accepted, str):
-        answers = [accepted]
-    elif isinstance(accepted, list) and all(isinstance(value, str) for value in accepted):
-        answers = accepted
+    if isinstance(accepted, (str, int, float)) and not isinstance(accepted, bool):
+        answers = [str(accepted)]
+    elif isinstance(accepted, list) and all(
+        isinstance(value, (str, int, float)) and not isinstance(value, bool)
+        for value in accepted
+    ):
+        answers = [str(value) for value in accepted]
     else:
         raise ValueError("judge answers are invalid")
     if not isinstance(question_type, str):
