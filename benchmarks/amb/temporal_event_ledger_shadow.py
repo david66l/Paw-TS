@@ -137,19 +137,17 @@ def timestamp(value: str) -> str | None:
 def enumerate_locked_user_turns(
     item: dict[str, Any], returned_document_hashes: set[str]
 ) -> list[TurnCandidate]:
-    question_id = required_string(item, "question_id")
     sessions = item.get("haystack_sessions")
     session_ids = item.get("haystack_session_ids")
     dates = item.get("haystack_dates")
     if not isinstance(sessions, list) or not isinstance(session_ids, list) or not isinstance(dates, list):
         raise ValueError("LongMemEval history is invalid")
     candidates: list[TurnCandidate] = []
-    for session_order, (session_id, date, turns) in enumerate(
-        zip(session_ids, dates, sessions), start=1
+    for session_order, (source_id, date, turns) in enumerate(
+        canonical_session_sources(item), start=1
     ):
-        if not isinstance(session_id, str) or not isinstance(date, str) or not isinstance(turns, list):
+        if not isinstance(date, str) or not isinstance(turns, list):
             raise ValueError("LongMemEval session is invalid")
-        source_id = f"{question_id}_{session_id}"
         if sha256_text(source_id) not in returned_document_hashes:
             continue
         session_timestamp = timestamp(date)
@@ -175,6 +173,47 @@ def enumerate_locked_user_turns(
                 )
             )
     return candidates
+
+
+def canonical_session_sources(item: dict[str, Any]) -> list[tuple[str, str, list[Any]]]:
+    """Mirror the runner's collision-free physical source-ID policy."""
+
+    question_id = required_string(item, "question_id")
+    sessions = item.get("haystack_sessions")
+    session_ids = item.get("haystack_session_ids")
+    dates = item.get("haystack_dates")
+    if not isinstance(sessions, list) or not isinstance(session_ids, list) or not isinstance(dates, list):
+        raise ValueError("LongMemEval history is invalid")
+    entries = list(zip(session_ids, dates, sessions))
+    if any(not isinstance(session_id, str) for session_id, _, _ in entries):
+        raise ValueError("LongMemEval session ID is invalid")
+    totals = Counter(session_id for session_id, _, _ in entries)
+    occurrences: Counter[str] = Counter()
+    output: list[tuple[str, str, list[Any]]] = []
+    for session_id, date, turns in entries:
+        if not isinstance(session_id, str) or not isinstance(date, str) or not isinstance(turns, list):
+            raise ValueError("LongMemEval session is invalid")
+        occurrences[session_id] += 1
+        suffix = (
+            f"~occurrence-{occurrences[session_id]}"
+            if totals[session_id] > 1
+            else ""
+        )
+        output.append((f"{question_id}_{session_id}{suffix}", date, turns))
+    return output
+
+
+def answer_user_evidence_refs(item: dict[str, Any]) -> set[str]:
+    refs: set[str] = set()
+    for source_id, _, turns in canonical_session_sources(item):
+        for turn_order, turn in enumerate(turns, start=1):
+            if (
+                isinstance(turn, dict)
+                and str(turn.get("role", "")).strip().lower() == "user"
+                and turn.get("has_answer") is True
+            ):
+                refs.add(f"{source_id}#turn-{turn_order}")
+    return refs
 
 
 def tokenize(value: str) -> list[str]:
@@ -266,7 +305,7 @@ def chat_completion(prompt: str, model: str, base_url: str, api_key: str) -> tup
             {"role": "user", "content": prompt},
         ],
         "temperature": 0,
-        "max_tokens": 1_200,
+        "max_tokens": 2_048,
         "response_format": {"type": "json_object"},
     }
     request = urllib.request.Request(
@@ -429,7 +468,7 @@ def main() -> None:
             selector_prompt(question, cutoff, ranked), model, base_url, api_key
         )
         certified, selected, certificate_status = validate_selection(proposal, ranked, cutoff)
-        gold_refs = {candidate.evidence_ref for candidate in locked if candidate.has_answer}
+        gold_refs = answer_user_evidence_refs(item)
         ranked_refs = {candidate.evidence_ref for candidate in ranked}
         selected_refs = {candidate.evidence_ref for candidate in selected}
         result_rows.append(
