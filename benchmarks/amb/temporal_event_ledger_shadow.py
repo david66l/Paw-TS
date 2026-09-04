@@ -356,7 +356,9 @@ Candidates:
 {rendered if rendered else '[No candidates]'}"""
 
 
-def chat_completion(prompt: str, model: str, base_url: str, api_key: str) -> tuple[dict[str, Any] | None, str]:
+def chat_completion(
+    prompt: str, model: str, base_url: str, api_key: str, max_tokens: int
+) -> tuple[dict[str, Any] | None, str]:
     payload = {
         "model": model,
         "messages": [
@@ -367,7 +369,7 @@ def chat_completion(prompt: str, model: str, base_url: str, api_key: str) -> tup
             {"role": "user", "content": prompt},
         ],
         "temperature": 0,
-        "max_tokens": 2_048,
+        "max_tokens": max_tokens,
         "response_format": {"type": "json_object"},
     }
     request = urllib.request.Request(
@@ -499,6 +501,14 @@ def main() -> None:
         raise ValueError("--top-k must be between 1 and 128")
     if bool(args.retrieval_log) == bool(args.temporal_source_lane_log):
         raise ValueError("provide exactly one source-lock log")
+    try:
+        selector_max_tokens = int(
+            os.environ.get("PAW_AMB_TEMPORAL_SELECTOR_MAX_TOKENS", "2048")
+        )
+    except ValueError as error:
+        raise ValueError("temporal selector token budget is invalid") from error
+    if not 256 <= selector_max_tokens <= 4096:
+        raise ValueError("temporal selector token budget must be between 256 and 4096")
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
@@ -551,7 +561,11 @@ def main() -> None:
         locked = enumerate_locked_user_turns(item, source_hashes)
         ranked = rank_bm25(question, locked, args.top_k)
         proposal, response_hash = chat_completion(
-            selector_prompt(question, cutoff, ranked), model, base_url, api_key
+            selector_prompt(question, cutoff, ranked),
+            model,
+            base_url,
+            api_key,
+            selector_max_tokens,
         )
         certified, selected, certificate_status = validate_selection(proposal, ranked, cutoff)
         gold_refs = answer_user_evidence_refs(item)
@@ -602,7 +616,11 @@ def main() -> None:
             "queryCutoffRequired": True,
             "readerInjection": False,
         },
-        "selectorPolicy": {"schemaVersion": SELECTOR_SCHEMA_VERSION, "model": model},
+        "selectorPolicy": {
+            "schemaVersion": SELECTOR_SCHEMA_VERSION,
+            "model": model,
+            "maxCompletionTokens": selector_max_tokens,
+        },
         "rows": result_rows,
         "metrics": {
             "baselineErrorCount": len(result_rows),
