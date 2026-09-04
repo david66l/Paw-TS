@@ -9,6 +9,7 @@ consulted for diagnostic coverage metrics.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -59,7 +60,7 @@ except ImportError:
     )
 
 
-SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v6"
+SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v7"
 PLANNER_SCHEMA_VERSION = "paw.temporal-event-planner.v1"
 BINDER_SCHEMA_VERSION = "paw.temporal-event-binder.v2"
 DETERMINISTIC_PLANNER_VERSION = "paw.temporal-question-compiler.v1"
@@ -676,6 +677,14 @@ def bounded_integer(name: str, default: int, minimum: int, maximum: int) -> int:
     return value
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def save_checkpoint(path: Path, policy: dict[str, Any], rows: list[dict[str, Any]]) -> None:
     payload = {
         "schemaVersion": f"{SCHEMA_VERSION}:checkpoint",
@@ -921,6 +930,16 @@ def main() -> None:
     run_policy = {
         "candidatePolicy": candidate_policy,
         "modelPolicy": model_policy,
+        "artifactPolicy": {
+            "datasetSha256": sha256_file(args.dataset),
+            "baselineLedgerSha256s": sorted(
+                sha256_file(path) for path in args.baseline_ledger
+            ),
+            "sourceLockLogSha256s": sorted(
+                sha256_file(path)
+                for path in (args.retrieval_log or args.temporal_source_lane_log)
+            ),
+        },
         "targetScope": args.target_scope,
         "targetQueryHmacs": sorted(target_hmacs),
     }
@@ -1132,8 +1151,18 @@ def main() -> None:
             {
                 "queryHmac": query_hmac,
                 "questionType": item.get("question_type"),
+                "queryCutoffHash": sha256_text(cutoff),
+                "sourceLockRevisionHash": sha256_text(
+                    json.dumps(sorted(source_hashes), separators=(",", ":"))
+                ),
                 "lockedUserTurnCount": len(locked),
                 "rankedCandidateCount": len(ranked),
+                "rankedCandidateSetRevisionHash": sha256_text(
+                    json.dumps(
+                        [candidate.evidence_ref for candidate in ranked],
+                        separators=(",", ":"),
+                    )
+                ),
                 "goldUserEndpointCount": len(gold_refs),
                 "rankedEndpointCoverageComplete": bool(gold_refs)
                 and gold_refs.issubset(ranked_refs),
