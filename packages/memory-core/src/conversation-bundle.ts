@@ -18,7 +18,7 @@ export function isAssistantMemoryQueryV1(query: string): boolean {
   const normalized = query.trim().replace(/\s+/gu, " ");
   if (!normalized || normalized.length > 512) return false;
   const explicitAssistantAction =
-    /\b(?:what|which|how)\b.{0,80}\b(?:did|have)\s+you\b|\b(?:you|your)\s+(?:said|told|recommended|suggested|wrote|created|generated|showed|booked|scheduled|provided|listed|gave|produced|composed|answered|mentioned|shared|replied|responded|came\s+up\s+with)\b|(?:你(?:之前|上次|此前)?|(?:之前|上次|此前)你)(?:说|告诉|推荐|建议|写|创建|生成|展示|提供|列出|给出|回答|回复|提到|分享|预订|安排)(?:了|过|的)?/iu.test(
+    /\b(?:what|which|how)\b.{0,80}\b(?:did|have)\s+you\b|\byou\s+(?:said|told|recommended|suggested|wrote|created|generated|showed|booked|scheduled|provided|listed|gave|produced|composed|answered|mentioned|shared|replied|responded|made|performed|played|chose|selected|used|came\s+up\s+with)\b|\byour\s+(?:response|answer|reply|message|recommendation|suggestion|draft|list|plan|move|choice|selection)\b|(?:你(?:之前|上次|此前)?|(?:之前|上次|此前)你)(?:说|告诉|推荐|建议|写|创建|生成|展示|提供|列出|给出|回答|回复|提到|分享|预订|安排)(?:了|过|的)?/iu.test(
       normalized,
     );
   const explicitPriorResponse =

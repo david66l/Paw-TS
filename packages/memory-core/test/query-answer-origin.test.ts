@@ -57,6 +57,11 @@ describe("typed immutable query answer origin v1", () => {
         "Can you remember what you recommended earlier?",
       ).originKind,
     ).toBe("explicit_assistant");
+    expect(
+      compileMemoryQueryAnswerOriginV1(
+        "Looking back at our previous game, what was the move you made after my last move?",
+      ).originKind,
+    ).toBe("explicit_assistant");
   });
 
   test("treats a plan as a proposal and rejects unauthorized role widening", () => {
