@@ -449,3 +449,73 @@ slice (133 questions) as a comparable treatment.
   The next shadow therefore records hashes for the exact source-span anchors
   that admitted each source and tests anchor-led local expansion before calling
   the temporal selector.
+
+## v55-v65 temporal candidate and selector development
+
+- V55 materialized the approved, answer-free temporal source lane as a frozen
+  retrieval log. All later selector experiments consume this same source lock;
+  they do not widen or reorder the reader's ordinary notebook.
+- The generic exact-turn candidate ranker remains too broad. At top 64 it
+  contains every labeled supporting turn for 17/21 residual rows, but the first
+  V56 DeepSeek selector produced no valid certificates at a 2,048-token bound.
+  V57's larger bound exposed incomplete HTTP-status handling, and V58 then
+  established that the configured DeepSeek account returns HTTP 402. These are
+  provider/workflow failures, not negative evidence about the memory design.
+- GLM capability negotiation was made explicit after V59 proved that the
+  selected model rejects disabled thinking. V60 was stopped after partial
+  responses showed that merely omitting the setting did not provide a stable
+  structured-output contract. Subsequent runs use bounded enabled thinking and
+  deterministic sampling.
+- Selector V1 at low reasoning (V61) formed certificates on 8/21 rows and chose
+  all labeled turns on 5/21. V2 separated the temporal operation from candidate
+  identifiers: low reasoning (V62) reached 10 certificates and 5 complete
+  selections; high reasoning (V63) reached 13 and 7. This supports typed
+  execution, but a single flat evidence list still confuses event identity with
+  evidence cardinality.
+- A pinned local cross-encoder was added only inside this shadow candidate lane.
+  RRF top 16 with low reasoning (V64) exposed 11 candidate-complete rows, formed
+  10 certificates, and selected all labeled turns on 5. RRF top 48 with high
+  reasoning (V65) exposed 16 candidate-complete rows, formed 15 certificates,
+  and selected all labeled turns on 7. Candidate reachability is no longer the
+  dominant error; structured binding is.
+
+## v66-v68 typed event-slot gate
+
+- V66 replaces the flat evidence-count contract with a question-only temporal
+  planner and a separate source-locked binder. The planner freezes typed
+  operations and logical event slots. Each ordinary event slot may bind one
+  primary turn plus at most three supporting turns; collection slots have a
+  separately bounded set. Host validation binds query, cutoff, candidate set,
+  slot roles, and certificate before any selection is counted.
+- The complete 21-row V66 shadow exposed all labeled turns in 16 rows, planned
+  all 21, formed 16 certificates, and selected every labeled turn in **10/21**.
+  Mean selected context was 2.81 turns. This is the best content-free selector
+  gate so far and confirms that one logical event can require multiple evidence
+  turns.
+- V67 repeated the same policy across four concurrent query shards. It planned
+  20 rows, formed 14 certificates, and selected every labeled turn in 8/21.
+  V66 and V67 overlap on only six complete selections but cover 12 in union;
+  certificate union is 16. The service therefore remains nondeterministic even
+  with greedy sampling, so a single binder call is not a stable production
+  boundary.
+- V68 freezes one plan, runs two binders concurrently over the identical
+  candidate set, validates each result independently, and unions only evidence
+  from certified bindings in original rank order. Parallelism bounds wall-clock
+  cost, while the host-side union cannot admit an uncertified selector output.
+  This remains a shadow gate: it changes no answer, and its result cannot be
+  reported as temporal accuracy until a sealed 133-row treatment is run.
+- The completed V68 run did **not** pass that gate. It again exposed all labeled
+  turns in 16/21 rows, planned 20, formed at least one address-valid binding in
+  15, and selected every labeled turn in **8/21**, with a mean of 2.00 selected
+  turns. Twelve rows had two accepted replicas, but V68 added no new complete
+  row beyond the V66/V67 union. Different response hashes therefore do not
+  imply independent semantic errors; the committee is correlated and its union
+  is rejected as an answer-path design.
+- Row-level inspection identifies representation failures rather than a need
+  for more replicas: `elapsed_since` is incorrectly constrained to one logical
+  event even when the question names both an interval start and end; lookup
+  slots do not require separate event-identity, temporal-anchor, and requested-
+  attribute coverage; and one stochastic planner failure still removes an
+  otherwise candidate-complete latest-state row. The next gate must compile the
+  temporal operator deterministically and bind a bounded evidence packet per
+  event/facet. No V68 reader injection or 133-row answer treatment is authorized.
