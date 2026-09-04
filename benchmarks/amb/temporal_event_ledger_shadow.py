@@ -378,11 +378,14 @@ def chat_completion(
         "response_format": {"type": "json_object"},
     }
     # Endpoint selection is a bounded classification task. Providers that
-    # expose a thinking control should disable it so the completion budget is
-    # spent on the JSON decision. Strict OpenAI-compatible providers reject
-    # this extension, so capability negotiation may explicitly omit it.
+    # expose a thinking control should disable it or use the lowest supported
+    # effort so the completion budget is spent on the JSON decision. Strict
+    # OpenAI-compatible providers may require the extension to be omitted.
     if thinking_mode == "disabled":
         payload["thinking"] = {"type": "disabled"}
+    elif thinking_mode in {"low", "high", "max"}:
+        payload["thinking"] = {"type": "enabled"}
+        payload["reasoning_effort"] = thinking_mode
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -535,8 +538,10 @@ def main() -> None:
     selector_thinking = os.environ.get(
         "PAW_AMB_TEMPORAL_SELECTOR_THINKING", "disabled"
     ).strip()
-    if selector_thinking not in {"disabled", "omit"}:
-        raise ValueError("temporal selector thinking mode must be disabled or omit")
+    if selector_thinking not in {"disabled", "omit", "low", "high", "max"}:
+        raise ValueError(
+            "temporal selector thinking mode must be disabled, omit, low, high, or max"
+        )
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
