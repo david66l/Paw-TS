@@ -38,6 +38,7 @@ OPERATORS = {
     "latest_event",
 }
 UNITS = {"day", "week", "month", "year"}
+SEMANTIC_RRF_K = 60
 
 
 @dataclass(frozen=True)
@@ -326,6 +327,63 @@ def rank_bm25(query: str, candidates: list[TurnCandidate], limit: int) -> list[T
     ]
 
 
+def rank_semantic_rrf(
+    query: str,
+    candidates: list[TurnCandidate],
+    limit: int,
+    reranker: Any,
+    batch_size: int,
+) -> list[TurnCandidate]:
+    """Fuse exact-turn BM25 with a label-blind cross-encoder ranking."""
+
+    if not candidates:
+        return []
+    lexical = rank_bm25(query, candidates, len(candidates))
+    raw_scores = reranker.predict(
+        [(query, candidate.content) for candidate in candidates],
+        batch_size=batch_size,
+        show_progress_bar=False,
+    )
+    scores = raw_scores.tolist() if hasattr(raw_scores, "tolist") else list(raw_scores)
+    if len(scores) != len(candidates):
+        raise ValueError("temporal semantic reranker cardinality is invalid")
+    semantic = [
+        candidate
+        for score, candidate in sorted(
+            zip(scores, candidates),
+            key=lambda item: (
+                -float(item[0]),
+                item[1].session_order,
+                item[1].turn_order,
+                item[1].evidence_ref,
+            ),
+        )
+        if math.isfinite(float(score))
+    ]
+    if len(semantic) != len(candidates):
+        raise ValueError("temporal semantic reranker score is invalid")
+    lexical_rank = {
+        candidate.evidence_ref: index
+        for index, candidate in enumerate(lexical, start=1)
+    }
+    semantic_rank = {
+        candidate.evidence_ref: index
+        for index, candidate in enumerate(semantic, start=1)
+    }
+    return sorted(
+        candidates,
+        key=lambda candidate: (
+            -(
+                1 / (SEMANTIC_RRF_K + lexical_rank[candidate.evidence_ref])
+                + 1 / (SEMANTIC_RRF_K + semantic_rank[candidate.evidence_ref])
+            ),
+            candidate.session_order,
+            candidate.turn_order,
+            candidate.evidence_ref,
+        ),
+    )[:limit]
+
+
 def selector_prompt(question: str, query_cutoff: str, candidates: list[TurnCandidate]) -> str:
     rendered = "\n\n".join(
         "\n".join(
@@ -479,6 +537,7 @@ def save_checkpoint(
     path: Path,
     top_k: int,
     source_boundary: str,
+    candidate_policy: dict[str, Any],
     selector_policy: dict[str, Any],
     target_hmacs: set[str],
     rows: list[dict[str, Any]],
@@ -488,6 +547,7 @@ def save_checkpoint(
         "contentFree": True,
         "topK": top_k,
         "sourceBoundary": source_boundary,
+        "candidatePolicy": candidate_policy,
         "selectorPolicy": selector_policy,
         "targetQueryHmacs": sorted(target_hmacs),
         "rows": sorted(rows, key=lambda row: str(row["queryHmac"])),
@@ -502,6 +562,7 @@ def load_checkpoint(
     path: Path,
     top_k: int,
     source_boundary: str,
+    candidate_policy: dict[str, Any],
     selector_policy: dict[str, Any],
     target_hmacs: set[str],
 ) -> list[dict[str, Any]]:
@@ -514,6 +575,7 @@ def load_checkpoint(
         or payload.get("contentFree") is not True
         or payload.get("topK") != top_k
         or payload.get("sourceBoundary") != source_boundary
+        or payload.get("candidatePolicy") != candidate_policy
         or payload.get("selectorPolicy") != selector_policy
         or set(payload.get("targetQueryHmacs", [])) != target_hmacs
         or not isinstance(payload.get("rows"), list)
@@ -564,6 +626,42 @@ def main() -> None:
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
     if not api_key or not model or not base_url:
         raise ValueError("DeepSeek configuration is incomplete")
+    reranker_id = os.environ.get("PAW_AMB_TEMPORAL_RERANKER_ID", "").strip()
+    reranker_revision = os.environ.get(
+        "PAW_AMB_TEMPORAL_RERANKER_REVISION", ""
+    ).strip()
+    reranker_path = os.environ.get("PAW_AMB_TEMPORAL_RERANKER_PATH", "").strip()
+    if bool(reranker_id) != bool(reranker_revision):
+        raise ValueError("temporal reranker ID and revision must be configured together")
+    if reranker_path and not reranker_id:
+        raise ValueError("temporal reranker path requires a pinned model ID")
+    try:
+        reranker_batch_size = int(
+            os.environ.get("PAW_AMB_TEMPORAL_RERANKER_BATCH_SIZE", "64")
+        )
+        reranker_max_length = int(
+            os.environ.get("PAW_AMB_TEMPORAL_RERANKER_MAX_LENGTH", "512")
+        )
+    except ValueError as error:
+        raise ValueError("temporal reranker bounds are invalid") from error
+    if not 1 <= reranker_batch_size <= 256 or not 64 <= reranker_max_length <= 1024:
+        raise ValueError("temporal reranker bounds are invalid")
+    reranker = None
+    if reranker_id:
+        from sentence_transformers import CrossEncoder
+
+        reranker_options: dict[str, Any] = {
+            "device": os.environ.get(
+                "PAW_AMB_TEMPORAL_RERANKER_DEVICE", "cuda"
+            ).strip(),
+            "max_length": reranker_max_length,
+        }
+        if not reranker_path:
+            reranker_options["revision"] = reranker_revision
+        reranker = CrossEncoder(
+            reranker_path or reranker_id,
+            **reranker_options,
+        )
     key = args.eval_hmac_key.read_bytes().strip()
     if not key:
         raise ValueError("evaluation HMAC key is empty")
@@ -593,6 +691,28 @@ def main() -> None:
         if args.retrieval_log
         else load_temporal_source_lane_sources(args.temporal_source_lane_log)
     )
+    candidate_policy = {
+        "sourceBoundary": source_boundary,
+        "role": "user_only",
+        "ranker": (
+            "label_blind_exact_turn_bm25_cross_encoder_rrf_v1"
+            if reranker is not None
+            else "label_blind_exact_turn_bm25_v1"
+        ),
+        "topK": args.top_k,
+        "usesBenchmarkHasAnswerBeforeSelection": False,
+        **(
+            {
+                "crossEncoderModel": reranker_id,
+                "crossEncoderRevision": reranker_revision,
+                "crossEncoderMaxLength": reranker_max_length,
+                "crossEncoderBatchSize": reranker_batch_size,
+                "rrfK": SEMANTIC_RRF_K,
+            }
+            if reranker is not None
+            else {}
+        ),
+    }
     selector_policy = {
         "schemaVersion": SELECTOR_SCHEMA_VERSION,
         "model": model,
@@ -604,6 +724,7 @@ def main() -> None:
         checkpoint_path,
         args.top_k,
         source_boundary,
+        candidate_policy,
         selector_policy,
         baseline_errors,
     )
@@ -619,7 +740,17 @@ def main() -> None:
             raise ValueError("query cutoff is invalid")
         source_hashes = source_by_query.get(sha256_text(question), set())
         locked = enumerate_locked_user_turns(item, source_hashes)
-        ranked = rank_bm25(question, locked, args.top_k)
+        ranked = (
+            rank_semantic_rrf(
+                question,
+                locked,
+                args.top_k,
+                reranker,
+                reranker_batch_size,
+            )
+            if reranker is not None
+            else rank_bm25(question, locked, args.top_k)
+        )
         proposal, response_hash = chat_completion(
             selector_prompt(question, cutoff, ranked),
             model,
@@ -653,6 +784,7 @@ def main() -> None:
             checkpoint_path,
             args.top_k,
             source_boundary,
+            candidate_policy,
             selector_policy,
             baseline_errors,
             result_rows,
@@ -665,13 +797,7 @@ def main() -> None:
         "contentFree": True,
         "diagnosticOnly": True,
         "answerPathChanged": False,
-        "candidatePolicy": {
-            "sourceBoundary": source_boundary,
-            "role": "user_only",
-            "ranker": "label_blind_exact_turn_bm25_v1",
-            "topK": args.top_k,
-            "usesBenchmarkHasAnswerBeforeSelection": False,
-        },
+        "candidatePolicy": candidate_policy,
         "certificatePolicy": {
             "policyVersion": "paw.memory-temporal-event-ledger.v1:source-locked-certificate-only",
             "timeBasis": "amb_declared_source_session_timeline",

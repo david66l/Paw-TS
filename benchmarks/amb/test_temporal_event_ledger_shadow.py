@@ -2,6 +2,7 @@ import unittest
 
 from temporal_event_ledger_shadow import (
     TurnCandidate,
+    rank_semantic_rrf,
     selector_prompt,
     validate_selection,
 )
@@ -78,6 +79,29 @@ class TemporalEventLedgerSelectorTest(unittest.TestCase):
         self.assertFalse(certified)
         self.assertEqual([], selected)
         self.assertEqual("out_of_scope_address", status)
+
+    def test_semantic_rrf_fuses_full_lexical_and_semantic_ranks(self) -> None:
+        candidates = [
+            TurnCandidate(
+                **{
+                    **candidate(f"ref-{index}", index).__dict__,
+                    "content": "alpha" if index < 3 else "unrelated",
+                }
+            )
+            for index in range(1, 4)
+        ]
+
+        class FakeReranker:
+            def predict(self, pairs, *, batch_size, show_progress_bar):
+                self.call = (pairs, batch_size, show_progress_bar)
+                return [0.0, 2.0, 1.0]
+
+        reranker = FakeReranker()
+        ranked = rank_semantic_rrf("alpha", candidates, 2, reranker, 8)
+
+        self.assertEqual(["ref-2", "ref-1"], [item.evidence_ref for item in ranked])
+        self.assertEqual(8, reranker.call[1])
+        self.assertFalse(reranker.call[2])
 
 
 if __name__ == "__main__":
