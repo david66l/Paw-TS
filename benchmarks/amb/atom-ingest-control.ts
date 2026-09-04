@@ -12,6 +12,37 @@ import { scanForSecrets } from "@paw/memory/longterm";
 export const ATOM_INGEST_CHECKPOINT_SCHEMA_VERSION_V1 =
   "paw.amb-atom-ingest-checkpoint.v1" as const;
 
+export interface AmbIndexWriterIdentityV1 {
+  readonly model: string;
+  readonly baseUrl: string;
+  readonly overrideActive: boolean;
+}
+
+export function resolveAmbIndexWriterIdentityV1(input: {
+  readonly activeModel?: string;
+  readonly activeBaseUrl?: string;
+  readonly frozenWriterModel?: string;
+  readonly frozenWriterBaseUrl?: string;
+}): AmbIndexWriterIdentityV1 {
+  const frozenWriterModel = input.frozenWriterModel?.trim() || undefined;
+  const frozenWriterBaseUrl = input.frozenWriterBaseUrl?.trim() || undefined;
+  if (Boolean(frozenWriterModel) !== Boolean(frozenWriterBaseUrl)) {
+    throw new Error(
+      "PAW_AMB_INDEX_WRITER_MODEL and PAW_AMB_INDEX_WRITER_BASE_URL must be configured together",
+    );
+  }
+  return Object.freeze({
+    model:
+      frozenWriterModel || input.activeModel?.trim() || "deepseek-v4-flash",
+    baseUrl: (
+      frozenWriterBaseUrl ||
+      input.activeBaseUrl?.trim() ||
+      "https://api.deepseek.com"
+    ).replace(/\/+$/, ""),
+    overrideActive: Boolean(frozenWriterModel),
+  });
+}
+
 export interface AtomIngestLimitsV1 {
   readonly maxRemoteCalls: number;
   readonly maxPromptTokens: number;

@@ -118,6 +118,7 @@ import {
   parseAmbCachedMemoryUsageV1,
   projectAmbMemoryEvidenceV1,
   readAmbMemoryLlmBudgetLimitsV1,
+  resolveAmbIndexWriterIdentityV1,
   runKeyedInOrderV1,
   selectAmbSourceChunksV1,
   selectAmbSourceEvidenceV1,
@@ -365,6 +366,12 @@ const atomWriteMode = (() => {
   throw new Error("PAW_AMB_ATOM_WRITE_MODE is invalid");
 })();
 const atomMaxOutputTokens = 4_096;
+const indexWriterIdentity = resolveAmbIndexWriterIdentityV1({
+  activeModel: process.env.DEEPSEEK_MODEL,
+  activeBaseUrl: process.env.DEEPSEEK_BASE_URL,
+  frozenWriterModel: process.env.PAW_AMB_INDEX_WRITER_MODEL,
+  frozenWriterBaseUrl: process.env.PAW_AMB_INDEX_WRITER_BASE_URL,
+});
 const atomWriterIdentityHash = sha(
   JSON.stringify({
     policy: "paw.amb-memory-write-cache.v1",
@@ -376,10 +383,8 @@ const atomWriterIdentityHash = sha(
         : null,
     repairPolicy: "paw.memory-atom-repair-once.v1",
     promptSchema: "paw.memory-atom-extraction-input.v2",
-    model: process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-flash",
-    baseUrl: (
-      process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com"
-    ).replace(/\/+$/, ""),
+    model: indexWriterIdentity.model,
+    baseUrl: indexWriterIdentity.baseUrl,
     evidenceProjection: "system-user-only.v1",
     maxWindowChars: 24_000,
     temperature: 0,
@@ -6085,6 +6090,11 @@ log("bridge_start", {
           resumeRequested: atomResume,
           reuseIndex,
           identityHash: atomWriterIdentityHash,
+          indexWriterIdentity: {
+            model: indexWriterIdentity.model,
+            endpointSha256: sha(indexWriterIdentity.baseUrl),
+            overrideActive: indexWriterIdentity.overrideActive,
+          },
         }
       : null,
   fusionWeights:

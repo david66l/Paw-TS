@@ -11,6 +11,7 @@ import {
   projectAmbMemoryEvidenceV1,
   readAmbMemoryLlmBudgetLimitsV1,
   readAtomIngestLimitsV1,
+  resolveAmbIndexWriterIdentityV1,
   runKeyedInOrderV1,
   selectAmbSourceChunksV1,
   selectAmbSourceEvidenceV1,
@@ -25,6 +26,27 @@ afterEach(() => {
 });
 
 describe("AMB atom ingest controls", () => {
+  test("keeps a frozen index writer identity separate from the active reader model", () => {
+    expect(
+      resolveAmbIndexWriterIdentityV1({
+        activeModel: "glm-5.3-flash",
+        activeBaseUrl: "https://glm.example/v4/",
+        frozenWriterModel: "deepseek-v4-flash",
+        frozenWriterBaseUrl: "https://api.deepseek.com/",
+      }),
+    ).toEqual({
+      model: "deepseek-v4-flash",
+      baseUrl: "https://api.deepseek.com",
+      overrideActive: true,
+    });
+    expect(() =>
+      resolveAmbIndexWriterIdentityV1({
+        activeModel: "glm-5.3-flash",
+        frozenWriterModel: "deepseek-v4-flash",
+      }),
+    ).toThrow("must be configured together");
+  });
+
   test("keeps complete dialogue context but sanitizes assistant evidence", () => {
     const windows = projectAmbMemoryEvidenceV1(
       [

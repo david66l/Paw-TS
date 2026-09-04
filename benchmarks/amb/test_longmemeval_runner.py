@@ -1,9 +1,11 @@
 from types import SimpleNamespace
 import json
 from pathlib import Path
+import os
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -21,6 +23,7 @@ from run_paw_longmemeval_retrieval import (
     complete_blind_arm,
     consume_blind_arm,
     experiment_protocol,
+    index_writer_identity_protocol,
     local_embedding_health_url,
     order_longmemeval_reader_documents,
     public_report,
@@ -62,6 +65,33 @@ class FakeDataset:
 
 
 class LongMemEvalRunnerTest(unittest.TestCase):
+    def test_index_writer_identity_can_be_frozen_independently(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "DEEPSEEK_MODEL": "glm-5.3-flash",
+                "DEEPSEEK_BASE_URL": "https://glm.example/v4",
+                "PAW_AMB_INDEX_WRITER_MODEL": "deepseek-v4-flash",
+                "PAW_AMB_INDEX_WRITER_BASE_URL": "https://api.deepseek.com/",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                {
+                    "modelId": "deepseek:deepseek-v4-flash",
+                    "endpointSha256": "a34e2a4708ed1c61008a151688838dcf1c44d4e7f08054633e72ba7c0b16cfc1",
+                    "overrideActive": True,
+                },
+                index_writer_identity_protocol(),
+            )
+        with patch.dict(
+            os.environ,
+            {"PAW_AMB_INDEX_WRITER_MODEL": "deepseek-v4-flash"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ValueError, "must be configured together"):
+                index_writer_identity_protocol()
+
     def test_reader_context_is_chronological_without_changing_retrieval_rank(self) -> None:
         documents = [
             SimpleNamespace(id="later", content="later"),

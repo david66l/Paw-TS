@@ -743,6 +743,27 @@ def local_embedding_health_url(base_url: str) -> str:
     return f"{endpoint}/health"
 
 
+def index_writer_identity_protocol() -> dict[str, str | bool]:
+    active_model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
+    active_base_url = os.environ.get(
+        "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
+    ).strip()
+    frozen_model = os.environ.get("PAW_AMB_INDEX_WRITER_MODEL", "").strip()
+    frozen_base_url = os.environ.get("PAW_AMB_INDEX_WRITER_BASE_URL", "").strip()
+    if bool(frozen_model) != bool(frozen_base_url):
+        raise ValueError(
+            "PAW_AMB_INDEX_WRITER_MODEL and PAW_AMB_INDEX_WRITER_BASE_URL "
+            "must be configured together"
+        )
+    model = frozen_model or active_model
+    base_url = (frozen_base_url or active_base_url).rstrip("/")
+    return {
+        "modelId": f"deepseek:{model}",
+        "endpointSha256": sha(base_url),
+        "overrideActive": bool(frozen_model),
+    }
+
+
 def experiment_protocol(
     args: argparse.Namespace,
     *,
@@ -808,6 +829,7 @@ def experiment_protocol(
                 "sourceArtifactSha256": source_artifact_sha256,
             },
             "prebuiltIndexPolicy": "complete-id-and-embedding-coverage-v2",
+            "indexWriterIdentity": index_writer_identity_protocol(),
             "sourceLocalLocator": "required",
             "readerFeatureFlags": reader_feature_flags,
         },
