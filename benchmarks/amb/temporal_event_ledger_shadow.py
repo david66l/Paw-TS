@@ -110,9 +110,15 @@ def load_initial_retrieval_sources(paths: list[Path]) -> dict[str, set[str]]:
 
 
 def timestamp(value: str) -> str | None:
-    text = value.strip()
+    text = value.split("(")[0].strip() if "(" in value else value.strip()
     if not text:
         return None
+    for date_format in ("%Y/%m/%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            parsed = datetime.strptime(text, date_format).replace(tzinfo=timezone.utc)
+            return parsed.isoformat().replace("+00:00", "Z")
+        except ValueError:
+            continue
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
