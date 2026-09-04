@@ -34,10 +34,7 @@ except ImportError:
 
 
 SCHEMA_VERSION = "paw.multi-session-evidence-set-direct-answer.v1"
-RUNNER_POLICY = "paw.multi-session-evidence-set-direct.v2:query-bound-boundaries"
-INSUFFICIENT_ANSWER = (
-    "The available memory does not contain enough information to answer this question."
-)
+RUNNER_POLICY = "paw.multi-session-evidence-set-direct.v3:query-bound-no-zero-override"
 
 
 def sha(value: str) -> str:
@@ -97,18 +94,6 @@ def boundary_protocol(question: str) -> str:
     return "\n\nAdditional query-bound boundary rules:\n- " + "\n- ".join(clauses)
 
 
-def finalize_answer(plan: Any, answer: str) -> str:
-    """Treat an unsupported zero count as missing evidence, not a known zero."""
-
-    if (
-        plan is not None
-        and getattr(plan.operator, "value", None) == "count_members"
-        and re.match(r"^\s*0(?:\D|$)", answer)
-    ):
-        return INSUFFICIENT_ANSWER
-    return answer
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selection-artifact", type=Path, required=True)
@@ -164,13 +149,11 @@ Question: {query}"""
             task_type="open",
             meta={"_prompt_fn": prompt_fn},
         )
-        final_answer = finalize_answer(plan, result.answer)
-
         # This is the first evaluation-label boundary.
         accepted, question_type, abstention = judge_values(item)
         judgment = judge.score(
             question,
-            final_answer,
+            result.answer,
             accepted,
             official_longmemeval_judge_prompt_fn(
                 question_type=question_type,
@@ -182,8 +165,8 @@ Question: {query}"""
                 "queryHmac": query_hmac,
                 "packetRevisionHmac": packet.packet_revision_hmac,
                 "plan": plan_payload,
-                "answerHash": sha(final_answer),
-                "answerChars": len(final_answer),
+                "answerHash": sha(result.answer),
+                "answerChars": len(result.answer),
                 "answerCorrect": judgment.correct,
                 "judgeReasonHash": sha(judgment.reason),
                 "sourceCount": packet.source_count,
