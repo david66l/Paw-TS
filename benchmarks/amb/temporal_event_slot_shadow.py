@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -57,9 +58,9 @@ except ImportError:
     )
 
 
-SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v1"
+SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v2"
 PLANNER_SCHEMA_VERSION = "paw.temporal-event-planner.v1"
-BINDER_SCHEMA_VERSION = "paw.temporal-event-binder.v1"
+BINDER_SCHEMA_VERSION = "paw.temporal-event-binder.v2"
 UNIT_ALIASES = {
     "day": "day",
     "days": "day",
@@ -251,6 +252,27 @@ def validate_binding(
     return True, selected, "certified"
 
 
+def combine_binding_results(
+    results: list[tuple[bool, list[TurnCandidate], str, str]],
+    ranked: list[TurnCandidate],
+) -> tuple[bool, list[TurnCandidate], list[str], list[str]]:
+    selected_refs = {
+        candidate.evidence_ref
+        for certified, selected, _, _ in results
+        if certified
+        for candidate in selected
+    }
+    selected = [
+        candidate for candidate in ranked if candidate.evidence_ref in selected_refs
+    ]
+    return (
+        bool(selected_refs),
+        selected,
+        [status for _, _, status, _ in results],
+        [response_hash for _, _, _, response_hash in results],
+    )
+
+
 def bounded_integer(name: str, default: int, minimum: int, maximum: int) -> int:
     try:
         value = int(os.environ.get(name, str(default)))
@@ -324,6 +346,9 @@ def main() -> None:
     )
     binder_tokens = bounded_integer(
         "PAW_AMB_TEMPORAL_SELECTOR_MAX_TOKENS", 4096, 256, 8192
+    )
+    binder_replicas = bounded_integer(
+        "PAW_AMB_TEMPORAL_BINDER_REPLICAS", 1, 1, 3
     )
     planner_thinking = os.environ.get(
         "PAW_AMB_TEMPORAL_PLANNER_THINKING", "low"
@@ -436,6 +461,7 @@ def main() -> None:
             "maxCompletionTokens": binder_tokens,
             "thinking": binder_thinking,
             "sampling": binder_sampling,
+            "replicas": binder_replicas,
         },
     }
     run_policy = {
@@ -477,24 +503,45 @@ def main() -> None:
             planner_sampling,
         )
         plan, planner_status = compile_plan(plan_proposal)
-        binding_proposal: dict[str, Any] | None = None
-        binder_response_hash = "not_called"
         selected: list[TurnCandidate] = []
         certified = False
         binder_status = "planner_rejected"
+        binder_replica_statuses: list[str] = []
+        binder_response_hashes: list[str] = []
         if plan is not None:
-            binding_proposal, binder_response_hash = chat_completion(
-                binder_prompt(question, cutoff, plan, ranked),
-                model,
-                base_url,
-                api_key,
-                binder_tokens,
-                binder_thinking,
-                binder_sampling,
-            )
-            certified, selected, binder_status = validate_binding(
-                binding_proposal, plan, ranked, cutoff
-            )
+            prompt = binder_prompt(question, cutoff, plan, ranked)
+
+            def bind_once() -> tuple[bool, list[TurnCandidate], str, str]:
+                proposal, response_hash = chat_completion(
+                    prompt,
+                    model,
+                    base_url,
+                    api_key,
+                    binder_tokens,
+                    binder_thinking,
+                    binder_sampling,
+                )
+                replica_certified, replica_selected, replica_status = validate_binding(
+                    proposal, plan, ranked, cutoff
+                )
+                return (
+                    replica_certified,
+                    replica_selected,
+                    replica_status,
+                    response_hash,
+                )
+
+            with ThreadPoolExecutor(max_workers=binder_replicas) as executor:
+                binding_results = list(
+                    executor.map(lambda _: bind_once(), range(binder_replicas))
+                )
+            (
+                certified,
+                selected,
+                binder_replica_statuses,
+                binder_response_hashes,
+            ) = combine_binding_results(binding_results, ranked)
+            binder_status = "certified" if certified else "all_rejected"
         gold_refs = answer_user_evidence_refs(item)
         ranked_refs = {candidate.evidence_ref for candidate in ranked}
         selected_refs = {candidate.evidence_ref for candidate in selected}
@@ -521,7 +568,11 @@ def main() -> None:
                 "planOperator": plan.operator if plan is not None else None,
                 "planSlotCount": len(plan.slots) if plan is not None else 0,
                 "binderStatus": binder_status,
-                "binderResponseHash": binder_response_hash,
+                "binderReplicaStatuses": binder_replica_statuses,
+                "binderResponseHashes": binder_response_hashes,
+                "certifiedReplicaCount": sum(
+                    status == "certified" for status in binder_replica_statuses
+                ),
                 "selectedCandidateCount": len(selected_refs),
                 "certified": certified,
                 "selectedEvidenceRefHmacs": sorted(

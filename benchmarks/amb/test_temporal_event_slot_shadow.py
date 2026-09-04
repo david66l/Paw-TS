@@ -4,6 +4,7 @@ from temporal_event_ledger_shadow import TurnCandidate
 from temporal_event_slot_shadow import (
     SlotSpec,
     TemporalPlan,
+    combine_binding_results,
     compile_plan,
     validate_binding,
 )
@@ -136,6 +137,24 @@ class TemporalEventSlotShadowTest(unittest.TestCase):
         self.assertFalse(certified)
         self.assertEqual([], selected)
         self.assertEqual("invalid_slot_binding", status)
+
+    def test_committee_unions_only_certified_bindings_in_rank_order(self) -> None:
+        pool = candidates(4)
+        certified, selected, statuses, hashes = combine_binding_results(
+            [
+                (True, [pool[2], pool[0]], "certified", "hash-a"),
+                (False, [pool[3]], "invalid_slot_binding", "hash-b"),
+                (True, [pool[1]], "certified", "hash-c"),
+            ],
+            pool,
+        )
+
+        self.assertTrue(certified)
+        self.assertEqual(pool[:3], selected)
+        self.assertEqual(
+            ["certified", "invalid_slot_binding", "certified"], statuses
+        )
+        self.assertEqual(["hash-a", "hash-b", "hash-c"], hashes)
 
 
 if __name__ == "__main__":
