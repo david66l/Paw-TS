@@ -266,7 +266,7 @@ def chat_completion(prompt: str, model: str, base_url: str, api_key: str) -> tup
             {"role": "user", "content": prompt},
         ],
         "temperature": 0,
-        "max_tokens": 600,
+        "max_tokens": 1_200,
         "response_format": {"type": "json_object"},
     }
     request = urllib.request.Request(
@@ -283,10 +283,15 @@ def chat_completion(prompt: str, model: str, base_url: str, api_key: str) -> tup
             message = choices[0].get("message") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
             content = message.get("content") if isinstance(message, dict) else None
             if not isinstance(content, str) or not content.strip():
-                return None, "invalid_response"
-            parsed = json.loads(content)
-            return (parsed if isinstance(parsed, dict) else None), sha256_text(content)
-        except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, TimeoutError):
+                return None, "empty_content"
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                return None, "invalid_json"
+            return (parsed if isinstance(parsed, dict) else None), (
+                sha256_text(content) if isinstance(parsed, dict) else "non_object_json"
+            )
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
             if attempt == 1:
                 return None, "request_failed"
             time.sleep(2 * (attempt + 1))
