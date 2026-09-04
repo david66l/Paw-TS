@@ -146,6 +146,10 @@ import { logicalSourceLocalEvidenceRefV1 } from "./immutable-evidence-address.js
 import { hydrateAmbImmutableSourceLocalEvidenceV1 } from "./immutable-source-local-hydration.js";
 import { buildAmbMemoryLlmReplayCacheKeyV1 } from "./memory-llm-replay-cache.js";
 import {
+  RECOMMENDATION_USER_AUTHORITY_POLICY_V1,
+  projectRecommendationUserAuthorityV1,
+} from "./preference-session-projection-v1.js";
+import {
   isAmbDocumentVisibleAtQueryV1,
   parseAmbQueryTimeCutoffV1,
 } from "./query-time-cutoff.js";
@@ -280,6 +284,14 @@ const atomContextMode = (() => {
   if (value === "topic_evidence") return "topic_evidence" as const;
   if (value === "tool_driven") return "tool_driven" as const;
   throw new Error("PAW_AMB_ATOM_CONTEXT_MODE is invalid");
+})();
+const recommendationUserAuthorityMode = (() => {
+  const value =
+    process.env.PAW_AMB_RECOMMEND_USER_AUTHORITY_MODE?.trim().toLowerCase() ??
+    "off";
+  if (value === "off" || value === "shadow" || value === "replace")
+    return value;
+  throw new Error("PAW_AMB_RECOMMEND_USER_AUTHORITY_MODE is invalid");
 })();
 const evidenceExecutionProfile = resolveAmbEvidenceExecutionProfileV1(
   process.env.PAW_AMB_EVIDENCE_PROFILE,
@@ -576,6 +588,14 @@ const temporalSourceLaneShadowEnabled =
   /^(?:1|true)$/iu.test(
     process.env.PAW_AMB_TEMPORAL_SOURCE_LANE_SHADOW?.trim() ?? "",
   );
+if (
+  recommendationUserAuthorityMode === "replace" &&
+  executionReaderProjectionInjectEnabled
+) {
+  throw new Error(
+    "recommendation user authority replace conflicts with execution reader projection inject",
+  );
+}
 const evidenceGroundedRoleBindingEnabled =
   sourceLocalLocatorEnabled &&
   /^(?:1|true)$/iu.test(
@@ -4436,7 +4456,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     ).size;
     rawEvidenceSpanCount = resolution.packetSources.length;
     memoryRoute = "evidence_first_spans";
-    const evidenceOutput = resolution.packetSources.map((source, index) => {
+    let evidenceOutput = resolution.packetSources.map((source, index) => {
       const packetWarning =
         source.answerRole === "candidate"
           ? "[Unverified candidate L0 evidence]\nUse only if it directly answers a missing requirement; relevance alone is not support."
@@ -4466,6 +4486,192 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         },
       };
     });
+    const recommendationProjectionEligible =
+      recommendationUserAuthorityMode !== "off" &&
+      evidenceFirstInitialAnswerShape === "recommend" &&
+      evidenceFirstInitialRoleConstraint === "user" &&
+      queryTimeCutoff !== undefined;
+    let recommendationProjectionStatus = recommendationProjectionEligible
+      ? "pending"
+      : "not_eligible";
+    let recommendationProjectionReason = recommendationProjectionEligible
+      ? "pending"
+      : "not_eligible";
+    let recommendationProjection:
+      | ReturnType<typeof projectRecommendationUserAuthorityV1>
+      | undefined;
+    const recommendationLegacyChars = evidenceOutput.reduce(
+      (total, document) => total + document.content.length,
+      0,
+    );
+    let recommendationSourceLockCount = 0;
+    let recommendationSourceLockHash: string | null = null;
+    let recommendationAssistantCandidateCount = 0;
+    let recommendationOutOfLockUserTurnCount = 0;
+    let recommendationPostCutoffUserTurnCount = 0;
+    let recommendationDuplicateEvidenceRefCount = 0;
+    if (recommendationProjectionEligible) {
+      const projectionStarted = performance.now();
+      try {
+        const sourceLock = [
+          ...new Set(
+            resolution.packetSources.map((source) => source.sourceId),
+          ),
+        ].slice(0, 8);
+        recommendationSourceLockCount = sourceLock.length;
+        recommendationSourceLockHash = sha(JSON.stringify(sourceLock)).slice(
+          0,
+          20,
+        );
+        if (sourceLock.length === 0) throw new Error("empty_source_lock");
+        const kindByEvidence = sourceKindByUser.get(userId) ?? new Map();
+        const userRefsBySource = new Map(
+          sourceLock.map((sourceId) => [sourceId, [] as string[]] as const),
+        );
+        for (const [physicalRef, kind] of kindByEvidence) {
+          const logical = logicalSourceLocalEvidenceRefV1(physicalRef);
+          const match =
+            logical === undefined
+              ? undefined
+              : /^(.+)#source-(\d+)$/u.exec(logical);
+          const sourceRefs = match?.[1]
+            ? userRefsBySource.get(match[1])
+            : undefined;
+          if (!match || !sourceRefs) continue;
+          if (kind === "user_input") sourceRefs.push(logical as string);
+          else recommendationAssistantCandidateCount += 1;
+        }
+        const refs = sourceLock.flatMap(
+          (sourceId) => userRefsBySource.get(sourceId) ?? [],
+        );
+        recommendationDuplicateEvidenceRefCount =
+          refs.length - new Set(refs).size;
+        if (
+          refs.length === 0 ||
+          recommendationDuplicateEvidenceRefCount !== 0
+        )
+          throw new Error("invalid_locked_user_refs");
+        const hydrated = await hydrateAmbImmutableSourceLocalEvidenceV1({
+          archive: rawEvidenceArchiveFor(userId),
+          evidenceRefs: refs,
+          signal: new AbortController().signal,
+        });
+        const cutoff = Date.parse(queryTimeCutoff.normalizedIso);
+        const turns = hydrated.rows.map((row) => {
+          const match = /^(.+)#source-(\d+)$/u.exec(row.evidenceRef);
+          const observedAt = Date.parse(row.observedAt ?? "");
+          const sourceId = match?.[1];
+          if (!sourceId) throw new Error("invalid_hydrated_user_turn");
+          if (!sourceLock.includes(sourceId)) {
+            recommendationOutOfLockUserTurnCount += 1;
+            throw new Error("out_of_lock_user_turn");
+          }
+          if (Number.isFinite(observedAt) && observedAt > cutoff) {
+            recommendationPostCutoffUserTurnCount += 1;
+            throw new Error("post_cutoff_user_turn");
+          }
+          if (
+            row.sourceKind !== "user_input" ||
+            !Number.isFinite(cutoff) ||
+            !Number.isFinite(observedAt) ||
+            sha(row.content) !== row.contentHash
+          )
+            throw new Error("invalid_hydrated_user_turn");
+          const sessionOrder = documentOrderByUser
+            .get(userId)
+            ?.get(sourceId);
+          if (sessionOrder === undefined)
+            throw new Error("missing_session_order");
+          return {
+            sourceId,
+            evidenceRef: row.evidenceRef,
+            sessionOrder,
+            turnOrder: row.turnOrder,
+            observedAt: row.observedAt ?? "",
+            content: row.content,
+            contentHash: row.contentHash,
+          };
+        });
+        recommendationProjection = projectRecommendationUserAuthorityV1({
+          query: queryText,
+          queryCutoff: queryTimeCutoff.normalizedIso,
+          sourceLock,
+          turns,
+          legacyChars: recommendationLegacyChars,
+        });
+        recommendationProjectionStatus = recommendationProjection.status;
+        recommendationProjectionReason = recommendationProjection.reason;
+        if (
+          recommendationUserAuthorityMode === "replace" &&
+          recommendationProjection.status === "projected"
+        ) {
+          evidenceOutput = [
+            {
+              id: `user-authority:${recommendationProjection.packetRevision}`,
+              content: recommendationProjection.content as string,
+              user_id: userId,
+              metadata: {
+                memoryId: "recommendation-user-authority-projection-v1",
+                memoryIds: [...recommendationProjection.sourceIds],
+                evidence: `amb:projection/${recommendationProjection.packetRevision}`,
+                evidences: recommendationProjection.evidenceRefs.map(
+                  (ref) => `amb:document/${ref}`,
+                ),
+                evidenceUses: [],
+                evidenceBindings: [],
+              },
+            },
+          ];
+        }
+      } catch (error) {
+        recommendationProjectionStatus = "fallback";
+        recommendationProjectionReason =
+          error instanceof Error && error.message
+            ? error.message
+            : "projection_error";
+      }
+      log("recommend_user_authority_projection", {
+        policyVersion: RECOMMENDATION_USER_AUTHORITY_POLICY_V1,
+        queryHash: sha(queryText),
+        queryCutoffHash: sha(queryTimeCutoff.normalizedIso).slice(0, 20),
+        mode: recommendationUserAuthorityMode,
+        status: recommendationProjectionStatus,
+        reasonCode: recommendationProjectionReason,
+        answerPathChanged:
+          recommendationUserAuthorityMode === "replace" &&
+          recommendationProjection?.status === "projected",
+        sourceLockCount: recommendationSourceLockCount,
+        sourceLockHash: recommendationSourceLockHash,
+        projectionSourceCount: recommendationProjection?.sourceIds.length ?? 0,
+        projectionSourceHash:
+          recommendationProjection === undefined
+            ? null
+            : sha(JSON.stringify(recommendationProjection.sourceIds)).slice(
+                0,
+                20,
+              ),
+        userTurnCount: recommendationProjection?.evidenceRefs.length ?? 0,
+        assistantCandidateCount: recommendationAssistantCandidateCount,
+        assistantInjectedCount: 0,
+        outOfLockUserTurnCount: recommendationOutOfLockUserTurnCount,
+        postCutoffUserTurnCount: recommendationPostCutoffUserTurnCount,
+        duplicateEvidenceRefCount: recommendationDuplicateEvidenceRefCount,
+        rawChars: recommendationProjection?.rawChars ?? 0,
+        renderedChars: recommendationProjection?.renderedChars ?? 0,
+        legacyChars: recommendationLegacyChars,
+        projectedToLegacyCharRatio:
+          recommendationProjection?.renderedChars === undefined ||
+          recommendationLegacyChars === 0
+            ? null
+            : recommendationProjection.renderedChars /
+              recommendationLegacyChars,
+        packetRevisionHash: recommendationProjection?.packetRevision
+          ? sha(recommendationProjection.packetRevision).slice(0, 20)
+          : null,
+        durationMs: Math.max(0, performance.now() - projectionStarted),
+        extraLlmCalls: 0,
+      });
+    }
     const readerProjectionBuild = resolution.readerProjectionBuild;
     const certifiedExecutionOutput =
       executionReaderProjectionInjectEnabled &&
@@ -5744,6 +5950,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     temporalSourceLaneStatus,
     temporalSourceLaneCandidateCount,
     temporalSourceLaneSelectedSourceCount,
+    recommendationUserAuthorityMode,
     queryCutoffApplied: queryTimeCutoff !== undefined,
     queryCutoffHash:
       queryTimeCutoff === undefined
@@ -5845,6 +6052,7 @@ log("bridge_start", {
   ingestMode,
   stateFrameShadowEnabled,
   executionReaderProjectionInjectEnabled,
+  recommendationUserAuthorityMode,
   stateSemanticAuditEnabled,
   atomContextMode: ingestMode === "atom" ? atomContextMode : null,
   atomSourceContextMaxChars:
