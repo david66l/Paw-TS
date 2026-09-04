@@ -141,7 +141,7 @@ def _temporal_mode(question: str) -> TemporalMode:
         return TemporalMode.LATEST
     temporal_words = r"(?:\d{4}|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|date|week|month|year)"
     if re.search(
-        r"\b(?:during|since|recently|today|yesterday|this (?:week|month|year)|last (?:week|month|year)|past (?:few |two |three |four )?(?:days?|weeks?|months?|years?))\b|\bin\s+(?:the\s+)?\d{4}\b",
+        r"\b(?:before|after|during|since|recently|today|yesterday|this (?:week|month|year)|last (?:week|month|year)|past (?:few |two |three |four )?(?:days?|weeks?|months?|years?))\b|\bin\s+(?:the\s+)?\d{4}\b",
         question,
     ) or (
         re.search(r"\b(?:between|from)\b.+\b(?:and|to)\b", question)
@@ -209,7 +209,10 @@ def compile_set_plan(question: str) -> SetPlan | None:
         operator, exhaustive = Operator.SUM_VALUES, True
     elif re.search(r"\b(?:list|all|unique|distinct|which ones|what are)\b", text):
         operator, exhaustive = Operator.COLLECT_UNIQUE, True
-    elif re.match(r"^(?:who|what|which|when|where|did|do|does|is|was|were|how)\b", text):
+    elif re.match(
+        r"^(?:(?:at|for|on)\s+)?(?:who|what|which|when|where|did|do|does|is|was|were|how)\b",
+        text,
+    ):
         operator = Operator.LOOKUP
     else:
         return None

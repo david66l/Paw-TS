@@ -102,6 +102,13 @@ Derive the exact inclusion rule from the question, then scan EVERY supplied sess
 
 Treat the question as the cross-session join contract. If separate sessions provide unique compatible facts for the named entity, operands, or requested relationship, join them; do not reject the calculation merely because no one sentence restates the relationship. Evidence that the user acquired or possesses an item may support an acquisition count unless another statement contradicts it. Normalize compatible units. For a count, enumerate the unique event/action members; for a sum, difference, average, ratio, or maximum, show a short checkable calculation. Make a second pass over all sessions. If a required operand is genuinely absent or conflicting, state that the available memory is insufficient rather than guessing. The final answer must directly match the requested value, date, entity, list, or comparison.
 
+Boundary and abstention rules:
+- Absence of a matching memory is not proof that the count is zero. Say the information is insufficient unless the packet positively establishes an exhaustive zero.
+- In "items/events before X" questions, X is the boundary/reference event and is not itself a counted member unless the wording explicitly includes it.
+- Keep exact qualifiers such as entity, research stage, location, and event type. Never substitute an adjacent but different fact merely because it has similar words.
+- Interpret "last week" as the rolling seven-day interval immediately preceding the query cutoff; never include days after the cutoff. Other relative windows also end at the cutoff unless the question states a calendar boundary.
+- A uniquely matching scheduled appointment time may supply the time of the named visit or arrival when the question joins those facts and nothing conflicts; likewise join a uniquely matching deadline/date with the named submission. Do not demand a redundant sentence restating the link.
+
 {context}
 
 Question: {query}"""

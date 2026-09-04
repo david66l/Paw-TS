@@ -77,6 +77,8 @@ def test_measure_questions_and_fallback_interrogatives_are_not_misclassified():
     assert subject.compile_set_plan("How many pages do I have left to read?").operator is subject.Operator.DIFFERENCE
     assert subject.compile_set_plan("How much will I save by taking the train instead?").operator is subject.Operator.DIFFERENCE
     assert subject.compile_set_plan("Did I receive a higher discount?").operator is subject.Operator.LOOKUP
+    assert subject.compile_set_plan("At which university did I present a poster?").operator is subject.Operator.LOOKUP
+    assert subject.compile_set_plan("How many homes did I see before making an offer?").temporal_mode is subject.TemporalMode.RANGE
 
 
 def test_validation_rejects_unknown_evidence_duplicate_keys_and_operator_mismatch():
