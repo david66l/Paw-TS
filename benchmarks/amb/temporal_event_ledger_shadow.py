@@ -357,7 +357,12 @@ Candidates:
 
 
 def chat_completion(
-    prompt: str, model: str, base_url: str, api_key: str, max_tokens: int
+    prompt: str,
+    model: str,
+    base_url: str,
+    api_key: str,
+    max_tokens: int,
+    thinking_mode: str,
 ) -> tuple[dict[str, Any] | None, str]:
     payload = {
         "model": model,
@@ -371,11 +376,13 @@ def chat_completion(
         "temperature": 0,
         "max_tokens": max_tokens,
         "response_format": {"type": "json_object"},
-        # Endpoint selection is a bounded classification task. Long chain of
-        # thought previously consumed the entire completion budget without a
-        # final JSON object; the host still validates every selected address.
-        "thinking": {"type": "disabled"},
     }
+    # Endpoint selection is a bounded classification task. Providers that
+    # expose a thinking control should disable it so the completion budget is
+    # spent on the JSON decision. Strict OpenAI-compatible providers reject
+    # this extension, so capability negotiation may explicitly omit it.
+    if thinking_mode == "disabled":
+        payload["thinking"] = {"type": "disabled"}
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -452,6 +459,7 @@ def save_checkpoint(
     path: Path,
     top_k: int,
     source_boundary: str,
+    selector_policy: dict[str, Any],
     target_hmacs: set[str],
     rows: list[dict[str, Any]],
 ) -> None:
@@ -460,6 +468,7 @@ def save_checkpoint(
         "contentFree": True,
         "topK": top_k,
         "sourceBoundary": source_boundary,
+        "selectorPolicy": selector_policy,
         "targetQueryHmacs": sorted(target_hmacs),
         "rows": sorted(rows, key=lambda row: str(row["queryHmac"])),
     }
@@ -470,7 +479,11 @@ def save_checkpoint(
 
 
 def load_checkpoint(
-    path: Path, top_k: int, source_boundary: str, target_hmacs: set[str]
+    path: Path,
+    top_k: int,
+    source_boundary: str,
+    selector_policy: dict[str, Any],
+    target_hmacs: set[str],
 ) -> list[dict[str, Any]]:
     if not path.exists():
         return []
@@ -481,6 +494,7 @@ def load_checkpoint(
         or payload.get("contentFree") is not True
         or payload.get("topK") != top_k
         or payload.get("sourceBoundary") != source_boundary
+        or payload.get("selectorPolicy") != selector_policy
         or set(payload.get("targetQueryHmacs", [])) != target_hmacs
         or not isinstance(payload.get("rows"), list)
     ):
@@ -518,6 +532,11 @@ def main() -> None:
         raise ValueError("temporal selector token budget is invalid") from error
     if not 256 <= selector_max_tokens <= 4096:
         raise ValueError("temporal selector token budget must be between 256 and 4096")
+    selector_thinking = os.environ.get(
+        "PAW_AMB_TEMPORAL_SELECTOR_THINKING", "disabled"
+    ).strip()
+    if selector_thinking not in {"disabled", "omit"}:
+        raise ValueError("temporal selector thinking mode must be disabled or omit")
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
@@ -552,9 +571,19 @@ def main() -> None:
         if args.retrieval_log
         else load_temporal_source_lane_sources(args.temporal_source_lane_log)
     )
+    selector_policy = {
+        "schemaVersion": SELECTOR_SCHEMA_VERSION,
+        "model": model,
+        "maxCompletionTokens": selector_max_tokens,
+        "thinking": selector_thinking,
+    }
     checkpoint_path = args.checkpoint or args.output.with_suffix(args.output.suffix + ".checkpoint.json")
     result_rows = load_checkpoint(
-        checkpoint_path, args.top_k, source_boundary, baseline_errors
+        checkpoint_path,
+        args.top_k,
+        source_boundary,
+        selector_policy,
+        baseline_errors,
     )
     completed_hmacs = {str(row["queryHmac"]) for row in result_rows}
     for index, query_hmac in enumerate(sorted(baseline_errors), start=1):
@@ -575,6 +604,7 @@ def main() -> None:
             base_url,
             api_key,
             selector_max_tokens,
+            selector_thinking,
         )
         certified, selected, certificate_status = validate_selection(proposal, ranked, cutoff)
         gold_refs = answer_user_evidence_refs(item)
@@ -601,6 +631,7 @@ def main() -> None:
             checkpoint_path,
             args.top_k,
             source_boundary,
+            selector_policy,
             baseline_errors,
             result_rows,
         )
@@ -625,12 +656,7 @@ def main() -> None:
             "queryCutoffRequired": True,
             "readerInjection": False,
         },
-        "selectorPolicy": {
-            "schemaVersion": SELECTOR_SCHEMA_VERSION,
-            "model": model,
-            "maxCompletionTokens": selector_max_tokens,
-            "thinking": "disabled",
-        },
+        "selectorPolicy": selector_policy,
         "rows": result_rows,
         "metrics": {
             "baselineErrorCount": len(result_rows),
