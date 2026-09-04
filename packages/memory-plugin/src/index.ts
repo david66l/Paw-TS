@@ -239,6 +239,7 @@ export {
   PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
   buildMemoryEvidenceQueryPlanRequestV3,
   classifyMemoryEvidenceQueryV3,
+  compileMemoryQueryAnswerOriginV1,
   createJsonMemoryEvidenceQueryPlannerV3,
   needsCertifiedAssistantDialogueCandidateV1,
   needsMemoryEvidenceRoleResolutionV1,
