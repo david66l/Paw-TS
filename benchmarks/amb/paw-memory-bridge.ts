@@ -129,6 +129,10 @@ import {
   selectAmbSourceEvidenceV1,
 } from "./atom-ingest-control.js";
 import {
+  type AmbDialogueMaterializationAuthorizedItemV1,
+  canonicalizeAmbDialogueAuthorizationV1,
+} from "./dialogue-materialization-authorization.js";
+import {
   AMB_DIALOGUE_PAIR_PROMPT_ISSUE_TYPE_V1,
   AMB_DIALOGUE_PAIR_RESPONSE_ISSUE_TYPE_V1,
   AMB_DIALOGUE_PAIR_SCHEMA_VERSION_V1,
@@ -2667,6 +2671,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstDialogueRecognizedBindingCount = 0;
   let evidenceFirstDialogueUnparseableBindingCount = 0;
   let evidenceFirstDialogueUncommittedBindingCount = 0;
+  let evidenceFirstDialogueDuplicateAuthorizationCount = 0;
+  let evidenceFirstDialogueConflictingAuthorizationCount = 0;
   let evidenceFirstDialoguePairProofMissing = false;
   const evidenceFirstDialogueOriginFilteredBindingCounts = {
     assistantReport: 0,
@@ -4481,50 +4487,58 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ),
       ),
     );
-    let dialogueAuthorizedItems = resolution.packetSources.flatMap((source) =>
-      source.evidenceBindings.flatMap((binding) => {
-        if (
-          binding.evidenceUse !== "assistant_report" &&
-          binding.evidenceUse !== "shared_dialogue_artifact"
-        )
-          return [];
-        evidenceFirstDialogueRecognizedBindingCount += 1;
-        if (!dialogueAllowedEvidenceUses.has(binding.evidenceUse)) {
-          if (binding.evidenceUse === "assistant_report")
-            evidenceFirstDialogueOriginFilteredBindingCounts.assistantReport += 1;
-          else
-            evidenceFirstDialogueOriginFilteredBindingCounts.sharedDialogueArtifact += 1;
-          return [];
-        }
-        if (
-          !committedDialogueBindings.has(
-            `${binding.evidenceRef}\0${binding.evidenceUse}`,
+    let dialogueAuthorizedItems: readonly AmbDialogueMaterializationAuthorizedItemV1[] =
+      resolution.packetSources.flatMap((source) =>
+        source.evidenceBindings.flatMap((binding) => {
+          if (
+            binding.evidenceUse !== "assistant_report" &&
+            binding.evidenceUse !== "shared_dialogue_artifact"
           )
-        ) {
-          evidenceFirstDialogueUncommittedBindingCount += 1;
-          return [];
-        }
-        const logicalRef =
-          logicalSourceLocalEvidenceRefV1(binding.evidenceRef) ??
-          (/^[^#]+#source-\d+$/u.test(binding.evidenceRef)
-            ? binding.evidenceRef
-            : undefined);
-        const match = /^(.+)#source-(\d+)$/u.exec(logicalRef ?? "");
-        if (!match?.[1] || match[1] !== source.sourceId || !match[2]) {
-          evidenceFirstDialogueUnparseableBindingCount += 1;
-          return [];
-        }
-        return [
-          {
-            sourceId: source.sourceId,
-            evidenceRef: logicalRef as string,
-            turnOrder: Number(match[2]),
-            evidenceUse: binding.evidenceUse,
-            allowedModes: ["dialogue_materialization"],
-          },
-        ];
-      }),
-    );
+            return [];
+          evidenceFirstDialogueRecognizedBindingCount += 1;
+          if (!dialogueAllowedEvidenceUses.has(binding.evidenceUse)) {
+            if (binding.evidenceUse === "assistant_report")
+              evidenceFirstDialogueOriginFilteredBindingCounts.assistantReport += 1;
+            else
+              evidenceFirstDialogueOriginFilteredBindingCounts.sharedDialogueArtifact += 1;
+            return [];
+          }
+          if (
+            !committedDialogueBindings.has(
+              `${binding.evidenceRef}\0${binding.evidenceUse}`,
+            )
+          ) {
+            evidenceFirstDialogueUncommittedBindingCount += 1;
+            return [];
+          }
+          const logicalRef =
+            logicalSourceLocalEvidenceRefV1(binding.evidenceRef) ??
+            (/^[^#]+#source-\d+$/u.test(binding.evidenceRef)
+              ? binding.evidenceRef
+              : undefined);
+          const match = /^(.+)#source-(\d+)$/u.exec(logicalRef ?? "");
+          if (!match?.[1] || match[1] !== source.sourceId || !match[2]) {
+            evidenceFirstDialogueUnparseableBindingCount += 1;
+            return [];
+          }
+          return [
+            {
+              sourceId: source.sourceId,
+              evidenceRef: logicalRef as string,
+              turnOrder: Number(match[2]),
+              evidenceUse: binding.evidenceUse,
+              allowedModes: ["dialogue_materialization"] as const,
+            },
+          ];
+        }),
+      );
+    const canonicalDialogueAuthorization =
+      canonicalizeAmbDialogueAuthorizationV1(dialogueAuthorizedItems);
+    dialogueAuthorizedItems = canonicalDialogueAuthorization.items;
+    evidenceFirstDialogueDuplicateAuthorizationCount =
+      canonicalDialogueAuthorization.duplicateCount;
+    evidenceFirstDialogueConflictingAuthorizationCount =
+      canonicalDialogueAuthorization.conflictCount;
     const supportingDialogueContextsByParent = new Map<string, Set<string>[]>();
     for (const assessment of resolution.supportAssessments) {
       for (const disposition of assessment.evidenceDispositions ?? []) {
@@ -5883,6 +5897,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         evidenceFirstDialogueOriginFilteredBindingCounts.sharedDialogueArtifact,
       unparseableBindingCount: evidenceFirstDialogueUnparseableBindingCount,
       uncommittedBindingCount: evidenceFirstDialogueUncommittedBindingCount,
+      duplicateAuthorizationCount:
+        evidenceFirstDialogueDuplicateAuthorizationCount,
+      conflictingAuthorizationCount:
+        evidenceFirstDialogueConflictingAuthorizationCount,
       pairContextCount: Array.isArray(
         evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedPairContext,
       )
