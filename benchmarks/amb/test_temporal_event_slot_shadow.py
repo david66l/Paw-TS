@@ -64,6 +64,15 @@ class TemporalEventSlotShadowTest(unittest.TestCase):
         self.assertEqual("latest_event", plan.operator)
         self.assertEqual("event_set", plan.slots[0].role)
 
+    def test_deterministic_planner_compiles_declarative_attribute_lookup(self) -> None:
+        plan = compile_question_plan(
+            "I received a piece of jewelry last Saturday from whom?"
+        )
+
+        self.assertIsNotNone(plan)
+        self.assertEqual("locate_event", plan.operator)
+        self.assertEqual("target_event", plan.slots[0].role)
+
     def test_deterministic_planner_does_not_confuse_relative_first_noun(self) -> None:
         plan = compile_question_plan(
             "How many days ago did I harvest my first batch of fresh herbs?"

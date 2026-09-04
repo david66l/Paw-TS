@@ -286,6 +286,7 @@ def compile_question_plan(question: str) -> TemporalPlan | None:
     locate_requested = bool(
         re.match(r"^(?:who|what|which|where|when|how old)\b", lowered)
         or lowered.startswith("i mentioned")
+        or (lowered.startswith("i ") and normalized.endswith("?"))
     )
     if locate_requested:
         return TemporalPlan(
