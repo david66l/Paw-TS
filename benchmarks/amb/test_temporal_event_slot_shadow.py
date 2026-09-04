@@ -5,8 +5,12 @@ from temporal_event_slot_shadow import (
     SlotSpec,
     TemporalPlan,
     combine_binding_results,
+    compile_question_plan,
     compile_plan,
+    directional_slots,
     validate_binding,
+    validate_event_packet_binding,
+    validate_event_packet_proposal,
 )
 
 
@@ -26,6 +30,48 @@ def candidates(count: int) -> list[TurnCandidate]:
 
 
 class TemporalEventSlotShadowTest(unittest.TestCase):
+    def test_deterministic_planner_compiles_two_event_since_when_interval(self) -> None:
+        plan = compile_question_plan(
+            "How many weeks had passed since I recovered from the flu when I went on my 10th jog outdoors?"
+        )
+
+        self.assertEqual("duration_between", plan.operator)
+        self.assertEqual("week", plan.unit)
+        self.assertEqual(["start_event", "end_event"], [slot.role for slot in plan.slots])
+        for slot in plan.slots:
+            self.assertEqual(
+                slot.query_mention,
+                "How many weeks had passed since I recovered from the flu when I went on my 10th jog outdoors?"[
+                    slot.query_start : slot.query_end
+                ],
+            )
+
+    def test_directional_before_slots_preserve_semantic_direction(self) -> None:
+        question = (
+            "How many days before my friend's party did I order the birthday gift?"
+        )
+        slots = directional_slots(question)
+
+        self.assertIsNotNone(slots)
+        self.assertEqual("I order the birthday gift", slots[0].query_mention)
+        self.assertEqual("my friend's party", slots[1].query_mention)
+
+    def test_deterministic_planner_compiles_latest_collection(self) -> None:
+        plan = compile_question_plan(
+            "Which streaming service did I start using most recently?"
+        )
+
+        self.assertEqual("latest_event", plan.operator)
+        self.assertEqual("event_set", plan.slots[0].role)
+
+    def test_deterministic_planner_does_not_confuse_relative_first_noun(self) -> None:
+        plan = compile_question_plan(
+            "How many days ago did I harvest my first batch of fresh herbs?"
+        )
+
+        self.assertEqual("elapsed_since", plan.operator)
+        self.assertEqual("target_event", plan.slots[0].role)
+
     def test_planner_compiles_lookup_and_ignores_window_unit(self) -> None:
         plan, status = compile_plan(
             {
@@ -138,6 +184,93 @@ class TemporalEventSlotShadowTest(unittest.TestCase):
         self.assertEqual([], selected)
         self.assertEqual("invalid_slot_binding", status)
 
+    def test_event_packet_accepts_bounded_multi_turn_event(self) -> None:
+        plan = TemporalPlan(
+            "locate_event",
+            None,
+            (SlotSpec("E1", "target_event", "event last week"),),
+        )
+        valid, selected, status = validate_event_packet_binding(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": ["C03", "C01", "C02"]}
+                ],
+            },
+            plan,
+            candidates(4),
+            "2025-01-31T00:00:00Z",
+        )
+
+        self.assertTrue(valid)
+        self.assertEqual("address_valid", status)
+        self.assertEqual([candidates(4)[2], candidates(4)[0], candidates(4)[1]], selected)
+
+    def test_event_packet_revision_preserves_slot_roles(self) -> None:
+        plan = TemporalPlan(
+            "duration_between",
+            "day",
+            (
+                SlotSpec("E1", "start_event", "start"),
+                SlotSpec("E2", "end_event", "end"),
+            ),
+        )
+        pool = candidates(2)
+        first, _ = validate_event_packet_proposal(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": ["C01"]},
+                    {"slotId": "E2", "candidateIds": ["C02"]},
+                ],
+            },
+            plan,
+            pool,
+            "2025-01-31T00:00:00Z",
+        )
+        swapped, _ = validate_event_packet_proposal(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": ["C02"]},
+                    {"slotId": "E2", "candidateIds": ["C01"]},
+                ],
+            },
+            plan,
+            pool,
+            "2025-01-31T00:00:00Z",
+        )
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(swapped)
+        self.assertNotEqual(first.canonical_revision(), swapped.canonical_revision())
+
+    def test_event_packet_rejects_global_budget_overflow(self) -> None:
+        plan = TemporalPlan(
+            "duration_between",
+            "day",
+            (
+                SlotSpec("E1", "start_event", "start"),
+                SlotSpec("E2", "end_event", "end"),
+            ),
+        )
+        valid, selected, status = validate_event_packet_binding(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": [f"C{i:02d}" for i in range(1, 8)]},
+                    {"slotId": "E2", "candidateIds": [f"C{i:02d}" for i in range(8, 14)]},
+                ],
+            },
+            plan,
+            candidates(13),
+            "2025-01-31T00:00:00Z",
+        )
+
+        self.assertFalse(valid)
+        self.assertEqual([], selected)
+        self.assertEqual("packet_budget_exceeded", status)
+
     def test_committee_unions_only_certified_bindings_in_rank_order(self) -> None:
         pool = candidates(4)
         certified, selected, statuses, hashes = combine_binding_results(
@@ -155,6 +288,20 @@ class TemporalEventSlotShadowTest(unittest.TestCase):
             ["certified", "invalid_slot_binding", "certified"], statuses
         )
         self.assertEqual(["hash-a", "hash-b", "hash-c"], hashes)
+
+    def test_committee_applies_rank_order_packet_budget(self) -> None:
+        pool = candidates(4)
+        valid, selected, _, _ = combine_binding_results(
+            [
+                (True, [pool[3], pool[1]], "address_valid", "hash-a"),
+                (True, [pool[2], pool[0]], "address_valid", "hash-b"),
+            ],
+            pool,
+            max_selected=3,
+        )
+
+        self.assertTrue(valid)
+        self.assertEqual(pool[:3], selected)
 
 
 if __name__ == "__main__":
