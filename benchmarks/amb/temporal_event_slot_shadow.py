@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
+import inspect
 import json
 import os
 import re
@@ -60,12 +62,13 @@ except ImportError:
     )
 
 
-SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v7"
+SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v8"
 PLANNER_SCHEMA_VERSION = "paw.temporal-event-planner.v1"
 BINDER_SCHEMA_VERSION = "paw.temporal-event-binder.v2"
 DETERMINISTIC_PLANNER_VERSION = "paw.temporal-question-compiler.v1"
 EVENT_PACKET_BINDER_VERSION = "paw.temporal-event-packet-binder.v2:slot-consensus"
 EVENT_PACKET_MAX_SELECTED = 12
+RUN_INSTANCE = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
 UNIT_ALIASES = {
     "day": "day",
     "days": "day",
@@ -122,7 +125,13 @@ class EventPacketBinding:
         )
 
 
-def content_free_plan_slots(plan: TemporalPlan | None) -> list[dict[str, Any]]:
+def keyed_revision(value: str, key: bytes, domain: str) -> str:
+    return eval_hmac(f"{domain}:{value}", key)
+
+
+def content_free_plan_slots(
+    plan: TemporalPlan | None, key: bytes
+) -> list[dict[str, Any]]:
     if plan is None:
         return []
     return [
@@ -131,7 +140,9 @@ def content_free_plan_slots(plan: TemporalPlan | None) -> list[dict[str, Any]]:
             "role": slot.role,
             "queryStart": slot.query_start,
             "queryEnd": slot.query_end,
-            "queryMentionHash": sha256_text(slot.query_mention),
+            "queryMentionHmac": keyed_revision(
+                slot.query_mention, key, "query-mention"
+            ),
         }
         for slot in plan.slots
     ]
@@ -149,9 +160,9 @@ def content_free_consensus_slots(
         {
             "slotId": slot_id,
             "role": role_by_slot[slot_id],
-            "evidenceRefHmacs": [
+            "evidenceRefHmacs": sorted(
                 hmac_ref(candidate.evidence_ref, key) for candidate in candidates
-            ],
+            ),
         }
         for slot_id, candidates in binding.slots
     ]
@@ -685,6 +696,29 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def sha256_tree(path: Path) -> str:
+    if not path.is_dir():
+        raise ValueError(f"artifact tree does not exist: {path}")
+    entries = []
+    for child in sorted(item for item in path.rglob("*") if item.is_file()):
+        entries.append(
+            {
+                "path": child.relative_to(path).as_posix(),
+                "sha256": sha256_file(child),
+            }
+        )
+    if not entries:
+        raise ValueError(f"artifact tree is empty: {path}")
+    return sha256_text(json.dumps(entries, sort_keys=True, separators=(",", ":")))
+
+
+def package_version(name: str) -> str:
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError as error:
+        raise ValueError(f"required package version is unavailable: {name}") from error
+
+
 def save_checkpoint(path: Path, policy: dict[str, Any], rows: list[dict[str, Any]]) -> None:
     payload = {
         "schemaVersion": f"{SCHEMA_VERSION}:checkpoint",
@@ -810,6 +844,11 @@ def main() -> None:
     binder_sampling = os.environ.get(
         "PAW_AMB_TEMPORAL_SELECTOR_SAMPLING", "greedy"
     ).strip()
+    run_instance_id = os.environ.get(
+        "PAW_AMB_TEMPORAL_RUN_INSTANCE_ID", ""
+    ).strip()
+    if RUN_INSTANCE.fullmatch(run_instance_id) is None:
+        raise ValueError("PAW_AMB_TEMPORAL_RUN_INSTANCE_ID is missing or invalid")
     thinking_modes = {"disabled", "omit", "low", "high", "max"}
     sampling_modes = {"temperature_zero", "greedy"}
     if planner_thinking not in thinking_modes or binder_thinking not in thinking_modes:
@@ -849,6 +888,7 @@ def main() -> None:
     key = args.eval_hmac_key.read_bytes().strip()
     if not key:
         raise ValueError("evaluation HMAC key is empty")
+    hmac_key_id = keyed_revision("paw.temporal.v1", key, "key-id")
     dataset = load_json(args.dataset)
     if not isinstance(dataset, list):
         raise ValueError("dataset is invalid")
@@ -890,6 +930,13 @@ def main() -> None:
                 "crossEncoderMaxLength": reranker_max_length,
                 "crossEncoderBatchSize": reranker_batch_size,
                 "rrfK": 60,
+                "crossEncoderArtifactSha256": (
+                    sha256_tree(Path(reranker_path)) if reranker_path else None
+                ),
+                "crossEncoderRuntimeVersions": {
+                    name: package_version(name)
+                    for name in ("sentence-transformers", "transformers", "torch")
+                },
             }
             if reranker is not None
             else {}
@@ -897,6 +944,9 @@ def main() -> None:
     }
     model_policy = {
         "model": model,
+        "providerEndpointHmac": keyed_revision(
+            base_url.rstrip("/"), key, "provider-endpoint"
+        ),
         "planner": {
             "mode": planner_mode,
             "schemaVersion": (
@@ -939,6 +989,26 @@ def main() -> None:
                 sha256_file(path)
                 for path in (args.retrieval_log or args.temporal_source_lane_log)
             ),
+            "producerCodeSha256": sha256_file(Path(__file__)),
+            "helperCodeSha256": sha256_file(
+                Path(__file__).with_name("temporal_event_ledger_shadow.py")
+            ),
+            "plannerTemplateSha256": sha256_text(
+                inspect.getsource(planner_prompt)
+                if planner_mode == "llm"
+                else inspect.getsource(compile_question_plan)
+            ),
+            "binderTemplateSha256": sha256_text(
+                inspect.getsource(event_packet_binder_prompt)
+                if binder_mode == "event_packet"
+                else inspect.getsource(binder_prompt)
+            ),
+            "hmacKeyId": hmac_key_id,
+        },
+        "executionPolicy": {
+            "runInstanceId": run_instance_id,
+            "clientCacheReuse": False,
+            "perReplicaRequestNonceInjected": True,
         },
         "targetScope": args.target_scope,
         "targetQueryHmacs": sorted(target_hmacs),
@@ -971,7 +1041,11 @@ def main() -> None:
             plan = compile_question_plan(question)
             planner_status = "compiled" if plan is not None else "unsupported"
             planner_response_hash = (
-                sha256_text(json.dumps(asdict(plan), sort_keys=True))
+                keyed_revision(
+                    json.dumps(asdict(plan), sort_keys=True),
+                    key,
+                    "planner-response",
+                )
                 if plan is not None
                 else "unsupported"
             )
@@ -985,11 +1059,15 @@ def main() -> None:
                 planner_thinking,
                 planner_sampling,
             )
+            planner_response_hash = keyed_revision(
+                planner_response_hash, key, "planner-response"
+            )
             plan, planner_status = compile_plan(plan_proposal)
         selected: list[TurnCandidate] = []
         certified = False
         binder_status = "planner_rejected"
         binder_replica_statuses: list[str] = []
+        binder_request_hmacs: list[str] = []
         binder_response_hashes: list[str] = []
         valid_replica_selected_counts: list[int] = []
         replica_selection_jaccard: float | None = None
@@ -1009,7 +1087,18 @@ def main() -> None:
                 else binder_prompt(question, cutoff, plan, ranked)
             )
 
-            def bind_once() -> tuple[
+            def replica_prompt(replica_index: int) -> str:
+                return (
+                    f"{prompt}\n\nExecution nonce: "
+                    f"{run_instance_id}:{query_hmac}:{replica_index}"
+                )
+
+            binder_request_hmacs = [
+                keyed_revision(replica_prompt(index), key, "binder-request")
+                for index in range(binder_replicas)
+            ]
+
+            def bind_once(replica_index: int) -> tuple[
                 bool,
                 list[TurnCandidate],
                 str,
@@ -1017,7 +1106,7 @@ def main() -> None:
                 EventPacketBinding | None,
             ]:
                 proposal, response_hash = chat_completion(
-                    prompt,
+                    replica_prompt(replica_index),
                     model,
                     base_url,
                     api_key,
@@ -1049,9 +1138,7 @@ def main() -> None:
                 )
 
             with ThreadPoolExecutor(max_workers=binder_replicas) as executor:
-                binding_results = list(
-                    executor.map(lambda _: bind_once(), range(binder_replicas))
-                )
+                binding_results = list(executor.map(bind_once, range(binder_replicas)))
             valid_replica_sets = [
                 {candidate.evidence_ref for candidate in replica_selected}
                 for replica_valid, replica_selected, _, _, _ in binding_results
@@ -1143,25 +1230,34 @@ def main() -> None:
             and gold_refs.issubset(selected_refs)
         )
         plan_hash = (
-            sha256_text(json.dumps(asdict(plan), sort_keys=True))
+            keyed_revision(
+                json.dumps(asdict(plan), sort_keys=True), key, "temporal-plan"
+            )
             if plan is not None
             else "invalid_plan"
+        )
+        selected_slot_hmacs = content_free_consensus_slots(
+            consensus_binding, plan, key
         )
         result_rows.append(
             {
                 "queryHmac": query_hmac,
                 "questionType": item.get("question_type"),
-                "queryCutoffHash": sha256_text(cutoff),
-                "sourceLockRevisionHash": sha256_text(
-                    json.dumps(sorted(source_hashes), separators=(",", ":"))
+                "queryCutoffHmac": keyed_revision(cutoff, key, "query-cutoff"),
+                "sourceLockRevisionHmac": keyed_revision(
+                    json.dumps(sorted(source_hashes), separators=(",", ":")),
+                    key,
+                    "source-lock",
                 ),
                 "lockedUserTurnCount": len(locked),
                 "rankedCandidateCount": len(ranked),
-                "rankedCandidateSetRevisionHash": sha256_text(
+                "rankedCandidateSetRevisionHmac": keyed_revision(
                     json.dumps(
                         [candidate.evidence_ref for candidate in ranked],
                         separators=(",", ":"),
-                    )
+                    ),
+                    key,
+                    "ranked-candidate-set",
                 ),
                 "goldUserEndpointCount": len(gold_refs),
                 "rankedEndpointCoverageComplete": bool(gold_refs)
@@ -1172,19 +1268,25 @@ def main() -> None:
                 and gold_refs.issubset(committee_union_refs),
                 "selectedGoldEndpointCount": len(gold_refs & selected_refs),
                 "plannerStatus": planner_status,
-                "plannerResponseHash": planner_response_hash,
-                "planHash": plan_hash,
+                "plannerResponseHmac": planner_response_hash,
+                "planRevisionHmac": plan_hash,
                 "planOperator": plan.operator if plan is not None else None,
+                "planUnit": plan.unit if plan is not None else None,
                 "planSlotCount": len(plan.slots) if plan is not None else 0,
-                "planSlots": content_free_plan_slots(plan),
+                "planSlots": content_free_plan_slots(plan, key),
                 "binderStatus": binder_status,
                 "binderReplicaStatuses": binder_replica_statuses,
-                "binderResponseHashes": binder_response_hashes,
+                "binderRequestHmacs": binder_request_hmacs,
+                "binderResponseHmacs": [
+                    keyed_revision(response_hash, key, "binder-response")
+                    for response_hash in binder_response_hashes
+                ],
                 "validReplicaSelectedCandidateCounts": valid_replica_selected_counts,
                 "replicaSelectionJaccard": replica_selection_jaccard,
                 "roleSpecificJaccards": role_specific_jaccards,
-                "packetBindingRevisionHashes": [
-                    revision for revision in packet_binding_revisions
+                "packetBindingRevisionHmacs": [
+                    keyed_revision(revision, key, "replica-packet-binding")
+                    for revision in packet_binding_revisions
                 ],
                 "allReplicasValid": all_replicas_valid,
                 "slotExactAgreement": slot_exact_agreement,
@@ -1193,14 +1295,20 @@ def main() -> None:
                 "committeeUnionWithinBudget": (
                     replica_union_count <= EVENT_PACKET_MAX_SELECTED
                 ),
-                "consensusBindingRevisionHash": (
-                    consensus_binding.canonical_revision()
+                "consensusBindingRevisionHmac": (
+                    keyed_revision(
+                        json.dumps(
+                            selected_slot_hmacs,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ),
+                        key,
+                        "consensus-binding",
+                    )
                     if consensus_binding is not None
                     else None
                 ),
-                "selectedSlotEvidenceRefHmacs": content_free_consensus_slots(
-                    consensus_binding, plan, key
-                ),
+                "selectedSlotEvidenceRefHmacs": selected_slot_hmacs,
                 "singleReplicaEndpointCoverageComplete": single_replica_complete,
                 "stableEndpointCoverageComplete": stable_complete,
                 "certifiedReplicaCount": sum(
@@ -1313,6 +1421,16 @@ def main() -> None:
                 row["selectedGoldEndpointPrecision"] for row in result_rows
             )
             / len(result_rows),
+        },
+        "executionEvidence": {
+            "runInstanceId": run_instance_id,
+            "clientCacheReuse": False,
+            "perReplicaRequestNonceInjected": True,
+            "remoteBinderLogicalCallCount": sum(
+                row["plannerStatus"] in {"planned", "compiled"}
+                for row in result_rows
+            )
+            * binder_replicas,
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

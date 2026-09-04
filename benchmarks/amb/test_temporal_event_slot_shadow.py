@@ -306,7 +306,7 @@ class TemporalEventSlotShadowTest(unittest.TestCase):
             "2025-01-31T00:00:00Z",
         )
 
-        plan_slots = content_free_plan_slots(plan)
+        plan_slots = content_free_plan_slots(plan, b"test-key")
         packet_slots = content_free_consensus_slots(binding, plan, b"test-key")
 
         self.assertEqual(["start_event", "end_event"], [x["role"] for x in plan_slots])

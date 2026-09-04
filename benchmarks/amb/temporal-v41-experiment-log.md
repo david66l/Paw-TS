@@ -579,3 +579,41 @@ slice (133 questions) as a comparable treatment.
   Baseline and treatment must use the same answer and judge models; because the
   historical DeepSeek account is unavailable, a GLM run requires a fresh GLM
   baseline and cannot be compared directly with the historical 112/133 result.
+
+## v72-v75 full-ledger source and replay audit
+
+- V72 reproduced the frozen temporal source lane over all 133 temporal queries
+  in four shards. Every query received exactly one source lock, no answer path
+  was run, and the 21 historical residual locks matched V55 exactly. The four
+  source-log SHA-256 values are `ed9bf0064c207e671fcd96356ffec7c87b96e96492f5b1734775542c8db6d1cce`,
+  `cdd67ffe4cb970f08b7e1d008b27c5fd7a6ffb93725ec66dfdc061f3b10e21b5b`,
+  `a173fff5b8fd3f32dd2ee983919922a4415034560828b414cdb6b93394579d6fe`,
+  and `a9e93dda0eb62a03b87b2af9a3af8d7c311dd9b283d49b8c96549b1adf9aa56a4`.
+- V73 was the first complete 133-row per-slot consensus audit. Candidate
+  reachability was 125/133; 118 rows formed address-valid consensus packets;
+  104 packets contained every labeled endpoint; and the loose committee-union
+  upper bound was 112. The 21 historical errors contributed 14 consensus
+  packets, eight endpoint-complete packets, and 12 union-upper-bound packets.
+  Historical correct rows still included eight accepted but endpoint-incomplete
+  packets, so activating every single-run consensus was rejected as unsafe.
+- V75 repeated the same complete ledger after binding per-row cutoff, source
+  lock, ranked candidate set, plan, and slot evidence identities. Candidate
+  reachability remained 125/133; 117 rows formed consensus packets; 101 were
+  endpoint-complete; and the union upper bound was 109. Its four artifact hashes
+  are `64fabe2fe276c62dedb5abed5d5dcabbd90436eaec01dd3563d0fff477510bcb`,
+  `ab03a2a9b90adf6cc3c1a68b0307fc23aec5ddf41f7341709f2c893fcbdeede2`,
+  `75d13ff154796f6be65c3111326c3195d4aa40058086f281e71bf0ee25d73a9e`,
+  and `7e708ac0823a1eab05f59850663f5e90f8f5618666ad163881c7df38ceb43f53`.
+- V73/V75 had 112 queries with consensus in both runs, but only 86 retained the
+  same plan, consensus binding, and flat evidence-address set. Of those 86,
+  78 were endpoint-complete in both runs. After this label-blind stability set
+  was identified, diagnostic unsealing showed 78 historical-correct rows and
+  eight historical-error rows; only six of the latter were endpoint-complete.
+  This is not enough safe theoretical margin to claim a 90% treatment result.
+- V73 and V75 are therefore diagnostic evidence only. A production treatment
+  cohort requires two distinct, no-client-cache replay instances whose requests
+  carry per-replica nonces and whose sanitized manifests bind the same HMAC key
+  domain, dataset, complete baseline ledger, source logs, candidate/model
+  policies, producer revision, cutoff, plan operator/unit/roles, and exact
+  per-slot evidence-HMAC sets. Raw diagnostic reports must be projected through
+  a strict label-blind sanitizer before the cross-replay freezer can read them.
