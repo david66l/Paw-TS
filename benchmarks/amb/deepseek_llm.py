@@ -2,20 +2,32 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
 from memory_bench.llm.base import LLM, Schema
 
 
-CACHE_ENTRY_SCHEMA = "paw.amb-llm-cache-entry.v2"
-STRUCTURED_MESSAGE_POLICY = "paw.amb-structured-messages.v1:stable-schema-prefix"
+CACHE_ENTRY_SCHEMA = "paw.amb-llm-cache-entry.v4"
+STRUCTURED_MESSAGE_POLICY = (
+    "paw.amb-structured-messages.v2:stable-schema-prefix-exact-echo-recovery"
+)
+STRUCTURED_RESULT_POLICY = (
+    "paw.amb-structured-result.v2:draft2020-direct-or-exact-one-level-echo"
+)
 
 
 class StructuredOutputError(ValueError):
     """The provider returned a final answer that violates the JSON contract."""
+
+
+class ProviderContentFilterError(RuntimeError):
+    """The provider repeatedly refused a request before returning an answer."""
 
 
 def _structured_messages(prompt: str, schema_json: dict) -> list[dict]:
@@ -93,6 +105,10 @@ class DeepSeekFlashLLM(LLM):
             "memoryToolCacheHits": 0,
             "memoryToolFailures": 0,
             "memoryToolResultChars": 0,
+            "structuredDirectCalls": 0,
+            "structuredEchoObservedCalls": 0,
+            "structuredEchoRecoveredCalls": 0,
+            "structuredRejectedCalls": 0,
         }
 
     def bind_memory_tools(
@@ -125,6 +141,7 @@ class DeepSeekFlashLLM(LLM):
             "reasoningEffort": "max",
             "toolProfile": self._tool_profile,
             "structuredMessagePolicy": STRUCTURED_MESSAGE_POLICY,
+            "structuredResultPolicy": STRUCTURED_RESULT_POLICY,
         }
 
     @property
@@ -132,13 +149,13 @@ class DeepSeekFlashLLM(LLM):
         return f"deepseek:{self._model}"
 
     def _create_with_content_filter_resilience(self, kwargs: dict):
-        """Retry provider content-filter refusals, then degrade explicitly.
+        """Retry provider content-filter refusals, then fail explicitly.
 
         Provider-side content filters (for example Zhipu error 1301) can trip
         on benign roleplay-style benchmark conversations. A refusal is a
-        per-request event, not a fatal harness error: retry briefly, then
-        return a parseable cannot-answer payload so the evaluation continues
-        and the affected item is scored on its merits.
+        per-request event rather than evidence.  Retry briefly, then surface a
+        typed hard failure; manufacturing a schema-shaped answer would silently
+        contaminate either the benchmark score or an intermediate certificate.
         """
         last_error: Exception | None = None
         for attempt in range(3):
@@ -155,35 +172,9 @@ class DeepSeekFlashLLM(LLM):
             "content_filter_refusal",
             json.dumps({"attempts": 3, "error": str(last_error)[:200]}),
         )
-        return self._synthetic_content_filter_response()
-
-    def _synthetic_content_filter_response(self):
-        from openai.types.chat import ChatCompletion, ChatCompletionMessage
-        from openai.types.chat.chat_completion import Choice
-
-        return ChatCompletion(
-            id="content-filter-refusal",
-            model=self._model,
-            object="chat.completion",
-            created=int(time.time()),
-            choices=[
-                Choice(
-                    finish_reason="stop",
-                    index=0,
-                    message=ChatCompletionMessage(
-                        role="assistant",
-                        content=json.dumps(
-                            {
-                                "answer": "Based on the available memory, I cannot answer this question.",
-                                "correct": False,
-                                "reason": "provider content filter refused the request",
-                            }
-                        ),
-                    ),
-                )
-            ],
-            usage=None,
-        )
+        raise ProviderContentFilterError(
+            "provider content filter refused the request after 3 attempts"
+        ) from last_error
 
     def generate(self, prompt: str, schema: Schema) -> dict:
         schema_json = {
@@ -193,6 +184,14 @@ class DeepSeekFlashLLM(LLM):
             "additionalProperties": False,
         }
         initial_messages = _structured_messages(prompt, schema_json)
+        schema_hash = hashlib.sha256(
+            json.dumps(
+                schema_json,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
         prompt_hash = hashlib.sha256(
             json.dumps(
                 initial_messages,
@@ -210,11 +209,11 @@ class DeepSeekFlashLLM(LLM):
                             else (
                                 "paw.amb-llm-cache.v11-l0-control"
                                 if self._tool_profile == "l0_only"
-                                else "paw.amb-llm-cache.v24-stable-schema-prefix"
+                                else "paw.amb-llm-cache.v26-draft-schema-echo-recovery"
                             )
                         )
                         if self._memory_provider is not None
-                        else "paw.amb-llm-cache.v2-stable-schema-prefix"
+                        else "paw.amb-llm-cache.v4-draft-schema-echo-recovery"
                     ),
                     "model": self.model_id,
                     "promptHash": prompt_hash,
@@ -225,6 +224,7 @@ class DeepSeekFlashLLM(LLM):
                     "memoryTools": self._memory_provider is not None,
                     "memoryToolProfile": self._tool_profile,
                     "cacheFormat": CACHE_ENTRY_SCHEMA,
+                    "structuredResultPolicy": STRUCTURED_RESULT_POLICY,
                 },
                 sort_keys=True,
                 ensure_ascii=False,
@@ -239,7 +239,9 @@ class DeepSeekFlashLLM(LLM):
         cache_path = cache_dir / f"{cache_key}.json"
         if cache_path.exists():
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            cached_result, cached_usage = _read_cache_entry(cached, schema)
+            cached_result, cached_usage, cached_normalization_mode = _read_cache_entry(
+                cached, schema
+            )
             if cached_result is not None:
                 self._stats["calls"] += 1
                 self._stats["cacheHitCalls"] += 1
@@ -290,37 +292,52 @@ class DeepSeekFlashLLM(LLM):
                         "costEvidenceComplete": cached_usage is not None,
                         "memoryToolProfile": self._tool_profile,
                         "structuredMessagePolicy": STRUCTURED_MESSAGE_POLICY,
+                        "structuredResultPolicy": STRUCTURED_RESULT_POLICY,
+                        "structuredNormalizationMode": cached_normalization_mode,
                     },
                 )
                 return cached_result
         started = time.perf_counter()
         delay = 5
+        accumulated_usage = {
+            "promptTokens": 0,
+            "completionTokens": 0,
+            "totalTokens": 0,
+            "promptCacheHitTokens": 0,
+            "promptCacheMissTokens": 0,
+        }
+        accumulated_tool_stats = {
+            "memoryToolCalls": 0,
+            "memoryToolExecutedCalls": 0,
+            "memoryToolLimitedCalls": 0,
+            "memoryToolRounds": 0,
+            "memoryToolCacheHits": 0,
+            "memoryToolFailures": 0,
+            "memoryToolResultChars": 0,
+        }
+        remote_attempts = 0
         for attempt in range(6):
             try:
+                remote_attempts += 1
                 result, usage_totals, tool_stats = self._generate_remote(
                     initial_messages
                 )
-                missing = [key for key in schema.required if key not in result]
-                if missing and isinstance(result, dict):
-                    # Salvage deterministic shape drift from flash-class
-                    # readers: at temperature 0 retries reproduce the same
-                    # drift, so coerce the returned object into the required
-                    # shape with conservative defaults instead of failing
-                    # the item after identical attempts.
-                    for key in schema.required:
-                        if not isinstance(result.get(key), (str, bool, int, float)):
-                            result[key] = (
-                                "Based on the available memory, I cannot answer this question."
-                                if key == "answer"
-                                else False
-                                if key == "correct"
-                                else ""
-                            )
-                    missing = []
-                if missing:
-                    raise StructuredOutputError(
-                        "structured response omitted required fields"
+                _accumulate_integer_fields(accumulated_usage, usage_totals)
+                _accumulate_integer_fields(accumulated_tool_stats, tool_stats)
+                echo_observed = _is_schema_echo_wrapper(result)
+                if echo_observed:
+                    self._stats["structuredEchoObservedCalls"] += 1
+                try:
+                    result, normalization_mode = _normalize_structured_result_with_mode(
+                        result, schema_json
                     )
+                except StructuredOutputError:
+                    self._stats["structuredRejectedCalls"] += 1
+                    raise
+                if normalization_mode == "exact_schema_echo":
+                    self._stats["structuredEchoRecoveredCalls"] += 1
+                else:
+                    self._stats["structuredDirectCalls"] += 1
                 cache_dir.mkdir(parents=True, exist_ok=True)
                 temp_path = cache_path.with_suffix(f".{os.getpid()}.tmp")
                 temp_path.write_text(
@@ -328,17 +345,24 @@ class DeepSeekFlashLLM(LLM):
                         {
                             "schemaVersion": CACHE_ENTRY_SCHEMA,
                             "result": result,
-                            "usage": usage_totals,
-                            "toolStats": tool_stats,
+                            "usage": accumulated_usage,
+                            "toolStats": accumulated_tool_stats,
+                            "normalizationMode": normalization_mode,
+                            "structuredResultPolicy": STRUCTURED_RESULT_POLICY,
+                            "schemaSha256": schema_hash,
                         },
                         ensure_ascii=False,
+                        allow_nan=False,
                     ),
                     encoding="utf-8",
                 )
                 os.replace(temp_path, cache_path)
                 self._stats["calls"] += 1
-                self._stats["remoteCalls"] += 1
-                for key, value in {**usage_totals, **tool_stats}.items():
+                self._stats["remoteCalls"] += remote_attempts
+                for key, value in {
+                    **accumulated_usage,
+                    **accumulated_tool_stats,
+                }.items():
                     if key in self._stats and isinstance(value, int):
                         self._stats[key] += value
                 _log(
@@ -350,10 +374,12 @@ class DeepSeekFlashLLM(LLM):
                         "attempt": attempt + 1,
                         "promptHash": prompt_hash,
                         "durationMs": round((time.perf_counter() - started) * 1000, 1),
-                        **usage_totals,
-                        **tool_stats,
+                        **accumulated_usage,
+                        **accumulated_tool_stats,
                         "memoryToolProfile": self._tool_profile,
                         "structuredMessagePolicy": STRUCTURED_MESSAGE_POLICY,
+                        "structuredResultPolicy": STRUCTURED_RESULT_POLICY,
+                        "structuredNormalizationMode": normalization_mode,
                     },
                 )
                 return result
@@ -367,6 +393,14 @@ class DeepSeekFlashLLM(LLM):
                         time.sleep(delay)
                         delay *= 2
                     continue
+                self._stats["calls"] += 1
+                self._stats["remoteCalls"] += remote_attempts
+                for key, value in {
+                    **accumulated_usage,
+                    **accumulated_tool_stats,
+                }.items():
+                    if key in self._stats and isinstance(value, int):
+                        self._stats[key] += value
                 _log(
                     "llm_settlement",
                     {
@@ -377,6 +411,9 @@ class DeepSeekFlashLLM(LLM):
                         "durationMs": round((time.perf_counter() - started) * 1000, 1),
                         "errorCode": error.__class__.__name__,
                         "structuredMessagePolicy": STRUCTURED_MESSAGE_POLICY,
+                        "structuredResultPolicy": STRUCTURED_RESULT_POLICY,
+                        **accumulated_usage,
+                        **accumulated_tool_stats,
                         **({"httpStatus": status} if status is not None else {}),
                     },
                 )
@@ -839,23 +876,45 @@ def _memory_evidence_identity(tool: object, list_key: str, item: object) -> str:
 def _read_cache_entry(
     cached: object,
     schema: Schema,
-) -> tuple[dict | None, dict | None]:
+) -> tuple[dict | None, dict | None, str | None]:
     if not isinstance(cached, dict):
-        return None, None
+        return None, None, None
     if cached.get("schemaVersion") == CACHE_ENTRY_SCHEMA:
         result = cached.get("result")
         usage = cached.get("usage")
+        normalization_mode = cached.get("normalizationMode")
     else:
         # Legacy raw-result entries remain readable for development, but their
         # missing origin usage makes them ineligible for a release cost gate.
         result = cached
         usage = None
-    if not isinstance(result, dict) or not all(
-        key in result for key in schema.required
+        normalization_mode = None
+    schema_json = {
+        "type": "object",
+        "properties": schema.properties,
+        "required": schema.required,
+        "additionalProperties": False,
+    }
+    schema_hash = hashlib.sha256(
+        json.dumps(
+            schema_json,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    if cached.get("schemaVersion") == CACHE_ENTRY_SCHEMA and (
+        cached.get("structuredResultPolicy") != STRUCTURED_RESULT_POLICY
+        or cached.get("schemaSha256") != schema_hash
+        or normalization_mode not in {"direct", "exact_schema_echo"}
     ):
-        return None, None
+        return None, None, None
+    try:
+        result = _normalize_structured_result(result, schema_json)
+    except StructuredOutputError:
+        return None, None, None
     if usage is None:
-        return result, None
+        return result, None, normalization_mode
     usage_keys = (
         "promptTokens",
         "completionTokens",
@@ -866,8 +925,98 @@ def _read_cache_entry(
     if not isinstance(usage, dict) or any(
         not isinstance(usage.get(key), int) or usage[key] < 0 for key in usage_keys
     ):
-        return result, None
-    return result, {key: usage[key] for key in usage_keys}
+        return result, None, normalization_mode
+    return result, {key: usage[key] for key in usage_keys}, normalization_mode
+
+
+def _normalize_structured_result(result: object, schema_json: dict) -> dict:
+    """Validate the declared response shape and recover one exact GLM drift.
+
+    Some flash-class OpenAI-compatible models copy the four JSON-schema wrapper
+    fields and place their generated values under ``properties``.  Recovery is
+    allowed only for that exact, single-level signature.  Both ordinary and
+    recovered candidates pass the same complete Draft 2020-12 validation; no
+    coercion, default filling, or recursive search is performed.
+    """
+    normalized, _mode = _normalize_structured_result_with_mode(result, schema_json)
+    return normalized
+
+
+def _normalize_structured_result_with_mode(
+    result: object, schema_json: dict
+) -> tuple[dict, str]:
+    if not isinstance(result, dict):
+        raise StructuredOutputError("structured response is not an object")
+    properties = schema_json.get("properties")
+    required = schema_json.get("required")
+    if (
+        schema_json.get("type") != "object"
+        or schema_json.get("additionalProperties") is not False
+        or not isinstance(properties, dict)
+        or not isinstance(required, list)
+        or any(not isinstance(key, str) or key not in properties for key in required)
+    ):
+        raise StructuredOutputError("structured response schema is invalid")
+    try:
+        Draft202012Validator.check_schema(schema_json)
+        validator = Draft202012Validator(schema_json)
+    except SchemaError as error:
+        raise StructuredOutputError("structured response schema is invalid") from error
+
+    if _is_finite_json_value(result) and validator.is_valid(result):
+        return (
+            {key: result[key] for key in properties if key in result},
+            "direct",
+        )
+
+    wrapper_fields = {"type", "properties", "required", "additionalProperties"}
+    nested = result.get("properties")
+    if (
+        set(result) != wrapper_fields
+        or result.get("type") != "object"
+        or result.get("additionalProperties") is not False
+        or result.get("required") != required
+        or not isinstance(nested, dict)
+        or any(key in result for key in required)
+        or bool(set(properties).intersection(wrapper_fields))
+        or not _is_finite_json_value(nested)
+        or not validator.is_valid(nested)
+    ):
+        raise StructuredOutputError("structured response violates its schema")
+    return (
+        {key: nested[key] for key in properties if key in nested},
+        "exact_schema_echo",
+    )
+
+
+def _is_schema_echo_wrapper(value: object) -> bool:
+    return isinstance(value, dict) and set(value) == {
+        "type",
+        "properties",
+        "required",
+        "additionalProperties",
+    }
+
+
+def _accumulate_integer_fields(target: dict, source: dict) -> None:
+    for key in target:
+        value = source.get(key, 0)
+        if isinstance(value, int) and value >= 0:
+            target[key] += value
+
+
+def _is_finite_json_value(value: object) -> bool:
+    """Reject Python's non-standard NaN/Infinity JSON extensions recursively."""
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(_is_finite_json_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(key, str) and _is_finite_json_value(item)
+            for key, item in value.items()
+        )
+    return value is None or isinstance(value, (str, bool, int))
 
 
 def _parse_json_object(content: str) -> dict:
