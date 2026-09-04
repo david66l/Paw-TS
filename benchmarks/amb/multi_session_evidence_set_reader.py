@@ -140,12 +140,12 @@ def validate_selection_artifact(
             or not isinstance(sessions, list)
             or not isinstance(refs, list)
             or not isinstance(short_ids, list)
-            or len(source_lock) != 8
-            or len(set(source_lock)) != 8
+            or not 1 <= len(source_lock) <= 8
+            or len(set(source_lock)) != len(source_lock)
             or any(not isinstance(value, str) for value in source_lock + source_hmacs + refs)
             or any(not isinstance(value, str) for value in short_ids)
             or source_hmacs != [keyed_revision(value, key, "source-hash") for value in source_lock]
-            or len(sessions) != 8
+            or len(sessions) != len(source_lock)
             or len(refs) != len(set(refs))
             or len(short_ids) != len(refs)
             or len(short_ids) != len(set(short_ids))
@@ -181,7 +181,11 @@ def render_multi_session_evidence(
         raise ValueError("query cutoff binding is invalid")
     certificate = _dict(row.get("certificate"), "selection certificate is invalid")
     source_lock = tuple(certificate.get("sourceDocumentHashes", []))
-    if len(source_lock) != 8 or any(not isinstance(value, str) for value in source_lock):
+    if (
+        not 1 <= len(source_lock) <= 8
+        or len(set(source_lock)) != len(source_lock)
+        or any(not isinstance(value, str) for value in source_lock)
+    ):
         raise ValueError("selection source lock is invalid")
     if expected_source_lock is not None and source_lock != expected_source_lock:
         raise ValueError("selection source lock differs from pinned retrieval trace")

@@ -60,8 +60,11 @@ KEY_DOMAIN = "paw.multi-session-evidence-set"
 def _source_ranked_sessions(sessions: tuple[Any, ...], source_lock: tuple[str, ...]) -> list[tuple[int, Any]]:
     """Resolve the frozen lock and order its complete sessions by time."""
 
-    if len(source_lock) != BASELINE_SOURCE_COUNT or len(set(source_lock)) != BASELINE_SOURCE_COUNT:
-        raise ValueError("multi-session source lock must contain exactly eight unique sources")
+    if (
+        not 1 <= len(source_lock) <= BASELINE_SOURCE_COUNT
+        or len(set(source_lock)) != len(source_lock)
+    ):
+        raise ValueError("multi-session source lock must contain one to eight unique sources")
     by_hash = {session.source_hash: session for session in sessions}
     try:
         selected = [(rank, by_hash[source_hash]) for rank, source_hash in enumerate(source_lock, start=1)]

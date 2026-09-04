@@ -148,8 +148,14 @@ class MultiSessionEvidenceSetTest(unittest.TestCase):
     def test_missing_locked_or_post_cutoff_source_fails_closed(self) -> None:
         item = sample_item()
         sessions = user_only_sessions(item, "2024-12-31T00:00:00Z")
-        with self.assertRaisesRegex(ValueError, "exactly eight"):
-            shadow.content_free_certificate(sessions, tuple(session.source_hash for session in sessions[:7]), KEY)
+        with self.assertRaisesRegex(ValueError, "one to eight"):
+            shadow.content_free_certificate(sessions, (), KEY)
+        with self.assertRaisesRegex(ValueError, "one to eight"):
+            shadow.content_free_certificate(
+                sessions,
+                (sessions[0].source_hash, sessions[0].source_hash),
+                KEY,
+            )
         future_hash = sha256_text("multi-1_future")
         with self.assertRaisesRegex(ValueError, "cannot hydrate"):
             shadow.content_free_certificate(
