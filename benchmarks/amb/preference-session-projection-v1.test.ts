@@ -35,7 +35,7 @@ describe("recommendation user-authority projection", () => {
       legacyChars: 10_000,
     });
     expect(result.status).toBe("projected");
-    expect(result.sourceIds).toEqual(["a", "b", "c", "d", "f"]);
+    expect(result.sourceIds).toEqual(["a", "b", "c", "d", "f", "e"]);
   });
 
   it("is deterministic and insensitive to excluded assistant noise", () => {
@@ -68,7 +68,7 @@ describe("recommendation user-authority projection", () => {
       legacyChars: 10_000,
     });
     expect(result.status).toBe("projected");
-    expect(result.sourceIds).toEqual(["a", "b", "c", "d"]);
+    expect(result.sourceIds).toEqual(["a", "b", "c", "d", "e", "f"]);
   });
 
   it("fails closed for tampered content and future evidence", () => {

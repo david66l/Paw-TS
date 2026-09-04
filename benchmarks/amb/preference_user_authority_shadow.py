@@ -332,8 +332,14 @@ def projection_candidate_sources(
         locked_sessions = tuple(by_hash[source_hash] for source_hash in baseline)
     except KeyError as error:
         raise ValueError("top-8 source lock cannot hydrate a user session") from error
+    baseline_projection = set(baseline[:BASELINE_PROJECTION_SOURCE_COUNT])
+    rescue_pool = tuple(
+        session
+        for session in locked_sessions
+        if session.source_hash not in baseline_projection
+    )
     lexical_rescue = rank_sessions_bm25(
-        question, locked_sessions, LEXICAL_RESCUE_SOURCE_COUNT
+        question, rescue_pool, LEXICAL_RESCUE_SOURCE_COUNT
     )
     return tuple(
         dict.fromkeys(

@@ -116,6 +116,8 @@ class PreferenceUserAuthorityShadowTest(unittest.TestCase):
         candidates = projection_candidate_sources("What should I do in Denver?", sessions, baseline)
 
         self.assertEqual(baseline[:4], candidates[:4])
+        self.assertEqual(6, len(candidates))
+        self.assertIn(baseline[4], candidates[4:])
         self.assertIn(baseline[5], candidates[4:])
 
     def test_checkpoint_rejects_forbidden_evaluation_field(self) -> None:

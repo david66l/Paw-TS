@@ -85,11 +85,10 @@ export function projectRecommendationUserAuthorityV1(input: {
     );
   }
   const baseline = lock.slice(0, 4);
-  const ranked = rankSessionsBm25(input.query, lock, bySource).slice(0, 2);
-  const selected = [
-    ...baseline,
-    ...ranked.filter((sourceId) => !baseline.includes(sourceId)),
-  ];
+  const ranked = rankSessionsBm25(input.query, lock, bySource)
+    .filter((sourceId) => !baseline.includes(sourceId))
+    .slice(0, 2);
+  const selected = [...baseline, ...ranked];
   const rendered = render(selected, bySource);
   // Projection is atomic: any selected complete session that does not fit
   // rejects the entire replacement instead of silently dropping a session.
