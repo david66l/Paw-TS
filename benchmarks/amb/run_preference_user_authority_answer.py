@@ -27,7 +27,14 @@ except ImportError:
 
 
 SCHEMA_VERSION = "paw.preference-user-authority-answer-harness.v1"
-ANSWER_PROFILES = ("legacy", "evidence_commitment_v2")
+ANSWER_PROFILES = ("legacy", "evidence_commitment_v2", "evidence_profile_v3")
+PROFILE_BUCKETS = (
+    "positiveEvidenceIds",
+    "negativeEvidenceIds",
+    "goalEvidenceIds",
+    "experienceEvidenceIds",
+    "contextEvidenceIds",
+)
 
 
 def sha(value: str) -> str:
@@ -81,6 +88,17 @@ def answer_instruction(profile: str) -> str:
             "or recommendations, but never invent additional user facts. Do not refuse merely "
             "because the exact recommendation is absent from memory."
         )
+    if profile == "evidence_profile_v3":
+        return (
+            "Answer the request directly with a small number of concrete, useful options. The "
+            "trusted evidence profile contains exact user-authored statements selected for this "
+            "request. Jointly honor every relevant positive preference, negative constraint, "
+            "goal, prior experience, and named context item in that profile. Distinguish what the "
+            "user experienced, liked, asked about, considered, and planned. General knowledge may "
+            "supply new recommendations, but never describe those new ideas as the user's history. "
+            "Do not add tangential personal details, and do not refuse merely because the exact "
+            "recommendation is absent from memory."
+        )
     if profile != "evidence_commitment_v2":
         raise ValueError("answer profile is invalid")
     return (
@@ -99,6 +117,66 @@ def answer_instruction(profile: str) -> str:
         "personal details, obey negative constraints, and do not refuse just because the exact "
         "recommendation is absent from memory."
     )
+
+
+def preference_profile_schema():
+    from memory_bench.llm.base import Schema
+
+    evidence_ids = {
+        "type": "array",
+        "items": {"type": "string"},
+    }
+    return Schema(
+        properties={
+            "status": {
+                "type": "string",
+                "enum": ["complete", "insufficient"],
+            },
+            **{bucket: evidence_ids for bucket in PROFILE_BUCKETS},
+        },
+        required=["status", *PROFILE_BUCKETS],
+    )
+
+
+def preference_profile_prompt(question: str, addressed_context: str) -> str:
+    return f"""Select the complete, query-relevant user evidence for one personalized answer.
+
+Return only the supplied evidence IDs, never paraphrases or new facts. Scan every source before deciding. Select an ID when its user statement provides a material positive preference, negative preference or constraint, current goal or plan, firsthand experience or outcome, or named context fact for this request. A question about a topic is not proof that the user likes or experienced it. Preserve all independently relevant constraints and named examples, but omit unrelated domains. If no supplied statement can personalize the answer, return insufficient with all lists empty.
+
+QUESTION:
+{question}
+
+USER EVIDENCE:
+{addressed_context}
+"""
+
+
+def compile_preference_profile(packet, proposal: dict[str, Any]) -> tuple[str | None, int]:
+    if proposal.get("status") != "complete":
+        return None, 0
+    evidence = dict(packet.evidence_items)
+    selected: list[str] = []
+    sections = [
+        "TRUSTED_USER_EVIDENCE_PROFILE",
+        "Each line below is an exact user-authored statement. Bucket names describe only how the line constrains this answer.",
+    ]
+    for bucket in PROFILE_BUCKETS:
+        values = proposal.get(bucket)
+        if (
+            not isinstance(values, list)
+            or len(values) > 8
+            or any(not isinstance(value, str) or value not in evidence for value in values)
+        ):
+            return None, 0
+        unique_values = list(dict.fromkeys(values))
+        sections.append(f"[{bucket}]")
+        for evidence_id in unique_values:
+            sections.append(f"[{evidence_id}] {evidence[evidence_id]}")
+            selected.append(evidence_id)
+    selected = list(dict.fromkeys(selected))
+    if not selected or len(selected) > 16:
+        return None, 0
+    return "\n".join(sections), len(selected)
 
 
 def main() -> None:
@@ -127,10 +205,25 @@ def main() -> None:
     judge_llm = DeepSeekFlashLLM(tool_profile="l0_only")
     answer_mode = RAGMode(answer_llm)
     judge = GeminiJudge(judge_llm)
+    profile_schema = preference_profile_schema()
     rows: list[dict[str, Any]] = []
     for query_hmac in target_hmacs:
         item, packet = packets[query_hmac]
         question = required_string(item, "question")
+        answer_context = packet.context
+        profile_status = "not_requested"
+        profile_selected_count = 0
+        if args.answer_profile == "evidence_profile_v3":
+            proposal = answer_llm.generate(
+                preference_profile_prompt(question, packet.addressed_context),
+                profile_schema,
+            )
+            compiled, profile_selected_count = compile_preference_profile(packet, proposal)
+            if compiled is None:
+                profile_status = "fallback"
+            else:
+                profile_status = "compiled"
+                answer_context = compiled
 
         def prompt_fn(query: str, context: str, meta=None) -> str:
             return (
@@ -143,7 +236,7 @@ def main() -> None:
 
         result = answer_mode.answer_from_context(
             question,
-            packet.context,
+            answer_context,
             task_type="open",
             meta={"_prompt_fn": prompt_fn},
         )
@@ -171,6 +264,9 @@ def main() -> None:
                 "judgeReasonHash": sha(judgment.reason),
                 "model": answer_llm.model_id,
                 "memoryToolsBound": False,
+                "profileStatus": profile_status,
+                "profileSelectedCount": profile_selected_count,
+                "profileContextHash": sha(answer_context),
                 "historicalV26Correct": historical.get(query_hmac),
             }
         )

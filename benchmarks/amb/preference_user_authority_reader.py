@@ -54,6 +54,8 @@ class ReaderPacket:
     query_hmac: str
     packet_revision_hmac: str
     context: str
+    addressed_context: str
+    evidence_items: tuple[tuple[str, str], ...]
     evidence_ref_hmacs: tuple[str, ...]
     rendered_context_chars: int
     context_chars: int
@@ -172,18 +174,29 @@ def render_user_authored_memory(item: dict[str, Any], row: dict[str, Any], key: 
 
     by_hash, projection, actual_hmacs = _reader_turns(item, row, key)
     sections = ["USER_AUTHORED_MEMORY", RULE]
+    addressed_sections = ["USER_AUTHORED_MEMORY_WITH_ADDRESSES", RULE]
+    evidence_items: list[tuple[str, str]] = []
     context_chars = 0
     for rank, source_hash in enumerate(projection, start=1):
         session = by_hash[source_hash]
         sections.append(f"[Memory source {rank}; session {session.session_timestamp}]")
+        addressed_sections.append(
+            f"[Memory source {rank}; session {session.session_timestamp}]"
+        )
         for turn in sorted(session.turns, key=lambda value: (value.turn_order, value.evidence_ref)):
             sections.append(turn.content)
+            evidence_id = f"M{rank:02d}T{turn.turn_order:03d}"
+            addressed_sections.append(f"[{evidence_id}] {turn.content}")
+            evidence_items.append((evidence_id, turn.content))
             context_chars += len(turn.content)
     context = "\n".join(sections)
+    addressed_context = "\n".join(addressed_sections)
     return ReaderPacket(
         query_hmac=str(row["queryHmac"]),
         packet_revision_hmac=str(row["packetRevisionHmac"]),
         context=context,
+        addressed_context=addressed_context,
+        evidence_items=tuple(evidence_items),
         evidence_ref_hmacs=actual_hmacs,
         rendered_context_chars=len(context),
         context_chars=context_chars,

@@ -104,8 +104,10 @@ class PreferenceReaderTest(unittest.TestCase):
             second = reader.render_user_authored_memory(noisy, row, b"key")
 
             self.assertEqual(first.context, second.context)
+            self.assertEqual(first.addressed_context, second.addressed_context)
             self.assertNotIn("assistant-private-noise", first.context)
             self.assertNotIn("different assistant text", second.context)
+            self.assertNotIn("assistant-private-noise", first.addressed_context)
 
     def test_certificate_reference_mismatch_is_rejected(self) -> None:
         temporary, item, _, _, _, row = self.with_fixture()
@@ -134,6 +136,8 @@ class PreferenceReaderTest(unittest.TestCase):
 
             self.assertEqual(first, second)
             self.assertTrue(first.context.startswith("USER_AUTHORED_MEMORY"))
+            self.assertIn("[M01T001] I enjoyed the ridge trail.", first.addressed_context)
+            self.assertEqual(first.evidence_items[0], ("M01T001", "I enjoyed the ridge trail."))
             self.assertLess(first.context.index("ridge trail"), first.context.index("noisy city walk"))
 
 
