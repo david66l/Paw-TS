@@ -332,3 +332,30 @@ slice (133 questions) as a comparable treatment.
   source-recall and no-regression checks, report calendar/duration/history
   slices separately, and beat the v36 112/133 baseline before it is considered
   for default behavior.
+
+## Rejected v48 exact-turn BM25 full treatment
+
+- Four independently sealed shards completed with exactly 133 distinct
+  temporal queries and no missing or duplicate HMAC rows. The treatment scored
+  **108/133 (81.20%)**, below the v36 baseline of **112/133 (84.21%)**. Its
+  paired outcome was 103 retained successes, 16 retained failures, **five
+  recoveries, and nine regressions**. The promising 21-query gate was therefore
+  not representative enough to authorize the behavior.
+- The result is especially clear by workload shape. V48 reached 51/54 on
+  duration questions but only 32/42 on ordering/history and 11/19 on
+  relative/elapsed questions. The session-clock regime fell to 54/73 (73.97%)
+  and same-day explicit ordering fell to 54/60 (90.0%). Error audit shifted to
+  eight temporal-ordering, eight missing-evidence, seven distractor/conflict,
+  and two multi-evidence-synthesis failures.
+- This is not a source-acquisition failure: aggregate source-session evidence
+  remained high (264/280 matched sessions, macro recall 0.911). The failure is
+  architectural. Reserving only the baseline anchors is insufficient: reordering
+  the remaining shared evidence slots still displaces useful context and makes
+  the reader combine conflicting turns. The 21-query turn-recall gain therefore
+  cannot justify a shared-notebook ranker.
+- Commit `86814bf` is reverted after this record. Do not revive BM25 ordering as
+  a default or opt-in frontier. The next design must preserve the complete
+  baseline packet byte-for-byte, expose a separate bounded temporal event ledger
+  only to a typed order/elapsed-time executor, and let that executor emit a
+  cited calculation certificate. Candidate ranking alone must never change the
+  shared reader evidence order.
