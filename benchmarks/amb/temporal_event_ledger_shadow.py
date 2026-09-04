@@ -266,6 +266,7 @@ def chat_completion(prompt: str, model: str, base_url: str, api_key: str) -> tup
             {"role": "user", "content": prompt},
         ],
         "temperature": 0,
+        "max_tokens": 600,
         "response_format": {"type": "json_object"},
     }
     request = urllib.request.Request(
@@ -274,9 +275,9 @@ def chat_completion(prompt: str, model: str, base_url: str, api_key: str) -> tup
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         method="POST",
     )
-    for attempt in range(3):
+    for attempt in range(2):
         try:
-            with urllib.request.urlopen(request, timeout=300) as response:
+            with urllib.request.urlopen(request, timeout=120) as response:
                 raw = json.loads(response.read())
             choices = raw.get("choices") if isinstance(raw, dict) else None
             message = choices[0].get("message") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
@@ -286,7 +287,7 @@ def chat_completion(prompt: str, model: str, base_url: str, api_key: str) -> tup
             parsed = json.loads(content)
             return (parsed if isinstance(parsed, dict) else None), sha256_text(content)
         except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, TimeoutError):
-            if attempt == 2:
+            if attempt == 1:
                 return None, "request_failed"
             time.sleep(2 * (attempt + 1))
     return None, "request_failed"
@@ -330,6 +331,43 @@ def hmac_ref(value: str, key: bytes) -> str:
     return eval_hmac(f"evidence:{value}", key)
 
 
+def save_checkpoint(path: Path, top_k: int, target_hmacs: set[str], rows: list[dict[str, Any]]) -> None:
+    payload = {
+        "schemaVersion": f"{SCHEMA_VERSION}:checkpoint",
+        "contentFree": True,
+        "topK": top_k,
+        "targetQueryHmacs": sorted(target_hmacs),
+        "rows": sorted(rows, key=lambda row: str(row["queryHmac"])),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def load_checkpoint(path: Path, top_k: int, target_hmacs: set[str]) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    payload = load_json(path)
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schemaVersion") != f"{SCHEMA_VERSION}:checkpoint"
+        or payload.get("contentFree") is not True
+        or payload.get("topK") != top_k
+        or set(payload.get("targetQueryHmacs", [])) != target_hmacs
+        or not isinstance(payload.get("rows"), list)
+    ):
+        raise ValueError("checkpoint does not match this shadow run")
+    rows = [row for row in payload["rows"] if isinstance(row, dict)]
+    hmacs = [row.get("queryHmac") for row in rows]
+    if (
+        any(not isinstance(value, str) or value not in target_hmacs for value in hmacs)
+        or len(set(hmacs)) != len(hmacs)
+    ):
+        raise ValueError("checkpoint rows are invalid")
+    return rows
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, required=True)
@@ -337,6 +375,7 @@ def main() -> None:
     parser.add_argument("--retrieval-log", type=Path, nargs="+", required=True)
     parser.add_argument("--eval-hmac-key", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--top-k", type=int, default=12)
     args = parser.parse_args()
     if not 1 <= args.top_k <= 32:
@@ -366,8 +405,13 @@ def main() -> None:
     if not baseline_errors or not baseline_errors.issubset(dataset_by_hmac):
         raise ValueError("baseline errors cannot be bound to the pinned dataset")
     source_by_query = load_initial_retrieval_sources(args.retrieval_log)
-    result_rows: list[dict[str, Any]] = []
+    checkpoint_path = args.checkpoint or args.output.with_suffix(args.output.suffix + ".checkpoint.json")
+    result_rows = load_checkpoint(checkpoint_path, args.top_k, baseline_errors)
+    completed_hmacs = {str(row["queryHmac"]) for row in result_rows}
     for index, query_hmac in enumerate(sorted(baseline_errors), start=1):
+        if query_hmac in completed_hmacs:
+            print(f"resumed {index}/{len(baseline_errors)}", flush=True)
+            continue
         item = dataset_by_hmac[query_hmac]
         question = required_string(item, "question")
         cutoff = timestamp(required_string(item, "question_date"))
@@ -399,6 +443,8 @@ def main() -> None:
                 "selectedEvidenceRefHmacs": sorted(hmac_ref(ref, key) for ref in selected_refs),
             }
         )
+        completed_hmacs.add(query_hmac)
+        save_checkpoint(checkpoint_path, args.top_k, baseline_errors, result_rows)
         print(f"completed {index}/{len(baseline_errors)}", flush=True)
     result_rows.sort(key=lambda row: str(row["queryHmac"]))
     certified_rows = [row for row in result_rows if row["certified"]]
