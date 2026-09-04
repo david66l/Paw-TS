@@ -4211,6 +4211,12 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
                   lane.certificate.selectedSources.map((source) =>
                     sha(source.sourceId),
                   ),
+                // A content-free audit handle for the exact source-span that
+                // admitted each source. It remains outside the reader packet.
+                selectedAnchorEvidenceRefHashes:
+                  lane.certificate.selectedSources.map((source) =>
+                    sha(source.firstEvidenceRef),
+                  ),
               }
             : { rejectedReason: lane.rejectedReason }),
         });

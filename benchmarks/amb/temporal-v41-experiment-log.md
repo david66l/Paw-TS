@@ -431,3 +431,21 @@ slice (133 questions) as a comparable treatment.
   change, reader injection, or answer. Its first acceptance test is that the
   runtime lock reproduces the 18/21 source-reachability result before the
   ledger selector is run at its valid 2,048-token bound.
+
+## v54 temporal source-lane runtime gate
+
+- The source-only shadow completed all 21 sealed v36 temporal-error rows on
+  commit `fbfb3b2`. The bridge emitted **21 selected**, read-only source locks,
+  each capped at 16 sources; the public result has no answer metrics and no
+  answer or judge LLM statistics.
+- The runtime lock reproduces the source gate exactly: **18/21** rows contain
+  every labeled user endpoint source, versus 15/21 in the v48 shared lock.
+  This authorizes a separate temporal candidate-execution shadow, but not a
+  reader injection or a changed answer-path result.
+- The existing generic exact-turn BM25 is now the next proved bottleneck: over
+  the new lock it covers all endpoints in 10/21 at top-16, 11/21 at top-24,
+  17/21 at top-64, and 18/21 only at top-96. Sending 64--96 unstructured turns
+  to a selector is a context-cost workaround, not an acceptable architecture.
+  The next shadow therefore records hashes for the exact source-span anchors
+  that admitted each source and tests anchor-led local expansion before calling
+  the temporal selector.

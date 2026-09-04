@@ -140,6 +140,37 @@ def load_temporal_source_lane_sources(paths: list[Path]) -> dict[str, set[str]]:
     return output
 
 
+def load_temporal_source_lane_anchor_hashes(paths: list[Path]) -> dict[str, set[str]]:
+    """Read content-free exact source-span anchors from a read-only lane."""
+
+    output: dict[str, set[str]] = {}
+    for path in paths:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            if event.get("event") != "temporal_source_lane":
+                continue
+            detail = event.get("detail")
+            if not isinstance(detail, dict):
+                continue
+            if detail.get("answerPathChanged") is not False:
+                raise ValueError("temporal source lane is not read-only")
+            if detail.get("status") != "selected":
+                continue
+            query_hash = detail.get("queryHash")
+            anchors = detail.get("selectedAnchorEvidenceRefHashes")
+            if not isinstance(query_hash, str) or not isinstance(anchors, list):
+                raise ValueError("temporal source lane anchors are invalid")
+            if query_hash in output:
+                continue
+            frozen = {value for value in anchors if isinstance(value, str) and value}
+            if not frozen or len(frozen) != len(anchors):
+                raise ValueError("temporal source lane anchors are invalid")
+            output[query_hash] = frozen
+    return output
+
+
 def timestamp(value: str) -> str | None:
     text = value.split("(")[0].strip() if "(" in value else value.strip()
     if not text:
