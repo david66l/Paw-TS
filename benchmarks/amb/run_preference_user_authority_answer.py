@@ -27,6 +27,7 @@ except ImportError:
 
 
 SCHEMA_VERSION = "paw.preference-user-authority-answer-harness.v1"
+ANSWER_PROFILES = ("legacy", "evidence_commitment_v2")
 
 
 def sha(value: str) -> str:
@@ -71,6 +72,35 @@ def load_historical_correctness(path: Path | None) -> dict[str, bool]:
     }
 
 
+def answer_instruction(profile: str) -> str:
+    if profile == "legacy":
+        return (
+            "The supplied memory is authoritative only for facts about the user, not a catalog "
+            "of ready-made answers. Answer the question directly and personalize it with the "
+            "most relevant supported user facts. You may use general knowledge to create advice "
+            "or recommendations, but never invent additional user facts. Do not refuse merely "
+            "because the exact recommendation is absent from memory."
+        )
+    if profile != "evidence_commitment_v2":
+        raise ValueError("answer profile is invalid")
+    return (
+        "The supplied block contains user-authored memory, not ready-made answers. Before "
+        "answering, silently scan every supplied source and form a compact set of all facts "
+        "that are directly relevant to the requested domain. Preserve every explicit like, "
+        "dislike, comparison, goal, constraint, prior attempt and effect, and named item that "
+        "materially constrains the answer. Prefer firsthand experiences and explicit choices "
+        "over topics the user merely asked about or considered. Distinguish experienced, liked, "
+        "asked-about, considered, and planned: never strengthen one into another.\n\n"
+        "Give a short direct answer with only a few well-targeted options. Tie each option to an "
+        "exactly supported user fact or constraint, and cover jointly relevant facts rather than "
+        "following only the first match. Any clause phrased as 'you', 'your', or 'you have' must "
+        "be entailed by a user statement in the memory. General knowledge may supply a new "
+        "recommendation, but must not be presented as the user's history. Omit tangential "
+        "personal details, obey negative constraints, and do not refuse just because the exact "
+        "recommendation is absent from memory."
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selection-artifact", type=Path, required=True)
@@ -80,6 +110,7 @@ def main() -> None:
     parser.add_argument("--slice-index", type=int, default=0)
     parser.add_argument("--slice-count", type=int, default=1)
     parser.add_argument("--historical-v26-ledger", type=Path)
+    parser.add_argument("--answer-profile", choices=ANSWER_PROFILES, default="legacy")
     args = parser.parse_args()
     from deepseek_llm import DeepSeekFlashLLM
     from longmemeval_protocol import official_longmemeval_judge_prompt_fn
@@ -103,11 +134,8 @@ def main() -> None:
 
         def prompt_fn(query: str, context: str, meta=None) -> str:
             return (
-                "The supplied memory is authoritative only for facts about the user, not a catalog "
-                "of ready-made answers. Answer the question directly and personalize it with the "
-                "most relevant supported user facts. You may use general knowledge to create advice "
-                "or recommendations, but never invent additional user facts. Do not refuse merely "
-                "because the exact recommendation is absent from memory.\n\n"
+                answer_instruction(args.answer_profile)
+                + "\n\n"
                 + context
                 + "\n\nQuestion: "
                 + query
@@ -150,6 +178,7 @@ def main() -> None:
     output = {
         "schemaVersion": SCHEMA_VERSION,
         "sealed": True,
+        "answerProfile": args.answer_profile,
         "modelComparable": False,
         "modelComparabilityReason": "historical_v26_ledger_may_use_a_different_model_or_packet",
         "slice": {"index": args.slice_index, "count": args.slice_count},
