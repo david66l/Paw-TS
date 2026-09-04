@@ -519,3 +519,63 @@ slice (133 questions) as a comparable treatment.
   otherwise candidate-complete latest-state row. The next gate must compile the
   temporal operator deterministically and bind a bounded evidence packet per
   event/facet. No V68 reader injection or 133-row answer treatment is authorized.
+
+## v69 deterministic compiler and event-packet gate
+
+- V69 removes the question-planner LLM from the temporal path. A deterministic
+  compiler recognizes all 133 temporal questions, preserves the exact queried
+  spans, and assigns explicit operators and slot roles before any candidate is
+  selected. In particular, directional intervals now always have distinct
+  start and end slots instead of being collapsed into a single event.
+- The binder is deliberately recall-oriented and address-only. It may propose
+  evidence only from the frozen top-48 candidate lock, and its output does not
+  claim semantic relevance, closed-world completeness, or answer correctness.
+  Labels are consulted only after the packet is frozen to compute diagnostics.
+- On the 21 sealed v36 errors, candidate reachability remained **16/21**. V69
+  compiled all 21 rows, produced at least one address-valid replica on 17, and
+  selected every labeled endpoint on 10. Requiring the entire packet to match
+  byte-for-byte across replicas retained only 6 complete rows, although both
+  valid replicas were individually complete on 8. This shows that whole-packet
+  equality is too strict when replicas differ only by additional candidates;
+  the agreement boundary must be slot-specific rather than a flat union or a
+  full-packet identity test.
+- The public, content-free artifact is
+  `/root/autodl-tmp/paw-c666a20/runs/paw-temporal-v69-deterministic-event-packets/temporal-v69-event-packets.json`
+  with SHA-256
+  `03d5d5a96dbdd3fa41835158302fbe1513177f572174f91de05097849ae256b0`.
+  Mean selected size is 2.90 turns, median 2, maximum 10, and mean labeled-
+  endpoint precision is 0.446. These are selector diagnostics, not accuracy.
+
+## v70 per-slot intersection consensus gate
+
+- V70 preserves each logical slot and intersects the two independently
+  validated binder proposals inside that slot. Missing quorum, an empty slot,
+  a role swap, an unknown address, or a budget violation fails closed and adds
+  no packet. The committee union is retained only as an explicitly labeled
+  upper-bound diagnostic and is never authorized for reader injection.
+- The completed 21-row shadow produced 14 address-valid consensus packets and
+  **10/21** stable packets containing every labeled endpoint. The loose union
+  upper bound is 12/21, so the stable count is not a union-recall artifact.
+  Mean packet size is 1.95 turns, median 1, maximum 9, and mean labeled-endpoint
+  precision is 0.509. Six rows failed for missing replica quorum and one for an
+  empty slot; these are safe abstentions under byte-identical baseline fallback.
+- Row inspection confirms that the ten complete packets are ordinary temporal
+  lookup, interval, ordering, and latest-state questions. The two residual
+  `_abs` questions each received `insufficient` from both binder replicas.
+  That agreement is useful diagnostic evidence, but it is not a global absence
+  proof because the temporal source lane is not certified closed-world.
+- The public, content-free artifact is
+  `/root/autodl-tmp/paw-c666a20/runs/paw-temporal-v70-slot-intersection-consensus/temporal-v70-consensus.json`
+  with SHA-256
+  `11862cc7b67461ae88ac604e69ef1b4e85202010f05070114de6a2e7b83b3abf`.
+  It changes no answer path and therefore must not be reported as 10 recovered
+  questions or as temporal accuracy.
+- V70 passes the gate for one frozen, full-133 shadow reproduction followed by
+  a same-model paired answer experiment. It does **not** authorize production
+  integration or release. The treatment must keep the baseline reader packet
+  byte-identical, append only a small address-consensus temporal supplement,
+  hydrate exact source turns at runtime, deduplicate turns already present,
+  and fall back without any context change when consensus is unavailable.
+  Baseline and treatment must use the same answer and judge models; because the
+  historical DeepSeek account is unavailable, a GLM run requires a fresh GLM
+  baseline and cannot be compared directly with the historical 112/133 result.
