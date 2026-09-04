@@ -359,3 +359,49 @@ slice (133 questions) as a comparable treatment.
   only to a typed order/elapsed-time executor, and let that executor emit a
   cited calculation certificate. Candidate ranking alone must never change the
   shared reader evidence order.
+
+## v49/v50 isolated ledger-selector shadow
+
+- A new `memory-core` temporal event ledger is intentionally outside the
+  notebook, state-frame, and reader-projection chain. Its certificate binds a
+  frozen source set, exact source span, declared time basis, source/session
+  order, query cutoff, operation, and deterministic result. It rejects missing
+  clocks, future source observations, mismatched sources, and altered spans.
+  It has no production reader injection.
+- The first v49 selector run was stopped after discovering a workflow issue:
+  a single long reasoning request could consume three 300-second retries and
+  no per-row checkpoint existed. This did not change an answer path or produce
+  a score. The harness now writes a content-free checkpoint per row and bounds
+  each selector request to two 120-second attempts.
+- A completed 21-row v50 shadow with a 1,200-token completion cap is **not** a
+  selector-quality result: 15 rows ended at the provider length limit with no
+  final JSON, five returned a valid `insufficient` decision, and one formed a
+  certificate. A content-free one-row probe confirmed that the empty cases had
+  `finish_reason=length`, 1,200 completion tokens, and only reasoning content.
+  A 2,048-token probe returned a valid final JSON. Future selector measurements
+  must use that sufficient bound (or a documented lower-thinking provider mode)
+  before interpreting certificate rates.
+
+## v51 source-lock reachability correction
+
+- A content-free, label-blind-before-ranking audit remeasured the 21 v36
+  temporal errors using physical collision-free source IDs and consulted
+  `has_answer` only after ranking. It corrects an earlier optimistic reachability
+  statement that had accidentally measured coverage only against endpoints that
+  already survived the source lock.
+- Exact source-pool coverage is 12/21 for v36 and 15/21 for v48. Consequently,
+  at least six residual errors are source-acquisition failures for any ledger
+  constrained to the current v48 source lock; a perfect within-lock selector
+  cannot repair them. The v48 pool is still a real improvement over v36, but it
+  is insufficient for a 90% temporal target.
+- The temporary generic BM25 implementation used by the new audit reaches only
+  10/21 at top-12 and 11/21 at top-24 inside the v48 lock; over all history it
+  likewise does not establish a viable top-24 route. These are diagnostic facts,
+  not a contradiction to the production benchmark: the prior ad-hoc optimistic
+  BM25 coverage figures are not reproducible from the preserved artifact and
+  must not be used to authorize a source-expansion design.
+- Next architecture gate: build a separate, query-frozen **temporal source
+  acquisition** lane (not a shared notebook repair), prove its source and turn
+  reachability with a pinned ranker and corpus revision, then feed only its
+  immutable candidate addresses to the ledger selector. No answer injection or
+  full temporal treatment is authorized until this gate passes.
