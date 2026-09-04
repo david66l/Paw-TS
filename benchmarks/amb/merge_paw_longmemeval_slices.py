@@ -62,6 +62,13 @@ def _stable_configuration(sealed: dict[str, Any]) -> dict[str, Any]:
         "selectionPolicy",
     ):
         manifest.pop(key, None)
+    # This is an observed, shard-local data statistic rather than a runner
+    # setting. Keep it in each sealed ledger for auditability, but do not make
+    # naturally different shard populations fail the configuration gate.
+    if isinstance(manifest.get("longMemEvalProtocol"), dict):
+        longmemeval_protocol = dict(manifest["longMemEvalProtocol"])
+        longmemeval_protocol.pop("physicalDocumentIdCollisionCount", None)
+        manifest["longMemEvalProtocol"] = longmemeval_protocol
     return {
         "schemaVersion": sealed.get("schemaVersion"),
         "runnerPolicy": sealed.get("runnerPolicy"),

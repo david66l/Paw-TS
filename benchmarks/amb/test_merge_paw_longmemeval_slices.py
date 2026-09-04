@@ -43,6 +43,10 @@ def _write_slice(root: Path, index: int, count: int, rows: list[dict]) -> Path:
             "questionTypeTargets": type_counts,
             "historyDocumentCounts": [1] * len(rows),
             "answerProtocol": "evidence_policy",
+            "longMemEvalProtocol": {
+                "sourceIdentityPolicy": "dataset-scoped-physical-id-v1",
+                "physicalDocumentIdCollisionCount": index,
+            },
             "experimentProtocol": {
                 "common": {
                     "readerFeatureFlags": {
