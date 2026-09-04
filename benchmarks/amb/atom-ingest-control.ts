@@ -225,9 +225,12 @@ export function readAmbMemoryLlmBudgetLimitsV1(
       env,
       prefix: "PAW_AMB_EVIDENCE_SUPPORT",
       defaults: {
-        maxRemoteCalls: 600,
-        maxPromptTokens: 4_000_000,
-        maxCompletionTokens: 200_000,
+        // Evidence support is sharded so a dense 32-candidate group normally
+        // spends three calls, with bounded split retries on truncation. Keep a
+        // full 500-question run inside one pre-registered purpose budget.
+        maxRemoteCalls: 2_400,
+        maxPromptTokens: 32_000_000,
+        maxCompletionTokens: 4_000_000,
         concurrency: 2,
       },
     }),

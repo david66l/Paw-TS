@@ -30,7 +30,7 @@ except ImportError:
     from temporal_event_ledger_shadow import timestamp  # type: ignore[no-redef]
 
 
-ROUTER_POLICY = "paw.typed-source-locked-reader.v5:origin-filtered-authority-certificate"
+ROUTER_POLICY = "paw.typed-source-locked-reader.v6:pair-proven-authority-certificate"
 
 
 class SourceLockInvariantError(RuntimeError):
@@ -85,6 +85,7 @@ class ReaderExecution:
 class CertificateScope:
     source_ids: tuple[str, ...]
     authorized_items: tuple["AuthorizedItem", ...]
+    authorized_pairs: tuple["AuthorizedPair", ...]
     revision: str
 
 
@@ -94,6 +95,18 @@ class AuthorizedItem:
     evidence_ref: str
     turn_order: int
     evidence_use: str
+
+
+@dataclass(frozen=True)
+class AuthorizedPair:
+    source_id: str
+    assistant_ref: str
+    assistant_hash: str
+    assistant_order: int
+    predecessor_ref: str
+    predecessor_hash: str
+    predecessor_order: int
+    cutoff: str
 
 
 def _public_plan(plan: SetPlan) -> dict[str, Any]:
@@ -140,6 +153,10 @@ def _set_route(question: str) -> SetPlan | None:
 
 
 def _turns(document: object) -> tuple[tuple[str, str], ...]:
+    return tuple((role, text.strip()) for role, text in _raw_turns(document))
+
+
+def _raw_turns(document: object) -> tuple[tuple[str, str], ...]:
     content = getattr(document, "content", None)
     if not isinstance(content, str):
         raise SourceLockInvariantError("source content is not text")
@@ -156,7 +173,7 @@ def _turns(document: object) -> tuple[tuple[str, str], ...]:
         text = turn.get("content")
         if not isinstance(text, str) or not text.strip():
             raise SourceLockInvariantError("source dialogue content is invalid")
-        output.append((turn["role"], text.strip()))
+        output.append((turn["role"], text))
     return tuple(output)
 
 
@@ -218,13 +235,13 @@ def _certificate_sources(
         raise CertificateInvariantError("dialogue authority certificate is missing")
     identity = {key: certificate.get(key) for key in (
         "schema", "policy", "queryHash", "originKind", "originRevision", "queryCutoff",
-        "sourceLockIds", "sourceLockDigest", "authorizedItems", "resolutionRevision",
+        "sourceLockIds", "sourceLockDigest", "authorizedItems", "authorizedPairContext", "resolutionRevision",
         "readerDocumentIds", "readerDocumentDigest", "readerPacketDigest",
     )}
     if set(certificate) != {*identity, "certificateRevision"}:
         raise CertificateInvariantError("certificate fields are invalid")
-    if (identity["schema"] != "paw.dialogue-materialization-certificate.v3"
-            or identity["policy"] != "paw.core-final-packet-authority.v3:item-scoped-origin-filtered"):
+    if (identity["schema"] != "paw.dialogue-materialization-certificate.v4"
+            or identity["policy"] != "paw.core-final-packet-authority.v4:item-scoped-pair-proven"):
         raise CertificateInvariantError("certificate schema or policy is invalid")
     if identity["queryHash"] != _sha(question) or identity["originKind"] != authority:
         raise CertificateInvariantError("certificate query or authority binding is invalid")
@@ -304,8 +321,51 @@ def _certificate_sources(
         authorized_items.append(
             AuthorizedItem(source_id, evidence_ref, turn_order, evidence_use)
         )
+    pairs = identity["authorizedPairContext"]
+    if not isinstance(pairs, list):
+        raise CertificateInvariantError("certificate pair context is invalid")
+    authorized_pairs: list[AuthorizedPair] = []
+    seen_pair_assistants: set[str] = set()
+    for pair in pairs:
+        if not isinstance(pair, Mapping) or set(pair) != {
+            "sourceId", "assistantEvidenceRef", "assistantContentHash", "assistantTurnOrder",
+            "assistantRole", "predecessorEvidenceRef", "predecessorContentHash", "predecessorTurnOrder",
+            "predecessorRole", "relation", "allowedModes", "evidenceTimeUpperBound", "verifierVersion", "verificationRevision",
+            "dialogueCertificateRevision",
+        }:
+            raise CertificateInvariantError("certificate pair context fields are invalid")
+        source_id = pair["sourceId"]
+        assistant_ref = pair["assistantEvidenceRef"]
+        predecessor_ref = pair["predecessorEvidenceRef"]
+        assistant_order = pair["assistantTurnOrder"]
+        predecessor_order = pair["predecessorTurnOrder"]
+        assistant_match = re.fullmatch(r"(.+)#source-(\d+)", assistant_ref) if isinstance(assistant_ref, str) else None
+        predecessor_match = re.fullmatch(r"(.+)#source-(\d+)", predecessor_ref) if isinstance(predecessor_ref, str) else None
+        hashes = (pair["assistantContentHash"], pair["predecessorContentHash"], pair["verificationRevision"], pair["dialogueCertificateRevision"])
+        if (not isinstance(source_id, str) or source_id not in ids
+                or assistant_match is None or predecessor_match is None
+                or assistant_match.group(1) != source_id or predecessor_match.group(1) != source_id
+                or not isinstance(assistant_order, int) or isinstance(assistant_order, bool)
+                or not isinstance(predecessor_order, int) or isinstance(predecessor_order, bool)
+                or assistant_order < 2 or predecessor_order < 1
+                or int(assistant_match.group(2)) != assistant_order
+                or int(predecessor_match.group(2)) != predecessor_order
+                or assistant_order != predecessor_order + 1
+                or pair["assistantRole"] != "assistant_output" or pair["predecessorRole"] != "user_input"
+                or pair["relation"] != "immediate_predecessor" or pair["allowedModes"] != ["dialogue_pair_context"]
+                or not isinstance(pair["evidenceTimeUpperBound"], str)
+                or timestamp(pair["evidenceTimeUpperBound"]) != cutoff
+                or not isinstance(pair["verifierVersion"], str) or not pair["verifierVersion"]
+                or any(not isinstance(value, str) or not hexadecimal.fullmatch(value) for value in hashes)
+                or assistant_ref in seen_pair_assistants):
+            raise CertificateInvariantError("certificate pair context is invalid")
+        seen_pair_assistants.add(assistant_ref)
+        authorized_pairs.append(AuthorizedPair(source_id, assistant_ref, pair["assistantContentHash"], assistant_order, predecessor_ref, pair["predecessorContentHash"], predecessor_order, cutoff))
+    if (len(authorized_pairs) > len(authorized_items)
+            or not seen_pair_assistants.issubset(seen_refs)):
+        raise CertificateInvariantError("certificate pair context is orphaned")
     return CertificateScope(
-        tuple(ids), tuple(authorized_items), certificate["certificateRevision"]
+        tuple(ids), tuple(authorized_items), tuple(authorized_pairs), certificate["certificateRevision"]
     )
 
 
@@ -530,6 +590,10 @@ def route_typed_source_locked_reader(
         sources_by_id = {
             getattr(source, "id", ""): source for source, _ in sources
         }
+        pairs_by_assistant = {
+            pair.assistant_ref: pair for pair in certificate_scope.authorized_pairs
+        }
+        assistant_item_refs: set[str] = set()
         for item in certificate_scope.authorized_items:
             source = sources_by_id.get(item.source_id)
             if source is None:
@@ -549,14 +613,24 @@ def route_typed_source_locked_reader(
             selected = mutable_allowed_turns.setdefault(item.source_id, set())
             selected.add(item.turn_order)
             if role == "assistant":
-                if (
-                    item.turn_order < 2
-                    or turns[item.turn_order - 2][0] != "user"
-                ):
+                assistant_item_refs.add(item.evidence_ref)
+                pair = pairs_by_assistant.get(item.evidence_ref)
+                if pair is None:
                     raise CertificateInvariantError(
-                        "authorized assistant turn has no adjacent user predecessor"
+                        "authorized assistant turn has no core pair proof"
                     )
-                selected.add(item.turn_order - 1)
+                raw_turns = _raw_turns(source)
+                if (pair.source_id != item.source_id
+                        or pair.assistant_order != item.turn_order
+                        or pair.predecessor_order != item.turn_order - 1
+                        or turns[pair.assistant_order - 1][0] != "assistant"
+                        or turns[pair.predecessor_order - 1][0] != "user"
+                        or _sha(raw_turns[pair.assistant_order - 1][1]) != pair.assistant_hash
+                        or _sha(raw_turns[pair.predecessor_order - 1][1]) != pair.predecessor_hash):
+                    raise CertificateInvariantError("authorized pair proof does not match canonical dialogue")
+                selected.add(pair.predecessor_order)
+        if set(pairs_by_assistant) != assistant_item_refs:
+            raise CertificateInvariantError("certificate pair context is not exact")
         allowed_turns = {
             source_id: frozenset(turn_orders)
             for source_id, turn_orders in mutable_allowed_turns.items()

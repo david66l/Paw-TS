@@ -79,6 +79,11 @@ def test_measure_questions_and_fallback_interrogatives_are_not_misclassified():
     assert subject.compile_set_plan("Did I receive a higher discount?").operator is subject.Operator.LOOKUP
     assert subject.compile_set_plan("At which university did I present a poster?").operator is subject.Operator.LOOKUP
     assert subject.compile_set_plan("How many homes did I see before making an offer?").temporal_mode is subject.TemporalMode.RANGE
+    # A background adjective is not a request to enumerate a set.  This keeps
+    # ordinary dialogue lookup routing out of the evidence-set executor.
+    assert subject.compile_set_plan(
+        "I saw unique engagement rings from a designer. What is his Instagram handle?"
+    ) is None
 
 
 def test_common_derived_difference_phrases_are_text_only_plans():

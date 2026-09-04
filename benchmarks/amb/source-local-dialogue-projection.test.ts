@@ -12,9 +12,10 @@ function anchor(
   documentId: string,
   sourceSeq: number,
   sourceKind: "user_input" | "assistant_output",
+  physicalFragment: "source" | "atom" = "source",
 ): AmbDialogueAnchorV1 {
   const evidenceRef = logicalSourceLocalEvidenceRefV1(
-    `amb:document/${documentId}#source-${sourceSeq}`,
+    `amb:document/${documentId}#${physicalFragment}-${sourceSeq}`,
   );
   if (!evidenceRef) throw new Error("invalid dialogue test address");
   return {
@@ -30,6 +31,24 @@ describe("source-local dialogue-pair projection", () => {
     expect(anchor("session-1", 3, "user_input").evidenceRef).toBe(
       "session-1#source-3",
     );
+  });
+
+  test("canonicalizes adjacent atom addresses before certifiable dialogue pairing", () => {
+    const user = anchor("atom-session", 1, "user_input", "atom");
+    const assistant = anchor("atom-session", 2, "assistant_output", "atom");
+    const result = rankAmbDialogueEvidenceAnchorsV1({
+      roleConstraint: "assistant",
+      certifiedAssistantDialogueCandidate: false,
+      directAnchors: [],
+      projections: [{ discovery: user, answer: assistant }],
+      maxAnchors: 2,
+    });
+
+    expect(user.evidenceRef).toBe("atom-session#source-1");
+    expect(assistant.evidenceRef).toBe("atom-session#source-2");
+    expect(result.promotedAssistantEvidenceRefs).toEqual([
+      "atom-session#source-2",
+    ]);
   });
 
   test("uses a user discovery only to return its adjacent assistant answer", () => {
@@ -141,24 +160,20 @@ describe("source-local dialogue-pair projection", () => {
       anchor("source-1", 3, "user_input"),
       anchor("source-1", 5, "user_input"),
     ];
+    const noisyWinner = noisyTopSource[0];
+    if (!noisyWinner) throw new Error("missing noisy-source fixture");
     const goldLowerSource = anchor("source-3", 7, "user_input");
     const selected = selectAmbSourceFairPromptAnchorsV1({
       sourcePriority: ["source-1", "source-2", "source-3"],
       rankingsBySource: new Map([
-        [
-          "source-1",
-          [{ lane: "requirement", anchors: noisyTopSource }],
-        ],
+        ["source-1", [{ lane: "requirement", anchors: noisyTopSource }]],
         ["source-2", [{ lane: "requirement", anchors: [] }]],
-        [
-          "source-3",
-          [{ lane: "original_query", anchors: [goldLowerSource] }],
-        ],
+        ["source-3", [{ lane: "original_query", anchors: [goldLowerSource] }]],
       ]),
       maxPromptAnchorsPerSource: 1,
     });
 
-    expect(selected).toEqual([noisyTopSource[0]!, goldLowerSource]);
+    expect(selected).toEqual([noisyWinner, goldLowerSource]);
   });
 
   test("uses the strongest prompt lane and RRF as a deterministic tie break", () => {
@@ -189,12 +204,15 @@ describe("source-local dialogue-pair projection", () => {
 
   test("keeps the mandatory direct anchor before source-fair successors", () => {
     const direct = anchor("source-1", 8, "assistant_output");
-    const fair = ["source-1", "source-2", "source-3"].map(
-      (source) => ({
-        discovery: anchor(source, 1, "user_input"),
-        answer: anchor(source, 2, "assistant_output"),
-      }),
-    );
+    const fair = ["source-1", "source-2", "source-3"].map((source) => ({
+      discovery: anchor(source, 1, "user_input"),
+      answer: anchor(source, 2, "assistant_output"),
+    }));
+    const firstFairAnswer = fair[0]?.answer;
+    const secondFairAnswer = fair[1]?.answer;
+    if (!firstFairAnswer || !secondFairAnswer) {
+      throw new Error("missing source-fair fixtures");
+    }
     const result = rankAmbDialogueEvidenceAnchorsV1({
       roleConstraint: "any",
       certifiedAssistantDialogueCandidate: true,
@@ -204,11 +222,7 @@ describe("source-local dialogue-pair projection", () => {
       maxAnchors: 3,
     });
 
-    expect(result.anchors).toEqual([
-      direct,
-      fair[0]!.answer!,
-      fair[1]!.answer!,
-    ]);
+    expect(result.anchors).toEqual([direct, firstFairAnswer, secondFairAnswer]);
     expect(result.telemetry.sourceFairSourceCount).toBe(3);
     expect(result.telemetry.directCandidateDisplacedCount).toBe(0);
   });

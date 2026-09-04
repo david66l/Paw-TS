@@ -13,6 +13,7 @@ import sys
 import time
 import urllib.request
 from collections import Counter, defaultdict
+from dataclasses import asdict
 from pathlib import Path
 
 from longmemeval_protocol import (
@@ -22,6 +23,8 @@ from longmemeval_protocol import (
     require_protocol_records,
 )
 from typed_source_locked_reader import ROUTER_POLICY, route_typed_source_locked_reader
+from multi_session_evidence_set_protocol import complete_evidence_set_protocol
+from multi_session_set_plan import compile_set_plan
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -83,6 +86,34 @@ def canonical_sha256(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def complete_evidence_set_executor_prompt(
+    question: str, packet: str, reader_execution_route: str | None
+) -> str | None:
+    """Build the set-only final executor prompt from question and locked packet.
+
+    This boundary deliberately has no benchmark metadata argument. All other
+    reader routes retain the ordinary RAG prompt unchanged.
+    """
+
+    if reader_execution_route != "evidence_set":
+        return None
+    plan = compile_set_plan(question)
+    if plan is None:
+        return None
+    plan_payload = asdict(plan)
+    for key, value in tuple(plan_payload.items()):
+        if hasattr(value, "value"):
+            plan_payload[key] = value.value
+    protocol = complete_evidence_set_protocol(
+        plan_payload, question, role_authority="user"
+    )
+    return f"""You are the final executor for a complete, locked multi-session evidence set.
+{protocol}
+{packet}
+
+Question: {question}"""
 
 
 def load_or_create_eval_key(path: Path) -> bytes:
@@ -1822,6 +1853,13 @@ def run(args: argparse.Namespace) -> dict:
                     )
 
                 def prompt_fn(question: str, packet: str, meta=None) -> str:
+                    set_executor_prompt = complete_evidence_set_executor_prompt(
+                        question,
+                        packet,
+                        reader_execution.route if reader_execution else None,
+                    )
+                    if set_executor_prompt is not None:
+                        return set_executor_prompt
                     base_prompt = dataset.build_rag_prompt(
                         question,
                         packet,

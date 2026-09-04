@@ -228,9 +228,9 @@ describe("AMB atom ingest controls", () => {
       maxCompletionTokens: 150_000,
     });
     expect(limits["evidence-support"]).toMatchObject({
-      maxRemoteCalls: 600,
+      maxRemoteCalls: 2_400,
       maxPromptTokens: 123_456,
-      maxCompletionTokens: 200_000,
+      maxCompletionTokens: 4_000_000,
     });
     expect(limits["state-semantic-audit-a"]).toMatchObject({
       maxRemoteCalls: 120,

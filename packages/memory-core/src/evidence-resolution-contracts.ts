@@ -24,7 +24,7 @@ import type { MemorySourceLocalizationReportV1 } from "./source-local-evidence-l
 import type { MemoryResolvedStateFrameV2 } from "./state-frame-v2.js";
 
 export const PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1 =
-  "paw.memory-evidence-resolver.v34:temporal-source-aperture-reserve" as const;
+  "paw.memory-evidence-resolver.v35:dialogue-pair-proof" as const;
 
 export type MemoryEvidenceClosureModeV1 = "disabled" | "observe" | "repair";
 
@@ -225,6 +225,28 @@ export interface MemoryEvidenceResolutionV1 {
     evidenceBindings: readonly MemoryEvidenceBindingV1[];
     evidenceUses: readonly MemoryEvidenceUseV1[];
     answerRole: "current" | "ambiguous" | "supporting" | "candidate" | "mixed";
+  }>[];
+  /**
+   * Content-free immutable adjacent-pair proofs. These are presentation
+   * metadata only: they do not authorize an item, satisfy closure, or bind a
+   * requirement by themselves.
+   */
+  readonly authorizedPairContext: readonly Readonly<{
+    sourceId: string;
+    assistantEvidenceRef: string;
+    assistantContentHash: string;
+    assistantTurnOrder: number;
+    assistantRole: "assistant_output";
+    predecessorEvidenceRef: string;
+    predecessorContentHash: string;
+    predecessorTurnOrder: number;
+    predecessorRole: "user_input";
+    relation: "immediate_predecessor";
+    allowedModes: readonly ["dialogue_pair_context"];
+    evidenceTimeUpperBound: string | null;
+    verifierVersion: string;
+    verificationRevision: string;
+    dialogueCertificateRevision: string;
   }>[];
   readonly telemetry: MemoryEvidenceCandidateFusionV2["telemetry"];
   readonly notebook: MemoryEvidenceNotebookV1;

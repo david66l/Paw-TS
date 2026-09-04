@@ -332,10 +332,12 @@ export function createMemoryEvidenceResolverV1(input: {
                 deficiencies: audit.deficiencies,
               }),
             });
-            const revisedPlan = projectMemoryEvidenceQueryPlanForAnswerOriginV1({
-              origin: queryAnswerOrigin,
-              plan: plannerRevisedPlan,
-            });
+            const revisedPlan = projectMemoryEvidenceQueryPlanForAnswerOriginV1(
+              {
+                origin: queryAnswerOrigin,
+                plan: plannerRevisedPlan,
+              },
+            );
             validateMemoryEvidenceQueryPlanBoundary({
               query: value,
               plan: revisedPlan,
@@ -688,6 +690,27 @@ export function createMemoryEvidenceResolverV1(input: {
                 stateFrameShadow?.frame?.sourceLockDigest ?? null,
               telemetry: stateFrameTelemetry ?? null,
             } as unknown as JsonValue);
+      const authorizedPairContext = Object.freeze(
+        pass.dialogueCertificateRegistry.certificates.map((certificate) =>
+          Object.freeze({
+            sourceId: certificate.sourceId,
+            assistantEvidenceRef: certificate.assistant.evidenceRef,
+            assistantContentHash: certificate.assistant.contentHash,
+            assistantTurnOrder: certificate.assistant.turnOrder,
+            assistantRole: "assistant_output" as const,
+            predecessorEvidenceRef: certificate.predecessor.evidenceRef,
+            predecessorContentHash: certificate.predecessor.contentHash,
+            predecessorTurnOrder: certificate.predecessor.turnOrder,
+            predecessorRole: "user_input" as const,
+            relation: "immediate_predecessor" as const,
+            allowedModes: ["dialogue_pair_context"] as const,
+            evidenceTimeUpperBound: certificate.evidenceTimeUpperBound,
+            verifierVersion: certificate.verifierVersion,
+            verificationRevision: certificate.verificationRevision,
+            dialogueCertificateRevision: certificate.certificateRevision,
+          }),
+        ),
+      );
       const revisionBody = {
         resolverVersion: PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1,
         indexVersion: input.index.indexVersion,
@@ -747,6 +770,7 @@ export function createMemoryEvidenceResolverV1(input: {
           evidenceBindings: source.evidenceBindings,
           evidenceUses: source.evidenceUses,
         })),
+        authorizedPairContext,
       };
       return Object.freeze({
         resolverVersion: PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1,
@@ -829,6 +853,7 @@ export function createMemoryEvidenceResolverV1(input: {
         primaryHits: primary.hits,
         requirementEvidence,
         packetSources,
+        authorizedPairContext,
         telemetry: fusion.telemetry,
         notebook,
         resolutionRevision: hashCanonicalJsonV1(

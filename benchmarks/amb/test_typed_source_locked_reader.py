@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import inspect
 import json
 import hashlib
+import copy
 import unittest
 
 import typed_source_locked_reader as reader
@@ -48,6 +49,7 @@ def certificate_raw(
         else "shared_dialogue_artifact"
     )
     authorized_items = []
+    authorized_pairs = []
     if authority in {
         "explicit_assistant",
         "explicit_shared",
@@ -68,9 +70,30 @@ def certificate_raw(
                         "allowedModes": ["dialogue_materialization"],
                     }
                 )
+                if turn_order > 1 and json.loads(item.content)[turn_order - 2]["role"] == "user":
+                    predecessor = json.loads(item.content)[turn_order - 2]
+                    authorized_pairs.append(
+                        {
+                            "sourceId": item.id,
+                            "assistantEvidenceRef": f"{item.id}#source-{turn_order}",
+                            "assistantContentHash": hashlib.sha256(turn["content"].encode("utf-8")).hexdigest(),
+                            "assistantTurnOrder": turn_order,
+                            "assistantRole": "assistant_output",
+                            "predecessorEvidenceRef": f"{item.id}#source-{turn_order - 1}",
+                            "predecessorContentHash": hashlib.sha256(predecessor["content"].encode("utf-8")).hexdigest(),
+                            "predecessorTurnOrder": turn_order - 1,
+                            "predecessorRole": "user_input",
+                            "relation": "immediate_predecessor",
+                            "allowedModes": ["dialogue_pair_context"],
+                            "evidenceTimeUpperBound": "2025-01-03T00:00:00Z",
+                            "verifierVersion": "test-verifier",
+                            "verificationRevision": hashlib.sha256(b"test-verification").hexdigest(),
+                            "dialogueCertificateRevision": hashlib.sha256(f"pair-{item.id}-{turn_order}".encode()).hexdigest(),
+                        }
+                    )
     identity = {
-        "schema": "paw.dialogue-materialization-certificate.v3",
-        "policy": "paw.core-final-packet-authority.v3:item-scoped-origin-filtered",
+        "schema": "paw.dialogue-materialization-certificate.v4",
+        "policy": "paw.core-final-packet-authority.v4:item-scoped-pair-proven",
         "queryHash": hashlib.sha256(question.encode()).hexdigest(),
         "originKind": authority,
         "originRevision": origin_revision,
@@ -80,6 +103,7 @@ def certificate_raw(
             json.dumps(ids, separators=(",", ":")).encode()
         ).hexdigest(),
         "authorizedItems": authorized_items,
+        "authorizedPairContext": authorized_pairs,
         "resolutionRevision": hashlib.sha256(b"test-resolution").hexdigest(),
         "readerDocumentIds": reader_ids,
         "readerDocumentDigest": hashlib.sha256(
@@ -111,6 +135,14 @@ def certificate_raw(
             ).hexdigest(),
         },
     }
+
+
+def resign_certificate(raw: dict) -> None:
+    certificate = raw["evidenceFirstDialogueMaterializationCertificate"]
+    identity = {key: value for key, value in certificate.items() if key != "certificateRevision"}
+    certificate["certificateRevision"] = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 class TypedSourceLockedReaderTest(unittest.TestCase):
@@ -262,11 +294,70 @@ class TypedSourceLockedReaderTest(unittest.TestCase):
             [self.later, self.earlier],
         )
         self.assertEqual(
-            "6740c777200c6f18888c426e483eb3631c322506b359ddb34a790f717a0b5687",
+            "56f58a4382e9ba50e1ad67b84b956ac0590b868570e33898533d2832039a390b",
             raw["evidenceFirstDialogueMaterializationCertificate"][
                 "certificateRevision"
             ],
         )
+
+    def test_forged_pair_context_is_semantically_rejected_after_resigning(self) -> None:
+        question = "What did you recommend?"
+        variants = {
+            "assistant_hash": lambda pair, certificate: pair.__setitem__("assistantContentHash", "0" * 64),
+            "predecessor_hash": lambda pair, certificate: pair.__setitem__("predecessorContentHash", "1" * 64),
+            "cross_source": lambda pair, certificate: pair.__setitem__("sourceId", "source-a"),
+            "non_adjacent": lambda pair, certificate: pair.__setitem__("predecessorTurnOrder", 0),
+            "nested_extra": lambda pair, certificate: pair.__setitem__("nested", {}),
+            "v3": lambda pair, certificate: (
+                certificate.__setitem__("schema", "paw.dialogue-materialization-certificate.v3"),
+                certificate.__setitem__("policy", "paw.core-final-packet-authority.v3:item-scoped-origin-filtered"),
+            ),
+            "orphan": lambda pair, certificate: certificate.__setitem__("authorizedPairContext", []),
+            "extra_pair": lambda pair, certificate: certificate["authorizedPairContext"].append(copy.deepcopy(pair)),
+        }
+        for name, mutate in variants.items():
+            with self.subTest(name=name):
+                raw = certificate_raw(question, "explicit_assistant", [self.later, self.earlier])
+                certificate = raw["evidenceFirstDialogueMaterializationCertificate"]
+                pair = certificate["authorizedPairContext"][0]
+                mutate(pair, certificate)
+                resign_certificate(raw)
+                with self.assertRaises(reader.CertificateInvariantError):
+                    self.route(question, raw)
+
+    def test_pair_cutoff_accepts_equivalent_fractional_precision(self) -> None:
+        question = "What did you recommend?"
+        raw = certificate_raw(
+            question, "explicit_assistant", [self.later, self.earlier]
+        )
+        certificate = raw["evidenceFirstDialogueMaterializationCertificate"]
+        certificate["authorizedPairContext"][0]["evidenceTimeUpperBound"] = (
+            "2025-01-03T00:00:00.000Z"
+        )
+        resign_certificate(raw)
+
+        execution = self.route(question, raw)
+        self.assertEqual("assistant_dialogue", execution.route)
+
+    def test_pair_context_rejects_zero_based_logical_turn_addresses(self) -> None:
+        question = "What did you recommend?"
+        recalled = [self.later, self.earlier]
+        raw = certificate_raw(question, "explicit_assistant", recalled)
+        certificate = raw["evidenceFirstDialogueMaterializationCertificate"]
+        pair = certificate["authorizedPairContext"][0]
+        pair["assistantEvidenceRef"] = f"{pair['sourceId']}#source-1"
+        pair["assistantTurnOrder"] = 1
+        pair["predecessorEvidenceRef"] = f"{pair['sourceId']}#source-0"
+        pair["predecessorTurnOrder"] = 0
+        resign_certificate(raw)
+
+        with self.assertRaises(reader.CertificateInvariantError):
+            reader._certificate_sources(
+                raw=raw,
+                question=question,
+                cutoff="2025-01-03T00:00:00Z",
+                recalled=tuple(recalled),
+            )
 
     def test_assistant_certificate_requires_assistant_report_use(self) -> None:
         question = "What did you recommend?"

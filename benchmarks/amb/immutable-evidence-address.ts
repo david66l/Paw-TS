@@ -4,9 +4,23 @@ const IMMUTABLE_DOCUMENT_PREFIX = "amb:document/";
 export function logicalSourceLocalEvidenceRefV1(
   evidenceRef: string,
 ): string | undefined {
-  const match = /^amb:document\/([^#]+)#source-(\d+)$/u.exec(evidenceRef);
+  const match = /^amb:document\/([^#]+)#(?:source|atom)-(\d+)$/u.exec(
+    evidenceRef,
+  );
   if (!match || !match[1] || !match[2]) return undefined;
   return `${match[1]}#source-${match[2]}`;
+}
+
+/** Strict source ownership check shared by the AMB adapter and core verifier. */
+export function ambSourceLocalEvidenceRefBelongsToSourceV1(
+  sourceId: string,
+  evidenceRef: string,
+): boolean {
+  const logical =
+    logicalSourceLocalEvidenceRefV1(evidenceRef) ??
+    (/^[^#]+#source-\d+$/u.test(evidenceRef) ? evidenceRef : undefined);
+  const match = /^([^#]+)#source-\d+$/u.exec(logical ?? "");
+  return match?.[1] === sourceId;
 }
 
 /** Resolve a logical source-local address to the current immutable alias. */

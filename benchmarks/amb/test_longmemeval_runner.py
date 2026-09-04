@@ -5,6 +5,7 @@ import os
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+import inspect
 from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
@@ -42,6 +43,7 @@ from run_paw_longmemeval_retrieval import (
     validate_blind_plan,
     validated_diagnostic_include_manifest,
     validated_exclusion_manifest,
+    complete_evidence_set_executor_prompt,
 )
 
 
@@ -66,6 +68,22 @@ class FakeDataset:
 
 
 class LongMemEvalRunnerTest(unittest.TestCase):
+    def test_evidence_set_executor_prompt_is_query_only_and_other_routes_stay_none(self) -> None:
+        prompt = complete_evidence_set_executor_prompt(
+            "How many books did I buy?", "[locked evidence]", "evidence_set"
+        )
+        self.assertIsNotNone(prompt)
+        self.assertIn("complete, locked multi-session evidence set", prompt)
+        self.assertIn("[locked evidence]", prompt)
+        self.assertIsNone(
+            complete_evidence_set_executor_prompt(
+                "How many books did I buy?", "[locked evidence]", "assistant_dialogue_set"
+            )
+        )
+        source = inspect.getsource(complete_evidence_set_executor_prompt)
+        for forbidden in ("question_type", "gold_answers", "has_answer"):
+            self.assertNotIn(forbidden, source)
+
     def test_memory_model_protocol_seals_reasoning_profile(self) -> None:
         with patch.dict(
             os.environ,
@@ -330,8 +348,8 @@ class LongMemEvalRunnerTest(unittest.TestCase):
                 "temporalRoundFrontier": "0",
                 "typedSourceLockedReader": "typed_source_locked",
                 "typedSourceLockedReaderPolicy": (
-                    "paw.typed-source-locked-reader.v4:"
-                    "item-scoped-authority-certificate"
+                    "paw.typed-source-locked-reader.v6:"
+                    "pair-proven-authority-certificate"
                 ),
             },
             protocol["common"]["readerFeatureFlags"],

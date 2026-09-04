@@ -34,14 +34,14 @@ function fixture(): {
       evidenceRef: "doc-b#source-3",
       content: "related context",
       sourceKind: "user_input" as const,
-      authority: "user_authored" as const,
+      authority: "user_asserted" as const,
     },
     {
       sourceId: "doc-c",
       evidenceRef: "doc-c#source-4",
       content: "unused context",
       sourceKind: "user_input" as const,
-      authority: "user_authored" as const,
+      authority: "user_asserted" as const,
     },
   ];
   const selection: MemoryEvidenceSupportSelectionInputV1 = {
@@ -75,6 +75,27 @@ function fixture(): {
         unknownEvidenceRefs: ["doc-b#source-3"],
       },
     ],
+    batchTelemetry: {
+      batchCount: 2,
+      batches: [
+        {
+          candidateCount: 2,
+          bodyChars: 900,
+          sourceCount: 2,
+          retryDepth: 0,
+          certifiedAssistantCoverage: 1,
+          status: "completed",
+        },
+        {
+          candidateCount: 1,
+          bodyChars: 500,
+          sourceCount: 1,
+          retryDepth: 1,
+          certifiedAssistantCoverage: 0,
+          status: "truncated",
+        },
+      ],
+    },
   };
   return { selection, result };
 }
@@ -131,6 +152,7 @@ describe("AMB support selector observer", () => {
       unknownEvidenceRefHashes: [hash("doc-b#source-3")],
       omittedEvidenceRefHashes: [hash("doc-c#source-4")],
     });
+    expect(observation?.batchTelemetry).toEqual(result.batchTelemetry);
   });
 
   test("forwards one-call grouped settlement and reports a partial commit", async () => {

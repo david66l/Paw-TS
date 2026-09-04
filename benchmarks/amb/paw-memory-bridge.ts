@@ -148,7 +148,11 @@ import {
   evidenceNotebookCharsForProfileV1,
   resolveAmbEvidenceExecutionProfileV1,
 } from "./evidence-execution-profile.js";
-import { logicalSourceLocalEvidenceRefV1 } from "./immutable-evidence-address.js";
+import { verifyAmbImmutableDialoguePredecessorsV1 } from "./immutable-dialogue-predecessor-verifier.js";
+import {
+  ambSourceLocalEvidenceRefBelongsToSourceV1,
+  logicalSourceLocalEvidenceRefV1,
+} from "./immutable-evidence-address.js";
 import { hydrateAmbImmutableSourceLocalEvidenceV1 } from "./immutable-source-local-hydration.js";
 import {
   buildAmbMemoryLlmReplayCacheKeyV1,
@@ -208,7 +212,8 @@ mkdirSync(dirname(logPath), { recursive: true });
 const cache = createMemoryRetrievalCacheStoreV1({ maxEntries: 2_048 });
 const engines = new Map<string, PostgresMemoryStoreEngine>();
 const sourceEngines = new Map<string, PostgresMemoryStoreEngine>();
-interface SourceLocalLocatorDiagnosticsV1 extends AmbDialogueProjectionTelemetryV1 {
+interface SourceLocalLocatorDiagnosticsV1
+  extends AmbDialogueProjectionTelemetryV1 {
   readonly directAssistantDiscoveryRefHashes: readonly string[];
   readonly promotedAssistantCandidateRefHashes: readonly string[];
   readonly sourceFairAssistantCandidateRefHashes: readonly string[];
@@ -665,13 +670,11 @@ function createAmbMemoryWriterModel(
     process.env.PAW_AMB_SOURCE_ARTIFACT_SHA256?.trim() || "unbound-development";
   const purposeBudget = memoryLlmBudgets.budgetFor(purpose);
   // Evidence triage emits a bounded address partition, not a generative
-  // answer. On reasoning-capable endpoints, hidden thinking consumes the same
-  // completion allowance and can truncate the required JSON before it closes.
-  // Keep the caller-selected profile for planning/auditing, but make this
-  // mechanical classifier explicitly non-reasoning and cache it separately.
+  // answer. GLM Flash rejects disabled thinking (HTTP 400 / code 1210), so
+  // keep this purpose at its lowest supported effort and cache it separately.
   const purposeReasoningEffort =
     purpose === "evidence-support"
-      ? ("disabled" as const)
+      ? ("low" as const)
       : memoryLlmReasoningEffort;
   mkdirSync(cacheDir, { recursive: true });
   return Object.freeze({
@@ -679,6 +682,10 @@ function createAmbMemoryWriterModel(
       request: Parameters<MemoryWriterModelV1["complete"]>[0],
       options: Parameters<MemoryWriterModelV1["complete"]>[1],
     ) {
+      const maxOutputTokens =
+        purpose === "evidence-support"
+          ? (options.maxOutputTokens ?? 8_192)
+          : atomMaxOutputTokens;
       const promptHash = sha(
         JSON.stringify({ system: request.system, user: request.user }),
       );
@@ -692,7 +699,7 @@ function createAmbMemoryWriterModel(
         model,
         baseUrl,
         promptHash,
-        maxTokens: atomMaxOutputTokens,
+        maxTokens: maxOutputTokens,
         reasoningEffort: purposeReasoningEffort,
       });
       const cachePath = resolve(cacheDir, `${cacheKey}.json`);
@@ -734,7 +741,8 @@ function createAmbMemoryWriterModel(
       }
       const started = performance.now();
       let reservation:
-        ReturnType<typeof purposeBudget.reserveRemoteCall> | undefined;
+        | ReturnType<typeof purposeBudget.reserveRemoteCall>
+        | undefined;
       try {
         reservation = purposeBudget.reserveRemoteCall({
           promptTokenUpperBound:
@@ -742,7 +750,7 @@ function createAmbMemoryWriterModel(
               JSON.stringify({ system: request.system, user: request.user }),
               "utf8",
             ) + 256,
-          completionTokenUpperBound: atomMaxOutputTokens,
+          completionTokenUpperBound: maxOutputTokens,
         });
         const response = await fetch(`${baseUrl}/chat/completions`, {
           method: "POST",
@@ -758,7 +766,7 @@ function createAmbMemoryWriterModel(
             ],
             response_format: { type: "json_object" },
             temperature: 0,
-            max_tokens: atomMaxOutputTokens,
+            max_tokens: maxOutputTokens,
             ...buildAmbMemoryLlmThinkingRequestV1(purposeReasoningEffort),
           }),
           signal: options.signal,
@@ -2654,10 +2662,12 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstPlanRoleConstraint: string = evidenceIntent.roleConstraint;
   let evidenceFirstPlanRequirementCount = 0;
   let evidenceFirstDialogueMaterializationCertificateIdentity:
-    Readonly<Record<string, unknown>> | undefined;
+    | Readonly<Record<string, unknown>>
+    | undefined;
   let evidenceFirstDialogueRecognizedBindingCount = 0;
   let evidenceFirstDialogueUnparseableBindingCount = 0;
   let evidenceFirstDialogueUncommittedBindingCount = 0;
+  let evidenceFirstDialoguePairProofMissing = false;
   const evidenceFirstDialogueOriginFilteredBindingCounts = {
     assistantReport: 0,
     sharedDialogueArtifact: 0,
@@ -2828,11 +2838,16 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       authority: "user_asserted" | "context_only" | "mixed";
     }> = [];
     for (const entry of entries) {
-      const evidence = entry.evidence.find((ref) => /#source-\d+$/.test(ref));
-      const match = evidence?.match(/^amb:document\/(.+)#source-(\d+)$/);
+      const physicalEvidence = entry.evidence.find(
+        (ref) => logicalSourceLocalEvidenceRefV1(ref) !== undefined,
+      );
+      const evidence = physicalEvidence
+        ? logicalSourceLocalEvidenceRefV1(physicalEvidence)
+        : undefined;
+      const match = evidence?.match(/^(.+)#source-(\d+)$/);
       if (!match?.[1] || match[2] === undefined) continue;
       const rawKind =
-        sourceKindByUser.get(userId)?.get(evidence ?? "") ??
+        sourceKindByUser.get(userId)?.get(physicalEvidence ?? "") ??
         (entry.kind === "episodic" ? entry.issueType : "");
       const sourceKind =
         rawKind === "user_input" ||
@@ -2853,7 +2868,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         documentId: match[1],
         sourceSeq: Number(match[2]),
         text: entry.kind === "episodic" ? entry.whenToUse : "",
-        evidenceRef: evidence ?? match[0],
+        evidenceRef: match[0],
         sourceKind,
         authority,
       });
@@ -3203,8 +3218,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ) {
           return undefined;
         }
-        const physicalEvidenceRef = entry.evidence.find((ref) =>
-          /#source-\d+$/.test(ref),
+        const physicalEvidenceRef = entry.evidence.find(
+          (ref) => logicalSourceLocalEvidenceRefV1(ref) !== undefined,
         );
         const documentId = physicalEvidenceRef
           ? sourceDocumentIdFromEvidenceV1(physicalEvidenceRef)
@@ -3589,8 +3604,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         );
         const turns = neighborEntries.flatMap((entry) => {
           if (entry.kind !== "episodic") return [];
-          const physicalEvidenceRef = entry.evidence.find((ref) =>
-            /#source-\d+$/.test(ref),
+          const physicalEvidenceRef = entry.evidence.find(
+            (ref) => logicalSourceLocalEvidenceRefV1(ref) !== undefined,
           );
           const evidenceRef = physicalEvidenceRef
             ? logicalSourceLocalEvidenceRefV1(physicalEvidenceRef)
@@ -3874,97 +3889,11 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       request: MemoryDialoguePredecessorVerificationRequestV1,
       signal: AbortSignal,
     ): Promise<MemoryDialoguePredecessorVerificationResultV1> {
-      const archive = rawEvidenceArchiveFor(userId);
-      if (!archive.hydrate) {
-        return Object.freeze({
-          verifierVersion: dialoguePredecessorVerifierVersion,
-          verificationRevision: sha("immutable-archive-unavailable"),
-          proofs: Object.freeze([]),
-        });
-      }
-      const locked = new Set(request.lockedSourceIds);
-      const addressPairs = request.targets.flatMap((target) => {
-        const match = /^amb:document\/(.+)#(atom|source)-(\d+)$/u.exec(
-          target.evidenceRef,
-        );
-        const turnOrder = Number(match?.[3]);
-        if (
-          !match?.[1] ||
-          !match[2] ||
-          match[1] !== target.sourceId ||
-          !locked.has(target.sourceId) ||
-          !Number.isSafeInteger(turnOrder) ||
-          turnOrder < 2
-        ) {
-          return [];
-        }
-        return [
-          Object.freeze({
-            target,
-            predecessorEvidenceRef: `amb:document/${match[1]}#${match[2]}-${turnOrder - 1}`,
-          }),
-        ];
-      });
-      const requestedRefs = [
-        ...new Set(
-          addressPairs.flatMap((pair) => [
-            pair.target.evidenceRef,
-            pair.predecessorEvidenceRef,
-          ]),
-        ),
-      ];
-      const hydrated =
-        requestedRefs.length > 0
-          ? await archive.hydrate(requestedRefs, signal)
-          : [];
-      const byRef = new Map(
-        hydrated.map((item) => [item.evidenceRef, item] as const),
-      );
-      const cutoff =
-        request.evidenceTimeUpperBound === undefined
-          ? undefined
-          : Date.parse(request.evidenceTimeUpperBound);
-      const proofs = addressPairs.flatMap((pair) => {
-        const assistant = byRef.get(pair.target.evidenceRef);
-        const precedingUser = byRef.get(pair.predecessorEvidenceRef);
-        const assistantTime = Date.parse(assistant?.observedAt ?? "");
-        const userTime = Date.parse(precedingUser?.observedAt ?? "");
-        if (
-          !assistant ||
-          !precedingUser ||
-          assistant.sourceKind !== "assistant_output" ||
-          precedingUser.sourceKind !== "user_input" ||
-          assistant.turnOrder !== precedingUser.turnOrder + 1 ||
-          (cutoff !== undefined &&
-            (!Number.isFinite(assistantTime) ||
-              !Number.isFinite(userTime) ||
-              assistantTime > cutoff ||
-              userTime > cutoff))
-        ) {
-          return [];
-        }
-        return [
-          Object.freeze({
-            sourceId: pair.target.sourceId,
-            assistant,
-            precedingUser,
-          }),
-        ];
-      });
-      return Object.freeze({
+      return verifyAmbImmutableDialoguePredecessorsV1({
+        archive: rawEvidenceArchiveFor(userId),
         verifierVersion: dialoguePredecessorVerifierVersion,
-        verificationRevision: sha(
-          JSON.stringify(
-            proofs.map((proof) => ({
-              sourceId: proof.sourceId,
-              assistantEvidenceRef: proof.assistant.evidenceRef,
-              assistantContentHash: proof.assistant.contentHash,
-              precedingUserEvidenceRef: proof.precedingUser.evidenceRef,
-              precedingUserContentHash: proof.precedingUser.contentHash,
-            })),
-          ),
-        ),
-        proofs: Object.freeze(proofs),
+        request,
+        signal,
       });
     }
     const observedEvidenceSupportSelector = evidenceSupportSelector
@@ -3983,7 +3912,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         indexVersion:
           "paw.amb-turn-evidence-index.v2:namespaced-source-address",
         evidenceRefBelongsToSource(sourceId, evidenceRef) {
-          return sourceDocumentIdFromEvidenceV1(evidenceRef) === sourceId;
+          return (
+            sourceDocumentIdFromEvidenceV1(evidenceRef) === sourceId ||
+            ambSourceLocalEvidenceRefBelongsToSourceV1(sourceId, evidenceRef)
+          );
         },
         async search(searchText) {
           const result = await searchEvidenceIndex(searchText);
@@ -4549,7 +4481,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ),
       ),
     );
-    const dialogueAuthorizedItems = resolution.packetSources.flatMap((source) =>
+    let dialogueAuthorizedItems = resolution.packetSources.flatMap((source) =>
       source.evidenceBindings.flatMap((binding) => {
         if (
           binding.evidenceUse !== "assistant_report" &&
@@ -4593,9 +4525,87 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ];
       }),
     );
+    const supportingDialogueContextsByParent = new Map<string, Set<string>[]>();
+    for (const assessment of resolution.supportAssessments) {
+      for (const disposition of assessment.evidenceDispositions ?? []) {
+        if (
+          disposition.disposition !== "supporting" ||
+          (disposition.evidenceUse !== "assistant_report" &&
+            disposition.evidenceUse !== "shared_dialogue_artifact")
+        ) {
+          continue;
+        }
+        const key = `${disposition.evidenceRef}\0${disposition.evidenceUse}`;
+        const contexts = supportingDialogueContextsByParent.get(key) ?? [];
+        contexts.push(new Set(disposition.contextEvidenceRefs));
+        supportingDialogueContextsByParent.set(key, contexts);
+      }
+    }
+    let authorizedPairContext = resolution.authorizedPairContext.flatMap(
+      (pair) => {
+        const parent = dialogueAuthorizedItems.find(
+          (item) =>
+            item.sourceId === pair.sourceId &&
+            item.evidenceRef === pair.assistantEvidenceRef,
+        );
+        const contexts = parent
+          ? supportingDialogueContextsByParent.get(
+              `${parent.evidenceRef}\0${parent.evidenceUse}`,
+            )
+          : undefined;
+        // Pair materialization is a strict intersection: an already-authorized
+        // supporting parent, its committed context refs, and the core's exact
+        // immutable proof. It never expands authorizedItems or closure input.
+        if (
+          !parent ||
+          !contexts?.some(
+            (context) =>
+              context.has(pair.assistantEvidenceRef) &&
+              context.has(pair.predecessorEvidenceRef),
+          )
+        ) {
+          return [];
+        }
+        return [pair];
+      },
+    );
+    const assistantSupportingBindingKeys = new Set(
+      resolution.supportAssessments.flatMap((assessment) =>
+        (assessment.evidenceDispositions ?? []).flatMap((disposition) =>
+          disposition.disposition === "supporting" &&
+          disposition.resolvedRole === "assistant" &&
+          (disposition.evidenceUse === "assistant_report" ||
+            disposition.evidenceUse === "shared_dialogue_artifact")
+            ? [`${disposition.evidenceRef}\0${disposition.evidenceUse}`]
+            : [],
+        ),
+      ),
+    );
+    const assistantParentRefs = new Set(
+      dialogueAuthorizedItems.flatMap((item) =>
+        assistantSupportingBindingKeys.has(
+          `${item.evidenceRef}\0${item.evidenceUse}`,
+        )
+          ? [item.evidenceRef]
+          : [],
+      ),
+    );
+    const pairParentRefs = new Set(
+      authorizedPairContext.map((pair) => pair.assistantEvidenceRef),
+    );
+    const pairProofMissing =
+      assistantParentRefs.size !== pairParentRefs.size ||
+      [...assistantParentRefs].some((ref) => !pairParentRefs.has(ref));
+    evidenceFirstDialoguePairProofMissing = pairProofMissing;
+    if (pairProofMissing) {
+      // Certificate fail-closed: never hand the reader an assistant parent
+      // that would require a pair it cannot prove.
+      dialogueAuthorizedItems = [];
+      authorizedPairContext = [];
+    }
     const dialogueCertificateIdentity = {
-      schema: "paw.dialogue-materialization-certificate.v3",
-      policy: "paw.core-final-packet-authority.v3:item-scoped-origin-filtered",
+      schema: "paw.dialogue-materialization-certificate.v4",
+      policy: "paw.core-final-packet-authority.v4:item-scoped-pair-proven",
       queryHash,
       originKind: evidenceQueryAnswerOrigin.originKind,
       originRevision: evidenceQueryAnswerOrigin.originRevision,
@@ -4605,6 +4615,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         dialogueSourceLockIds as unknown as JsonValue,
       ),
       authorizedItems: dialogueAuthorizedItems,
+      authorizedPairContext,
       resolutionRevision: resolution.resolutionRevision,
     };
     evidenceFirstDialogueMaterializationCertificateIdentity = Object.freeze(
@@ -4622,7 +4633,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ? "pending"
       : "not_eligible";
     let recommendationProjection:
-      ReturnType<typeof projectRecommendationUserAuthorityV1> | undefined;
+      | ReturnType<typeof projectRecommendationUserAuthorityV1>
+      | undefined;
     const recommendationLegacyChars = evidenceOutput.reduce(
       (total, document) => total + document.content.length,
       0,
@@ -5067,7 +5079,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       maxChars: 6_000,
     });
     let coveragePlan:
-      Awaited<ReturnType<typeof planMemoryEvidenceCoverageV1>> | undefined;
+      | Awaited<ReturnType<typeof planMemoryEvidenceCoverageV1>>
+      | undefined;
     if (coveragePlanner) {
       const coverageSnapshot: SessionInputSnapshot<InputFactV1> = Object.freeze(
         {
@@ -5850,19 +5863,19 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     log("evidence_dialogue_materialization_certificate", {
       queryHash,
       originKind: evidenceQueryAnswerOrigin.originKind,
-      sourceLockCount:
-        evidenceFirstDialogueMaterializationCertificateIdentity?.sourceLockIds instanceof
-        Array
-          ? evidenceFirstDialogueMaterializationCertificateIdentity
-              .sourceLockIds.length
-          : 0,
+      sourceLockCount: Array.isArray(
+        evidenceFirstDialogueMaterializationCertificateIdentity?.sourceLockIds,
+      )
+        ? evidenceFirstDialogueMaterializationCertificateIdentity.sourceLockIds
+            .length
+        : 0,
       readerDocumentCount: documents.length,
-      authorizedItemCount:
-        evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedItems instanceof
-        Array
-          ? evidenceFirstDialogueMaterializationCertificateIdentity
-              .authorizedItems.length
-          : 0,
+      authorizedItemCount: Array.isArray(
+        evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedItems,
+      )
+        ? evidenceFirstDialogueMaterializationCertificateIdentity
+            .authorizedItems.length
+        : 0,
       recognizedBindingCount: evidenceFirstDialogueRecognizedBindingCount,
       originFilteredAssistantReportCount:
         evidenceFirstDialogueOriginFilteredBindingCounts.assistantReport,
@@ -5870,10 +5883,16 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         evidenceFirstDialogueOriginFilteredBindingCounts.sharedDialogueArtifact,
       unparseableBindingCount: evidenceFirstDialogueUnparseableBindingCount,
       uncommittedBindingCount: evidenceFirstDialogueUncommittedBindingCount,
+      pairContextCount: Array.isArray(
+        evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedPairContext,
+      )
+        ? evidenceFirstDialogueMaterializationCertificateIdentity
+            .authorizedPairContext.length
+        : 0,
+      pairProofMissing: evidenceFirstDialoguePairProofMissing,
       emptyAuthorization:
-        !(
-          evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedItems instanceof
-          Array
+        !Array.isArray(
+          evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedItems,
         ) ||
         evidenceFirstDialogueMaterializationCertificateIdentity.authorizedItems
           .length === 0,

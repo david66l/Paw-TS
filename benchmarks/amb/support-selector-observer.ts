@@ -7,6 +7,10 @@ import type {
   MemoryEvidenceTriageAssessmentV1,
 } from "@paw/memory-plugin";
 
+type AmbSupportSelectorGroupsV1 = Parameters<
+  NonNullable<MemoryEvidenceSupportSelectorV1["selectGrouped"]>
+>[1];
+
 type ContentFreeAssessmentV1 = Readonly<{
   requirementIdHash: string;
   supportingEvidenceRefHashes: readonly string[];
@@ -28,7 +32,7 @@ export type AmbSupportSelectorObservationV1 = Readonly<{
     contentNormalizedChars: number;
     eventKeyNormalizedChars: number | null;
     contextEvidenceRefCount: number;
-    sourceKind: string;
+    sourceKind: string | undefined;
     authority: string;
     certifiedAssistantDialogue: boolean;
   }>[];
@@ -42,6 +46,17 @@ export type AmbSupportSelectorObservationV1 = Readonly<{
       omittedEvidenceRefHashes: readonly string[];
     }
   >[];
+  batchTelemetry?: Readonly<{
+    batchCount: number;
+    batches: readonly Readonly<{
+      candidateCount: number;
+      bodyChars: number;
+      sourceCount: number;
+      retryDepth: number;
+      certifiedAssistantCoverage: number;
+      status: "completed" | "truncated" | "failed";
+    }>[];
+  }>;
   failureCode?: string;
 }>;
 
@@ -67,7 +82,10 @@ export function observeAmbEvidenceSupportSelectorV1(input: {
 }): MemoryEvidenceSupportSelectorV1 {
   return Object.freeze({
     selectorVersion: input.selector.selectorVersion,
-    async select(selection, signal) {
+    async select(
+      selection: Readonly<MemoryEvidenceSupportSelectionInputV1>,
+      signal: AbortSignal,
+    ) {
       try {
         const result = await input.selector.select(selection, signal);
         safelyObserve(
@@ -94,7 +112,11 @@ export function observeAmbEvidenceSupportSelectorV1(input: {
     ...(input.selector.selectGrouped === undefined
       ? {}
       : {
-          async selectGrouped(selection, groups, signal) {
+          async selectGrouped(
+            selection: Readonly<MemoryEvidenceSupportSelectionInputV1>,
+            groups: AmbSupportSelectorGroupsV1,
+            signal: AbortSignal,
+          ) {
             try {
               const selectGrouped = input.selector.selectGrouped;
               if (!selectGrouped) {
@@ -112,6 +134,9 @@ export function observeAmbEvidenceSupportSelectorV1(input: {
                 assessments: Object.freeze(
                   result.groups.flatMap((group) => group.assessments),
                 ),
+                ...(result.batchTelemetry === undefined
+                  ? {}
+                  : { batchTelemetry: result.batchTelemetry }),
               });
               const observation = projectObservation(
                 selection,
@@ -208,6 +233,25 @@ function projectObservation(
     ...base,
     status: "completed",
     assessments: Object.freeze(assessments),
+    ...(result.batchTelemetry === undefined
+      ? {}
+      : {
+          batchTelemetry: Object.freeze({
+            batchCount: result.batchTelemetry.batchCount,
+            batches: Object.freeze(
+              result.batchTelemetry.batches.map((batch) =>
+                Object.freeze({
+                  candidateCount: batch.candidateCount,
+                  bodyChars: batch.bodyChars,
+                  sourceCount: batch.sourceCount,
+                  retryDepth: batch.retryDepth,
+                  certifiedAssistantCoverage: batch.certifiedAssistantCoverage,
+                  status: batch.status,
+                }),
+              ),
+            ),
+          }),
+        }),
   });
 }
 

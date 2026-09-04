@@ -218,7 +218,10 @@ def compile_set_plan(question: str) -> SetPlan | None:
         text,
     ):
         operator, exhaustive = Operator.SUM_VALUES, True
-    elif re.search(r"\b(?:list|all|unique|distinct|which ones|what are)\b", text):
+    elif re.search(
+        r"(?:^|[?.]\s*)(?:list|show|enumerate|name|give me|what are|which are)\s+(?:all\s+)?(?:the\s+)?(?:unique\s+|distinct\s+)?\w+|\bwhich ones\b",
+        text,
+    ):
         operator, exhaustive = Operator.COLLECT_UNIQUE, True
     elif re.match(
         r"^(?:(?:at|for|on)\s+)?(?:who|what|which|when|where|did|do|does|is|was|were|how)\b",

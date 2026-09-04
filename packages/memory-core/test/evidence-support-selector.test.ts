@@ -28,6 +28,9 @@ const requirements: readonly MemoryEvidenceRequirementV3[] = [
     roleConstraint: "user",
   },
 ];
+const secondRequirement = requirements[1];
+if (!secondRequirement)
+  throw new Error("support selector requirement fixture is incomplete");
 
 const candidates: readonly MemoryEvidenceNotebookHitV1[] = [
   {
@@ -576,15 +579,21 @@ describe("requirement-bound evidence support selector v1", () => {
     );
     const selector = createJsonMemoryEvidenceSupportSelectorV1({
       model: {
-        async complete() {
+        async complete(request) {
+          const payload = JSON.parse(request.user) as {
+            candidates: Array<{
+              evidenceRef: string;
+              eligibleRequirementIds: string[];
+            }>;
+          };
           return {
             status: "completed",
             text: JSON.stringify({
               assessments: [
                 {
                   requirementId: firstRequirement.requirementId,
-                  supportingEvidenceRefs: wideCandidates.map(
-                    (_, index) => `e${index + 1}`,
+                  supportingEvidenceRefs: payload.candidates.map(
+                    (candidate) => candidate.evidenceRef,
                   ),
                   contradictingEvidenceRefs: [],
                   unknownEvidenceRefs: [],
@@ -608,6 +617,636 @@ describe("requirement-bound evidence support selector v1", () => {
     expect(selected.assessments[0]?.supportingEvidenceRefs).toEqual(
       wideCandidates.map((candidate) => candidate.evidenceRef),
     );
+  });
+
+  test("reserves the final shard manifest inside the twelve-thousand-character body limit", async () => {
+    const boundaryCandidates = Array.from({ length: 12 }, (_, index) => ({
+      sourceId: `boundary-${index}`,
+      evidenceRef: `boundary-${index}#turn-1`,
+      content: `${index}:${"x".repeat(1_200)}`,
+      authority: "user_asserted" as const,
+    }));
+    const bodySizes: number[] = [];
+    const selector = createJsonMemoryEvidenceSupportSelectorV1({
+      model: {
+        async complete(request) {
+          bodySizes.push(request.user.length);
+          const payload = JSON.parse(request.user) as {
+            candidates: Array<{ evidenceRef: string }>;
+          };
+          return {
+            status: "completed",
+            text: JSON.stringify({
+              assessments: [
+                {
+                  requirementId: firstRequirement.requirementId,
+                  supportingEvidenceRefs: payload.candidates.map(
+                    (candidate) => candidate.evidenceRef,
+                  ),
+                  contradictingEvidenceRefs: [],
+                  unknownEvidenceRefs: [],
+                },
+              ],
+            }),
+          } as const;
+        },
+      },
+    });
+
+    const selected = await selector.select(
+      {
+        query: "Summarize every boundary observation.",
+        requirements: [firstRequirement],
+        candidates: boundaryCandidates,
+      },
+      new AbortController().signal,
+    );
+
+    expect(bodySizes.length).toBeGreaterThan(1);
+    expect(bodySizes.every((size) => size <= 12_000)).toBe(true);
+    expect(selected.assessments[0]?.supportingEvidenceRefs).toEqual(
+      boundaryCandidates.map((candidate) => candidate.evidenceRef),
+    );
+  });
+
+  test("projects the 32-candidate aperture once, then batches two mixed-root scopes fairly", async () => {
+    const batchRequirements = [
+      { ...firstRequirement, requirementId: "user-scope" },
+      {
+        ...secondRequirement,
+        requirementId: "assistant-scope",
+        roleConstraint: "assistant" as const,
+      },
+    ] as const;
+    const userCandidates = Array.from({ length: 18 }, (_, index) => ({
+      sourceId: `user-root-${index % 3}`,
+      evidenceRef: `user-${index}`,
+      content: `user-${index} direct observation`,
+      authority: "user_asserted" as const,
+      sourceKind: "user_input" as const,
+    }));
+    const assistantCandidates = Array.from({ length: 14 }, (_, index) => ({
+      sourceId: `assistant-root-${index % 2}`,
+      evidenceRef: `assistant-${index}`,
+      content: `assistant-${index} addressed reply`,
+      authority: "context_only" as const,
+      sourceKind: "assistant_output" as const,
+      contextEvidenceRefs: [`user-${index}`],
+    }));
+    const requests: Array<{
+      bodyChars: number;
+      candidates: string[];
+      options: unknown;
+      shardManifest?: {
+        globalCandidateCount: number;
+        globalEligibleCounts: Array<{ requirementId: string; count: number }>;
+        batchIndex: number;
+        batchCount: number;
+      };
+    }> = [];
+    const selector = createJsonMemoryEvidenceSupportSelectorV1({
+      model: {
+        async complete(request, options) {
+          const payload = JSON.parse(request.user) as {
+            requirements: Array<{ requirementId: string }>;
+            candidates: Array<{
+              evidenceRef: string;
+              eligibleRequirementIds: string[];
+              content: string;
+            }>;
+            shardManifest?: {
+              globalCandidateCount: number;
+              globalEligibleCounts: Array<{
+                requirementId: string;
+                count: number;
+              }>;
+              batchIndex: number;
+              batchCount: number;
+            };
+          };
+          requests.push({
+            bodyChars: request.user.length,
+            candidates: payload.candidates.map(
+              (candidate) => candidate.content,
+            ),
+            options,
+            shardManifest: payload.shardManifest,
+          });
+          return {
+            status: "completed",
+            text: JSON.stringify({
+              assessments: payload.requirements.map((requirement) => ({
+                requirementId: requirement.requirementId,
+                supportingEvidenceRefs: payload.candidates
+                  .filter((candidate) =>
+                    candidate.eligibleRequirementIds.includes(
+                      requirement.requirementId,
+                    ),
+                  )
+                  .map((candidate) => candidate.evidenceRef),
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              })),
+            }),
+          } as const;
+        },
+      },
+    });
+    const selected = await selector.select(
+      {
+        query: "Recover every observation from both roots.",
+        requirements: batchRequirements,
+        candidates: [...userCandidates, ...assistantCandidates],
+        candidateScopes: [
+          {
+            requirementId: "user-scope",
+            evidenceRefs: userCandidates.map((item) => item.evidenceRef),
+          },
+          {
+            requirementId: "assistant-scope",
+            evidenceRefs: assistantCandidates.map((item) => item.evidenceRef),
+          },
+        ],
+        certifiedAssistantDialogueEvidenceRefs: assistantCandidates.map(
+          (item) => item.evidenceRef,
+        ),
+      },
+      new AbortController().signal,
+    );
+
+    expect(requests).toHaveLength(3);
+    expect(
+      requests.every(
+        (item) => item.candidates.length <= 12 && item.bodyChars <= 12_000,
+      ),
+    ).toBe(true);
+    expect(
+      requests.every(
+        (item) =>
+          (item.options as { maxOutputTokens?: number }).maxOutputTokens ===
+          8_192,
+      ),
+    ).toBe(true);
+    expect(new Set(requests.flatMap((item) => item.candidates))).toEqual(
+      new Set([
+        ...userCandidates.map((item) => item.content),
+        ...assistantCandidates.map((item) => item.content),
+      ]),
+    );
+    const firstUserCandidate = userCandidates[0];
+    const secondUserCandidate = userCandidates[1];
+    const firstAssistantCandidate = assistantCandidates[0];
+    const secondAssistantCandidate = assistantCandidates[1];
+    if (
+      !firstUserCandidate ||
+      !secondUserCandidate ||
+      !firstAssistantCandidate ||
+      !secondAssistantCandidate
+    ) {
+      throw new Error("support selector batch fixture is incomplete");
+    }
+    expect(requests[0]?.candidates.slice(0, 4)).toEqual([
+      firstUserCandidate.content,
+      firstAssistantCandidate.content,
+      secondUserCandidate.content,
+      secondAssistantCandidate.content,
+    ]);
+    expect(requests.map((request) => request.shardManifest)).toEqual([
+      {
+        globalCandidateCount: 32,
+        globalEligibleCounts: [
+          { requirementId: "user-scope", count: 18 },
+          { requirementId: "assistant-scope", count: 14 },
+        ],
+        batchIndex: 1,
+        batchCount: 3,
+      },
+      {
+        globalCandidateCount: 32,
+        globalEligibleCounts: [
+          { requirementId: "user-scope", count: 18 },
+          { requirementId: "assistant-scope", count: 14 },
+        ],
+        batchIndex: 2,
+        batchCount: 3,
+      },
+      {
+        globalCandidateCount: 32,
+        globalEligibleCounts: [
+          { requirementId: "user-scope", count: 18 },
+          { requirementId: "assistant-scope", count: 14 },
+        ],
+        batchIndex: 3,
+        batchCount: 3,
+      },
+    ]);
+    expect(
+      selected.batchTelemetry?.batches.reduce(
+        (sum, item) => sum + item.certifiedAssistantCoverage,
+        0,
+      ),
+    ).toBe(14);
+    expect(
+      selected.assessments.map((item) => item.supportingEvidenceRefs.length),
+    ).toEqual([18, 14]);
+  });
+
+  test("recovers one truncated batch by recursively splitting 12 to 6 to 3", async () => {
+    const twelve = Array.from({ length: 12 }, (_, index) => ({
+      sourceId: "root",
+      evidenceRef: `evidence-${index}`,
+      content: `evidence ${index}`,
+      authority: "user_asserted" as const,
+    }));
+    const sizes: number[] = [];
+    const selector = createJsonMemoryEvidenceSupportSelectorV1({
+      model: {
+        async complete(request) {
+          const payload = JSON.parse(request.user) as {
+            candidates: Array<{ evidenceRef: string }>;
+          };
+          sizes.push(payload.candidates.length);
+          if (payload.candidates.length > 3) {
+            return {
+              status: "truncated",
+              errorCode: "MemoryWriterModelTruncated",
+            } as const;
+          }
+          return {
+            status: "completed",
+            text: JSON.stringify({
+              assessments: [
+                {
+                  requirementId: firstRequirement.requirementId,
+                  supportingEvidenceRefs: payload.candidates.map(
+                    (item) => item.evidenceRef,
+                  ),
+                  contradictingEvidenceRefs: [],
+                  unknownEvidenceRefs: [],
+                },
+              ],
+            }),
+          } as const;
+        },
+      },
+    });
+    const selected = await selector.select(
+      {
+        query: "List evidence.",
+        requirements: [firstRequirement],
+        candidates: twelve,
+      },
+      new AbortController().signal,
+    );
+
+    expect(sizes).toEqual([12, 6, 3, 3, 6, 3, 3]);
+    expect(selected.assessments[0]?.supportingEvidenceRefs).toEqual(
+      twelve.map((item) => item.evidenceRef),
+    );
+    expect(
+      selected.batchTelemetry?.batches.filter(
+        (item) => item.status === "truncated",
+      ),
+    ).toHaveLength(3);
+  });
+
+  test("runs at most two batches concurrently and merges completed shards by ordinal", async () => {
+    const twentyFour = Array.from({ length: 24 }, (_, index) => ({
+      sourceId: "root",
+      evidenceRef: `parallel-${index}`,
+      content: `parallel ${index}`,
+      authority: "user_asserted" as const,
+    }));
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const started: number[] = [];
+    const completed: number[] = [];
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const selector = createJsonMemoryEvidenceSupportSelectorV1({
+      model: {
+        async complete(request) {
+          const payload = JSON.parse(request.user) as {
+            candidates: Array<{ evidenceRef: string }>;
+            shardManifest: { batchIndex: number };
+          };
+          const batchIndex = payload.shardManifest.batchIndex;
+          started.push(batchIndex);
+          inFlight += 1;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          if (batchIndex === 1) {
+            await firstGate;
+          } else {
+            // Complete the later shard first; host merge must nevertheless
+            // retain the planned batch ordinal.
+            releaseFirst();
+          }
+          completed.push(batchIndex);
+          inFlight -= 1;
+          return {
+            status: "completed",
+            text: JSON.stringify({
+              assessments: [
+                {
+                  requirementId: firstRequirement.requirementId,
+                  supportingEvidenceRefs: payload.candidates.map(
+                    (candidate) => candidate.evidenceRef,
+                  ),
+                  contradictingEvidenceRefs: [],
+                  unknownEvidenceRefs: [],
+                },
+              ],
+            }),
+          } as const;
+        },
+      },
+    });
+    const selected = await selector.select(
+      {
+        query: "List every observation.",
+        requirements: [firstRequirement],
+        candidates: twentyFour,
+      },
+      new AbortController().signal,
+    );
+
+    expect(maxInFlight).toBe(2);
+    expect(started).toEqual([1, 2]);
+    expect(completed).toEqual([2, 1]);
+    expect(selected.assessments[0]?.supportingEvidenceRefs).toEqual(
+      twentyFour.map((candidate) => candidate.evidenceRef),
+    );
+    expect(
+      selected.batchTelemetry?.batches.map((batch) => batch.candidateCount),
+    ).toEqual([12, 12]);
+  });
+
+  test("keeps a concurrently failed transaction group atomic", async () => {
+    const twentyFour = Array.from({ length: 24 }, (_, index) => ({
+      sourceId: "root",
+      evidenceRef: `atomic-${index}`,
+      content: `atomic ${index}`,
+      authority: "user_asserted" as const,
+    }));
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const started: number[] = [];
+    const selector = createJsonMemoryEvidenceSupportSelectorV1({
+      model: {
+        async complete(request) {
+          const payload = JSON.parse(request.user) as {
+            candidates: Array<{ evidenceRef: string }>;
+            shardManifest: { batchIndex: number };
+          };
+          const batchIndex = payload.shardManifest.batchIndex;
+          started.push(batchIndex);
+          if (batchIndex === 1) {
+            await firstGate;
+            return {
+              status: "completed",
+              text: JSON.stringify({
+                assessments: [
+                  {
+                    requirementId: firstRequirement.requirementId,
+                    supportingEvidenceRefs: payload.candidates.map(
+                      (candidate) => candidate.evidenceRef,
+                    ),
+                    contradictingEvidenceRefs: [],
+                    unknownEvidenceRefs: [],
+                  },
+                ],
+              }),
+            } as const;
+          }
+          releaseFirst();
+          return { status: "failed", errorCode: "SyntheticFailure" } as const;
+        },
+      },
+    });
+    const grouped = await selector.selectGrouped?.(
+      {
+        query: "List every observation.",
+        requirements: [firstRequirement],
+        candidates: twentyFour,
+      },
+      [
+        {
+          groupId: "atomic-group",
+          requirementIds: [firstRequirement.requirementId],
+        },
+      ],
+      new AbortController().signal,
+    );
+
+    expect(started).toEqual([1, 2]);
+    expect(grouped?.groups).toEqual([
+      {
+        groupId: "atomic-group",
+        status: "fallback",
+        assessments: [],
+        failureCodes: ["SyntheticFailure"],
+      },
+    ]);
+    expect(
+      grouped?.batchTelemetry?.batches.map((batch) => batch.status),
+    ).toEqual(["completed", "failed"]);
+  });
+
+  test("permanent truncation closes only its transaction group after prior batches", async () => {
+    const groupRequirements = [
+      { ...firstRequirement, requirementId: "good" },
+      { ...secondRequirement, requirementId: "bad" },
+    ] as const;
+    const good = Array.from({ length: 8 }, (_, index) => ({
+      sourceId: "good-root",
+      evidenceRef: `good-${index}`,
+      content: `good ${index}`,
+      authority: "user_asserted" as const,
+    }));
+    const bad = Array.from({ length: 24 }, (_, index) => ({
+      sourceId: "bad-root",
+      evidenceRef: `bad-${index}`,
+      content: `bad ${index}`,
+      authority: "user_asserted" as const,
+    }));
+    const selector = createJsonMemoryEvidenceSupportSelectorV1({
+      model: {
+        async complete(request) {
+          const payload = JSON.parse(request.user) as {
+            requirements: Array<{ requirementId: string }>;
+            candidates: Array<{ evidenceRef: string; content: string }>;
+          };
+          if (
+            payload.requirements[0]?.requirementId === "bad" &&
+            payload.candidates.some((item) => item.content === "bad 12")
+          ) {
+            return {
+              status: "truncated",
+              errorCode: "MemoryWriterModelTruncated",
+            } as const;
+          }
+          return {
+            status: "completed",
+            text: JSON.stringify({
+              assessments: payload.requirements.map((requirement) => ({
+                requirementId: requirement.requirementId,
+                supportingEvidenceRefs: payload.candidates.map(
+                  (candidate) => candidate.evidenceRef,
+                ),
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              })),
+            }),
+          } as const;
+        },
+      },
+    });
+    const grouped = await selector.selectGrouped?.(
+      {
+        query: "Compare scoped evidence.",
+        requirements: groupRequirements,
+        candidates: [...good, ...bad],
+        candidateScopes: [
+          {
+            requirementId: "good",
+            evidenceRefs: good.map((item) => item.evidenceRef),
+          },
+          {
+            requirementId: "bad",
+            evidenceRefs: bad.map((item) => item.evidenceRef),
+          },
+        ],
+      },
+      [
+        { groupId: "good-group", requirementIds: ["good"] },
+        { groupId: "bad-group", requirementIds: ["bad"] },
+      ],
+      new AbortController().signal,
+    );
+
+    expect(
+      grouped?.groups.map((group) => [
+        group.groupId,
+        group.status,
+        group.assessments.length,
+      ]),
+    ).toEqual([
+      ["good-group", "completed", 1],
+      ["bad-group", "fallback", 0],
+    ]);
+    expect(grouped?.groups[1]?.failureCodes).toEqual([
+      "MemoryWriterModelTruncated",
+    ]);
+  });
+
+  test("does not widen an assistant certificate into an inferred user subgroup", async () => {
+    const userRequirement = {
+      ...firstRequirement,
+      requirementId: "user-inference",
+      relation: "inferred" as const,
+      coverageMode: "convergent" as const,
+      minimumEvidence: 2,
+    };
+    const assistantRequirement = {
+      ...secondRequirement,
+      requirementId: "assistant-dialogue",
+      roleConstraint: "assistant" as const,
+    };
+    const assistantCandidate = {
+      sourceId: "session",
+      evidenceRef: "session#assistant-2",
+      content: "The assistant proposed the label Northstar.",
+      authority: "context_only" as const,
+      sourceKind: "assistant_output" as const,
+      contextEvidenceRefs: ["session#user-1", "session#assistant-2"],
+      turnOrder: 2,
+    };
+    const modelRequirementIds: string[] = [];
+    const selector = createJsonMemoryEvidenceSupportSelectorV1({
+      model: {
+        async complete(request) {
+          const payload = JSON.parse(request.user) as {
+            requirements: Array<{ requirementId: string }>;
+            candidates: Array<{ evidenceRef: string }>;
+          };
+          modelRequirementIds.push(
+            ...payload.requirements.map((item) => item.requirementId),
+          );
+          return {
+            status: "completed",
+            text: JSON.stringify({
+              assessments: payload.requirements.map((requirement) => ({
+                requirementId: requirement.requirementId,
+                supportingEvidenceRefs: payload.candidates.map(
+                  (candidate) => candidate.evidenceRef,
+                ),
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              })),
+            }),
+          } as const;
+        },
+      },
+    });
+
+    const grouped = await selector.selectGrouped?.(
+      {
+        query: "Infer the user preference and recover the assistant label.",
+        requirements: [userRequirement, assistantRequirement],
+        candidates: [assistantCandidate],
+        candidateScopes: [
+          {
+            requirementId: userRequirement.requirementId,
+            evidenceRefs: [assistantCandidate.evidenceRef],
+          },
+          {
+            requirementId: assistantRequirement.requirementId,
+            evidenceRefs: [assistantCandidate.evidenceRef],
+          },
+        ],
+        certifiedAssistantDialogueEvidenceRefs: [
+          assistantCandidate.evidenceRef,
+        ],
+      },
+      [
+        {
+          groupId: "user-group",
+          requirementIds: [userRequirement.requirementId],
+        },
+        {
+          groupId: "assistant-group",
+          requirementIds: [assistantRequirement.requirementId],
+        },
+      ],
+      new AbortController().signal,
+    );
+
+    expect(grouped?.groups).toEqual([
+      {
+        groupId: "user-group",
+        status: "fallback",
+        assessments: [],
+        failureCodes: ["MemoryEvidenceSupportCertificateInvalid"],
+      },
+      {
+        groupId: "assistant-group",
+        status: "completed",
+        assessments: [
+          {
+            requirementId: assistantRequirement.requirementId,
+            supportingEvidenceRefs: [assistantCandidate.evidenceRef],
+            contradictingEvidenceRefs: [],
+            unknownEvidenceRefs: [],
+          },
+        ],
+        failureCodes: [],
+      },
+    ]);
+    expect(modelRequirementIds).toEqual([assistantRequirement.requirementId]);
   });
 
   test("projects raw L0 before the model-view bound without mutating provenance", async () => {
