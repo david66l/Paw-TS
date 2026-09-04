@@ -204,12 +204,11 @@ def render_multi_session_evidence(
         raise ValueError("hydrated evidence certificate does not match selection")
     rendered = render_user_session_blocks(sessions, source_lock)
     evidence_ids = tuple(actual_certificate["shortEvidenceIds"])
+    # The answer runner supplies EXECUTION_PROTOCOL once in its stable prompt.
+    # Keeping it out of the evidence body avoids paying for duplicated control
+    # prose and leaves the packet budget almost entirely for verbatim memory.
     context = "\n\n".join(
-        (
-            EXECUTION_PROTOCOL,
-            f"[Query cutoff {required_string(item, 'question_date')}]",
-            rendered,
-        )
+        (f"[Query cutoff {required_string(item, 'question_date')}]", rendered)
     )
     return ReaderPacket(
         query_hmac=str(row["queryHmac"]),
