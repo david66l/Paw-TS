@@ -53,7 +53,7 @@ EVIDENCE_ANSWER_PROTOCOL = """Paw evidence synthesis protocol:
 Keep the reasoning audit concise. Make the final answer directly match the requested value, list, comparison, date, or preference profile.
 
 """
-RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v13:typed-item-scoped-reader"
+RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v14:origin-capability-reader"
 MEMORY_POLICY = "paw.amb-evidence-first.v31:coverage-cardinality-semantics"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
 RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v8:semantic-slot-local"

@@ -208,8 +208,7 @@ mkdirSync(dirname(logPath), { recursive: true });
 const cache = createMemoryRetrievalCacheStoreV1({ maxEntries: 2_048 });
 const engines = new Map<string, PostgresMemoryStoreEngine>();
 const sourceEngines = new Map<string, PostgresMemoryStoreEngine>();
-interface SourceLocalLocatorDiagnosticsV1
-  extends AmbDialogueProjectionTelemetryV1 {
+interface SourceLocalLocatorDiagnosticsV1 extends AmbDialogueProjectionTelemetryV1 {
   readonly directAssistantDiscoveryRefHashes: readonly string[];
   readonly promotedAssistantCandidateRefHashes: readonly string[];
   readonly sourceFairAssistantCandidateRefHashes: readonly string[];
@@ -665,6 +664,15 @@ function createAmbMemoryWriterModel(
   const sourceArtifactSha256 =
     process.env.PAW_AMB_SOURCE_ARTIFACT_SHA256?.trim() || "unbound-development";
   const purposeBudget = memoryLlmBudgets.budgetFor(purpose);
+  // Evidence triage emits a bounded address partition, not a generative
+  // answer. On reasoning-capable endpoints, hidden thinking consumes the same
+  // completion allowance and can truncate the required JSON before it closes.
+  // Keep the caller-selected profile for planning/auditing, but make this
+  // mechanical classifier explicitly non-reasoning and cache it separately.
+  const purposeReasoningEffort =
+    purpose === "evidence-support"
+      ? ("disabled" as const)
+      : memoryLlmReasoningEffort;
   mkdirSync(cacheDir, { recursive: true });
   return Object.freeze({
     async complete(
@@ -685,7 +693,7 @@ function createAmbMemoryWriterModel(
         baseUrl,
         promptHash,
         maxTokens: atomMaxOutputTokens,
-        reasoningEffort: memoryLlmReasoningEffort,
+        reasoningEffort: purposeReasoningEffort,
       });
       const cachePath = resolve(cacheDir, `${cacheKey}.json`);
       if (existsSync(cachePath)) {
@@ -715,7 +723,7 @@ function createAmbMemoryWriterModel(
                 usage?.providerCacheMissTokens ?? null,
               costEvidenceComplete: usage !== null,
               budgetScope: purpose,
-              reasoningEffort: memoryLlmReasoningEffort,
+              reasoningEffort: purposeReasoningEffort,
               budget: purposeBudget.snapshot(),
             });
             return { status: "completed" as const, text: cached.text };
@@ -726,8 +734,7 @@ function createAmbMemoryWriterModel(
       }
       const started = performance.now();
       let reservation:
-        | ReturnType<typeof purposeBudget.reserveRemoteCall>
-        | undefined;
+        ReturnType<typeof purposeBudget.reserveRemoteCall> | undefined;
       try {
         reservation = purposeBudget.reserveRemoteCall({
           promptTokenUpperBound:
@@ -752,7 +759,7 @@ function createAmbMemoryWriterModel(
             response_format: { type: "json_object" },
             temperature: 0,
             max_tokens: atomMaxOutputTokens,
-            ...buildAmbMemoryLlmThinkingRequestV1(memoryLlmReasoningEffort),
+            ...buildAmbMemoryLlmThinkingRequestV1(purposeReasoningEffort),
           }),
           signal: options.signal,
         });
@@ -799,7 +806,7 @@ function createAmbMemoryWriterModel(
             promptTokens: payload.usage?.prompt_tokens ?? 0,
             completionTokens: payload.usage?.completion_tokens ?? 0,
             budgetScope: purpose,
-            reasoningEffort: memoryLlmReasoningEffort,
+            reasoningEffort: purposeReasoningEffort,
             budget: purposeBudget.snapshot(),
           });
           return {
@@ -833,7 +840,7 @@ function createAmbMemoryWriterModel(
           durationMs: Math.max(0, performance.now() - started),
           ...usage,
           budgetScope: purpose,
-          reasoningEffort: memoryLlmReasoningEffort,
+          reasoningEffort: purposeReasoningEffort,
           budget: purposeBudget.snapshot(),
         });
         return { status: "completed" as const, text };
@@ -854,7 +861,7 @@ function createAmbMemoryWriterModel(
           errorCode,
           durationMs: Math.max(0, performance.now() - started),
           budgetScope: purpose,
-          reasoningEffort: memoryLlmReasoningEffort,
+          reasoningEffort: purposeReasoningEffort,
           budget: purposeBudget.snapshot(),
         });
         return cancelled
@@ -2647,8 +2654,14 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstPlanRoleConstraint: string = evidenceIntent.roleConstraint;
   let evidenceFirstPlanRequirementCount = 0;
   let evidenceFirstDialogueMaterializationCertificateIdentity:
-    | Readonly<Record<string, unknown>>
-    | undefined;
+    Readonly<Record<string, unknown>> | undefined;
+  let evidenceFirstDialogueRecognizedBindingCount = 0;
+  let evidenceFirstDialogueUnparseableBindingCount = 0;
+  let evidenceFirstDialogueUncommittedBindingCount = 0;
+  const evidenceFirstDialogueOriginFilteredBindingCounts = {
+    assistantReport: 0,
+    sharedDialogueArtifact: 0,
+  };
   let evidenceFirstNotebookCoveredCount = 0;
   let evidenceFirstNotebookPartialCount = 0;
   let evidenceFirstNotebookMissingCount = 0;
@@ -4518,6 +4531,24 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     const dialogueSourceLockIds = resolution.packetSources.map(
       (source) => source.sourceId,
     );
+    const dialogueAllowedEvidenceUses =
+      evidenceQueryAnswerOrigin.originKind === "explicit_assistant"
+        ? new Set(["assistant_report"] as const)
+        : evidenceQueryAnswerOrigin.originKind === "explicit_shared" ||
+            evidenceQueryAnswerOrigin.originKind === "dialogue_artifact_unowned"
+          ? new Set(["assistant_report", "shared_dialogue_artifact"] as const)
+          : new Set<"assistant_report" | "shared_dialogue_artifact">();
+    const committedDialogueBindings = new Set(
+      resolution.supportAssessments.flatMap((assessment) =>
+        (assessment.evidenceDispositions ?? []).flatMap((disposition) =>
+          disposition.disposition === "supporting" &&
+          (disposition.evidenceUse === "assistant_report" ||
+            disposition.evidenceUse === "shared_dialogue_artifact")
+            ? [`${disposition.evidenceRef}\0${disposition.evidenceUse}`]
+            : [],
+        ),
+      ),
+    );
     const dialogueAuthorizedItems = resolution.packetSources.flatMap((source) =>
       source.evidenceBindings.flatMap((binding) => {
         if (
@@ -4525,13 +4556,32 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           binding.evidenceUse !== "shared_dialogue_artifact"
         )
           return [];
+        evidenceFirstDialogueRecognizedBindingCount += 1;
+        if (!dialogueAllowedEvidenceUses.has(binding.evidenceUse)) {
+          if (binding.evidenceUse === "assistant_report")
+            evidenceFirstDialogueOriginFilteredBindingCounts.assistantReport += 1;
+          else
+            evidenceFirstDialogueOriginFilteredBindingCounts.sharedDialogueArtifact += 1;
+          return [];
+        }
+        if (
+          !committedDialogueBindings.has(
+            `${binding.evidenceRef}\0${binding.evidenceUse}`,
+          )
+        ) {
+          evidenceFirstDialogueUncommittedBindingCount += 1;
+          return [];
+        }
         const logicalRef =
           logicalSourceLocalEvidenceRefV1(binding.evidenceRef) ??
           (/^[^#]+#source-\d+$/u.test(binding.evidenceRef)
             ? binding.evidenceRef
             : undefined);
         const match = /^(.+)#source-(\d+)$/u.exec(logicalRef ?? "");
-        if (!match?.[1] || match[1] !== source.sourceId || !match[2]) return [];
+        if (!match?.[1] || match[1] !== source.sourceId || !match[2]) {
+          evidenceFirstDialogueUnparseableBindingCount += 1;
+          return [];
+        }
         return [
           {
             sourceId: source.sourceId,
@@ -4545,7 +4595,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
     );
     const dialogueCertificateIdentity = {
       schema: "paw.dialogue-materialization-certificate.v3",
-      policy: "paw.core-final-packet-authority.v3:item-scoped",
+      policy: "paw.core-final-packet-authority.v3:item-scoped-origin-filtered",
       queryHash,
       originKind: evidenceQueryAnswerOrigin.originKind,
       originRevision: evidenceQueryAnswerOrigin.originRevision,
@@ -4572,8 +4622,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       ? "pending"
       : "not_eligible";
     let recommendationProjection:
-      | ReturnType<typeof projectRecommendationUserAuthorityV1>
-      | undefined;
+      ReturnType<typeof projectRecommendationUserAuthorityV1> | undefined;
     const recommendationLegacyChars = evidenceOutput.reduce(
       (total, document) => total + document.content.length,
       0,
@@ -4588,9 +4637,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       const projectionStarted = performance.now();
       try {
         const sourceLock = [
-          ...new Set(
-            resolution.packetSources.map((source) => source.sourceId),
-          ),
+          ...new Set(resolution.packetSources.map((source) => source.sourceId)),
         ].slice(0, 8);
         recommendationSourceLockCount = sourceLock.length;
         recommendationSourceLockHash = sha(JSON.stringify(sourceLock)).slice(
@@ -4620,10 +4667,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         );
         recommendationDuplicateEvidenceRefCount =
           refs.length - new Set(refs).size;
-        if (
-          refs.length === 0 ||
-          recommendationDuplicateEvidenceRefCount !== 0
-        )
+        if (refs.length === 0 || recommendationDuplicateEvidenceRefCount !== 0)
           throw new Error("invalid_locked_user_refs");
         const hydrated = await hydrateAmbImmutableSourceLocalEvidenceV1({
           archive: rawEvidenceArchiveFor(userId),
@@ -4651,9 +4695,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             sha(row.content) !== row.contentHash
           )
             throw new Error("invalid_hydrated_user_turn");
-          const sessionOrder = documentOrderByUser
-            .get(userId)
-            ?.get(sourceId);
+          const sessionOrder = documentOrderByUser.get(userId)?.get(sourceId);
           if (sessionOrder === undefined)
             throw new Error("missing_session_order");
           return {
@@ -5025,8 +5067,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       maxChars: 6_000,
     });
     let coveragePlan:
-      | Awaited<ReturnType<typeof planMemoryEvidenceCoverageV1>>
-      | undefined;
+      Awaited<ReturnType<typeof planMemoryEvidenceCoverageV1>> | undefined;
     if (coveragePlanner) {
       const coverageSnapshot: SessionInputSnapshot<InputFactV1> = Object.freeze(
         {
@@ -5812,19 +5853,34 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       sourceLockCount:
         evidenceFirstDialogueMaterializationCertificateIdentity?.sourceLockIds instanceof
         Array
-          ? evidenceFirstDialogueMaterializationCertificateIdentity.sourceLockIds
-              .length
+          ? evidenceFirstDialogueMaterializationCertificateIdentity
+              .sourceLockIds.length
           : 0,
       readerDocumentCount: documents.length,
       authorizedItemCount:
         evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedItems instanceof
         Array
-          ? evidenceFirstDialogueMaterializationCertificateIdentity.authorizedItems
-              .length
+          ? evidenceFirstDialogueMaterializationCertificateIdentity
+              .authorizedItems.length
           : 0,
-      certificateRevision: evidenceFirstDialogueMaterializationCertificate.certificateRevision
-        .toString()
-        .slice(0, 20),
+      recognizedBindingCount: evidenceFirstDialogueRecognizedBindingCount,
+      originFilteredAssistantReportCount:
+        evidenceFirstDialogueOriginFilteredBindingCounts.assistantReport,
+      originFilteredSharedDialogueArtifactCount:
+        evidenceFirstDialogueOriginFilteredBindingCounts.sharedDialogueArtifact,
+      unparseableBindingCount: evidenceFirstDialogueUnparseableBindingCount,
+      uncommittedBindingCount: evidenceFirstDialogueUncommittedBindingCount,
+      emptyAuthorization:
+        !(
+          evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedItems instanceof
+          Array
+        ) ||
+        evidenceFirstDialogueMaterializationCertificateIdentity.authorizedItems
+          .length === 0,
+      certificateRevision:
+        evidenceFirstDialogueMaterializationCertificate.certificateRevision
+          .toString()
+          .slice(0, 20),
     });
   }
   const response = {
@@ -5913,8 +5969,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstInitialAnswerShape,
       evidenceFirstInitialTemporalMode,
       evidenceFirstInitialRoleConstraint,
-      evidenceFirstQueryAnswerOriginKind:
-        evidenceQueryAnswerOrigin.originKind,
+      evidenceFirstQueryAnswerOriginKind: evidenceQueryAnswerOrigin.originKind,
       evidenceFirstQueryAnswerOriginRevision:
         evidenceQueryAnswerOrigin.originRevision,
       evidenceFirstDialogueMaterializationCertificate:

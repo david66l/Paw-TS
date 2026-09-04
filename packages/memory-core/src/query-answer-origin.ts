@@ -127,6 +127,94 @@ export function validateMemoryEvidenceQueryPlanOriginV1(input: {
   }
 }
 
+/**
+ * Align a planner proposal with an immutable explicit-assistant origin before
+ * the normal plan boundary and authority filters run. This is deliberately a
+ * capability projection, not a role widening: user leaves remain user-only
+ * dependencies/context, while every role-neutral leaf is made assistant-only.
+ *
+ * The mixed root envelope is retained only when preserved user leaves require
+ * it. In that case the concrete assistant leaves, not the `any` envelope, are
+ * the only leaves that may close an assistant-answer obligation.
+ */
+export function projectMemoryEvidenceQueryPlanForAnswerOriginV1(input: {
+  readonly origin: MemoryQueryAnswerOriginV1;
+  readonly plan: MemoryEvidenceQueryPlanV3;
+}): MemoryEvidenceQueryPlanV3 {
+  assertMemoryQueryAnswerOriginV1(input.origin);
+  if (input.origin.originKind !== "explicit_assistant") return input.plan;
+  if (!Array.isArray(input.plan.requirements)) {
+    throw namedError("MemoryEvidenceQueryPlanAssistantAlignmentInvalid");
+  }
+
+  let requirements = input.plan.requirements.map((requirement) => {
+    const roleConstraint =
+      requirement.roleConstraint === "any"
+        ? ("assistant" as const)
+        : requirement.roleConstraint;
+    // A role candidate is an unresolved alternative, never an authorization.
+    // Origin alignment resolves it to the same singleton as the leaf role so
+    // a later mixed-role binder cannot re-open a user/shared path.
+    const roleCandidates = Object.freeze(
+      roleConstraint === "user"
+        ? (["user"] as const)
+        : roleConstraint === "assistant"
+          ? (["assistant"] as const)
+          : [...(requirement.roleCandidates ?? [])],
+    );
+    return Object.freeze({ ...requirement, roleConstraint, roleCandidates });
+  });
+  const hasAssistantLeaf = requirements.some(
+    (requirement) => requirement.roleConstraint === "assistant",
+  );
+  if (!hasAssistantLeaf) {
+    if (requirements.length === 0 || requirements.length >= 4) {
+      throw namedError("MemoryEvidenceQueryPlanAssistantCapabilityMissing");
+    }
+    const seed = requirements[0];
+    if (!seed) {
+      throw namedError("MemoryEvidenceQueryPlanAssistantCapabilityMissing");
+    }
+    const ids = new Set(requirements.map((requirement) => requirement.requirementId));
+    let requirementId = "origin_assistant_answer";
+    for (let suffix = 2; ids.has(requirementId); suffix += 1) {
+      requirementId = `origin_assistant_answer_${suffix}`;
+    }
+    const dagPlan = requirements.some(
+      (requirement) => requirement.dependencyRelation !== undefined,
+    );
+    // Preserve all user leaves as dependency/context. The new assistant leaf
+    // carries the same retrieval wording as the first planner leaf; it does
+    // not reinterpret that user leaf as assistant-authored evidence.
+    requirements = [
+      ...requirements,
+      Object.freeze({
+        ...seed,
+        requirementId,
+        label: `Assistant answer: ${seed.label}`.slice(0, 192),
+        roleConstraint: "assistant" as const,
+        roleCandidates: Object.freeze(["assistant"] as const),
+        ...(dagPlan
+          ? {
+              dependencyRelation: "independent" as const,
+              dependsOnRequirementIds: Object.freeze([]),
+            }
+          : {}),
+      }),
+    ];
+  }
+  const hasUserDependency = requirements.some(
+    (requirement) => requirement.roleConstraint === "user",
+  );
+  return Object.freeze({
+    ...input.plan,
+    // `any` here is solely the legal envelope for a user dependency plus an
+    // assistant answer leaf. No resulting leaf has an `any` role.
+    roleConstraint: hasUserDependency ? ("any" as const) : ("assistant" as const),
+    requirements: Object.freeze(requirements),
+  });
+}
+
 /** Build one requirement-bound, content-free capability for the locator. */
 export function authorizeMemoryQueryAnswerOriginMaterializationV1(input: {
   readonly origin: MemoryQueryAnswerOriginV1;

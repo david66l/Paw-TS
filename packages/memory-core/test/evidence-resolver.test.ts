@@ -11,6 +11,7 @@ import {
   selectSupportCandidates,
   selectSupportCandidatesPreservingBaselineV1,
 } from "../src/evidence-resolver-helpers.js";
+import type { MemoryEvidenceRequirementV3 } from "../src/query-plan-contracts.js";
 import {
   type MemoryEvidenceIndexV1,
   PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
@@ -269,6 +270,188 @@ describe("shared evidence resolver v1", () => {
 
     expect(selected).toHaveLength(32);
     expect(selected).not.toContain("session#turn-33");
+  });
+
+  test("projects an explicit-assistant mixed planner proposal before authority settlement", async () => {
+    const observedRequirementCalls: MemoryEvidenceRequirementV3[][] = [];
+    let auditorCalls = 0;
+    const resolver = createMemoryEvidenceResolverV1({
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "test",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "user-context",
+                    sourceId: "dialogue",
+                    evidenceRef: "dialogue#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                  {
+                    candidateId: "assistant-report",
+                    sourceId: "dialogue",
+                    evidenceRef: "dialogue#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    authority: "context_only" as const,
+                  },
+                ],
+              },
+            ],
+            hits: [
+              {
+                sourceId: "dialogue",
+                evidenceRef: "dialogue#turn-1",
+                content: "Please tell me the selected color.",
+                sourceKind: "user_input" as const,
+                authority: "user_asserted" as const,
+              },
+              {
+                sourceId: "dialogue",
+                evidenceRef: "dialogue#turn-2",
+                content: "I said the selected color was cobalt.",
+                sourceKind: "assistant_output" as const,
+                authority: "context_only" as const,
+              },
+            ],
+          };
+        },
+      },
+      planner: {
+        plannerVersion: "test-planner.v1",
+        async plan() {
+          return {
+            plannerVersion: "test-planner.v1",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "any" as const,
+            needsPlanning: true,
+            requirements: [
+              {
+                requirementId: "assistant-claim",
+                label: "assistant claim",
+                searchText: "what you said",
+                temporalMode: "any" as const,
+                roleConstraint: "any" as const,
+                roleCandidates: ["user", "assistant"] as const,
+              },
+              {
+                requirementId: "user-context",
+                label: "user context",
+                searchText: "my request",
+                temporalMode: "any" as const,
+                roleConstraint: "user" as const,
+                roleCandidates: ["user", "assistant"] as const,
+              },
+            ],
+          };
+        },
+      },
+      supportSelector: {
+        selectorVersion: "test-selector.v1",
+        async select(input) {
+          observedRequirementCalls.push([...input.requirements]);
+          return {
+            selectorVersion: "test-selector.v1",
+            selectionRevision: "selected-mixed-origin-aligned-leaves",
+            assessments: [
+              {
+                requirementId: "assistant-claim",
+                supportingEvidenceRefs: ["dialogue#turn-2"],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+              {
+                requirementId: "user-context",
+                supportingEvidenceRefs: ["dialogue#turn-1"],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: [],
+              },
+            ],
+          };
+        },
+      },
+      closureMode: "repair",
+      closureAuditor: {
+        auditorVersion: "test-auditor.v1",
+        async audit() {
+          auditorCalls += 1;
+          return auditorCalls === 1
+            ? {
+                auditorVersion: "test-auditor.v1",
+                auditRevision: "require-origin-aligned-repair",
+                decision: "incomplete" as const,
+                deficiencies: [
+                  {
+                    reason: "weak_support" as const,
+                    targetRequirementId: "assistant-claim",
+                  },
+                ],
+                rejectedEvidenceRefs: [],
+              }
+            : {
+                auditorVersion: "test-auditor.v1",
+                auditRevision: "origin-aligned-repair-pass",
+                decision: "pass" as const,
+                deficiencies: [],
+                rejectedEvidenceRefs: [],
+              };
+        },
+      },
+    });
+
+    const result = await resolver.resolve(
+      "What did you say in our earlier conversation?",
+      new AbortController().signal,
+    );
+
+    expect(observedRequirementCalls).toHaveLength(2);
+    for (const observedRequirements of observedRequirementCalls) {
+      expect(observedRequirements).toEqual([
+      expect.objectContaining({
+        requirementId: "assistant-claim",
+        roleConstraint: "assistant",
+        roleCandidates: ["assistant"],
+      }),
+      expect.objectContaining({
+        requirementId: "user-context",
+        roleConstraint: "user",
+        roleCandidates: ["user"],
+      }),
+      ]);
+    }
+    expect(result.requirements).toEqual(
+      requiredAt(observedRequirementCalls, 1),
+    );
+    expect(
+      result.packetSources.flatMap((source) => source.evidenceBindings),
+    ).toContainEqual({
+      evidenceRef: "dialogue#turn-2",
+      evidenceUse: "assistant_report",
+    });
+    expect(
+      result.supportAssessments.flatMap(
+        (assessment) => assessment.evidenceDispositions ?? [],
+      ),
+    ).toContainEqual(
+      expect.objectContaining({
+        evidenceRef: "dialogue#turn-2",
+        evidenceUse: "assistant_report",
+        disposition: "supporting",
+        resolvedRole: "assistant",
+      }),
+    );
+    expect(
+      result.packetSources.flatMap((source) => source.evidenceBindings),
+    ).not.toContainEqual({
+      evidenceRef: "dialogue#turn-2",
+      evidenceUse: "shared_dialogue_artifact",
+    });
   });
 
   test("reopens the assistant lane after semantic role normalization", async () => {

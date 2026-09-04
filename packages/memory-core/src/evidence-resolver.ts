@@ -19,6 +19,7 @@ import {
   type MemoryEvidenceRequirementV3,
   classifyMemoryEvidenceQueryV3,
   compileMemoryQueryAnswerOriginV1,
+  projectMemoryEvidenceQueryPlanForAnswerOriginV1,
   validateMemoryEvidenceQueryPlanOriginV1,
 } from "./evidence-query-planner.js";
 import {
@@ -158,8 +159,12 @@ export function createMemoryEvidenceResolverV1(input: {
       const shouldPlan = input.planner !== undefined;
       if (shouldPlan && input.planner) {
         try {
-          const plan = await input.planner.plan(value, signal, {
+          const plannerPlan = await input.planner.plan(value, signal, {
             force: !intent.needsPlanning,
+          });
+          const plan = projectMemoryEvidenceQueryPlanForAnswerOriginV1({
+            origin: queryAnswerOrigin,
+            plan: plannerPlan,
           });
           validateMemoryEvidenceQueryPlanBoundary({
             query: value,
@@ -320,12 +325,16 @@ export function createMemoryEvidenceResolverV1(input: {
             // future host-owned invalidation channel may populate this set and
             // invoke the source-atomic sanitizer independently.
             const hardRejectedEvidenceRefs = new Set<string>();
-            const revisedPlan = await input.planner.plan(value, signal, {
+            const plannerRevisedPlan = await input.planner.plan(value, signal, {
               force: true,
               revision: Object.freeze({
                 currentRequirements: initialRequirements,
                 deficiencies: audit.deficiencies,
               }),
+            });
+            const revisedPlan = projectMemoryEvidenceQueryPlanForAnswerOriginV1({
+              origin: queryAnswerOrigin,
+              plan: plannerRevisedPlan,
             });
             validateMemoryEvidenceQueryPlanBoundary({
               query: value,

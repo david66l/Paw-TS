@@ -30,7 +30,7 @@ except ImportError:
     from temporal_event_ledger_shadow import timestamp  # type: ignore[no-redef]
 
 
-ROUTER_POLICY = "paw.typed-source-locked-reader.v4:item-scoped-authority-certificate"
+ROUTER_POLICY = "paw.typed-source-locked-reader.v5:origin-filtered-authority-certificate"
 
 
 class SourceLockInvariantError(RuntimeError):
@@ -224,7 +224,7 @@ def _certificate_sources(
     if set(certificate) != {*identity, "certificateRevision"}:
         raise CertificateInvariantError("certificate fields are invalid")
     if (identity["schema"] != "paw.dialogue-materialization-certificate.v3"
-            or identity["policy"] != "paw.core-final-packet-authority.v3:item-scoped"):
+            or identity["policy"] != "paw.core-final-packet-authority.v3:item-scoped-origin-filtered"):
         raise CertificateInvariantError("certificate schema or policy is invalid")
     if identity["queryHash"] != _sha(question) or identity["originKind"] != authority:
         raise CertificateInvariantError("certificate query or authority binding is invalid")

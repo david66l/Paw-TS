@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   authorizeMemoryQueryAnswerOriginMaterializationV1,
   compileMemoryQueryAnswerOriginV1,
+  projectMemoryEvidenceQueryPlanForAnswerOriginV1,
   validateMemoryEvidenceQueryPlanOriginV1,
   validateMemoryQueryAnswerOriginAuthorizationV1,
 } from "../src/query-answer-origin.js";
@@ -95,6 +96,126 @@ describe("typed immutable query answer origin v1", () => {
         plan: assistantPlan,
       }),
     ).not.toThrow();
+  });
+
+  test("aligns a confused explicit-assistant plan to concrete assistant capability leaves", () => {
+    const plan = {
+      plannerVersion: "test-planner.v1",
+      answerShape: "lookup" as const,
+      temporalMode: "any" as const,
+      roleConstraint: "any" as const,
+      needsPlanning: true,
+      requirements: [
+        {
+          requirementId: "claimed-answer",
+          label: "claimed answer",
+          searchText: "what you said",
+          temporalMode: "any" as const,
+          roleConstraint: "any" as const,
+          roleCandidates: ["user", "assistant"] as const,
+        },
+        {
+          requirementId: "user-context",
+          label: "user context",
+          searchText: "my earlier request",
+          temporalMode: "any" as const,
+          roleConstraint: "user" as const,
+          roleCandidates: ["user", "assistant"] as const,
+        },
+      ],
+    };
+    const projected = projectMemoryEvidenceQueryPlanForAnswerOriginV1({
+      origin: compileMemoryQueryAnswerOriginV1(
+        "What did you say in our earlier conversation?",
+      ),
+      plan,
+    });
+    expect(projected).not.toBe(plan);
+    expect(projected).toMatchObject({ roleConstraint: "any" });
+    expect(projected.requirements).toEqual([
+      expect.objectContaining({
+        requirementId: "claimed-answer",
+        roleConstraint: "assistant",
+        roleCandidates: ["assistant"],
+      }),
+      expect.objectContaining({
+        requirementId: "user-context",
+        roleConstraint: "user",
+        roleCandidates: ["user"],
+      }),
+    ]);
+    expect(plan.requirements[0]?.roleCandidates).toEqual(["user", "assistant"]);
+    expect(Object.isFrozen(projected.requirements)).toBe(true);
+    expect(Object.isFrozen(projected.requirements[0] ?? {})).toBe(true);
+  });
+
+  test("does not project shared or unowned dialogue origins", () => {
+    const plan = {
+      plannerVersion: "test-planner.v1",
+      answerShape: "lookup" as const,
+      temporalMode: "any" as const,
+      roleConstraint: "any" as const,
+      needsPlanning: true,
+      requirements: [
+        {
+          requirementId: "mixed",
+          label: "mixed",
+          searchText: "earlier dialogue",
+          temporalMode: "any" as const,
+          roleConstraint: "any" as const,
+          roleCandidates: ["user", "assistant"] as const,
+        },
+      ],
+    };
+    for (const query of [
+      "What did we decide on?",
+      "Can you remember the earlier label for me?",
+    ]) {
+      expect(
+        projectMemoryEvidenceQueryPlanForAnswerOriginV1({
+          origin: compileMemoryQueryAnswerOriginV1(query),
+          plan,
+        }),
+      ).toBe(plan);
+    }
+  });
+
+  test("adds an assistant capability leaf without rewriting a user dependency", () => {
+    const plan = {
+      plannerVersion: "test-planner.v1",
+      answerShape: "lookup" as const,
+      temporalMode: "any" as const,
+      roleConstraint: "user" as const,
+      needsPlanning: true,
+      requirements: [
+        {
+          requirementId: "user-context",
+          label: "user context",
+          searchText: "earlier request",
+          temporalMode: "any" as const,
+          roleConstraint: "user" as const,
+        },
+      ],
+    };
+    const projected = projectMemoryEvidenceQueryPlanForAnswerOriginV1({
+      origin: compileMemoryQueryAnswerOriginV1(
+        "What did you say in our earlier conversation?",
+      ),
+      plan,
+    });
+    expect(projected).toMatchObject({ roleConstraint: "any" });
+    expect(projected.requirements).toEqual([
+      expect.objectContaining({
+        requirementId: "user-context",
+        roleConstraint: "user",
+        roleCandidates: ["user"],
+      }),
+      expect.objectContaining({
+        requirementId: "origin_assistant_answer",
+        roleConstraint: "assistant",
+        roleCandidates: ["assistant"],
+      }),
+    ]);
   });
 
   test("binds and revalidates a source-local capability", () => {

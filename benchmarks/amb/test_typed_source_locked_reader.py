@@ -70,7 +70,7 @@ def certificate_raw(
                 )
     identity = {
         "schema": "paw.dialogue-materialization-certificate.v3",
-        "policy": "paw.core-final-packet-authority.v3:item-scoped",
+        "policy": "paw.core-final-packet-authority.v3:item-scoped-origin-filtered",
         "queryHash": hashlib.sha256(question.encode()).hexdigest(),
         "originKind": authority,
         "originRevision": origin_revision,
@@ -262,7 +262,7 @@ class TypedSourceLockedReaderTest(unittest.TestCase):
             [self.later, self.earlier],
         )
         self.assertEqual(
-            "330e2c1f86c623f615166275a10369f06382ca196193cdc0b5a7e41bb82ebcb0",
+            "6740c777200c6f18888c426e483eb3631c322506b359ddb34a790f717a0b5687",
             raw["evidenceFirstDialogueMaterializationCertificate"][
                 "certificateRevision"
             ],
