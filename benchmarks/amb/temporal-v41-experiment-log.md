@@ -617,3 +617,30 @@ slice (133 questions) as a comparable treatment.
   policies, producer revision, cutoff, plan operator/unit/roles, and exact
   per-slot evidence-HMAC sets. Raw diagnostic reports must be projected through
   a strict label-blind sanitizer before the cross-replay freezer can read them.
+
+## v76 stopped replay and deterministic-selector pivot
+
+- V76 began a new four-shard, independently nonced GLM binder replay, but was
+  stopped before half of the 133-row ledger completed. The last observed shard
+  progress was 19/40, 21/40, 9/27, and 17/26; all four workers were terminated
+  and no V76 result was accepted or scored.
+- The stop was intentional rather than an infrastructure failure. The sealed
+  V73/V75 comparison already established that the LLM binder's stable complete
+  recovery among the 21 historical errors was only 6, while its loose single-
+  run union upper bound was 12. Another correlated replay could measure more
+  variance, but could not create the safe theoretical margin needed for a
+  120/133 treatment.
+- Commit `8985b0c` introduced a deterministic lexical set-selection prototype.
+  Review classified it as a reproducible lexical baseline, not yet an event-
+  facet architecture: it lacks typed mandatory obligations, stable event IDs,
+  normalized temporal anchors, collection-membership closure, and a fail-closed
+  completeness gate. It also constructed adjacency only inside the query-ranked
+  top-48 subset and accidentally assigned the same initial rank to every record.
+  Consequently this prototype is not authorized for a 133-row architecture
+  gate or reader injection.
+- The next accepted shadow must build immutable event bundles over all locked
+  user turns before query ranking; separate event identity, time anchor,
+  requested attribute, relation endpoint, collection membership, and count
+  support from lexical features; select by uncovered mandatory obligations;
+  reject incomplete packets; and persist a label-free selection artifact before
+  a separate evaluator may read endpoint labels.
