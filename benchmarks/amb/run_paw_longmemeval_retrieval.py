@@ -764,6 +764,27 @@ def index_writer_identity_protocol() -> dict[str, str | bool]:
     }
 
 
+def memory_model_protocol() -> dict[str, str | float | None]:
+    model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
+    base_url = os.environ.get(
+        "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
+    ).strip()
+    reasoning_effort = os.environ.get(
+        "PAW_AMB_MEMORY_LLM_REASONING_EFFORT", "disabled"
+    ).strip().lower()
+    if reasoning_effort not in {"disabled", "low", "high", "max"}:
+        raise ValueError("PAW_AMB_MEMORY_LLM_REASONING_EFFORT is invalid")
+    return {
+        "modelId": f"deepseek:{model}",
+        "endpointSha256": sha(base_url.rstrip("/")),
+        "temperature": 0.0,
+        "thinking": "disabled" if reasoning_effort == "disabled" else "enabled",
+        "reasoningEffort": (
+            None if reasoning_effort == "disabled" else reasoning_effort
+        ),
+    }
+
+
 def experiment_protocol(
     args: argparse.Namespace,
     *,
@@ -791,7 +812,7 @@ def experiment_protocol(
         ).strip(),
     }
     return {
-        "schemaVersion": "paw.longmemeval-paired-experiment.v5",
+        "schemaVersion": "paw.longmemeval-paired-experiment.v6",
         "projectReleaseGate": PROJECT_RELEASE_GATE,
         "common": {
             "k": args.k,
@@ -821,6 +842,7 @@ def experiment_protocol(
                 "thinking": "enabled",
                 "reasoningEffort": "max",
             },
+            "memoryModel": memory_model_protocol(),
             "toolProfile": os.environ.get("PAW_AMB_TOOL_PROFILE", "full"),
             "evidenceLedger": os.environ.get("PAW_AMB_EVIDENCE_LEDGER", "0"),
             "llmCachePolicy": {

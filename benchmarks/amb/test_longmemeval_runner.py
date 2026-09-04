@@ -25,6 +25,7 @@ from run_paw_longmemeval_retrieval import (
     experiment_protocol,
     index_writer_identity_protocol,
     local_embedding_health_url,
+    memory_model_protocol,
     order_longmemeval_reader_documents,
     public_report,
     resolve_index_store_dir,
@@ -65,6 +66,28 @@ class FakeDataset:
 
 
 class LongMemEvalRunnerTest(unittest.TestCase):
+    def test_memory_model_protocol_seals_reasoning_profile(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "DEEPSEEK_MODEL": "glm-5.3-flash",
+                "DEEPSEEK_BASE_URL": "https://glm.example/v4/",
+                "PAW_AMB_MEMORY_LLM_REASONING_EFFORT": "low",
+            },
+            clear=True,
+        ):
+            protocol = memory_model_protocol()
+        self.assertEqual("deepseek:glm-5.3-flash", protocol["modelId"])
+        self.assertEqual("enabled", protocol["thinking"])
+        self.assertEqual("low", protocol["reasoningEffort"])
+        with patch.dict(
+            os.environ,
+            {"PAW_AMB_MEMORY_LLM_REASONING_EFFORT": "medium"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ValueError, "is invalid"):
+                memory_model_protocol()
+
     def test_index_writer_identity_can_be_frozen_independently(self) -> None:
         with patch.dict(
             os.environ,
@@ -278,7 +301,7 @@ class LongMemEvalRunnerTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            "paw.longmemeval-paired-experiment.v5",
+            "paw.longmemeval-paired-experiment.v6",
             protocol["schemaVersion"],
         )
         self.assertEqual(0.75, protocol["projectReleaseGate"]["minimumTreatmentAccuracy"])

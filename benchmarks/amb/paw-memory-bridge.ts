@@ -145,7 +145,11 @@ import {
 } from "./evidence-execution-profile.js";
 import { logicalSourceLocalEvidenceRefV1 } from "./immutable-evidence-address.js";
 import { hydrateAmbImmutableSourceLocalEvidenceV1 } from "./immutable-source-local-hydration.js";
-import { buildAmbMemoryLlmReplayCacheKeyV1 } from "./memory-llm-replay-cache.js";
+import {
+  buildAmbMemoryLlmReplayCacheKeyV1,
+  buildAmbMemoryLlmThinkingRequestV1,
+  resolveAmbMemoryLlmReasoningEffortV1,
+} from "./memory-llm-replay-cache.js";
 import {
   RECOMMENDATION_USER_AUTHORITY_POLICY_V1,
   projectRecommendationUserAuthorityV1,
@@ -366,6 +370,9 @@ const atomWriteMode = (() => {
   throw new Error("PAW_AMB_ATOM_WRITE_MODE is invalid");
 })();
 const atomMaxOutputTokens = 4_096;
+const memoryLlmReasoningEffort = resolveAmbMemoryLlmReasoningEffortV1(
+  process.env.PAW_AMB_MEMORY_LLM_REASONING_EFFORT,
+);
 const indexWriterIdentity = resolveAmbIndexWriterIdentityV1({
   activeModel: process.env.DEEPSEEK_MODEL,
   activeBaseUrl: process.env.DEEPSEEK_BASE_URL,
@@ -673,6 +680,7 @@ function createAmbMemoryWriterModel(
         baseUrl,
         promptHash,
         maxTokens: atomMaxOutputTokens,
+        reasoningEffort: memoryLlmReasoningEffort,
       });
       const cachePath = resolve(cacheDir, `${cacheKey}.json`);
       if (existsSync(cachePath)) {
@@ -702,6 +710,7 @@ function createAmbMemoryWriterModel(
                 usage?.providerCacheMissTokens ?? null,
               costEvidenceComplete: usage !== null,
               budgetScope: purpose,
+              reasoningEffort: memoryLlmReasoningEffort,
               budget: purposeBudget.snapshot(),
             });
             return { status: "completed" as const, text: cached.text };
@@ -738,7 +747,7 @@ function createAmbMemoryWriterModel(
             response_format: { type: "json_object" },
             temperature: 0,
             max_tokens: atomMaxOutputTokens,
-            thinking: { type: "disabled" },
+            ...buildAmbMemoryLlmThinkingRequestV1(memoryLlmReasoningEffort),
           }),
           signal: options.signal,
         });
@@ -785,6 +794,7 @@ function createAmbMemoryWriterModel(
             promptTokens: payload.usage?.prompt_tokens ?? 0,
             completionTokens: payload.usage?.completion_tokens ?? 0,
             budgetScope: purpose,
+            reasoningEffort: memoryLlmReasoningEffort,
             budget: purposeBudget.snapshot(),
           });
           return {
@@ -818,6 +828,7 @@ function createAmbMemoryWriterModel(
           durationMs: Math.max(0, performance.now() - started),
           ...usage,
           budgetScope: purpose,
+          reasoningEffort: memoryLlmReasoningEffort,
           budget: purposeBudget.snapshot(),
         });
         return { status: "completed" as const, text };
@@ -838,6 +849,7 @@ function createAmbMemoryWriterModel(
           errorCode,
           durationMs: Math.max(0, performance.now() - started),
           budgetScope: purpose,
+          reasoningEffort: memoryLlmReasoningEffort,
           budget: purposeBudget.snapshot(),
         });
         return cancelled
@@ -6086,6 +6098,7 @@ log("bridge_start", {
       ? {
           limits: atomLimits,
           memoryLlmBudgetLimits,
+          memoryLlmReasoningEffort,
           writeMode: atomWriteMode,
           resumeRequested: atomResume,
           reuseIndex,
