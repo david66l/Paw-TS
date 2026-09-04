@@ -286,3 +286,49 @@ slice (133 questions) as a comparable treatment.
   default ranking change is therefore reverted after logging; V47 is retained
   only as evidence that an eventual typed event ledger must preserve baseline
   evidence while improving event identity and temporal operators.
+
+## V47 configuration correction
+
+- A later artifact audit found that the public V47 manifest records
+  `PAW_AMB_TEMPORAL_ROUND_FRONTIER=0`. Its reported +1 outcome therefore cannot
+  establish a causal effect for the event-cue ranker and must not be used as a
+  promotion signal. The historical result remains above for traceability only.
+- All future temporal-frontier experiments must first produce a dry-run
+  manifest and bridge-start event proving both the frontier flag and the
+  candidate-ranking mode that will be evaluated.
+
+## v48 exact-turn BM25 frontier gate
+
+- The official LongMemEval construction distinguishes two temporal regimes:
+  73/133 temporal rows use one or more answer sessions on different calendar
+  dates (including single-event-to-question-time cases), while 60/133 contain
+  multiple answer sessions on one calendar day and require explicit
+  within-dialogue ordering. This supports a dual-clock architecture: source
+  session time is a benchmark-provided ordering/elapsed-time basis for the
+  former regime, but it is not an unqualified event-time claim for product
+  state resolution.
+- A label-blind retrieval audit over all temporal rows showed that simple
+  exact-turn BM25 on the raw user turns reaches every labeled turn in 99/133
+  rows at top-8 and 108/133 at top-16 when evaluated over the complete
+  haystack. The product experiment does **not** open that full haystack: it
+  applies BM25 only after the existing source lock, and keeps baseline anchors
+  immutable and first.
+- The V48 dry run and bridge-start event record
+  `PAW_AMB_TEMPORAL_ROUND_FRONTIER=1` and
+  `temporalCandidateRankingMode=exact_bm25`. The retrieval-only paired audit on
+  the same V44 diagnostic cohort kept aggregate gold source sessions at 50/57,
+  increased macro source recall from 0.865 to 0.872, and raised hash-audited
+  labeled turns rendered in the notebook from 10/46 to 14/46. It did not add
+  sources or use `has_answer` in ranking.
+- The complete sealed 21-query run scored **6/21**, compared with **4/21** for
+  V44: two recoveries, four retained successes, and zero regressions
+  (15 false-to-false, 2 false-to-true, 4 true-to-true). The paired gain is
+  9.52 percentage points, above the 7.5-point diagnostic threshold. The two
+  recoveries are one same-day explicit chronology/abstention row and one
+  five-session airline-history ordering row, consistent with exact-turn rather
+  than source-aperture recovery.
+- This authorizes one fresh sealed 133-row temporal treatment, not a release
+  claim. The experimental mode remains opt-in. A full run must retain the
+  source-recall and no-regression checks, report calendar/duration/history
+  slices separately, and beat the v36 112/133 baseline before it is considered
+  for default behavior.
