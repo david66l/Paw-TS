@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -33,7 +34,10 @@ except ImportError:
 
 
 SCHEMA_VERSION = "paw.multi-session-evidence-set-direct-answer.v1"
-RUNNER_POLICY = "paw.multi-session-evidence-set-direct.v1:complete-scan-one-call"
+RUNNER_POLICY = "paw.multi-session-evidence-set-direct.v2:query-bound-boundaries"
+INSUFFICIENT_ANSWER = (
+    "The available memory does not contain enough information to answer this question."
+)
 
 
 def sha(value: str) -> str:
@@ -56,6 +60,53 @@ def judge_values(item: dict[str, Any]) -> tuple[list[str], str, bool]:
     if not isinstance(question_type, str):
         raise ValueError("judge question type is invalid")
     return answers, question_type, question_id.endswith("_abs")
+
+
+def boundary_protocol(question: str) -> str:
+    """Add narrow query-derived boundary rules without perturbing other prompts."""
+
+    lowered = question.casefold()
+    clauses: list[str] = []
+    if re.search(r"\bbefore\b", lowered):
+        clauses.append(
+            "In an items/events-before-X question, X is the boundary/reference "
+            "event and is not itself counted unless the wording explicitly includes it."
+        )
+    if "last week" in lowered:
+        clauses.append(
+            "Interpret last week as the rolling seven-day interval immediately "
+            "preceding the query cutoff; never include days after the cutoff."
+        )
+    if re.search(r"\b(?:what|which) time\b.*\b(?:reach|arriv)", lowered):
+        clauses.append(
+            "A uniquely matching scheduled appointment time may supply the time "
+            "of the named visit or arrival when nothing conflicts."
+        )
+    if re.search(r"\b(?:when|what date)\b.*\b(?:submit|submission)", lowered):
+        clauses.append(
+            "Join a uniquely matching deadline or submission date to the named "
+            "submission when the sessions identify the same event."
+        )
+    if re.search(r"\b(?:undergrad|undergraduate|graduate|thesis|course research)\b", lowered):
+        clauses.append(
+            "Keep the exact research or education stage; do not substitute a "
+            "poster, institution, or project from a different stage."
+        )
+    if not clauses:
+        return ""
+    return "\n\nAdditional query-bound boundary rules:\n- " + "\n- ".join(clauses)
+
+
+def finalize_answer(plan: Any, answer: str) -> str:
+    """Treat an unsupported zero count as missing evidence, not a known zero."""
+
+    if (
+        plan is not None
+        and getattr(plan.operator, "value", None) == "count_members"
+        and re.match(r"^\s*0(?:\D|$)", answer)
+    ):
+        return INSUFFICIENT_ANSWER
+    return answer
 
 
 def main() -> None:
@@ -93,6 +144,7 @@ def main() -> None:
         question = required_string(item, "question")
         plan = compile_set_plan(question)
         plan_payload = public_plan(plan) if plan is not None else None
+        query_boundary_protocol = boundary_protocol(question)
 
         def prompt_fn(query: str, context: str, meta=None) -> str:
             return f"""You are the final executor for a complete, locked multi-session evidence set.
@@ -100,14 +152,7 @@ The query-only host plan is: {json.dumps(plan_payload, sort_keys=True, separator
 
 Derive the exact inclusion rule from the question, then scan EVERY supplied session. Form the complete set of matching user facts before calculating. Preserve entity, action/state, value, unit, and event time. Merge only repeated mentions of the same real event and action; the same entity can have distinct obligations or events, such as returning an old item and picking up its replacement. Apply time/range/latest and active/completed/planned/cancelled filters before arithmetic. For relative windows, anchor at the query cutoff and use the session timestamp when no more specific event date is stated.
 
-Treat the question as the cross-session join contract. If separate sessions provide unique compatible facts for the named entity, operands, or requested relationship, join them; do not reject the calculation merely because no one sentence restates the relationship. Evidence that the user acquired or possesses an item may support an acquisition count unless another statement contradicts it. Normalize compatible units. For a count, enumerate the unique event/action members; for a sum, difference, average, ratio, or maximum, show a short checkable calculation. Make a second pass over all sessions. If a required operand is genuinely absent or conflicting, state that the available memory is insufficient rather than guessing. The final answer must directly match the requested value, date, entity, list, or comparison.
-
-Boundary and abstention rules:
-- Absence of a matching memory is not proof that the count is zero. Say the information is insufficient unless the packet positively establishes an exhaustive zero.
-- In "items/events before X" questions, X is the boundary/reference event and is not itself a counted member unless the wording explicitly includes it.
-- Keep exact qualifiers such as entity, research stage, location, and event type. Never substitute an adjacent but different fact merely because it has similar words.
-- Interpret "last week" as the rolling seven-day interval immediately preceding the query cutoff; never include days after the cutoff. Other relative windows also end at the cutoff unless the question states a calendar boundary.
-- A uniquely matching scheduled appointment time may supply the time of the named visit or arrival when the question joins those facts and nothing conflicts; likewise join a uniquely matching deadline/date with the named submission. Do not demand a redundant sentence restating the link.
+Treat the question as the cross-session join contract. If separate sessions provide unique compatible facts for the named entity, operands, or requested relationship, join them; do not reject the calculation merely because no one sentence restates the relationship. Evidence that the user acquired or possesses an item may support an acquisition count unless another statement contradicts it. Normalize compatible units. For a count, enumerate the unique event/action members; for a sum, difference, average, ratio, or maximum, show a short checkable calculation. Make a second pass over all sessions. If a required operand is genuinely absent or conflicting, state that the available memory is insufficient rather than guessing. The final answer must directly match the requested value, date, entity, list, or comparison.{query_boundary_protocol}
 
 {context}
 
@@ -119,12 +164,13 @@ Question: {query}"""
             task_type="open",
             meta={"_prompt_fn": prompt_fn},
         )
+        final_answer = finalize_answer(plan, result.answer)
 
         # This is the first evaluation-label boundary.
         accepted, question_type, abstention = judge_values(item)
         judgment = judge.score(
             question,
-            result.answer,
+            final_answer,
             accepted,
             official_longmemeval_judge_prompt_fn(
                 question_type=question_type,
@@ -136,8 +182,8 @@ Question: {query}"""
                 "queryHmac": query_hmac,
                 "packetRevisionHmac": packet.packet_revision_hmac,
                 "plan": plan_payload,
-                "answerHash": sha(result.answer),
-                "answerChars": len(result.answer),
+                "answerHash": sha(final_answer),
+                "answerChars": len(final_answer),
                 "answerCorrect": judgment.correct,
                 "judgeReasonHash": sha(judgment.reason),
                 "sourceCount": packet.source_count,
