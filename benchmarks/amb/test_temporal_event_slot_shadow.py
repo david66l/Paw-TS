@@ -8,6 +8,7 @@ from temporal_event_slot_shadow import (
     compile_question_plan,
     compile_plan,
     directional_slots,
+    intersect_event_packet_bindings,
     validate_binding,
     validate_event_packet_binding,
     validate_event_packet_proposal,
@@ -253,6 +254,91 @@ class TemporalEventSlotShadowTest(unittest.TestCase):
         self.assertIsNotNone(first)
         self.assertIsNotNone(swapped)
         self.assertNotEqual(first.canonical_revision(), swapped.canonical_revision())
+
+    def test_packet_consensus_keeps_only_per_slot_intersection(self) -> None:
+        plan = TemporalPlan(
+            "duration_between",
+            "day",
+            (
+                SlotSpec("E1", "start_event", "start"),
+                SlotSpec("E2", "end_event", "end"),
+            ),
+        )
+        pool = candidates(5)
+        first, _ = validate_event_packet_proposal(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": ["C01", "C03"]},
+                    {"slotId": "E2", "candidateIds": ["C02", "C04"]},
+                ],
+            },
+            plan,
+            pool,
+            "2025-01-31T00:00:00Z",
+        )
+        second, _ = validate_event_packet_proposal(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": ["C01"]},
+                    {"slotId": "E2", "candidateIds": ["C02", "C05"]},
+                ],
+            },
+            plan,
+            pool,
+            "2025-01-31T00:00:00Z",
+        )
+
+        consensus, status = intersect_event_packet_bindings(
+            [first, second], 2, plan, pool
+        )
+
+        self.assertEqual("consensus_address_valid", status)
+        self.assertIsNotNone(consensus)
+        self.assertEqual((pool[0], pool[1]), consensus.selected())
+
+    def test_packet_consensus_rejects_role_swaps(self) -> None:
+        plan = TemporalPlan(
+            "duration_between",
+            "day",
+            (
+                SlotSpec("E1", "start_event", "start"),
+                SlotSpec("E2", "end_event", "end"),
+            ),
+        )
+        pool = candidates(2)
+        first, _ = validate_event_packet_proposal(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": ["C01"]},
+                    {"slotId": "E2", "candidateIds": ["C02"]},
+                ],
+            },
+            plan,
+            pool,
+            "2025-01-31T00:00:00Z",
+        )
+        swapped, _ = validate_event_packet_proposal(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": ["C02"]},
+                    {"slotId": "E2", "candidateIds": ["C01"]},
+                ],
+            },
+            plan,
+            pool,
+            "2025-01-31T00:00:00Z",
+        )
+
+        consensus, status = intersect_event_packet_bindings(
+            [first, swapped], 2, plan, pool
+        )
+
+        self.assertIsNone(consensus)
+        self.assertEqual("empty_slot_consensus", status)
 
     def test_event_packet_rejects_global_budget_overflow(self) -> None:
         plan = TemporalPlan(

@@ -59,11 +59,11 @@ except ImportError:
     )
 
 
-SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v3"
+SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v4"
 PLANNER_SCHEMA_VERSION = "paw.temporal-event-planner.v1"
 BINDER_SCHEMA_VERSION = "paw.temporal-event-binder.v2"
 DETERMINISTIC_PLANNER_VERSION = "paw.temporal-question-compiler.v1"
-EVENT_PACKET_BINDER_VERSION = "paw.temporal-event-packet-binder.v1"
+EVENT_PACKET_BINDER_VERSION = "paw.temporal-event-packet-binder.v2:slot-consensus"
 EVENT_PACKET_MAX_SELECTED = 12
 UNIT_ALIASES = {
     "day": "day",
@@ -568,6 +568,45 @@ def validate_event_packet_binding(
     )
 
 
+def intersect_event_packet_bindings(
+    bindings: list[EventPacketBinding],
+    expected_replicas: int,
+    plan: TemporalPlan,
+    ranked: list[TurnCandidate],
+) -> tuple[EventPacketBinding | None, str]:
+    """Keep only address-valid evidence independently selected for each slot."""
+
+    if expected_replicas < 2 or len(bindings) != expected_replicas:
+        return None, "replica_quorum_missing"
+    ranked_by_ref = {candidate.evidence_ref: candidate for candidate in ranked}
+    consensus_slots: list[tuple[str, tuple[TurnCandidate, ...]]] = []
+    for slot_index, slot in enumerate(plan.slots):
+        slot_sets = [
+            {
+                candidate.evidence_ref
+                for candidate in binding.slots[slot_index][1]
+            }
+            for binding in bindings
+        ]
+        consensus_refs = set.intersection(*slot_sets)
+        if not consensus_refs:
+            return None, "empty_slot_consensus"
+        ordered = tuple(
+            candidate
+            for candidate in ranked
+            if candidate.evidence_ref in consensus_refs
+        )
+        if not ordered or any(
+            candidate.evidence_ref not in ranked_by_ref for candidate in ordered
+        ):
+            return None, "consensus_address_invalid"
+        consensus_slots.append((slot.slot_id, ordered))
+    binding = EventPacketBinding(tuple(consensus_slots))
+    if len(binding.selected()) > EVENT_PACKET_MAX_SELECTED:
+        return None, "consensus_budget_exceeded"
+    return binding, "consensus_address_valid"
+
+
 def combine_binding_results(
     results: list[tuple[bool, list[TurnCandidate], str, str]],
     ranked: list[TurnCandidate],
@@ -871,6 +910,8 @@ def main() -> None:
         all_replicas_valid = False
         slot_exact_agreement: bool | None = None
         role_specific_jaccards: list[float] = []
+        committee_union_selected: list[TurnCandidate] = []
+        consensus_binding: EventPacketBinding | None = None
         if plan is not None:
             prompt = (
                 event_packet_binder_prompt(question, cutoff, plan, ranked)
@@ -970,32 +1011,45 @@ def main() -> None:
                         else 1.0
                     )
             (
-                certified,
-                selected,
+                any_replica_valid,
+                committee_union_selected,
                 binder_replica_statuses,
                 binder_response_hashes,
             ) = combine_binding_results(
                 [result[:4] for result in binding_results],
                 ranked,
             )
-            binder_status = (
-                "address_valid"
-                if certified and binder_mode == "event_packet"
-                else "certified"
-                if certified
-                else "all_rejected"
-            )
+            if binder_mode == "event_packet":
+                consensus_binding, binder_status = intersect_event_packet_bindings(
+                    packet_bindings, binder_replicas, plan, ranked
+                )
+                certified = consensus_binding is not None
+                if consensus_binding is not None:
+                    consensus_refs = {
+                        candidate.evidence_ref
+                        for candidate in consensus_binding.selected()
+                    }
+                    selected = [
+                        candidate
+                        for candidate in ranked
+                        if candidate.evidence_ref in consensus_refs
+                    ]
+            else:
+                certified = any_replica_valid
+                selected = committee_union_selected
+                binder_status = "certified" if certified else "all_rejected"
         gold_refs = answer_user_evidence_refs(item)
         ranked_refs = {candidate.evidence_ref for candidate in ranked}
         selected_refs = {candidate.evidence_ref for candidate in selected}
+        committee_union_refs = {
+            candidate.evidence_ref for candidate in committee_union_selected
+        }
         single_replica_complete = [
             bool(gold_refs) and gold_refs.issubset(replica_refs)
             for replica_refs in valid_replica_sets
         ]
         stable_complete = (
             bool(gold_refs)
-            and all_replicas_valid
-            and slot_exact_agreement is True
             and gold_refs.issubset(selected_refs)
         )
         plan_hash = (
@@ -1014,6 +1068,8 @@ def main() -> None:
                 and gold_refs.issubset(ranked_refs),
                 "selectedEndpointCoverageComplete": bool(gold_refs)
                 and gold_refs.issubset(selected_refs),
+                "committeeUnionUpperBoundCoverageComplete": bool(gold_refs)
+                and gold_refs.issubset(committee_union_refs),
                 "selectedGoldEndpointCount": len(gold_refs & selected_refs),
                 "plannerStatus": planner_status,
                 "plannerResponseHash": planner_response_hash,
@@ -1035,6 +1091,11 @@ def main() -> None:
                 "replicaUnionCandidateCount": replica_union_count,
                 "committeeUnionWithinBudget": (
                     replica_union_count <= EVENT_PACKET_MAX_SELECTED
+                ),
+                "consensusBindingRevisionHash": (
+                    consensus_binding.canonical_revision()
+                    if consensus_binding is not None
+                    else None
                 ),
                 "singleReplicaEndpointCoverageComplete": single_replica_complete,
                 "stableEndpointCoverageComplete": stable_complete,
@@ -1096,7 +1157,7 @@ def main() -> None:
             "eventSetCompletenessProven": False,
             "answerCorrectnessProven": False,
             "committeeSelectionPolicy": (
-                "union_upper_bound_only"
+                "per_slot_intersection_consensus"
                 if binder_mode == "event_packet"
                 else "union_of_slot_shape_valid_bindings"
             ),
@@ -1125,7 +1186,8 @@ def main() -> None:
                 row["selectedEndpointCoverageComplete"] for row in result_rows
             ),
             "committeeUnionUpperBoundCompleteCount": sum(
-                row["selectedEndpointCoverageComplete"] for row in result_rows
+                row["committeeUnionUpperBoundCoverageComplete"]
+                for row in result_rows
             ),
             "stableEndpointCoverageCompleteCount": sum(
                 row["stableEndpointCoverageComplete"] for row in result_rows
