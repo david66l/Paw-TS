@@ -426,6 +426,7 @@ def chat_completion(
     api_key: str,
     max_tokens: int,
     thinking_mode: str,
+    sampling_mode: str,
 ) -> tuple[dict[str, Any] | None, str]:
     payload = {
         "model": model,
@@ -440,6 +441,8 @@ def chat_completion(
         "max_tokens": max_tokens,
         "response_format": {"type": "json_object"},
     }
+    if sampling_mode == "greedy":
+        payload["do_sample"] = False
     # Endpoint selection is a bounded classification task. Providers that
     # expose a thinking control should disable it or use the lowest supported
     # effort so the completion budget is spent on the JSON decision. Strict
@@ -621,6 +624,13 @@ def main() -> None:
         raise ValueError(
             "temporal selector thinking mode must be disabled, omit, low, high, or max"
         )
+    selector_sampling = os.environ.get(
+        "PAW_AMB_TEMPORAL_SELECTOR_SAMPLING", "temperature_zero"
+    ).strip()
+    if selector_sampling not in {"temperature_zero", "greedy"}:
+        raise ValueError(
+            "temporal selector sampling mode must be temperature_zero or greedy"
+        )
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
@@ -718,6 +728,7 @@ def main() -> None:
         "model": model,
         "maxCompletionTokens": selector_max_tokens,
         "thinking": selector_thinking,
+        "sampling": selector_sampling,
     }
     checkpoint_path = args.checkpoint or args.output.with_suffix(args.output.suffix + ".checkpoint.json")
     result_rows = load_checkpoint(
@@ -758,6 +769,7 @@ def main() -> None:
             api_key,
             selector_max_tokens,
             selector_thinking,
+            selector_sampling,
         )
         certified, selected, certificate_status = validate_selection(proposal, ranked, cutoff)
         gold_refs = answer_user_evidence_refs(item)
