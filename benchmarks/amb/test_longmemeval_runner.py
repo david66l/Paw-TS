@@ -326,8 +326,9 @@ class LongMemEvalRunnerTest(unittest.TestCase):
             {
                 "recommendationUserAuthorityMode": "off",
                 "executionReaderProjectionInject": "0",
-                "evidenceRoleLateBinding": "0",
+                "evidenceRoleLateBinding": "1",
                 "temporalRoundFrontier": "0",
+                "typedSourceLockedReader": "typed_source_locked",
             },
             protocol["common"]["readerFeatureFlags"],
         )

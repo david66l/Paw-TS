@@ -56,6 +56,7 @@ import {
   buildMemoryConversationTurnBundleV1,
   buildMemoryTemporalSourceLaneV1,
   classifyMemoryEvidenceQueryV3,
+  compileMemoryQueryAnswerOriginV1,
   createJsonMemoryAtomConflictResolverV1,
   createJsonMemoryAtomExtractorV1,
   createJsonMemoryEvidenceClosureAuditorV1,
@@ -2626,6 +2627,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstContextStop = "not_evaluated";
   let evidenceFirstVerificationStatus = "not_evaluated";
   const evidenceIntent = classifyMemoryEvidenceQueryV3(queryText);
+  const evidenceQueryAnswerOrigin = compileMemoryQueryAnswerOriginV1(queryText);
   const evidenceFirstInitialAnswerShape = evidenceIntent.answerShape;
   const evidenceFirstInitialTemporalMode = evidenceIntent.temporalMode;
   const evidenceFirstInitialRoleConstraint = evidenceIntent.roleConstraint;
@@ -5809,6 +5811,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       evidenceFirstInitialAnswerShape,
       evidenceFirstInitialTemporalMode,
       evidenceFirstInitialRoleConstraint,
+      evidenceFirstQueryAnswerOriginKind:
+        evidenceQueryAnswerOrigin.originKind,
+      evidenceFirstQueryAnswerOriginRevision:
+        evidenceQueryAnswerOrigin.originRevision,
       evidenceFirstIntentNormalizedAxes,
       evidenceFirstRoleResolutionStatus,
       evidenceFirstPlanRequirementCount,

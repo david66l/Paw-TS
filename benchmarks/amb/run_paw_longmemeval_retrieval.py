@@ -21,6 +21,7 @@ from longmemeval_protocol import (
     official_longmemeval_judge_prompt_fn,
     require_protocol_records,
 )
+from typed_source_locked_reader import route_typed_source_locked_reader
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -52,7 +53,7 @@ EVIDENCE_ANSWER_PROTOCOL = """Paw evidence synthesis protocol:
 Keep the reasoning audit concise. Make the final answer directly match the requested value, list, comparison, date, or preference profile.
 
 """
-RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v11:semantic-slot-scopes"
+RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v12:typed-source-locked-reader"
 MEMORY_POLICY = "paw.amb-evidence-first.v31:coverage-cardinality-semantics"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
 RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v8:semantic-slot-local"
@@ -642,6 +643,9 @@ RELEASE_PROVIDER_ENV = {
     # shell-selected benchmark ablation. Binding it here makes a sealed run
     # fail reproducibly instead of silently degrading to global retrieval.
     "PAW_AMB_SOURCE_LOCAL_LOCATOR": "1",
+    # Answer provenance is part of the retained source-local architecture.
+    # Do not rely on an ad-hoc shell flag to reopen prior assistant turns.
+    "PAW_AMB_EVIDENCE_ROLE_LATE_BINDING": "1",
     "PAW_AMB_TEMPORAL_ROUND_FRONTIER": (
         "1"
         if os.environ.get("PAW_AMB_TEMPORAL_ROUND_FRONTIER", "").lower()
@@ -795,21 +799,26 @@ def experiment_protocol(
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
     temperature = float(os.environ.get("DEEPSEEK_TEMPERATURE", "0"))
+
+    def effective_reader_flag(key: str, default: str) -> str:
+        return os.environ.get(key, retrieval_environment.get(key, default)).strip()
+
     reader_feature_flags = {
-        "recommendationUserAuthorityMode": os.environ.get(
+        "recommendationUserAuthorityMode": effective_reader_flag(
             "PAW_AMB_RECOMMEND_USER_AUTHORITY_MODE", "off"
-        )
-        .strip()
-        .lower(),
-        "executionReaderProjectionInject": os.environ.get(
+        ).lower(),
+        "executionReaderProjectionInject": effective_reader_flag(
             "PAW_AMB_EXECUTION_READER_PROJECTION_INJECT", "0"
-        ).strip(),
-        "evidenceRoleLateBinding": os.environ.get(
-            "PAW_AMB_EVIDENCE_ROLE_LATE_BINDING", "0"
-        ).strip(),
-        "temporalRoundFrontier": os.environ.get(
+        ),
+        "evidenceRoleLateBinding": effective_reader_flag(
+            "PAW_AMB_EVIDENCE_ROLE_LATE_BINDING", "1"
+        ),
+        "temporalRoundFrontier": effective_reader_flag(
             "PAW_AMB_TEMPORAL_ROUND_FRONTIER", "0"
-        ).strip(),
+        ),
+        "typedSourceLockedReader": getattr(
+            args, "reader_execution_profile", "typed_source_locked"
+        ),
     }
     return {
         "schemaVersion": "paw.longmemeval-paired-experiment.v6",
@@ -1293,6 +1302,7 @@ def run(args: argparse.Namespace) -> dict:
     document_timestamp_by_id = {
         document.id: document.timestamp for document in documents
     }
+    canonical_document_by_id = {document.id: document for document in documents}
     document_counts = Counter(document.user_id for document in documents)
     manifest = {
         "schemaVersion": "paw.longmemeval-stratified-manifest.v3",
@@ -1477,6 +1487,11 @@ def run(args: argparse.Namespace) -> dict:
                     "contextTokens": sum(len(document.content) for document in recalled) // 4,
                     "retrieveMs": round(retrieve_ms, 1),
                     "route": raw.get("memoryRoute") if isinstance(raw, dict) else None,
+                    "queryAnswerOriginKind": (
+                        raw.get("evidenceFirstQueryAnswerOriginKind")
+                        if isinstance(raw, dict)
+                        else None
+                    ),
                     "selectedSourceCount": (
                         raw.get("evidenceFirstSelectedSourceCount")
                         if isinstance(raw, dict)
@@ -1773,6 +1788,29 @@ def run(args: argparse.Namespace) -> dict:
                     f"## Memory {index + 1}\n{document.content}"
                     for index, document in enumerate(reader_documents)
                 )
+                reader_execution = (
+                    route_typed_source_locked_reader(
+                        question=query.query,
+                        query_timestamp=query.meta.get("query_timestamp"),
+                        recalled=recalled,
+                        documents_by_id=canonical_document_by_id,
+                        raw=raw if isinstance(raw, dict) else None,
+                        legacy_context=context,
+                    )
+                    if args.reader_execution_profile == "typed_source_locked"
+                    else None
+                )
+                if reader_execution is not None:
+                    context = reader_execution.context
+                    row.update(
+                        {
+                            "readerExecutionRoute": reader_execution.route,
+                            "readerExecutionSourceCount": reader_execution.source_count,
+                            "readerExecutionTurnCount": reader_execution.turn_count,
+                            "readerExecutionPlan": reader_execution.plan,
+                            "readerExecutionFallbackReason": reader_execution.fallback_reason,
+                        }
+                    )
 
                 def prompt_fn(question: str, packet: str, meta=None) -> str:
                     base_prompt = dataset.build_rag_prompt(
@@ -1784,7 +1822,9 @@ def run(args: argparse.Namespace) -> dict:
                         meta,
                     )
                     return (
-                        EVIDENCE_ANSWER_PROTOCOL + base_prompt
+                        EVIDENCE_ANSWER_PROTOCOL
+                        + (reader_execution.protocol if reader_execution else "")
+                        + base_prompt
                         if args.answer_protocol == "evidence_policy"
                         else base_prompt
                     )
@@ -1986,6 +2026,15 @@ def main() -> None:
         choices=("upstream", "evidence_policy"),
         default="evidence_policy",
         help="Select the final answer synthesis protocol without changing retrieval.",
+    )
+    parser.add_argument(
+        "--reader-execution-profile",
+        choices=("legacy", "typed_source_locked"),
+        default="typed_source_locked",
+        help=(
+            "Use query-only assistant-dialogue and evidence-set readers over the "
+            "already retrieved immutable source lock, with atomic legacy fallback."
+        ),
     )
     parser.add_argument("--sealed-ledger", type=Path)
     parser.add_argument("--eval-key-file", type=Path)
