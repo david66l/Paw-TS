@@ -371,6 +371,10 @@ def chat_completion(
         "temperature": 0,
         "max_tokens": max_tokens,
         "response_format": {"type": "json_object"},
+        # Endpoint selection is a bounded classification task. Long chain of
+        # thought previously consumed the entire completion budget without a
+        # final JSON object; the host still validates every selected address.
+        "thinking": {"type": "disabled"},
     }
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}/chat/completions",
@@ -394,7 +398,12 @@ def chat_completion(
             return (parsed if isinstance(parsed, dict) else None), (
                 sha256_text(content) if isinstance(parsed, dict) else "non_object_json"
             )
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        except urllib.error.HTTPError as error:
+            retryable = error.code == 429 or error.code >= 500
+            if attempt == 1 or not retryable:
+                return None, f"http_{error.code}"
+            time.sleep(2 * (attempt + 1))
+        except (urllib.error.URLError, TimeoutError):
             if attempt == 1:
                 return None, "request_failed"
             time.sleep(2 * (attempt + 1))
@@ -620,6 +629,7 @@ def main() -> None:
             "schemaVersion": SELECTOR_SCHEMA_VERSION,
             "model": model,
             "maxCompletionTokens": selector_max_tokens,
+            "thinking": "disabled",
         },
         "rows": result_rows,
         "metrics": {
