@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,18 +22,28 @@ sys.path.insert(0, str(HERE))
 
 try:
     from .multi_session_evidence_set_reader import load_reader_packets
-    from .multi_session_set_plan import compile_set_plan
+    from .multi_session_set_plan import SET_PLAN_POLICY, compile_set_plan
+    from .multi_session_evidence_set_protocol import (
+        PROTOCOL_REVISION,
+        complete_evidence_set_protocol,
+        query_bound_boundary_protocol,
+    )
     from .run_multi_session_evidence_set_answer import public_plan, slice_hmacs
     from .temporal_event_ledger_shadow import required_string
 except ImportError:
     from multi_session_evidence_set_reader import load_reader_packets  # type: ignore[no-redef]
-    from multi_session_set_plan import compile_set_plan  # type: ignore[no-redef]
+    from multi_session_set_plan import SET_PLAN_POLICY, compile_set_plan  # type: ignore[no-redef]
+    from multi_session_evidence_set_protocol import (  # type: ignore[no-redef]
+        PROTOCOL_REVISION,
+        complete_evidence_set_protocol,
+        query_bound_boundary_protocol,
+    )
     from run_multi_session_evidence_set_answer import public_plan, slice_hmacs  # type: ignore[no-redef]
     from temporal_event_ledger_shadow import required_string  # type: ignore[no-redef]
 
 
-SCHEMA_VERSION = "paw.multi-session-evidence-set-direct-answer.v1"
-RUNNER_POLICY = "paw.multi-session-evidence-set-direct.v3:query-bound-no-zero-override"
+SCHEMA_VERSION = "paw.multi-session-evidence-set-direct-answer.v2"
+RUNNER_POLICY = "paw.multi-session-evidence-set-direct.v4:sealed-shared-protocol"
 
 
 def sha(value: str) -> str:
@@ -59,39 +68,7 @@ def judge_values(item: dict[str, Any]) -> tuple[list[str], str, bool]:
     return answers, question_type, question_id.endswith("_abs")
 
 
-def boundary_protocol(question: str) -> str:
-    """Add narrow query-derived boundary rules without perturbing other prompts."""
-
-    lowered = question.casefold()
-    clauses: list[str] = []
-    if re.search(r"\bbefore\b", lowered):
-        clauses.append(
-            "In an items/events-before-X question, X is the boundary/reference "
-            "event and is not itself counted unless the wording explicitly includes it."
-        )
-    if "last week" in lowered:
-        clauses.append(
-            "Interpret last week as the rolling seven-day interval immediately "
-            "preceding the query cutoff; never include days after the cutoff."
-        )
-    if re.search(r"\b(?:what|which) time\b.*\b(?:reach|arriv)", lowered):
-        clauses.append(
-            "A uniquely matching scheduled appointment time may supply the time "
-            "of the named visit or arrival when nothing conflicts."
-        )
-    if re.search(r"\b(?:when|what date)\b.*\b(?:submit|submission)", lowered):
-        clauses.append(
-            "Join a uniquely matching deadline or submission date to the named "
-            "submission when the sessions identify the same event."
-        )
-    if re.search(r"\b(?:undergrad|undergraduate|graduate|thesis|course research)\b", lowered):
-        clauses.append(
-            "Keep the exact research or education stage; do not substitute a "
-            "poster, institution, or project from a different stage."
-        )
-    if not clauses:
-        return ""
-    return "\n\nAdditional query-bound boundary rules:\n- " + "\n- ".join(clauses)
+boundary_protocol = query_bound_boundary_protocol
 
 
 def main() -> None:
@@ -129,16 +106,15 @@ def main() -> None:
         question = required_string(item, "question")
         plan = compile_set_plan(question)
         plan_payload = public_plan(plan) if plan is not None else None
-        query_boundary_protocol = boundary_protocol(question)
+        protocol_text = complete_evidence_set_protocol(
+            plan_payload,
+            question,
+            role_authority="user",
+        )
 
         def prompt_fn(query: str, context: str, meta=None) -> str:
             return f"""You are the final executor for a complete, locked multi-session evidence set.
-The query-only host plan is: {json.dumps(plan_payload, sort_keys=True, separators=(',', ':'))}
-
-Derive the exact inclusion rule from the question, then scan EVERY supplied session. Form the complete set of matching user facts before calculating. Preserve entity, action/state, value, unit, and event time. Merge only repeated mentions of the same real event and action; the same entity can have distinct obligations or events, such as returning an old item and picking up its replacement. Apply time/range/latest and active/completed/planned/cancelled filters before arithmetic. For relative windows, anchor at the query cutoff and use the session timestamp when no more specific event date is stated.
-
-Treat the question as the cross-session join contract. If separate sessions provide unique compatible facts for the named entity, operands, or requested relationship, join them; do not reject the calculation merely because no one sentence restates the relationship. Evidence that the user acquired or possesses an item may support an acquisition count unless another statement contradicts it. Normalize compatible units. For a count, enumerate the unique event/action members; for a sum, difference, average, ratio, or maximum, show a short checkable calculation. Make a second pass over all sessions. If a required operand is genuinely absent or conflicting, state that the available memory is insufficient rather than guessing. The final answer must directly match the requested value, date, entity, list, or comparison.{query_boundary_protocol}
-
+{protocol_text}
 {context}
 
 Question: {query}"""
@@ -165,6 +141,13 @@ Question: {query}"""
                 "queryHmac": query_hmac,
                 "packetRevisionHmac": packet.packet_revision_hmac,
                 "plan": plan_payload,
+                "planRevision": sha(
+                    json.dumps(plan_payload, sort_keys=True, separators=(",", ":"))
+                ),
+                "setPlanPolicy": SET_PLAN_POLICY,
+                "protocolRevision": PROTOCOL_REVISION,
+                "protocolHash": sha(protocol_text),
+                "promptHash": sha(prompt_fn(question, packet.context)),
                 "answerHash": sha(result.answer),
                 "answerChars": len(result.answer),
                 "answerCorrect": judgment.correct,
@@ -181,6 +164,8 @@ Question: {query}"""
             "schemaVersion": f"{SCHEMA_VERSION}:checkpoint",
             "sealed": True,
             "runnerPolicy": RUNNER_POLICY,
+            "setPlanPolicy": SET_PLAN_POLICY,
+            "protocolRevision": PROTOCOL_REVISION,
             "slice": {"index": args.slice_index, "count": args.slice_count},
             "rows": rows,
         }
@@ -196,6 +181,8 @@ Question: {query}"""
         "schemaVersion": SCHEMA_VERSION,
         "sealed": True,
         "runnerPolicy": RUNNER_POLICY,
+        "setPlanPolicy": SET_PLAN_POLICY,
+        "protocolRevision": PROTOCOL_REVISION,
         "slice": {"index": args.slice_index, "count": args.slice_count},
         "rows": rows,
         "metrics": {

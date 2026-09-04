@@ -81,6 +81,27 @@ def test_measure_questions_and_fallback_interrogatives_are_not_misclassified():
     assert subject.compile_set_plan("How many homes did I see before making an offer?").temporal_mode is subject.TemporalMode.RANGE
 
 
+def test_common_derived_difference_phrases_are_text_only_plans():
+    for question in (
+        "What is the difference in price between plan A and plan B?",
+        "How much did I save on the sale?",
+        "How old was I when I started the course?",
+    ):
+        plan = subject.compile_set_plan(question)
+        assert plan is not None
+        assert plan.operator is subject.Operator.DIFFERENCE
+
+
+def test_save_and_qualitative_difference_words_do_not_imply_arithmetic():
+    for question in (
+        "Which photo did I save on my phone?",
+        "What difference did the color change make?",
+    ):
+        plan = subject.compile_set_plan(question)
+        assert plan is not None
+        assert plan.operator is subject.Operator.LOOKUP
+
+
 def test_validation_rejects_unknown_evidence_duplicate_keys_and_operator_mismatch():
     plan = subject.compile_set_plan("What was the total cost?")
     with pytest.raises(ValueError, match="not in packet"):

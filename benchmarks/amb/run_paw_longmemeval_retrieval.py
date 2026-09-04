@@ -21,7 +21,7 @@ from longmemeval_protocol import (
     official_longmemeval_judge_prompt_fn,
     require_protocol_records,
 )
-from typed_source_locked_reader import route_typed_source_locked_reader
+from typed_source_locked_reader import ROUTER_POLICY, route_typed_source_locked_reader
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -53,7 +53,7 @@ EVIDENCE_ANSWER_PROTOCOL = """Paw evidence synthesis protocol:
 Keep the reasoning audit concise. Make the final answer directly match the requested value, list, comparison, date, or preference profile.
 
 """
-RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v12:typed-source-locked-reader"
+RUNNER_POLICY = "paw.longmemeval-evidence-retrieval.v13:typed-item-scoped-reader"
 MEMORY_POLICY = "paw.amb-evidence-first.v31:coverage-cardinality-semantics"
 SEARCH_POLICY = "paw.memory-search-plan.v16:nonempty-plan-verified-root"
 RETRIEVAL_PROFILE = "paw.amb-retrieval-profile.v8:semantic-slot-local"
@@ -819,6 +819,7 @@ def experiment_protocol(
         "typedSourceLockedReader": getattr(
             args, "reader_execution_profile", "typed_source_locked"
         ),
+        "typedSourceLockedReaderPolicy": ROUTER_POLICY,
     }
     return {
         "schemaVersion": "paw.longmemeval-paired-experiment.v6",
@@ -1809,6 +1810,14 @@ def run(args: argparse.Namespace) -> dict:
                             "readerExecutionTurnCount": reader_execution.turn_count,
                             "readerExecutionPlan": reader_execution.plan,
                             "readerExecutionFallbackReason": reader_execution.fallback_reason,
+                            "readerExecutionAuthority": reader_execution.authority,
+                            "readerExecutionLockedSourceCount": reader_execution.locked_source_count,
+                            "readerExecutionSourceLockDigest": reader_execution.source_lock_digest,
+                            "readerExecutionPacketHash": reader_execution.packet_hash,
+                            "readerExecutionProtocolHash": reader_execution.protocol_hash,
+                            "readerExecutionCertificateRevision": reader_execution.certificate_revision,
+                            "readerExecutionRenderedChars": reader_execution.rendered_chars,
+                            "readerExecutionRenderedTokens": reader_execution.rendered_chars // 4,
                         }
                     )
 

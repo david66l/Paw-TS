@@ -2,25 +2,43 @@
 
 The retrieval layer owns the source aperture.  This module may re-render only
 documents already returned by that aperture; it never searches, expands, or
-consults evaluation annotations.  A failed hydration is an atomic fallback to
-the original reader packet.
+consults evaluation annotations.  Invalid source locks and malformed authority
+certificates fail hard; only an explicitly unowned, uncertified dialogue stays
+on the original reader packet.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+import hashlib
 import json
+import re
 from typing import Any, Iterable, Mapping
 
 try:
     from .multi_session_set_plan import Operator, SetPlan, compile_set_plan
+    from .multi_session_evidence_set_protocol import (
+        complete_evidence_set_protocol,
+    )
     from .temporal_event_ledger_shadow import timestamp
 except ImportError:
     from multi_session_set_plan import Operator, SetPlan, compile_set_plan  # type: ignore[no-redef]
+    from multi_session_evidence_set_protocol import (  # type: ignore[no-redef]
+        complete_evidence_set_protocol,
+    )
     from temporal_event_ledger_shadow import timestamp  # type: ignore[no-redef]
 
 
-ROUTER_POLICY = "paw.typed-source-locked-reader.v1:query-origin-and-set-plan"
+ROUTER_POLICY = "paw.typed-source-locked-reader.v4:item-scoped-authority-certificate"
+
+
+class SourceLockInvariantError(RuntimeError):
+    """The frozen retrieval aperture cannot be proven safe to materialize."""
+
+
+class CertificateInvariantError(RuntimeError):
+    """Core-issued dialogue authority does not bind this exact reader packet."""
 
 ASSISTANT_DIALOGUE_PROTOCOL = """Paw prior-dialogue artifact protocol:
 - The supplied blocks are exact turns from already-retrieved prior sessions.
@@ -31,14 +49,16 @@ ASSISTANT_DIALOGUE_PROTOCOL = """Paw prior-dialogue artifact protocol:
 
 """
 
-EVIDENCE_SET_PROTOCOL = """Paw typed evidence-set execution protocol:
-- The query-only host plan is: {plan}
-- The supplied blocks are complete USER turns from every already-retrieved, cutoff-valid source in the frozen source lock. Scan every session before calculating.
-- First form a checkable member table: entity, action/state, value, unit, event time, and supporting session/turn. Apply inclusion, time-window, active/completed/planned/cancelled, and requested-attribute filters before arithmetic.
-- Deduplicate only repeated mentions of the same real event and action. The same entity may have distinct events or obligations. A newer fact supersedes an older fact only for the same entity and attribute.
-- Treat the question as the join contract: compatible operands may come from separate sessions. Normalize compatible units, then count, sum, compare, average, select, or list only after a second complete scan.
-- Do not replace a missing operand with a related fact. If a required operand is absent or conflicting, report the exact insufficiency instead of guessing.
-- Make the final answer directly match the requested value, date, entity, list, or comparison; keep the audit calculation short.
+SHARED_DIALOGUE_PROTOCOL = """Paw shared-dialogue artifact protocol:
+- The supplied role-labelled turns are authorized shared dialogue artifacts from the frozen packet only.
+- Preserve both authors and resolve the requested shared artifact only from an explicitly supported dialogue pair.
+- Do not promote a USER statement into an ASSISTANT action, or an ASSISTANT response into a user preference.
+
+"""
+
+UNOWNED_DIALOGUE_PROTOCOL = """Paw certified-dialogue artifact protocol:
+- The supplied role-labelled turns are limited to the certificate's exact authorized source scope.
+- Preserve authorship and answer only an explicitly supported shared dialogue artifact; never infer that either participant owns an unstated claim.
 
 """
 
@@ -52,6 +72,28 @@ class ReaderExecution:
     turn_count: int
     plan: dict[str, Any] | None
     fallback_reason: str | None
+    authority: str = ""
+    locked_source_count: int = 0
+    source_lock_digest: str | None = None
+    packet_hash: str | None = None
+    protocol_hash: str | None = None
+    certificate_revision: str | None = None
+    rendered_chars: int = 0
+
+
+@dataclass(frozen=True)
+class CertificateScope:
+    source_ids: tuple[str, ...]
+    authorized_items: tuple["AuthorizedItem", ...]
+    revision: str
+
+
+@dataclass(frozen=True)
+class AuthorizedItem:
+    source_id: str
+    evidence_ref: str
+    turn_order: int
+    evidence_use: str
 
 
 def _public_plan(plan: SetPlan) -> dict[str, Any]:
@@ -62,19 +104,35 @@ def _public_plan(plan: SetPlan) -> dict[str, Any]:
     }
 
 
-def _assistant_route(raw: Mapping[str, Any] | None) -> bool:
-    if raw is None:
-        return False
-    return raw.get("evidenceFirstQueryAnswerOriginKind") in {
-        "explicit_assistant",
-        "explicit_shared",
-        "dialogue_artifact_unowned",
-    }
+def _sha(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _canonical_json(value: object) -> str:
+    return json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+
+
+def _instant(value: str) -> datetime | None:
+    normalized = timestamp(value)
+    if normalized is None:
+        return None
+    try:
+        return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:  # pragma: no cover - timestamp already parsed it
+        return None
+
+
+def _authority(raw: Mapping[str, Any] | None) -> str:
+    return str(raw.get("evidenceFirstQueryAnswerOriginKind", "")) if raw else ""
 
 
 def _set_route(question: str) -> SetPlan | None:
     plan = compile_set_plan(question)
-    if plan is None or plan.operator is Operator.LOOKUP:
+    if plan is None:
+        return None
+    if plan.operator is Operator.LOOKUP:
         return None
     if not plan.exhaustive_set_required and plan.arity < 2:
         return None
@@ -84,17 +142,20 @@ def _set_route(question: str) -> SetPlan | None:
 def _turns(document: object) -> tuple[tuple[str, str], ...]:
     content = getattr(document, "content", None)
     if not isinstance(content, str):
-        raise ValueError("source content is not text")
-    value = json.loads(content)
+        raise SourceLockInvariantError("source content is not text")
+    try:
+        value = json.loads(content)
+    except json.JSONDecodeError as error:
+        raise SourceLockInvariantError("source content is malformed JSON") from error
     if not isinstance(value, list) or not value:
-        raise ValueError("source content is not a dialogue session")
+        raise SourceLockInvariantError("source content is not a dialogue session")
     output: list[tuple[str, str]] = []
     for turn in value:
         if not isinstance(turn, dict) or turn.get("role") not in {"user", "assistant"}:
-            raise ValueError("source dialogue role is invalid")
+            raise SourceLockInvariantError("source dialogue role is invalid")
         text = turn.get("content")
         if not isinstance(text, str) or not text.strip():
-            raise ValueError("source dialogue content is invalid")
+            raise SourceLockInvariantError("source dialogue content is invalid")
         output.append((turn["role"], text.strip()))
     return tuple(output)
 
@@ -103,46 +164,178 @@ def _locked_documents(
     recalled: Iterable[object],
     documents_by_id: Mapping[str, object],
     query_timestamp: str | None,
-) -> tuple[object, ...]:
-    cutoff = timestamp(query_timestamp) if isinstance(query_timestamp, str) else None
+) -> tuple[tuple[object, int], ...]:
+    cutoff = _instant(query_timestamp) if isinstance(query_timestamp, str) else None
     if cutoff is None:
         raise ValueError("query cutoff is unavailable")
-    selected: list[object] = []
+    selected: list[tuple[object, int]] = []
     seen: set[str] = set()
-    for recalled_document in recalled:
+    for rank, recalled_document in enumerate(recalled, start=1):
         source_id = getattr(recalled_document, "id", None)
-        if not isinstance(source_id, str) or source_id in seen:
-            continue
+        if not isinstance(source_id, str):
+            raise SourceLockInvariantError("source lock has an invalid source identifier")
+        if source_id in seen:
+            raise SourceLockInvariantError("source lock has a duplicate source identifier")
         source = documents_by_id.get(source_id)
         if source is None:
-            continue
+            raise SourceLockInvariantError("source lock source is missing from canonical documents")
         observed = getattr(source, "timestamp", None)
-        normalized = timestamp(observed) if isinstance(observed, str) else None
-        if normalized is None or normalized > cutoff:
-            raise ValueError("source lock contains an invalid or post-cutoff source")
+        observed_at = _instant(observed) if isinstance(observed, str) else None
+        if observed_at is None or observed_at > cutoff:
+            raise SourceLockInvariantError("source lock contains an invalid or post-cutoff source")
+        # Validate every canonical dialogue before any route, including legacy.
+        # Otherwise an ordinary lookup could bypass malformed-role/session gates.
+        _turns(source)
         seen.add(source_id)
-        selected.append(source)
-        if len(selected) == 8:
-            break
+        selected.append((source, rank))
     if not selected:
-        raise ValueError("source lock has no immutable source documents")
+        raise SourceLockInvariantError("source lock has no immutable source documents")
     return tuple(selected)
 
 
-def _render(sources: tuple[object, ...], *, user_only: bool) -> tuple[str, int]:
+def _certificate_sources(
+    *,
+    raw: Mapping[str, Any] | None,
+    question: str,
+    cutoff: str,
+    recalled: tuple[object, ...],
+) -> CertificateScope | None:
+    """Validate the core source lock and its final presentation envelope.
+
+    The bridge can legitimately replace core source documents with a certified
+    presentation document.  The certificate therefore binds both layers:
+    ``sourceLockIds`` select immutable canonical sessions, while
+    ``readerDocumentIds`` must exactly match the documents returned to the
+    benchmark runner.  Canonical sessions are hydrated only after the router
+    decides that a specialized reader actually needs them.
+    """
+    authority = _authority(raw)
+    certificate = raw.get("evidenceFirstDialogueMaterializationCertificate") if raw else None
+    named_authority = authority in {"explicit_assistant", "explicit_shared"}
+    if certificate is None and not named_authority:
+        return None
+    if not isinstance(certificate, Mapping):
+        raise CertificateInvariantError("dialogue authority certificate is missing")
+    identity = {key: certificate.get(key) for key in (
+        "schema", "policy", "queryHash", "originKind", "originRevision", "queryCutoff",
+        "sourceLockIds", "sourceLockDigest", "authorizedItems", "resolutionRevision",
+        "readerDocumentIds", "readerDocumentDigest", "readerPacketDigest",
+    )}
+    if set(certificate) != {*identity, "certificateRevision"}:
+        raise CertificateInvariantError("certificate fields are invalid")
+    if (identity["schema"] != "paw.dialogue-materialization-certificate.v3"
+            or identity["policy"] != "paw.core-final-packet-authority.v3:item-scoped"):
+        raise CertificateInvariantError("certificate schema or policy is invalid")
+    if identity["queryHash"] != _sha(question) or identity["originKind"] != authority:
+        raise CertificateInvariantError("certificate query or authority binding is invalid")
+    hexadecimal = re.compile(r"^[0-9a-f]{64}$")
+    if (not isinstance(identity["originRevision"], str)
+            or not hexadecimal.fullmatch(identity["originRevision"])
+            or identity["originRevision"] != (raw.get("evidenceFirstQueryAnswerOriginRevision") if raw else None)
+            or not isinstance(identity["resolutionRevision"], str)
+            or not hexadecimal.fullmatch(identity["resolutionRevision"])
+            or not isinstance(certificate.get("certificateRevision"), str)
+            or not hexadecimal.fullmatch(certificate["certificateRevision"])):
+        raise CertificateInvariantError("certificate origin revision is invalid")
+    certificate_cutoff = identity["queryCutoff"]
+    if not isinstance(certificate_cutoff, str) or timestamp(certificate_cutoff) != cutoff:
+        raise CertificateInvariantError("certificate cutoff is invalid")
+    ids = identity["sourceLockIds"]
+    if (not isinstance(ids, list)
+            or any(not isinstance(source_id, str) or not source_id for source_id in ids)
+            or len(set(ids)) != len(ids)):
+        raise CertificateInvariantError("certificate source lock is invalid")
+    if identity["sourceLockDigest"] != _sha(_canonical_json(ids)):
+        raise CertificateInvariantError("certificate source lock digest is invalid")
+    reader_ids = identity["readerDocumentIds"]
+    actual_reader_ids = [getattr(source, "id", None) for source in recalled]
+    actual_reader_packet = [
+        {
+            "id": getattr(source, "id", None),
+            "contentHash": _sha(getattr(source, "content", "")),
+        }
+        for source in recalled
+        if isinstance(getattr(source, "content", None), str)
+    ]
+    if (not isinstance(reader_ids, list)
+            or any(not isinstance(source_id, str) or not source_id for source_id in reader_ids)
+            or len(set(reader_ids)) != len(reader_ids)
+            or reader_ids != actual_reader_ids
+            or len(actual_reader_packet) != len(recalled)
+            or identity["readerDocumentDigest"] != _sha(_canonical_json(reader_ids))
+            or identity["readerPacketDigest"] != _sha(_canonical_json(actual_reader_packet))):
+        raise CertificateInvariantError("certificate reader document lock is invalid")
+    if certificate.get("certificateRevision") != _sha(_canonical_json(identity)):
+        raise CertificateInvariantError("certificate revision is invalid")
+    authorized = identity["authorizedItems"]
+    if not isinstance(authorized, list):
+        raise CertificateInvariantError("certificate authorized items are invalid")
+    authorized_items: list[AuthorizedItem] = []
+    seen_refs: set[str] = set()
+    for item in authorized:
+        if not isinstance(item, Mapping) or set(item) != {
+            "sourceId",
+            "evidenceRef",
+            "turnOrder",
+            "evidenceUse",
+            "allowedModes",
+        }:
+            raise CertificateInvariantError("certificate authorization entry is invalid")
+        source_id = item["sourceId"]
+        evidence_ref = item["evidenceRef"]
+        turn_order = item["turnOrder"]
+        evidence_use = item["evidenceUse"]
+        modes = item["allowedModes"]
+        match = (
+            re.fullmatch(r"(.+)#source-(\d+)", evidence_ref)
+            if isinstance(evidence_ref, str)
+            else None
+        )
+        if (not isinstance(source_id, str) or source_id not in ids
+                or match is None or match.group(1) != source_id
+                or not isinstance(turn_order, int) or isinstance(turn_order, bool)
+                or turn_order < 1 or int(match.group(2)) != turn_order
+                or evidence_ref in seen_refs
+                or evidence_use not in {"assistant_report", "shared_dialogue_artifact"}
+                or (authority == "explicit_assistant" and evidence_use != "assistant_report")
+                or modes != ["dialogue_materialization"]):
+            raise CertificateInvariantError("certificate authorization scope is invalid")
+        seen_refs.add(evidence_ref)
+        authorized_items.append(
+            AuthorizedItem(source_id, evidence_ref, turn_order, evidence_use)
+        )
+    return CertificateScope(
+        tuple(ids), tuple(authorized_items), certificate["certificateRevision"]
+    )
+
+
+def _render(
+    sources: tuple[tuple[object, int], ...],
+    *,
+    user_only: bool,
+    query_timestamp: str,
+    set_mode: bool,
+    allowed_turns: Mapping[str, frozenset[int]] | None = None,
+) -> tuple[str, int]:
     chronological = sorted(
-        enumerate(sources),
+        sources,
         key=lambda item: (
-            timestamp(getattr(item[1], "timestamp", "")) or "9999",
-            item[0],
+            _instant(getattr(item[0], "timestamp", ""))
+            or datetime.max.replace(tzinfo=timezone.utc),
+            item[1],
         ),
     )
     blocks: list[str] = []
     turn_count = 0
-    for session_index, (_, source) in enumerate(chronological, start=1):
+    for session_index, (source, source_rank) in enumerate(chronological, start=1):
         source_turns = _turns(source)
         rendered: list[str] = []
         for turn_index, (role, text) in enumerate(source_turns, start=1):
+            source_id = getattr(source, "id", "")
+            if allowed_turns is not None and turn_index not in allowed_turns.get(
+                source_id, frozenset()
+            ):
+                continue
             if user_only and role != "user":
                 continue
             rendered.append(
@@ -151,13 +344,19 @@ def _render(sources: tuple[object, ...], *, user_only: bool) -> tuple[str, int]:
             turn_count += 1
         if rendered:
             observed = timestamp(getattr(source, "timestamp", ""))
-            blocks.append(
-                f"[Session S{session_index:02d}; observed {observed}]\n"
-                + "\n".join(rendered)
+            header = (
+                f"[Session S{session_index:02d}; source rank R{source_rank:02d}; "
+                f"observed {observed}]"
+                if set_mode
+                else f"[Session S{session_index:02d}; observed {observed}]"
             )
+            blocks.append(header + "\n" + "\n".join(rendered))
     if not blocks or turn_count == 0:
-        raise ValueError("source lock rendered no eligible dialogue turns")
-    return "\n\n".join(blocks), turn_count
+        raise SourceLockInvariantError("source lock rendered no eligible dialogue turns")
+    context = "\n\n".join(blocks)
+    if set_mode:
+        context = f"[Query cutoff {timestamp(query_timestamp) or query_timestamp}]\n\n{context}"
+    return context, turn_count
 
 
 def route_typed_source_locked_reader(
@@ -171,40 +370,247 @@ def route_typed_source_locked_reader(
 ) -> ReaderExecution:
     """Choose a reader packet without looking at category, gold, or correctness."""
 
-    assistant = _assistant_route(raw)
+    cutoff = timestamp(query_timestamp) if isinstance(query_timestamp, str) else None
+    if cutoff is None:
+        raise SourceLockInvariantError("query cutoff is unavailable")
+    authority = _authority(raw)
     plan = _set_route(question)
-    route = (
-        "assistant_dialogue_set"
-        if assistant and plan is not None
-        else "assistant_dialogue"
-        if assistant
-        else "evidence_set"
-        if plan is not None
-        else "legacy"
+    recalled_documents = tuple(recalled)
+    certificate_scope = _certificate_sources(
+        raw=raw,
+        question=question,
+        cutoff=cutoff,
+        recalled=recalled_documents,
     )
-    if route == "legacy":
-        return ReaderExecution(route, legacy_context, "", 0, 0, None, None)
-    try:
-        sources = _locked_documents(recalled, documents_by_id, query_timestamp)
-        context, turn_count = _render(sources, user_only=route == "evidence_set")
-    except (TypeError, ValueError, json.JSONDecodeError) as error:
+    assistant = authority == "explicit_assistant"
+    shared = authority == "explicit_shared"
+    unowned = authority == "dialogue_artifact_unowned"
+    certificate_revision = (
+        certificate_scope.revision if certificate_scope is not None else None
+    )
+    if certificate_scope is not None:
+        locked_ids = certificate_scope.source_ids
+        locked_source_count = len(locked_ids)
+        source_lock_digest = _sha(_canonical_json(list(locked_ids)))
+    else:
+        locked_ids = ()
+        locked_source_count = len(recalled_documents)
+        source_lock_digest = None
+
+    def legacy_execution() -> ReaderExecution:
         return ReaderExecution(
             "legacy",
             legacy_context,
             "",
             0,
             0,
-            _public_plan(plan) if plan is not None else None,
-            type(error).__name__,
+            None,
+            None,
+            authority=authority,
+            locked_source_count=locked_source_count,
+            source_lock_digest=source_lock_digest,
+            packet_hash=_sha(legacy_context),
+            certificate_revision=certificate_revision,
+            rendered_chars=len(legacy_context),
         )
+
+    # An empty valid authorization is a safe negative result, not a corrupt
+    # certificate and never permission to widen back to the full packet.
+    if certificate_scope is not None and (assistant or shared):
+        if not certificate_scope.authorized_items:
+            protocol = (
+                ASSISTANT_DIALOGUE_PROTOCOL if assistant else SHARED_DIALOGUE_PROTOCOL
+            )
+            context = "[No source in the frozen packet is authorized for this dialogue artifact.]"
+            return ReaderExecution(
+                "assistant_dialogue_insufficient"
+                if assistant
+                else "shared_dialogue_insufficient",
+                context,
+                protocol,
+                0,
+                0,
+                None,
+                "empty_authorized_source_scope",
+                authority=authority,
+                locked_source_count=locked_source_count,
+                source_lock_digest=source_lock_digest,
+                packet_hash=_sha(context),
+                protocol_hash=_sha(protocol),
+                certificate_revision=certificate_revision,
+                rendered_chars=len(context),
+            )
+    if unowned and (
+        certificate_scope is None or not certificate_scope.authorized_items
+    ):
+        if certificate_scope is None and recalled_documents:
+            sources = _locked_documents(
+                recalled_documents, documents_by_id, cutoff
+            )
+            locked_source_count = len(sources)
+            source_lock_digest = _sha(
+                _canonical_json(
+                    [getattr(source, "id") for source, _ in sources]
+                )
+            )
+        return legacy_execution()
+
+    route = (
+        "assistant_dialogue_set"
+        if assistant and plan is not None
+        else "assistant_dialogue"
+        if assistant
+        else "shared_dialogue_set"
+        if shared and plan is not None
+        else "shared_dialogue"
+        if shared
+        else "unowned_dialogue_set"
+        if unowned and plan is not None
+        else "unowned_dialogue"
+        if unowned
+        else "evidence_set"
+        if plan is not None
+        else "legacy"
+    )
+    if route == "legacy":
+        # A valid v3 envelope already binds the exact presentation packet.  A
+        # legacy reader consumes that presentation as-is; it must not try to
+        # parse a synthetic projection as a canonical dialogue session.
+        if certificate_scope is None and recalled_documents:
+            sources = _locked_documents(
+                recalled_documents, documents_by_id, cutoff
+            )
+            locked_source_count = len(sources)
+            source_lock_digest = _sha(
+                _canonical_json(
+                    [getattr(source, "id") for source, _ in sources]
+                )
+            )
+        return legacy_execution()
+
+    if certificate_scope is not None:
+        canonical_recalled = tuple(
+            documents_by_id.get(source_id)
+            for source_id in certificate_scope.source_ids
+        )
+        if any(source is None for source in canonical_recalled):
+            raise SourceLockInvariantError(
+                "certificate source is missing from canonical documents"
+            )
+        sources = (
+            _locked_documents(canonical_recalled, documents_by_id, cutoff)
+            if canonical_recalled
+            else ()
+        )
+        if [getattr(source, "id", None) for source, _ in sources] != list(
+            certificate_scope.source_ids
+        ):
+            raise SourceLockInvariantError(
+                "certificate source lock order changed during hydration"
+            )
+    else:
+        sources = (
+            _locked_documents(recalled_documents, documents_by_id, cutoff)
+            if recalled_documents
+            else ()
+        )
+        locked_source_count = len(sources)
+        source_lock_digest = _sha(
+            _canonical_json([getattr(source, "id") for source, _ in sources])
+        )
+    allowed_turns: dict[str, frozenset[int]] | None = None
+    if certificate_scope is not None and (assistant or shared or unowned):
+        authorized = {
+            item.source_id for item in certificate_scope.authorized_items
+        }
+        sources = tuple(
+            item for item in sources if getattr(item[0], "id", None) in authorized
+        )
+        mutable_allowed_turns: dict[str, set[int]] = {}
+        sources_by_id = {
+            getattr(source, "id", ""): source for source, _ in sources
+        }
+        for item in certificate_scope.authorized_items:
+            source = sources_by_id.get(item.source_id)
+            if source is None:
+                raise SourceLockInvariantError(
+                    "authorized item source is missing from the core source lock"
+                )
+            turns = _turns(source)
+            if item.turn_order > len(turns):
+                raise CertificateInvariantError(
+                    "authorized item turn is outside the canonical dialogue"
+                )
+            role = turns[item.turn_order - 1][0]
+            if item.evidence_use == "assistant_report" and role != "assistant":
+                raise CertificateInvariantError(
+                    "assistant report does not bind an assistant turn"
+                )
+            selected = mutable_allowed_turns.setdefault(item.source_id, set())
+            selected.add(item.turn_order)
+            if role == "assistant":
+                if (
+                    item.turn_order < 2
+                    or turns[item.turn_order - 2][0] != "user"
+                ):
+                    raise CertificateInvariantError(
+                        "authorized assistant turn has no adjacent user predecessor"
+                    )
+                selected.add(item.turn_order - 1)
+        allowed_turns = {
+            source_id: frozenset(turn_orders)
+            for source_id, turn_orders in mutable_allowed_turns.items()
+        }
+    if not sources:
+        protocol = (
+            complete_evidence_set_protocol(
+                _public_plan(plan),
+                question,
+                role_authority="dialogue"
+                if (assistant or shared or unowned)
+                else "user",
+            )
+            if plan is not None
+            else ""
+        )
+        context = "[The frozen source lock contains no eligible evidence.]"
+        return ReaderExecution(
+            f"{route}_insufficient",
+            context,
+            protocol,
+            0,
+            0,
+            _public_plan(plan) if plan is not None else None,
+            "empty_source_lock",
+            authority=authority,
+            locked_source_count=locked_source_count,
+            source_lock_digest=source_lock_digest,
+            packet_hash=_sha(context),
+            protocol_hash=_sha(protocol) if protocol else None,
+            certificate_revision=certificate_revision,
+            rendered_chars=len(context),
+        )
+    context, turn_count = _render(
+        sources,
+        user_only=route == "evidence_set",
+        query_timestamp=cutoff,
+        set_mode=plan is not None,
+        allowed_turns=allowed_turns,
+    )
     public_plan = _public_plan(plan) if plan is not None else None
     protocol = (
         ASSISTANT_DIALOGUE_PROTOCOL
         if assistant
+        else SHARED_DIALOGUE_PROTOCOL
+        if shared
+        else UNOWNED_DIALOGUE_PROTOCOL
+        if unowned
         else ""
     ) + (
-        EVIDENCE_SET_PROTOCOL.format(
-            plan=json.dumps(public_plan, sort_keys=True, separators=(",", ":"))
+        complete_evidence_set_protocol(
+            public_plan,
+            question,
+            role_authority="dialogue" if (assistant or shared or unowned) else "user",
         )
         if plan is not None
         else ""
@@ -217,4 +623,11 @@ def route_typed_source_locked_reader(
         turn_count,
         public_plan,
         None,
+        authority=authority,
+        locked_source_count=locked_source_count,
+        source_lock_digest=source_lock_digest,
+        packet_hash=_sha(context),
+        protocol_hash=_sha(protocol) if protocol else None,
+        certificate_revision=certificate_revision,
+        rendered_chars=len(context),
     )

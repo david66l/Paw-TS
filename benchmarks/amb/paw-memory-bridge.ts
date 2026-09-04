@@ -11,6 +11,10 @@ import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline";
 
 import type { SessionInputSnapshot } from "@paw/agent-loop";
+import {
+  type JsonValue,
+  hashCanonicalJsonV1,
+} from "@paw/memory-core/canonical";
 
 import {
   MEMORY_RRF_TEXT_WEIGHT_V1,
@@ -2642,6 +2646,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstPlanTemporalMode: string = evidenceIntent.temporalMode;
   let evidenceFirstPlanRoleConstraint: string = evidenceIntent.roleConstraint;
   let evidenceFirstPlanRequirementCount = 0;
+  let evidenceFirstDialogueMaterializationCertificateIdentity:
+    | Readonly<Record<string, unknown>>
+    | undefined;
   let evidenceFirstNotebookCoveredCount = 0;
   let evidenceFirstNotebookPartialCount = 0;
   let evidenceFirstNotebookMissingCount = 0;
@@ -4505,6 +4512,54 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         },
       };
     });
+    // Content-free authority envelope for the Python reader.  It binds the
+    // final core packet rather than retrieval candidates. It carries only
+    // content-free identities, evidence addresses, and content hashes.
+    const dialogueSourceLockIds = resolution.packetSources.map(
+      (source) => source.sourceId,
+    );
+    const dialogueAuthorizedItems = resolution.packetSources.flatMap((source) =>
+      source.evidenceBindings.flatMap((binding) => {
+        if (
+          binding.evidenceUse !== "assistant_report" &&
+          binding.evidenceUse !== "shared_dialogue_artifact"
+        )
+          return [];
+        const logicalRef =
+          logicalSourceLocalEvidenceRefV1(binding.evidenceRef) ??
+          (/^[^#]+#source-\d+$/u.test(binding.evidenceRef)
+            ? binding.evidenceRef
+            : undefined);
+        const match = /^(.+)#source-(\d+)$/u.exec(logicalRef ?? "");
+        if (!match?.[1] || match[1] !== source.sourceId || !match[2]) return [];
+        return [
+          {
+            sourceId: source.sourceId,
+            evidenceRef: logicalRef as string,
+            turnOrder: Number(match[2]),
+            evidenceUse: binding.evidenceUse,
+            allowedModes: ["dialogue_materialization"],
+          },
+        ];
+      }),
+    );
+    const dialogueCertificateIdentity = {
+      schema: "paw.dialogue-materialization-certificate.v3",
+      policy: "paw.core-final-packet-authority.v3:item-scoped",
+      queryHash,
+      originKind: evidenceQueryAnswerOrigin.originKind,
+      originRevision: evidenceQueryAnswerOrigin.originRevision,
+      queryCutoff: queryTimeCutoff?.normalizedIso ?? null,
+      sourceLockIds: dialogueSourceLockIds,
+      sourceLockDigest: hashCanonicalJsonV1(
+        dialogueSourceLockIds as unknown as JsonValue,
+      ),
+      authorizedItems: dialogueAuthorizedItems,
+      resolutionRevision: resolution.resolutionRevision,
+    };
+    evidenceFirstDialogueMaterializationCertificateIdentity = Object.freeze(
+      dialogueCertificateIdentity,
+    );
     const recommendationProjectionEligible =
       recommendationUserAuthorityMode !== "off" &&
       evidenceFirstInitialAnswerShape === "recommend" &&
@@ -5725,6 +5780,53 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       routeStats.personaInjections += 1;
     }
   }
+  const dialogueCertificateIdentity =
+    evidenceFirstDialogueMaterializationCertificateIdentity === undefined
+      ? undefined
+      : Object.freeze({
+          ...evidenceFirstDialogueMaterializationCertificateIdentity,
+          readerDocumentIds: documents.map((document) => document.id),
+          readerDocumentDigest: hashCanonicalJsonV1(
+            documents.map((document) => document.id) as unknown as JsonValue,
+          ),
+          readerPacketDigest: hashCanonicalJsonV1(
+            documents.map((document) => ({
+              id: document.id,
+              contentHash: sha(document.content),
+            })) as unknown as JsonValue,
+          ),
+        });
+  const evidenceFirstDialogueMaterializationCertificate =
+    dialogueCertificateIdentity === undefined
+      ? undefined
+      : Object.freeze({
+          ...dialogueCertificateIdentity,
+          certificateRevision: hashCanonicalJsonV1(
+            dialogueCertificateIdentity as unknown as JsonValue,
+          ),
+        });
+  if (evidenceFirstDialogueMaterializationCertificate !== undefined) {
+    log("evidence_dialogue_materialization_certificate", {
+      queryHash,
+      originKind: evidenceQueryAnswerOrigin.originKind,
+      sourceLockCount:
+        evidenceFirstDialogueMaterializationCertificateIdentity?.sourceLockIds instanceof
+        Array
+          ? evidenceFirstDialogueMaterializationCertificateIdentity.sourceLockIds
+              .length
+          : 0,
+      readerDocumentCount: documents.length,
+      authorizedItemCount:
+        evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedItems instanceof
+        Array
+          ? evidenceFirstDialogueMaterializationCertificateIdentity.authorizedItems
+              .length
+          : 0,
+      certificateRevision: evidenceFirstDialogueMaterializationCertificate.certificateRevision
+        .toString()
+        .slice(0, 20),
+    });
+  }
   const response = {
     documents,
     ...(toolPayload === undefined ? {} : { toolPayload }),
@@ -5815,6 +5917,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         evidenceQueryAnswerOrigin.originKind,
       evidenceFirstQueryAnswerOriginRevision:
         evidenceQueryAnswerOrigin.originRevision,
+      evidenceFirstDialogueMaterializationCertificate:
+        evidenceFirstDialogueMaterializationCertificate ?? null,
       evidenceFirstIntentNormalizedAxes,
       evidenceFirstRoleResolutionStatus,
       evidenceFirstPlanRequirementCount,

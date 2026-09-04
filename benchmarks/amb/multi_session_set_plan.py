@@ -16,6 +16,9 @@ import re
 from typing import Any, Iterable, Mapping
 
 
+SET_PLAN_POLICY = "paw.multi-session-set-plan.v2:query-only-derived-operators"
+
+
 class Operator(str, Enum):
     COUNT_MEMBERS = "count_members"
     SUM_VALUES = "sum_values"
@@ -179,9 +182,17 @@ def compile_set_plan(question: str) -> SetPlan | None:
     exhaustive = False
     if re.search(r"\b(?:percentage|percent|ratio)\b|%|\bwhat portion\b", text):
         operator, arity, minimum = Operator.RATIO_PERCENT, 2, 2
-    elif re.search(
-        r"\b(?:difference between|how much (?:more|less)|how many (?:more|fewer)|increase|decrease|older|younger|earlier|later|faster|slower|left to|need to earn|did it take|have i been|exceed(?:ed)?|save by|saved on|subtract)\b",
-        text,
+    elif (
+        re.search(
+            r"\b(?:how much (?:more|less)|how many (?:more|fewer)|increase|decrease|older|younger|earlier|later|faster|slower|left to|need to earn|did it take|have i been|exceed(?:ed)?|subtract)\b",
+            text,
+        )
+        or re.search(
+            r"\bdifference(?:\s+in\s+[^?]+)?\s+between\s+[^?]+\s+and\s+[^?]+",
+            text,
+        )
+        or re.search(r"\bhow much\b[^?]*\bsave(?:d)?\s+(?:by|on)\b", text)
+        or re.search(r"\bhow old\b[^?]*\bwhen\b", text)
     ):
         operator, arity, minimum = Operator.DIFFERENCE, 2, 2
     elif re.search(r"\b(?:average|mean)\b", text):

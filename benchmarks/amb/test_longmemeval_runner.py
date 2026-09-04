@@ -329,6 +329,10 @@ class LongMemEvalRunnerTest(unittest.TestCase):
                 "evidenceRoleLateBinding": "1",
                 "temporalRoundFrontier": "0",
                 "typedSourceLockedReader": "typed_source_locked",
+                "typedSourceLockedReaderPolicy": (
+                    "paw.typed-source-locked-reader.v4:"
+                    "item-scoped-authority-certificate"
+                ),
             },
             protocol["common"]["readerFeatureFlags"],
         )
