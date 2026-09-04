@@ -348,8 +348,8 @@ class LongMemEvalRunnerTest(unittest.TestCase):
                 "temporalRoundFrontier": "0",
                 "typedSourceLockedReader": "typed_source_locked",
                 "typedSourceLockedReaderPolicy": (
-                    "paw.typed-source-locked-reader.v6:"
-                    "pair-proven-authority-certificate"
+                    "paw.typed-source-locked-reader.v7:"
+                    "canonical-pair-proof-lineage"
                 ),
             },
             protocol["common"]["readerFeatureFlags"],

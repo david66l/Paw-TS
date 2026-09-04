@@ -132,6 +132,7 @@ import {
   type AmbDialogueMaterializationAuthorizedItemV1,
   canonicalAmbDialogueEvidenceRefV1,
   canonicalizeAmbDialogueAuthorizationV1,
+  canonicalizeAmbDialoguePairProofsV1,
 } from "./dialogue-materialization-authorization.js";
 import {
   AMB_DIALOGUE_PAIR_PROMPT_ISSUE_TYPE_V1,
@@ -2674,6 +2675,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
   let evidenceFirstDialogueUncommittedBindingCount = 0;
   let evidenceFirstDialogueDuplicateAuthorizationCount = 0;
   let evidenceFirstDialogueConflictingAuthorizationCount = 0;
+  let evidenceFirstDialogueDuplicatePairProofCount = 0;
+  let evidenceFirstDialoguePairProofLineageCount = 0;
+  let evidenceFirstDialogueConflictingPairProofCount = 0;
+  let evidenceFirstDialogueRejectedPairProofCount = 0;
   let evidenceFirstDialoguePairProofMissing = false;
   const evidenceFirstDialogueOriginFilteredBindingCounts = {
     assistantReport: 0,
@@ -4570,7 +4575,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         supportingDialogueContextsByParent.set(key, contexts);
       }
     }
-    let authorizedPairContext = resolution.authorizedPairContext.flatMap(
+    const validatedPairContext = resolution.authorizedPairContext.flatMap(
       (pair) => {
         const assistantEvidenceRef = canonicalAmbDialogueEvidenceRefV1(
           pair.assistantEvidenceRef,
@@ -4580,10 +4585,9 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         );
         if (!assistantEvidenceRef || !predecessorEvidenceRef) return [];
         const parent = dialogueAuthorizedItems.find(
-          (item) =>
-            item.sourceId === pair.sourceId &&
-            item.evidenceRef === assistantEvidenceRef,
+          (item) => item.evidenceRef === assistantEvidenceRef,
         );
+        if (!parent) return [];
         const contexts = parent
           ? supportingDialogueContextsByParent.get(
               `${parent.evidenceRef}\0${parent.evidenceUse}`,
@@ -4593,13 +4597,18 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         // supporting parent, its committed context refs, and the core's exact
         // immutable proof. It never expands authorizedItems or closure input.
         if (
-          !parent ||
+          parent.sourceId !== pair.sourceId ||
+          !assistantEvidenceRef.startsWith(`${pair.sourceId}#source-`) ||
+          !predecessorEvidenceRef.startsWith(`${pair.sourceId}#source-`) ||
+          queryTimeCutoff === undefined ||
+          pair.evidenceTimeUpperBound !== queryTimeCutoff.normalizedIso ||
           !contexts?.some(
             (context) =>
               context.has(assistantEvidenceRef) &&
               context.has(predecessorEvidenceRef),
           )
         ) {
+          evidenceFirstDialogueRejectedPairProofCount += 1;
           return [];
         }
         return [
@@ -4611,6 +4620,15 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         ];
       },
     );
+    const canonicalPairProjection =
+      canonicalizeAmbDialoguePairProofsV1(validatedPairContext);
+    let authorizedPairContext = canonicalPairProjection.pairs;
+    evidenceFirstDialogueDuplicatePairProofCount =
+      canonicalPairProjection.duplicateCount;
+    evidenceFirstDialoguePairProofLineageCount =
+      canonicalPairProjection.lineageCount;
+    evidenceFirstDialogueConflictingPairProofCount =
+      canonicalPairProjection.conflictCount;
     const assistantSupportingBindingKeys = new Set(
       resolution.supportAssessments.flatMap((assessment) =>
         (assessment.evidenceDispositions ?? []).flatMap((disposition) => {
@@ -4641,6 +4659,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       authorizedPairContext.map((pair) => pair.assistantEvidenceRef),
     );
     const pairProofMissing =
+      canonicalDialogueAuthorization.status === "conflict" ||
+      canonicalPairProjection.status === "conflict" ||
+      evidenceFirstDialogueRejectedPairProofCount > 0 ||
+      pairParentRefs.size !== authorizedPairContext.length ||
       assistantParentRefs.size !== pairParentRefs.size ||
       [...assistantParentRefs].some((ref) => !pairParentRefs.has(ref));
     evidenceFirstDialoguePairProofMissing = pairProofMissing;
@@ -4651,8 +4673,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       authorizedPairContext = [];
     }
     const dialogueCertificateIdentity = {
-      schema: "paw.dialogue-materialization-certificate.v4",
-      policy: "paw.core-final-packet-authority.v4:item-scoped-pair-proven",
+      schema: "paw.dialogue-materialization-certificate.v5",
+      policy: "paw.core-final-packet-authority.v5:canonical-pair-proof-lineage",
       queryHash,
       originKind: evidenceQueryAnswerOrigin.originKind,
       originRevision: evidenceQueryAnswerOrigin.originRevision,
@@ -5934,6 +5956,10 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         evidenceFirstDialogueDuplicateAuthorizationCount,
       conflictingAuthorizationCount:
         evidenceFirstDialogueConflictingAuthorizationCount,
+      duplicatePairProofCount: evidenceFirstDialogueDuplicatePairProofCount,
+      pairProofLineageCount: evidenceFirstDialoguePairProofLineageCount,
+      conflictingPairProofCount: evidenceFirstDialogueConflictingPairProofCount,
+      rejectedPairProofCount: evidenceFirstDialogueRejectedPairProofCount,
       pairContextCount: Array.isArray(
         evidenceFirstDialogueMaterializationCertificateIdentity?.authorizedPairContext,
       )

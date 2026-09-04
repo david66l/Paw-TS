@@ -30,7 +30,9 @@ except ImportError:
     from temporal_event_ledger_shadow import timestamp  # type: ignore[no-redef]
 
 
-ROUTER_POLICY = "paw.typed-source-locked-reader.v6:pair-proven-authority-certificate"
+ROUTER_POLICY = "paw.typed-source-locked-reader.v7:canonical-pair-proof-lineage"
+
+MAX_DIALOGUE_PAIR_LINEAGE_REVISIONS = 16
 
 
 class SourceLockInvariantError(RuntimeError):
@@ -107,6 +109,7 @@ class AuthorizedPair:
     predecessor_hash: str
     predecessor_order: int
     cutoff: str
+    lineage_revisions: tuple[str, ...]
 
 
 def _public_plan(plan: SetPlan) -> dict[str, Any]:
@@ -240,8 +243,8 @@ def _certificate_sources(
     )}
     if set(certificate) != {*identity, "certificateRevision"}:
         raise CertificateInvariantError("certificate fields are invalid")
-    if (identity["schema"] != "paw.dialogue-materialization-certificate.v4"
-            or identity["policy"] != "paw.core-final-packet-authority.v4:item-scoped-pair-proven"):
+    if (identity["schema"] != "paw.dialogue-materialization-certificate.v5"
+            or identity["policy"] != "paw.core-final-packet-authority.v5:canonical-pair-proof-lineage"):
         raise CertificateInvariantError("certificate schema or policy is invalid")
     if identity["queryHash"] != _sha(question) or identity["originKind"] != authority:
         raise CertificateInvariantError("certificate query or authority binding is invalid")
@@ -326,12 +329,13 @@ def _certificate_sources(
         raise CertificateInvariantError("certificate pair context is invalid")
     authorized_pairs: list[AuthorizedPair] = []
     seen_pair_assistants: set[str] = set()
+    seen_lineage_revisions: set[str] = set()
     for pair in pairs:
         if not isinstance(pair, Mapping) or set(pair) != {
             "sourceId", "assistantEvidenceRef", "assistantContentHash", "assistantTurnOrder",
             "assistantRole", "predecessorEvidenceRef", "predecessorContentHash", "predecessorTurnOrder",
             "predecessorRole", "relation", "allowedModes", "evidenceTimeUpperBound", "verifierVersion", "verificationRevision",
-            "dialogueCertificateRevision",
+            "dialogueCertificateRevisions",
         }:
             raise CertificateInvariantError("certificate pair context fields are invalid")
         source_id = pair["sourceId"]
@@ -341,7 +345,8 @@ def _certificate_sources(
         predecessor_order = pair["predecessorTurnOrder"]
         assistant_match = re.fullmatch(r"(.+)#source-(\d+)", assistant_ref) if isinstance(assistant_ref, str) else None
         predecessor_match = re.fullmatch(r"(.+)#source-(\d+)", predecessor_ref) if isinstance(predecessor_ref, str) else None
-        hashes = (pair["assistantContentHash"], pair["predecessorContentHash"], pair["verificationRevision"], pair["dialogueCertificateRevision"])
+        hashes = (pair["assistantContentHash"], pair["predecessorContentHash"], pair["verificationRevision"])
+        lineage_revisions = pair["dialogueCertificateRevisions"]
         if (not isinstance(source_id, str) or source_id not in ids
                 or assistant_match is None or predecessor_match is None
                 or assistant_match.group(1) != source_id or predecessor_match.group(1) != source_id
@@ -357,10 +362,17 @@ def _certificate_sources(
                 or timestamp(pair["evidenceTimeUpperBound"]) != cutoff
                 or not isinstance(pair["verifierVersion"], str) or not pair["verifierVersion"]
                 or any(not isinstance(value, str) or not hexadecimal.fullmatch(value) for value in hashes)
+                or not isinstance(lineage_revisions, list)
+                or not 1 <= len(lineage_revisions) <= MAX_DIALOGUE_PAIR_LINEAGE_REVISIONS
+                or any(not isinstance(value, str) or not hexadecimal.fullmatch(value) for value in lineage_revisions)
+                or lineage_revisions != sorted(lineage_revisions)
+                or len(set(lineage_revisions)) != len(lineage_revisions)
+                or any(value in seen_lineage_revisions for value in lineage_revisions)
                 or assistant_ref in seen_pair_assistants):
             raise CertificateInvariantError("certificate pair context is invalid")
         seen_pair_assistants.add(assistant_ref)
-        authorized_pairs.append(AuthorizedPair(source_id, assistant_ref, pair["assistantContentHash"], assistant_order, predecessor_ref, pair["predecessorContentHash"], predecessor_order, cutoff))
+        seen_lineage_revisions.update(lineage_revisions)
+        authorized_pairs.append(AuthorizedPair(source_id, assistant_ref, pair["assistantContentHash"], assistant_order, predecessor_ref, pair["predecessorContentHash"], predecessor_order, cutoff, tuple(lineage_revisions)))
     if (len(authorized_pairs) > len(authorized_items)
             or not seen_pair_assistants.issubset(seen_refs)):
         raise CertificateInvariantError("certificate pair context is orphaned")

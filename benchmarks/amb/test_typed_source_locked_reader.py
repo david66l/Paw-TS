@@ -88,12 +88,16 @@ def certificate_raw(
                             "evidenceTimeUpperBound": "2025-01-03T00:00:00Z",
                             "verifierVersion": "test-verifier",
                             "verificationRevision": hashlib.sha256(b"test-verification").hexdigest(),
-                            "dialogueCertificateRevision": hashlib.sha256(f"pair-{item.id}-{turn_order}".encode()).hexdigest(),
+                            "dialogueCertificateRevisions": [
+                                hashlib.sha256(
+                                    f"pair-{item.id}-{turn_order}".encode()
+                                ).hexdigest()
+                            ],
                         }
                     )
     identity = {
-        "schema": "paw.dialogue-materialization-certificate.v4",
-        "policy": "paw.core-final-packet-authority.v4:item-scoped-pair-proven",
+        "schema": "paw.dialogue-materialization-certificate.v5",
+        "policy": "paw.core-final-packet-authority.v5:canonical-pair-proof-lineage",
         "queryHash": hashlib.sha256(question.encode()).hexdigest(),
         "originKind": authority,
         "originRevision": origin_revision,
@@ -294,7 +298,7 @@ class TypedSourceLockedReaderTest(unittest.TestCase):
             [self.later, self.earlier],
         )
         self.assertEqual(
-            "56f58a4382e9ba50e1ad67b84b956ac0590b868570e33898533d2832039a390b",
+            "70db6906a1de78f0e03211b0760f7176d970a83da68c0d10b8527ed55472969a",
             raw["evidenceFirstDialogueMaterializationCertificate"][
                 "certificateRevision"
             ],
@@ -308,9 +312,9 @@ class TypedSourceLockedReaderTest(unittest.TestCase):
             "cross_source": lambda pair, certificate: pair.__setitem__("sourceId", "source-a"),
             "non_adjacent": lambda pair, certificate: pair.__setitem__("predecessorTurnOrder", 0),
             "nested_extra": lambda pair, certificate: pair.__setitem__("nested", {}),
-            "v3": lambda pair, certificate: (
-                certificate.__setitem__("schema", "paw.dialogue-materialization-certificate.v3"),
-                certificate.__setitem__("policy", "paw.core-final-packet-authority.v3:item-scoped-origin-filtered"),
+            "v4": lambda pair, certificate: (
+                certificate.__setitem__("schema", "paw.dialogue-materialization-certificate.v4"),
+                certificate.__setitem__("policy", "paw.core-final-packet-authority.v4:item-scoped-pair-proven"),
             ),
             "orphan": lambda pair, certificate: certificate.__setitem__("authorizedPairContext", []),
             "extra_pair": lambda pair, certificate: certificate["authorizedPairContext"].append(copy.deepcopy(pair)),
@@ -324,6 +328,77 @@ class TypedSourceLockedReaderTest(unittest.TestCase):
                 resign_certificate(raw)
                 with self.assertRaises(reader.CertificateInvariantError):
                     self.route(question, raw)
+
+    def test_pair_lineage_is_exact_sorted_unique_bounded_lowercase_sha256(self) -> None:
+        question = "What did you recommend?"
+        variants = {
+            "old_scalar": lambda pair: (
+                pair.__setitem__(
+                    "dialogueCertificateRevision",
+                    pair["dialogueCertificateRevisions"][0],
+                ),
+                pair.__delitem__("dialogueCertificateRevisions"),
+            ),
+            "empty": lambda pair: pair.__setitem__("dialogueCertificateRevisions", []),
+            "duplicate": lambda pair: pair.__setitem__(
+                "dialogueCertificateRevisions",
+                [pair["dialogueCertificateRevisions"][0]] * 2,
+            ),
+            "unsorted": lambda pair: pair.__setitem__(
+                "dialogueCertificateRevisions",
+                ["f" * 64, "0" * 64],
+            ),
+            "uppercase": lambda pair: pair.__setitem__(
+                "dialogueCertificateRevisions", ["A" * 64]
+            ),
+            "over_limit": lambda pair: pair.__setitem__(
+                "dialogueCertificateRevisions",
+                [f"{value:064x}" for value in range(17)],
+            ),
+        }
+        for name, mutate in variants.items():
+            with self.subTest(name=name):
+                raw = certificate_raw(
+                    question, "explicit_assistant", [self.later, self.earlier]
+                )
+                pair = raw["evidenceFirstDialogueMaterializationCertificate"][
+                    "authorizedPairContext"
+                ][0]
+                mutate(pair)
+                resign_certificate(raw)
+                with self.assertRaises(reader.CertificateInvariantError):
+                    self.route(question, raw)
+
+    def test_pair_lineage_revision_cannot_be_reused_across_pairs(self) -> None:
+        question = "What did you recommend?"
+        raw = certificate_raw(
+            question, "explicit_assistant", [self.later, self.earlier]
+        )
+        pairs = raw["evidenceFirstDialogueMaterializationCertificate"][
+            "authorizedPairContext"
+        ]
+        self.assertGreaterEqual(len(pairs), 2)
+        pairs[1]["dialogueCertificateRevisions"] = list(
+            pairs[0]["dialogueCertificateRevisions"]
+        )
+        resign_certificate(raw)
+        with self.assertRaises(reader.CertificateInvariantError):
+            self.route(question, raw)
+
+    def test_sorted_distinct_pair_lineage_materializes_one_assistant_pair(self) -> None:
+        question = "What did you recommend?"
+        raw = certificate_raw(
+            question, "explicit_assistant", [self.later, self.earlier]
+        )
+        pair = raw["evidenceFirstDialogueMaterializationCertificate"][
+            "authorizedPairContext"
+        ][0]
+        pair["dialogueCertificateRevisions"] = ["0" * 64, "f" * 64]
+        resign_certificate(raw)
+
+        execution = self.route(question, raw)
+        self.assertEqual("assistant_dialogue", execution.route)
+        self.assertIn("I suggested Aurora", execution.context)
 
     def test_pair_cutoff_accepts_equivalent_fractional_precision(self) -> None:
         question = "What did you recommend?"
