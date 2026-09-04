@@ -52,7 +52,7 @@ export function classifyMemoryEvidenceQueryV3(
     );
   const newRecommendation =
     !priorRecommendationRecall &&
-    /\b(?:recommend|recommendation|suggest|suggestion|what\s+should\s+i|should\s+i|any\s+(?:tips|ideas|advice)|good\s+(?:options|activities|recipes?)|what\s+do\s+you\s+think|do\s+you\s+think\s+(?:it|this|that).{0,64}good\s+idea|could\s+there\s+be\s+a\s+reason|do\s+you\s+think\s+it\s+might)\b|(?:推荐|建议|有什么(?:好)?(?:办法|选择|活动|食谱)|我应该|你觉得|你怎么看)/iu.test(
+    /\b(?:recommend(?:ation)?s?|suggest(?:ion)?s?|what\s+should\s+i|should\s+i|any\s+(?:(?:helpful|practical|other|new)\s+)?(?:tips|ideas|advice|suggestions?|recommendations?)|good\s+(?:options|activities|recipes?)|what\s+do\s+you\s+think|do\s+you\s+think\s+(?:it|this|that).{0,64}good\s+idea|could\s+there\s+be\s+a\s+reason|do\s+you\s+think\s+it\s+might)\b|(?:推荐|建议|有什么(?:好)?(?:办法|选择|活动|食谱)|我应该|你觉得|你怎么看)/iu.test(
       value,
     );
   const answerShape: MemoryEvidenceAnswerShapeV3 = compare

@@ -101,6 +101,9 @@ describe("typed evidence query planner v3", () => {
     ).toMatchObject({ answerShape: "lookup", roleConstraint: "user" });
     for (const query of [
       "I've been struggling with this routine. Any advice?",
+      "I'm planning a trip to Denver soon. Any suggestions on what to do?",
+      "I've got some free time tonight, any documentary recommendations?",
+      "Do you have any helpful tips?",
       "Do you think it would be a good idea for me to attend?",
       "My bike is performing better. Could there be a reason for this?",
     ]) {
