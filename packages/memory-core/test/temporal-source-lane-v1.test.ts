@@ -123,4 +123,21 @@ describe("temporal source lane v1", () => {
       }),
     ).toBe(false);
   });
+
+  test("keeps the candidate aperture bounded before source de-duplication", () => {
+    const result = buildMemoryTemporalSourceLaneV1(
+      request({
+        candidates: Array.from({ length: 257 }, (_, index) => ({
+          sourceId: `session-${index + 1}`,
+          evidenceRef: `session-${index + 1}#source-1`,
+          rank: index + 1,
+          observedAt: "2025-01-01T00:00:00.000Z",
+        })),
+      }),
+    );
+    expect(result).toEqual({
+      status: "rejected",
+      rejectedReason: "candidate_set_mismatch",
+    });
+  });
 });

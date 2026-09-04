@@ -11,7 +11,11 @@ export const PAW_MEMORY_TEMPORAL_SOURCE_LANE_POLICY_V1 =
   "paw.memory-temporal-source-lane.v1:independent-read-only-source-lock" as const;
 
 export const PAW_MEMORY_TEMPORAL_SOURCE_LANE_MAX_SOURCES_V1 = 16;
-export const PAW_MEMORY_TEMPORAL_SOURCE_LANE_MAX_CANDIDATES_V1 = 64;
+// The source-span index may surface up to 256 ranked spans before source-level
+// de-duplication. The lane must inspect that bounded retriever aperture to
+// locate the first 16 *distinct* sources; clipping raw spans earlier would let
+// one long conversation crowd out later source documents.
+export const PAW_MEMORY_TEMPORAL_SOURCE_LANE_MAX_CANDIDATES_V1 = 256;
 
 export type MemoryTemporalSourceLaneRejectedReasonV1 =
   | "invalid_input"
