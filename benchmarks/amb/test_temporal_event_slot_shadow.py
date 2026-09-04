@@ -7,6 +7,8 @@ from temporal_event_slot_shadow import (
     combine_binding_results,
     compile_question_plan,
     compile_plan,
+    content_free_consensus_slots,
+    content_free_plan_slots,
     directional_slots,
     intersect_event_packet_bindings,
     select_target_query_hmacs,
@@ -280,6 +282,38 @@ class TemporalEventSlotShadowTest(unittest.TestCase):
         self.assertIsNotNone(first)
         self.assertIsNotNone(swapped)
         self.assertNotEqual(first.canonical_revision(), swapped.canonical_revision())
+
+    def test_content_free_packet_keeps_slot_roles_without_raw_addresses(self) -> None:
+        plan = TemporalPlan(
+            "duration_between",
+            "day",
+            (
+                SlotSpec("E1", "start_event", "start", 10, 15),
+                SlotSpec("E2", "end_event", "end", 20, 23),
+            ),
+        )
+        pool = candidates(2)
+        binding, _ = validate_event_packet_proposal(
+            {
+                "decision": "select",
+                "eventSlots": [
+                    {"slotId": "E1", "candidateIds": ["C01"]},
+                    {"slotId": "E2", "candidateIds": ["C02"]},
+                ],
+            },
+            plan,
+            pool,
+            "2025-01-31T00:00:00Z",
+        )
+
+        plan_slots = content_free_plan_slots(plan)
+        packet_slots = content_free_consensus_slots(binding, plan, b"test-key")
+
+        self.assertEqual(["start_event", "end_event"], [x["role"] for x in plan_slots])
+        self.assertEqual(["start_event", "end_event"], [x["role"] for x in packet_slots])
+        rendered = str(packet_slots)
+        self.assertNotIn("source-1#turn-1", rendered)
+        self.assertNotIn("source-2#turn-1", rendered)
 
     def test_packet_consensus_keeps_only_per_slot_intersection(self) -> None:
         plan = TemporalPlan(

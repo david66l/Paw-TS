@@ -59,7 +59,7 @@ except ImportError:
     )
 
 
-SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v5"
+SCHEMA_VERSION = "paw.temporal-event-slot-shadow.v6"
 PLANNER_SCHEMA_VERSION = "paw.temporal-event-planner.v1"
 BINDER_SCHEMA_VERSION = "paw.temporal-event-binder.v2"
 DETERMINISTIC_PLANNER_VERSION = "paw.temporal-question-compiler.v1"
@@ -119,6 +119,41 @@ class EventPacketBinding:
                 sort_keys=True,
             )
         )
+
+
+def content_free_plan_slots(plan: TemporalPlan | None) -> list[dict[str, Any]]:
+    if plan is None:
+        return []
+    return [
+        {
+            "slotId": slot.slot_id,
+            "role": slot.role,
+            "queryStart": slot.query_start,
+            "queryEnd": slot.query_end,
+            "queryMentionHash": sha256_text(slot.query_mention),
+        }
+        for slot in plan.slots
+    ]
+
+
+def content_free_consensus_slots(
+    binding: EventPacketBinding | None,
+    plan: TemporalPlan | None,
+    key: bytes,
+) -> list[dict[str, Any]]:
+    if binding is None or plan is None:
+        return []
+    role_by_slot = {slot.slot_id: slot.role for slot in plan.slots}
+    return [
+        {
+            "slotId": slot_id,
+            "role": role_by_slot[slot_id],
+            "evidenceRefHmacs": [
+                hmac_ref(candidate.evidence_ref, key) for candidate in candidates
+            ],
+        }
+        for slot_id, candidates in binding.slots
+    ]
 
 
 def query_span_slot(
@@ -1112,6 +1147,7 @@ def main() -> None:
                 "planHash": plan_hash,
                 "planOperator": plan.operator if plan is not None else None,
                 "planSlotCount": len(plan.slots) if plan is not None else 0,
+                "planSlots": content_free_plan_slots(plan),
                 "binderStatus": binder_status,
                 "binderReplicaStatuses": binder_replica_statuses,
                 "binderResponseHashes": binder_response_hashes,
@@ -1132,6 +1168,9 @@ def main() -> None:
                     consensus_binding.canonical_revision()
                     if consensus_binding is not None
                     else None
+                ),
+                "selectedSlotEvidenceRefHmacs": content_free_consensus_slots(
+                    consensus_binding, plan, key
                 ),
                 "singleReplicaEndpointCoverageComplete": single_replica_complete,
                 "stableEndpointCoverageComplete": stable_complete,
