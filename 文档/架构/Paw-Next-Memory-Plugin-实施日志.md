@@ -1057,3 +1057,13 @@ Artifacts:
 - 同一模型、相同 133 题与相同 evidence packet 的 V3→V6 精确配对结果为 2 胜、0 负，最终 **114/133=85.71%**，通过 85% 门禁；两道新增正确来自 appointment join 与教育阶段隔离。V6 的全部答案与裁判调用均为相同 prompt/answer 的内容寻址缓存命中，因此没有 provider 重采样；11 个答案哈希相对 V3 变化，证据包哈希 0 个变化。
 - 六个分片合并后验证 133 个唯一 query HMAC、无重复、单一模型、零 memory tool；合并产物位于云端 `runs/paw-multi-evidence-v54-f847879/full-v6-no-zero-combined.json`，SHA-256 为 `4d7de91a4aec4a951b210f3bad688d5718390dfaff4dbf9d8f5d13f09e810e36`。最终安全修正提交为 `456e0ef`；历史 99/133 与当前运行的模型版本不同，只报告绝对分数变化，不把它冒充同模型 A/B。
 - 114/133 是当前多会话候选 checkpoint，不等同于全部 query-bound 规则已可直接进入生产。`appointment time→arrival time`、`deadline→submission date`、`last week` 的解释仍需 typed relation/provenance 与未参与调参题集的消融门禁；当前剩余 19 错为 count 11、sum 5、difference 2、lookup 1，下一结构瓶颈仍是集合闭包、事件去重和数值聚合。
+
+### M13：DeepSeek 全量 500 题回归与分片完整性门禁
+
+- 在源码提交 `7c40ac0` 上，以 `deepseek-v4-flash`、temperature 0、thinking max、官方 LongMemEval-S 500 题和既有完整只读索引执行六分片回归；answer review、answer tools 与 error audit 均未启用。六个分片无 429/5xx、无进程失败，500 次 answer 与 500 次 judge settlement 全部成功。
+- 严格合并器验证 6/6 不同 slice、500 个全局唯一 query HMAC、逐片公开账本 SHA/行数、官方 70/56/133/133/78/30 题型数量和稳定配置哈希。首次合并正确拦下 `physicalDocumentIdCollisionCount` 的分片差异；复核证明该字段是随 shard 数据变化的观测统计而非运行配置。`b107e1b` 将其继续保留在密封账本，但排除出配置相等判断，并增加分片统计不同仍可合并的回归测试。
+- 全量结果为 **409/500=81.80%**：single-session-user 68/70=97.14%、single-session-assistant 45/56=80.36%、multi-session 96/133=72.18%、temporal-reasoning 110/133=82.71%、knowledge-update 72/78=92.31%、single-session-preference 18/30=60.00%。相对历史 DeepSeek V26 的 411/500，本轮总分净少 2 题；时间推理净增 9 题，但 assistant 净少 7、多会话净少 3、user 净少 1，不能宣称整体晋级。
+- 偏好 user-authority 投影在全量日志中触发 22 次：21 次完成并改变 answer packet，1 次因预算回退，0 次越 source lock、0 次越 cutoff、0 次注入 assistant；但 DeepSeek 下偏好总分仍为 18/30。此前 28/30=93.33% 是 GLM 专项实验，不能外推成 DeepSeek 全量收益。多会话 114/133=85.71% 同样是 GLM 独立 evidence-set reader 的候选 checkpoint；因其尚未通过 label-blind 主路由接入，本轮主 runner 仍走 baseline multi 路径，不能用专项答案替换正式 500 题结果。
+- 六分片墙钟为 40 分 08 秒，吞吐约 12.46 题/分钟；单题阶段均值为 retrieval 3.19 秒、answer 22.16 秒、judge 1.48 秒。answer P50/P90/P95 为 9.42/60.85/83.64 秒，最大 197.95 秒，约 82% 串行阶段时间消耗在 answer 长推理尾部。索引启动校验每片约 10.6～10.9 秒，不是瓶颈。
+- 精确本地缓存实际只命中 answer 6/500、judge 9/500、memory helper 18/1490；其余均为远程调用，因此本轮是以独立重算为主的工程回归，而不是把旧答案整批回放。下一轮同口径提速优先做 10-shard 小样限流门禁与动态领题队列，消除固定分片长尾；只改 reader 的 A/B 可冻结并校验 retrieval packet 后复用 memory helper 精确缓存。降低 thinking 或限制输出 token 会改变模型配置，只能另立 fast profile，不能覆盖本轮正式结果。
+- 合并产物位于云端 `runs/paw-full500-v56-7c40ac0/merged.json`，SHA-256 为 `c1a229644f5da8e12659750bdd72aef1dd316158db659247af436f3b2d7be6f9`；六个原始密封账本均保留在同目录。本轮配置与完整性修正已经推送至 `memory/temporal-v36`。
