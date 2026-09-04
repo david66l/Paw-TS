@@ -403,6 +403,26 @@ class TemporalTreatmentManifestTest(unittest.TestCase):
                 self.raw_artifact("raw.json", "run-instance-a", [raw])
             )
 
+    def test_incomplete_binder_response_settlement_is_rejected(self) -> None:
+        query = token(b"query")
+        path = self.raw_artifact("raw.json", "run-instance-a", [self.raw_row(query)])
+        artifact = json.loads(path.read_text())
+        artifact["rows"][0]["binderResponseHmacs"].pop()
+        path.write_text(json.dumps(artifact))
+
+        with self.assertRaisesRegex(ValueError, "settlement is incomplete"):
+            self.sanitized(path)
+
+    def test_deterministic_planner_rejects_legacy_planned_status(self) -> None:
+        query = token(b"query")
+        raw = self.raw_row(query)
+        raw["plannerStatus"] = "planned"
+
+        with self.assertRaisesRegex(ValueError, "planner status"):
+            self.sanitized(
+                self.raw_artifact("raw.json", "run-instance-a", [raw])
+            )
+
     def test_replay_loader_rejects_extra_fields(self) -> None:
         query = token(b"query")
         manifest = self.sanitized(

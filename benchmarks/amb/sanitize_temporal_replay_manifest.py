@@ -106,6 +106,10 @@ def project_candidate_policy(raw: Any) -> dict[str, Any]:
         artifact_sha = raw.get("crossEncoderArtifactSha256")
         if artifact_sha is not None:
             require_hex(artifact_sha, "crossEncoderArtifactSha256", 64)
+        elif re.fullmatch(r"[0-9a-f]{40}", str(raw.get("crossEncoderRevision"))) is None:
+            raise ValueError(
+                "cross-encoder revision must be immutable when no artifact SHA is available"
+            )
         versions = raw.get("crossEncoderRuntimeVersions")
         if not isinstance(versions, dict) or set(versions) != {
             "sentence-transformers",
@@ -184,7 +188,11 @@ def project_model_policy(raw: Any) -> dict[str, Any]:
     }
     if set(binder) != binder_keys or binder.get("mode") != "event_packet":
         raise ValueError("binder policy contains unknown, missing, or unsafe fields")
-    if not isinstance(binder.get("replicas"), int) or binder["replicas"] < 2:
+    if (
+        isinstance(binder.get("replicas"), bool)
+        or not isinstance(binder.get("replicas"), int)
+        or binder["replicas"] < 2
+    ):
         raise ValueError("binder replica count is invalid")
     if not isinstance(raw.get("model"), str) or not raw["model"]:
         raise ValueError("model identity is invalid")
@@ -269,7 +277,9 @@ def project_row(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError("shadow row must be an object")
     planner_status = raw.get("plannerStatus")
-    compiled = planner_status in {"compiled", "planned"}
+    if planner_status not in {"compiled", "unsupported"}:
+        raise ValueError("deterministic planner status is invalid")
+    compiled = planner_status == "compiled"
     plan = None
     if compiled:
         operator = raw.get("planOperator")
@@ -350,6 +360,7 @@ def sanitize_replay(
     run_instance_id = None
     remote_calls = 0
     settled_request_hmacs: list[str] = []
+    settled_response_count = 0
     for path in shadow_paths:
         artifact = load_object(path)
         if artifact.get("schemaVersion") != SHADOW_SCHEMA_VERSION:
@@ -490,7 +501,26 @@ def sanitize_replay(
                 require_hex(request, "binderRequestHmac", 32)
             if len(binder_requests) != len(set(binder_requests)):
                 raise ValueError(f"binder request settlement is duplicated: {path}")
+            expected_row_calls = (
+                shard_model_policy["binder"]["replicas"]
+                if projected_row["plannerStatus"] == "compiled"
+                else 0
+            )
+            if (
+                len(binder_requests) != expected_row_calls
+                or len(binder_responses) != expected_row_calls
+            ):
+                raise ValueError(f"binder request/response settlement is incomplete: {path}")
+            if projected_row["plannerStatus"] == "unsupported" and (
+                projected_row["plan"] is not None
+                or projected_row["selectedSlots"]
+                or projected_row["selectedEvidenceRefHmacs"]
+                or projected_row["selectedCandidateCount"] != 0
+                or projected_row["bindingRevisionHmac"] is not None
+            ):
+                raise ValueError(f"unsupported planner row contains a selection: {path}")
             settled_request_hmacs.extend(binder_requests)
+            settled_response_count += len(binder_responses)
             response_settlements.append(
                 {
                     "queryHmac": projected_row["queryHmac"],
@@ -511,7 +541,7 @@ def sanitize_replay(
         shard_calls = execution_evidence.get("remoteBinderLogicalCallCount")
         replicas = shard_model_policy.get("binder", {}).get("replicas")
         expected_calls = sum(
-            row["plannerStatus"] in {"compiled", "planned"}
+            row["plannerStatus"] == "compiled"
             for row in projected_rows
         ) * replicas
         if not isinstance(shard_calls, int) or shard_calls != expected_calls:
@@ -578,6 +608,8 @@ def sanitize_replay(
     }
     if len(execution_body["settledRequestHmacs"]) != remote_calls:
         raise ValueError("binder request HMACs are not globally unique")
+    if settled_response_count != remote_calls:
+        raise ValueError("binder response count differs from logical call settlement")
     execution_body["executionRevision"] = sha256_canonical(execution_body)
     output = {
         "schemaVersion": SCHEMA_VERSION,

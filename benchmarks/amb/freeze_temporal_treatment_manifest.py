@@ -205,7 +205,7 @@ def validate_replay(value: dict[str, Any], artifact: Path) -> dict[str, Any]:
     if not isinstance(replicas, int) or replicas < 2:
         raise ValueError(f"replay binder replica policy is invalid: {artifact}")
     expected_calls = sum(
-        row.get("plannerStatus") in {"compiled", "planned"} for row in indexed.values()
+        row.get("plannerStatus") == "compiled" for row in indexed.values()
     ) * replicas
     if execution.get("remoteBinderLogicalCallCount") != expected_calls:
         raise ValueError(f"replay call settlement differs from rows: {artifact}")
@@ -302,9 +302,9 @@ def treatment_or_fallback(
     max_selected: int,
     key: bytes,
 ) -> dict[str, Any]:
-    if first.get("plannerStatus") not in {"compiled", "planned"}:
+    if first.get("plannerStatus") != "compiled":
         return {"queryHmac": query_hmac, "decision": "fallback", "reasonCode": "no_plan_replay_a"}
-    if second.get("plannerStatus") not in {"compiled", "planned"}:
+    if second.get("plannerStatus") != "compiled":
         return {"queryHmac": query_hmac, "decision": "fallback", "reasonCode": "no_plan_replay_b"}
     first_plan = first.get("plan")
     second_plan = second.get("plan")
