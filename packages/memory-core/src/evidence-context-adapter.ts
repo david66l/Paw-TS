@@ -19,6 +19,7 @@ import type {
   MemoryEvidenceUseV1,
 } from "./evidence-origin.js";
 import type { MemoryEvidenceResolutionV1 } from "./evidence-resolver.js";
+import type { MemoryDialogueOrdinalReaderControlV1 } from "./evidence-support-selector.js";
 
 export const PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1 =
   "paw.memory-evidence-answer-contract.v3:requirement-evidence-ledger" as const;
@@ -45,6 +46,7 @@ export interface MemoryEvidenceAnswerContractV1 {
     candidateEvidenceRefs: readonly string[];
     contradictingEvidenceRefs: readonly string[];
     evidenceDispositions: readonly Readonly<MemoryEvidenceDispositionBindingV1>[];
+    dialogueOrdinalSelection?: Readonly<MemoryDialogueOrdinalReaderControlV1>;
   }>[];
 }
 
@@ -186,6 +188,9 @@ export function projectEvidenceFirstMemoryContextPacketV1(
         evidenceDispositions: Object.freeze([
           ...(assessment?.evidenceDispositions ?? []),
         ]),
+        ...(assessment?.dialogueOrdinalSelection === undefined
+          ? {}
+          : { dialogueOrdinalSelection: assessment.dialogueOrdinalSelection }),
       });
     }),
   );
@@ -356,6 +361,11 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
           evidenceDispositions: Object.freeze([
             ...(assessment?.evidenceDispositions ?? []),
           ]),
+          ...(assessment?.dialogueOrdinalSelection === undefined
+            ? {}
+            : {
+                dialogueOrdinalSelection: assessment.dialogueOrdinalSelection,
+              }),
         });
       }),
     ),

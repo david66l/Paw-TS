@@ -3,6 +3,7 @@ import type {
   MemoryEvidenceDispositionBindingV1,
   MemoryEvidenceUseV1,
 } from "./evidence-origin.js";
+import type { MemoryDialogueOrdinalReaderControlV1 } from "./evidence-support-selector.js";
 
 /** Runtime-independent evidence packet contract exposed by the memory core. */
 export const PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1 =
@@ -77,6 +78,7 @@ export interface MemoryResolvedContextPacketV1 {
     contradictingMemoryIds: readonly string[];
     unknownMemoryIds: readonly string[];
     evidenceDispositions?: readonly Readonly<MemoryEvidenceDispositionBindingV1>[];
+    dialogueOrdinalSelection?: Readonly<MemoryDialogueOrdinalReaderControlV1>;
   }>[];
   readonly verification: Readonly<{
     status: "verified" | "not_configured" | "failed";

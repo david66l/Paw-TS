@@ -1,5 +1,13 @@
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import {
+  type MemoryDialogueOrdinalAdmissionV1,
+  createJsonMemoryDialogueOrdinalAdmissionV1,
+} from "./dialogue-ordinal-admission.js";
+import {
+  type MemoryDialogueOrdinalSelectorV1,
+  createJsonMemoryDialogueOrdinalSelectorV1,
+} from "./dialogue-ordinal-transaction.js";
+import {
   type MemoryEvidenceNotebookHitV1,
   projectMemoryEvidenceExcerptV1,
 } from "./evidence-first.js";
@@ -35,6 +43,12 @@ export interface MemoryEvidenceSupportSelectionInputV1 {
   readonly certifiedAssistantDialogueEvidenceRefs?: readonly string[];
 }
 
+/** Host-settled reader control for an ordinal inside one selected output. */
+export interface MemoryDialogueOrdinalReaderControlV1 {
+  readonly constraintRevision: string;
+  readonly withinOutputOrdinal: number;
+}
+
 export interface MemoryEvidenceTriageAssessmentV1 {
   readonly requirementId: string;
   readonly supportingEvidenceRefs: readonly string[];
@@ -42,6 +56,12 @@ export interface MemoryEvidenceTriageAssessmentV1 {
   readonly unknownEvidenceRefs: readonly string[];
   /** Code-owned post-selection disposition ledger; selectors never author it. */
   readonly evidenceDispositions?: readonly Readonly<MemoryEvidenceDispositionBindingV1>[];
+  /**
+   * Host-owned ordinal address inside one assistant output. It is emitted only
+   * after the immutable cohort reducer settles a unique winner; reader code
+   * uses it as a control, never as model-supplied evidence.
+   */
+  readonly dialogueOrdinalSelection?: Readonly<MemoryDialogueOrdinalReaderControlV1>;
 }
 
 export interface MemoryEvidenceSupportSelectionV1 {
@@ -98,6 +118,10 @@ export interface MemoryEvidenceSupportSelectorV1 {
     groups: readonly MemoryEvidenceSupportSelectionGroupDescriptorV1[],
     signal: AbortSignal,
   ): Promise<MemoryEvidenceSupportGroupedSelectionV1>;
+  /** Separate atomic protocol; ordinal cohorts never use triage arrays. */
+  readonly dialogueOrdinalSelector?: MemoryDialogueOrdinalSelectorV1;
+  /** Query-only veto before ordinal-specific retrieval or settlement. */
+  readonly dialogueOrdinalAdmission?: MemoryDialogueOrdinalAdmissionV1;
 }
 
 /**
@@ -108,6 +132,11 @@ export interface MemoryEvidenceSupportSelectorV1 {
 export function createJsonMemoryEvidenceSupportSelectorV1(input: {
   readonly model: MemoryWriterModelV1;
   readonly selectorVersion?: string;
+  /** Independently budgeted and cache-namespaced admission transport. */
+  readonly dialogueOrdinalAdmission?: Readonly<{
+    model: MemoryWriterModelV1;
+    admissionVersion: string;
+  }>;
 }): MemoryEvidenceSupportSelectorV1 {
   if (!input.model || typeof input.model.complete !== "function") {
     throw namedError("MemoryEvidenceSupportSelectorModelInvalid");
@@ -119,6 +148,17 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
   }
   return Object.freeze({
     selectorVersion,
+    dialogueOrdinalSelector: createJsonMemoryDialogueOrdinalSelectorV1({
+      model: input.model,
+      selectorVersion: `${selectorVersion}:ordinal-cohort`,
+    }),
+    ...(input.dialogueOrdinalAdmission === undefined
+      ? {}
+      : {
+          dialogueOrdinalAdmission: createJsonMemoryDialogueOrdinalAdmissionV1(
+            input.dialogueOrdinalAdmission,
+          ),
+        }),
     async select(
       selection: Readonly<MemoryEvidenceSupportSelectionInputV1>,
       signal: AbortSignal,

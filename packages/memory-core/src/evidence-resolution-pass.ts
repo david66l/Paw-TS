@@ -1,8 +1,20 @@
-import { hashCanonicalJsonV1 } from "./canonical.js";
+import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import {
   type MemoryDialogueCertificateRegistryV1,
   compileMemoryDialogueCertificateRegistryV1,
 } from "./dialogue-certificate.js";
+import type { MemoryDialogueOrdinalAdmissionReceiptV1 } from "./dialogue-ordinal-admission.js";
+import {
+  type MemoryDialogueOrdinalSourceSettlementV1,
+  compileMemoryDialogueOrdinalSelectorBodyV1,
+  reduceMemoryDialogueOrdinalSourcesV1,
+  settleMemoryDialogueOrdinalSourceV1,
+  validateMemoryDialogueOrdinalCohortV1,
+} from "./dialogue-ordinal-transaction.js";
+import {
+  type MemoryDialogueOrdinalConstraintV1,
+  compileMemoryDialogueOrdinalConstraintV1,
+} from "./dialogue-ordinal.js";
 import {
   type MemoryEvidenceCandidateFusionV2,
   type MemoryEvidenceNotebookHitV1,
@@ -67,6 +79,7 @@ import {
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
   type MemoryDialoguePredecessorProofV1,
+  type MemoryDialoguePredecessorVerificationRequestV1,
   type MemoryDialoguePredecessorVerifierV1,
   type MemorySourceLocalEvidenceBudgetV1,
   type MemorySourceLocalEvidenceHitV1,
@@ -178,6 +191,87 @@ export async function resolveEvidencePass(input: {
   readonly sourceLock?: MemoryEvidenceSourceLockV1;
   readonly signal: AbortSignal;
 }): Promise<MemoryEvidenceResolutionPassV1> {
+  // This compiler is deliberately query-only. Planner text, retrieval text,
+  // and model output can never manufacture an ordinal host settlement.
+  const compiledDialogueOrdinal = compileMemoryDialogueOrdinalConstraintV1(
+    input.query,
+  );
+  const ordinalAssistantLeaves = input.requirements.filter(
+    (requirement) => requirement.roleConstraint === "assistant",
+  );
+  const plannedSelectorGroups =
+    input.requirements.length > 0
+      ? compileMemoryEvidenceSelectorGroupsV1({
+          intent: input.intent,
+          requirements: input.requirements,
+        })
+      : Object.freeze([]);
+  const ordinalTargetLeaf =
+    ordinalAssistantLeaves.length === 1 ? ordinalAssistantLeaves[0] : undefined;
+  const ordinalTargetGroup = ordinalTargetLeaf
+    ? plannedSelectorGroups.find((group) =>
+        group.requirementIds.includes(ordinalTargetLeaf.requirementId),
+      )
+    : undefined;
+  // This only makes a query-only semantic veto eligible. Ordinal retrieval is
+  // still unavailable until the independent typed admission port approves.
+  const ordinalStructuralEligible =
+    compiledDialogueOrdinal !== undefined &&
+    input.queryAnswerOrigin.originKind === "explicit_assistant" &&
+    input.supportSelector?.dialogueOrdinalSelector !== undefined &&
+    input.supportSelector?.dialogueOrdinalAdmission !== undefined &&
+    input.sourceLocalLocator !== undefined &&
+    input.sourceLocalHydrator !== undefined &&
+    input.dialoguePredecessorVerifier !== undefined &&
+    // v2 intentionally has one self-contained transaction. Mixed plans keep
+    // the established selector path byte-for-byte until their independent
+    // merge contract is separately proven.
+    input.requirements.length === 1 &&
+    ordinalTargetLeaf !== undefined &&
+    // A host settlement owns one obligation only. A dependent/mixed selector
+    // group would otherwise make the ordinal branch silently settle unrelated
+    // leaves, so it remains on the ordinary transaction path.
+    ordinalTargetGroup?.requirementIds.length === 1;
+  let dialogueOrdinalAdmission:
+    | MemoryDialogueOrdinalAdmissionReceiptV1
+    | undefined;
+  if (ordinalStructuralEligible && compiledDialogueOrdinal !== undefined) {
+    try {
+      const admission =
+        await input.supportSelector?.dialogueOrdinalAdmission?.admit(
+          Object.freeze({
+            query: input.query.replace(/\s+/gu, " ").trim(),
+            constraint: compiledDialogueOrdinal,
+          }),
+          input.signal,
+        );
+      if (admission !== undefined) {
+        // A typed port remains external. Validate only its fixed receipt;
+        // model output cannot supply an ordinal, artifact, source, or proof.
+        if (
+          admission.admissionVersion !==
+            input.supportSelector?.dialogueOrdinalAdmission?.admissionVersion ||
+          !/^[a-f0-9]{64}$/u.test(admission.admissionRevision) ||
+          (admission.classification !== "artifact_itself" &&
+            admission.classification !== "artifact_internal_content")
+        ) {
+          throw namedError("MemoryDialogueOrdinalAdmissionReceiptInvalid");
+        }
+        dialogueOrdinalAdmission = admission;
+      }
+    } catch (error) {
+      if (input.signal.aborted || isAbort(error)) throw abortError();
+      // Failed/rejected admission is deliberately a byte-compatible old path.
+      dialogueOrdinalAdmission = undefined;
+    }
+  }
+  const dialogueOrdinal =
+    dialogueOrdinalAdmission === undefined
+      ? undefined
+      : compiledDialogueOrdinal;
+  const ordinalTargetRequirementId = dialogueOrdinal
+    ? ordinalTargetLeaf?.requirementId
+    : undefined;
   // Bind every leaf to the immutable original query and trusted cutoff before
   // any retrieval channel sees it. Legacy custom planners are upgraded
   // ephemerally from their existing temporalMode field.
@@ -427,6 +521,7 @@ export async function resolveEvidencePass(input: {
   const temporalFrontierRepairActive =
     input.temporalRoundFrontier === true && input.sourceLock !== undefined;
   const localEligible =
+    dialogueOrdinal !== undefined ||
     planScopedLocalization ||
     (sourceLocalExecutionRoute.executor === "per_leaf_v25" &&
       effectiveLeafEligibility.some((eligibility) => eligibility.eligible));
@@ -474,13 +569,23 @@ export async function resolveEvidencePass(input: {
           maxEvidencePerSource: input.maxEvidencePerSource,
         }).sources.map((source) => source.sourceId)
       : Object.freeze([]);
-  const sourceLocalLockedIds = input.sourceLock
+  const unlockedSourceLocalIds = input.sourceLock
     ? input.sourceLock.lockedSourceIds
     : localEligible
       ? Object.freeze([
           ...new Set([...sourceIds, ...dialogueCandidateSourceIds]),
         ])
       : sourceIds;
+  // A complete ordinal population has a hard proof cap. Slicing a wider lock
+  // would silently change N, so it remains unavailable instead.
+  const sourceLocalLockedIds = unlockedSourceLocalIds;
+  // Do not suppress ordinary leaves merely because the ordinal proof cap is
+  // exceeded. The ordinal leaf becomes unknown below, while the untouched
+  // leaves retain their normal source-local execution.
+  const ordinalPopulationLockedSourceIds =
+    dialogueOrdinal !== undefined && sourceLocalLockedIds.length <= 8
+      ? sourceLocalLockedIds
+      : Object.freeze([]);
   const baselineRequirementHits = input.requirements.map((requirement, index) =>
     mergeEvidenceHits(
       input.sourceLock
@@ -511,6 +616,13 @@ export async function resolveEvidencePass(input: {
   >();
   let dialogueVerifierVersion: string | null = null;
   let dialogueVerificationRevision: string | null = null;
+  const dialogueOrdinalCohortsByRequirement = new Map<
+    string,
+    readonly Readonly<{
+      result: MemorySourceLocalEvidenceResultV1;
+      hits: readonly MemorySourceLocalEvidenceHitV1[];
+    }>[]
+  >();
   const sourceLocalExecutionTrace = Object.freeze({
     executor: sourceLocalExecutionRoute.executor,
     executionRouteRevision: sourceLocalExecutionRoute.routeRevision,
@@ -580,7 +692,15 @@ export async function resolveEvidencePass(input: {
         requirement,
       ] of locatorExecutionRequirements.entries()) {
         const eligibility = effectiveLeafEligibility[requirementIndex];
-        if (!planScopedLocalization && !eligibility?.eligible) continue;
+        const isOrdinalTarget =
+          dialogueOrdinal !== undefined &&
+          requirement.requirementId === ordinalTargetRequirementId;
+        if (
+          !planScopedLocalization &&
+          !eligibility?.eligible &&
+          !isOrdinalTarget
+        )
+          continue;
         if (!eligibility)
           throw namedError("MemorySourceLocalEligibilityMissing");
         let temporalFrontierAttempted = false;
@@ -663,6 +783,23 @@ export async function resolveEvidencePass(input: {
                 ),
               })
             : materializationBudget;
+          const ordinalPopulationBudget = isOrdinalTarget
+            ? Object.freeze({
+                ...locatorBudget,
+                // The adapter must return the entire bounded population, or
+                // reject it. This is a capacity for proof, not a ranked cap.
+                maxAnchors: 8,
+                maxAnchorsPerSource: 8,
+                maxCandidatesPerChannel: Math.max(
+                  8,
+                  locatorBudget.maxCandidatesPerChannel,
+                ),
+                // Ordinal populations are proof-bounded. A larger render cap
+                // is not a best-effort improvement: it invalidates the v2
+                // cohort contract and must never reach the bridge.
+                maxChars: 16_384,
+              })
+            : locatorBudget;
           const baselineEvidenceRefs = temporalFrontierAttempted
             ? Object.freeze([
                 ...new Set(
@@ -695,13 +832,15 @@ export async function resolveEvidencePass(input: {
                   }),
                 }
               : {}),
-            ...(certifiedAssistantDialogueCandidate ||
+            ...(isOrdinalTarget ||
+            certifiedAssistantDialogueCandidate ||
             materializationAuthorization?.mode === "late_binding" ||
             materializationAuthorization?.mode === "shared_envelope" ||
             (materializationAuthorization?.mode === "assistant_leaf" &&
               requirement.dependencyRelation !== undefined)
               ? { assistantDialogueCandidate: true }
               : {}),
+            ...(isOrdinalTarget ? { dialogueOrdinal } : {}),
             ...(respondingAssistantMaterializationEligible
               ? {
                   respondingAssistantMaterialization: Object.freeze({
@@ -720,29 +859,124 @@ export async function resolveEvidencePass(input: {
             ...(input.evidenceTimeUpperBound === undefined
               ? {}
               : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
-            budget: locatorBudget,
+            budget: ordinalPopulationBudget,
           });
-          const locatedResult = await input.sourceLocalLocator.locate(
-            request,
-            input.signal,
-          );
-          validateMemorySourceLocalEvidenceResultV1({
-            locator: input.sourceLocalLocator,
-            request,
-            result: locatedResult,
-          });
-          const result = await hydrateMemorySourceLocalEvidenceResultV1({
-            hydrator: input.sourceLocalHydrator,
-            request,
-            result: locatedResult,
-            signal: input.signal,
-          });
-          const hits = validateMemorySourceLocalEvidenceResultV1({
-            locator: input.sourceLocalLocator,
-            request,
-            result,
-          });
+          // A typed ordinal is never one mixed source aperture. Fan out the
+          // immutable full lock into independent active-source cohorts.
+          const {
+            respondingAssistantMaterialization: _ordinalMaterialization,
+            ...ordinalRequest
+          } = request;
+          const cohortRequests = isOrdinalTarget
+            ? ordinalPopulationLockedSourceIds.map((activeSourceId) =>
+                Object.freeze({
+                  ...ordinalRequest,
+                  lockedSourceIds: Object.freeze([activeSourceId]),
+                  dialogueOrdinalFullLockedSourceIds: Object.freeze([
+                    ...ordinalPopulationLockedSourceIds,
+                  ]),
+                }),
+              )
+            : [request];
+          const materialized = [] as Array<
+            Readonly<{
+              request: typeof request;
+              result: MemorySourceLocalEvidenceResultV1;
+              hits: readonly MemorySourceLocalEvidenceHitV1[];
+            }>
+          >;
+          for (const cohortRequest of cohortRequests) {
+            try {
+              const locatedResult = await input.sourceLocalLocator.locate(
+                cohortRequest,
+                input.signal,
+              );
+              validateMemorySourceLocalEvidenceResultV1({
+                locator: input.sourceLocalLocator,
+                request: cohortRequest,
+                result: locatedResult,
+              });
+              const hydrated = await hydrateMemorySourceLocalEvidenceResultV1({
+                hydrator: input.sourceLocalHydrator,
+                request: cohortRequest,
+                result: locatedResult,
+                signal: input.signal,
+              });
+              const cohortHits = validateMemorySourceLocalEvidenceResultV1({
+                locator: input.sourceLocalLocator,
+                request: cohortRequest,
+                result: hydrated,
+              });
+              materialized.push(
+                Object.freeze({
+                  request: cohortRequest as typeof request,
+                  result: hydrated,
+                  hits: cohortHits,
+                }),
+              );
+            } catch (cohortError) {
+              if (input.signal.aborted || isAbort(cohortError))
+                throw abortError();
+              // An ordinal source that cannot form an atomic cohort remains
+              // unknown for the later global reducer; it never falls back to
+              // a mixed ranked candidate set.
+              if (!isOrdinalTarget) throw cohortError;
+            }
+          }
+          if (materialized.length === 0 && !isOrdinalTarget) {
+            throw namedError("MemoryDialogueOrdinalCohortUnavailable");
+          }
+          if (materialized.length === 0) continue;
+          const firstMaterialized = materialized[0];
+          if (!firstMaterialized) {
+            throw namedError("MemoryDialogueOrdinalCohortUnavailable");
+          }
+          const result =
+            materialized.length === 1
+              ? firstMaterialized.result
+              : Object.freeze({
+                  ...firstMaterialized.result,
+                  locatorRevision: hashCanonicalJsonV1({
+                    schemaVersion:
+                      "paw.memory-dialogue-ordinal-cohort-fanout.v1",
+                    revisions: materialized.map(
+                      (item) => item.result.locatorRevision,
+                    ),
+                  } as never),
+                  hits: Object.freeze(
+                    materialized.flatMap((item) => item.result.hits),
+                  ),
+                  dialogueOrdinalCohort: undefined,
+                  telemetry: Object.freeze({
+                    ...firstMaterialized.result.telemetry,
+                    anchorCount: materialized.reduce(
+                      (total, item) => total + item.hits.length,
+                      0,
+                    ),
+                    includedTurnCount: materialized.reduce(
+                      (total, item) =>
+                        total + item.result.telemetry.includedTurnCount,
+                      0,
+                    ),
+                    renderedChars: materialized.reduce(
+                      (total, item) =>
+                        total + item.result.telemetry.renderedChars,
+                      0,
+                    ),
+                  }),
+                });
+          const hits = Object.freeze(materialized.flatMap((item) => item.hits));
           located[requirementIndex] = Object.freeze({ result, hits });
+          if (isOrdinalTarget) {
+            dialogueOrdinalCohortsByRequirement.set(
+              requirement.requirementId,
+              Object.freeze(
+                materialized.map((item) =>
+                  Object.freeze({ result: item.result, hits: item.hits }),
+                ),
+              ),
+            );
+          }
           temporalFrontierSucceededByRequirement[requirementIndex] =
             result.temporalFrontier !== undefined;
           for (const evidenceRef of result.temporalFrontier
@@ -981,6 +1215,7 @@ export async function resolveEvidencePass(input: {
       ]),
     );
     const allowContextOnlyCandidates =
+      dialogueOrdinal !== undefined ||
       assistantLeafPresent ||
       input.intent.roleConstraint !== "user" ||
       evidenceGroundedRoleBindingEligible ||
@@ -988,7 +1223,7 @@ export async function resolveEvidencePass(input: {
     const frontierIntroduced = temporalFrontierRefsByRequirement.some(
       (refs) => refs.size > 0,
     );
-    let candidates = frontierIntroduced
+    const ordinaryCandidates = frontierIntroduced
       ? selectSupportCandidatesPreservingBaselineV1({
           baselineRequirementHits: baselineSupportHits,
           augmentedRequirementHits: requirementHits,
@@ -1002,7 +1237,24 @@ export async function resolveEvidencePass(input: {
           allowContextOnlyCandidates,
           32,
         );
-    if (candidates.length > 0) {
+    // A host settlement sees an exact cohort, never a top-k approximation.
+    // Ordinary leaves retain the pre-existing ranked candidate path.
+    const ordinalCohortCandidates = dialogueOrdinal
+      ? Object.freeze(
+          [...dialogueOrdinalCohortsByRequirement.values()]
+            .flat()
+            .flatMap((cohort) => cohort.hits)
+            .filter((hit) => hit.sourceKind === "assistant_output"),
+        )
+      : Object.freeze([]);
+    let candidates = Object.freeze([
+      ...new Map(
+        [...ordinaryCandidates, ...ordinalCohortCandidates].map(
+          (hit) => [hit.evidenceRef, hit] as const,
+        ),
+      ).values(),
+    ]);
+    if (candidates.length > 0 || dialogueOrdinal !== undefined) {
       const candidateEvidenceRefs = new Set(
         candidates.map((candidate) => candidate.evidenceRef),
       );
@@ -1011,17 +1263,20 @@ export async function resolveEvidencePass(input: {
           Object.freeze({
             requirementId: requirement.requirementId,
             evidenceRefs: Object.freeze(
-              (requirementHits[index] ?? [])
-                .map((hit) => hit.evidenceRef)
-                .filter((evidenceRef) =>
-                  candidateEvidenceRefs.has(evidenceRef),
-                ),
+              requirement.requirementId === ordinalTargetRequirementId
+                ? ordinalCohortCandidates.map((hit) => hit.evidenceRef)
+                : (requirementHits[index] ?? [])
+                    .map((hit) => hit.evidenceRef)
+                    .filter((evidenceRef) =>
+                      candidateEvidenceRefs.has(evidenceRef),
+                    ),
             ),
           }),
         ),
       );
       const verifierTargets =
-        (assistantLeafPresent ||
+        (dialogueOrdinal !== undefined ||
+          assistantLeafPresent ||
           evidenceGroundedRoleBindingEligible ||
           input.intent.roleConstraint === "assistant" ||
           input.intent.roleConstraint === "any" ||
@@ -1031,6 +1286,12 @@ export async function resolveEvidencePass(input: {
               candidates
                 .filter(
                   (candidate) =>
+                    (dialogueOrdinal === undefined ||
+                      ordinalCohortCandidates.some(
+                        (ordinalCandidate) =>
+                          ordinalCandidate.evidenceRef ===
+                          candidate.evidenceRef,
+                      )) &&
                     sourceLocalLockedIds.includes(candidate.sourceId) &&
                     (!evidenceGroundedRoleBindingEligible ||
                       localEvidenceRefs.has(candidate.evidenceRef)) &&
@@ -1047,26 +1308,62 @@ export async function resolveEvidencePass(input: {
           : Object.freeze([]);
       if (verifierTargets.length > 0 && input.dialoguePredecessorVerifier) {
         try {
-          const request = Object.freeze({
-            targets: verifierTargets,
-            lockedSourceIds: Object.freeze([...sourceLocalLockedIds]),
-            ...(input.evidenceTimeUpperBound === undefined
-              ? {}
-              : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
-          });
-          const verificationResult =
-            await input.dialoguePredecessorVerifier.verify(
+          // The ordinary verifier remains a single, capped (32) request. A
+          // typed ordinal population may cover up to eight outputs from each
+          // of eight sources, so it is verified as deterministic, source
+          // boundary-preserving batches instead of widening the generic port.
+          const targetBatches = dialogueOrdinal
+            ? partitionOrdinalPredecessorTargetsV1(verifierTargets)
+            : verifierTargets.length <= 32
+              ? Object.freeze([verifierTargets])
+              : (() => {
+                  throw namedError(
+                    "MemoryDialoguePredecessorVerificationCapped",
+                  );
+                })();
+          const verificationBatches: Array<{
+            readonly request: MemoryDialoguePredecessorVerificationRequestV1;
+            readonly result: Awaited<
+              ReturnType<MemoryDialoguePredecessorVerifierV1["verify"]>
+            >;
+            readonly proofs: readonly MemoryDialoguePredecessorProofV1[];
+          }> = [];
+          for (const targets of targetBatches) {
+            const request = Object.freeze({
+              targets,
+              lockedSourceIds: Object.freeze(
+                dialogueOrdinal
+                  ? [...new Set(targets.map((target) => target.sourceId))]
+                  : [...sourceLocalLockedIds],
+              ),
+              ...(input.evidenceTimeUpperBound === undefined
+                ? {}
+                : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
+            });
+            const result = await input.dialoguePredecessorVerifier.verify(
               request,
               input.signal,
             );
-          const verifiedProofs =
-            validateMemoryDialoguePredecessorVerificationV1({
+            const proofs = validateMemoryDialoguePredecessorVerificationV1({
               verifier: input.dialoguePredecessorVerifier,
               request,
-              result: verificationResult,
+              result,
               evidenceRefBelongsToSource:
                 input.index.evidenceRefBelongsToSource,
             });
+            verificationBatches.push(
+              Object.freeze({ request, result, proofs }),
+            );
+          }
+          const verifiedProofs = Object.freeze(
+            verificationBatches.flatMap((batch) => batch.proofs),
+          );
+          if (
+            new Set(verifiedProofs.map((proof) => proof.assistant.evidenceRef))
+              .size !== verifiedProofs.length
+          ) {
+            throw namedError("MemoryDialoguePredecessorBatchInvalid");
+          }
           certifiedAssistantDialogueRefs = new Set([
             ...certifiedAssistantDialogueRefs,
             ...verifiedProofs.map((proof) => proof.assistant.evidenceRef),
@@ -1080,9 +1377,17 @@ export async function resolveEvidencePass(input: {
           certifiedDialogueProofsByAssistant = new Map(
             verifiedProofs.map((proof) => [proof.assistant.evidenceRef, proof]),
           );
-          dialogueVerifierVersion = verificationResult.verifierVersion;
-          dialogueVerificationRevision =
-            verificationResult.verificationRevision;
+          dialogueVerifierVersion =
+            input.dialoguePredecessorVerifier.verifierVersion;
+          dialogueVerificationRevision = hashCanonicalJsonV1({
+            verifierVersion: dialogueVerifierVersion,
+            batches: verificationBatches.map((batch) => ({
+              targetRefs: batch.request.targets.map(
+                (target) => target.evidenceRef,
+              ),
+              verificationRevision: batch.result.verificationRevision,
+            })),
+          } as never);
           const proofByAssistantRef = new Map(
             verifiedProofs.map((proof) => [proof.assistant.evidenceRef, proof]),
           );
@@ -1182,41 +1487,182 @@ export async function resolveEvidencePass(input: {
         );
       }
       try {
-        const settlement = await settleMemoryEvidenceSupportSelectionV1({
-          selector: input.supportSelector,
-          query: input.query,
-          intent: input.intent,
-          requirements: executionRequirements,
-          candidates,
-          candidateScopes,
-          requirementHits,
-          roleConstraint: input.intent.roleConstraint,
-          certifiedSharedDialogueRefs:
-            structurallyBoundCertifiedAssistantDialogueRefs,
-          certifiedDialoguePredecessorsByAssistant,
-          certifiedAssistantDialogueCandidate:
-            certifiedAssistantDialogueCandidate,
-          selectorCertifiedAssistantDialogueRefs:
-            (assistantLeafPresent ||
-              evidenceGroundedRoleBindingEligible ||
-              input.intent.roleConstraint === "assistant" ||
-              input.intent.roleConstraint === "any" ||
-              certifiedAssistantDialogueCandidate) &&
-            selectorCertifiedAssistantDialogueRefs.length > 0
-              ? selectorCertifiedAssistantDialogueRefs
-              : Object.freeze([]),
-          temporalConstraints: boundTemporalConstraints,
-          lockedSourceIds: sourceLocalLockedIds,
-          originRevision: input.queryAnswerOrigin.originRevision,
-          committedAttempt:
-            localEvidenceRefs.size > 0 ? "augmented" : "baseline",
-          attemptCount: 1,
-          signal: input.signal,
-        });
+        const ordinaryRequirements = dialogueOrdinal
+          ? executionRequirements.filter(
+              (requirement) =>
+                requirement.requirementId !== ordinalTargetRequirementId,
+            )
+          : executionRequirements;
+        const ordinaryRequirementIds = new Set(
+          ordinaryRequirements.map((requirement) => requirement.requirementId),
+        );
+        const ordinaryCandidateScopes = Object.freeze(
+          candidateScopes.filter((scope) =>
+            ordinaryRequirementIds.has(scope.requirementId),
+          ),
+        );
+        const ordinaryCandidateRefs = new Set(
+          ordinaryCandidateScopes.flatMap((scope) => scope.evidenceRefs),
+        );
+        const ordinaryCandidates = Object.freeze(
+          candidates.filter((candidate) =>
+            ordinaryCandidateRefs.has(candidate.evidenceRef),
+          ),
+        );
+        const ordinaryRequirementHits = Object.freeze(
+          input.requirements.flatMap((requirement, index) =>
+            ordinaryRequirementIds.has(requirement.requirementId)
+              ? [requirementHits[index] ?? Object.freeze([])]
+              : [],
+          ),
+        );
+        const ordinaryTemporalConstraints = Object.freeze(
+          input.requirements.flatMap((requirement, index) =>
+            ordinaryRequirementIds.has(requirement.requirementId)
+              ? [
+                  boundTemporalConstraints[
+                    index
+                  ] as MemoryEvidenceBoundTemporalConstraintV1,
+                ]
+              : [],
+          ),
+        );
+        const ordinarySettlement =
+          dialogueOrdinal !== undefined && ordinaryRequirements.length > 0
+            ? await settleMemoryEvidenceSupportSelectionV1({
+                selector: input.supportSelector,
+                query: input.query,
+                intent: input.intent,
+                requirements: ordinaryRequirements,
+                candidates: ordinaryCandidates,
+                candidateScopes: ordinaryCandidateScopes,
+                requirementHits: ordinaryRequirementHits,
+                roleConstraint: input.intent.roleConstraint,
+                certifiedSharedDialogueRefs:
+                  structurallyBoundCertifiedAssistantDialogueRefs,
+                certifiedDialoguePredecessorsByAssistant,
+                certifiedAssistantDialogueCandidate,
+                selectorCertifiedAssistantDialogueRefs,
+                temporalConstraints: ordinaryTemporalConstraints,
+                lockedSourceIds: sourceLocalLockedIds,
+                originRevision: input.queryAnswerOrigin.originRevision,
+                committedAttempt:
+                  localEvidenceRefs.size > 0 ? "augmented" : "baseline",
+                attemptCount: 1,
+                signal: input.signal,
+              })
+            : undefined;
+        const ordinalSettlement = dialogueOrdinal
+          ? await settleMemoryDialogueOrdinalTransactionV1({
+              selector: input.supportSelector,
+              query: input.query,
+              intent: input.intent,
+              requirements: executionRequirements.filter(
+                (requirement) =>
+                  requirement.requirementId === ordinalTargetRequirementId,
+              ),
+              candidates,
+              candidateScopes: candidateScopes.filter(
+                (scope) => scope.requirementId === ordinalTargetRequirementId,
+              ),
+              temporalConstraints:
+                ordinaryTemporalConstraints.length ===
+                boundTemporalConstraints.length
+                  ? boundTemporalConstraints
+                  : Object.freeze(
+                      input.requirements.flatMap((requirement, index) =>
+                        requirement.requirementId === ordinalTargetRequirementId
+                          ? [
+                              boundTemporalConstraints[
+                                index
+                              ] as MemoryEvidenceBoundTemporalConstraintV1,
+                            ]
+                          : [],
+                      ),
+                    ),
+              lockedSourceIds: ordinalPopulationLockedSourceIds,
+              originRevision: input.queryAnswerOrigin.originRevision,
+              cohortsByRequirement: dialogueOrdinalCohortsByRequirement,
+              constraint: dialogueOrdinal,
+              admission:
+                dialogueOrdinalAdmission as MemoryDialogueOrdinalAdmissionReceiptV1,
+              proofsByAssistant: certifiedDialogueProofsByAssistant,
+              committedAttempt:
+                localEvidenceRefs.size > 0 ? "augmented" : "baseline",
+              signal: input.signal,
+            })
+          : undefined;
+        const settlement =
+          dialogueOrdinal && ordinalSettlement
+            ? ordinarySettlement
+              ? mergeMemoryDialogueOrdinalSelectionV1({
+                  query: input.query,
+                  intent: input.intent,
+                  requirements: executionRequirements,
+                  temporalConstraints: boundTemporalConstraints,
+                  candidateScopes,
+                  lockedSourceIds: sourceLocalLockedIds,
+                  originRevision: input.queryAnswerOrigin.originRevision,
+                  ordinal: ordinalSettlement,
+                  ordinary: ordinarySettlement,
+                  committedAttempt:
+                    localEvidenceRefs.size > 0 ? "augmented" : "baseline",
+                })
+              : ordinalSettlement
+            : await settleMemoryEvidenceSupportSelectionV1({
+                selector: input.supportSelector,
+                query: input.query,
+                intent: input.intent,
+                requirements: executionRequirements,
+                candidates,
+                candidateScopes,
+                requirementHits,
+                roleConstraint: input.intent.roleConstraint,
+                certifiedSharedDialogueRefs:
+                  structurallyBoundCertifiedAssistantDialogueRefs,
+                certifiedDialoguePredecessorsByAssistant,
+                certifiedAssistantDialogueCandidate:
+                  certifiedAssistantDialogueCandidate,
+                selectorCertifiedAssistantDialogueRefs:
+                  (assistantLeafPresent ||
+                    evidenceGroundedRoleBindingEligible ||
+                    input.intent.roleConstraint === "assistant" ||
+                    input.intent.roleConstraint === "any" ||
+                    certifiedAssistantDialogueCandidate) &&
+                  selectorCertifiedAssistantDialogueRefs.length > 0
+                    ? selectorCertifiedAssistantDialogueRefs
+                    : Object.freeze([]),
+                temporalConstraints: boundTemporalConstraints,
+                lockedSourceIds: sourceLocalLockedIds,
+                originRevision: input.queryAnswerOrigin.originRevision,
+                committedAttempt:
+                  localEvidenceRefs.size > 0 ? "augmented" : "baseline",
+                attemptCount: 1,
+                signal: input.signal,
+              });
         supportAssessments = settlement.assessments;
         selectedRefsByRequirement = settlement.selectedRefsByRequirement;
         supportSelectionRevision = settlement.selectionRevision;
         selectorExecutionSnapshot = settlement.selectorExecutionSnapshot;
+        if (dialogueOrdinal) {
+          const winner = supportAssessments.find(
+            (assessment) =>
+              assessment.requirementId === ordinalTargetRequirementId,
+          )?.supportingEvidenceRefs[0];
+          const winnerPredecessor = winner
+            ? certifiedDialoguePredecessorsByAssistant.get(winner)
+            : undefined;
+          const winnerProof = winner
+            ? certifiedDialogueProofsByAssistant.get(winner)
+            : undefined;
+          certifiedAssistantDialogueRefs = new Set(winner ? [winner] : []);
+          certifiedDialoguePredecessorsByAssistant = new Map(
+            winner && winnerPredecessor ? [[winner, winnerPredecessor]] : [],
+          );
+          certifiedDialogueProofsByAssistant = new Map(
+            winner && winnerProof ? [[winner, winnerProof]] : [],
+          );
+        }
         supportSelectorStatus =
           settlement.failedGroupCount > 0 ? "partial" : "completed";
         sourceLocalization = Object.freeze({
@@ -1238,6 +1684,7 @@ export async function resolveEvidencePass(input: {
       } catch (error) {
         if (input.signal.aborted || isAbort(error)) throw abortError();
         const baselineRetryEligible =
+          dialogueOrdinal === undefined &&
           sourceLocalExecutionRoute.reasonCode ===
             "recommendation_operand_materialization" &&
           localEvidenceRefs.size > 0 &&
@@ -1443,22 +1890,36 @@ export async function resolveEvidencePass(input: {
       new Set(["completed", "partial"]).has(supportSelectorStatus)) ||
     (certifiedAssistantDialogueCandidate &&
       new Set(["completed", "partial"]).has(supportSelectorStatus));
-  const allowFallbackContextOnly = input.intent.roleConstraint === "assistant";
+  const allowFallbackContextOnly =
+    dialogueOrdinal === undefined &&
+    input.intent.roleConstraint === "assistant";
   // Deterministic support floor: selector abstention (empty binding, failed
   // group, or selector failure) must not collapse a requirement's packet to
   // zero evidence while locked-source candidates exist. Exclusion requires a
   // positive judgment; absence of one downgrades to code-owned ranking.
   let supportFloorAppliedCount = 0;
-  if (selectedRefsByRequirement !== undefined) {
+  const floorRequirementIndexes = executionRequirements
+    .map((requirement, index) =>
+      requirement.requirementId === ordinalTargetRequirementId ? -1 : index,
+    )
+    .filter((index) => index >= 0);
+  if (
+    selectedRefsByRequirement !== undefined &&
+    floorRequirementIndexes.length > 0
+  ) {
     const floor = applyMemoryDeterministicSupportFloorV1({
       selectedRefsByRequirement,
-      requirementIds: executionRequirements.map(
-        (requirement) => requirement.requirementId,
+      requirementIds: floorRequirementIndexes.map(
+        (index) => executionRequirements[index]?.requirementId ?? "",
       ),
-      requirementHits,
+      requirementHits: floorRequirementIndexes.map(
+        (index) => requirementHits[index] ?? Object.freeze([]),
+      ),
       lockedSourceIds: sourceLocalLockedIds,
       maxFloorHitsPerRequirement: 2,
-      excludedEvidenceRefs: executionRequirements.map((requirement, index) => {
+      excludedEvidenceRefs: floorRequirementIndexes.map((index) => {
+        const requirement = executionRequirements[index];
+        if (!requirement) return new Set<string>();
         const assessment = supportAssessments.find(
           (item) => item.requirementId === requirement.requirementId,
         );
@@ -1547,16 +2008,18 @@ export async function resolveEvidencePass(input: {
       ...assessment.unknownEvidenceRefs,
     ]),
   );
-  const packetFallbackHits = mergeEvidenceHits(
-    requirementHits
-      .flat()
-      .filter(
-        (hit) =>
-          nonSupportingRefs.has(hit.evidenceRef) &&
-          !localEvidenceRefs.has(hit.evidenceRef),
-      ),
-    prioritizedPrimary.hits,
-  ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));
+  const packetFallbackHits = dialogueOrdinal
+    ? Object.freeze([])
+    : mergeEvidenceHits(
+        requirementHits
+          .flat()
+          .filter(
+            (hit) =>
+              nonSupportingRefs.has(hit.evidenceRef) &&
+              !localEvidenceRefs.has(hit.evidenceRef),
+          ),
+        prioritizedPrimary.hits,
+      ).filter((hit) => !input.excludedEvidenceRefs?.has(hit.evidenceRef));
   const packetSources =
     executionRequirements.length > 0
       ? buildPlannedEvidencePacketSources({
@@ -1566,9 +2029,10 @@ export async function resolveEvidencePass(input: {
           selectedSourceIds: sourceIds,
           allowContextOnly: allowFallbackContextOnly,
           includeFallback:
-            input.intent.temporalMode !== "latest" ||
-            notebook.coverage.some((item) => item.status !== "covered") ||
-            nonSupportingRefs.size > 0,
+            dialogueOrdinal === undefined &&
+            (input.intent.temporalMode !== "latest" ||
+              notebook.coverage.some((item) => item.status !== "covered") ||
+              nonSupportingRefs.size > 0),
           fallbackAnswerRole: "candidate",
           maxFallbackChars: input.maxNotebookChars,
           maxFallbackHitsPerSource: 1,
@@ -1600,6 +2064,12 @@ export async function resolveEvidencePass(input: {
       verifierVersion: dialogueVerifierVersion,
       verificationRevision: dialogueVerificationRevision,
       originRevision: input.queryAnswerOrigin.originRevision,
+      ...(dialogueOrdinalAdmission === undefined
+        ? {}
+        : {
+            ordinalAdmissionRevision:
+              dialogueOrdinalAdmission.admissionRevision,
+          }),
       ...(input.evidenceTimeUpperBound === undefined
         ? {}
         : { evidenceTimeUpperBound: input.evidenceTimeUpperBound }),
@@ -1624,6 +2094,569 @@ export async function resolveEvidencePass(input: {
     requirementEvidence,
     packetSources,
     dialogueCertificateRegistry,
+  });
+}
+
+/**
+ * Ordinal dialogue settlement is deliberately separate from semantic triage.
+ * It consumes one immutable, complete cohort per source and gives authority
+ * to exactly one verifier-backed output only after the global reduction.
+ */
+async function settleMemoryDialogueOrdinalTransactionV1(input: {
+  readonly selector: MemoryEvidenceSupportSelectorV1;
+  readonly query: string;
+  readonly intent: MemoryEvidenceQueryIntentV3;
+  readonly requirements: readonly MemoryEvidenceRequirementV3[];
+  readonly candidates: readonly MemoryEvidenceNotebookHitV1[];
+  readonly candidateScopes: readonly Readonly<{
+    requirementId: string;
+    evidenceRefs: readonly string[];
+  }>[];
+  readonly temporalConstraints: readonly MemoryEvidenceBoundTemporalConstraintV1[];
+  readonly lockedSourceIds: readonly string[];
+  readonly originRevision: string;
+  readonly cohortsByRequirement: ReadonlyMap<
+    string,
+    readonly Readonly<{
+      result: MemorySourceLocalEvidenceResultV1;
+      hits: readonly MemorySourceLocalEvidenceHitV1[];
+    }>[]
+  >;
+  readonly constraint: MemoryDialogueOrdinalConstraintV1;
+  readonly admission: MemoryDialogueOrdinalAdmissionReceiptV1;
+  readonly proofsByAssistant: ReadonlyMap<
+    string,
+    MemoryDialoguePredecessorProofV1
+  >;
+  readonly committedAttempt: "augmented" | "baseline";
+  readonly signal: AbortSignal;
+}): Promise<
+  Readonly<{
+    selectionRevision: string;
+    assessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
+    selectedRefsByRequirement: ReadonlyMap<string, ReadonlySet<string>>;
+    groupCount: number;
+    committedGroupCount: number;
+    failedGroupCount: number;
+    selectorExecutionSnapshot: MemorySelectorExecutionSnapshotV1;
+  }>
+> {
+  const eligible = input.requirements.filter(
+    (requirement) =>
+      requirement.roleConstraint === "assistant" ||
+      requirement.roleCandidates?.includes("assistant") === true,
+  );
+  // The compiler binds an assistant-answer leaf. If planning produces zero or
+  // many possible leaves, declining is safer than broadcasting a winner.
+  const leaf = eligible.length === 1 ? eligible[0] : undefined;
+  const empty = (requirementId: string): MemoryEvidenceTriageAssessmentV1 =>
+    Object.freeze({
+      requirementId,
+      supportingEvidenceRefs: Object.freeze([]),
+      contradictingEvidenceRefs: Object.freeze([]),
+      unknownEvidenceRefs: Object.freeze([]),
+    });
+  const candidateByRef = new Map(
+    input.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
+  );
+  const cohorts = leaf
+    ? (input.cohortsByRequirement.get(leaf.requirementId) ?? Object.freeze([]))
+    : Object.freeze([]);
+  const bySource = new Map<string, (typeof cohorts)[number]>();
+  for (const item of cohorts) {
+    const cohort = item.result.dialogueOrdinalCohort;
+    if (!cohort || bySource.has(cohort.activeSourceId)) continue;
+    bySource.set(cohort.activeSourceId, item);
+  }
+  const settlements = await mapWithConcurrencyV1(
+    input.lockedSourceIds,
+    2,
+    async (sourceId): Promise<MemoryDialogueOrdinalSourceSettlementV1> => {
+      const materialized = bySource.get(sourceId);
+      const cohort = materialized?.result.dialogueOrdinalCohort;
+      if (
+        !leaf ||
+        !cohort ||
+        cohort.activeSourceId !== sourceId ||
+        cohort.fullLockedSourceIds.length !== input.lockedSourceIds.length ||
+        cohort.fullLockedSourceIds.some(
+          (id, index) => id !== input.lockedSourceIds[index],
+        )
+      ) {
+        return Object.freeze({ status: "unknown", sourceId, knownCount: 0 });
+      }
+      try {
+        validateMemoryDialogueOrdinalCohortV1({
+          constraint: input.constraint,
+          cohort,
+        });
+        const outputs = cohort.items.map((item) => {
+          const proof = input.proofsByAssistant.get(item.evidenceRef);
+          const candidate = candidateByRef.get(item.evidenceRef);
+          if (
+            !proof ||
+            !candidate ||
+            candidate.sourceId !== sourceId ||
+            candidate.sourceKind !== "assistant_output" ||
+            proof.assistant.evidenceRef !== item.evidenceRef ||
+            proof.assistant.turnOrder !== item.turnOrder ||
+            proof.precedingUser.evidenceRef !== item.predecessorEvidenceRef ||
+            proof.precedingUser.turnOrder !== item.predecessorTurnOrder ||
+            proof.assistant.contentHash !== item.contentHash ||
+            proof.precedingUser.contentHash !== item.predecessorContentHash ||
+            hashTextV1(proof.assistant.content) !== item.contentHash ||
+            hashTextV1(proof.precedingUser.content) !==
+              item.predecessorContentHash
+          ) {
+            throw namedError("MemoryDialogueOrdinalCohortProofInvalid");
+          }
+          return Object.freeze({
+            evidenceRef: item.evidenceRef,
+            assistantOutput: proof.assistant.content,
+            predecessorUserPrompt: proof.precedingUser.content,
+          });
+        });
+        // Admission happens in the host before calling a potentially remote
+        // selector. An oversized raw pair population is one unknown source,
+        // never a shortened or split model prompt.
+        compileMemoryDialogueOrdinalSelectorBodyV1({
+          constraint: input.constraint,
+          cohort,
+          query: input.query,
+          outputs,
+        });
+        const occurrences = input.selector.dialogueOrdinalSelector
+          ? await input.selector.dialogueOrdinalSelector.selectCohort(
+              {
+                constraint: input.constraint,
+                cohort,
+                query: input.query,
+                outputs,
+              },
+              input.signal,
+            )
+          : (() => {
+              throw namedError("MemoryDialogueOrdinalSelectorMissing");
+            })();
+        return settleMemoryDialogueOrdinalSourceV1({
+          constraint: input.constraint,
+          cohort,
+          occurrences,
+        });
+      } catch (error) {
+        if (input.signal.aborted || isAbort(error)) throw abortError();
+        return Object.freeze({
+          status: "unknown",
+          sourceId,
+          knownCount: 0,
+          ...(error instanceof Error &&
+          error.name === "MemoryDialogueOrdinalSelectorBodyTooLarge"
+            ? { failureCode: "raw_pair_body_too_large" as const }
+            : {}),
+        });
+      }
+    },
+  );
+  const global = reduceMemoryDialogueOrdinalSourcesV1(settlements);
+  const selected =
+    global.status === "winner" && leaf ? global.evidenceRef : undefined;
+  const rawAssessments = leaf
+    ? Object.freeze([
+        selected
+          ? Object.freeze({
+              requirementId: leaf.requirementId,
+              supportingEvidenceRefs: Object.freeze([selected]),
+              contradictingEvidenceRefs: Object.freeze([]),
+              unknownEvidenceRefs: Object.freeze([]),
+            })
+          : empty(leaf.requirementId),
+      ])
+    : Object.freeze([]);
+  const authorityAssessments =
+    selected && leaf
+      ? enforceSelectedEvidenceAuthority({
+          assessments: rawAssessments,
+          requirements: Object.freeze([leaf]),
+          candidateEvidenceRefs: new Set([selected]),
+          candidateEvidenceRefsByRequirement: new Map([
+            [leaf.requirementId, new Set([selected])],
+          ]),
+          requirementHits: Object.freeze([
+            Object.freeze(
+              [candidateByRef.get(selected)].filter(
+                (candidate): candidate is MemoryEvidenceNotebookHitV1 =>
+                  candidate !== undefined,
+              ),
+            ),
+          ]),
+          roleConstraint: "assistant",
+          certifiedSharedDialogueRefs: new Set([selected]),
+          certifiedDialoguePredecessorsByAssistant: new Map(
+            [
+              [
+                selected,
+                input.proofsByAssistant.get(selected)?.precedingUser
+                  .evidenceRef,
+              ],
+            ].filter(
+              (entry): entry is [string, string] => entry[1] !== undefined,
+            ),
+          ),
+          certifiedAssistantDialogueCandidate: true,
+        })
+      : rawAssessments;
+  const committed = selected !== undefined && global.status === "winner";
+  const assessments = committed
+    ? Object.freeze(
+        authorityAssessments.map((assessment) =>
+          Object.freeze({
+            ...assessment,
+            dialogueOrdinalSelection: Object.freeze({
+              constraintRevision: input.constraint.constraintRevision,
+              withinOutputOrdinal: global.withinOutputOrdinal,
+            }),
+          }),
+        ),
+      )
+    : Object.freeze([]);
+  const selectedRefsByRequirement = new Map<string, ReadonlySet<string>>(
+    input.requirements.map((requirement) => [
+      requirement.requirementId,
+      new Set(
+        selected && leaf?.requirementId === requirement.requirementId
+          ? [selected]
+          : [],
+      ),
+    ]),
+  );
+  const cohortRevisions = input.lockedSourceIds.map(
+    (sourceId) =>
+      bySource.get(sourceId)?.result.dialogueOrdinalCohort
+        ?.populationRevision ??
+      hashCanonicalJsonV1({
+        schemaVersion: "missing-ordinal-cohort.v1",
+        sourceId,
+      } as never),
+  );
+  const proofIdentity = {
+    proofVersion: "paw.memory-ordinal-settlement-proof.v1" as const,
+    constraintRevision: input.constraint.constraintRevision,
+    admissionRevision: input.admission.admissionRevision,
+    cohortRevisions: Object.freeze(cohortRevisions),
+    sourceSettlements: Object.freeze(
+      settlements.map((settlement) =>
+        Object.freeze({
+          sourceId: settlement.sourceId,
+          status: settlement.status,
+          knownCount: "knownCount" in settlement ? settlement.knownCount : 0,
+          ...(settlement.status === "unknown" &&
+          settlement.failureCode !== undefined
+            ? { failureCode: settlement.failureCode }
+            : {}),
+          ...(settlement.status === "winner"
+            ? {
+                winnerEvidenceRef: settlement.evidenceRef,
+                withinOutputOrdinal: settlement.withinOutputOrdinal,
+              }
+            : {}),
+        }),
+      ),
+    ),
+    globalStatus: global.status,
+    ...(global.status === "winner"
+      ? {
+          winnerEvidenceRef: global.evidenceRef,
+          withinOutputOrdinal: global.withinOutputOrdinal,
+        }
+      : {}),
+    authorityScope: "post_settlement_winner_only" as const,
+  };
+  const ordinalSettlementProof = Object.freeze({
+    ...proofIdentity,
+    proofRevision: hashCanonicalJsonV1(proofIdentity as never),
+  });
+  const selectionRevision = hashCanonicalJsonV1({
+    schemaVersion: "paw.memory-dialogue-ordinal-settlement.v2:winner-only",
+    selectorVersion:
+      input.selector.dialogueOrdinalSelector?.selectorVersion ?? "missing",
+    constraintRevision: input.constraint.constraintRevision,
+    admissionRevision: input.admission.admissionRevision,
+    lockedSourceIds: input.lockedSourceIds,
+    cohortRevisions,
+    settlements,
+    global,
+  } as never);
+  const selectorGroups = compileMemoryEvidenceSelectorGroupsV1({
+    intent: input.intent,
+    requirements: input.requirements,
+  });
+  const selectorGroup = leaf
+    ? selectorGroups.find((group) =>
+        group.requirementIds.includes(leaf.requirementId),
+      )
+    : undefined;
+  const snapshotScopes = input.candidateScopes.map((scope) =>
+    Object.freeze({
+      requirementId: scope.requirementId,
+      evidenceRefs:
+        selected && leaf?.requirementId === scope.requirementId
+          ? Object.freeze([selected])
+          : Object.freeze([]),
+    }),
+  );
+  return Object.freeze({
+    selectionRevision,
+    assessments,
+    selectedRefsByRequirement,
+    groupCount: 1,
+    committedGroupCount: committed ? 1 : 0,
+    failedGroupCount: committed ? 0 : 1,
+    selectorExecutionSnapshot: compileMemorySelectorExecutionSnapshotV1({
+      query: input.query,
+      intent: input.intent,
+      requirements: input.requirements,
+      temporalConstraints: input.temporalConstraints,
+      candidateScopes: snapshotScopes,
+      lockedSourceIds: input.lockedSourceIds,
+      originRevision: input.originRevision,
+      selectorVersion:
+        input.selector.dialogueOrdinalSelector?.selectorVersion ?? "missing",
+      selectionRevision,
+      committedAttempt: input.committedAttempt,
+      attemptCount: 1,
+      ordinalSettlementProof,
+      groups: Object.freeze([
+        Object.freeze({
+          groupId: selectorGroup?.groupId ?? "ordinal-unbound",
+          requirementIds: selectorGroup?.requirementIds ?? Object.freeze([]),
+          status: committed ? ("committed" as const) : ("failed" as const),
+          assessments,
+          failureCodes: committed
+            ? Object.freeze([])
+            : Object.freeze([
+                "MemoryDialogueOrdinalSettlementUnavailable",
+                ...(settlements.some(
+                  (settlement) =>
+                    settlement.status === "unknown" &&
+                    settlement.failureCode === "raw_pair_body_too_large",
+                )
+                  ? ["MemoryDialogueOrdinalRawPairBodyTooLarge"]
+                  : []),
+              ]),
+        }),
+      ]),
+    }),
+  });
+}
+
+/** Preserves source order while limiting independent cohort model calls. */
+async function mapWithConcurrencyV1<T, R>(
+  values: readonly T[],
+  concurrency: 1 | 2,
+  work: (value: T) => Promise<R>,
+): Promise<readonly R[]> {
+  const output: R[] = new Array(values.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      const value = values[index];
+      if (value === undefined) return;
+      output[index] = await work(value);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, worker),
+  );
+  return Object.freeze(output);
+}
+
+/**
+ * Ordinal populations are full per-source cohorts. Preserve those boundaries
+ * while fitting the unchanged generic predecessor-verifier cap of 32.
+ */
+function partitionOrdinalPredecessorTargetsV1<
+  T extends Readonly<{ sourceId: string }>,
+>(targets: readonly T[]): readonly (readonly T[])[] {
+  const bySource = new Map<string, T[]>();
+  for (const target of targets) {
+    const group = bySource.get(target.sourceId) ?? [];
+    group.push(target);
+    bySource.set(target.sourceId, group);
+  }
+  const batches: T[][] = [];
+  let current: T[] = [];
+  for (const group of bySource.values()) {
+    if (group.length > 32) {
+      throw namedError("MemoryDialogueOrdinalPredecessorBatchInvalid");
+    }
+    if (current.length > 0 && current.length + group.length > 32) {
+      batches.push(current);
+      current = [];
+    }
+    current.push(...group);
+  }
+  if (current.length > 0) batches.push(current);
+  return Object.freeze(batches.map((batch) => Object.freeze(batch)));
+}
+
+/**
+ * Reconstitutes the planner's formal groups after the ordinal target has been
+ * settled outside the model selector. The ordinal cohort is deliberately
+ * narrowed to its winner before snapshotting; its full population remains a
+ * transaction proof, never an authority candidate partition.
+ */
+function mergeMemoryDialogueOrdinalSelectionV1(input: {
+  readonly query: string;
+  readonly intent: MemoryEvidenceQueryIntentV3;
+  readonly requirements: readonly MemoryEvidenceRequirementV3[];
+  readonly temporalConstraints: readonly MemoryEvidenceBoundTemporalConstraintV1[];
+  readonly candidateScopes: readonly Readonly<{
+    requirementId: string;
+    evidenceRefs: readonly string[];
+  }>[];
+  readonly lockedSourceIds: readonly string[];
+  readonly originRevision: string;
+  readonly ordinal: Awaited<
+    ReturnType<typeof settleMemoryDialogueOrdinalTransactionV1>
+  >;
+  readonly ordinary?: Awaited<
+    ReturnType<typeof settleMemoryEvidenceSupportSelectionV1>
+  >;
+  readonly committedAttempt: "augmented" | "baseline";
+}): Readonly<{
+  selectionRevision: string;
+  assessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
+  selectedRefsByRequirement: ReadonlyMap<string, ReadonlySet<string>>;
+  groupCount: number;
+  committedGroupCount: number;
+  failedGroupCount: number;
+  selectorExecutionSnapshot: MemorySelectorExecutionSnapshotV1;
+}> {
+  const groups = compileMemoryEvidenceSelectorGroupsV1({
+    intent: input.intent,
+    requirements: input.requirements,
+  });
+  const ordinalGroupById = new Map(
+    input.ordinal.selectorExecutionSnapshot.groups.map((group) => [
+      group.groupId,
+      group,
+    ]),
+  );
+  const ordinaryGroupById = new Map(
+    input.ordinary?.selectorExecutionSnapshot.groups.map((group) => [
+      group.groupId,
+      group,
+    ]) ?? [],
+  );
+  const assessmentsByRequirement = new Map<
+    string,
+    MemoryEvidenceTriageAssessmentV1
+  >();
+  for (const assessment of input.ordinal.assessments) {
+    assessmentsByRequirement.set(assessment.requirementId, assessment);
+  }
+  for (const assessment of input.ordinary?.assessments ?? []) {
+    assessmentsByRequirement.set(assessment.requirementId, assessment);
+  }
+  const selectedRefsByRequirement = new Map<string, ReadonlySet<string>>();
+  for (const requirement of input.requirements) {
+    selectedRefsByRequirement.set(
+      requirement.requirementId,
+      input.ordinal.selectedRefsByRequirement.get(requirement.requirementId) ??
+        input.ordinary?.selectedRefsByRequirement.get(
+          requirement.requirementId,
+        ) ??
+        new Set(),
+    );
+  }
+  const snapshotScopes = Object.freeze(
+    input.candidateScopes.map((scope) =>
+      Object.freeze({
+        requirementId: scope.requirementId,
+        // Only the winner is a post-settlement ordinal candidate. This keeps
+        // the final snapshot's assessment partition exact and prevents a
+        // non-winner population proof from becoming reader authority.
+        evidenceRefs: input.ordinal.selectedRefsByRequirement.has(
+          scope.requirementId,
+        )
+          ? Object.freeze([
+              ...(input.ordinal.selectedRefsByRequirement.get(
+                scope.requirementId,
+              ) ?? new Set()),
+            ])
+          : scope.evidenceRefs,
+      }),
+    ),
+  );
+  const executionGroups: MemorySelectorExecutionGroupInputV1[] = [];
+  for (const group of groups) {
+    const source =
+      ordinalGroupById.get(group.groupId) ??
+      ordinaryGroupById.get(group.groupId);
+    if (!source) {
+      throw namedError("MemoryDialogueOrdinalGroupMergeInvalid");
+    }
+    executionGroups.push(
+      Object.freeze({
+        groupId: group.groupId,
+        requirementIds: group.requirementIds,
+        status: source.status,
+        assessments: Object.freeze(
+          group.requirementIds.flatMap((requirementId) => {
+            const assessment = assessmentsByRequirement.get(requirementId);
+            return assessment ? [assessment] : [];
+          }),
+        ),
+        failureCodes: source.failureCodes,
+      }),
+    );
+  }
+  const selectionRevision = hashCanonicalJsonV1({
+    schemaVersion: "paw.memory-dialogue-ordinal-selection-merge.v2",
+    ordinal: input.ordinal.selectionRevision,
+    ordinary: input.ordinary?.selectionRevision ?? "none",
+    groups: executionGroups.map((group) => ({
+      groupId: group.groupId,
+      status: group.status,
+      failureCodes: group.failureCodes ?? [],
+    })),
+  } as never);
+  const assessments = Object.freeze(
+    input.requirements.flatMap((requirement) => {
+      const assessment = assessmentsByRequirement.get(
+        requirement.requirementId,
+      );
+      return assessment ? [assessment] : [];
+    }),
+  );
+  const failedGroupCount = executionGroups.filter(
+    (group) => group.status === "failed",
+  ).length;
+  return Object.freeze({
+    selectionRevision,
+    assessments,
+    selectedRefsByRequirement,
+    groupCount: executionGroups.length,
+    committedGroupCount: executionGroups.filter(
+      (group) => group.status === "committed",
+    ).length,
+    failedGroupCount,
+    selectorExecutionSnapshot: compileMemorySelectorExecutionSnapshotV1({
+      query: input.query,
+      intent: input.intent,
+      requirements: input.requirements,
+      temporalConstraints: input.temporalConstraints,
+      candidateScopes: snapshotScopes,
+      lockedSourceIds: input.lockedSourceIds,
+      originRevision: input.originRevision,
+      selectorVersion: "paw.memory-dialogue-ordinal-selector-merge.v2",
+      selectionRevision,
+      committedAttempt: input.committedAttempt,
+      attemptCount: 1,
+      groups: executionGroups,
+    }),
   });
 }
 

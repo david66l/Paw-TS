@@ -57,7 +57,31 @@ export interface MemorySelectorExecutionSnapshotV1 {
   readonly lockedSourceRevision: string;
   readonly groups: readonly MemorySelectorExecutionGroupV1[];
   readonly postAuthorityAssessmentRevision: string;
+  /** Host-only receipt for a complete ordinal cohort settlement. */
+  readonly ordinalSettlementProof?: MemoryOrdinalSettlementProofV1;
   readonly snapshotRevision: string;
+}
+
+export interface MemoryOrdinalSettlementProofV1 {
+  readonly proofVersion: "paw.memory-ordinal-settlement-proof.v1";
+  readonly constraintRevision: string;
+  /** Query-only semantic admission bound before ordinal-specific retrieval. */
+  readonly admissionRevision: string;
+  readonly cohortRevisions: readonly string[];
+  readonly sourceSettlements: readonly Readonly<{
+    sourceId: string;
+    status: "below" | "unknown" | "winner";
+    knownCount: number;
+    /** Host-only, content-free reason for a source admission failure. */
+    failureCode?: "raw_pair_body_too_large";
+    winnerEvidenceRef?: string;
+    withinOutputOrdinal?: number;
+  }>[];
+  readonly globalStatus: "winner" | "missing" | "ambiguous" | "unknown";
+  readonly winnerEvidenceRef?: string;
+  readonly withinOutputOrdinal?: number;
+  readonly authorityScope: "post_settlement_winner_only";
+  readonly proofRevision: string;
 }
 
 export interface MemorySelectorExecutionGroupInputV1 {
@@ -87,6 +111,7 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
   readonly selectionRevision: string;
   readonly committedAttempt: "augmented" | "baseline" | "none";
   readonly attemptCount: 1 | 2;
+  readonly ordinalSettlementProof?: MemoryOrdinalSettlementProofV1;
   readonly groups: readonly MemorySelectorExecutionGroupInputV1[];
 }): MemorySelectorExecutionSnapshotV1 {
   if (
@@ -268,6 +293,10 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
   if (seenRequirements.size !== input.requirements.length) {
     throw namedError("MemorySelectorExecutionSnapshotGroupInvalid");
   }
+  validateOrdinalSettlementProof(input.ordinalSettlementProof, {
+    groups,
+    candidateScopes: input.candidateScopes,
+  });
 
   const planRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-query-plan-execution.v1",
@@ -308,6 +337,9 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
     lockedSourceRevision,
     groups: Object.freeze(groups),
     postAuthorityAssessmentRevision,
+    ...(input.ordinalSettlementProof === undefined
+      ? {}
+      : { ordinalSettlementProof: input.ordinalSettlementProof }),
   };
   return Object.freeze({
     ...identity,
@@ -329,6 +361,15 @@ function validateAssessment(
     !assessment.requirementId.trim() ||
     new Set(partition).size !== partition.length ||
     partition.some((evidenceRef) => !scope.has(evidenceRef)) ||
+    (assessment.dialogueOrdinalSelection !== undefined &&
+      (!/^[a-f0-9]{64}$/u.test(
+        assessment.dialogueOrdinalSelection.constraintRevision,
+      ) ||
+        !Number.isSafeInteger(
+          assessment.dialogueOrdinalSelection.withinOutputOrdinal,
+        ) ||
+        assessment.dialogueOrdinalSelection.withinOutputOrdinal < 1 ||
+        assessment.supportingEvidenceRefs.length !== 1)) ||
     assessment.evidenceDispositions?.some(
       (item) =>
         item.requirementId !== assessment.requirementId ||
@@ -336,6 +377,110 @@ function validateAssessment(
     )
   ) {
     throw namedError("MemorySelectorExecutionSnapshotAssessmentInvalid");
+  }
+}
+
+function validateOrdinalSettlementProof(
+  proof: MemoryOrdinalSettlementProofV1 | undefined,
+  input: {
+    readonly groups: readonly MemorySelectorExecutionGroupV1[];
+    readonly candidateScopes: readonly Readonly<{
+      requirementId: string;
+      evidenceRefs: readonly string[];
+    }>[];
+  },
+): void {
+  if (proof === undefined) return;
+  const sourceIds = new Set(
+    proof.sourceSettlements.map((item) => item.sourceId),
+  );
+  const cohortRevisions = new Set(proof.cohortRevisions);
+  if (
+    proof.proofVersion !== "paw.memory-ordinal-settlement-proof.v1" ||
+    !/^[a-f0-9]{64}$/u.test(proof.constraintRevision) ||
+    !/^[a-f0-9]{64}$/u.test(proof.admissionRevision) ||
+    cohortRevisions.size !== proof.cohortRevisions.length ||
+    proof.cohortRevisions.some(
+      (revision) => !/^[a-f0-9]{64}$/u.test(revision),
+    ) ||
+    proof.sourceSettlements.length < 1 ||
+    sourceIds.size !== proof.sourceSettlements.length ||
+    proof.sourceSettlements.some(
+      (item) =>
+        !item.sourceId.trim() ||
+        !Number.isSafeInteger(item.knownCount) ||
+        item.knownCount < 0 ||
+        (item.failureCode !== undefined &&
+          (item.status !== "unknown" ||
+            item.failureCode !== "raw_pair_body_too_large")) ||
+        (item.status === "winner" &&
+          (!item.winnerEvidenceRef?.trim() ||
+            !Number.isSafeInteger(item.withinOutputOrdinal) ||
+            (item.withinOutputOrdinal ?? 0) < 1)) ||
+        (item.status !== "winner" &&
+          (item.winnerEvidenceRef !== undefined ||
+            item.withinOutputOrdinal !== undefined)),
+    ) ||
+    !/^[a-f0-9]{64}$/u.test(proof.proofRevision) ||
+    proof.authorityScope !== "post_settlement_winner_only"
+  ) {
+    throw namedError("MemorySelectorExecutionSnapshotOrdinalProofInvalid");
+  }
+  const winner = proof.sourceSettlements.filter(
+    (item) => item.status === "winner",
+  );
+  const hasUnknown = proof.sourceSettlements.some(
+    (item) => item.status === "unknown",
+  );
+  const snapshotWinner =
+    proof.globalStatus === "winner" ? proof.winnerEvidenceRef : undefined;
+  if (
+    (proof.globalStatus === "winner" &&
+      (winner.length !== 1 ||
+        hasUnknown ||
+        !snapshotWinner?.trim() ||
+        winner[0]?.winnerEvidenceRef !== snapshotWinner ||
+        winner[0]?.withinOutputOrdinal !== proof.withinOutputOrdinal)) ||
+    (proof.globalStatus === "ambiguous" && winner.length < 2) ||
+    (proof.globalStatus === "missing" && (winner.length !== 0 || hasUnknown)) ||
+    (proof.globalStatus === "unknown" && (!hasUnknown || winner.length > 1)) ||
+    (proof.globalStatus !== "winner" &&
+      (proof.winnerEvidenceRef !== undefined ||
+        proof.withinOutputOrdinal !== undefined))
+  ) {
+    throw namedError("MemorySelectorExecutionSnapshotOrdinalProofInvalid");
+  }
+  const group = input.groups[0];
+  const scope = input.candidateScopes[0];
+  if (
+    input.groups.length !== 1 ||
+    !group ||
+    !scope ||
+    (proof.globalStatus === "winner"
+      ? group.status !== "committed" ||
+        scope.evidenceRefs.length !== 1 ||
+        scope.evidenceRefs[0] !== proof.winnerEvidenceRef
+      : group.status !== "failed")
+  ) {
+    throw namedError("MemorySelectorExecutionSnapshotOrdinalProofInvalid");
+  }
+  const identity = {
+    proofVersion: proof.proofVersion,
+    constraintRevision: proof.constraintRevision,
+    admissionRevision: proof.admissionRevision,
+    cohortRevisions: proof.cohortRevisions,
+    sourceSettlements: proof.sourceSettlements,
+    globalStatus: proof.globalStatus,
+    ...(proof.winnerEvidenceRef === undefined
+      ? {}
+      : { winnerEvidenceRef: proof.winnerEvidenceRef }),
+    ...(proof.withinOutputOrdinal === undefined
+      ? {}
+      : { withinOutputOrdinal: proof.withinOutputOrdinal }),
+    authorityScope: proof.authorityScope,
+  };
+  if (proof.proofRevision !== hashCanonicalJsonV1(identity as never)) {
+    throw namedError("MemorySelectorExecutionSnapshotOrdinalProofInvalid");
   }
 }
 

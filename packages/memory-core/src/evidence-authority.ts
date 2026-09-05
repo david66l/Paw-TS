@@ -202,7 +202,10 @@ export function enforceSelectedEvidenceAuthority(input: {
         assessedIds.has(assessment.requirementId) ||
         !Array.isArray(assessment.supportingEvidenceRefs) ||
         !Array.isArray(assessment.contradictingEvidenceRefs) ||
-        !Array.isArray(assessment.unknownEvidenceRefs)
+        !Array.isArray(assessment.unknownEvidenceRefs) ||
+        // This field is host-only. A generic selector must not smuggle an
+        // ordinal reader instruction through its otherwise model-owned DTO.
+        assessment.dialogueOrdinalSelection !== undefined
       ) {
         throw namedError("MemoryEvidenceSupportSelectionBoundaryInvalid");
       }

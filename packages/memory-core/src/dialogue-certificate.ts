@@ -26,6 +26,8 @@ export interface MemoryDialogueCertificateV1 {
   readonly verifierVersion: string;
   readonly verificationRevision: string;
   readonly originRevision: string;
+  /** Present only for a query admitted to the ordinal transaction. */
+  readonly ordinalAdmissionRevision?: string;
   readonly evidenceTimeUpperBound: string | null;
   readonly certificateRevision: string;
 }
@@ -35,6 +37,7 @@ export interface MemoryDialogueCertificateRegistryV1 {
   readonly lockedSourceIds: readonly string[];
   readonly lockedSourceIdsRevision: string;
   readonly originRevision: string;
+  readonly ordinalAdmissionRevision?: string;
   readonly evidenceTimeUpperBound: string | null;
   readonly certificates: readonly MemoryDialogueCertificateV1[];
   readonly registryRevision: string;
@@ -46,6 +49,7 @@ export function compileMemoryDialogueCertificateRegistryV1(input: {
   readonly verifierVersion: string | null;
   readonly verificationRevision: string | null;
   readonly originRevision: string;
+  readonly ordinalAdmissionRevision?: string;
   readonly evidenceTimeUpperBound?: string;
 }): MemoryDialogueCertificateRegistryV1 {
   const lockedSourceIds = Object.freeze([...input.lockedSourceIds]);
@@ -53,6 +57,8 @@ export function compileMemoryDialogueCertificateRegistryV1(input: {
     new Set(lockedSourceIds).size !== lockedSourceIds.length ||
     lockedSourceIds.some((sourceId) => !sourceId.trim()) ||
     !input.originRevision.trim() ||
+    (input.ordinalAdmissionRevision !== undefined &&
+      !/^[a-f0-9]{64}$/u.test(input.ordinalAdmissionRevision)) ||
     (input.verifierVersion === null) !==
       (input.verificationRevision === null) ||
     (input.proofs.length > 0 &&
@@ -104,6 +110,9 @@ export function compileMemoryDialogueCertificateRegistryV1(input: {
           verifierVersion: input.verifierVersion as string,
           verificationRevision: input.verificationRevision as string,
           originRevision: input.originRevision,
+          ...(input.ordinalAdmissionRevision === undefined
+            ? {}
+            : { ordinalAdmissionRevision: input.ordinalAdmissionRevision }),
           evidenceTimeUpperBound,
         };
         return Object.freeze({
@@ -121,6 +130,9 @@ export function compileMemoryDialogueCertificateRegistryV1(input: {
     registryVersion: PAW_MEMORY_DIALOGUE_CERTIFICATE_REGISTRY_VERSION_V1,
     lockedSourceIdsRevision,
     originRevision: input.originRevision,
+    ...(input.ordinalAdmissionRevision === undefined
+      ? {}
+      : { ordinalAdmissionRevision: input.ordinalAdmissionRevision }),
     evidenceTimeUpperBound,
     certificates,
   };
@@ -129,6 +141,9 @@ export function compileMemoryDialogueCertificateRegistryV1(input: {
     lockedSourceIds,
     lockedSourceIdsRevision,
     originRevision: input.originRevision,
+    ...(input.ordinalAdmissionRevision === undefined
+      ? {}
+      : { ordinalAdmissionRevision: input.ordinalAdmissionRevision }),
     evidenceTimeUpperBound,
     certificates,
     registryRevision: hashCanonicalJsonV1(
@@ -162,6 +177,9 @@ export function validateMemoryDialogueCertificateRegistryV1(
     registryVersion: PAW_MEMORY_DIALOGUE_CERTIFICATE_REGISTRY_VERSION_V1,
     lockedSourceIdsRevision,
     originRevision: registry.originRevision,
+    ...(registry.ordinalAdmissionRevision === undefined
+      ? {}
+      : { ordinalAdmissionRevision: registry.ordinalAdmissionRevision }),
     evidenceTimeUpperBound: registry.evidenceTimeUpperBound,
     certificates,
   };
@@ -176,6 +194,8 @@ export function validateMemoryDialogueCertificateRegistryV1(
     certificates.some(
       (certificate) =>
         certificate.originRevision !== registry.originRevision ||
+        certificate.ordinalAdmissionRevision !==
+          registry.ordinalAdmissionRevision ||
         certificate.evidenceTimeUpperBound !== registry.evidenceTimeUpperBound,
     ) ||
     hashCanonicalJsonV1(registryIdentity as unknown as JsonValue) !==

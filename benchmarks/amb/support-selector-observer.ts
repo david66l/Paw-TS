@@ -82,6 +82,12 @@ export function observeAmbEvidenceSupportSelectorV1(input: {
 }): MemoryEvidenceSupportSelectorV1 {
   return Object.freeze({
     selectorVersion: input.selector.selectorVersion,
+    ...(input.selector.dialogueOrdinalSelector === undefined
+      ? {}
+      : { dialogueOrdinalSelector: input.selector.dialogueOrdinalSelector }),
+    ...(input.selector.dialogueOrdinalAdmission === undefined
+      ? {}
+      : { dialogueOrdinalAdmission: input.selector.dialogueOrdinalAdmission }),
     async select(
       selection: Readonly<MemoryEvidenceSupportSelectionInputV1>,
       signal: AbortSignal,

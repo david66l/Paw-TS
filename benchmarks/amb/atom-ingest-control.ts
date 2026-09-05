@@ -105,6 +105,7 @@ export const AMB_MEMORY_LLM_PURPOSES_V1 = [
   "memory-write",
   "query-plan",
   "evidence-support",
+  "dialogue-ordinal-admission",
   "state-binding",
   "state-verification",
   "state-semantic-audit-a",
@@ -234,6 +235,16 @@ export function readAmbMemoryLlmBudgetLimitsV1(
         concurrency: 2,
       },
     }),
+    "dialogue-ordinal-admission": readPurposeLimitsV1({
+      env,
+      prefix: "PAW_AMB_DIALOGUE_ORDINAL_ADMISSION",
+      defaults: {
+        maxRemoteCalls: 600,
+        maxPromptTokens: 600_000,
+        maxCompletionTokens: 60_000,
+        concurrency: 2,
+      },
+    }),
     "state-binding": readPurposeLimitsV1({
       env,
       prefix: "PAW_AMB_STATE_BINDING",
@@ -294,6 +305,9 @@ export function createAmbMemoryLlmBudgetPortfolioV1(
     "memory-write": createAtomIngestBudgetV1(limits["memory-write"]),
     "query-plan": createAtomIngestBudgetV1(limits["query-plan"]),
     "evidence-support": createAtomIngestBudgetV1(limits["evidence-support"]),
+    "dialogue-ordinal-admission": createAtomIngestBudgetV1(
+      limits["dialogue-ordinal-admission"],
+    ),
     "state-binding": createAtomIngestBudgetV1(limits["state-binding"]),
     "state-verification": createAtomIngestBudgetV1(
       limits["state-verification"],
@@ -315,6 +329,8 @@ export function createAmbMemoryLlmBudgetPortfolioV1(
         "memory-write": budgets["memory-write"].snapshot(),
         "query-plan": budgets["query-plan"].snapshot(),
         "evidence-support": budgets["evidence-support"].snapshot(),
+        "dialogue-ordinal-admission":
+          budgets["dialogue-ordinal-admission"].snapshot(),
         "state-binding": budgets["state-binding"].snapshot(),
         "state-verification": budgets["state-verification"].snapshot(),
         "state-semantic-audit-a": budgets["state-semantic-audit-a"].snapshot(),

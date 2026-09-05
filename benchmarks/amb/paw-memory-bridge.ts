@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -135,6 +136,11 @@ import {
   canonicalizeAmbDialoguePairProofsV1,
 } from "./dialogue-materialization-authorization.js";
 import {
+  PAW_AMB_DIALOGUE_ORDINAL_ADMISSION_MAX_OUTPUT_TOKENS_V1,
+  buildAmbDialogueOrdinalAdmissionVersionV1,
+  isStrictAmbDialogueOrdinalAdmissionReplyV1,
+} from "./dialogue-ordinal-admission-runtime-contract.js";
+import {
   AMB_DIALOGUE_PAIR_PROMPT_ISSUE_TYPE_V1,
   AMB_DIALOGUE_PAIR_RESPONSE_ISSUE_TYPE_V1,
   AMB_DIALOGUE_PAIR_SCHEMA_VERSION_V1,
@@ -253,6 +259,13 @@ const sourceBlockIdsByUserDocument = new Map<
   string,
   Map<string, readonly string[]>
 >();
+// Raw immutable conversation turns, retained independently from compact L0
+// render fields. Ordinal cohort hashes and predecessor verification must bind
+// this same source domain; `whenToUse` may be compacted for retrieval.
+const rawDialogueTurnsByUserDocument = new Map<
+  string,
+  Map<string, Map<number, string>>
+>();
 const dialoguePairFacetIdsByUserDocument = new Map<
   string,
   Map<string, readonly string[]>
@@ -260,6 +273,10 @@ const dialoguePairFacetIdsByUserDocument = new Map<
 const dialoguePairFacetsByUserEntryId = new Map<
   string,
   Map<string, AmbCompiledDialoguePairFacetV1>
+>();
+const dialogueOrdinalPairFacetsByUserDocument = new Map<
+  string,
+  Map<string, readonly AmbCompiledDialoguePairFacetV1[]>
 >();
 const dialoguePairIndexRevisionByUser = new Map<string, string>();
 const sourceKindByUser = new Map<
@@ -560,6 +577,13 @@ const evidenceSupportSelector =
   /^(?:1|true)$/iu.test(process.env.PAW_AMB_QUERY_EXPANSION?.trim() ?? "")
     ? createJsonMemoryEvidenceSupportSelectorV1({
         model: createAmbMemoryWriterModel("evidence-support"),
+        dialogueOrdinalAdmission: {
+          model: createAmbMemoryWriterModel("dialogue-ordinal-admission"),
+          admissionVersion: buildAmbDialogueOrdinalAdmissionVersionV1({
+            model: process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-flash",
+            reasoningEffort: "low",
+          }),
+        },
       })
     : undefined;
 const stateFrameShadowEnabled =
@@ -679,7 +703,7 @@ function createAmbMemoryWriterModel(
   // answer. GLM Flash rejects disabled thinking (HTTP 400 / code 1210), so
   // keep this purpose at its lowest supported effort and cache it separately.
   const purposeReasoningEffort =
-    purpose === "evidence-support"
+    purpose === "evidence-support" || purpose === "dialogue-ordinal-admission"
       ? ("low" as const)
       : memoryLlmReasoningEffort;
   mkdirSync(cacheDir, { recursive: true });
@@ -691,7 +715,10 @@ function createAmbMemoryWriterModel(
       const maxOutputTokens =
         purpose === "evidence-support"
           ? (options.maxOutputTokens ?? 8_192)
-          : atomMaxOutputTokens;
+          : purpose === "dialogue-ordinal-admission"
+            ? (options.maxOutputTokens ??
+              PAW_AMB_DIALOGUE_ORDINAL_ADMISSION_MAX_OUTPUT_TOKENS_V1)
+            : atomMaxOutputTokens;
       const promptHash = sha(
         JSON.stringify({ system: request.system, user: request.user }),
       );
@@ -716,7 +743,11 @@ function createAmbMemoryWriterModel(
             text?: unknown;
             usage?: unknown;
           };
-          if (typeof cached.text === "string") {
+          const cacheableAdmissionReply =
+            purpose !== "dialogue-ordinal-admission" ||
+            (typeof cached.text === "string" &&
+              isStrictAmbDialogueOrdinalAdmissionReplyV1(cached.text));
+          if (typeof cached.text === "string" && cacheableAdmissionReply) {
             const usage = parseAmbCachedMemoryUsageV1(cached.usage);
             purposeBudget.recordCacheHit(usage ?? undefined);
             log("memory_llm_settlement", {
@@ -741,6 +772,10 @@ function createAmbMemoryWriterModel(
             });
             return { status: "completed" as const, text: cached.text };
           }
+          // A malformed admission reply must never survive as replay material:
+          // the strict enum parser in memory-core would reject it after a cache
+          // hit, which could make a transient bad response permanently sticky.
+          if (purpose === "dialogue-ordinal-admission") unlinkSync(cachePath);
         } catch {
           // Invalid cache entries are ignored and replaced after a successful call.
         }
@@ -833,18 +868,23 @@ function createAmbMemoryWriterModel(
           error.name = "MemoryWriterEmptyResponse";
           throw error;
         }
-        const tempPath = `${cachePath}.${process.pid}.tmp`;
-        writeFileSync(
-          tempPath,
-          JSON.stringify({
-            schemaVersion: "paw.amb-memory-llm-cache-entry.v1",
-            text,
-            usage,
-            sourceArtifactSha256,
-          }),
-          "utf8",
-        );
-        renameSync(tempPath, cachePath);
+        if (
+          purpose !== "dialogue-ordinal-admission" ||
+          isStrictAmbDialogueOrdinalAdmissionReplyV1(text)
+        ) {
+          const tempPath = `${cachePath}.${process.pid}.tmp`;
+          writeFileSync(
+            tempPath,
+            JSON.stringify({
+              schemaVersion: "paw.amb-memory-llm-cache-entry.v1",
+              text,
+              usage,
+              sourceArtifactSha256,
+            }),
+            "utf8",
+          );
+          renameSync(tempPath, cachePath);
+        }
         log("memory_llm_settlement", {
           purpose,
           model,
@@ -1254,8 +1294,10 @@ async function prepare(params: Record<string, unknown>): Promise<unknown> {
   documentCreatedByUser.clear();
   documentOrderByUser.clear();
   sourceBlockIdsByUserDocument.clear();
+  rawDialogueTurnsByUserDocument.clear();
   dialoguePairFacetIdsByUserDocument.clear();
   dialoguePairFacetsByUserEntryId.clear();
+  dialogueOrdinalPairFacetsByUserDocument.clear();
   dialoguePairIndexRevisionByUser.clear();
   sourceKindByUser.clear();
   sceneSnapshots.clear();
@@ -1345,6 +1387,23 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
       }),
     ]),
   );
+  // Ordinal settlement reads the archive domain, whose assistant bodies are
+  // intentionally not compacted. Keep this separate from the ordinary pair
+  // sidecar: normal retrieval remains indexed against `window.source`.
+  const dialogueOrdinalPairFacetsForDocument = new Map(
+    documents.map((document) => [
+      `${document.userId}\0${document.id}`,
+      compileAmbDialoguePairFacetsV1({
+        runKey,
+        userId: document.userId,
+        documentId: document.id,
+        turns: (
+          evidenceWindowsByDocument.get(`${document.userId}\0${document.id}`) ??
+          []
+        ).flatMap((window) => window.archiveSource),
+      }),
+    ]),
+  );
   const nextOrderByUser = new Map<string, number>();
   for (const document of documents) {
     const orderByDocument =
@@ -1357,6 +1416,15 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
     const windows =
       evidenceWindowsByDocument.get(`${document.userId}\0${document.id}`) ?? [];
     const sources = windows.flatMap((window) => window.source);
+    const archiveSources = windows.flatMap((window) => window.archiveSource);
+    const rawByDocument =
+      rawDialogueTurnsByUserDocument.get(document.userId) ??
+      new Map<string, Map<number, string>>();
+    rawByDocument.set(
+      document.id,
+      new Map(archiveSources.map((source) => [source.seq, source.content])),
+    );
+    rawDialogueTurnsByUserDocument.set(document.userId, rawByDocument);
     const blockIdsByDocument =
       sourceBlockIdsByUserDocument.get(document.userId) ??
       new Map<string, readonly string[]>();
@@ -1391,6 +1459,19 @@ async function ingest(params: Record<string, unknown>): Promise<unknown> {
     dialoguePairFacetIdsByUserDocument.set(
       document.userId,
       pairFacetIdsByDocument,
+    );
+    const ordinalPairFacetsByDocument =
+      dialogueOrdinalPairFacetsByUserDocument.get(document.userId) ??
+      new Map<string, readonly AmbCompiledDialoguePairFacetV1[]>();
+    ordinalPairFacetsByDocument.set(
+      document.id,
+      dialogueOrdinalPairFacetsForDocument.get(
+        `${document.userId}\0${document.id}`,
+      ) ?? [],
+    );
+    dialogueOrdinalPairFacetsByUserDocument.set(
+      document.userId,
+      ordinalPairFacetsByDocument,
     );
     const pairByEntryId =
       dialoguePairFacetsByUserEntryId.get(document.userId) ?? new Map();
@@ -3257,6 +3338,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           sourceKind: entry.issueType,
         };
       }
+      const ordinalRequested = request.dialogueOrdinal !== undefined;
       const projectionEligible =
         request.requirement.roleConstraint === "assistant" ||
         request.requirement.roleConstraint === "any" ||
@@ -3275,20 +3357,26 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
         frontierRequirementSearch,
         frontierExactEntries,
       ] = await Promise.all([
-        searchAnchorChannels(anchorSourceKinds),
-        projectionEligible
+        ordinalRequested
+          ? Promise.resolve({
+              lexical: { hits: [], failed: false as const },
+              dense: { hits: [], failed: false as const },
+              entries: [] as MemoryEntry[],
+            })
+          : searchAnchorChannels(anchorSourceKinds),
+        !ordinalRequested && projectionEligible
           ? searchAnchorChannels(userKinds)
           : Promise.resolve(undefined),
-        request.temporalFrontier
+        !ordinalRequested && request.temporalFrontier
           ? searchAnchorChannels(
               anchorSourceKinds,
               request.temporalFrontier.originalQuery,
             )
           : Promise.resolve(undefined),
-        request.temporalFrontier
+        !ordinalRequested && request.temporalFrontier
           ? searchAnchorChannels(anchorSourceKinds, frontierRequirementQuery)
           : Promise.resolve(undefined),
-        request.temporalFrontier
+        !ordinalRequested && request.temporalFrontier
           ? allowedIds.length === 0
             ? Promise.resolve([] as MemoryEntry[])
             : engine.getMany
@@ -3311,7 +3399,7 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           throw new Error("AmbTemporalRoundFrontierHydrationIncomplete");
         }
       }
-      const directAnchors = directSearch.entries.flatMap((entry) => {
+      const rankedDirectAnchors = directSearch.entries.flatMap((entry) => {
         const anchor = anchorFromEntry(entry, anchorSourceKinds);
         return anchor ? [anchor] : [];
       });
@@ -3375,7 +3463,8 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             maxAnchors: request.budget.maxAnchors,
           })
         : undefined;
-      const effectiveDirectAnchors = frontierRanking?.anchors ?? directAnchors;
+      const effectiveDirectAnchors =
+        frontierRanking?.anchors ?? rankedDirectAnchors;
       const userDiscoveries = (promotionSearch?.entries ?? []).flatMap(
         (entry) => {
           const anchor = anchorFromEntry(entry, userKinds);
@@ -3445,6 +3534,211 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           assistantEvidenceRef: facet.assistantEvidenceRef,
         });
       }
+      // Ordinal host settlement never consumes ranked anchors as a population.
+      // Read every immutable source block in the one locked dialogue session,
+      // then intersect it with the independently compiled adjacent-pair facet
+      // sidecar. The response texts themselves still travel through the normal
+      // hydrator/certificate lane before the host can select one.
+      const dialogueOrdinalConstraint = request.dialogueOrdinal;
+      const dialogueOrdinalManifest = dialogueOrdinalConstraint
+        ? await (async () => {
+            if (allowed.size !== 1 || allowedIds.length === 0) {
+              throw new Error("AmbDialogueOrdinalCrossSessionOrEmpty");
+            }
+            const sourceId = request.lockedSourceIds[0];
+            if (!sourceId) throw new Error("AmbDialogueOrdinalSourceMissing");
+            if (!documentVisibleAtQuery(sourceId)) {
+              throw new Error("AmbDialogueOrdinalSourceAfterCutoff");
+            }
+            const rawTurns = rawDialogueTurnsByUserDocument
+              .get(userId)
+              ?.get(sourceId);
+            if (!rawTurns) {
+              throw new Error("AmbDialogueOrdinalRawHydrationMissing");
+            }
+            const entries = engine.getMany
+              ? await engine.getMany(allowedIds)
+              : (
+                  await Promise.all(allowedIds.map((id) => engine.get(id)))
+                ).filter((entry): entry is MemoryEntry => entry !== null);
+            const byId = new Map(entries.map((entry) => [entry.id, entry]));
+            if (
+              byId.size !== allowedIds.length ||
+              allowedIds.some((id) => !byId.has(id))
+            ) {
+              throw new Error(
+                "AmbDialogueOrdinalSourceBlockHydrationIncomplete",
+              );
+            }
+            const ordinalPairFacets =
+              dialogueOrdinalPairFacetsByUserDocument
+                .get(userId)
+                ?.get(sourceId) ?? [];
+            const responseFacets = [...ordinalPairFacets]
+              .filter(
+                (facet) =>
+                  facet.documentId === sourceId && facet.face === "response",
+              )
+              .sort((left, right) => left.assistantSeq - right.assistantSeq);
+            const assistantBlockIds = new Set(
+              [...byId.values()]
+                .filter(
+                  (entry) =>
+                    entry.kind === "episodic" &&
+                    entry.issueType === "assistant_output",
+                )
+                .map((entry) => entry.id),
+            );
+            if (
+              responseFacets.length !== assistantBlockIds.size ||
+              new Set(
+                responseFacets.map((facet) =>
+                  sourceBlockId(userId, sourceId, facet.assistantSeq),
+                ),
+              ).size !== responseFacets.length ||
+              responseFacets.some(
+                (facet) =>
+                  !assistantBlockIds.has(
+                    sourceBlockId(userId, sourceId, facet.assistantSeq),
+                  ),
+              )
+            ) {
+              throw new Error("AmbDialogueOrdinalPairFacetIncomplete");
+            }
+            const items = responseFacets.map((facet) => {
+              const userEntry = byId.get(
+                sourceBlockId(userId, sourceId, facet.userSeq),
+              );
+              const assistantEntry = byId.get(
+                sourceBlockId(userId, sourceId, facet.assistantSeq),
+              );
+              const rawUser = rawTurns.get(facet.userSeq);
+              const rawAssistant = rawTurns.get(facet.assistantSeq);
+              if (
+                !userEntry ||
+                !assistantEntry ||
+                !rawUser ||
+                !rawAssistant ||
+                userEntry.kind !== "episodic" ||
+                assistantEntry.kind !== "episodic" ||
+                userEntry.issueType !== "user_input" ||
+                assistantEntry.issueType !== "assistant_output" ||
+                userEntry.created !==
+                  documentCreatedByUser.get(userId)?.get(sourceId) ||
+                assistantEntry.created !==
+                  documentCreatedByUser.get(userId)?.get(sourceId) ||
+                userEntry.tInvalid !== null ||
+                assistantEntry.tInvalid !== null ||
+                ambDialoguePairIdentityV1({
+                  runKey,
+                  userId,
+                  documentId: sourceId,
+                  user: { seq: facet.userSeq, content: rawUser },
+                  assistant: {
+                    seq: facet.assistantSeq,
+                    content: rawAssistant,
+                  },
+                }) !== facet.pairId
+              ) {
+                throw new Error("AmbDialogueOrdinalPairFacetInvalid");
+              }
+              return Object.freeze({
+                assistantEvidenceRef: facet.assistantEvidenceRef,
+                assistantTurnOrder: facet.assistantSeq,
+                assistantContentHash: sha(rawAssistant),
+                predecessorEvidenceRef: facet.userEvidenceRef,
+                predecessorTurnOrder: facet.userSeq,
+                predecessorContentHash: sha(rawUser),
+              });
+            });
+            if (items.length > 8) {
+              throw new Error("AmbDialogueOrdinalPopulationTruncated");
+            }
+            const sourceBlockRevision = sha(
+              [
+                ...[...allowedIds].sort(),
+                ...[...rawTurns.entries()]
+                  .map(([seq, content]) => `${seq}\0${sha(content)}`)
+                  .sort(),
+              ].join("\n"),
+            );
+            const rawEpisodeOrder = documentOrderByUser
+              .get(userId)
+              ?.get(sourceId);
+            if (!Number.isSafeInteger(rawEpisodeOrder)) {
+              throw new Error("AmbDialogueOrdinalEpisodeOrderInvalid");
+            }
+            const episodeOrder = Number(rawEpisodeOrder);
+            const identity = {
+              constraintRevision: dialogueOrdinalConstraint.constraintRevision,
+              sourceId,
+              episodeOrder,
+              sourceBlockRevision,
+              dialoguePairRevision: sha(
+                [
+                  AMB_DIALOGUE_PAIR_SCHEMA_VERSION_V1,
+                  ...ordinalPairFacets
+                    .map(
+                      (facet) => `${facet.id}\0${facet.pairId}\0${facet.face}`,
+                    )
+                    .sort(),
+                ].join("\n"),
+              ),
+              items,
+            };
+            return Object.freeze(identity);
+          })()
+        : undefined;
+      const dialogueOrdinalCohort = dialogueOrdinalManifest
+        ? (() => {
+            const identity = {
+              transactionVersion:
+                "paw.memory-dialogue-ordinal-transaction.v1:atomic-source-cohort" as const,
+              constraintRevision: dialogueOrdinalManifest.constraintRevision,
+              fullLockedSourceIds: Object.freeze([
+                ...(request.dialogueOrdinalFullLockedSourceIds ??
+                  request.lockedSourceIds),
+              ]),
+              activeSourceId: dialogueOrdinalManifest.sourceId,
+              sourceAcquisitionRevision:
+                request.sourceAcquisitionRevision ?? "missing",
+              evidenceTimeUpperBound: request.evidenceTimeUpperBound ?? null,
+              episodeOrder: dialogueOrdinalManifest.episodeOrder,
+              sourceBlockRevision: dialogueOrdinalManifest.sourceBlockRevision,
+              dialoguePairRevision:
+                dialogueOrdinalManifest.dialoguePairRevision,
+              items: Object.freeze(
+                dialogueOrdinalManifest.items.map((item) =>
+                  Object.freeze({
+                    evidenceRef: item.assistantEvidenceRef,
+                    contentHash: item.assistantContentHash,
+                    turnOrder: item.assistantTurnOrder,
+                    predecessorEvidenceRef: item.predecessorEvidenceRef,
+                    predecessorContentHash: item.predecessorContentHash,
+                    predecessorTurnOrder: item.predecessorTurnOrder,
+                  }),
+                ),
+              ),
+            };
+            return Object.freeze({
+              ...identity,
+              populationRevision: hashCanonicalJsonV1(identity as JsonValue),
+            });
+          })()
+        : undefined;
+      const ordinalCohortAnchors = dialogueOrdinalManifest
+        ? dialogueOrdinalManifest.items.map((item) =>
+            Object.freeze({
+              documentId: dialogueOrdinalManifest.sourceId,
+              sourceSeq: item.assistantTurnOrder,
+              evidenceRef: item.assistantEvidenceRef,
+              sourceKind: "assistant_output" as const,
+            }),
+          )
+        : [];
+      const completeDirectAnchors = dialogueOrdinalManifest
+        ? Object.freeze(ordinalCohortAnchors)
+        : effectiveDirectAnchors;
       const sourceFairSearches = request.respondingAssistantMaterialization
         ? await Promise.all(
             request.respondingAssistantMaterialization.sourcePriorityIds.map(
@@ -3566,22 +3860,34 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
           readonly answer: AmbDialogueAnchorV1;
         } => projection !== undefined,
       );
-      const rankedAnchors = rankAmbDialogueEvidenceAnchorsV1({
-        roleConstraint: request.requirement.roleConstraint,
-        certifiedAssistantDialogueCandidate:
-          request.assistantDialogueCandidate === true,
-        directAnchors: effectiveDirectAnchors,
-        projections,
-        sourceFairProjections,
-        maxAnchors: request.budget.maxAnchors,
-      });
-      const anchors = rankedAnchors.anchors;
+      const rankedAnchors = dialogueOrdinalManifest
+        ? undefined
+        : rankAmbDialogueEvidenceAnchorsV1({
+            roleConstraint: request.requirement.roleConstraint,
+            certifiedAssistantDialogueCandidate:
+              request.assistantDialogueCandidate === true,
+            directAnchors: completeDirectAnchors,
+            projections,
+            sourceFairProjections,
+            maxAnchors: request.budget.maxAnchors,
+          });
+      // Typed ordinal cohorts deliberately bypass all rank/RRF/projection
+      // outputs. The only candidate set is the complete pair-facet population.
+      const anchors = dialogueOrdinalManifest
+        ? completeDirectAnchors
+        : (rankedAnchors?.anchors ?? []);
       const promotedAssistantEvidenceRefs = new Set([
-        ...rankedAnchors.promotedAssistantEvidenceRefs,
-        ...rankedAnchors.sourceFairAssistantEvidenceRefs,
+        ...(dialogueOrdinalManifest
+          ? completeDirectAnchors.map((anchor) => anchor.evidenceRef)
+          : [
+              ...(rankedAnchors?.promotedAssistantEvidenceRefs ?? []),
+              ...(rankedAnchors?.sourceFairAssistantEvidenceRefs ?? []),
+            ]),
       ]);
       const sourceFairAssistantEvidenceRefs = new Set(
-        rankedAnchors.sourceFairAssistantEvidenceRefs,
+        dialogueOrdinalManifest
+          ? ([] as string[])
+          : (rankedAnchors?.sourceFairAssistantEvidenceRefs ?? []),
       );
       const perSource = new Map<string, number>();
       const hits = [];
@@ -3687,22 +3993,33 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
       }
       const locatorDiagnostics: SourceLocalLocatorDiagnosticsV1 = Object.freeze(
         {
-          ...rankedAnchors.telemetry,
+          ...(rankedAnchors?.telemetry ?? {
+            directAssistantDiscoveryCount: 0,
+            userDiscoveryCount: 0,
+            promotedAssistantCount: 0,
+            promotionDroppedNoAdjacentAssistant: 0,
+            dedupedAssistantCount: 0,
+            finalAssistantCandidateCount: 0,
+            directCandidateDisplacedCount: 0,
+            sourceFairPromptCount: 0,
+            sourceFairAssistantCount: 0,
+            sourceFairSourceCount: 0,
+          }),
           finalAssistantCandidateCount: hits.filter(
             (hit) => hit.sourceKind === "assistant_output",
           ).length,
           directAssistantDiscoveryRefHashes: contentFreeEvidenceRefHashes(
-            directAnchors
+            rankedDirectAnchors
               .filter((anchor) => anchor.sourceKind === "assistant_output")
               .map((anchor) => anchor.evidenceRef),
             32,
           ),
           promotedAssistantCandidateRefHashes: contentFreeEvidenceRefHashes(
-            rankedAnchors.promotedAssistantEvidenceRefs,
+            rankedAnchors?.promotedAssistantEvidenceRefs ?? [],
             32,
           ),
           sourceFairAssistantCandidateRefHashes: contentFreeEvidenceRefHashes(
-            rankedAnchors.sourceFairAssistantEvidenceRefs,
+            rankedAnchors?.sourceFairAssistantEvidenceRefs ?? [],
             8,
           ),
           sourceFairSourceHashes: contentFreeSourceHashes(
@@ -3825,11 +4142,20 @@ async function retrieve(params: Record<string, unknown>): Promise<unknown> {
             contextEvidenceRefs: hits.map((hit) => hit.contextEvidenceRefs),
             temporalFrontierRevision:
               temporalFrontier?.frontierRevision ?? "disabled",
+            ...(dialogueOrdinalCohort === undefined
+              ? {}
+              : {
+                  dialogueOrdinalCohortRevision:
+                    dialogueOrdinalCohort.populationRevision,
+                }),
           }),
         ),
         hits: Object.freeze(hits),
         degradedChannels,
         ...(temporalFrontier === undefined ? {} : { temporalFrontier }),
+        ...(dialogueOrdinalCohort === undefined
+          ? {}
+          : { dialogueOrdinalCohort }),
         telemetry: Object.freeze({
           lexicalCandidates: lexicalCandidateCount,
           denseCandidates: denseCandidateCount,

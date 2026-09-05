@@ -4,20 +4,28 @@ import {
   hashTextV1,
 } from "./canonical.js";
 import {
+  type MemoryDialogueOrdinalCohortV1,
+  validateMemoryDialogueOrdinalCohortV1,
+} from "./dialogue-ordinal-transaction.js";
+import {
+  type MemoryDialogueOrdinalConstraintV1,
+  isMemoryDialogueOrdinalConstraintV1,
+} from "./dialogue-ordinal.js";
+import {
   type MemoryConversationTurnKindV1,
   type MemoryEvidenceNotebookHitV1,
   buildMemoryConversationTurnBundleV1,
 } from "./evidence-first.js";
 import type { MemoryEvidenceRequirementV3 } from "./evidence-query-planner.js";
-import type {
-  MemoryEvidenceBoundTemporalConstraintV1,
-  MemoryEvidenceTemporalIntervalV2,
-} from "./query-plan-contracts.js";
 import { evidenceSourceIdV1 } from "./evidence-ref.js";
 import {
   type MemoryQueryAnswerOriginAuthorizationV1,
   validateMemoryQueryAnswerOriginAuthorizationV1,
 } from "./query-answer-origin.js";
+import type {
+  MemoryEvidenceBoundTemporalConstraintV1,
+  MemoryEvidenceTemporalIntervalV2,
+} from "./query-plan-contracts.js";
 import {
   assertMemoryEvidenceTemporalConstraintIdentityV1,
   bindMemoryEvidenceTemporalConstraintV1,
@@ -120,6 +128,10 @@ export interface MemorySourceLocalEvidenceRequestV1 {
    * assistant anchors inside the already bounded source aperture.
    */
   readonly assistantDialogueCandidate?: boolean;
+  /** Query-compiled only; opens a complete, one-session assistant-pair manifest. */
+  readonly dialogueOrdinal?: MemoryDialogueOrdinalConstraintV1;
+  /** Full immutable lock retained while this request reads one active source. */
+  readonly dialogueOrdinalFullLockedSourceIds?: readonly string[];
   /**
    * Bounded prompt-side discovery for a provenance-unresolved answer slot.
    * Adapters may retrieve user prompts with both texts, but may return only
@@ -193,6 +205,8 @@ export interface MemorySourceLocalEvidenceResultV1 {
   readonly hits: readonly MemorySourceLocalEvidenceHitV1[];
   readonly degradedChannels: readonly ("lexical" | "dense" | "hydrate")[];
   readonly telemetry: MemorySourceLocalEvidenceTelemetryV1;
+  /** Complete immutable assistant pair cohort for exactly one source. */
+  readonly dialogueOrdinalCohort?: MemoryDialogueOrdinalCohortV1;
   readonly temporalFrontier?: MemoryTemporalEvidenceFrontierSnapshotV1;
 }
 
@@ -261,7 +275,9 @@ export function createMemoryTemporalEvidenceFrontierSnapshotV1(input: {
       cutoff !== undefined &&
       (effectiveUpper === undefined || effectiveUpper > cutoff)
     ) {
-      throw namedError("MemorySourceLocalEvidenceTemporalFrontierCutoffInvalid");
+      throw namedError(
+        "MemorySourceLocalEvidenceTemporalFrontierCutoffInvalid",
+      );
     }
     postingByRef.set(posting.evidenceRef, posting);
   }
@@ -274,7 +290,9 @@ export function createMemoryTemporalEvidenceFrontierSnapshotV1(input: {
     new Set(returnedEvidenceRefs).size !== returnedEvidenceRefs.length ||
     returnedEvidenceRefs.some((evidenceRef) => !postingByRef.has(evidenceRef))
   ) {
-    throw namedError("MemorySourceLocalEvidenceTemporalFrontierReturnedInvalid");
+    throw namedError(
+      "MemorySourceLocalEvidenceTemporalFrontierReturnedInvalid",
+    );
   }
   const partitions = {
     eventInsideWindowEvidenceRefs: [] as string[],
@@ -875,6 +893,12 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
 }): readonly MemorySourceLocalEvidenceHitV1[] {
   assertBudget(input.request.budget);
   assertRespondingAssistantMaterialization(input.request);
+  if (
+    input.request.dialogueOrdinal !== undefined &&
+    !isMemoryDialogueOrdinalConstraintV1(input.request.dialogueOrdinal)
+  ) {
+    throw namedError("MemoryDialogueOrdinalConstraintInvalid");
+  }
   if (input.request.temporalFrontier) {
     assertTemporalFrontierRequest(input.request);
   }
@@ -895,6 +919,11 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
   ) {
     throw namedError("MemorySourceLocalEvidenceSourcesInvalid");
   }
+  validateDialogueOrdinalCohortResultV1({
+    request: input.request,
+    cohort: input.result.dialogueOrdinalCohort,
+    allowedSources: allowed,
+  });
   const cutoff = input.request.evidenceTimeUpperBound
     ? Date.parse(input.request.evidenceTimeUpperBound)
     : undefined;
@@ -1007,7 +1036,69 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       returnedEvidenceRefs: input.result.hits.map((hit) => hit.evidenceRef),
     });
   }
+  if (input.request.dialogueOrdinal) {
+    const cohort = input.result.dialogueOrdinalCohort;
+    if (
+      !cohort ||
+      refs.size !== cohort.items.length ||
+      cohort.items.some((item) => !refs.has(item.evidenceRef))
+    ) {
+      throw namedError("MemoryDialogueOrdinalCohortHitsIncomplete");
+    }
+  }
   return Object.freeze([...input.result.hits]);
+}
+
+/** The locator may return one and only one complete immutable source cohort. */
+export function validateDialogueOrdinalCohortResultV1(input: {
+  readonly request: MemorySourceLocalEvidenceRequestV1;
+  readonly cohort: MemoryDialogueOrdinalCohortV1 | undefined;
+  readonly allowedSources: ReadonlySet<string>;
+}): void {
+  const constraint = input.request.dialogueOrdinal;
+  if (constraint === undefined) {
+    if (input.cohort !== undefined) {
+      throw namedError("MemoryDialogueOrdinalCohortUnexpected");
+    }
+    return;
+  }
+  const cohort = input.cohort;
+  const fullLock = input.request.dialogueOrdinalFullLockedSourceIds;
+  if (
+    !cohort ||
+    input.allowedSources.size !== 1 ||
+    !fullLock ||
+    fullLock.length < 1 ||
+    fullLock.length > 8 ||
+    new Set(fullLock).size !== fullLock.length ||
+    cohort.activeSourceId !== input.request.lockedSourceIds[0] ||
+    !input.allowedSources.has(cohort.activeSourceId) ||
+    cohort.fullLockedSourceIds.length !== fullLock.length ||
+    cohort.fullLockedSourceIds.some(
+      (sourceId, index) => sourceId !== fullLock[index],
+    ) ||
+    cohort.sourceAcquisitionRevision !==
+      (input.request.sourceAcquisitionRevision ?? "missing") ||
+    cohort.evidenceTimeUpperBound !==
+      (input.request.evidenceTimeUpperBound ?? null)
+  ) {
+    throw namedError("MemoryDialogueOrdinalCohortInvalid");
+  }
+  try {
+    validateMemoryDialogueOrdinalCohortV1({ constraint, cohort });
+  } catch {
+    throw namedError("MemoryDialogueOrdinalCohortInvalid");
+  }
+  if (
+    cohort.items.some(
+      (item) =>
+        evidenceRefFamily(item.evidenceRef) !== cohort.activeSourceId ||
+        evidenceRefFamily(item.predecessorEvidenceRef) !==
+          cohort.activeSourceId,
+    )
+  ) {
+    throw namedError("MemoryDialogueOrdinalCohortInvalid");
+  }
 }
 
 /**
@@ -1024,16 +1115,14 @@ export async function hydrateMemorySourceLocalEvidenceResultV1(input: {
     throw namedError("MemorySourceLocalEvidenceHydratorInvalid");
   }
   const requestedRefs = [
-    ...new Set(
-      [
-        ...input.result.hits.flatMap((hit) =>
-          hit.includedTurns.map((turn) => turn.evidenceRef),
-        ),
-        ...(input.result.temporalFrontier?.postings.map(
-          (posting) => posting.evidenceRef,
-        ) ?? []),
-      ],
-    ),
+    ...new Set([
+      ...input.result.hits.flatMap((hit) =>
+        hit.includedTurns.map((turn) => turn.evidenceRef),
+      ),
+      ...(input.result.temporalFrontier?.postings.map(
+        (posting) => posting.evidenceRef,
+      ) ?? []),
+    ]),
   ];
   if (requestedRefs.length === 0) return input.result;
   const hydrated = await input.hydrator.hydrate(requestedRefs, input.signal);
@@ -1205,6 +1294,15 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     roleConstraint: input.request.requirement.roleConstraint,
     assistantDialogueCandidate:
       input.request.assistantDialogueCandidate === true,
+    ...(input.request.dialogueOrdinal === undefined
+      ? {}
+      : {
+          dialogueOrdinal: input.request.dialogueOrdinal.constraintRevision,
+          dialogueOrdinalFullLockedSourceIds:
+            input.request.dialogueOrdinalFullLockedSourceIds === undefined
+              ? "missing"
+              : [...input.request.dialogueOrdinalFullLockedSourceIds],
+        }),
     respondingAssistantMaterialization: input.request
       .respondingAssistantMaterialization
       ? {
@@ -1374,8 +1472,12 @@ function assertTemporalRoundPosting(
 ): void {
   const observedAt = parseOptionalTimestamp(posting.observedAt);
   const eventInterval = posting.eventInterval;
-  const eventLower = eventInterval ? Date.parse(eventInterval.lower) : undefined;
-  const eventUpper = eventInterval ? Date.parse(eventInterval.upper) : undefined;
+  const eventLower = eventInterval
+    ? Date.parse(eventInterval.lower)
+    : undefined;
+  const eventUpper = eventInterval
+    ? Date.parse(eventInterval.upper)
+    : undefined;
   const expectedRevision = hashCanonicalJsonV1({
     sourceId: posting.sourceId,
     evidenceRef: posting.evidenceRef,
@@ -1408,8 +1510,7 @@ function assertTemporalRoundPosting(
         (eventLower as number) >= (eventUpper as number))) ||
     (posting.timeBasis === "explicit_event_interval") !==
       (eventInterval !== undefined) ||
-    (posting.timeBasis === "source_observed_at" &&
-      observedAt === undefined) ||
+    (posting.timeBasis === "source_observed_at" && observedAt === undefined) ||
     (posting.timeBasis === "unbound" && eventInterval !== undefined) ||
     posting.postingRevision !== expectedRevision
   ) {

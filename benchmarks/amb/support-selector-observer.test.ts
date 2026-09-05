@@ -155,6 +155,52 @@ describe("AMB support selector observer", () => {
     expect(observation?.batchTelemetry).toEqual(result.batchTelemetry);
   });
 
+  test("transparently forwards the host ordinal selector without changing identity", () => {
+    const ordinalSelector = {
+      selectorVersion: "ordinal-v1",
+      async selectCohort() {
+        return [];
+      },
+    } as NonNullable<
+      MemoryEvidenceSupportSelectorV1["dialogueOrdinalSelector"]
+    >;
+    const delegate: MemoryEvidenceSupportSelectorV1 = {
+      selectorVersion: "selector-v1",
+      dialogueOrdinalSelector: ordinalSelector,
+      async select() {
+        return fixture().result;
+      },
+    };
+    const observer = observeAmbEvidenceSupportSelectorV1({
+      selector: delegate,
+      observe() {},
+    });
+    expect(observer.selectorVersion).toBe(delegate.selectorVersion);
+    expect(observer.dialogueOrdinalSelector).toBe(ordinalSelector);
+  });
+
+  test("transparently forwards the query-only ordinal admission port", () => {
+    const admission = {
+      admissionVersion: "ordinal-admission-v1",
+      async admit() {
+        return undefined;
+      },
+    } as NonNullable<
+      MemoryEvidenceSupportSelectorV1["dialogueOrdinalAdmission"]
+    >;
+    const observer = observeAmbEvidenceSupportSelectorV1({
+      selector: {
+        selectorVersion: "selector-v1",
+        dialogueOrdinalAdmission: admission,
+        async select() {
+          return fixture().result;
+        },
+      },
+      observe() {},
+    });
+    expect(observer.dialogueOrdinalAdmission).toBe(admission);
+  });
+
   test("forwards one-call grouped settlement and reports a partial commit", async () => {
     const { selection } = fixture();
     let strictCalls = 0;

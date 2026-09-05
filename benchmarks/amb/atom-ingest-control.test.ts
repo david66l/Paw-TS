@@ -99,6 +99,18 @@ describe("AMB atom ingest controls", () => {
     ]);
   });
 
+  test("keeps archive dialogue bodies raw when the normal source sidecar compacts", () => {
+    const assistantBody = "x".repeat(2_000);
+    const windows = projectAmbMemoryEvidenceV1(
+      `[USER] write a song\n[ASSISTANT] ${assistantBody}`,
+      4_000,
+    );
+    expect(windows).toHaveLength(1);
+    expect(windows[0]?.source[1]?.content).toHaveLength(1_600);
+    expect(windows[0]?.archiveSource[1]?.content).toHaveLength(2_000);
+    expect(windows[0]?.archiveSource[1]?.content).toBe(assistantBody);
+  });
+
   test("uses atom terms to select bounded source evidence deterministically", () => {
     const input = {
       sourceTexts: [
@@ -232,6 +244,11 @@ describe("AMB atom ingest controls", () => {
       maxPromptTokens: 123_456,
       maxCompletionTokens: 4_000_000,
     });
+    expect(limits["dialogue-ordinal-admission"]).toMatchObject({
+      maxRemoteCalls: 600,
+      maxPromptTokens: 600_000,
+      maxCompletionTokens: 60_000,
+    });
     expect(limits["state-semantic-audit-a"]).toMatchObject({
       maxRemoteCalls: 120,
       maxPromptTokens: 1_500_000,
@@ -269,6 +286,12 @@ describe("AMB atom ingest controls", () => {
         concurrency: 1,
       },
       "evidence-support": {
+        maxRemoteCalls: 3,
+        maxPromptTokens: 300,
+        maxCompletionTokens: 150,
+        concurrency: 1,
+      },
+      "dialogue-ordinal-admission": {
         maxRemoteCalls: 3,
         maxPromptTokens: 300,
         maxCompletionTokens: 150,
@@ -348,7 +371,7 @@ describe("AMB atom ingest controls", () => {
     });
     expect(snapshot.byPurpose["evidence-support"].cacheHits).toBe(1);
     expect(snapshot.aggregate).toMatchObject({
-      maxRemoteCalls: 21,
+      maxRemoteCalls: 24,
       remoteCalls: 2,
       cacheHits: 1,
       promptTokens: 170,

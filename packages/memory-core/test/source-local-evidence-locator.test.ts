@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { hashTextV1 } from "../src/canonical.js";
 import {
   DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
-  PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
   type MemorySourceLocalEvidenceHitV1,
   type MemorySourceLocalEvidenceResultV1,
+  PAW_MEMORY_TEMPORAL_EVIDENCE_FRONTIER_VERSION_V1,
   createMemoryTemporalEvidenceFrontierSnapshotV1,
   createMemoryTemporalRoundPostingV1,
   evaluateMemorySourceLocalLeafEligibilityV2,
@@ -14,14 +15,14 @@ import {
   isMemorySourceLocalEvidenceRouteEligibleV2,
   memorySourceLocalAnchorKindsV1,
   memorySourceLocalEvidenceCacheKeyV1,
-  validateMemoryTemporalEvidenceFrontierSnapshotV1,
   validateMemorySourceLocalEvidenceResultV1,
+  validateMemoryTemporalEvidenceFrontierSnapshotV1,
 } from "../src/legacy.js";
-import { hashTextV1 } from "../src/canonical.js";
 import {
   authorizeMemoryQueryAnswerOriginMaterializationV1,
   compileMemoryQueryAnswerOriginV1,
 } from "../src/query-answer-origin.js";
+import { validateMemoryDialoguePredecessorVerificationV1 } from "../src/source-local-evidence-locator.js";
 import {
   bindMemoryEvidenceTemporalConstraintV1,
   compileMemoryEvidenceTemporalConstraintV1,
@@ -57,6 +58,46 @@ function lateBindingAuthorization(requirementId = requirement.requirementId) {
 }
 
 describe("source-local evidence locator boundary", () => {
+  test("keeps the ordinary predecessor-verifier cap at thirty-two", () => {
+    const verifier = {
+      verifierVersion: "test-predecessor-v1",
+      async verify() {
+        throw new Error("not called");
+      },
+    };
+    const result = {
+      verifierVersion: verifier.verifierVersion,
+      verificationRevision: "revision",
+      proofs: [],
+    };
+    expect(() =>
+      validateMemoryDialoguePredecessorVerificationV1({
+        verifier,
+        request: {
+          targets: Array.from({ length: 32 }, (_, index) => ({
+            sourceId: "s",
+            evidenceRef: `s#${index + 1}`,
+          })),
+          lockedSourceIds: ["s"],
+        },
+        result,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateMemoryDialoguePredecessorVerificationV1({
+        verifier,
+        request: {
+          targets: Array.from({ length: 33 }, (_, index) => ({
+            sourceId: "s",
+            evidenceRef: `s#${index + 1}`,
+          })),
+          lockedSourceIds: ["s"],
+        },
+        result,
+      }),
+    ).toThrow("MemoryDialoguePredecessorVerificationInvalid");
+  });
+
   test("derives one shared role aperture for every locator adapter", () => {
     const request = {
       requirement,
@@ -900,9 +941,7 @@ describe("source-local evidence locator boundary", () => {
         sourceClockHintOutsideEvidenceRefs: [outside.evidenceRef],
         timeUnboundEvidenceRefs: [],
       },
-      omitted: [
-        { evidenceRef: outside.evidenceRef, reason: "rank_budget" },
-      ],
+      omitted: [{ evidenceRef: outside.evidenceRef, reason: "rank_budget" }],
     });
     expect(snapshot.introducedEvidenceRefs).toEqual([inside.evidenceRef]);
     expect(() =>
