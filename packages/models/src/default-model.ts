@@ -116,6 +116,11 @@ const KNOWN_CAPABILITIES: Array<{ pattern: RegExp; caps: ModelCapabilities }> =
       pattern: /gpt-3[.]5/i,
       caps: { contextWindow: 16_385, maxOutputTokens: 4_096 },
     },
+    // GLM-5.3-Flash: official 1M context / 128K output.
+    {
+      pattern: /^glm-5[.]3-flash$/i,
+      caps: { contextWindow: 1_000_000, maxOutputTokens: 128_000 },
+    },
     // ── DeepSeek 系列 ──
     // V4 模型：1M 上下文（必须在通用 /deepseek/i 之前匹配）
     {
@@ -197,6 +202,11 @@ const PROVIDERS: Record<CredentialProvider, ProviderEntry> = {
     defaultModel: "qwen-plus",
     defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
   },
+  glm: {
+    client: "openai",
+    defaultModel: "glm-5.3-flash",
+    defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+  },
   deepseek: {
     client: "openai",
     defaultModel: "deepseek-chat",
@@ -231,6 +241,7 @@ function detectProvider(
     return "openai";
   }
   if (hasConfiguredApiKey("qwen")) return "qwen";
+  if (hasConfiguredApiKey("glm")) return "glm";
 
   // With no configured key, fall back to credentials supplied by the
   // process environment using the historical provider priority.
@@ -243,6 +254,7 @@ function detectProvider(
     return "openai";
   }
   if (hasApiKey(settings, "qwen")) return "qwen";
+  if (hasApiKey(settings, "glm")) return "glm";
   return undefined;
 }
 

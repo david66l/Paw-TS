@@ -19,7 +19,12 @@
 import type { PawSettingsLocal } from "./schema.js";
 
 /** 需要 API Key + 可选 Base URL 的 AI 提供商类型。 */
-export type CredentialProvider = "anthropic" | "openai" | "qwen" | "deepseek";
+export type CredentialProvider =
+  | "anthropic"
+  | "openai"
+  | "qwen"
+  | "deepseek"
+  | "glm";
 
 /** API Key 的扁平字段名映射：provider → settings 字段 key。 */
 const API_KEY_FIELDS: Record<CredentialProvider, keyof PawSettingsLocal> = {
@@ -27,6 +32,7 @@ const API_KEY_FIELDS: Record<CredentialProvider, keyof PawSettingsLocal> = {
   openai: "openai_api_key",
   qwen: "qwen_api_key",
   deepseek: "deepseek_api_key",
+  glm: "glm_api_key",
 };
 
 /** Base URL 的扁平字段名映射：provider → settings 字段 key。 */
@@ -35,6 +41,7 @@ const BASE_URL_FIELDS: Record<CredentialProvider, keyof PawSettingsLocal> = {
   openai: "openai_base_url",
   qwen: "qwen_base_url",
   deepseek: "deepseek_base_url",
+  glm: "glm_base_url",
 };
 
 /** API Key 的环境变量名映射：provider → 环境变量名。 */
@@ -43,6 +50,7 @@ const API_KEY_ENVS: Record<CredentialProvider, string> = {
   openai: "OPENAI_API_KEY",
   qwen: "QWEN_API_KEY",
   deepseek: "DEEPSEEK_API_KEY",
+  glm: "GLM_API_KEY",
 };
 
 /** Base URL 的环境变量名映射：provider → 环境变量名。 */
@@ -51,6 +59,7 @@ const BASE_URL_ENVS: Record<CredentialProvider, string> = {
   openai: "OPENAI_BASE_URL",
   qwen: "QWEN_BASE_URL",
   deepseek: "DEEPSEEK_BASE_URL",
+  glm: "GLM_BASE_URL",
 };
 
 /**

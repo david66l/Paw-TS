@@ -123,6 +123,23 @@ try {
   await page.getByRole("button", { name: "设置", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "设置" });
   await dialog.waitFor();
+  if (process.env.PAW_NATIVE_QA_MODEL) {
+    await page
+      .getByText(process.env.PAW_NATIVE_QA_MODEL, { exact: true })
+      .waitFor();
+    const preset = process.env.PAW_NATIVE_QA_PRESET;
+    if (preset) {
+      assert.equal(
+        await dialog
+          .getByRole("button", { name: preset, exact: true })
+          .getAttribute("aria-pressed"),
+        "true",
+      );
+    }
+    checks.push(
+      `Desktop host and selected preset: ${process.env.PAW_NATIVE_QA_MODEL}`,
+    );
+  }
   await dialog.getByRole("button", { name: /纸间 · Louis/ }).click();
   assert.equal(
     await page.locator("html").getAttribute("data-color-theme"),

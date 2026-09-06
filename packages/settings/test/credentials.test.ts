@@ -118,3 +118,30 @@ describe("credentials", () => {
     expect(redacted.model).toBe("gpt-4o");
   });
 });
+
+test("GLM credentials resolve nested, legacy and environment values and redact secrets", () => {
+  const oldKey = process.env.GLM_API_KEY;
+  const oldUrl = process.env.GLM_BASE_URL;
+  try {
+    process.env.GLM_API_KEY = "test-env-secret";
+    process.env.GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+    expect(resolveApiKey({}, "glm")).toBe("test-env-secret");
+    expect(resolveBaseUrl({}, "glm")).toBe(process.env.GLM_BASE_URL);
+    const settings = {
+      glm_api_key: "test-legacy-secret",
+      models: { glm: { apiKey: "test-nested-secret" } },
+    };
+    expect(resolveApiKey({ glm_api_key: settings.glm_api_key }, "glm")).toBe(
+      "test-legacy-secret",
+    );
+    expect(resolveApiKey(settings, "glm")).toBe("test-nested-secret");
+    const redacted = JSON.stringify(redactSecrets(settings));
+    expect(redacted).not.toContain("test-legacy-secret");
+    expect(redacted).not.toContain("test-nested-secret");
+  } finally {
+    if (oldKey === undefined) delete process.env.GLM_API_KEY;
+    else process.env.GLM_API_KEY = oldKey;
+    if (oldUrl === undefined) delete process.env.GLM_BASE_URL;
+    else process.env.GLM_BASE_URL = oldUrl;
+  }
+});

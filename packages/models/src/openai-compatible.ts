@@ -51,6 +51,25 @@ export interface OpenAICompatibleOptions {
   readonly supportsThinkingToggle?: boolean;
 }
 
+function isGlm53(model: string): boolean {
+  return /^glm-5[.]3(?:-flash)?$/i.test(model);
+}
+
+/** Provider-specific fields shared by complete and completeStream. */
+function glmRequestFields(
+  model: string,
+  streaming = false,
+): Record<string, unknown> {
+  return isGlm53(model)
+    ? {
+        thinking: { type: "enabled", clear_thinking: false },
+        temperature: 1,
+        top_p: 0.95,
+        ...(streaming ? { tool_stream: true } : {}),
+      }
+    : {};
+}
+
 function abortError(): Error {
   const e = new Error("The operation was aborted");
   e.name = "AbortError";
@@ -65,6 +84,16 @@ function resolveRequestThinkingV1(
   enabled: boolean | undefined;
   effort: "high" | "max" | undefined;
 }> {
+  // GLM-5.3 cannot disable reasoning, including bounded auxiliary calls.
+  if (isGlm53(profile.model)) {
+    return {
+      enabled: true,
+      effort:
+        options?.thinkingEnabled === false
+          ? "high"
+          : (profile.reasoningEffort ?? "max"),
+    };
+  }
   const enabled =
     options?.thinkingEnabled === false
       ? supportsThinkingToggle
@@ -115,7 +144,9 @@ export class OpenAICompatibleModel implements LanguageModel {
         ? `deepseek:${opts.model}`
         : opts.model.toLowerCase().includes("qwen")
           ? `qwen3:${opts.model}`
-          : `openai:${opts.model}`;
+          : /^glm-/i.test(opts.model)
+            ? `glm:${opts.model}`
+            : `openai:${opts.model}`;
     this.capabilities = opts.capabilities;
     this.runtimeProfile = {
       protocol: "openai-compatible",
@@ -126,6 +157,12 @@ export class OpenAICompatibleModel implements LanguageModel {
         : {}),
       ...(opts.reasoningEffort !== undefined
         ? { reasoningEffort: opts.reasoningEffort }
+        : {}),
+      ...(isGlm53(opts.model)
+        ? {
+            thinkingEnabled: true,
+            reasoningEffort: opts.reasoningEffort ?? "max",
+          }
         : {}),
     };
   }
@@ -168,6 +205,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     if (options?.tools && options.tools.length > 0) {
       body.tools = options.tools;
     }
+    Object.assign(body, glmRequestFields(this.model));
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -315,6 +353,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     if (options?.tools && options.tools.length > 0) {
       baseStreamBody.tools = options.tools;
     }
+    Object.assign(baseStreamBody, glmRequestFields(this.model, true));
     let res = await fetch(url, {
       method: "POST",
       headers: {

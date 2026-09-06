@@ -80,6 +80,8 @@ export const pawSettingsLocalSchema = z
     qwen_base_url: z.string().optional(),
     deepseek_api_key: z.string().optional(),
     deepseek_base_url: z.string().optional(),
+    glm_api_key: z.string().optional(),
+    glm_base_url: z.string().optional(),
     ollama_host: z.string().optional(),
     /**
      * 记忆检索策略：

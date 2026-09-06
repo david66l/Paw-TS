@@ -191,3 +191,34 @@ Manager 可以在后续计划中声明对已有阶段的依赖，也可以用新
 这套测试用于开发验收 Paw 自身窗口；任务运行时的「视觉验收」仍检查本地网页，尚未获得控制任意原生程序的能力。系统文件选择器、操作系统标题栏按钮和真实模型生成质量不在此测试范围内。
 
 接口参考：[Playwright Electron](https://playwright.dev/docs/api/class-electron)、[Electron capturePage](https://www.electronjs.org/docs/latest/api/web-contents#contentscapturepagerect-opts)。
+
+
+## GLM-5.3-Flash
+
+在工作区 `.paw/settings.local.json` 的 `models` 中添加下列预设，并设置 `"provider": "glm"`。保留其他预设即可在桌面设置中切换。
+
+```json
+{
+  "provider": "glm",
+  "models": {
+    "glm": {
+      "model": "glm-5.3-flash",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "apiKey": "YOUR_API_KEY",
+      "thinkingEnabled": true,
+      "reasoningEffort": "max",
+      "imageInput": true
+    }
+  }
+}
+```
+
+`glm` 内置提供商也支持 `GLM_API_KEY` / `GLM_BASE_URL` 环境变量。密钥只放在 Git 忽略的本地配置或环境变量中。上例使用标准 API；Coding Plan 应按账户权益使用官方指定的 Coding 端点，两者计费与额度独立。
+
+按[官方模型文档](https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash)，Paw 使用 1,000,000 token 上下文预算和保守的 128,000 token 输出上限；实际调用仍受任务自身的输出预算限制。图片通过 `image_url` 传输，可用于附件理解与现有网页视觉验收；视频和文档输入尚未接入桌面附件。
+
+GLM-5.3-Flash 不支持关闭思考。适配器始终发送 `thinking.type: enabled` 和 `clear_thinking: false`，原样回传工具轮次中的 `reasoning_content`，流式请求启用 `tool_stream`。辅助调用原本要求关闭思考时，改用 `high` 强度并保留原有输出和超时限制；正常任务默认 `max`，也可在预设中选择 `high`。选择该模型时，桌面主 Agent 和 `flash/pro/inherit` 子 Agent 使用所选 GLM Flash。切换其他模型后沿用原有模型偏好规则。
+
+GLM 的 Token 用量来自接口实际返回；费用面板目前仍使用通用估算费率，尚未接入智谱标准 API 的人民币定价和套餐折扣，实际费用请以智谱账单为准。
+
+更换模型后请新建对话；旧任务恢复要求使用其原有模型配置。

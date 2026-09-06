@@ -386,6 +386,7 @@ function resolveModelLabel(workspaceRoot: string): string {
 
     // 命名预设别名：provider 指向 models 里的自定义条目名（非内置 provider）
     const builtin =
+      provider === "glm" ||
       provider === "deepseek" ||
       provider === "qwen" ||
       provider === "anthropic" ||
@@ -401,6 +402,9 @@ function resolveModelLabel(workspaceRoot: string): string {
     }
 
     // 显式 provider 优先
+    if (provider === "glm") {
+      return `glm:${resolveModel(s, "glm", "glm-5.3-flash")}`;
+    }
     if (provider === "deepseek") {
       return `deepseek:${resolveModel(s, "deepseek", "deepseek-chat")}`;
     }
@@ -432,6 +436,9 @@ function resolveModelLabel(workspaceRoot: string): string {
     }
     if (hasApiKey(s, "qwen")) {
       return `qwen:${resolveModel(s, "qwen", "qwen-plus")}`;
+    }
+    if (hasApiKey(s, "glm")) {
+      return `glm:${resolveModel(s, "glm", "glm-5.3-flash")}`;
     }
     return "fake (no API keys)";
   } catch {

@@ -103,11 +103,13 @@ export function SettingsModal({
           <section className={styles.section}>
             <div className={styles.sectionTitle}>模型</div>
 
-            <div className={styles.row}>
+            <div className={`${styles.row} ${styles.modelRow}`}>
               <div className={styles.rowText}>
                 <div className={styles.rowLabel}>模型预设</div>
                 <div className={styles.rowDesc}>
-                  切换 settings.local.json 里的 provider
+                  当前模型：
+                  {modelPresets.find((p) => p.id === provider)?.model ||
+                    "未选择"}
                 </div>
               </div>
               <Segmented

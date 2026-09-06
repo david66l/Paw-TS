@@ -115,6 +115,22 @@
   min-width: 0;
 }
 
+.modelRow {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.modelRow .segmented {
+  flex-wrap: wrap;
+  border-radius: 12px;
+}
+
+.modelRow .seg,
+.modelRow .segActive {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .rowLabel {
   font-size: 13.5px;
   font-weight: 600;

@@ -24,6 +24,9 @@ export function desktopAgentModels(
   let flash: LanguageModel | undefined;
   const choose = (preference: string) => {
     if (preference !== "flash") return main;
+    // The selected GLM Flash also satisfies worker/root Flash preferences.
+    if (main.runtimeProfile?.model.toLowerCase() === "glm-5.3-flash")
+      return main;
     flash ??= createDeepSeekFlashModel(workspaceRoot) ?? main;
     return flash;
   };
