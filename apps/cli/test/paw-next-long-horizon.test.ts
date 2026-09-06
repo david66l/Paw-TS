@@ -88,13 +88,14 @@ test("failed attempts consume the durable stage budget; repair feedback does not
     callerId: "completion-review",
     delivery: "queue",
     content: "repair",
-    acceptedAt: 100,
+    contentHash: "repair",
   });
   facts.push({
     type: "input.promoted",
     inputId: "repair",
     delivery: "queue",
     content: "repair",
+    contentHash: "repair",
   });
   expect(managerStageAdmissionAllowed(facts, "new-call", 1)).toBe(false);
   facts.push({
@@ -102,6 +103,7 @@ test("failed attempts consume the durable stage budget; repair feedback does not
     inputId: "new-work",
     delivery: "queue",
     content: "new user task",
+    contentHash: "new-work",
   });
   expect(managerStageAdmissionAllowed(facts, "new-call", 1)).toBe(true);
 });

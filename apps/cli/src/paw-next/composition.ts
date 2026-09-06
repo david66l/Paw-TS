@@ -16,6 +16,14 @@ import {
   createManagerStageLauncher,
   stageEvidenceIsCurrent,
 } from "./long-horizon.js";
+import {
+  type StageGraphSnapshot,
+  guardStageDependencies,
+  projectStageGraph,
+  stageGraphSummary,
+  stageResultEvidence,
+  withStageLedger,
+} from "./stage-graph.js";
 
 import {
   type AgentLoopContinueCursorV1,
@@ -337,6 +345,7 @@ export interface PawNextChildControlV1 {
 export interface RunFreshPawNextTaskOptionsV1 {
   readonly environmentAudit?: true;
   readonly auditedMemory?: true;
+  readonly stageGraph?: true;
   readonly longHorizon?: "manager" | "executor";
   readonly onChildResult?: (id: string, result: SubAgentResult) => void;
   readonly onManagedJobsReady?: (
@@ -399,6 +408,7 @@ export interface RunFreshPawNextTaskOptionsV1 {
   readonly onModelSettlement?: (event: PawModelSettlementTelemetryV1) => void;
   /** Process-local memory cache telemetry; excluded from durable identity. */
   readonly onMemoryCacheEvent?: (event: MemoryRetrievalCacheEventV1) => void;
+  readonly onStageGraph?: (graph: StageGraphSnapshot) => void;
   /** Process-local, content-free memory writer telemetry. */
   readonly onMemoryWriterEvent?: (event: MemoryWriterEventV1) => void;
   /** Process-local, content-free memory topic organizer telemetry. */
@@ -590,6 +600,7 @@ export function preparePawNextProductRuntimeIdentityV3(
       options.mcp,
       options.memory,
       options.longHorizon,
+      options.stageGraph,
     ),
   );
 }
@@ -1037,6 +1048,7 @@ export interface RunFreshPawNextTaskInputV3 {
   ) => void | Promise<void>;
   readonly onModelSettlement?: (event: PawModelSettlementTelemetryV1) => void;
   readonly onMemoryCacheEvent?: (event: MemoryRetrievalCacheEventV1) => void;
+  readonly onStageGraph?: (graph: StageGraphSnapshot) => void;
   readonly onMemoryWriterEvent?: (event: MemoryWriterEventV1) => void;
   readonly onMemoryTopicOrganizerEvent?: (
     event: MemoryTopicOrganizerEventV1,
@@ -1363,6 +1375,7 @@ function preparePawNextProductRuntimeV3(
       : {}),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
+    ...(task.stageGraph ? { stageGraph: true as const } : {}),
     ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
@@ -1405,6 +1418,7 @@ function preparePawNextProductRuntimeV3(
     ...(input.onModelSettlement === undefined
       ? {}
       : { onModelSettlement: input.onModelSettlement }),
+    ...(input.onStageGraph ? { onStageGraph: input.onStageGraph } : {}),
     ...(input.onMemoryCacheEvent === undefined
       ? {}
       : { onMemoryCacheEvent: input.onMemoryCacheEvent }),
@@ -1477,6 +1491,7 @@ function preparePawNextProductRuntimeV3(
       task.mcp,
       task.memory,
       task.longHorizon,
+      task.stageGraph,
     ),
   );
   const manifest = createPawNextProductManifestV3({
@@ -1502,6 +1517,7 @@ function preparePawNextProductRuntimeV3(
     ...(task.memory === undefined ? {} : { memory: task.memory }),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
+    ...(task.stageGraph ? { stageGraph: true as const } : {}),
     ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
   });
   const configHash = hashPawNextProductManifestV3(manifest);
@@ -2003,6 +2019,7 @@ function pawNextV3ExtensionsV1(
   mcp?: PawNextMcpRuntimeProfileV1,
   memory?: PawNextMemoryPluginProfileV1,
   longHorizon?: "manager" | "executor",
+  stageGraph?: true,
 ): PawNextRuntimeExtensionsV1 {
   if (mode === "child") {
     if (!agent) throw new Error("Child extensions require an AgentSpec");
@@ -2017,7 +2034,7 @@ function pawNextV3ExtensionsV1(
       foundationPlugins: [],
       plugins: [
         createTaskProgressToolPluginV1(),
-        createLongHorizonCollaborationPlugin(roster),
+        createLongHorizonCollaborationPlugin(roster, stageGraph),
         ...(memory !== undefined && memory.mode !== "off"
           ? [createPawNextMemoryToolPluginV1(memory)]
           : []),
@@ -2914,6 +2931,15 @@ function collaborationContextV1(
   }
   const taskOptions = runtime.v3TaskOptions;
   const roster = runtime.collaborationRoster;
+  const graphContext = {
+    workspaceRoot: options.workspaceRoot,
+    sessionId: options.sessionId,
+    runId: options.runId,
+    roster,
+    readFacts: async () =>
+      (await session.readInputSnapshot()).entries.map((entry) => entry.fact),
+    onSnapshot: options.onStageGraph,
+  };
   const delegate = createPawNextV3ChildLauncherV1({
     parentOptions: Object.freeze({
       ...options,
@@ -2922,7 +2948,10 @@ function collaborationContextV1(
     parentTaskOptions: taskOptions,
   });
   const coordinated = createDurableCollaborationCoordinatorV1({
-    delegate,
+    delegate: options.stageGraph
+      ? guardStageDependencies(delegate, graphContext)
+      : delegate,
+    ...(options.stageGraph ? { projectResult: stageResultEvidence } : {}),
     roster,
     journal: {
       async readFacts() {
@@ -3031,15 +3060,14 @@ function collaborationContextV1(
         }
       : {}),
   });
+  const manager =
+    options.longHorizon === "manager"
+      ? createManagerStageLauncher(adaptive, graphContext.readFacts)
+      : adaptive;
   return Object.freeze({
-    subAgentLauncher:
-      options.longHorizon === "manager"
-        ? createManagerStageLauncher(adaptive, async () =>
-            (await session.readInputSnapshot()).entries.map(
-              (entry) => entry.fact,
-            ),
-          )
-        : adaptive,
+    subAgentLauncher: options.stageGraph
+      ? withStageLedger(manager, graphContext)
+      : manager,
   });
 }
 
@@ -3337,6 +3365,8 @@ function preparePawNextReadOnlyChildV3(
   const {
     environmentAudit: _rootAudit,
     auditedMemory: _rootMemoryAdmission,
+    stageGraph: _rootStageGraph,
+    onStageGraph: _rootStageObserver,
     longHorizon: _rootLongHorizon,
     mcp: parentMcp,
     onLiveInputReady: _rootInbox,
@@ -3345,12 +3375,15 @@ function preparePawNextReadOnlyChildV3(
   } = input.parentOptions;
   void _rootAudit;
   void _rootMemoryAdmission;
+  void _rootStageGraph;
+  void _rootStageObserver;
   void _rootLongHorizon;
   void _rootInbox;
   void _rootAttachments;
   const {
     environmentAudit: _rootTaskAudit,
     auditedMemory: _rootTaskMemoryAdmission,
+    stageGraph: _rootTaskStageGraph,
     longHorizon: _rootTaskLongHorizon,
     mcp: parentTaskMcp,
     ...parentTaskOptionsWithoutMcp
@@ -3359,6 +3392,7 @@ function preparePawNextReadOnlyChildV3(
   void parentTaskMcp;
   void _rootTaskAudit;
   void _rootTaskMemoryAdmission;
+  void _rootTaskStageGraph;
   void _rootTaskLongHorizon;
   const mayExecute = input.agent.effect !== "inspect";
   const mayMutate = input.agent.effect === "mutate";
@@ -4269,7 +4303,24 @@ function environmentReviewer(
     prepared: PreparedPawNextProductRuntimeV3;
   },
   candidate: import("@paw/completion-review").CompletionReviewCandidateV1,
+  graph?: StageGraphSnapshot,
 ) {
+  if (graph?.blockers.length)
+    return {
+      reviewerId: "paw.environment-audit.v1",
+      async review() {
+        return {
+          status: "completed" as const,
+          verdict: "block" as const,
+          reasonCode: "stage_graph_unverified",
+          summary:
+            `跨计划成果尚未全部有效，请重新验收或修复失效阶段。 ${stageGraphSummary(graph)}`.slice(
+              0,
+              2000,
+            ),
+        };
+      },
+    };
   const lastStage = [...candidate.toolEvidence]
     .reverse()
     .find(
@@ -4382,6 +4433,19 @@ async function openNextPawNextV3WorkSegmentV1(input: {
 
   const prefix = await input.session.readCanonicalPrefix();
   const snapshot = prefixInputSnapshot(prefix);
+  const graph =
+    input.options.stageGraph && input.prepared.collaborationRoster
+      ? projectStageGraph(
+          snapshot.entries.map((entry) => entry.fact),
+          {
+            workspaceRoot: input.options.workspaceRoot,
+            sessionId: input.options.sessionId,
+            runId: input.options.runId,
+            roster: input.prepared.collaborationRoster,
+          },
+        )
+      : undefined;
+  if (graph) input.options.onStageGraph?.(graph);
   const recoverableFeedback = projectPendingCompletionReviewFeedbackV1(
     snapshot.entries.map((entry) => entry.fact),
   );
@@ -4413,7 +4477,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     loadForPrefix: input.loadForPrefix,
     signal: input.signal,
   });
-  if (candidate && input.options.environmentAudit) {
+  if (candidate && input.options.environmentAudit && !graph?.blockers.length) {
     const latest = [...snapshot.entries]
       .reverse()
       .find((entry) => entry.fact.type === "completion.review_settled");
@@ -4468,7 +4532,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
       const controller = createCompletionReviewControllerV1({
         session: input.session,
         reviewer: input.options.environmentAudit
-          ? environmentReviewer(input, candidate)
+          ? environmentReviewer(input, candidate, graph)
           : createModelCompletionReviewerV1({
               model: completionReviewModelAdapterV1(
                 input.options.model,

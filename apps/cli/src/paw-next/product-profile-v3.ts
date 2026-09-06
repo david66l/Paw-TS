@@ -70,6 +70,7 @@ export interface PawNextProductProfileV3
   readonly memory?: PawNextMemoryPluginProfileV1;
   readonly environmentAudit?: true;
   readonly auditedMemory?: true;
+  readonly stageGraph?: true;
   readonly longHorizon?: "manager" | "executor";
 }
 
@@ -129,6 +130,7 @@ export interface PawNextTaskProfileOptionsV3 {
   readonly memory?: PawNextMemoryPluginProfileV1;
   readonly environmentAudit?: true;
   readonly auditedMemory?: true;
+  readonly stageGraph?: true;
   readonly longHorizon?: "manager" | "executor";
 }
 
@@ -230,6 +232,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
+    ...(profile.stageGraph ? { stageGraph: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const v1 = preparePawNextProductRuntimeIdentityV3(identityTask).manifest;
@@ -262,6 +265,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
+    ...(profile.stageGraph ? { stageGraph: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = deepFreeze({
@@ -301,6 +305,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
+    ...(profile.stageGraph ? { stageGraph: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   return deepFreeze({
@@ -342,7 +347,14 @@ function parseProfileV3(
       "workSegmentPolicyVersion",
       "payloadRuntime",
     ],
-    ["mcp", "memory", "environmentAudit", "longHorizon", "auditedMemory"],
+    [
+      "mcp",
+      "memory",
+      "environmentAudit",
+      "longHorizon",
+      "auditedMemory",
+      "stageGraph",
+    ],
   );
   if (record.approval !== "available" && record.approval !== "unavailable") {
     throw new Error("Unsupported V3 approval mode");
@@ -363,6 +375,11 @@ function parseProfileV3(
     throw new Error(
       "Long-task profiles require manager mode, environment auditing, and no MCP binding",
     );
+  if (
+    record.stageGraph !== undefined &&
+    (record.stageGraph !== true || record.longHorizon !== "manager")
+  )
+    throw new Error("Stage graph requires long-task Manager mode");
   const control = parseControlV3(record.control, `${label}.control`);
   const common = parsePawNextProductProfileInternal(
     {
@@ -392,6 +409,7 @@ function parseProfileV3(
     approval: record.approval,
     ...(record.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(record.auditedMemory ? { auditedMemory: true as const } : {}),
+    ...(record.stageGraph ? { stageGraph: true as const } : {}),
     ...(record.longHorizon ? { longHorizon: "manager" as const } : {}),
     control,
     workSegmentPolicyVersion: WORK_SEGMENT_POLICY_VERSION_V1,

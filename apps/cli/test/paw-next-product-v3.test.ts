@@ -1131,3 +1131,23 @@ test("audited memory is frozen separately and requires independent auditing", ()
     }),
   ).toThrow("Invalid audited memory policy");
 });
+
+test("stage graph changes only opted-in Manager identity and rejects other roles", () => {
+  const base = {
+    ...manifestInputV3(),
+    environmentAudit: true as const,
+    longHorizon: "manager" as const,
+  };
+  const graph = createPawNextProductManifestV3({ ...base, stageGraph: true });
+  expect(graph.stageGraph).toBe("paw.stage-graph.v1");
+  expect(hashPawNextProductManifestV3(graph)).not.toBe(
+    hashPawNextProductManifestV3(createPawNextProductManifestV3(base)),
+  );
+  expect(() =>
+    createPawNextProductManifestV3({
+      ...base,
+      longHorizon: "executor",
+      stageGraph: true,
+    }),
+  ).toThrow("requires");
+});

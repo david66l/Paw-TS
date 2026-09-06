@@ -562,6 +562,29 @@ describe("product evidence adapter", () => {
           };
         },
       },
+      // Primary retrieval is a shared candidate pool. Selection, not the
+      // search query, assigns support to a requirement.
+      supportSelector: {
+        selectorVersion: "test-requirement-selector.v1",
+        async select({ requirements, candidates }) {
+          return {
+            selectorVersion: "test-requirement-selector.v1",
+            selectionRevision: "test-selection",
+            assessments: requirements.map((requirement) => {
+              const selected =
+                requirement.requirementId === "alpha" ? "ref-a" : "ref-b";
+              return {
+                requirementId: requirement.requirementId,
+                supportingEvidenceRefs: [selected],
+                contradictingEvidenceRefs: [],
+                unknownEvidenceRefs: candidates
+                  .map((candidate) => candidate.evidenceRef)
+                  .filter((ref) => ref !== selected),
+              };
+            }),
+          };
+        },
+      },
       planner: {
         plannerVersion:
           "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
@@ -625,12 +648,16 @@ describe("product evidence adapter", () => {
     expect(contract.requirements).toEqual([
       expect.objectContaining({
         requirementId: "alpha",
-        status: "covered",
+        supportingEvidenceRefs: ["ref-a"],
+        candidateEvidenceRefs: ["ref-b"],
+        status: "partial",
         selectedEvidenceCount: 1,
       }),
       expect.objectContaining({
         requirementId: "beta",
-        status: "covered",
+        supportingEvidenceRefs: ["ref-b"],
+        candidateEvidenceRefs: ["ref-a"],
+        status: "partial",
         selectedEvidenceCount: 1,
       }),
     ]);

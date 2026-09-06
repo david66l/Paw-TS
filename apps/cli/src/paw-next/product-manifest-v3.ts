@@ -38,6 +38,7 @@ import {
 import { AUDITED_MEMORY_POLICY_V1 } from "./audited-memory.js";
 import { ENVIRONMENT_AUDIT_POLICY_VERSION_V1 } from "./environment-audit.js";
 import { LONG_HORIZON_POLICY_V1 } from "./long-horizon.js";
+import { STAGE_GRAPH_POLICY_V1 } from "./stage-graph.js";
 
 import {
   type CreatePawNextProductManifestInputV2,
@@ -121,6 +122,7 @@ export interface PawNextProductManifestV3
   readonly modelOutputRecovery: typeof PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1;
   readonly environmentAudit?: typeof ENVIRONMENT_AUDIT_POLICY_VERSION_V1;
   readonly auditedMemory?: typeof AUDITED_MEMORY_POLICY_V1;
+  readonly stageGraph?: typeof STAGE_GRAPH_POLICY_V1;
   readonly longHorizon?: {
     readonly policyVersion: typeof LONG_HORIZON_POLICY_V1;
     readonly role: "manager" | "executor";
@@ -137,6 +139,7 @@ export interface CreatePawNextProductManifestInputV3
   readonly runConfig: InteractiveControlConfigV2;
   readonly environmentAudit?: true;
   readonly auditedMemory?: true;
+  readonly stageGraph?: true;
   readonly longHorizon?: "manager" | "executor";
   readonly memory?: PawNextMemoryPluginProfileV1;
 }
@@ -160,6 +163,11 @@ export function createPawNextProductManifestV3(
     (input.auditedMemory !== true || input.environmentAudit !== true)
   )
     throw new Error("Invalid audited memory policy");
+  if (
+    input.stageGraph !== undefined &&
+    (input.stageGraph !== true || input.longHorizon !== "manager")
+  )
+    throw new Error("Stage graph requires long-task Manager mode");
   const runConfig = freezeInteractiveControlConfigV2(input.runConfig);
   const v2 = createPawNextProductManifestV2({
     toolEffectCheckpointPolicyVersion: input.toolEffectCheckpointPolicyVersion,
@@ -212,6 +220,7 @@ export function createPawNextProductManifestV3(
       ? { environmentAudit: ENVIRONMENT_AUDIT_POLICY_VERSION_V1 }
       : {}),
     ...(input.auditedMemory ? { auditedMemory: AUDITED_MEMORY_POLICY_V1 } : {}),
+    ...(input.stageGraph ? { stageGraph: STAGE_GRAPH_POLICY_V1 } : {}),
     progressAdvisor: PAW_NEXT_PROGRESS_ADVISOR_IDENTITY_V1,
     collaboration: PAW_NEXT_COLLABORATION_IDENTITY_V1,
     modelOutputRecovery: PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1,

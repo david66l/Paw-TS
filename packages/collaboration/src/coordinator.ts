@@ -65,6 +65,7 @@ export function createDurableCollaborationCoordinatorV1(input: {
   readonly policy?: CollaborationPolicyV1;
   readonly roster?: CollaborationRosterV1;
   readonly clock?: () => number;
+  readonly projectResult?: (result: SubAgentResult) => JsonValue | undefined;
 }): SubAgentLauncher {
   if (!input.delegate || typeof input.delegate.launch !== "function") {
     throw new TypeError("Collaboration coordinator delegate is invalid");
@@ -134,6 +135,7 @@ export function createDurableCollaborationCoordinatorV1(input: {
         options?.signal?.aborted ? "cancelled" : result.status,
         result.summary,
         clock,
+        input.projectResult?.(result),
       );
       return withTaskLocator(result, identity);
     } catch (error) {
@@ -330,6 +332,7 @@ async function settleOnce(
   status: "completed" | "failed" | "cancelled",
   summary: string,
   clock: () => number,
+  result?: JsonValue,
 ): Promise<void> {
   const task = projectCollaborationTasksV1(
     await journal.readFacts(),
@@ -343,6 +346,7 @@ async function settleOnce(
       status,
       settledAt: clock(),
       summary: singleLine(summary, 8_000),
+      ...(result === undefined ? {} : { result }),
     },
   ]);
 }

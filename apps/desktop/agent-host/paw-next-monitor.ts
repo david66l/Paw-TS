@@ -1,5 +1,6 @@
 import type { ManagedJobReadV1, SubAgentResult } from "@paw/harness";
 import type { RunJournalEnvelopeV1 } from "@paw/protocol";
+import type { StageGraphSnapshot } from "../../cli/src/paw-next/stage-graph.js";
 import type {
   DesktopMonitorSnapshot,
   MonitorTask,
@@ -177,6 +178,48 @@ export class DesktopRunMonitor {
         inspected: result.environmentAudit.inspected,
         unmetCriteria: result.environmentAudit.unmetCriteria,
       };
+    this.emit();
+  }
+  stageGraph(graph: StageGraphSnapshot) {
+    const ids = new Map(
+      graph.nodes.map((node) => [node.ref, `${this.runId}:${node.callId}`]),
+    );
+    for (const node of graph.nodes) {
+      const reason = graph.nodes.reduce(
+        (text, source) => text?.replaceAll(source.ref, `「${source.goal}」`),
+        node.reason,
+      );
+      const task = this.task(
+        `${this.runId}:${node.callId}`,
+        node.goal,
+        `${this.runId}:${node.planCallId}`,
+      );
+      task.stageRef = node.ref;
+      task.scope = [...node.scope];
+      task.acceptance = [...node.acceptance];
+      task.dependencies = node.dependencies.map((ref) => ids.get(ref) ?? ref);
+      task.freshness = {
+        status: node.status,
+        reason,
+        replacedBy: node.replacedBy,
+      };
+      if (node.status === "stale") {
+        task.status = "blocked";
+        task.blocker = reason;
+      }
+      if (node.status === "verified" || node.status === "superseded") {
+        task.status = "done";
+        task.blocker = undefined;
+      }
+      if (node.reviewId)
+        task.audit = {
+          reviewId: node.reviewId,
+          status: node.status === "verified" ? "verified" : "unverified",
+          summary: reason ?? "独立验收证据有效",
+          inspected: node.inspected,
+          unmetCriteria: reason ? [reason] : [],
+        };
+    }
     this.emit();
   }
   job(runId: string, job: ManagedJobReadV1) {

@@ -124,6 +124,22 @@ export function TaskOverview({
             </span>
           </div>
           {task.agentId ? <p>{task.agentId}</p> : null}
+          {task.freshness ? (
+            <div aria-label="成果版本状态">
+              <p className={styles.status} data-status={task.freshness.status}>
+                {
+                  {
+                    pending: "待执行",
+                    verified: "成果版本有效",
+                    unverified: "成果尚未验证",
+                    stale: "成果已失效，需重新验收",
+                    superseded: "已由新阶段替代",
+                  }[task.freshness.status]
+                }
+              </p>
+              {task.freshness.reason ? <p>{task.freshness.reason}</p> : null}
+            </div>
+          ) : null}
           {task.dependencies.length ? (
             <div className={styles.dependencies}>
               依赖 →{" "}
@@ -143,7 +159,7 @@ export function TaskOverview({
           {task.blocker ? (
             <output className={styles.blocker}>{task.blocker}</output>
           ) : null}
-          {task.audit ? (
+          {task.audit && task.freshness?.status !== "superseded" ? (
             <div>
               <p className={styles.status} data-status={task.audit.status}>
                 {task.audit.status === "verified"

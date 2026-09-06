@@ -444,22 +444,24 @@ function summarizeRun(
   result: Awaited<ReturnType<typeof runFreshPawNextTaskV3>>,
 ): Record<string, unknown> {
   const facts = result.inputFacts as readonly Record<string, unknown>[];
-  const retrieval = facts.findLast(
-    (fact) => fact.type === "memory.retrieval_settled",
-  );
-  const evidence = facts.findLast(
-    (fact) => fact.type === "memory.topic_evidence_settled",
-  );
-  const write = facts.findLast((fact) => fact.type === "memory.write_settled");
-  const rawEvidence = facts.findLast(
-    (fact) => fact.type === "memory.raw_evidence_settled",
-  );
-  const coverage = facts.findLast(
-    (fact) => fact.type === "memory.evidence_coverage_settled",
-  );
-  const organization = facts.findLast(
-    (fact) => fact.type === "memory.topic_organization_settled",
-  );
+  const retrieval = [...facts]
+    .reverse()
+    .find((fact) => fact.type === "memory.retrieval_settled");
+  const evidence = [...facts]
+    .reverse()
+    .find((fact) => fact.type === "memory.topic_evidence_settled");
+  const write = [...facts]
+    .reverse()
+    .find((fact) => fact.type === "memory.write_settled");
+  const rawEvidence = [...facts]
+    .reverse()
+    .find((fact) => fact.type === "memory.raw_evidence_settled");
+  const coverage = [...facts]
+    .reverse()
+    .find((fact) => fact.type === "memory.evidence_coverage_settled");
+  const organization = [...facts]
+    .reverse()
+    .find((fact) => fact.type === "memory.topic_organization_settled");
   return {
     run,
     decision: (result.state.decision as { kind?: string }).kind ?? "unknown",

@@ -48,6 +48,7 @@ interface DesktopRunRecord {
   liveSteering?: true;
   environmentAudit?: true;
   auditedMemory?: true;
+  stageGraph?: true;
   taskMode?: "long";
   sessionId: string;
   runId: string;
@@ -239,6 +240,7 @@ export async function runDesktopNext(
       legacyRecovery = false,
       legacyAudit = false,
       legacyMemoryAdmission = false,
+      legacyStageGraph = false,
     ) => {
       const { liveSteering: _steering, ...legacyControl } = profile.control;
       void _steering;
@@ -254,9 +256,13 @@ export async function runDesktopNext(
         options.environmentAudit !== false
           ? { ...selectedProfile, auditedMemory: true as const }
           : selectedProfile;
+      const graphProfile =
+        taskMode === "long" && !legacyStageGraph
+          ? { ...memoryProfile, stageGraph: true as const }
+          : memoryProfile;
       const activeProfile = legacyRecovery
-        ? { ...memoryProfile, control: legacyControl }
-        : memoryProfile;
+        ? { ...graphProfile, control: legacyControl }
+        : graphProfile;
       const first = buildPawNextTaskProfileV3({
         identity: { workspaceRoot, ...identity },
         profile: activeProfile,
@@ -282,6 +288,7 @@ export async function runDesktopNext(
           recovering && previous.liveSteering !== true,
           recovering && previous.environmentAudit !== true,
           recovering && previous.auditedMemory !== true,
+          recovering && previous.stageGraph !== true,
         )
       : undefined;
     if (
@@ -314,7 +321,9 @@ export async function runDesktopNext(
         : goal;
       record = {
         version: 1,
-        ...(taskMode === "long" ? { taskMode: "long" as const } : {}),
+        ...(taskMode === "long"
+          ? { taskMode: "long" as const, stageGraph: true as const }
+          : {}),
         liveSteering: true,
         ...(options.environmentAudit !== false
           ? { environmentAudit: true as const, auditedMemory: true as const }
@@ -400,6 +409,7 @@ export async function runDesktopNext(
       ...(options.abortSignal ? { signal: options.abortSignal } : {}),
       onJournalCommit: projection.committed.bind(projection),
       onChildResult: projection.monitor.result.bind(projection.monitor),
+      onStageGraph: projection.monitor.stageGraph.bind(projection.monitor),
       onManagedJobsReady: (runId, jobs) =>
         options.controls?.managedJobs(runId, jobs),
       onManagedJobUpdate: projection.monitor.job.bind(projection.monitor),

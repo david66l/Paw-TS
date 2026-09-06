@@ -7,6 +7,11 @@ import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
 import type { InputFactV1 } from "@paw/protocol";
 import type { RuntimeToolPluginV1 } from "@paw/runtime";
 import { fingerprintAuditFile } from "./environment-audit.js";
+import {
+  STAGE_GRAPH_POLICY_V1,
+  STAGE_GRAPH_PROMPT,
+  parseStageLinks,
+} from "./stage-graph.js";
 
 export const LONG_HORIZON_POLICY_V1 = "paw.long-horizon.v1" as const;
 export const LONG_HORIZON_MAX_STAGES = 12;
@@ -18,22 +23,62 @@ At most ${LONG_HORIZON_MAX_STAGES} executor stages may start for one user task, 
 /** Same durable delegation transport, with a separate frozen manager tool identity. */
 export function createLongHorizonCollaborationPlugin(
   roster: CollaborationRosterV1,
+  stageGraph = false,
 ): RuntimeToolPluginV1 {
   const base = createCollaborationToolPluginV1({ roster });
   return {
     ...base,
-    pluginVersion: LONG_HORIZON_POLICY_V1,
+    pluginVersion: stageGraph ? STAGE_GRAPH_POLICY_V1 : LONG_HORIZON_POLICY_V1,
     entries: base.entries.map((entry) => ({
       ...entry,
       definition: {
         ...entry.definition,
         function: {
           ...entry.definition.function,
-          description: `${LONG_HORIZON_MANAGER_PROMPT}\n${entry.definition.function.description.slice(entry.definition.function.description.indexOf("Current Team Brief:"))}`,
+          description: `${LONG_HORIZON_MANAGER_PROMPT}${stageGraph ? `\n${STAGE_GRAPH_PROMPT}` : ""}\n${entry.definition.function.description.slice(entry.definition.function.description.indexOf("Current Team Brief:"))}`,
+          ...(stageGraph
+            ? {
+                parameters: {
+                  ...entry.definition.function.parameters,
+                  properties: {
+                    ...(entry.definition.function.parameters
+                      .properties as Record<string, unknown>),
+                    stage_links: {
+                      type: "array",
+                      maxItems: 12,
+                      description:
+                        "Dependencies and replacements referencing previous stage ledger refs.",
+                      items: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["task_id", "requires"],
+                        properties: {
+                          task_id: { type: "string", maxLength: 80 },
+                          requires: {
+                            type: "array",
+                            maxItems: 12,
+                            items: {
+                              type: "string",
+                              pattern: "^stage-[a-f0-9]{24}$",
+                            },
+                          },
+                          replaces: {
+                            type: "string",
+                            pattern: "^stage-[a-f0-9]{24}$",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              }
+            : {}),
         },
       },
       validate(args) {
-        const checked = entry.validate(args);
+        const input = args as Record<string, unknown>;
+        const { stage_links, ...baseArgs } = input ?? {};
+        const checked = entry.validate(stageGraph ? baseArgs : args);
         if (!checked.ok) return checked;
         const plan = parseCollaborationDelegationPlanV1(
           checked.args.delegation_plan,
@@ -52,7 +97,26 @@ export function createLongHorizonCollaborationPlugin(
               payload: { code: "E_SCHEMA_INVALID", executed: false },
             },
           };
-        return checked;
+        if (!stageGraph) return checked;
+        try {
+          const links = parseStageLinks(
+            stage_links,
+            plan.tasks.map((task) => task.id),
+          );
+          return {
+            ...checked,
+            args: Object.freeze({ ...checked.args, stage_links: links }),
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            result: {
+              ok: false,
+              summary: String(error),
+              payload: { code: "E_SCHEMA_INVALID", executed: false },
+            },
+          };
+        }
       },
       classify(args, root) {
         const classified = entry.classify(args, root);

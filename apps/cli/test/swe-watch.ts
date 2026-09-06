@@ -2,8 +2,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const runDir =
-  "E:/A_Louis/paw-next-smoke-swe/workspace/.paw/paw-next/sessions/4ead632e71fc98b9e00674ab4ed67eaef763dd35f3a429b815b023a67aa0248a/4069cc6e3de88d28c627da3ebc9634afcb2649d4d28916ebd2fc0b74c337b5ae
+const requestedRunDir = process.argv[2];
+if (!requestedRunDir)
+  throw new Error("Usage: bun swe-watch.ts <run-directory>");
+const runDir = path.resolve(requestedRunDir);
 const arts = path.join(runDir, "journal-artifacts");
 const facts: Record<string, unknown>[] = [];
 for (const f of fs.readdirSync(arts).sort()) {

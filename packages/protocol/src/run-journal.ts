@@ -551,6 +551,8 @@ export type InputFactV1 =
   | Readonly<{
       /** Durable terminal observation for a previously started activity. */
       type: "runtime.activity_settled";
+      /** Optional host-owned result; never model-authored activity metadata. */
+      result?: JsonValue;
       activityId: string;
       status: "completed" | "failed" | "cancelled" | "unknown";
       settledAt: number;
@@ -2931,7 +2933,7 @@ function assertInputFact(value: unknown): void {
       assertExactKeys(
         fact,
         ["type", "activityId", "status", "settledAt", "summary"],
-        [],
+        ["result"],
         fact.type,
       );
       assertId(fact.activityId, "activityId");
@@ -2942,6 +2944,11 @@ function assertInputFact(value: unknown): void {
       );
       assertNonNegativeInteger(fact.settledAt, "settledAt");
       assertSingleLineString(fact.summary, "summary");
+      if (fact.result !== undefined) {
+        assertJsonValue(fact.result, "activity result");
+        if (JSON.stringify(fact.result).length > 32000)
+          throw new Error("Activity result too large");
+      }
       return;
     case "abort.requested":
       assertExactKeys(fact, ["type", "source"], ["reason"], fact.type);

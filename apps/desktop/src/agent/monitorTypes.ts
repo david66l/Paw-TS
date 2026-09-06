@@ -25,6 +25,12 @@ export interface MonitorTask {
   blocker?: string;
   summary?: string;
   audit?: MonitorAudit;
+  stageRef?: string;
+  freshness?: {
+    status: "pending" | "verified" | "unverified" | "stale" | "superseded";
+    reason?: string;
+    replacedBy?: string;
+  };
   files: string[];
   artifacts: string[];
   tests: { name: string; passed: boolean }[];

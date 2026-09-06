@@ -322,13 +322,23 @@ test("Manager repairs an unverified stage using a fresh executor before final ac
             return response;
           }
           if (text.includes("Paw stage executor")) {
-            if (text.includes("FRESH_REPAIR")) repairInputs.push(text);
+            if (text.includes("FRESH_REPAIR") && !text.includes("SECOND_STAGE"))
+              repairInputs.push(text);
             return f.model.complete(messages, options);
           }
           if (++rootCalls === 2)
             return tool("workspace_delegate", {
               goal: "Repair and finish",
               kind: "implementation",
+              stage_links: [
+                {
+                  task_id: "repair",
+                  requires: [],
+                  replaces: readDesktopMonitor(f.root, "managed")?.tasks.find(
+                    (task) => task.name.includes("FIRST_STAGE"),
+                  )?.stageRef,
+                },
+              ],
               tasks: [
                 {
                   id: "repair",
