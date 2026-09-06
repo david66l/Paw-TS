@@ -7,6 +7,10 @@ import {
 } from "@paw/collaboration";
 import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
 import type { InputFactV1, JsonValue } from "@paw/protocol";
+import {
+  type BrowserAuditCheckV1,
+  assertBrowserAuditCheckV1,
+} from "@paw/protocol";
 import { fingerprintAuditFile } from "./environment-audit.js";
 
 export const STAGE_GRAPH_POLICY_V1 = "paw.stage-graph.v1" as const;
@@ -35,6 +39,7 @@ export interface StageGraphNode {
   reason?: string;
   inspected: readonly { path: string; hash: string }[];
   reviewId?: string;
+  browserChecks?: readonly BrowserAuditCheckV1[];
 }
 export interface StageGraphSnapshot {
   policyVersion: typeof STAGE_GRAPH_POLICY_V1;
@@ -225,6 +230,20 @@ export function projectStageGraph(
         started: activityId !== undefined,
         status: activityId ? "unverified" : "pending",
         inspected,
+        ...(Array.isArray(audit.browserChecks)
+          ? {
+              browserChecks: audit.browserChecks.filter(
+                (check): check is BrowserAuditCheckV1 => {
+                  try {
+                    assertBrowserAuditCheckV1(check);
+                    return true;
+                  } catch {
+                    return false;
+                  }
+                },
+              ),
+            }
+          : {}),
         ...(typeof audit.reviewId === "string"
           ? { reviewId: audit.reviewId }
           : {}),

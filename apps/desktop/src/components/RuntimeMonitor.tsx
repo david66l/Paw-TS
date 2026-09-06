@@ -84,6 +84,11 @@ export function TaskOverview({
             </span>
           </div>
           <p>{snapshot.audit.summary}</p>
+          {snapshot.audit.browserChecks?.map((check) => (
+            <p key={check.callId}>
+              浏览器行为已检查：{check.url} · {check.assertions} 项断言通过
+            </p>
+          ))}
           {snapshot.audit.unmetCriteria.length ? (
             <ul>
               {snapshot.audit.unmetCriteria.map((item) => (
@@ -168,6 +173,11 @@ export function TaskOverview({
               </p>
               {task.audit.unmetCriteria.map((item) => (
                 <p key={item}>{item}</p>
+              ))}
+              {task.audit.browserChecks?.map((check) => (
+                <p key={check.callId}>
+                  浏览器行为已检查：{check.url} · {check.assertions} 项断言通过
+                </p>
               ))}
               <details>
                 <summary>阶段检查的文件</summary>

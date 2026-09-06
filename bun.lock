@@ -43,6 +43,7 @@
         "@paw/task-progress": "workspace:*",
         "@paw/web-access": "workspace:*",
         "@paw/workspace": "workspace:*",
+        "playwright": "^1.62.1",
       },
     },
     "apps/desktop": {

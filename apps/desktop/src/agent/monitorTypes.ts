@@ -1,4 +1,5 @@
 export interface MonitorAudit {
+  browserChecks?: readonly import("@paw/protocol").BrowserAuditCheckV1[];
   reviewId: string;
   status: "checking" | "verified" | "unverified" | "repairing";
   summary: string;

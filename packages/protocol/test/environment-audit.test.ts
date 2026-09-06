@@ -75,3 +75,34 @@ test("environment audit evidence is candidate-bound and requires a clean grounde
     3,
   );
 });
+
+test("browser audit evidence is optional, bounded, and rejects empty or duplicate proof", () => {
+  const check = {
+    callId: "browser1",
+    url: "http://127.0.0.1:3000/",
+    scenarioHash: "e".repeat(64),
+    observationHash: "f".repeat(64),
+    assertions: 1,
+    checkedAt: 10,
+  };
+  expect(
+    parseRunJournalPrefixV1(prefix({ ...evidence, browserChecks: [check] })),
+  ).toHaveLength(3);
+  for (const invalid of [
+    { ...check, assertions: 0 },
+    { ...check, url: "https://external.invalid/" },
+    { ...check, observationHash: "invented" },
+    { ...check, passed: true },
+  ]) {
+    expect(() =>
+      parseRunJournalPrefixV1(
+        prefix({ ...evidence, browserChecks: [invalid] }),
+      ),
+    ).toThrow();
+  }
+  expect(() =>
+    parseRunJournalPrefixV1(
+      prefix({ ...evidence, browserChecks: [check, check] }),
+    ),
+  ).toThrow();
+});

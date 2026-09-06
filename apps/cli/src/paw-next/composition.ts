@@ -5,6 +5,11 @@ import {
   memoryUserStatement,
 } from "./audited-memory.js";
 import {
+  BROWSER_CHECK,
+  createBrowserCheckPlugin,
+  runBrowserCheck,
+} from "./browser-check.js";
+import {
   ENVIRONMENT_AUDIT_MAX_TURNS,
   createEnvironmentCompletionReviewerV1,
   environmentRevision,
@@ -346,6 +351,7 @@ export interface RunFreshPawNextTaskOptionsV1 {
   readonly environmentAudit?: true;
   readonly auditedMemory?: true;
   readonly stageGraph?: true;
+  readonly browserAudit?: true;
   readonly longHorizon?: "manager" | "executor";
   readonly onChildResult?: (id: string, result: SubAgentResult) => void;
   readonly onManagedJobsReady?: (
@@ -1376,6 +1382,7 @@ function preparePawNextProductRuntimeV3(
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.stageGraph ? { stageGraph: true as const } : {}),
+    ...(task.browserAudit ? { browserAudit: true as const } : {}),
     ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
@@ -1518,6 +1525,7 @@ function preparePawNextProductRuntimeV3(
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.stageGraph ? { stageGraph: true as const } : {}),
+    ...(task.browserAudit ? { browserAudit: true as const } : {}),
     ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
   });
   const configHash = hashPawNextProductManifestV3(manifest);
@@ -2061,6 +2069,7 @@ function pawNextV3ChildExtensionsV1(
   agent: CollaborationAgentSpecV1,
   shellSandbox?: ShellSandboxConfig,
   toolWorkspaceRoot?: string,
+  auditBrowser = false,
 ): PawNextRuntimeExtensionsV1 {
   const allowed = agent.tools === "inherit" ? undefined : new Set(agent.tools);
   const permits = (tool: string): boolean => !allowed || allowed.has(tool);
@@ -2114,11 +2123,18 @@ function pawNextV3ChildExtensionsV1(
     recoverTruncatedModelOutput: true,
     builtinTools: Object.freeze(builtinTools),
     foundationPlugins: Object.freeze(foundationPlugins),
-    childBoundary,
+    // Browser checks use execution approval but have their own closed action schema.
+    // The auditor's explicit tool list contains no shell or file mutation entry.
+    childBoundary: auditBrowser
+      ? Object.freeze({ ...childBoundary, shellPolicy: "allow" as const })
+      : childBoundary,
     ...(toolWorkspaceRoot === undefined ? {} : { toolWorkspaceRoot }),
     plugins: Object.freeze([
       createOutputRecallToolPluginV1(),
       ...(web ? [web] : []),
+      ...(auditBrowser && permits(BROWSER_CHECK)
+        ? [createBrowserCheckPlugin()]
+        : []),
     ]),
     toolObservationProjector: createOutputRecallProjectorV1(),
   });
@@ -3124,6 +3140,7 @@ function createPawNextV3ChildLauncherV1(input: {
 
 /** @internal Stable child-run seam used by the collaboration adapter and recovery tests. */
 export async function runPawNextChildV3(input: {
+  readonly auditBrowser?: boolean;
   readonly parentOptions: RunFreshPawNextTaskOptionsV1;
   readonly parentTaskOptions: PawNextTaskProfileOptionsV3;
   readonly callId: string;
@@ -3135,6 +3152,26 @@ export async function runPawNextChildV3(input: {
   readonly auditedStage?: boolean;
   readonly signal?: AbortSignal;
 }): Promise<SubAgentResult> {
+  if (
+    input.auditBrowser &&
+    (input.parentOptions.browserAudit !== true ||
+      input.agent.effect !== "execute" ||
+      input.agent.canSpawn ||
+      input.agent.tools === "inherit" ||
+      input.agent.tools.some(
+        (tool) =>
+          ![
+            BROWSER_CHECK,
+            "workspace.read_file",
+            "workspace.list_dir",
+            "workspace.glob",
+            "workspace.grep",
+          ].includes(tool),
+      ))
+  )
+    throw new Error(
+      "Browser auditor requires the closed inspection tool boundary",
+    );
   const currentSourceRevision = workspaceRevisionV1(
     input.parentOptions.workspaceRoot,
   );
@@ -3149,6 +3186,7 @@ export async function runPawNextChildV3(input: {
   const runId = `child-run-${childKey}`;
   const inputId = `child-input-${childKey}`;
   const shouldIsolate =
+    !input.auditBrowser &&
     input.agent.effect === "execute" &&
     findGitRoot(input.parentOptions.workspaceRoot) !== null;
   const worktree = shouldIsolate
@@ -3172,6 +3210,7 @@ export async function runPawNextChildV3(input: {
       goal: input.goal,
       agent: input.agent,
       auditedStage: input.auditedStage,
+      auditBrowser: input.auditBrowser,
       maxModelTurns: input.maxModelTurns,
       ...(input.softModelTurns === undefined
         ? {}
@@ -3270,6 +3309,10 @@ export async function runPawNextChildV3(input: {
     ...(input.auditedStage
       ? {
           environmentAudit: {
+            ...(stageAudit?.type === "completion.review_settled" &&
+            stageAudit.environmentAudit?.browserChecks
+              ? { browserChecks: stageAudit.environmentAudit.browserChecks }
+              : {}),
             status:
               acceptance === "verified"
                 ? ("verified" as const)
@@ -3345,6 +3388,7 @@ export function runPawNextReadOnlyChildV3(input: {
 
 function preparePawNextReadOnlyChildV3(
   input: {
+    readonly auditBrowser?: boolean;
     readonly parentOptions: RunFreshPawNextTaskOptionsV1;
     readonly parentTaskOptions: PawNextTaskProfileOptionsV3;
     readonly sessionId: string;
@@ -3366,6 +3410,7 @@ function preparePawNextReadOnlyChildV3(
     environmentAudit: _rootAudit,
     auditedMemory: _rootMemoryAdmission,
     stageGraph: _rootStageGraph,
+    browserAudit: _rootBrowserAudit,
     onStageGraph: _rootStageObserver,
     longHorizon: _rootLongHorizon,
     mcp: parentMcp,
@@ -3376,6 +3421,7 @@ function preparePawNextReadOnlyChildV3(
   void _rootAudit;
   void _rootMemoryAdmission;
   void _rootStageGraph;
+  void _rootBrowserAudit;
   void _rootStageObserver;
   void _rootLongHorizon;
   void _rootInbox;
@@ -3384,6 +3430,7 @@ function preparePawNextReadOnlyChildV3(
     environmentAudit: _rootTaskAudit,
     auditedMemory: _rootTaskMemoryAdmission,
     stageGraph: _rootTaskStageGraph,
+    browserAudit: _rootTaskBrowserAudit,
     longHorizon: _rootTaskLongHorizon,
     mcp: parentTaskMcp,
     ...parentTaskOptionsWithoutMcp
@@ -3393,6 +3440,7 @@ function preparePawNextReadOnlyChildV3(
   void _rootTaskAudit;
   void _rootTaskMemoryAdmission;
   void _rootTaskStageGraph;
+  void _rootTaskBrowserAudit;
   void _rootTaskLongHorizon;
   const mayExecute = input.agent.effect !== "inspect";
   const mayMutate = input.agent.effect === "mutate";
@@ -3462,7 +3510,13 @@ function preparePawNextReadOnlyChildV3(
   const options: RunFreshPawNextTaskOptionsV1 = Object.freeze({
     ...parentOptionsWithoutMcp,
     ...(input.auditedStage
-      ? { environmentAudit: true as const, longHorizon: "executor" as const }
+      ? {
+          environmentAudit: true as const,
+          longHorizon: "executor" as const,
+          ...(input.parentOptions.browserAudit
+            ? { browserAudit: true as const }
+            : {}),
+        }
       : {}),
     ...childModelOptions,
     sessionId: input.sessionId,
@@ -3501,12 +3555,11 @@ function preparePawNextReadOnlyChildV3(
   const core = preparePawNextProductRuntimeCoreV1(
     options,
     loadPayloadEvidence,
-    pawNextV3ExtensionsV1(
-      "child",
-      undefined,
+    pawNextV3ChildExtensionsV1(
       input.agent,
       options.shellSandbox,
       input.toolWorkspaceRoot,
+      input.auditBrowser,
     ),
   );
   const payloadRuntime = freezeFileDurableJsonPayloadRuntimePolicyV1(
@@ -3533,13 +3586,25 @@ function preparePawNextReadOnlyChildV3(
     credentialBindingHash: core.manifest.credentialBindingHash,
     payloadRuntime,
     ...(input.auditedStage
-      ? { environmentAudit: true as const, longHorizon: "executor" as const }
+      ? {
+          environmentAudit: true as const,
+          longHorizon: "executor" as const,
+          ...(input.parentOptions.browserAudit
+            ? { browserAudit: true as const }
+            : {}),
+        }
       : {}),
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = Object.freeze({
     ...parentTaskOptionsWithoutMcp,
     ...(input.auditedStage
-      ? { environmentAudit: true as const, longHorizon: "executor" as const }
+      ? {
+          environmentAudit: true as const,
+          longHorizon: "executor" as const,
+          ...(input.parentOptions.browserAudit
+            ? { browserAudit: true as const }
+            : {}),
+        }
       : {}),
     ...childModelOptions,
     workspaceRoot: options.workspaceRoot,
@@ -3718,6 +3783,11 @@ async function runFreshFilePayloadPawNextTask<
           ...outputRecallContextV1(runtime, bundle),
           ...taskProgressContextV1(runtime, bundle, managedJobs),
           ...webAccessContextV1(runtime),
+          ...(runtime.registry.plugins.some(
+            (p) => p.pluginId === "paw.browser-audit",
+          )
+            ? { browserCheck: runBrowserCheck }
+            : {}),
           ...collaborationContextV1(runtime, options, bundle.session),
           ...(options.shellSandbox
             ? { shellSandbox: options.shellSandbox }
@@ -4347,6 +4417,7 @@ function environmentReviewer(
     };
   return createEnvironmentCompletionReviewerV1({
     workspaceRoot: input.options.workspaceRoot,
+    browserAudit: input.options.browserAudit,
     async run(goal, signal, observe) {
       let facts: readonly InputFactV1[] = [];
       const base = resolveCollaborationAgentV1(
@@ -4356,7 +4427,7 @@ function environmentReviewer(
       if (!base) throw new Error("Default audit agent template missing");
       const agent = parseCollaborationAgentSpecV1({
         ...base,
-        id: "paw_auditor",
+        id: input.options.browserAudit ? "paw_browser_auditor" : "paw_auditor",
         name: "Environment auditor",
         maxSteps: ENVIRONMENT_AUDIT_MAX_TURNS,
         tools: [
@@ -4364,12 +4435,14 @@ function environmentReviewer(
           "workspace.list_dir",
           "workspace.glob",
           "workspace.grep",
+          ...(input.options.browserAudit ? [BROWSER_CHECK] : []),
         ],
-        effect: "inspect",
+        effect: input.options.browserAudit ? "execute" : "inspect",
         childPolicy: "read_only",
         canSpawn: false,
       });
       const result = await runPawNextChildV3({
+        auditBrowser: input.options.browserAudit,
         parentOptions: {
           ...input.options,
           onModelStreamEvent: undefined,
@@ -5571,6 +5644,11 @@ async function executePreparedFilePayloadPawNextLoop<
       ...outputRecallContextV1(runtime, bundle),
       ...taskProgressContextV1(runtime, bundle, managedJobs),
       ...webAccessContextV1(runtime),
+      ...(runtime.registry.plugins.some(
+        (p) => p.pluginId === "paw.browser-audit",
+      )
+        ? { browserCheck: runBrowserCheck }
+        : {}),
       ...collaborationContextV1(runtime, options, bundle.session),
       ...(options.shellSandbox ? { shellSandbox: options.shellSandbox } : {}),
     },

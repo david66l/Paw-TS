@@ -1151,3 +1151,26 @@ test("stage graph changes only opted-in Manager identity and rejects other roles
     }),
   ).toThrow("requires");
 });
+
+test("browser audit is opt-in, requires environment auditing, and keeps old identity", () => {
+  const base = { ...manifestInputV3(), environmentAudit: true as const };
+  const enabled = createPawNextProductManifestV3({
+    ...base,
+    browserAudit: true,
+  });
+  expect(enabled.browserAudit).toBe("paw.browser-audit.v1");
+  expect(hashPawNextProductManifestV3(enabled)).not.toBe(
+    hashPawNextProductManifestV3(createPawNextProductManifestV3(base)),
+  );
+  expect(() =>
+    createPawNextProductManifestV3({
+      ...manifestInputV3(),
+      browserAudit: true,
+    }),
+  ).toThrow("requires");
+  expect(
+    hashPawNextProductManifestV3(
+      createPawNextProductManifestV3(manifestInputV3()),
+    ),
+  ).toBe(V3_HASH);
+});

@@ -71,6 +71,7 @@ export interface PawNextProductProfileV3
   readonly environmentAudit?: true;
   readonly auditedMemory?: true;
   readonly stageGraph?: true;
+  readonly browserAudit?: true;
   readonly longHorizon?: "manager" | "executor";
 }
 
@@ -131,6 +132,7 @@ export interface PawNextTaskProfileOptionsV3 {
   readonly environmentAudit?: true;
   readonly auditedMemory?: true;
   readonly stageGraph?: true;
+  readonly browserAudit?: true;
   readonly longHorizon?: "manager" | "executor";
 }
 
@@ -233,6 +235,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
+    ...(profile.browserAudit ? { browserAudit: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const v1 = preparePawNextProductRuntimeIdentityV3(identityTask).manifest;
@@ -266,6 +269,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
+    ...(profile.browserAudit ? { browserAudit: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = deepFreeze({
@@ -306,6 +310,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
+    ...(profile.browserAudit ? { browserAudit: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   return deepFreeze({
@@ -354,6 +359,7 @@ function parseProfileV3(
       "longHorizon",
       "auditedMemory",
       "stageGraph",
+      "browserAudit",
     ],
   );
   if (record.approval !== "available" && record.approval !== "unavailable") {
@@ -380,6 +386,11 @@ function parseProfileV3(
     (record.stageGraph !== true || record.longHorizon !== "manager")
   )
     throw new Error("Stage graph requires long-task Manager mode");
+  if (
+    record.browserAudit !== undefined &&
+    (record.browserAudit !== true || record.environmentAudit !== true)
+  )
+    throw new Error("Browser audit requires environment auditing");
   const control = parseControlV3(record.control, `${label}.control`);
   const common = parsePawNextProductProfileInternal(
     {
@@ -410,6 +421,7 @@ function parseProfileV3(
     ...(record.environmentAudit ? { environmentAudit: true as const } : {}),
     ...(record.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(record.stageGraph ? { stageGraph: true as const } : {}),
+    ...(record.browserAudit ? { browserAudit: true as const } : {}),
     ...(record.longHorizon ? { longHorizon: "manager" as const } : {}),
     control,
     workSegmentPolicyVersion: WORK_SEGMENT_POLICY_VERSION_V1,

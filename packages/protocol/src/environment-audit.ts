@@ -1,3 +1,47 @@
+export interface BrowserAuditCheckV1 {
+  readonly callId: string;
+  readonly url: string;
+  readonly scenarioHash: string;
+  readonly observationHash: string;
+  readonly assertions: number;
+  readonly checkedAt: number;
+}
+
+export function assertBrowserAuditCheckV1(
+  value: unknown,
+): asserts value is BrowserAuditCheckV1 {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Invalid browser audit check");
+  const r = value as Record<string, unknown>;
+  if (
+    Object.keys(r).sort().join(",") !==
+      "assertions,callId,checkedAt,observationHash,scenarioHash,url" ||
+    typeof r.callId !== "string" ||
+    !r.callId.trim() ||
+    r.callId.length > 512 ||
+    typeof r.url !== "string" ||
+    r.url.length > 2048 ||
+    !Number.isSafeInteger(r.assertions) ||
+    Number(r.assertions) < 1 ||
+    Number(r.assertions) > 12 ||
+    !Number.isSafeInteger(r.checkedAt) ||
+    Number(r.checkedAt) < 0 ||
+    ![r.scenarioHash, r.observationHash].every(
+      (h) => typeof h === "string" && /^[a-f0-9]{64}$/.test(h),
+    )
+  )
+    throw new Error("Invalid browser audit check");
+  const url = new URL(r.url);
+  if (
+    url.protocol !== "http:" ||
+    !url.port ||
+    !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) ||
+    url.username ||
+    url.password
+  )
+    throw new Error("Invalid browser audit URL");
+}
+
 /** Environment evidence is produced by the host, never accepted from executor prose. */
 export interface EnvironmentAuditEvidenceV1 {
   readonly policyVersion: "paw.environment-audit.v1";
@@ -11,6 +55,7 @@ export interface EnvironmentAuditEvidenceV1 {
     readonly hash: string;
   }[];
   readonly unmetCriteria: readonly string[];
+  readonly browserChecks?: readonly BrowserAuditCheckV1[];
 }
 
 export function assertEnvironmentAuditEvidenceV1(
@@ -23,7 +68,10 @@ export function assertEnvironmentAuditEvidenceV1(
     return fail();
   const r = value as Record<string, unknown>;
   if (
-    Object.keys(r).sort().join(",") !==
+    Object.keys(r)
+      .filter((k) => k !== "browserChecks")
+      .sort()
+      .join(",") !==
       "candidateHash,childRunId,childSessionId,inspected,integrity,policyVersion,sourceRevision,unmetCriteria" ||
     r.policyVersion !== "paw.environment-audit.v1" ||
     typeof r.sourceRevision !== "string" ||
@@ -44,6 +92,16 @@ export function assertEnvironmentAuditEvidenceV1(
     )
   )
     return fail();
+  if (r.browserChecks !== undefined) {
+    if (!Array.isArray(r.browserChecks) || r.browserChecks.length > 12)
+      return fail();
+    const calls = new Set<string>();
+    for (const check of r.browserChecks) {
+      assertBrowserAuditCheckV1(check);
+      if (calls.has(check.callId)) return fail();
+      calls.add(check.callId);
+    }
+  }
   const paths = new Set<string>();
   for (const item of r.inspected) {
     if (

@@ -108,6 +108,7 @@ export interface HarnessToolExecutorOptionsV1 {
     | "payloadRecall"
     | "taskProgress"
     | "webAccess"
+    | "browserCheck"
     | "subAgentLauncher"
   >;
   readonly checkpointSequence: CheckpointSequenceV1;
@@ -163,6 +164,9 @@ export function createHarnessToolExecutorV1(
       : {}),
     ...(options.context.webAccess
       ? { webAccess: options.context.webAccess }
+      : {}),
+    ...(options.context.browserCheck
+      ? { browserCheck: options.context.browserCheck }
       : {}),
     ...(options.context.subAgentLauncher
       ? { subAgentLauncher: options.context.subAgentLauncher }

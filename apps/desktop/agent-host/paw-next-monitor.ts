@@ -82,6 +82,7 @@ export class DesktopRunMonitor {
             : "unverified",
         summary: fact.summary,
         inspected: fact.environmentAudit?.inspected ?? [],
+        browserChecks: fact.environmentAudit?.browserChecks,
         unmetCriteria: fact.environmentAudit?.unmetCriteria ?? [],
       };
       this.emit();
@@ -176,6 +177,7 @@ export class DesktopRunMonitor {
         status: result.environmentAudit.status,
         summary: result.summary,
         inspected: result.environmentAudit.inspected,
+        browserChecks: result.environmentAudit.browserChecks,
         unmetCriteria: result.environmentAudit.unmetCriteria,
       };
     this.emit();
@@ -217,6 +219,7 @@ export class DesktopRunMonitor {
           status: node.status === "verified" ? "verified" : "unverified",
           summary: reason ?? "独立验收证据有效",
           inspected: node.inspected,
+          browserChecks: node.browserChecks,
           unmetCriteria: reason ? [reason] : [],
         };
     }

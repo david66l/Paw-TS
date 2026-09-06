@@ -200,6 +200,14 @@ export interface SubAgentOutcomeV1 {
 export interface SubAgentResult {
   /** Host projection of the independent child audit. */
   readonly environmentAudit?: {
+    readonly browserChecks?: readonly {
+      readonly callId: string;
+      readonly url: string;
+      readonly scenarioHash: string;
+      readonly observationHash: string;
+      readonly assertions: number;
+      readonly checkedAt: number;
+    }[];
     readonly status: "verified" | "unverified";
     readonly reviewId?: string;
     readonly inspected: readonly {
@@ -447,4 +455,9 @@ export interface HarnessContext {
   readonly payloadRecall?: PayloadRecallServiceV1;
   /** Policy-owning web backend. Preferred over the legacy direct fetch helpers. */
   readonly webAccess?: WebAccessServiceV1;
+  /** Host-owned local browser verification, available only through an explicit plugin. */
+  readonly browserCheck?: (
+    args: unknown,
+    signal?: AbortSignal,
+  ) => Promise<import("./registry/definitions.js").ToolRunResult>;
 }

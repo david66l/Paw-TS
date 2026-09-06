@@ -49,6 +49,7 @@ interface DesktopRunRecord {
   environmentAudit?: true;
   auditedMemory?: true;
   stageGraph?: true;
+  browserAudit?: true;
   taskMode?: "long";
   sessionId: string;
   runId: string;
@@ -241,6 +242,7 @@ export async function runDesktopNext(
       legacyAudit = false,
       legacyMemoryAdmission = false,
       legacyStageGraph = false,
+      legacyBrowserAudit = false,
     ) => {
       const { liveSteering: _steering, ...legacyControl } = profile.control;
       void _steering;
@@ -260,9 +262,15 @@ export async function runDesktopNext(
         taskMode === "long" && !legacyStageGraph
           ? { ...memoryProfile, stageGraph: true as const }
           : memoryProfile;
+      const browserProfile =
+        !legacyBrowserAudit &&
+        options.environmentAudit !== false &&
+        !legacyAudit
+          ? { ...graphProfile, browserAudit: true as const }
+          : graphProfile;
       const activeProfile = legacyRecovery
-        ? { ...graphProfile, control: legacyControl }
-        : graphProfile;
+        ? { ...browserProfile, control: legacyControl }
+        : browserProfile;
       const first = buildPawNextTaskProfileV3({
         identity: { workspaceRoot, ...identity },
         profile: activeProfile,
@@ -289,6 +297,7 @@ export async function runDesktopNext(
           recovering && previous.environmentAudit !== true,
           recovering && previous.auditedMemory !== true,
           recovering && previous.stageGraph !== true,
+          recovering && previous.browserAudit !== true,
         )
       : undefined;
     if (
@@ -326,7 +335,11 @@ export async function runDesktopNext(
           : {}),
         liveSteering: true,
         ...(options.environmentAudit !== false
-          ? { environmentAudit: true as const, auditedMemory: true as const }
+          ? {
+              environmentAudit: true as const,
+              auditedMemory: true as const,
+              browserAudit: true as const,
+            }
           : {}),
         sessionId: `desktop-session-${randomUUID()}`,
         runId: `desktop-next-${randomUUID()}`,

@@ -325,6 +325,15 @@ export async function executeTool(
   }
 
   const rec = asRecord(args) ?? {};
+  if (tool === "workspace.browser_check") {
+    if (!ctx.browserCheck)
+      return {
+        ok: false,
+        summary: "Browser verification is unavailable",
+        payload: { code: "E_POLICY_DENIED" },
+      };
+    return ctx.browserCheck(args, ctx.abortSignal);
+  }
   if (tool === MCP_PROXY) {
     return executeMcpProxy(ctx, rec);
   }
