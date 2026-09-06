@@ -32,6 +32,7 @@ import {
   defaultSettingsPath,
   loadPawSettingsLocal,
 } from "@paw/settings";
+import { LONG_HORIZON_MANAGER_PROMPT } from "../../cli/src/paw-next/long-horizon.js";
 import type { DesktopNextControls } from "./paw-next-controls.js";
 import { DesktopNextEvents } from "./paw-next-events.js";
 import { desktopAgentModels } from "./paw-next-models.js";
@@ -46,6 +47,7 @@ interface DesktopRunRecord {
   version: 1;
   liveSteering?: true;
   environmentAudit?: true;
+  taskMode?: "long";
   sessionId: string;
   runId: string;
   inputId: string;
@@ -61,6 +63,7 @@ interface DesktopRunRecord {
   };
 }
 export interface DesktopNextOptions {
+  taskMode?: "standard" | "long";
   attachments?: unknown;
   controls?: DesktopNextControls;
   workspaceRoot: string;
@@ -154,6 +157,9 @@ export async function runDesktopNext(
     const model = agentModels?.model ?? configuredModel;
     const collaborationModels =
       options.collaborationModels ?? agentModels?.models;
+    const previous = readRecord(file);
+    const taskMode =
+      options.intent === "recover" ? previous?.taskMode : options.taskMode;
     let profile = desktopProfile(
       workspaceRoot,
       model,
@@ -161,12 +167,22 @@ export async function runDesktopNext(
       options.maxSteps ?? settings.max_steps,
       options.memoryEnabled,
     );
+    if (taskMode === "long")
+      profile = {
+        ...profile,
+        longHorizon: "manager",
+        systemPrompt: `${profile.systemPrompt}\n\n${LONG_HORIZON_MANAGER_PROMPT}`,
+      };
     if (agentModels?.rootPrompt)
       profile = {
         ...profile,
         systemPrompt: `${profile.systemPrompt}\n\nConfigured root agent:\n${agentModels.rootPrompt}`,
       };
-    if (Array.isArray(settings.mcp_servers) && settings.mcp_servers.length) {
+    if (
+      taskMode !== "long" &&
+      Array.isArray(settings.mcp_servers) &&
+      settings.mcp_servers.length
+    ) {
       const servers = settings.mcp_servers as McpServerConfig[];
       const manager = new McpClientManager();
       try {
@@ -250,7 +266,6 @@ export async function runDesktopNext(
         requestApproval,
       });
     };
-    const previous = readRecord(file);
     const resetHistory = options.intent === "reset";
     const recovering = options.intent === "recover";
     let resolution = previous
@@ -290,6 +305,7 @@ export async function runDesktopNext(
         : goal;
       record = {
         version: 1,
+        ...(taskMode === "long" ? { taskMode: "long" as const } : {}),
         liveSteering: true,
         ...(options.environmentAudit !== false
           ? { environmentAudit: true as const }

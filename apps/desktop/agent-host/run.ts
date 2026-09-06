@@ -85,6 +85,7 @@ type InMsg =
       workspaceRoot: string;
       maxSteps?: number;
       intent?: "continue" | "recover" | "reset";
+      taskMode?: "standard" | "long";
       conversationId?: string;
       history?: HistoryTurn[];
       attachments?: unknown;
@@ -662,6 +663,7 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
       workspaceRoot,
       maxSteps: msg.maxSteps,
       intent: msg.intent,
+      taskMode: msg.taskMode === "long" ? "long" : "standard",
       conversationHistory: Array.isArray(msg.history) ? history : undefined,
       conversationId,
       abortSignal: ac.signal,

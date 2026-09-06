@@ -24,6 +24,7 @@ export interface MonitorTask {
     | "interrupted";
   blocker?: string;
   summary?: string;
+  audit?: MonitorAudit;
   files: string[];
   artifacts: string[];
   tests: { name: string; passed: boolean }[];

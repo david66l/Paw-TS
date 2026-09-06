@@ -167,6 +167,16 @@ export class DesktopRunMonitor {
       passed: test.passed,
     }));
     task.summary = result.summary;
+    if (result.environmentAudit && task.status !== "cancelled")
+      task.status = result.status === "completed" ? "done" : "failed";
+    if (result.environmentAudit)
+      task.audit = {
+        reviewId: result.environmentAudit.reviewId ?? "unverified",
+        status: result.environmentAudit.status,
+        summary: result.summary,
+        inspected: result.environmentAudit.inspected,
+        unmetCriteria: result.environmentAudit.unmetCriteria,
+      };
     this.emit();
   }
   job(runId: string, job: ManagedJobReadV1) {

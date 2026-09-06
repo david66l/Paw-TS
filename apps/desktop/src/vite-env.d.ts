@@ -84,6 +84,7 @@ export type PawDesktopApi = {
     workspaceRoot?: string;
     maxSteps?: number;
     intent?: "continue" | "recover" | "reset";
+    taskMode?: "standard" | "long";
     requestId?: string;
     conversationId?: string;
     history?: readonly {

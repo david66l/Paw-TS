@@ -36,6 +36,7 @@ import {
   WORK_SEGMENT_POLICY_VERSION_V1,
 } from "@paw/protocol";
 import { ENVIRONMENT_AUDIT_POLICY_VERSION_V1 } from "./environment-audit.js";
+import { LONG_HORIZON_POLICY_V1 } from "./long-horizon.js";
 
 import {
   type CreatePawNextProductManifestInputV2,
@@ -118,6 +119,10 @@ export interface PawNextProductManifestV3
   readonly collaboration: typeof PAW_NEXT_COLLABORATION_IDENTITY_V1;
   readonly modelOutputRecovery: typeof PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1;
   readonly environmentAudit?: typeof ENVIRONMENT_AUDIT_POLICY_VERSION_V1;
+  readonly longHorizon?: {
+    readonly policyVersion: typeof LONG_HORIZON_POLICY_V1;
+    readonly role: "manager" | "executor";
+  };
   readonly memory?: PawNextMemoryPluginIdentityV1;
 }
 
@@ -129,6 +134,7 @@ export interface CreatePawNextProductManifestInputV3
   readonly workSegmentPolicyVersion: typeof WORK_SEGMENT_POLICY_VERSION_V1;
   readonly runConfig: InteractiveControlConfigV2;
   readonly environmentAudit?: true;
+  readonly longHorizon?: "manager" | "executor";
   readonly memory?: PawNextMemoryPluginProfileV1;
 }
 
@@ -140,6 +146,12 @@ export function createPawNextProductManifestV3(
   }
   if (input.environmentAudit !== undefined && input.environmentAudit !== true)
     throw new Error("Invalid environment audit policy");
+  if (
+    input.longHorizon !== undefined &&
+    (!["manager", "executor"].includes(input.longHorizon) ||
+      input.environmentAudit !== true)
+  )
+    throw new Error("Invalid long-task policy");
   const runConfig = freezeInteractiveControlConfigV2(input.runConfig);
   const v2 = createPawNextProductManifestV2({
     toolEffectCheckpointPolicyVersion: input.toolEffectCheckpointPolicyVersion,
@@ -177,6 +189,14 @@ export function createPawNextProductManifestV3(
     compositionVersion: PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V3,
     reducerVersion: INTERACTIVE_CONTROL_REDUCER_VERSION_V2,
     workSegmentPolicyVersion: WORK_SEGMENT_POLICY_VERSION_V1,
+    ...(input.longHorizon
+      ? {
+          longHorizon: {
+            policyVersion: LONG_HORIZON_POLICY_V1,
+            role: input.longHorizon,
+          },
+        }
+      : {}),
     runConfig,
     contextCompaction: PAW_NEXT_CONTEXT_COMPACTION_IDENTITY_V1,
     completionReview: PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1,

@@ -198,6 +198,16 @@ export interface SubAgentOutcomeV1 {
 }
 
 export interface SubAgentResult {
+  /** Host projection of the independent child audit. */
+  readonly environmentAudit?: {
+    readonly status: "verified" | "unverified";
+    readonly reviewId?: string;
+    readonly inspected: readonly {
+      readonly path: string;
+      readonly hash: string;
+    }[];
+    readonly unmetCriteria: readonly string[];
+  };
   readonly status: "completed" | "failed";
   readonly summary: string;
   /** Durable child-run locator returned to the parent tool result. */

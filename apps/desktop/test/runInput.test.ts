@@ -26,3 +26,12 @@ test("Electron forwards recovery and explicit empty history without inventing a 
   });
   expect(runInputFields({ maxSteps: -1 })).not.toHaveProperty("maxSteps");
 });
+
+test("Electron only forwards the supported long-task mode", () => {
+  expect(runInputFields({ taskMode: "long" })).toMatchObject({
+    taskMode: "long",
+  });
+  expect(runInputFields({ taskMode: "unsupported" })).not.toHaveProperty(
+    "taskMode",
+  );
+});

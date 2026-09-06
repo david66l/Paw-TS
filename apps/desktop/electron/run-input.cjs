@@ -12,6 +12,7 @@ function runInputFields(payload) {
         .map((t) => ({ role: t.role, content: t.content.trim() }))
     : undefined;
   return {
+    ...(payload?.taskMode === "long" ? { taskMode: "long" } : {}),
     intent:
       payload?.intent === "recover"
         ? "recover"
@@ -22,7 +23,9 @@ function runInputFields(payload) {
       ? { maxSteps: payload.maxSteps }
       : {}),
     ...(history ? { history } : {}),
-    ...(Array.isArray(payload?.attachments) ? { attachments: payload.attachments } : {}),
+    ...(Array.isArray(payload?.attachments)
+      ? { attachments: payload.attachments }
+      : {}),
   };
 }
 module.exports = { runInputFields };

@@ -69,6 +69,7 @@ export interface PawNextProductProfileV3
   /** Optional root-only, read-only long-term memory plugin. */
   readonly memory?: PawNextMemoryPluginProfileV1;
   readonly environmentAudit?: true;
+  readonly longHorizon?: "manager" | "executor";
 }
 
 export interface PawNextProductProfileStoreV3 {
@@ -126,6 +127,7 @@ export interface PawNextTaskProfileOptionsV3 {
   readonly mcp?: PawNextMcpRuntimeProfileV1;
   readonly memory?: PawNextMemoryPluginProfileV1;
   readonly environmentAudit?: true;
+  readonly longHorizon?: "manager" | "executor";
 }
 
 export interface BuiltPawNextTaskProfileV3 {
@@ -225,6 +227,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const v1 = preparePawNextProductRuntimeIdentityV3(identityTask).manifest;
   const manifest = createPawNextProductManifestV3({
@@ -255,6 +258,7 @@ export function buildPawNextTaskProfileV3(
     payloadRuntime: profile.payloadRuntime,
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = deepFreeze({
     ...(input.collaborationModels
@@ -292,6 +296,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   return deepFreeze({
     productVersion: "v3",
@@ -332,13 +337,22 @@ function parseProfileV3(
       "workSegmentPolicyVersion",
       "payloadRuntime",
     ],
-    ["mcp", "memory", "environmentAudit"],
+    ["mcp", "memory", "environmentAudit", "longHorizon"],
   );
   if (record.approval !== "available" && record.approval !== "unavailable") {
     throw new Error("Unsupported V3 approval mode");
   }
   if (record.environmentAudit !== undefined && record.environmentAudit !== true)
     throw new Error("Unsupported environment audit policy");
+  if (
+    record.longHorizon !== undefined &&
+    (record.longHorizon !== "manager" ||
+      record.environmentAudit !== true ||
+      record.mcp !== undefined)
+  )
+    throw new Error(
+      "Long-task profiles require manager mode, environment auditing, and no MCP binding",
+    );
   const control = parseControlV3(record.control, `${label}.control`);
   const common = parsePawNextProductProfileInternal(
     {
@@ -367,6 +381,7 @@ function parseProfileV3(
     ...common,
     approval: record.approval,
     ...(record.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(record.longHorizon ? { longHorizon: "manager" as const } : {}),
     control,
     workSegmentPolicyVersion: WORK_SEGMENT_POLICY_VERSION_V1,
     payloadRuntime: freezeFileDurableJsonPayloadRuntimePolicyV1(

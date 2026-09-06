@@ -1085,3 +1085,31 @@ test("environment audit is opt-in and changes the V3 identity without changing h
   );
   expect(hashPawNextProductManifestV3(ordinary)).toBe(V3_HASH);
 });
+
+test("long-task roles have distinct exact identities and require auditing", () => {
+  const base = { ...manifestInputV3(), environmentAudit: true as const };
+  const manager = createPawNextProductManifestV3({
+    ...base,
+    longHorizon: "manager",
+  });
+  const executor = createPawNextProductManifestV3({
+    ...base,
+    longHorizon: "executor",
+  });
+  expect(manager.longHorizon).toEqual({
+    policyVersion: "paw.long-horizon.v1",
+    role: "manager",
+  });
+  expect(hashPawNextProductManifestV3(manager)).not.toBe(
+    hashPawNextProductManifestV3(executor),
+  );
+  expect(hashPawNextProductManifestV3(manager)).not.toBe(
+    hashPawNextProductManifestV3(createPawNextProductManifestV3(base)),
+  );
+  expect(() =>
+    createPawNextProductManifestV3({
+      ...manifestInputV3(),
+      longHorizon: "manager",
+    }),
+  ).toThrow("Invalid long-task policy");
+});

@@ -144,6 +144,21 @@ function boundResult(
   return Object.freeze({
     status: value.status,
     summary: truncate(value.summary, policy.maxSummaryChars),
+    ...(value.environmentAudit
+      ? {
+          environmentAudit: Object.freeze({
+            ...value.environmentAudit,
+            inspected: Object.freeze(
+              value.environmentAudit.inspected.map((file) =>
+                Object.freeze({ ...file }),
+              ),
+            ),
+            unmetCriteria: Object.freeze([
+              ...value.environmentAudit.unmetCriteria,
+            ]),
+          }),
+        }
+      : {}),
     ...(value.childRun
       ? { childRun: Object.freeze({ ...value.childRun }) }
       : {}),

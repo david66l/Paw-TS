@@ -143,6 +143,26 @@ export function TaskOverview({
           {task.blocker ? (
             <output className={styles.blocker}>{task.blocker}</output>
           ) : null}
+          {task.audit ? (
+            <div>
+              <p className={styles.status} data-status={task.audit.status}>
+                {task.audit.status === "verified"
+                  ? "阶段验收通过"
+                  : "阶段尚未通过验收"}
+              </p>
+              {task.audit.unmetCriteria.map((item) => (
+                <p key={item}>{item}</p>
+              ))}
+              <details>
+                <summary>阶段检查的文件</summary>
+                {task.audit.inspected.map((file) => (
+                  <p key={file.path}>
+                    <code>{file.path}</code>
+                  </p>
+                ))}
+              </details>
+            </div>
+          ) : null}
           <Evidence task={task} />
         </article>
       ))}

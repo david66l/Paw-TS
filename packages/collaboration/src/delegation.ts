@@ -149,6 +149,8 @@ export function parseCollaborationDelegationPlanV1(
 }
 
 export function createAdaptiveCollaborationLauncherV1(input: {
+  readonly validateDependencyResult?: (result: SubAgentResult) => boolean;
+  readonly shouldPause?: () => Promise<boolean>;
   readonly delegate: SubAgentLauncher;
   readonly roster?: CollaborationRosterV1;
   readonly policy?: CollaborationPolicyV1;
@@ -194,6 +196,8 @@ export function createAdaptiveCollaborationLauncherV1(input: {
       launchOptions,
       roster,
       policy,
+      input.validateDependencyResult,
+      input.shouldPause,
     );
   };
 
@@ -453,10 +457,31 @@ async function runMission(
   options: SubAgentLaunchOptions,
   roster: CollaborationRosterV1,
   policy: CollaborationPolicyV1,
+  validateDependencyResult?: (result: SubAgentResult) => boolean,
+  shouldPause?: () => Promise<boolean>,
 ): Promise<SubAgentResult> {
   const pending = new Map(plan.tasks.map((task) => [task.id, task]));
   const results = new Map<string, SubAgentResult>();
   while (pending.size > 0) {
+    if (await shouldPause?.()) {
+      for (const task of pending.values())
+        results.set(task.id, {
+          status: "failed",
+          summary:
+            "Stage not started: new user input requires Manager replanning.",
+        });
+      break;
+    }
+    if (validateDependencyResult)
+      for (const [id, result] of results) {
+        if (result.status === "completed" && !validateDependencyResult(result))
+          results.set(id, {
+            ...result,
+            status: "failed",
+            summary:
+              "Dependency evidence changed or was not independently verified; re-audit required.",
+          });
+      }
     for (const task of [...pending.values()]) {
       const failedDependency = task.dependsOn.find(
         (id) => results.get(id)?.status === "failed",
@@ -490,7 +515,7 @@ async function runMission(
       ...inspectTasks,
       ...executeTasks,
       ...(executeTasks.length === 0 && mutationTask ? [mutationTask] : []),
-    ].slice(0, policy.maxConcurrentChildren);
+    ].slice(0, validateDependencyResult ? 1 : policy.maxConcurrentChildren);
     const settled = await Promise.all(
       wave.map(async (task) => ({
         task,

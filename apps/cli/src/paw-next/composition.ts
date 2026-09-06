@@ -5,7 +5,13 @@ import {
   createEnvironmentCompletionReviewerV1,
   environmentRevision,
   fingerprintAuditFile,
+  projectEnvironmentAcceptance,
 } from "./environment-audit.js";
+import {
+  createLongHorizonCollaborationPlugin,
+  createManagerStageLauncher,
+  stageEvidenceIsCurrent,
+} from "./long-horizon.js";
 
 import {
   type AgentLoopContinueCursorV1,
@@ -211,6 +217,7 @@ import {
   type FileSessionExecutionLeaseV1,
   type FrozenPermissionConfigV1,
   FrozenPermissionEngineV1,
+  GLOBAL_TOOL_RESOURCE_LOCK_V1,
   type JournalContextOptionsV1,
   MCP_PROXY_TOOL_PLUGIN_ID_V1,
   MonotonicCheckpointSequenceV1,
@@ -325,6 +332,7 @@ export interface PawNextChildControlV1 {
 
 export interface RunFreshPawNextTaskOptionsV1 {
   readonly environmentAudit?: true;
+  readonly longHorizon?: "manager" | "executor";
   readonly onChildResult?: (id: string, result: SubAgentResult) => void;
   readonly onManagedJobsReady?: (
     runId: string,
@@ -576,6 +584,7 @@ export function preparePawNextProductRuntimeIdentityV3(
       undefined,
       options.mcp,
       options.memory,
+      options.longHorizon,
     ),
   );
 }
@@ -1348,6 +1357,7 @@ function preparePawNextProductRuntimeV3(
       ? { onJournalCommit: input.onJournalCommit }
       : {}),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
     runId: task.runId,
@@ -1460,6 +1470,7 @@ function preparePawNextProductRuntimeV3(
       undefined,
       task.mcp,
       task.memory,
+      task.longHorizon,
     ),
   );
   const manifest = createPawNextProductManifestV3({
@@ -1484,6 +1495,7 @@ function preparePawNextProductRuntimeV3(
     payloadRuntime,
     ...(task.memory === undefined ? {} : { memory: task.memory }),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
   });
   const configHash = hashPawNextProductManifestV3(manifest);
   if (
@@ -1983,6 +1995,7 @@ function pawNextV3ExtensionsV1(
   toolWorkspaceRoot?: string,
   mcp?: PawNextMcpRuntimeProfileV1,
   memory?: PawNextMemoryPluginProfileV1,
+  longHorizon?: "manager" | "executor",
 ): PawNextRuntimeExtensionsV1 {
   if (mode === "child") {
     if (!agent) throw new Error("Child extensions require an AgentSpec");
@@ -1990,6 +2003,20 @@ function pawNextV3ExtensionsV1(
   }
   if (!roster)
     throw new Error("Root extensions require a collaboration roster");
+  if (longHorizon === "manager")
+    return Object.freeze({
+      recoverTruncatedModelOutput: true,
+      builtinTools: [],
+      foundationPlugins: [],
+      plugins: [
+        createTaskProgressToolPluginV1(),
+        createLongHorizonCollaborationPlugin(roster),
+        ...(memory !== undefined && memory.mode !== "off"
+          ? [createPawNextMemoryToolPluginV1(memory)]
+          : []),
+      ],
+      toolObservationProjector: createOutputRecallProjectorV1(),
+    });
   return Object.freeze({
     recoverTruncatedModelOutput: true,
     plugins: Object.freeze([
@@ -2949,11 +2976,56 @@ function collaborationContextV1(
     delegate: controlled,
     roster,
   });
+  const adaptive = createAdaptiveCollaborationLauncherV1({
+    delegate: bounded,
+    roster,
+    ...(options.longHorizon === "manager"
+      ? {
+          validateDependencyResult: (result: SubAgentResult) => {
+            const current = stageEvidenceIsCurrent(
+              options.workspaceRoot,
+              result,
+            );
+            if (!current && result.childRun)
+              options.onChildResult?.(
+                `${options.runId}:${result.childRun.parentCallId}`,
+                {
+                  ...result,
+                  status: "failed",
+                  summary: "阶段证据已变化，需要重新验收。",
+                  ...(result.environmentAudit
+                    ? {
+                        environmentAudit: {
+                          ...result.environmentAudit,
+                          status: "unverified",
+                        },
+                      }
+                    : {}),
+                },
+              );
+            return current;
+          },
+          shouldPause: async () => {
+            const inbox = projectDurableInputInboxStateV1(
+              await session.readInputSnapshot(),
+            );
+            return (
+              inbox.pendingSteerIds.length > 0 ||
+              inbox.pendingQueueIds.length > 0
+            );
+          },
+        }
+      : {}),
+  });
   return Object.freeze({
-    subAgentLauncher: createAdaptiveCollaborationLauncherV1({
-      delegate: bounded,
-      roster,
-    }),
+    subAgentLauncher:
+      options.longHorizon === "manager"
+        ? createManagerStageLauncher(adaptive, async () =>
+            (await session.readInputSnapshot()).entries.map(
+              (entry) => entry.fact,
+            ),
+          )
+        : adaptive,
   });
 }
 
@@ -2979,6 +3051,9 @@ function createPawNextV3ChildLauncherV1(input: {
       callId,
       goal,
       agent,
+      ...(input.parentOptions.longHorizon === "manager"
+        ? { auditedStage: true }
+        : {}),
       maxModelTurns: maxSteps ?? 8,
       softModelTurns: childSoftModelTurnsV1(
         launchOptions?.args?.initial_steps,
@@ -3015,6 +3090,7 @@ export async function runPawNextChildV3(input: {
   readonly maxModelTurns: number;
   readonly softModelTurns?: number;
   readonly onResult?: (result: PawNextTaskResultV3) => void;
+  readonly auditedStage?: boolean;
   readonly signal?: AbortSignal;
 }): Promise<SubAgentResult> {
   const currentSourceRevision = workspaceRevisionV1(
@@ -3053,6 +3129,7 @@ export async function runPawNextChildV3(input: {
       inputId,
       goal: input.goal,
       agent: input.agent,
+      auditedStage: input.auditedStage,
       maxModelTurns: input.maxModelTurns,
       ...(input.softModelTurns === undefined
         ? {}
@@ -3082,6 +3159,22 @@ export async function runPawNextChildV3(input: {
           taskOptions: prepared.taskOptions,
           runtime: productLoopRuntimeV3(prepared),
           configHash: prepared.configHash,
+          ...(input.auditedStage
+            ? {
+                openNextQueuedWorkSegment: (
+                  context: Pick<
+                    Parameters<typeof openNextPawNextV3WorkSegmentV1>[0],
+                    "session" | "inbox" | "loadForPrefix" | "signal" | "state"
+                  >,
+                ) =>
+                  openNextPawNextV3WorkSegmentV1({
+                    ...context,
+                    options: prepared.options,
+                    prepared,
+                    drainQueuedUserWork: false,
+                  }),
+              }
+            : {}),
           publishPayloadBundle(bundle) {
             payloadBundle = bundle;
           },
@@ -3095,8 +3188,15 @@ export async function runPawNextChildV3(input: {
   );
   const revisionStable =
     sourceRevision === undefined || observedRevision === sourceRevision;
+  const acceptance = input.auditedStage
+    ? projectEnvironmentAcceptance(result.inputFacts)
+    : "not_required";
+  const stageAudit = [...result.inputFacts]
+    .reverse()
+    .find((f) => f.type === "completion.review_settled");
   const completed =
     result.state.decision.kind === "completed" &&
+    (!input.auditedStage || acceptance === "verified") &&
     (input.agent.effect === "mutate" || revisionStable);
   const summary =
     result.assistantText?.trim() ||
@@ -3122,7 +3222,30 @@ export async function runPawNextChildV3(input: {
   );
   const childResult = Object.freeze({
     status: completed ? "completed" : "failed",
-    summary,
+    summary: input.auditedStage
+      ? `${acceptance === "verified" ? "Independently verified" : "Unverified"}: ${summary}\n${stageAudit?.type === "completion.review_settled" ? stageAudit.summary : "Audit missing"}`
+      : summary,
+    ...(input.auditedStage
+      ? {
+          environmentAudit: {
+            status:
+              acceptance === "verified"
+                ? ("verified" as const)
+                : ("unverified" as const),
+            ...(stageAudit?.type === "completion.review_settled"
+              ? { reviewId: stageAudit.reviewId }
+              : {}),
+            inspected:
+              stageAudit?.type === "completion.review_settled"
+                ? (stageAudit.environmentAudit?.inspected ?? [])
+                : [],
+            unmetCriteria:
+              stageAudit?.type === "completion.review_settled"
+                ? (stageAudit.environmentAudit?.unmetCriteria ?? [])
+                : [],
+          },
+        }
+      : {}),
     childRun: Object.freeze({
       runtime: "paw_next_v3" as const,
       sessionId,
@@ -3190,6 +3313,7 @@ function preparePawNextReadOnlyChildV3(
     readonly maxModelTurns: number;
     readonly softModelTurns?: number;
     readonly toolWorkspaceRoot?: string;
+    readonly auditedStage?: boolean;
     readonly signal?: AbortSignal;
   },
   loadPayloadEvidence: NonNullable<
@@ -3198,22 +3322,26 @@ function preparePawNextReadOnlyChildV3(
 ): PreparedPawNextProductRuntimeV3 {
   const {
     environmentAudit: _rootAudit,
+    longHorizon: _rootLongHorizon,
     mcp: parentMcp,
     onLiveInputReady: _rootInbox,
     initialAttachments: _rootAttachments,
     ...parentOptionsWithoutMcp
   } = input.parentOptions;
   void _rootAudit;
+  void _rootLongHorizon;
   void _rootInbox;
   void _rootAttachments;
   const {
     environmentAudit: _rootTaskAudit,
+    longHorizon: _rootTaskLongHorizon,
     mcp: parentTaskMcp,
     ...parentTaskOptionsWithoutMcp
   } = input.parentTaskOptions;
   void parentMcp;
   void parentTaskMcp;
   void _rootTaskAudit;
+  void _rootTaskLongHorizon;
   const mayExecute = input.agent.effect !== "inspect";
   const mayMutate = input.agent.effect === "mutate";
   const childModel =
@@ -3281,6 +3409,9 @@ function preparePawNextReadOnlyChildV3(
   });
   const options: RunFreshPawNextTaskOptionsV1 = Object.freeze({
     ...parentOptionsWithoutMcp,
+    ...(input.auditedStage
+      ? { environmentAudit: true as const, longHorizon: "executor" as const }
+      : {}),
     ...childModelOptions,
     sessionId: input.sessionId,
     runId: input.runId,
@@ -3349,9 +3480,15 @@ function preparePawNextReadOnlyChildV3(
     profileIdentity: core.manifest.profileIdentity,
     credentialBindingHash: core.manifest.credentialBindingHash,
     payloadRuntime,
+    ...(input.auditedStage
+      ? { environmentAudit: true as const, longHorizon: "executor" as const }
+      : {}),
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = Object.freeze({
     ...parentTaskOptionsWithoutMcp,
+    ...(input.auditedStage
+      ? { environmentAudit: true as const, longHorizon: "executor" as const }
+      : {}),
     ...childModelOptions,
     workspaceRoot: options.workspaceRoot,
     sessionId: input.sessionId,
@@ -4093,6 +4230,30 @@ function environmentReviewer(
   },
   candidate: import("@paw/completion-review").CompletionReviewCandidateV1,
 ) {
+  const lastStage = [...candidate.toolEvidence]
+    .reverse()
+    .find(
+      (evidence) =>
+        evidence.tool === "workspace_delegate" ||
+        evidence.tool === "workspace.run_agent",
+    );
+  if (
+    input.options.longHorizon === "manager" &&
+    lastStage &&
+    (lastStage.executionStatus !== "completed" || lastStage.isError)
+  )
+    return {
+      reviewerId: "paw.environment-audit.v1",
+      async review() {
+        return {
+          status: "completed" as const,
+          verdict: "block" as const,
+          reasonCode: "manager_stage_unverified",
+          summary:
+            "最近的阶段计划尚未通过。请根据失败或变更的要求重新委派，不能直接宣布完成。",
+        };
+      },
+    };
   return createEnvironmentCompletionReviewerV1({
     workspaceRoot: input.options.workspaceRoot,
     async run(goal, signal, observe) {
@@ -4633,6 +4794,7 @@ async function projectCompletionReviewCandidateV1(input: {
   });
   if (
     evaluateCompletionReviewGateV1(triggerProbe).action === "allow" &&
+    !input.options.longHorizon &&
     !(input.options.environmentAudit && triggerProbe.mutationCount > 0)
   ) {
     return undefined;
@@ -4989,6 +5151,19 @@ async function runPreparedExistingFilePayloadPawNextTask<
         restored.classification,
         input.allowBlockedPending?.(prefix) ?? false,
       );
+      if (
+        restored.classification.status === "actionable_repair" &&
+        options.longHorizon === "manager"
+      ) {
+        await recoverManagerDelegationsV1(
+          runtime,
+          options,
+          bundle,
+          executionSignal,
+        );
+        prefix = await bundle.session.readCanonicalPrefix();
+        restored = await input.inspect(prefix, bundle, executionSignal);
+      }
       if (restored.classification.status === "actionable_repair") {
         await repairRunRecoveryV1({
           session: bundle.session,
@@ -5045,6 +5220,95 @@ async function runPreparedExistingFilePayloadPawNextTask<
     },
     input.expectedInventoryHash,
   );
+}
+
+/** Resume only the managed delegation transport, whose effects live in identity-bound child journals.
+ * Ordinary tools, unapproved dispatches, and unknown child effects keep generic fail-closed recovery. */
+async function recoverManagerDelegationsV1<
+  TRunConfig,
+  TControlState extends LoopControlState,
+>(
+  runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>,
+  options: RunFreshPawNextTaskOptionsV1,
+  bundle: PawNextPayloadExecutionBundleV2,
+  signal: AbortSignal,
+): Promise<void> {
+  const snapshot = await bundle.session.readInputSnapshot();
+  const facts = snapshot.entries.map((entry) => entry.fact);
+  const settled = new Set(
+    facts.flatMap((f) => (f.type === "tool.settled" ? [f.callId] : [])),
+  );
+  const permitted = new Set(
+    facts.flatMap((f) =>
+      f.type === "tool.permission_resolved" && f.resolution !== "deny"
+        ? [f.callId]
+        : [],
+    ),
+  );
+  const dispatched = new Set(
+    facts.flatMap((f) =>
+      f.type === "tool.dispatch_recorded" ? [f.callId] : [],
+    ),
+  );
+  const pending = facts.filter(
+    (f) =>
+      f.type === "tool.call_observed" &&
+      f.tool === "workspace_delegate" &&
+      !settled.has(f.callId) &&
+      permitted.has(f.callId) &&
+      dispatched.has(f.callId),
+  );
+  if (!pending.length) return;
+  const launcher = collaborationContextV1(
+    runtime,
+    options,
+    bundle.session,
+  ).subAgentLauncher;
+  const entry = runtime.registry.resolveProviderName("workspace_delegate");
+  if (!launcher || !entry)
+    throw new Error("Managed recovery requires its frozen delegation runtime");
+  for (const fact of pending) {
+    if (fact.type !== "tool.call_observed") continue;
+    signal.throwIfAborted();
+    const checked = entry.validate(fact.args);
+    if (!checked.ok) throw new Error("Managed recovery contract is invalid");
+    const lease = await GLOBAL_TOOL_RESOURCE_LOCK_V1.acquire(
+      entry.classify(checked.args, options.workspaceRoot),
+      signal,
+    );
+    try {
+      const result = await launcher.launch(
+        String(checked.args.goal),
+        Number(checked.args.max_steps),
+        {
+          agentId: fact.callId,
+          parentRunId: options.runId,
+          args: { ...checked.args },
+          signal,
+        },
+      );
+      signal.throwIfAborted();
+      await bundle.session.appendInputFacts([
+        {
+          type: "tool.settled",
+          ...toDurableToolSettlementV1(
+            {
+              callId: fact.callId,
+              status: "success",
+              result: {
+                ok: result.status === "completed",
+                payload: result,
+                summary: `Recovered managed delegation: ${result.status}`,
+              },
+            },
+            createInlineDurableJsonStore(),
+          ),
+        },
+      ]);
+    } finally {
+      lease.release();
+    }
+  }
 }
 
 function publishLiveInputV1<TRunConfig, TControlState extends LoopControlState>(

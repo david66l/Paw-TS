@@ -1431,6 +1431,10 @@ export function useAgentRun() {
       goal: string,
       intent: "continue" | "recover" = "continue",
       attachments: readonly DesktopAttachment[] = [],
+      taskMode: "standard" | "long" = localStorage.getItem("paw.taskMode") ===
+      "long"
+        ? "long"
+        : "standard",
     ) => {
       const desk = api();
       const text =
@@ -1573,6 +1577,7 @@ export function useAgentRun() {
       try {
         const { requestId } = await desk.startRun({
           goal: text,
+          ...(taskMode === "long" ? { taskMode } : {}),
           attachments,
           intent,
           requestId: clientRequestId,

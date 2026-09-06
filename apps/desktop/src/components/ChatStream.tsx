@@ -59,6 +59,7 @@ export type ChatStreamProps = {
   readonly onSend: (
     text: string,
     attachments?: readonly DesktopAttachment[],
+    taskMode?: "standard" | "long",
   ) => Promise<boolean | undefined>;
   readonly onCancelChild: (id: string) => void;
   readonly onRetryChild: (id: string) => void;
@@ -435,6 +436,9 @@ export function ChatStream({
   onDismissError,
   approvalMode,
 }: ChatStreamProps) {
+  const [taskMode, setTaskMode] = useState<"standard" | "long">(() =>
+    localStorage.getItem("paw.taskMode") === "long" ? "long" : "standard",
+  );
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<DesktopAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
@@ -511,7 +515,7 @@ export function ChatStream({
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const accepted = await onSend(t, attachments);
+      const accepted = await onSend(t, attachments, taskMode);
       if (accepted !== false) setAttachments([]);
       if (accepted !== false)
         setDraft((current) => (current.trim() === t ? "" : current));
@@ -784,6 +788,21 @@ export function ChatStream({
                   : "宿主未就绪"}
             </span>
             <div className={styles.actions}>
+              <select
+                aria-label="任务模式"
+                value={taskMode}
+                disabled={isRunning || submitting}
+                className={styles.secondaryBtn}
+                title="长任务：分阶段独立执行和验收，会增加模型调用。"
+                onChange={(e) => {
+                  const mode = e.target.value === "long" ? "long" : "standard";
+                  setTaskMode(mode);
+                  localStorage.setItem("paw.taskMode", mode);
+                }}
+              >
+                <option value="standard">普通任务</option>
+                <option value="long">长任务</option>
+              </select>
               <button
                 type="button"
                 className={styles.secondaryBtn}

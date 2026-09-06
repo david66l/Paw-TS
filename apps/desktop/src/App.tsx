@@ -162,8 +162,8 @@ export function App() {
           agent.selectActivity(id);
           setRightTab("agents");
         }}
-        onSend={(text, attachments) =>
-          agent.send(text, "continue", attachments)
+        onSend={(text, attachments, taskMode) =>
+          agent.send(text, "continue", attachments, taskMode)
         }
         onCancelChild={agent.cancelChild}
         onRetryChild={agent.retryChild}
