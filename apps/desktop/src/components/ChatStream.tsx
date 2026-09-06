@@ -436,6 +436,9 @@ export function ChatStream({
   onDismissError,
   approvalMode,
 }: ChatStreamProps) {
+  const [visualAudit, setVisualAudit] = useState(
+    () => localStorage.getItem("paw.visualAudit") === "true",
+  );
   const [taskMode, setTaskMode] = useState<"standard" | "long">(() =>
     localStorage.getItem("paw.taskMode") === "long" ? "long" : "standard",
   );
@@ -788,6 +791,25 @@ export function ChatStream({
                   : "宿主未就绪"}
             </span>
             <div className={styles.actions}>
+              <label
+                className={styles.secondaryBtn}
+                title="对本地网页截图进行独立视觉验收，需要支持图片的模型，会增加模型调用。"
+              >
+                <input
+                  type="checkbox"
+                  aria-label="视觉验收"
+                  checked={visualAudit}
+                  disabled={isRunning || submitting}
+                  onChange={(event) => {
+                    setVisualAudit(event.target.checked);
+                    localStorage.setItem(
+                      "paw.visualAudit",
+                      String(event.target.checked),
+                    );
+                  }}
+                />
+                视觉验收
+              </label>
               <select
                 aria-label="任务模式"
                 value={taskMode}

@@ -32,6 +32,7 @@ export interface PawNextProductModelProfileV1 {
   readonly model: string;
   readonly baseUrl: string;
   readonly capabilities: {
+    readonly imageInput?: true;
     readonly contextWindow: number;
     readonly maxOutputTokens: number;
   };

@@ -50,6 +50,7 @@ interface DesktopRunRecord {
   auditedMemory?: true;
   stageGraph?: true;
   browserAudit?: true;
+  visualAudit?: true;
   taskMode?: "long";
   sessionId: string;
   runId: string;
@@ -67,6 +68,7 @@ interface DesktopRunRecord {
 }
 export interface DesktopNextOptions {
   taskMode?: "standard" | "long";
+  visualAudit?: true;
   attachments?: unknown;
   controls?: DesktopNextControls;
   workspaceRoot: string;
@@ -163,6 +165,12 @@ export async function runDesktopNext(
     const previous = readRecord(file);
     const taskMode =
       options.intent === "recover" ? previous?.taskMode : options.taskMode;
+    const visualAudit =
+      options.intent === "recover"
+        ? previous?.visualAudit
+        : options.visualAudit;
+    if (visualAudit && options.environmentAudit === false)
+      throw new Error("视觉验收需要启用环境审计。");
     let profile = desktopProfile(
       workspaceRoot,
       model,
@@ -175,6 +183,11 @@ export async function runDesktopNext(
         ...profile,
         longHorizon: "manager",
         systemPrompt: `${profile.systemPrompt}\n\n${LONG_HORIZON_MANAGER_PROMPT}`,
+      };
+    if (visualAudit)
+      profile = {
+        ...profile,
+        systemPrompt: `${profile.systemPrompt}\nVisual acceptance is enabled. Make the relevant local web app available at an explicit loopback HTTP port before finishing and include that URL in your result. Independent auditors will check behavior and current screenshot pixels. Missing images or required reference comparisons remain unverified.`,
       };
     if (agentModels?.rootPrompt)
       profile = {
@@ -268,9 +281,13 @@ export async function runDesktopNext(
         !legacyAudit
           ? { ...graphProfile, browserAudit: true as const }
           : graphProfile;
+      const visualProfile =
+        visualAudit && !legacyBrowserAudit
+          ? { ...browserProfile, visualAudit: true as const }
+          : browserProfile;
       const activeProfile = legacyRecovery
-        ? { ...browserProfile, control: legacyControl }
-        : browserProfile;
+        ? { ...visualProfile, control: legacyControl }
+        : visualProfile;
       const first = buildPawNextTaskProfileV3({
         identity: { workspaceRoot, ...identity },
         profile: activeProfile,
@@ -334,6 +351,7 @@ export async function runDesktopNext(
           ? { taskMode: "long" as const, stageGraph: true as const }
           : {}),
         liveSteering: true,
+        ...(visualAudit ? { visualAudit: true as const } : {}),
         ...(options.environmentAudit !== false
           ? {
               environmentAudit: true as const,

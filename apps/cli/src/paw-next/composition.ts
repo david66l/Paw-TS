@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createCompletionReviewEvidencePacketV1 } from "@paw/completion-review";
 import {
   admittedMemorySourceSeqs,
   memoryUserStatement,
@@ -29,6 +30,10 @@ import {
   stageResultEvidence,
   withStageLedger,
 } from "./stage-graph.js";
+import {
+  createVisualBrowserCheck,
+  verifyVisualEvidence,
+} from "./visual-check.js";
 
 import {
   type AgentLoopContinueCursorV1,
@@ -352,6 +357,9 @@ export interface RunFreshPawNextTaskOptionsV1 {
   readonly auditedMemory?: true;
   readonly stageGraph?: true;
   readonly browserAudit?: true;
+  readonly visualAudit?: true;
+  /** Host-only backend, installed exclusively on the closed auditor child. */
+  readonly auditedBrowserCheck?: typeof runBrowserCheck;
   readonly longHorizon?: "manager" | "executor";
   readonly onChildResult?: (id: string, result: SubAgentResult) => void;
   readonly onManagedJobsReady?: (
@@ -1383,6 +1391,7 @@ function preparePawNextProductRuntimeV3(
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.stageGraph ? { stageGraph: true as const } : {}),
     ...(task.browserAudit ? { browserAudit: true as const } : {}),
+    ...(task.visualAudit ? { visualAudit: true as const } : {}),
     ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
@@ -1526,6 +1535,7 @@ function preparePawNextProductRuntimeV3(
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.stageGraph ? { stageGraph: true as const } : {}),
     ...(task.browserAudit ? { browserAudit: true as const } : {}),
+    ...(task.visualAudit ? { visualAudit: true as const } : {}),
     ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
   });
   const configHash = hashPawNextProductManifestV3(manifest);
@@ -3411,6 +3421,8 @@ function preparePawNextReadOnlyChildV3(
     auditedMemory: _rootMemoryAdmission,
     stageGraph: _rootStageGraph,
     browserAudit: _rootBrowserAudit,
+    visualAudit: _rootVisualAudit,
+    auditedBrowserCheck: _rootBrowserBackend,
     onStageGraph: _rootStageObserver,
     longHorizon: _rootLongHorizon,
     mcp: parentMcp,
@@ -3422,6 +3434,8 @@ function preparePawNextReadOnlyChildV3(
   void _rootMemoryAdmission;
   void _rootStageGraph;
   void _rootBrowserAudit;
+  void _rootVisualAudit;
+  void _rootBrowserBackend;
   void _rootStageObserver;
   void _rootLongHorizon;
   void _rootInbox;
@@ -3431,6 +3445,7 @@ function preparePawNextReadOnlyChildV3(
     auditedMemory: _rootTaskMemoryAdmission,
     stageGraph: _rootTaskStageGraph,
     browserAudit: _rootTaskBrowserAudit,
+    visualAudit: _rootTaskVisualAudit,
     longHorizon: _rootTaskLongHorizon,
     mcp: parentTaskMcp,
     ...parentTaskOptionsWithoutMcp
@@ -3441,6 +3456,7 @@ function preparePawNextReadOnlyChildV3(
   void _rootTaskMemoryAdmission;
   void _rootTaskStageGraph;
   void _rootTaskBrowserAudit;
+  void _rootTaskVisualAudit;
   void _rootTaskLongHorizon;
   const mayExecute = input.agent.effect !== "inspect";
   const mayMutate = input.agent.effect === "mutate";
@@ -3509,6 +3525,9 @@ function preparePawNextReadOnlyChildV3(
   });
   const options: RunFreshPawNextTaskOptionsV1 = Object.freeze({
     ...parentOptionsWithoutMcp,
+    ...(input.auditBrowser && input.parentOptions.auditedBrowserCheck
+      ? { auditedBrowserCheck: input.parentOptions.auditedBrowserCheck }
+      : {}),
     ...(input.auditedStage
       ? {
           environmentAudit: true as const,
@@ -3786,7 +3805,7 @@ async function runFreshFilePayloadPawNextTask<
           ...(runtime.registry.plugins.some(
             (p) => p.pluginId === "paw.browser-audit",
           )
-            ? { browserCheck: runBrowserCheck }
+            ? { browserCheck: options.auditedBrowserCheck ?? runBrowserCheck }
             : {}),
           ...collaborationContextV1(runtime, options, bundle.session),
           ...(options.shellSandbox
@@ -4418,6 +4437,7 @@ function environmentReviewer(
   return createEnvironmentCompletionReviewerV1({
     workspaceRoot: input.options.workspaceRoot,
     browserAudit: input.options.browserAudit,
+    visualAudit: input.options.visualAudit,
     async run(goal, signal, observe) {
       let facts: readonly InputFactV1[] = [];
       const base = resolveCollaborationAgentV1(
@@ -4446,6 +4466,22 @@ function environmentReviewer(
         parentOptions: {
           ...input.options,
           onModelStreamEvent: undefined,
+          ...(input.options.visualAudit
+            ? {
+                auditedBrowserCheck: createVisualBrowserCheck({
+                  workspaceRoot: input.options.workspaceRoot,
+                  model: input.options.model,
+                  requirements: JSON.stringify(
+                    createCompletionReviewEvidencePacketV1(candidate),
+                  ),
+                  onCompletion: createAuxiliaryModelCompletionObserverV1({
+                    options: input.options,
+                    costTracker: input.prepared.core.costTracker,
+                    phase: "completion_review",
+                  }),
+                }),
+              }
+            : {}),
           onJournalCommit(event) {
             for (const envelope of event) observe(envelope);
             input.options.onJournalCommit?.(event);
@@ -4574,6 +4610,16 @@ async function openNextPawNextV3WorkSegmentV1(input: {
               input.options.workspaceRoot,
               candidate.changedPaths,
             ) &&
+          (!input.options.visualAudit ||
+            (report.browserChecks?.length &&
+              report.browserChecks.every(
+                (check) =>
+                  check.visual &&
+                  verifyVisualEvidence(
+                    input.options.workspaceRoot,
+                    check.visual,
+                  ),
+              ))) &&
           report.inspected.every(
             (item) =>
               fingerprintAuditFile(input.options.workspaceRoot, item.path)
@@ -5647,7 +5693,7 @@ async function executePreparedFilePayloadPawNextLoop<
       ...(runtime.registry.plugins.some(
         (p) => p.pluginId === "paw.browser-audit",
       )
-        ? { browserCheck: runBrowserCheck }
+        ? { browserCheck: options.auditedBrowserCheck ?? runBrowserCheck }
         : {}),
       ...collaborationContextV1(runtime, options, bundle.session),
       ...(options.shellSandbox ? { shellSandbox: options.shellSandbox } : {}),

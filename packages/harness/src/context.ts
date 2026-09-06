@@ -201,6 +201,18 @@ export interface SubAgentResult {
   /** Host projection of the independent child audit. */
   readonly environmentAudit?: {
     readonly browserChecks?: readonly {
+      readonly visual?: {
+        readonly screenshotHash: string;
+        readonly requirementsHash: string;
+        readonly reportHash: string;
+        readonly verdict: "pass" | "fail" | "unknown";
+        readonly summary: string;
+        readonly checks: readonly {
+          readonly criterion: string;
+          readonly verdict: "pass" | "fail" | "unknown";
+          readonly observation: string;
+        }[];
+      };
       readonly callId: string;
       readonly url: string;
       readonly scenarioHash: string;

@@ -1577,6 +1577,9 @@ export function useAgentRun() {
       try {
         const { requestId } = await desk.startRun({
           goal: text,
+          ...(localStorage.getItem("paw.visualAudit") === "true"
+            ? { visualAudit: true as const }
+            : {}),
           ...(taskMode === "long" ? { taskMode } : {}),
           attachments,
           intent,

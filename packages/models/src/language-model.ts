@@ -24,6 +24,8 @@ import type {
 
 /** 声明模型的能力 — 上下文窗口、最大输出等。 */
 export interface ModelCapabilities {
+  /** Explicit capability declaration; omission is not evidence of image support. */
+  readonly imageInput?: true;
   readonly contextWindow: number;
   readonly maxOutputTokens?: number;
 }

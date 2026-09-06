@@ -162,10 +162,12 @@ export function createBrowserCheckPlugin(): RuntimeToolPluginV1 {
 export async function runBrowserCheck(
   args: unknown,
   signal?: AbortSignal,
+  capture = false,
 ): Promise<ToolRunResult> {
   const scenario = parseBrowserScenario(args);
   signal?.throwIfAborted();
   return new Promise((resolve) => {
+    const maxOutput = capture ? 3_000_000 : 64_000;
     const worker = spawn(
       "node",
       [fileURLToPath(new URL("./browser-check-worker.mjs", import.meta.url))],
@@ -198,14 +200,14 @@ export async function runBrowserCheck(
     const timer = setTimeout(cancel, 40_000);
     worker.stdin.on("error", () => {});
     worker.stdout.on("data", (data) => {
-      output = (output + String(data)).slice(0, 64_001);
-      if (output.length > 64_000) cancel();
+      output = (output + String(data)).slice(0, maxOutput + 1);
+      if (output.length > maxOutput) cancel();
     });
     worker.stderr.resume();
     worker.on("error", () => finish(failure()));
     worker.on("close", (code) => {
       try {
-        if (code !== 0 || signal?.aborted || output.length > 64_000)
+        if (code !== 0 || signal?.aborted || output.length > maxOutput)
           throw new Error("Browser did not finish");
         const result = JSON.parse(output);
         if (
@@ -220,7 +222,9 @@ export async function runBrowserCheck(
       }
     });
     signal?.addEventListener("abort", cancel, { once: true });
-    worker.stdin.write(`${JSON.stringify(scenario)}\n`);
+    worker.stdin.write(
+      `${JSON.stringify({ ...scenario, ...(capture ? { capture: true } : {}) })}\n`,
+    );
     if (signal?.aborted) cancel();
   });
 }

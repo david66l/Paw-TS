@@ -124,6 +124,7 @@ export interface PawNextProductManifestV3
   readonly auditedMemory?: typeof AUDITED_MEMORY_POLICY_V1;
   readonly stageGraph?: typeof STAGE_GRAPH_POLICY_V1;
   readonly browserAudit?: "paw.browser-audit.v1";
+  readonly visualAudit?: "paw.visual-audit.v1";
   readonly longHorizon?: {
     readonly policyVersion: typeof LONG_HORIZON_POLICY_V1;
     readonly role: "manager" | "executor";
@@ -142,6 +143,7 @@ export interface CreatePawNextProductManifestInputV3
   readonly auditedMemory?: true;
   readonly stageGraph?: true;
   readonly browserAudit?: true;
+  readonly visualAudit?: true;
   readonly longHorizon?: "manager" | "executor";
   readonly memory?: PawNextMemoryPluginProfileV1;
 }
@@ -175,6 +177,11 @@ export function createPawNextProductManifestV3(
     (input.browserAudit !== true || input.environmentAudit !== true)
   )
     throw new Error("Browser audit requires environment auditing");
+  if (
+    input.visualAudit !== undefined &&
+    (input.visualAudit !== true || input.browserAudit !== true)
+  )
+    throw new Error("Visual audit requires browser auditing");
   const runConfig = freezeInteractiveControlConfigV2(input.runConfig);
   const v2 = createPawNextProductManifestV2({
     toolEffectCheckpointPolicyVersion: input.toolEffectCheckpointPolicyVersion,
@@ -228,6 +235,9 @@ export function createPawNextProductManifestV3(
       : {}),
     ...(input.auditedMemory ? { auditedMemory: AUDITED_MEMORY_POLICY_V1 } : {}),
     ...(input.stageGraph ? { stageGraph: STAGE_GRAPH_POLICY_V1 } : {}),
+    ...(input.visualAudit
+      ? { visualAudit: "paw.visual-audit.v1" as const }
+      : {}),
     ...(input.browserAudit
       ? { browserAudit: "paw.browser-audit.v1" as const }
       : {}),

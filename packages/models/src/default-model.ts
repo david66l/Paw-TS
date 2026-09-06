@@ -300,7 +300,12 @@ export function createDefaultLanguageModel(
           ? `${ollamaHost.replace(/\/$/, "")}/v1`
           : "http://localhost:11434/v1",
         model: ollamaModel,
-        capabilities: resolveCapabilities(ollamaModel),
+        capabilities: {
+          ...resolveCapabilities(ollamaModel),
+          ...(s.models?.ollama?.imageInput
+            ? { imageInput: true as const }
+            : {}),
+        },
       });
     }
 
@@ -322,7 +327,10 @@ export function createDefaultLanguageModel(
               ? "https://api.anthropic.com/v1"
               : "https://api.openai.com/v1"),
           model: modelName,
-          capabilities: resolveCapabilities(modelName),
+          capabilities: {
+            ...resolveCapabilities(modelName),
+            ...(entry.imageInput ? { imageInput: true as const } : {}),
+          },
           thinkingEnabled: entry.thinkingEnabled,
           reasoningEffort: entry.reasoningEffort,
         };
@@ -348,7 +356,12 @@ export function createDefaultLanguageModel(
           apiKey,
           baseUrl,
           model,
-          capabilities: resolveCapabilities(model),
+          capabilities: {
+            ...resolveCapabilities(model),
+            ...(s.models?.[activeProvider]?.imageInput
+              ? { imageInput: true as const }
+              : {}),
+          },
           reasoningEffort: s.models?.[activeProvider]?.reasoningEffort,
         });
       }
@@ -356,7 +369,12 @@ export function createDefaultLanguageModel(
         apiKey,
         baseUrl,
         model,
-        capabilities: resolveCapabilities(model),
+        capabilities: {
+          ...resolveCapabilities(model),
+          ...(s.models?.[activeProvider]?.imageInput
+            ? { imageInput: true as const }
+            : {}),
+        },
         thinkingEnabled: s.models?.[activeProvider]?.thinkingEnabled,
         reasoningEffort: s.models?.[activeProvider]?.reasoningEffort,
       });

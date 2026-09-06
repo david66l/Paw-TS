@@ -35,3 +35,13 @@ test("Electron only forwards the supported long-task mode", () => {
     "taskMode",
   );
 });
+
+test("Electron forwards only an explicit visual requirement", () => {
+  expect(runInputFields({ visualAudit: true })).toMatchObject({
+    visualAudit: true,
+  });
+  for (const value of [false, "true", 1, null])
+    expect(runInputFields({ visualAudit: value })).not.toHaveProperty(
+      "visualAudit",
+    );
+});

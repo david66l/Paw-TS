@@ -40,6 +40,7 @@ export const modelConfigSchema = z
     thinkingEnabled: z.boolean().optional(),
     /** 统一的推理强度意图，由各 provider adapter 映射到原生请求字段。 */
     reasoningEffort: z.enum(["high", "max"]).optional(),
+    imageInput: z.literal(true).optional(),
   })
   .refine(
     (value) =>

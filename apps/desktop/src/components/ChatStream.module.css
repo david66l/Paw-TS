@@ -442,6 +442,7 @@
 
 .composerBar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -449,6 +450,7 @@
 }
 
 .hint {
+  flex: 1 0 200px;
   font-size: 11.5px;
   color: var(--text-muted);
   min-width: 0;
@@ -459,6 +461,10 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+  max-width: 100%;
   gap: 8px;
   align-items: center;
   flex-shrink: 0;

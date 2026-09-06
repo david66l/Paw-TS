@@ -137,6 +137,7 @@ test("browser claims require successful dispatched, scenario-bound assertions fr
   };
   for (const variant of [
     "valid",
+    "visual_missing",
     "failed",
     "wrong_hash",
     "no_assertions",
@@ -196,6 +197,7 @@ test("browser claims require successful dispatched, scenario-bound assertions fr
     const reviewer = createEnvironmentCompletionReviewerV1({
       workspaceRoot: root,
       browserAudit: true,
+      ...(variant === "visual_missing" ? { visualAudit: true as const } : {}),
       async run(_goal, _signal, observe) {
         observe({
           runId: "child",

@@ -31,11 +31,27 @@ const tool = (
   ],
 });
 
-for (const outcome of ["pass", "broken", "denied", "long"] as const)
+for (const outcome of [
+  "pass",
+  "broken",
+  "denied",
+  "long",
+  "visual_pass",
+  "visual_fail",
+  "visual_unknown",
+  "visual_unavailable",
+  "visual_long",
+] as const)
   test(`desktop browser audit: ${outcome}, durable evidence and recovery`, async () => {
+    const isLong = outcome === "long" || outcome === "visual_long";
+    const visual = outcome.startsWith("visual_");
+    const verified = ["pass", "long", "visual_pass", "visual_long"].includes(
+      outcome,
+    );
+    let visualCalls = 0;
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-browser-desktop-"));
     const source = path.join(root, "index.html");
-    if (outcome === "long") {
+    if (isLong) {
       fs.mkdirSync(path.join(root, ".paw", "agents"), { recursive: true });
       fs.writeFileSync(
         path.join(root, ".paw", "agents", "writer.md"),
@@ -82,13 +98,59 @@ Browser fixture writer.
       });
     const model: LanguageModel = {
       label: "openai:browser-audit-test",
-      capabilities: { contextWindow: 32000, maxOutputTokens: 4096 },
+      capabilities: {
+        contextWindow: 32000,
+        maxOutputTokens: 4096,
+        ...(visual && outcome !== "visual_unavailable"
+          ? { imageInput: true as const }
+          : {}),
+      },
       runtimeProfile: {
         protocol: "openai-compatible",
         model: "browser-audit-test",
         baseUrl: "https://desktop.invalid/v1",
       },
       async complete(messages, options) {
+        if (
+          messages[0]?.content.startsWith(
+            "You independently audit the attached",
+          )
+        ) {
+          visualCalls++;
+          expect(options?.tools).toEqual([]);
+          expect(messages).toHaveLength(2);
+          const attachment = messages[1]?.attachments?.[0];
+          expect(attachment?.type).toBe("image");
+          expect(
+            attachment?.content.startsWith("data:image/png;base64,iVBOR"),
+          ).toBe(true);
+          const prompt = messages[0].content;
+          const verdict =
+            outcome === "visual_fail"
+              ? "fail"
+              : outcome === "visual_unknown"
+                ? "unknown"
+                : "pass";
+          return final(
+            JSON.stringify({
+              screenshotHash: prompt.match(
+                /"screenshotHash":"([a-f0-9]+)"/,
+              )?.[1],
+              requirementsHash: prompt.match(
+                /"requirementsHash":"([a-f0-9]+)"/,
+              )?.[1],
+              verdict,
+              summary: "独立截图检查",
+              checks: [
+                {
+                  criterion: "计数器文字清晰可见",
+                  verdict,
+                  observation: "按钮下方显示 Count: 1，无裁切。",
+                },
+              ],
+            }),
+          );
+        }
         const auditor = JSON.stringify(messages).includes(
           "Paw environment auditor",
         );
@@ -119,9 +181,9 @@ Browser fixture writer.
         }
         expect(tools).not.toContain("workspace_browser_check");
         const executor =
-          outcome === "long" &&
+          isLong &&
           JSON.stringify(messages).includes("Browser fixture writer.");
-        if (!executor && outcome === "long") {
+        if (!executor && isLong) {
           if (++roots === 1)
             return tool("delegate-page", "workspace_delegate", {
               goal: `实现 ${server.url.href} 的计数器`,
@@ -145,7 +207,8 @@ Browser fixture writer.
       workspaceRoot: root,
       conversationId: "browser",
       memoryEnabled: false,
-      ...(outcome === "long" ? { taskMode: "long" as const } : {}),
+      ...(visual ? { visualAudit: true as const } : {}),
+      ...(isLong ? { taskMode: "long" as const } : {}),
       settings: {},
       model,
       resolveToolApproval: async (request: { tool?: string }) => {
@@ -166,27 +229,38 @@ Browser fixture writer.
         options,
       );
       expect(JSON.parse(result.text).acceptance).toBe(
-        outcome === "pass" || outcome === "long" ? "verified" : "unverified",
+        verified ? "verified" : "unverified",
       );
       expect(approvalCount).toBeGreaterThan(0);
       const audit = readDesktopMonitor(root, "browser")?.audit;
-      if (outcome === "pass" || outcome === "long") {
+      if (verified) {
         expect(audit?.browserChecks).toHaveLength(1);
         expect(audit?.browserChecks?.[0]).toMatchObject({
-          callId: outcome === "long" ? "browser-1" : "browser-0",
+          callId: isLong ? "browser-1" : "browser-0",
           url: server.url.href,
           assertions: 1,
         });
-        const before = { roots, audits, served };
+        if (visual) {
+          expect(visualCalls).toBe(1);
+          expect(audit?.browserChecks?.[0]?.visual?.verdict).toBe("pass");
+          const screenshot = audit?.browserChecks?.[0]?.visual?.screenshotHash;
+          expect(
+            fs.existsSync(
+              path.join(root, ".paw", "visual-audits", `${screenshot}.png`),
+            ),
+          ).toBe(true);
+        }
+        const before = { roots, audits, served, visualCalls };
         await runDesktopNext("恢复计数器任务", {
           ...options,
           intent: "recover",
+          visualAudit: undefined, // recovery must retain the original task policy
         });
-        expect({ roots, audits, served }).toEqual(before);
+        expect({ roots, audits, served, visualCalls }).toEqual(before);
         expect(
           readDesktopMonitor(root, "browser")?.audit?.browserChecks,
         ).toEqual(audit?.browserChecks);
-        if (outcome === "long") {
+        if (isLong) {
           const stage = readDesktopMonitor(root, "browser")?.tasks.find(
             (task) => task.stageRef,
           );
@@ -196,7 +270,15 @@ Browser fixture writer.
         }
       } else {
         expect(audit?.status).toBe("unverified");
-        if (outcome === "denied") expect(served).toBe(0);
+        if (outcome === "denied" || outcome === "visual_unavailable")
+          expect(served).toBe(0);
+        if (outcome === "visual_unavailable") expect(visualCalls).toBe(0);
+        if (outcome === "visual_fail" || outcome === "visual_unknown") {
+          expect(visualCalls).toBeGreaterThan(0);
+          expect(audit?.browserChecks?.[0]?.visual?.verdict).toBe(
+            outcome === "visual_fail" ? "fail" : "unknown",
+          );
+        }
       }
     } finally {
       await server.stop(true);

@@ -52,6 +52,9 @@ export function desktopProfile(
       model: runtime.model,
       baseUrl: runtime.baseUrl,
       capabilities: {
+        ...(model.capabilities?.imageInput
+          ? { imageInput: true as const }
+          : {}),
         contextWindow,
         maxOutputTokens: model.capabilities?.maxOutputTokens ?? 8192,
       },

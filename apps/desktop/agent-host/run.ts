@@ -86,6 +86,7 @@ type InMsg =
       maxSteps?: number;
       intent?: "continue" | "recover" | "reset";
       taskMode?: "standard" | "long";
+      visualAudit?: true;
       conversationId?: string;
       history?: HistoryTurn[];
       attachments?: unknown;
@@ -660,6 +661,7 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
     const r = await runDesktopNext(goal, {
       controls,
       attachments: msg.attachments,
+      ...(msg.visualAudit === true ? { visualAudit: true as const } : {}),
       workspaceRoot,
       maxSteps: msg.maxSteps,
       intent: msg.intent,

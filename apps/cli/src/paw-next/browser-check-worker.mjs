@@ -20,6 +20,7 @@ async function runBrowserCheck(scenario, signal) {
   };
   const checks = [];
   let snapshot = "";
+  let screenshot;
   try {
     signal?.throwIfAborted();
     const context = await browser.newContext({
@@ -126,6 +127,25 @@ async function runBrowserCheck(scenario, signal) {
     snapshot = (
       await page.locator("body").ariaSnapshot({ timeout: 3000 })
     ).slice(0, 12_000);
+    if (scenario.capture) {
+      const png = await page.screenshot({
+        type: "png",
+        fullPage: false,
+        animations: "disabled",
+        caret: "hide",
+        scale: "css",
+        timeout: 5000,
+      });
+      if (png.length > 2 * 1024 * 1024)
+        throw new Error("Screenshot exceeds 2 MiB");
+      screenshot = {
+        mimeType: "image/png",
+        width: 1280,
+        height: 800,
+        sha256: createHash("sha256").update(png).digest("hex"),
+        data: png.toString("base64"),
+      };
+    }
   } catch (error) {
     recordError(String(error).slice(0, 500));
   } finally {
@@ -137,7 +157,7 @@ async function runBrowserCheck(scenario, signal) {
   const evidence = {
     schemaVersion: BROWSER_AUDIT_POLICY,
     url: scenario.url,
-    scenarioHash: hash(scenario),
+    scenarioHash: hash({ url: scenario.url, steps: scenario.steps }),
     observationHash: hash({ checks, snapshot, errors }),
     assertions: checks.filter((check) => check.passed).length,
     passed,
@@ -151,6 +171,7 @@ async function runBrowserCheck(scenario, signal) {
       scenario,
       checks,
       snapshot,
+      ...(screenshot ? { screenshot } : {}),
       errors: errors.slice(0, 12),
     },
   };

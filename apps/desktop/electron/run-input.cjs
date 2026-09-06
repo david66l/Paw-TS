@@ -12,6 +12,7 @@ function runInputFields(payload) {
         .map((t) => ({ role: t.role, content: t.content.trim() }))
     : undefined;
   return {
+    ...(payload?.visualAudit === true ? { visualAudit: true } : {}),
     ...(payload?.taskMode === "long" ? { taskMode: "long" } : {}),
     intent:
       payload?.intent === "recover"

@@ -87,6 +87,26 @@ export function TaskOverview({
           {snapshot.audit.browserChecks?.map((check) => (
             <p key={check.callId}>
               浏览器行为已检查：{check.url} · {check.assertions} 项断言通过
+              {check.visual ? (
+                <span style={{ display: "block" }}>
+                  视觉验收：
+                  {
+                    { pass: "通过", fail: "失败", unknown: "无法判断" }[
+                      check.visual.verdict
+                    ]
+                  }{" "}
+                  · {check.visual.summary}
+                  <small style={{ display: "block" }}>
+                    截图：{check.visual.screenshotHash.slice(0, 12)} · 1280 ×
+                    800
+                  </small>
+                  {check.visual.checks.map((item) => (
+                    <span key={item.criterion} style={{ display: "block" }}>
+                      {item.criterion}：{item.observation}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
             </p>
           ))}
           {snapshot.audit.unmetCriteria.length ? (
@@ -177,6 +197,26 @@ export function TaskOverview({
               {task.audit.browserChecks?.map((check) => (
                 <p key={check.callId}>
                   浏览器行为已检查：{check.url} · {check.assertions} 项断言通过
+                  {check.visual ? (
+                    <span style={{ display: "block" }}>
+                      视觉验收：
+                      {
+                        { pass: "通过", fail: "失败", unknown: "无法判断" }[
+                          check.visual.verdict
+                        ]
+                      }{" "}
+                      · {check.visual.summary}
+                      <small style={{ display: "block" }}>
+                        截图：{check.visual.screenshotHash.slice(0, 12)} · 1280
+                        × 800
+                      </small>
+                      {check.visual.checks.map((item) => (
+                        <span key={item.criterion} style={{ display: "block" }}>
+                          {item.criterion}：{item.observation}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
                 </p>
               ))}
               <details>

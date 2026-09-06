@@ -129,6 +129,8 @@ export {
   assertEnvironmentAuditEvidenceV1,
 } from "./environment-audit.js";
 export {
+  type VisualAuditCheckV1,
+  assertVisualAuditCheckV1,
   type BrowserAuditCheckV1,
   assertBrowserAuditCheckV1,
 } from "./environment-audit.js";

@@ -241,12 +241,13 @@ export function exactRecordInternal(
   value: unknown,
   label: string,
   keys: readonly string[],
+  optionalKeys: readonly string[] = [],
 ): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
   }
   const record = value as Record<string, unknown>;
-  const allowed = new Set(keys);
+  const allowed = new Set([...keys, ...optionalKeys]);
   for (const key of Object.keys(record)) {
     if (!allowed.has(key)) throw new Error(`${label}.${key} is not supported`);
   }
@@ -279,7 +280,10 @@ function parseModel(
     record.capabilities,
     `${label}.capabilities`,
     ["contextWindow", "maxOutputTokens"],
+    ["imageInput"],
   );
+  if (capabilities.imageInput !== undefined && capabilities.imageInput !== true)
+    throw new Error("imageInput must be true when declared");
   const thinkingEnabled = nullableBoolean(
     record.thinkingEnabled,
     `${label}.thinkingEnabled`,
@@ -305,6 +309,9 @@ function parseModel(
     model: nonEmptyString(record.model, `${label}.model`),
     baseUrl: absoluteHttpUrl(record.baseUrl, `${label}.baseUrl`),
     capabilities: Object.freeze({
+      ...(capabilities.imageInput === true
+        ? { imageInput: true as const }
+        : {}),
       contextWindow: positiveInteger(
         capabilities.contextWindow,
         `${label}.capabilities.contextWindow`,
