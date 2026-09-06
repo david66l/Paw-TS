@@ -10,6 +10,9 @@ export type UiMessage = {
   readonly content: string;
   /** 模型思考过程（DeepSeek 等 reasoning 通道 / 内嵌 think 标签） */
   readonly thinking?: string;
+  readonly inputState?: "accepted" | "promoted";
+  readonly inputId?: string;
+  readonly attachments?: readonly { id: string; name: string; type: string }[];
   /** 流式生成中 */
   readonly streaming?: boolean;
   /** role==="activity" 时指向对应 RunActivity.id（执行摘要卡的锚点） */
@@ -18,7 +21,39 @@ export type UiMessage = {
   readonly toolBatchId?: string;
 };
 
-export type RunStatus = "idle" | "running" | "completed" | "failed" | "aborted";
+export type RunStatus =
+  | "idle"
+  | "running"
+  | "completed"
+  | "failed"
+  | "aborted"
+  | "await_user"
+  | "await_external"
+  | "incomplete";
+
+export function settledRunStatus(value: unknown): RunStatus {
+  return value === "completed" ||
+    value === "failed" ||
+    value === "aborted" ||
+    value === "await_user" ||
+    value === "await_external" ||
+    value === "incomplete"
+    ? value
+    : "incomplete";
+}
+
+export function runStatusLabel(status: RunStatus): string {
+  return {
+    idle: "就绪",
+    running: "运行中",
+    completed: "完成",
+    failed: "失败",
+    aborted: "已中止",
+    await_user: "等待回复",
+    await_external: "等待外部任务",
+    incomplete: "尚未完成",
+  }[status];
+}
 
 /** 花名册上的 Agent 运行态（绿点 / 灰点） */
 export type AgentRunStatus = "idle" | "running" | "done" | "failed";
@@ -28,6 +63,11 @@ export type ActivityStatus = "running" | "done" | "failed";
 /** 单个子 Agent 的运行态（由 child.* 事件驱动，key = callId = agentId） */
 export interface SubAgentInfo {
   id: string;
+  agentId?: string;
+  retryGoal?: string;
+  controllable?: boolean;
+  cancelRequested?: boolean;
+  cancelled?: boolean;
   /** 展示标签 = 子 Agent 目标（goal） */
   label: string;
   status: ActivityStatus;

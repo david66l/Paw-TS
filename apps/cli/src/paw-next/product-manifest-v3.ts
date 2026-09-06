@@ -35,6 +35,7 @@ import {
   COMPLETION_REVIEW_POLICY_VERSION_V1,
   WORK_SEGMENT_POLICY_VERSION_V1,
 } from "@paw/protocol";
+import { ENVIRONMENT_AUDIT_POLICY_VERSION_V1 } from "./environment-audit.js";
 
 import {
   type CreatePawNextProductManifestInputV2,
@@ -116,6 +117,7 @@ export interface PawNextProductManifestV3
   readonly progressAdvisor: typeof PAW_NEXT_PROGRESS_ADVISOR_IDENTITY_V1;
   readonly collaboration: typeof PAW_NEXT_COLLABORATION_IDENTITY_V1;
   readonly modelOutputRecovery: typeof PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1;
+  readonly environmentAudit?: typeof ENVIRONMENT_AUDIT_POLICY_VERSION_V1;
   readonly memory?: PawNextMemoryPluginIdentityV1;
 }
 
@@ -126,6 +128,7 @@ export interface CreatePawNextProductManifestInputV3
   > {
   readonly workSegmentPolicyVersion: typeof WORK_SEGMENT_POLICY_VERSION_V1;
   readonly runConfig: InteractiveControlConfigV2;
+  readonly environmentAudit?: true;
   readonly memory?: PawNextMemoryPluginProfileV1;
 }
 
@@ -135,6 +138,8 @@ export function createPawNextProductManifestV3(
   if (input.workSegmentPolicyVersion !== WORK_SEGMENT_POLICY_VERSION_V1) {
     throw new Error("Unsupported Paw Next work-segment policy version");
   }
+  if (input.environmentAudit !== undefined && input.environmentAudit !== true)
+    throw new Error("Invalid environment audit policy");
   const runConfig = freezeInteractiveControlConfigV2(input.runConfig);
   const v2 = createPawNextProductManifestV2({
     toolEffectCheckpointPolicyVersion: input.toolEffectCheckpointPolicyVersion,
@@ -175,6 +180,9 @@ export function createPawNextProductManifestV3(
     runConfig,
     contextCompaction: PAW_NEXT_CONTEXT_COMPACTION_IDENTITY_V1,
     completionReview: PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1,
+    ...(input.environmentAudit
+      ? { environmentAudit: ENVIRONMENT_AUDIT_POLICY_VERSION_V1 }
+      : {}),
     progressAdvisor: PAW_NEXT_PROGRESS_ADVISOR_IDENTITY_V1,
     collaboration: PAW_NEXT_COLLABORATION_IDENTITY_V1,
     modelOutputRecovery: PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1,
@@ -197,7 +205,12 @@ function freezeInteractiveControlConfigV2(
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Paw Next V3 interactive control config is invalid");
   }
-  const keys = Object.keys(value).sort().join("\0");
+  if (value.liveSteering !== undefined && value.liveSteering !== true)
+    throw new Error("Paw Next live steering config is invalid");
+  const keys = Object.keys(value)
+    .filter((key) => key !== "liveSteering")
+    .sort()
+    .join("\0");
   const baseKeys =
     "maxModelTurns\0maxSegments\0maxTotalModelTurns\0mode\0naturalStop";
   const softKeys =
@@ -229,6 +242,7 @@ function freezeInteractiveControlConfigV2(
     mode: "interactive",
     maxModelTurns: value.maxModelTurns,
     naturalStop: value.naturalStop,
+    ...(value.liveSteering === true ? { liveSteering: true as const } : {}),
     maxSegments: value.maxSegments,
     maxTotalModelTurns: value.maxTotalModelTurns,
     ...(keys === softKeys

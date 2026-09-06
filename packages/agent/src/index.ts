@@ -241,3 +241,4 @@ export {
 } from "./managed-job-controller.js";
 
 export * from "./loop-v2/index.js";
+export { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";

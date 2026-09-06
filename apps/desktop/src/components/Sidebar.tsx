@@ -95,7 +95,7 @@ export const Sidebar = memo(function Sidebar({
           <span className={styles.brand}>Paw</span>
           <span
             className={hostReady ? styles.hostOn : styles.hostOff}
-            title={hostReady ? "Agent 宿主就绪" : "Agent 宿主未就绪"}
+            title={hostReady ? "Paw Next 已就绪" : "Paw Next 尚未就绪"}
           >
             {hostReady ? "在线" : "离线"}
           </span>

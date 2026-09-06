@@ -60,6 +60,14 @@ export interface ChangeEntry {
 }
 
 export interface ContextSnapshot {
+  nextBudget?: {
+    contextWindowTokens: number;
+    selectedInputTokens: number;
+    reservedOutputTokens: number;
+    fixedInputTokens: number;
+    estimatedOmittedInputTokens: number;
+    level: string;
+  };
   turn?: number;
   maxSteps?: number;
   estimatedTokens?: number;
@@ -412,7 +420,7 @@ export function useRightPanelData(): RightPanelData {
           return;
         }
 
-        if (typ === "tool.result") {
+        if (typ === "tool.result" || typ === "workspace.changes") {
           const tool = typeof ev.tool === "string" ? ev.tool : "";
           const ok = ev.ok !== false;
           const summary =
@@ -501,6 +509,35 @@ export function useRightPanelData(): RightPanelData {
               ? [...recentFilesRef.current]
               : prev?.recentFiles,
           }));
+          return;
+        }
+        if (typ === "context.next_budget") {
+          const names = [
+            "contextWindowTokens",
+            "selectedInputTokens",
+            "reservedOutputTokens",
+            "fixedInputTokens",
+            "estimatedOmittedInputTokens",
+          ] as const;
+          if (
+            names.every(
+              (name) =>
+                typeof ev[name] === "number" && Number.isFinite(ev[name]),
+            )
+          ) {
+            setContext((prev) => ({
+              ...prev,
+              nextBudget: {
+                contextWindowTokens: ev.contextWindowTokens as number,
+                selectedInputTokens: ev.selectedInputTokens as number,
+                reservedOutputTokens: ev.reservedOutputTokens as number,
+                fixedInputTokens: ev.fixedInputTokens as number,
+                estimatedOmittedInputTokens:
+                  ev.estimatedOmittedInputTokens as number,
+                level: typeof ev.level === "string" ? ev.level : "",
+              },
+            }));
+          }
           return;
         }
 

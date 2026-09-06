@@ -30,5 +30,5 @@
 
 .resizer:hover::before,
 .resizer:active::before {
-  background: rgba(26, 107, 255, 0.4);
+  background: rgba(var(--accent-rgb), 0.4);
 }

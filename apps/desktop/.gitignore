@@ -1,0 +1,2 @@
+# The renderer entry is source, not a generated HTML report.
+!index.html

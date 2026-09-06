@@ -79,9 +79,11 @@ export type PawDesktopApi = {
     agentReady: boolean;
   }>;
   startRun: (opts: {
+    attachments?: readonly import("./agent/attachments").DesktopAttachment[];
     goal: string;
     workspaceRoot?: string;
     maxSteps?: number;
+    intent?: "continue" | "recover" | "reset";
     requestId?: string;
     conversationId?: string;
     history?: readonly {
@@ -89,6 +91,30 @@ export type PawDesktopApi = {
       content: string;
     }[];
   }) => Promise<{ requestId: string; workspaceRoot: string }>;
+  refreshJobs: (opts: { requestId: string }) => Promise<{
+    ok: boolean;
+    error?: string;
+  }>;
+  stopJob: (opts: {
+    requestId: string;
+    runId: string;
+    jobId: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  getMonitor: (opts: { requestId: string; conversationId: string }) => Promise<{
+    ok: boolean;
+    error?: string;
+    data?: import("./agent/monitorTypes").DesktopMonitorSnapshot;
+  }>;
+  submitInput: (opts: {
+    attachments?: readonly import("./agent/attachments").DesktopAttachment[];
+    requestId: string;
+    inputId: string;
+    content: string;
+  }) => Promise<{ ok: boolean; status?: string; error?: string }>;
+  cancelChild: (opts: { requestId: string; childId: string }) => Promise<{
+    ok: boolean;
+    error?: string;
+  }>;
   abortRun: (requestId: string) => Promise<{ ok: boolean }>;
   respondApproval: (opts: {
     requestId: string;
@@ -175,6 +201,9 @@ export type PawDesktopApi = {
   ) => () => void;
   onError: (
     cb: (payload: { requestId: string; message: string }) => void,
+  ) => () => void;
+  onApprovalClosed: (
+    cb: (event: { requestId: string; approvalId: string }) => void,
   ) => () => void;
   onApprovalRequest: (
     cb: (payload: {

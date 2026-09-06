@@ -16,6 +16,7 @@ import {
 } from "@paw/protocol";
 import {
   DEFAULT_FILE_DURABLE_JSON_PAYLOAD_POLICY_V1,
+  DurableInputInboxV1,
   type DurableJsonPayloadBindingV1,
   EMPTY_RUN_JOURNAL_PREFIX_HASH_V1,
   FileRunSessionV1,
@@ -1709,3 +1710,35 @@ function acquireLease(
   }
   return result.lease;
 }
+
+test("inbox retries materialized attachments by actual content and rejects forged hashes", async () => {
+  const source = new MemorySource();
+  const materializer = new MemoryMaterializer();
+  const inbox = new DurableInputInboxV1(wrap(source, materializer));
+  const request = {
+    inputId: "retry-attachment",
+    delivery: "steer" as const,
+    callerId: "desktop",
+    content: "Read the attachment",
+    attachments: [attachment("retry-attachment", inline("original content"))],
+  };
+  expect((await inbox.accept(request)).status).toBe("accepted");
+  expect((await inbox.accept(request)).status).toBe("already_accepted");
+  const original = request.attachments[0]!;
+  await expect(
+    inbox.accept({
+      ...request,
+      attachments: [
+        {
+          ...original,
+          content: {
+            kind: "inline",
+            value: "forged content",
+            hash: original.content.hash,
+          },
+        },
+      ],
+    }),
+  ).rejects.toThrow("idempotency conflict");
+  expect((await inbox.inspect()).acceptedCount).toBe(1);
+});

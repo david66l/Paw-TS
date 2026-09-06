@@ -1,3 +1,7 @@
+import {
+  type EnvironmentAuditEvidenceV1,
+  assertEnvironmentAuditEvidenceV1,
+} from "./environment-audit.js";
 /**
  * Paw Next's canonical, append-only run journal protocol.
  *
@@ -585,6 +589,7 @@ export type InputFactV1 =
   | Readonly<{
       /** Terminal observation for one completion review claim. */
       type: "completion.review_settled";
+      environmentAudit?: EnvironmentAuditEvidenceV1;
       reviewId: string;
       status: "completed" | "failed" | "cancelled" | "unknown";
       verdict: CompletionReviewVerdictV1;
@@ -1107,7 +1112,11 @@ function assertLifecycleIdentities(
   >();
   const completionReviews = new Map<
     string,
-    { readonly candidateHash: string; settled: boolean }
+    {
+      readonly candidateHash: string;
+      readonly reviewerId: string;
+      settled: boolean;
+    }
   >();
   let expectedSegmentIndex = 1;
 
@@ -1745,6 +1754,7 @@ function assertLifecycleIdentities(
         }
         completionReviews.set(fact.reviewId, {
           candidateHash: fact.candidateHash,
+          reviewerId: fact.reviewerId,
           settled: false,
         });
         break;
@@ -1761,6 +1771,22 @@ function assertLifecycleIdentities(
             `duplicate completion review settlement: ${fact.reviewId}`,
           );
         }
+        if (
+          review.reviewerId === "paw.environment-audit.v1" &&
+          fact.verdict === "allow" &&
+          !fact.environmentAudit
+        )
+          throw new Error("Environment audit allow requires evidence");
+        if (
+          fact.environmentAudit &&
+          review.reviewerId !== "paw.environment-audit.v1"
+        )
+          throw new Error("Environment audit reviewer mismatch");
+        if (
+          fact.environmentAudit &&
+          fact.environmentAudit.candidateHash !== review.candidateHash
+        )
+          throw new Error("Environment audit candidate binding mismatch");
         review.settled = true;
         break;
       }
@@ -3015,7 +3041,7 @@ function assertInputFact(value: unknown): void {
           "summary",
           "settledAt",
         ],
-        [],
+        ["environmentAudit"],
         fact.type,
       );
       assertId(fact.reviewId, "reviewId");
@@ -3037,6 +3063,16 @@ function assertInputFact(value: unknown): void {
       }
       if (fact.status !== "completed" && fact.verdict !== "unknown") {
         throw new Error("non-completed completion review must be unknown");
+      }
+      if (fact.environmentAudit !== undefined) {
+        assertEnvironmentAuditEvidenceV1(fact.environmentAudit);
+        if (
+          fact.verdict === "allow" &&
+          (fact.environmentAudit.integrity !== "clean" ||
+            fact.environmentAudit.inspected.length === 0 ||
+            fact.environmentAudit.unmetCriteria.length > 0)
+        )
+          throw new Error("Environment audit cannot allow unverified evidence");
       }
       return;
     case "context.checkpoint_distillation_claimed": {

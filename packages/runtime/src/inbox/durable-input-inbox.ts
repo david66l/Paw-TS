@@ -89,7 +89,10 @@ export class DurableInputInboxV1 implements LoopInputPort {
       : session;
   }
 
-  async accept(request: AcceptInputRequestV1): Promise<AcceptInputResultV1> {
+  async accept(
+    request: AcceptInputRequestV1,
+    assertAdmission?: (snapshot: SessionInputSnapshot<InputFactV1>) => void,
+  ): Promise<AcceptInputResultV1> {
     const fact = createInputAcceptedFactV1(request);
     while (true) {
       const snapshot = await this.session.readInputSnapshot();
@@ -108,6 +111,9 @@ export class DurableInputInboxV1 implements LoopInputPort {
         }
         return { status: "already_accepted", inputId: fact.inputId };
       }
+      // Recheck admission on every CAS retry; duplicate acknowledgements above
+      // remain valid even after the admission window closes.
+      assertAdmission?.(snapshot);
       const committed = await this.session.commitInputFacts(snapshot.tailSeq, [
         fact,
       ]);
@@ -496,7 +502,34 @@ function sameAcceptedInput(
   left: InputAcceptedFactV1,
   right: InputAcceptedFactV1,
 ): boolean {
-  return canonicalJson(left) === canonicalJson(right);
+  const { attachments: leftAttachments = [], ...leftBody } = left;
+  const { attachments: rightAttachments = [], ...rightBody } = right;
+  if (
+    canonicalJson(leftBody) !== canonicalJson(rightBody) ||
+    leftAttachments.length !== rightAttachments.length
+  )
+    return false;
+  return leftAttachments.every((attachment, index) => {
+    const other = rightAttachments[index]!;
+    const { content, ...metadata } = attachment;
+    const { content: otherContent, ...otherMetadata } = other;
+    if (
+      canonicalJson(metadata) !== canonicalJson(otherMetadata) ||
+      content.hash !== otherContent.hash
+    )
+      return false;
+    if (content.kind === otherContent.kind)
+      return canonicalJson(content) === canonicalJson(otherContent);
+    // File payload sessions materialize accepted attachments before acknowledging.
+    // Compare the retried inline bytes to that committed content hash, never the caller's claimed hash alone.
+    const inline = content.kind === "inline" ? content : otherContent;
+    return (
+      inline.kind === "inline" &&
+      typeof inline.value === "string" &&
+      createHash("sha256").update(canonicalJson(inline.value)).digest("hex") ===
+        content.hash
+    );
+  });
 }
 
 function cloneAttachments(

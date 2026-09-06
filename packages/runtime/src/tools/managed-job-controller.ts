@@ -43,6 +43,7 @@ export interface RuntimeActivityFactRecorderV1 {
 }
 
 export interface RuntimeManagedJobControllerOptionsV1 {
+  readonly onSnapshot?: (job: ManagedJobReadV1) => void;
   readonly runId: string;
   readonly workspaceRoot: string;
   readonly shellSandbox?: ShellSandboxConfig;
@@ -238,6 +239,7 @@ export class RuntimeManagedJobControllerV1 {
     this.startCommits.set(jobId, startCommit);
     try {
       await startCommit;
+      this.publishSnapshot(jobId);
     } catch (error) {
       this.failedStarts.add(jobId);
       this.registry.kill(
@@ -275,6 +277,14 @@ export class RuntimeManagedJobControllerV1 {
       });
     }
     return this.registry.read(this.options.runId, id);
+  }
+
+  peek(id: string): ManagedJobReadV1 {
+    this.assertOpen();
+    const recovered = this.recoveredJobs.get(id);
+    return recovered
+      ? { text: recovered.detail ?? "", snapshot: recovered }
+      : this.registry.peek(this.options.runId, id);
   }
 
   wait(
@@ -349,6 +359,7 @@ export class RuntimeManagedJobControllerV1 {
             summary: activitySummary(snapshot),
           },
         ]);
+        this.publishSnapshot(snapshot.id);
         try {
           this.options.wakeExternal?.();
         } catch {
@@ -359,6 +370,14 @@ export class RuntimeManagedJobControllerV1 {
       .catch((error: unknown) => {
         this.backgroundErrors.push(error);
       });
+  }
+
+  private publishSnapshot(id: string): void {
+    try {
+      this.options.onSnapshot?.(this.registry.peek(this.options.runId, id));
+    } catch {
+      /* UI telemetry cannot affect execution. */
+    }
   }
 
   private assertOpen(): void {

@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld("pawDesktop", {
 
   startRun: (opts) => ipcRenderer.invoke("agent:start-run", opts),
 
+  refreshJobs: (opts) => ipcRenderer.invoke("agent:refresh-jobs", opts),
+  stopJob: (opts) => ipcRenderer.invoke("agent:stop-job", opts),
+  getMonitor: (opts) => ipcRenderer.invoke("agent:get-monitor", opts),
+  submitInput: (opts) => ipcRenderer.invoke("agent:submit-input", opts),
+  cancelChild: (opts) => ipcRenderer.invoke("agent:cancel-child", opts),
+
   abortRun: (requestId) => ipcRenderer.invoke("agent:abort", { requestId }),
 
   respondApproval: (opts) => ipcRenderer.invoke("agent:approval-respond", opts),
@@ -54,6 +60,7 @@ contextBridge.exposeInMainWorld("pawDesktop", {
   onEvent: (cb) => onChannel("agent:event", cb),
   onRunDone: (cb) => onChannel("agent:run-done", cb),
   onError: (cb) => onChannel("agent:error", cb),
+  onApprovalClosed: (cb) => onChannel("agent:approval-closed", cb),
   onApprovalRequest: (cb) => onChannel("agent:approval-request", cb),
   onAskUserRequest: (cb) => onChannel("agent:ask-request", cb),
   onLog: (cb) => onChannel("agent:log", cb),

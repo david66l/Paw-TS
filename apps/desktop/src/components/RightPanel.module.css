@@ -24,7 +24,8 @@
 
 .tabs {
   display: flex;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 4px 2px;
   padding: var(--space-2);
   border-bottom: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.12);
@@ -34,9 +35,9 @@
 
 .tab,
 .tabActive {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 4px;
+  flex: 1 0 auto;
+  min-width: max-content;
+  padding: 8px 7px;
   border-radius: 10px;
   font-size: 12px;
   font-weight: 600;
@@ -311,7 +312,7 @@
 
 .agentDotRunning {
   background: var(--running);
-  box-shadow: 0 0 0 3px rgba(26, 107, 255, 0.18);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
   animation: agentPulse 1.4s ease-in-out infinite;
 }
 
@@ -510,7 +511,7 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text-accent);
-  background: rgba(26, 107, 255, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
   border-radius: 999px;
   padding: 0 5px;
   line-height: 15px;
@@ -1067,4 +1068,39 @@
   border: 1px solid rgba(217, 138, 0, 0.25);
   border-radius: var(--radius-pill);
   padding: 1px 7px;
+}
+
+/* Louis.dev paper skin. */
+:global(:root[data-color-theme="paper"]) .panel {
+  box-shadow: none;
+}
+
+:global(:root[data-color-theme="paper"]) .planFill {
+  background: var(--accent);
+}
+
+:global(:root[data-color-theme="paper"]) .planTrack {
+  background: var(--accent-soft);
+}
+
+:global(:root[data-color-theme="paper"]) .tabs {
+  background: #e7e3d780;
+  border-color: var(--glass-border);
+  backdrop-filter: none;
+  padding: 8px 6px;
+}
+
+:global(:root[data-color-theme="paper"]) .tab,
+:global(:root[data-color-theme="paper"]) .tabActive {
+  border-radius: 5px;
+}
+
+:global(:root[data-color-theme="paper"]) .tabActive {
+  background: #f5f3ec;
+  border-color: var(--glass-border);
+  box-shadow: none;
+}
+
+:global(:root[data-color-theme="paper"]) .tab:hover {
+  background: #f5f3ec80;
 }

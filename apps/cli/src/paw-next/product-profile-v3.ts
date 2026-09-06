@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { createHash } from "node:crypto";
 import type { McpServerConfig, ShellSandboxConfig } from "@paw/harness";
 import {
   type PawNextMemoryPluginProfileV1,
@@ -12,6 +13,8 @@ import type {
 } from "@paw/models";
 import { WORK_SEGMENT_POLICY_VERSION_V1 } from "@paw/protocol";
 import {
+  type ApprovalPromptV1,
+  type ApprovalResponseV1,
   type FileDurableJsonPayloadRuntimePolicyV1,
   type FrozenPermissionConfigV1,
   type SessionLeaseHeartbeatPolicyV1,
@@ -50,8 +53,10 @@ export interface PawNextMcpRuntimeProfileV1 {
 }
 
 export interface PawNextProductProfileV3
-  extends Omit<PawNextProductProfileV1, "control"> {
+  extends Omit<PawNextProductProfileV1, "control" | "approval"> {
+  readonly approval: "available" | "unavailable";
   readonly control: {
+    readonly liveSteering?: true;
     readonly mode: "interactive";
     readonly maxModelTurns: number;
     readonly naturalStop: "complete" | "await_user";
@@ -63,6 +68,7 @@ export interface PawNextProductProfileV3
   readonly mcp?: PawNextMcpRuntimeProfileV1;
   /** Optional root-only, read-only long-term memory plugin. */
   readonly memory?: PawNextMemoryPluginProfileV1;
+  readonly environmentAudit?: true;
 }
 
 export interface PawNextProductProfileStoreV3 {
@@ -76,12 +82,20 @@ export interface LoadPawNextProductProfileStoreOptionsV3 {
 }
 
 export interface BuildPawNextTaskProfileInputV3 {
+  readonly collaborationModels?: Readonly<Record<string, LanguageModel>>;
   readonly identity: Omit<PawNextStartupRunIdentityV1, "configHash">;
   readonly profile: PawNextProductProfileV3;
   readonly apiKey: string;
+  /** Embedded hosts may reuse their configured model and approval transport. */
+  readonly model?: LanguageModel;
+  readonly requestApproval?: (
+    prompt: ApprovalPromptV1,
+    signal: AbortSignal,
+  ) => Promise<ApprovalResponseV1>;
 }
 
 export interface PawNextTaskProfileOptionsV3 {
+  readonly collaborationModels?: Readonly<Record<string, LanguageModel>>;
   readonly productVersion: "v3";
   readonly workspaceRoot: string;
   readonly sessionId: string;
@@ -97,6 +111,7 @@ export interface PawNextTaskProfileOptionsV3 {
   readonly systemPrompt: string;
   readonly maxModelTurns: number;
   readonly naturalStop: "complete" | "await_user";
+  readonly liveSteering?: true;
   readonly maxSegments: number;
   readonly maxTotalModelTurns: number;
   readonly workSegmentPolicyVersion: typeof WORK_SEGMENT_POLICY_VERSION_V1;
@@ -110,6 +125,7 @@ export interface PawNextTaskProfileOptionsV3 {
   readonly payloadRuntime: FileDurableJsonPayloadRuntimePolicyV1;
   readonly mcp?: PawNextMcpRuntimeProfileV1;
   readonly memory?: PawNextMemoryPluginProfileV1;
+  readonly environmentAudit?: true;
 }
 
 export interface BuiltPawNextTaskProfileV3 {
@@ -156,6 +172,11 @@ export function buildPawNextTaskProfileV3(
   input: BuildPawNextTaskProfileInputV3,
 ): BuiltPawNextTaskProfileV3 {
   const profile = parseProfileV3(input.profile, "profile");
+  if ((profile.approval === "available") !== Boolean(input.requestApproval)) {
+    throw new Error(
+      "V3 approval profile does not match the host approval transport",
+    );
+  }
   const commonProfile: PawNextProductProfileV1 = Object.freeze({
     profileId: profile.profileId,
     revision: profile.revision,
@@ -169,24 +190,47 @@ export function buildPawNextTaskProfileV3(
     systemPrompt: profile.systemPrompt,
     budget: profile.budget,
     permission: profile.permission,
-    approval: profile.approval,
+    approval: "unavailable",
     heartbeat: profile.heartbeat,
     shellSandbox: profile.shellSandbox,
   });
   const task = buildPawNextTaskOptionsFromProfileInternal({
     identity: input.identity,
     profile: commonProfile,
-    apiKey: input.apiKey,
+    apiKey:
+      input.collaborationModels && Object.keys(input.collaborationModels).length
+        ? createHash("sha256")
+            .update(
+              JSON.stringify([
+                input.apiKey,
+                Object.entries(input.collaborationModels)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([id, model]) => [
+                    id,
+                    model.label,
+                    model.runtimeProfile,
+                    model.capabilities,
+                  ]),
+              ]),
+            )
+            .digest("hex")
+        : input.apiKey,
   });
   const identityTask = Object.freeze({
     ...task,
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.requestApproval
+      ? { requestApproval: input.requestApproval }
+      : {}),
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
+    ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
   });
   const v1 = preparePawNextProductRuntimeIdentityV3(identityTask).manifest;
   const manifest = createPawNextProductManifestV3({
     toolEffectCheckpointPolicyVersion: v1.toolEffectCheckpointPolicyVersion,
     runConfig: {
+      ...(profile.control.liveSteering ? { liveSteering: true as const } : {}),
       mode: "interactive",
       maxModelTurns: profile.control.maxModelTurns,
       naturalStop: profile.control.naturalStop,
@@ -210,15 +254,19 @@ export function buildPawNextTaskProfileV3(
     credentialBindingHash: v1.credentialBindingHash,
     payloadRuntime: profile.payloadRuntime,
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
+    ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = deepFreeze({
+    ...(input.collaborationModels
+      ? { collaborationModels: input.collaborationModels }
+      : {}),
     productVersion: "v3",
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
     runId: task.runId,
     inputId: task.inputId,
     goal: task.goal,
-    model: task.model,
+    model: identityTask.model,
     profileIdentity: task.profileIdentity as PawNextProductProfileIdentityV1,
     credentialBindingHash: task.credentialBindingHash as string,
     providerProtocol: task.providerProtocol as PawProviderProtocol,
@@ -227,6 +275,7 @@ export function buildPawNextTaskProfileV3(
     systemPrompt: task.systemPrompt as string,
     maxModelTurns: profile.control.maxModelTurns,
     naturalStop: profile.control.naturalStop,
+    ...(profile.control.liveSteering ? { liveSteering: true as const } : {}),
     maxSegments: profile.control.maxSegments,
     maxTotalModelTurns: profile.control.maxTotalModelTurns,
     workSegmentPolicyVersion: profile.workSegmentPolicyVersion,
@@ -242,6 +291,7 @@ export function buildPawNextTaskProfileV3(
     payloadRuntime: profile.payloadRuntime,
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
+    ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
   });
   return deepFreeze({
     productVersion: "v3",
@@ -282,8 +332,13 @@ function parseProfileV3(
       "workSegmentPolicyVersion",
       "payloadRuntime",
     ],
-    ["mcp", "memory"],
+    ["mcp", "memory", "environmentAudit"],
   );
+  if (record.approval !== "available" && record.approval !== "unavailable") {
+    throw new Error("Unsupported V3 approval mode");
+  }
+  if (record.environmentAudit !== undefined && record.environmentAudit !== true)
+    throw new Error("Unsupported environment audit policy");
   const control = parseControlV3(record.control, `${label}.control`);
   const common = parsePawNextProductProfileInternal(
     {
@@ -299,7 +354,7 @@ function parseProfileV3(
       systemPrompt: record.systemPrompt,
       budget: record.budget,
       permission: record.permission,
-      approval: record.approval,
+      approval: "unavailable",
       heartbeat: record.heartbeat,
       shellSandbox: record.shellSandbox,
     },
@@ -310,6 +365,8 @@ function parseProfileV3(
   }
   return Object.freeze({
     ...common,
+    approval: record.approval,
+    ...(record.environmentAudit ? { environmentAudit: true as const } : {}),
     control,
     workSegmentPolicyVersion: WORK_SEGMENT_POLICY_VERSION_V1,
     payloadRuntime: freezeFileDurableJsonPayloadRuntimePolicyV1(
@@ -430,14 +487,20 @@ function parseControlV3(
   value: unknown,
   label: string,
 ): PawNextProductProfileV3["control"] {
-  const record = exactRecordInternal(value, label, [
-    "mode",
-    "maxModelTurns",
-    "naturalStop",
-    "maxSegments",
-    "maxTotalModelTurns",
-  ]);
+  const record = exactRecordWithOptionalKeysV1(
+    value,
+    label,
+    [
+      "mode",
+      "maxModelTurns",
+      "naturalStop",
+      "maxSegments",
+      "maxTotalModelTurns",
+    ],
+    ["liveSteering"],
+  );
   if (
+    (record.liveSteering !== undefined && record.liveSteering !== true) ||
     record.mode !== "interactive" ||
     !Number.isSafeInteger(record.maxModelTurns) ||
     (record.maxModelTurns as number) <= 0 ||
@@ -454,6 +517,7 @@ function parseControlV3(
     mode: "interactive",
     maxModelTurns: record.maxModelTurns as number,
     naturalStop: record.naturalStop,
+    ...(record.liveSteering === true ? { liveSteering: true as const } : {}),
     maxSegments: record.maxSegments as number,
     maxTotalModelTurns: record.maxTotalModelTurns as number,
   });

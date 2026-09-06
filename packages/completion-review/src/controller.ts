@@ -139,6 +139,9 @@ function toSettlement(
   if (result.status === "completed") {
     return Object.freeze({
       type: "completion.review_settled",
+      ...(result.environmentAudit
+        ? { environmentAudit: result.environmentAudit }
+        : {}),
       reviewId,
       status: "completed",
       verdict: result.verdict,
@@ -149,6 +152,9 @@ function toSettlement(
   }
   return Object.freeze({
     type: "completion.review_settled",
+    ...(result.environmentAudit
+      ? { environmentAudit: result.environmentAudit }
+      : {}),
     reviewId,
     status: result.status,
     verdict: "unknown",

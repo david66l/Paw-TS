@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { formatModelTextForUi } from "../agent/formatModelText";
+import { runStatusLabel } from "../agent/types";
 import type {
   FileChangeItem,
   PendingApprovalItem,
@@ -34,6 +35,12 @@ function displayAssistantText(raw: string): string {
   return cleaned ?? "";
 }
 
+import {
+  type DesktopAttachment,
+  MAX_ATTACHMENTS,
+  readDesktopFile,
+} from "../agent/attachments";
+
 export type ChatStreamProps = {
   readonly messages: readonly UiMessage[];
   readonly status: RunStatus;
@@ -49,7 +56,12 @@ export type ChatStreamProps = {
   readonly toolBatches: readonly ToolBatch[];
   readonly fileChanges: readonly FileChangeItem[];
   readonly onViewDetails: (id: string) => void;
-  readonly onSend: (text: string) => void;
+  readonly onSend: (
+    text: string,
+    attachments?: readonly DesktopAttachment[],
+  ) => Promise<boolean | undefined>;
+  readonly onCancelChild: (id: string) => void;
+  readonly onRetryChild: (id: string) => void;
   readonly onAbort: () => void;
   readonly onClear: () => void;
   readonly pendingApprovals: readonly PendingApprovalItem[];
@@ -67,8 +79,8 @@ export type ChatStreamProps = {
   readonly approvalMode: "ask" | "auto";
 };
 
-function Avatar({ role }: { role: "user" | "assistant" }) {
-  if (role === "user") {
+function Avatar({ kind }: { kind: "user" | "assistant" }) {
+  if (kind === "user") {
     return <div className={styles.avatarUser}>你</div>;
   }
   return <div className={styles.avatarPaw}>🐾</div>;
@@ -209,7 +221,7 @@ const MessageRow = memo(function MessageRow({
     return (
       <div className={styles.rowUser}>
         <div className={styles.msgRow}>
-          <Avatar role="user" />
+          <Avatar kind="user" />
           <GlassPanel
             variant="strong"
             padding="md"
@@ -217,8 +229,20 @@ const MessageRow = memo(function MessageRow({
           >
             <div className={styles.roleRow}>
               <span className={styles.role}>You</span>
+              {m.inputState ? (
+                <span className={styles.inputBadge}>
+                  {m.inputState === "promoted"
+                    ? "追加指令 · 已纳入上下文"
+                    : "追加指令 · 已接收，等待当前步骤结束"}
+                </span>
+              ) : null}
             </div>
             <div className={styles.body}>{m.content}</div>
+            {m.attachments?.map((a) => (
+              <div className={styles.inputBadge} key={a.id}>
+                ▧ {a.name}
+              </div>
+            ))}
           </GlassPanel>
           <RowActions text={m.content} onEdit={onEdit} />
         </div>
@@ -230,7 +254,7 @@ const MessageRow = memo(function MessageRow({
   return (
     <div className={styles.rowAssistant}>
       <div className={styles.msgRow}>
-        <Avatar role="assistant" />
+        <Avatar kind="assistant" />
         <div className={styles.assistantPlain}>
           <div className={styles.roleRow}>
             <span className={styles.role}>Paw</span>
@@ -277,69 +301,44 @@ const ExecutionCard = memo(function ExecutionCard({
   fallback,
   selected,
   onViewDetails,
+  onCancelChild,
+  onRetryChild,
+  hostReady,
+  canRetryChild,
 }: {
   activityId: string;
   activity?: RunActivity;
   fallback: string;
   selected: boolean;
   onViewDetails: (id: string) => void;
+  onCancelChild: (id: string) => void;
+  onRetryChild: (id: string) => void;
+  hostReady: boolean;
+  canRetryChild: boolean;
 }) {
-  if (!activity) {
+  if (!activity)
     return (
       <div className={styles.execCard}>
         <div className={styles.execDone}>{fallback}</div>
       </div>
     );
-  }
-  const ops = activity.agents.reduce((n, a) => n + a.toolCount, 0);
-  if (activity.status === "running") {
-    return (
-      <div className={styles.execCard}>
-        <div className={styles.execHead}>
-          <span className={`${styles.execDot} ${styles.execDotRun}`} />
-          <span className={styles.execTitle}>并行执行 · 运行中</span>
-          <span className={styles.execMeta}>
-            {activity.agents.length} 个 Agent
-          </span>
-        </div>
-        <div className={styles.execRows}>
-          {activity.agents.map((a) => (
-            <div key={a.id} className={styles.execRow}>
-              <span className={`${styles.execDot} ${execDotClass(a.status)}`} />
-              <span className={styles.execLabel} title={a.label}>
-                {a.label}
-              </span>
-              <span className={styles.execCount}>{a.toolCount} 次操作</span>
-              {a.lastTool ? (
-                <span className={styles.execTool}>{a.lastTool}</span>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  const failed = activity.status === "failed";
-  const secs =
-    activity.finishedAt && activity.startedAt
-      ? Math.max(
-          1,
-          Math.round((activity.finishedAt - activity.startedAt) / 1000),
-        )
-      : 0;
+  const running = activity.status === "running";
   return (
     <div className={`${styles.execCard} ${selected ? styles.execCardSel : ""}`}>
-      <div className={styles.execDone}>
+      <div className={styles.execHead}>
         <span
-          className={`${styles.execDot} ${
-            failed ? styles.execDotFail : styles.execDotDone
-          }`}
+          className={`${styles.execDot} ${running ? styles.execDotRun : activity.status === "failed" ? styles.execDotFail : styles.execDotDone}`}
         />
         <span className={styles.execTitle}>
-          {failed ? "并行执行 · 部分失败" : "并行执行 · 已完成"}
+          子任务 ·{" "}
+          {running
+            ? "运行中"
+            : activity.status === "failed"
+              ? "部分未完成"
+              : "已完成"}
         </span>
         <span className={styles.execMeta}>
-          {activity.agents.length} 个 Agent · {ops} 次操作 · {secs} 秒
+          {activity.agents.length} 个 Agent
         </span>
         <button
           type="button"
@@ -348,6 +347,60 @@ const ExecutionCard = memo(function ExecutionCard({
         >
           查看详情 →
         </button>
+      </div>
+      <div className={styles.execRows}>
+        {activity.agents.map((a) => (
+          <div key={a.id} className={styles.childItem}>
+            <div className={styles.execRow}>
+              <span className={`${styles.execDot} ${execDotClass(a.status)}`} />
+              <span className={styles.execLabel} title={a.retryGoal ?? a.label}>
+                {a.label}
+              </span>
+              <span className={styles.execCount}>
+                {a.cancelled
+                  ? "已停止"
+                  : a.status === "failed"
+                    ? "未完成"
+                    : a.status === "done"
+                      ? "完成"
+                      : a.cancelRequested
+                        ? "正在停止…"
+                        : `${a.toolCount} 次操作`}
+              </span>
+              {a.status === "running" && a.controllable ? (
+                <button
+                  type="button"
+                  className={styles.childAction}
+                  disabled={!hostReady || a.cancelRequested}
+                  onClick={() => onCancelChild(a.id)}
+                >
+                  停止子任务
+                </button>
+              ) : null}
+              {a.status === "failed" && a.retryGoal ? (
+                <button
+                  type="button"
+                  className={styles.childAction}
+                  disabled={!hostReady || !canRetryChild}
+                  onClick={() => onRetryChild(a.id)}
+                  title={
+                    canRetryChild
+                      ? "让主 Agent 检查已有改动并创建新的委派"
+                      : "请先恢复主任务或新建对话"
+                  }
+                >
+                  重新委派
+                </button>
+              ) : null}
+            </div>
+            {a.error || a.summary ? (
+              <details className={styles.childSummary}>
+                <summary>结果摘要</summary>
+                <p>{a.error ?? a.summary}</p>
+              </details>
+            ) : null}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -369,6 +422,8 @@ export function ChatStream({
   fileChanges,
   onViewDetails,
   onSend,
+  onCancelChild,
+  onRetryChild,
   onAbort,
   onClear,
   pendingApprovals,
@@ -381,6 +436,38 @@ export function ChatStream({
   approvalMode,
 }: ChatStreamProps) {
   const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<DesktopAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState("");
+  const [readingFiles, setReadingFiles] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachFiles = async (files: FileList | null) => {
+    if (!files?.length || readingFiles) return;
+    setReadingFiles(true);
+    setAttachmentError("");
+    try {
+      if (attachments.length + files.length > MAX_ATTACHMENTS)
+        throw new Error("每条消息最多 4 个附件。");
+      const added = await Promise.all(Array.from(files).map(readDesktopFile));
+      if (
+        [...attachments, ...added].reduce(
+          (size, item) => size + new TextEncoder().encode(item.content).length,
+          0,
+        ) >
+        6 * 1024 * 1024
+      )
+        throw new Error("本条消息附件总大小超过 6 MB。");
+      setAttachments((current) => [...current, ...added]);
+    } catch (error) {
+      setAttachmentError(
+        String(error instanceof Error ? error.message : error),
+      );
+    } finally {
+      setReadingFiles(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const streamRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stickBottomRef = useRef(true);
@@ -412,16 +499,31 @@ export function ChatStream({
     stickBottomRef.current = dist < 80;
   };
 
-  const submit = () => {
+  const submit = async () => {
     const t = draft.trim();
-    if (!t || isRunning) return;
-    setDraft("");
-    stickBottomRef.current = true;
-    onSend(t);
+    if (
+      (!t && !attachments.length) ||
+      readingFiles ||
+      !hostReady ||
+      submittingRef.current
+    )
+      return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const accepted = await onSend(t, attachments);
+      if (accepted !== false) setAttachments([]);
+      if (accepted !== false)
+        setDraft((current) => (current.trim() === t ? "" : current));
+      stickBottomRef.current = true;
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       submit();
     }
@@ -439,17 +541,7 @@ export function ChatStream({
             : styles.badgeIdle;
 
   const statusLabel =
-    status === "running"
-      ? "运行中"
-      : status === "failed"
-        ? "失败"
-        : status === "completed"
-          ? "完成"
-          : status === "aborted"
-            ? "已中止"
-            : hostReady
-              ? "就绪"
-              : "连接中";
+    status === "idle" && !hostReady ? "连接中" : runStatusLabel(status);
 
   const firstUser = messages.find((m) => m.role === "user")?.content?.trim();
   const sessionTitle = firstUser
@@ -544,6 +636,14 @@ export function ChatStream({
                   fallback={m.content}
                   selected={selectedActivityId === m.activityId}
                   onViewDetails={onViewDetails}
+                  onCancelChild={onCancelChild}
+                  onRetryChild={onRetryChild}
+                  hostReady={hostReady}
+                  canRetryChild={[
+                    "running",
+                    "completed",
+                    "await_user",
+                  ].includes(status)}
                 />
               );
             }
@@ -599,10 +699,10 @@ export function ChatStream({
             <button
               type="button"
               className={styles.retryBtn}
-              title={`重试：${failedGoal.slice(0, 80)}`}
+              title={`检查并恢复原任务：${failedGoal.slice(0, 80)}`}
               onClick={onRetry}
             >
-              重试
+              恢复任务
             </button>
           ) : null}
           <button
@@ -617,6 +717,45 @@ export function ChatStream({
       ) : null}
 
       <div className={styles.composerWrap}>
+        {attachmentError ? (
+          <p role="alert" className={styles.inputBadge}>
+            {attachmentError}
+          </p>
+        ) : null}
+        {attachments.length ? (
+          <div className={styles.attachmentTray}>
+            {attachments.map((a) => (
+              <span key={a.id} className={styles.attachmentChip}>
+                {a.type === "image" ? (
+                  <img src={a.content} alt={a.name} />
+                ) : (
+                  "▧"
+                )}{" "}
+                {a.name}
+                <button
+                  type="button"
+                  disabled={submitting}
+                  aria-label={`移除附件 ${a.name}`}
+                  onClick={() =>
+                    setAttachments((items) =>
+                      items.filter((item) => item.id !== a.id),
+                    )
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+        <input
+          type="file"
+          multiple
+          ref={fileInputRef}
+          hidden
+          onChange={(e) => void attachFiles(e.target.files)}
+          aria-label="选择附件"
+        />
         <GlassPanel variant="strong" padding="sm" className={styles.composer}>
           <textarea
             ref={inputRef}
@@ -624,7 +763,7 @@ export function ChatStream({
             rows={2}
             placeholder={
               isRunning
-                ? "任务运行中… 可点中止"
+                ? "补充要求或调整方向，Enter 追加指令"
                 : hostReady
                   ? "描述任务，Enter 发送，Shift+Enter 换行"
                   : "等待 Agent 宿主…"
@@ -632,12 +771,12 @@ export function ChatStream({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKeyDown}
-            disabled={isRunning || !hostReady}
+            disabled={!hostReady}
           />
           <div className={styles.composerBar}>
             <span className={styles.hint}>
               {isRunning
-                ? "Agent 正在执行"
+                ? "追加指令将在模型或工具完成后纳入上下文"
                 : hostReady
                   ? approvalMode === "auto"
                     ? "本机 Bun · 自动批准工具"
@@ -645,6 +784,15 @@ export function ChatStream({
                   : "宿主未就绪"}
             </span>
             <div className={styles.actions}>
+              <button
+                type="button"
+                className={styles.secondaryBtn}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!hostReady || readingFiles || submitting}
+                title="UTF-8 文本或代码（256 KB），PNG/JPEG/WebP/GIF（2 MB），最多 4 个"
+              >
+                {readingFiles ? "读取中…" : "添加附件"}
+              </button>
               <button
                 type="button"
                 className={styles.secondaryBtn}
@@ -661,20 +809,24 @@ export function ChatStream({
                 >
                   中止
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  className={styles.sendBtn}
-                  onClick={submit}
-                  disabled={!draft.trim() || !hostReady}
-                  aria-label="发送"
-                >
-                  发送
-                  <span className={styles.sendIcon} aria-hidden>
-                    ↵
-                  </span>
-                </button>
-              )}
+              ) : null}
+              <button
+                type="button"
+                className={styles.sendBtn}
+                onClick={submit}
+                disabled={
+                  (!draft.trim() && !attachments.length) ||
+                  !hostReady ||
+                  submitting ||
+                  readingFiles
+                }
+                aria-label={isRunning ? "追加指令" : "发送"}
+              >
+                {submitting ? "发送中…" : isRunning ? "追加指令" : "发送"}
+                <span className={styles.sendIcon} aria-hidden>
+                  ↵
+                </span>
+              </button>
             </div>
           </div>
         </GlassPanel>

@@ -1,0 +1,98 @@
+.content {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+.empty {
+  padding: 24px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.summary {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.card {
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.card p {
+  margin: 7px 0;
+  white-space: pre-wrap;
+}
+.heading {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.heading strong {
+  font-weight: 500;
+  min-width: 0;
+}
+.status {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 2px 5px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+}
+.status[data-status="running"] {
+  color: var(--accent);
+}
+.status[data-status="blocked"],
+.status[data-status="failed"],
+.blocker {
+  color: #b34b47;
+}
+.dependencies {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  margin: 8px 0;
+  background: #8881;
+  border-radius: 6px;
+}
+.card details {
+  margin-top: 8px;
+}
+.card summary {
+  cursor: pointer;
+}
+.card pre {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 8px;
+  background: #8881;
+  border-radius: 6px;
+}
+.card button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  font: inherit;
+}
+.card button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.status[data-status="verified"] {
+  color: var(--accent);
+}
+.status[data-status="unverified"] {
+  color: #b34b47;
+}

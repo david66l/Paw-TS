@@ -1,13 +1,14 @@
 import { useEffect } from "react";
+import type { ColorTheme, MaterialTheme } from "../styles/appearance";
 import styles from "./SettingsModal.module.css";
 
 export type SettingsModalProps = {
   readonly open: boolean;
   readonly onClose: () => void;
-  readonly colorTheme: "calm" | "aurora";
-  readonly onColorThemeChange: (theme: "calm" | "aurora") => void;
-  readonly materialTheme: "soft" | "lens";
-  readonly onMaterialThemeChange: (theme: "soft" | "lens") => void;
+  readonly colorTheme: ColorTheme;
+  readonly onColorThemeChange: (theme: ColorTheme) => void;
+  readonly materialTheme: MaterialTheme;
+  readonly onMaterialThemeChange: (theme: MaterialTheme) => void;
   /** 模型预设（来自 settings.local.json 的 models） */
   readonly modelPresets: readonly { id: string; model: string }[];
   readonly provider?: string;
@@ -44,7 +45,7 @@ function Segmented({
 }
 
 /**
- * 设置弹窗。目前只有「外观」——配色 / 材质（从侧栏搬入）。
+ * 设置弹窗：模型、工具审批与外观。
  * 布局参考 Codex 设置面板：分组 + 每行「左标签/说明 · 右控件」。
  * 关闭：× 按钮 / 点击遮罩（真实 button）/ Esc。
  */
@@ -80,9 +81,9 @@ export function SettingsModal({
         aria-label="关闭设置"
         onClick={onClose}
       />
-      <div
+      <dialog
         className={styles.dialog}
-        role="dialog"
+        open
         aria-modal="true"
         aria-label="设置"
       >
@@ -143,36 +144,68 @@ export function SettingsModal({
 
             <div className={styles.row}>
               <div className={styles.rowText}>
-                <div className={styles.rowLabel}>配色</div>
-                <div className={styles.rowDesc}>界面主色调</div>
+                <div className={styles.rowLabel}>皮肤</div>
+                <div className={styles.rowDesc}>选择你的工作氛围</div>
               </div>
-              <Segmented
-                value={colorTheme}
-                options={[
-                  ["calm", "静谧"],
-                  ["aurora", "极光"],
-                ]}
-                onChange={(v) => onColorThemeChange(v as "calm" | "aurora")}
-              />
             </div>
+            <fieldset className={styles.skinGrid} aria-label="界面皮肤">
+              {(
+                [
+                  ["calm", "静谧", "轻盈 · 清透"],
+                  ["aurora", "极光", "流光 · 玻璃"],
+                  ["paper", "纸间 · Louis", "暖纸 · 薰衣草"],
+                ] as const
+              ).map(([id, label, description]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={styles.skinCard}
+                  aria-pressed={colorTheme === id}
+                  onClick={() => onColorThemeChange(id)}
+                >
+                  <span
+                    className={styles.skinPreview}
+                    data-skin={id}
+                    aria-hidden="true"
+                  >
+                    <span className={styles.previewSidebar} />
+                    <span className={styles.previewPage}>
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    <span className={styles.previewAccent} />
+                  </span>
+                  <span className={styles.skinName}>{label}</span>
+                  <span className={styles.skinDescription}>{description}</span>
+                </button>
+              ))}
+            </fieldset>
 
-            <div className={styles.row}>
-              <div className={styles.rowText}>
-                <div className={styles.rowLabel}>材质</div>
-                <div className={styles.rowDesc}>玻璃质感</div>
+            {colorTheme === "paper" ? (
+              <p className={styles.skinNote}>
+                来自 Louis.dev
+                的纸张纹理、薰衣草紫与衬线标题。外观选择会自动保存。
+              </p>
+            ) : (
+              <div className={styles.row}>
+                <div className={styles.rowText}>
+                  <div className={styles.rowLabel}>材质</div>
+                  <div className={styles.rowDesc}>玻璃质感</div>
+                </div>
+                <Segmented
+                  value={materialTheme}
+                  options={[
+                    ["soft", "柔雾"],
+                    ["lens", "折光"],
+                  ]}
+                  onChange={(v) => onMaterialThemeChange(v as MaterialTheme)}
+                />
               </div>
-              <Segmented
-                value={materialTheme}
-                options={[
-                  ["soft", "柔雾"],
-                  ["lens", "折光"],
-                ]}
-                onChange={(v) => onMaterialThemeChange(v as "soft" | "lens")}
-              />
-            </div>
+            )}
           </section>
         </div>
-      </div>
+      </dialog>
     </div>
   );
 }

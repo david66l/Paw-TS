@@ -2,10 +2,16 @@ import { createHash } from "node:crypto";
 import type { JsonValue, ToolSettlementStatusV1 } from "@paw/protocol";
 
 export type CompletionReviewEvidenceOutcomeV1 =
-  "passed" | "failed" | "indeterminate";
+  | "passed"
+  | "failed"
+  | "indeterminate";
 
 export type CompletionReviewVerificationKindV1 =
-  "test" | "build" | "lint" | "typecheck" | "none";
+  | "test"
+  | "build"
+  | "lint"
+  | "typecheck"
+  | "none";
 
 export interface CompletionReviewToolEvidenceV1 {
   readonly callId: string;
@@ -24,6 +30,7 @@ export interface CompletionReviewToolEvidenceV1 {
 
 export interface CompletionReviewCandidateV1 {
   readonly candidateHash: string;
+  readonly environmentRevision?: string;
   readonly sourceThroughSeq: number;
   readonly goal: string;
   readonly assistantText: string;
@@ -33,10 +40,8 @@ export interface CompletionReviewCandidateV1 {
   readonly toolEvidence: readonly CompletionReviewToolEvidenceV1[];
 }
 
-export interface CreateCompletionReviewCandidateInputV1 extends Omit<
-  CompletionReviewCandidateV1,
-  "candidateHash"
-> {}
+export interface CreateCompletionReviewCandidateInputV1
+  extends Omit<CompletionReviewCandidateV1, "candidateHash"> {}
 
 export function createCompletionReviewCandidateV1(
   input: CreateCompletionReviewCandidateInputV1,
@@ -57,7 +62,15 @@ export function createCompletionReviewCandidateV1(
   const toolEvidence = Object.freeze(
     input.toolEvidence.map((item) => freezeEvidence(item)),
   );
+  if (
+    input.environmentRevision !== undefined &&
+    !/^[a-f0-9]{64}$/.test(input.environmentRevision)
+  )
+    throw new Error("Invalid environment revision");
   const value = Object.freeze({
+    ...(input.environmentRevision
+      ? { environmentRevision: input.environmentRevision }
+      : {}),
     sourceThroughSeq: input.sourceThroughSeq,
     goal: input.goal,
     assistantText: input.assistantText,

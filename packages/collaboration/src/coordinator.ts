@@ -131,7 +131,7 @@ export function createDurableCollaborationCoordinatorV1(input: {
       await settleOnce(
         input.journal,
         identity.taskId,
-        result.status,
+        options?.signal?.aborted ? "cancelled" : result.status,
         result.summary,
         clock,
       );

@@ -1071,3 +1071,17 @@ function assertDeepFrozen(value: unknown): void {
   expect(Object.isFrozen(value)).toBeTrue();
   for (const child of Object.values(value)) assertDeepFrozen(child);
 }
+
+test("environment audit is opt-in and changes the V3 identity without changing historical profiles", () => {
+  const ordinary = createPawNextProductManifestV3(manifestInputV3());
+  const audited = createPawNextProductManifestV3({
+    ...manifestInputV3(),
+    environmentAudit: true,
+  });
+  expect(ordinary).not.toHaveProperty("environmentAudit");
+  expect(audited.environmentAudit).toBe("paw.environment-audit.v1");
+  expect(hashPawNextProductManifestV3(audited)).not.toBe(
+    hashPawNextProductManifestV3(ordinary),
+  );
+  expect(hashPawNextProductManifestV3(ordinary)).toBe(V3_HASH);
+});

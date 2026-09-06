@@ -8,6 +8,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const readline = require("node:readline");
+const { runInputFields } = require("./run-input.cjs");
 
 const isDev = !app.isPackaged;
 const DEV_URL = process.env.VITE_DEV_SERVER_URL || "http://127.0.0.1:5173";
@@ -44,6 +45,14 @@ function findBun() {
   return "bun";
 }
 
+const pendingControls = new Map();
+function failControls(message) {
+  for (const pending of pendingControls.values()) {
+    clearTimeout(pending.timer);
+    pending.resolve({ ok: false, error: message });
+  }
+  pendingControls.clear();
+}
 function sendToRenderer(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
@@ -79,6 +88,15 @@ function startAgentHost() {
       });
       return;
     }
+    if (msg.type === "control.done") {
+      const pending = pendingControls.get(msg.operationId);
+      if (pending && pending.requestId === msg.requestId) {
+        clearTimeout(pending.timer);
+        pendingControls.delete(msg.operationId);
+        pending.resolve(msg);
+      }
+      return;
+    }
     if (msg.type === "ready") {
       agentReady = true;
       sendToRenderer("agent:ready", {});
@@ -105,6 +123,7 @@ function startAgentHost() {
       });
       return;
     }
+    if (msg.type === "approval.closed") { sendToRenderer("agent:approval-closed", msg); return; }
     if (msg.type === "approval.request") {
       sendToRenderer("agent:approval-request", {
         requestId: msg.requestId,
@@ -221,6 +240,7 @@ function startAgentHost() {
   });
 
   agentProc.on("exit", (code) => {
+    failControls("Agent 宿主已退出。");
     agentProc = null;
     agentReady = false;
     sendToRenderer("agent:host-exit", { code });
@@ -328,29 +348,11 @@ function setupIpc() {
       typeof payload?.workspaceRoot === "string" && payload.workspaceRoot.trim()
         ? path.resolve(payload.workspaceRoot)
         : REPO_ROOT;
-    const maxSteps =
-      typeof payload?.maxSteps === "number" && payload.maxSteps > 0
-        ? payload.maxSteps
-        : 24;
     const conversationId =
       typeof payload?.conversationId === "string" &&
       payload.conversationId.trim()
         ? payload.conversationId.trim()
         : undefined;
-    /** @type {{ role: string, content: string }[]} */
-    let history = [];
-    if (Array.isArray(payload?.history)) {
-      history = payload.history
-        .filter(
-          (t) =>
-            t &&
-            (t.role === "user" || t.role === "assistant") &&
-            typeof t.content === "string" &&
-            t.content.trim(),
-        )
-        .map((t) => ({ role: t.role, content: String(t.content).trim() }));
-    }
-
     // 宿主可能尚未 ready，短暂等待
     const tryWrite = () => {
       writeAgent({
@@ -358,9 +360,8 @@ function setupIpc() {
         requestId,
         goal,
         workspaceRoot,
-        maxSteps,
+        ...runInputFields(payload),
         ...(conversationId ? { conversationId } : {}),
-        ...(history.length > 0 ? { history } : {}),
       });
     };
 
@@ -384,6 +385,29 @@ function setupIpc() {
 
     return { requestId, workspaceRoot };
   });
+
+  for (const [channel, type] of [["agent:submit-input", "input.submit"], ["agent:cancel-child", "child.cancel"], ["agent:refresh-jobs", "jobs.refresh"], ["agent:stop-job", "job.stop"], ["agent:get-monitor", "monitor.get"]]) {
+    ipcMain.handle(channel, (_evt, payload) => {
+      if (!agentReady || !agentProc || typeof payload?.requestId !== "string")
+        return { ok: false, error: "Agent 宿主未就绪。" };
+      const operationId = require("node:crypto").randomUUID();
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          pendingControls.delete(operationId);
+          resolve({ ok: false, error: "操作回执超时；重试追加指令会使用相同编号，不会重复入队。" });
+        }, 15000);
+        pendingControls.set(operationId, { requestId: payload.requestId, timer, resolve });
+        try {
+          writeAgent({ type, requestId: payload.requestId, operationId,
+            ...(type === "input.submit" ? { inputId: payload.inputId, content: payload.content, attachments: payload.attachments } : { childId: payload.childId, runId: payload.runId, jobId: payload.jobId, conversationId: payload.conversationId, workspaceRoot: payload.workspaceRoot }) });
+        } catch (error) {
+          clearTimeout(timer);
+          pendingControls.delete(operationId);
+          resolve({ ok: false, error: String(error) });
+        }
+      });
+    });
+  }
 
   ipcMain.handle("agent:abort", (_evt, payload) => {
     const requestId = payload?.requestId;

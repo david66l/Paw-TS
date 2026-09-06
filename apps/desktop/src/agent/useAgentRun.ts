@@ -15,6 +15,8 @@ import {
   createEmptySession,
   deriveSessionTitle,
   loadSessionsFromStorage,
+  resetRuntimeConversation,
+  runtimeConversationId,
   sameSessionHistory,
   sameSessionMessages,
   saveSessionsToStorage,
@@ -40,7 +42,11 @@ import type {
   ToolBatch,
   UiMessage,
 } from "./types";
+import { runStatusLabel, settledRunStatus } from "./types";
 import { extractPathFromArgs } from "./useRightPanelData";
+
+import type { DesktopAttachment } from "./attachments";
+import type { DesktopMonitorSnapshot } from "./monitorTypes";
 
 const SUB_AGENT_TOOL = "workspace.run_agent";
 
@@ -353,9 +359,70 @@ export function useAgentRun() {
     const desk = api();
     if (!desk?.finalizeConversation || !conversationId) return;
     void desk
-      .finalizeConversation({ conversationId })
+      .finalizeConversation({
+        conversationId: runtimeConversationId(conversationId),
+      })
       .catch((e) => console.warn("[finalizeConversation]", e));
   }, []);
+
+  const [monitor, setMonitor] = useState<DesktopMonitorSnapshot | null>(null);
+  useEffect(() => {
+    setMonitor(null);
+    const desk = api();
+    if (!desk?.getMonitor || !hostReady) return;
+    let cancelled = false;
+    void desk
+      .getMonitor({
+        requestId: newId("monitor"),
+        conversationId: runtimeConversationId(activeSessionId),
+      })
+      .then((result) => {
+        if (!cancelled && result.ok && result.data)
+          setMonitor((current) =>
+            current && current.updatedAt >= result.data!.updatedAt
+              ? current
+              : result.data!,
+          );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, hostReady]);
+  useEffect(() => {
+    if (status !== "running") return;
+    const desk = api();
+    const requestId = requestIdRef.current;
+    if (!desk?.refreshJobs || !requestId) return;
+    let pending = false;
+    const refresh = async () => {
+      if (pending || requestIdRef.current !== requestId) return;
+      pending = true;
+      try {
+        await desk.refreshJobs({ requestId });
+      } catch {
+      } finally {
+        pending = false;
+      }
+    };
+    const timer = setInterval(() => void refresh(), 1000);
+    return () => clearInterval(timer);
+  }, [status]);
+  const stopJob = useCallback(async (runId: string, jobId: string) => {
+    const desk = api();
+    const requestId = requestIdRef.current;
+    if (!desk || !requestId) return;
+    try {
+      const result = await desk.stopJob({ requestId, runId, jobId });
+      if (requestIdRef.current === requestId && !result.ok)
+        setError(result.error ?? "停止后台任务失败");
+    } catch (e) {
+      if (requestIdRef.current === requestId) setError(String(e));
+    }
+  }, []);
+
+  const supplementalInputsRef = useRef(new Map<string, string>());
+  const inputIdsRef = useRef(new Map<string, string>());
 
   const commitHistoryIfNeeded = useCallback(
     (assistantText: string) => {
@@ -368,7 +435,12 @@ export function useAgentRun() {
         return;
       const next: ConversationTurn[] = [
         ...historyRef.current,
-        { role: "user" as const, content: user },
+        {
+          role: "user" as const,
+          content: [user, ...supplementalInputsRef.current.values()].join(
+            "\n\n追加指令：\n",
+          ),
+        },
         { role: "assistant" as const, content: assistant },
       ];
       historyRef.current = next.slice(-32);
@@ -587,12 +659,116 @@ export function useAgentRun() {
       refreshSettings();
     });
 
+    const offApprovalClosed = desk.onApprovalClosed?.(
+      ({ requestId, approvalId }) => {
+        if (requestId === requestIdRef.current)
+          setPendingApprovals((prev) =>
+            prev.filter((item) => item.approvalId !== approvalId),
+          );
+      },
+    );
     const offEvent = desk.onEvent(({ requestId, event: envelope }) => {
-      if (requestIdRef.current && requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current) return;
 
       const ev = envelope?.event;
       if (!ev || typeof ev.type !== "string") return;
       const t = ev.type;
+      if (
+        t === "monitor.snapshot" &&
+        ev.snapshot &&
+        typeof ev.snapshot === "object"
+      ) {
+        setMonitor(ev.snapshot as DesktopMonitorSnapshot);
+        return;
+      }
+      if (
+        (t === "input.accepted" || t === "input.promoted") &&
+        typeof ev.inputId === "string"
+      ) {
+        const inputId = ev.inputId;
+        if (t === "input.accepted" && typeof ev.content === "string") {
+          supplementalInputsRef.current.set(inputId, ev.content);
+          const content = ev.content;
+          setMessages((prev) =>
+            prev.some((m) => m.inputId === inputId)
+              ? prev
+              : [
+                  ...prev,
+                  {
+                    id: inputId,
+                    inputId,
+                    role: "user",
+                    content,
+                    inputState: "accepted",
+                    attachments: Array.isArray(ev.attachments)
+                      ? (ev.attachments as UiMessage["attachments"])
+                      : undefined,
+                  },
+                ],
+          );
+        } else if (t === "input.promoted") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.inputId === inputId ? { ...m, inputState: "promoted" } : m,
+            ),
+          );
+        }
+        return;
+      }
+      if (t === "workspace.changes" && ev.ok === false)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: newId("sys"),
+            role: "system",
+            content:
+              typeof ev.summary === "string" ? ev.summary : "文件差异暂不可用",
+          },
+        ]);
+      const changeEvent = (t === "child.tool_result" ? ev.originalEvent : ev) as
+        | Record<string, unknown>
+        | undefined;
+      if (
+        (t === "tool.result" ||
+          t === "child.tool_result" ||
+          t === "workspace.changes") &&
+        changeEvent?.ok !== false &&
+        changeEvent
+      ) {
+        // 修改性工具的变更统计 → Changed files 卡（首个变更到达时插锚点）
+        if (
+          Array.isArray(changeEvent.fileChanges) &&
+          changeEvent.fileChanges.length > 0
+        ) {
+          const incoming: FileChangeItem[] = [];
+          for (const c of changeEvent.fileChanges) {
+            if (!c || typeof c !== "object") continue;
+            const r = c as Record<string, unknown>;
+            if (typeof r.path !== "string") continue;
+            incoming.push({
+              path: r.path,
+              added: typeof r.added === "number" ? r.added : 0,
+              removed: typeof r.removed === "number" ? r.removed : 0,
+              ...(typeof r.diff === "string" && r.diff ? { diff: r.diff } : {}),
+            });
+          }
+          if (incoming.length > 0) {
+            fileChangesRef.current = mergeFileChanges(
+              fileChangesRef.current,
+              incoming,
+            );
+            setFileChanges([...fileChangesRef.current]);
+            if (!changesMarkerIdRef.current) {
+              const markerId = newId("chgmsg");
+              changesMarkerIdRef.current = markerId;
+              setMessages((prev) => [
+                ...prev,
+                { id: markerId, role: "changes", content: "文件变更" },
+              ]);
+            }
+          }
+        }
+      }
 
       // 信封级 runId
       if (typeof envelope?.runId === "string" && envelope.runId.trim()) {
@@ -789,7 +965,8 @@ export function useAgentRun() {
                   rows: [
                     ...b.rows,
                     {
-                      id: newId("tr"),
+                      id:
+                        typeof ev.callId === "string" ? ev.callId : newId("tr"),
                       tool: ev.tool as string,
                       summary,
                       status: "running" as const,
@@ -829,36 +1006,6 @@ export function useAgentRun() {
         const ok = ev.ok !== false;
         const summary =
           typeof ev.summary === "string" ? ev.summary : ok ? "完成" : "失败";
-        // 修改性工具的变更统计 → Changed files 卡（首个变更到达时插锚点）
-        if (Array.isArray(ev.fileChanges) && ev.fileChanges.length > 0) {
-          const incoming: FileChangeItem[] = [];
-          for (const c of ev.fileChanges) {
-            if (!c || typeof c !== "object") continue;
-            const r = c as Record<string, unknown>;
-            if (typeof r.path !== "string") continue;
-            incoming.push({
-              path: r.path,
-              added: typeof r.added === "number" ? r.added : 0,
-              removed: typeof r.removed === "number" ? r.removed : 0,
-              ...(typeof r.diff === "string" && r.diff ? { diff: r.diff } : {}),
-            });
-          }
-          if (incoming.length > 0) {
-            fileChangesRef.current = mergeFileChanges(
-              fileChangesRef.current,
-              incoming,
-            );
-            setFileChanges([...fileChangesRef.current]);
-            if (!changesMarkerIdRef.current) {
-              const markerId = newId("chgmsg");
-              changesMarkerIdRef.current = markerId;
-              setMessages((prev) => [
-                ...prev,
-                { id: markerId, role: "changes", content: "文件变更" },
-              ]);
-            }
-          }
-        }
         // 更新工具批里对应行（FIFO：最后一个 running 且同工具的行）
         const bid = openToolBatchIdRef.current;
         if (bid) {
@@ -868,7 +1015,12 @@ export function useAgentRun() {
             let idx = -1;
             for (let i = b.rows.length - 1; i >= 0; i--) {
               const r = b.rows[i]!;
-              if (r.status === "running" && r.tool === ev.tool) {
+              if (
+                r.status === "running" &&
+                (typeof ev.callId === "string"
+                  ? r.id === ev.callId
+                  : r.tool === ev.tool)
+              ) {
                 idx = i;
                 break;
               }
@@ -935,7 +1087,13 @@ export function useAgentRun() {
           }));
           return;
         }
-        if (t === "child.tool_call") {
+        if (t === "child.control") {
+          upsertAgent(activityId, agentId, {
+            controllable: orig?.controllable === true,
+            ...(typeof ev.goal === "string" ? { retryGoal: ev.goal } : {}),
+            ...(typeof ev.agentId === "string" ? { agentId: ev.agentId } : {}),
+          });
+        } else if (t === "child.tool_call") {
           const tool = typeof orig?.tool === "string" ? orig.tool : undefined;
           const path = extractPathFromArgs(orig?.args);
           patchActivity(activityId, (a) => ({
@@ -988,6 +1146,8 @@ export function useAgentRun() {
             }));
           }
         } else if (t === "child.completed") {
+          const specId = runAgentSpecByCallRef.current.get(agentId);
+          if (specId) setSpecRunStatus(specId, "idle");
           upsertAgent(activityId, agentId, {
             status: "done",
             ...(typeof orig?.message === "string"
@@ -995,8 +1155,11 @@ export function useAgentRun() {
               : {}),
           });
         } else if (t === "child.failed") {
+          const specId = runAgentSpecByCallRef.current.get(agentId);
+          if (specId) setSpecRunStatus(specId, "failed");
           upsertAgent(activityId, agentId, {
             status: "failed",
+            cancelled: orig?.status === "cancelled",
             ...(typeof orig?.message === "string"
               ? { error: orig.message }
               : {}),
@@ -1021,12 +1184,11 @@ export function useAgentRun() {
         finalizeOpenActivity();
         finalizeOpenToolBatch();
         finalizeChangesCard();
-        const aborted = ev.status === "aborted";
         const failed = ev.status === "failed";
         if (failed) setFailedGoal(pendingUserRef.current);
         clearPendingInteractions();
-        setStatus(aborted ? "aborted" : failed ? "failed" : "completed");
-        setStatusText(aborted ? "已中止" : failed ? "失败" : "完成");
+        setStatus(settledRunStatus(ev.status));
+        setStatusText(runStatusLabel(settledRunStatus(ev.status)));
         // 本轮结束：全部回到空闲（灰点）；失败的可短暂保持 failed 后也归 idle
         setAgentRunStatus((prev) => {
           const next: Record<string, AgentRunStatus> = { ...prev };
@@ -1068,7 +1230,7 @@ export function useAgentRun() {
               }
             }
           }
-          if (!failed) {
+          if (ev.status === "completed" || ev.status === "await_user") {
             commitHistoryIfNeeded(lastAssistantContent(next));
           }
           return next;
@@ -1093,16 +1255,24 @@ export function useAgentRun() {
     });
 
     const offDone = desk.onRunDone(({ requestId, result }) => {
-      if (requestIdRef.current && requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current) return;
       finalizeOpenActivity();
       finalizeOpenToolBatch();
       finalizeChangesCard();
-      const aborted = result.status === "aborted";
       const failed = result.status === "failed";
       if (failed) setFailedGoal(pendingUserRef.current);
       clearPendingInteractions();
-      setStatus(aborted ? "aborted" : failed ? "failed" : "completed");
-      setStatusText(aborted ? "已中止" : failed ? "失败" : "完成");
+      const finalStatus = settledRunStatus(result.status);
+      if (failed)
+        setError(result.message || "任务失败。可检查原任务状态，或新建对话。");
+      setStatus(finalStatus);
+      setStatusText(runStatusLabel(finalStatus));
+      if (finalStatus === "incomplete" || finalStatus === "await_external") {
+        setFailedGoal(pendingUserRef.current);
+        setError(
+          `${runStatusLabel(finalStatus)}。可检查并恢复原任务；开始不同任务请新建对话。`,
+        );
+      }
       setAgentRunStatus((prev) => {
         const next: Record<string, AgentRunStatus> = { ...prev };
         for (const k of Object.keys(next)) {
@@ -1144,7 +1314,7 @@ export function useAgentRun() {
             }
           }
         }
-        if (!failed) {
+        if (result.status === "completed" || result.status === "await_user") {
           commitHistoryIfNeeded(lastAssistantContent(next));
         }
         return next;
@@ -1176,7 +1346,7 @@ export function useAgentRun() {
     });
 
     const offApprovalReq = desk.onApprovalRequest((p) => {
-      if (requestIdRef.current && p.requestId !== requestIdRef.current) return;
+      if (p.requestId !== requestIdRef.current) return;
       setPendingApprovals((prev) =>
         prev.some((a) => a.approvalId === p.approvalId)
           ? prev
@@ -1194,7 +1364,7 @@ export function useAgentRun() {
     });
 
     const offAskReq = desk.onAskUserRequest((p) => {
-      if (requestIdRef.current && p.requestId !== requestIdRef.current) return;
+      if (p.requestId !== requestIdRef.current) return;
       const item: PendingAskItem = {
         askId: p.askId,
         question: p.question,
@@ -1210,7 +1380,9 @@ export function useAgentRun() {
       const interrupted = requestIdRef.current !== null;
       if (interrupted) {
         setFailedGoal(pendingUserRef.current);
-        setError("Agent 宿主中断，任务已终止；宿主将自动重启，可点重试");
+        setError(
+          "Agent 宿主中断；重启后可检查并恢复原任务，不会把它重新提交为新任务。",
+        );
         requestIdRef.current = null;
         assistantIdRef.current = null;
         streamRawRef.current = "";
@@ -1247,6 +1419,7 @@ export function useAgentRun() {
       offDone();
       offErr();
       offApprovalReq();
+      offApprovalClosed?.();
       offAskReq();
       offHost();
       offLog();
@@ -1254,20 +1427,51 @@ export function useAgentRun() {
   }, [commitHistoryIfNeeded, clearPendingInteractions]);
 
   const send = useCallback(
-    async (goal: string) => {
+    async (
+      goal: string,
+      intent: "continue" | "recover" = "continue",
+      attachments: readonly DesktopAttachment[] = [],
+    ) => {
       const desk = api();
-      const text = goal.trim();
+      const text =
+        goal.trim() || (attachments.length ? "请分析这些附件。" : "");
       if (!text) return;
       if (!desk) {
         setError("当前不在 Electron 中，无法运行 Agent");
         return;
       }
       if (requestIdRef.current) {
-        setError("已有任务在运行，请先等待结束或中止");
-        return;
+        const requestId = requestIdRef.current;
+        const inputKey = JSON.stringify([text, attachments.map((a) => a.id)]);
+        const inputId = inputIdsRef.current.get(inputKey) ?? newId("steer");
+        inputIdsRef.current.set(inputKey, inputId);
+        try {
+          const result = await desk.submitInput({
+            requestId,
+            inputId,
+            content: text,
+            attachments,
+          });
+          if (requestIdRef.current !== requestId) return result.ok;
+          if (!result.ok) {
+            setError(result.error ?? "追加失败，请重试。");
+            return false;
+          }
+          setError(null);
+          inputIdsRef.current.delete(inputKey);
+          // The committed input.accepted event owns the user bubble, before this acknowledgement.
+          return true;
+        } catch (e) {
+          if (requestIdRef.current === requestId) setError(String(e));
+          return false;
+        }
       }
 
       // slash：本地执行，不进入 agent run
+      if (text.startsWith("/") && attachments.length) {
+        setError("本地命令不能携带附件，请输入任务描述。");
+        return false;
+      }
       if (text.startsWith("/")) {
         setError(null);
         setMessages((prev) => [
@@ -1281,6 +1485,7 @@ export function useAgentRun() {
             workspaceRoot: repoRoot || undefined,
           });
           if (result.clearMessages) {
+            resetRuntimeConversation(conversationIdRef.current);
             setMessages([
               {
                 id: newId("sys"),
@@ -1323,11 +1528,14 @@ export function useAgentRun() {
       setError(null);
       setFailedGoal(null);
       setStatus("running");
+      setMonitor(null);
       setStatusText("启动中…");
       assistantIdRef.current = null;
       streamRawRef.current = "";
       streamThinkingRef.current = "";
       pendingUserRef.current = text;
+      supplementalInputsRef.current.clear();
+      inputIdsRef.current.clear();
       historyCommittedRef.current = false;
       clearPendingInteractions();
       // 新 run：清空上一轮的变更卡与工具卡（锚点消息保留，按 content 静态渲染）
@@ -1347,21 +1555,34 @@ export function useAgentRun() {
         content: t.content,
       }));
 
-      setMessages((prev) => [
-        ...prev,
-        { id: newId("u"), role: "user", content: text },
-      ]);
+      if (intent !== "recover")
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: newId("u"),
+            role: "user",
+            content: text,
+            attachments: attachments.map(({ id, name, type }) => ({
+              id,
+              name,
+              type,
+            })),
+          },
+        ]);
 
       try {
         const { requestId } = await desk.startRun({
           goal: text,
-          maxSteps: 24,
+          attachments,
+          intent,
           requestId: clientRequestId,
-          conversationId: conversationIdRef.current,
+          conversationId: runtimeConversationId(conversationIdRef.current),
           history: historySnapshot,
         });
-        requestIdRef.current = requestId;
-        setStatusText("运行中…");
+        if (requestIdRef.current === clientRequestId) {
+          requestIdRef.current = requestId;
+          setStatusText("运行中…");
+        }
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setError(message);
@@ -1372,6 +1593,45 @@ export function useAgentRun() {
       }
     },
     [lastRunId, repoRoot, hostReady, clearPendingInteractions],
+  );
+
+  const cancelChild = useCallback(async (childId: string) => {
+    const desk = api();
+    const requestId = requestIdRef.current;
+    if (!desk || !requestId) return;
+    try {
+      const result = await desk.cancelChild({ requestId, childId });
+      if (requestIdRef.current !== requestId) return;
+      if (!result.ok) {
+        setError(result.error ?? "停止子任务失败");
+        return;
+      }
+      activitiesRef.current = activitiesRef.current.map((a) => ({
+        ...a,
+        agents: a.agents.map((g) =>
+          g.id === childId ? { ...g, cancelRequested: true } : g,
+        ),
+      }));
+      setActivities([...activitiesRef.current]);
+    } catch (error) {
+      if (requestIdRef.current === requestId) setError(String(error));
+    }
+  }, []);
+  const retryChild = useCallback(
+    (childId: string) => {
+      const child = activitiesRef.current
+        .flatMap((a) => a.agents)
+        .find((g) => g.id === childId);
+      if (!child?.retryGoal || child.status !== "failed") return;
+      if (!["running", "completed", "await_user"].includes(status)) {
+        setError("请先恢复主任务或新建对话。");
+        return false;
+      }
+      return send(
+        `请重新委派子任务给 ${child.agentId ?? "合适的 Agent"}，作为新的委派记录。先检查已有结果和工作区改动，再执行剩余工作。原任务：\n${child.retryGoal}`,
+      );
+    },
+    [send, status],
   );
 
   const abort = useCallback(async () => {
@@ -1430,7 +1690,7 @@ export function useAgentRun() {
     if (!goal || status === "running") return;
     setError(null);
     setFailedGoal(null);
-    void send(goal);
+    void send(goal, "recover");
   }, [failedGoal, status, send]);
 
   const dismissError = useCallback(() => {
@@ -1477,6 +1737,7 @@ export function useAgentRun() {
   /** 清空当前会话消息（不删会话、不 finalize） */
   const clearCurrentMessages = useCallback(() => {
     if (status === "running") return;
+    resetRuntimeConversation(conversationIdRef.current);
     setMessages([]);
     setError(null);
     setFailedGoal(null);
@@ -1610,12 +1871,16 @@ export function useAgentRun() {
 
   return {
     messages,
+    monitor,
+    stopJob,
     status,
     statusText,
     repoRoot,
     hostReady,
     error,
     send,
+    cancelChild,
+    retryChild,
     abort,
     clear,
     clearCurrentMessages,

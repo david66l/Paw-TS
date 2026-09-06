@@ -197,3 +197,21 @@ describe("ManagedJobRegistryV1", () => {
     );
   });
 });
+
+test("desktop peek preserves Agent output and keeps a separate bounded log", async () => {
+  const registry = new ManagedJobRegistryV1();
+  registry.attachController("run-preview");
+  const chunks = ["first", "second", "third", ""];
+  const job = startFake(registry, "run-preview", {
+    output: () => chunks.shift() ?? "",
+  });
+  expect(registry.peek("run-preview", job.id).text).toBe("first");
+  expect(registry.read("run-preview", job.id).text).toBe("firstsecond");
+  expect(registry.peek("run-preview", job.id).text).toBe("firstsecondthird");
+  expect(registry.read("run-preview", job.id).text).toBe("third");
+  expect(registry.get("run-preview", job.id).reported).toBe(false);
+  expect(() => registry.peek("another-run", job.id)).toThrow();
+  job.done.resolve({ status: "completed" });
+  await job.done.promise;
+  await registry.close();
+});

@@ -124,6 +124,17 @@
   padding: 0;
 }
 
+/* Paper is a matte surface, independent of the saved glass material. */
+:global(:root[data-color-theme="paper"]) .panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:global(:root[data-color-theme="paper"]) .panel::before,
+:global(:root[data-color-theme="paper"]) .panel::after {
+  display: none;
+}
+
 .pad_sm {
   padding: var(--space-3);
 }

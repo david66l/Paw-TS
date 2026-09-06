@@ -123,3 +123,8 @@ export {
   type WaitDecisionActionV1,
   type WorkSegmentStartedFactV1,
 } from "./run-journal.js";
+
+export {
+  type EnvironmentAuditEvidenceV1,
+  assertEnvironmentAuditEvidenceV1,
+} from "./environment-audit.js";

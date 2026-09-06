@@ -1,4 +1,12 @@
 #!/usr/bin/env bun
+import { loadPawNextCollaborationRosterV1 } from "@paw/cli/paw-next";
+import {
+  desktopCheckpointNamespace,
+  finalizeDesktopNext,
+  listDesktopNextMemories,
+  readDesktopMonitor,
+  runDesktopNext,
+} from "./paw-next.js";
 /**
  * 桌面端 Agent 宿主进程（由 Electron 主进程 spawn bun）。
  *
@@ -9,14 +17,7 @@
 
 import path from "node:path";
 import { createInterface } from "node:readline";
-import {
-  finalizeConversationMemory,
-  formatDoctorOutput,
-  getConversationMemoryTask,
-  listWorkspaceMemories,
-  loadAgentRegistry,
-  runStubRun,
-} from "@paw/agent";
+import { formatDoctorOutput } from "@paw/agent";
 import type { RunEventEnvelope } from "@paw/core";
 import {
   FileSystemSessionStore,
@@ -24,6 +25,7 @@ import {
   loadSkillsFromDirectory,
   undoLastCheckpoint,
 } from "@paw/core";
+import { createDefaultLanguageModel } from "@paw/models";
 import {
   defaultSettingsPath,
   hasApiKey,
@@ -32,26 +34,60 @@ import {
   resolveModel,
   savePawSettingsLocal,
 } from "@paw/settings";
+import { desktopAgentModels } from "./paw-next-models.js";
 import {
   alwaysAllowKey,
   previewToolArgs,
   summarizeToolArgs,
-} from "./tool-preview.ts";
+} from "./tool-preview.js";
 
 type HistoryTurn = {
   role: "user" | "assistant";
   content: string;
 };
 
+import { DesktopNextControls } from "./paw-next-controls.js";
+
 type InMsg =
+  | { type: "jobs.refresh"; requestId: string; operationId: string }
+  | {
+      type: "job.stop";
+      requestId: string;
+      operationId: string;
+      runId: string;
+      jobId: string;
+    }
+  | {
+      type: "monitor.get";
+      requestId: string;
+      operationId: string;
+      conversationId: string;
+      workspaceRoot?: string;
+    }
+  | {
+      type: "input.submit";
+      requestId: string;
+      operationId: string;
+      inputId: string;
+      content: string;
+      attachments?: unknown;
+    }
+  | {
+      type: "child.cancel";
+      requestId: string;
+      operationId: string;
+      childId: string;
+    }
   | {
       type: "run";
       requestId: string;
       goal: string;
       workspaceRoot: string;
       maxSteps?: number;
+      intent?: "continue" | "recover" | "reset";
       conversationId?: string;
       history?: HistoryTurn[];
+      attachments?: unknown;
     }
   | { type: "abort"; requestId: string }
   | {
@@ -153,6 +189,17 @@ type RunEventRow = {
 };
 
 type OutMsg =
+  | { type: "approval.closed"; requestId: string; approvalId: string }
+  | {
+      type: "control.done";
+      data?: unknown;
+      requestId: string;
+      operationId: string;
+      ok: boolean;
+      inputId?: string;
+      status?: string;
+      error?: string;
+    }
   | { type: "ready" }
   | { type: "event"; requestId: string; event: RunEventEnvelope }
   | {
@@ -415,7 +462,7 @@ function emitSettingsState(requestId: string, workspaceRoot: string): void {
     const s = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
     const presets = Object.entries(s.models ?? {}).map(([id, m]) => ({
       id,
-      model: m.model,
+      model: m.model ?? id,
       ...(m.baseUrl ? { baseUrl: m.baseUrl } : {}),
     }));
     emit({
@@ -518,10 +565,77 @@ function summarizeEvent(envelope: RunEventEnvelope): RunEventRow {
 }
 
 const controllers = new Map<string, AbortController>();
+const runControls = new Map<string, DesktopNextControls>();
+async function handleControl(
+  msg: Extract<
+    InMsg,
+    {
+      type:
+        | "input.submit"
+        | "child.cancel"
+        | "jobs.refresh"
+        | "job.stop"
+        | "monitor.get";
+    }
+  >,
+) {
+  try {
+    if (msg.type === "monitor.get") {
+      const data = readDesktopMonitor(
+        resolveRoot(msg.workspaceRoot),
+        msg.conversationId,
+      );
+      emit({
+        type: "control.done",
+        requestId: msg.requestId,
+        operationId: msg.operationId,
+        ok: true,
+        data,
+      });
+      return;
+    }
+    const control = runControls.get(msg.requestId);
+    if (!control || controllers.get(msg.requestId)?.signal.aborted)
+      throw new Error("当前运行不可接收操作。");
+    let result: { inputId?: string; status?: string } = {};
+    if (msg.type === "input.submit")
+      result = await control.submit(msg.inputId, msg.content, msg.attachments);
+    else if (msg.type === "child.cancel") control.cancel(msg.childId);
+    else if (msg.type === "jobs.refresh") control.refreshJobs();
+    else {
+      control.stopJob(msg.runId, msg.jobId);
+      control.refreshJobs();
+    }
+    emit({
+      type: "control.done",
+      requestId: msg.requestId,
+      operationId: msg.operationId,
+      ok: true,
+      ...result,
+    });
+  } catch (error) {
+    emit({
+      type: "control.done",
+      requestId: msg.requestId,
+      operationId: msg.operationId,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
   const existing = controllers.get(msg.requestId);
-  if (existing) existing.abort();
+  if (existing) {
+    emit({
+      type: "error",
+      requestId: msg.requestId,
+      message: "重复的运行请求编号。",
+    });
+    return;
+  }
+  const controls = new DesktopNextControls();
+  runControls.set(msg.requestId, controls);
   const ac = new AbortController();
   controllers.set(msg.requestId, ac);
 
@@ -529,6 +643,8 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
   if (!goal) {
     emit({ type: "error", requestId: msg.requestId, message: "任务目标为空" });
     controllers.delete(msg.requestId);
+    runControls.delete(msg.requestId);
+    controls.close();
     return;
   }
 
@@ -539,28 +655,21 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
       ? msg.conversationId.trim()
       : undefined;
 
-  const resumeMemoryTaskId = conversationId
-    ? getConversationMemoryTask(conversationId)
-    : undefined;
-  const deferMemoryComplete = Boolean(conversationId);
-  const skillsDir = skillsDirFor(workspaceRoot);
-
   try {
-    const r = await runStubRun(goal, {
+    const r = await runDesktopNext(goal, {
+      controls,
+      attachments: msg.attachments,
       workspaceRoot,
       maxSteps: msg.maxSteps,
-      resumeSession: false,
-      conversationHistory: history.length > 0 ? history : undefined,
+      intent: msg.intent,
+      conversationHistory: Array.isArray(msg.history) ? history : undefined,
       conversationId,
-      resumeMemoryTaskId,
-      deferMemoryComplete,
       abortSignal: ac.signal,
-      skillsDir,
       // 审批模式：auto = 全自动（与旧行为一致）；ask = 走审批卡询问
       resolveToolApproval:
         approvalModeFor(workspaceRoot) === "auto"
           ? async () => true
-          : (input) => {
+          : (input, signal) => {
               const key = alwaysAllowKey(input.tool, input.args);
               const convKey = conversationId ?? msg.requestId;
               if (alwaysAllowByConversation.get(convKey)?.has(key)) {
@@ -576,8 +685,21 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
                 argsPreview: previewToolArgs(input.args),
               });
               return new Promise<boolean>((resolve) => {
+                const pendingKey = pendKey(msg.requestId, approvalId);
+                const cancel = () => {
+                  pendingApprovals.delete(pendingKey);
+                  signal.removeEventListener("abort", cancel);
+                  emit({
+                    type: "approval.closed",
+                    requestId: msg.requestId,
+                    approvalId,
+                  });
+                  resolve(false);
+                };
+                signal.addEventListener("abort", cancel, { once: true });
                 pendingApprovals.set(pendKey(msg.requestId, approvalId), {
                   resolve: (d) => {
+                    signal.removeEventListener("abort", cancel);
                     if (d.approved && d.always) {
                       let set = alwaysAllowByConversation.get(convKey);
                       if (!set) {
@@ -589,21 +711,9 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
                     resolve(d.approved);
                   },
                 });
+                if (signal.aborted) cancel();
               });
             },
-      resolveAskUser: (input) => {
-        const askId = newId("ask");
-        emit({
-          type: "ask.request",
-          requestId: msg.requestId,
-          askId,
-          question: input.question,
-          timeoutSec: input.timeoutSec,
-        });
-        return new Promise<string>((resolve) => {
-          pendingAsks.set(pendKey(msg.requestId, askId), { resolve });
-        });
-      },
       onEvent: (envelope: RunEventEnvelope) => {
         emit({ type: "event", requestId: msg.requestId, event: envelope });
       },
@@ -629,8 +739,12 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
     const message = e instanceof Error ? e.message : String(e);
     emit({ type: "error", requestId: msg.requestId, message });
   } finally {
+    controls.close();
+    if (runControls.get(msg.requestId) === controls)
+      runControls.delete(msg.requestId);
     settlePendingForRequest(msg.requestId);
-    controllers.delete(msg.requestId);
+    if (controllers.get(msg.requestId) === ac)
+      controllers.delete(msg.requestId);
   }
 }
 
@@ -648,11 +762,7 @@ async function handleMemoryFinalize(
   }
   const workspaceRoot = resolveRoot(msg.workspaceRoot);
   try {
-    const r = await finalizeConversationMemory({
-      conversationId,
-      workspaceRoot,
-      finalMessage: msg.finalMessage,
-    });
+    const r = finalizeDesktopNext(workspaceRoot, conversationId);
     emit({
       type: "memory.finalize.done",
       requestId: msg.requestId,
@@ -681,7 +791,7 @@ async function handleMemoryList(
       ? Math.min(msg.limit, 100)
       : 40;
   try {
-    const r = await listWorkspaceMemories({
+    const r = await listDesktopNextMemories({
       workspaceRoot,
       limit,
       ...(typeof msg.memoryType === "string" && msg.memoryType.trim()
@@ -692,18 +802,7 @@ async function handleMemoryList(
       type: "memory.list.done",
       requestId: msg.requestId,
       ok: r.ok,
-      items: r.items.map((it) => ({
-        id: it.id,
-        title: it.title,
-        summary: it.summary,
-        type: it.type,
-        status: it.status,
-        confidence: it.confidence,
-        ...(it.subjectKey ? { subjectKey: it.subjectKey } : {}),
-        ...(it.relatedFiles ? { relatedFiles: it.relatedFiles } : {}),
-        ...(it.updatedAt ? { updatedAt: it.updatedAt } : {}),
-      })),
-      ...(r.error ? { error: r.error } : {}),
+      items: r.items,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
@@ -756,7 +855,10 @@ function handleCheckpointList(
     return;
   }
   try {
-    const items = listCheckpoints(workspaceRoot, runId).map((c) => ({
+    const items = listCheckpoints(
+      workspaceRoot,
+      desktopCheckpointNamespace(workspaceRoot, runId),
+    ).map((c) => ({
       seq: c.seq,
       tool: c.tool,
       targets: c.targets,
@@ -798,7 +900,10 @@ function handleCheckpointUndo(
     return;
   }
   try {
-    const meta = undoLastCheckpoint(workspaceRoot, runId);
+    const meta = undoLastCheckpoint(
+      workspaceRoot,
+      desktopCheckpointNamespace(workspaceRoot, runId),
+    );
     emit({
       type: "checkpoint.undo.done",
       requestId: msg.requestId,
@@ -921,6 +1026,7 @@ function handleStatus(msg: Extract<InMsg, { type: "status" }>): void {
   const workspaceRoot = resolveRoot(msg.workspaceRoot);
   try {
     const skillsDir = skillsDirFor(workspaceRoot);
+    let modelLabel = resolveModelLabel(workspaceRoot);
     let agentsCount = 0;
     let agents: {
       id: string;
@@ -936,17 +1042,23 @@ function handleStatus(msg: Extract<InMsg, { type: "status" }>): void {
       tools?: "inherit" | readonly string[];
     }[] = [];
     try {
-      const reg = loadAgentRegistry(workspaceRoot);
-      agents = reg.list().map((s) => ({
+      const reg = loadPawNextCollaborationRosterV1(workspaceRoot);
+      const configured = desktopAgentModels(
+        workspaceRoot,
+        createDefaultLanguageModel(workspaceRoot),
+        loadPawSettingsLocal(defaultSettingsPath(workspaceRoot)),
+      );
+      modelLabel = configured.model.label;
+      agents = reg.agents.map((s) => ({
         id: s.id,
         name: s.name,
         role: s.role,
-        ...(s.emoji ? { emoji: s.emoji } : {}),
-        kind: s.kind,
+
+        kind: "worker",
         ...(s.description ? { description: s.description } : {}),
         childPolicy: s.childPolicy,
         canSpawn: s.canSpawn,
-        model: s.model,
+        model: (configured.models[s.id] ?? configured.model).label,
         maxSteps: s.maxSteps,
         tools: s.tools === "inherit" ? "inherit" : [...s.tools],
       }));
@@ -959,7 +1071,7 @@ function handleStatus(msg: Extract<InMsg, { type: "status" }>): void {
       requestId: msg.requestId,
       ok: true,
       workspaceRoot,
-      modelLabel: resolveModelLabel(workspaceRoot),
+      modelLabel,
       skillsCount: countSkills(workspaceRoot),
       skillsDir,
       agentsCount,
@@ -997,6 +1109,13 @@ function handleLine(line: string): void {
   }
 
   switch (msg.type) {
+    case "jobs.refresh":
+    case "job.stop":
+    case "monitor.get":
+    case "input.submit":
+    case "child.cancel":
+      void handleControl(msg);
+      return;
     case "abort":
       controllers.get(msg.requestId)?.abort();
       settlePendingForRequest(msg.requestId);

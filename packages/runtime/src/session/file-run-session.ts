@@ -91,6 +91,8 @@ export interface FileRunSessionOptionsV1 {
   readonly executionLease: FileSessionExecutionLeaseV1;
   readonly clock?: () => number;
   readonly commitHooks?: FileRunSessionCommitHooksV1;
+  /** Best-effort observer, called only after authoritative commit publication. */
+  readonly onCommitted?: (events: readonly RunJournalEnvelopeV1[]) => void;
 }
 
 export type FileRunSessionRecoveryInfoV1 =
@@ -268,6 +270,7 @@ export class FileRunSessionV1
   private readonly metadataPath: string;
   private readonly clock: () => number;
   private readonly leaseCapability: VerifiedFileSessionExecutionLeaseCapabilityV1;
+  private readonly onCommitted: FileRunSessionOptionsV1["onCommitted"];
   private readonly commitHooks: FileRunSessionCommitHooksV1 | undefined;
   private readonly owner = Symbol("file-run-session-owner");
   private readonly coordinatorIdentity: string;
@@ -296,6 +299,7 @@ export class FileRunSessionV1
     this.leaseCapability = leaseCapability;
     this.clock = options.clock ?? Date.now;
     this.commitHooks = options.commitHooks;
+    this.onCommitted = options.onCommitted;
 
     const sessionsRoot = path.join(
       workspaceRoot,
@@ -750,6 +754,16 @@ export class FileRunSessionV1
             snapshotThroughSeq: 0,
             tailEnvelopeCount: this.envelopes.length,
           };
+    // Observers cannot roll back, mutate, or fail committed execution.
+    try {
+      this.onCommitted?.(
+        immutableCanonicalJsonCloneV1(
+          nextPrefix.slice(attempt.startSeq - 1) as unknown as JsonValue,
+        ) as unknown as readonly RunJournalEnvelopeV1[],
+      );
+    } catch {
+      /* UI is non-authoritative. */
+    }
     return "committed";
   }
 

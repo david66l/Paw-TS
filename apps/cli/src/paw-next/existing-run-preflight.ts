@@ -16,6 +16,7 @@ import {
 import { hashCanonicalJsonV1 } from "./product-manifest.js";
 
 export interface PawNextExistingIdentityV1 {
+  readonly allowInitialAttachments?: boolean;
   readonly inputId: string;
   readonly goal: string;
   readonly configHash: string;
@@ -31,6 +32,7 @@ export interface PawNextExistingBootstrapIdentityV1 {
 /** Read the only product bootstrap identity accepted by profile resolution. */
 export function readPawNextExistingBootstrapIdentityV1(
   prefix: readonly RunJournalEnvelopeV1[],
+  allowInitialAttachments = false,
 ): PawNextExistingBootstrapIdentityV1 {
   const canonical = parseRunJournalPrefixV1(prefix);
   const { first, second } = assertUniqueBootstrapFacts(canonical);
@@ -39,7 +41,7 @@ export function readPawNextExistingBootstrapIdentityV1(
   if (
     first.goalHash !== goalHash ||
     second.contentHash !== goalHash ||
-    second.attachments !== undefined
+    (!allowInitialAttachments && second.attachments !== undefined)
   ) {
     throw new Error("Existing Paw Next bootstrap identity is inconsistent");
   }
@@ -57,7 +59,10 @@ export function assertPawNextExistingIdentityV1(
 ): readonly RunJournalEnvelopeV1[] {
   const canonical = parseRunJournalPrefixV1(prefix);
   const { first, second } = assertUniqueBootstrapFacts(canonical);
-  const bootstrap = readPawNextExistingBootstrapIdentityV1(canonical);
+  const bootstrap = readPawNextExistingBootstrapIdentityV1(
+    canonical,
+    expected.allowInitialAttachments,
+  );
   const goalHash = hashText(expected.goal);
   if (
     bootstrap.inputId !== expected.inputId ||

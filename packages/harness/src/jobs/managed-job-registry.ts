@@ -70,6 +70,8 @@ interface TrackedJobV1 {
   status: ManagedJobStatusV1;
   detail?: string;
   output?: string;
+  previewOutput: string;
+  unreadOutput: string;
   readonly startedAt: number;
   finishedAt?: number;
   reported: boolean;
@@ -183,6 +185,8 @@ export class ManagedJobRegistryV1 {
       status: "running",
       startedAt: Date.now(),
       reported: false,
+      previewOutput: "",
+      unreadOutput: "",
       waiters: new Set(),
     };
     this.jobs.set(id, job);
@@ -211,13 +215,38 @@ export class ManagedJobRegistryV1 {
 
   read(ownerId: string, id: string): ManagedJobReadV1 {
     const job = this.expectOwned(ownerId, id);
+    this.collectOutput(job);
     const text = job.readOutput
-      ? job.readOutput()
+      ? job.unreadOutput
       : isTerminal(job.status)
         ? (job.output ?? "")
         : "";
+    job.unreadOutput = "";
     if (isTerminal(job.status)) job.reported = true;
     return Object.freeze({ text, snapshot: this.snapshot(job) });
+  }
+
+  /** Independent bounded desktop view; never marks output reported to the Agent. */
+  peek(ownerId: string, id: string): ManagedJobReadV1 {
+    const job = this.expectOwned(ownerId, id);
+    this.collectOutput(job);
+    return Object.freeze({
+      text: job.previewOutput,
+      snapshot: this.snapshot(job),
+    });
+  }
+
+  private collectOutput(job: TrackedJobV1): void {
+    const chunk = job.readOutput?.() ?? "";
+    const tail = (text: string) =>
+      Buffer.from(text)
+        .subarray(-(job.outputLimitBytes ?? 64 * 1024))
+        .toString("utf8");
+    if (chunk) {
+      job.previewOutput = tail(job.previewOutput + chunk);
+      job.unreadOutput = tail(job.unreadOutput + chunk);
+    } else if (!job.readOutput && isTerminal(job.status))
+      job.previewOutput = tail(job.output ?? "");
   }
 
   kill(

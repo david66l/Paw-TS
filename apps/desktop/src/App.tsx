@@ -12,6 +12,13 @@ import { ChatStream } from "./components/ChatStream";
 import { RightPanel, type RightTabId } from "./components/RightPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import { Sidebar } from "./components/Sidebar";
+import {
+  type ColorTheme,
+  type MaterialTheme,
+  applyAppearance,
+  readAppearance,
+  saveAppearance,
+} from "./styles/appearance";
 
 /** 中间聊天区最小宽度，拖拽时保证两侧不把它挤没 */
 const CHAT_MIN = 360;
@@ -22,8 +29,12 @@ function readWidth(key: string, fallback: number): number {
 }
 
 export function App() {
-  const [colorTheme, setColorTheme] = useState<"calm" | "aurora">("calm");
-  const [materialTheme, setMaterialTheme] = useState<"soft" | "lens">("lens");
+  const [colorTheme, setColorTheme] = useState<ColorTheme>(
+    () => readAppearance().color,
+  );
+  const [materialTheme, setMaterialTheme] = useState<MaterialTheme>(
+    () => readAppearance().material,
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rightTab, setRightTab] = useState<RightTabId>("plan");
   const [sidebarWidth, setSidebarWidth] = useState(() =>
@@ -36,12 +47,10 @@ export function App() {
   const panelData = useRightPanelData();
 
   useEffect(() => {
-    document.documentElement.dataset.colorTheme = colorTheme;
-  }, [colorTheme]);
-
-  useEffect(() => {
-    document.documentElement.dataset.materialTheme = materialTheme;
-  }, [materialTheme]);
+    const appearance = { color: colorTheme, material: materialTheme };
+    applyAppearance(appearance);
+    saveAppearance(appearance);
+  }, [colorTheme, materialTheme]);
 
   useEffect(() => {
     localStorage.setItem("paw.width.sidebar", String(sidebarWidth));
@@ -105,7 +114,7 @@ export function App() {
     <div
       className={styles.app}
       data-color-theme={colorTheme}
-      data-material-theme={materialTheme}
+      data-material-theme={colorTheme === "paper" ? "paper" : materialTheme}
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,
@@ -135,6 +144,7 @@ export function App() {
         onKeyDown={onResizerKey("left")}
       />
       <ChatStream
+        key={agent.activeSessionId}
         messages={agent.messages}
         status={agent.status}
         statusText={agent.statusText}
@@ -152,7 +162,11 @@ export function App() {
           agent.selectActivity(id);
           setRightTab("agents");
         }}
-        onSend={agent.send}
+        onSend={(text, attachments) =>
+          agent.send(text, "continue", attachments)
+        }
+        onCancelChild={agent.cancelChild}
+        onRetryChild={agent.retryChild}
         onAbort={agent.abort}
         onClear={agent.clearCurrentMessages}
         pendingApprovals={agent.pendingApprovals}
@@ -174,6 +188,9 @@ export function App() {
         onKeyDown={onResizerKey("right")}
       />
       <RightPanel
+        monitor={agent.monitor}
+        isRunning={agent.isRunning}
+        onStopJob={agent.stopJob}
         plan={panelData.plan}
         changes={panelData.changes}
         context={panelData.context}

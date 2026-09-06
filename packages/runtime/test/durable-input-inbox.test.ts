@@ -614,3 +614,19 @@ async function appendCompletedModel(
     },
   ]);
 }
+
+test("live admission guard rejects late input without losing acknowledgement of accepted input", async () => {
+  const session = openSession(tempRoot());
+  const inbox = new DurableInputInboxV1(session);
+  const request = input("live-input", "steer");
+  await inbox.accept(request);
+  const closed = () => {
+    throw new Error("admission closed");
+  };
+  expect((await inbox.accept(request, closed)).status).toBe("already_accepted");
+  await expect(
+    inbox.accept(input("late-input", "steer"), closed),
+  ).rejects.toThrow("admission closed");
+  expect((await inbox.inspect()).acceptedCount).toBe(1);
+  session.close();
+});

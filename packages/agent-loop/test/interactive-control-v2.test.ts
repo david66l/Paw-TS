@@ -513,3 +513,59 @@ function tool(
 ): Extract<InputFactV1, { type: "tool.settled" }> {
   return { type: "tool.settled", callId, status };
 }
+
+test("live steering is opt-in, survives natural stop, consumes once and respects hard limits", () => {
+  const reducer = createInteractiveControlReducerV2();
+  const live = { ...config, liveSteering: true as const };
+  const accepted: InputFactV1 = {
+    type: "input.accepted",
+    inputId: "steer",
+    callerId: "desktop-user",
+    delivery: "steer",
+    content: "Follow up",
+    contentHash: "follow-up",
+  };
+  const dispatch: InputFactV1 = {
+    type: "model.dispatch_recorded",
+    modelCallId: "model-1",
+    turn: 1,
+    requestHash: "request-1",
+  };
+  const facts = [dispatch, accepted, model(1, "completed", false)];
+  expect(reducer.reduce(facts, config).decision.kind).toBe("completed");
+  expect(reducer.reduce(facts, live).decision.kind).toBe("continue");
+  const promoted: InputFactV1 = {
+    type: "input.promoted",
+    inputId: "steer",
+    delivery: "steer",
+    content: "Follow up",
+    contentHash: "follow-up",
+  };
+  expect(reducer.reduce([...facts, promoted], live).decision.kind).toBe(
+    "continue",
+  );
+  expect(
+    reducer.reduce(
+      [
+        ...facts,
+        promoted,
+        { ...dispatch, modelCallId: "model-2", turn: 2 },
+        model(2, "completed", false),
+      ],
+      live,
+    ).decision.kind,
+  ).toBe("completed");
+  expect(reducer.reduce(facts, { ...live, maxModelTurns: 1 }).decision).toEqual(
+    { kind: "incomplete", reason: "model-turn-budget-exhausted" },
+  );
+  expect(
+    reducer.reduce(
+      [...facts, { type: "abort.requested", source: "user" }],
+      live,
+    ).decision.kind,
+  ).toBe("aborted");
+  expect(
+    reducer.reduce([...facts, segment(1), promotion("next")], live).decision
+      .kind,
+  ).toBe("continue");
+});

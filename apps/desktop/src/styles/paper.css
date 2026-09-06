@@ -1,0 +1,133 @@
+/* Louis.dev: warm paper, lavender, ink and quiet editorial typography. */
+@font-face {
+  font-family: "Paw Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../assets/paper/inter-latin-wght-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Paw Newsreader";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("../assets/paper/newsreader-latin-wght-normal.woff2") format("woff2");
+}
+
+:root[data-color-theme="paper"] {
+  --bg-app: #f0eee6;
+  --bg-app-gradient: radial-gradient(
+      circle at 18% 12%,
+      #ffffff4d,
+      transparent 34%
+    ), radial-gradient(circle at 82% 68%, #8061a509, transparent 38%), #f0eee6;
+  --paper-surface: #e7e3d7;
+  --glass-bg: #f0eee6;
+  --glass-bg-strong: #f5f3ec;
+  --glass-bg-subtle: #e7e3d780;
+  --glass-bg-chip: #f5f3ec80;
+  --glass-bg-chip-active: #e5dced;
+  --glass-bg-chip-hover: #e7e3d7;
+  --glass-border: #1818172e;
+  --glass-border-strong: #18181742;
+  --glass-border-soft: #1818171a;
+  --glass-border-outer: #1818172e;
+  --glass-blur: 0px;
+  --glass-blur-chip: 0px;
+  --glass-saturate: 100%;
+  --glass-brightness: 1;
+  --glass-highlight: inset 0 0 0 transparent;
+  --glass-specular: none;
+  --glass-shadow: 0 8px 24px #18181708;
+  --glass-shadow-soft: 0 2px 8px #18181705;
+  --button-primary-bg: #8061a5;
+  --button-primary-border: #70518f;
+  --button-primary-shadow: 0 2px 4px #8061a514;
+  --avatar-user-bg: #8061a5;
+  --text-primary: #181817;
+  --text-secondary: #68645c;
+  --text-muted: #787269;
+  --text-accent: #765496;
+  --text-on-accent: #ffffff;
+  --accent: #8061a5;
+  --accent-rgb: 128, 97, 165;
+  --accent-soft: #8061a512;
+  --accent-border: #8061a54d;
+  --success: #596b46;
+  --success-soft: #89927624;
+  --danger: #b44540;
+  --danger-soft: #b4454014;
+  --danger-border: #b445403d;
+  --running: #765496;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --font-ui: "Paw Inter", "PingFang SC", "Microsoft YaHei", system-ui,
+    sans-serif;
+  --font-editorial: "Paw Newsreader", "Songti SC", STSong, SimSun, serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+:root[data-color-theme="paper"] body::before {
+  inset: 0;
+  z-index: 2;
+  background: url("../assets/paper/paper-fibers-v1.webp") repeat;
+  background-size: 480px 480px;
+  mix-blend-mode: multiply;
+  opacity: 0.22;
+  filter: none;
+  animation: none;
+}
+
+:root[data-color-theme="paper"] :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+:root[data-color-theme="paper"] ::selection {
+  background: #d8cae8;
+  color: #181817;
+}
+
+:root[data-color-theme="paper"] ::-webkit-scrollbar-thumb {
+  background: #68645c3d;
+}
+
+:root[data-color-theme="paper"] ::-webkit-scrollbar-thumb:hover {
+  background: #68645c66;
+}
+
+:root[data-color-theme="paper"] .md {
+  line-height: 1.75;
+}
+
+:root[data-color-theme="paper"] .md :is(h1, h2, h3) {
+  font-family: var(--font-editorial);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+}
+
+:root[data-color-theme="paper"] .md pre {
+  background: #e7e3d780;
+  border-color: var(--glass-border);
+  border-radius: 8px;
+}
+
+:root[data-color-theme="paper"] .md :is(th, td, hr) {
+  border-color: var(--glass-border);
+}
+
+:root[data-color-theme="paper"] .md th {
+  background: #e7e3d7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-color-theme="paper"] *,
+  :root[data-color-theme="paper"] *::before,
+  :root[data-color-theme="paper"] *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

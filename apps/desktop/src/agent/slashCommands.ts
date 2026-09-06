@@ -31,10 +31,14 @@ const HELP_TEXT = [
   "/sessions — 磁盘 Run 历史（.paw/sessions）",
   "/replay <runId> — 加载 run 事件摘要",
   "",
-  "自然语言仍会交给 Agent。工具默认自动批准。",
+  "自然语言交给 Paw Next。修改性工具默认询问，审批模式可在设置中切换。",
 ].join("\n");
 
-function headAndRest(raw: string): { head: string; rest: string; args: string[] } {
+function headAndRest(raw: string): {
+  head: string;
+  rest: string;
+  args: string[];
+} {
   const trimmed = raw.trim();
   const parts = trimmed.split(/\s+/).filter(Boolean);
   const head = (parts[0] ?? "").toLowerCase();
@@ -76,14 +80,14 @@ export async function tryHandleSlashCommand(
       const r = await requestDoctor(ctx.workspaceRoot);
       return {
         handled: true,
-        messages: [
-          `Doctor ${r.ok ? "✓" : "✗"}\n${r.text}`,
-        ],
+        messages: [`Doctor ${r.ok ? "✓" : "✗"}\n${r.text}`],
       };
     } catch (e) {
       return {
         handled: true,
-        messages: [`Doctor 失败：${e instanceof Error ? e.message : String(e)}`],
+        messages: [
+          `Doctor 失败：${e instanceof Error ? e.message : String(e)}`,
+        ],
       };
     }
   }
@@ -108,7 +112,9 @@ export async function tryHandleSlashCommand(
     } catch (e) {
       return {
         handled: true,
-        messages: [`Status 失败：${e instanceof Error ? e.message : String(e)}`],
+        messages: [
+          `Status 失败：${e instanceof Error ? e.message : String(e)}`,
+        ],
       };
     }
   }
@@ -118,7 +124,9 @@ export async function tryHandleSlashCommand(
     if (!runId) {
       return {
         handled: true,
-        messages: ["/checkpoints: 没有 runId（先跑一次任务，或 /checkpoints <runId>）"],
+        messages: [
+          "/checkpoints: 没有 runId（先跑一次任务，或 /checkpoints <runId>）",
+        ],
       };
     }
     try {
@@ -247,8 +255,7 @@ export async function tryHandleSlashCommand(
         };
       }
       const lines = r.events.map(
-        (ev, i) =>
-          `  ${ev.seq ?? i + 1}. ${ev.summary}`,
+        (ev, i) => `  ${ev.seq ?? i + 1}. ${ev.summary}`,
       );
       return {
         handled: true,

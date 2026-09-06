@@ -11,10 +11,22 @@ import { currentPlanItemId, planProgress } from "../agent/useRightPanelData";
 import { GlassPanel } from "./GlassPanel";
 import styles from "./RightPanel.module.css";
 
-export type RightTabId = "plan" | "changes" | "context" | "memory" | "agents";
+import type { DesktopMonitorSnapshot } from "../agent/monitorTypes";
+import { BackgroundJobs, TaskOverview } from "./RuntimeMonitor";
+
+export type RightTabId =
+  | "plan"
+  | "changes"
+  | "context"
+  | "memory"
+  | "agents"
+  | "tasks"
+  | "jobs";
 
 const TABS: readonly { id: RightTabId; label: string }[] = [
   { id: "plan", label: "Plan" },
+  { id: "tasks", label: "任务" },
+  { id: "jobs", label: "后台" },
   { id: "changes", label: "Changes" },
   { id: "context", label: "Context" },
   { id: "memory", label: "Memory" },
@@ -48,6 +60,9 @@ export type AgentRosterItem = {
 };
 
 export interface RightPanelProps {
+  readonly monitor: DesktopMonitorSnapshot | null;
+  readonly isRunning: boolean;
+  readonly onStopJob: (runId: string, jobId: string) => void;
   readonly plan: PlanState;
   readonly changes: readonly ChangeEntry[];
   readonly context: ContextSnapshot | null;
@@ -530,12 +545,20 @@ function ContextTab({ context }: { context: ContextSnapshot | null }) {
     return <EmptyState icon="◇" label="等待上下文数据" />;
   }
 
-  const { turn, maxSteps, estimatedTokens, budget, cost, recentFiles } =
-    context;
+  const {
+    turn,
+    maxSteps,
+    estimatedTokens,
+    budget,
+    nextBudget,
+    cost,
+    recentFiles,
+  } = context;
   const hasBody =
     turn !== undefined ||
     estimatedTokens !== undefined ||
     budget ||
+    nextBudget ||
     cost ||
     (recentFiles && recentFiles.length > 0);
 
@@ -583,7 +606,35 @@ function ContextTab({ context }: { context: ContextSnapshot | null }) {
         </div>
       )}
 
-      {budget && (
+      {nextBudget && (
+        <div className={styles.statGroup}>
+          <div className={styles.statLabel}>当前上下文预算（估算）</div>
+          <BudgetBar
+            label="输入"
+            used={nextBudget.selectedInputTokens}
+            budget={
+              nextBudget.contextWindowTokens - nextBudget.reservedOutputTokens
+            }
+          />
+          <div className={styles.statRow}>
+            <span className={styles.stat}>
+              固定上下文 {nextBudget.fixedInputTokens.toLocaleString()}
+            </span>
+            <span className={styles.stat}>
+              输出预留 {nextBudget.reservedOutputTokens.toLocaleString()}
+            </span>
+            {nextBudget.estimatedOmittedInputTokens > 0 && (
+              <span className={styles.stat}>
+                已裁减 {nextBudget.estimatedOmittedInputTokens.toLocaleString()}
+              </span>
+            )}
+            {nextBudget.level === "semantic_checkpoint" && (
+              <span className={styles.stat}>已使用压缩摘要</span>
+            )}
+          </div>
+        </div>
+      )}
+      {!nextBudget && budget && (
         <div className={styles.statGroup}>
           <div className={styles.statLabel}>上下文预算</div>
           <div className={styles.budgetGrid}>
@@ -767,6 +818,9 @@ function MemoryTab({
 // ponytail: memo — App 每个 model.chunk 都重渲染，但面板数据（plan/changes/
 // context/memory 均为 useState 值，回调为 useCallback）多数 chunk 不变，浅比较跳过。
 export const RightPanel = memo(function RightPanel({
+  monitor,
+  isRunning,
+  onStopJob,
   plan,
   changes,
   context,
@@ -810,6 +864,14 @@ export const RightPanel = memo(function RightPanel({
           ))}
         </div>
         <div className={`${styles.body} selectable`} role="tabpanel">
+          {tab === "tasks" && <TaskOverview snapshot={monitor} />}
+          {tab === "jobs" && (
+            <BackgroundJobs
+              snapshot={monitor}
+              live={isRunning}
+              onStop={onStopJob}
+            />
+          )}
           {tab === "plan" && <PlanTab plan={plan} />}
           {tab === "changes" && <ChangesTab changes={changes} />}
           {tab === "context" && <ContextTab context={context} />}

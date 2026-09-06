@@ -15,6 +15,18 @@ export const SESSIONS_STORAGE_KEY = "paw-desktop-sessions-v1";
 export const ACTIVE_SESSION_STORAGE_KEY = "paw-desktop-active-session-v1";
 export const MAX_SESSIONS = 40;
 
+/** Clearing a chat explicitly rotates its durable runtime identity, including after reload. */
+export function runtimeConversationId(id: string): string {
+  return localStorage.getItem(`paw-runtime-conversation:${id}`) || id;
+}
+
+export function resetRuntimeConversation(id: string): void {
+  localStorage.setItem(
+    `paw-runtime-conversation:${id}`,
+    `${id}-${crypto.randomUUID()}`,
+  );
+}
+
 export function deriveSessionTitle(
   messages: readonly UiMessage[],
   fallback = "新对话",
@@ -83,8 +95,7 @@ export function loadSessionsFromStorage(): {
           typeof o.title === "string" && o.title.trim()
             ? o.title
             : deriveSessionTitle(messages),
-        updatedAt:
-          typeof o.updatedAt === "number" ? o.updatedAt : Date.now(),
+        updatedAt: typeof o.updatedAt === "number" ? o.updatedAt : Date.now(),
         messages,
         history,
       });
@@ -94,8 +105,7 @@ export function loadSessionsFromStorage(): {
       return { sessions: [s], activeId: s.id };
     }
     const activeId =
-      typeof activeRaw === "string" &&
-      sessions.some((s) => s.id === activeRaw)
+      typeof activeRaw === "string" && sessions.some((s) => s.id === activeRaw)
         ? activeRaw
         : sessions[0]!.id;
     return { sessions, activeId };
@@ -114,7 +124,13 @@ export function sameSessionMessages(
   for (let i = 0; i < a.length; i++) {
     const x = a[i]!;
     const y = b[i]!;
-    if (x.id !== y.id || x.role !== y.role || x.content !== y.content) {
+    if (
+      x.id !== y.id ||
+      x.role !== y.role ||
+      x.content !== y.content ||
+      x.inputState !== y.inputState ||
+      x.inputId !== y.inputId
+    ) {
       return false;
     }
   }

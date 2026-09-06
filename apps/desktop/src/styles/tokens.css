@@ -69,7 +69,7 @@
     0 1px 4px rgba(40, 70, 130, 0.04);
   --button-primary-bg: linear-gradient(180deg, #4d8fff 0%, #1a6bff 55%, #1560e8 100%);
   --button-primary-border: rgba(255, 255, 255, 0.28);
-  --button-primary-shadow: 0 8px 22px rgba(26, 107, 255, 0.32),
+  --button-primary-shadow: 0 8px 22px rgba(var(--accent-rgb), 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
     inset 0 -1px 0 rgba(0, 40, 120, 0.15);
   --avatar-user-bg: linear-gradient(145deg, #5b8cff, #1a6bff);
@@ -83,8 +83,9 @@
 
   /* 强调 / 状态 */
   --accent: #1a6bff;
-  --accent-soft: rgba(26, 107, 255, 0.14);
-  --accent-border: rgba(26, 107, 255, 0.32);
+  --accent-rgb: 26, 107, 255;
+  --accent-soft: rgba(var(--accent-rgb), 0.14);
+  --accent-border: rgba(var(--accent-rgb), 0.32);
   --success: #12a66a;
   --success-soft: rgba(18, 166, 106, 0.12);
   --danger: #e24b4b;

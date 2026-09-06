@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import {
+  ENVIRONMENT_AUDIT_MAX_TURNS,
+  createEnvironmentCompletionReviewerV1,
+  environmentRevision,
+  fingerprintAuditFile,
+} from "./environment-audit.js";
 
 import {
   type AgentLoopContinueCursorV1,
@@ -304,7 +310,40 @@ import type {
 const DEFAULT_SYSTEM_PROMPT = `You are Paw, a coding agent working in the user's repository.
 Inspect relevant files before editing. Use the provided tools for repository actions. Keep changes scoped to the request, run proportionate checks, and finish with a concise factual handoff.`;
 
+export interface PawNextLiveInputV1 {
+  accept(
+    request: import("@paw/runtime").AcceptInputRequestV1,
+  ): Promise<AcceptInputResultV1>;
+}
+export interface PawNextChildControlV1 {
+  readonly id: string;
+  readonly goal: string;
+  readonly agentId: string;
+  /** Absent once this child has settled. */
+  readonly cancel?: () => void;
+}
+
 export interface RunFreshPawNextTaskOptionsV1 {
+  readonly environmentAudit?: true;
+  readonly onChildResult?: (id: string, result: SubAgentResult) => void;
+  readonly onManagedJobsReady?: (
+    runId: string,
+    jobs: Pick<RuntimeManagedJobControllerV1, "list" | "peek" | "kill">,
+  ) => void;
+  readonly onManagedJobUpdate?: (
+    runId: string,
+    job: import("@paw/harness").ManagedJobReadV1,
+  ) => void;
+  readonly initialAttachments?: readonly InputAttachmentV1[];
+  readonly onLiveInputReady?: (input: PawNextLiveInputV1) => void;
+  readonly onChildControl?: (child: PawNextChildControlV1) => void;
+  readonly collaborationModels?: Readonly<Record<string, LanguageModel>>;
+  readonly onContextBudget?: (event: {
+    runId: string;
+    tokens: import("@paw/runtime").JournalContextTokenPlanV1;
+    level: string;
+  }) => void;
+  readonly onJournalCommit?: (events: readonly RunJournalEnvelopeV1[]) => void;
   readonly workspaceRoot: string;
   readonly sessionId: string;
   readonly runId: string;
@@ -341,6 +380,7 @@ export interface RunFreshPawNextTaskOptionsV1 {
   readonly leaseScheduler?: SessionLeaseSchedulerV1;
   readonly onModelStreamEvent?: (
     event: ModelStreamChunk,
+    identity?: { readonly runId: string; readonly sessionId: string },
   ) => void | Promise<void>;
   /** Process-local diagnostic hook; excluded from durable config identity. */
   readonly onModelSettlement?: (event: PawModelSettlementTelemetryV1) => void;
@@ -627,6 +667,8 @@ function preparePawNextProductRuntimeCoreV1(
   }
   const inlineStore = createInlineDurableJsonStore();
   const context = createJournalContextV1({
+    onTokenPlan: (tokens, level) =>
+      options.onContextBudget?.({ runId: options.runId, tokens, level }),
     payloads: inlineStore,
     ...(loadPayloadEvidence === undefined ? {} : { loadPayloadEvidence }),
     ...(extensions?.toolObservationProjector === undefined
@@ -946,6 +988,7 @@ export interface RunFreshPawNextTaskInputV2 {
   readonly leaseScheduler?: SessionLeaseSchedulerV1;
   readonly onModelStreamEvent?: (
     event: ModelStreamChunk,
+    identity?: { readonly runId: string; readonly sessionId: string },
   ) => void | Promise<void>;
   readonly onModelSettlement?: (event: PawModelSettlementTelemetryV1) => void;
   /**
@@ -960,6 +1003,15 @@ export interface RunFreshPawNextTaskInputV2 {
 export type RunExistingPawNextTaskInputV2 = RunFreshPawNextTaskInputV2;
 
 export interface RunFreshPawNextTaskInputV3 {
+  readonly onChildResult?: RunFreshPawNextTaskOptionsV1["onChildResult"];
+  readonly onManagedJobsReady?: RunFreshPawNextTaskOptionsV1["onManagedJobsReady"];
+  readonly onManagedJobUpdate?: RunFreshPawNextTaskOptionsV1["onManagedJobUpdate"];
+  readonly initialAttachments?: readonly InputAttachmentV1[];
+  readonly onLiveInputReady?: RunFreshPawNextTaskOptionsV1["onLiveInputReady"];
+  readonly onChildControl?: RunFreshPawNextTaskOptionsV1["onChildControl"];
+  readonly onContextBudget?: RunFreshPawNextTaskOptionsV1["onContextBudget"];
+  readonly requestApproval?: RunFreshPawNextTaskOptionsV1["requestApproval"];
+  readonly onJournalCommit?: RunFreshPawNextTaskOptionsV1["onJournalCommit"];
   readonly resolution: BuiltPawNextTaskProfileV3;
   /** Shared by the root and every child for aggregate cache/cost telemetry. */
   readonly costTracker?: CostTracker;
@@ -967,6 +1019,7 @@ export interface RunFreshPawNextTaskInputV3 {
   readonly leaseScheduler?: SessionLeaseSchedulerV1;
   readonly onModelStreamEvent?: (
     event: ModelStreamChunk,
+    identity?: { readonly runId: string; readonly sessionId: string },
   ) => void | Promise<void>;
   readonly onModelSettlement?: (event: PawModelSettlementTelemetryV1) => void;
   readonly onMemoryCacheEvent?: (event: MemoryRetrievalCacheEventV1) => void;
@@ -1270,6 +1323,7 @@ function preparePawNextProductRuntimeV3(
     mode: "interactive",
     maxModelTurns: task.maxModelTurns,
     naturalStop: task.naturalStop,
+    ...(task.liveSteering ? { liveSteering: true as const } : {}),
     maxSegments: task.maxSegments,
     maxTotalModelTurns: task.maxTotalModelTurns,
   });
@@ -1278,12 +1332,31 @@ function preparePawNextProductRuntimeV3(
   );
   reducer.reduce([], runConfig);
   const options: RunFreshPawNextTaskOptionsV1 = Object.freeze({
+    onChildResult: input.onChildResult,
+    onManagedJobsReady: input.onManagedJobsReady,
+    onManagedJobUpdate: input.onManagedJobUpdate,
+    initialAttachments: input.initialAttachments,
+    onLiveInputReady: input.onLiveInputReady,
+    onChildControl: input.onChildControl,
+    ...(input.requestApproval
+      ? { requestApproval: input.requestApproval }
+      : {}),
+    ...(input.onContextBudget
+      ? { onContextBudget: input.onContextBudget }
+      : {}),
+    ...(input.onJournalCommit
+      ? { onJournalCommit: input.onJournalCommit }
+      : {}),
+    ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
     runId: task.runId,
     inputId: task.inputId,
     goal: task.goal,
     model: task.model,
+    ...(task.collaborationModels
+      ? { collaborationModels: task.collaborationModels }
+      : {}),
     profileIdentity: task.profileIdentity,
     credentialBindingHash: task.credentialBindingHash,
     providerProtocol: task.providerProtocol,
@@ -1410,6 +1483,7 @@ function preparePawNextProductRuntimeV3(
     credentialBindingHash: core.manifest.credentialBindingHash,
     payloadRuntime,
     ...(task.memory === undefined ? {} : { memory: task.memory }),
+    ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
   });
   const configHash = hashPawNextProductManifestV3(manifest);
   if (
@@ -2281,7 +2355,7 @@ function memoryWriterControllerV1<
       phase: "memory_write",
     }),
   });
-  const writerModel: MemoryWriterModelV1 = Object.freeze({
+  const writerModel = Object.freeze<MemoryWriterModelV1>({
     async complete(request, options) {
       const result = await auxiliary.complete(
         {
@@ -2624,6 +2698,7 @@ function createAuxiliaryModelCompletionObserverV1(input: {
     | "completion_review"
     | "memory_write"
     | "memory_organization"
+    | "memory_dossier"
     | "memory_query_plan"
     | "memory_coverage"
     | "memory_support";
@@ -2818,8 +2893,60 @@ function collaborationContextV1(
       },
     },
   });
+  const controlledLaunch: SubAgentLauncher["launch"] = async (
+    goal,
+    maxSteps,
+    launchOptions,
+  ) => {
+    const parentSignal = launchOptions?.signal;
+    const controller = new AbortController();
+    const abort = () => controller.abort(parentSignal?.reason);
+    parentSignal?.addEventListener("abort", abort, { once: true });
+    if (parentSignal?.aborted) abort();
+    const child = {
+      id: `${options.runId}:${launchOptions?.agentId}`,
+      goal,
+      agentId: String(
+        (launchOptions?.args?.agent_spec &&
+          parseCollaborationAgentSpecV1(launchOptions.args.agent_spec).id) ||
+          "worker",
+      ),
+    };
+    try {
+      options.onChildControl?.({
+        ...child,
+        cancel: () => controller.abort(new Error("Child cancelled by user")),
+      });
+      const result = await coordinated.launch(goal, maxSteps, {
+        ...launchOptions,
+        signal: controller.signal,
+      });
+      options.onChildResult?.(child.id, result);
+      return controller.signal.aborted
+        ? {
+            ...result,
+            status: "failed",
+            summary: `Child cancelled by user. ${result.summary}`,
+          }
+        : result;
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+      return {
+        status: "failed",
+        summary: "Child cancelled by user.",
+        errors: [String(error)],
+      };
+    } finally {
+      parentSignal?.removeEventListener("abort", abort);
+      options.onChildControl?.(child);
+    }
+  };
+  const controlled: SubAgentLauncher = {
+    launch: controlledLaunch,
+    launchStreaming: (args) => controlledLaunch(args.goal, args.maxSteps, args),
+  };
   const bounded = createBoundedSubAgentLauncherV1({
-    delegate: coordinated,
+    delegate: controlled,
     roster,
   });
   return Object.freeze({
@@ -2887,6 +3014,7 @@ export async function runPawNextChildV3(input: {
   readonly agent: CollaborationAgentSpecV1;
   readonly maxModelTurns: number;
   readonly softModelTurns?: number;
+  readonly onResult?: (result: PawNextTaskResultV3) => void;
   readonly signal?: AbortSignal;
 }): Promise<SubAgentResult> {
   const currentSourceRevision = workspaceRevisionV1(
@@ -2961,6 +3089,7 @@ export async function runPawNextChildV3(input: {
       : await runPreparedExistingPawNextTaskV3(prepared, head, (bundle) => {
           payloadBundle = bundle;
         });
+  input.onResult?.(result);
   const observedRevision = workspaceRevisionV1(
     input.parentOptions.workspaceRoot,
   );
@@ -3067,13 +3196,49 @@ function preparePawNextReadOnlyChildV3(
     JournalContextOptionsV1["loadPayloadEvidence"]
   >,
 ): PreparedPawNextProductRuntimeV3 {
-  const { mcp: parentMcp, ...parentOptionsWithoutMcp } = input.parentOptions;
-  const { mcp: parentTaskMcp, ...parentTaskOptionsWithoutMcp } =
-    input.parentTaskOptions;
+  const {
+    environmentAudit: _rootAudit,
+    mcp: parentMcp,
+    onLiveInputReady: _rootInbox,
+    initialAttachments: _rootAttachments,
+    ...parentOptionsWithoutMcp
+  } = input.parentOptions;
+  void _rootAudit;
+  void _rootInbox;
+  void _rootAttachments;
+  const {
+    environmentAudit: _rootTaskAudit,
+    mcp: parentTaskMcp,
+    ...parentTaskOptionsWithoutMcp
+  } = input.parentTaskOptions;
   void parentMcp;
   void parentTaskMcp;
+  void _rootTaskAudit;
   const mayExecute = input.agent.effect !== "inspect";
   const mayMutate = input.agent.effect === "mutate";
+  const childModel =
+    input.parentOptions.collaborationModels?.[input.agent.id] ??
+    input.parentOptions.model;
+  const childModelOptions =
+    childModel === input.parentOptions.model
+      ? {}
+      : {
+          model: childModel,
+          providerProtocol:
+            childModel.runtimeProfile?.protocol ??
+            input.parentTaskOptions.providerProtocol,
+          transport: childModel.completeStream
+            ? ("stream" as const)
+            : ("complete" as const),
+          contextWindowTokens:
+            childModel.capabilities?.contextWindow ?? 128_000,
+          reservedOutputTokens: Math.min(
+            childModel.capabilities?.maxOutputTokens ?? 8192,
+            8192,
+          ),
+          estimatorId: `core:${childModel.label}`,
+          estimatorVersion: "v1",
+        };
   const shellSandbox = childShellSandboxV1(
     input.agent,
     input.parentOptions.shellSandbox,
@@ -3083,6 +3248,9 @@ function preparePawNextReadOnlyChildV3(
     policyVersion: `${AGENT_SPEC_CHILD_PERMISSION_POLICY_VERSION_V1}:${input.agent.effect}`,
     defaultAction: "deny",
     rules: Object.freeze([
+      ...(input.parentOptions.permissionConfig?.rules.filter(
+        (rule) => rule.layer === "hard" || rule.layer === "admin",
+      ) ?? []),
       Object.freeze({
         id: "allow-child-read",
         layer: "default" as const,
@@ -3093,18 +3261,27 @@ function preparePawNextReadOnlyChildV3(
         id: mayMutate ? "allow-child-write" : "deny-child-write",
         layer: (mayMutate ? "default" : "hard") as "default" | "hard",
         category: "write" as const,
-        action: mayMutate ? ("allow" as const) : ("deny" as const),
+        action: mayMutate
+          ? input.parentOptions.requestApproval
+            ? ("ask" as const)
+            : ("allow" as const)
+          : ("deny" as const),
       }),
       Object.freeze({
         id: mayExecute ? "allow-child-shell" : "deny-child-shell",
         layer: (mayExecute ? "default" : "hard") as "default" | "hard",
         category: "shell" as const,
-        action: mayExecute ? ("allow" as const) : ("deny" as const),
+        action: mayExecute
+          ? input.parentOptions.requestApproval
+            ? ("ask" as const)
+            : ("allow" as const)
+          : ("deny" as const),
       }),
     ]),
   });
   const options: RunFreshPawNextTaskOptionsV1 = Object.freeze({
     ...parentOptionsWithoutMcp,
+    ...childModelOptions,
     sessionId: input.sessionId,
     runId: input.runId,
     inputId: input.inputId,
@@ -3175,6 +3352,7 @@ function preparePawNextReadOnlyChildV3(
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = Object.freeze({
     ...parentTaskOptionsWithoutMcp,
+    ...childModelOptions,
     workspaceRoot: options.workspaceRoot,
     sessionId: input.sessionId,
     runId: input.runId,
@@ -3335,6 +3513,9 @@ async function runFreshFilePayloadPawNextTask<
         runId: options.runId,
         registry: runtime.registry,
         permissions,
+        ...(options.requestApproval
+          ? { requestApproval: options.requestApproval }
+          : {}),
         permissionRecorder: {
           async record(facts) {
             await session.appendInputFacts(facts);
@@ -3424,6 +3605,9 @@ async function runFreshFilePayloadPawNextTask<
           delivery: "initial",
           content: options.goal,
           contentHash: hashText(options.goal),
+          ...(options.initialAttachments?.length
+            ? { attachments: options.initialAttachments }
+            : {}),
         },
       ]);
       // Durable admission seam: input is persisted BEFORE the executor wakes,
@@ -3432,7 +3616,15 @@ async function runFreshFilePayloadPawNextTask<
       if (input.onInboxReady) {
         await input.onInboxReady(inbox);
       }
+      const closeInput = publishLiveInputV1(
+        options,
+        runtime,
+        inbox,
+        executionSignal,
+        registerCleanup,
+      );
       await coordinator.wake();
+      await closeInput();
       if (!finalState) {
         throw new Error(
           `Paw Next ${input.productLabel} run produced no control state`,
@@ -3747,6 +3939,7 @@ export async function runDiscoveredPawNextTaskV2(input: {
   readonly leaseScheduler?: SessionLeaseSchedulerV1;
   readonly onModelStreamEvent?: (
     event: ModelStreamChunk,
+    identity?: { readonly runId: string; readonly sessionId: string },
   ) => void | Promise<void>;
 }): Promise<PawNextTaskResultV1> {
   if (!/^[0-9a-f]{64}$/.test(input.expectedInventoryHash)) {
@@ -3794,6 +3987,7 @@ export async function runDiscoveredPawNextTaskV3(input: {
   readonly leaseScheduler?: SessionLeaseSchedulerV1;
   readonly onModelStreamEvent?: (
     event: ModelStreamChunk,
+    identity?: { readonly runId: string; readonly sessionId: string },
   ) => void | Promise<void>;
 }): Promise<PawNextTaskResultV3> {
   if (!/^[0-9a-f]{64}$/.test(input.expectedInventoryHash)) {
@@ -3892,6 +4086,61 @@ function runPreparedExistingPawNextTaskV3(
   });
 }
 
+function environmentReviewer(
+  input: {
+    options: RunFreshPawNextTaskOptionsV1;
+    prepared: PreparedPawNextProductRuntimeV3;
+  },
+  candidate: import("@paw/completion-review").CompletionReviewCandidateV1,
+) {
+  return createEnvironmentCompletionReviewerV1({
+    workspaceRoot: input.options.workspaceRoot,
+    async run(goal, signal, observe) {
+      let facts: readonly InputFactV1[] = [];
+      const base = resolveCollaborationAgentV1(
+        DEFAULT_COLLABORATION_ROSTER_V1,
+        "reviewer",
+      );
+      if (!base) throw new Error("Default audit agent template missing");
+      const agent = parseCollaborationAgentSpecV1({
+        ...base,
+        id: "paw_auditor",
+        name: "Environment auditor",
+        maxSteps: ENVIRONMENT_AUDIT_MAX_TURNS,
+        tools: [
+          "workspace.read_file",
+          "workspace.list_dir",
+          "workspace.glob",
+          "workspace.grep",
+        ],
+        effect: "inspect",
+        childPolicy: "read_only",
+        canSpawn: false,
+      });
+      const result = await runPawNextChildV3({
+        parentOptions: {
+          ...input.options,
+          onModelStreamEvent: undefined,
+          onJournalCommit(event) {
+            for (const envelope of event) observe(envelope);
+            input.options.onJournalCommit?.(event);
+          },
+        },
+        parentTaskOptions: input.prepared.taskOptions,
+        callId: `environment-audit-${candidate.candidateHash.slice(0, 32)}`,
+        goal,
+        agent,
+        maxModelTurns: ENVIRONMENT_AUDIT_MAX_TURNS,
+        signal,
+        onResult(result) {
+          facts = result.inputFacts;
+        },
+      });
+      return { result, facts };
+    },
+  });
+}
+
 const COMPLETION_REVIEW_MUTATION_TOOLS_V1 = new Set([
   "workspace_write_file",
   "workspace_edit_file",
@@ -3913,7 +4162,11 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   readonly state: InteractiveControlStateV2;
   readonly drainQueuedUserWork: boolean;
 }): Promise<boolean> {
-  if (!canOpenPawNextV3WorkSegmentV1(input.state, input.prepared.runConfig)) {
+  const canContinue = canOpenPawNextV3WorkSegmentV1(
+    input.state,
+    input.prepared.runConfig,
+  );
+  if (!canContinue && !input.options.environmentAudit) {
     return false;
   }
 
@@ -3923,6 +4176,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     snapshot.entries.map((entry) => entry.fact),
   );
   if (recoverableFeedback) {
+    if (!canContinue) return false;
     await refreshPawNextV3TerminalDecisionV1(input);
     await startPawNextV3WorkSegmentV1({
       ...input,
@@ -3933,7 +4187,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   const pendingBeforeReview =
     projectDurableInputInboxStateV1(snapshot).pendingQueueIds[0];
   if (pendingBeforeReview) {
-    if (!input.drainQueuedUserWork) return false;
+    if (!canContinue || !input.drainQueuedUserWork) return false;
     await startPawNextV3WorkSegmentV1({
       ...input,
       inputId: pendingBeforeReview,
@@ -3947,6 +4201,42 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     loadForPrefix: input.loadForPrefix,
     signal: input.signal,
   });
+  if (candidate && input.options.environmentAudit) {
+    const latest = [...snapshot.entries]
+      .reverse()
+      .find((entry) => entry.fact.type === "completion.review_settled");
+    if (
+      latest?.fact.type === "completion.review_settled" &&
+      latest.fact.environmentAudit
+    ) {
+      const report = latest.fact.environmentAudit;
+      const reviewId = latest.fact.reviewId;
+      const claim = snapshot.entries.find(
+        (entry) =>
+          entry.fact.type === "completion.review_claimed" &&
+          entry.fact.reviewId === reviewId,
+      )?.fact;
+      try {
+        if (
+          claim?.type === "completion.review_claimed" &&
+          claim.sourceThroughSeq === candidate.sourceThroughSeq &&
+          report.sourceRevision ===
+            environmentRevision(
+              input.options.workspaceRoot,
+              candidate.changedPaths,
+            ) &&
+          report.inspected.every(
+            (item) =>
+              fingerprintAuditFile(input.options.workspaceRoot, item.path)
+                .hash === item.hash,
+          )
+        )
+          return false;
+      } catch {
+        /* Changed or unavailable evidence needs a fresh audit. */
+      }
+    }
+  }
   const priorInterventions = snapshot.entries.filter(
     (entry) =>
       entry.fact.type === "completion.review_settled" &&
@@ -3957,31 +4247,45 @@ async function openNextPawNextV3WorkSegmentV1(input: {
 
   if (
     candidate !== undefined &&
-    priorInterventions < PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1.maxBlocksPerRun
+    (input.options.environmentAudit ||
+      priorInterventions <
+        PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1.maxBlocksPerRun)
   ) {
     const gate = evaluateCompletionReviewGateV1(candidate);
-    if (gate.action !== "allow") {
+    if (gate.action !== "allow" || input.options.environmentAudit) {
       const controller = createCompletionReviewControllerV1({
         session: input.session,
-        reviewer: createModelCompletionReviewerV1({
-          model: completionReviewModelAdapterV1(
-            input.options.model,
-            createAuxiliaryModelCompletionObserverV1({
-              options: input.options,
-              costTracker: input.prepared.core.costTracker,
-              phase: "completion_review",
+        reviewer: input.options.environmentAudit
+          ? environmentReviewer(input, candidate)
+          : createModelCompletionReviewerV1({
+              model: completionReviewModelAdapterV1(
+                input.options.model,
+                createAuxiliaryModelCompletionObserverV1({
+                  options: input.options,
+                  costTracker: input.prepared.core.costTracker,
+                  phase: "completion_review",
+                }),
+              ),
             }),
-          ),
-        }),
         signal: input.signal,
       });
-      const settlement = await controller.review(candidate, gate.triggers);
+      const settlement = await controller.review(
+        candidate,
+        gate.action === "allow" ? ["non_trivial_change"] : gate.triggers,
+      );
       const reviewerBlocked =
         settlement.status === "completed" && settlement.verdict === "block";
       const reviewerUnavailable =
         (settlement.status === "failed" || settlement.status === "unknown") &&
-        hasCompletionReviewSourceMutationV1(candidate);
+        (input.options.environmentAudit ||
+          hasCompletionReviewSourceMutationV1(candidate));
       if (reviewerBlocked || reviewerUnavailable) {
+        if (
+          !canContinue ||
+          priorInterventions >=
+            PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1.maxBlocksPerRun
+        )
+          return false;
         const pendingAfterReview = projectDurableInputInboxStateV1(
           await input.session.readInputSnapshot(),
         ).pendingQueueIds[0];
@@ -4014,7 +4318,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   const current = await input.session.readInputSnapshot();
   const nextInputId =
     projectDurableInputInboxStateV1(current).pendingQueueIds[0];
-  if (!nextInputId || !input.drainQueuedUserWork) return false;
+  if (!canContinue || !nextInputId || !input.drainQueuedUserWork) return false;
   await startPawNextV3WorkSegmentV1({ ...input, inputId: nextInputId });
   return true;
 }
@@ -4253,10 +4557,69 @@ async function projectCompletionReviewCandidateV1(input: {
       : input.options.goal;
   const currentGoal =
     segmentGoal?.type === "input.promoted" ? segmentGoal.content : rootGoal;
+  const reviewFeedbackIds = new Set(
+    input.snapshot.entries.flatMap((entry) =>
+      entry.fact.type === "input.accepted" &&
+      entry.fact.callerId === COMPLETION_REVIEW_FEEDBACK_CALLER_ID_V1
+        ? [entry.fact.inputId]
+        : [],
+    ),
+  );
+  const originalWork = [...input.snapshot.entries]
+    .reverse()
+    .find(
+      (entry) =>
+        entry.fact.type === "input.promoted" &&
+        entry.fact.delivery !== "steer" &&
+        !reviewFeedbackIds.has(entry.fact.inputId),
+    );
+  const workGoal =
+    originalWork?.fact.type === "input.promoted"
+      ? originalWork.fact.content
+      : currentGoal;
+  const steering = input.snapshot.entries.flatMap((entry) =>
+    entry.seq > (originalWork?.seq ?? 0) &&
+    entry.fact.type === "input.promoted" &&
+    entry.fact.delivery === "steer"
+      ? [entry.fact.content]
+      : [],
+  );
+  const auditGoal = [
+    rootGoal,
+    workGoal !== rootGoal ? `Current user task:\n${workGoal}` : "",
+    ...steering.map((text) => `Additional user requirement:\n${text}`),
+    currentGoal !== workGoal && currentGoal !== rootGoal
+      ? `Repair request:\n${currentGoal}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const candidateInput = {
-    sourceThroughSeq: input.snapshot.latestInputSeq,
-    goal:
-      currentGoal === rootGoal
+    sourceThroughSeq: input.options.environmentAudit
+      ? (input.snapshot.entries
+          .filter((entry) => !entry.fact.type.startsWith("completion.review_"))
+          .at(-1)?.seq ?? input.snapshot.latestInputSeq)
+      : input.snapshot.latestInputSeq,
+    ...(input.options.environmentAudit
+      ? {
+          environmentRevision: environmentRevision(
+            input.options.workspaceRoot,
+            [
+              ...changedPaths,
+              ...segmentEntries.flatMap((entry) =>
+                entry.fact.type === "completion.review_settled"
+                  ? (entry.fact.environmentAudit?.inspected.map(
+                      (item) => item.path,
+                    ) ?? [])
+                  : [],
+              ),
+            ],
+          ),
+        }
+      : {}),
+    goal: input.options.environmentAudit
+      ? auditGoal
+      : currentGoal === rootGoal
         ? rootGoal
         : `${rootGoal}\n\nCurrent work segment:\n${currentGoal}`,
     changedPaths,
@@ -4268,7 +4631,10 @@ async function projectCompletionReviewCandidateV1(input: {
     ...candidateInput,
     assistantText: "completion review trigger probe",
   });
-  if (evaluateCompletionReviewGateV1(triggerProbe).action === "allow") {
+  if (
+    evaluateCompletionReviewGateV1(triggerProbe).action === "allow" &&
+    !(input.options.environmentAudit && triggerProbe.mutationCount > 0)
+  ) {
     return undefined;
   }
 
@@ -4681,6 +5047,49 @@ async function runPreparedExistingFilePayloadPawNextTask<
   );
 }
 
+function publishLiveInputV1<TRunConfig, TControlState extends LoopControlState>(
+  options: RunFreshPawNextTaskOptionsV1,
+  runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>,
+  inbox: DurableInputInboxV1,
+  signal: AbortSignal,
+  registerCleanup: (cleanup: () => void | Promise<void>) => void,
+): () => Promise<void> {
+  let closed = false;
+  const pending = new Set<Promise<AcceptInputResultV1>>();
+  const close = async () => {
+    closed = true;
+    await Promise.allSettled([...pending]);
+  };
+  registerCleanup(close);
+  options.onLiveInputReady?.({
+    accept(request) {
+      if (closed || signal.aborted)
+        return Promise.reject(
+          new Error("任务已结束或正在停止，请在结束后发送新消息。"),
+        );
+      const operation = inbox.accept(request, (snapshot) => {
+        signal.throwIfAborted();
+        const state = runtime.reducer.reduce(
+          snapshot.entries.map((entry) => entry.fact),
+          runtime.runConfig,
+        );
+        if (
+          closed ||
+          !["continue", "await_external"].includes(state.decision.kind)
+        )
+          throw new Error("任务正在结束，本条指令未接收，请在结束后重新发送。");
+      });
+      pending.add(operation);
+      void operation.then(
+        () => pending.delete(operation),
+        () => pending.delete(operation),
+      );
+      return operation;
+    },
+  });
+  return close;
+}
+
 async function executePreparedFilePayloadPawNextLoop<
   TRunConfig,
   TControlState extends LoopControlState,
@@ -4755,6 +5164,9 @@ async function executePreparedFilePayloadPawNextLoop<
     runId: options.runId,
     registry: runtime.registry,
     permissions,
+    ...(options.requestApproval
+      ? { requestApproval: options.requestApproval }
+      : {}),
     permissionRecorder: {
       async record(facts) {
         await bundle.session.appendInputFacts(facts);
@@ -4831,7 +5243,15 @@ async function executePreparedFilePayloadPawNextLoop<
     signal: executionSignal,
   });
   input.registerCoordinator(coordinator);
+  const closeInput = publishLiveInputV1(
+    options,
+    runtime,
+    inbox,
+    executionSignal,
+    input.registerCleanup,
+  );
   await coordinator.wake();
+  await closeInput();
   if (!finalState) throw new Error("Paw Next run produced no control state");
   const final = await bundle.readFinalProjection(
     runtime.protocol,
@@ -5137,6 +5557,7 @@ async function inspectExistingFilePayloadProduct<
 }> {
   const canonical = assertPawNextExistingIdentityV1(input.prefix, {
     inputId: input.options.inputId,
+    allowInitialAttachments: input.runtime.v3TaskOptions !== undefined,
     goal: input.options.goal,
     configHash: input.configHash,
     providerProtocol: input.runtime.protocol,
@@ -5538,7 +5959,13 @@ function createProductLoopDependenciesGeneric<
     facts: input.prepared.facts,
     runConfig: input.prepared.runConfig,
     ...(input.options.onModelStreamEvent
-      ? { onModelStreamEvent: input.options.onModelStreamEvent }
+      ? {
+          onModelStreamEvent: (event: ModelStreamChunk) =>
+            input.options.onModelStreamEvent?.(event, {
+              runId: input.options.runId,
+              sessionId: input.options.sessionId,
+            }),
+        }
       : {}),
   };
 }
@@ -5585,7 +6012,10 @@ function createProductMemoryContextResolverV1(
     topicDossierStore?: MemoryTopicDossierStoreV1;
     rawEvidenceArchive?: MemoryRawEvidenceArchiveV1;
   }>,
-  options: Pick<RunFreshPawNextTaskOptionsV1, "model">,
+  options: Pick<
+    RunFreshPawNextTaskOptionsV1,
+    "model" | "sessionId" | "runId" | "onModelSettlement"
+  >,
   costTracker: PreparedPawNextProductRuntimeV1["costTracker"],
 ): MemoryContextResolverV1 | undefined {
   if (!memory.provider) return undefined;
@@ -5601,7 +6031,7 @@ function createProductMemoryContextResolverV1(
         phase,
       }),
     });
-    return Object.freeze({
+    return Object.freeze<MemoryWriterModelV1>({
       async complete(request, completionOptions) {
         const result = await auxiliary.complete(
           {
@@ -5668,7 +6098,7 @@ function createProductMemoryContextResolverV1(
       }),
       supportSelector: createJsonMemoryEvidenceSupportSelectorV1({
         model: auxiliaryModel(
-          "memory_evidence_support",
+          "memory_support",
           "MemoryEvidenceSupportSelectorModelFailed",
         ),
       }),
@@ -5862,6 +6292,9 @@ async function withFencedPawNextSessionV1<
       sessionId: options.sessionId,
       runId: options.runId,
       executionLease,
+      ...(options.onJournalCommit
+        ? { onCommitted: options.onJournalCommit }
+        : {}),
     });
   } catch (error) {
     try {
@@ -6137,13 +6570,18 @@ function runtimeToolWorkspaceRootV1(
 function createRuntimeManagedJobs(
   options: Pick<
     RunFreshPawNextTaskOptionsV1,
-    "runId" | "workspaceRoot" | "shellSandbox"
+    | "runId"
+    | "workspaceRoot"
+    | "shellSandbox"
+    | "onManagedJobsReady"
+    | "onManagedJobUpdate"
   >,
   session: Pick<Session<InputFactV1, DerivedDecisionV1>, "appendInputFacts">,
   resumeFacts: readonly InputFactV1[],
   wakeExternal: () => void,
 ): RuntimeManagedJobControllerV1 {
-  return new RuntimeManagedJobControllerV1({
+  const jobs = new RuntimeManagedJobControllerV1({
+    onSnapshot: (job) => options.onManagedJobUpdate?.(options.runId, job),
     runId: options.runId,
     workspaceRoot: options.workspaceRoot,
     ...(options.shellSandbox ? { shellSandbox: options.shellSandbox } : {}),
@@ -6155,6 +6593,8 @@ function createRuntimeManagedJobs(
     },
     wakeExternal,
   });
+  options.onManagedJobsReady?.(options.runId, jobs);
+  return jobs;
 }
 
 function wakeCoordinatorBestEffort<TResult>(

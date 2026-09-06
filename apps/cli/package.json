@@ -34,5 +34,8 @@
     "smoke:kv-cache": "bun test/paw-next-kv-cache-smoke.driver.ts",
     "smoke:kv-cache:child-prefix": "bun test/paw-child-prefix-cache-smoke.driver.ts",
     "start": "bun run src/main.ts"
+  },
+  "exports": {
+    "./paw-next": "./src/paw-next/embedded.ts"
   }
 }

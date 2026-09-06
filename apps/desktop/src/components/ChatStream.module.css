@@ -250,9 +250,8 @@
   border: 1px solid rgba(255, 255, 255, 0.55) !important;
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    0 6px 18px rgba(40, 70, 130, 0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 6px 18px
+    rgba(40, 70, 130, 0.08) !important;
 }
 
 .roleRow {
@@ -312,7 +311,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--running);
-  box-shadow: 0 0 0 3px rgba(26, 107, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -407,9 +406,8 @@
   border: 1px solid rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(12px) saturate(160%);
   -webkit-backdrop-filter: blur(12px) saturate(160%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    0 2px 10px rgba(40, 60, 110, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 2px 10px
+    rgba(40, 60, 110, 0.06);
 }
 
 .composerWrap {
@@ -678,7 +676,7 @@
 }
 
 .execCardSel {
-  border-color: rgba(26, 107, 255, 0.4);
+  border-color: rgba(var(--accent-rgb), 0.4);
 }
 
 .execHead {
@@ -789,3 +787,140 @@
 .execViewBtn:hover {
   text-decoration: underline;
 }
+
+/* Louis.dev paper skin. */
+:global(:root[data-color-theme="paper"]) .topBar {
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--glass-border);
+  min-height: 54px;
+}
+
+:global(:root[data-color-theme="paper"]) .topTitle {
+  font-family: var(--font-editorial);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+:global(:root[data-color-theme="paper"]) .stream {
+  padding-top: 24px;
+  gap: 24px;
+}
+
+:global(:root[data-color-theme="paper"]) .modelChip,
+:global(:root[data-color-theme="paper"]) .systemChip,
+:global(:root[data-color-theme="paper"]) .secondaryBtn {
+  background: #e7e3d766;
+  border-color: var(--glass-border);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+:global(:root[data-color-theme="paper"]) .avatarPaw {
+  background: #e5dced;
+  border-color: var(--accent-border);
+}
+
+:global(:root[data-color-theme="paper"]) .bubbleUser {
+  background: #e7e3d799 !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+}
+
+:global(:root[data-color-theme="paper"]) .thinking,
+:global(:root[data-color-theme="paper"]) .execCard {
+  background: #e7e3d74d;
+  border-color: var(--glass-border);
+}
+
+:global(:root[data-color-theme="paper"]) .thinkingHeader,
+:global(:root[data-color-theme="paper"]) .execHead,
+:global(:root[data-color-theme="paper"]) .execRow:not(:last-child) {
+  border-color: var(--glass-border-soft);
+}
+
+:global(:root[data-color-theme="paper"]) .body {
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+:global(:root[data-color-theme="paper"]) .composerWrap:focus-within {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+:global(:root[data-color-theme="paper"]) .input {
+  padding: 8px 4px;
+}
+
+:global(:root[data-color-theme="paper"]) .input:focus-visible {
+  outline: none;
+}
+
+:global(:root[data-color-theme="paper"]) .sendBtn,
+:global(:root[data-color-theme="paper"]) .secondaryBtn,
+:global(:root[data-color-theme="paper"]) .abortBtn {
+  border-radius: 7px;
+}
+
+:global(:root[data-color-theme="paper"]) .empty {
+  position: relative;
+  max-width: 480px;
+  gap: 16px;
+  padding: 36px 24px;
+}
+
+:global(:root[data-color-theme="paper"]) .empty::before {
+  content: "";
+  width: 72px;
+  height: 108px;
+  background: url("../assets/paper/lavender-sprig.webp") center / contain
+    no-repeat;
+  pointer-events: none;
+}
+
+:global(:root[data-color-theme="paper"]) .emptyIcon {
+  display: none;
+}
+
+:global(:root[data-color-theme="paper"]) .emptyTitle {
+  font-family: var(--font-editorial);
+  font-size: clamp(24px, 2.5vw, 34px);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+}
+
+:global(:root[data-color-theme="paper"]) .emptyBody {
+  max-width: 320px;
+  line-height: 1.8;
+}
+
+:global(:root[data-color-theme="paper"]) .chip {
+  background: transparent;
+  border-color: var(--glass-border-strong);
+  box-shadow: none;
+}
+
+:global(:root[data-color-theme="paper"]) .chip:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+:global(:root[data-color-theme="paper"]) .badgeIdle,
+:global(:root[data-color-theme="paper"]) .badgeDone {
+  border-color: #8992764d;
+}
+
+.inputBadge { font-size: 11px; color: var(--text-secondary); }
+.childItem { min-width: 0; padding: 4px 0; }
+.childAction { border: 1px solid var(--border-subtle, #8884); border-radius: 6px; padding: 4px 8px; background: transparent; color: inherit; cursor: pointer; white-space: nowrap; font: inherit; font-size: 11px; }
+.childAction:disabled { opacity: .45; cursor: default; }
+.childSummary { margin: 4px 0 0 16px; font-size: 12px; color: var(--text-secondary); }
+.childSummary summary { cursor: pointer; }
+.childSummary p { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow-y: auto; }
+
+.attachmentTray { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 0; }
+.attachmentChip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--glass-border); border-radius: 8px; font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
+.attachmentChip img { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; }
+.attachmentChip button { border: 0; background: transparent; color: inherit; cursor: pointer; }

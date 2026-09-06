@@ -93,6 +93,10 @@ export interface JournalContextBudgetV1 {
 
 /** Frozen request fields plus the only external evidence resolver. */
 export interface JournalContextOptionsV1 {
+  readonly onTokenPlan?: (
+    tokens: JournalContextPlanV1["tokens"],
+    level: JournalContextPlanV1["level"],
+  ) => void;
   readonly payloads: DurablePayloadResolverV1;
   /** Loaded once for each exact build snapshot; required for artifact payloads. */
   readonly loadPayloadEvidence?: (
@@ -337,6 +341,11 @@ export function createJournalContextPlannerV1(
         },
         ...(checkpoint === undefined ? {} : { checkpoint }),
       };
+      try {
+        options.onTokenPlan?.(Object.freeze({ ...plan.tokens }), plan.level);
+      } catch {
+        /* UI telemetry cannot affect context planning. */
+      }
       return plan;
     },
   };

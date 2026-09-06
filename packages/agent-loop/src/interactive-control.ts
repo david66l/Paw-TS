@@ -26,6 +26,8 @@ export interface InteractiveControlStateV1 extends LoopControlState {
 
 /** 多工作段运行开始时冻结的交互控制规则。 */
 export interface InteractiveControlConfigV2 extends InteractiveControlConfigV1 {
+  /** Opt-in, frozen in the manifest; historical configurations keep their original stop semantics. */
+  readonly liveSteering?: true;
   /** 包含隐式初始段（segment 0）的最大工作段数量。 */
   readonly maxSegments: number;
   /** 同一 run 内所有工作段合计的模型回合上限。 */
@@ -190,7 +192,7 @@ function decide(
   inputFacts: readonly InputFactV1[],
   modelFacts: readonly Extract<InputFactV1, { type: "model.settled" }>[],
   toolFacts: readonly Extract<InputFactV1, { type: "tool.settled" }>[],
-  config: InteractiveControlConfigV1,
+  config: InteractiveControlConfigV1 & { readonly liveSteering?: true },
 ): ControlDecision {
   const abort = findLast(inputFacts, "abort.requested");
   if (abort) {
@@ -256,9 +258,31 @@ function decide(
   if (!latestModel.hasVisibleOutput) {
     return { kind: "incomplete", reason: "model-visible-output-missing" };
   }
+  if (config.liveSteering && hasUnconsumedSteer(inputFacts)) {
+    return modelFacts.length >= config.maxModelTurns
+      ? { kind: "incomplete", reason: "model-turn-budget-exhausted" }
+      : { kind: "continue" };
+  }
   return config.naturalStop === "complete"
     ? { kind: "completed", reason: "interactive-natural-stop" }
     : { kind: "await_user", reason: "interactive-turn-finished" };
+}
+
+function hasUnconsumedSteer(facts: readonly InputFactV1[]): boolean {
+  const accepted = new Set<string>();
+  const promoted = new Map<string, number>();
+  let lastDispatch = -1;
+  for (let index = 0; index < facts.length; index++) {
+    const fact = facts[index]!;
+    if (fact.type === "input.accepted" && fact.delivery === "steer")
+      accepted.add(fact.inputId);
+    if (fact.type === "input.promoted" && fact.delivery === "steer")
+      promoted.set(fact.inputId, index);
+    if (fact.type === "model.dispatch_recorded") lastDispatch = index;
+  }
+  return [...accepted].some(
+    (id) => !promoted.has(id) || promoted.get(id)! > lastDispatch,
+  );
 }
 
 function latestToolBatch(

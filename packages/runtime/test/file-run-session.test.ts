@@ -23,6 +23,39 @@ afterEach(() => {
 });
 
 describe("Paw Next fenced durable file Session", () => {
+  test("committed observers see detached immutable batches and cannot fail execution", async () => {
+    const root = tempRoot();
+    const lease = acquire(root);
+    const batches: number[][] = [];
+    const session = new FileRunSessionV1({
+      workspaceRoot: root,
+      sessionId: "session-1",
+      runId: "run-1",
+      executionLease: lease,
+      onCommitted(events) {
+        batches.push(events.map((event) => event.seq));
+        expect(Object.isFrozen(events)).toBe(true);
+        expect(Object.isFrozen(events[0]?.record)).toBe(true);
+        throw new Error("UI transport disconnected");
+      },
+    });
+    try {
+      await session.appendInputFacts([attemptStarted()]);
+      await session.appendInputFacts([promoted("goal")]);
+      expect(batches).toEqual([[1], [2]]);
+      expect((await session.readInputSnapshot()).tailSeq).toBe(2);
+      expect(
+        readFileSessionJournalCommitIndexV1({
+          workspaceRoot: root,
+          sessionId: "session-1",
+          runId: "run-1",
+        }).head.tailSeq,
+      ).toBe(2);
+    } finally {
+      session.close();
+    }
+  });
+
   test("reads an empty commit index without creating storage", () => {
     const root = tempRoot();
     expect(

@@ -9,9 +9,10 @@
     "dev": "concurrently -k -n vite,electron -c cyan,magenta \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json && bunx tsc --noEmit -p tsconfig.host.json",
     "start": "electron .",
-    "rebuild-electron": "node -e \"require('child_process').execSync('node '+require('path').join(require.resolve('electron/package.json'),'..','install.js'),{stdio:'inherit'})\""
+    "rebuild-electron": "node -e \"require('child_process').execSync('node '+require('path').join(require.resolve('electron/package.json'),'..','install.js'),{stdio:'inherit'})\"",
+    "test": "bun test test"
   },
   "dependencies": {
     "@paw/agent": "workspace:*",
@@ -21,7 +22,14 @@
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
     "remark-breaks": "^4.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "@paw/cli": "workspace:*",
+    "@paw/models": "workspace:*",
+    "@paw/protocol": "workspace:*",
+    "@paw/runtime": "workspace:*",
+    "@paw/memory": "workspace:*",
+    "@paw/memory-plugin": "workspace:*",
+    "@paw/harness": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
