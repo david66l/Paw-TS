@@ -35,6 +35,7 @@ import {
   COMPLETION_REVIEW_POLICY_VERSION_V1,
   WORK_SEGMENT_POLICY_VERSION_V1,
 } from "@paw/protocol";
+import { AUDITED_MEMORY_POLICY_V1 } from "./audited-memory.js";
 import { ENVIRONMENT_AUDIT_POLICY_VERSION_V1 } from "./environment-audit.js";
 import { LONG_HORIZON_POLICY_V1 } from "./long-horizon.js";
 
@@ -119,6 +120,7 @@ export interface PawNextProductManifestV3
   readonly collaboration: typeof PAW_NEXT_COLLABORATION_IDENTITY_V1;
   readonly modelOutputRecovery: typeof PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1;
   readonly environmentAudit?: typeof ENVIRONMENT_AUDIT_POLICY_VERSION_V1;
+  readonly auditedMemory?: typeof AUDITED_MEMORY_POLICY_V1;
   readonly longHorizon?: {
     readonly policyVersion: typeof LONG_HORIZON_POLICY_V1;
     readonly role: "manager" | "executor";
@@ -134,6 +136,7 @@ export interface CreatePawNextProductManifestInputV3
   readonly workSegmentPolicyVersion: typeof WORK_SEGMENT_POLICY_VERSION_V1;
   readonly runConfig: InteractiveControlConfigV2;
   readonly environmentAudit?: true;
+  readonly auditedMemory?: true;
   readonly longHorizon?: "manager" | "executor";
   readonly memory?: PawNextMemoryPluginProfileV1;
 }
@@ -152,6 +155,11 @@ export function createPawNextProductManifestV3(
       input.environmentAudit !== true)
   )
     throw new Error("Invalid long-task policy");
+  if (
+    input.auditedMemory !== undefined &&
+    (input.auditedMemory !== true || input.environmentAudit !== true)
+  )
+    throw new Error("Invalid audited memory policy");
   const runConfig = freezeInteractiveControlConfigV2(input.runConfig);
   const v2 = createPawNextProductManifestV2({
     toolEffectCheckpointPolicyVersion: input.toolEffectCheckpointPolicyVersion,
@@ -203,6 +211,7 @@ export function createPawNextProductManifestV3(
     ...(input.environmentAudit
       ? { environmentAudit: ENVIRONMENT_AUDIT_POLICY_VERSION_V1 }
       : {}),
+    ...(input.auditedMemory ? { auditedMemory: AUDITED_MEMORY_POLICY_V1 } : {}),
     progressAdvisor: PAW_NEXT_PROGRESS_ADVISOR_IDENTITY_V1,
     collaboration: PAW_NEXT_COLLABORATION_IDENTITY_V1,
     modelOutputRecovery: PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1,

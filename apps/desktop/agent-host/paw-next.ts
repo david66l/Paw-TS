@@ -47,6 +47,7 @@ interface DesktopRunRecord {
   version: 1;
   liveSteering?: true;
   environmentAudit?: true;
+  auditedMemory?: true;
   taskMode?: "long";
   sessionId: string;
   runId: string;
@@ -237,6 +238,7 @@ export async function runDesktopNext(
       >,
       legacyRecovery = false,
       legacyAudit = false,
+      legacyMemoryAdmission = false,
     ) => {
       const { liveSteering: _steering, ...legacyControl } = profile.control;
       void _steering;
@@ -246,9 +248,15 @@ export async function runDesktopNext(
         legacyAudit || options.environmentAudit === false
           ? profileWithoutAudit
           : profile;
+      const memoryProfile =
+        !legacyMemoryAdmission &&
+        !legacyAudit &&
+        options.environmentAudit !== false
+          ? { ...selectedProfile, auditedMemory: true as const }
+          : selectedProfile;
       const activeProfile = legacyRecovery
-        ? { ...selectedProfile, control: legacyControl }
-        : selectedProfile;
+        ? { ...memoryProfile, control: legacyControl }
+        : memoryProfile;
       const first = buildPawNextTaskProfileV3({
         identity: { workspaceRoot, ...identity },
         profile: activeProfile,
@@ -273,6 +281,7 @@ export async function runDesktopNext(
           previous,
           recovering && previous.liveSteering !== true,
           recovering && previous.environmentAudit !== true,
+          recovering && previous.auditedMemory !== true,
         )
       : undefined;
     if (
@@ -308,7 +317,7 @@ export async function runDesktopNext(
         ...(taskMode === "long" ? { taskMode: "long" as const } : {}),
         liveSteering: true,
         ...(options.environmentAudit !== false
-          ? { environmentAudit: true as const }
+          ? { environmentAudit: true as const, auditedMemory: true as const }
           : {}),
         sessionId: `desktop-session-${randomUUID()}`,
         runId: `desktop-next-${randomUUID()}`,

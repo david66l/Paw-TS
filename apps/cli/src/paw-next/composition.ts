@@ -1,6 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  admittedMemorySourceSeqs,
+  memoryUserStatement,
+} from "./audited-memory.js";
+import {
   ENVIRONMENT_AUDIT_MAX_TURNS,
   createEnvironmentCompletionReviewerV1,
   environmentRevision,
@@ -332,6 +336,7 @@ export interface PawNextChildControlV1 {
 
 export interface RunFreshPawNextTaskOptionsV1 {
   readonly environmentAudit?: true;
+  readonly auditedMemory?: true;
   readonly longHorizon?: "manager" | "executor";
   readonly onChildResult?: (id: string, result: SubAgentResult) => void;
   readonly onManagedJobsReady?: (
@@ -1357,6 +1362,7 @@ function preparePawNextProductRuntimeV3(
       ? { onJournalCommit: input.onJournalCommit }
       : {}),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
@@ -1495,6 +1501,7 @@ function preparePawNextProductRuntimeV3(
     payloadRuntime,
     ...(task.memory === undefined ? {} : { memory: task.memory }),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.longHorizon ? { longHorizon: task.longHorizon } : {}),
   });
   const configHash = hashPawNextProductManifestV3(manifest);
@@ -2427,6 +2434,13 @@ function memoryWriterControllerV1<
     extractor,
     conflictResolver,
     store: plugin.writerStore,
+    ...(input.options.auditedMemory
+      ? {
+          sourceAdmission: (snapshot) =>
+            admittedMemorySourceSeqs(snapshot, input.options.workspaceRoot),
+          userInputContent: memoryUserStatement,
+        }
+      : {}),
     ...(plugin.rawEvidenceArchive === undefined
       ? {}
       : { evidenceArchive: plugin.rawEvidenceArchive }),
@@ -3322,6 +3336,7 @@ function preparePawNextReadOnlyChildV3(
 ): PreparedPawNextProductRuntimeV3 {
   const {
     environmentAudit: _rootAudit,
+    auditedMemory: _rootMemoryAdmission,
     longHorizon: _rootLongHorizon,
     mcp: parentMcp,
     onLiveInputReady: _rootInbox,
@@ -3329,11 +3344,13 @@ function preparePawNextReadOnlyChildV3(
     ...parentOptionsWithoutMcp
   } = input.parentOptions;
   void _rootAudit;
+  void _rootMemoryAdmission;
   void _rootLongHorizon;
   void _rootInbox;
   void _rootAttachments;
   const {
     environmentAudit: _rootTaskAudit,
+    auditedMemory: _rootTaskMemoryAdmission,
     longHorizon: _rootTaskLongHorizon,
     mcp: parentTaskMcp,
     ...parentTaskOptionsWithoutMcp
@@ -3341,6 +3358,7 @@ function preparePawNextReadOnlyChildV3(
   void parentMcp;
   void parentTaskMcp;
   void _rootTaskAudit;
+  void _rootTaskMemoryAdmission;
   void _rootTaskLongHorizon;
   const mayExecute = input.agent.effect !== "inspect";
   const mayMutate = input.agent.effect === "mutate";
@@ -3563,6 +3581,7 @@ async function runFreshFilePayloadPawNextTask<
     readonly loadForPrefix: PawNextPayloadExecutionBundleV2["loadForPrefix"];
     readonly signal: AbortSignal;
     readonly state: TControlState;
+    readonly settleMemory?: () => Promise<void>;
   }) => Promise<boolean>;
 }): Promise<{
   readonly state: TControlState;
@@ -3702,7 +3721,8 @@ async function runFreshFilePayloadPawNextTask<
             loadStartupModelResponseEvidence: (snapshot, signal) =>
               bundle.loadForSnapshot(snapshot, signal),
           });
-          await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
+          if (!options.auditedMemory || state.decision.kind !== "completed")
+            await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
           if (input.openNextQueuedWorkSegment) {
             while (state.decision.kind === "completed") {
               const opened = await input.openNextQueuedWorkSegment({
@@ -3712,14 +3732,34 @@ async function runFreshFilePayloadPawNextTask<
                   bundle.loadForPrefix(prefix, signal),
                 signal: executionSignal,
                 state,
+                ...(options.auditedMemory
+                  ? {
+                      settleMemory: () =>
+                        settleMemoryWriterTerminalBestEffortV1(
+                          memoryWriter,
+                          state,
+                        ),
+                    }
+                  : {}),
               });
-              if (!opened) break;
+              if (!opened) {
+                if (options.auditedMemory)
+                  await settleMemoryWriterTerminalBestEffortV1(
+                    memoryWriter,
+                    state,
+                  );
+                break;
+              }
               state = await runAgentLoop(dependencies, {
                 signal: executionSignal,
                 loadStartupModelResponseEvidence: (snapshot, signal) =>
                   bundle.loadForSnapshot(snapshot, signal),
               });
-              await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
+              if (!options.auditedMemory || state.decision.kind !== "completed")
+                await settleMemoryWriterTerminalBestEffortV1(
+                  memoryWriter,
+                  state,
+                );
             }
           }
           finalState = state;
@@ -4322,7 +4362,16 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   readonly signal: AbortSignal;
   readonly state: InteractiveControlStateV2;
   readonly drainQueuedUserWork: boolean;
+  readonly settleMemory?: () => Promise<void>;
 }): Promise<boolean> {
+  const settleMemoryBeforeContinuation = async () => {
+    if (!input.settleMemory) return;
+    await input.settleMemory();
+    // Memory facts follow the loop terminal. Re-anchor that decision before
+    // admitting a new segment; the segment protocol permits only queued inputs
+    // after its terminal decision.
+    await refreshPawNextV3TerminalDecisionV1(input);
+  };
   const canContinue = canOpenPawNextV3WorkSegmentV1(
     input.state,
     input.prepared.runConfig,
@@ -4338,7 +4387,8 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   );
   if (recoverableFeedback) {
     if (!canContinue) return false;
-    await refreshPawNextV3TerminalDecisionV1(input);
+    if (!input.settleMemory) await refreshPawNextV3TerminalDecisionV1(input);
+    await settleMemoryBeforeContinuation();
     await startPawNextV3WorkSegmentV1({
       ...input,
       inputId: recoverableFeedback.inputId,
@@ -4349,6 +4399,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     projectDurableInputInboxStateV1(snapshot).pendingQueueIds[0];
   if (pendingBeforeReview) {
     if (!canContinue || !input.drainQueuedUserWork) return false;
+    await settleMemoryBeforeContinuation();
     await startPawNextV3WorkSegmentV1({
       ...input,
       inputId: pendingBeforeReview,
@@ -4452,6 +4503,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
         ).pendingQueueIds[0];
         if (pendingAfterReview) {
           if (!input.drainQueuedUserWork) return false;
+          await settleMemoryBeforeContinuation();
           await startPawNextV3WorkSegmentV1({
             ...input,
             inputId: pendingAfterReview,
@@ -4469,7 +4521,9 @@ async function openNextPawNextV3WorkSegmentV1(input: {
             ? createCompletionReviewFeedbackV1(settlement)
             : createCompletionReviewFallbackFeedbackV1(settlement),
         });
-        await refreshPawNextV3TerminalDecisionV1(input);
+        if (!input.settleMemory)
+          await refreshPawNextV3TerminalDecisionV1(input);
+        await settleMemoryBeforeContinuation();
         await startPawNextV3WorkSegmentV1({ ...input, inputId: feedbackId });
         return true;
       }
@@ -4480,6 +4534,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   const nextInputId =
     projectDurableInputInboxStateV1(current).pendingQueueIds[0];
   if (!canContinue || !nextInputId || !input.drainQueuedUserWork) return false;
+  await settleMemoryBeforeContinuation();
   await startPawNextV3WorkSegmentV1({ ...input, inputId: nextInputId });
   return true;
 }
@@ -4758,7 +4813,14 @@ async function projectCompletionReviewCandidateV1(input: {
   const candidateInput = {
     sourceThroughSeq: input.options.environmentAudit
       ? (input.snapshot.entries
-          .filter((entry) => !entry.fact.type.startsWith("completion.review_"))
+          .filter(
+            (entry) =>
+              !entry.fact.type.startsWith("completion.review_") &&
+              !(
+                input.options.auditedMemory &&
+                entry.fact.type.startsWith("memory.")
+              ),
+          )
           .at(-1)?.seq ?? input.snapshot.latestInputSeq)
       : input.snapshot.latestInputSeq,
     ...(input.options.environmentAudit
@@ -5113,6 +5175,7 @@ async function runPreparedExistingFilePayloadPawNextTask<
     readonly loadForPrefix: PawNextPayloadExecutionBundleV2["loadForPrefix"];
     readonly signal: AbortSignal;
     readonly state: TControlState;
+    readonly settleMemory?: () => Promise<void>;
   }) => Promise<boolean>;
 }): Promise<{
   readonly state: TControlState;
@@ -5376,6 +5439,7 @@ async function executePreparedFilePayloadPawNextLoop<
     readonly loadForPrefix: PawNextPayloadExecutionBundleV2["loadForPrefix"];
     readonly signal: AbortSignal;
     readonly state: TControlState;
+    readonly settleMemory?: () => Promise<void>;
   }) => Promise<boolean>;
 }): Promise<{
   readonly state: TControlState;
@@ -5480,7 +5544,8 @@ async function executePreparedFilePayloadPawNextLoop<
         loadStartupModelResponseEvidence: (snapshot, signal) =>
           bundle.loadForSnapshot(snapshot, signal),
       });
-      await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
+      if (!options.auditedMemory || state.decision.kind !== "completed")
+        await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
       if (input.openNextQueuedWorkSegment) {
         while (state.decision.kind === "completed") {
           const opened = await input.openNextQueuedWorkSegment({
@@ -5490,14 +5555,25 @@ async function executePreparedFilePayloadPawNextLoop<
               bundle.loadForPrefix(prefix, signal),
             signal: executionSignal,
             state,
+            ...(options.auditedMemory
+              ? {
+                  settleMemory: () =>
+                    settleMemoryWriterTerminalBestEffortV1(memoryWriter, state),
+                }
+              : {}),
           });
-          if (!opened) break;
+          if (!opened) {
+            if (options.auditedMemory)
+              await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
+            break;
+          }
           state = await runAgentLoop(dependencies, {
             signal: executionSignal,
             loadStartupModelResponseEvidence: (snapshot, signal) =>
               bundle.loadForSnapshot(snapshot, signal),
           });
-          await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
+          if (!options.auditedMemory || state.decision.kind !== "completed")
+            await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
         }
       }
       finalState = state;

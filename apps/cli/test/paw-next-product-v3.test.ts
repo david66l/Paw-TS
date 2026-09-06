@@ -1113,3 +1113,21 @@ test("long-task roles have distinct exact identities and require auditing", () =
     }),
   ).toThrow("Invalid long-task policy");
 });
+
+test("audited memory is frozen separately and requires independent auditing", () => {
+  const base = { ...manifestInputV3(), environmentAudit: true as const };
+  const manifest = createPawNextProductManifestV3({
+    ...base,
+    auditedMemory: true,
+  });
+  expect(manifest.auditedMemory).toBe("paw.audited-memory.v1");
+  expect(hashPawNextProductManifestV3(manifest)).not.toBe(
+    hashPawNextProductManifestV3(createPawNextProductManifestV3(base)),
+  );
+  expect(() =>
+    createPawNextProductManifestV3({
+      ...manifestInputV3(),
+      auditedMemory: true,
+    }),
+  ).toThrow("Invalid audited memory policy");
+});

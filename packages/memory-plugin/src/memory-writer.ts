@@ -89,6 +89,12 @@ export interface MemoryWriterControllerOptionsV1 {
   readonly maxSourceChars?: number;
   readonly now?: () => number;
   readonly onEvent?: (event: MemoryWriterEventV1) => void;
+  /** Frozen by the product manifest; rechecked before applying staged writes. */
+  readonly sourceAdmission?: (
+    snapshot: SessionInputSnapshot<InputFactV1>,
+  ) => ReadonlySet<number>;
+  /** Host-supplied separation of a current user statement from imported context. */
+  readonly userInputContent?: (content: string) => string;
 }
 
 export function createMemoryWriterControllerV1(
@@ -131,16 +137,26 @@ export function createMemoryWriterControllerV1(
       if (options.evidenceArchive) {
         const archiveStart = now();
         const snapshot = await readSnapshot();
+        const admitted = options.sourceAdmission?.(snapshot);
         const sourceFromSeq = episodeArchiveThroughSeq + 1;
         const spans =
           sourceFromSeq > snapshot.tailSeq
             ? Object.freeze([])
             : projectMemoryEpisodeArchiveInputsV1({
-                snapshot,
+                snapshot: admitted
+                  ? {
+                      ...snapshot,
+                      entries: snapshot.entries.filter((entry) =>
+                        admitted.has(entry.seq),
+                      ),
+                    }
+                  : snapshot,
                 runId: options.runId,
                 sourceFromSeq,
                 sourceThroughSeq: snapshot.tailSeq,
                 observedAt: new Date(archiveStart).toISOString(),
+                includeAuditProvenance: admitted !== undefined,
+                userInputContent: options.userInputContent,
               });
         if (spans.length > 0) {
           await options.evidenceArchive.put(spans, options.signal);
@@ -171,6 +187,8 @@ export function createMemoryWriterControllerV1(
         snapshot,
         outcome,
         maxSourceChars,
+        options.sourceAdmission?.(snapshot),
+        options.userInputContent,
       );
       if (!source) {
         emit(options.onEvent, {
@@ -322,6 +340,8 @@ export function projectMemoryWriteSourceV1(
   snapshot: SessionInputSnapshot<InputFactV1>,
   outcome: MemoryWriterTerminalOutcomeV1,
   maxSourceChars = 24_000,
+  admitted?: ReadonlySet<number>,
+  userInputContent?: (content: string) => string,
 ):
   | Readonly<{
       trigger: MemoryWriteClaimedFactV1["trigger"];
@@ -353,7 +373,14 @@ export function projectMemoryWriteSourceV1(
   );
   const projected: MemoryWriterSourceItemV1[] = [];
   for (const entry of sourceEntries) {
-    const item = projectSourceItem(entry.seq, entry.fact, outcome);
+    if (admitted && !admitted.has(entry.seq)) continue;
+    const item = projectSourceItem(
+      entry.seq,
+      entry.fact,
+      outcome,
+      admitted !== undefined,
+      userInputContent,
+    );
     if (item) projected.push(item);
   }
   const explicit = projected.some(
@@ -366,7 +393,9 @@ export function projectMemoryWriteSourceV1(
     (entry) => entry.fact.type === "tool.effect_checkpoint_allocated",
   );
   const verifiedTerminal =
-    outcome === "completed" && hasVerification && hasMutationEvidence;
+    outcome === "completed" &&
+    hasVerification &&
+    (admitted !== undefined || hasMutationEvidence);
   if (!explicit && !verifiedTerminal) return undefined;
 
   const boundedItems: MemoryWriterSourceItemV1[] = [];
@@ -464,6 +493,30 @@ async function applyStagedWriteV1(input: {
 }): Promise<MemoryWriteSettledFactV1> {
   const started = input.now();
   try {
+    if (input.options.sourceAdmission) {
+      const snapshot = await input.readSnapshot();
+      const admitted = input.options.sourceAdmission(snapshot);
+      const kinds = new Map(
+        snapshot.entries.map((entry) => [entry.seq, entry.fact.type]),
+      );
+      if (
+        input.staged.atoms.some(
+          (atom) =>
+            atom.action !== "skip" &&
+            (atom.sourceSeqs.length === 0 ||
+              atom.sourceSeqs.some((seq) => !admitted.has(seq)) ||
+              !atom.sourceSeqs.some(
+                (seq) =>
+                  kinds.get(seq) ===
+                  (atom.authority === "user_asserted"
+                    ? "input.promoted"
+                    : "completion.review_settled"),
+              )),
+        )
+      ) {
+        throw new Error("MemorySourceNoLongerAdmitted");
+      }
+    }
     const result = await input.options.store.apply(
       {
         writeId: input.claim.writeId,
@@ -551,6 +604,8 @@ export function projectMemoryEpisodeArchiveInputsV1(
     sourceFromSeq: number;
     sourceThroughSeq: number;
     observedAt: string;
+    includeAuditProvenance?: boolean;
+    userInputContent?: (content: string) => string;
   }>,
 ): readonly MemoryRawEvidenceArchiveInputV1[] {
   if (
@@ -565,13 +620,15 @@ export function projectMemoryEpisodeArchiveInputsV1(
   }
   const spans: MemoryRawEvidenceArchiveInputV1[] = [];
   for (const entry of input.snapshot.entries) {
-    if (
-      entry.seq < input.sourceFromSeq ||
-      entry.seq > input.sourceThroughSeq
-    ) {
+    if (entry.seq < input.sourceFromSeq || entry.seq > input.sourceThroughSeq) {
       continue;
     }
-    const source = projectArchiveSourceItem(entry.seq, entry.fact);
+    const source = projectArchiveSourceItem(
+      entry.seq,
+      entry.fact,
+      input.includeAuditProvenance,
+      input.userInputContent,
+    );
     if (!source) continue;
     spans.push(
       Object.freeze({
@@ -680,9 +737,15 @@ function projectSourceItem(
   seq: number,
   fact: InputFactV1,
   outcome: MemoryWriterTerminalOutcomeV1,
+  includeAuditProvenance = false,
+  userInputContent?: (content: string) => string,
 ): MemoryWriterSourceItemV1 | undefined {
   if (fact.type === "input.promoted") {
-    return sanitizedSourceItem(seq, "user_input", fact.content);
+    return sanitizedSourceItem(
+      seq,
+      "user_input",
+      userInputContent?.(fact.content) ?? fact.content,
+    );
   }
   const assistant = assistantSourceItem(seq, fact, 1_600);
   if (assistant) return assistant;
@@ -701,7 +764,7 @@ function projectSourceItem(
     return sanitizedSourceItem(
       seq,
       "verification",
-      `completion review allowed: ${fact.reasonCode}; ${fact.summary}`,
+      memoryVerificationContent(fact, includeAuditProvenance),
     );
   }
   if (fact.type === "policy.request_recorded") {
@@ -717,9 +780,15 @@ function projectSourceItem(
 function projectArchiveSourceItem(
   seq: number,
   fact: InputFactV1,
+  includeAuditProvenance = false,
+  userInputContent?: (content: string) => string,
 ): MemoryWriterSourceItemV1 | undefined {
   if (fact.type === "input.promoted") {
-    return sanitizedSourceItem(seq, "user_input", fact.content);
+    return sanitizedSourceItem(
+      seq,
+      "user_input",
+      userInputContent?.(fact.content) ?? fact.content,
+    );
   }
   const assistant = assistantSourceItem(seq, fact, 8_192);
   if (assistant) return assistant;
@@ -738,7 +807,7 @@ function projectArchiveSourceItem(
     return sanitizedSourceItem(
       seq,
       "verification",
-      `completion review allowed: ${fact.reasonCode}; ${fact.summary}`,
+      memoryVerificationContent(fact, includeAuditProvenance),
     );
   }
   if (fact.type === "policy.request_recorded") {
@@ -749,6 +818,16 @@ function projectArchiveSourceItem(
     );
   }
   return undefined;
+}
+
+function memoryVerificationContent(
+  fact: Extract<InputFactV1, { type: "completion.review_settled" }>,
+  includeAuditProvenance: boolean,
+): string {
+  const text = `completion review allowed: ${fact.reasonCode}; ${fact.summary}`;
+  return includeAuditProvenance && fact.environmentAudit
+    ? `${text}\nAudit provenance: ${JSON.stringify({ reviewId: fact.reviewId, ...fact.environmentAudit })}`
+    : text;
 }
 
 function assistantSourceItem(

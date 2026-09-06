@@ -69,6 +69,7 @@ export interface PawNextProductProfileV3
   /** Optional root-only, read-only long-term memory plugin. */
   readonly memory?: PawNextMemoryPluginProfileV1;
   readonly environmentAudit?: true;
+  readonly auditedMemory?: true;
   readonly longHorizon?: "manager" | "executor";
 }
 
@@ -127,6 +128,7 @@ export interface PawNextTaskProfileOptionsV3 {
   readonly mcp?: PawNextMcpRuntimeProfileV1;
   readonly memory?: PawNextMemoryPluginProfileV1;
   readonly environmentAudit?: true;
+  readonly auditedMemory?: true;
   readonly longHorizon?: "manager" | "executor";
 }
 
@@ -227,6 +229,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const v1 = preparePawNextProductRuntimeIdentityV3(identityTask).manifest;
@@ -258,6 +261,7 @@ export function buildPawNextTaskProfileV3(
     payloadRuntime: profile.payloadRuntime,
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = deepFreeze({
@@ -296,6 +300,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   return deepFreeze({
@@ -337,13 +342,18 @@ function parseProfileV3(
       "workSegmentPolicyVersion",
       "payloadRuntime",
     ],
-    ["mcp", "memory", "environmentAudit", "longHorizon"],
+    ["mcp", "memory", "environmentAudit", "longHorizon", "auditedMemory"],
   );
   if (record.approval !== "available" && record.approval !== "unavailable") {
     throw new Error("Unsupported V3 approval mode");
   }
   if (record.environmentAudit !== undefined && record.environmentAudit !== true)
     throw new Error("Unsupported environment audit policy");
+  if (
+    record.auditedMemory !== undefined &&
+    (record.auditedMemory !== true || record.environmentAudit !== true)
+  )
+    throw new Error("Invalid audited memory policy");
   if (
     record.longHorizon !== undefined &&
     (record.longHorizon !== "manager" ||
@@ -381,6 +391,7 @@ function parseProfileV3(
     ...common,
     approval: record.approval,
     ...(record.environmentAudit ? { environmentAudit: true as const } : {}),
+    ...(record.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(record.longHorizon ? { longHorizon: "manager" as const } : {}),
     control,
     workSegmentPolicyVersion: WORK_SEGMENT_POLICY_VERSION_V1,
