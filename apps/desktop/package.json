@@ -12,7 +12,8 @@
     "typecheck": "bunx tsc --noEmit -p tsconfig.json && bunx tsc --noEmit -p tsconfig.host.json",
     "start": "electron .",
     "rebuild-electron": "node -e \"require('child_process').execSync('node '+require('path').join(require.resolve('electron/package.json'),'..','install.js'),{stdio:'inherit'})\"",
-    "test": "bun test test"
+    "test": "bun test test",
+    "test:native": "node e2e/native-window.mjs"
   },
   "dependencies": {
     "@paw/agent": "workspace:*",

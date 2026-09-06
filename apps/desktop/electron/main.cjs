@@ -9,8 +9,11 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const readline = require("node:readline");
 const { runInputFields } = require("./run-input.cjs");
+const { findBun } = require("./bun-path.cjs");
 
 const isDev = !app.isPackaged;
+// Test-owned instances render without taking the user's desktop focus.
+const backgroundTest = isDev && process.argv.includes("--paw-background-test");
 const DEV_URL = process.env.VITE_DEV_SERVER_URL || "http://127.0.0.1:5173";
 
 /** monorepo 根：apps/desktop/electron → ../../../ */
@@ -26,24 +29,6 @@ let agentReady = false;
 let quitting = false;
 /** 看门狗：最近重启时间戳（60s 滑动窗口，超 5 次放弃，防崩溃循环） */
 let agentRestartTimes = [];
-
-function findBun() {
-  if (process.env.BUN_PATH && fs.existsSync(process.env.BUN_PATH)) {
-    return process.env.BUN_PATH;
-  }
-  const home = process.env.HOME || "";
-  const candidates = [
-    path.join(home, ".bun/bin/bun"),
-    "/usr/local/bin/bun",
-    "/opt/homebrew/bin/bun",
-    "bun",
-  ];
-  for (const c of candidates) {
-    if (c === "bun") return c;
-    if (fs.existsSync(c)) return c;
-  }
-  return "bun";
-}
 
 const pendingControls = new Map();
 function failControls(message) {
@@ -64,6 +49,7 @@ function startAgentHost() {
 
   const bun = findBun();
   agentProc = spawn(bun, ["run", AGENT_HOST], {
+    windowsHide: true,
     cwd: REPO_ROOT,
     env: {
       ...process.env,
@@ -296,6 +282,7 @@ function createWindow() {
   // macOS 关窗不退出：重开窗口时复位退出标志，恢复看门狗
   quitting = false;
   mainWindow = new BrowserWindow({
+    show: !backgroundTest,
     width: 1280,
     height: 800,
     minWidth: 960,
@@ -311,6 +298,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      ...(backgroundTest ? { backgroundThrottling: false } : {}),
     },
   });
 

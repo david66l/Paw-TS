@@ -214,7 +214,12 @@ const MessageRow = memo(function MessageRow({
   if (m.role === "system") {
     return (
       <div className={styles.rowSystem}>
-        <div className={styles.systemChip}>{m.content}</div>
+        <div
+          className={styles.systemChip}
+          data-multiline={m.content.includes("\n") || undefined}
+        >
+          {m.content}
+        </div>
       </div>
     );
   }

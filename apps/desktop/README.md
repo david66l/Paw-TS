@@ -178,3 +178,16 @@ Manager 可以在后续计划中声明对已有阶段的依赖，也可以用新
 记忆来源验证覆盖验收后写入、失败成果与原始归档隔离、用户偏好保留、修复反馈排除、验收引用绑定、提取期间文件变化、已暂存写入恢复时重新核验，以及已结算任务恢复时的幂等性。测试使用离线模型、本地真实文件和模拟记忆存储，不调用付费模型或线上数据库。
 
 跨计划验证覆盖真实多次委派、上游版本替换与下游重验、间接依赖失效、独立成果不受影响、错误替换合同阻断、子 Run 证据绑定、最终验收阻断，以及恢复后外部文件变化检查与执行幂等性。
+
+
+## 原生桌面回归验收
+
+在 `apps/desktop` 中运行 `bun run test:native`。测试使用真实 Electron BrowserWindow、preload 和 Bun 宿主，启动临时 Vite 服务与独立用户数据目录。开发实例使用 `--paw-background-test` 隐藏窗口，通过 Electron API 截图和调整窗口尺寸，不抢占系统鼠标。此参数只在开发环境生效。
+
+覆盖宿主自动启动、设置弹窗、纸间皮肤、刷新后的外观和任务开关、960×640 / 1100×800 / 1440×960 窗口尺寸、任务面板切换和本地 `/help`。截图等待字体、有限动画和页面绘制完成；小窗口下额外检查欢迎入口不需要滚动即可看到。测试不会调用付费模型。
+
+默认将 PNG 和 `report.json` 保存在新建的临时目录，结束时打印路径。设置 `PAW_NATIVE_QA_OUTPUT` 可指定证据目录，随后临时用户数据会清理。普通桌面启动支持自动找到 Windows 独立安装和 npm 全局安装的 Bun；仍可用 `BUN_PATH` 指定路径。
+
+这套测试用于开发验收 Paw 自身窗口；任务运行时的「视觉验收」仍检查本地网页，尚未获得控制任意原生程序的能力。系统文件选择器、操作系统标题栏按钮和真实模型生成质量不在此测试范围内。
+
+接口参考：[Playwright Electron](https://playwright.dev/docs/api/class-electron)、[Electron capturePage](https://www.electronjs.org/docs/latest/api/web-contents#contentscapturepagerect-opts)。
