@@ -726,8 +726,8 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 26 | 渲染进程边界：导出 `DesktopRunEvent` 联合类型，`agentId` 改真字段（§D2） | 消掉"改一句摘要就静默破坏子 Agent 名册" | 中 |
 | 27 | 跨包同名不同义改名去歧义（§3） | 消除读者陷阱 | 中（面广但机械） |
 | 28 | `db/rows.ts` 行类型 + DAO 断言收敛（§M1、M7） | 把静默 `undefined` 变编译错误 | 中大 |
-| 29 | 抽公共实现：`sse.ts` + `ToolCallAccumulator`、`toWorkspaceRelPath()`、共享 `summarizeToolArgs`（§D8） | 消掉"同一载荷落不同缓冲区行为不同"等已分叉副本 | 中 |
-| 30 | `benchmarks/` 加 tsconfig 并纳入 typecheck（§2.4） | 3 万行回到闸门内 | 小 |
+| 29 | 🟡 三分之二完成：`toWorkspaceRelPath()` ✅（4 处副本 → `workspace/src/workspace-path.ts` 的两个操作）、共享 `summarizeToolArgs` ✅（审批卡漏了 `pattern`，glob/grep/search 此前给审批人显示空摘要；两侧截断长度差异保留并说明理由）；`sse.ts` + `ToolCallAccumulator` 未抽 —— 实测两处副本只有写法差异、无可观测行为差异（§11.11），剩下的纯属可读性 | 消掉已分叉副本 | 中 |
+| 30 | 📏 已测量、未接线：`benchmarks/tsconfig.json` 已加，实测 **496 个类型错误**（报告估的"小"偏低）；未并入 `check:ts`，否则闸门立刻变红。修法见 §11.10 | 3 万行回到闸门内 | 小（实为中大） |
 
 **批次 D —— 结构收敛（做完前三批后再评估收益）**
 
