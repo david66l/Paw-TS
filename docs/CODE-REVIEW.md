@@ -737,7 +737,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 32 | 🟡 (a) 已完成：(b) **早已由批次 B #6 顺带做完**（两个 `canonicalJsonStringifyV1` 现在都收 `unknown`，§R7 的前提过期）。4 个形状校验器改成 `asserts` 谓词，**实测消掉 13 处断言**（3 个 `as unknown as` + 10 个具名断言，去掉注释后计数）。**剩余**：`assertCheckpointSourcesInRange`/`assertJournalCommitShape` 是**关系**校验器，结构上不可能是 `asserts` 谓词（§11.22），`session-execution-lease.ts:1485` 那处需另想办法 | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
 | 33 | 🟡 可区分性已完整解决：全文件唯一的那对重复文案消除（实测重复数为 0），14 处 work-segment 守卫改为带稳定 `code` + `detectedAt` 的 `LifecycleInvariantErrorV1`；§R2 第二半（把不变量陈述搬到 `reduceEvent`）也做了。**剩余**：`LifecycleInvariantV1` 表与 29 个累加器的状态对象未立 —— 报告写作时它的收益是"可区分"，那部分已拿到；剩下的只有"可发现性"，**建议与 #25 的 `ResolutionPassState` 一起做**（同类改动、同类风险，见 11.23） | 让"work segment 启动前必须成立什么"可被单点回答 |
 | 34 | 给 `packages/paw-next` 补测试（它是桌面端唯一入口，却零测试，§C7） | 风险最高的模块从零保障到有保障 |
-| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例，含优先级与大小写）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）。仍为 0 命中：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp`、`run_skill`（见 11.20，其中网络类需要桩，`run_skill` 只差一个桩注册表） | 该包测试比 0.28，而它决定策略与审计 |
+| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例，含优先级与大小写）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）、`run_skill` ✅（7 例，见 11.31）。仍为 0 命中：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp`（其中网络类需要桩） | 该包测试比 0.28，而它决定策略与审计 |
 
 > 建议在第 12 条之前先落地第 6 条：`canonicalJsonStringifyV1` 签名一变，`orchestrator.ts` 里若干 `as never` / `as unknown as` 会自然消失，重构时的噪声更少。
 
@@ -1481,3 +1481,25 @@ Received: "string"
 **代价**：4 处 `as any`（`sql.json` 收 `JSONValue`，`WorkingMemory`/`ActorRef` 是无索引签名的 interface；`wm` 两处 + 快照两处）。这是同目录既有约定（`memoryItem.ts` 的 `sql.json(item.scope as any)`），lint 仍是 0 error，warning 数从 432 升到 **436**。我没有为此新造一个 `as unknown as JSONValue` 的桥接函数 —— 那会把 §R7 要消掉的东西再添一处。
 
 **验收（清库 + 比较失败集合）**：`packages/memory` **1021 pass / 3 fail**，失败集合与改前逐条同名（readonly CLI、memory-mechanism fixtures、Memory Evaluator）；pass 增加 3 = 本轮新增用例。
+
+### 11.31 #35 再补一个工具：`run_skill`，并实测出两处「读代码猜不到」的契约
+
+`workspace.run_skill` 此前在 `packages/harness/test` 里 **0 命中**。它是把技能提示词注入会话的唯一入口 —— 注入错了模型就照着错的东西干活，所以值得有用例。新增 `packages/harness/test/run-skill.test.ts`（7 例），`packages/harness` 从 229 涨到 **236 pass / 0 fail**。
+
+**写测试的过程中被实测纠正了两次**，两次都值得记：
+
+**一、`handlers/agents.ts` 的错误分支没有 `error_code`。** 我先按文件类工具的形态断言 `payload.error_code === "E_USER"`、摘要带 `E_*` 前缀 —— 实测得到 `undefined` 与 `run_skill: missing skill_id`。读回处理器确认：`handleRunSkill`（`:162-168`）与 `handleRunAgent`（`:12-18`）返回的都是**裸 payload**：
+
+```ts
+return { ok: false, payload: { error: "missing skill_id" }, summary: "run_skill: missing skill_id" };
+```
+
+而 `handlers/files.ts` 走的是 `toolErrorResult(...)`，它会补上 `error_code`（`tool-support.ts:115-126`）。**同一个 registry 层里两种错误约定并存**，这正是 §R4 记的那件事的下游表现 —— 而 §R4 说 `errorCode` 对崩溃恢复是承重的。测试现在钉住的是现状（注明"这是一处值得收敛的不一致"），不是我以为的形态。
+
+**二、未声明的占位符不会被替换。** 我原以为 `args` 会按 `{{name}}` 直接替换，实测 `renderSkillPrompt(skill, {who:"Ada"})` 对 `"Greet {{who}} warmly."` 返回**原文**。读 `core/src/skills.ts:556-567` 才明白：替换只遍历 `skill.parameters`，**没声明过的占位符原样留下**。也就是说技能作者写了 `{{who}}` 却忘了声明参数时，模型收到的提示词里就是字面量 `{{who}}` —— 既不报错也不是空串，静默地把模板当正文发出去。
+
+两条都补成了用例：一条断言"声明了就替换"，一条断言"没声明就原样保留"（后者是那个坑的回归网）。
+
+**其余用例**覆盖：省略 `skill_id` 由声明式 schema 拦下（`definitions.ts:651` 要求 `["skill_id"]`，报 `E_SCHEMA_INVALID`）、空串落到处理器、无注册表时拒绝而不是假装成功、未知技能报出找不到的 id、成功时 `payload.skillId` + 摘要 + **通过 `newMessages` 注入渲染后的提示词**（断言形状而非渲染细节）。
+
+**§D9 剩余**：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp` 仍未覆盖（`run_skill` 与 `create_agent` 已完成）。
