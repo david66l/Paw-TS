@@ -10,9 +10,7 @@ describe("extractThinkBlocks", () => {
   });
 
   test("extracts a single <think> block", () => {
-    const result = extractThinkBlocks(
-      "<think>step one</think>\nfinal answer",
-    );
+    const result = extractThinkBlocks("<think>step one</think>\nfinal answer");
     expect(result.text).toBe("final answer");
     expect(result.thinking).toBe("step one");
   });

@@ -3,8 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type LanguageModel, OpenAICompatibleModel } from "@paw/models";
-import { desktopProfile } from "../agent-host/paw-next-profile.js";
 import { PAW_AGENT_SYSTEM_PROMPT } from "../agent-host/agent-system-prompt.js";
+import { desktopProfile } from "../agent-host/paw-next-profile.js";
 import { runDesktopNext } from "../agent-host/paw-next.js";
 
 setDefaultTimeout(30_000);
@@ -85,10 +85,7 @@ test("desktop GLM stream sends native 128K on first request and recovery while p
   expect(JSON.parse(result.text).status).toBe("completed");
   const approvedPrompt = fs
     .readFileSync(
-      path.resolve(
-        import.meta.dir,
-        "./fixtures/agent-system-prompt.zh-CN.txt",
-      ),
+      path.resolve(import.meta.dir, "./fixtures/agent-system-prompt.zh-CN.txt"),
       "utf8",
     )
     .replace(/\r\n/g, "\n")

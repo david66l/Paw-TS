@@ -48,7 +48,8 @@ const FAKE_TOOL_RESULT_RE = /^\[Tool\s+\S+.*?\](?:\n|$)/gim;
  * 需要执行的真实工具调用指令。
  */
 /** Tool call JSON lines: {"tool":"...","args":{...}} */
-const TOOL_CALL_JSON_RE = /\{\s*"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^}]*\}\s*\}/gi;
+const TOOL_CALL_JSON_RE =
+  /\{\s*"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^}]*\}\s*\}/gi;
 
 /**
  * 伪造的行动指令 JSON：{"action":"final_answer"|"ask_user"|...}
@@ -57,7 +58,8 @@ const TOOL_CALL_JSON_RE = /\{\s*"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^}]*\
  * 编排器的执行流程（如强制结束、请求用户输入等）。
  */
 /** Action JSON lines: {"action":"final_answer"|"ask_user"|"plan_update"|"abort",...} */
-const ACTION_JSON_RE = /\{\s*"action"\s*:\s*"(?:final_answer|ask_user|plan_update|abort)"[^}]*\}/gi;
+const ACTION_JSON_RE =
+  /\{\s*"action"\s*:\s*"(?:final_answer|ask_user|plan_update|abort)"[^}]*\}/gi;
 
 /**
  * XML/HTML 格式的工具调用标签

@@ -7,16 +7,19 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { closeSql, ping } from "../src/db/connection.js";
-import { resetMemoryV2Core } from "../src/runtime/index.js";
 import {
+  type MechSuiteName,
   renderMechReport,
   runMechanismSuite,
-  type MechSuiteName,
 } from "../src/longterm/eval/memory-mechanism-fixtures.js";
+import { resetMemoryV2Core } from "../src/runtime/index.js";
 
 const outPath =
   process.argv[2] ??
-  resolve(import.meta.dir, "../../../benchmarks/memory-mechanism/last-run.json");
+  resolve(
+    import.meta.dir,
+    "../../../benchmarks/memory-mechanism/last-run.json",
+  );
 
 if (!(await ping())) {
   console.error("Postgres 不可达：请设置 DATABASE_URL");

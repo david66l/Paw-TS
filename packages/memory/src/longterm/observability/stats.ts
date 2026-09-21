@@ -6,11 +6,15 @@
  */
 
 import { getSql } from "../../db/connection.js";
-import { scanDeletionCandidates, DEFAULT_LIFECYCLE_CONFIG } from "../lifecycle/janitor.js";
+import {
+  DEFAULT_LIFECYCLE_CONFIG,
+  scanDeletionCandidates,
+} from "../lifecycle/janitor.js";
 
 /** spec §9.4 默认值（展示文案用；判定逻辑在 lifecycle/janitor.scanDeletionCandidates） */
 export const DELETE_MIN_FREQ = DEFAULT_LIFECYCLE_CONFIG.deleteMinFreq;
-export const DELETE_MAX_UTILITY_RATIO = DEFAULT_LIFECYCLE_CONFIG.deleteMaxUtilityRatio;
+export const DELETE_MAX_UTILITY_RATIO =
+  DEFAULT_LIFECYCLE_CONFIG.deleteMaxUtilityRatio;
 /** spec §10.4-3：unverified 占比告警阈值 */
 export const UNVERIFIED_WARN_RATIO = 0.1;
 
@@ -52,7 +56,11 @@ export async function collectMemoryStats(): Promise<MemoryStats> {
       count(*) FILTER (WHERE t_invalid IS NULL AND verification_status = 'unverified')::int AS unverified
     FROM memory_items
   `;
-  const t = totals as { active: number; invalidated: number; unverified: number };
+  const t = totals as {
+    active: number;
+    invalidated: number;
+    unverified: number;
+  };
 
   // 删除候选：与生命周期批处理同一判定函数（freq≥8 且采纳率<0.2 且 utility 比低，§7.2）
   const deleteCandidates = (await scanDeletionCandidates()).length;
@@ -62,7 +70,8 @@ export async function collectMemoryStats(): Promise<MemoryStats> {
     WHERE t_invalid IS NULL GROUP BY type ORDER BY n DESC
   `;
   const byKind: Record<string, number> = {};
-  for (const r of kindRows as unknown as { type: string; n: number }[]) byKind[r.type] = r.n;
+  for (const r of kindRows as unknown as { type: string; n: number }[])
+    byKind[r.type] = r.n;
 
   const [writeOps] = await sql`
     SELECT count(*)::int AS n FROM memory_op_log
@@ -112,9 +121,13 @@ export function renderMemoryStats(s: MemoryStats): string {
   const lines: string[] = [
     "记忆库统计",
     `  活跃条目: ${s.active}    已软失效: ${s.invalidated}`,
-    `  按 kind: ${Object.keys(s.byKind).length > 0
-      ? Object.entries(s.byKind).map(([k, n]) => `${k}=${n}`).join("  ")
-      : "(空库)"}`,
+    `  按 kind: ${
+      Object.keys(s.byKind).length > 0
+        ? Object.entries(s.byKind)
+            .map(([k, n]) => `${k}=${n}`)
+            .join("  ")
+        : "(空库)"
+    }`,
     `  unverified: ${s.unverified} (${(s.unverifiedRatio * 100).toFixed(1)}%)`,
     `  删除候选: ${s.deleteCandidates}（freq≥${DELETE_MIN_FREQ} 且 utility/freq<${DELETE_MAX_UTILITY_RATIO}）`,
     `  本月写入操作: ${s.writeOpsThisMonth}`,
@@ -131,7 +144,7 @@ export function renderMemoryStats(s: MemoryStats): string {
   if (s.unverifiedRatio > UNVERIFIED_WARN_RATIO) {
     lines.push(
       `⚠ 告警: unverified 条目占比 ${(s.unverifiedRatio * 100).toFixed(1)}% 超过 ` +
-      `${UNVERIFIED_WARN_RATIO * 100}%——弱模型可能在腐蚀记忆库（spec §10.4-3）`,
+        `${UNVERIFIED_WARN_RATIO * 100}%——弱模型可能在腐蚀记忆库（spec §10.4-3）`,
     );
   }
   return lines.join("\n");

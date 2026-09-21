@@ -22,9 +22,9 @@ import {
   type ASTNode,
   type Command,
   type Pipeline,
+  flattenGroups,
   walkCommands,
   walkPipelines,
-  flattenGroups,
 } from "./shell-ast.js";
 import {
   evaluatePolicy,
@@ -54,14 +54,27 @@ const DANGEROUS_SCRIPT_PATTERNS = [
 
 /** 无论什么参数都始终阻断的命令（纵深防御） */
 const ALWAYS_BLOCKED_COMMANDS = new Set([
-  "sudo", "su", "mkfs", "mkfs.ext4", "mkfs.ext3",
-  "mkfs.ntfs", "shred",
+  "sudo",
+  "su",
+  "mkfs",
+  "mkfs.ext4",
+  "mkfs.ext3",
+  "mkfs.ntfs",
+  "shred",
 ]);
 
 /** 读取敏感信息的命令 — 与网络工具配对 → 数据泄露 */
 const SENSITIVE_READ_COMMANDS = new Set([
-  "cat", "head", "tail", "tar", "zip",
-  "ps", "ss", "netstat", "env", "printenv",
+  "cat",
+  "head",
+  "tail",
+  "tar",
+  "zip",
+  "ps",
+  "ss",
+  "netstat",
+  "env",
+  "printenv",
 ]);
 
 /** 网络通信命令 */
@@ -69,13 +82,27 @@ const NETWORK_COMMANDS = new Set(["curl", "wget", "nc", "ncat", "netcat"]);
 
 /** 网络上传标志（表示数据将被发送到远程） */
 const NETWORK_UPLOAD_FLAGS = new Set([
-  "--data", "--data-binary", "--data-raw", "--data-urlencode",
-  "--upload-file", "-x", "-post", "--post", "--post-data", "--post-file",
+  "--data",
+  "--data-binary",
+  "--data-raw",
+  "--data-urlencode",
+  "--upload-file",
+  "-x",
+  "-post",
+  "--post",
+  "--post-data",
+  "--post-file",
 ]);
 
 /** 接受内联代码的脚本解释器 */
 const SCRIPT_INTERPRETERS = new Set([
-  "python", "python3", "node", "bun", "ruby", "perl", "php",
+  "python",
+  "python3",
+  "node",
+  "bun",
+  "ruby",
+  "perl",
+  "php",
 ]);
 
 /** 内联代码标志（如 python -c, node -e） */
@@ -93,18 +120,24 @@ function argRaws(cmd: Command): string[] {
 // ── 快速字面量扫描（AST 分析前拦截明显攻击）──
 
 const DANGEROUS_LITERALS = [
-  "rm -rf /", "rm -rf /*", "> /dev/sda",
-  "mkfs.", "dd if=", ":(){ :|:& };:",
+  "rm -rf /",
+  "rm -rf /*",
+  "> /dev/sda",
+  "mkfs.",
+  "dd if=",
+  ":(){ :|:& };:",
 ];
 const INJECTION_MARKERS = ["$(", "`", "<<<"];
 
 function fastLiteralScan(raw: string): ShellGuardResult | null {
   const low = raw.toLowerCase();
   for (const lit of DANGEROUS_LITERALS) {
-    if (low.includes(lit)) return { allowed: false, reason: `blocked literal: ${lit}` };
+    if (low.includes(lit))
+      return { allowed: false, reason: `blocked literal: ${lit}` };
   }
   for (const m of INJECTION_MARKERS) {
-    if (raw.includes(m)) return { allowed: false, reason: `disallowed pattern (injection): ${m}` };
+    if (raw.includes(m))
+      return { allowed: false, reason: `disallowed pattern (injection): ${m}` };
   }
   return null;
 }
@@ -119,11 +152,20 @@ function checkPolicy(cmd: Command, raw: string): ShellGuardResult | null {
   const result = evaluatePolicy("bash", raw, config);
 
   if (result.action === "deny") {
-    return { allowed: false, reason: result.reason, matchedRule: result.matchedRule };
+    return {
+      allowed: false,
+      reason: result.reason,
+      matchedRule: result.matchedRule,
+    };
   }
   // "ask" 表示命令被允许但需要 UI 审批流程
   if (result.action === "ask") {
-    return { allowed: true, requiresApproval: true, reason: result.reason, matchedRule: result.matchedRule };
+    return {
+      allowed: true,
+      requiresApproval: true,
+      reason: result.reason,
+      matchedRule: result.matchedRule,
+    };
   }
   return null;
 }
@@ -141,8 +183,19 @@ function checkAlwaysBlocked(cmd: Command): ShellGuardResult | null {
 // ═══ 规则 2b：系统路径上的 rm ═══
 
 const SYSTEM_PATHS = new Set([
-  "/", "/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64",
-  "/var", "/sys", "/proc", "/dev", "/boot", "/root",
+  "/",
+  "/etc",
+  "/usr",
+  "/bin",
+  "/sbin",
+  "/lib",
+  "/lib64",
+  "/var",
+  "/sys",
+  "/proc",
+  "/dev",
+  "/boot",
+  "/root",
 ]);
 
 function isSystemPath(arg: string): boolean {
@@ -160,7 +213,10 @@ function checkRmSystemPaths(cmd: Command): ShellGuardResult | null {
   if (cmd.name.toLowerCase() !== "rm") return null;
   for (const arg of cmd.args) {
     if (isSystemPath(arg.value)) {
-      return { allowed: false, reason: `blocked: removing system path "${arg.value}"` };
+      return {
+        allowed: false,
+        reason: `blocked: removing system path "${arg.value}"`,
+      };
     }
   }
   return null;
@@ -170,10 +226,15 @@ function checkRmSystemPaths(cmd: Command): ShellGuardResult | null {
 
 function checkInjection(cmd: Command): ShellGuardResult | null {
   for (const arg of cmd.args) {
-    if (arg.hasSubstitution) return { allowed: false, reason: "blocked: command substitution in arguments" };
+    if (arg.hasSubstitution)
+      return {
+        allowed: false,
+        reason: "blocked: command substitution in arguments",
+      };
   }
   for (const arg of cmd.args) {
-    if (arg.raw.includes("<<<")) return { allowed: false, reason: "blocked: here-string" };
+    if (arg.raw.includes("<<<"))
+      return { allowed: false, reason: "blocked: here-string" };
   }
   return null;
 }
@@ -199,19 +260,33 @@ function checkDataExfiltration(pipeline: Pipeline): ShellGuardResult | null {
     const hasUploadFlag = netArgs.some((a) =>
       [...NETWORK_UPLOAD_FLAGS].some((f) => a === f || a.startsWith(f)),
     );
-    if (hasUploadFlag) return { allowed: false, reason: "blocked: pipe to network upload command" };
+    if (hasUploadFlag)
+      return {
+        allowed: false,
+        reason: "blocked: pipe to network upload command",
+      };
 
     // 敏感读取命令 + 管道到网络命令 → 泄露
     for (let i = 0; i < netIdx; i++) {
       const prev = cmds[i]!;
       const prevName = prev.name.toLowerCase();
       if (SENSITIVE_READ_COMMANDS.has(prevName)) {
-        return { allowed: false, reason: "blocked: sensitive data piped to network command" };
+        return {
+          allowed: false,
+          reason: "blocked: sensitive data piped to network command",
+        };
       }
       if (prevName === "tar" || prevName === "zip") {
         const prevArgs = argValues(prev);
-        if (prevArgs.includes("-c") || prevArgs.includes("-cf") || prevArgs.includes("-czf")) {
-          return { allowed: false, reason: "blocked: archive piped to network command" };
+        if (
+          prevArgs.includes("-c") ||
+          prevArgs.includes("-cf") ||
+          prevArgs.includes("-czf")
+        ) {
+          return {
+            allowed: false,
+            reason: "blocked: archive piped to network command",
+          };
         }
       }
     }
@@ -229,14 +304,18 @@ function checkDestructiveScript(cmd: Command): ShellGuardResult | null {
   const rawArgs = argRaws(cmd);
   let scriptIndex = -1;
   for (let i = 0; i < args.length; i++) {
-    if (SCRIPT_INLINE_FLAGS.has(args[i]!)) { scriptIndex = i + 1; break; }
+    if (SCRIPT_INLINE_FLAGS.has(args[i]!)) {
+      scriptIndex = i + 1;
+      break;
+    }
   }
   if (scriptIndex < 0 || scriptIndex >= rawArgs.length) return null;
 
   const scriptRaw = rawArgs[scriptIndex]!;
   const script = scriptRaw.replace(/^["'](.*)["']$/, "$1");
   for (const pat of DANGEROUS_SCRIPT_PATTERNS) {
-    if (pat.test(script)) return { allowed: false, reason: "blocked: destructive inline script" };
+    if (pat.test(script))
+      return { allowed: false, reason: "blocked: destructive inline script" };
   }
   return null;
 }
@@ -247,13 +326,24 @@ function checkRedirects(cmd: Command): ShellGuardResult | null {
   for (const redir of cmd.redirects) {
     const target = redir.target.toLowerCase();
     if (target.startsWith("/dev/sd") || target.startsWith("/dev/hd")) {
-      return { allowed: false, reason: `blocked: redirect to block device ${redir.target}` };
+      return {
+        allowed: false,
+        reason: `blocked: redirect to block device ${redir.target}`,
+      };
     }
     if (target === "/dev/null") continue;
     if (redir.op === ">" || redir.op === ">>" || redir.op === ">&") {
-      if (target.startsWith("/etc/") || target.startsWith("/usr/") ||
-          target.startsWith("/bin/") || target.startsWith("/sbin/") || target === "/") {
-        return { allowed: false, reason: `blocked: overwrite redirect to system path ${redir.target}` };
+      if (
+        target.startsWith("/etc/") ||
+        target.startsWith("/usr/") ||
+        target.startsWith("/bin/") ||
+        target.startsWith("/sbin/") ||
+        target === "/"
+      ) {
+        return {
+          allowed: false,
+          reason: `blocked: overwrite redirect to system path ${redir.target}`,
+        };
       }
     }
   }
@@ -292,8 +382,8 @@ export function analyzeCommandLine(
   // 2. 遍历每个命令
   for (const cmd of walkCommands(ast)) {
     const r0 = checkPolicy(cmd, raw);
-    if (r0 && !r0.allowed) return r0;          // deny → 立即阻断
-    if (r0?.requiresApproval) approval = r0;    // ask → 记住，继续检查
+    if (r0 && !r0.allowed) return r0; // deny → 立即阻断
+    if (r0?.requiresApproval) approval = r0; // ask → 记住，继续检查
 
     const r1 = checkAlwaysBlocked(cmd);
     if (r1) return r1;
@@ -327,7 +417,8 @@ export function analyzeCommandLine(
         const hasUploadFlag = args.some((a) =>
           [...NETWORK_UPLOAD_FLAGS].some((f) => a === f || a.startsWith(f)),
         );
-        if (hasUploadFlag) return { allowed: false, reason: "blocked: network upload command" };
+        if (hasUploadFlag)
+          return { allowed: false, reason: "blocked: network upload command" };
       }
     }
   }

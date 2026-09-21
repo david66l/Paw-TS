@@ -6,15 +6,27 @@
  */
 
 import { getSql } from "../../connection.js";
-import { MemoryEvaluator } from "./memoryEvaluator.js";
-import { MemoryGovernance } from "../write/memoryGovernance.js";
-import { GovernanceExecutor } from "../write/governanceExecutor.js";
 import { governanceDecisionDao } from "../../dao/governanceDecision.js";
-import { generateId } from "../platform/idGen.js";
 import type { ActorRef } from "../../types.js";
+import { generateId } from "../platform/idGen.js";
+import { GovernanceExecutor } from "../write/governanceExecutor.js";
+import { MemoryGovernance } from "../write/memoryGovernance.js";
+import { MemoryEvaluator } from "./memoryEvaluator.js";
 
-export type EvolutionType = "MERGE" | "ABSTRACT" | "MARK_STALE" | "DEPRECATE" | "CONFIDENCE_DECREASE";
-export type EvolutionStatus = "generated" | "validating" | "pending_review" | "approved" | "rejected" | "applied" | "expired";
+export type EvolutionType =
+  | "MERGE"
+  | "ABSTRACT"
+  | "MARK_STALE"
+  | "DEPRECATE"
+  | "CONFIDENCE_DECREASE";
+export type EvolutionStatus =
+  | "generated"
+  | "validating"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "applied"
+  | "expired";
 
 export interface EvolutionCandidate {
   id: string;
@@ -67,25 +79,49 @@ export class SelfEvolvingLoop {
     `;
 
     const candidates: EvolutionCandidate[] = [];
-    const evaluations: { memoryId: string; suggestion: string; overall: number }[] = [];
+    const evaluations: {
+      memoryId: string;
+      suggestion: string;
+      overall: number;
+    }[] = [];
 
     try {
       // 1. 查找低质量记忆 → 生成 DEPRECATE / MARK_STALE 候选
       const lowQualityIds = await this.evaluator.findLowQualityMemories(0.4);
       for (const mid of lowQualityIds) {
         const score = await this.evaluator.evaluate(mid);
-        evaluations.push({ memoryId: mid, suggestion: score.suggestion, overall: score.overall });
+        evaluations.push({
+          memoryId: mid,
+          suggestion: score.suggestion,
+          overall: score.overall,
+        });
         if (score.suggestion === "deprecate") {
-          candidates.push(await this.createCandidate(batchId, "DEPRECATE", [mid], score, {}, now));
+          candidates.push(
+            await this.createCandidate(
+              batchId,
+              "DEPRECATE",
+              [mid],
+              score,
+              {},
+              now,
+            ),
+          );
         }
       }
 
       // 2. 查找重复记忆对 → 生成 MERGE 候选
       const dupes = await this.evaluator.findDuplicatePairs();
       for (const pair of dupes.slice(0, 10)) {
-        candidates.push(await this.createCandidate(batchId, "MERGE", [pair.idA, pair.idB],
-          { overall: pair.score, suggestion: "merge_candidate" },
-          { duplicateScore: pair.score }, now));
+        candidates.push(
+          await this.createCandidate(
+            batchId,
+            "MERGE",
+            [pair.idA, pair.idB],
+            { overall: pair.score, suggestion: "merge_candidate" },
+            { duplicateScore: pair.score },
+            now,
+          ),
+        );
       }
 
       // 3. 提交候选到治理
@@ -94,7 +130,9 @@ export class SelfEvolvingLoop {
         // 将 EvolutionCandidate 转换为 MemoryCandidate 格式提交治理
         const memCand = await this.submitToGovernance(cand);
         if (memCand) {
-          const { decision } = await this.governance.evaluate({ candidateId: memCand.id });
+          const { decision } = await this.governance.evaluate({
+            candidateId: memCand.id,
+          });
           if (decision.status === "APPROVED") {
             await governanceDecisionDao.create(decision);
             const result = await this.executor.execute(decision);
@@ -115,7 +153,13 @@ export class SelfEvolvingLoop {
       `;
 
       return {
-        batch: { id: batchId, status: "completed", triggerReason: reason, sampledMemoryCount: lowQualityIds.length + dupes.length, resultCandidateCount: approvedCount },
+        batch: {
+          id: batchId,
+          status: "completed",
+          triggerReason: reason,
+          sampledMemoryCount: lowQualityIds.length + dupes.length,
+          resultCandidateCount: approvedCount,
+        },
         candidates,
         evaluations,
       };
@@ -126,7 +170,9 @@ export class SelfEvolvingLoop {
   }
 
   private async createCandidate(
-    batchId: string, type: EvolutionType, targetIds: string[],
+    batchId: string,
+    type: EvolutionType,
+    targetIds: string[],
     score: { overall: number; suggestion: string },
     evidence: Record<string, unknown> = {},
     now: string,
@@ -137,13 +183,29 @@ export class SelfEvolvingLoop {
       INSERT INTO evolution_candidates (id, batch_id, evolution_type, target_memory_ids, proposed_title, proposed_summary, proposed_payload, proposed_confidence, risk_level, evidence, status, generated_by, created_at)
       VALUES (${id}, ${batchId}, ${type}, ${sql.array(targetIds)}, ${`Auto-${type}: ${targetIds.length} memories`}, ${`Generated by SelfEvolvingLoop. Score: ${score.overall.toFixed(2)}, suggestion: ${score.suggestion}`}, ${sql.json(evidence as any)}, ${score.overall}, ${type === "DEPRECATE" ? "medium" : "low"}, ${sql.json(evidence as any)}, 'generated', ${sql.json({ actorType: "system", actorId: "self-evolving-loop" } as any)}, ${now})
     `;
-    return { id, batchId, evolutionType: type, targetMemoryIds: targetIds, proposedTitle: `Auto-${type}`, proposedSummary: `${type} suggestion`, proposedPayload: evidence, proposedConfidence: score.overall, riskLevel: "medium", evidence, status: "generated", generatedBy: { actorType: "system", actorId: "self-evolving-loop" }, createdAt: now };
+    return {
+      id,
+      batchId,
+      evolutionType: type,
+      targetMemoryIds: targetIds,
+      proposedTitle: `Auto-${type}`,
+      proposedSummary: `${type} suggestion`,
+      proposedPayload: evidence,
+      proposedConfidence: score.overall,
+      riskLevel: "medium",
+      evidence,
+      status: "generated",
+      generatedBy: { actorType: "system", actorId: "self-evolving-loop" },
+      createdAt: now,
+    };
   }
 
   /**
    * 将 EvolutionCandidate 提交为 MemoryCandidate 走标准治理流程。
    */
-  private async submitToGovernance(cand: EvolutionCandidate): Promise<{ id: string } | null> {
+  private async submitToGovernance(
+    cand: EvolutionCandidate,
+  ): Promise<{ id: string } | null> {
     const sql = getSql();
     const id = generateId("cand");
     const now = new Date().toISOString();

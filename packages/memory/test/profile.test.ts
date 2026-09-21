@@ -4,7 +4,7 @@
  * 纯函数 + 内存引擎，不依赖 Postgres。
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type {
   LedgerEntry,
   MemoryEntry,
@@ -18,18 +18,20 @@ import { deriveEntryId } from "../src/longterm/store/id.js";
 import {
   PROFILE_CAP,
   PROFILE_MIN_SUPPORT,
+  type ProfileDraft,
   admitProfile,
   enforceProfileCapacity,
   isBehaviorDescription,
   profileSimilarity,
   validateProfileDraft,
-  type ProfileDraft,
 } from "../src/longterm/write/profile.js";
 
 const NOOP_RECORD_OP = async () => true;
 
 /** 最小内存引擎：只实现 put/get/invalidate/query */
-function makeMemEngine(): MemoryStoreEngine & { store: Map<string, MemoryEntry> } {
+function makeMemEngine(): MemoryStoreEngine & {
+  store: Map<string, MemoryEntry>;
+} {
   const store = new Map<string, MemoryEntry>();
   return {
     store,
@@ -51,7 +53,8 @@ function makeMemEngine(): MemoryStoreEngine & { store: Map<string, MemoryEntry> 
       let rows = [...store.values()];
       if (filter.kind) rows = rows.filter((e) => e.kind === filter.kind);
       if (filter.repo) rows = rows.filter((e) => e.repo === filter.repo);
-      if (!filter.includeInvalidated) rows = rows.filter((e) => e.tInvalid == null);
+      if (!filter.includeInvalidated)
+        rows = rows.filter((e) => e.tInvalid == null);
       return rows.slice(0, filter.limit ?? 200);
     },
     async searchText(): Promise<ScoredId[]> {
@@ -65,15 +68,26 @@ function makeMemEngine(): MemoryStoreEngine & { store: Map<string, MemoryEntry> 
     },
     async bumpLedger(): Promise<void> {},
     async reindex(): Promise<ReindexReport> {
-      return { scanned: 0, indexed: 0, failed: 0, smoke: { total: 0, passed: 0, failedIds: [] } };
+      return {
+        scanned: 0,
+        indexed: 0,
+        failed: 0,
+        smoke: { total: 0, passed: 0, failedIds: [] },
+      };
     },
   };
 }
 
-function draft(overrides: Partial<ProfileDraft> & { insight: string }): ProfileDraft {
+function draft(
+  overrides: Partial<ProfileDraft> & { insight: string },
+): ProfileDraft {
   return {
     repo: "repo-profile-test",
-    evidence: ["runs/a/trajectory#1", "runs/b/trajectory#1", "runs/c/trajectory#1"],
+    evidence: [
+      "runs/a/trajectory#1",
+      "runs/b/trajectory#1",
+      "runs/c/trajectory#1",
+    ],
     ...overrides,
   };
 }
@@ -156,7 +170,10 @@ describe("admitProfile", () => {
       expect(second.memoryId).toBe(first.memoryId);
       const got = (await engine.get(second.memoryId)) as ProfileInsight;
       expect(got.evidence.length).toBeGreaterThanOrEqual(4);
-      const active = await engine.query({ kind: "profile", repo: "repo-profile-test" });
+      const active = await engine.query({
+        kind: "profile",
+        repo: "repo-profile-test",
+      });
       expect(active).toHaveLength(1);
     }
   });
@@ -206,7 +223,10 @@ describe("admitProfile", () => {
         await engine.put({ ...e, utility: i, freq: 1 });
       }
     }
-    const before = await engine.query({ kind: "profile", repo: "repo-profile-test" });
+    const before = await engine.query({
+      kind: "profile",
+      repo: "repo-profile-test",
+    });
     expect(before).toHaveLength(PROFILE_CAP);
 
     const r = await admitProfile(
@@ -220,7 +240,10 @@ describe("admitProfile", () => {
     if (r.status === "written" && "removedId" in r) {
       const victim = await engine.get(r.removedId);
       expect(victim?.tInvalid).not.toBeNull();
-      const active = await engine.query({ kind: "profile", repo: "repo-profile-test" });
+      const active = await engine.query({
+        kind: "profile",
+        repo: "repo-profile-test",
+      });
       expect(active).toHaveLength(PROFILE_CAP);
       expect(active.some((e) => e.id === r.memoryId)).toBe(true);
     } else {
@@ -252,7 +275,10 @@ describe("admitProfile", () => {
       }),
       { engine, cap: 2, recordOp: NOOP_RECORD_OP },
     );
-    expect(r).toEqual({ status: "rejected", reason: "profile_cap_no_removable" });
+    expect(r).toEqual({
+      status: "rejected",
+      reason: "profile_cap_no_removable",
+    });
   });
 });
 
@@ -291,7 +317,10 @@ describe("enforceProfileCapacity", () => {
     });
     expect(removed.length).toBe(2);
     expect(removed).not.toContain(ids[0]); // user_statement 豁免
-    const active = await engine.query({ kind: "profile", repo: "repo-profile-test" });
+    const active = await engine.query({
+      kind: "profile",
+      repo: "repo-profile-test",
+    });
     expect(active).toHaveLength(2);
     expect(active.some((e) => e.id === ids[0])).toBe(true);
   });

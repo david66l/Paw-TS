@@ -32,7 +32,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** Prompt 文件存放目录，通过 import.meta.dirname 推导运行时路径 */
-const PROMPT_DIR = join(import.meta.dirname ?? join(process.cwd(), "packages/core/src/prompt"));
+const PROMPT_DIR = join(
+  import.meta.dirname ?? join(process.cwd(), "packages/core/src/prompt"),
+);
 
 /**
  * 根据给定的模型 ID 解析对应的系统提示词文本。
@@ -83,7 +85,7 @@ function selectPromptFile(modelId?: string): string {
   const id = modelId.toLowerCase();
 
   if (id.includes("deepseek")) return "deepseek.txt";
-  if (id.includes("qwen")) return "deepseek.txt";    // Qwen 与 DeepSeek 行为相似，共用同一份提示词（Qwen shares DeepSeek's prompt — similar behavior）
+  if (id.includes("qwen")) return "deepseek.txt"; // Qwen 与 DeepSeek 行为相似，共用同一份提示词（Qwen shares DeepSeek's prompt — similar behavior）
   if (id.includes("claude") || id.includes("anthropic")) return "default.txt";
   if (id.includes("gpt") || id.includes("openai")) return "default.txt";
 

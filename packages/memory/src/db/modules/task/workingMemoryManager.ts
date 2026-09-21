@@ -5,7 +5,11 @@
  */
 
 import { workingMemoryDao } from "../../dao/workingMemory.js";
-import type { WorkingMemory, WorkingMemorySnapshot, ActorRef } from "../../types.js";
+import type {
+  ActorRef,
+  WorkingMemory,
+  WorkingMemorySnapshot,
+} from "../../types.js";
 import { generateId } from "../platform/idGen.js";
 import { RevisionConflictError } from "./taskSessionManager.js";
 
@@ -18,12 +22,20 @@ export class WorkingMemoryManager {
    * 更新 WorkingMemory。必须提供 expectedRevision，不匹配时抛出 RevisionConflictError。
    * 返回更新后的 WorkingMemory（含新 revision）。
    */
-  async update(taskId: string, expectedRevision: number, patch: Partial<WorkingMemory>): Promise<WorkingMemory> {
+  async update(
+    taskId: string,
+    expectedRevision: number,
+    patch: Partial<WorkingMemory>,
+  ): Promise<WorkingMemory> {
     const current = await workingMemoryDao.findByTaskId(taskId);
     if (!current) throw new Error(`WorkingMemory not found for task ${taskId}`);
 
     if (current.revision !== expectedRevision) {
-      throw new RevisionConflictError("workingMemory", taskId, expectedRevision);
+      throw new RevisionConflictError(
+        "workingMemory",
+        taskId,
+        expectedRevision,
+      );
     }
 
     // 合并 patch 到 current
@@ -36,8 +48,17 @@ export class WorkingMemoryManager {
       updatedAt: new Date().toISOString(),
     };
 
-    const result = await workingMemoryDao.update(current.id, expectedRevision, updated);
-    if (!result) throw new RevisionConflictError("workingMemory", taskId, expectedRevision);
+    const result = await workingMemoryDao.update(
+      current.id,
+      expectedRevision,
+      updated,
+    );
+    if (!result)
+      throw new RevisionConflictError(
+        "workingMemory",
+        taskId,
+        expectedRevision,
+      );
     return result;
   }
 

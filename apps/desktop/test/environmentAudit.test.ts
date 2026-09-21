@@ -7,9 +7,12 @@ import type {
   LanguageModel,
   ModelCompletionResult,
 } from "@paw/models";
-import { readDesktopMonitor, runDesktopNext } from "../agent-host/paw-next.js";
-import { buildPawNextTaskProfileV3, runFreshPawNextTaskV3 } from "@paw/paw-next";
+import {
+  buildPawNextTaskProfileV3,
+  runFreshPawNextTaskV3,
+} from "@paw/paw-next";
 import { desktopProfile, fingerprint } from "../agent-host/paw-next-profile.js";
+import { readDesktopMonitor, runDesktopNext } from "../agent-host/paw-next.js";
 
 setDefaultTimeout(60_000);
 const roots: string[] = [];
@@ -136,136 +139,261 @@ function fixture(audit: "pass" | "false_claim" | "denied_write" | "repair") {
   };
 }
 
-test.each(["read_then_pass", "repeat_bad_report", "read_then_defect"] as const)("owned evidence correction stays in one child and is bounded: %s", async (outcome) => {
-  const f = fixture("pass");
-  let auditCalls = 0;
-  let correctionsSeen = 0;
-  const model: LanguageModel = { ...f.options.model, async complete(messages, options) {
-    const text = JSON.stringify(messages);
-    if (!text.includes("Paw environment auditor")) return f.options.model.complete(messages, options);
-    auditCalls++;
-    if (text.includes("Your report was rejected by host validation")) correctionsSeen++;
-    expect(text).toContain("Auditor-owned file reads");
-    if (auditCalls === 2 && outcome !== "repeat_bad_report") return tool("workspace_read_file", { path: "note.txt" });
-    if (auditCalls === 3) {
-      expect(text).toContain("requestedRange");
-      expect(text).toContain("test-call-");
-    }
-    return final(JSON.stringify({ completion: outcome === "read_then_defect" && auditCalls >= 3 ? "incomplete" : "complete",
-      summary: "检查完成", evidencePaths: ["note.txt"], unmetCriteria: outcome === "read_then_defect" && auditCalls >= 3 ? ["内容错误，应为 checked"] : [] }));
-  }};
-  const options = { ...f.options, model, environmentAuditSinglePass: true, environmentAuditEvidenceRepair: true };
-  const result = await runDesktopNext("Create note.txt containing hello", options);
-  const body = JSON.parse(result.text);
-  if (outcome === "read_then_pass") {
-    expect(body.acceptance, result.text).toBe("verified");
-    expect(auditCalls).toBe(3);
-    expect(f.counts().rootCalls).toBe(2);
-    expect(correctionsSeen).toBe(2);
-  } else if (outcome === "repeat_bad_report") {
-    expect(body.acceptance, result.text).toBe("unverified");
-    expect(body.status).toBe("incomplete");
-    expect(auditCalls).toBe(2);
-    expect(f.counts().rootCalls).toBe(2);
-  } else {
-    expect(body.acceptance).toBe("unverified");
-    expect(f.counts().rootCalls).toBeGreaterThan(2);
-  }
-  const before = auditCalls;
-  await runDesktopNext("Continue", { ...options, environmentAuditEvidenceRepair: false, intent: "recover" });
-  expect(auditCalls).toBe(before);
-});
-
-test.each(["pass", "turn_limit", "timeout"] as const)("audit correction retains prior reads and shares the original budget: %s", async outcome => {
-  const f = fixture("pass");
-  fs.writeFileSync(path.join(f.root, "README.md"), "hello contract");
-  let calls = 0;
-  let timers = 0;
-  const nativeTimeout = globalThis.setTimeout;
-  const timer = spyOn(globalThis, "setTimeout").mockImplementation(((handler, delay, ...args) => {
-    if (delay === 240_000) timers++;
-    return nativeTimeout(handler, delay === 240_000 && outcome === "timeout" ? 8000 : delay, ...args);
-  }) as typeof setTimeout);
-  try {
-    const model: LanguageModel = { ...f.options.model, async complete(messages, options) {
-      const text = JSON.stringify(messages);
-      if (!text.includes("Paw environment auditor")) return f.options.model.complete(messages, options);
-      calls++;
-      if (calls === 1) return tool("workspace_read_file", { path: "note.txt" });
-      if (calls === 3 && outcome === "timeout") return new Promise((_resolve, reject) => {
-        const signal = options!.signal!;
-        if (signal.aborted) reject(signal.reason);
-        else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-      });
-      if (calls === 3 || (calls > 3 && outcome === "turn_limit")) return tool("workspace_read_file", { path: "README.md" });
-      if (calls === 4) {
-        expect(text).toContain("Your report was rejected by host validation");
-        const ledger = messages.filter(m => typeof m.content === "string" && m.content.includes("[Auditor-owned file reads]")).at(-1)!.content;
-        expect(ledger).toContain("note.txt");
-        expect(ledger).toContain("README.md");
-      }
-      return final(JSON.stringify({ completion: "complete", summary: "已核对", evidencePaths: ["note.txt", "README.md"], unmetCriteria: [] }));
-    }};
-    const result = await runDesktopNext("Create note.txt containing hello", { ...f.options, model, environmentAuditSinglePass: true, environmentAuditEvidenceRepair: true });
-    expect(JSON.parse(result.text).acceptance, result.text).toBe(outcome === "pass" ? "verified" : "unverified");
-    expect(f.counts().rootCalls).toBe(2);
-    expect(timers).toBe(1);
-    expect(calls).toBe(outcome === "pass" ? 4 : outcome === "turn_limit" ? 12 : 3);
-    if (outcome === "pass") expect(readDesktopMonitor(f.root, "audit")?.audit?.inspected.map(i => i.path).sort()).toEqual(["README.md", "note.txt"]);
-  } finally { timer.mockRestore(); }
-});
-
-test.each(["pass", "timeout", "changed"] as const)("audit timeout retries inside review without restarting root: %s", async (outcome) => {
-  const f = fixture("pass");
-  let auditCalls = 0;
-  let rootCalls = 0;
-  const nativeTimeout = globalThis.setTimeout;
-  // Compress only the audit deadline. Production retains its 120s deadline;
-  // all real child setup, cancellation, journaling and recovery still execute.
-  const timer = spyOn(globalThis, "setTimeout").mockImplementation(((handler, delay, ...args) =>
-    nativeTimeout(handler, delay === 120_000 ? 3000 : delay, ...args)) as typeof setTimeout);
-  try {
+test.each(["read_then_pass", "repeat_bad_report", "read_then_defect"] as const)(
+  "owned evidence correction stays in one child and is bounded: %s",
+  async (outcome) => {
+    const f = fixture("pass");
+    let auditCalls = 0;
+    let correctionsSeen = 0;
     const model: LanguageModel = {
       ...f.options.model,
       async complete(messages, options) {
-        if (!JSON.stringify(messages).includes("Paw environment auditor")) {
-          rootCalls++;
+        const text = JSON.stringify(messages);
+        if (!text.includes("Paw environment auditor"))
           return f.options.model.complete(messages, options);
-        }
         auditCalls++;
-        if (auditCalls === 2 || (outcome === "timeout" && auditCalls === 4)) {
-          const signal = options?.signal;
-          if (!signal) throw new Error("Missing audit cancellation signal");
-          return new Promise((_resolve, reject) => {
-            const stop = () => {
-              if (outcome === "changed") fs.writeFileSync(path.join(f.root, "note.txt"), "external change");
-              reject(signal.reason);
-            };
-            if (signal.aborted) stop();
-            else signal.addEventListener("abort", stop, { once: true });
-          });
+        if (text.includes("Your report was rejected by host validation"))
+          correctionsSeen++;
+        expect(text).toContain("Auditor-owned file reads");
+        if (auditCalls === 2 && outcome !== "repeat_bad_report")
+          return tool("workspace_read_file", { path: "note.txt" });
+        if (auditCalls === 3) {
+          expect(text).toContain("requestedRange");
+          expect(text).toContain("test-call-");
         }
-        if (auditCalls % 2 === 1) return tool("workspace_read_file", { path: "note.txt" });
-        return final(JSON.stringify({ completion: "complete", summary: "Independently checked",
-          evidencePaths: ["note.txt"], unmetCriteria: [] }));
+        return final(
+          JSON.stringify({
+            completion:
+              outcome === "read_then_defect" && auditCalls >= 3
+                ? "incomplete"
+                : "complete",
+            summary: "检查完成",
+            evidencePaths: ["note.txt"],
+            unmetCriteria:
+              outcome === "read_then_defect" && auditCalls >= 3
+                ? ["内容错误，应为 checked"]
+                : [],
+          }),
+        );
       },
     };
-    const result = await runDesktopNext("Create note.txt containing hello", { ...f.options, model });
-    expect(JSON.parse(result.text).acceptance).toBe(outcome === "pass" ? "verified" : "unverified");
-    expect(JSON.parse(result.text).status).toBe(outcome === "pass" ? "completed" : "incomplete");
-    expect(result.ok).toBe(outcome === "pass");
-    expect(rootCalls).toBe(2);
-    expect(auditCalls).toBe(outcome === "changed" ? 2 : 4);
-    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(outcome === "changed" ? "external change" : "hello");
-    if (outcome !== "changed") {
-      expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).toEndWith("-retry-1");
-      const before = { rootCalls, auditCalls };
-      const recovered = await runDesktopNext("Create note.txt containing hello", { ...f.options, model, intent: "recover" });
-      expect(JSON.parse(recovered.text).acceptance).toBe(outcome === "pass" ? "verified" : "unverified");
-      expect({ rootCalls, auditCalls }).toEqual(before);
+    const options = {
+      ...f.options,
+      model,
+      environmentAuditSinglePass: true,
+      environmentAuditEvidenceRepair: true,
+    };
+    const result = await runDesktopNext(
+      "Create note.txt containing hello",
+      options,
+    );
+    const body = JSON.parse(result.text);
+    if (outcome === "read_then_pass") {
+      expect(body.acceptance, result.text).toBe("verified");
+      expect(auditCalls).toBe(3);
+      expect(f.counts().rootCalls).toBe(2);
+      expect(correctionsSeen).toBe(2);
+    } else if (outcome === "repeat_bad_report") {
+      expect(body.acceptance, result.text).toBe("unverified");
+      expect(body.status).toBe("incomplete");
+      expect(auditCalls).toBe(2);
+      expect(f.counts().rootCalls).toBe(2);
+    } else {
+      expect(body.acceptance).toBe("unverified");
+      expect(f.counts().rootCalls).toBeGreaterThan(2);
     }
-  } finally { timer.mockRestore(); }
-});
+    const before = auditCalls;
+    await runDesktopNext("Continue", {
+      ...options,
+      environmentAuditEvidenceRepair: false,
+      intent: "recover",
+    });
+    expect(auditCalls).toBe(before);
+  },
+);
+
+test.each(["pass", "turn_limit", "timeout"] as const)(
+  "audit correction retains prior reads and shares the original budget: %s",
+  async (outcome) => {
+    const f = fixture("pass");
+    fs.writeFileSync(path.join(f.root, "README.md"), "hello contract");
+    let calls = 0;
+    let timers = 0;
+    const nativeTimeout = globalThis.setTimeout;
+    const timer = spyOn(globalThis, "setTimeout").mockImplementation(((
+      handler,
+      delay,
+      ...args
+    ) => {
+      if (delay === 240_000) timers++;
+      return nativeTimeout(
+        handler,
+        delay === 240_000 && outcome === "timeout" ? 8000 : delay,
+        ...args,
+      );
+    }) as typeof setTimeout);
+    try {
+      const model: LanguageModel = {
+        ...f.options.model,
+        async complete(messages, options) {
+          const text = JSON.stringify(messages);
+          if (!text.includes("Paw environment auditor"))
+            return f.options.model.complete(messages, options);
+          calls++;
+          if (calls === 1)
+            return tool("workspace_read_file", { path: "note.txt" });
+          if (calls === 3 && outcome === "timeout")
+            return new Promise((_resolve, reject) => {
+              const signal = options!.signal!;
+              if (signal.aborted) reject(signal.reason);
+              else
+                signal.addEventListener("abort", () => reject(signal.reason), {
+                  once: true,
+                });
+            });
+          if (calls === 3 || (calls > 3 && outcome === "turn_limit"))
+            return tool("workspace_read_file", { path: "README.md" });
+          if (calls === 4) {
+            expect(text).toContain(
+              "Your report was rejected by host validation",
+            );
+            const ledger = messages
+              .filter(
+                (m) =>
+                  typeof m.content === "string" &&
+                  m.content.includes("[Auditor-owned file reads]"),
+              )
+              .at(-1)!.content;
+            expect(ledger).toContain("note.txt");
+            expect(ledger).toContain("README.md");
+          }
+          return final(
+            JSON.stringify({
+              completion: "complete",
+              summary: "已核对",
+              evidencePaths: ["note.txt", "README.md"],
+              unmetCriteria: [],
+            }),
+          );
+        },
+      };
+      const result = await runDesktopNext("Create note.txt containing hello", {
+        ...f.options,
+        model,
+        environmentAuditSinglePass: true,
+        environmentAuditEvidenceRepair: true,
+      });
+      expect(JSON.parse(result.text).acceptance, result.text).toBe(
+        outcome === "pass" ? "verified" : "unverified",
+      );
+      expect(f.counts().rootCalls).toBe(2);
+      expect(timers).toBe(1);
+      expect(calls).toBe(
+        outcome === "pass" ? 4 : outcome === "turn_limit" ? 12 : 3,
+      );
+      if (outcome === "pass")
+        expect(
+          readDesktopMonitor(f.root, "audit")
+            ?.audit?.inspected.map((i) => i.path)
+            .sort(),
+        ).toEqual(["README.md", "note.txt"]);
+    } finally {
+      timer.mockRestore();
+    }
+  },
+);
+
+test.each(["pass", "timeout", "changed"] as const)(
+  "audit timeout retries inside review without restarting root: %s",
+  async (outcome) => {
+    const f = fixture("pass");
+    let auditCalls = 0;
+    let rootCalls = 0;
+    const nativeTimeout = globalThis.setTimeout;
+    // Compress only the audit deadline. Production retains its 120s deadline;
+    // all real child setup, cancellation, journaling and recovery still execute.
+    const timer = spyOn(globalThis, "setTimeout").mockImplementation(((
+      handler,
+      delay,
+      ...args
+    ) =>
+      nativeTimeout(
+        handler,
+        delay === 120_000 ? 3000 : delay,
+        ...args,
+      )) as typeof setTimeout);
+    try {
+      const model: LanguageModel = {
+        ...f.options.model,
+        async complete(messages, options) {
+          if (!JSON.stringify(messages).includes("Paw environment auditor")) {
+            rootCalls++;
+            return f.options.model.complete(messages, options);
+          }
+          auditCalls++;
+          if (auditCalls === 2 || (outcome === "timeout" && auditCalls === 4)) {
+            const signal = options?.signal;
+            if (!signal) throw new Error("Missing audit cancellation signal");
+            return new Promise((_resolve, reject) => {
+              const stop = () => {
+                if (outcome === "changed")
+                  fs.writeFileSync(
+                    path.join(f.root, "note.txt"),
+                    "external change",
+                  );
+                reject(signal.reason);
+              };
+              if (signal.aborted) stop();
+              else signal.addEventListener("abort", stop, { once: true });
+            });
+          }
+          if (auditCalls % 2 === 1)
+            return tool("workspace_read_file", { path: "note.txt" });
+          return final(
+            JSON.stringify({
+              completion: "complete",
+              summary: "Independently checked",
+              evidencePaths: ["note.txt"],
+              unmetCriteria: [],
+            }),
+          );
+        },
+      };
+      const result = await runDesktopNext("Create note.txt containing hello", {
+        ...f.options,
+        model,
+      });
+      expect(JSON.parse(result.text).acceptance).toBe(
+        outcome === "pass" ? "verified" : "unverified",
+      );
+      expect(JSON.parse(result.text).status).toBe(
+        outcome === "pass" ? "completed" : "incomplete",
+      );
+      expect(result.ok).toBe(outcome === "pass");
+      expect(rootCalls).toBe(2);
+      expect(auditCalls).toBe(outcome === "changed" ? 2 : 4);
+      expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(
+        outcome === "changed" ? "external change" : "hello",
+      );
+      if (outcome !== "changed") {
+        expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).toEndWith(
+          "-retry-1",
+        );
+        const before = { rootCalls, auditCalls };
+        const recovered = await runDesktopNext(
+          "Create note.txt containing hello",
+          { ...f.options, model, intent: "recover" },
+        );
+        expect(JSON.parse(recovered.text).acceptance).toBe(
+          outcome === "pass" ? "verified" : "unverified",
+        );
+        expect({ rootCalls, auditCalls }).toEqual(before);
+      }
+    } finally {
+      timer.mockRestore();
+    }
+  },
+);
 
 test("single-pass audit has one bounded deadline, preserves evidence and cannot display false completion", async () => {
   const f = fixture("pass");
@@ -273,49 +401,96 @@ test("single-pass audit has one bounded deadline, preserves evidence and cannot 
   let auditCalls = 0;
   let auditTimers = 0;
   const nativeTimeout = globalThis.setTimeout;
-  const timer = spyOn(globalThis, "setTimeout").mockImplementation(((handler, delay, ...args) => {
+  const timer = spyOn(globalThis, "setTimeout").mockImplementation(((
+    handler,
+    delay,
+    ...args
+  ) => {
     if (delay === 240_000) auditTimers++;
     return nativeTimeout(handler, delay === 240_000 ? 3000 : delay, ...args);
   }) as typeof setTimeout);
   try {
-    const model: LanguageModel = { ...f.options.model, async complete(messages, options) {
-      const prompt = JSON.stringify(messages);
-      if (!prompt.includes("Paw environment auditor")) {
-        rootCalls++;
-        return rootCalls === 1 ? tool("workspace_write_file", { path: "note.txt", content: "hello" }) : final("Everything is complete and verified.");
-      }
-      auditCalls++;
-      expect(prompt).toContain("at most 240 seconds total wall time");
-      if (auditCalls === 1) return tool("workspace_read_file", { path: "note.txt" });
-      return new Promise((_resolve, reject) => {
-        const signal = options!.signal!;
-        if (signal.aborted) reject(signal.reason);
-        else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-      });
-    } };
+    const model: LanguageModel = {
+      ...f.options.model,
+      async complete(messages, options) {
+        const prompt = JSON.stringify(messages);
+        if (!prompt.includes("Paw environment auditor")) {
+          rootCalls++;
+          return rootCalls === 1
+            ? tool("workspace_write_file", {
+                path: "note.txt",
+                content: "hello",
+              })
+            : final("Everything is complete and verified.");
+        }
+        auditCalls++;
+        expect(prompt).toContain("at most 240 seconds total wall time");
+        if (auditCalls === 1)
+          return tool("workspace_read_file", { path: "note.txt" });
+        return new Promise((_resolve, reject) => {
+          const signal = options!.signal!;
+          if (signal.aborted) reject(signal.reason);
+          else
+            signal.addEventListener("abort", () => reject(signal.reason), {
+              once: true,
+            });
+        });
+      },
+    };
     const options = { ...f.options, environmentAuditSinglePass: true, model };
-    const result = await runDesktopNext("Create note.txt containing hello", options);
+    const result = await runDesktopNext(
+      "Create note.txt containing hello",
+      options,
+    );
     const body = JSON.parse(result.text);
     expect(body.status).toBe("incomplete");
     expect(body.acceptance).toBe("unverified");
     expect(body.message).toContain("独立验收达到时限");
     expect(body.message).not.toContain("Everything is complete");
-    expect({ rootCalls, auditCalls, auditTimers }).toEqual({ rootCalls: 2, auditCalls: 2, auditTimers: 1 });
-    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe("hello");
-    expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).not.toEndWith("-retry-1");
-    const recovered = await runDesktopNext("Continue", { ...options, environmentAuditSinglePass: false, intent: "recover" });
+    expect({ rootCalls, auditCalls, auditTimers }).toEqual({
+      rootCalls: 2,
+      auditCalls: 2,
+      auditTimers: 1,
+    });
+    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(
+      "hello",
+    );
+    expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).not.toEndWith(
+      "-retry-1",
+    );
+    const recovered = await runDesktopNext("Continue", {
+      ...options,
+      environmentAuditSinglePass: false,
+      intent: "recover",
+    });
     expect(JSON.parse(recovered.text).acceptance).toBe("unverified");
-    expect({ rootCalls, auditCalls, auditTimers }).toEqual({ rootCalls: 2, auditCalls: 2, auditTimers: 1 });
-  } finally { timer.mockRestore(); }
+    expect({ rootCalls, auditCalls, auditTimers }).toEqual({
+      rootCalls: 2,
+      auditCalls: 2,
+      auditTimers: 1,
+    });
+  } finally {
+    timer.mockRestore();
+  }
 });
 
 test("single-pass audit can verify and replay with its frozen identity", async () => {
   const f = fixture("pass");
-  const result = await runDesktopNext("Create note.txt containing hello", { ...f.options, environmentAuditSinglePass: true });
+  const result = await runDesktopNext("Create note.txt containing hello", {
+    ...f.options,
+    environmentAuditSinglePass: true,
+  });
   expect(result.ok, result.text).toBe(true);
-  expect(f.messagesSeen.some(text => text.includes("at most 240 seconds total wall time"))).toBe(true);
+  expect(
+    f.messagesSeen.some((text) =>
+      text.includes("at most 240 seconds total wall time"),
+    ),
+  ).toBe(true);
   const before = f.counts();
-  const recovered = await runDesktopNext("Continue", { ...f.options, intent: "recover" });
+  const recovered = await runDesktopNext("Continue", {
+    ...f.options,
+    intent: "recover",
+  });
   expect(recovered.ok, recovered.text).toBe(true);
   expect(f.counts()).toEqual(before);
 });
@@ -323,39 +498,80 @@ test("single-pass audit can verify and replay with its frozen identity", async (
 test("single-pass ungrounded report stops unverified without reopening the executor", async () => {
   const f = fixture("false_claim");
   const options = { ...f.options, environmentAuditSinglePass: true };
-  const result = await runDesktopNext("Create note.txt containing hello", options);
+  const result = await runDesktopNext(
+    "Create note.txt containing hello",
+    options,
+  );
   const body = JSON.parse(result.text);
   expect(body.status).toBe("incomplete");
   expect(body.acceptance).toBe("unverified");
   expect(f.counts()).toEqual({ rootCalls: 2, auditCalls: 1 });
   expect(body.message).toContain("独立验收尚未通过");
   expect(body.message).not.toContain("已完成文件任务");
-  expect(readDesktopMonitor(f.root, "audit")?.audit?.summary).toContain("未成功读取");
+  expect(readDesktopMonitor(f.root, "audit")?.audit?.summary).toContain(
+    "未成功读取",
+  );
   const before = f.counts();
-  const recovered = await runDesktopNext("Continue", { ...options, intent: "recover" });
+  const recovered = await runDesktopNext("Continue", {
+    ...options,
+    intent: "recover",
+  });
   expect(JSON.parse(recovered.text).acceptance).toBe("unverified");
   expect(f.counts()).toEqual(before);
 });
 
 test("pre-retry audited desktop sessions recover with their original identity and zero model calls", async () => {
   const f = fixture("pass");
-  const identity = { workspaceRoot: f.root, sessionId: "desktop-session-old-audit",
-    runId: "desktop-next-old-audit", inputId: "desktop-input-old-audit", goal: "Create note.txt containing hello" };
-  const profile = { ...desktopProfile(f.root, f.options.model, {}, undefined, false),
-    auditedMemory: true as const, browserAudit: true as const };
+  const identity = {
+    workspaceRoot: f.root,
+    sessionId: "desktop-session-old-audit",
+    runId: "desktop-next-old-audit",
+    inputId: "desktop-input-old-audit",
+    goal: "Create note.txt containing hello",
+  };
+  const profile = {
+    ...desktopProfile(f.root, f.options.model, {}, undefined, false),
+    auditedMemory: true as const,
+    browserAudit: true as const,
+  };
   const requestApproval = async () => ({ decision: "allow_once" as const });
-  const args = { identity, profile, model: f.options.model, apiKey: fingerprint({}), requestApproval };
+  const args = {
+    identity,
+    profile,
+    model: f.options.model,
+    apiKey: fingerprint({}),
+    requestApproval,
+  };
   const first = buildPawNextTaskProfileV3(args);
-  const resolution = buildPawNextTaskProfileV3({ ...args, profile: { ...profile, configHash: first.configHash } });
+  const resolution = buildPawNextTaskProfileV3({
+    ...args,
+    profile: { ...profile, configHash: first.configHash },
+  });
   await runFreshPawNextTaskV3({ resolution, requestApproval });
-  const record = { version: 1, ...identity, liveSteering: true, environmentAudit: true,
-    auditedMemory: true, browserAudit: true, configHash: resolution.configHash, status: "completed", segments: 1 };
-  const dir = path.join(f.root, ".paw", "desktop-next"); fs.mkdirSync(dir, { recursive: true });
+  const record = {
+    version: 1,
+    ...identity,
+    liveSteering: true,
+    environmentAudit: true,
+    auditedMemory: true,
+    browserAudit: true,
+    configHash: resolution.configHash,
+    status: "completed",
+    segments: 1,
+  };
+  const dir = path.join(f.root, ".paw", "desktop-next");
+  fs.mkdirSync(dir, { recursive: true });
   for (const name of [`conversation-${fingerprint("audit")}`, identity.runId])
     fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(record));
   const before = f.counts();
-  const result = await runDesktopNext(identity.goal, { ...f.options, intent: "recover" });
-  expect(JSON.parse(result.text)).toMatchObject({ runId: identity.runId, acceptance: "verified" });
+  const result = await runDesktopNext(identity.goal, {
+    ...f.options,
+    intent: "recover",
+  });
+  expect(JSON.parse(result.text)).toMatchObject({
+    runId: identity.runId,
+    acceptance: "verified",
+  });
   expect(f.counts()).toEqual(before);
 });
 
@@ -507,9 +723,11 @@ test("a blocking audit feeds a repair work segment and only a new inspection pas
   expect(f.counts()).toEqual({ rootCalls: 4, auditCalls: 4 });
 });
 
-test.each([false, true])("a process crash after a committed audit claim recovers without repeating the write (retry=%s)", async (retryClaim) => {
-  const f = fixture("pass");
-  const source = `import fs from "node:fs";
+test.each([false, true])(
+  "a process crash after a committed audit claim recovers without repeating the write (retry=%s)",
+  async (retryClaim) => {
+    const f = fixture("pass");
+    const source = `import fs from "node:fs";
     import { runDesktopNext } from ${JSON.stringify(new URL("../agent-host/paw-next.ts", import.meta.url).href)};
     const nativeTimeout = globalThis.setTimeout;
     globalThis.setTimeout = (fn, delay, ...args) => nativeTimeout(fn, delay === 120000 ? 3000 : delay, ...args);
@@ -525,52 +743,60 @@ test.each([false, true])("a process crash after a committed audit claim recovers
     await runDesktopNext("Create note.txt containing hello", { workspaceRoot: ${JSON.stringify(f.root)}, conversationId: "audit", memoryEnabled: false, environmentAudit: true, environmentAuditSinglePass: false, settings: {}, model, resolveToolApproval: async () => true,
       onEvent(envelope) { if (envelope.event.type === "monitor.snapshot" && envelope.event.snapshot?.audit?.status === "checking" && (${!retryClaim} || envelope.event.snapshot.audit.reviewId.endsWith("-retry-1"))) process.exit(91); }
     }); process.exit(92);`;
-  const script = path.join(f.root, "crash-harness.ts");
-  fs.writeFileSync(script, source);
-  const proc = Bun.spawn([process.execPath, script], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const stderr = new Response(proc.stderr).text();
-  const timer = setTimeout(() => proc.kill(), 20_000);
-  try {
-    expect(await proc.exited).toBe(91);
-    await stderr;
-  } finally {
-    clearTimeout(timer);
-  }
-  expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe("hello");
-  let resumedRootCalls = 0;
-  const resumeModel: LanguageModel = {
-    ...f.options.model,
-    async complete(messages, options) {
-      if (JSON.stringify(messages).includes("Paw environment auditor"))
-        return f.options.model.complete(messages, options);
-      resumedRootCalls++;
-      return final("检查已有文件并完成验收。");
-    },
-  };
-  // Respect the frozen 90s execution lease: simulate time passing after process death.
-  const now = () => Date.now() + 100_000;
-  const resumed = await runDesktopNext("Create note.txt containing hello", {
-    ...f.options,
-    model: resumeModel,
-    intent: "recover",
-    leaseScheduler: {
-      now,
-      scheduleAt(deadline, task) {
-        const timer = setTimeout(task, Math.max(0, deadline - now()));
-        return { cancel: () => clearTimeout(timer) };
+    const script = path.join(f.root, "crash-harness.ts");
+    fs.writeFileSync(script, source);
+    const proc = Bun.spawn([process.execPath, script], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stderr = new Response(proc.stderr).text();
+    const timer = setTimeout(() => proc.kill(), 20_000);
+    try {
+      expect(await proc.exited).toBe(91);
+      await stderr;
+    } finally {
+      clearTimeout(timer);
+    }
+    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(
+      "hello",
+    );
+    let resumedRootCalls = 0;
+    const resumeModel: LanguageModel = {
+      ...f.options.model,
+      async complete(messages, options) {
+        if (JSON.stringify(messages).includes("Paw environment auditor"))
+          return f.options.model.complete(messages, options);
+        resumedRootCalls++;
+        return final("检查已有文件并完成验收。");
       },
-    },
-  });
+    };
+    // Respect the frozen 90s execution lease: simulate time passing after process death.
+    const now = () => Date.now() + 100_000;
+    const resumed = await runDesktopNext("Create note.txt containing hello", {
+      ...f.options,
+      model: resumeModel,
+      intent: "recover",
+      leaseScheduler: {
+        now,
+        scheduleAt(deadline, task) {
+          const timer = setTimeout(task, Math.max(0, deadline - now()));
+          return { cancel: () => clearTimeout(timer) };
+        },
+      },
+    });
 
-  expect(JSON.parse(resumed.text).acceptance).toBe("verified");
-  expect(resumedRootCalls).toBe(0);
-  expect(f.counts().auditCalls).toBe(2);
-  if (retryClaim) expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).toEndWith("-retry-1");
-  expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe("hello");
-});
+    expect(JSON.parse(resumed.text).acceptance).toBe("verified");
+    expect(resumedRootCalls).toBe(0);
+    expect(f.counts().auditCalls).toBe(2);
+    if (retryClaim)
+      expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).toEndWith(
+        "-retry-1",
+      );
+    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(
+      "hello",
+    );
+  },
+);
 
 test("ordinary conversation does not start file auditing", async () => {
   const f = fixture("pass");

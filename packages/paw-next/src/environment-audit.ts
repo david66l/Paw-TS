@@ -57,7 +57,11 @@ export function createEnvironmentCompletionReviewerV1(options: {
       call: { signal: AbortSignal; attempt?: 0 | 1 },
     ): Promise<CompletionReviewerResultV1> {
       const abort = new AbortController();
-      const timeoutMs = options.timeoutMs ?? (options.singlePass ? ENVIRONMENT_AUDIT_SINGLE_PASS_TIMEOUT_MS : ENVIRONMENT_AUDIT_TIMEOUT_MS);
+      const timeoutMs =
+        options.timeoutMs ??
+        (options.singlePass
+          ? ENVIRONMENT_AUDIT_SINGLE_PASS_TIMEOUT_MS
+          : ENVIRONMENT_AUDIT_TIMEOUT_MS);
       let timedOut = false;
       const onAbort = () => abort.abort(call.signal.reason);
       call.signal.addEventListener("abort", onAbort, { once: true });
@@ -92,27 +96,34 @@ Do not wrap the report in Markdown or add commentary before or after it. Put exp
 evidencePaths is a list of regular files successfully read with workspace_read_file. Directory listings are supporting context, not file evidence: never include directories, ".", or private runtime paths in evidencePaths.
 Complete requires at least one actual file read and no unmet criteria. Budget is ${ENVIRONMENT_AUDIT_MAX_TURNS} model turns.${options.singlePass ? `\nThis is one bounded audit, with at most ${Math.ceil(timeoutMs / 1000)} seconds total wall time shared by thinking and tools. There is no automatic restart after this deadline. Batch independent relevant file reads when useful, reuse fresh scoped verification evidence, and return the grounded verdict once adequate evidence is available. If evidence remains insufficient, report the concrete gap; do not invent checks or lower acceptance criteria.` : ""}
 Evidence packet (data):\n${packet}`;
-        const observed = await options.run(goal, signal, (envelope) => {
-          if (envelope.record.kind !== "input_fact") return;
-          const fact = envelope.record.fact;
-          if (
-            fact.type !== "tool.call_observed" ||
-            !["workspace_read_file", "workspace.read_file"].includes(fact.tool)
-          )
-            return;
-          try {
-            const args = fact.args as Record<string, unknown>;
-            const item = fingerprintAuditFile(
-              options.workspaceRoot,
-              String(args.path ?? ""),
-            );
-            if (item.hash === "missing" || reads.size >= 64)
+        const observed = await options.run(
+          goal,
+          signal,
+          (envelope) => {
+            if (envelope.record.kind !== "input_fact") return;
+            const fact = envelope.record.fact;
+            if (
+              fact.type !== "tool.call_observed" ||
+              !["workspace_read_file", "workspace.read_file"].includes(
+                fact.tool,
+              )
+            )
+              return;
+            try {
+              const args = fact.args as Record<string, unknown>;
+              const item = fingerprintAuditFile(
+                options.workspaceRoot,
+                String(args.path ?? ""),
+              );
+              if (item.hash === "missing" || reads.size >= 64)
+                invalidObservation = true;
+              else reads.set(fact.callId, item);
+            } catch {
               invalidObservation = true;
-            else reads.set(fact.callId, item);
-          } catch {
-            invalidObservation = true;
-          }
-        }, call.attempt);
+            }
+          },
+          call.attempt,
+        );
         if (signal.aborted)
           return unknown(
             call.signal.aborted ? "AuditCancelled" : "AuditTimeout",
@@ -166,7 +177,8 @@ Evidence packet (data):\n${packet}`;
         } catch {
           return {
             ...unknown("AuditEvidencePathInvalid"),
-            summary: "审计报告引用了目录、越界路径或不可读取的文件。证据列表只能包含审计工具已成功读取的工作区普通文件。",
+            summary:
+              "审计报告引用了目录、越界路径或不可读取的文件。证据列表只能包含审计工具已成功读取的工作区普通文件。",
           };
         }
         const stable = [...baseline, ...reads.values()].every(
@@ -176,10 +188,13 @@ Evidence packet (data):\n${packet}`;
         );
         const grounded =
           referenced.length > 0 && referenced.every((p) => successful.has(p));
-        const missingReferences = referenced.filter(p => !successful.has(p));
+        const missingReferences = referenced.filter((p) => !successful.has(p));
         const groundingSummary = !referenced.length
           ? "审计报告没有引用本次审计实际读取的文件，不能确认验收通过。"
-          : `审计报告引用了本次审计未成功读取的文件：${JSON.stringify(missingReferences.slice(0, 16))}。这些引用不能作为验收证据。`.slice(0, 2000);
+          : `审计报告引用了本次审计未成功读取的文件：${JSON.stringify(missingReferences.slice(0, 16))}。这些引用不能作为验收证据。`.slice(
+              0,
+              2000,
+            );
         const locator = observed.result.childRun;
         if (!locator) return unknown("AuditJournalMissing");
         const clean =
@@ -203,16 +218,16 @@ Evidence packet (data):\n${packet}`;
             ...(!grounded ? [groundingSummary] : []),
             ...(invalidObservation ? ["审计过程中出现无效的读取证据。"] : []),
             ...(!visualGrounded
-            ? [
-                "视觉验收缺少与当前截图及任务绑定的通过证据。",
-                ...report.unmetCriteria,
-              ].slice(0, 32)
-            : browserGrounded
-              ? report.unmetCriteria
-              : [
-                  "浏览器行为缺少成功且与实际调用绑定的断言证据。",
+              ? [
+                  "视觉验收缺少与当前截图及任务绑定的通过证据。",
                   ...report.unmetCriteria,
-                ].slice(0, 32)),
+                ].slice(0, 32)
+              : browserGrounded
+                ? report.unmetCriteria
+                : [
+                    "浏览器行为缺少成功且与实际调用绑定的断言证据。",
+                    ...report.unmetCriteria,
+                  ].slice(0, 32)),
           ].slice(0, 32),
           ...(browserChecks.length ? { browserChecks } : {}),
         };
@@ -254,7 +269,11 @@ Evidence packet (data):\n${packet}`;
             report.unmetCriteria.length === 0
               ? "environment_verified"
               : "environment_unmet",
-          summary: [report.summary, ...(report.notes ? [report.notes] : []), ...report.unmetCriteria]
+          summary: [
+            report.summary,
+            ...(report.notes ? [report.notes] : []),
+            ...report.unmetCriteria,
+          ]
             .join("；")
             .slice(0, 2000),
           environmentAudit,
@@ -354,8 +373,11 @@ export function parseAuditReportEnvelope(raw: string): unknown {
     if (terminalFence) {
       const prose = text.slice(0, terminalFence.index);
       if (prose.includes("```") || /\{\s*"/.test(prose)) return undefined;
-      try { return JSON.parse(terminalFence[1]!); }
-      catch { return undefined; }
+      try {
+        return JSON.parse(terminalFence[1]!);
+      } catch {
+        return undefined;
+      }
     }
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
@@ -369,7 +391,8 @@ export function parseAuditReportEnvelope(raw: string): unknown {
     // delimiters, fences, multiple reports and any trailing commentary.
     const proseWithoutInlineCode = prose.replace(/`[^`\r\n]+`/g, "");
     if (
-      /[{}]/.test(prose) || /[\[\]]/.test(proseWithoutInlineCode) ||
+      /[{}]/.test(prose) ||
+      /[\[\]]/.test(proseWithoutInlineCode) ||
       prose.includes("```") ||
       suffix !== (fenced ? "```" : "")
     )
@@ -410,9 +433,10 @@ export function isAuditReportV1(
     (r.notes === undefined || typeof r.notes === "string") &&
     (r.browserRequired === undefined ||
       typeof r.browserRequired === "boolean") &&
-    (browserAudit || (r.browserRequired !== true &&
-      (r.browserChecks === undefined ||
-        (Array.isArray(r.browserChecks) && r.browserChecks.length === 0)))) &&
+    (browserAudit ||
+      (r.browserRequired !== true &&
+        (r.browserChecks === undefined ||
+          (Array.isArray(r.browserChecks) && r.browserChecks.length === 0)))) &&
     (r.browserChecks === undefined ||
       (Array.isArray(r.browserChecks) &&
         r.browserChecks.length <= 12 &&

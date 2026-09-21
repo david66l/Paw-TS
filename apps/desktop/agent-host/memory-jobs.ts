@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
 import os from "node:os";
-import { getSql } from "@paw/memory/db";
+import path from "node:path";
 import { createOperationDeadline } from "@paw/core";
+import { getSql } from "@paw/memory/db";
 
 export interface MemoryJobLocator {
   workspaceRoot: string;

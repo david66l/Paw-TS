@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { EmbeddingCache, resolveEmbeddingConfig } from "../src/shared/embedding-cache.js";
+import {
+  EmbeddingCache,
+  resolveEmbeddingConfig,
+} from "../src/shared/embedding-cache.js";
 
 describe("EmbeddingCache — static methods (no Ollama dependency)", () => {
   describe("cosineSimilarity", () => {

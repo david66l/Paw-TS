@@ -336,10 +336,12 @@ function evidenceCandidateIdentityConflictV2(
       sourceId: left?.sourceId === right.sourceId ? "same" : "different",
       evidenceRef:
         left?.evidenceRef === right.evidenceRef ? "same" : "different",
-      sourceKind: Object.freeze([left?.sourceKind ?? "missing", right.sourceKind]),
+      sourceKind: Object.freeze([
+        left?.sourceKind ?? "missing",
+        right.sourceKind,
+      ]),
       authority: Object.freeze([left?.authority ?? "missing", right.authority]),
-      observedAt:
-        left?.observedAt === right.observedAt ? "same" : "different",
+      observedAt: left?.observedAt === right.observedAt ? "same" : "different",
     }),
   });
   return error;

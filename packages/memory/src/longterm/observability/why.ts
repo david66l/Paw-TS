@@ -6,7 +6,7 @@
  */
 
 import { getSql, parseJson } from "../../db/connection.js";
-import type { MemoryStoreEngine, MemoryEntry } from "../store/engine.js";
+import type { MemoryEntry, MemoryStoreEngine } from "../store/engine.js";
 import { queryOpLog } from "./op-log.js";
 
 export interface MemoryProvenance {
@@ -26,7 +26,10 @@ export interface MemoryProvenance {
   recentOps: { ts: string; op: string; runId?: string }[];
 }
 
-export async function collectWhy(engine: MemoryStoreEngine, id: string): Promise<MemoryProvenance> {
+export async function collectWhy(
+  engine: MemoryStoreEngine,
+  id: string,
+): Promise<MemoryProvenance> {
   const entry = await engine.get(id);
   const sql = getSql();
 
@@ -36,18 +39,25 @@ export async function collectWhy(engine: MemoryStoreEngine, id: string): Promise
     WHERE resulting_memory_id = ${id} OR target_memory_id = ${id}
     ORDER BY decided_at ASC
   `;
-  const decisions = (decisionRows as unknown as Record<string, unknown>[]).map((r) => {
-    const reasons = (parseJson(r.reasons) ?? []) as { description?: string }[];
-    const decidedBy = (parseJson(r.decided_by) ?? {}) as { actorId?: string };
-    return {
-      id: r.id as string,
-      decision: r.decision as string,
-      status: r.status as string,
-      decidedBy: decidedBy.actorId ?? "unknown",
-      decidedAt: r.decided_at instanceof Date ? r.decided_at.toISOString() : String(r.decided_at),
-      reasons: reasons.map((x) => x.description ?? "").filter(Boolean),
-    };
-  });
+  const decisions = (decisionRows as unknown as Record<string, unknown>[]).map(
+    (r) => {
+      const reasons = (parseJson(r.reasons) ?? []) as {
+        description?: string;
+      }[];
+      const decidedBy = (parseJson(r.decided_by) ?? {}) as { actorId?: string };
+      return {
+        id: r.id as string,
+        decision: r.decision as string,
+        status: r.status as string,
+        decidedBy: decidedBy.actorId ?? "unknown",
+        decidedAt:
+          r.decided_at instanceof Date
+            ? r.decided_at.toISOString()
+            : String(r.decided_at),
+        reasons: reasons.map((x) => x.description ?? "").filter(Boolean),
+      };
+    },
+  );
 
   const ops = await queryOpLog({ entryId: id, limit: 200 });
   const opCounts: Record<string, number> = {};
@@ -57,7 +67,9 @@ export async function collectWhy(engine: MemoryStoreEngine, id: string): Promise
     entry,
     decisions,
     opCounts,
-    recentOps: ops.slice(0, 10).map((o) => ({ ts: o.ts, op: o.op, runId: o.runId })),
+    recentOps: ops
+      .slice(0, 10)
+      .map((o) => ({ ts: o.ts, op: o.op, runId: o.runId })),
   };
 }
 
@@ -78,13 +90,17 @@ export function renderWhy(p: MemoryProvenance): string {
     lines.push("  裁决历史:");
     for (const d of p.decisions) {
       const why = d.reasons.length > 0 ? ` — ${d.reasons.join("; ")}` : "";
-      lines.push(`    ${d.decidedAt}  ${d.decision} [${d.status}] by ${d.decidedBy}${why}`);
+      lines.push(
+        `    ${d.decidedAt}  ${d.decision} [${d.status}] by ${d.decidedBy}${why}`,
+      );
     }
   } else {
     lines.push("  裁决历史: (无 governance 记录——可能由引擎直接写入)");
   }
 
   const ops = Object.entries(p.opCounts);
-  lines.push(`  操作记录: ${ops.length > 0 ? ops.map(([op, n]) => `${op}×${n}`).join("  ") : "(无)"}`);
+  lines.push(
+    `  操作记录: ${ops.length > 0 ? ops.map(([op, n]) => `${op}×${n}`).join("  ") : "(无)"}`,
+  );
   return lines.join("\n");
 }

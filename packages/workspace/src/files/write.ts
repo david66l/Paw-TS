@@ -110,7 +110,8 @@ function validateLiteralReplacement(
     return `edit invariant failed: expected ${expectedReplacements} replacements but produced ${result.replacements}`;
   }
   const expectedLength =
-    original.length + expectedReplacements * (replacement.length - search.length);
+    original.length +
+    expectedReplacements * (replacement.length - search.length);
   if (result.content.length !== expectedLength) {
     return `edit invariant failed: expected ${expectedLength} LF characters but produced ${result.content.length}`;
   }

@@ -3,7 +3,7 @@
  * 不替代模型后续 plan_update；仅做「有结构目标 → 可见计划」兜底。
  */
 
-import { createPlanItem, PlanItemStatus, type PlanItem } from "@paw/store";
+import { type PlanItem, PlanItemStatus, createPlanItem } from "@paw/store";
 
 /**
  * 从 goal 文本提取有序步骤。不足 2 步返回空（简单任务不强制出 plan）。
@@ -15,8 +15,7 @@ export function extractPlanStepsFromGoal(goal: string): string[] {
   const steps: string[] = [];
 
   // 行首编号：1) / 1. / 1、 / (1)
-  const lineRe =
-    /(?:^|\n)\s*(?:\(?(\d+)\)?[.)、]|（(\d+)）)\s*([^\n]+)/g;
+  const lineRe = /(?:^|\n)\s*(?:\(?(\d+)\)?[.)、]|（(\d+)）)\s*([^\n]+)/g;
   let m: RegExpExecArray | null = lineRe.exec(g);
   while (m !== null) {
     const text = (m[3] ?? "").trim().replace(/[;；。]\s*$/, "");

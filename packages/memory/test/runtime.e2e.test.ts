@@ -10,8 +10,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { closeSql, getSql } from "../src/db/connection.js";
 import {
-  createMemoryRuntime,
   type MemoryRuntime,
+  createMemoryRuntime,
 } from "../src/runtime/index.js";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgresql:///paw_memory_test";
@@ -57,10 +57,9 @@ afterAll(async () => {
     await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [
       taskId,
     ]);
-    await sql.unsafe(
-      "DELETE FROM tool_result_records WHERE task_id = $1",
-      [taskId],
-    );
+    await sql.unsafe("DELETE FROM tool_result_records WHERE task_id = $1", [
+      taskId,
+    ]);
     await sql.unsafe(
       "DELETE FROM governance_decisions WHERE candidate_id LIKE $1",
       ["cand_%"],

@@ -2,6 +2,19 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  CostTracker,
+  FileSystemSessionStore,
+  type RunEventEnvelope,
+} from "@paw/core";
+import { McpClientManager, type McpServerConfig } from "@paw/harness";
+import { resolveScope } from "@paw/memory";
+import {
+  type MemoryKind,
+  PostgresMemoryStoreEngine,
+} from "@paw/memory/longterm";
+import { type LanguageModel, createDefaultLanguageModel } from "@paw/models";
+import {
+  type ExecutionDeadlineV1,
   LONG_HORIZON_MANAGER_PROMPT,
   type PawNextPhaseEffortPolicyV1,
   type PawNextPhaseEffortTelemetryV1,
@@ -16,20 +29,7 @@ import {
   runExistingPawNextTaskV3,
   runExistingPawNextWorkSegmentV3,
   runFreshPawNextTaskV3,
-  type ExecutionDeadlineV1,
 } from "@paw/paw-next";
-import {
-  CostTracker,
-  FileSystemSessionStore,
-  type RunEventEnvelope,
-} from "@paw/core";
-import { McpClientManager, type McpServerConfig } from "@paw/harness";
-import { resolveScope } from "@paw/memory";
-import {
-  type MemoryKind,
-  PostgresMemoryStoreEngine,
-} from "@paw/memory/longterm";
-import { type LanguageModel, createDefaultLanguageModel } from "@paw/models";
 import {
   type ApprovalPromptV1,
   type ApprovalResponseV1,
@@ -42,16 +42,19 @@ import {
   loadPawSettingsLocal,
 } from "@paw/settings";
 import { PAW_INCREMENTAL_VERIFICATION_GUIDANCE } from "./agent-system-prompt.js";
+import {
+  type CloudRunTelemetry,
+  desktopCloudTelemetry,
+} from "./cloud-telemetry.js";
 import type { DesktopNextControls } from "./paw-next-controls.js";
 import { DesktopNextEvents } from "./paw-next-events.js";
 import { desktopAgentModels } from "./paw-next-models.js";
 import { desktopProfile, fingerprint } from "./paw-next-profile.js";
 import { arrangeDesktopTask } from "./task-arrangement.js";
-import { desktopCloudTelemetry, type CloudRunTelemetry } from "./cloud-telemetry.js";
 
 import type { InputAttachmentV1 } from "@paw/protocol";
-import { desktopAttachments } from "./paw-next-attachments.js";
 import { enqueueDesktopMemoryJob } from "./memory-jobs.js";
+import { desktopAttachments } from "./paw-next-attachments.js";
 
 import type { DesktopMonitorSnapshot } from "../src/agent/monitorTypes.js";
 
@@ -190,16 +193,30 @@ export async function runDesktopNext(
 ): Promise<{ ok: boolean; text: string }> {
   const cloud = desktopCloudTelemetry();
   let telemetry = options.telemetry;
-  try { telemetry ??= cloud?.start(); } catch { /* Monitoring must not block a run. */ }
+  try {
+    telemetry ??= cloud?.start();
+  } catch {
+    /* Monitoring must not block a run. */
+  }
   if (!telemetry) return executeDesktopNext(goal, options);
   let status = "failed";
   try {
-    const result = await telemetry.run(() => executeDesktopNext(goal, options, telemetry));
+    const result = await telemetry.run(() =>
+      executeDesktopNext(goal, options, telemetry),
+    );
     status = result.ok ? "completed" : "failed";
-    try { status = JSON.parse(result.text).status ?? status; } catch { /* No result body is sent. */ }
+    try {
+      status = JSON.parse(result.text).status ?? status;
+    } catch {
+      /* No result body is sent. */
+    }
     return result;
   } finally {
-    try { telemetry.finish(options.abortSignal?.aborted ? "cancelled" : status); } catch { /* Best effort. */ }
+    try {
+      telemetry.finish(options.abortSignal?.aborted ? "cancelled" : status);
+    } catch {
+      /* Best effort. */
+    }
     void cloud?.flush().catch(() => {});
   }
 }
@@ -213,8 +230,15 @@ async function executeDesktopNext(
     path.resolve(options.workspaceRoot),
   );
   const conversationId = options.conversationId ?? randomUUID();
-  if (options.memoryRunId && (options.operation !== "memory" || !/^desktop-next-[\w-]+$/.test(options.memoryRunId))) throw new Error("Invalid memory run locator");
-  const file = options.memoryRunId ? path.join(stateDir(workspaceRoot), `${options.memoryRunId}.json`) : conversationFile(workspaceRoot, conversationId);
+  if (
+    options.memoryRunId &&
+    (options.operation !== "memory" ||
+      !/^desktop-next-[\w-]+$/.test(options.memoryRunId))
+  )
+    throw new Error("Invalid memory run locator");
+  const file = options.memoryRunId
+    ? path.join(stateDir(workspaceRoot), `${options.memoryRunId}.json`)
+    : conversationFile(workspaceRoot, conversationId);
   if (busy.has(file))
     throw new Error("此对话已有任务运行，请等待完成或停止当前任务。");
   busy.add(file);
@@ -234,26 +258,39 @@ async function executeDesktopNext(
     const collaborationModels =
       options.collaborationModels ?? agentModels?.models;
     const previous = readRecord(file);
-    const inheritedDeadline = options.intent === "recover"
-      ? previous?.executionDeadline
-      : undefined;
+    const inheritedDeadline =
+      options.intent === "recover" ? previous?.executionDeadline : undefined;
     if (
-      inheritedDeadline && options.executionDeadline &&
-      (inheritedDeadline.deadlineAtMs !== options.executionDeadline.deadlineAtMs ||
+      inheritedDeadline &&
+      options.executionDeadline &&
+      (inheritedDeadline.deadlineAtMs !==
+        options.executionDeadline.deadlineAtMs ||
         inheritedDeadline.reserveMs !== options.executionDeadline.reserveMs ||
-        (options.executionDeadline.admissionPolicy !== undefined && inheritedDeadline.admissionPolicy !== options.executionDeadline.admissionPolicy))
+        (options.executionDeadline.admissionPolicy !== undefined &&
+          inheritedDeadline.admissionPolicy !==
+            options.executionDeadline.admissionPolicy))
     )
       throw new Error("无法恢复：任务时间预算已变化，请新建任务。");
-    const executionDeadline = inheritedDeadline ?? (options.executionDeadline && options.intent !== "recover"
-      ? { admissionPolicy: "recent_round_floor_v1" as const, ...options.executionDeadline }
-      : options.executionDeadline);
+    const executionDeadline =
+      inheritedDeadline ??
+      (options.executionDeadline && options.intent !== "recover"
+        ? {
+            admissionPolicy: "recent_round_floor_v1" as const,
+            ...options.executionDeadline,
+          }
+        : options.executionDeadline);
     if (executionDeadline && !options.operation) {
       assertExecutionDeadlineV1(executionDeadline);
       const controller = new AbortController();
       const expire = () => {
         const remaining = executionDeadline.deadlineAtMs - Date.now();
-        if (remaining <= 0) controller.abort(new Error("ExecutionDeadlineExceeded"));
-        else deadlineTimer = setTimeout(expire, Math.min(remaining, 2_147_483_647));
+        if (remaining <= 0)
+          controller.abort(new Error("ExecutionDeadlineExceeded"));
+        else
+          deadlineTimer = setTimeout(
+            expire,
+            Math.min(remaining, 2_147_483_647),
+          );
       };
       expire();
       options = {
@@ -266,7 +303,11 @@ async function executeDesktopNext(
       options.abortSignal!.throwIfAborted();
     }
     let legacyOutputRecall = previous?.legacyOutputRecall;
-    if (options.expectedConfigHash && previous?.configHash !== options.expectedConfigHash) throw new Error("Memory job configuration changed");
+    if (
+      options.expectedConfigHash &&
+      previous?.configHash !== options.expectedConfigHash
+    )
+      throw new Error("Memory job configuration changed");
     let arrangement = {
       taskMode: "standard" as "standard" | "long",
       visualAudit: false,
@@ -299,11 +340,16 @@ async function executeDesktopNext(
       workspaceRoot,
       model,
       settings,
-      options.maxSteps ?? (options.intent === "recover" ? previous?.maxSteps : undefined) ?? settings.max_steps,
+      options.maxSteps ??
+        (options.intent === "recover" ? previous?.maxSteps : undefined) ??
+        settings.max_steps,
       options.memoryEnabled,
     );
     if (options.experimentalReasoningRecovery)
-      profile = { ...profile, control: { ...profile.control, recoverReasoningTimeout: true } };
+      profile = {
+        ...profile,
+        control: { ...profile.control, recoverReasoningTimeout: true },
+      };
     if (taskMode === "long")
       profile = {
         ...profile,
@@ -327,28 +373,38 @@ async function executeDesktopNext(
     ) {
       const servers = settings.mcp_servers as McpServerConfig[];
       if (options.operation === "memory") {
-        if (!previous?.mcpAllowedTools) throw new Error("Memory maintenance requires the original MCP catalog");
-        profile = { ...profile, mcp: { policyVersion: "paw.mcp-runtime.v1", servers, allowedTools: previous.mcpAllowedTools } };
-      } else {
-      const manager = new McpClientManager();
-      try {
-        for (const server of servers) {
-          options.abortSignal?.throwIfAborted();
-          await manager.connect(server);
-        }
+        if (!previous?.mcpAllowedTools)
+          throw new Error(
+            "Memory maintenance requires the original MCP catalog",
+          );
         profile = {
           ...profile,
           mcp: {
             policyVersion: "paw.mcp-runtime.v1",
             servers,
-            allowedTools: manager
-              .listTools()
-              .map((tool) => `mcp:${tool.serverName}/${tool.toolName}`),
+            allowedTools: previous.mcpAllowedTools,
           },
         };
-      } finally {
-        await manager.disconnectAll();
-      }
+      } else {
+        const manager = new McpClientManager();
+        try {
+          for (const server of servers) {
+            options.abortSignal?.throwIfAborted();
+            await manager.connect(server);
+          }
+          profile = {
+            ...profile,
+            mcp: {
+              policyVersion: "paw.mcp-runtime.v1",
+              servers,
+              allowedTools: manager
+                .listTools()
+                .map((tool) => `mcp:${tool.serverName}/${tool.toolName}`),
+            },
+          };
+        } finally {
+          await manager.disconnectAll();
+        }
       }
     }
     // Only an opaque binding goes through profile construction. The configured
@@ -380,7 +436,14 @@ async function executeDesktopNext(
     const build = (
       identity: Pick<
         DesktopRunRecord,
-        "sessionId" | "runId" | "inputId" | "goal" | "incrementalVerification" | "deliveryLedger" | "environmentAuditSinglePass" | "environmentAuditEvidenceRepair"
+        | "sessionId"
+        | "runId"
+        | "inputId"
+        | "goal"
+        | "incrementalVerification"
+        | "deliveryLedger"
+        | "environmentAuditSinglePass"
+        | "environmentAuditEvidenceRepair"
       >,
       legacyRecovery = false,
       legacyAudit = false,
@@ -398,9 +461,10 @@ async function executeDesktopNext(
         legacyAudit || options.environmentAudit === false
           ? profileWithoutAudit
           : profile;
-      const retryProfile = !legacyAuditRetry && !legacyAudit && options.environmentAudit !== false
-        ? { ...selectedProfile, environmentAuditRetry: true as const }
-        : selectedProfile;
+      const retryProfile =
+        !legacyAuditRetry && !legacyAudit && options.environmentAudit !== false
+          ? { ...selectedProfile, environmentAuditRetry: true as const }
+          : selectedProfile;
       const memoryProfile =
         !legacyMemoryAdmission &&
         !legacyAudit &&
@@ -424,21 +488,37 @@ async function executeDesktopNext(
       const activeProfile = legacyRecovery
         ? { ...visualProfile, control: legacyControl }
         : visualProfile;
-      const receiptProfile = !legacyMutationReceipts && !legacyOutputRecall
-        ? { ...activeProfile, compactMutationReceipts: true as const }
-        : activeProfile;
-      const selectedCompatibleProfile = legacyOutputRecall ? { ...receiptProfile, legacyOutputRecall: true as const } : receiptProfile;
+      const receiptProfile =
+        !legacyMutationReceipts && !legacyOutputRecall
+          ? { ...activeProfile, compactMutationReceipts: true as const }
+          : activeProfile;
+      const selectedCompatibleProfile = legacyOutputRecall
+        ? { ...receiptProfile, legacyOutputRecall: true as const }
+        : receiptProfile;
       const verificationProfile = identity.incrementalVerification
-        ? { ...selectedCompatibleProfile, systemPrompt: `${selectedCompatibleProfile.systemPrompt}\n\n${PAW_INCREMENTAL_VERIFICATION_GUIDANCE}` }
+        ? {
+            ...selectedCompatibleProfile,
+            systemPrompt: `${selectedCompatibleProfile.systemPrompt}\n\n${PAW_INCREMENTAL_VERIFICATION_GUIDANCE}`,
+          }
         : selectedCompatibleProfile;
-      const deliveryProfile = identity.deliveryLedger && taskMode !== "long"
-        ? { ...verificationProfile, deliveryLedger: true as const }
-        : verificationProfile;
-      const singlePassProfile = identity.environmentAuditSinglePass && !legacyAudit && options.environmentAudit !== false
-        ? { ...deliveryProfile, environmentAuditSinglePass: true as const }
-        : deliveryProfile;
-      const compatibleProfile = identity.environmentAuditEvidenceRepair && "environmentAuditSinglePass" in singlePassProfile
-        ? { ...singlePassProfile, environmentAuditEvidenceRepair: true as const } : singlePassProfile;
+      const deliveryProfile =
+        identity.deliveryLedger && taskMode !== "long"
+          ? { ...verificationProfile, deliveryLedger: true as const }
+          : verificationProfile;
+      const singlePassProfile =
+        identity.environmentAuditSinglePass &&
+        !legacyAudit &&
+        options.environmentAudit !== false
+          ? { ...deliveryProfile, environmentAuditSinglePass: true as const }
+          : deliveryProfile;
+      const compatibleProfile =
+        identity.environmentAuditEvidenceRepair &&
+        "environmentAuditSinglePass" in singlePassProfile
+          ? {
+              ...singlePassProfile,
+              environmentAuditEvidenceRepair: true as const,
+            }
+          : singlePassProfile;
       const first = buildPawNextTaskProfileV3({
         identity: { workspaceRoot, ...identity },
         profile: compatibleProfile,
@@ -470,10 +550,24 @@ async function executeDesktopNext(
           previous.compactMutationReceipts !== true,
         )
       : undefined;
-    if (previous && resolution?.configHash !== previous.configHash && !legacyOutputRecall) {
+    if (
+      previous &&
+      resolution?.configHash !== previous.configHash &&
+      !legacyOutputRecall
+    ) {
       legacyOutputRecall = true;
-      const compatible = build(previous, recovering && previous.liveSteering !== true, recovering && previous.environmentAudit !== true, recovering && previous.auditedMemory !== true, recovering && previous.stageGraph !== true, recovering && previous.browserAudit !== true, previous.environmentAuditRetry !== true, previous.compactMutationReceipts !== true);
-      if (compatible.configHash === previous.configHash) resolution = compatible;
+      const compatible = build(
+        previous,
+        recovering && previous.liveSteering !== true,
+        recovering && previous.environmentAudit !== true,
+        recovering && previous.auditedMemory !== true,
+        recovering && previous.stageGraph !== true,
+        recovering && previous.browserAudit !== true,
+        previous.environmentAuditRetry !== true,
+        previous.compactMutationReceipts !== true,
+      );
+      if (compatible.configHash === previous.configHash)
+        resolution = compatible;
       else legacyOutputRecall = undefined;
     }
     if (
@@ -498,7 +592,11 @@ async function executeDesktopNext(
       throw new Error(
         "上次任务未正常结束，请使用恢复操作检查并继续原任务，或新建对话。",
       );
-    if (reusable || recovering) record = previous && { ...previous, ...(legacyOutputRecall ? { legacyOutputRecall: true } : {}) };
+    if (reusable || recovering)
+      record = previous && {
+        ...previous,
+        ...(legacyOutputRecall ? { legacyOutputRecall: true } : {}),
+      };
     else {
       legacyOutputRecall = undefined;
       const history = options.conversationHistory?.slice(-32) ?? [];
@@ -521,8 +619,15 @@ async function executeDesktopNext(
           ? {
               environmentAudit: true as const,
               environmentAuditRetry: true as const,
-              ...(taskMode !== "long" && options.environmentAuditSinglePass !== false ? { environmentAuditSinglePass: true as const } : {}),
-              ...(taskMode !== "long" && options.environmentAuditSinglePass !== false && options.environmentAuditEvidenceRepair !== false ? { environmentAuditEvidenceRepair: true as const } : {}),
+              ...(taskMode !== "long" &&
+              options.environmentAuditSinglePass !== false
+                ? { environmentAuditSinglePass: true as const }
+                : {}),
+              ...(taskMode !== "long" &&
+              options.environmentAuditSinglePass !== false &&
+              options.environmentAuditEvidenceRepair !== false
+                ? { environmentAuditEvidenceRepair: true as const }
+                : {}),
               auditedMemory: true as const,
               browserAudit: true as const,
             }
@@ -541,9 +646,15 @@ async function executeDesktopNext(
     if (!resolution || !record) throw new Error("Paw Next profile unavailable");
     if (options.operation === "memory") {
       const maintenance = await maintainExistingPawNextMemoryV3({
-        resolution, requestApproval, signal: options.abortSignal, leaseScheduler: options.leaseScheduler,
+        resolution,
+        requestApproval,
+        signal: options.abortSignal,
+        leaseScheduler: options.leaseScheduler,
       });
-      return { ok: maintenance.status === "completed", text: JSON.stringify(maintenance) };
+      return {
+        ok: maintenance.status === "completed",
+        text: JSON.stringify(maintenance),
+      };
     }
     if (options.operation === "compact") {
       const result = await compactExistingPawNextTaskV3({
@@ -625,14 +736,26 @@ async function executeDesktopNext(
     const costTracker = new CostTracker();
     let rootTurns = 0;
     const input: RunFreshPawNextTaskInputV3 = {
-      ...(options.executionDeadline ? { executionDeadline: options.executionDeadline } : {}),
-      ...((options.backgroundMemory ?? !options.model) && resolution.taskOptions.memory?.mode === "read_write" ? {
-        deferMemory: async (sourceThroughSeq: number) => {
-          enqueueDesktopMemoryJob(options.memoryQueueDirectory ?? path.join(process.cwd(), ".paw", "desktop-memory-ingress"), {
-            workspaceRoot, runId: record!.runId, configHash: resolution!.configHash, sourceThroughSeq,
-          });
-        },
-      } : {}),
+      ...(options.executionDeadline
+        ? { executionDeadline: options.executionDeadline }
+        : {}),
+      ...((options.backgroundMemory ?? !options.model) &&
+      resolution.taskOptions.memory?.mode === "read_write"
+        ? {
+            deferMemory: async (sourceThroughSeq: number) => {
+              enqueueDesktopMemoryJob(
+                options.memoryQueueDirectory ??
+                  path.join(process.cwd(), ".paw", "desktop-memory-ingress"),
+                {
+                  workspaceRoot,
+                  runId: record!.runId,
+                  configHash: resolution!.configHash,
+                  sourceThroughSeq,
+                },
+              );
+            },
+          }
+        : {}),
       leaseScheduler: options.leaseScheduler,
       ...(options.thinkingRecovery !== undefined
         ? { thinkingRecovery: options.thinkingRecovery }
@@ -720,16 +843,24 @@ async function executeDesktopNext(
       ? projectEnvironmentAcceptance(result.inputFacts)
       : "not_required";
     const status = decision.kind;
-    const admissionStopped = status === "failed" && result.inputFacts.some(fact =>
-      fact.type === "runtime.failed" && fact.area === "input" &&
-      fact.message.startsWith("ExecutionBudgetInsufficientForRequest:"));
+    const admissionStopped =
+      status === "failed" &&
+      result.inputFacts.some(
+        (fact) =>
+          fact.type === "runtime.failed" &&
+          fact.area === "input" &&
+          fact.message.startsWith("ExecutionBudgetInsufficientForRequest:"),
+      );
     const answer = result.assistantText?.trim();
-    const auditTimedOut = acceptance === "unverified" && [...result.inputFacts].reverse().find(fact =>
-      fact.type === "completion.review_settled")?.reasonCode === "AuditTimeout";
-    const message =
-      admissionStopped
-        ? "根据本任务近期耗时，剩余时间不足以继续一次请求，已停止执行并保留已有结果。任务尚未完成。"
-        : acceptance === "unverified" && status === "completed"
+    const auditTimedOut =
+      acceptance === "unverified" &&
+      [...result.inputFacts]
+        .reverse()
+        .find((fact) => fact.type === "completion.review_settled")
+        ?.reasonCode === "AuditTimeout";
+    const message = admissionStopped
+      ? "根据本任务近期耗时，剩余时间不足以继续一次请求，已停止执行并保留已有结果。任务尚未完成。"
+      : acceptance === "unverified" && status === "completed"
         ? auditTimedOut
           ? "已有产物和验证记录已保留，但独立验收达到时限，任务尚未通过最终验收。请查看任务面板中的验收结果。"
           : "已有产物和验证记录已保留，但独立验收尚未通过，任务不能标记为完成。请查看任务面板中的验收结果。"
@@ -752,7 +883,8 @@ async function executeDesktopNext(
       record,
     );
     const uiStatus =
-      admissionStopped || status === "continue" ||
+      admissionStopped ||
+      status === "continue" ||
       (status === "completed" && acceptance === "unverified")
         ? "incomplete"
         : status;

@@ -1,27 +1,23 @@
+import { spawn } from "node:child_process";
 /**
  * 独立 workspace 全栈任务：notes-api（Bun server + 静态前端 + JSON 文件库）
  * 通过 startRun({ workspaceRoot }) 切到新工作区，不改 paw-ts monorepo。
  */
 import {
   existsSync,
-  readFileSync,
-  writeFileSync,
-  readdirSync,
   mkdirSync,
+  readdirSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const CDP = process.env.CDP_URL || "http://127.0.0.1:9223";
 const WORKSPACE =
   process.env.PLAYGROUND_ROOT ||
   "/Users/Zhuanz/Documents/CS/项目/paw-playground";
-const ART = join(
-  import.meta.dirname,
-  "../.cdp-artifacts",
-);
+const ART = join(import.meta.dirname, "../.cdp-artifacts");
 mkdirSync(ART, { recursive: true });
 mkdirSync(WORKSPACE, { recursive: true });
 
@@ -314,7 +310,9 @@ async function main() {
     files.some((f) => f.endsWith("server.ts"));
   const checks = {
     hasServer,
-    hasIndex: files.some((f) => f.endsWith("public/index.html") || f === "index.html"),
+    hasIndex: files.some(
+      (f) => f.endsWith("public/index.html") || f === "index.html",
+    ),
     hasAppJs: files.some((f) => f.includes("app.js")),
     hasCss: files.some((f) => f.includes("styles.css") || f.endsWith(".css")),
     hasReadme: files.some((f) => /readme/i.test(f)),
@@ -331,11 +329,7 @@ async function main() {
   const srv = await verifyServer();
   console.log(JSON.stringify(srv, null, 2));
 
-  const scoreParts = [
-    ...Object.values(checks),
-    srv.apiOk,
-    srv.createOk,
-  ];
+  const scoreParts = [...Object.values(checks), srv.apiOk, srv.createOk];
   const score = scoreParts.filter(Boolean).length;
   const total = scoreParts.length;
 

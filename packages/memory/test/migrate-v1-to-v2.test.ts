@@ -27,12 +27,21 @@ const migratedIds: string[] = [];
 function v1Row(
   type: string,
   overrides: Partial<Record<string, unknown>> = {},
-): { id: string; type: string; title: string; summary: string; confidence: number; payload: string } {
+): {
+  id: string;
+  type: string;
+  title: string;
+  summary: string;
+  confidence: number;
+  payload: string;
+} {
   return {
     id: `v1-${type}-${Date.now().toString(36)}`,
     type,
     title: String(overrides.title ?? `Title for ${type}`),
-    summary: String(overrides.summary ?? `Summary for ${type} with useful content`),
+    summary: String(
+      overrides.summary ?? `Summary for ${type} with useful content`,
+    ),
     confidence: Number(overrides.confidence ?? 0.7),
     payload: j({
       taskId: `tsk_${type}`,
@@ -53,10 +62,15 @@ afterAll(async () => {
   try {
     const sql = getSql();
     for (const id of migratedIds) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [id]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
+        id,
+      ]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [id]);
     }
-    await sql.unsafe("DELETE FROM memory_items WHERE scope->>'repositoryId' = $1", [REPO]);
+    await sql.unsafe(
+      "DELETE FROM memory_items WHERE scope->>'repositoryId' = $1",
+      [REPO],
+    );
     await closeSql();
   } catch {
     /* best-effort */
@@ -113,7 +127,9 @@ describe("pure: v1 行 → v2 条目构造", () => {
   });
 
   test("task_summary → episodic（whenToUse 用 title 构造）", () => {
-    const entry = buildV2EntryFromV1Row(v1Row("task_summary", { title: "Add redis caching" }));
+    const entry = buildV2EntryFromV1Row(
+      v1Row("task_summary", { title: "Add redis caching" }),
+    );
     expect(entry).not.toBeNull();
     if (entry && entry.kind === "episodic") {
       expect(entry.whenToUse).toContain("Add redis caching");
@@ -121,12 +137,17 @@ describe("pure: v1 行 → v2 条目构造", () => {
   });
 
   test("空内容 → null（跳过）；未知类型 → null", () => {
-    expect(buildV2EntryFromV1Row(v1Row("decision", { title: "", summary: " " }))).toBeNull();
+    expect(
+      buildV2EntryFromV1Row(v1Row("decision", { title: "", summary: " " })),
+    ).toBeNull();
     expect(buildV2EntryFromV1Row(v1Row("unknown-type"))).toBeNull();
   });
 
   test("extractMigratedKeywords 切词去重", () => {
-    const kws = extractMigratedKeywords("Use vitest for testing", "vitest is fast");
+    const kws = extractMigratedKeywords(
+      "Use vitest for testing",
+      "vitest is fast",
+    );
     expect(kws).toContain("vitest");
     expect(kws).toContain("testing");
     expect(new Set(kws).size).toBe(kws.length);
@@ -146,11 +167,23 @@ describe("DB: 迁移闭环", () => {
       { type: "decision" },
     ];
     for (const seed of seeds) {
-      const row = v1Row(seed.type, { summary: seed.summary, payload: { repositoryId: REPO } });
+      const row = v1Row(seed.type, {
+        summary: seed.summary,
+        payload: { repositoryId: REPO },
+      });
       // jsonb 列必须用 sql.json()（字符串 + ::jsonb 会被 postgres.js 双重编码成 JSON 字符串）
       await sql.unsafe(
         "INSERT INTO memory_items (id, schema_version, type, subject_key, title, summary, status, scope, confidence, verification_status, payload, version, created_at, updated_at, t_valid) VALUES ($1, 1, $2, $3, $4, $5, 'active', $6, $7, 'unverified', $8, 1, now(), now(), now())",
-        [row.id, row.type, `legacy:${row.type}`, row.title, row.summary, sql.json({ repositoryId: REPO }), row.confidence, sql.json(JSON.parse(row.payload))],
+        [
+          row.id,
+          row.type,
+          `legacy:${row.type}`,
+          row.title,
+          row.summary,
+          sql.json({ repositoryId: REPO }),
+          row.confidence,
+          sql.json(JSON.parse(row.payload)),
+        ],
       );
       migratedIds.push(row.id);
     }
@@ -165,7 +198,9 @@ describe("DB: 迁移闭环", () => {
       "SELECT type FROM memory_items WHERE scope->>'repositoryId' = $1",
       [REPO],
     )) as unknown as { type: string }[];
-    expect(rows.every((r) => !["semantic", "episodic"].includes(r.type))).toBe(true);
+    expect(rows.every((r) => !["semantic", "episodic"].includes(r.type))).toBe(
+      true,
+    );
   });
 
   test("正式迁移：kind 改写 + embedding + 幂等", async () => {
@@ -201,7 +236,9 @@ describe("DB: 迁移闭环", () => {
     // v2 引擎可读 + 可检索
     const entries = await engine.query({ repo: REPO, limit: 10 });
     expect(entries.length).toBe(4);
-    expect(entries.every((e) => ["semantic", "episodic"].includes(e.kind))).toBe(true);
+    expect(
+      entries.every((e) => ["semantic", "episodic"].includes(e.kind)),
+    ).toBe(true);
 
     const hits = await engine.searchText("vitest testing", 10);
     expect(hits.length).toBeGreaterThan(0);

@@ -133,7 +133,8 @@ export function createInteractiveControlReducerV2(): ControlReducer<
         segmentToolFacts,
         {
           ...config,
-          allowReasoningRecovery: config.recoverReasoningTimeout === true &&
+          allowReasoningRecovery:
+            config.recoverReasoningTimeout === true &&
             allModelFacts.filter(isReasoningTimeout).length === 1,
         },
       );
@@ -191,10 +192,15 @@ function modelSettlements(
   );
 }
 
-function isReasoningTimeout(fact: Extract<InputFactV1, { type: "model.settled" }>): boolean {
-  return fact.status === "unknown" &&
+function isReasoningTimeout(
+  fact: Extract<InputFactV1, { type: "model.settled" }>,
+): boolean {
+  return (
+    fact.status === "unknown" &&
     fact.errorCode === "ModelReasoningWithoutActionTimeout" &&
-    !fact.hasToolCalls && !fact.hasVisibleOutput;
+    !fact.hasToolCalls &&
+    !fact.hasVisibleOutput
+  );
 }
 
 function toolSettlements(
@@ -252,9 +258,21 @@ function decide(
         reason: latestModel.errorCode ?? "model-failed",
       };
     case "unknown":
-      if (config.allowReasoningRecovery && isReasoningTimeout(latestModel) &&
-          modelFacts.length < config.maxModelTurns) return { kind: "continue" };
-      return { kind: "incomplete", reason: /^Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout$/.test(latestModel.errorCode ?? "") ? latestModel.errorCode! : "model-result-unknown" };
+      if (
+        config.allowReasoningRecovery &&
+        isReasoningTimeout(latestModel) &&
+        modelFacts.length < config.maxModelTurns
+      )
+        return { kind: "continue" };
+      return {
+        kind: "incomplete",
+        reason:
+          /^Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout$/.test(
+            latestModel.errorCode ?? "",
+          )
+            ? latestModel.errorCode!
+            : "model-result-unknown",
+      };
     case "cancelled":
       return { kind: "incomplete", reason: "model-cancelled" };
     case "truncated":
@@ -387,7 +405,8 @@ function assertConfig(config: InteractiveControlConfigV1): void {
 function assertConfigV2(config: InteractiveControlConfigV2): void {
   assertConfig(config);
   if (
-    (config.recoverReasoningTimeout !== undefined && config.recoverReasoningTimeout !== true) ||
+    (config.recoverReasoningTimeout !== undefined &&
+      config.recoverReasoningTimeout !== true) ||
     (config.settleFinalToolBatch !== undefined &&
       config.settleFinalToolBatch !== true) ||
     !Number.isSafeInteger(config.maxSegments) ||

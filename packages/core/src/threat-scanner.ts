@@ -73,7 +73,11 @@ function definePatterns(): void {
    * - "context" → 加入 context + strict
    * - "strict" → 只加入 strict
    */
-  function p(pattern: string, id: string, scope: "all" | "context" | "strict"): void {
+  function p(
+    pattern: string,
+    id: string,
+    scope: "all" | "context" | "strict",
+  ): void {
     const entry: ThreatPattern = { regex: new RegExp(pattern, "i"), id };
     if (scope === "all") {
       all.push(entry);
@@ -88,54 +92,174 @@ function definePatterns(): void {
   }
 
   // ═══ Classic prompt injection (all) ═══
-  p(String.raw`ignore\s+${F}(previous|all|above|prior)\s+${F}instructions`, "prompt_injection", "all");
+  p(
+    String.raw`ignore\s+${F}(previous|all|above|prior)\s+${F}instructions`,
+    "prompt_injection",
+    "all",
+  );
   p(String.raw`system\s+prompt\s+override`, "sys_prompt_override", "all");
-  p(String.raw`disregard\s+${F}(your|all|any)\s+${F}(instructions|rules|guidelines)`, "disregard_rules", "all");
-  p(String.raw`act\s+as\s+(if|though)\s+${F}you\s+${F}(have\s+no|don't\s+have)\s+${F}(restrictions|limits|rules)`, "bypass_restrictions", "all");
-  p(String.raw`<!--[^>]{0,512}(?:ignore|override|system|secret|hidden)[^>]{0,512}-->`, "html_comment_injection", "all");
-  p(String.raw`<\s*div\s+style\s*=\s*["'][^>]{0,2048}display\s*:\s*none`, "hidden_div", "all");
-  p(String.raw`translate\s+[^\n]{0,512}\s+into\s+[^\n]{0,512}\s+and\s+(execute|run|eval)`, "translate_execute", "all");
+  p(
+    String.raw`disregard\s+${F}(your|all|any)\s+${F}(instructions|rules|guidelines)`,
+    "disregard_rules",
+    "all",
+  );
+  p(
+    String.raw`act\s+as\s+(if|though)\s+${F}you\s+${F}(have\s+no|don't\s+have)\s+${F}(restrictions|limits|rules)`,
+    "bypass_restrictions",
+    "all",
+  );
+  p(
+    String.raw`<!--[^>]{0,512}(?:ignore|override|system|secret|hidden)[^>]{0,512}-->`,
+    "html_comment_injection",
+    "all",
+  );
+  p(
+    String.raw`<\s*div\s+style\s*=\s*["'][^>]{0,2048}display\s*:\s*none`,
+    "hidden_div",
+    "all",
+  );
+  p(
+    String.raw`translate\s+[^\n]{0,512}\s+into\s+[^\n]{0,512}\s+and\s+(execute|run|eval)`,
+    "translate_execute",
+    "all",
+  );
   p(String.raw`do\s+not\s+${F}tell\s+${F}the\s+user`, "deception_hide", "all");
 
   // ═══ Role-play / identity hijack (context) ═══
-  p(String.raw`you\s+are\s+${F}now\s+(?:a|an|the)\s+`, "role_hijack", "context");
-  p(String.raw`pretend\s+${F}(you\s+are|to\s+be)\s+`, "role_pretend", "context");
-  p(String.raw`output\s+${F}(system|initial)\s+prompt`, "leak_system_prompt", "context");
-  p(String.raw`(respond|answer|reply)\s+without\s+${F}(restrictions|limitations|filters|safety)`, "remove_filters", "context");
-  p(String.raw`you\s+have\s+been\s+${F}(updated|upgraded|patched)\s+to`, "fake_update", "context");
+  p(
+    String.raw`you\s+are\s+${F}now\s+(?:a|an|the)\s+`,
+    "role_hijack",
+    "context",
+  );
+  p(
+    String.raw`pretend\s+${F}(you\s+are|to\s+be)\s+`,
+    "role_pretend",
+    "context",
+  );
+  p(
+    String.raw`output\s+${F}(system|initial)\s+prompt`,
+    "leak_system_prompt",
+    "context",
+  );
+  p(
+    String.raw`(respond|answer|reply)\s+without\s+${F}(restrictions|limitations|filters|safety)`,
+    "remove_filters",
+    "context",
+  );
+  p(
+    String.raw`you\s+have\s+been\s+${F}(updated|upgraded|patched)\s+to`,
+    "fake_update",
+    "context",
+  );
   p(String.raw`\bname\s+yourself\s+\w+`, "identity_override", "context");
 
   // ═══ C2 / Brainworm-style promptware (context) ═══
-  p(String.raw`register\s+(as\s+)?a?\s*node`, "c2_node_registration", "context");
-  p(String.raw`(heartbeat|beacon|check[\s\-]?in)\s+(to|with)\s+`, "c2_heartbeat", "context");
-  p(String.raw`pull\s+(down\s+)?(?:new\s+)?task(?:ing|s)?\b`, "c2_task_pull", "context");
-  p(String.raw`connect\s+to\s+the\s+network\b`, "c2_network_connect", "context");
-  p(String.raw`you\s+must\s+(?:\w+\s+){0,3}(register|connect|report|beacon)\b`, "forced_action", "context");
-  p(String.raw`only\s+use\s+one[\s\-]?liners?\b`, "anti_forensic_oneliner", "context");
-  p(String.raw`never\s+${F}(?:create|write)\s+${F}(?:script|file)\s+${F}disk`, "anti_forensic_disk", "context");
-  p(String.raw`unset\s+\w*(?:CLAUDE|CODEX|HERMES|AGENT|OPENAI|ANTHROPIC|PAW)\w*`, "env_var_unset_agent", "context");
+  p(
+    String.raw`register\s+(as\s+)?a?\s*node`,
+    "c2_node_registration",
+    "context",
+  );
+  p(
+    String.raw`(heartbeat|beacon|check[\s\-]?in)\s+(to|with)\s+`,
+    "c2_heartbeat",
+    "context",
+  );
+  p(
+    String.raw`pull\s+(down\s+)?(?:new\s+)?task(?:ing|s)?\b`,
+    "c2_task_pull",
+    "context",
+  );
+  p(
+    String.raw`connect\s+to\s+the\s+network\b`,
+    "c2_network_connect",
+    "context",
+  );
+  p(
+    String.raw`you\s+must\s+(?:\w+\s+){0,3}(register|connect|report|beacon)\b`,
+    "forced_action",
+    "context",
+  );
+  p(
+    String.raw`only\s+use\s+one[\s\-]?liners?\b`,
+    "anti_forensic_oneliner",
+    "context",
+  );
+  p(
+    String.raw`never\s+${F}(?:create|write)\s+${F}(?:script|file)\s+${F}disk`,
+    "anti_forensic_disk",
+    "context",
+  );
+  p(
+    String.raw`unset\s+\w*(?:CLAUDE|CODEX|HERMES|AGENT|OPENAI|ANTHROPIC|PAW)\w*`,
+    "env_var_unset_agent",
+    "context",
+  );
 
   // ═══ Known C2 / red-team framework names (context) ═══
-  p(String.raw`\b(?:cobalt\s*strike|sliver|havoc|mythic|metasploit|brainworm)\b`, "known_c2_framework", "context");
-  p(String.raw`\bc2\s+(?:server|channel|infrastructure|beacon)\b`, "c2_explicit", "context");
+  p(
+    String.raw`\b(?:cobalt\s*strike|sliver|havoc|mythic|metasploit|brainworm)\b`,
+    "known_c2_framework",
+    "context",
+  );
+  p(
+    String.raw`\bc2\s+(?:server|channel|infrastructure|beacon)\b`,
+    "c2_explicit",
+    "context",
+  );
   p(String.raw`\bcommand\s+and\s+control\b`, "c2_explicit_long", "context");
 
   // ═══ Exfiltration via curl/wget/cat (all) ═══
-  p(String.raw`curl\s+[^\n]{0,2048}\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)`, "exfil_curl", "all");
-  p(String.raw`wget\s+[^\n]{0,2048}\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)`, "exfil_wget", "all");
-  p(String.raw`cat\s+[^\n]{0,2048}(?:\.env|credentials|\.netrc|\.pgpass|\.npmrc|\.pypirc)`, "read_secrets", "all");
-  p(String.raw`(?:send|post|upload|transmit)\s+[^\n]{0,2048}\s+(?:to|at)\s+https?://`, "send_to_url", "strict");
-  p(String.raw`(?:include|output|print|share)\s+${F}(?:conversation|chat\s+history|previous\s+messages|full\s+context|entire\s+context)`, "context_exfil", "strict");
+  p(
+    String.raw`curl\s+[^\n]{0,2048}\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)`,
+    "exfil_curl",
+    "all",
+  );
+  p(
+    String.raw`wget\s+[^\n]{0,2048}\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)`,
+    "exfil_wget",
+    "all",
+  );
+  p(
+    String.raw`cat\s+[^\n]{0,2048}(?:\.env|credentials|\.netrc|\.pgpass|\.npmrc|\.pypirc)`,
+    "read_secrets",
+    "all",
+  );
+  p(
+    String.raw`(?:send|post|upload|transmit)\s+[^\n]{0,2048}\s+(?:to|at)\s+https?://`,
+    "send_to_url",
+    "strict",
+  );
+  p(
+    String.raw`(?:include|output|print|share)\s+${F}(?:conversation|chat\s+history|previous\s+messages|full\s+context|entire\s+context)`,
+    "context_exfil",
+    "strict",
+  );
 
   // ═══ Persistence / SSH backdoor (strict) ═══
   p(String.raw`authorized_keys`, "ssh_backdoor", "strict");
   p(String.raw`\$HOME/\.ssh|\~/\.ssh`, "ssh_access", "strict");
-  p(String.raw`\$HOME/\.hermes/\.env|\~/\.hermes/\.env`, "hermes_env", "strict");
-  p(String.raw`(?:update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}(?:PAW\.md|AGENTS\.md|CLAUDE\.md|settings\.local\.json|\.cursorrules|\.clinerules)`, "agent_config_mod", "strict");
-  p(String.raw`(?:update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}\.hermes/(?:config\.yaml|SOUL\.md)`, "hermes_config_mod", "strict");
+  p(
+    String.raw`\$HOME/\.hermes/\.env|\~/\.hermes/\.env`,
+    "hermes_env",
+    "strict",
+  );
+  p(
+    String.raw`(?:update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}(?:PAW\.md|AGENTS\.md|CLAUDE\.md|settings\.local\.json|\.cursorrules|\.clinerules)`,
+    "agent_config_mod",
+    "strict",
+  );
+  p(
+    String.raw`(?:update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}\.hermes/(?:config\.yaml|SOUL\.md)`,
+    "hermes_config_mod",
+    "strict",
+  );
 
   // ═══ Hardcoded secrets (strict) ═══
-  p(String.raw`(?:api[_-]?key|token|secret|password)\s*[=:]\s*["'][A-Za-z0-9+/=_-]{20,}`, "hardcoded_secret", "strict");
+  p(
+    String.raw`(?:api[_-]?key|token|secret|password)\s*[=:]\s*["'][A-Za-z0-9+/=_-]{20,}`,
+    "hardcoded_secret",
+    "strict",
+  );
 
   _PATTERNS["all"] = all;
   _PATTERNS["context"] = context;
@@ -167,7 +291,9 @@ export function scanForThreats(
   const charSet = new Set(text);
   for (const ch of INVISIBLE_CHARS) {
     if (charSet.has(ch)) {
-      findings.push(`invisible_unicode_U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`);
+      findings.push(
+        `invisible_unicode_U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`,
+      );
     }
   }
 

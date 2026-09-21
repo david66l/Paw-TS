@@ -7,13 +7,22 @@ export const PAW_MEMORY_EVIDENCE_TEMPORAL_COMPATIBILITY_VERSION_V1 =
   "paw.memory-evidence-temporal-compatibility.v1:leaf-retrieval" as const;
 
 export type MemoryEvidenceAnswerShapeV3 =
-  "lookup" | "compare" | "aggregate" | "recommend";
+  | "lookup"
+  | "compare"
+  | "aggregate"
+  | "recommend";
 
 export type MemoryEvidenceTemporalModeV3 =
-  "any" | "latest" | "as_of" | "history" | "range";
+  | "any"
+  | "latest"
+  | "as_of"
+  | "history"
+  | "range";
 
 export type MemoryEvidenceTemporalAnchorPolicyV1 =
-  "none" | "query_cutoff" | "query_derived_anchor";
+  | "none"
+  | "query_cutoff"
+  | "query_derived_anchor";
 export type MemoryEvidenceTemporalIntervalPolicyV1 =
   | "unbounded"
   | "latest_at_or_before_cutoff"
@@ -47,7 +56,8 @@ export interface MemoryEvidenceTemporalIntervalV2 {
 }
 
 export type MemoryEvidenceTemporalClockPolicyV2 =
-  "event_required" | "event_then_observed_if_uniform";
+  | "event_required"
+  | "event_then_observed_if_uniform";
 
 export type MemoryEvidenceBoundTemporalWindowV2 =
   | Readonly<{
@@ -109,7 +119,8 @@ export interface MemoryEvidenceDurationRequestV1 {
   readonly requestRevision: string;
 }
 
-export interface MemoryEvidenceBoundTemporalConstraintV1 extends MemoryEvidenceTemporalConstraintV1 {
+export interface MemoryEvidenceBoundTemporalConstraintV1
+  extends MemoryEvidenceTemporalConstraintV1 {
   readonly evidenceTimeUpperBound: string | null;
   readonly window: MemoryEvidenceBoundTemporalWindowV2;
   readonly durationRequest: MemoryEvidenceDurationRequestV1 | null;
@@ -122,9 +133,14 @@ export type MemoryEvidenceRequirementRoleV4 = Exclude<
   "any"
 >;
 export type MemoryEvidenceRequirementDependencyV4 =
-  "independent" | "depends_on" | "responds_to" | "supersedes";
+  | "independent"
+  | "depends_on"
+  | "responds_to"
+  | "supersedes";
 export type MemoryEvidenceIntentAxisV1 =
-  "answerShape" | "temporalMode" | "roleConstraint";
+  | "answerShape"
+  | "temporalMode"
+  | "roleConstraint";
 export type MemoryEvidenceIntentAxisAuthorityV1 = "fixed" | "semantic";
 
 /** Code locks explicit cues; a planner may normalize only semantic fallbacks. */
@@ -134,9 +150,15 @@ export interface MemoryEvidenceIntentBoundaryV1 {
   readonly roleConstraint: MemoryEvidenceIntentAxisAuthorityV1;
 }
 export type MemoryEvidenceRelationV3 =
-  "direct" | "temporal" | "comparative" | "inferred";
+  | "direct"
+  | "temporal"
+  | "comparative"
+  | "inferred";
 export type MemoryEvidenceCoverageModeV3 =
-  "any" | "all" | "latest" | "convergent";
+  | "any"
+  | "all"
+  | "latest"
+  | "convergent";
 
 /**
  * Query intent is deliberately factored into independent axes. A question can

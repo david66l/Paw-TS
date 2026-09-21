@@ -1034,7 +1034,10 @@ function assertLifecycleIdentities(
     Extract<InputFactV1, { type: "input.accepted" }>
   >();
   const promotedInputIds = new Set<string>();
-  const executionBudgets = new Map<string, Extract<InputFactV1, { type: "execution.budget_observed" }>>();
+  const executionBudgets = new Map<
+    string,
+    Extract<InputFactV1, { type: "execution.budget_observed" }>
+  >();
   const models = new Map<
     string,
     {
@@ -1158,10 +1161,19 @@ function assertLifecycleIdentities(
     const fact = envelope.record.fact;
     switch (fact.type) {
       case "execution.budget_observed": {
-        if (!promotedInputIds.has(fact.inputId)) throw new Error("Execution budget requires promoted input");
+        if (!promotedInputIds.has(fact.inputId))
+          throw new Error("Execution budget requires promoted input");
         const previous = executionBudgets.get(fact.inputId);
-        if (previous && (previous.deadlineAtMs !== fact.deadlineAtMs || previous.reserveMs !== fact.reserveMs || previous.admissionPolicy !== fact.admissionPolicy || fact.observedAtMs < previous.observedAtMs))
-          throw new Error("Execution budget cannot reset or move its clock backwards");
+        if (
+          previous &&
+          (previous.deadlineAtMs !== fact.deadlineAtMs ||
+            previous.reserveMs !== fact.reserveMs ||
+            previous.admissionPolicy !== fact.admissionPolicy ||
+            fact.observedAtMs < previous.observedAtMs)
+        )
+          throw new Error(
+            "Execution budget cannot reset or move its clock backwards",
+          );
         executionBudgets.set(fact.inputId, fact);
         break;
       }
@@ -2079,12 +2091,22 @@ function assertInputFact(value: unknown): void {
   const fact = expectObject(value, "input fact");
   switch (fact.type) {
     case "execution.budget_observed":
-      assertExactKeys(fact, ["type", "inputId", "deadlineAtMs", "observedAtMs", "reserveMs"], ["admissionPolicy"], fact.type);
-      if (fact.admissionPolicy !== undefined && fact.admissionPolicy !== "recent_round_floor_v1") throw new Error("Invalid execution admission policy");
+      assertExactKeys(
+        fact,
+        ["type", "inputId", "deadlineAtMs", "observedAtMs", "reserveMs"],
+        ["admissionPolicy"],
+        fact.type,
+      );
+      if (
+        fact.admissionPolicy !== undefined &&
+        fact.admissionPolicy !== "recent_round_floor_v1"
+      )
+        throw new Error("Invalid execution admission policy");
       assertId(fact.inputId, "inputId");
       for (const key of ["deadlineAtMs", "observedAtMs", "reserveMs"]) {
         assertNonNegativeInteger(fact[key], key);
-        if (!Number.isSafeInteger(fact[key])) throw new Error(`Invalid execution budget ${key}`);
+        if (!Number.isSafeInteger(fact[key]))
+          throw new Error(`Invalid execution budget ${key}`);
       }
       return;
     case "attempt.started":

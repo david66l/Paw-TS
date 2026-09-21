@@ -44,7 +44,10 @@ export interface ContextPolicy {
     reservedForSystem: number;
     reservedForGeneration: number;
     availableForContext: number;
-    categoryBudgets: Record<string, { minTokens: number; targetTokens: number; maxTokens: number }>;
+    categoryBudgets: Record<
+      string,
+      { minTokens: number; targetTokens: number; maxTokens: number }
+    >;
   };
   evictionOrder: string[];
 }
@@ -80,7 +83,15 @@ export interface PolicySnapshot {
 
 const DEFAULTS: EffectivePolicy = {
   write: {
-    allowedCandidateTypes: ["task_summary", "decision", "failure", "project_knowledge", "user_preference", "rule", "skill"],
+    allowedCandidateTypes: [
+      "task_summary",
+      "decision",
+      "failure",
+      "project_knowledge",
+      "user_preference",
+      "rule",
+      "skill",
+    ],
     minConfidence: 0.5,
     requireEvidence: true,
     maxCandidatesPerTask: 20,
@@ -89,14 +100,25 @@ const DEFAULTS: EffectivePolicy = {
   retrieval: {
     topK: 6,
     minScore: 0.4,
-    allowedMemoryTypes: ["task_summary", "decision", "failure", "project_knowledge", "user_preference", "rule", "skill"],
+    allowedMemoryTypes: [
+      "task_summary",
+      "decision",
+      "failure",
+      "project_knowledge",
+      "user_preference",
+      "rule",
+      "skill",
+    ],
     tokenBudget: 4000,
     retrievalMode: "memory_only",
   },
   governance: {
     autoApproveLowRiskThreshold: 0.6,
     autoApproveMediumRiskThreshold: 0.7,
-    autoApproveConditions: ["low+sufficient_confidence", "medium+high_confidence"],
+    autoApproveConditions: [
+      "low+sufficient_confidence",
+      "medium+high_confidence",
+    ],
     autoRejectConditions: ["no_evidence", "schema_invalid"],
     conflictMode: "reject",
     duplicateThreshold: 0.9,
@@ -121,7 +143,12 @@ const DEFAULTS: EffectivePolicy = {
     timeoutMs: 10000,
     codeIndexDegradation: "memory_only",
     memoryWriterFailure: "continue",
-    policyFallbackOrder: ["session_snapshot", "last_known_good", "safe_default", "fail_closed"],
+    policyFallbackOrder: [
+      "session_snapshot",
+      "last_known_good",
+      "safe_default",
+      "fail_closed",
+    ],
   },
 };
 
@@ -129,7 +156,11 @@ const DEFAULTS: EffectivePolicy = {
 // Engine
 // ══════════════════════════════════════════════
 
-type PolicyScope = { repositoryId?: string; userId?: string; taskType?: string };
+type PolicyScope = {
+  repositoryId?: string;
+  userId?: string;
+  taskType?: string;
+};
 
 export class PolicyEngine {
   private cache = new Map<string, { policy: EffectivePolicy; ts: number }>();
@@ -139,7 +170,8 @@ export class PolicyEngine {
   async resolve(scope: PolicyScope = {}): Promise<EffectivePolicy> {
     const cacheKey = this.cacheKey(scope);
     const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < this.cacheTtlMs) return cached.policy;
+    if (cached && Date.now() - cached.ts < this.cacheTtlMs)
+      return cached.policy;
 
     const sql = getSql();
     try {
@@ -154,7 +186,9 @@ export class PolicyEngine {
         ORDER BY CASE scope_type WHEN 'global' THEN 0 WHEN 'repository' THEN 1 WHEN 'user' THEN 2 END
       `;
 
-      const merged = this.merge(rows as unknown as { domain: string; config: unknown }[]);
+      const merged = this.merge(
+        rows as unknown as { domain: string; config: unknown }[],
+      );
       this.cache.set(cacheKey, { policy: merged, ts: Date.now() });
       return merged;
     } catch {
@@ -163,7 +197,10 @@ export class PolicyEngine {
   }
 
   /** 为 Task Session 创建不可变策略快照 */
-  async createSnapshot(taskSessionId: string, scope?: PolicyScope): Promise<PolicySnapshot> {
+  async createSnapshot(
+    taskSessionId: string,
+    scope?: PolicyScope,
+  ): Promise<PolicySnapshot> {
     const policy = await this.resolve(scope);
     const sourceVersions = await this.getVersions();
     const raw = JSON.stringify(policy);
@@ -176,13 +213,21 @@ export class PolicyEngine {
       VALUES (${id}, ${taskSessionId}, ${sql.json(policy as any)}, ${sql.json(sourceVersions as any)}, ${simpleHash(raw)}, 'active', ${now})
       ON CONFLICT (task_session_id) DO NOTHING
     `;
-    return { id, taskSessionId, effectivePolicy: policy, sourceVersions, checksum: simpleHash(raw), createdAt: now };
+    return {
+      id,
+      taskSessionId,
+      effectivePolicy: policy,
+      sourceVersions,
+      checksum: simpleHash(raw),
+      createdAt: now,
+    };
   }
 
   /** 根据 snapshotId 获取固定策略 */
   async getSnapshot(snapshotId: string): Promise<EffectivePolicy | null> {
     const sql = getSql();
-    const rows = await sql`SELECT effective_policy FROM policy_snapshots WHERE id = ${snapshotId}`;
+    const rows =
+      await sql`SELECT effective_policy FROM policy_snapshots WHERE id = ${snapshotId}`;
     if (rows.length === 0) return null;
     const raw = rows[0]!.effective_policy;
     const parsed = parseJson(raw) as Record<string, unknown>;
@@ -205,8 +250,10 @@ export class PolicyEngine {
     for (const row of rows) {
       const config = (parseJson(row.config) ?? {}) as Record<string, unknown>;
       if (row.domain === "write") Object.assign(result.write, config);
-      else if (row.domain === "retrieval") Object.assign(result.retrieval, config);
-      else if (row.domain === "governance") Object.assign(result.governance, config);
+      else if (row.domain === "retrieval")
+        Object.assign(result.retrieval, config);
+      else if (row.domain === "governance")
+        Object.assign(result.governance, config);
       else if (row.domain === "context") Object.assign(result.context, config);
       else if (row.domain === "error") Object.assign(result.error, config);
     }
@@ -215,9 +262,14 @@ export class PolicyEngine {
 
   private async getVersions(): Promise<Record<string, string>> {
     const sql = getSql();
-    const rows = await sql`SELECT domain, name, version FROM policy_configs WHERE status = 'active'`;
+    const rows =
+      await sql`SELECT domain, name, version FROM policy_configs WHERE status = 'active'`;
     const versions: Record<string, string> = {};
-    for (const r of rows as unknown as { domain: string; name: string; version: number }[]) {
+    for (const r of rows as unknown as {
+      domain: string;
+      name: string;
+      version: number;
+    }[]) {
       versions[`${r.domain}/${r.name}`] = `v${r.version}`;
     }
     return versions;

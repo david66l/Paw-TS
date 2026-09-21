@@ -2,13 +2,13 @@ import type {
   InteractiveControlConfigV2,
   SessionInputSnapshot,
 } from "@paw/agent-loop";
+import { projectPendingCompletionReviewFeedbackV1 } from "@paw/completion-review";
 import {
   projectProgressAdviceTimelineV1,
   projectProgressAdviceV1,
   renderProgressAdviceMessageV1,
 } from "@paw/progress-advisor";
 import type { InputFactV1 } from "@paw/protocol";
-import { projectPendingCompletionReviewFeedbackV1 } from "@paw/completion-review";
 import {
   type JournalContextAnnotationV1,
   projectLatestWorkSegmentBoundaryV1,

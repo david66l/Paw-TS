@@ -17,10 +17,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { closeSql, getSql } from "../src/db/connection.js";
 import {
+  type MemoryRuntime,
   createMemoryRuntime,
   getMemoryV2CoreForTests,
   resetMemoryV2Core,
-  type MemoryRuntime,
 } from "../src/runtime/index.js";
 import {
   makeDistillerLlm,
@@ -64,10 +64,15 @@ beforeAll(async () => {
   // 测试 4 的蒸馏产物：semantic + episodic（whenToUse 含 ECONNREFUSED，供 T2 匹配；
   // 轨迹含失败→成功转折，episodic 必须带 failureFixPair）
   distillState.current = [
-    makeSemanticCandidate({ fact: "Always prefer vitest over jest in this monorepo.", keywords: ["vitest", "jest"] }),
+    makeSemanticCandidate({
+      fact: "Always prefer vitest over jest in this monorepo.",
+      keywords: ["vitest", "jest"],
+    }),
     makeEpisodicCandidate({
-      whenToUse: "When a test fails with ECONNREFUSED, check the mock server port first.",
-      perspective: "Connection errors in tests usually mean the mock server is not listening.",
+      whenToUse:
+        "When a test fails with ECONNREFUSED, check the mock server port first.",
+      perspective:
+        "Connection errors in tests usually mean the mock server is not listening.",
       modification: ["Verify the mock server port", "Check the test config"],
       issueType: "ECONNREFUSED",
       failureFixPair: {
@@ -108,20 +113,42 @@ afterAll(async () => {
   try {
     const sql = getSql();
     for (const id of createdIds) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [id]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
+        id,
+      ]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [id]);
       // Governor 裁决记录（candidate_id = 内容哈希 = 条目 id）；不清理会污染 governor 测试的 v2-m5 断言
-      await sql.unsafe("DELETE FROM governance_decisions WHERE candidate_id = $1", [id]);
+      await sql.unsafe(
+        "DELETE FROM governance_decisions WHERE candidate_id = $1",
+        [id],
+      );
     }
-    for (const tid of [taskId, taskIdNoTest, taskIdCancel, taskIdTrial].filter(Boolean)) {
-      await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [tid]);
+    for (const tid of [taskId, taskIdNoTest, taskIdCancel, taskIdTrial].filter(
+      Boolean,
+    )) {
+      await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [
+        tid,
+      ]);
       await sql.unsafe("DELETE FROM memory_op_log WHERE run_id = $1", [tid]);
-      await sql.unsafe("DELETE FROM memory_trial_lessons WHERE origin_task_id = $1", [tid]);
-      await sql.unsafe("DELETE FROM governance_decisions WHERE candidate_id = $1", [tid]);
+      await sql.unsafe(
+        "DELETE FROM memory_trial_lessons WHERE origin_task_id = $1",
+        [tid],
+      );
+      await sql.unsafe(
+        "DELETE FROM governance_decisions WHERE candidate_id = $1",
+        [tid],
+      );
     }
-    await sql.unsafe("DELETE FROM memory_items WHERE scope->>'repositoryId' = $1", [REPO]);
-    await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id NOT IN (SELECT id FROM memory_items)");
-    await sql.unsafe("DELETE FROM memory_op_log WHERE run_id LIKE $1", [`%${REPO}%`]);
+    await sql.unsafe(
+      "DELETE FROM memory_items WHERE scope->>'repositoryId' = $1",
+      [REPO],
+    );
+    await sql.unsafe(
+      "DELETE FROM memory_embeddings WHERE memory_id NOT IN (SELECT id FROM memory_items)",
+    );
+    await sql.unsafe("DELETE FROM memory_op_log WHERE run_id LIKE $1", [
+      `%${REPO}%`,
+    ]);
     await runtime.shutdown();
     resetMemoryV2Core();
     await closeSql();
@@ -290,7 +317,8 @@ describe("MemoryRuntime v2 closed loop", () => {
     // （workspace/run/shell/command/bun/test/exit）才能在共享测试库中压过噪声排名
     const seeded = await runtime.saveMemory({
       title: "bun test ECONNREFUSED mock server",
-      summary: "Run bun test in a workspace shell command; when it exits with ECONNREFUSED the mock server is not listening on the expected port.",
+      summary:
+        "Run bun test in a workspace shell command; when it exits with ECONNREFUSED the mock server is not listening on the expected port.",
       type: "project_knowledge",
     });
     createdIds.push(seeded.memoryId!);
@@ -317,7 +345,10 @@ describe("MemoryRuntime v2 closed loop", () => {
   test("7. 无测试信号 → session_finalize 兜底（conf ≤0.6）", async () => {
     // 切换蒸馏内容（避免与测试 4 的内容哈希撞 id）
     distillState.current = [
-      makeSemanticCandidate({ fact: "Use dependency injection for the auth service layer.", keywords: ["auth", "dependency"] }),
+      makeSemanticCandidate({
+        fact: "Use dependency injection for the auth service layer.",
+        keywords: ["auth", "dependency"],
+      }),
     ];
 
     const begun = await runtime.beginTask({
@@ -346,7 +377,11 @@ describe("MemoryRuntime v2 closed loop", () => {
     const rows = (await sql.unsafe(
       "SELECT id, confidence, verification_status FROM memory_items WHERE scope->>'repositoryId' = $1 AND id NOT IN (SELECT unnest($2::text[]))",
       [REPO, createdIds],
-    )) as unknown as { id: string; confidence: number; verification_status: string }[];
+    )) as unknown as {
+      id: string;
+      confidence: number;
+      verification_status: string;
+    }[];
     expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) {
       expect(r.confidence).toBeLessThanOrEqual(0.6);

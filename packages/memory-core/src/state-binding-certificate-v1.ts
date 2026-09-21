@@ -319,8 +319,7 @@ export function compileMemoryStateBindingCertificatesV1(
             ...(observation.lifecycleTargetEvidenceRef === undefined
               ? {}
               : {
-                  targetEvidenceRef:
-                    observation.lifecycleTargetEvidenceRef,
+                  targetEvidenceRef: observation.lifecycleTargetEvidenceRef,
                 }),
             ...(lifecycleTarget === undefined
               ? {}

@@ -85,8 +85,7 @@ export class EmbeddingCache {
   constructor(config?: EmbeddingConfig) {
     this.model = config?.model ?? DEFAULT_EMBEDDING_MODEL;
     // 去除 baseUrl 尾部斜杠，防止拼接出双斜杠的 URL
-    this.baseUrl =
-      config?.baseUrl?.replace(/\/$/, "") ?? DEFAULT_OLLAMA_HOST;
+    this.baseUrl = config?.baseUrl?.replace(/\/$/, "") ?? DEFAULT_OLLAMA_HOST;
     this.timeoutMs = config?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
@@ -180,7 +179,7 @@ export class EmbeddingCache {
     entry: EmbeddingCacheEntry,
   ): Promise<number[] | null> {
     const text = [entry.title, entry.summary, entry.content]
-      .filter((x) => x.trim())  // 过滤空字段，避免多余换行
+      .filter((x) => x.trim()) // 过滤空字段，避免多余换行
       .join("\n");
     return this.computeEmbedding(text);
   }

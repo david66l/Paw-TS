@@ -8,13 +8,13 @@
  * - workspaceId: options / repositoryId
  */
 
-import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  createMemoryScopeKey,
   type MemoryScopeKey,
+  createMemoryScopeKey,
 } from "../longterm/store/scope-key.js";
 import type { MemoryRuntimeOptions } from "./types.js";
 
@@ -51,7 +51,10 @@ function readSettingsOverrides(
   try {
     const p = path.join(workspaceRoot, ".paw", "settings.local.json");
     if (!fs.existsSync(p)) return {};
-    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
+    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<
+      string,
+      unknown
+    >;
     return {
       tenantId:
         typeof raw.tenant_id === "string"

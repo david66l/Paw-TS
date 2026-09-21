@@ -175,9 +175,9 @@ describe("selectors", () => {
     });
 
     test("save rejects a runId that escapes the states directory", () => {
-      expect(() =>
-        store.save(makeState({ runId: "../../escaped" })),
-      ).toThrow(/escapes the states directory/);
+      expect(() => store.save(makeState({ runId: "../../escaped" }))).toThrow(
+        /escapes the states directory/,
+      );
     });
 
     test("delete rejects a runId that escapes the states directory", () => {

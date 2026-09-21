@@ -26,9 +26,7 @@ export function resolveEstimatorForModel(modelLabel: string): TokenEstimator {
   // Qwen / GLM / MiniMax / Yi 等中文系模型：o200k 更接近真实 tokenizer
   // （(?![a-z])：qwen2.5 / qwen3 等带版本后缀的 label 同样命中）
   if (
-    /\b(qwen|glm|minimax|yi|kimi|moonshot|ernie|baichuan)(?![a-z])/.test(
-      label,
-    )
+    /\b(qwen|glm|minimax|yi|kimi|moonshot|ernie|baichuan)(?![a-z])/.test(label)
   ) {
     return new TiktokenEstimator("o200k_base");
   }
@@ -100,20 +98,14 @@ export class CalibratedEstimator implements TokenEstimator {
    * 回填一次真实 usage：actual = 模型返回的 prompt_tokens，
    * estimated = 同一消息数组的裸估算。
    */
-  recordActual(
-    actualTokens: number,
-    estimatedTokens: number,
-  ): void {
+  recordActual(actualTokens: number, estimatedTokens: number): void {
     if (!Number.isFinite(actualTokens) || actualTokens <= 0) return;
     if (!Number.isFinite(estimatedTokens) || estimatedTokens <= 0) return;
     this.sumActual += actualTokens;
     this.sumEstimated += estimatedTokens;
     this.samples += 1;
     const r = this.sumActual / this.sumEstimated;
-    this.ratio = Math.min(
-      CALIBRATION_MAX,
-      Math.max(CALIBRATION_MIN, r),
-    );
+    this.ratio = Math.min(CALIBRATION_MAX, Math.max(CALIBRATION_MIN, r));
   }
 
   /** 当前校准系数 */

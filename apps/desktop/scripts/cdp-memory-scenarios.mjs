@@ -2,7 +2,7 @@
  * 记忆系统专项复杂场景（CDP）
  * 依赖：Electron --remote-debugging-port=9223 + vite :5173 + Postgres paw_memory
  */
-import { writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const CDP = process.env.CDP_URL || "http://127.0.0.1:9223";
@@ -215,7 +215,8 @@ async function main() {
       })()`,
       true,
     );
-    if (meta.agentReady && meta.hasList) pass("M0 API ready", JSON.stringify(meta));
+    if (meta.agentReady && meta.hasList)
+      pass("M0 API ready", JSON.stringify(meta));
     else fail("M0 API ready", JSON.stringify(meta));
   } catch (e) {
     fail("M0 API ready", e.message);
@@ -272,9 +273,9 @@ async function main() {
       /Prefer vitest|user_preference|vitest/i.test(mem) &&
       /本次会话命中[\s\S]{0,30}[1-9]/.test(mem);
     const ans = /vitest/i.test(body);
-    if (hit || ans)
-      pass("M2 retrieve vitest", `hit=${hit} ans=${ans}`);
-    else fail("M2 retrieve vitest", mem.slice(0, 200) + " | " + body.slice(-150));
+    if (hit || ans) pass("M2 retrieve vitest", `hit=${hit} ans=${ans}`);
+    else
+      fail("M2 retrieve vitest", mem.slice(0, 200) + " | " + body.slice(-150));
   } catch (e) {
     fail("M2 retrieve vitest", e.message);
   }
@@ -292,7 +293,10 @@ async function main() {
     await sleep(300);
     const mem = await panelText(send);
     if (/ioredis/i.test(body) || /ioredis|Redis/i.test(mem))
-      pass("M3 retrieve ioredis", `body=${/ioredis/i.test(body)} mem=${/ioredis/i.test(mem)}`);
+      pass(
+        "M3 retrieve ioredis",
+        `body=${/ioredis/i.test(body)} mem=${/ioredis/i.test(mem)}`,
+      );
     else fail("M3 retrieve ioredis", body.slice(-200));
   } catch (e) {
     fail("M3 retrieve ioredis", e.message);
@@ -325,7 +329,10 @@ async function main() {
     if (lib.ok && !poisoned)
       pass("M5 chitchat finalize no poison", `lib=${lib.count}`);
     else if (lib.ok && poisoned)
-      fail("M5 chitchat finalize no poison", "library polluted: " + lib.titles.join("; "));
+      fail(
+        "M5 chitchat finalize no poison",
+        "library polluted: " + lib.titles.join("; "),
+      );
     else fail("M5 chitchat finalize no poison", JSON.stringify(lib));
   } catch (e) {
     fail("M5 chitchat finalize no poison", e.message);
@@ -345,15 +352,18 @@ async function main() {
     await sleep(2500);
     const lib = await listLibrary(send);
     const has =
-      lib.titles?.some((t) => /中文|注释|prefer/i.test(t + (lib.titles || []).join(" "))) ||
-      (lib.titles || []).join(" ").includes("中文");
+      lib.titles?.some((t) =>
+        /中文|注释|prefer/i.test(t + (lib.titles || []).join(" ")),
+      ) || (lib.titles || []).join(" ").includes("中文");
     // soft: may or may not promote depending on finalize + worth writing
     // With durable signal finalize should write preference
-    if (lib.ok && has) pass("M6 explicit remember after finalize", lib.titles.join(" | "));
+    if (lib.ok && has)
+      pass("M6 explicit remember after finalize", lib.titles.join(" | "));
     else if (lib.ok)
       pass(
         "M6 explicit remember after finalize",
-        "soft: no new title yet (defer/write path) — " + (lib.titles || []).join(" | "),
+        "soft: no new title yet (defer/write path) — " +
+          (lib.titles || []).join(" | "),
       );
     else fail("M6 explicit remember after finalize", JSON.stringify(lib));
   } catch (e) {
@@ -375,8 +385,13 @@ async function main() {
     const fileOk = /package\.json|memory/i.test(ctx);
     const ansOk = /@paw\/memory|paw\/memory/i.test(body);
     if (fileOk && ansOk) pass("M7 readonly tool + context", "file+answer ok");
-    else if (ansOk) pass("M7 readonly tool + context", "answer ok, context soft");
-    else fail("M7 readonly tool + context", ctx.slice(0, 120) + " | " + body.slice(-120));
+    else if (ansOk)
+      pass("M7 readonly tool + context", "answer ok, context soft");
+    else
+      fail(
+        "M7 readonly tool + context",
+        ctx.slice(0, 120) + " | " + body.slice(-120),
+      );
   } catch (e) {
     fail("M7 readonly tool + context", e.message);
   }
@@ -402,15 +417,15 @@ async function main() {
   // M9 session hits show type when retrieve
   try {
     await newChat(send);
-    await sendGoal(
-      send,
-      "不要调用工具。一句话：我们单测框架约定是什么？",
-    );
+    await sendGoal(send, "不要调用工具。一句话：我们单测框架约定是什么？");
     await waitRunDone(send);
     await clickTab(send, "Memory");
     await sleep(400);
     const mem = await panelText(send);
-    if (/本次会话命中[\s\S]{0,40}[1-9]/.test(mem) || /USER_PREFERENCE|Prefer vitest/i.test(mem))
+    if (
+      /本次会话命中[\s\S]{0,40}[1-9]/.test(mem) ||
+      /USER_PREFERENCE|Prefer vitest/i.test(mem)
+    )
       pass("M9 session hits panel", mem.replace(/\s+/g, " ").slice(0, 180));
     else fail("M9 session hits panel", mem.slice(0, 220));
   } catch (e) {

@@ -15,7 +15,7 @@
  * 手写校验（不引入 zod 依赖）。
  */
 
-import { distillTrialLesson, type TrialLessonDraft } from "./trial.js";
+import { type TrialLessonDraft, distillTrialLesson } from "./trial.js";
 
 export interface DistillerLlm {
   complete(prompt: string): Promise<string>;
@@ -57,8 +57,13 @@ export type DistillResult =
  * 失败→成功转折探测（§5.4 纪律 3）：outcome=success 但轨迹含失败信号。
  * buildDistillPrompt 的提示与 validateCandidate 的必填校验共用此函数（修复批次 C #17）。
  */
-export function hasFailureToSuccessTurn(input: Pick<DistillInput, "outcome" | "trajectory">): boolean {
-  return input.outcome === "success" && /(?:error|failed|failure|报错|失败)/i.test(input.trajectory);
+export function hasFailureToSuccessTurn(
+  input: Pick<DistillInput, "outcome" | "trajectory">,
+): boolean {
+  return (
+    input.outcome === "success" &&
+    /(?:error|failed|failure|报错|失败)/i.test(input.trajectory)
+  );
 }
 
 export function buildDistillPrompt(input: DistillInput): string {
@@ -92,7 +97,8 @@ ${input.trajectory}`;
 
 // ── 校验（手写，契约纪律的可执行形式）──
 
-const FILE_PATH_RE = /(?:[\w.-]+\/[\w./-]+)|(?:\w+\.(?:ts|tsx|js|jsx|py|java|go|rs|sql|json|ya?ml|toml|vue|svelte)\b)/;
+const FILE_PATH_RE =
+  /(?:[\w.-]+\/[\w./-]+)|(?:\w+\.(?:ts|tsx|js|jsx|py|java|go|rs|sql|json|ya?ml|toml|vue|svelte)\b)/;
 const CODE_IDENTIFIER_RE = /\b[a-z]+(?:[A-Z][a-z0-9]+)+\b/; // camelCase 标识符
 const WHEN_TO_USE_RE = /^(?:当|When[\s,])/;
 
@@ -108,7 +114,8 @@ export function validateCandidate(
   opts: { requireFailureFixPair?: boolean } = {},
 ): { ok: true; value: DistillCandidate } | { ok: false; errors: string[] } {
   const errors: string[] = [];
-  if (typeof raw !== "object" || raw === null) return { ok: false, errors: ["候选不是对象"] };
+  if (typeof raw !== "object" || raw === null)
+    return { ok: false, errors: ["候选不是对象"] };
   const c = raw as Record<string, unknown>;
 
   if (c.kind !== "semantic" && c.kind !== "episodic") {
@@ -117,7 +124,11 @@ export function validateCandidate(
   }
 
   // 纪律 4：证据指针
-  if (!Array.isArray(c.evidence) || c.evidence.length === 0 || !c.evidence.every((e) => typeof e === "string" && e.length > 0)) {
+  if (
+    !Array.isArray(c.evidence) ||
+    c.evidence.length === 0 ||
+    !c.evidence.every((e) => typeof e === "string" && e.length > 0)
+  ) {
     errors.push("evidence 必须是非空字符串数组（≥1 个证据指针）");
   }
 
@@ -128,51 +139,82 @@ export function validateCandidate(
     if (typeof c.fact !== "string" || c.fact.trim().length === 0) {
       errors.push("semantic 候选缺 fact");
     } else {
-      if (c.fact.length > MAX_FIELD_CHARS) errors.push("fact 超体量上限（300 tokens）");
+      if (c.fact.length > MAX_FIELD_CHARS)
+        errors.push("fact 超体量上限（300 tokens）");
       textFields.push(c.fact);
     }
-    if (c.keywords !== undefined && (!Array.isArray(c.keywords) || !c.keywords.every((k) => typeof k === "string"))) {
+    if (
+      c.keywords !== undefined &&
+      (!Array.isArray(c.keywords) ||
+        !c.keywords.every((k) => typeof k === "string"))
+    ) {
       errors.push("keywords 必须是字符串数组");
     }
   } else {
     // episodic
-    if (typeof c.whenToUse !== "string" || !WHEN_TO_USE_RE.test(c.whenToUse.trim())) {
+    if (
+      typeof c.whenToUse !== "string" ||
+      !WHEN_TO_USE_RE.test(c.whenToUse.trim())
+    ) {
       errors.push('whenToUse 必填且须以 "当/When" 开头（纪律 2）');
     } else {
       textFields.push(c.whenToUse);
     }
-    if (typeof c.perspective !== "string" || c.perspective.trim().length === 0) {
+    if (
+      typeof c.perspective !== "string" ||
+      c.perspective.trim().length === 0
+    ) {
       errors.push("episodic 候选缺 perspective");
     } else {
-      if (countSentences(c.perspective) > 2) errors.push("perspective 超 2 句（纪律 5）");
+      if (countSentences(c.perspective) > 2)
+        errors.push("perspective 超 2 句（纪律 5）");
       textFields.push(c.perspective);
     }
-    if (!Array.isArray(c.modification) || c.modification.length === 0 || c.modification.length > 3) {
+    if (
+      !Array.isArray(c.modification) ||
+      c.modification.length === 0 ||
+      c.modification.length > 3
+    ) {
       errors.push("modification 必须为 1–3 条（纪律 5）");
     } else {
-      for (const m of c.modification) if (typeof m === "string") textFields.push(m);
+      for (const m of c.modification)
+        if (typeof m === "string") textFields.push(m);
     }
     if (c.failureFixPair !== undefined) {
       const p = c.failureFixPair as Record<string, unknown>;
-      if (typeof p !== "object" || p === null
-        || typeof p.failed !== "string" || typeof p.feedback !== "string" || typeof p.fixed !== "string") {
-        errors.push("failureFixPair 必须含 failed/feedback/fixed 三个字符串字段（纪律 3）");
+      if (
+        typeof p !== "object" ||
+        p === null ||
+        typeof p.failed !== "string" ||
+        typeof p.feedback !== "string" ||
+        typeof p.fixed !== "string"
+      ) {
+        errors.push(
+          "failureFixPair 必须含 failed/feedback/fixed 三个字符串字段（纪律 3）",
+        );
       }
     } else if (opts.requireFailureFixPair) {
       // 轨迹含失败→成功转折时 failureFixPair 必填（纪律 3，修复批次 C #17）
-      errors.push("轨迹含失败→成功转折，episodic 候选必须产出 failureFixPair（纪律 3）");
+      errors.push(
+        "轨迹含失败→成功转折，episodic 候选必须产出 failureFixPair（纪律 3）",
+      );
     }
   }
 
   // 可选 tValid（时序倒挂判定用）
-  if (c.tValid !== undefined && (typeof c.tValid !== "string" || Number.isNaN(Date.parse(c.tValid)))) {
+  if (
+    c.tValid !== undefined &&
+    (typeof c.tValid !== "string" || Number.isNaN(Date.parse(c.tValid)))
+  ) {
     errors.push("tValid 必须是可解析的时间字符串");
   }
 
   // 纪律 1：去具体化
   for (const t of textFields) {
-    if (FILE_PATH_RE.test(t)) errors.push(`疑似文件路径/文件名（纪律 1）: ${t.slice(0, 50)}…`);
-    if (CODE_IDENTIFIER_RE.test(t)) errors.push(`疑似代码标识符（纪律 1）: ${t.slice(0, 50)}…`);
+    if (FILE_PATH_RE.test(t))
+      errors.push(`疑似文件路径/文件名（纪律 1）: ${t.slice(0, 50)}…`);
+    if (CODE_IDENTIFIER_RE.test(t))
+      errors.push(`疑似代码标识符（纪律 1）: ${t.slice(0, 50)}…`);
   }
 
   if (errors.length > 0) return { ok: false, errors };
@@ -196,16 +238,23 @@ export class MemoryDistiller {
    * 蒸馏轨迹为候选条目。校验失败自动重试 1 次（§5.7）；
    * 再失败返回 degraded（调用方降级 append-only）。
    */
-  async distill(input: DistillInput): Promise<DistillResult> {    const prompt = buildDistillPrompt(input);
+  async distill(input: DistillInput): Promise<DistillResult> {
+    const prompt = buildDistillPrompt(input);
     const allErrors: string[] = [];
 
     for (let attempt = 0; attempt < 2; attempt++) {
       let parsed: unknown;
       try {
-        const raw = await this.llm.complete(attempt === 0 ? prompt : `${prompt}\n\n上次输出校验失败：${allErrors.join("；")}。请修正后重新输出 JSON。`);
+        const raw = await this.llm.complete(
+          attempt === 0
+            ? prompt
+            : `${prompt}\n\n上次输出校验失败：${allErrors.join("；")}。请修正后重新输出 JSON。`,
+        );
         parsed = extractJson(raw);
       } catch (e) {
-        allErrors.push(`attempt ${attempt + 1}: 输出非 JSON（${e instanceof Error ? e.message : String(e)}）`);
+        allErrors.push(
+          `attempt ${attempt + 1}: 输出非 JSON（${e instanceof Error ? e.message : String(e)}）`,
+        );
         continue;
       }
 
@@ -225,7 +274,9 @@ export class MemoryDistiller {
       }
       // 候选为空且原始数组也为空 = 合法的"无值得固化内容"
       if (attemptErrors.length === 0) return { status: "ok", candidates };
-      allErrors.push(...attemptErrors.map((e) => `attempt ${attempt + 1}: ${e}`));
+      allErrors.push(
+        ...attemptErrors.map((e) => `attempt ${attempt + 1}: ${e}`),
+      );
     }
 
     return {

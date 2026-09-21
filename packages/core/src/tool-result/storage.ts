@@ -30,8 +30,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { atomicWrite } from "../utils/fs.js";
-import { formatToolResult } from "./format.js";
 import { sanitizeRunId, toolResultsDir } from "../workspace-paths.js";
+import { formatToolResult } from "./format.js";
 
 /**
  * 持久化输出在上下文中的标记标签。
@@ -94,9 +94,7 @@ export function generatePreview(
   const lastNewline = truncated.lastIndexOf("\n");
   // 只在换行符离末尾不太远时（>50% 位置）才在换行处截断
   const preview =
-    lastNewline > maxBytes * 0.5
-      ? truncated.slice(0, lastNewline)
-      : truncated;
+    lastNewline > maxBytes * 0.5 ? truncated.slice(0, lastNewline) : truncated;
   return { preview, hasMore: true };
 }
 

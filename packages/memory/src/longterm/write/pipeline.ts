@@ -15,21 +15,31 @@
 import type { RunEvent } from "@paw/core";
 import { getSql, parseJson } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
-import type { MemoryEntry, MemoryStoreEngine, SemanticFact, EpisodicExperience } from "../store/engine.js";
-import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
-import { deriveEntryId } from "../store/id.js";
 import {
-  sameMemoryScope,
-  type MemoryScopeKey,
-} from "../store/scope-key.js";
+  detectAdoption,
+  recordAdoption,
+  recordTaskSuccess,
+} from "../observability/ledger.js";
 import { appendOpLog, queryOpLog } from "../observability/op-log.js";
-import { recordTaskSuccess, recordAdoption, detectAdoption } from "../observability/ledger.js";
 import { hybridRecall } from "../retrieval/hybrid.js";
-import { scanForSecrets } from "./secrets.js";
-import { MemoryDistiller, type DistillInput } from "./distiller.js";
-import { LongtermGovernor, type GovernorLlm, type GovernorCandidate } from "./governor.js";
-import { addTrialLesson, graduateTrialLesson } from "./trial.js";
+import type {
+  EpisodicExperience,
+  MemoryEntry,
+  MemoryStoreEngine,
+  SemanticFact,
+} from "../store/engine.js";
+import { deriveEntryId } from "../store/id.js";
+import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
+import { type MemoryScopeKey, sameMemoryScope } from "../store/scope-key.js";
 import type { CorrectionConfirmer } from "./correction.js";
+import type { DistillInput, MemoryDistiller } from "./distiller.js";
+import {
+  type GovernorCandidate,
+  type GovernorLlm,
+  LongtermGovernor,
+} from "./governor.js";
+import { scanForSecrets } from "./secrets.js";
+import { addTrialLesson, graduateTrialLesson } from "./trial.js";
 
 // ── 事件与门控类型（spec §9.1 + §5.3）──
 
@@ -42,11 +52,41 @@ export type Verdict =
 type MemoryWriteScope = { scope?: MemoryScopeKey };
 
 export type MemoryWriteEvent = (
-  | { type: "task_succeeded"; runId: string; trajectoryRef: string; repo?: string; goal?: string; trajectory?: string; verdict?: Verdict }
-  | { type: "task_failed"; runId: string; trajectoryRef: string; repo?: string; goal?: string; trajectory?: string; verdict?: Verdict }
-  | { type: "user_correction"; text: string; messageRef: string; runId?: string; repo?: string }
-  | { type: "session_finalize"; conversationId: string; runId?: string; repo?: string; goal?: string; trajectory?: string }
-) & MemoryWriteScope;
+  | {
+      type: "task_succeeded";
+      runId: string;
+      trajectoryRef: string;
+      repo?: string;
+      goal?: string;
+      trajectory?: string;
+      verdict?: Verdict;
+    }
+  | {
+      type: "task_failed";
+      runId: string;
+      trajectoryRef: string;
+      repo?: string;
+      goal?: string;
+      trajectory?: string;
+      verdict?: Verdict;
+    }
+  | {
+      type: "user_correction";
+      text: string;
+      messageRef: string;
+      runId?: string;
+      repo?: string;
+    }
+  | {
+      type: "session_finalize";
+      conversationId: string;
+      runId?: string;
+      repo?: string;
+      goal?: string;
+      trajectory?: string;
+    }
+) &
+  MemoryWriteScope;
 
 export type ProcessResult =
   | { status: "written"; memoryIds: string[] }
@@ -61,11 +101,21 @@ export interface GovernorHook {
   adjudicate(
     candidate: GovernorCandidate,
     similar: MemoryEntry[],
-  ): Promise<{ op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP"; targetId?: string; reason?: string }>;
+  ): Promise<{
+    op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP";
+    targetId?: string;
+    reason?: string;
+  }>;
   /** 批量裁决（spec §5.6，默认路径）；实现后管线一次调用裁决整批 */
   adjudicateBatch?(
     items: { candidate: GovernorCandidate; similar: MemoryEntry[] }[],
-  ): Promise<{ op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP"; targetId?: string; reason?: string }[]>;
+  ): Promise<
+    {
+      op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP";
+      targetId?: string;
+      reason?: string;
+    }[]
+  >;
 }
 
 export interface WritePipelineOptions {
@@ -124,19 +174,29 @@ export class MemoryWritePipeline {
 
   constructor(opts: WritePipelineOptions = {}) {
     this.scope = opts.scope ?? opts.engine?.scope;
-    if (opts.scope && opts.engine?.scope && !sameMemoryScope(opts.scope, opts.engine.scope)) {
+    if (
+      opts.scope &&
+      opts.engine?.scope &&
+      !sameMemoryScope(opts.scope, opts.engine.scope)
+    ) {
       throw new Error("Memory pipeline scope does not match its store engine");
     }
     this.engine = opts.engine ?? new PostgresMemoryStoreEngine(this.scope);
     this.distiller = opts.distiller;
-    this.governor = opts.governor
-      ?? (opts.governorLlm ? new LongtermGovernor({ llm: opts.governorLlm, now: opts.now }) : undefined);
+    this.governor =
+      opts.governor ??
+      (opts.governorLlm
+        ? new LongtermGovernor({ llm: opts.governorLlm, now: opts.now })
+        : undefined);
     this.batchAdjudication = opts.batchAdjudication ?? true;
     this.intervalMs = opts.intervalMs ?? 2000;
     this.dailyBudget = opts.dailyBudget ?? 50;
     this.emit = opts.emit;
     this.correctionConfirmer = opts.correctionConfirmer;
-    this.isReadonly = typeof opts.readonly === "function" ? opts.readonly : () => opts.readonly === true;
+    this.isReadonly =
+      typeof opts.readonly === "function"
+        ? opts.readonly
+        : () => opts.readonly === true;
     this.now = opts.now ?? (() => new Date());
   }
 
@@ -154,7 +214,13 @@ export class MemoryWritePipeline {
       ? { ...event, repo: this.scope.repositoryId, scope: this.scope }
       : event;
     const sql = getSql();
-    const estimated = estimateTokens("goal" in scopedEvent ? `${scopedEvent.goal ?? ""}\n${scopedEvent.trajectory ?? ""}` : "text" in scopedEvent ? scopedEvent.text : "");
+    const estimated = estimateTokens(
+      "goal" in scopedEvent
+        ? `${scopedEvent.goal ?? ""}\n${scopedEvent.trajectory ?? ""}`
+        : "text" in scopedEvent
+          ? scopedEvent.text
+          : "",
+    );
     // sequence 用 V007 的 outbox_sequence_gen 发号：并发安全（nextval 不会冲突），
     // 配合 (aggregate_id, sequence) 唯一约束（V007）双保险
     await sql`
@@ -172,7 +238,11 @@ export class MemoryWritePipeline {
       runId: "runId" in event ? event.runId : undefined,
       detail: { eventType: event.type, estimatedTokens: estimated },
     });
-    this.emit?.({ type: "memory.write.enqueued", eventType: event.type, runId: "runId" in event ? event.runId : undefined });
+    this.emit?.({
+      type: "memory.write.enqueued",
+      eventType: event.type,
+      runId: "runId" in event ? event.runId : undefined,
+    });
     this.requestTick();
   }
 
@@ -275,25 +345,41 @@ export class MemoryWritePipeline {
           processing_at = NULL
         WHERE id = ${row.id}
       `;
-      await appendOpLog("error", { detail: { stage: "write.process", error: msg } });
+      await appendOpLog("error", {
+        detail: { stage: "write.process", error: msg },
+      });
     }
     return true;
   }
 
   /** 单事件处理主流程（五道关） */
   async processEvent(event: MemoryWriteEvent): Promise<ProcessResult> {
-    if (this.scope && (!event.scope || !sameMemoryScope(this.scope, event.scope))) {
+    if (
+      this.scope &&
+      (!event.scope || !sameMemoryScope(this.scope, event.scope))
+    ) {
       throw new Error("Memory write event is outside the pipeline scope");
     }
-    const repo = this.scope?.repositoryId ?? ("repo" in event ? (event.repo ?? "") : "");
+    const repo =
+      this.scope?.repositoryId ?? ("repo" in event ? (event.repo ?? "") : "");
     const runId = "runId" in event ? event.runId : undefined;
 
     // ── 第一道（双道之一）：密钥拦截——蒸馏前 ──
-    const contentText = "text" in event ? event.text : `${"goal" in event ? (event.goal ?? "") : ""}\n${"trajectory" in event ? (event.trajectory ?? "") : ""}`;
+    const contentText =
+      "text" in event
+        ? event.text
+        : `${"goal" in event ? (event.goal ?? "") : ""}\n${"trajectory" in event ? (event.trajectory ?? "") : ""}`;
     const scan = scanForSecrets(contentText);
     if (scan.action === "reject") {
-      await appendOpLog("write.rejected", { runId, detail: { reason: "secret", pattern: scan.pattern } });
-      this.emit?.({ type: "memory.write.rejected", reason: "secret", detail: scan.pattern });
+      await appendOpLog("write.rejected", {
+        runId,
+        detail: { reason: "secret", pattern: scan.pattern },
+      });
+      this.emit?.({
+        type: "memory.write.rejected",
+        reason: "secret",
+        detail: scan.pattern,
+      });
       return { status: "rejected", reason: "secret" };
     }
 
@@ -301,20 +387,36 @@ export class MemoryWritePipeline {
       case "user_correction": {
         // #10：规则命中后交 LLM 确认；确认器不可用/否认 → 保守走蒸馏通道（confidence ≤0.6）
         const confirmed = this.correctionConfirmer
-          ? await this.correctionConfirmer.confirm(event.text).catch(() => false)
+          ? await this.correctionConfirmer
+              .confirm(event.text)
+              .catch(() => false)
           : false;
         if (confirmed) {
-          return this.handleUserCorrection(event.text, { repo, runId, redactedText: scan.action === "redact" ? scan.text : undefined });
+          return this.handleUserCorrection(event.text, {
+            repo,
+            runId,
+            redactedText: scan.action === "redact" ? scan.text : undefined,
+          });
         }
         return this.consolidate(
-          { runId: runId ?? "correction", goal: "", trajectory: event.text, outcome: "unknown" },
+          {
+            runId: runId ?? "correction",
+            goal: "",
+            trajectory: event.text,
+            outcome: "unknown",
+          },
           { repo, runId, confidenceCap: 0.6 },
         );
       }
 
       case "task_failed": {
         // 失败轨迹 → 试用通道（不直接入库，§5.3）；#7：LLM 蒸馏教训，超预算降级原文切片
-        return this.createTrial(event.runId, event.goal ?? "", event.trajectory ?? "", runId);
+        return this.createTrial(
+          event.runId,
+          event.goal ?? "",
+          event.trajectory ?? "",
+          runId,
+        );
       }
 
       case "task_succeeded": {
@@ -323,28 +425,69 @@ export class MemoryWritePipeline {
         if (verdict.kind === "test" || verdict.kind === "compile") {
           if (!verdict.passed) {
             // outcome=fail 转试用通道
-            return this.createTrial(event.runId, event.goal ?? "", event.trajectory ?? "", runId);
+            return this.createTrial(
+              event.runId,
+              event.goal ?? "",
+              event.trajectory ?? "",
+              runId,
+            );
           }
-          const r = await this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
+          const r = await this.consolidate(
+            {
+              runId: event.runId,
+              goal: event.goal ?? "",
+              trajectory: event.trajectory ?? "",
+              outcome: "success",
+            },
+            { repo, runId },
+          );
           // 效用结算（§7.1）+ 试用转正（§4.2）：注入过的正式条目 utility+1；随行 trial 验证成功 → episodic
-          await this.settleRunOutcome(event.runId, event.trajectory ?? "", repo);
+          await this.settleRunOutcome(
+            event.runId,
+            event.trajectory ?? "",
+            repo,
+          );
           return r;
         }
         if (verdict.kind === "user_accepted") {
-          const r = await this.consolidate({ runId: event.runId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "success" }, { repo, runId });
-          await this.settleRunOutcome(event.runId, event.trajectory ?? "", repo);
+          const r = await this.consolidate(
+            {
+              runId: event.runId,
+              goal: event.goal ?? "",
+              trajectory: event.trajectory ?? "",
+              outcome: "success",
+            },
+            { repo, runId },
+          );
+          await this.settleRunOutcome(
+            event.runId,
+            event.trajectory ?? "",
+            repo,
+          );
           return r;
         }
         // 禁止盲改条款（§5.3）：无任何反馈信号不得固化
-        await appendOpLog("write.rejected", { runId, detail: { reason: "unverified", eventType: event.type } });
-        this.emit?.({ type: "memory.write.rejected", reason: "unverified", detail: "no feedback signal" });
+        await appendOpLog("write.rejected", {
+          runId,
+          detail: { reason: "unverified", eventType: event.type },
+        });
+        this.emit?.({
+          type: "memory.write.rejected",
+          reason: "unverified",
+          detail: "no feedback signal",
+        });
         return { status: "rejected", reason: "unverified" };
       }
 
       case "session_finalize":
         // 兜底蒸馏，confidence ≤0.6（§5.3）
         return this.consolidate(
-          { runId: event.runId ?? event.conversationId, goal: event.goal ?? "", trajectory: event.trajectory ?? "", outcome: "unknown" },
+          {
+            runId: event.runId ?? event.conversationId,
+            goal: event.goal ?? "",
+            trajectory: event.trajectory ?? "",
+            outcome: "unknown",
+          },
           { repo, runId, confidenceCap: 0.6 },
         );
     }
@@ -354,15 +497,31 @@ export class MemoryWritePipeline {
    * 试用通道入口（#7）：优先 LLM 蒸馏 Reflexion 式教训（受成本熔断），
    * 蒸馏不可用/失败/超预算 → 降级原文切片（distilled=false 标注）。
    */
-  private async createTrial(originTaskId: string, goal: string, trajectory: string, runId?: string): Promise<ProcessResult> {
+  private async createTrial(
+    originTaskId: string,
+    goal: string,
+    trajectory: string,
+    runId?: string,
+  ): Promise<ProcessResult> {
     const slice = (trajectory || goal).slice(0, 500);
     if (!slice.trim()) return { status: "noop", reason: "empty_trajectory" };
 
     if (this.distiller) {
       const usedToday = await this.countDistillCallsToday();
       if (usedToday < this.dailyBudget) {
-        await appendOpLog("write.distill", { runId, detail: { kind: "trial", estimatedTokens: estimateTokens(goal + trajectory) } });
-        const draft = await this.distiller.distillTrial({ runId: originTaskId, goal, trajectory, outcome: "failed" });
+        await appendOpLog("write.distill", {
+          runId,
+          detail: {
+            kind: "trial",
+            estimatedTokens: estimateTokens(goal + trajectory),
+          },
+        });
+        const draft = await this.distiller.distillTrial({
+          runId: originTaskId,
+          goal,
+          trajectory,
+          outcome: "failed",
+        });
         if (draft) {
           const trial = await addTrialLesson(draft.lesson, originTaskId, {
             whenToUse: draft.whenToUse,
@@ -409,9 +568,17 @@ export class MemoryWritePipeline {
     };
     await this.engine.put(entry);
     const id = entry.id || deriveEntryId(entry, this.scope);
-    await appendOpLog("governed", { runId: opts.runId, entryIds: [id], detail: { op: "ADD", by: "user_correction" } });
+    await appendOpLog("governed", {
+      runId: opts.runId,
+      entryIds: [id],
+      detail: { op: "ADD", by: "user_correction" },
+    });
     this.emit?.({ type: "memory.governed", op: "ADD", entryId: id });
-    return { status: "corrected", memoryId: id, undoHint: `paw-ts memory forget ${id}` };
+    return {
+      status: "corrected",
+      memoryId: id,
+      undoHint: `paw-ts memory forget ${id}`,
+    };
   }
 
   /** 固化通道：成本熔断 → 蒸馏（重试 1 次）→ 入库前密钥二道 → Governor → put */
@@ -419,49 +586,103 @@ export class MemoryWritePipeline {
     input: DistillInput,
     opts: { repo: string; runId?: string; confidenceCap?: number },
   ): Promise<ProcessResult> {
-    if (!input.trajectory.trim() && !input.goal.trim()) return { status: "noop", reason: "empty_trajectory" };
+    if (!input.trajectory.trim() && !input.goal.trim())
+      return { status: "noop", reason: "empty_trajectory" };
 
     // ── 成本熔断（§5.2）──
     const distillCallsToday = await this.countDistillCallsToday();
-    if (distillCallsToday + 1 >= Math.floor(this.dailyBudget * 0.8) && distillCallsToday < this.dailyBudget) {
-      await appendOpLog("write.budget_warn", { runId: opts.runId, detail: { used: distillCallsToday, budget: this.dailyBudget } });
+    if (
+      distillCallsToday + 1 >= Math.floor(this.dailyBudget * 0.8) &&
+      distillCallsToday < this.dailyBudget
+    ) {
+      await appendOpLog("write.budget_warn", {
+        runId: opts.runId,
+        detail: { used: distillCallsToday, budget: this.dailyBudget },
+      });
     }
     const overBudget = distillCallsToday >= this.dailyBudget || !this.distiller;
     if (overBudget) {
-      return this.storeDegraded(input, opts, !this.distiller ? "no_distiller" : "daily_budget_exceeded");
+      return this.storeDegraded(
+        input,
+        opts,
+        !this.distiller ? "no_distiller" : "daily_budget_exceeded",
+      );
     }
 
-    await appendOpLog("write.distill", { runId: opts.runId, detail: { estimatedTokens: estimateTokens(input.goal + input.trajectory) } });
+    await appendOpLog("write.distill", {
+      runId: opts.runId,
+      detail: {
+        estimatedTokens: estimateTokens(input.goal + input.trajectory),
+      },
+    });
     const result = await this.distiller!.distill(input);
     if (result.status === "degraded") {
-      return this.storeDegraded(input, opts, "schema_validation_failed", result.errors);
+      return this.storeDegraded(
+        input,
+        opts,
+        "schema_validation_failed",
+        result.errors,
+      );
     }
-    if (result.candidates.length === 0) return { status: "noop", reason: "no_candidates" };
+    if (result.candidates.length === 0)
+      return { status: "noop", reason: "no_candidates" };
 
     // ── 阶段一：密钥二道 + 构造草稿 + 相似召回 ──
     const nowIso = this.now().toISOString();
-    const drafts: { draft: GovernorCandidate; recallKey: string; similar: MemoryEntry[] }[] = [];
+    const drafts: {
+      draft: GovernorCandidate;
+      recallKey: string;
+      similar: MemoryEntry[];
+    }[] = [];
     for (const candidate of result.candidates) {
       // 修复批次 B #6：semantic + episodic 同通道落库；其余 kind 丢弃必须记 op-log
       if (candidate.kind !== "semantic" && candidate.kind !== "episodic") {
-        await appendOpLog("write.rejected", { runId: opts.runId, detail: { reason: "unsupported_kind", kind: candidate.kind } });
-        this.emit?.({ type: "memory.write.rejected", reason: "schema", detail: `unsupported_kind:${candidate.kind}` });
+        await appendOpLog("write.rejected", {
+          runId: opts.runId,
+          detail: { reason: "unsupported_kind", kind: candidate.kind },
+        });
+        this.emit?.({
+          type: "memory.write.rejected",
+          reason: "schema",
+          detail: `unsupported_kind:${candidate.kind}`,
+        });
         continue;
       }
 
       // ── 密钥拦截二道：入库前（对候选的全部文本字段扫描）──
-      const candidateText = candidate.kind === "semantic"
-        ? (candidate.fact ?? "")
-        : [candidate.whenToUse, candidate.perspective, ...(candidate.modification ?? [])].filter(Boolean).join("\n");
+      const candidateText =
+        candidate.kind === "semantic"
+          ? (candidate.fact ?? "")
+          : [
+              candidate.whenToUse,
+              candidate.perspective,
+              ...(candidate.modification ?? []),
+            ]
+              .filter(Boolean)
+              .join("\n");
       const pre = scanForSecrets(candidateText);
       if (pre.action === "reject") {
-        await appendOpLog("write.rejected", { runId: opts.runId, detail: { reason: "secret", pattern: pre.pattern, stage: "pre-store" } });
-        this.emit?.({ type: "memory.write.rejected", reason: "secret", detail: pre.pattern });
+        await appendOpLog("write.rejected", {
+          runId: opts.runId,
+          detail: {
+            reason: "secret",
+            pattern: pre.pattern,
+            stage: "pre-store",
+          },
+        });
+        this.emit?.({
+          type: "memory.write.rejected",
+          reason: "secret",
+          detail: pre.pattern,
+        });
         continue;
       }
       const text = pre.action === "redact" ? pre.text : candidateText;
       if (pre.action === "redact") {
-        await appendOpLog("write.redacted", { runId: opts.runId, detail: { count: pre.count } });
+        await appendOpLog("write.redacted", {
+          runId: opts.runId,
+          detail: { count: pre.count },
+        });
       }
 
       // 候选可携带 tValid（迟到的旧事实）；缺省 = 写入时间。时序倒挂由 Governor 规则层判定（§7.4）
@@ -471,16 +692,36 @@ export class MemoryWritePipeline {
       let recallKey: string;
       if (candidate.kind === "semantic") {
         draft = {
-          id: "", kind: "semantic", repo: opts.repo, created: nowIso, tValid, tInvalid: null,
-          source: "agent_verified", confidence, evidence: candidate.evidence, freq: 0, utility: 0,
-          fact: text, keywords: candidate.keywords ?? [], embeddingKey: `${text} ${(candidate.keywords ?? []).join(" ")}`,
+          id: "",
+          kind: "semantic",
+          repo: opts.repo,
+          created: nowIso,
+          tValid,
+          tInvalid: null,
+          source: "agent_verified",
+          confidence,
+          evidence: candidate.evidence,
+          freq: 0,
+          utility: 0,
+          fact: text,
+          keywords: candidate.keywords ?? [],
+          embeddingKey: `${text} ${(candidate.keywords ?? []).join(" ")}`,
         };
         recallKey = (draft as SemanticFact).embeddingKey;
       } else {
         // episodic：whenToUse 为检索主键（§4.2）；redact 后的文本回退到 perspective
         draft = {
-          id: "", kind: "episodic", repo: opts.repo, created: nowIso, tValid, tInvalid: null,
-          source: "agent_verified", confidence, evidence: candidate.evidence, freq: 0, utility: 0,
+          id: "",
+          kind: "episodic",
+          repo: opts.repo,
+          created: nowIso,
+          tValid,
+          tInvalid: null,
+          source: "agent_verified",
+          confidence,
+          evidence: candidate.evidence,
+          freq: 0,
+          utility: 0,
           whenToUse: candidate.whenToUse ?? text,
           perspective: candidate.perspective ?? text,
           modification: candidate.modification ?? [],
@@ -490,44 +731,71 @@ export class MemoryWritePipeline {
         };
         recallKey = (draft as EpisodicExperience).whenToUse;
       }
-      const similar = await hybridRecall(this.engine, recallKey, { candidates: 10 })
+      const similar = await hybridRecall(this.engine, recallKey, {
+        candidates: 10,
+      })
         .then((r) => r.items.map((i) => i.entry))
         .catch(() => [] as MemoryEntry[]);
       drafts.push({ draft, recallKey, similar });
     }
 
     // ── 阶段二：Governor 裁决（§5.6 批量为默认路径）──
-    type Decision = { op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP"; targetId?: string; reason?: string };
+    type Decision = {
+      op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP";
+      targetId?: string;
+      reason?: string;
+    };
     let decisions: Decision[];
     if (!this.governor) {
       decisions = drafts.map(() => ({ op: "ADD" as const }));
     } else if (this.batchAdjudication && this.governor.adjudicateBatch) {
-      decisions = await this.governor.adjudicateBatch(drafts.map((d) => ({ candidate: d.draft, similar: d.similar })));
+      decisions = await this.governor.adjudicateBatch(
+        drafts.map((d) => ({ candidate: d.draft, similar: d.similar })),
+      );
     } else {
       decisions = [];
-      for (const d of drafts) decisions.push(await this.governor.adjudicate(d.draft, d.similar));
+      for (const d of drafts)
+        decisions.push(await this.governor.adjudicate(d.draft, d.similar));
     }
 
     // ── 阶段三：应用裁决 ──
     const memoryIds: string[] = [];
     for (let i = 0; i < drafts.length; i++) {
       const { draft } = drafts[i]!;
-      const decision = decisions[i] ?? { op: "NOOP" as const, reason: "missing_decision" };
+      const decision = decisions[i] ?? {
+        op: "NOOP" as const,
+        reason: "missing_decision",
+      };
 
       if (decision.op === "NOOP") {
-        await appendOpLog("governed", { runId: opts.runId, detail: { op: "NOOP", reason: decision.reason ?? "" } });
+        await appendOpLog("governed", {
+          runId: opts.runId,
+          detail: { op: "NOOP", reason: decision.reason ?? "" },
+        });
         this.emit?.({ type: "memory.governed", op: "NOOP", entryId: "" });
         continue;
       }
       if (decision.op === "INVALIDATE" && decision.targetId) {
         // 矛盾（§5.6 裁决表 / §5.8-4）：旧条目软失效（不物理删除），候选作为新条目 ADD
         await this.engine.invalidate(decision.targetId, nowIso);
-        await appendOpLog("governed", { runId: opts.runId, entryIds: [decision.targetId], detail: { op: "INVALIDATE" } });
-        this.emit?.({ type: "memory.governed", op: "INVALIDATE", entryId: decision.targetId });
+        await appendOpLog("governed", {
+          runId: opts.runId,
+          entryIds: [decision.targetId],
+          detail: { op: "INVALIDATE" },
+        });
+        this.emit?.({
+          type: "memory.governed",
+          op: "INVALIDATE",
+          entryId: decision.targetId,
+        });
         await this.engine.put(draft);
         const newId = draft.id || deriveEntryId(draft, this.scope);
         memoryIds.push(newId);
-        await appendOpLog("governed", { runId: opts.runId, entryIds: [newId], detail: { op: "ADD", replaces: decision.targetId } });
+        await appendOpLog("governed", {
+          runId: opts.runId,
+          entryIds: [newId],
+          detail: { op: "ADD", replaces: decision.targetId },
+        });
         this.emit?.({ type: "memory.governed", op: "ADD", entryId: newId });
         continue;
       }
@@ -535,17 +803,30 @@ export class MemoryWritePipeline {
         // UPDATE 版本链（§5.6）：旧值追加进 history[]（semantic）；freq/utility/t_valid/created_at 由引擎 upsert 保留
         const old = await this.engine.get(decision.targetId);
         if (old?.kind === "semantic" && draft.kind === "semantic") {
-          draft.history = [...(old.history ?? []), { fact: old.fact, tInvalid: nowIso }];
+          draft.history = [
+            ...(old.history ?? []),
+            { fact: old.fact, tInvalid: nowIso },
+          ];
         }
         draft.id = decision.targetId;
       }
       await this.engine.put(draft);
       const id = draft.id || deriveEntryId(draft, this.scope);
       memoryIds.push(id);
-      await appendOpLog("governed", { runId: opts.runId, entryIds: [id], detail: { op: decision.op === "UPDATE" ? "UPDATE" : "ADD" } });
-      this.emit?.({ type: "memory.governed", op: decision.op === "UPDATE" ? "UPDATE" : "ADD", entryId: id });
+      await appendOpLog("governed", {
+        runId: opts.runId,
+        entryIds: [id],
+        detail: { op: decision.op === "UPDATE" ? "UPDATE" : "ADD" },
+      });
+      this.emit?.({
+        type: "memory.governed",
+        op: decision.op === "UPDATE" ? "UPDATE" : "ADD",
+        entryId: id,
+      });
     }
-    return memoryIds.length > 0 ? { status: "written", memoryIds } : { status: "noop", reason: "all_candidates_filtered" };
+    return memoryIds.length > 0
+      ? { status: "written", memoryIds }
+      : { status: "noop", reason: "all_candidates_filtered" };
   }
 
   /** 降级 append-only（§5.7）：原文摘要 + confidence=0.3 + agent_inferred + degraded 标记（不参与自动注入） */
@@ -576,8 +857,21 @@ export class MemoryWritePipeline {
     } as SemanticFact;
     await this.engine.put(entry);
     const id = entry.id || deriveEntryId(entry, this.scope);
-    await appendOpLog("write.rejected", { runId: opts.runId, entryIds: [id], detail: { reason: "schema", degraded: true, why: reason, errors: errors.slice(0, 5) } });
-    this.emit?.({ type: "memory.write.rejected", reason: "schema", detail: reason });
+    await appendOpLog("write.rejected", {
+      runId: opts.runId,
+      entryIds: [id],
+      detail: {
+        reason: "schema",
+        degraded: true,
+        why: reason,
+        errors: errors.slice(0, 5),
+      },
+    });
+    this.emit?.({
+      type: "memory.write.rejected",
+      reason: "schema",
+      detail: reason,
+    });
     return { status: "degraded", memoryId: id };
   }
 
@@ -587,15 +881,25 @@ export class MemoryWritePipeline {
    * - 试用池：按 runId 查 read.inject.trial → 转正为 episodic(source=trial_graduated)
    * 结算失败不阻塞主流程（§9.6）。
    */
-  private async settleRunOutcome(runId: string, trajectoryText: string, repo: string): Promise<void> {
+  private async settleRunOutcome(
+    runId: string,
+    trajectoryText: string,
+    repo: string,
+  ): Promise<void> {
     try {
-      const injects = await queryOpLog({ runId, op: "read.inject", limit: 100 });
+      const injects = await queryOpLog({
+        runId,
+        op: "read.inject",
+        limit: 100,
+      });
       const ids = [...new Set(injects.flatMap((l) => l.entryIds))];
       if (ids.length > 0) {
         await recordTaskSuccess(this.engine, ids);
 
         const entries = (
-          await Promise.all(ids.map((id) => this.engine.get(id).catch(() => null)))
+          await Promise.all(
+            ids.map((id) => this.engine.get(id).catch(() => null)),
+          )
         ).filter((e): e is MemoryEntry => e !== null);
         const adopted = detectAdoption(
           entries.map((e) => ({
@@ -605,11 +909,16 @@ export class MemoryWritePipeline {
           })),
           trajectoryText,
         );
-        if (adopted.length > 0) await recordAdoption(runId, adopted, { by: "detectAdoption" });
+        if (adopted.length > 0)
+          await recordAdoption(runId, adopted, { by: "detectAdoption" });
       }
 
       // 试用转正：本 run 随行注入过的 trial，在验证成功后入库正式库
-      const trialInjects = await queryOpLog({ runId, op: "read.inject.trial", limit: 50 });
+      const trialInjects = await queryOpLog({
+        runId,
+        op: "read.inject.trial",
+        limit: 50,
+      });
       const trialIds = [...new Set(trialInjects.flatMap((l) => l.entryIds))];
       for (const trialId of trialIds) {
         try {
@@ -627,12 +936,17 @@ export class MemoryWritePipeline {
               entryId: graduated.memoryId,
             });
           }
-        } catch { /* 单条转正失败不阻塞其余 */ }
+        } catch {
+          /* 单条转正失败不阻塞其余 */
+        }
       }
-    } catch { /* 账本允许近似 */ }
+    } catch {
+      /* 账本允许近似 */
+    }
   }
 
-  /** 当日蒸馏 LLM 调用计数（op-log 持久化口径，跨进程一致） */private async countDistillCallsToday(): Promise<number> {
+  /** 当日蒸馏 LLM 调用计数（op-log 持久化口径，跨进程一致） */
+  private async countDistillCallsToday(): Promise<number> {
     const sql = getSql();
     const [row] = await sql`
       SELECT count(*)::int AS n FROM memory_op_log

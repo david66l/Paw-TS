@@ -4,16 +4,17 @@
  *   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test" bun test test/memory-mechanism.test.ts
  */
 
-import { describe, test, expect, afterAll } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { closeSql, ping } from "../src/db/connection.js";
-import { resetMemoryV2Core } from "../src/runtime/index.js";
 import {
+  type MechReport,
   renderMechReport,
   runMechanismSuite,
-  type MechReport,
 } from "../src/longterm/eval/memory-mechanism-fixtures.js";
+import { resetMemoryV2Core } from "../src/runtime/index.js";
 
-process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??=
+  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -40,7 +41,10 @@ describe("memory-mechanism fixtures（DB）", () => {
   }, 120_000);
 
   it("可按套件过滤（仅 profile）", async () => {
-    const report = await runMechanismSuite({ suites: ["profile"], keep: false });
+    const report = await runMechanismSuite({
+      suites: ["profile"],
+      keep: false,
+    });
     expect(report.details.length).toBeGreaterThan(0);
     expect(report.details.every((d) => d.suite === "profile")).toBe(true);
     expect(report.passed).toBe(true);

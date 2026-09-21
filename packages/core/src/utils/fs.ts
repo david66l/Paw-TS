@@ -5,9 +5,10 @@
  * Node.js 无原生 fcntl → 使用 lock 文件 + PID 检测实现跨平台文件锁。
  */
 
+import { createHash, randomUUID } from "node:crypto";
 import {
-  existsSync,
   closeSync,
+  existsSync,
   fsyncSync,
   mkdirSync,
   openSync,
@@ -16,7 +17,6 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 
 // ── 文件锁 ───────────────────────────────────────────────
@@ -210,7 +210,10 @@ export function readWithHash(filePath: string): {
  *
  * @returns true = 未漂移，安全写入；false = 已漂移，已创建 .bak 备份
  */
-export function checkDrift(filePath: string, expectedHash: string): DriftCheckResult {
+export function checkDrift(
+  filePath: string,
+  expectedHash: string,
+): DriftCheckResult {
   const current = readWithHash(filePath);
   if (!current) {
     // 文件不存在 → 首次写入，无漂移

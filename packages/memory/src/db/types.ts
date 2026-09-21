@@ -108,7 +108,14 @@ export interface ScopeDescriptor {
 // ══════════════════════════════════════════════════════════
 
 export interface ActorRef {
-  actorType: "user" | "human_reviewer" | "agent" | "subagent" | "system" | "tool" | "importer";
+  actorType:
+    | "user"
+    | "human_reviewer"
+    | "agent"
+    | "subagent"
+    | "system"
+    | "tool"
+    | "importer";
   actorId: string;
   modelId?: string;
   runtimeVersion?: string;
@@ -173,7 +180,12 @@ export interface WorkingMemory {
 export interface WorkingConstraint {
   id: string;
   text: string;
-  source: "current_user_request" | "user_followup" | "active_rule" | "runtime" | "tool_result";
+  source:
+    | "current_user_request"
+    | "user_followup"
+    | "active_rule"
+    | "runtime"
+    | "tool_result";
   sourceRefId?: string;
   priority: number;
   scope?: ScopeDescriptor;
@@ -278,8 +290,15 @@ export interface WorkingMemorySnapshot {
   taskId: string;
   workingMemoryId: string;
   workingMemoryRevision: number;
-  reason: "manual" | "before_compaction" | "after_plan" | "before_risky_action"
-    | "after_tool_batch" | "pause" | "recovery" | "task_complete";
+  reason:
+    | "manual"
+    | "before_compaction"
+    | "after_plan"
+    | "before_risky_action"
+    | "after_tool_batch"
+    | "pause"
+    | "recovery"
+    | "task_complete";
   snapshot: WorkingMemory;
   createdBy: ActorRef;
   createdAt: string;
@@ -300,7 +319,11 @@ export interface MemoryItemBase {
   status: MemoryStatus;
   scope: ScopeDescriptor;
   confidence: number;
-  verificationStatus: "unverified" | "partially_verified" | "verified" | "invalidated";
+  verificationStatus:
+    | "unverified"
+    | "partially_verified"
+    | "verified"
+    | "invalidated";
   tags: string[];
   relatedFiles: string[];
   relatedSymbols: string[];
@@ -374,9 +397,16 @@ export interface RulePayload {
 
 export interface ProjectKnowledgePayload {
   assertion: string;
-  knowledgeKind: "architecture" | "module_responsibility" | "domain_concept"
-    | "business_flow" | "technology" | "convention" | "configuration"
-    | "repository_structure" | "other";
+  knowledgeKind:
+    | "architecture"
+    | "module_responsibility"
+    | "domain_concept"
+    | "business_flow"
+    | "technology"
+    | "convention"
+    | "configuration"
+    | "repository_structure"
+    | "other";
   stability: "stable" | "evolving" | "version_bound" | "inferred";
   applicability?: string;
   assumptions?: string[];
@@ -407,7 +437,14 @@ export interface DecisionPayload {
   rationale: string[];
   consequences: string[];
   risks: string[];
-  decisionStatus: "proposed" | "accepted" | "implemented" | "validated" | "superseded" | "reverted" | "deprecated";
+  decisionStatus:
+    | "proposed"
+    | "accepted"
+    | "implemented"
+    | "validated"
+    | "superseded"
+    | "reverted"
+    | "deprecated";
   implementedAt?: string;
   validatedAt?: string;
   supersedesDecisionIds?: string[];
@@ -417,15 +454,29 @@ export interface DecisionPayload {
 export interface UserPreferencePayload {
   preferenceKey: string;
   value: unknown;
-  origin: "explicit" | "confirmed_inference" | "repeated_inference" | "single_observation";
+  origin:
+    | "explicit"
+    | "confirmed_inference"
+    | "repeated_inference"
+    | "single_observation";
   strength: "hard" | "default" | "soft" | "inferred";
-  appliesTo: "communication" | "coding_style" | "technology" | "testing"
-    | "documentation" | "workflow" | "risk_handling" | "other";
+  appliesTo:
+    | "communication"
+    | "coding_style"
+    | "technology"
+    | "testing"
+    | "documentation"
+    | "workflow"
+    | "risk_handling"
+    | "other";
   observationCount: number;
   firstObservedAt: string;
   lastObservedAt: string;
   confirmedAt?: string;
-  overridePolicy: "current_request_wins" | "ask_on_conflict" | "hard_unless_revoked";
+  overridePolicy:
+    | "current_request_wins"
+    | "ask_on_conflict"
+    | "hard_unless_revoked";
 }
 
 export interface SkillPayload {
@@ -460,7 +511,14 @@ export interface FailurePayload {
   rootCause?: string;
   ineffectiveAttempts: { description: string; whyFailed: string }[];
   resolution?: string;
-  failureStatus: "hypothesis" | "observed" | "root_cause_confirmed" | "fixed" | "fix_verified" | "recurring" | "invalidated";
+  failureStatus:
+    | "hypothesis"
+    | "observed"
+    | "root_cause_confirmed"
+    | "fixed"
+    | "fix_verified"
+    | "recurring"
+    | "invalidated";
   affectedScopeDescription?: string;
   prevention?: string[];
 }
@@ -482,8 +540,20 @@ export interface MemoryCandidate {
   proposedScope: ScopeDescriptor;
   proposedConfidence: number;
   sourceTaskIds: string[];
-  sourceRefs: { sourceType: string; sourceId?: string; taskId?: string; uri?: string; capturedAt: string }[];
-  evidenceRefs: { evidenceType: string; uri?: string; filePath?: string; strength: string; capturedAt: string }[];
+  sourceRefs: {
+    sourceType: string;
+    sourceId?: string;
+    taskId?: string;
+    uri?: string;
+    capturedAt: string;
+  }[];
+  evidenceRefs: {
+    evidenceType: string;
+    uri?: string;
+    filePath?: string;
+    strength: string;
+    capturedAt: string;
+  }[];
   possibleDuplicateIds: string[];
   possibleConflictIds: string[];
   riskLevel: "low" | "medium" | "high" | "critical";

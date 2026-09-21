@@ -72,10 +72,10 @@ function extractJsonObject(text: string): string | null {
     if (inString) {
       if (escape) escape = false;
       else if (ch === "\\") escape = true;
-      else if (ch === "\"") inString = false;
+      else if (ch === '"') inString = false;
       continue;
     }
-    if (ch === "\"") {
+    if (ch === '"') {
       inString = true;
       continue;
     }
@@ -109,7 +109,7 @@ function repairJsonStringControlChars(input: string): string {
         escape = true;
         continue;
       }
-      if (ch === "\"") {
+      if (ch === '"') {
         inString = false;
         out += ch;
         continue;
@@ -129,7 +129,7 @@ function repairJsonStringControlChars(input: string): string {
       out += ch;
       continue;
     }
-    if (ch === "\"") {
+    if (ch === '"') {
       inString = true;
       out += ch;
       continue;
@@ -161,7 +161,7 @@ function extractJsonStringField(blob: string, field: string): string | null {
       i += 2;
       continue;
     }
-    if (ch === "\"") {
+    if (ch === '"') {
       // 像字段结束：引号后空白 + , 或 }
       const rest = blob.slice(i + 1).match(/^\s*([,}])/);
       if (rest) return out;
@@ -239,7 +239,7 @@ export function formatModelOutputForUi(
 ): FormatModelOutput {
   const streaming = options?.streaming === true;
   const embedded = extractEmbeddedThinking(raw, { streaming });
-  let text = embedded.text;
+  const text = embedded.text;
   const thinking = embedded.thinking;
 
   if (!text) {

@@ -13,18 +13,18 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { AutoMemoryStore, type AutoMemoryEntry } from "../compat/auto-memory.js";
+import {
+  type AutoMemoryEntry,
+  AutoMemoryStore,
+} from "../compat/auto-memory.js";
 import { closeSql, ping as dbPing } from "../db/connection.js";
 import { governanceDecisionDao } from "../db/dao/governanceDecision.js";
 import { memoryCandidateDao } from "../db/dao/memoryCandidate.js";
 import { memoryItemDao } from "../db/dao/memoryItem.js";
+import { GovernanceExecutor, MemoryGovernance } from "../db/modules/index.js";
 import { generateId } from "../db/modules/platform/idGen.js";
-import {
-  GovernanceExecutor,
-  MemoryGovernance,
-} from "../db/modules/index.js";
 import type { MemoryCandidate, MemoryType } from "../db/types.js";
-import { kindFromLegacyType, type MemoryKind } from "../shared/memory-types.js";
+import { type MemoryKind, kindFromLegacyType } from "../shared/memory-types.js";
 import { resolveScope } from "./scope.js";
 
 export interface MigrateLegacyOptions {
@@ -314,9 +314,7 @@ Requires DATABASE_URL and applied migrations (bun run memory:migrate).
 }
 
 const isMain =
-  typeof Bun !== "undefined" &&
-  Bun.main &&
-  import.meta.path === Bun.main;
+  typeof Bun !== "undefined" && Bun.main && import.meta.path === Bun.main;
 
 if (isMain) {
   main().catch((e) => {

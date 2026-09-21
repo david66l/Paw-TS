@@ -153,11 +153,12 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
       if (result.status !== "completed") {
         throw namedError(stableName(result.errorCode));
       }
-      const settledGroups = parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
-        result.text,
-        projected,
-        groups,
-      );
+      const settledGroups =
+        parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
+          result.text,
+          projected,
+          groups,
+        );
       const assessments = settledGroups.flatMap((group) => group.assessments);
       const allCompleted = settledGroups.every(
         (group) => group.status === "completed",
@@ -188,8 +189,7 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
                 assessments,
               } as never)
             : ({
-                schemaVersion:
-                  "paw.memory-evidence-support-group-selection.v1",
+                schemaVersion: "paw.memory-evidence-support-group-selection.v1",
                 selectorVersion,
                 query: projected.query,
                 requirements: projected.requirements,
@@ -430,10 +430,7 @@ function parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
       groupByRequirement.set(requirementId, group.groupId);
     }
   }
-  if (
-    groups.length < 1 ||
-    groupByRequirement.size !== requirementIds.size
-  ) {
+  if (groups.length < 1 || groupByRequirement.size !== requirementIds.size) {
     throw namedError("MemoryEvidenceSupportGroupContractInvalid");
   }
 
@@ -506,9 +503,7 @@ function parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
         Object.freeze({
           requirementId,
           supportingEvidenceRefs: Object.freeze(supportingEvidenceRefs),
-          contradictingEvidenceRefs: Object.freeze(
-            contradictingEvidenceRefs,
-          ),
+          contradictingEvidenceRefs: Object.freeze(contradictingEvidenceRefs),
           unknownEvidenceRefs: Object.freeze(unknownEvidenceRefs),
         }),
       );
@@ -607,10 +602,7 @@ function boundedEvidencePartition(
   const seen = new Set<string>();
   const maximumPartitionAddresses = new Set(allowed.values()).size;
   const output = values.map((value) => {
-    if (
-      !Array.isArray(value) ||
-      value.length > maximumPartitionAddresses
-    ) {
+    if (!Array.isArray(value) || value.length > maximumPartitionAddresses) {
       throw namedError("MemoryEvidenceSupportAddressesInvalid");
     }
     const selected: string[] = [];

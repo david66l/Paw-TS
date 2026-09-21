@@ -41,28 +41,54 @@ export const taskSessionDao = {
         started_at, completed_at, created_at, updated_at, revision
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
       RETURNING *`,
-      [task.id, task.schemaVersion, task.organizationId ?? null, task.userId ?? null,
-        task.workspaceId ?? null, task.repositoryId ?? null, task.parentTaskId ?? null,
-        task.rootTaskId, task.title ?? null, task.initialUserRequest, task.status,
-        task.branch ?? null, task.baseCommit ?? null, task.headCommit ?? null,
-        task.currentWorkingMemoryId ?? null, task.latestCheckpointId ?? null,
-        task.startedAt ?? null, task.completedAt ?? null, task.createdAt, task.updatedAt,
-        task.revision],
+      [
+        task.id,
+        task.schemaVersion,
+        task.organizationId ?? null,
+        task.userId ?? null,
+        task.workspaceId ?? null,
+        task.repositoryId ?? null,
+        task.parentTaskId ?? null,
+        task.rootTaskId,
+        task.title ?? null,
+        task.initialUserRequest,
+        task.status,
+        task.branch ?? null,
+        task.baseCommit ?? null,
+        task.headCommit ?? null,
+        task.currentWorkingMemoryId ?? null,
+        task.latestCheckpointId ?? null,
+        task.startedAt ?? null,
+        task.completedAt ?? null,
+        task.createdAt,
+        task.updatedAt,
+        task.revision,
+      ],
     );
     return rowToTask(rows[0] as Record<string, unknown>);
   },
 
   async findById(id: string): Promise<TaskSession | null> {
     const sql = getSql();
-    const rows = await sql.unsafe("SELECT * FROM task_sessions WHERE id = $1", [id]);
-    return rows.length > 0 ? rowToTask(rows[0] as Record<string, unknown>) : null;
+    const rows = await sql.unsafe("SELECT * FROM task_sessions WHERE id = $1", [
+      id,
+    ]);
+    return rows.length > 0
+      ? rowToTask(rows[0] as Record<string, unknown>)
+      : null;
   },
 
   async updateStatus(
     id: string,
     expectedRevision: number,
     status: TaskSession["status"],
-    opts?: { headCommit?: string; startedAt?: string; completedAt?: string; currentWorkingMemoryId?: string; latestCheckpointId?: string },
+    opts?: {
+      headCommit?: string;
+      startedAt?: string;
+      completedAt?: string;
+      currentWorkingMemoryId?: string;
+      latestCheckpointId?: string;
+    },
   ): Promise<TaskSession | null> {
     const sql = getSql();
     const rows = await sql.unsafe(
@@ -73,14 +99,26 @@ export const taskSessionDao = {
         completed_at = COALESCE($7, completed_at),
         updated_at = now(), revision = revision + 1
       WHERE id = $1 AND revision = $8 RETURNING *`,
-      [id, status, opts?.currentWorkingMemoryId ?? null, opts?.latestCheckpointId ?? null,
-        opts?.headCommit ?? null, opts?.startedAt ?? null, opts?.completedAt ?? null,
-        expectedRevision],
+      [
+        id,
+        status,
+        opts?.currentWorkingMemoryId ?? null,
+        opts?.latestCheckpointId ?? null,
+        opts?.headCommit ?? null,
+        opts?.startedAt ?? null,
+        opts?.completedAt ?? null,
+        expectedRevision,
+      ],
     );
-    return rows.length > 0 ? rowToTask(rows[0] as Record<string, unknown>) : null;
+    return rows.length > 0
+      ? rowToTask(rows[0] as Record<string, unknown>)
+      : null;
   },
 
-  async listByStatus(status: TaskSession["status"], limit = 20): Promise<TaskSession[]> {
+  async listByStatus(
+    status: TaskSession["status"],
+    limit = 20,
+  ): Promise<TaskSession[]> {
     const sql = getSql();
     const rows = await sql.unsafe(
       "SELECT * FROM task_sessions WHERE status = $1 ORDER BY created_at DESC LIMIT $2",

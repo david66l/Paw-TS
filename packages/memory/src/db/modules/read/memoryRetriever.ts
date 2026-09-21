@@ -5,12 +5,19 @@
  * 向量检索失败时自动降级为纯关键词。
  */
 
+import { tokenizeForMemoryScore } from "../../../shared/memory-quality.js";
 import { getSql } from "../../connection.js";
 import { memoryItemDao } from "../../dao/memoryItem.js";
-import type { MemoryItem, MemoryType, MemoryStatus } from "../../types.js";
-import { PolicyEngine, type RetrievalPolicy } from "../platform/policyEngine.js";
-import { NGramEmbeddingService, cosineSimilarity, MEMORY_EMBEDDING_DIMENSIONS } from "../platform/embeddingService.js";
-import { tokenizeForMemoryScore } from "../../../shared/memory-quality.js";
+import type { MemoryItem, MemoryStatus, MemoryType } from "../../types.js";
+import {
+  MEMORY_EMBEDDING_DIMENSIONS,
+  NGramEmbeddingService,
+  cosineSimilarity,
+} from "../platform/embeddingService.js";
+import {
+  PolicyEngine,
+  type RetrievalPolicy,
+} from "../platform/policyEngine.js";
 
 export interface RetrievalRequest {
   taskId: string;
@@ -73,7 +80,9 @@ export class MemoryRetriever {
   private embedder = new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS);
 
   constructor(policyEngine?: PolicyEngine) {
-    this.policy = policyEngine?.getDefaults().retrieval ?? new PolicyEngine().getDefaults().retrieval;
+    this.policy =
+      policyEngine?.getDefaults().retrieval ??
+      new PolicyEngine().getDefaults().retrieval;
   }
 
   async retrieve(req: RetrievalRequest): Promise<RetrievalResult> {
@@ -113,7 +122,10 @@ export class MemoryRetriever {
           SELECT memory_id, embedding FROM memory_embeddings WHERE memory_id = ANY(${sql.array(ids)})
         `;
         const vecMap = new Map<string, number[]>();
-        for (const r of embeddings as unknown as { memory_id: string; embedding: string }[]) {
+        for (const r of embeddings as unknown as {
+          memory_id: string;
+          embedding: string;
+        }[]) {
           vecMap.set(r.memory_id, parseVector(r.embedding));
         }
 
@@ -213,9 +225,12 @@ export class MemoryRetriever {
     const reasons: string[] = [];
     const qTerms = tokenizeForMemoryScore(query);
     for (const term of qTerms) {
-      if (item.title.toLowerCase().includes(term)) reasons.push(`title:${term}`);
-      if (item.summary.toLowerCase().includes(term)) reasons.push(`summary:${term}`);
-      if (item.subjectKey.toLowerCase().includes(term)) reasons.push(`subject:${term}`);
+      if (item.title.toLowerCase().includes(term))
+        reasons.push(`title:${term}`);
+      if (item.summary.toLowerCase().includes(term))
+        reasons.push(`summary:${term}`);
+      if (item.subjectKey.toLowerCase().includes(term))
+        reasons.push(`subject:${term}`);
     }
     return reasons.slice(0, 3);
   }
@@ -231,10 +246,16 @@ export class MemoryRetriever {
     return rows.map((r) => {
       const row = r as Record<string, unknown>;
       return {
-        id: row.id as string, type: row.type as MemoryType, subjectKey: row.subject_key as string,
-        title: row.title as string, summary: row.summary as string, status: row.status as MemoryStatus,
-        confidence: row.confidence as number, version: row.version as number,
-        createdAt: row.created_at as string, updatedAt: row.updated_at as string,
+        id: row.id as string,
+        type: row.type as MemoryType,
+        subjectKey: row.subject_key as string,
+        title: row.title as string,
+        summary: row.summary as string,
+        status: row.status as MemoryStatus,
+        confidence: row.confidence as number,
+        version: row.version as number,
+        createdAt: row.created_at as string,
+        updatedAt: row.updated_at as string,
       } as MemoryItem;
     });
   }
@@ -243,7 +264,11 @@ export class MemoryRetriever {
 function parseVector(raw: unknown): number[] {
   if (Array.isArray(raw)) return raw as number[];
   if (typeof raw === "string") {
-    try { return JSON.parse(raw) as number[]; } catch { return []; }
+    try {
+      return JSON.parse(raw) as number[];
+    } catch {
+      return [];
+    }
   }
   return [];
 }

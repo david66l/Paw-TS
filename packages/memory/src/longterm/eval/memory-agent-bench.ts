@@ -16,13 +16,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getSql } from "../../db/connection.js";
-import type { MemoryStoreEngine, SemanticFact } from "../store/engine.js";
-import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
-import { deriveEntryId } from "../store/id.js";
 import { TriggeredRetriever } from "../retrieval/triggered.js";
-import type { JudgeLlm } from "./replay.js";
-import { LlmBudget, type RedteamReport } from "./perturbation.js";
+import type { MemoryStoreEngine, SemanticFact } from "../store/engine.js";
+import { deriveEntryId } from "../store/id.js";
+import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import type { LlmStats } from "./llm-client.js";
+import { LlmBudget, type RedteamReport } from "./perturbation.js";
+import type { JudgeLlm } from "./replay.js";
 
 // ═══════════════════════════════════════════════════════════════
 // 类型
@@ -219,14 +219,21 @@ export function subsampleChunks(
     const mid = Math.max(0, maxChunks - head - tail);
     const out: string[] = [];
     for (let i = 0; i < head; i++) {
-      out.push(chunks[Math.round((i * (Math.floor(chunks.length / 3))) / Math.max(1, head - 1))]!);
+      out.push(
+        chunks[
+          Math.round(
+            (i * Math.floor(chunks.length / 3)) / Math.max(1, head - 1),
+          )
+        ]!,
+      );
     }
     if (mid > 0) {
       const midStart = Math.floor(chunks.length / 3);
       const midEnd = Math.floor((2 * chunks.length) / 3);
       for (let i = 0; i < mid; i++) {
         const idx =
-          midStart + Math.round((i * (midEnd - midStart)) / Math.max(1, mid - 1));
+          midStart +
+          Math.round((i * (midEnd - midStart)) / Math.max(1, mid - 1));
         out.push(chunks[Math.min(chunks.length - 1, idx)]!);
       }
     }
@@ -259,7 +266,9 @@ export function subsampleChunks(
 /** 从查询抽取词项（比 extractKeywords 更宽，用于选片打分） */
 export function queryTerms(text: string): string[] {
   const bag = new Set<string>();
-  for (const m of text.toLowerCase().match(/[a-z][a-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? []) {
+  for (const m of text
+    .toLowerCase()
+    .match(/[a-z][a-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? []) {
     bag.add(m);
   }
   return [...bag];
@@ -316,7 +325,9 @@ export function subsampleChunksForQuery(
 export function extractKeywords(...parts: string[]): string[] {
   const bag = new Set<string>();
   for (const p of parts) {
-    for (const m of p.toLowerCase().match(/[a-z][a-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? []) {
+    for (const m of p
+      .toLowerCase()
+      .match(/[a-z][a-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? []) {
       bag.add(m);
       if (bag.size >= 16) return [...bag];
     }
@@ -343,7 +354,11 @@ function padNoise(seed: string, minLen: number): string {
 }
 
 /** 在段落之间插入噪声，确保旧/新事实落入不同 chunk（SF 必需） */
-function padBetween(sections: readonly string[], minTotal: number, gapSize = 600): string {
+function padBetween(
+  sections: readonly string[],
+  minTotal: number,
+  gapSize = 600,
+): string {
   const gaps: string[] = [];
   const filler =
     "背景说明：本仓库使用 bun 作为包管理与测试运行器。模块边界清晰，工具调用需带超时。" +
@@ -510,7 +525,10 @@ const DIM_FROM_SPLIT: Record<string, MabDimension> = {
 };
 
 /** 官方 HF split → 维度（全量四维；SF 仍用内置） */
-export const MAB_HF_SPLITS: readonly { split: string; dimension: MabDimension }[] = [
+export const MAB_HF_SPLITS: readonly {
+  split: string;
+  dimension: MabDimension;
+}[] = [
   { split: "Accurate_Retrieval", dimension: "AR" },
   { split: "Test_Time_Learning", dimension: "TTL" },
   { split: "Long_Range_Understanding", dimension: "LRU" },
@@ -518,8 +536,7 @@ export const MAB_HF_SPLITS: readonly { split: string; dimension: MabDimension }[
 ];
 
 export const MAB_HF_DATASET = "ai-hyz/MemoryAgentBench";
-export const MAB_HF_ROWS_BASE =
-  "https://datasets-server.huggingface.co/rows";
+export const MAB_HF_ROWS_BASE = "https://datasets-server.huggingface.co/rows";
 
 const METRIC_FOR_DIM: Record<MabDimension, MabMetric> = {
   AR: "substring_exact_match",
@@ -534,7 +551,13 @@ function asStringList(v: unknown): string[] {
   if (v == null) return [];
   if (typeof v === "string") return [v];
   if (Array.isArray(v)) {
-    return v.flatMap((x) => (typeof x === "string" ? [x] : Array.isArray(x) ? asStringList(x) : [String(x)]));
+    return v.flatMap((x) =>
+      typeof x === "string"
+        ? [x]
+        : Array.isArray(x)
+          ? asStringList(x)
+          : [String(x)],
+    );
   }
   return [String(v)];
 }
@@ -546,7 +569,9 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
   const context = typeof o.context === "string" ? o.context : "";
   if (context.length < 20) return null;
 
-  const meta = (o.metadata && typeof o.metadata === "object" ? o.metadata : {}) as Record<string, unknown>;
+  const meta = (
+    o.metadata && typeof o.metadata === "object" ? o.metadata : {}
+  ) as Record<string, unknown>;
   const source =
     (typeof o.source === "string" && o.source) ||
     (typeof meta.source === "string" && meta.source) ||
@@ -557,7 +582,8 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
     (typeof o.split === "string" && o.split) ||
     (typeof o.dataset === "string" && o.dataset) ||
     "";
-  const dimension = DIM_FROM_SPLIT[dimRaw] ?? (source.startsWith("coding_sf") ? "SF" : null);
+  const dimension =
+    DIM_FROM_SPLIT[dimRaw] ?? (source.startsWith("coding_sf") ? "SF" : null);
   if (!dimension) {
     // HF 官方按 split 加载时常不带 dimension 字段——允许调用方注入
     return null;
@@ -588,14 +614,20 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
           question,
           answers,
           sfMode:
-            q.sfMode === "current" || q.sfMode === "historical" ? q.sfMode : undefined,
-          oldFactNeedle: typeof q.oldFactNeedle === "string" ? q.oldFactNeedle : undefined,
+            q.sfMode === "current" || q.sfMode === "historical"
+              ? q.sfMode
+              : undefined,
+          oldFactNeedle:
+            typeof q.oldFactNeedle === "string" ? q.oldFactNeedle : undefined,
         } satisfies MabQaPair;
       })
       .filter((x): x is MabQaPair => x != null);
     if (qa.length === 0) return null;
     return {
-      id: typeof o.id === "string" ? o.id : `${dimension.toLowerCase()}-${source}-${index}`,
+      id:
+        typeof o.id === "string"
+          ? o.id
+          : `${dimension.toLowerCase()}-${source}-${index}`,
       dimension,
       source,
       context,
@@ -617,8 +649,12 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
     if (!q) continue;
     const answers = answerLists[i] ?? answerLists[0] ?? [];
     if (answers.length === 0) continue;
-    const sfMode = o.sfMode === "current" || o.sfMode === "historical" ? o.sfMode : undefined;
-    const oldFactNeedle = typeof o.oldFactNeedle === "string" ? o.oldFactNeedle : undefined;
+    const sfMode =
+      o.sfMode === "current" || o.sfMode === "historical"
+        ? o.sfMode
+        : undefined;
+    const oldFactNeedle =
+      typeof o.oldFactNeedle === "string" ? o.oldFactNeedle : undefined;
     qa.push({
       id: qaIds[i] || `q${i}`,
       question: q,
@@ -630,7 +666,10 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
   if (qa.length === 0) return null;
 
   return {
-    id: typeof o.id === "string" ? o.id : `${dimension.toLowerCase()}-${source}-${index}`,
+    id:
+      typeof o.id === "string"
+        ? o.id
+        : `${dimension.toLowerCase()}-${source}-${index}`,
     dimension,
     source,
     context,
@@ -664,13 +703,18 @@ export function loadMabSamplesFromFile(
     else if (obj.id || obj.context) records = [obj];
     else throw new Error(`无法识别的 JSON 形状: ${path}`);
   } else {
-    records = text.split("\n").filter((l) => l.trim()).map((l, i) => {
-      try {
-        return JSON.parse(l);
-      } catch (e) {
-        throw new Error(`JSONL 第 ${i + 1} 行非法: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    });
+    records = text
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l, i) => {
+        try {
+          return JSON.parse(l);
+        } catch (e) {
+          throw new Error(
+            `JSONL 第 ${i + 1} 行非法: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      });
   }
 
   const out: MabSample[] = [];
@@ -712,7 +756,10 @@ export function filterMabSamples(
 
 /** 把 Node Buffer 转成 hyparquet 可用的 ArrayBuffer */
 function toArrayBuffer(buf: Buffer): ArrayBuffer {
-  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  return buf.buffer.slice(
+    buf.byteOffset,
+    buf.byteOffset + buf.byteLength,
+  ) as ArrayBuffer;
 }
 
 /**
@@ -726,7 +773,10 @@ export async function loadMabSamplesFromParquetDir(
   const { parquetReadObjects } = await import("hyparquet");
   const { readdirSync } = await import("node:fs");
   const want = new Set(
-    (opts?.splits?.length ? opts.splits : MAB_HF_SPLITS.map((s) => s.split)).map(String),
+    (opts?.splits?.length
+      ? opts.splits
+      : MAB_HF_SPLITS.map((s) => s.split)
+    ).map(String),
   );
   const files = readdirSync(dataDir).filter((f) => f.endsWith(".parquet"));
   const out: MabSample[] = [];
@@ -734,11 +784,16 @@ export async function loadMabSamplesFromParquetDir(
   for (const { split, dimension } of MAB_HF_SPLITS) {
     if (!want.has(split)) continue;
     const match = files.find(
-      (f) => f === `${split}.parquet` || f.startsWith(`${split}-`) || f.includes(`${split}-`),
+      (f) =>
+        f === `${split}.parquet` ||
+        f.startsWith(`${split}-`) ||
+        f.includes(`${split}-`),
     );
     if (!match) continue;
     const buf = readFileSync(join(dataDir, match));
-    const rows = (await parquetReadObjects({ file: toArrayBuffer(buf) })) as unknown[];
+    const rows = (await parquetReadObjects({
+      file: toArrayBuffer(buf),
+    })) as unknown[];
     out.push(...recordsToSamples(rows, dimension, split));
   }
   return out;
@@ -750,7 +805,10 @@ export function loadMabSamplesFromHfCache(
   opts?: { splits?: readonly string[] },
 ): MabSample[] {
   const want = new Set(
-    (opts?.splits?.length ? opts.splits : MAB_HF_SPLITS.map((s) => s.split)).map(String),
+    (opts?.splits?.length
+      ? opts.splits
+      : MAB_HF_SPLITS.map((s) => s.split)
+    ).map(String),
   );
   const out: MabSample[] = [];
   for (const { split, dimension } of MAB_HF_SPLITS) {
@@ -763,12 +821,18 @@ export function loadMabSamplesFromHfCache(
   return out;
 }
 
-function recordsToSamples(records: unknown[], dimension: MabDimension, split: string): MabSample[] {
+function recordsToSamples(
+  records: unknown[],
+  dimension: MabDimension,
+  split: string,
+): MabSample[] {
   const out: MabSample[] = [];
   for (let i = 0; i < records.length; i++) {
     const raw = records[i];
     let sample = normalizeMabRecord(
-      raw && typeof raw === "object" ? { ...(raw as object), dimension, split } : raw,
+      raw && typeof raw === "object"
+        ? { ...(raw as object), dimension, split }
+        : raw,
       i,
     );
     if (!sample && raw && typeof raw === "object") {
@@ -823,7 +887,9 @@ export async function fetchMabHfSplit(
       headers: { Accept: "application/json" },
     });
     if (!res.ok) {
-      throw new Error(`HF rows ${split} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      throw new Error(
+        `HF rows ${split} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`,
+      );
     }
     const body = (await res.json()) as {
       num_rows_total?: number;
@@ -841,7 +907,11 @@ export async function fetchMabHfSplit(
 
   if (opts?.cacheDir) {
     mkdirSync(opts.cacheDir, { recursive: true });
-    writeFileSync(join(opts.cacheDir, `${split}.json`), JSON.stringify(records, null, 2), "utf8");
+    writeFileSync(
+      join(opts.cacheDir, `${split}.json`),
+      JSON.stringify(records, null, 2),
+      "utf8",
+    );
   }
   return recordsToSamples(records, dimension, split);
 }
@@ -888,14 +958,18 @@ export async function loadOrFetchMabHf(opts: {
     let samples: MabSample[] = [];
 
     if (!opts.forceFetch && existsSync(path)) {
-      samples = loadMabSamplesFromFile(path, { defaultDimension: meta.dimension }).map((s) => ({
+      samples = loadMabSamplesFromFile(path, {
+        defaultDimension: meta.dimension,
+      }).map((s) => ({
         ...s,
         id: s.id.includes(split) ? s.id : `${split}-${s.id}`,
       }));
       cached += 1;
     } else if (opts.parquetDir && existsSync(opts.parquetDir)) {
       try {
-        samples = await loadMabSamplesFromParquetDir(opts.parquetDir, { splits: [split] });
+        samples = await loadMabSamplesFromParquetDir(opts.parquetDir, {
+          splits: [split],
+        });
         if (samples.length > 0) fromParquet += 1;
       } catch (e) {
         warnings.push(
@@ -915,13 +989,17 @@ export async function loadOrFetchMabHf(opts: {
         fetched += 1;
       } catch (e) {
         if (existsSync(path)) {
-          samples = loadMabSamplesFromFile(path, { defaultDimension: meta.dimension });
+          samples = loadMabSamplesFromFile(path, {
+            defaultDimension: meta.dimension,
+          });
           cached += 1;
           warnings.push(
             `${split}: 拉取失败，回退缓存（${e instanceof Error ? e.message : String(e)}）`,
           );
         } else {
-          warnings.push(`${split}: ${e instanceof Error ? e.message : String(e)}`);
+          warnings.push(
+            `${split}: ${e instanceof Error ? e.message : String(e)}`,
+          );
           bySplit[split] = 0;
           continue;
         }
@@ -932,7 +1010,9 @@ export async function loadOrFetchMabHf(opts: {
     all.push(...samples);
   }
 
-  const kinds = [cached > 0, fromParquet > 0, fetched > 0].filter(Boolean).length;
+  const kinds = [cached > 0, fromParquet > 0, fetched > 0].filter(
+    Boolean,
+  ).length;
   const source: MabHfLoadResult["source"] =
     kinds > 1
       ? "mixed"
@@ -955,14 +1035,25 @@ export async function loadOrFetchMabHf(opts: {
 // 汇总 / 报告
 // ═══════════════════════════════════════════════════════════════
 
-export function accuracyOf(items: readonly MabQaResult[], memoryOn: boolean, dim?: MabDimension): number | null {
-  const xs = items.filter((i) => i.memoryOn === memoryOn && (dim === undefined || i.dimension === dim));
+export function accuracyOf(
+  items: readonly MabQaResult[],
+  memoryOn: boolean,
+  dim?: MabDimension,
+): number | null {
+  const xs = items.filter(
+    (i) =>
+      i.memoryOn === memoryOn && (dim === undefined || i.dimension === dim),
+  );
   if (xs.length === 0) return null;
   return xs.filter((i) => i.correct).length / xs.length;
 }
 
-export function sfSuppressionRate(items: readonly MabQaResult[]): number | null {
-  const ys = items.filter((i) => i.memoryOn && i.oldFactSuppressed !== undefined);
+export function sfSuppressionRate(
+  items: readonly MabQaResult[],
+): number | null {
+  const ys = items.filter(
+    (i) => i.memoryOn && i.oldFactSuppressed !== undefined,
+  );
   if (ys.length === 0) return null;
   return ys.filter((i) => i.oldFactSuppressed).length / ys.length;
 }
@@ -984,7 +1075,9 @@ export function binomialSignTestP(wins: number, losses: number): number | null {
  * 按 (sampleId, qaId, dimension) 配对 on/off。
  * win = on 对且 off 错；loss = on 错且 off 对。
  */
-export function computePairedStats(items: readonly MabQaResult[]): MabPairedStats {
+export function computePairedStats(
+  items: readonly MabQaResult[],
+): MabPairedStats {
   type Key = string;
   const on = new Map<Key, MabQaResult>();
   const off = new Map<Key, MabQaResult>();
@@ -1019,7 +1112,13 @@ export function computePairedStats(items: readonly MabQaResult[]): MabPairedStat
 export function summarizeMab(items: readonly MabQaResult[]): {
   byDim: Record<
     MabDimension,
-    { on: number | null; off: number | null; delta: number | null; nOn: number; nOff: number }
+    {
+      on: number | null;
+      off: number | null;
+      delta: number | null;
+      nOn: number;
+      nOff: number;
+    }
   >;
   sfSuppression: number | null;
   /** 所有有对照的维度平均 Δ；无对照 → null */
@@ -1034,7 +1133,13 @@ export function summarizeMab(items: readonly MabQaResult[]): {
   const dims: MabDimension[] = ["AR", "TTL", "LRU", "CR", "SF"];
   const byDim = {} as Record<
     MabDimension,
-    { on: number | null; off: number | null; delta: number | null; nOn: number; nOff: number }
+    {
+      on: number | null;
+      off: number | null;
+      delta: number | null;
+      nOn: number;
+      nOff: number;
+    }
   >;
   const deltas: number[] = [];
   for (const d of dims) {
@@ -1047,11 +1152,16 @@ export function summarizeMab(items: readonly MabQaResult[]): {
     if (delta !== null) deltas.push(delta);
   }
   const sfSuppression = (() => {
-    const ys = items.filter((i) => i.memoryOn && i.oldFactSuppressed !== undefined);
+    const ys = items.filter(
+      (i) => i.memoryOn && i.oldFactSuppressed !== undefined,
+    );
     if (ys.length === 0) return null;
     return ys.filter((i) => i.oldFactSuppressed).length / ys.length;
   })();
-  const meanDelta = deltas.length > 0 ? deltas.reduce((a, b) => a + b, 0) / deltas.length : null;
+  const meanDelta =
+    deltas.length > 0
+      ? deltas.reduce((a, b) => a + b, 0) / deltas.length
+      : null;
   const paired = computePairedStats(items);
   let passed: boolean | null = null;
   if (meanDelta !== null && paired.nPairs > 0) {
@@ -1069,12 +1179,16 @@ export function renderMabReport(r: MabReport): string {
     "指标:",
   ];
   for (const [k, v] of Object.entries(r.metrics)) {
-    lines.push(`  ${k}: ${v === null ? "n/a" : typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(3)) : v}`);
+    lines.push(
+      `  ${k}: ${v === null ? "n/a" : typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(3)) : v}`,
+    );
   }
   if (Object.keys(r.deltas).length > 0) {
     lines.push("分项 Δ (on−off):");
     for (const [k, v] of Object.entries(r.deltas)) {
-      lines.push(`  ${k}: ${v === null || v === undefined ? "n/a" : (v as number).toFixed(3)}`);
+      lines.push(
+        `  ${k}: ${v === null || v === undefined ? "n/a" : (v as number).toFixed(3)}`,
+      );
     }
   }
   const p = r.paired;
@@ -1137,7 +1251,11 @@ ${injected.trim() || "(无)"}
 请直接给出简短答案，不要解释过程。`;
 }
 
-function isLongFormSample(sample: { dimension: MabDimension; metric: MabMetric; source: string }): boolean {
+function isLongFormSample(sample: {
+  dimension: MabDimension;
+  metric: MabMetric;
+  source: string;
+}): boolean {
   return (
     sample.dimension === "LRU" ||
     sample.metric === "token_f1" ||
@@ -1146,7 +1264,11 @@ function isLongFormSample(sample: { dimension: MabDimension; metric: MabMetric; 
 }
 
 function isExtractiveSample(sample: { dimension: MabDimension }): boolean {
-  return sample.dimension === "AR" || sample.dimension === "TTL" || sample.dimension === "CR";
+  return (
+    sample.dimension === "AR" ||
+    sample.dimension === "TTL" ||
+    sample.dimension === "CR"
+  );
 }
 
 async function putChunk(
@@ -1246,7 +1368,9 @@ async function cleanupRepo(repo: string): Promise<void> {
  * 跑 MemoryAgentBench 适配评测。
  * 每个 sample：先 off（空注入答题）再 on（chunk 写入 → 检索 → 答题），保证同题配对。
  */
-export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabReport> {
+export async function runMemoryAgentBench(
+  opts: MabRunOptions,
+): Promise<MabReport> {
   const now = (opts.now ?? (() => new Date()))();
   const engine = opts.engine ?? new PostgresMemoryStoreEngine();
   const budget = new LlmBudget(opts.llmBudget ?? 400);
@@ -1272,8 +1396,13 @@ export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabRepor
     console.log(
       `[mab] ${si + 1}/${samples.length} start ${sample.dimension}/${sample.id} qa=${sample.qa.length} ctxChars=${sample.context.length}`,
     );
-    const repo = `mab-${ts}-${sample.id}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
-    const arLike = sample.dimension === "AR" || sample.dimension === "TTL" || sample.dimension === "CR";
+    const repo = `mab-${ts}-${sample.id}`
+      .replace(/[^a-zA-Z0-9_-]/g, "_")
+      .slice(0, 80);
+    const arLike =
+      sample.dimension === "AR" ||
+      sample.dimension === "TTL" ||
+      sample.dimension === "CR";
     const retriever = new TriggeredRetriever({
       engine,
       shadow: true,
@@ -1297,7 +1426,9 @@ export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabRepor
             buildAnswerPrompt(qa.question, "", { longForm, extractive }),
           );
         } catch (e) {
-          warnings.push(`${sample.id}/${qa.id} off: ${e instanceof Error ? e.message : String(e)}`);
+          warnings.push(
+            `${sample.id}/${qa.id} off: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
         items.push({
           sampleId: sample.id,
@@ -1313,7 +1444,8 @@ export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabRepor
 
       // ── memory ON：chunk → session 写入 ──
       // SF 夹具依赖窄 chunk + 禁止抽稀，避免旧/新事实粘在同一块导致无法软失效
-      const effectiveChunkSize = sample.dimension === "SF" ? Math.min(chunkSize, 512) : chunkSize;
+      const effectiveChunkSize =
+        sample.dimension === "SF" ? Math.min(chunkSize, 512) : chunkSize;
       const rawChunks = chunkText(sample.context, effectiveChunkSize);
       let chunks = rawChunks;
       const allowSubsample = sample.dimension !== "SF";
@@ -1351,9 +1483,16 @@ export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabRepor
       }
       // SF：纯旧事实 chunk 软失效（现行检索不可见；T4 历史问仍可见）
       if (sample.dimension === "SF") {
-        const inv = await invalidateSupersededForSf(engine, repo, sample, writtenIds);
+        const inv = await invalidateSupersededForSf(
+          engine,
+          repo,
+          sample,
+          writtenIds,
+        );
         if (inv.length === 0) {
-          warnings.push(`${sample.id}: SF 未失效任何旧 chunk（检查 oldFactNeedle 与分块）`);
+          warnings.push(
+            `${sample.id}: SF 未失效任何旧 chunk（检查 oldFactNeedle 与分块）`,
+          );
         }
       }
 
@@ -1369,11 +1508,18 @@ export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabRepor
             repo,
             runId: `${repo}-${qa.id}`,
           });
-          let items = pkg.items.map((i) => ({ text: i.text, tInvalid: i.tInvalid }));
+          const items = pkg.items.map((i) => ({
+            text: i.text,
+            tInvalid: i.tInvalid,
+          }));
           // 历史题：T4 词面启发式可能漏掉中文失效条，显式补上含 oldFactNeedle 的失效条目
           if (qa.sfMode === "historical" && qa.oldFactNeedle) {
             const needle = normalizeAnswer(qa.oldFactNeedle);
-            const all = await engine.query({ repo, includeInvalidated: true, limit: 200 });
+            const all = await engine.query({
+              repo,
+              includeInvalidated: true,
+              limit: 200,
+            });
             for (const e of all) {
               if (e.tInvalid == null || e.kind !== "semantic") continue;
               if (!normalizeAnswer(e.fact).includes(needle)) continue;
@@ -1406,7 +1552,9 @@ export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabRepor
             if (!goldInInject) qaWarnings.push("inject_miss_gold");
           }
         } catch (e) {
-          qaWarnings.push(`retrieve: ${e instanceof Error ? e.message : String(e)}`);
+          qaWarnings.push(
+            `retrieve: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
 
         let oldFactSuppressed: boolean | undefined;
@@ -1426,7 +1574,9 @@ export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabRepor
             buildAnswerPrompt(qa.question, injected, { longForm, extractive }),
           );
         } catch (e) {
-          qaWarnings.push(`answer: ${e instanceof Error ? e.message : String(e)}`);
+          qaWarnings.push(
+            `answer: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
 
         // historical SF：允许用 oldFactNeedle 作为答案兜底之一
@@ -1449,18 +1599,26 @@ export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabRepor
         warnings.push(...qaWarnings.map((w) => `${sample.id}/${qa.id}: ${w}`));
       }
     } catch (e) {
-      warnings.push(`${sample.id}: ${e instanceof Error ? e.message : String(e)}`);
+      warnings.push(
+        `${sample.id}: ${e instanceof Error ? e.message : String(e)}`,
+      );
     } finally {
       if (!opts.keep) {
         try {
           await cleanupRepo(repo);
         } catch (e) {
-          warnings.push(`${sample.id} cleanup: ${e instanceof Error ? e.message : String(e)}`);
+          warnings.push(
+            `${sample.id} cleanup: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       }
     }
-    const onN = items.filter((i) => i.sampleId === sample.id && i.memoryOn && i.correct).length;
-    const offN = items.filter((i) => i.sampleId === sample.id && !i.memoryOn && i.correct).length;
+    const onN = items.filter(
+      (i) => i.sampleId === sample.id && i.memoryOn && i.correct,
+    ).length;
+    const offN = items.filter(
+      (i) => i.sampleId === sample.id && !i.memoryOn && i.correct,
+    ).length;
     const qaN = sample.qa.length;
     console.log(
       `[mab] ${si + 1}/${samples.length} done ${sample.id} on=${onN}/${qaN} off=${offN}/${qaN} ${Date.now() - sampleT0}ms`,

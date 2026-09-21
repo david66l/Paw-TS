@@ -62,7 +62,11 @@ describe("editWorkspaceFile — string mode", () => {
 
   test("treats JavaScript replacement tokens as literal source text", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(path.join(root, "tokens.txt"), "before TARGET after\n", "utf8");
+    writeFileSync(
+      path.join(root, "tokens.txt"),
+      "before TARGET after\n",
+      "utf8",
+    );
     const literal = "$&|$`|$'|$$";
     const r = editWorkspaceFile(root, "tokens.txt", {
       oldString: "TARGET",
@@ -90,7 +94,11 @@ describe("editWorkspaceFile — string mode", () => {
 
     expect(r.error).toBeUndefined();
     const after = fs.readFileSync(path.join(root, "dates.py"), "utf8");
-    expect(after).toBe(before.slice(0, before.indexOf(oldString)) + newString + before.slice(before.indexOf(oldString) + oldString.length));
+    expect(after).toBe(
+      before.slice(0, before.indexOf(oldString)) +
+        newString +
+        before.slice(before.indexOf(oldString) + oldString.length),
+    );
     expect(after.match(/line_1299 = 1299/g)).toHaveLength(1);
     expect(r.linesAdded).toBe(1);
     expect(r.linesRemoved).toBe(1);

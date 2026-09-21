@@ -389,9 +389,7 @@ describe("sanitizeRunId", () => {
   });
 
   test("replaces separators as before", () => {
-    expect(sanitizeRunId("../../../etc/passwd")).toBe(
-      ".._.._.._etc_passwd",
-    );
+    expect(sanitizeRunId("../../../etc/passwd")).toBe(".._.._.._etc_passwd");
     expect(sanitizeRunId("a/b\\c")).toBe("a_b_c");
   });
 

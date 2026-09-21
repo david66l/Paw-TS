@@ -13,8 +13,8 @@
  * - `shadow`：shadow 灰度——读取管线只记录假设注入包（§11.2，M8）
  */
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export interface MemoryLocalConfig {

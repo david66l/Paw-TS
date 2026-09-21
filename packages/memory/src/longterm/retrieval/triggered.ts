@@ -19,19 +19,43 @@ function sharedTokenCount(text: string): number {
   _estimator ??= new TiktokenEstimator();
   return _estimator.count(text);
 }
-import type { MemoryEntry, MemoryKind, MemoryStoreEngine } from "../store/engine.js";
-import { hybridRecall, RECALL_ALPHA, type ScoredEntry } from "./hybrid.js";
-import { appendOpLog } from "../observability/op-log.js";
 import { recordRetrievalHits } from "../observability/ledger.js";
-import { listTrialLessons, decrementTrialAttempts } from "../write/trial.js";
+import { appendOpLog } from "../observability/op-log.js";
+import type {
+  MemoryEntry,
+  MemoryKind,
+  MemoryStoreEngine,
+} from "../store/engine.js";
 import type { MemoryScopeKey } from "../store/scope-key.js";
+import { decrementTrialAttempts, listTrialLessons } from "../write/trial.js";
+import { RECALL_ALPHA, type ScoredEntry, hybridRecall } from "./hybrid.js";
 
 // ── 触发与配置（§9.1 / §9.4）──
 
 export type MemoryTrigger =
-  | { type: "task_start"; taskDescription: string; branch?: string; repo?: string; runId?: string }
-  | { type: "action_failed"; errorOutput: string; lastActionSummary: string; branch?: string; repo?: string; runId?: string }
-  | { type: "post_compact"; summaryHead: string; goal: string; repo?: string; runId?: string; existingContextHints?: string[] }
+  | {
+      type: "task_start";
+      taskDescription: string;
+      branch?: string;
+      repo?: string;
+      runId?: string;
+    }
+  | {
+      type: "action_failed";
+      errorOutput: string;
+      lastActionSummary: string;
+      branch?: string;
+      repo?: string;
+      runId?: string;
+    }
+  | {
+      type: "post_compact";
+      summaryHead: string;
+      goal: string;
+      repo?: string;
+      runId?: string;
+      existingContextHints?: string[];
+    }
   | { type: "explicit_query"; question: string; repo?: string; runId?: string };
 
 export interface RetrieverOptions {
@@ -46,7 +70,12 @@ export interface RetrieverOptions {
    */
   queryRewriter?: RerankerLlm;
   /** 各触发点注入上限（§6.1 表） */
-  topK?: Partial<{ taskStart: number; actionFailed: number; postCompact: number; explicitQuery: number }>;
+  topK?: Partial<{
+    taskStart: number;
+    actionFailed: number;
+    postCompact: number;
+    explicitQuery: number;
+  }>;
   /** 注入预算，默认 500 tokens（§6.6） */
   maxInjectTokens?: number;
   emit?: (event: RunEvent) => void;
@@ -96,8 +125,10 @@ export interface InjectionPackage {
 
 // ── T2 防误检与 query 构造（§6.2，纯函数）──
 
-const NON_ACTIONABLE_RE = /permission denied|EACCES|EPERM|operation not permitted|用户中止|用户取消|aborted by user|user abort(?:ed)?|interrupted|SIGINT|Ctrl\+C|手动取消/i;
-const ACTIONABLE_RE = /error|failed|failure|exception|panic|traceback|exit(?:ed)?(?:\s+with)?(?:\s+code)?\s+[1-9]\d*|报错|失败/i;
+const NON_ACTIONABLE_RE =
+  /permission denied|EACCES|EPERM|operation not permitted|用户中止|用户取消|aborted by user|user abort(?:ed)?|interrupted|SIGINT|Ctrl\+C|手动取消/i;
+const ACTIONABLE_RE =
+  /error|failed|failure|exception|panic|traceback|exit(?:ed)?(?:\s+with)?(?:\s+code)?\s+[1-9]\d*|报错|失败/i;
 
 /** T2 仅对"可行动错误"触发：权限拒绝/用户中止不触发（§6.2 防误检） */
 export function isActionableError(errorOutput: string): boolean {
@@ -105,24 +136,46 @@ export function isActionableError(errorOutput: string): boolean {
   return ACTIONABLE_RE.test(errorOutput);
 }
 
-const ERROR_TYPE_RE = /\b([A-Z][\w]*(?:Error|Exception)|error\s+TS\d+|FAIL(?:ED)?)\b/;
+const ERROR_TYPE_RE =
+  /\b([A-Z][\w]*(?:Error|Exception)|error\s+TS\d+|FAIL(?:ED)?)\b/;
 const STACK_LINE_RE = /^\s*(?:at\s+\S+|\S+:\d+:\d+|File\s+")/;
 
 /** T2 query = errorType + 关键堆栈行（错误输出 ≤400 字符）+ 上一轮动作摘要（§6.2） */
-export function buildActionFailedQuery(errorOutput: string, lastActionSummary: string): string {
+export function buildActionFailedQuery(
+  errorOutput: string,
+  lastActionSummary: string,
+): string {
   const truncated = errorOutput.slice(0, 400);
   const errorType = ERROR_TYPE_RE.exec(truncated)?.[0] ?? "";
-  const stackLines = truncated.split("\n").filter((l) => STACK_LINE_RE.test(l)).slice(0, 2)
+  const stackLines = truncated
+    .split("\n")
+    .filter((l) => STACK_LINE_RE.test(l))
+    .slice(0, 2)
     .map((l) => l.trim().slice(0, 120));
-  return [errorType, ...stackLines, lastActionSummary.slice(0, 100)].filter(Boolean).join("\n");
+  return [errorType, ...stackLines, lastActionSummary.slice(0, 100)]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** T3 去重（§6.1）：条目文本与 SessionMemory hints 高重叠 → 跳过 */
-export function isCoveredByHints(entryText: string, hints: readonly string[]): boolean {
-  const tokens = new Set(entryText.toLowerCase().split(/\W+/).filter((t) => t.length > 2));
+export function isCoveredByHints(
+  entryText: string,
+  hints: readonly string[],
+): boolean {
+  const tokens = new Set(
+    entryText
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((t) => t.length > 2),
+  );
   if (tokens.size === 0) return false;
   for (const hint of hints) {
-    const hintTokens = new Set(hint.toLowerCase().split(/\W+/).filter((t) => t.length > 2));
+    const hintTokens = new Set(
+      hint
+        .toLowerCase()
+        .split(/\W+/)
+        .filter((t) => t.length > 2),
+    );
     if (hintTokens.size === 0) continue;
     let overlap = 0;
     for (const t of tokens) if (hintTokens.has(t)) overlap += 1;
@@ -140,7 +193,10 @@ export interface RerankItem {
   label: "applicable" | "reference";
 }
 
-export function buildRerankPrompt(query: string, candidates: readonly ScoredEntry[]): string {
+export function buildRerankPrompt(
+  query: string,
+  candidates: readonly ScoredEntry[],
+): string {
   const blocks = candidates.map((c, i) => {
     const text = entryText(c.entry);
     return `候选 ${i + 1}:\n${text}`;
@@ -180,7 +236,11 @@ export function parseQueryRewrite(raw: string): string | null {
 }
 
 /** 手写校验精排输出；非法 → null（调用方降级召回直取） */
-export function parseRerankOutput(raw: string, numCandidates: number): RerankItem[] | null {  let parsed: unknown;
+export function parseRerankOutput(
+  raw: string,
+  numCandidates: number,
+): RerankItem[] | null {
+  let parsed: unknown;
   try {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
@@ -196,9 +256,19 @@ export function parseRerankOutput(raw: string, numCandidates: number): RerankIte
   for (const it of items) {
     if (typeof it !== "object" || it === null) return null;
     const r = it as Record<string, unknown>;
-    if (typeof r.seq !== "number" || !Number.isInteger(r.seq) || r.seq < 1 || r.seq > numCandidates) return null;
+    if (
+      typeof r.seq !== "number" ||
+      !Number.isInteger(r.seq) ||
+      r.seq < 1 ||
+      r.seq > numCandidates
+    )
+      return null;
     if (r.label !== "applicable" && r.label !== "reference") return null;
-    out.push({ seq: r.seq, why: typeof r.why === "string" ? r.why : "", label: r.label });
+    out.push({
+      seq: r.seq,
+      why: typeof r.why === "string" ? r.why : "",
+      label: r.label,
+    });
   }
   return out;
 }
@@ -210,7 +280,10 @@ export function entryText(entry: MemoryEntry): string {
     case "semantic":
       return entry.fact;
     case "episodic":
-      return [entry.perspective, ...entry.modification.map((m) => `- ${m}`)].join("\n");
+      return [
+        entry.perspective,
+        ...entry.modification.map((m) => `- ${m}`),
+      ].join("\n");
     case "profile":
       return entry.insight;
     case "vault_ref":
@@ -232,7 +305,9 @@ export function inferApplicabilityLabel(
   query: string,
   entry: MemoryEntry,
 ): "applicable" | "reference" {
-  const haystack = [entryWhenToUse(entry) ?? "", entryText(entry)].join("\n").toLowerCase();
+  const haystack = [entryWhenToUse(entry) ?? "", entryText(entry)]
+    .join("\n")
+    .toLowerCase();
   const terms = extractMatchTerms(query);
   if (terms.length === 0) return "reference";
   const hits = terms.filter((t) => haystack.includes(t)).length;
@@ -258,7 +333,12 @@ const TRIGGER_KINDS: Record<MemoryTrigger["type"], MemoryKind[] | undefined> = {
   explicit_query: undefined, // T4 全库（含历史）
 };
 
-const DEFAULT_TOPK = { taskStart: 1, actionFailed: 3, postCompact: 2, explicitQuery: 5 };
+const DEFAULT_TOPK = {
+  taskStart: 1,
+  actionFailed: 3,
+  postCompact: 2,
+  explicitQuery: 5,
+};
 
 // ── 主类 ──
 
@@ -290,7 +370,10 @@ export class TriggeredRetriever {
     const repo = "repo" in trigger ? trigger.repo : undefined;
 
     // T2 防误检（§6.2）：不可行动错误零开销跳过
-    if (trigger.type === "action_failed" && !isActionableError(trigger.errorOutput)) {
+    if (
+      trigger.type === "action_failed" &&
+      !isActionableError(trigger.errorOutput)
+    ) {
       return this.emptyPackage();
     }
 
@@ -299,9 +382,16 @@ export class TriggeredRetriever {
     // 空库零开销（§6.7 / §6.8-6）：先 probe——空库不做任何检索/改写调用
     // （T1 query 改写是 LLM 调用，移到 probe 之后：空库短路时零 LLM 成本）
     // probe 排除 degraded 条目：append-only 降级行不进检索池，也不能让库显得"非空"
-    const probe = await this.engine.query({ repo, limit: 1, includeDegraded: false });
+    const probe = await this.engine.query({
+      repo,
+      limit: 1,
+      includeDegraded: false,
+    });
     if (probe.length === 0 && trigger.type !== "explicit_query") {
-      await appendOpLog("read.trigger", { runId, detail: { triggerType: trigger.type, skipped: "empty_store" } });
+      await appendOpLog("read.trigger", {
+        runId,
+        detail: { triggerType: trigger.type, skipped: "empty_store" },
+      });
       return this.emptyPackage();
     }
 
@@ -317,17 +407,34 @@ export class TriggeredRetriever {
         queries.unshift(refined);
       } else {
         degraded = true;
-        await appendOpLog("read.degraded", { runId, detail: { stage: "query_rewrite" } });
+        await appendOpLog("read.degraded", {
+          runId,
+          detail: { stage: "query_rewrite" },
+        });
       }
     }
 
-    await appendOpLog("read.trigger", { runId, detail: { triggerType: trigger.type, querySummary: query.slice(0, 200), queries } });
-    this.emit?.({ type: "memory.trigger", triggerType: trigger.type, querySummary: query.slice(0, 200) });
+    await appendOpLog("read.trigger", {
+      runId,
+      detail: {
+        triggerType: trigger.type,
+        querySummary: query.slice(0, 200),
+        queries,
+      },
+    });
+    this.emit?.({
+      type: "memory.trigger",
+      triggerType: trigger.type,
+      querySummary: query.slice(0, 200),
+    });
 
     // ── 召回（M2 hybrid；α 按触发点；T1 可能双路）──
     // repo 密封：注入路径只召回本仓库条目（A 仓库任务不注入 B 仓库记忆）
     const kinds = TRIGGER_KINDS[trigger.type];
-    const alpha = trigger.type === "action_failed" ? RECALL_ALPHA.actionFailed : RECALL_ALPHA.taskStart;
+    const alpha =
+      trigger.type === "action_failed"
+        ? RECALL_ALPHA.actionFailed
+        : RECALL_ALPHA.taskStart;
     const candidates: ScoredEntry[] = [];
     for (const kind of kinds ?? [undefined]) {
       for (const q of queries) {
@@ -343,7 +450,10 @@ export class TriggeredRetriever {
       }
     }
     if (degraded) {
-      await appendOpLog("read.degraded", { runId, detail: { triggerType: trigger.type } });
+      await appendOpLog("read.degraded", {
+        runId,
+        detail: { triggerType: trigger.type },
+      });
     }
     // 去重（同一条目可能被多个 kind/多路 query 召回，保留高分）
     const byBest = new Map<string, ScoredEntry>();
@@ -359,9 +469,19 @@ export class TriggeredRetriever {
 
     // ── 精排（§6.4）──
     const k = this.kFor(trigger);
-    let selected: { entry: MemoryEntry; score: number; why?: string; label?: "applicable" | "reference" }[];
+    let selected: {
+      entry: MemoryEntry;
+      score: number;
+      why?: string;
+      label?: "applicable" | "reference";
+    }[];
     if (this.reranker && pool.length > 0) {
-      const parsed = parseRerankOutput(await this.reranker.complete(buildRerankPrompt(query, pool)).catch(() => ""), pool.length);
+      const parsed = parseRerankOutput(
+        await this.reranker
+          .complete(buildRerankPrompt(query, pool))
+          .catch(() => ""),
+        pool.length,
+      );
       if (parsed) {
         selected = parsed.slice(0, k).map((item) => ({
           entry: pool[item.seq - 1]!.entry,
@@ -374,22 +494,38 @@ export class TriggeredRetriever {
         const halfK = Math.max(1, Math.floor(k / 2));
         selected = pool.slice(0, halfK);
         degraded = true;
-        await appendOpLog("read.degraded", { runId, detail: { triggerType: trigger.type, stage: "rerank" } });
+        await appendOpLog("read.degraded", {
+          runId,
+          detail: { triggerType: trigger.type, stage: "rerank" },
+        });
       }
     } else {
       selected = pool.slice(0, k);
     }
 
     // ── T3 与 SessionMemory 去重（§6.1）──
-    if (trigger.type === "post_compact" && trigger.existingContextHints?.length) {
-      selected = selected.filter((s) => !isCoveredByHints(entryText(s.entry), trigger.existingContextHints!));
+    if (
+      trigger.type === "post_compact" &&
+      trigger.existingContextHints?.length
+    ) {
+      selected = selected.filter(
+        (s) =>
+          !isCoveredByHints(entryText(s.entry), trigger.existingContextHints!),
+      );
     }
 
     // ── T1 经验类 ≤1 条（§6.1/§6.4 k=1 纪律）──
     if (trigger.type === "task_start") {
-      const episodic = selected.filter((s) => s.entry.kind === "episodic").slice(0, this.topK.taskStart);
-      const profiles = selected.filter((s) => s.entry.kind === "profile")
-        .sort((a, b) => (b.entry.kind === "profile" ? b.entry.supportCount : 0) - (a.entry.kind === "profile" ? a.entry.supportCount : 0));
+      const episodic = selected
+        .filter((s) => s.entry.kind === "episodic")
+        .slice(0, this.topK.taskStart);
+      const profiles = selected
+        .filter((s) => s.entry.kind === "profile")
+        .sort(
+          (a, b) =>
+            (b.entry.kind === "profile" ? b.entry.supportCount : 0) -
+            (a.entry.kind === "profile" ? a.entry.supportCount : 0),
+        );
       selected = [...episodic, ...profiles];
     }
 
@@ -402,7 +538,8 @@ export class TriggeredRetriever {
       status: resolveInjectStatus(query, s.entry, s.label),
       why: s.why,
       score: s.score,
-      supportCount: s.entry.kind === "profile" ? s.entry.supportCount : undefined,
+      supportCount:
+        s.entry.kind === "profile" ? s.entry.supportCount : undefined,
     }));
 
     // gate 可观测：applicable(=verified) / reference 计数（trial 随后追加，不计入本行）
@@ -415,7 +552,9 @@ export class TriggeredRetriever {
         detail: {
           applicable: gateApplicable,
           reference: gateReference,
-          source: selected.some((s) => s.label != null) ? "rerank" : "heuristic",
+          source: selected.some((s) => s.label != null)
+            ? "rerank"
+            : "heuristic",
         },
       });
     }
@@ -428,11 +567,21 @@ export class TriggeredRetriever {
 
     // ── T4：过期条目可见且带失效标注（§6.6/§6.8-5）──
     if (trigger.type === "explicit_query") {
-      const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
-      const all = await this.engine.query({ repo, includeInvalidated: true, limit: 200 });
-      const stale = all.filter((e) => e.tInvalid != null
-        && !items.some((i) => i.id === e.id)
-        && terms.some((t) => entryText(e).toLowerCase().includes(t)));
+      const terms = query
+        .toLowerCase()
+        .split(/\W+/)
+        .filter((t) => t.length > 2);
+      const all = await this.engine.query({
+        repo,
+        includeInvalidated: true,
+        limit: 200,
+      });
+      const stale = all.filter(
+        (e) =>
+          e.tInvalid != null &&
+          !items.some((i) => i.id === e.id) &&
+          terms.some((t) => entryText(e).toLowerCase().includes(t)),
+      );
       // 过期条目保底名额：活跃召回在 T4 最多占 topK-2 个（见 kFor），总量 ≤ topK.explicitQuery
       const staleSlots = Math.max(0, this.topK.explicitQuery - items.length);
       for (const e of stale.slice(0, staleSlots)) {
@@ -454,7 +603,9 @@ export class TriggeredRetriever {
     if (injectedTrial) {
       try {
         await decrementTrialAttempts(injectedTrial.id, this.scope);
-      } catch { /* 计数失败不影响注入 */ }
+      } catch {
+        /* 计数失败不影响注入 */
+      }
     }
     return pkg;
   }
@@ -464,7 +615,10 @@ export class TriggeredRetriever {
       case "task_start":
         return trigger.taskDescription;
       case "action_failed":
-        return buildActionFailedQuery(trigger.errorOutput, trigger.lastActionSummary);
+        return buildActionFailedQuery(
+          trigger.errorOutput,
+          trigger.lastActionSummary,
+        );
       case "post_compact":
         return `${trigger.summaryHead.split(/[。.\n]/)[0] ?? ""}\n${trigger.goal}`;
       case "explicit_query":
@@ -474,24 +628,36 @@ export class TriggeredRetriever {
 
   private kFor(trigger: MemoryTrigger): number {
     switch (trigger.type) {
-      case "task_start": return this.topK.taskStart + 15; // T1：episodic 限额 + profile 预算内不限条数（预算截断）
-      case "action_failed": return this.topK.actionFailed;
-      case "post_compact": return this.topK.postCompact;
-      case "explicit_query": return Math.max(1, this.topK.explicitQuery - 2); // 给过期条目预留 2 个名额（§6.6 T4）
+      case "task_start":
+        return this.topK.taskStart + 15; // T1：episodic 限额 + profile 预算内不限条数（预算截断）
+      case "action_failed":
+        return this.topK.actionFailed;
+      case "post_compact":
+        return this.topK.postCompact;
+      case "explicit_query":
+        return Math.max(1, this.topK.explicitQuery - 2); // 给过期条目预留 2 个名额（§6.6 T4）
     }
   }
 
   /** trial 池匹配（embedding 索引属 v2；宁缺毋滥：长特征词/中文词命中 whenToUse/keywords/lesson） */
-  private async matchTrialLesson(query: string): Promise<InjectedMemory | null> {
+  private async matchTrialLesson(
+    query: string,
+  ): Promise<InjectedMemory | null> {
     try {
       const terms = extractMatchTerms(query);
       if (terms.length === 0) return null;
       const lessons = await listTrialLessons(undefined, this.scope);
-      let best: { lesson: (typeof lessons)[number]; hits: number } | null = null;
+      let best: { lesson: (typeof lessons)[number]; hits: number } | null =
+        null;
       for (const lesson of lessons) {
         // 蒸馏产物有检索键（whenToUse/keywords，V032）；原文切片只有 lesson 文本
-        const text = [lesson.whenToUse ?? "", ...(lesson.keywords ?? []), lesson.lesson]
-          .join(" ").toLowerCase();
+        const text = [
+          lesson.whenToUse ?? "",
+          ...(lesson.keywords ?? []),
+          lesson.lesson,
+        ]
+          .join(" ")
+          .toLowerCase();
         const hits = terms.filter((t) => text.includes(t)).length;
         if (hits >= 1 && (!best || hits > best.hits)) best = { lesson, hits };
       }
@@ -511,7 +677,11 @@ export class TriggeredRetriever {
 
   /** 预算组装：超限截断（截尾巴不截头）并记 op-log read.truncated（§6.6）。
    *  单条即超预算时按字符截断正文到预算内——总量硬顶 maxInjectTokens 无例外（修复批次 A #5） */
-  private async pack(items: InjectedMemory[], degraded: boolean, runId?: string): Promise<InjectionPackage> {
+  private async pack(
+    items: InjectedMemory[],
+    degraded: boolean,
+    runId?: string,
+  ): Promise<InjectionPackage> {
     const kept: InjectedMemory[] = [];
     let truncated = false;
     for (const item of items) {
@@ -528,7 +698,14 @@ export class TriggeredRetriever {
       kept.push(item);
     }
     if (truncated) {
-      await appendOpLog("read.truncated", { runId, detail: { kept: kept.length, dropped: items.length - kept.length, singleItem: items.length > 0 && kept[0]!.truncated === true } });
+      await appendOpLog("read.truncated", {
+        runId,
+        detail: {
+          kept: kept.length,
+          dropped: items.length - kept.length,
+          singleItem: items.length > 0 && kept[0]!.truncated === true,
+        },
+      });
     }
 
     const pkg: InjectionPackage = {
@@ -552,8 +729,12 @@ export class TriggeredRetriever {
         });
       } else {
         // 账本：注入即 freq+1（trial 不进正式账本）；op-log read.inject 由 recordRetrievalHits 落
-        const formalIds = kept.filter((i) => i.kind !== "trial").map((i) => i.id);
-        const trialIds = kept.filter((i) => i.kind === "trial").map((i) => i.id);
+        const formalIds = kept
+          .filter((i) => i.kind !== "trial")
+          .map((i) => i.id);
+        const trialIds = kept
+          .filter((i) => i.kind === "trial")
+          .map((i) => i.id);
         if (formalIds.length > 0) {
           await recordRetrievalHits(this.engine, formalIds, {
             runId,
@@ -568,7 +749,12 @@ export class TriggeredRetriever {
             detail: { totalTokens: pkg.totalTokens },
           });
         }
-        this.emit?.({ type: "memory.inject", itemIds: kept.map((i) => i.id), totalTokens: pkg.totalTokens, degraded });
+        this.emit?.({
+          type: "memory.inject",
+          itemIds: kept.map((i) => i.id),
+          totalTokens: pkg.totalTokens,
+          degraded,
+        });
       }
     }
     return pkg;
@@ -578,7 +764,11 @@ export class TriggeredRetriever {
   private truncateToFit(item: InjectedMemory): InjectedMemory {
     let body = item.text;
     for (let i = 0; i < 12; i++) {
-      const candidate: InjectedMemory = { ...item, text: `${body}…[已截断]`, truncated: true };
+      const candidate: InjectedMemory = {
+        ...item,
+        text: `${body}…[已截断]`,
+        truncated: true,
+      };
       const tokens = this.countTokens(renderXml([candidate]));
       if (tokens <= this.maxInjectTokens) return candidate;
       const ratio = this.maxInjectTokens / tokens;
@@ -620,14 +810,16 @@ const STATUS_PREFIX: Record<InjectStatus, string> = {
 };
 
 function renderXml(items: readonly InjectedMemory[]): string {
-  return items.map((i) => {
-    const lines = [
-      `<agent-memory source="${i.kind}" id="${i.id}" status="${i.status}">`,
-    ];
-    if (i.whenToUse) lines.push(i.whenToUse);
-    lines.push(`${STATUS_PREFIX[i.status]}：${i.text}`);
-    if (i.tInvalid) lines.push(`（已于 ${i.tInvalid} 失效）`);
-    lines.push(`</agent-memory>`);
-    return lines.join("\n");
-  }).join("\n");
+  return items
+    .map((i) => {
+      const lines = [
+        `<agent-memory source="${i.kind}" id="${i.id}" status="${i.status}">`,
+      ];
+      if (i.whenToUse) lines.push(i.whenToUse);
+      lines.push(`${STATUS_PREFIX[i.status]}：${i.text}`);
+      if (i.tInvalid) lines.push(`（已于 ${i.tInvalid} 失效）`);
+      lines.push(`</agent-memory>`);
+      return lines.join("\n");
+    })
+    .join("\n");
 }

@@ -240,7 +240,8 @@ async function main() {
     else fail("Ops tab", JSON.stringify(ops));
     await sleep(400);
     const text = await bodyText(send);
-    if (/Doctor|Checkpoint|Run/i.test(text)) pass("Ops panel content", "labels present");
+    if (/Doctor|Checkpoint|Run/i.test(text))
+      pass("Ops panel content", "labels present");
     else fail("Ops panel content", text.slice(0, 300));
   } catch (e) {
     fail("Ops tab", String(e));
@@ -248,9 +249,7 @@ async function main() {
 
   const failed = results.filter((r) => !r.ok);
   console.log("\n—— summary ——");
-  console.log(
-    `${results.length - failed.length}/${results.length} passed`,
-  );
+  console.log(`${results.length - failed.length}/${results.length} passed`);
   if (failed.length) {
     for (const f of failed) console.log("FAIL:", f.name, f.detail);
     process.exitCode = 1;

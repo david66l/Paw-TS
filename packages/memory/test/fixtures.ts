@@ -4,7 +4,9 @@
 
 import type { MemoryRecord } from "@paw/memory";
 
-export function makeRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
+export function makeRecord(
+  overrides: Partial<MemoryRecord> = {},
+): MemoryRecord {
   return {
     id: "test",
     source: "auto",

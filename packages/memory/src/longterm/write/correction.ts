@@ -24,7 +24,10 @@ const CORRECTION_PATTERNS: { name: string; re: RegExp }[] = [
   { name: "en:remember", re: /\bremember\b/i },
   { name: "en:prefer", re: /\b(?:i\s+)?prefer\b/i },
   { name: "en:don't-use", re: /\b(?:don'?t|do\s+not|stop)\s+(?:use|using)\b/i },
-  { name: "en:always-never", re: /\b(?:always|never)\s+(?:use|do|run|write)\b/i },
+  {
+    name: "en:always-never",
+    re: /\b(?:always|never)\s+(?:use|do|run|write)\b/i,
+  },
 ];
 
 export function detectUserCorrection(text: string): CorrectionMatch {

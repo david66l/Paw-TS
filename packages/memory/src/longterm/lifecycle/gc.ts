@@ -59,12 +59,12 @@ async function loadDeadRows(
         ORDER BY t_invalid ASC LIMIT ${limit}
       `
     : repo
-    ? await sql`
+      ? await sql`
         SELECT * FROM memory_items
         WHERE t_invalid IS NOT NULL AND scope->>'repositoryId' = ${repo}
         ORDER BY t_invalid ASC LIMIT ${limit}
       `
-    : await sql`
+      : await sql`
         SELECT * FROM memory_items WHERE t_invalid IS NOT NULL
         ORDER BY t_invalid ASC LIMIT ${limit}
       `;
@@ -104,7 +104,12 @@ export async function collectGarbage(opts: GcOptions = {}): Promise<GcReport> {
     const month = new Date().toISOString().slice(0, 7).replace("-", "");
     const path = join(opts.exportDir, `archive-${month}.jsonl`);
     for (const d of dead) {
-      await appendFile(path, JSON.stringify({ archivedAt: new Date().toISOString(), ...d.entry }) + "\n", "utf-8");
+      await appendFile(
+        path,
+        JSON.stringify({ archivedAt: new Date().toISOString(), ...d.entry }) +
+          "\n",
+        "utf-8",
+      );
     }
     report.exportPath = path;
   }
@@ -112,17 +117,25 @@ export async function collectGarbage(opts: GcOptions = {}): Promise<GcReport> {
   // 3. 物理删除
   for (const d of dead) {
     await sql`DELETE FROM memory_items WHERE id = ${d.id}
-      ${opts.scope ? sql`AND scope->>'tenantId' = ${opts.scope.tenantId}
+      ${
+        opts.scope
+          ? sql`AND scope->>'tenantId' = ${opts.scope.tenantId}
         AND scope->>'userId' = ${opts.scope.userId}
         AND scope->>'workspaceId' = ${opts.scope.workspaceId}
-        AND scope->>'repositoryId' = ${opts.scope.repositoryId}` : sql``}`;
+        AND scope->>'repositoryId' = ${opts.scope.repositoryId}`
+          : sql``
+      }`;
     report.deleted += 1;
   }
 
   // 4. op-log（修复批次 B #13）：物理删除留痕，diff 的 purged 口径读此
   await appendOpLog("lifecycle.gc", {
     entryIds: report.archivedIds,
-    detail: { archived: report.archived, archive: "memory_gc_archive", exportPath: report.exportPath },
+    detail: {
+      archived: report.archived,
+      archive: "memory_gc_archive",
+      exportPath: report.exportPath,
+    },
   });
 
   return report;
@@ -136,13 +149,20 @@ export async function queryArchive(
   const sql = getSql();
   const rows = await sql`
     SELECT entry FROM memory_gc_archive WHERE entry_id = ${entryId}
-      ${scope ? sql`AND entry->'scope'->>'tenantId' = ${scope.tenantId}
+      ${
+        scope
+          ? sql`AND entry->'scope'->>'tenantId' = ${scope.tenantId}
         AND entry->'scope'->>'userId' = ${scope.userId}
         AND entry->'scope'->>'workspaceId' = ${scope.workspaceId}
-        AND entry->'scope'->>'repositoryId' = ${scope.repositoryId}` : sql``}
+        AND entry->'scope'->>'repositoryId' = ${scope.repositoryId}`
+          : sql``
+      }
     ORDER BY archived_at DESC LIMIT 1
   `;
   if (rows.length === 0) return null;
   const raw = (rows[0] as { entry: unknown }).entry;
-  return (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<string, unknown>;
+  return (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<
+    string,
+    unknown
+  >;
 }

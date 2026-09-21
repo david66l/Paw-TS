@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 import { loadPawNextCollaborationRosterV1 } from "@paw/paw-next";
 import {
+  compactDesktopContext,
   desktopCheckpointNamespace,
   finalizeDesktopNext,
   listDesktopNextMemories,
-  readDesktopMonitor,
   readDesktopContext,
-  compactDesktopContext,
+  readDesktopMonitor,
   runDesktopNext,
 } from "./paw-next.js";
 /**
@@ -48,8 +48,11 @@ type HistoryTurn = {
   content: string;
 };
 
+import {
+  createDesktopMemoryWorker,
+  postgresMemoryJobStore,
+} from "./memory-jobs.js";
 import { DesktopNextControls } from "./paw-next-controls.js";
-import { createDesktopMemoryWorker, postgresMemoryJobStore } from "./memory-jobs.js";
 
 type InMsg =
   | {
@@ -1248,9 +1251,14 @@ const memoryWorker = createDesktopMemoryWorker({
   idle: () => controllers.size === 0,
   async run(job, signal) {
     const result = await runDesktopNext("Background memory maintenance", {
-      operation: "memory", intent: "recover", memoryRunId: job.runId,
-      expectedConfigHash: job.configHash, workspaceRoot: job.workspaceRoot,
-      abortSignal: signal, resolveToolApproval: async () => false, onEvent() {},
+      operation: "memory",
+      intent: "recover",
+      memoryRunId: job.runId,
+      expectedConfigHash: job.configHash,
+      workspaceRoot: job.workspaceRoot,
+      abortSignal: signal,
+      resolveToolApproval: async () => false,
+      onEvent() {},
     });
     return JSON.parse(result.text);
   },
@@ -1262,7 +1270,9 @@ rl.on("close", async () => {
   for (const c of controllers.values()) c.abort();
   // A bounded best-effort flush; exporter failures cannot keep the host alive.
   await Promise.race([
-    import("./cloud-telemetry.js").then((m) => m.shutdownDesktopCloudTelemetry()).catch(() => {}),
+    import("./cloud-telemetry.js")
+      .then((m) => m.shutdownDesktopCloudTelemetry())
+      .catch(() => {}),
     new Promise<void>((resolve) => setTimeout(resolve, 2_500)),
   ]);
   process.exit(0);

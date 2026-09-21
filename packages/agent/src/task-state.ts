@@ -1264,4 +1264,3 @@ function summarizePlanItem(item: unknown): string {
     .filter(Boolean)
     .join(" ");
 }
-

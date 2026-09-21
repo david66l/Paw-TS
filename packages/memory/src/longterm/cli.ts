@@ -8,28 +8,28 @@
 
 import { join } from "node:path";
 import { closeSql } from "../db/connection.js";
+import { resetMemoryV2Core } from "../runtime/index.js";
 import { loadMemoryConfig, saveMemoryConfig } from "./config.js";
 import {
+  BUILTIN_CODING_FIXTURES,
   ChatClient,
   type LlmStats,
+  type MabDimension,
+  type MechSuiteName,
   type RedteamSuiteName,
-  renderBackboneSmokeReport,
-  renderRedteamReport,
-  resolveLlmConfig,
-  runBackboneSmoke,
-  runRedteamSuite,
-  BUILTIN_CODING_FIXTURES,
   filterMabSamples,
   loadMabSamplesFromFile,
   loadOrFetchMabHf,
+  renderBackboneSmokeReport,
   renderMabReport,
-  runMemoryAgentBench,
-  type MabDimension,
   renderMechReport,
+  renderRedteamReport,
+  resolveLlmConfig,
+  runBackboneSmoke,
   runMechanismSuite,
-  type MechSuiteName,
+  runMemoryAgentBench,
+  runRedteamSuite,
 } from "./eval/index.js";
-import { resetMemoryV2Core } from "../runtime/index.js";
 import {
   parseReplayJsonl,
   renderReplayReport,
@@ -238,13 +238,19 @@ export function parseMemoryArgs(
       const v = args[++i];
       if (!v) return { error: "--data 缺路径" };
       out.data = v;
-    } else if (a === "--dimension" || a === "--dimensions" || a === "--suite" || a === "--suites") {
+    } else if (
+      a === "--dimension" ||
+      a === "--dimensions" ||
+      a === "--suite" ||
+      a === "--suites"
+    ) {
       const v = args[++i];
       if (!v) return { error: "--dimension/--suite 缺值" };
       out.dimensions = v;
     } else if (a === "--chunk-size") {
       const v = Number(args[++i]);
-      if (!Number.isFinite(v) || v <= 0) return { error: "--chunk-size 需为正整数" };
+      if (!Number.isFinite(v) || v <= 0)
+        return { error: "--chunk-size 需为正整数" };
       out.chunkSize = v;
     } else if (a === "--keep") {
       out.keep = true;
@@ -594,11 +600,19 @@ export async function runMemoryCommand(
         if ("error" in backboneCfg)
           return { ok: false, text: backboneCfg.error };
 
-        const dimAllowed = new Set<MabDimension>(["AR", "TTL", "LRU", "CR", "SF"]);
+        const dimAllowed = new Set<MabDimension>([
+          "AR",
+          "TTL",
+          "LRU",
+          "CR",
+          "SF",
+        ]);
         let dimensions: MabDimension[] | undefined;
         if (parsed.dimensions) {
           dimensions = [];
-          for (const part of parsed.dimensions.split(/[,+\s]+/).filter(Boolean)) {
+          for (const part of parsed.dimensions
+            .split(/[,+\s]+/)
+            .filter(Boolean)) {
             const d = part.toUpperCase() as MabDimension;
             if (!dimAllowed.has(d)) {
               return {
@@ -611,12 +625,12 @@ export async function runMemoryCommand(
         }
 
         const warnings: string[] = [];
-        let samples =
-          parsed.data
-            ? loadMabSamplesFromFile(parsed.data, {
-                defaultDimension: dimensions?.length === 1 ? dimensions[0] : undefined,
-              })
-            : [];
+        let samples = parsed.data
+          ? loadMabSamplesFromFile(parsed.data, {
+              defaultDimension:
+                dimensions?.length === 1 ? dimensions[0] : undefined,
+            })
+          : [];
         if (parsed.data && samples.length === 0) {
           return {
             ok: false,
@@ -635,17 +649,20 @@ export async function runMemoryCommand(
             "hf-dataset",
             "data",
           );
-          const hfDims = (dimensions ?? ["AR", "TTL", "LRU", "CR"]).filter((d) => d !== "SF");
+          const hfDims = (dimensions ?? ["AR", "TTL", "LRU", "CR"]).filter(
+            (d) => d !== "SF",
+          );
           const splits = hfDims
-            .map((d) =>
-              (
-                {
-                  AR: "Accurate_Retrieval",
-                  TTL: "Test_Time_Learning",
-                  LRU: "Long_Range_Understanding",
-                  CR: "Conflict_Resolution",
-                } as const
-              )[d as "AR" | "TTL" | "LRU" | "CR"],
+            .map(
+              (d) =>
+                (
+                  ({
+                    AR: "Accurate_Retrieval",
+                    TTL: "Test_Time_Learning",
+                    LRU: "Long_Range_Understanding",
+                    CR: "Conflict_Resolution",
+                  }) as const
+                )[d as "AR" | "TTL" | "LRU" | "CR"],
             )
             .filter(Boolean);
           const loaded = await loadOrFetchMabHf({
@@ -670,7 +687,11 @@ export async function runMemoryCommand(
         } else if (parsed.builtin === undefined && parsed.hf) {
           // HF 全量默认仍附带 SF 内置条，否则 SF 断言缺席
           const wantSf = !dimensions || dimensions.includes("SF");
-          if (wantSf) samples = [...samples, ...BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF")];
+          if (wantSf)
+            samples = [
+              ...samples,
+              ...BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF"),
+            ];
         }
 
         samples = filterMabSamples(samples, {
@@ -684,7 +705,11 @@ export async function runMemoryCommand(
 
         const report = await runMemoryAgentBench({
           samples,
-          backbone: new ChatClient(backboneCfg, parsed.hf ? 180_000 : 60_000, stats),
+          backbone: new ChatClient(
+            backboneCfg,
+            parsed.hf ? 180_000 : 60_000,
+            stats,
+          ),
           engine,
           stats,
           keep: parsed.keep,
@@ -708,11 +733,18 @@ export async function runMemoryCommand(
 
       case "mechanism": {
         resetMemoryV2Core();
-        const allowed = new Set<MechSuiteName>(["trial", "gate", "profile", "cap"]);
+        const allowed = new Set<MechSuiteName>([
+          "trial",
+          "gate",
+          "profile",
+          "cap",
+        ]);
         let suites: MechSuiteName[] | undefined;
         if (parsed.dimensions) {
           suites = [];
-          for (const part of parsed.dimensions.split(/[,+\s]+/).filter(Boolean)) {
+          for (const part of parsed.dimensions
+            .split(/[,+\s]+/)
+            .filter(Boolean)) {
             const s = part.toLowerCase() as MechSuiteName;
             if (!allowed.has(s)) {
               return {
@@ -743,7 +775,10 @@ export async function runMemoryCommand(
           return { ok: true, text: `enable: ${cfg.enable ? "on" : "off"}` };
         }
         if (parsed.id !== "on" && parsed.id !== "off") {
-          return { ok: false, text: `memory enable 需要 on|off，收到: ${parsed.id}` };
+          return {
+            ok: false,
+            text: `memory enable 需要 on|off，收到: ${parsed.id}`,
+          };
         }
         const cfg = await saveMemoryConfig({ enable: parsed.id === "on" });
         return {

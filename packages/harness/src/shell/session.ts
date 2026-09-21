@@ -27,15 +27,15 @@
  *   会话不绕过任何策略。
  */
 
-import { randomBytes } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 
-import type { ShellSandboxConfig } from "../sandbox/types.js";
 import {
   type DockerShellSessionSpawnSpecV1,
   buildDockerSessionSpawnSpecV1,
 } from "../sandbox/docker-runner.js";
+import type { ShellSandboxConfig } from "../sandbox/types.js";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 60_000;
 const MIN_COMMAND_TIMEOUT_MS = 1_000;
@@ -69,7 +69,10 @@ export interface ShellSessionRunResult {
 export interface ShellSession {
   readonly key: string;
   readonly backend: "local" | "docker";
-  run(command: string, options?: ShellSessionRunOptions): Promise<ShellSessionRunResult>;
+  run(
+    command: string,
+    options?: ShellSessionRunOptions,
+  ): Promise<ShellSessionRunResult>;
   dispose(): Promise<void>;
 }
 
@@ -121,7 +124,9 @@ abstract class PersistentShellSessionBase implements ShellSession {
   }
 
   protected abstract spawnInternals(): LiveSessionInternals;
-  protected abstract killInternals(internals: LiveSessionInternals): Promise<void>;
+  protected abstract killInternals(
+    internals: LiveSessionInternals,
+  ): Promise<void>;
   protected abstract disposeBackendExtra(): Promise<void>;
   /** 后端专属的 cwd 前缀（local 直接 cd 宿主路径；docker 已是容器路径）。 */
   protected abstract cwdPrefix(cwd: string): string;
@@ -168,7 +173,9 @@ abstract class PersistentShellSessionBase implements ShellSession {
         resolve(result);
       };
 
-      const settleFromOutput = (extra?: Partial<ShellSessionRunResult>): void => {
+      const settleFromOutput = (
+        extra?: Partial<ShellSessionRunResult>,
+      ): void => {
         const text = stdoutText();
         const match = text.match(new RegExp(`${marker}(-?\\d+)__`));
         if (!match) return;
@@ -292,7 +299,9 @@ class LocalShellSession extends PersistentShellSessionBase {
     return { proc, stdout: [], stderr: [] };
   }
 
-  protected async killInternals(internals: LiveSessionInternals): Promise<void> {
+  protected async killInternals(
+    internals: LiveSessionInternals,
+  ): Promise<void> {
     killLocalProcessTree(internals.proc.pid ?? 0);
   }
 
@@ -306,11 +315,7 @@ class LocalShellSession extends PersistentShellSessionBase {
 class DockerShellSession extends PersistentShellSessionBase {
   private readonly spec: DockerShellSessionSpawnSpecV1;
 
-  constructor(
-    key: string,
-    hostCwd: string,
-    sandbox: ShellSandboxConfig,
-  ) {
+  constructor(key: string, hostCwd: string, sandbox: ShellSandboxConfig) {
     super(key, "docker", hostCwd);
     const spec = buildDockerSessionSpawnSpecV1(sandbox, {
       workspaceRoot: hostCwd,
@@ -337,7 +342,9 @@ class DockerShellSession extends PersistentShellSessionBase {
     return { proc, stdout: [], stderr: [] };
   }
 
-  protected async killInternals(internals: LiveSessionInternals): Promise<void> {
+  protected async killInternals(
+    internals: LiveSessionInternals,
+  ): Promise<void> {
     killLocalProcessTree(internals.proc.pid ?? 0);
     spawnSync(this.spec.runtime, ["rm", "-f", this.spec.containerName], {
       encoding: "utf8",

@@ -35,10 +35,9 @@ afterAll(async () => {
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [mid]);
     }
     for (const tid of taskIds) {
-      await sql.unsafe(
-        "DELETE FROM tool_result_records WHERE task_id = $1",
-        [tid],
-      );
+      await sql.unsafe("DELETE FROM tool_result_records WHERE task_id = $1", [
+        tid,
+      ]);
       await sql.unsafe(
         "DELETE FROM memory_candidates WHERE source_task_ids @> $1",
         [[tid]],

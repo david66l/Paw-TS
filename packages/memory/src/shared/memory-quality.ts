@@ -110,9 +110,7 @@ export function extractExplicitRememberText(goal: string): string | null {
   if (EPHEMERAL_REMEMBER.test(clean)) return null;
 
   // 中文：记住/记得 … 整句
-  const cn = clean.match(
-    /(?:请)?(?:记住|记得)(?:一下|住)?[：:\s]*(.+)$/i,
-  );
+  const cn = clean.match(/(?:请)?(?:记住|记得)(?:一下|住)?[：:\s]*(.+)$/i);
   if (cn?.[1]) {
     const body = cn[1].trim().replace(/[。.!！？?]+$/, "");
     if (body.length < 4 || EPHEMERAL_REMEMBER.test(body)) return null;
@@ -225,9 +223,7 @@ export function buildConversationAwareQuery(goal: string): string {
   const historyBlock = idx >= 0 ? goal.slice(0, idx) : "";
 
   const paths = extractFilePaths(goal).slice(0, 6);
-  const historyUserLines = [
-    ...historyBlock.matchAll(/(?:^|\n)User:\s*(.+)/g),
-  ]
+  const historyUserLines = [...historyBlock.matchAll(/(?:^|\n)User:\s*(.+)/g)]
     .map((m) => m[1]?.trim() ?? "")
     .filter(Boolean)
     .slice(-6);
@@ -296,8 +292,7 @@ export function shouldWriteTaskSummary(wm: MemoryWriteSignalInput): boolean {
   if (steps.some((s) => isDecisionStep(s.summary))) return true;
   if (
     steps.some(
-      (s) =>
-        s.summary.trim().length >= 40 && hasDurableMemorySignal(s.summary),
+      (s) => s.summary.trim().length >= 40 && hasDurableMemorySignal(s.summary),
     )
   ) {
     return true;

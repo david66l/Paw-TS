@@ -154,7 +154,9 @@ export function createJournalContextPlannerV1(
         }
         return Object.freeze({ ...item });
       };
-      const annotations = (projection?.annotations ?? []).map(validateAnnotation);
+      const annotations = (projection?.annotations ?? []).map(
+        validateAnnotation,
+      );
       const runtimeActivityContent = projection?.runtimeActivityContent;
       const optionalSections = (projection?.optionalSections ?? []).map(
         (section) => Object.freeze({ ...section }),

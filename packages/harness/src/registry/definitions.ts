@@ -280,8 +280,15 @@ export function toolDefinitions(
       "Read a UTF-8 file from the workspace. Returns plain text content plus line counts; content has no added line-number prefixes. Use offset and limit to read a range.",
       {
         path: { type: "string", description: "Relative path to the file" },
-        offset: { type: "integer", description: "Zero-based line offset; default 0 starts at the first line" },
-        limit: { type: "integer", description: "Maximum lines to read; omit to read the remaining file" },
+        offset: {
+          type: "integer",
+          description:
+            "Zero-based line offset; default 0 starts at the first line",
+        },
+        limit: {
+          type: "integer",
+          description: "Maximum lines to read; omit to read the remaining file",
+        },
       },
       ["path"],
     ),

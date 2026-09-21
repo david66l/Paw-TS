@@ -16,10 +16,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { closeSql, getSql } from "../src/db/connection.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 import {
+  type MemoryRuntime,
   createMemoryRuntime,
   getMemoryV2CoreForTests,
   resetMemoryV2Core,
-  type MemoryRuntime,
 } from "../src/runtime/index.js";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgresql:///paw_memory_test";
@@ -60,13 +60,22 @@ afterAll(async () => {
   try {
     const sql = getSql();
     for (const id of createdIds) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [id]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
+        id,
+      ]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [id]);
     }
-    await sql.unsafe("DELETE FROM memory_op_log WHERE run_id LIKE $1", ["v2d-%"]);
+    await sql.unsafe("DELETE FROM memory_op_log WHERE run_id LIKE $1", [
+      "v2d-%",
+    ]);
     for (const tid of taskIds) {
-      await sql.unsafe("DELETE FROM memory_trial_lessons WHERE origin_task_id = $1", [tid]);
-      await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [tid]);
+      await sql.unsafe(
+        "DELETE FROM memory_trial_lessons WHERE origin_task_id = $1",
+        [tid],
+      );
+      await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [
+        tid,
+      ]);
     }
     await runtime.shutdown();
     resetMemoryV2Core();
@@ -101,7 +110,10 @@ async function drainOutbox(taskIds: string[]): Promise<void> {
 
 describe("v2 降级路径", () => {
   test("1. 无 LLM 完成测试任务 → append-only 降级（conf 0.3 + degraded）", async () => {
-    const begun = await runtime.beginTask({ runId: "v2d-1", goal: "add feature x" });
+    const begun = await runtime.beginTask({
+      runId: "v2d-1",
+      goal: "add feature x",
+    });
     taskIds.push(begun.taskId);
     await runtime.onToolResult({
       taskId: begun.taskId,
@@ -123,14 +135,21 @@ describe("v2 降级路径", () => {
     const rows = (await sql.unsafe(
       "SELECT id, confidence, verification_status, payload->>'degraded' AS degraded FROM memory_items WHERE scope->>'repositoryId' = $1",
       [REPO],
-    )) as unknown as { id: string; confidence: number; verification_status: string; degraded: string | null }[];
+    )) as unknown as {
+      id: string;
+      confidence: number;
+      verification_status: string;
+      degraded: string | null;
+    }[];
     expect(rows.length).toBeGreaterThan(0);
 
     // 无蒸馏器 → storeDegraded：conf=0.3、unverified、degraded=true
     const degraded = rows.filter((r) => r.degraded === "true");
     expect(degraded.length).toBeGreaterThan(0);
     expect(degraded.every((r) => r.confidence === 0.3)).toBe(true);
-    expect(degraded.every((r) => r.verification_status === "unverified")).toBe(true);
+    expect(degraded.every((r) => r.verification_status === "unverified")).toBe(
+      true,
+    );
     for (const r of rows) createdIds.push(r.id);
   });
 
@@ -150,7 +169,10 @@ describe("v2 降级路径", () => {
       workspaceRoot: `/tmp/paw-v2-empty-${Date.now()}`,
       repositoryId: emptyRepo,
     });
-    const begun = await runtime2.beginTask({ runId: "v2d-2", goal: "nothing here" });
+    const begun = await runtime2.beginTask({
+      runId: "v2d-2",
+      goal: "nothing here",
+    });
     const section = await runtime2.buildContextSection({
       taskId: begun.taskId,
       query: "nothing matches this",
@@ -164,7 +186,10 @@ describe("v2 降级路径", () => {
   });
 
   test("4. 失败任务 → trial 通道（不进正式库）", async () => {
-    const begun = await runtime.beginTask({ runId: "v2d-3", goal: "broken task" });
+    const begun = await runtime.beginTask({
+      runId: "v2d-3",
+      goal: "broken task",
+    });
     taskIds.push(begun.taskId);
     await runtime.onToolResult({
       taskId: begun.taskId,

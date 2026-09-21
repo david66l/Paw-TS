@@ -9,11 +9,20 @@
 
 import { getSql } from "../../connection.js";
 import { governanceDecisionDao } from "../../dao/governanceDecision.js";
-import { memoryItemDao } from "../../dao/memoryItem.js";
 import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
-import type { GovernanceDecision, MemoryItem, MemoryStatus, ScopeDescriptor } from "../../types.js";
+import { memoryItemDao } from "../../dao/memoryItem.js";
+import type {
+  GovernanceDecision,
+  MemoryItem,
+  MemoryStatus,
+  ScopeDescriptor,
+} from "../../types.js";
+import {
+  MEMORY_EMBEDDING_DIMENSIONS,
+  NGramEmbeddingService,
+  storeEmbedding,
+} from "../platform/embeddingService.js";
 import { generateId } from "../platform/idGen.js";
-import { NGramEmbeddingService, storeEmbedding, MEMORY_EMBEDDING_DIMENSIONS } from "../platform/embeddingService.js";
 
 export interface ExecutionResult {
   success: boolean;
@@ -41,12 +50,19 @@ export class GovernanceExecutor {
     const already = await governanceDecisionDao.isExecuted(decision.id);
     if (already) {
       const existing = await governanceDecisionDao.findById(decision.id);
-      return { success: true, memoryId: existing?.resultingMemoryId, reason: "already_executed" };
+      return {
+        success: true,
+        memoryId: existing?.resultingMemoryId,
+        reason: "already_executed",
+      };
     }
 
     // 只有 APPROVED 才执行
     if (decision.status !== "APPROVED") {
-      return { success: false, reason: `Decision not approved (current: ${decision.status})` };
+      return {
+        success: false,
+        reason: `Decision not approved (current: ${decision.status})`,
+      };
     }
 
     // 前置条件 1: 决策未过期
@@ -61,9 +77,16 @@ export class GovernanceExecutor {
     // 前置条件 2: 目标版本校验（APPROVE_UPDATE/APPROVE_MERGE 时需要）
     if (decision.targetMemoryId && decision.expectedVersion !== undefined) {
       const existing = await memoryItemDao.findById(decision.targetMemoryId);
-      if (!existing) return { success: false, reason: `Target memory ${decision.targetMemoryId} not found` };
+      if (!existing)
+        return {
+          success: false,
+          reason: `Target memory ${decision.targetMemoryId} not found`,
+        };
       if (existing.version !== decision.expectedVersion) {
-        return { success: false, reason: `REVISION_CHANGED: expected v${decision.expectedVersion}, actual v${existing.version}` };
+        return {
+          success: false,
+          reason: `REVISION_CHANGED: expected v${decision.expectedVersion}, actual v${existing.version}`,
+        };
       }
     }
 
@@ -87,11 +110,16 @@ export class GovernanceExecutor {
         return result;
       });
     } catch (err: any) {
-      return { success: false, reason: `Transaction failed: ${err?.message ?? String(err)}` };
+      return {
+        success: false,
+        reason: `Transaction failed: ${err?.message ?? String(err)}`,
+      };
     }
   }
 
-  private async executeAction(decision: GovernanceDecision): Promise<ExecutionResult> {
+  private async executeAction(
+    decision: GovernanceDecision,
+  ): Promise<ExecutionResult> {
     const candidate = await memoryCandidateDao.findById(decision.candidateId);
     if (!candidate) return { success: false, reason: "Candidate not found" };
 
@@ -101,21 +129,39 @@ export class GovernanceExecutor {
       case "APPROVE_CREATE": {
         const memoryId = generateId("mem");
         const item = {
-          id: memoryId, schemaVersion: 1,
+          id: memoryId,
+          schemaVersion: 1,
           type: decision.adjustedType ?? candidate.proposedType,
-          subjectKey: candidate.proposedSubjectKey ?? `${candidate.proposedType}:${memoryId}`,
+          subjectKey:
+            candidate.proposedSubjectKey ??
+            `${candidate.proposedType}:${memoryId}`,
           subjectKeyVersion: candidate.subjectKeyVersion,
-          title: candidate.proposedTitle, summary: candidate.proposedSummary,
+          title: candidate.proposedTitle,
+          summary: candidate.proposedSummary,
           status: (decision.resultingStatus as MemoryStatus) ?? "active",
-          scope: (decision.adjustedScope as ScopeDescriptor) ?? (candidate.proposedScope as ScopeDescriptor),
-          confidence: decision.adjustedConfidence ?? candidate.proposedConfidence,
+          scope:
+            (decision.adjustedScope as ScopeDescriptor) ??
+            (candidate.proposedScope as ScopeDescriptor),
+          confidence:
+            decision.adjustedConfidence ?? candidate.proposedConfidence,
           verificationStatus: "unverified" as const,
-          payload: (decision.adjustedPayload as Record<string, unknown>) ?? candidate.proposedPayload,
-          tags: [] as string[], relatedFiles: [] as string[], relatedSymbols: [] as string[], relatedTestRunIds: [] as string[],
-          sensitivity: candidate.sensitivity as "public" | "internal" | "confidential" | "restricted",
+          payload:
+            (decision.adjustedPayload as Record<string, unknown>) ??
+            candidate.proposedPayload,
+          tags: [] as string[],
+          relatedFiles: [] as string[],
+          relatedSymbols: [] as string[],
+          relatedTestRunIds: [] as string[],
+          sensitivity: candidate.sensitivity as
+            | "public"
+            | "internal"
+            | "confidential"
+            | "restricted",
           version: 1,
-          createdBy: decision.decidedBy, updatedBy: decision.decidedBy,
-          createdAt: now, updatedAt: now,
+          createdBy: decision.decidedBy,
+          updatedBy: decision.decidedBy,
+          createdAt: now,
+          updatedAt: now,
         } as unknown as MemoryItem;
 
         await memoryItemDao.create(item);
@@ -123,56 +169,94 @@ export class GovernanceExecutor {
 
         // 异步生成 embedding
         try {
-          const embedder = new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS);
-          await storeEmbedding(memoryId, "1", await embedder.embed(`${item.title} ${item.summary}`));
-        } catch { /* non-blocking */ }
+          const embedder = new NGramEmbeddingService(
+            MEMORY_EMBEDDING_DIMENSIONS,
+          );
+          await storeEmbedding(
+            memoryId,
+            "1",
+            await embedder.embed(`${item.title} ${item.summary}`),
+          );
+        } catch {
+          /* non-blocking */
+        }
 
         return { success: true, memoryId, newVersion: 1 };
       }
 
       case "APPROVE_UPDATE": {
         const targetId = decision.targetMemoryId;
-        if (!targetId) return { success: false, reason: "Missing targetMemoryId" };
+        if (!targetId)
+          return { success: false, reason: "Missing targetMemoryId" };
 
         const existing = await memoryItemDao.findById(targetId);
-        if (!existing) return { success: false, reason: `Memory ${targetId} not found` };
+        if (!existing)
+          return { success: false, reason: `Memory ${targetId} not found` };
 
         const patch: Parameters<typeof memoryItemDao.update>[2] = {};
-        if (decision.adjustedPayload) patch.payload = decision.adjustedPayload as Record<string, unknown>;
-        if (decision.adjustedConfidence !== undefined) patch.confidence = decision.adjustedConfidence;
-        if (decision.resultingStatus) patch.status = decision.resultingStatus as MemoryStatus;
-        if (decision.adjustedScope) patch.scope = decision.adjustedScope as ScopeDescriptor;
+        if (decision.adjustedPayload)
+          patch.payload = decision.adjustedPayload as Record<string, unknown>;
+        if (decision.adjustedConfidence !== undefined)
+          patch.confidence = decision.adjustedConfidence;
+        if (decision.resultingStatus)
+          patch.status = decision.resultingStatus as MemoryStatus;
+        if (decision.adjustedScope)
+          patch.scope = decision.adjustedScope as ScopeDescriptor;
 
-        const updated = await memoryItemDao.update(targetId, existing.version, patch);
-        if (!updated) return { success: false, reason: "Update failed (version conflict)" };
-        return { success: true, memoryId: targetId, newVersion: updated.version };
+        const updated = await memoryItemDao.update(
+          targetId,
+          existing.version,
+          patch,
+        );
+        if (!updated)
+          return { success: false, reason: "Update failed (version conflict)" };
+        return {
+          success: true,
+          memoryId: targetId,
+          newVersion: updated.version,
+        };
       }
 
       case "APPROVE_MERGE": {
         const targetId = decision.targetMemoryId;
-        if (!targetId) return { success: false, reason: "Missing targetMemoryId" };
+        if (!targetId)
+          return { success: false, reason: "Missing targetMemoryId" };
 
         const existing = await memoryItemDao.findById(targetId);
-        if (!existing) return { success: false, reason: `Memory ${targetId} not found` };
+        if (!existing)
+          return { success: false, reason: `Memory ${targetId} not found` };
 
-        const newConfidence = (existing.confidence + (decision.adjustedConfidence ?? 0.5)) / 2;
+        const newConfidence =
+          (existing.confidence + (decision.adjustedConfidence ?? 0.5)) / 2;
         const updated = await memoryItemDao.update(targetId, existing.version, {
           confidence: newConfidence,
-          verificationStatus: existing.verificationStatus === "verified" ? "verified" : "partially_verified",
+          verificationStatus:
+            existing.verificationStatus === "verified"
+              ? "verified"
+              : "partially_verified",
         });
-        if (!updated) return { success: false, reason: "Merge failed (version conflict)" };
+        if (!updated)
+          return { success: false, reason: "Merge failed (version conflict)" };
 
         await memoryCandidateDao.updateStatus(candidate.id, "promoted");
-        return { success: true, memoryId: targetId, newVersion: updated.version };
+        return {
+          success: true,
+          memoryId: targetId,
+          newVersion: updated.version,
+        };
       }
 
       default:
-        return { success: false, reason: `Unsupported action: ${decision.decision}` };
+        return {
+          success: false,
+          reason: `Unsupported action: ${decision.decision}`,
+        };
     }
   }
 
   private async nextSequence(sql: any, aggregateId: string): Promise<number> {
-    const rows = await sql`SELECT COALESCE(MAX(sequence), 0) + 1 AS seq FROM outbox_events WHERE aggregate_id = ${aggregateId}`;
+    const rows =
+      await sql`SELECT COALESCE(MAX(sequence), 0) + 1 AS seq FROM outbox_events WHERE aggregate_id = ${aggregateId}`;
     return Number((rows[0] as { seq: number }).seq);
   }
 }

@@ -6,20 +6,20 @@
  * 报告渲染 / CLI 解析（smoke 子命令）/ fixture 合法性（密钥拦截 + trigram 三向重叠）。
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { parseMemoryArgs } from "../src/longterm/cli.js";
 import {
-  summarizeSmoke,
-  smokePassed,
-  smokeProbe,
-  renderBackboneSmokeReport,
+  type BackboneSmokeReport,
   SMOKE_FIXTURES,
-  SMOKE_SCHEMA_RATE_MIN,
   SMOKE_RECALL_RATE_MIN,
+  SMOKE_SCHEMA_RATE_MIN,
   SMOKE_UNVERIFIED_MAX,
   type SmokeItemResult,
-  type BackboneSmokeReport,
+  renderBackboneSmokeReport,
+  smokePassed,
+  smokeProbe,
+  summarizeSmoke,
 } from "../src/longterm/eval/backbone-smoke.js";
-import { parseMemoryArgs } from "../src/longterm/cli.js";
 import { scanForSecrets } from "../src/longterm/write/secrets.js";
 
 // ═══════════════════════════════════════════════════════════════
@@ -27,7 +27,9 @@ import { scanForSecrets } from "../src/longterm/write/secrets.js";
 // ═══════════════════════════════════════════════════════════════
 
 /** 构造 SmokeItemResult（默认 written 未召回） */
-function item(partial: Partial<SmokeItemResult> & { fixtureId: string }): SmokeItemResult {
+function item(
+  partial: Partial<SmokeItemResult> & { fixtureId: string },
+): SmokeItemResult {
   return {
     status: "written",
     memoryIds: [],
@@ -42,7 +44,8 @@ function item(partial: Partial<SmokeItemResult> & { fixtureId: string }): SmokeI
 function trigrams(s: string): Set<string> {
   const normalized = s.toLowerCase().replace(/[^a-z0-9一-鿿]/g, " ");
   const out = new Set<string>();
-  for (let i = 0; i <= normalized.length - 3; i++) out.add(normalized.slice(i, i + 3));
+  for (let i = 0; i <= normalized.length - 3; i++)
+    out.add(normalized.slice(i, i + 3));
   return out;
 }
 
@@ -58,7 +61,14 @@ function sharesTrigram(a: string, b: string): boolean {
 
 describe("summarizeSmoke", () => {
   test("全 written 全 recalled → schema=1 keywordRecall=1 unverified=0 passed=true", () => {
-    const items = ["a", "b", "c"].map((id) => item({ fixtureId: id, status: "written", memoryIds: [`m-${id}`], recalledByKeyword: true }));
+    const items = ["a", "b", "c"].map((id) =>
+      item({
+        fixtureId: id,
+        status: "written",
+        memoryIds: [`m-${id}`],
+        recalledByKeyword: true,
+      }),
+    );
     const s = summarizeSmoke(items);
     expect(s.schemaRate).toBe(1);
     expect(s.keywordRecall).toBe(1);
@@ -71,8 +81,17 @@ describe("summarizeSmoke", () => {
 
   test("4 条 degraded → unverified=0.4 超红线 → passed=false", () => {
     const items = [
-      ...["a", "b", "c", "d", "e", "f"].map((id) => item({ fixtureId: id, status: "written", memoryIds: [`m-${id}`], recalledByKeyword: true })),
-      ...["g", "h", "i", "j"].map((id) => item({ fixtureId: id, status: "degraded", memoryIds: [`d-${id}`] })),
+      ...["a", "b", "c", "d", "e", "f"].map((id) =>
+        item({
+          fixtureId: id,
+          status: "written",
+          memoryIds: [`m-${id}`],
+          recalledByKeyword: true,
+        }),
+      ),
+      ...["g", "h", "i", "j"].map((id) =>
+        item({ fixtureId: id, status: "degraded", memoryIds: [`d-${id}`] }),
+      ),
     ];
     const s = summarizeSmoke(items);
     expect(s.schemaRate).toBeCloseTo(6 / 10);
@@ -83,7 +102,14 @@ describe("summarizeSmoke", () => {
 
   test("schema 合格率不足（7 written 3 noop）→ passed=false", () => {
     const items = [
-      ...["a", "b", "c", "d", "e", "f", "g"].map((id) => item({ fixtureId: id, status: "written", memoryIds: [`m-${id}`], recalledByKeyword: true })),
+      ...["a", "b", "c", "d", "e", "f", "g"].map((id) =>
+        item({
+          fixtureId: id,
+          status: "written",
+          memoryIds: [`m-${id}`],
+          recalledByKeyword: true,
+        }),
+      ),
       ...["h", "i", "j"].map((id) => item({ fixtureId: id, status: "noop" })),
     ];
     const s = summarizeSmoke(items);
@@ -94,8 +120,22 @@ describe("summarizeSmoke", () => {
 
   test("检索命中率不足（keyword 6/10）→ passed=false", () => {
     const items = [
-      ...["a", "b", "c", "d", "e", "f"].map((id) => item({ fixtureId: id, status: "written", memoryIds: [`m-${id}`], recalledByKeyword: true })),
-      ...["g", "h", "i", "j"].map((id) => item({ fixtureId: id, status: "written", memoryIds: [`m-${id}`], recalledByKeyword: false })),
+      ...["a", "b", "c", "d", "e", "f"].map((id) =>
+        item({
+          fixtureId: id,
+          status: "written",
+          memoryIds: [`m-${id}`],
+          recalledByKeyword: true,
+        }),
+      ),
+      ...["g", "h", "i", "j"].map((id) =>
+        item({
+          fixtureId: id,
+          status: "written",
+          memoryIds: [`m-${id}`],
+          recalledByKeyword: false,
+        }),
+      ),
     ];
     const s = summarizeSmoke(items);
     expect(s.keywordRecall).toBeCloseTo(0.6);
@@ -103,7 +143,10 @@ describe("summarizeSmoke", () => {
   });
 
   test("全 rejected/noop（无写入）→ unverified=null → passed=null", () => {
-    const s = summarizeSmoke([item({ fixtureId: "a", status: "rejected" }), item({ fixtureId: "b", status: "noop" })]);
+    const s = summarizeSmoke([
+      item({ fixtureId: "a", status: "rejected" }),
+      item({ fixtureId: "b", status: "noop" }),
+    ]);
     expect(s.schemaRate).toBe(0);
     expect(s.unverifiedRatio).toBeNull();
     expect(s.passed).toBeNull();
@@ -118,33 +161,52 @@ describe("summarizeSmoke", () => {
   });
 
   test("degraded 带/不带 memoryId → degradedPathOk 真/假", () => {
-    const withId = summarizeSmoke([item({ fixtureId: "a", status: "degraded", memoryIds: ["d-a"] })]);
+    const withId = summarizeSmoke([
+      item({ fixtureId: "a", status: "degraded", memoryIds: ["d-a"] }),
+    ]);
     expect(withId.degradedPathOk).toBe(true);
-    const withoutId = summarizeSmoke([item({ fixtureId: "b", status: "degraded", memoryIds: [] })]);
+    const withoutId = summarizeSmoke([
+      item({ fixtureId: "b", status: "degraded", memoryIds: [] }),
+    ]);
     expect(withoutId.degradedPathOk).toBe(false);
     // 无 degraded → 真空成立
-    expect(summarizeSmoke([item({ fixtureId: "c", status: "written", memoryIds: ["m"] })]).degradedPathOk).toBe(true);
+    expect(
+      summarizeSmoke([
+        item({ fixtureId: "c", status: "written", memoryIds: ["m"] }),
+      ]).degradedPathOk,
+    ).toBe(true);
   });
 
   test("writtenOnlyRecall 拆因：degraded 不挤占 written 分母", () => {
     const items = [
-      item({ fixtureId: "a", status: "written", memoryIds: ["m-a"], recalledByKeyword: true }),
+      item({
+        fixtureId: "a",
+        status: "written",
+        memoryIds: ["m-a"],
+        recalledByKeyword: true,
+      }),
       item({ fixtureId: "b", status: "degraded", memoryIds: ["d-b"] }), // 天然 miss
     ];
     const s = summarizeSmoke(items);
     expect(s.keywordRecall).toBeCloseTo(0.5); // 分母 10 双惩罚
-    expect(s.writtenOnlyRecall).toBe(1);      // 拆因：written 全命中
+    expect(s.writtenOnlyRecall).toBe(1); // 拆因：written 全命中
   });
 });
 
 describe("smokePassed 边界", () => {
   test("阈值恰好命中与跨越", () => {
-    expect(smokePassed(SMOKE_SCHEMA_RATE_MIN, SMOKE_RECALL_RATE_MIN, SMOKE_UNVERIFIED_MAX - 0.01)).toBe(true);
-    expect(smokePassed(0.79, 1, 0)).toBe(false);                       // schema 不足
-    expect(smokePassed(1, 0.69, 0)).toBe(false);                       // recall 不足
-    expect(smokePassed(1, 1, SMOKE_UNVERIFIED_MAX)).toBe(false);       // unverified 恰好红线（>= 判定）
+    expect(
+      smokePassed(
+        SMOKE_SCHEMA_RATE_MIN,
+        SMOKE_RECALL_RATE_MIN,
+        SMOKE_UNVERIFIED_MAX - 0.01,
+      ),
+    ).toBe(true);
+    expect(smokePassed(0.79, 1, 0)).toBe(false); // schema 不足
+    expect(smokePassed(1, 0.69, 0)).toBe(false); // recall 不足
+    expect(smokePassed(1, 1, SMOKE_UNVERIFIED_MAX)).toBe(false); // unverified 恰好红线（>= 判定）
     expect(smokePassed(1, 1, 0.29)).toBe(true);
-    expect(smokePassed(1, 1, null)).toBeNull();                        // 无写入 → 无法判定
+    expect(smokePassed(1, 1, null)).toBeNull(); // 无写入 → 无法判定
   });
 });
 
@@ -170,9 +232,28 @@ describe("renderBackboneSmokeReport", () => {
     generatedAt: "2026-01-01T00:00:00.000Z",
     provider: "flash",
     passed: true,
-    metrics: { 条目数: 10, "schema合格率": 1, "检索命中率(keyword)": 0.9, "unverified占比": 0 },
-    details: [item({ fixtureId: "smoke-01", status: "written", memoryIds: ["m"], recalledByKeyword: true })],
-    efficiency: { llmCalls: 22, retries: 1, failures: 0, totalMs: 5000, estimatedTokens: 8000, truncated: false },
+    metrics: {
+      条目数: 10,
+      schema合格率: 1,
+      "检索命中率(keyword)": 0.9,
+      unverified占比: 0,
+    },
+    details: [
+      item({
+        fixtureId: "smoke-01",
+        status: "written",
+        memoryIds: ["m"],
+        recalledByKeyword: true,
+      }),
+    ],
+    efficiency: {
+      llmCalls: 22,
+      retries: 1,
+      failures: 0,
+      totalMs: 5000,
+      estimatedTokens: 8000,
+      truncated: false,
+    },
     warnings: [],
   };
 
@@ -190,7 +271,11 @@ describe("renderBackboneSmokeReport", () => {
   });
 
   test("无写入 → 无法判定 + 只读提示（passed!==true 一律 fail-closed）", () => {
-    const text = renderBackboneSmokeReport({ ...base, passed: null, metrics: { 条目数: 0 } });
+    const text = renderBackboneSmokeReport({
+      ...base,
+      passed: null,
+      metrics: { 条目数: 0 },
+    });
     expect(text).toContain("无法判定");
     expect(text).toContain("memory readonly on");
   });
@@ -202,7 +287,15 @@ describe("renderBackboneSmokeReport", () => {
 
 describe("parseMemoryArgs smoke", () => {
   test("smoke --provider flash --json --keep --no-governed --auto-readonly", () => {
-    const r = parseMemoryArgs(["smoke", "--provider", "flash", "--json", "--keep", "--no-governed", "--auto-readonly"]);
+    const r = parseMemoryArgs([
+      "smoke",
+      "--provider",
+      "flash",
+      "--json",
+      "--keep",
+      "--no-governed",
+      "--auto-readonly",
+    ]);
     if ("error" in r) throw new Error(r.error);
     expect(r.subcommand).toBe("smoke");
     expect(r.provider).toBe("flash");
@@ -243,8 +336,13 @@ describe("SMOKE_FIXTURES 合法性", () => {
 
   test("不触发密钥拦截（scanForSecrets 不 reject，否则整条被写入管线拦截）", () => {
     for (const f of SMOKE_FIXTURES) {
-      const scan = scanForSecrets(`${f.goal}\n${f.trajectory}\n${f.query}\n${f.keywords.join(" ")}`);
-      expect(scan.action, `${f.id} 触发密钥拦截: ${scan.action === "reject" ? scan.pattern : ""}`).not.toBe("reject");
+      const scan = scanForSecrets(
+        `${f.goal}\n${f.trajectory}\n${f.query}\n${f.keywords.join(" ")}`,
+      );
+      expect(
+        scan.action,
+        `${f.id} 触发密钥拦截: ${scan.action === "reject" ? scan.pattern : ""}`,
+      ).not.toBe("reject");
     }
   });
 
@@ -257,8 +355,14 @@ describe("SMOKE_FIXTURES 合法性", () => {
     // 出现的复合词（bun / 日志轮转）。
     for (const f of SMOKE_FIXTURES) {
       const kwProbe = f.keywords.join(" ");
-      expect(sharesTrigram(kwProbe, f.trajectory), `${f.id} keyword 探针与 trajectory 无共享 trigram`).toBe(true);
-      expect(sharesTrigram(f.query, f.trajectory), `${f.id} query 与 trajectory 无共享 trigram`).toBe(true);
+      expect(
+        sharesTrigram(kwProbe, f.trajectory),
+        `${f.id} keyword 探针与 trajectory 无共享 trigram`,
+      ).toBe(true);
+      expect(
+        sharesTrigram(f.query, f.trajectory),
+        `${f.id} query 与 trajectory 无共享 trigram`,
+      ).toBe(true);
     }
   });
 

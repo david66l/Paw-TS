@@ -5,9 +5,9 @@ import {
   Settings2,
   SquarePen,
 } from "lucide-react";
-import { PawMark } from "./PawMark";
 import { memo, useEffect, useState } from "react";
 import type { ChatSession } from "../agent/sessionTypes";
+import { PawMark } from "./PawMark";
 import styles from "./Sidebar.module.css";
 
 export type SidebarProps = {

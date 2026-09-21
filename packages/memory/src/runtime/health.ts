@@ -4,7 +4,7 @@
 
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import { closeSql, getSql, ping as dbPing } from "../db/connection.js";
+import { closeSql, ping as dbPing, getSql } from "../db/connection.js";
 
 export type MemoryBackendKind = "db" | "file";
 

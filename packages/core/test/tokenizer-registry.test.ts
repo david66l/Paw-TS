@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   ApproximateEstimator,
-  CalibratedEstimator,
   CONSERVATIVE_BIAS,
+  CalibratedEstimator,
   FastEstimator,
   TiktokenEstimator,
   resolveEstimatorForModel,
@@ -29,9 +29,9 @@ describe("P1.4 估算器注册表", () => {
   });
 
   test("claude/anthropic → ApproximateEstimator（cl100k 近似）", () => {
-    expect(resolveEstimatorForModel("anthropic:claude-opus-4-6")).toBeInstanceOf(
-      ApproximateEstimator,
-    );
+    expect(
+      resolveEstimatorForModel("anthropic:claude-opus-4-6"),
+    ).toBeInstanceOf(ApproximateEstimator);
   });
 
   test("未知模型 → FastEstimator（零依赖）", () => {
@@ -66,7 +66,7 @@ describe("P1.4 CalibratedEstimator usage 回填校准", () => {
 
   test("AC-P1-10 多轮收敛：3 轮后估算不低估且误差有界（基线偏差 37%）", () => {
     const est = new CalibratedEstimator();
-    const text = "console.log('hello world'); " .repeat(50);
+    const text = "console.log('hello world'); ".repeat(50);
     const base = est.estimateRaw(text);
     const real = base * 1.37; // 模拟 cl100k 对 DeepSeek 低估 37%
     for (let i = 0; i < 5; i++) {
@@ -83,9 +83,7 @@ describe("P1.4 CalibratedEstimator usage 回填校准", () => {
     const est = new CalibratedEstimator(base);
     const text = "hello";
     const raw = base.count(text);
-    expect(est.count(text)).toBe(
-      Math.ceil(raw * CONSERVATIVE_BIAS),
-    );
+    expect(est.count(text)).toBe(Math.ceil(raw * CONSERVATIVE_BIAS));
     const msgs = [{ role: "user" as const, content: text }];
     expect(est.countMessages(msgs)).toBe(
       Math.ceil(base.countMessages(msgs) * CONSERVATIVE_BIAS),

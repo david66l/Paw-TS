@@ -7,9 +7,9 @@ import {
 
 describe("buildOpenAiMessageContent", () => {
   test("returns plain string when no attachments", () => {
-    expect(
-      buildOpenAiMessageContent({ role: "user", content: "hello" }),
-    ).toBe("hello");
+    expect(buildOpenAiMessageContent({ role: "user", content: "hello" })).toBe(
+      "hello",
+    );
   });
 
   test("builds image_url parts for image attachments", () => {
@@ -26,7 +26,10 @@ describe("buildOpenAiMessageContent", () => {
       ],
     });
     expect(Array.isArray(content)).toBe(true);
-    const parts = content as Array<{ type: string; image_url?: { url: string } }>;
+    const parts = content as Array<{
+      type: string;
+      image_url?: { url: string };
+    }>;
     expect(parts[0]?.type).toBe("text");
     expect(parts[1]?.type).toBe("image_url");
     expect(parts[1]?.image_url?.url).toBe("data:image/png;base64,abc123");
@@ -36,9 +39,7 @@ describe("buildOpenAiMessageContent", () => {
     const content = buildOpenAiMessageContent({
       role: "user",
       content: "review",
-      attachments: [
-        { type: "file", name: "a.txt", content: "line one" },
-      ],
+      attachments: [{ type: "file", name: "a.txt", content: "line one" }],
     });
     const parts = content as Array<{ type: string; text?: string }>;
     expect(parts.some((p) => p.text?.includes("[File: a.txt]"))).toBe(true);
@@ -47,9 +48,9 @@ describe("buildOpenAiMessageContent", () => {
 
 describe("buildAnthropicUserContent", () => {
   test("returns plain string when no attachments", () => {
-    expect(
-      buildAnthropicUserContent({ role: "user", content: "hello" }),
-    ).toBe("hello");
+    expect(buildAnthropicUserContent({ role: "user", content: "hello" })).toBe(
+      "hello",
+    );
   });
 
   test("builds base64 image blocks", () => {

@@ -96,7 +96,7 @@ function anthropicImageMediaType(att: Attachment): string {
  */
 function anthropicImageData(att: Attachment): string {
   const raw = att.content.startsWith("data:")
-    ? att.content.split(",", 2)[1] ?? ""
+    ? (att.content.split(",", 2)[1] ?? "")
     : att.content;
   return raw;
 }

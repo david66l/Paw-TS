@@ -50,14 +50,17 @@ export function buildConstraintReconcilePrompt(opts: {
 }): string {
   const existingLines =
     opts.existing.length > 0
-      ? opts.existing.map(
-          (c, i) => `[${i}] (turn ${c.sourceTurn}) ${c.text}`,
-        )
+      ? opts.existing.map((c, i) => `[${i}] (turn ${c.sourceTurn}) ${c.text}`)
       : ["(none)"];
   const newLines =
     opts.newUserMessages.length > 0
-      ? opts.newUserMessages.map((m, i) => `${opts.currentTurn - opts.newUserMessages.length + 1 + i}: ${m}`)
-      : ["(no new user messages — this is a periodic check: drop constraints that have become stale)"];
+      ? opts.newUserMessages.map(
+          (m, i) =>
+            `${opts.currentTurn - opts.newUserMessages.length + 1 + i}: ${m}`,
+        )
+      : [
+          "(no new user messages — this is a periodic check: drop constraints that have become stale)",
+        ];
   return [
     "Existing active constraints:",
     ...existingLines,
@@ -96,8 +99,9 @@ function toIndexArray(v: unknown): number[] {
 function toAddArray(v: unknown): { text: string }[] {
   if (!Array.isArray(v)) return [];
   return v
-    .filter((x): x is Record<string, unknown> =>
-      !!x && typeof x === "object" && !Array.isArray(x),
+    .filter(
+      (x): x is Record<string, unknown> =>
+        !!x && typeof x === "object" && !Array.isArray(x),
     )
     .map((x) => ({ text: typeof x.text === "string" ? x.text.trim() : "" }))
     .filter((a) => a.text.length > 0);
@@ -112,9 +116,7 @@ function ruleFallbackExtract(messages: readonly string[]): string[] {
       if (
         t &&
         t.length <= 200 &&
-        /\b(?:must|only|never|do not|don't)\b|必须|只能|不要|不能|禁止/.test(
-          t,
-        )
+        /\b(?:must|only|never|do not|don't)\b|必须|只能|不要|不能|禁止/.test(t)
       ) {
         out.push(t);
       }
@@ -173,7 +175,9 @@ export async function runConstraintReconcile(opts: {
   const drop = toIndexArray(parsed.drop);
   const add = toAddArray(parsed.add);
   // 防御：keep/drop 下标越界过滤；同一下标不能既 keep 又 drop（drop 优先）
-  const validKeep = keep.filter((i) => i < opts.existing.length && !drop.includes(i));
+  const validKeep = keep.filter(
+    (i) => i < opts.existing.length && !drop.includes(i),
+  );
   return {
     keep: validKeep,
     drop: drop.filter((i) => i < opts.existing.length),

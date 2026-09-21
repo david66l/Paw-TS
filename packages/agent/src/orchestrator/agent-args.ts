@@ -73,8 +73,7 @@ export function buildOutputFormat(agentType: AgentType): string {
 export function parseAgentType(
   args: Record<string, unknown> | undefined,
 ): AgentType {
-  const raw =
-    args?.agent_type ?? args?.agentType ?? args?.type ?? args?.kind;
+  const raw = args?.agent_type ?? args?.agentType ?? args?.type ?? args?.kind;
   if (typeof raw === "string" && AGENT_TYPES.has(raw as AgentType)) {
     return raw as AgentType;
   }

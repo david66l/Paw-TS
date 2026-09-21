@@ -50,20 +50,25 @@ export class DesktopNextEvents {
   }
   private pending = new Set<Promise<void>>();
 
-  memoryMaintenance(phase: "write" | "topic", event: {
-    type: string;
-    writeId?: string;
-    organizationId?: string;
-    reasonCode?: string;
-    durationMs: number;
-  }): void {
+  memoryMaintenance(
+    phase: "write" | "topic",
+    event: {
+      type: string;
+      writeId?: string;
+      organizationId?: string;
+      reasonCode?: string;
+      durationMs: number;
+    },
+  ): void {
     const operationId = event.writeId ?? event.organizationId;
     this.emit({
       type: "memory.maintenance",
       phase,
       action: event.type,
       ...(operationId === undefined ? {} : { operationId }),
-      ...(event.reasonCode === undefined ? {} : { reasonCode: event.reasonCode }),
+      ...(event.reasonCode === undefined
+        ? {}
+        : { reasonCode: event.reasonCode }),
       durationMs: event.durationMs,
     });
   }
@@ -80,9 +85,12 @@ export class DesktopNextEvents {
     this.textDelta = this.thinkingDelta = "";
     // This lane is an ephemeral projection. Journal persistence remains strict.
     try {
-      if (thinking) this.emit({ type: "model.thinking", text: thinking, mode: "delta" });
+      if (thinking)
+        this.emit({ type: "model.thinking", text: thinking, mode: "delta" });
       if (text) this.emit({ type: "model.chunk", text, mode: "delta" });
-    } catch { /* The final canonical response can restore a disconnected UI. */ }
+    } catch {
+      /* The final canonical response can restore a disconnected UI. */
+    }
   }
   constructor(
     readonly runId: string,

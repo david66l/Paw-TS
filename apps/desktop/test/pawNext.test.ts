@@ -52,7 +52,10 @@ function model(
       baseUrl: "https://desktop.invalid/v1",
     },
     async complete(messages: readonly ChatMessage[]) {
-      if (messages[0]?.content.includes("completion reviewer")) return final('{"decision":"allow","reasonCode":"evidence_sufficient","summary":"Fixture evidence is sufficient"}');
+      if (messages[0]?.content.includes("completion reviewer"))
+        return final(
+          '{"decision":"allow","reasonCode":"evidence_sufficient","summary":"Fixture evidence is sufficient"}',
+        );
       requests.push(JSON.stringify(messages));
       return responses[index++] ?? final("Done");
     },
@@ -66,8 +69,16 @@ const final = (text: string): ModelCompletionResult => ({
 
 test("memory recovery diagnostics reach the desktop event stream without source content", () => {
   const events: RunEventEnvelope[] = [];
-  const projection = new DesktopNextEvents("memory-run", (event) => events.push(event));
-  const diagnostic = { type: "recovery_pending", writeId: "write-id", reasonCode: "MemoryWriteApplyOutcomeUnknown", durationMs: 30, content: "private memory statement" };
+  const projection = new DesktopNextEvents("memory-run", (event) =>
+    events.push(event),
+  );
+  const diagnostic = {
+    type: "recovery_pending",
+    writeId: "write-id",
+    reasonCode: "MemoryWriteApplyOutcomeUnknown",
+    durationMs: 30,
+    content: "private memory statement",
+  };
   projection.memoryMaintenance("write", diagnostic);
   const event = events.at(-1)!;
   expect(JSON.stringify(event)).toContain("MemoryWriteApplyOutcomeUnknown");
@@ -806,9 +817,33 @@ test("desktop host JSON protocol streams Paw Next through a local model server",
     hostname: "127.0.0.1",
     async fetch(request) {
       const body = await request.text();
-      if (JSON.parse(body).messages?.[0]?.content?.includes("completion reviewer")) {
+      if (
+        JSON.parse(body).messages?.[0]?.content?.includes("completion reviewer")
+      ) {
         deliveryReviews++;
-        return Response.json({ choices: [{ message: { role: "assistant", content: JSON.stringify(deliveryReviews === 1 ? { decision: "continue", reasonCode: "missing_requirement", summary: "Confirm the additional IPC request." } : { decision: "allow", reasonCode: "evidence_sufficient", summary: "IPC confirmed" }) }, finish_reason: "stop" }] });
+        return Response.json({
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: JSON.stringify(
+                  deliveryReviews === 1
+                    ? {
+                        decision: "continue",
+                        reasonCode: "missing_requirement",
+                        summary: "Confirm the additional IPC request.",
+                      }
+                    : {
+                        decision: "allow",
+                        reasonCode: "evidence_sufficient",
+                        summary: "IPC confirmed",
+                      },
+                ),
+              },
+              finish_reason: "stop",
+            },
+          ],
+        });
       }
       if (
         JSON.parse(body).messages?.[0]?.content?.startsWith(

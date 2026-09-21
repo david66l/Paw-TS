@@ -41,8 +41,8 @@ import path from "node:path";
 import {
   atomicWrite,
   lockFile,
-  parseYamlFrontmatter,
   parseMarkdownSections,
+  parseYamlFrontmatter,
   scanForThreats,
   splitFrontmatter,
   stringifyYamlFrontmatter,
@@ -77,7 +77,6 @@ export interface SessionMemory {
   readonly relevantContext?: string;
 }
 
-
 /**
  * 会话记忆存储管理器。
  *
@@ -93,8 +92,7 @@ export class SessionMemoryStore {
    * @param opts.sessionsDir - 可选的自定义会话目录，未提供时使用默认路径
    */
   constructor(opts: { workspaceRoot: string; sessionsDir?: string }) {
-    this.sessionsDir =
-      opts.sessionsDir ?? sessionMemoryDir(opts.workspaceRoot);
+    this.sessionsDir = opts.sessionsDir ?? sessionMemoryDir(opts.workspaceRoot);
   }
 
   /**
@@ -129,7 +127,7 @@ export class SessionMemoryStore {
     if (threat.length > 0) {
       throw new Error(
         `Session memory blocked: content matches threat pattern '${threat[0]}'. ` +
-        `Refusing to persist potentially malicious content.`,
+          `Refusing to persist potentially malicious content.`,
       );
     }
 
@@ -282,5 +280,4 @@ export class SessionMemoryStore {
       relevantContext: sections["relevant context"],
     };
   }
-
 }

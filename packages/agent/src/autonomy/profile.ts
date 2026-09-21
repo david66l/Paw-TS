@@ -6,19 +6,20 @@
  */
 
 import {
-  applyAutonomyShellPolicy,
   type AutonomyShellLevel,
+  applyAutonomyShellPolicy,
 } from "@paw/harness";
-import type { AskUserResolveInput, ToolApprovalInput } from "../orchestrator.js";
+import type {
+  AskUserResolveInput,
+  ToolApprovalInput,
+} from "../orchestrator.js";
 
 export type AutonomyLevel = AutonomyShellLevel;
 
 export interface AutonomyProfileOptions {
   readonly level: AutonomyLevel;
   /** Override tool approval (interactive UI). Headless ignores and auto-allows. */
-  readonly resolveToolApproval?: (
-    input: ToolApprovalInput,
-  ) => Promise<boolean>;
+  readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
   /** Override ask_user. Headless returns a non-interactive continue message. */
   readonly resolveAskUser?: (input: AskUserResolveInput) => Promise<string>;
   /**
@@ -30,9 +31,7 @@ export interface AutonomyProfileOptions {
 
 export interface AutonomyProfile {
   readonly level: AutonomyLevel;
-  readonly resolveToolApproval?: (
-    input: ToolApprovalInput,
-  ) => Promise<boolean>;
+  readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
   readonly resolveAskUser?: (input: AskUserResolveInput) => Promise<string>;
   readonly approvalPolicy?: (tool: string) => boolean | undefined;
   /** Apply shell policy for this profile (call once when creating the run). */
@@ -82,8 +81,7 @@ export function createAutonomyProfile(
     return {
       level,
       resolveToolApproval: options.resolveToolApproval ?? (async () => true),
-      resolveAskUser:
-        options.resolveAskUser ?? (async () => HEADLESS_ASK_USER),
+      resolveAskUser: options.resolveAskUser ?? (async () => HEADLESS_ASK_USER),
       approvalPolicy,
       apply: () => applyAutonomyShellPolicy("supervised"),
     };

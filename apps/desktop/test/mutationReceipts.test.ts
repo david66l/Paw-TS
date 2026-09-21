@@ -2,15 +2,15 @@ import { expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  buildPawNextTaskProfileV3,
-  runFreshPawNextTaskV3,
-} from "@paw/paw-next";
 import type {
   ChatMessage,
   LanguageModel,
   ModelCompletionResult,
 } from "@paw/models";
+import {
+  buildPawNextTaskProfileV3,
+  runFreshPawNextTaskV3,
+} from "@paw/paw-next";
 import { desktopProfile, fingerprint } from "../agent-host/paw-next-profile.js";
 import { runDesktopNext } from "../agent-host/paw-next.js";
 

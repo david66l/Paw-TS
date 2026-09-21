@@ -37,9 +37,17 @@ export const outboxManager = {
         memory_id, memory_version, payload,
         sequence, transaction_id, status, created_at
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',now())`,
-      [generateId("outbox"), event.eventType, event.aggregateType, event.aggregateId,
-        event.memoryId ?? null, event.memoryVersion ?? null,
-        JSON.stringify(event.payload), sequence, transactionId],
+      [
+        generateId("outbox"),
+        event.eventType,
+        event.aggregateType,
+        event.aggregateId,
+        event.memoryId ?? null,
+        event.memoryVersion ?? null,
+        JSON.stringify(event.payload),
+        sequence,
+        transactionId,
+      ],
     );
   },
 
@@ -48,7 +56,8 @@ export const outboxManager = {
     const sql = getSql();
     const rows = await sql.unsafe(
       `SELECT * FROM outbox_events WHERE status = 'pending'
-       ORDER BY sequence ASC LIMIT $1`, [limit],
+       ORDER BY sequence ASC LIMIT $1`,
+      [limit],
     );
     return rows.map(rowToEvent);
   },
@@ -58,7 +67,8 @@ export const outboxManager = {
     const sql = getSql();
     await sql.unsafe(
       `UPDATE outbox_events SET status = 'published', published_at = now()
-       WHERE id = $1`, [id],
+       WHERE id = $1`,
+      [id],
     );
   },
 
@@ -73,7 +83,8 @@ export const outboxManager = {
         next_retry_at = CASE WHEN retry_count >= max_retries THEN NULL
           ELSE now() + make_interval(secs => power(2, retry_count) * 5)
         END
-       WHERE id = $1`, [id, error],
+       WHERE id = $1`,
+      [id, error],
     );
   },
 };

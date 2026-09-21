@@ -58,7 +58,9 @@ function rowToRecord(row: Record<string, unknown>): ExecutionRecord {
     rawOutputRef: row.raw_output_ref as string | undefined,
     exitCode: row.exit_code as number | undefined,
     durationMs: row.duration_ms as number,
-    verificationLevel: (row.verification_level as ExecutionRecord["verificationLevel"]) ?? "EXECUTED",
+    verificationLevel:
+      (row.verification_level as ExecutionRecord["verificationLevel"]) ??
+      "EXECUTED",
     errors: parseJson(row.errors) as ExecutionRecord["errors"],
     createdAt: row.created_at as string,
   };
@@ -86,12 +88,28 @@ export const executionRecorder = {
         END,
         updated_at = NOW()
       RETURNING *`,
-      [id, id, input.idempotencyKey, input.taskId, input.sessionId ?? null, input.attemptId,
-        input.toolCallId, input.toolName, input.toolType, input.inputSummary,
-        input.executionStatus, input.resultSummary, input.rawOutputRef ?? null,
-        input.rawOutputSizeBytes ?? null, input.exitCode ?? null, input.durationMs,
-        input.verificationLevel ?? "EXECUTED", JSON.stringify(input.errors ?? []),
-        input.relatedPlanStepId ?? null, now],
+      [
+        id,
+        id,
+        input.idempotencyKey,
+        input.taskId,
+        input.sessionId ?? null,
+        input.attemptId,
+        input.toolCallId,
+        input.toolName,
+        input.toolType,
+        input.inputSummary,
+        input.executionStatus,
+        input.resultSummary,
+        input.rawOutputRef ?? null,
+        input.rawOutputSizeBytes ?? null,
+        input.exitCode ?? null,
+        input.durationMs,
+        input.verificationLevel ?? "EXECUTED",
+        JSON.stringify(input.errors ?? []),
+        input.relatedPlanStepId ?? null,
+        now,
+      ],
     );
     return rowToRecord(rows[0] as Record<string, unknown>);
   },
@@ -99,7 +117,8 @@ export const executionRecorder = {
   async queryByTask(taskId: string): Promise<ExecutionRecord[]> {
     const sql = getSql();
     const rows = await sql.unsafe(
-      "SELECT * FROM tool_result_records WHERE task_id = $1 ORDER BY created_at ASC", [taskId],
+      "SELECT * FROM tool_result_records WHERE task_id = $1 ORDER BY created_at ASC",
+      [taskId],
     );
     return rows.map((r) => rowToRecord(r as Record<string, unknown>));
   },
@@ -111,13 +130,18 @@ export const executionRecorder = {
     failures: { toolCallId: string; toolName: string; errorSummary: string }[];
   }> {
     const sql = getSql();
-    const rows = await sql.unsafe(
-      "SELECT * FROM tool_result_records WHERE task_id = $1", [taskId],
-    ) as Record<string, unknown>[];
+    const rows = (await sql.unsafe(
+      "SELECT * FROM tool_result_records WHERE task_id = $1",
+      [taskId],
+    )) as Record<string, unknown>[];
 
     const byStatus: Record<string, number> = {};
     const byVerification: Record<string, number> = {};
-    const failures: { toolCallId: string; toolName: string; errorSummary: string }[] = [];
+    const failures: {
+      toolCallId: string;
+      toolName: string;
+      errorSummary: string;
+    }[] = [];
 
     for (const r of rows) {
       const status = r.execution_status as string;
@@ -131,7 +155,7 @@ export const executionRecorder = {
         failures.push({
           toolCallId: r.tool_call_id as string,
           toolName: r.tool_name as string,
-          errorSummary: errors[0]?.message ?? r.result_summary as string,
+          errorSummary: errors[0]?.message ?? (r.result_summary as string),
         });
       }
     }

@@ -187,7 +187,9 @@ export function createMemoryWriterControllerV1(
       if (options.signal.aborted) return undefined;
 
       const snapshot = await readSnapshot();
-      const retry = options.retryFailedUnstaged ? retryableMemorySource(snapshot) : undefined;
+      const retry = options.retryFailedUnstaged
+        ? retryableMemorySource(snapshot)
+        : undefined;
       const source = projectMemoryWriteSourceV1(
         snapshot,
         outcome,
@@ -217,7 +219,9 @@ export function createMemoryWriterControllerV1(
         extractorVersion: options.extractor.extractorVersion,
         conflictResolverVersion:
           options.conflictResolver?.resolverVersion ?? "not_configured",
-        ...(retry ? { retryOf: retry.claim.writeId, attempt: retry.attempt } : {}),
+        ...(retry
+          ? { retryOf: retry.claim.writeId, attempt: retry.attempt }
+          : {}),
       } as JsonValue);
       const claimedAt = now();
       const claim: MemoryWriteClaimedFactV1 = Object.freeze({
@@ -419,7 +423,8 @@ export function projectMemoryWriteSourceV1(
   const sourceEntries = snapshot.entries.filter(
     (entry) =>
       (sourceRange
-        ? entry.seq >= sourceRange.sourceFromSeq && entry.seq <= sourceRange.sourceThroughSeq
+        ? entry.seq >= sourceRange.sourceFromSeq &&
+          entry.seq <= sourceRange.sourceThroughSeq
         : entry.seq > lastThrough) && !entry.fact.type.startsWith("memory."),
   );
   const [firstSourceEntry] = sourceEntries;

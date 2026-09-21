@@ -34,25 +34,100 @@ describe("interactive control reducer v2 work segments", () => {
   const v2 = createInteractiveControlReducerV2();
   test("reasoning recovery is journal-counted across segments and never bypasses hard stops", () => {
     const recovery = { ...config, recoverReasoningTimeout: true as const };
-    const timeout = (turn: number): InputFactV1 => ({ ...model(turn, "unknown", false), errorCode: "ModelReasoningWithoutActionTimeout" });
+    const timeout = (turn: number): InputFactV1 => ({
+      ...model(turn, "unknown", false),
+      errorCode: "ModelReasoningWithoutActionTimeout",
+    });
     const facts = [timeout(1)];
     expect(v2.reduce(facts, recovery).decision.kind).toBe("continue");
-    expect(v2.reduce(JSON.parse(JSON.stringify(facts)), recovery)).toEqual(v2.reduce(facts, recovery));
-    expect(v2.reduce([...facts, timeout(2)], recovery).decision.kind).toBe("incomplete");
-    expect(v2.reduce([...facts, model(2, "completed", false), segment(1), promotion("next"), timeout(3)], recovery).decision.kind).toBe("incomplete");
-    expect(v2.reduce(facts, { ...recovery, maxModelTurns: 1 }).decision.kind).toBe("incomplete");
-    expect(v2.reduce([model(1, "completed", false), model(2, "completed", false), segment(1), promotion("next"), timeout(3)], { ...recovery, maxTotalModelTurns: 3 }).decision).toEqual({ kind: "incomplete", reason: "total-model-turn-budget-exhausted" });
-    expect(v2.reduce([...facts, { type: "abort.requested", source: "user" }], recovery).decision.kind).toBe("aborted");
-    for (const errorCode of ["ModelRequestIdleTimeout", "ModelRequestWallTimeout", "OtherError"]) {
-      expect(v2.reduce([{ ...model(1, "unknown", false), errorCode }], recovery).decision.kind).toBe("incomplete");
+    expect(v2.reduce(JSON.parse(JSON.stringify(facts)), recovery)).toEqual(
+      v2.reduce(facts, recovery),
+    );
+    expect(v2.reduce([...facts, timeout(2)], recovery).decision.kind).toBe(
+      "incomplete",
+    );
+    expect(
+      v2.reduce(
+        [
+          ...facts,
+          model(2, "completed", false),
+          segment(1),
+          promotion("next"),
+          timeout(3),
+        ],
+        recovery,
+      ).decision.kind,
+    ).toBe("incomplete");
+    expect(
+      v2.reduce(facts, { ...recovery, maxModelTurns: 1 }).decision.kind,
+    ).toBe("incomplete");
+    expect(
+      v2.reduce(
+        [
+          model(1, "completed", false),
+          model(2, "completed", false),
+          segment(1),
+          promotion("next"),
+          timeout(3),
+        ],
+        { ...recovery, maxTotalModelTurns: 3 },
+      ).decision,
+    ).toEqual({
+      kind: "incomplete",
+      reason: "total-model-turn-budget-exhausted",
+    });
+    expect(
+      v2.reduce(
+        [...facts, { type: "abort.requested", source: "user" }],
+        recovery,
+      ).decision.kind,
+    ).toBe("aborted");
+    for (const errorCode of [
+      "ModelRequestIdleTimeout",
+      "ModelRequestWallTimeout",
+      "OtherError",
+    ]) {
+      expect(
+        v2.reduce([{ ...model(1, "unknown", false), errorCode }], recovery)
+          .decision.kind,
+      ).toBe("incomplete");
     }
-    expect(v2.reduce([{ ...model(1, "unknown", true), errorCode: "ModelReasoningWithoutActionTimeout" }], recovery).decision.kind).toBe("incomplete");
+    expect(
+      v2.reduce(
+        [
+          {
+            ...model(1, "unknown", true),
+            errorCode: "ModelReasoningWithoutActionTimeout",
+          },
+        ],
+        recovery,
+      ).decision.kind,
+    ).toBe("incomplete");
   });
   test("supervision stop codes survive replay without turning partial responses into success", () => {
-    for (const errorCode of ["ModelRequestIdleTimeout", "ModelRequestWallTimeout", "ModelReasoningWithoutActionTimeout"]) {
-      const facts: InputFactV1[] = [{ type: "model.settled", modelCallId: "model-1", turn: 1, status: "unknown", hasToolCalls: false, hasVisibleOutput: false, errorCode }];
-      expect(v2.reduce(facts, config).decision).toEqual({ kind: "incomplete", reason: errorCode });
-      expect(v2.reduce(JSON.parse(JSON.stringify(facts)), config)).toEqual(v2.reduce(facts, config));
+    for (const errorCode of [
+      "ModelRequestIdleTimeout",
+      "ModelRequestWallTimeout",
+      "ModelReasoningWithoutActionTimeout",
+    ]) {
+      const facts: InputFactV1[] = [
+        {
+          type: "model.settled",
+          modelCallId: "model-1",
+          turn: 1,
+          status: "unknown",
+          hasToolCalls: false,
+          hasVisibleOutput: false,
+          errorCode,
+        },
+      ];
+      expect(v2.reduce(facts, config).decision).toEqual({
+        kind: "incomplete",
+        reason: errorCode,
+      });
+      expect(v2.reduce(JSON.parse(JSON.stringify(facts)), config)).toEqual(
+        v2.reduce(facts, config),
+      );
     }
   });
 

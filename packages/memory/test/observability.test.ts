@@ -6,31 +6,35 @@
  *   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test" bun test test/observability.test.ts
  */
 
-import { describe, test, expect, afterAll } from "bun:test";
-import { getSql, closeSql, ping } from "../src/db/connection.js";
-import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import { deriveEntryId } from "../src/longterm/store/id.js";
-import { appendOpLog, queryOpLog } from "../src/longterm/observability/op-log.js";
-import {
-  recordRetrievalHits,
-  recordTaskSuccess,
-  recordAdoption,
-} from "../src/longterm/observability/ledger.js";
-import {
-  collectMemoryStats,
-  renderMemoryStats,
-  UNVERIFIED_WARN_RATIO,
-  type MemoryStats,
-} from "../src/longterm/observability/stats.js";
+import { afterAll, describe, expect, test } from "bun:test";
+import { closeSql, getSql, ping } from "../src/db/connection.js";
+import { parseMemoryArgs, runMemoryCommand } from "../src/longterm/cli.js";
 import {
   collectMemoryDiff,
   renderMemoryDiff,
 } from "../src/longterm/observability/diff.js";
+import {
+  recordAdoption,
+  recordRetrievalHits,
+  recordTaskSuccess,
+} from "../src/longterm/observability/ledger.js";
+import {
+  appendOpLog,
+  queryOpLog,
+} from "../src/longterm/observability/op-log.js";
+import {
+  type MemoryStats,
+  UNVERIFIED_WARN_RATIO,
+  collectMemoryStats,
+  renderMemoryStats,
+} from "../src/longterm/observability/stats.js";
 import { collectWhy, renderWhy } from "../src/longterm/observability/why.js";
-import { parseMemoryArgs, runMemoryCommand } from "../src/longterm/cli.js";
 import type { SemanticFact } from "../src/longterm/store/engine.js";
+import { deriveEntryId } from "../src/longterm/store/id.js";
+import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 
-process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??=
+  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -45,8 +49,24 @@ describe("parseMemoryArgs", () => {
   });
 
   test("list --kind/--all/--repo/--limit", () => {
-    expect(parseMemoryArgs(["list", "--kind", "episodic", "--all", "--repo", "r1", "--limit", "5"]))
-      .toEqual({ subcommand: "list", kind: "episodic", all: true, repo: "r1", limit: 5 });
+    expect(
+      parseMemoryArgs([
+        "list",
+        "--kind",
+        "episodic",
+        "--all",
+        "--repo",
+        "r1",
+        "--limit",
+        "5",
+      ]),
+    ).toEqual({
+      subcommand: "list",
+      kind: "episodic",
+      all: true,
+      repo: "r1",
+      limit: 5,
+    });
   });
 
   test("非法 kind 报错", () => {
@@ -57,13 +77,19 @@ describe("parseMemoryArgs", () => {
   test("why/forget 缺 id 报错", () => {
     expect("error" in parseMemoryArgs(["why"])).toBe(true);
     expect("error" in parseMemoryArgs(["forget"])).toBe(true);
-    expect(parseMemoryArgs(["why", "semantic-abc"])).toEqual({ subcommand: "why", id: "semantic-abc" });
+    expect(parseMemoryArgs(["why", "semantic-abc"])).toEqual({
+      subcommand: "why",
+      id: "semantic-abc",
+    });
   });
 
   test("diff --since 校验时间格式", () => {
-    expect("error" in parseMemoryArgs(["diff", "--since", "不是时间"])).toBe(true);
-    expect(parseMemoryArgs(["diff", "--since", "2026-08-01T00:00:00Z"]))
-      .toEqual({ subcommand: "diff", since: "2026-08-01T00:00:00Z" });
+    expect("error" in parseMemoryArgs(["diff", "--since", "不是时间"])).toBe(
+      true,
+    );
+    expect(
+      parseMemoryArgs(["diff", "--since", "2026-08-01T00:00:00Z"]),
+    ).toEqual({ subcommand: "diff", since: "2026-08-01T00:00:00Z" });
   });
 
   test("未知子命令/参数报错", () => {
@@ -96,13 +122,17 @@ function makeStats(overrides: Partial<MemoryStats>): MemoryStats {
 
 describe("renderMemoryStats 告警", () => {
   test("unverified 占比 >10% 输出告警", () => {
-    const text = renderMemoryStats(makeStats({ unverified: 11, unverifiedRatio: 0.11 }));
+    const text = renderMemoryStats(
+      makeStats({ unverified: 11, unverifiedRatio: 0.11 }),
+    );
     expect(text).toContain("告警");
     expect(text).toContain("11.0%");
   });
 
   test("占比恰为阈值不告警", () => {
-    const text = renderMemoryStats(makeStats({ unverified: 10, unverifiedRatio: UNVERIFIED_WARN_RATIO }));
+    const text = renderMemoryStats(
+      makeStats({ unverified: 10, unverifiedRatio: UNVERIFIED_WARN_RATIO }),
+    );
     expect(text).not.toContain("告警");
   });
 
@@ -112,7 +142,9 @@ describe("renderMemoryStats 告警", () => {
   });
 
   test("有数据时采纳率按 adopted/injected 展示", () => {
-    const text = renderMemoryStats(makeStats({ adoptionRate30d: 0.5, injected30d: 8, adopted30d: 4 }));
+    const text = renderMemoryStats(
+      makeStats({ adoptionRate30d: 0.5, injected30d: 8, adopted30d: 4 }),
+    );
     expect(text).toContain("50.0%");
     expect(text).toContain("4/8");
   });
@@ -124,7 +156,14 @@ describe("renderMemoryDiff", () => {
       since: "2026-08-01T00:00:00Z",
       until: "2026-08-02T00:00:00Z",
       opCounts: { "read.inject": 3, governed: 1 },
-      added: [{ id: "semantic-x", kind: "semantic", title: "t", tValid: "2026-08-01T01:00:00Z" }],
+      added: [
+        {
+          id: "semantic-x",
+          kind: "semantic",
+          title: "t",
+          tValid: "2026-08-01T01:00:00Z",
+        },
+      ],
       updated: [],
       invalidated: [],
       purgedIds: [],
@@ -196,12 +235,17 @@ describe("可观测性 db 集成", () => {
     const byEntry = await queryOpLog({ entryId });
     expect(byEntry.some((o) => o.runId === RUN)).toBe(true);
 
-    const future = await queryOpLog({ runId: RUN, since: new Date(Date.now() + 3600_000).toISOString() });
+    const future = await queryOpLog({
+      runId: RUN,
+      since: new Date(Date.now() + 3600_000).toISOString(),
+    });
     expect(future.length).toBe(0);
   });
 
   it("ledger 批量记账：注入→freq、任务成功→utility、采纳→op-log", async () => {
-    const fact = makeFact("Ledger batch accounting records freq utility adoption");
+    const fact = makeFact(
+      "Ledger batch accounting records freq utility adoption",
+    );
     const id = deriveEntryId(fact);
     createdIds.push(id);
     await engine.put(fact);
@@ -256,7 +300,9 @@ describe("可观测性 db 集成", () => {
     expect(whyText).toContain("freq=0");
 
     // diff：窗口内应看到这条新增 + 失效
-    const diff = await collectMemoryDiff(new Date(Date.now() - 3600_000).toISOString());
+    const diff = await collectMemoryDiff(
+      new Date(Date.now() - 3600_000).toISOString(),
+    );
     expect(diff.added.map((e) => e.id)).toContain(id);
     expect(diff.invalidated.map((e) => e.id)).toContain(id);
     expect(diff.opCounts.governed).toBeGreaterThanOrEqual(1);

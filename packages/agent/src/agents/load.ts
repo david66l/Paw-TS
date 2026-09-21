@@ -2,10 +2,10 @@
  * 从目录加载 Agent 定义（.md）
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import type { AgentSpec } from "./types.js";
 import { parseAgentMarkdown } from "./parse.js";
+import type { AgentSpec } from "./types.js";
 
 export function agentsDir(workspaceRoot: string): string {
   return path.join(path.resolve(workspaceRoot), ".paw", "agents");

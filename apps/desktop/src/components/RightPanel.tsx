@@ -1,11 +1,11 @@
 import {
-  X,
   Bot,
   Circle,
   CircleCheck,
+  CircleGauge,
   FileText,
   NotebookText,
-  CircleGauge,
+  X,
 } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { shortToolName } from "../agent/toolCards";

@@ -20,9 +20,7 @@ describe("mergeStreamText", () => {
 
 describe("extractEmbeddedThinking", () => {
   test("闭合 think 标签", () => {
-    const r = extractEmbeddedThinking(
-      "<think>先想一下</think>\n最终答案是 42",
-    );
+    const r = extractEmbeddedThinking("<think>先想一下</think>\n最终答案是 42");
     expect(r.thinking).toBe("先想一下");
     expect(r.text).toBe("最终答案是 42");
   });
@@ -71,7 +69,8 @@ describe("formatModelOutputForUi", () => {
       tool: "workspace.write_file",
       args: {
         path: "public/styles.css",
-        content: "* {\nmargin: 0;\nbox-sizing: border-box;\n}\nbody { color: red; }\n",
+        content:
+          "* {\nmargin: 0;\nbox-sizing: border-box;\n}\nbody { color: red; }\n",
       },
     });
     expect(formatModelOutputForUi(raw).content).toBeNull();

@@ -41,7 +41,7 @@
  *    解耦裁剪逻辑与具体的估算和组装实现。
  */
 
- /**
+/**
  * System-prompt budget trimming.
  *
  * Keeps the step-wise degradation table out of `system-prompt.ts` so the
@@ -156,11 +156,20 @@ const EMERGENCY_TRIM_STEPS: TrimStep[] = [
   /** 紧急第3步：工具目录上限 2000 字符 */
   { label: "tool_catalog_2000", patch: { toolCatalogMaxChars: 2000 } },
   /** 紧急第4步：工具目录保持 2000 字符，同时完全省略技能段 */
-  { label: "omit_skills", patch: { toolCatalogMaxChars: 2000, omitSkills: true } },
+  {
+    label: "omit_skills",
+    patch: { toolCatalogMaxChars: 2000, omitSkills: true },
+  },
   /** 紧急第5步：工具目录上限 1000 字符，同时省略技能段 */
-  { label: "tool_catalog_1000", patch: { toolCatalogMaxChars: 1000, omitSkills: true } },
+  {
+    label: "tool_catalog_1000",
+    patch: { toolCatalogMaxChars: 1000, omitSkills: true },
+  },
   /** 紧急第6步：工具目录上限 500 字符，同时省略技能段 —— 极限压缩 */
-  { label: "tool_catalog_500", patch: { toolCatalogMaxChars: 500, omitSkills: true } },
+  {
+    label: "tool_catalog_500",
+    patch: { toolCatalogMaxChars: 500, omitSkills: true },
+  },
 ];
 
 /**
@@ -184,8 +193,15 @@ const EMERGENCY_TRIM_STEPS: TrimStep[] = [
 export function trimSystemPromptToBudget(
   input: TrimSystemPromptInput,
 ): SystemPromptBuildResult {
-  const { opts, systemBudget, initialContent, initialTokens, estimate, assemble, truncate } =
-    input;
+  const {
+    opts,
+    systemBudget,
+    initialContent,
+    initialTokens,
+    estimate,
+    assemble,
+    truncate,
+  } = input;
 
   // 初始内容已在预算内，无需裁剪
   if (initialTokens <= systemBudget) {

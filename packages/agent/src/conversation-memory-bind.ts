@@ -3,10 +3,7 @@
  * 桌面 agent-host 多轮 run 复用同一 TaskSession，避免每句 completeTask。
  */
 
-import {
-  createMemoryRuntime,
-  type MemoryListItem,
-} from "@paw/memory";
+import { type MemoryListItem, createMemoryRuntime } from "@paw/memory";
 
 const conversationTaskMap = new Map<string, string>();
 

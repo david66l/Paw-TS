@@ -49,32 +49,79 @@ function createJournalContextV1(
 
 describe("journal context", () => {
   test("evidence annotations share one verified load, preserve native turns and enter token accounting", async () => {
-    const fixture = canonicalFixtureSnapshot({ artifactToolObservations: true });
-    const loader = issuedEvidenceLoader(fixture.snapshot, fixture.artifacts, []);
+    const fixture = canonicalFixtureSnapshot({
+      artifactToolObservations: true,
+    });
+    const loader = issuedEvidenceLoader(
+      fixture.snapshot,
+      fixture.artifacts,
+      [],
+    );
     let loads = 0;
     const context = createJournalContextV1({
       payloads: fixture.resolver,
-      loadPayloadEvidence: async (...args) => { loads++; return loader(...args); },
+      loadPayloadEvidence: async (...args) => {
+        loads++;
+        return loader(...args);
+      },
     });
     const plain = await context.plan(fixture.snapshot, { signal });
     loads = 0;
-    const plan = await context.plan(fixture.snapshot, { signal }, {
-      evidenceAnnotations(evidence) {
-        expect(evidence).toBeDefined();
-        for (const { seq, fact } of fixture.snapshot.entries) {
-          if (fact.type !== "tool.settled" || !fact.observation?.payload) continue;
-          expect(evidence!.requirePayload({ snapshot: fixture.snapshot, payload: fact.observation.payload, location: { kind: "tool_observation", carrierType: "tool.settled", carrierSeq: seq, callId: fact.callId } })).toBeDefined();
-        }
-        return [{ sourceThroughSeq: fixture.snapshot.latestInputSeq, content: "current evidence", placement: "tail" }];
+    const plan = await context.plan(
+      fixture.snapshot,
+      { signal },
+      {
+        evidenceAnnotations(evidence) {
+          expect(evidence).toBeDefined();
+          for (const { seq, fact } of fixture.snapshot.entries) {
+            if (fact.type !== "tool.settled" || !fact.observation?.payload)
+              continue;
+            expect(
+              evidence!.requirePayload({
+                snapshot: fixture.snapshot,
+                payload: fact.observation.payload,
+                location: {
+                  kind: "tool_observation",
+                  carrierType: "tool.settled",
+                  carrierSeq: seq,
+                  callId: fact.callId,
+                },
+              }),
+            ).toBeDefined();
+          }
+          return [
+            {
+              sourceThroughSeq: fixture.snapshot.latestInputSeq,
+              content: "current evidence",
+              placement: "tail",
+            },
+          ];
+        },
       },
-    });
+    );
     expect(loads).toBe(1);
     expect(plan.request.messages.at(-1)?.content).toBe("current evidence");
-    expect(plan.request.messages.slice(0, -1)).toEqual([...plain.request.messages]);
-    expect(plan.tokens.selectedInputTokens).toBeGreaterThan(plain.tokens.selectedInputTokens);
-    await expect(context.plan(fixture.snapshot, { signal }, {
-      evidenceAnnotations: () => [{ sourceThroughSeq: fixture.snapshot.latestInputSeq + 1, content: "future", placement: "tail" }],
-    })).rejects.toThrow("Invalid context annotation");
+    expect(plan.request.messages.slice(0, -1)).toEqual([
+      ...plain.request.messages,
+    ]);
+    expect(plan.tokens.selectedInputTokens).toBeGreaterThan(
+      plain.tokens.selectedInputTokens,
+    );
+    await expect(
+      context.plan(
+        fixture.snapshot,
+        { signal },
+        {
+          evidenceAnnotations: () => [
+            {
+              sourceThroughSeq: fixture.snapshot.latestInputSeq + 1,
+              content: "future",
+              placement: "tail",
+            },
+          ],
+        },
+      ),
+    ).rejects.toThrow("Invalid context annotation");
   });
 
   test("renders durable runtime activity as host evidence, not user input", async () => {

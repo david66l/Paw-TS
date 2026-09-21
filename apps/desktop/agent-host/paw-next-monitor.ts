@@ -1,6 +1,6 @@
 import type { ManagedJobReadV1, SubAgentResult } from "@paw/harness";
-import type { RunJournalEnvelopeV1 } from "@paw/protocol";
 import type { StageGraphSnapshot } from "@paw/paw-next";
+import type { RunJournalEnvelopeV1 } from "@paw/protocol";
 import type {
   DesktopMonitorSnapshot,
   MonitorTask,

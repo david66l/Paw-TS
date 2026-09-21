@@ -1,4 +1,3 @@
-import { withMemoryDeadline } from "./memory-deadline.js";
 import type {
   LoopInputPort,
   LoopSafeBoundary,
@@ -18,6 +17,7 @@ import type {
   ContextTokenEstimatorV1,
   JournalContextRuntimeV1,
 } from "@paw/runtime";
+import { withMemoryDeadline } from "./memory-deadline.js";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import { createMemoryContextSectionV1 } from "./memory-section.js";
@@ -30,7 +30,6 @@ import {
 
 export const PAW_MEMORY_SEARCH_PLAN_VERSION_V2 =
   "paw.memory-search-plan.v2:lexical-anchors" as const;
-
 
 export interface MemoryProviderQueryV1 {
   readonly queryId: string;
@@ -120,12 +119,30 @@ export function createMemoryRetrievalInputPortV1(
           if (query && !hasReceipt(snapshot, query.queryId)) {
             let fact: MemoryRetrievalSettledFactV1 | undefined;
             try {
-              fact = await withMemoryDeadline(options.signal, signal => settleRetrieval({
-                snapshot, query, profile, provider, context: planContext, buildContext,
-                estimator: options.estimator, signal,
-              }));
+              fact = await withMemoryDeadline(options.signal, (signal) =>
+                settleRetrieval({
+                  snapshot,
+                  query,
+                  profile,
+                  provider,
+                  context: planContext,
+                  buildContext,
+                  estimator: options.estimator,
+                  signal,
+                }),
+              );
             } catch (error) {
-              if (!options.signal.aborted) fact = receipt(query, profile.providerVersion, "degraded", [], error instanceof Error && error.name === "MemoryContextTimeout" ? "memory_retrieval_timeout" : "memory_retrieval_failed");
+              if (!options.signal.aborted)
+                fact = receipt(
+                  query,
+                  profile.providerVersion,
+                  "degraded",
+                  [],
+                  error instanceof Error &&
+                    error.name === "MemoryContextTimeout"
+                    ? "memory_retrieval_timeout"
+                    : "memory_retrieval_failed",
+                );
             }
             if (fact && !options.signal.aborted) {
               await commitReceiptBestEffort({

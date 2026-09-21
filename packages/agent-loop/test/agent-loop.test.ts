@@ -156,10 +156,22 @@ function createHarness(options: HarnessOptions) {
 
 describe("minimal agent loop", () => {
   test("ephemeral observers cannot stall or fail a canonical model settlement", async () => {
-    for (const callback of [() => { throw new Error("UI disconnected"); }, () => Promise.reject(new Error("UI rejected")), () => new Promise<void>(() => {})]) {
+    for (const callback of [
+      () => {
+        throw new Error("UI disconnected");
+      },
+      () => Promise.reject(new Error("UI rejected")),
+      () => new Promise<void>(() => {}),
+    ]) {
       const h = createHarness({ model: [modelSuccess("done")] });
       await runAgentLoop({ ...h.dependencies, onModelStreamEvent: callback });
-      expect(findModelSettlement(await h.session.readInputSnapshot().then(s => s.entries.map(e => e.fact)))?.status).toBe("completed");
+      expect(
+        findModelSettlement(
+          await h.session
+            .readInputSnapshot()
+            .then((s) => s.entries.map((e) => e.fact)),
+        )?.status,
+      ).toBe("completed");
     }
   });
   test("L01 natural stop ends only when ControlReducer says so", async () => {

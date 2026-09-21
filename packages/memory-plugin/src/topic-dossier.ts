@@ -1,8 +1,8 @@
 import type { MemoryEntry } from "@paw/memory/longterm";
 import type { JsonValue } from "@paw/protocol";
 
-import type { MemoryWriterModelV1 } from "./model-port.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 import {
   type MemoryTopicProjectionV1,
   type MemoryTopicRelationRefV1,

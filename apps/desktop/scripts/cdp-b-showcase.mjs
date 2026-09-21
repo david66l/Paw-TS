@@ -1,7 +1,13 @@
 /**
  * B 档真实场景：让桌面 Agent 在 /tmp/paw-showcase 做落地页+主题+假记忆面板
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 const CDP = process.env.CDP_URL || "http://127.0.0.1:9223";
@@ -214,7 +220,14 @@ function inspectFiles() {
     checks.hasCards &&
     checks.hasThemeToggle &&
     checks.hasMemoryDemo;
-  return { ok, missing, files, checks, htmlLen: html.length, cssLen: css.length };
+  return {
+    ok,
+    missing,
+    files,
+    checks,
+    htmlLen: html.length,
+    cssLen: css.length,
+  };
 }
 
 async function main() {
@@ -228,7 +241,12 @@ async function main() {
   await sendGoal(send, GOAL1);
   const r1 = await waitDone(send, 480000);
   report.steps.push({ round: 1, done: r1.done?.result || r1.done });
-  console.log("Round1 done", r1.done?.result?.status || "ok", "plans", r1.plans);
+  console.log(
+    "Round1 done",
+    r1.done?.result?.status || "ok",
+    "plans",
+    r1.plans,
+  );
 
   await clickTab(send, "Plan");
   report.panels.plan1 = await panel(send);
@@ -278,14 +296,17 @@ async function main() {
   // Score
   const criteria = [
     ["dir exists", existsSync(OUT_DIR)],
-    ["required files", inspect2.ok || (inspect2.missing?.length === 0)],
+    ["required files", inspect2.ok || inspect2.missing?.length === 0],
     ["hero/cards", !!inspect2.checks?.hasHero && !!inspect2.checks?.hasCards],
     ["theme toggle", !!inspect2.checks?.hasThemeToggle],
     ["memory demo filter", !!inspect2.checks?.hasMemoryDemo],
     ["plan panel non-empty", !/暂无执行计划/.test(report.panels.plan1 || "")],
-    ["changes or context activity", /html|css|js|showcase|相关文件/i.test(
-      (report.panels.changes1 || "") + (report.panels.context1 || ""),
-    )],
+    [
+      "changes or context activity",
+      /html|css|js|showcase|相关文件/i.test(
+        (report.panels.changes1 || "") + (report.panels.context1 || ""),
+      ),
+    ],
     ["round2 blue accent", blueOk],
     ["round2 failure type", failureOk],
   ];
@@ -297,9 +318,16 @@ async function main() {
     if (ok) pass++;
   }
   console.log(`\nScore: ${pass}/${criteria.length}`);
-  report.score = { pass, total: criteria.length, criteria: criteria.map(([n, o]) => ({ n, o })) };
+  report.score = {
+    pass,
+    total: criteria.length,
+    criteria: criteria.map(([n, o]) => ({ n, o })),
+  };
 
-  writeFileSync(join(ART, "b-showcase-report.json"), JSON.stringify(report, null, 2));
+  writeFileSync(
+    join(ART, "b-showcase-report.json"),
+    JSON.stringify(report, null, 2),
+  );
   console.log("Report:", join(ART, "b-showcase-report.json"));
   console.log("Open:", join(OUT_DIR, "index.html"));
 

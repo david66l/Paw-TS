@@ -4,12 +4,12 @@
  */
 
 import {
-  createBuiltinPolicyConfig,
-  setPolicyConfig,
   type PolicyAction,
   type PolicyConfig,
   type PolicyRule,
   type ToolPolicy,
+  createBuiltinPolicyConfig,
+  setPolicyConfig,
 } from "./shell-policy-config.js";
 
 export type AutonomyShellLevel = "interactive" | "supervised" | "headless";

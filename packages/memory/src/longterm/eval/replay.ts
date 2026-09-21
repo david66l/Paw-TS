@@ -15,9 +15,12 @@
  * 完整配对检验（p<0.05）留到真实任务评测集（§11.1）。
  */
 
+import {
+  type RetrieverOptions,
+  TriggeredRetriever,
+} from "../retrieval/triggered.js";
 import type { MemoryStoreEngine } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
-import { TriggeredRetriever, type RetrieverOptions } from "../retrieval/triggered.js";
 
 // ── 输入格式 ──
 
@@ -46,7 +49,9 @@ export function parseReplayJsonl(text: string): ReplayTrajectory[] {
     try {
       parsed = JSON.parse(line);
     } catch (e) {
-      throw new Error(`第 ${i + 1} 行不是合法 JSON: ${e instanceof Error ? e.message : String(e)}`);
+      throw new Error(
+        `第 ${i + 1} 行不是合法 JSON: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
     const t = parsed as Record<string, unknown>;
     if (typeof t.taskId !== "string" || typeof t.description !== "string") {
@@ -65,7 +70,10 @@ export interface JudgeLlm {
 
 export type JudgeVerdict = "helpful" | "neutral" | "harmful" | "unjudged";
 
-export function buildJudgePrompt(trajectory: ReplayTrajectory, injectedText: string): string {
+export function buildJudgePrompt(
+  trajectory: ReplayTrajectory,
+  injectedText: string,
+): string {
   const failures = (trajectory.events ?? [])
     .map((e, i) => `失败 ${i + 1}: ${e.errorOutput.slice(0, 300)}`)
     .join("\n");
@@ -90,14 +98,27 @@ ${injectedText}`;
 }
 
 /** 手写校验 judge 输出；非法 → null（调用方记 unjudged） */
-export function parseJudgeOutput(raw: string): { verdict: Exclude<JudgeVerdict, "unjudged">; reason: string } | null {
+export function parseJudgeOutput(
+  raw: string,
+): { verdict: Exclude<JudgeVerdict, "unjudged">; reason: string } | null {
   try {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
     if (start === -1 || end <= start) return null;
-    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
-    if (parsed.verdict !== "helpful" && parsed.verdict !== "neutral" && parsed.verdict !== "harmful") return null;
-    return { verdict: parsed.verdict, reason: typeof parsed.reason === "string" ? parsed.reason : "" };
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<
+      string,
+      unknown
+    >;
+    if (
+      parsed.verdict !== "helpful" &&
+      parsed.verdict !== "neutral" &&
+      parsed.verdict !== "harmful"
+    )
+      return null;
+    return {
+      verdict: parsed.verdict,
+      reason: typeof parsed.reason === "string" ? parsed.reason : "",
+    };
   } catch {
     return null;
   }
@@ -118,7 +139,12 @@ export interface ReplayReport {
   /** 至少产出一条假设注入的轨迹数 */
   trajectoriesWithHits: number;
   hitRate: number;
-  judgments: { helpful: number; neutral: number; harmful: number; unjudged: number };
+  judgments: {
+    helpful: number;
+    neutral: number;
+    harmful: number;
+    unjudged: number;
+  };
   /** 仅统计已判定（helpful/neutral/harmful）的比例；无判定数据为 null */
   helpfulRate: number | null;
   harmfulRate: number | null;
@@ -167,16 +193,23 @@ export async function runReplay(
 
     // 触发点：任务开始 + 每个可行动的失败事件
     const packages = [
-      await retriever.retrieve({ type: "task_start", taskDescription: t.description, repo, runId: t.taskId }),
-    ];
-    for (const ev of t.events ?? []) {
-      packages.push(await retriever.retrieve({
-        type: "action_failed",
-        errorOutput: ev.errorOutput,
-        lastActionSummary: ev.lastActionSummary ?? "",
+      await retriever.retrieve({
+        type: "task_start",
+        taskDescription: t.description,
         repo,
         runId: t.taskId,
-      }));
+      }),
+    ];
+    for (const ev of t.events ?? []) {
+      packages.push(
+        await retriever.retrieve({
+          type: "action_failed",
+          errorOutput: ev.errorOutput,
+          lastActionSummary: ev.lastActionSummary ?? "",
+          repo,
+          runId: t.taskId,
+        }),
+      );
     }
 
     for (const pkg of packages) {
@@ -185,13 +218,30 @@ export async function runReplay(
         entryIds.push(item.id);
         let judgment: ReplayJudgment;
         if (!opts.judge) {
-          judgment = { taskId: t.taskId, entryId: item.id, verdict: "unjudged", reason: "no judge configured" };
+          judgment = {
+            taskId: t.taskId,
+            entryId: item.id,
+            verdict: "unjudged",
+            reason: "no judge configured",
+          };
         } else {
-          const raw = await opts.judge.complete(buildJudgePrompt(t, item.text)).catch(() => "");
+          const raw = await opts.judge
+            .complete(buildJudgePrompt(t, item.text))
+            .catch(() => "");
           const parsed = parseJudgeOutput(raw);
           judgment = parsed
-            ? { taskId: t.taskId, entryId: item.id, verdict: parsed.verdict, reason: parsed.reason }
-            : { taskId: t.taskId, entryId: item.id, verdict: "unjudged", reason: "judge_output_unparseable" };
+            ? {
+                taskId: t.taskId,
+                entryId: item.id,
+                verdict: parsed.verdict,
+                reason: parsed.reason,
+              }
+            : {
+                taskId: t.taskId,
+                entryId: item.id,
+                verdict: "unjudged",
+                reason: "judge_output_unparseable",
+              };
         }
         judgments.push(judgment);
         totals[judgment.verdict] += 1;
@@ -199,7 +249,12 @@ export async function runReplay(
     }
 
     if (entryIds.length > 0) withHits += 1;
-    results.push({ taskId: t.taskId, injections: entryIds.length, entryIds, judgments });
+    results.push({
+      taskId: t.taskId,
+      injections: entryIds.length,
+      entryIds,
+      judgments,
+    });
   }
 
   const judged = totals.helpful + totals.neutral + totals.harmful;
@@ -212,14 +267,18 @@ export async function runReplay(
     judgments: totals,
     helpfulRate: judged > 0 ? totals.helpful / judged : null,
     harmfulRate: judged > 0 ? totals.harmful / judged : null,
-    sampleWarning: n < 30 ? `样本量 n=${n} < 30，比例仅供参考（统计显著性检验留待真实评测集）` : null,
+    sampleWarning:
+      n < 30
+        ? `样本量 n=${n} < 30，比例仅供参考（统计显著性检验留待真实评测集）`
+        : null,
     results,
   };
 }
 
 /** 控制台表格渲染（纯函数） */
 export function renderReplayReport(r: ReplayReport): string {
-  const pct = (v: number | null) => (v === null ? "n/a" : `${(v * 100).toFixed(1)}%`);
+  const pct = (v: number | null) =>
+    v === null ? "n/a" : `${(v * 100).toFixed(1)}%`;
   const lines = [
     "轨迹回放 Δ 代理报告",
     `  生成时间: ${r.generatedAt}`,
@@ -230,8 +289,12 @@ export function renderReplayReport(r: ReplayReport): string {
   if (r.sampleWarning) lines.push(`  ⚠ ${r.sampleWarning}`);
   lines.push("  ── 逐轨迹 ──");
   for (const res of r.results) {
-    const verdicts = res.judgments.map((j) => `${j.entryId.slice(0, 24)}:${j.verdict}`).join("  ");
-    lines.push(`  ${res.taskId}  注入 ${res.injections} 条${verdicts ? `    ${verdicts}` : ""}`);
+    const verdicts = res.judgments
+      .map((j) => `${j.entryId.slice(0, 24)}:${j.verdict}`)
+      .join("  ");
+    lines.push(
+      `  ${res.taskId}  注入 ${res.injections} 条${verdicts ? `    ${verdicts}` : ""}`,
+    );
   }
   return lines.join("\n");
 }

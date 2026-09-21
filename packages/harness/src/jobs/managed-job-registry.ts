@@ -256,9 +256,7 @@ export class ManagedJobRegistryV1 {
       const dropped = chunk.match(
         /^\[managed output truncated: (\d+) oldest bytes dropped\]\n/,
       );
-      const body = dropped
-        ? chunk.slice(dropped[0].length)
-        : chunk;
+      const body = dropped ? chunk.slice(dropped[0].length) : chunk;
       if (dropped) job.droppedBytesTotal += Number(dropped[1]);
       job.previewOutput = tail(job.previewOutput + body);
       job.unreadOutput = tail(job.unreadOutput + body);

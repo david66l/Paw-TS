@@ -337,7 +337,9 @@ export function buildDockerSessionSpawnSpecV1(
   const cpus = config.cpus ?? 2;
   // Docker names allow [a-zA-Z0-9][a-zA-Z0-9_.-]*; session keys are
   // `${sessionId}:${runId}` so fold anything else into a stable slug.
-  const keySlug = input.sessionKey.replace(/[^a-zA-Z0-9_.-]+/g, "-").slice(0, 48);
+  const keySlug = input.sessionKey
+    .replace(/[^a-zA-Z0-9_.-]+/g, "-")
+    .slice(0, 48);
   const containerName = `paw-session-${process.pid}-${keySlug}-${randomUUID().slice(0, 8)}`;
 
   const args: string[] = [
@@ -367,11 +369,7 @@ export function buildDockerSessionSpawnSpecV1(
     args.push("--network", "none");
   }
   if (config.mode === "strict") {
-    args.push(
-      "--read-only",
-      "--tmpfs",
-      "/tmp:exec,nosuid,size=512m",
-    );
+    args.push("--read-only", "--tmpfs", "/tmp:exec,nosuid,size=512m");
   }
   // One interactive shell for the whole session; commands arrive via stdin.
   args.push(image, commandShell);

@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { LanguageModel } from "@paw/models";
 import {
   buildPawNextTaskProfileV3,
   runFreshPawNextTaskV3,
 } from "@paw/paw-next";
-import type { LanguageModel } from "@paw/models";
 import { desktopProfile, fingerprint } from "../agent-host/paw-next-profile.js";
 import { runDesktopNext } from "../agent-host/paw-next.js";
 

@@ -4,12 +4,10 @@ import type {
   MemoryAtomProposalV1,
 } from "@paw/protocol";
 
-import type {
-  MemoryConflictCandidateV1,
-} from "./atom-extractor.js";
-import type { MemoryWriterModelV1 } from "./model-port.js";
+import type { MemoryConflictCandidateV1 } from "./atom-extractor.js";
 import type { MemoryAtomWriterStoreV1 } from "./atom-store.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_ATOM_CONFLICT_RESOLVER_VERSION_V1 =
   "paw.memory-atom-conflict-resolver.json.v2:per-atom-catalog:temporal" as const;

@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { createDefaultLanguageModel } from "../src/default-model.js";
-import { OpenAICompatibleModel } from "../src/openai-compatible.js";
 import { FakeLanguageModel } from "../src/fake-model.js";
+import { OpenAICompatibleModel } from "../src/openai-compatible.js";
 
 describe("createDefaultLanguageModel settings fallback", () => {
   test("uses process.cwd() settings when workspace has none", () => {

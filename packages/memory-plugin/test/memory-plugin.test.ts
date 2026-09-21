@@ -63,27 +63,54 @@ const profile: PawNextMemoryPluginProfileV1 = Object.freeze({
 });
 
 describe("Paw Next memory plugin", () => {
-  test.each(["completed", "degraded"] as const)("empty %s retrieval records its receipt without invoking context planning or building", async status => {
-    const session = new FakeSession(initialSnapshot());
-    let retrievals = 0;
-    let boundaries = 0;
-    const port = createMemoryRetrievalInputPortV1({
-      baseInput: { async reportSafeBoundary() { boundaries++; }, async consumePromotedInputIds() { return []; } },
-      session,
-      context: {
-        async plan() { throw new Error("Empty retrieval must not start context planning"); },
-        async build() { throw new Error("Empty retrieval must not start auxiliary model work"); },
-      },
-      estimator: estimator(), profile,
-      provider: { providerVersion: profile.providerVersion, async retrieve() { retrievals++; return { status, cards: [], reasonCode: "empty_scope" }; } },
-      signal: new AbortController().signal,
-    });
-    await port.reportSafeBoundary("before_first_model_request");
-    await port.reportSafeBoundary("before_first_model_request");
-    expect(lastMemoryFact(session)).toMatchObject({ status, cards: [], reasonCode: "empty_scope" });
-    expect(retrievals).toBe(1);
-    expect(boundaries).toBe(2);
-  });
+  test.each(["completed", "degraded"] as const)(
+    "empty %s retrieval records its receipt without invoking context planning or building",
+    async (status) => {
+      const session = new FakeSession(initialSnapshot());
+      let retrievals = 0;
+      let boundaries = 0;
+      const port = createMemoryRetrievalInputPortV1({
+        baseInput: {
+          async reportSafeBoundary() {
+            boundaries++;
+          },
+          async consumePromotedInputIds() {
+            return [];
+          },
+        },
+        session,
+        context: {
+          async plan() {
+            throw new Error("Empty retrieval must not start context planning");
+          },
+          async build() {
+            throw new Error(
+              "Empty retrieval must not start auxiliary model work",
+            );
+          },
+        },
+        estimator: estimator(),
+        profile,
+        provider: {
+          providerVersion: profile.providerVersion,
+          async retrieve() {
+            retrievals++;
+            return { status, cards: [], reasonCode: "empty_scope" };
+          },
+        },
+        signal: new AbortController().signal,
+      });
+      await port.reportSafeBoundary("before_first_model_request");
+      await port.reportSafeBoundary("before_first_model_request");
+      expect(lastMemoryFact(session)).toMatchObject({
+        status,
+        cards: [],
+        reasonCode: "empty_scope",
+      });
+      expect(retrievals).toBe(1);
+      expect(boundaries).toBe(2);
+    },
+  );
   test("optional automatic resolution times out once per query without blocking subsequent turns", async () => {
     let calls = 0;
     let signal: AbortSignal | undefined;

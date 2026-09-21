@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   extractPlanStepsFromGoal,
-  planItemsFromStepTexts,
   markPlanItemsCompleted,
+  planItemsFromStepTexts,
   planItemsToEventSnapshot,
 } from "../src/plan-bootstrap.js";
 

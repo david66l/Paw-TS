@@ -282,10 +282,18 @@ export type RunEvent =
     }
   /** 模型返回的文本块（流式或单次），累积了当前已收到的所有 assistant 文本 */
   /** Accumulated assistant text so far (streaming or single-shot). */
-  | { readonly type: "model.chunk"; readonly text: string; readonly mode?: "delta" }
+  | {
+      readonly type: "model.chunk";
+      readonly text: string;
+      readonly mode?: "delta";
+    }
   /** 模型返回的思考/推理文本块（流式），累积了当前已收到的所有 thinking 文本 */
   /** Accumulated thinking/reasoning text so far (streaming). */
-  | { readonly type: "model.thinking"; readonly text: string; readonly mode?: "delta" }
+  | {
+      readonly type: "model.thinking";
+      readonly text: string;
+      readonly mode?: "delta";
+    }
   /** 模型调用完成：携带完整文本、token 用量和可选的 thinking 文本 */
   | {
       readonly type: "model.done";

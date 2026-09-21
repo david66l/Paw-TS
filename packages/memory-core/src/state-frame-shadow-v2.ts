@@ -4,10 +4,6 @@ import {
   validateMemoryDialogueCertificateRegistryV1,
 } from "./dialogue-certificate.js";
 import type { MemoryEvidenceNotebookHitV1 } from "./evidence-contracts.js";
-import {
-  type MemoryEvidenceReaderProjectionBuildResultV1,
-  buildMemoryEvidenceReaderProjectionV1,
-} from "./evidence-reader-projection-v1.js";
 import type { MemoryEvidenceExecutionCoverageCertificateV1 } from "./evidence-execution-coverage-v1.js";
 import {
   type MemoryEvidenceExecutionProgramV1,
@@ -17,6 +13,10 @@ import {
   type MemoryEvidenceExecutionResultV1,
   executeMemoryEvidenceProgramV1,
 } from "./evidence-execution-runtime-v1.js";
+import {
+  type MemoryEvidenceReaderProjectionBuildResultV1,
+  buildMemoryEvidenceReaderProjectionV1,
+} from "./evidence-reader-projection-v1.js";
 import type { MemoryQueryAnswerOriginV1 } from "./query-answer-origin.js";
 import type {
   MemoryEvidenceBoundTemporalConstraintV1,

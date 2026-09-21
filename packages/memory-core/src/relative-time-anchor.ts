@@ -38,7 +38,15 @@ const WEEKDAYS_EN: readonly (readonly string[])[] = [
   ["saturday", "sat"],
 ];
 
-const WEEKDAYS_ZH: readonly string[] = ["日", "一", "二", "三", "四", "五", "六"];
+const WEEKDAYS_ZH: readonly string[] = [
+  "日",
+  "一",
+  "二",
+  "三",
+  "四",
+  "五",
+  "六",
+];
 
 function weekdayIndexEn(word: string): number | null {
   const normalized = word.toLowerCase().replace(/\.$/, "");

@@ -131,7 +131,9 @@ export type ToolExecutionTransactionOutcome =
       readonly callId: string;
       readonly executed: false;
       readonly phase:
-        "execution_policy" | "checkpoint_prepare" | "effect_prepare";
+        | "execution_policy"
+        | "checkpoint_prepare"
+        | "effect_prepare";
       readonly error: ToolTransactionError;
       readonly checkpoint?: ToolTransactionCheckpointEvidence;
     }

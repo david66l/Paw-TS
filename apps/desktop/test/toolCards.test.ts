@@ -90,7 +90,6 @@ describe("totalChangeStats / toolBatchSummaryLine", () => {
   });
 });
 
-
 describe("子 Agent 实时工具流", () => {
   test("appendAgentTool 追加并保留最近 N 条", () => {
     let list = appendAgentTool([], {

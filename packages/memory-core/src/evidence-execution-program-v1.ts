@@ -22,9 +22,16 @@ export const PAW_MEMORY_EVIDENCE_PERSONALIZATION_REQUEST_VERSION_V1 =
 export interface MemoryEvidenceAggregateRequestV1 {
   readonly requestVersion: typeof PAW_MEMORY_EVIDENCE_AGGREGATE_REQUEST_VERSION_V1;
   readonly operator:
-    "collect_unique" | "count" | "sum" | "difference" | "ratio_percent";
+    | "collect_unique"
+    | "count"
+    | "sum"
+    | "difference"
+    | "ratio_percent";
   readonly aggregationUnit:
-    "event" | "semantic_value" | "entity" | "numeric_quantity";
+    | "event"
+    | "semantic_value"
+    | "entity"
+    | "numeric_quantity";
   /**
    * Counting an enumerated evidence set is not the same operation as reading
    * a cardinality stated inside one piece of evidence. The latter needs a

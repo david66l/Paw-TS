@@ -69,9 +69,9 @@ export function detectContainerRuntime(
   // 构建探测顺序：偏好优先，未指定则 Docker 优先
   const order: ("docker" | "podman")[] = preferred
     ? preferred === "docker"
-      ? ["docker", "podman"]   // 偏好 docker → [docker, podman]
-      : ["podman", "docker"]   // 偏好 podman → [podman, docker]
-    : ["docker", "podman"];    // 无偏好 → [docker, podman]
+      ? ["docker", "podman"] // 偏好 docker → [docker, podman]
+      : ["podman", "docker"] // 偏好 podman → [podman, docker]
+    : ["docker", "podman"]; // 无偏好 → [docker, podman]
 
   // 依次探测每个运行时；成功后缓存，进程内不再重复探测
   for (const runtime of order) {

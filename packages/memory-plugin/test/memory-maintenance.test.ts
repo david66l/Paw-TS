@@ -3,13 +3,13 @@ import type { SessionInputSnapshot } from "@paw/agent-loop";
 import type { MemoryEntry } from "@paw/memory/longterm";
 import { type InputFactV1, parseRunJournalPrefixV1 } from "@paw/protocol";
 import {
-  createMemoryMaintenanceControllerV1,
-  createJsonMemoryAtomExtractorV1,
-  createMemoryTopicProposalV1,
-  createBoundedMemoryTopicDossierProposalV1,
-  materializeMemoryTopicProjectionV1,
   type MemoryMaintenanceOptionsV1,
   type MemoryWriterEventV1,
+  createBoundedMemoryTopicDossierProposalV1,
+  createJsonMemoryAtomExtractorV1,
+  createMemoryMaintenanceControllerV1,
+  createMemoryTopicProposalV1,
+  materializeMemoryTopicProjectionV1,
 } from "../src/index.js";
 
 const scope = {

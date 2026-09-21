@@ -11,11 +11,21 @@ import { getSql } from "../../connection.js";
 import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
 import { memoryItemDao } from "../../dao/memoryItem.js";
 import type {
-  GovernanceDecision, MemoryCandidate, GovernanceAction, ActorRef,
+  ActorRef,
+  GovernanceAction,
+  GovernanceDecision,
+  MemoryCandidate,
 } from "../../types.js";
+import {
+  MEMORY_EMBEDDING_DIMENSIONS,
+  NGramEmbeddingService,
+  cosineSimilarity,
+} from "../platform/embeddingService.js";
 import { generateId } from "../platform/idGen.js";
-import { PolicyEngine, type GovernancePolicy } from "../platform/policyEngine.js";
-import { NGramEmbeddingService, cosineSimilarity, MEMORY_EMBEDDING_DIMENSIONS } from "../platform/embeddingService.js";
+import {
+  type GovernancePolicy,
+  PolicyEngine,
+} from "../platform/policyEngine.js";
 
 export interface EvaluateInput {
   candidateId: string;
@@ -33,7 +43,9 @@ export class MemoryGovernance {
   private policy: GovernancePolicy;
 
   constructor(policyEngine?: PolicyEngine) {
-    this.policy = policyEngine?.getDefaults().governance ?? new PolicyEngine().getDefaults().governance;
+    this.policy =
+      policyEngine?.getDefaults().governance ??
+      new PolicyEngine().getDefaults().governance;
   }
 
   /** 注入自定义策略（用于测试或动态更新） */
@@ -49,26 +61,49 @@ export class MemoryGovernance {
     if (!candidate) throw new Error(`Candidate ${input.candidateId} not found`);
 
     const now = new Date().toISOString();
-    const decidedBy = input.decidedBy ?? { actorType: "system", actorId: "governance" };
+    const decidedBy = input.decidedBy ?? {
+      actorType: "system",
+      actorId: "governance",
+    };
 
     // 1. 基础校验
     const schemaErrors = this.validateSchema(candidate);
     if (schemaErrors.length > 0) {
-      return this.decide(candidate, "REJECT", schemaErrors, decidedBy, input.policyVersion, now);
+      return this.decide(
+        candidate,
+        "REJECT",
+        schemaErrors,
+        decidedBy,
+        input.policyVersion,
+        now,
+      );
     }
 
     // 2. 查重：同 subjectKey + scope 的已有 active 记忆
     if (candidate.proposedSubjectKey) {
-      const existing = await memoryItemDao.findBySubjectKey(candidate.proposedSubjectKey, "active");
+      const existing = await memoryItemDao.findBySubjectKey(
+        candidate.proposedSubjectKey,
+        "active",
+      );
       if (existing.length > 0) {
         // 检查是否完全重复（同 subjectKey + 同 scope repo）
         const dup = existing.find((e) =>
-          this.scopeOverlap(candidate.proposedScope, e.scope)
+          this.scopeOverlap(candidate.proposedScope, e.scope),
         );
         if (dup) {
-          const merge = this.decide(candidate, "APPROVE_MERGE",
-            [{ code: "DUPLICATE", description: `Duplicate of existing memory ${dup.id}` }],
-            decidedBy, input.policyVersion, now);
+          const merge = this.decide(
+            candidate,
+            "APPROVE_MERGE",
+            [
+              {
+                code: "DUPLICATE",
+                description: `Duplicate of existing memory ${dup.id}`,
+              },
+            ],
+            decidedBy,
+            input.policyVersion,
+            now,
+          );
           return {
             decision: { ...merge.decision, targetMemoryId: dup.id },
             duplicateOf: dup.id,
@@ -96,13 +131,28 @@ export class MemoryGovernance {
       ORDER BY me.embedding <-> ${`[${candidateVec.join(",")}]`}::vector
       LIMIT 5
     `;
-    for (const row of similarRows as unknown as { id: string; title: string; type: string; embedding: unknown }[]) {
+    for (const row of similarRows as unknown as {
+      id: string;
+      title: string;
+      type: string;
+      embedding: unknown;
+    }[]) {
       const storedVec = parseEmbedding(row.embedding);
       const sim = cosineSimilarity(candidateVec, storedVec);
       if (sim >= this.policy.duplicateThreshold) {
-        const merge = this.decide(candidate, "APPROVE_MERGE",
-          [{ code: "SEMANTIC_DUPLICATE", description: `Semantically similar (${sim.toFixed(2)}) to ${row.id}: ${row.title}` }],
-          decidedBy, input.policyVersion, now);
+        const merge = this.decide(
+          candidate,
+          "APPROVE_MERGE",
+          [
+            {
+              code: "SEMANTIC_DUPLICATE",
+              description: `Semantically similar (${sim.toFixed(2)}) to ${row.id}: ${row.title}`,
+            },
+          ],
+          decidedBy,
+          input.policyVersion,
+          now,
+        );
         return {
           decision: { ...merge.decision, targetMemoryId: row.id },
           duplicateOf: row.id,
@@ -112,26 +162,53 @@ export class MemoryGovernance {
 
     // 3. 冲突检测：同 subjectKey 但内容差异大 → 标记
     if (candidate.proposedSubjectKey) {
-      const allSameSubject = await memoryItemDao.findBySubjectKey(candidate.proposedSubjectKey);
-      const conflicts = allSameSubject.filter((m) => m.status === "active" && !this.isSimilar(candidate, m));
+      const allSameSubject = await memoryItemDao.findBySubjectKey(
+        candidate.proposedSubjectKey,
+      );
+      const conflicts = allSameSubject.filter(
+        (m) => m.status === "active" && !this.isSimilar(candidate, m),
+      );
       if (conflicts.length > 0) {
         await memoryCandidateDao.updateStatus(candidate.id, "evaluating", {
           possibleConflictIds: conflicts.map((c) => c.id),
         });
         // 冲突且无法自动解决 → 人工 review
-        if (candidate.riskLevel === "high" || candidate.riskLevel === "critical") {
+        if (
+          candidate.riskLevel === "high" ||
+          candidate.riskLevel === "critical"
+        ) {
           return {
-            ...this.decide(candidate, "REQUEST_REVIEW",
-              [{ code: "CONFLICT", description: `Conflicts with existing memories: ${conflicts.map((c) => c.id).join(", ")}` }],
-              decidedBy, input.policyVersion, now),
+            ...this.decide(
+              candidate,
+              "REQUEST_REVIEW",
+              [
+                {
+                  code: "CONFLICT",
+                  description: `Conflicts with existing memories: ${conflicts.map((c) => c.id).join(", ")}`,
+                },
+              ],
+              decidedBy,
+              input.policyVersion,
+              now,
+            ),
             conflictWith: conflicts[0]?.id,
           };
         }
         // 低风险冲突 → 拒绝新候选，保留已有
         return {
-          ...this.decide(candidate, "REJECT",
-            [{ code: "CONFLICT", description: `Conflicts with existing active memory` }],
-            decidedBy, input.policyVersion, now),
+          ...this.decide(
+            candidate,
+            "REJECT",
+            [
+              {
+                code: "CONFLICT",
+                description: `Conflicts with existing active memory`,
+              },
+            ],
+            decidedBy,
+            input.policyVersion,
+            now,
+          ),
           conflictWith: conflicts[0]?.id,
         };
       }
@@ -141,22 +218,59 @@ export class MemoryGovernance {
     const lowThreshold = this.policy.autoApproveLowRiskThreshold;
     const medThreshold = this.policy.autoApproveMediumRiskThreshold;
 
-    if (candidate.riskLevel === "low" && !candidate.reviewRequired && candidate.proposedConfidence >= lowThreshold) {
-      return this.decide(candidate, "APPROVE_CREATE",
-        [{ code: "LOW_RISK", description: `Low risk, confidence ${candidate.proposedConfidence} >= ${lowThreshold}` }],
-        decidedBy, input.policyVersion, now);
+    if (
+      candidate.riskLevel === "low" &&
+      !candidate.reviewRequired &&
+      candidate.proposedConfidence >= lowThreshold
+    ) {
+      return this.decide(
+        candidate,
+        "APPROVE_CREATE",
+        [
+          {
+            code: "LOW_RISK",
+            description: `Low risk, confidence ${candidate.proposedConfidence} >= ${lowThreshold}`,
+          },
+        ],
+        decidedBy,
+        input.policyVersion,
+        now,
+      );
     }
 
-    if (candidate.riskLevel === "medium" && candidate.proposedConfidence >= medThreshold) {
-      return this.decide(candidate, "APPROVE_CREATE",
-        [{ code: "MEDIUM_RISK_APPROVED", description: `Medium risk, confidence ${candidate.proposedConfidence} >= ${medThreshold}` }],
-        decidedBy, input.policyVersion, now);
+    if (
+      candidate.riskLevel === "medium" &&
+      candidate.proposedConfidence >= medThreshold
+    ) {
+      return this.decide(
+        candidate,
+        "APPROVE_CREATE",
+        [
+          {
+            code: "MEDIUM_RISK_APPROVED",
+            description: `Medium risk, confidence ${candidate.proposedConfidence} >= ${medThreshold}`,
+          },
+        ],
+        decidedBy,
+        input.policyVersion,
+        now,
+      );
     }
 
     // 高风险 / 低置信度 → 人工 review
-    return this.decide(candidate, "REQUEST_REVIEW",
-      [{ code: "REVIEW_REQUIRED", description: `Risk: ${candidate.riskLevel}, confidence: ${candidate.proposedConfidence}` }],
-      decidedBy, input.policyVersion, now);
+    return this.decide(
+      candidate,
+      "REQUEST_REVIEW",
+      [
+        {
+          code: "REVIEW_REQUIRED",
+          description: `Risk: ${candidate.riskLevel}, confidence: ${candidate.proposedConfidence}`,
+        },
+      ],
+      decidedBy,
+      input.policyVersion,
+      now,
+    );
   }
 
   // ── Private helpers ──
@@ -178,15 +292,19 @@ export class MemoryGovernance {
       resultingMemoryId: undefined,
       resultingStatus: action.startsWith("APPROVE") ? "active" : undefined,
       adjustedType: candidate.proposedType,
-      adjustedScope: candidate.proposedScope as GovernanceDecision["adjustedScope"],
+      adjustedScope:
+        candidate.proposedScope as GovernanceDecision["adjustedScope"],
       adjustedConfidence: candidate.proposedConfidence,
       adjustedPayload: candidate.proposedPayload,
       requiredActions: [],
       policyVersion,
       decidedBy,
-      status: action === "REQUEST_REVIEW" ? "PENDING_REVIEW"
-        : action.startsWith("APPROVE") ? "APPROVED"
-        : "REJECTED",
+      status:
+        action === "REQUEST_REVIEW"
+          ? "PENDING_REVIEW"
+          : action.startsWith("APPROVE")
+            ? "APPROVED"
+            : "REJECTED",
       decidedAt: now,
       createdAt: now,
     };
@@ -194,11 +312,19 @@ export class MemoryGovernance {
     return { decision };
   }
 
-  private validateSchema(candidate: MemoryCandidate): { code: string; description: string }[] {
+  private validateSchema(
+    candidate: MemoryCandidate,
+  ): { code: string; description: string }[] {
     const errors: { code: string; description: string }[] = [];
-    if (!candidate.proposedTitle) errors.push({ code: "MISSING_TITLE", description: "Title is required" });
-    if (!candidate.proposedType) errors.push({ code: "MISSING_TYPE", description: "Type is required" });
-    if (candidate.proposedConfidence < 0) errors.push({ code: "INVALID_CONFIDENCE", description: "Confidence must be >= 0" });
+    if (!candidate.proposedTitle)
+      errors.push({ code: "MISSING_TITLE", description: "Title is required" });
+    if (!candidate.proposedType)
+      errors.push({ code: "MISSING_TYPE", description: "Type is required" });
+    if (candidate.proposedConfidence < 0)
+      errors.push({
+        code: "INVALID_CONFIDENCE",
+        description: "Confidence must be >= 0",
+      });
     return errors;
   }
 
@@ -210,7 +336,10 @@ export class MemoryGovernance {
   }
 
   /** 简单相似度判断：title 前 100 字符相同视为相似 */
-  private isSimilar(candidate: MemoryCandidate, existing: { title: string }): boolean {
+  private isSimilar(
+    candidate: MemoryCandidate,
+    existing: { title: string },
+  ): boolean {
     const ct = candidate.proposedTitle.slice(0, 100).toLowerCase();
     const et = existing.title.slice(0, 100).toLowerCase();
     return ct === et;
@@ -221,7 +350,11 @@ export class MemoryGovernance {
 function parseEmbedding(raw: unknown): number[] {
   if (Array.isArray(raw)) return raw as number[];
   if (typeof raw === "string") {
-    try { return JSON.parse(raw) as number[]; } catch { return []; }
+    try {
+      return JSON.parse(raw) as number[];
+    } catch {
+      return [];
+    }
   }
   return [];
 }

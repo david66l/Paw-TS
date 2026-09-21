@@ -31,9 +31,7 @@ describe("derived context turns v1", () => {
       {
         role: "assistant",
         content: "native fallback",
-        attachments: [
-          { type: "file", name: "trace.txt", content: "trace" },
-        ],
+        attachments: [{ type: "file", name: "trace.txt", content: "trace" }],
         nativeToolTurn: {
           schemaVersion: 1,
           protocol: "openai-compatible",

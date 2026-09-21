@@ -25,10 +25,7 @@ import {
   type TokenEstimator,
 } from "../token-estimator.js";
 import { isToolResultMessage } from "../tool-result/format.js";
-import {
-  allocateContextBudget,
-  computeCompactThreshold,
-} from "./budget.js";
+import { allocateContextBudget, computeCompactThreshold } from "./budget.js";
 import type { ChatMessage } from "./manager.js";
 import { isProtectedUserConstraint } from "./policy.js";
 import { groupContextTurnsV1 } from "./turns.js";
@@ -179,7 +176,8 @@ export class ContextCompactor {
     const allocation = allocateContextBudget(contextWindow);
     const thresholdTokens = Math.max(
       0,
-      computeCompactThreshold(allocation.historyBudget) - this.config.bufferTokens,
+      computeCompactThreshold(allocation.historyBudget) -
+        this.config.bufferTokens,
     );
     return {
       shouldCompact: !this.disabled && currentTokens > thresholdTokens,
@@ -469,8 +467,7 @@ export function projectCompactedHistoryV1(
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
     if (!message || isContextSummaryMessage(message)) continue;
-    const inMiddle =
-      index > boundaries.headEnd && index < boundaries.tailStart;
+    const inMiddle = index > boundaries.headEnd && index < boundaries.tailStart;
     if (!inMiddle || pinned.has(index)) {
       projected.push(message);
       continue;

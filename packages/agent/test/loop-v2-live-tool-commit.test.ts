@@ -143,7 +143,8 @@ describe("Loop Kernel v2 live tool commit seam", () => {
                 if (event.type === "tool.result") {
                   trace.push(`${index}:event`);
                   const input = event.decisionCommit;
-                  if (!input) throw new Error("missing durable decision commit");
+                  if (!input)
+                    throw new Error("missing durable decision commit");
                   trace.push(`${index}:projector`);
                   projected.push({
                     callId: input.callId,
@@ -327,11 +328,12 @@ describe("Loop Kernel v2 live tool commit seam", () => {
         maxSteps: 2,
       });
       expect(result.status).toBe("failed");
-      expect(fs.readFileSync(path.join(workspaceRoot, "value.txt"), "utf8")).toBe(
-        "after\n",
-      );
+      expect(
+        fs.readFileSync(path.join(workspaceRoot, "value.txt"), "utf8"),
+      ).toBe("after\n");
       const journal =
-        new FileSystemSessionStore({ workspaceRoot }).loadRunStrict(runId) ?? [];
+        new FileSystemSessionStore({ workspaceRoot }).loadRunStrict(runId) ??
+        [];
       const committed = journal.find(
         (event) => event.event.type === "tool.result",
       );

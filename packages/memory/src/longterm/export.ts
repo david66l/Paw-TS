@@ -39,7 +39,9 @@ export interface ExportReport {
   files: string[];
 }
 
-export async function exportMemories(opts: ExportOptions = {}): Promise<ExportReport> {
+export async function exportMemories(
+  opts: ExportOptions = {},
+): Promise<ExportReport> {
   const engine = opts.engine ?? new PostgresMemoryStoreEngine();
   const dir = opts.dir ?? join(process.cwd(), ".paw", "shared-memory");
   const now = (opts.now ?? (() => new Date()))();
@@ -74,8 +76,23 @@ export async function exportMemories(opts: ExportOptions = {}): Promise<ExportRe
   await mkdir(dir, { recursive: true });
   const jsonlPath = join(dir, "memory-export.jsonl");
   const readmePath = join(dir, "README.md");
-  await writeFile(jsonlPath, lines.join("\n") + (lines.length > 0 ? "\n" : ""), "utf-8");
-  await writeFile(readmePath, renderReadme(entries.length, lines.length, skipped, redacted, kindCounts, now), "utf-8");
+  await writeFile(
+    jsonlPath,
+    lines.join("\n") + (lines.length > 0 ? "\n" : ""),
+    "utf-8",
+  );
+  await writeFile(
+    readmePath,
+    renderReadme(
+      entries.length,
+      lines.length,
+      skipped,
+      redacted,
+      kindCounts,
+      now,
+    ),
+    "utf-8",
+  );
 
   return {
     dir,
@@ -95,8 +112,13 @@ function renderReadme(
   kindCounts: Record<string, number>,
   now: Date,
 ): string {
-  const kinds = Object.entries(kindCounts).map(([k, n]) => `- ${k}: ${n} 条`).join("\n") || "- （空）";
-  const skipLines = skipped.map((s) => `- ${s.id}（命中 ${s.pattern}）`).join("\n") || "- （无）";
+  const kinds =
+    Object.entries(kindCounts)
+      .map(([k, n]) => `- ${k}: ${n} 条`)
+      .join("\n") || "- （空）";
+  const skipLines =
+    skipped.map((s) => `- ${s.id}（命中 ${s.pattern}）`).join("\n") ||
+    "- （无）";
   return `# 共享记忆导出
 
 > 由 \`paw-ts memory export\` 生成，可提交 git（导出时已全量过密钥扫描）。

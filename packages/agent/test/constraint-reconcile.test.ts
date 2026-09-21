@@ -6,7 +6,7 @@ import {
   buildConstraintReconcilePrompt,
   runConstraintReconcile,
 } from "../src/constraint-reconcile.js";
-import { TaskStateManager, type ConstraintRecord } from "../src/task-state.js";
+import { type ConstraintRecord, TaskStateManager } from "../src/task-state.js";
 
 function modelResponding(text: string): LanguageModel {
   return {
@@ -66,9 +66,7 @@ describe("constraint-reconcile", () => {
 
   test("宽松解析：容忍 markdown 围栏", async () => {
     const result = await runConstraintReconcile({
-      model: modelResponding(
-        '```json\n{"keep":[],"add":[],"drop":[0,1]}\n```',
-      ),
+      model: modelResponding('```json\n{"keep":[],"add":[],"drop":[0,1]}\n```'),
       existing,
       newUserMessages: ["撤销之前的所有限制"],
       currentTurn: 13,
@@ -79,9 +77,7 @@ describe("constraint-reconcile", () => {
 
   test("越界下标过滤；drop 优先于 keep", async () => {
     const result = await runConstraintReconcile({
-      model: modelResponding(
-        '{"keep":[0,1,99],"drop":[1],"add":[]}',
-      ),
+      model: modelResponding('{"keep":[0,1,99],"drop":[1],"add":[]}'),
       existing,
       newUserMessages: [],
       currentTurn: 13,

@@ -1,5 +1,8 @@
 import path from "node:path";
-import { captureWorkspaceRevision, compareWorkspaceRevisions } from "../workspace-revision.js";
+import {
+  captureWorkspaceRevision,
+  compareWorkspaceRevisions,
+} from "../workspace-revision.js";
 
 import {
   type ToolErrorCode,
@@ -927,7 +930,10 @@ export async function executeTool(
               : {}),
           })
         : runShellInWorkspace(ctx.workspaceRoot, cmd, shellOpts);
-    const workspaceEffect = compareWorkspaceRevisions(before, await captureWorkspaceRevision(ctx.workspaceRoot));
+    const workspaceEffect = compareWorkspaceRevisions(
+      before,
+      await captureWorkspaceRevision(ctx.workspaceRoot),
+    );
     if (r.error) {
       const msg = r.timed_out ? "timeout" : r.error;
       const code: ToolErrorCode = r.timed_out
@@ -935,7 +941,10 @@ export async function executeTool(
         : r.requiresApproval
           ? "E_POLICY_DENIED"
           : errorCodeForToolPayload(r);
-      return { ...toolErrorResult("run_shell", code, msg), payload: { ...r, ...makeToolError(code, msg), workspaceEffect } };
+      return {
+        ...toolErrorResult("run_shell", code, msg),
+        payload: { ...r, ...makeToolError(code, msg), workspaceEffect },
+      };
     }
     const code = r.exit_code ?? "?";
     const interpretation = interpretShellExitCode(cmd, r.exit_code);

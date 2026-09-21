@@ -53,7 +53,12 @@
  *    静态参数和动态参数，对动态参数施加更严格的限制。
  */
 
-import { parse as unbashParse, type Node, type Word, type Redirect } from "unbash";
+import {
+  type Node,
+  type Redirect,
+  type Word,
+  parse as unbashParse,
+} from "unbash";
 
 // ---------------------------------------------------------------------------
 // 归约后的 AST 节点类型（为策略引擎保持稳定接口）
@@ -143,9 +148,9 @@ function wordHasSubstitution(word: Word): boolean {
   if (!word.parts) return false;
   return word.parts.some(
     (p) =>
-      p.type === "CommandExpansion" ||   // $(...) 或 `...`
+      p.type === "CommandExpansion" || // $(...) 或 `...`
       p.type === "ProcessSubstitution" || // <(...) 或 >(...)
-      p.type === "ArithmeticExpansion",   // $((...))
+      p.type === "ArithmeticExpansion", // $((...))
   );
 }
 
@@ -266,7 +271,13 @@ function normaliseNode(node: Node): ASTNode {
     const cmds = node.commands.map(normaliseNode);
     const ops = node.operators;
     if (cmds.length === 0) {
-      return { type: "command", name: "", args: [], redirects: [], envVars: [] };
+      return {
+        type: "command",
+        name: "",
+        args: [],
+        redirects: [],
+        envVars: [],
+      };
     }
     let left = cmds[0]!;
     for (let i = 0; i < ops.length; i++) {

@@ -482,7 +482,9 @@ async function settleModelCall<
         try {
           const pending = dependencies.onModelStreamEvent?.(event);
           if (pending) void Promise.resolve(pending).catch(() => {});
-        } catch { /* A disconnected UI is not an inference failure. */ }
+        } catch {
+          /* A disconnected UI is not an inference failure. */
+        }
       },
     });
   } catch (error) {

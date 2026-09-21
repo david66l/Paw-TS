@@ -21,8 +21,8 @@
  */
 
 import { parse } from "./shell-ast.js";
-import { analyzeCommandLine, type ShellGuardResult } from "./shell-policy.js";
 import { logShellAudit } from "./shell-audit.js";
+import { type ShellGuardResult, analyzeCommandLine } from "./shell-policy.js";
 
 export type { ShellGuardResult };
 
@@ -126,7 +126,11 @@ function logAudit(
       sessionId: ctx?.sessionId || "default",
       workspace: ctx?.workspace || process.cwd(),
       command,
-      decision: result.allowed ? "allow" : result.requiresApproval ? "ask" : "block",
+      decision: result.allowed
+        ? "allow"
+        : result.requiresApproval
+          ? "ask"
+          : "block",
       reason: result.reason || "unknown",
       matchedRule: result.matchedRule,
       userId: ctx?.userId,

@@ -1,10 +1,10 @@
+import { describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, test } from "bun:test";
 
-import type { ChatMessage } from "../src/context/manager.js";
 import { ArtifactRegistry } from "../src/context/archive.js";
+import type { ChatMessage } from "../src/context/manager.js";
 import { pruneToolResults } from "../src/context/pruner.js";
 import {
   DEFAULT_KEEP_RECENT_TOOLS,
@@ -160,7 +160,9 @@ describe("pruneToolResults", () => {
     });
     expect(result.pruned).toBe(true);
 
-    const assistantMsg = result.messages.find((m) => m.content === "let me check");
+    const assistantMsg = result.messages.find(
+      (m) => m.content === "let me check",
+    );
     expect(assistantMsg).toBeDefined();
 
     const oldTool = result.messages[3]!;
@@ -210,19 +212,55 @@ describe("pruneToolResults", () => {
     const dir = tempToolResultsDir();
     const registry = new ArtifactRegistry({ maxStubsInContext: 2 });
     registry.startTurn(0);
-    const a = registry.store("A".repeat(100), { tool: "read_file", ok: true, turn: 1 })!;
-    const b = registry.store("B".repeat(100), { tool: "read_file", ok: true, turn: 2 })!;
-    const c = registry.store("C".repeat(100), { tool: "read_file", ok: true, turn: 3 })!;
+    const a = registry.store("A".repeat(100), {
+      tool: "read_file",
+      ok: true,
+      turn: 1,
+    })!;
+    const b = registry.store("B".repeat(100), {
+      tool: "read_file",
+      ok: true,
+      turn: 2,
+    })!;
+    const c = registry.store("C".repeat(100), {
+      tool: "read_file",
+      ok: true,
+      turn: 3,
+    })!;
     // 中间桩 b 被 recall 过 → Cited，不可驱逐
     registry.markCited(b);
 
     const messages: ChatMessage[] = [
       { role: "system", content: "sys" },
-      { role: "user", content: toolResult("read_file", true, "old", `[${registry.toStub(a)}]`) },
+      {
+        role: "user",
+        content: toolResult(
+          "read_file",
+          true,
+          "old",
+          `[${registry.toStub(a)}]`,
+        ),
+      },
       { role: "assistant", content: "step1" },
-      { role: "user", content: toolResult("read_file", true, "mid", `[${registry.toStub(b)}]`) },
+      {
+        role: "user",
+        content: toolResult(
+          "read_file",
+          true,
+          "mid",
+          `[${registry.toStub(b)}]`,
+        ),
+      },
       { role: "assistant", content: "step2" },
-      { role: "user", content: toolResult("read_file", true, "new", `[${registry.toStub(c)}]`) },
+      {
+        role: "user",
+        content: toolResult(
+          "read_file",
+          true,
+          "new",
+          `[${registry.toStub(c)}]`,
+        ),
+      },
     ];
 
     const result = pruneToolResults(messages, {

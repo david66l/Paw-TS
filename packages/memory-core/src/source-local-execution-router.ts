@@ -1,4 +1,4 @@
-import { hashCanonicalJsonV1, type JsonValue } from "./canonical.js";
+import { type JsonValue, hashCanonicalJsonV1 } from "./canonical.js";
 import type {
   MemoryEvidenceAnswerShapeV3,
   MemoryEvidenceRequirementV3,

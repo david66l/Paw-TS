@@ -228,8 +228,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
         undefined
     ) {
       body.output_config = {
-        effort:
-          options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort,
+        effort: options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort,
       };
     }
     if (system) {
@@ -316,8 +315,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
         undefined
     ) {
       body.output_config = {
-        effort:
-          options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort,
+        effort: options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort,
       };
     }
     if (system) {

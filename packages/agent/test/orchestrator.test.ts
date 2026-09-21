@@ -17,8 +17,8 @@ import {
 import { CORE_MODEL_EXECUTABLE_TOOLS, resetPolicyConfig } from "@paw/harness";
 import { FakeLanguageModel } from "@paw/models";
 
-import { AgentOrchestrator } from "../src/orchestrator.js";
 import type { LoopV2ShadowReport } from "../src/loop-v2/index.js";
+import { AgentOrchestrator } from "../src/orchestrator.js";
 
 describe("AgentOrchestrator", () => {
   beforeEach(() => {
@@ -2010,9 +2010,9 @@ describe("AgentOrchestrator", () => {
     );
     const done = saved.filter((event) => event.event.type === "model.done");
     expect(done).toHaveLength(1);
-    expect(done[0]?.event.type === "model.done" && done[0].event.thinking).toHaveLength(
-      2_000,
-    );
+    expect(
+      done[0]?.event.type === "model.done" && done[0].event.thinking,
+    ).toHaveLength(2_000);
     expect(report?.diagnostics.length).toBeLessThan(100);
     expect(JSON.stringify(report).length).toBeLessThan(100_000);
   });

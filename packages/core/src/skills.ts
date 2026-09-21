@@ -251,7 +251,7 @@ function loadSkillsFromDirectoryBounded(
   try {
     entries = readdirSync(dir);
   } catch {
-    return skills;  // 目录不存在或无法读取
+    return skills; // 目录不存在或无法读取
   }
   for (const entry of entries) {
     const full = path.join(dir, entry);
@@ -269,7 +269,9 @@ function loadSkillsFromDirectoryBounded(
           }
         } else {
           // 不是技能目录，递归进入其子目录继续搜索
-          skills.push(...loadSkillsFromDirectoryBounded(full, depth + 1, visited));
+          skills.push(
+            ...loadSkillsFromDirectoryBounded(full, depth + 1, visited),
+          );
         }
       } else if (entry.endsWith(".json")) {
         const raw = readFileSync(full, "utf-8");
@@ -371,7 +373,7 @@ function parseMarkdownSkill(
   const fm = parseYamlFrontmatter(fmMatch.frontmatter);
 
   const prompt = fmMatch.body.trim();
-  if (!prompt) return null;  // 没有 prompt 正文的技能定义无效
+  if (!prompt) return null; // 没有 prompt 正文的技能定义无效
 
   // 解析工具白名单：逗号分隔的字符串转为数组
   const allowedTools = fm.tools
@@ -388,7 +390,7 @@ function parseMarkdownSkill(
     prompt.includes("{{args}}") || prompt.includes("{{ args }}");
   return {
     id: skillId,
-    name: fm.name ?? skillId,  // frontmatter 中的 name 优先，否则使用文件名
+    name: fm.name ?? skillId, // frontmatter 中的 name 优先，否则使用文件名
     description: fm.description ?? "",
     version: fm.version ?? "1.0.0",
     prompt,
@@ -427,7 +429,7 @@ function parseSkillDefinition(raw: unknown): SkillDefinition | null {
   const version = typeof obj.version === "string" ? obj.version : "1.0.0";
   const prompt = typeof obj.prompt === "string" ? obj.prompt : "";
   if (!id || !prompt) {
-    return null;  // 缺少必填字段，视为无效定义
+    return null; // 缺少必填字段，视为无效定义
   }
 
   const parameters = parseSkillParameters(obj.parameters);
@@ -483,12 +485,12 @@ function parseSkillParameters(raw: unknown): SkillParameter[] {
     const type =
       obj.type === "string" || obj.type === "number" || obj.type === "boolean"
         ? obj.type
-        : "string";  // 非法类型默认为 string
+        : "string"; // 非法类型默认为 string
     const required =
       typeof obj.required === "boolean" ? obj.required : undefined;
     const def = obj.default;
     if (!name) {
-      continue;  // 跳过缺少 name 的参数
+      continue; // 跳过缺少 name 的参数
     }
     out.push({
       name,
@@ -581,7 +583,7 @@ export function renderSkillPrompt(
       value !== undefined
         ? String(value)
         : param.required
-          ? `[missing: ${param.name}]`  // 必填参数缺失时的占位标记
+          ? `[missing: ${param.name}]` // 必填参数缺失时的占位标记
           : "";
     // 使用 split + join 而非 replaceAll，避免正则转义问题
     prompt = prompt.split(placeholder).join(replacement);

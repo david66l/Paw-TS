@@ -602,9 +602,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         const remaining = request.budget.maxChars - renderedChars;
         if (remaining < 256) break;
         const neighborRadius =
-          anchorSourceKind === "user_input"
-            ? 0
-            : request.budget.neighborRadius;
+          anchorSourceKind === "user_input" ? 0 : request.budget.neighborRadius;
         const neighborRows = await sql`
           SELECT evidence_ref, source_kind, source_seq, content,
                  content_hash, created_at
@@ -715,9 +713,8 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         cacheHit: false,
         lexicalCandidateCount: ranked.length,
         denseCandidateCount: 0,
-        userAnchorCount: hits.filter(
-          (hit) => hit.sourceKind === "user_input",
-        ).length,
+        userAnchorCount: hits.filter((hit) => hit.sourceKind === "user_input")
+          .length,
         assistantAnchorCount: hits.filter(
           (hit) => hit.sourceKind === "assistant_output",
         ).length,

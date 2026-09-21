@@ -6,9 +6,9 @@
  *   bun run src/db/migrate.ts --dry    # 列出待执行的迁移，不实际执行
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { getSql, closeSql } from "./connection.js";
+import { closeSql, getSql } from "./connection.js";
 
 const MIGRATIONS_DIR = join(import.meta.dirname, "migrations");
 
@@ -38,7 +38,9 @@ async function runMigrations(dryRun = false): Promise<void> {
 
   // 查询已应用的迁移
   const applied = await sql`SELECT version FROM _migrations ORDER BY version`;
-  const appliedSet = new Set(applied.map((r) => (r as { version: string }).version));
+  const appliedSet = new Set(
+    applied.map((r) => (r as { version: string }).version),
+  );
 
   const pending = migrations.filter((m) => !appliedSet.has(m.name));
   if (pending.length === 0) {

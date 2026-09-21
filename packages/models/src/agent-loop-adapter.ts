@@ -11,7 +11,10 @@ import {
 } from "@paw/protocol";
 import type { LanguageModel } from "./language-model.js";
 import type { ModelCompleteOptions } from "./model-options.js";
-import { superviseModelRequest, type RequestSupervisionLimits } from "./request-supervision.js";
+import {
+  type RequestSupervisionLimits,
+  superviseModelRequest,
+} from "./request-supervision.js";
 import type {
   ChatMessage,
   ModelCompletionResult,
@@ -50,7 +53,9 @@ export function createAgentLoopModelAdapter(
         return cancelledSettlement(callOptions.signal);
       }
 
-      const supervisor = supervision ? superviseModelRequest(callOptions.signal, supervision) : undefined;
+      const supervisor = supervision
+        ? superviseModelRequest(callOptions.signal, supervision)
+        : undefined;
       const options: ModelCompleteOptions = {
         ...request.options,
         signal: supervisor?.signal ?? callOptions.signal,
@@ -58,24 +63,32 @@ export function createAgentLoopModelAdapter(
       };
       try {
         const execute = async () => {
-        const messages = materializeModelRequestMessagesV1(request);
-        return normalizeCompletion(
-          transport === "complete"
-            ? await model.complete(messages, options)
-            : await collectStreamCompletion(
-                model,
-                messages,
-                options,
-                (event) => {
-                  if (options.signal?.aborted) return;
-                  if (event.type === "text" || event.type === "thinking") supervisor?.event({ type: "delta", kind: event.type, count: event.delta.length });
-                  else if (event.type === "tool_use") supervisor?.event({ type: "tool_assembled" });
-                  return callOptions.onStreamEvent(event);
-                },
-              ),
-        );
+          const messages = materializeModelRequestMessagesV1(request);
+          return normalizeCompletion(
+            transport === "complete"
+              ? await model.complete(messages, options)
+              : await collectStreamCompletion(
+                  model,
+                  messages,
+                  options,
+                  (event) => {
+                    if (options.signal?.aborted) return;
+                    if (event.type === "text" || event.type === "thinking")
+                      supervisor?.event({
+                        type: "delta",
+                        kind: event.type,
+                        count: event.delta.length,
+                      });
+                    else if (event.type === "tool_use")
+                      supervisor?.event({ type: "tool_assembled" });
+                    return callOptions.onStreamEvent(event);
+                  },
+                ),
+          );
         };
-        const completion = supervisor ? await supervisor.run(execute) : await execute();
+        const completion = supervisor
+          ? await supervisor.run(execute)
+          : await execute();
         if (isTruncated(completion.finishReason)) {
           return {
             status: "truncated",

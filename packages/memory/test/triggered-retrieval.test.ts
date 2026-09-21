@@ -6,27 +6,31 @@
  *   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test" bun test test/triggered-retrieval.test.ts
  */
 
-import { describe, test, expect, afterAll } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import type { RunEvent } from "@paw/core";
-import { getSql, closeSql, ping } from "../src/db/connection.js";
-import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import { deriveEntryId } from "../src/longterm/store/id.js";
+import { closeSql, getSql, ping } from "../src/db/connection.js";
 import { queryOpLog } from "../src/longterm/observability/op-log.js";
-import { addTrialLesson } from "../src/longterm/write/trial.js";
 import {
+  type RerankerLlm,
   TriggeredRetriever,
-  isActionableError,
   buildActionFailedQuery,
-  isCoveredByHints,
-  parseRerankOutput,
   buildRerankPrompt,
   inferApplicabilityLabel,
+  isActionableError,
+  isCoveredByHints,
+  parseRerankOutput,
   resolveInjectStatus,
-  type RerankerLlm,
 } from "../src/longterm/retrieval/triggered.js";
-import type { EpisodicExperience, SemanticFact } from "../src/longterm/store/engine.js";
+import type {
+  EpisodicExperience,
+  SemanticFact,
+} from "../src/longterm/store/engine.js";
+import { deriveEntryId } from "../src/longterm/store/id.js";
+import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
+import { addTrialLesson } from "../src/longterm/write/trial.js";
 
-process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??=
+  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -37,15 +41,21 @@ const it = dbOk ? test : test.skip;
 
 describe("isActionableError（T2 防误检，§6.2）", () => {
   test("可行动错误触发", () => {
-    expect(isActionableError("error TS2304: Cannot find name 'foo'")).toBe(true);
-    expect(isActionableError("ModuleResolutionError: Cannot find module")).toBe(true);
+    expect(isActionableError("error TS2304: Cannot find name 'foo'")).toBe(
+      true,
+    );
+    expect(isActionableError("ModuleResolutionError: Cannot find module")).toBe(
+      true,
+    );
     expect(isActionableError("3 tests failed")).toBe(true);
     expect(isActionableError("command exited with code 1")).toBe(true);
   });
 
   test("权限拒绝/用户中止不触发", () => {
     expect(isActionableError("rm: permission denied")).toBe(false);
-    expect(isActionableError("Error: EACCES: permission denied, open '/etc/x'")).toBe(false);
+    expect(
+      isActionableError("Error: EACCES: permission denied, open '/etc/x'"),
+    ).toBe(false);
     expect(isActionableError("用户中止了操作")).toBe(false);
     expect(isActionableError("process interrupted by SIGINT")).toBe(false);
   });
@@ -74,26 +84,41 @@ describe("buildActionFailedQuery（§6.2）", () => {
 
 describe("isCoveredByHints（T3 去重，§6.1）", () => {
   test("高重叠 → 覆盖", () => {
-    expect(isCoveredByHints(
-      "the project uses vitest for unit testing",
-      ["key decision: the project uses vitest for unit testing across packages"],
-    )).toBe(true);
+    expect(
+      isCoveredByHints("the project uses vitest for unit testing", [
+        "key decision: the project uses vitest for unit testing across packages",
+      ]),
+    ).toBe(true);
   });
 
   test("不相关 → 不覆盖", () => {
-    expect(isCoveredByHints("database pool defaults to ten connections", ["prefer pnpm workspaces"])).toBe(false);
+    expect(
+      isCoveredByHints("database pool defaults to ten connections", [
+        "prefer pnpm workspaces",
+      ]),
+    ).toBe(false);
   });
 });
 
 describe("parseRerankOutput（§6.4 输出契约）", () => {
   test("合法输出", () => {
-    const r = parseRerankOutput('{"items":[{"seq":2,"why":"相关","label":"applicable"}]}', 3);
+    const r = parseRerankOutput(
+      '{"items":[{"seq":2,"why":"相关","label":"applicable"}]}',
+      3,
+    );
     expect(r).toEqual([{ seq: 2, why: "相关", label: "applicable" }]);
   });
 
   test("越界序号/非法 label/非 JSON → null（降级）", () => {
-    expect(parseRerankOutput('{"items":[{"seq":9,"why":"","label":"applicable"}]}', 3)).toBeNull();
-    expect(parseRerankOutput('{"items":[{"seq":1,"why":"","label":"maybe"}]}', 3)).toBeNull();
+    expect(
+      parseRerankOutput(
+        '{"items":[{"seq":9,"why":"","label":"applicable"}]}',
+        3,
+      ),
+    ).toBeNull();
+    expect(
+      parseRerankOutput('{"items":[{"seq":1,"why":"","label":"maybe"}]}', 3),
+    ).toBeNull();
     expect(parseRerankOutput("完全不是 JSON", 3)).toBeNull();
   });
 
@@ -105,7 +130,10 @@ describe("parseRerankOutput（§6.4 输出契约）", () => {
 
 describe("disagreement gate（§6.5）", () => {
   const now = new Date().toISOString();
-  const baseEpisodic = (whenToUse: string, perspective: string): EpisodicExperience => ({
+  const baseEpisodic = (
+    whenToUse: string,
+    perspective: string,
+  ): EpisodicExperience => ({
     id: "",
     kind: "episodic",
     repo: "r",
@@ -153,9 +181,19 @@ describe("disagreement gate（§6.5）", () => {
       "When AmberModuleResolutionError appears after ESM migration",
       "Check exports map first",
     );
-    expect(resolveInjectStatus("AmberModuleResolutionError ESM migration", entry, "reference")).toBe("reference");
-    expect(resolveInjectStatus("unrelated query", entry, "applicable")).toBe("verified");
-    expect(resolveInjectStatus("AmberModuleResolutionError ESM migration", entry)).toBe("verified");
+    expect(
+      resolveInjectStatus(
+        "AmberModuleResolutionError ESM migration",
+        entry,
+        "reference",
+      ),
+    ).toBe("reference");
+    expect(resolveInjectStatus("unrelated query", entry, "applicable")).toBe(
+      "verified",
+    );
+    expect(
+      resolveInjectStatus("AmberModuleResolutionError ESM migration", entry),
+    ).toBe("verified");
   });
 });
 
@@ -168,13 +206,29 @@ const REPO = `m6-retrieval-${Date.now().toString(36)}`;
 const createdIds: string[] = [];
 const emitted: RunEvent[] = [];
 
-function makeEpisodic(whenToUse: string, perspective: string, overrides: Partial<EpisodicExperience> = {}): EpisodicExperience {
+function makeEpisodic(
+  whenToUse: string,
+  perspective: string,
+  overrides: Partial<EpisodicExperience> = {},
+): EpisodicExperience {
   const now = new Date().toISOString();
   return {
-    id: "", kind: "episodic", repo: REPO, created: now, tValid: now, tInvalid: null,
-    source: "agent_verified", confidence: 0.9, evidence: [], freq: 0, utility: 0,
-    whenToUse, perspective, modification: ["Check the config field first"],
-    issueType: "ModuleResolutionError", taskId: "tsk_m6",
+    id: "",
+    kind: "episodic",
+    repo: REPO,
+    created: now,
+    tValid: now,
+    tInvalid: null,
+    source: "agent_verified",
+    confidence: 0.9,
+    evidence: [],
+    freq: 0,
+    utility: 0,
+    whenToUse,
+    perspective,
+    modification: ["Check the config field first"],
+    issueType: "ModuleResolutionError",
+    taskId: "tsk_m6",
     ...overrides,
   };
 }
@@ -182,9 +236,20 @@ function makeEpisodic(whenToUse: string, perspective: string, overrides: Partial
 function makeSemantic(fact: string): SemanticFact {
   const now = new Date().toISOString();
   return {
-    id: "", kind: "semantic", repo: REPO, created: now, tValid: now, tInvalid: null,
-    source: "agent_verified", confidence: 0.9, evidence: [], freq: 0, utility: 0,
-    fact, keywords: [], embeddingKey: fact,
+    id: "",
+    kind: "semantic",
+    repo: REPO,
+    created: now,
+    tValid: now,
+    tInvalid: null,
+    source: "agent_verified",
+    confidence: 0.9,
+    evidence: [],
+    freq: 0,
+    utility: 0,
+    fact,
+    keywords: [],
+    embeddingKey: fact,
   };
 }
 
@@ -226,10 +291,28 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
 
   it("§6.8-1 20 条记忆 + 1 条高相关经验 → T1 恰好注入 1 条且是目标", async () => {
     // 20 条同池噪声（episodic，修复批次 C #16：与目标同池才算真实竞争；词汇与查询不相交）
-    const topics = ["database pooling", "cache headers", "retry backoff", "log rotation", "queue depth",
-      "tls handshake", "clock skew", "disk quota", "thread affinity", "heap sizing",
-      "shard routing", "lease renewal", "rate limiting", "circuit breaking", "bulkhead isolation",
-      "graceful shutdown", "config reload", "health probes", "metric cardinality", "trace sampling"];
+    const topics = [
+      "database pooling",
+      "cache headers",
+      "retry backoff",
+      "log rotation",
+      "queue depth",
+      "tls handshake",
+      "clock skew",
+      "disk quota",
+      "thread affinity",
+      "heap sizing",
+      "shard routing",
+      "lease renewal",
+      "rate limiting",
+      "circuit breaking",
+      "bulkhead isolation",
+      "graceful shutdown",
+      "config reload",
+      "health probes",
+      "metric cardinality",
+      "trace sampling",
+    ];
     for (const [i, t] of topics.entries()) {
       const noise = makeEpisodic(
         `When tuning ${t} parameters under load`,
@@ -250,7 +333,8 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     const r = makeRetriever(); // 无精排：k=1 纪律在触发层
     const pkg = await r.retrieve({
       type: "task_start",
-      taskDescription: "zephyr deployments fail with token mismatch after rotation",
+      taskDescription:
+        "zephyr deployments fail with token mismatch after rotation",
       repo: REPO,
       runId: `${RUN}_t1`,
     });
@@ -265,15 +349,25 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     expect(gates[0]!.detail.applicable).toBe(1);
     expect(gates[0]!.detail.source).toBe("heuristic"); // 无精排
     // RunEvent 发射
-    expect(emitted.some((e) => e.type === "memory.trigger" && e.triggerType === "task_start")).toBe(true);
+    expect(
+      emitted.some(
+        (e) => e.type === "memory.trigger" && e.triggerType === "task_start",
+      ),
+    ).toBe(true);
     expect(emitted.some((e) => e.type === "memory.inject")).toBe(true);
     // 账本 freq+1
     expect((await engine.ledger(targetId))!.freq).toBe(1);
   });
 
   it("§6.8-2 两条相似经验 → 精排只留 1 条", async () => {
-    const e1 = makeEpisodic("When quartz jobs deadlock on shutdown hooks", "Quartz job deadlocks usually come from shutdown hook ordering");
-    const e2 = makeEpisodic("When quartz jobs deadlock during shutdown", "Quartz shutdown deadlocks usually come from hook ordering issues");
+    const e1 = makeEpisodic(
+      "When quartz jobs deadlock on shutdown hooks",
+      "Quartz job deadlocks usually come from shutdown hook ordering",
+    );
+    const e2 = makeEpisodic(
+      "When quartz jobs deadlock during shutdown",
+      "Quartz shutdown deadlocks usually come from hook ordering issues",
+    );
     await engine.put(e1);
     await engine.put(e2);
     createdIds.push(deriveEntryId(e1), deriveEntryId(e2));
@@ -282,7 +376,15 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     const reranker: RerankerLlm = {
       complete: async (prompt) => {
         sawCandidates = (prompt.match(/候选 \d+:/g) ?? []).length;
-        return JSON.stringify({ items: [{ seq: seqOf(prompt, "hook ordering"), why: "直接匹配", label: "applicable" }] });
+        return JSON.stringify({
+          items: [
+            {
+              seq: seqOf(prompt, "hook ordering"),
+              why: "直接匹配",
+              label: "applicable",
+            },
+          ],
+        });
       },
     };
     const pkg = await makeRetriever(reranker).retrieve({
@@ -297,14 +399,24 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
   });
 
   it("§6.8-3 精排判 reference → 弱措辞注入", async () => {
-    const e = makeEpisodic("When garnet caches evict too aggressively", "Garnet cache evictions usually come from memory pressure");
+    const e = makeEpisodic(
+      "When garnet caches evict too aggressively",
+      "Garnet cache evictions usually come from memory pressure",
+    );
     await engine.put(e);
     createdIds.push(deriveEntryId(e));
 
     const reranker: RerankerLlm = {
-      complete: async (prompt) => JSON.stringify({
-        items: [{ seq: seqOf(prompt, "Garnet"), why: "与当前任务仅弱相关", label: "reference" }],
-      }),
+      complete: async (prompt) =>
+        JSON.stringify({
+          items: [
+            {
+              seq: seqOf(prompt, "Garnet"),
+              why: "与当前任务仅弱相关",
+              label: "reference",
+            },
+          ],
+        }),
     };
     const pkg = await makeRetriever(reranker).retrieve({
       type: "task_start",
@@ -353,7 +465,8 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
 
     const pkg = await makeRetriever().retrieve({
       type: "action_failed",
-      errorOutput: "Error: 调用 legacy API 失败\n    at callLegacy (client.ts:1:1)",
+      errorOutput:
+        "Error: 调用 legacy API 失败\n    at callLegacy (client.ts:1:1)",
       lastActionSummary: "run_tests 提交前检查 (exit 1)",
       repo: REPO,
       runId: `${RUN}_neg`,
@@ -363,7 +476,9 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
   });
 
   it("§6.8-5 过期条目 T1/T2/T3 不可见，T4 可见且带失效标注", async () => {
-    const s = makeSemantic("Topaz scheduler requires manual lease renewal every hour");
+    const s = makeSemantic(
+      "Topaz scheduler requires manual lease renewal every hour",
+    );
     await engine.put(s);
     const id = deriveEntryId(s);
     createdIds.push(id);
@@ -373,7 +488,8 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     // T2 不可见
     const pkgT2 = await makeRetriever().retrieve({
       type: "action_failed",
-      errorOutput: "SchedulerError: topaz lease expired\n    at renew (topaz.ts:2:2)",
+      errorOutput:
+        "SchedulerError: topaz lease expired\n    at renew (topaz.ts:2:2)",
       lastActionSummary: "run topaz scheduler (exit 1)",
       repo: REPO,
       runId: `${RUN}_stale_t2`,
@@ -416,7 +532,10 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
   it("§6.8-7 注入总量 ≤500 tokens（超限截断记 op-log）", async () => {
     // 5 条各 ~600 字符（粗估 150 tokens）的条目，T4 上限 5 条 → 必超 500
     for (let i = 0; i < 5; i++) {
-      const s = makeSemantic(`Iodine migration note ${i}: ` + "detailed migration step description. ".repeat(20));
+      const s = makeSemantic(
+        `Iodine migration note ${i}: ` +
+          "detailed migration step description. ".repeat(20),
+      );
       await engine.put(s);
       createdIds.push(deriveEntryId(s));
     }
@@ -435,20 +554,25 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     }
     // op-log read.inject 的 totalTokens 也在预算内
     const injects = await queryOpLog({ runId, op: "read.inject" });
-    expect((injects[0]!.detail.totalTokens as number)).toBeLessThanOrEqual(500);
+    expect(injects[0]!.detail.totalTokens as number).toBeLessThanOrEqual(500);
   });
 
   it("精排失败 → 召回直取 k 减半 + degraded（§6.7）", async () => {
     for (let i = 0; i < 3; i++) {
-      const s = makeSemantic(`Peridot cache invalidation strategy variant ${i} uses versioned keys`);
+      const s = makeSemantic(
+        `Peridot cache invalidation strategy variant ${i} uses versioned keys`,
+      );
       await engine.put(s);
       createdIds.push(deriveEntryId(s));
     }
-    const badReranker: RerankerLlm = { complete: async () => "格式完全错误的输出" };
+    const badReranker: RerankerLlm = {
+      complete: async () => "格式完全错误的输出",
+    };
     const runId = `${RUN}_rerankfail`;
     const pkg = await makeRetriever(badReranker).retrieve({
       type: "action_failed",
-      errorOutput: "CacheError: peridot invalidation failed\n    at invalidate (peridot.ts:3:3)",
+      errorOutput:
+        "CacheError: peridot invalidation failed\n    at invalidate (peridot.ts:3:3)",
       lastActionSummary: "flush peridot cache (exit 1)",
       repo: REPO,
       runId,
@@ -464,13 +588,16 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
       "ModuleResolutionError cannot find module 时先检查 exports 字段配置",
       `${RUN}_trial_origin`,
     );
-    const s = makeSemantic("Zircon loader resolves modules through the exports map");
+    const s = makeSemantic(
+      "Zircon loader resolves modules through the exports map",
+    );
     await engine.put(s);
     createdIds.push(deriveEntryId(s));
 
     const pkg = await makeRetriever().retrieve({
       type: "action_failed",
-      errorOutput: "ModuleResolutionError: Cannot find module 'zircon'\n    at resolve (loader.ts:9:9)",
+      errorOutput:
+        "ModuleResolutionError: Cannot find module 'zircon'\n    at resolve (loader.ts:9:9)",
       lastActionSummary: "run build (exit 1)",
       repo: REPO,
       runId: `${RUN}_trial`,
@@ -481,12 +608,17 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     expect(pkg.render()).toContain("试用经验（未验证）");
 
     // 试用不占正式条额、不进正式账本
-    const injects = await queryOpLog({ runId: `${RUN}_trial`, op: "read.inject" });
+    const injects = await queryOpLog({
+      runId: `${RUN}_trial`,
+      op: "read.inject",
+    });
     expect(injects[0]!.entryIds).not.toContain(lesson.id);
   });
 
   it("T3 与 SessionMemory 去重（§6.1）", async () => {
-    const s = makeSemantic("the build pipeline uses incremental compilation for speed");
+    const s = makeSemantic(
+      "the build pipeline uses incremental compilation for speed",
+    );
     await engine.put(s);
     const id = deriveEntryId(s);
     createdIds.push(id);
@@ -495,7 +627,9 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
       type: "post_compact",
       summaryHead: "讨论构建管线的增量编译",
       goal: "build pipeline incremental compilation",
-      existingContextHints: ["Key Decision: the build pipeline uses incremental compilation for speed"],
+      existingContextHints: [
+        "Key Decision: the build pipeline uses incremental compilation for speed",
+      ],
       repo: REPO,
       runId: `${RUN}_t3`,
     });

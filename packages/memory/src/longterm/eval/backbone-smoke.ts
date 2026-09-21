@@ -20,16 +20,16 @@
  * - processEvent 直接调用（不经 outbox worker），与 perturbation.seedViaPipeline 同模式
  */
 
+import { getSql } from "../../db/connection.js";
+import { appendOpLog } from "../observability/op-log.js";
+import { hybridRecall } from "../retrieval/hybrid.js";
 import type { MemoryStoreEngine } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
-import { MemoryWritePipeline, type ProcessResult } from "../write/pipeline.js";
 import { MemoryDistiller } from "../write/distiller.js";
-import { hybridRecall } from "../retrieval/hybrid.js";
-import { appendOpLog } from "../observability/op-log.js";
-import { getSql } from "../../db/connection.js";
+import { MemoryWritePipeline, type ProcessResult } from "../write/pipeline.js";
+import type { LlmStats } from "./llm-client.js";
 import { LlmBudget } from "./perturbation.js";
 import type { JudgeLlm } from "./replay.js";
-import type { LlmStats } from "./llm-client.js";
 
 // ═══════════════════════════════════════════════════════════════
 // 夹具
@@ -67,7 +67,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-01",
     description: "项目构建命令",
     goal: "配置并验证本项目的构建命令",
-    trajectory: "在构建配置中声明构建脚本，脚本内容为 bun run build，执行 bun run build 构建命令执行成功并生成构建产物目录",
+    trajectory:
+      "在构建配置中声明构建脚本，脚本内容为 bun run build，执行 bun run build 构建命令执行成功并生成构建产物目录",
     query: "本项目的构建命令是什么？",
     keywords: ["构建", "命令", "build"],
   },
@@ -75,7 +76,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-02",
     description: "单元测试运行方式",
     goal: "配置本仓库的单元测试运行命令",
-    trajectory: "安装测试依赖后，在 scripts 中添加入口为 test 的脚本，用 bun test 运行全部单元测试并全部通过",
+    trajectory:
+      "安装测试依赖后，在 scripts 中添加入口为 test 的脚本，用 bun test 运行全部单元测试并全部通过",
     query: "仓库跑单元测试用什么命令？",
     keywords: ["测试", "命令", "bun"],
   },
@@ -83,7 +85,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-03",
     description: "依赖安装包管理器",
     goal: "确定本仓库的依赖安装方式",
-    trajectory: "发现仓库根目录存在 bun.lock 文件，用 bun install 安装依赖成功，并把安装命令记录到 README",
+    trajectory:
+      "发现仓库根目录存在 bun.lock 文件，用 bun install 安装依赖成功，并把安装命令记录到 README",
     query: "安装依赖应该用哪个包管理器？",
     keywords: ["bun", "安装", "依赖"],
   },
@@ -99,7 +102,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-05",
     description: "服务配置管理",
     goal: "建立服务配置管理方式",
-    trajectory: "创建环境变量模板文件，配置模块负责加载环境变量，真实值不提交到仓库",
+    trajectory:
+      "创建环境变量模板文件，配置模块负责加载环境变量，真实值不提交到仓库",
     query: "项目的配置模块放在哪里管理？",
     keywords: ["配置", "环境变量", "模板"],
   },
@@ -107,7 +111,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-06",
     description: "缓存穿透修复",
     goal: "修复接口缓存穿透导致数据库压力过大的问题",
-    trajectory: "接口反复穿透缓存导致数据库报错，添加负缓存并设置短过期时间后数据库压力恢复稳定",
+    trajectory:
+      "接口反复穿透缓存导致数据库报错，添加负缓存并设置短过期时间后数据库压力恢复稳定",
     query: "缓存穿透导致数据库报错怎么办？",
     keywords: ["缓存", "穿透", "数据库"],
   },
@@ -115,7 +120,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-07",
     description: "连接池耗尽排查",
     goal: "排查服务连接池耗尽问题",
-    trajectory: "连接池报错耗尽，检查发现存在泄漏的事务未释放，修复后连接池恢复正常",
+    trajectory:
+      "连接池报错耗尽，检查发现存在泄漏的事务未释放，修复后连接池恢复正常",
     query: "连接池耗尽怎么排查？",
     keywords: ["连接池", "事务", "泄漏"],
   },
@@ -123,7 +129,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-08",
     description: "构建产物陈旧",
     goal: "解决增量构建产物陈旧问题",
-    trajectory: "增量构建产物内容陈旧导致输出不一致，清空构建缓存后重新构建，产物输出一致",
+    trajectory:
+      "增量构建产物内容陈旧导致输出不一致，清空构建缓存后重新构建，产物输出一致",
     query: "构建产物不一致怎么排查？",
     keywords: ["构建", "缓存", "产物"],
   },
@@ -131,7 +138,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-09",
     description: "日志占满磁盘",
     goal: "处理日志轮转占满磁盘的问题",
-    trajectory: "日志轮转保留过期日志导致磁盘被打满，调整保留窗口后磁盘占用恢复稳定",
+    trajectory:
+      "日志轮转保留过期日志导致磁盘被打满，调整保留窗口后磁盘占用恢复稳定",
     query: "日志轮转保留过期日志打满磁盘怎么处理？",
     keywords: ["日志轮转", "磁盘"],
   },
@@ -139,7 +147,8 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-10",
     description: "队列积压缓解",
     goal: "缓解消息队列积压问题",
-    trajectory: "消费者处理速度跟不上导致队列积压报错，扩容消费者后积压逐渐消化恢复正常",
+    trajectory:
+      "消费者处理速度跟不上导致队列积压报错，扩容消费者后积压逐渐消化恢复正常",
     query: "消息队列积压怎么缓解？",
     keywords: ["队列", "积压", "消费者"],
   },
@@ -194,20 +203,28 @@ export interface SmokeSummary {
 }
 
 /** 纯函数：汇总冒烟指标与达标判定 */
-export function summarizeSmoke(items: readonly SmokeItemResult[]): SmokeSummary {
+export function summarizeSmoke(
+  items: readonly SmokeItemResult[],
+): SmokeSummary {
   const total = items.length;
   const written = items.filter((i) => i.status === "written");
   const degraded = items.filter((i) => i.status === "degraded");
   const schemaRate = total > 0 ? written.length / total : 0;
   const keywordHits = items.filter((i) => i.recalledByKeyword).length;
   const queryHits = items.filter((i) => i.recalledByQuery).length;
-  const unverifiedRatio = written.length + degraded.length > 0 ? degraded.length / (written.length + degraded.length) : null;
-  const degradedPathOk = degraded.length > 0 ? degraded.every((i) => i.memoryIds.length > 0) : true;
+  const unverifiedRatio =
+    written.length + degraded.length > 0
+      ? degraded.length / (written.length + degraded.length)
+      : null;
+  const degradedPathOk =
+    degraded.length > 0 ? degraded.every((i) => i.memoryIds.length > 0) : true;
 
   const passed =
     total === 0 || unverifiedRatio === null
       ? null
-      : schemaRate >= SMOKE_SCHEMA_RATE_MIN && keywordRecallRate(keywordHits, total) >= SMOKE_RECALL_RATE_MIN && unverifiedRatio < SMOKE_UNVERIFIED_MAX;
+      : schemaRate >= SMOKE_SCHEMA_RATE_MIN &&
+        keywordRecallRate(keywordHits, total) >= SMOKE_RECALL_RATE_MIN &&
+        unverifiedRatio < SMOKE_UNVERIFIED_MAX;
 
   return {
     schemaRate,
@@ -233,7 +250,11 @@ export function smokePassed(
   unverifiedRatio: number | null,
 ): boolean | null {
   if (unverifiedRatio === null) return null;
-  return schemaRate >= SMOKE_SCHEMA_RATE_MIN && keywordRecall >= SMOKE_RECALL_RATE_MIN && unverifiedRatio < SMOKE_UNVERIFIED_MAX;
+  return (
+    schemaRate >= SMOKE_SCHEMA_RATE_MIN &&
+    keywordRecall >= SMOKE_RECALL_RATE_MIN &&
+    unverifiedRatio < SMOKE_UNVERIFIED_MAX
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -259,7 +280,8 @@ export interface BackboneSmokeReport {
   warnings: string[];
 }
 
-const READONLY_HINT = "为防止弱模型腐蚀记忆库（spec §5.7/§11.5），建议运行：paw-ts memory readonly on";
+const READONLY_HINT =
+  "为防止弱模型腐蚀记忆库（spec §5.7/§11.5），建议运行：paw-ts memory readonly on";
 
 /** 纯函数：渲染报告文本 */
 export function renderBackboneSmokeReport(r: BackboneSmokeReport): string {
@@ -268,12 +290,14 @@ export function renderBackboneSmokeReport(r: BackboneSmokeReport): string {
     `  生成时间: ${r.generatedAt}`,
   ];
   for (const [k, v] of Object.entries(r.metrics)) {
-    lines.push(`  ${k}: ${typeof v === "number" && !Number.isInteger(v) ? (v * 100).toFixed(1) + "%" : v}`);
+    lines.push(
+      `  ${k}: ${typeof v === "number" && !Number.isInteger(v) ? (v * 100).toFixed(1) + "%" : v}`,
+    );
   }
   lines.push(
     `  效率: LLM 调用 ${r.efficiency.llmCalls} 次（重试 ${r.efficiency.retries}，失败 ${r.efficiency.failures}），` +
-    `耗时 ${(r.efficiency.totalMs / 1000).toFixed(1)}s，估算 ~${r.efficiency.estimatedTokens} tokens` +
-    (r.efficiency.truncated ? "，⚠ 预算截断" : ""),
+      `耗时 ${(r.efficiency.totalMs / 1000).toFixed(1)}s，估算 ~${r.efficiency.estimatedTokens} tokens` +
+      (r.efficiency.truncated ? "，⚠ 预算截断" : ""),
   );
   // passed !== true（未达标或无法判定）都给只读提示：全拒/无写入也是弱模型信号（fail-closed）
   if (r.passed !== true) lines.push(`  ⚠ ${READONLY_HINT}`);
@@ -282,7 +306,9 @@ export function renderBackboneSmokeReport(r: BackboneSmokeReport): string {
     lines.push("  ── 明细 ──");
     for (const d of r.details) {
       const recalled = d.recalledByKeyword ? "k✓" : "k✗";
-      lines.push(`  ${d.fixtureId}  ${d.status}  ${recalled}${d.recalledByQuery ? "/q✓" : "/q✗"}  ${d.memoryIds.length} 条${d.detail ? `  ${d.detail}` : ""}`);
+      lines.push(
+        `  ${d.fixtureId}  ${d.status}  ${recalled}${d.recalledByQuery ? "/q✓" : "/q✗"}  ${d.memoryIds.length} 条${d.detail ? `  ${d.detail}` : ""}`,
+      );
     }
   }
   return lines.join("\n");
@@ -319,30 +345,44 @@ function truncate<T>(xs: readonly T[], maxSamples?: number): T[] {
 
 function statusOf(r: ProcessResult): SmokeWriteStatus {
   switch (r.status) {
-    case "written": return "written";
-    case "degraded": return "degraded";
-    case "rejected": return "rejected";
-    case "corrected": return "written"; // 用户纠正直写路径（冒烟不走，防御性映射）
-    case "trialed": return "noop";
-    case "noop": return "noop";
+    case "written":
+      return "written";
+    case "degraded":
+      return "degraded";
+    case "rejected":
+      return "rejected";
+    case "corrected":
+      return "written"; // 用户纠正直写路径（冒烟不走，防御性映射）
+    case "trialed":
+      return "noop";
+    case "noop":
+      return "noop";
   }
 }
 
 function memoryIdsOf(r: ProcessResult): string[] {
   switch (r.status) {
-    case "written": return r.memoryIds;
-    case "degraded": return r.memoryId ? [r.memoryId] : [];
-    case "corrected": return [r.memoryId];
-    default: return [];
+    case "written":
+      return r.memoryIds;
+    case "degraded":
+      return r.memoryId ? [r.memoryId] : [];
+    case "corrected":
+      return [r.memoryId];
+    default:
+      return [];
   }
 }
 
 function detailOf(r: ProcessResult): string {
   switch (r.status) {
-    case "rejected": return `reason=${r.reason}`;
-    case "noop": return `reason=${r.reason}`;
-    case "degraded": return "storeDegraded append-only";
-    default: return "";
+    case "rejected":
+      return `reason=${r.reason}`;
+    case "noop":
+      return `reason=${r.reason}`;
+    case "degraded":
+      return "storeDegraded append-only";
+    default:
+      return "";
   }
 }
 
@@ -368,7 +408,9 @@ async function recallInRepo(
   repo: string,
   memoryIds: string[],
 ): Promise<boolean> {
-  const r = await hybridRecall(engine, probe, { candidates: SMOKE_RECALL_POOL });
+  const r = await hybridRecall(engine, probe, {
+    candidates: SMOKE_RECALL_POOL,
+  });
   const inRepo = r.items.filter((i) => i.entry.repo === repo).slice(0, 10);
   return inRepo.some((i) => memoryIds.includes(i.entry.id));
 }
@@ -399,14 +441,18 @@ export async function runBackboneSmoke(
   // LlmBudget 限调用次数、不限墙钟；超时置位后循环中断 → passed=null fail-closed。
   const timeoutMs = opts.timeoutMs ?? SMOKE_DEFAULT_TIMEOUT_MS;
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; }, timeoutMs);
+  const timer = setTimeout(() => {
+    timedOut = true;
+  }, timeoutMs);
   timer.unref?.();
 
   try {
     // ── 写入阶段：真实蒸馏，每条 fixture 独立跑 processEvent ──
     for (const f of fixtures) {
       if (timedOut) {
-        warnings.push(`整体超时（>${Math.round(timeoutMs / 60_000)} 分钟）：冒烟中断，结果不完整，fail-closed`);
+        warnings.push(
+          `整体超时（>${Math.round(timeoutMs / 60_000)} 分钟）：冒烟中断，结果不完整，fail-closed`,
+        );
         break;
       }
       let r: ProcessResult;
@@ -421,8 +467,17 @@ export async function runBackboneSmoke(
           verdict: { kind: "test", passed: true }, // 走验证门控 → consolidate
         });
       } catch (e) {
-        warnings.push(`${f.id}: 写入抛错 ${e instanceof Error ? e.message : String(e)}`);
-        items.push({ fixtureId: f.id, status: "noop", memoryIds: [], recalledByKeyword: false, recalledByQuery: false, detail: "processEvent threw" });
+        warnings.push(
+          `${f.id}: 写入抛错 ${e instanceof Error ? e.message : String(e)}`,
+        );
+        items.push({
+          fixtureId: f.id,
+          status: "noop",
+          memoryIds: [],
+          recalledByKeyword: false,
+          recalledByQuery: false,
+          detail: "processEvent threw",
+        });
         continue;
       }
       const memoryIds = memoryIdsOf(r);
@@ -436,7 +491,9 @@ export async function runBackboneSmoke(
             recallInRepo(engine, smokeProbe(f, "query"), repo, memoryIds),
           ]);
         } catch (e) {
-          warnings.push(`${f.id}: 检索抛错 ${e instanceof Error ? e.message : String(e)}（该项计 miss）`);
+          warnings.push(
+            `${f.id}: 检索抛错 ${e instanceof Error ? e.message : String(e)}（该项计 miss）`,
+          );
         }
       }
       items.push({
@@ -471,11 +528,11 @@ export async function runBackboneSmoke(
       passed,
       metrics: {
         条目数: items.length,
-        "schema合格率": summary.schemaRate,
+        schema合格率: summary.schemaRate,
         "检索命中率(keyword)": summary.keywordRecall,
         "检索命中率(query)": summary.queryRecall,
         "检索命中率(仅written)": summary.writtenOnlyRecall,
-        "unverified占比": summary.unverifiedRatio,
+        unverified占比: summary.unverifiedRatio,
         降级路径生效: summary.degradedPathOk,
       },
       details: items,
@@ -489,13 +546,18 @@ export async function runBackboneSmoke(
       try {
         await cleanupCtx(repo);
       } catch (e) {
-        warnings.push(`清理 smoke repo 失败: ${e instanceof Error ? e.message : String(e)}（可能残留 smoke-* 数据，需人工清理）`);
+        warnings.push(
+          `清理 smoke repo 失败: ${e instanceof Error ? e.message : String(e)}（可能残留 smoke-* 数据，需人工清理）`,
+        );
       }
     }
   }
 }
 
-function efficiencyOf(stats: LlmStats | undefined, budget: LlmBudget): BackboneSmokeReport["efficiency"] {
+function efficiencyOf(
+  stats: LlmStats | undefined,
+  budget: LlmBudget,
+): BackboneSmokeReport["efficiency"] {
   return {
     llmCalls: stats?.calls ?? budget.used,
     retries: stats?.retries ?? 0,

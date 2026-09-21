@@ -9,7 +9,10 @@ import { taskSessionDao } from "../../dao/taskSession.js";
 import { workingMemoryDao } from "../../dao/workingMemory.js";
 import type { TaskSession, WorkingMemory } from "../../types.js";
 import { generateId } from "../platform/idGen.js";
-import { PolicyEngine, type EffectivePolicy } from "../platform/policyEngine.js";
+import {
+  type EffectivePolicy,
+  PolicyEngine,
+} from "../platform/policyEngine.js";
 
 export interface CreateTaskInput {
   userId?: string;
@@ -31,7 +34,10 @@ export class TaskSessionManager {
   /** 获取当前 Task Session 使用的 EffectivePolicy */
   async getEffectivePolicy(input: CreateTaskInput): Promise<EffectivePolicy> {
     if (this.policyEngine) {
-      return this.policyEngine.resolve({ repositoryId: input.repositoryId, userId: input.userId });
+      return this.policyEngine.resolve({
+        repositoryId: input.repositoryId,
+        userId: input.userId,
+      });
     }
     return new PolicyEngine().getDefaults();
   }
@@ -40,7 +46,9 @@ export class TaskSessionManager {
    * 创建 TaskSession + 初始化 WorkingMemory + 绑定 PolicySnapshot。
    * 返回 { task, wm } 或抛出错误。
    */
-  async createTask(input: CreateTaskInput): Promise<{ task: TaskSession; wm: WorkingMemory }> {
+  async createTask(
+    input: CreateTaskInput,
+  ): Promise<{ task: TaskSession; wm: WorkingMemory }> {
     const now = new Date().toISOString();
     const taskId = generateId("tsk");
     const wmId = generateId("wm");
@@ -89,7 +97,10 @@ export class TaskSessionManager {
 
     // 绑定 PolicySnapshot
     if (this.policyEngine) {
-      await this.policyEngine.createSnapshot(taskId, { repositoryId: input.repositoryId, userId: input.userId });
+      await this.policyEngine.createSnapshot(taskId, {
+        repositoryId: input.repositoryId,
+        userId: input.userId,
+      });
     }
 
     return { task, wm };
@@ -97,37 +108,64 @@ export class TaskSessionManager {
 
   /** 启动任务：CREATED → RUNNING */
   async startTask(id: string, expectedRevision: number): Promise<TaskSession> {
-    const result = await taskSessionDao.updateStatus(id, expectedRevision, "running", {
-      startedAt: new Date().toISOString(),
-    });
-    if (!result) throw new RevisionConflictError("taskSession", id, expectedRevision);
+    const result = await taskSessionDao.updateStatus(
+      id,
+      expectedRevision,
+      "running",
+      {
+        startedAt: new Date().toISOString(),
+      },
+    );
+    if (!result)
+      throw new RevisionConflictError("taskSession", id, expectedRevision);
     return result;
   }
 
   /** 完成任务：RUNNING → COMPLETED */
-  async completeTask(id: string, expectedRevision: number): Promise<TaskSession> {
-    const result = await taskSessionDao.updateStatus(id, expectedRevision, "completed", {
-      completedAt: new Date().toISOString(),
-    });
-    if (!result) throw new RevisionConflictError("taskSession", id, expectedRevision);
+  async completeTask(
+    id: string,
+    expectedRevision: number,
+  ): Promise<TaskSession> {
+    const result = await taskSessionDao.updateStatus(
+      id,
+      expectedRevision,
+      "completed",
+      {
+        completedAt: new Date().toISOString(),
+      },
+    );
+    if (!result)
+      throw new RevisionConflictError("taskSession", id, expectedRevision);
     return result;
   }
 
   /** 标记失败：RUNNING → FAILED */
   async failTask(id: string, expectedRevision: number): Promise<TaskSession> {
-    const result = await taskSessionDao.updateStatus(id, expectedRevision, "failed", {
-      completedAt: new Date().toISOString(),
-    });
-    if (!result) throw new RevisionConflictError("taskSession", id, expectedRevision);
+    const result = await taskSessionDao.updateStatus(
+      id,
+      expectedRevision,
+      "failed",
+      {
+        completedAt: new Date().toISOString(),
+      },
+    );
+    if (!result)
+      throw new RevisionConflictError("taskSession", id, expectedRevision);
     return result;
   }
 
   /** 取消任务 */
   async cancelTask(id: string, expectedRevision: number): Promise<TaskSession> {
-    const result = await taskSessionDao.updateStatus(id, expectedRevision, "cancelled", {
-      completedAt: new Date().toISOString(),
-    });
-    if (!result) throw new RevisionConflictError("taskSession", id, expectedRevision);
+    const result = await taskSessionDao.updateStatus(
+      id,
+      expectedRevision,
+      "cancelled",
+      {
+        completedAt: new Date().toISOString(),
+      },
+    );
+    if (!result)
+      throw new RevisionConflictError("taskSession", id, expectedRevision);
     return result;
   }
 
@@ -142,7 +180,9 @@ export class RevisionConflictError extends Error {
     public id: string,
     public expectedRevision: number,
   ) {
-    super(`Revision conflict: ${entity}#${id} expected revision ${expectedRevision}`);
+    super(
+      `Revision conflict: ${entity}#${id} expected revision ${expectedRevision}`,
+    );
     this.name = "RevisionConflictError";
   }
 }

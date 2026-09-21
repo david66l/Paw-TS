@@ -9,10 +9,10 @@ import { getSql } from "../../connection.js";
 
 export interface MemoryQualityScore {
   memoryId: string;
-  usefulness: number;    // 0-1, 被成功使用的频率
-  freshness: number;     // 0-1, 最近使用时间
-  accuracy: number;      // 0-1, 用户纠正率（低=高准确度）
-  overall: number;       // 0-1, 综合评分
+  usefulness: number; // 0-1, 被成功使用的频率
+  freshness: number; // 0-1, 最近使用时间
+  accuracy: number; // 0-1, 用户纠正率（低=高准确度）
+  overall: number; // 0-1, 综合评分
   usageCount: number;
   lastUsedAt?: string;
   correctionCount: number;
@@ -32,19 +32,29 @@ export class MemoryEvaluator {
       SELECT model_usage, outcome, user_feedback, recorded_at
       FROM memory_usage_records WHERE memory_id = ${memoryId}
       ORDER BY recorded_at DESC`;
-    const usages = usageRows as unknown as { model_usage: string; outcome: string; user_feedback: string; recorded_at: string }[];
+    const usages = usageRows as unknown as {
+      model_usage: string;
+      outcome: string;
+      user_feedback: string;
+      recorded_at: string;
+    }[];
 
     // 审计记录（修正/删除）
     const auditRows = await sql`
       SELECT event_type, created_at FROM audit_records
       WHERE entity_type = 'memory' AND entity_id = ${memoryId}
       ORDER BY created_at DESC`;
-    const audits = auditRows as unknown as { event_type: string; created_at: string }[];
+    const audits = auditRows as unknown as {
+      event_type: string;
+      created_at: string;
+    }[];
 
     const usageCount = usages.length;
     const helpfulCount = usages.filter((u) => u.outcome === "helpful").length;
-    const correctionCount = audits.filter((a) =>
-      a.event_type === "memory_updated" || a.event_type === "memory_status_changed"
+    const correctionCount = audits.filter(
+      (a) =>
+        a.event_type === "memory_updated" ||
+        a.event_type === "memory_status_changed",
     ).length;
     const lastUsedAt = usages[0]?.recorded_at;
 
@@ -59,7 +69,10 @@ export class MemoryEvaluator {
     }
 
     // Accuracy: 纠正越少越准确
-    const accuracy = usageCount > 0 ? Math.max(0, 1 - correctionCount / (usageCount + correctionCount)) : 0.5;
+    const accuracy =
+      usageCount > 0
+        ? Math.max(0, 1 - correctionCount / (usageCount + correctionCount))
+        : 0.5;
 
     // Overall 综合
     const overall = usefulness * 0.4 + freshness * 0.3 + accuracy * 0.3;
@@ -68,9 +81,20 @@ export class MemoryEvaluator {
     let suggestion: MemoryQualityScore["suggestion"] = "keep";
     if (overall < 0.3) suggestion = "deprecate";
     else if (overall < 0.5) suggestion = "review";
-    else if (correctionCount > 3 && accuracy < 0.6) suggestion = "merge_candidate";
+    else if (correctionCount > 3 && accuracy < 0.6)
+      suggestion = "merge_candidate";
 
-    return { memoryId, usefulness, freshness, accuracy, overall, usageCount, lastUsedAt, correctionCount, suggestion };
+    return {
+      memoryId,
+      usefulness,
+      freshness,
+      accuracy,
+      overall,
+      usageCount,
+      lastUsedAt,
+      correctionCount,
+      suggestion,
+    };
   }
 
   /**
@@ -93,7 +117,9 @@ export class MemoryEvaluator {
   /**
    * 查找可合并的重复记忆（同 type + 相似 title）。
    */
-  async findDuplicatePairs(): Promise<{ idA: string; idB: string; score: number }[]> {
+  async findDuplicatePairs(): Promise<
+    { idA: string; idB: string; score: number }[]
+  > {
     const sql = getSql();
     const rows = await sql`
       SELECT a.id AS id_a, b.id AS id_b, similarity(a.title, b.title) AS sim
@@ -101,8 +127,12 @@ export class MemoryEvaluator {
       JOIN memory_items b ON a.type = b.type AND a.id < b.id AND a.status = 'active' AND b.status = 'active'
       WHERE similarity(a.title, b.title) > 0.6
       ORDER BY sim DESC LIMIT 20`;
-    return (rows as unknown as { id_a: string; id_b: string; sim: number }[]).map((r) => ({
-      idA: r.id_a, idB: r.id_b, score: Number(r.sim),
+    return (
+      rows as unknown as { id_a: string; id_b: string; sim: number }[]
+    ).map((r) => ({
+      idA: r.id_a,
+      idB: r.id_b,
+      score: Number(r.sim),
     }));
   }
 }

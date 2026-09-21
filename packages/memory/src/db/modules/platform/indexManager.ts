@@ -6,14 +6,16 @@
  */
 
 import { getSql } from "../../connection.js";
-import { outboxManager, type OutboxEvent } from "./outboxManager.js";
+import { type OutboxEvent, outboxManager } from "./outboxManager.js";
 
 export const indexManager = {
   /**
    * 处理一批 outbox 事件，更新索引。
    * 幂等：通过 event_sequence 防止旧事件覆盖新索引。
    */
-  async processPending(limit = 20): Promise<{ processed: number; failed: number }> {
+  async processPending(
+    limit = 20,
+  ): Promise<{ processed: number; failed: number }> {
     const events = await outboxManager.pollPending(limit);
     let processed = 0;
     let failed = 0;
@@ -41,11 +43,16 @@ export const indexManager = {
     metadata: string;
   }> {
     const sql = getSql();
-    const rows = await sql.unsafe(
-      `SELECT index_type, index_state FROM memory_index_states WHERE memory_id = $1`, [memoryId],
-    ) as { index_type: string; index_state: string }[];
+    const rows = (await sql.unsafe(
+      `SELECT index_type, index_state FROM memory_index_states WHERE memory_id = $1`,
+      [memoryId],
+    )) as { index_type: string; index_state: string }[];
 
-    const states = { vector: "NOT_CONFIGURED", fullText: "NOT_CONFIGURED", metadata: "NOT_CONFIGURED" };
+    const states = {
+      vector: "NOT_CONFIGURED",
+      fullText: "NOT_CONFIGURED",
+      metadata: "NOT_CONFIGURED",
+    };
     for (const r of rows) {
       if (r.index_type === "VECTOR") states.vector = r.index_state;
       else if (r.index_type === "FULL_TEXT") states.fullText = r.index_state;
@@ -65,25 +72,53 @@ async function handleEvent(event: OutboxEvent): Promise<void> {
       if (!event.memoryId) break;
 
       // 检查 event_sequence 是否过时
-      const current = await getCurrentIndexRevision(sql, event.memoryId, "VECTOR");
+      const current = await getCurrentIndexRevision(
+        sql,
+        event.memoryId,
+        "VECTOR",
+      );
       if (event.sequence <= current) break; // 旧事件跳过
 
       // 更新元数据索引（memory_items 表自身的索引由 DDL 保证，这里写状态）
-      await upsertIndexState(sql, event.memoryId, event.memoryVersion ?? 1, "METADATA", "INDEXED", event.sequence);
-      await upsertIndexState(sql, event.memoryId, event.memoryVersion ?? 1, "FULL_TEXT", "INDEXED", event.sequence);
+      await upsertIndexState(
+        sql,
+        event.memoryId,
+        event.memoryVersion ?? 1,
+        "METADATA",
+        "INDEXED",
+        event.sequence,
+      );
+      await upsertIndexState(
+        sql,
+        event.memoryId,
+        event.memoryVersion ?? 1,
+        "FULL_TEXT",
+        "INDEXED",
+        event.sequence,
+      );
 
       // Vector 索引：标记为 INDEX_PENDING（实际的 embedding 生成由外部模型服务完成）
-      await upsertIndexState(sql, event.memoryId, event.memoryVersion ?? 1, "VECTOR", "INDEX_PENDING", event.sequence);
+      await upsertIndexState(
+        sql,
+        event.memoryId,
+        event.memoryVersion ?? 1,
+        "VECTOR",
+        "INDEX_PENDING",
+        event.sequence,
+      );
       break;
     }
 
     case "MemorySoftDeleted":
     case "MemoryHardDeleted": {
       if (!event.memoryId) break;
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [event.memoryId]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
+        event.memoryId,
+      ]);
       await sql.unsafe(
         `UPDATE memory_index_states SET index_state = 'DELETE_PENDING', updated_at = now()
-         WHERE memory_id = $1`, [event.memoryId],
+         WHERE memory_id = $1`,
+        [event.memoryId],
       );
       break;
     }
@@ -95,18 +130,27 @@ async function handleEvent(event: OutboxEvent): Promise<void> {
   }
 }
 
-async function getCurrentIndexRevision(sql: ReturnType<typeof getSql>, memoryId: string, indexType: string): Promise<number> {
+async function getCurrentIndexRevision(
+  sql: ReturnType<typeof getSql>,
+  memoryId: string,
+  indexType: string,
+): Promise<number> {
   const rows = await sql.unsafe(
     `SELECT index_revision FROM memory_index_states WHERE memory_id = $1 AND index_type = $2`,
     [memoryId, indexType],
   );
-  return rows.length > 0 ? (rows[0] as unknown as { index_revision: number }).index_revision : 0;
+  return rows.length > 0
+    ? (rows[0] as unknown as { index_revision: number }).index_revision
+    : 0;
 }
 
 async function upsertIndexState(
   sql: ReturnType<typeof getSql>,
-  memoryId: string, memoryVersionId: number, indexType: string,
-  indexState: string, eventSequence: number,
+  memoryId: string,
+  memoryVersionId: number,
+  indexType: string,
+  indexState: string,
+  eventSequence: number,
 ): Promise<void> {
   const id = `${memoryId}_${indexType}`;
   await sql.unsafe(

@@ -114,11 +114,7 @@ export class CircuitBreaker {
     }
     if (current === "half_open") {
       if (this.halfOpenCalls >= this.opts.halfOpenMaxCalls) {
-        throw new CircuitBreakerOpenError(
-          this.label,
-          current,
-          this.snapshot(),
-        );
+        throw new CircuitBreakerOpenError(this.label, current, this.snapshot());
       }
       this.halfOpenCalls++;
     }

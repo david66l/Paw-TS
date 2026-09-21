@@ -13,13 +13,17 @@
 import { createHash } from "node:crypto";
 import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
 import { appendOpLog } from "../observability/op-log.js";
-import type { EpisodicExperience, MemoryStoreEngine, TrialLesson } from "../store/engine.js";
+import type {
+  EpisodicExperience,
+  MemoryStoreEngine,
+  TrialLesson,
+} from "../store/engine.js";
 import { deriveEntryId } from "../store/id.js";
 import {
-  memoryScopeFingerprint,
   type MemoryScopeKey,
+  memoryScopeFingerprint,
 } from "../store/scope-key.js";
-import type { DistillerLlm, DistillInput } from "./distiller.js";
+import type { DistillInput, DistillerLlm } from "./distiller.js";
 
 export interface TrialLessonRow extends TrialLesson {
   scope?: MemoryScopeKey;
@@ -48,7 +52,8 @@ function rowToLesson(r: Record<string, unknown>): TrialLessonRow {
     id: r.id as string,
     lesson: r.lesson as string,
     originTaskId: r.origin_task_id as string,
-    created: r.created instanceof Date ? r.created.toISOString() : String(r.created),
+    created:
+      r.created instanceof Date ? r.created.toISOString() : String(r.created),
     attemptsLeft: r.attempts_left as number,
     whenToUse: (r.when_to_use as string | null) ?? undefined,
     keywords: (r.keywords as string[] | null) ?? undefined,
@@ -115,10 +120,14 @@ export async function getTrialLesson(
   const sql = getSql();
   const [row] = await sql`
     SELECT * FROM memory_trial_lessons WHERE id = ${id}
-      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+      ${
+        scope
+          ? sql`AND scope->>'tenantId' = ${scope.tenantId}
         AND scope->>'userId' = ${scope.userId}
         AND scope->>'workspaceId' = ${scope.workspaceId}
-        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${scope.repositoryId}`
+          : sql``
+      }
   `;
   return row ? rowToLesson(row as Record<string, unknown>) : null;
 }
@@ -132,13 +141,17 @@ export async function decrementTrialAttempts(
   const [row] = await sql`
     UPDATE memory_trial_lessons SET attempts_left = GREATEST(attempts_left - 1, 0)
     WHERE id = ${id}
-      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+      ${
+        scope
+          ? sql`AND scope->>'tenantId' = ${scope.tenantId}
         AND scope->>'userId' = ${scope.userId}
         AND scope->>'workspaceId' = ${scope.workspaceId}
-        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${scope.repositoryId}`
+          : sql``
+      }
     RETURNING attempts_left
   `;
-  return row ? ((row as { attempts_left: number }).attempts_left) : 0;
+  return row ? (row as { attempts_left: number }).attempts_left : 0;
 }
 
 /** 从 trial 池物理删除（转正成功后或调用方显式丢弃）。 */
@@ -149,10 +162,14 @@ export async function removeTrialLesson(
   const sql = getSql();
   const rows = await sql`
     DELETE FROM memory_trial_lessons WHERE id = ${id}
-      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+      ${
+        scope
+          ? sql`AND scope->>'tenantId' = ${scope.tenantId}
         AND scope->>'userId' = ${scope.userId}
         AND scope->>'workspaceId' = ${scope.workspaceId}
-        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${scope.repositoryId}`
+          : sql``
+      }
     RETURNING id
   `;
   return rows.length > 0;
@@ -223,7 +240,11 @@ export async function graduateTrialLesson(
   await appendOpLog("write.graduated", {
     runId: opts.graduatingRunId,
     entryIds: [memoryId],
-    detail: { trialId, originTaskId: lesson.originTaskId, source: "trial_graduated" },
+    detail: {
+      trialId,
+      originTaskId: lesson.originTaskId,
+      source: "trial_graduated",
+    },
   });
   return { memoryId, trialId };
 }
@@ -266,14 +287,26 @@ export function parseTrialLessonOutput(raw: string): TrialLessonDraft | null {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
     if (start === -1 || end <= start) return null;
-    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
-    if (typeof parsed.lesson !== "string" || parsed.lesson.trim().length === 0) return null;
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<
+      string,
+      unknown
+    >;
+    if (typeof parsed.lesson !== "string" || parsed.lesson.trim().length === 0)
+      return null;
     if (countSentences(parsed.lesson) > 3) return null;
-    if (typeof parsed.whenToUse !== "string" || !/^(?:当|When[\s,])/.test(parsed.whenToUse.trim())) return null;
+    if (
+      typeof parsed.whenToUse !== "string" ||
+      !/^(?:当|When[\s,])/.test(parsed.whenToUse.trim())
+    )
+      return null;
     const keywords = Array.isArray(parsed.keywords)
       ? parsed.keywords.filter((k): k is string => typeof k === "string")
       : [];
-    return { lesson: parsed.lesson.trim(), whenToUse: parsed.whenToUse.trim(), keywords };
+    return {
+      lesson: parsed.lesson.trim(),
+      whenToUse: parsed.whenToUse.trim(),
+      keywords,
+    };
   } catch {
     return null;
   }
@@ -290,7 +323,9 @@ export async function distillTrialLesson(
       const raw = await llm.complete(prompt);
       const parsed = parseTrialLessonOutput(raw);
       if (parsed) return parsed;
-    } catch { /* 重试 */ }
+    } catch {
+      /* 重试 */
+    }
   }
   return null;
 }

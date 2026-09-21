@@ -25,7 +25,7 @@
  *    调用方只需传入额外的上下文字段即可，API 更干净。
  */
 
- /** Cross-cutting error envelope (v2 §14 taxonomy — minimal subset for TS bootstrap). */
+/** Cross-cutting error envelope (v2 §14 taxonomy — minimal subset for TS bootstrap). */
 
 /**
  * 框架级错误码：按错误的来源层分类

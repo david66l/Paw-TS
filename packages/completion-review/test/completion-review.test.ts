@@ -4,6 +4,7 @@ import type { InputFactV1 } from "@paw/protocol";
 
 import {
   type CompletionReviewSessionV1,
+  TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
   classifyVerificationCommandV1,
   completionReviewFeedbackInputIdV1,
   createCompletionReviewCandidateV1,
@@ -13,7 +14,6 @@ import {
   createCompletionReviewFeedbackV1,
   createModelCompletionReviewerV1,
   evaluateCompletionReviewGateV1,
-  TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
   evaluateCompletionReviewTriggersV1,
   projectCompletionReviewToolEvidenceV1,
   projectPendingCompletionReviewFeedbackV1,
@@ -259,7 +259,10 @@ describe("completion review policy", () => {
       ),
     ).toEqual([]);
     expect(
-      evaluateCompletionReviewGateV1(source, TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1),
+      evaluateCompletionReviewGateV1(
+        source,
+        TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
+      ),
     ).toEqual({ action: "allow" });
 
     const nonTrivial = candidate({

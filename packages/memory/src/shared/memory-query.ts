@@ -283,10 +283,7 @@ export type TaskProfile =
  * Classify the user's task from the goal text.
  * Pure rule-based — zero LLM calls.
  */
-export function classifyTask(
-  goal: string,
-  errorMessage?: string,
-): TaskProfile {
+export function classifyTask(goal: string, errorMessage?: string): TaskProfile {
   const lower = goal.toLowerCase();
 
   // Bug fix: 存在错误信息或命中 bug 相关关键词时优先判定

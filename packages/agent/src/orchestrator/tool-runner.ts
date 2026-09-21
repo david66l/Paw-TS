@@ -100,10 +100,7 @@ function isManagedJobControlTool(tool: string): boolean {
   );
 }
 
-function isBlockedByReadOnlyChildPolicy(
-  tool: string,
-  args: unknown,
-): boolean {
+function isBlockedByReadOnlyChildPolicy(tool: string, args: unknown): boolean {
   if (isMutatingTool(tool) || tool.startsWith("mcp:")) return true;
   if (tool !== MCP_PROXY) return false;
   if (args === null || typeof args !== "object" || Array.isArray(args)) {
@@ -1355,7 +1352,9 @@ export function finalizeToolExecutionContext(
     if (tr.newMessages) {
       for (const msg of tr.newMessages) {
         if (msg.role === "user") {
-          ctx.ctxMgr.addHostMessage(wrapCapabilityContentV1(sourceTool, msg.content));
+          ctx.ctxMgr.addHostMessage(
+            wrapCapabilityContentV1(sourceTool, msg.content),
+          );
         } else if (msg.role === "assistant")
           ctx.ctxMgr.addAssistant(msg.content);
       }
@@ -1464,10 +1463,7 @@ function captureMutationBefore(
             : [];
         })()
       : extractCheckpointTargets(call.tool, call.args);
-  const normalized = normalizeMutationTargets(
-    workspaceRoot,
-    targets,
-  );
+  const normalized = normalizeMutationTargets(workspaceRoot, targets);
   if (!normalized) {
     return { status: "gap", reason: "unsafe_or_missing_target" };
   }

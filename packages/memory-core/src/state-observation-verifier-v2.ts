@@ -157,8 +157,7 @@ function projectVerificationInput(
         : input.proposedObservations.filter(
             (candidate) =>
               candidate.slotId === observation.slotId &&
-              candidate.evidenceRef ===
-                observation.lifecycleTargetEvidenceRef,
+              candidate.evidenceRef === observation.lifecycleTargetEvidenceRef,
           );
     if (
       (observation.lifecycleRelation === "none" &&

@@ -1,8 +1,9 @@
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const dir = process.argv[2] || "/Users/Zhuanz/Documents/CS/项目/paw-ts/paw-showcase";
+const dir =
+  process.argv[2] || "/Users/Zhuanz/Documents/CS/项目/paw-ts/paw-showcase";
 const fails = [];
 const ok = (name, cond, detail = "") => {
   console.log(`${cond ? "✅" : "❌"} ${name}${detail ? " — " + detail : ""}`);
@@ -34,7 +35,10 @@ ok("has memory demo section", /memory-demo|记忆演示/i.test(html));
 ok("has theme toggle button", /theme-toggle|切换.*色/i.test(html));
 ok("theme uses localStorage", /localStorage/.test(theme));
 ok("theme sets data-theme", /data-theme|setAttribute/.test(theme));
-ok("mem has preference/decision", /preference/i.test(mem) && /decision/i.test(mem));
+ok(
+  "mem has preference/decision",
+  /preference/i.test(mem) && /decision/i.test(mem),
+);
 ok("mem has failure (round2)", /failure/i.test(mem));
 ok("mem has filter logic", /filter|筛选|data-filter/i.test(html + mem));
 ok("css blue accent #1a6bff", /#1a6bff|1a6bff/i.test(css + html));
@@ -80,7 +84,9 @@ try {
 
 console.log("\nfile:// URL:");
 console.log(pathToFileURL(join(dir, "index.html")).href);
-console.log(`\nResult: ${fails.length === 0 ? "ALL PASS" : fails.length + " FAIL"}`);
+console.log(
+  `\nResult: ${fails.length === 0 ? "ALL PASS" : fails.length + " FAIL"}`,
+);
 if (fails.length) {
   console.log("Failed:", fails.join(", "));
   process.exit(1);

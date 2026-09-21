@@ -155,7 +155,9 @@ export function buildMemoryEvidenceNotebookV1(input: {
     const inWindow = new Set<string>();
     if (timeWindow) {
       for (const hit of rawRequirement.hits) {
-        const observed = hit.observedAt ? Date.parse(hit.observedAt) : undefined;
+        const observed = hit.observedAt
+          ? Date.parse(hit.observedAt)
+          : undefined;
         if (
           observed !== undefined &&
           Number.isFinite(observed) &&

@@ -20,11 +20,7 @@ const HARD_CAP = 256;
 
 /** 验证并规范化 maxSteps 值 */
 function parseMaxSteps(value: unknown): number | undefined {
-  if (
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    value >= 1
-  ) {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 1) {
     return Math.min(Math.floor(value), HARD_CAP);
   }
   return undefined;

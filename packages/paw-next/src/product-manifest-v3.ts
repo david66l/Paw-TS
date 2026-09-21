@@ -58,8 +58,10 @@ export const PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V3 =
 export const PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V3 =
   "paw.product-composition.v3.27:journal-working-state" as const;
 
-export const PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1 =
-  Object.freeze({ ...DEFAULT_MODEL_OUTPUT_RECOVERY_POLICY_V1, requestSupervision: MODEL_REQUEST_SUPERVISION_V1 });
+export const PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1 = Object.freeze({
+  ...DEFAULT_MODEL_OUTPUT_RECOVERY_POLICY_V1,
+  requestSupervision: MODEL_REQUEST_SUPERVISION_V1,
+});
 
 export const PAW_NEXT_CONTEXT_COMPACTION_IDENTITY_V1 = Object.freeze({
   plannerPolicyVersion: CONTEXT_COMPACTION_POLICY_VERSION_V1,
@@ -168,16 +170,27 @@ export function createPawNextProductManifestV3(
   if (input.workSegmentPolicyVersion !== WORK_SEGMENT_POLICY_VERSION_V1) {
     throw new Error("Unsupported Paw Next work-segment policy version");
   }
-  if (input.compactMutationReceipts !== undefined && input.compactMutationReceipts !== true)
+  if (
+    input.compactMutationReceipts !== undefined &&
+    input.compactMutationReceipts !== true
+  )
     throw new Error("Unsupported mutation receipt policy");
-  if (input.environmentAuditRetry !== undefined &&
-      (input.environmentAuditRetry !== true || input.environmentAudit !== true))
+  if (
+    input.environmentAuditRetry !== undefined &&
+    (input.environmentAuditRetry !== true || input.environmentAudit !== true)
+  )
     throw new Error("Audit retry requires environment auditing");
-  if (input.environmentAuditEvidenceRepair !== undefined &&
-      (input.environmentAuditEvidenceRepair !== true || input.environmentAuditSinglePass !== true))
+  if (
+    input.environmentAuditEvidenceRepair !== undefined &&
+    (input.environmentAuditEvidenceRepair !== true ||
+      input.environmentAuditSinglePass !== true)
+  )
     throw new Error("Audit evidence repair requires single-pass auditing");
-  if (input.environmentAuditSinglePass !== undefined &&
-      (input.environmentAuditSinglePass !== true || input.environmentAudit !== true))
+  if (
+    input.environmentAuditSinglePass !== undefined &&
+    (input.environmentAuditSinglePass !== true ||
+      input.environmentAudit !== true)
+  )
     throw new Error("Single-pass audit requires environment auditing");
   if (input.environmentAudit !== undefined && input.environmentAudit !== true)
     throw new Error("Invalid environment audit policy");
@@ -258,10 +271,24 @@ export function createPawNextProductManifestV3(
     ...(input.environmentAudit
       ? { environmentAudit: ENVIRONMENT_AUDIT_POLICY_VERSION_V1 }
       : {}),
-    ...(input.environmentAuditRetry ? { environmentAuditRetry: "paw.environment-audit-retry.v1" as const } : {}),
-    ...(input.environmentAuditSinglePass ? { environmentAuditSinglePass: "paw.environment-audit-single-pass.v1" as const } : {}),
-    ...(input.environmentAuditEvidenceRepair ? { environmentAuditEvidenceRepair: "paw.environment-audit-evidence-repair.v1" as const } : {}),
-    ...(input.compactMutationReceipts ? { compactMutationReceipts: "paw.mutation-receipt.v1" as const } : {}),
+    ...(input.environmentAuditRetry
+      ? { environmentAuditRetry: "paw.environment-audit-retry.v1" as const }
+      : {}),
+    ...(input.environmentAuditSinglePass
+      ? {
+          environmentAuditSinglePass:
+            "paw.environment-audit-single-pass.v1" as const,
+        }
+      : {}),
+    ...(input.environmentAuditEvidenceRepair
+      ? {
+          environmentAuditEvidenceRepair:
+            "paw.environment-audit-evidence-repair.v1" as const,
+        }
+      : {}),
+    ...(input.compactMutationReceipts
+      ? { compactMutationReceipts: "paw.mutation-receipt.v1" as const }
+      : {}),
     ...(input.auditedMemory ? { auditedMemory: AUDITED_MEMORY_POLICY_V1 } : {}),
     ...(input.stageGraph ? { stageGraph: STAGE_GRAPH_POLICY_V1 } : {}),
     ...(input.visualAudit
@@ -295,7 +322,10 @@ function freezeInteractiveControlConfigV2(
   }
   if (value.liveSteering !== undefined && value.liveSteering !== true)
     throw new Error("Paw Next live steering config is invalid");
-  if (value.recoverReasoningTimeout !== undefined && value.recoverReasoningTimeout !== true)
+  if (
+    value.recoverReasoningTimeout !== undefined &&
+    value.recoverReasoningTimeout !== true
+  )
     throw new Error("Paw Next reasoning recovery config is invalid");
   if (
     value.settleFinalToolBatch !== undefined &&
@@ -303,7 +333,12 @@ function freezeInteractiveControlConfigV2(
   )
     throw new Error("Paw Next final tool batch config is invalid");
   const keys = Object.keys(value)
-    .filter((key) => key !== "liveSteering" && key !== "settleFinalToolBatch" && key !== "recoverReasoningTimeout")
+    .filter(
+      (key) =>
+        key !== "liveSteering" &&
+        key !== "settleFinalToolBatch" &&
+        key !== "recoverReasoningTimeout",
+    )
     .sort()
     .join("\0");
   const baseKeys =
@@ -335,7 +370,9 @@ function freezeInteractiveControlConfigV2(
   }
   return Object.freeze({
     mode: "interactive",
-    ...(value.recoverReasoningTimeout ? { recoverReasoningTimeout: true as const } : {}),
+    ...(value.recoverReasoningTimeout
+      ? { recoverReasoningTimeout: true as const }
+      : {}),
     maxModelTurns: value.maxModelTurns,
     naturalStop: value.naturalStop,
     ...(value.liveSteering === true ? { liveSteering: true as const } : {}),

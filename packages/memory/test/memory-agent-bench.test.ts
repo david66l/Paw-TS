@@ -4,33 +4,41 @@
  * 全 mock 无 DB：打分 / 切 chunk / 汇总 / 加载 / 报告。
  */
 
-import { describe, test, expect } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
-  normalizeAnswer,
-  scorePrediction,
-  chunkText,
-  extractKeywords,
-  normalizeMabRecord,
-  loadMabSamplesFromFile,
-  filterMabSamples,
-  summarizeMab,
-  sfSuppressionRate,
-  renderMabReport,
   BUILTIN_CODING_FIXTURES,
   type MabQaResult,
   type MabReport,
+  chunkText,
+  extractKeywords,
+  filterMabSamples,
+  loadMabSamplesFromFile,
+  normalizeAnswer,
+  normalizeMabRecord,
+  renderMabReport,
+  scorePrediction,
+  sfSuppressionRate,
+  summarizeMab,
 } from "../src/longterm/eval/memory-agent-bench.js";
 
 describe("normalizeAnswer / scorePrediction", () => {
   test("去冠词标点后 substring / exact", () => {
     expect(normalizeAnswer("The Bun Run Build!")).toBe("bun run build");
-    expect(scorePrediction("用 bun run build 即可", ["bun run build"], "substring_exact_match")).toBe(true);
+    expect(
+      scorePrediction(
+        "用 bun run build 即可",
+        ["bun run build"],
+        "substring_exact_match",
+      ),
+    ).toBe(true);
     expect(scorePrediction("label: 43", ["43"], "exact_match")).toBe(false);
     expect(scorePrediction("43", ["43"], "exact_match")).toBe(true);
-    expect(scorePrediction("不知道", ["bun test"], "substring_exact_match")).toBe(false);
+    expect(
+      scorePrediction("不知道", ["bun test"], "substring_exact_match"),
+    ).toBe(false);
   });
 });
 
@@ -63,7 +71,9 @@ describe("BUILTIN_CODING_FIXTURES", () => {
       expect(s.qa.length).toBeGreaterThan(0);
     }
     const sf = BUILTIN_CODING_FIXTURES.find((s) => s.dimension === "SF")!;
-    expect(sf.qa.some((q) => q.sfMode === "current" && q.oldFactNeedle)).toBe(true);
+    expect(sf.qa.some((q) => q.sfMode === "current" && q.oldFactNeedle)).toBe(
+      true,
+    );
     expect(sf.qa.some((q) => q.sfMode === "historical")).toBe(true);
   });
 });
@@ -120,10 +130,25 @@ describe("normalizeMabRecord / loadMabSamplesFromFile", () => {
         ]),
       );
       expect(loadMabSamplesFromFile(arr)).toHaveLength(2);
-      expect(filterMabSamples(loadMabSamplesFromFile(arr), { dimensions: ["AR"] })).toHaveLength(1);
+      expect(
+        filterMabSamples(loadMabSamplesFromFile(arr), { dimensions: ["AR"] }),
+      ).toHaveLength(1);
 
       const wrapped = join(dir, "w.json");
-      writeFileSync(wrapped, JSON.stringify({ data: [{ dimension: "CR", context: "z".repeat(40), questions: ["q"], answers: ["a"], metadata: { source: "fact_mh" } }] }));
+      writeFileSync(
+        wrapped,
+        JSON.stringify({
+          data: [
+            {
+              dimension: "CR",
+              context: "z".repeat(40),
+              questions: ["q"],
+              answers: ["a"],
+              metadata: { source: "fact_mh" },
+            },
+          ],
+        }),
+      );
       expect(loadMabSamplesFromFile(wrapped)[0]?.dimension).toBe("CR");
 
       const jsonl = join(dir, "x.jsonl");
@@ -151,8 +176,26 @@ describe("normalizeMabRecord / loadMabSamplesFromFile", () => {
 describe("summarizeMab / sfSuppressionRate / render", () => {
   test("Δ 与 SF 抑制达标判定（正增益 + 配对 wins>losses）", () => {
     const items: MabQaResult[] = [
-      { sampleId: "a", qaId: "1", dimension: "AR", memoryOn: true, correct: true, answerSnippet: "x", recalled: true, warnings: [] },
-      { sampleId: "a", qaId: "1", dimension: "AR", memoryOn: false, correct: false, answerSnippet: "?", recalled: false, warnings: [] },
+      {
+        sampleId: "a",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: true,
+        correct: true,
+        answerSnippet: "x",
+        recalled: true,
+        warnings: [],
+      },
+      {
+        sampleId: "a",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: false,
+        correct: false,
+        answerSnippet: "?",
+        recalled: false,
+        warnings: [],
+      },
       {
         sampleId: "s",
         qaId: "c",
@@ -214,8 +257,26 @@ describe("summarizeMab / sfSuppressionRate / render", () => {
 
   test("零增益（meanΔ=0）或配对不占优 → 不达标", () => {
     const zero: MabQaResult[] = [
-      { sampleId: "a", qaId: "1", dimension: "AR", memoryOn: true, correct: true, answerSnippet: "x", recalled: true, warnings: [] },
-      { sampleId: "a", qaId: "1", dimension: "AR", memoryOn: false, correct: true, answerSnippet: "x", recalled: false, warnings: [] },
+      {
+        sampleId: "a",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: true,
+        correct: true,
+        answerSnippet: "x",
+        recalled: true,
+        warnings: [],
+      },
+      {
+        sampleId: "a",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: false,
+        correct: true,
+        answerSnippet: "x",
+        recalled: false,
+        warnings: [],
+      },
     ];
     const z = summarizeMab(zero);
     expect(z.meanDelta).toBe(0);
@@ -224,8 +285,26 @@ describe("summarizeMab / sfSuppressionRate / render", () => {
     expect(z.passed).toBe(false);
 
     const loss: MabQaResult[] = [
-      { sampleId: "a", qaId: "1", dimension: "AR", memoryOn: true, correct: false, answerSnippet: "?", recalled: true, warnings: [] },
-      { sampleId: "a", qaId: "1", dimension: "AR", memoryOn: false, correct: true, answerSnippet: "x", recalled: false, warnings: [] },
+      {
+        sampleId: "a",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: true,
+        correct: false,
+        answerSnippet: "?",
+        recalled: true,
+        warnings: [],
+      },
+      {
+        sampleId: "a",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: false,
+        correct: true,
+        answerSnippet: "x",
+        recalled: false,
+        warnings: [],
+      },
     ];
     expect(summarizeMab(loss).passed).toBe(false);
   });
@@ -247,7 +326,14 @@ describe("summarizeMab / sfSuppressionRate / render", () => {
         signTestP: 0.125,
       },
       details: [],
-      efficiency: { llmCalls: 2, retries: 0, failures: 0, totalMs: 10, estimatedTokens: 100, truncated: false },
+      efficiency: {
+        llmCalls: 2,
+        retries: 0,
+        failures: 0,
+        totalMs: 10,
+        estimatedTokens: 100,
+        truncated: false,
+      },
       warnings: [],
     };
     const text = renderMabReport(r);
@@ -259,16 +345,56 @@ describe("summarizeMab / sfSuppressionRate / render", () => {
 
 describe("computePairedStats / binomialSignTestP / HF cache", () => {
   test("配对与符号检验", async () => {
-    const { computePairedStats, binomialSignTestP, loadOrFetchMabHf, loadMabSamplesFromHfCache } =
-      await import("../src/longterm/eval/memory-agent-bench.js");
+    const {
+      computePairedStats,
+      binomialSignTestP,
+      loadOrFetchMabHf,
+      loadMabSamplesFromHfCache,
+    } = await import("../src/longterm/eval/memory-agent-bench.js");
     expect(binomialSignTestP(3, 0)).toBeCloseTo(0.125, 5);
     expect(binomialSignTestP(0, 0)).toBeNull();
 
     const paired = computePairedStats([
-      { sampleId: "a", qaId: "1", dimension: "AR", memoryOn: true, correct: true, answerSnippet: "", recalled: true, warnings: [] },
-      { sampleId: "a", qaId: "1", dimension: "AR", memoryOn: false, correct: false, answerSnippet: "", recalled: false, warnings: [] },
-      { sampleId: "b", qaId: "1", dimension: "AR", memoryOn: true, correct: false, answerSnippet: "", recalled: true, warnings: [] },
-      { sampleId: "b", qaId: "1", dimension: "AR", memoryOn: false, correct: true, answerSnippet: "", recalled: false, warnings: [] },
+      {
+        sampleId: "a",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: true,
+        correct: true,
+        answerSnippet: "",
+        recalled: true,
+        warnings: [],
+      },
+      {
+        sampleId: "a",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: false,
+        correct: false,
+        answerSnippet: "",
+        recalled: false,
+        warnings: [],
+      },
+      {
+        sampleId: "b",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: true,
+        correct: false,
+        answerSnippet: "",
+        recalled: true,
+        warnings: [],
+      },
+      {
+        sampleId: "b",
+        qaId: "1",
+        dimension: "AR",
+        memoryOn: false,
+        correct: true,
+        answerSnippet: "",
+        recalled: false,
+        warnings: [],
+      },
     ]);
     expect(paired).toMatchObject({ wins: 1, losses: 1, ties: 0, nPairs: 2 });
     expect(paired.winRateAmongDecisive).toBe(0.5);
@@ -278,7 +404,11 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
       subsampleChunks,
       subsampleChunksForQuery,
     } = await import("../src/longterm/eval/memory-agent-bench.js");
-    expect(subsampleChunks(["a", "b", "c", "d", "e"], 3)).toEqual(["a", "c", "e"]);
+    expect(subsampleChunks(["a", "b", "c", "d", "e"], 3)).toEqual([
+      "a",
+      "c",
+      "e",
+    ]);
 
     const corpus = [
       "noise about weather and traffic reports forever",
@@ -287,7 +417,9 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
       "orchid-42 appears again near the vault door latch",
       "random filler about sports scores and movies",
     ];
-    const picked = subsampleChunksForQuery(corpus, 3, ["What is the vault password orchid?"]);
+    const picked = subsampleChunksForQuery(corpus, 3, [
+      "What is the vault password orchid?",
+    ]);
     expect(picked.some((c) => c.includes("orchid-42"))).toBe(true);
     expect(picked.length).toBeLessThanOrEqual(3);
 
@@ -317,7 +449,9 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
           },
         ]),
       );
-      const cached = loadMabSamplesFromHfCache(dir, { splits: ["Accurate_Retrieval"] });
+      const cached = loadMabSamplesFromHfCache(dir, {
+        splits: ["Accurate_Retrieval"],
+      });
       expect(cached).toHaveLength(1);
       expect(cached[0]?.dimension).toBe("AR");
 
@@ -330,7 +464,9 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
       });
       expect(loaded.samples.length).toBeGreaterThanOrEqual(1);
       expect(loaded.bySplit.Accurate_Retrieval).toBe(1);
-      expect(loaded.warnings.some((w) => w.includes("Conflict_Resolution"))).toBe(true);
+      expect(
+        loaded.warnings.some((w) => w.includes("Conflict_Resolution")),
+      ).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -339,20 +475,18 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
 
 describe("shouldInvalidateForSf / injectionForSfMode", () => {
   test("纯旧失效；含新答案保留；current 只用活跃文本", async () => {
-    const {
-      shouldInvalidateForSf,
-      injectionForSfMode,
-    } = await import("../src/longterm/eval/memory-agent-bench.js");
-    expect(shouldInvalidateForSf("2023 用 jest", "jest", ["vitest"])).toBe(true);
-    expect(shouldInvalidateForSf("迁移到 vitest，jest 已移除", "jest", ["vitest"])).toBe(false);
+    const { shouldInvalidateForSf, injectionForSfMode } = await import("../src/longterm/eval/memory-agent-bench.js");
+    expect(shouldInvalidateForSf("2023 用 jest", "jest", ["vitest"])).toBe(
+      true,
+    );
+    expect(
+      shouldInvalidateForSf("迁移到 vitest，jest 已移除", "jest", ["vitest"]),
+    ).toBe(false);
     expect(shouldInvalidateForSf("只用 bun", "jest", ["vitest"])).toBe(false);
 
     const shaped = injectionForSfMode(
       "full",
-      [
-        { text: "vitest now" },
-        { text: "old jest", tInvalid: "2025-01-01" },
-      ],
+      [{ text: "vitest now" }, { text: "old jest", tInvalid: "2025-01-01" }],
       "current",
     );
     expect(shaped.activeTexts).toEqual(["vitest now"]);

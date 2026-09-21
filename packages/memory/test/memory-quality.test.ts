@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
+import { applyTypeQuotas } from "../src/db/modules/read/memoryRetriever.js";
+import type { MemoryItem } from "../src/db/types.js";
 import {
   buildConversationAwareQuery,
   cleanMemoryTitle,
@@ -11,8 +13,6 @@ import {
   shouldWriteTaskSummary,
   tokenizeForMemoryScore,
 } from "../src/shared/memory-quality.js";
-import { applyTypeQuotas } from "../src/db/modules/read/memoryRetriever.js";
-import type { MemoryItem } from "../src/db/types.js";
 import { extractCleanMemoryQuery } from "../src/shared/memory-query.js";
 
 describe("isLowValueChitchat", () => {
@@ -82,7 +82,11 @@ describe("isWorthWritingLongTermMemory", () => {
       isWorthWritingLongTermMemory({
         goal: "run tests",
         executedTools: [
-          { toolName: "workspace.run_shell", status: "failure", summary: "fail" },
+          {
+            toolName: "workspace.run_shell",
+            status: "failure",
+            summary: "fail",
+          },
         ],
       }),
     ).toBe(true);
@@ -123,9 +127,7 @@ describe("shouldWriteTaskSummary", () => {
       shouldWriteTaskSummary({
         goal: "read package.json",
         readFiles: [{ filePath: "package.json" }],
-        executedTools: [
-          { toolName: "workspace.read_file", status: "success" },
-        ],
+        executedTools: [{ toolName: "workspace.read_file", status: "success" }],
       }),
     ).toBe(false);
   });
@@ -233,12 +235,11 @@ describe("extractExplicitRememberText", () => {
 
 describe("applyTypeQuotas", () => {
   it("caps task_summary and prefers preferences", () => {
-    const mk = (type: string, id: string, score: number) =>
-      ({
-        memory: { id, type, title: id, summary: id } as MemoryItem,
-        score,
-        matchReasons: [],
-      });
+    const mk = (type: string, id: string, score: number) => ({
+      memory: { id, type, title: id, summary: id } as MemoryItem,
+      score,
+      matchReasons: [],
+    });
     const ranked = [
       mk("task_summary", "t1", 0.9),
       mk("task_summary", "t2", 0.85),
@@ -250,7 +251,9 @@ describe("applyTypeQuotas", () => {
     ];
     const out = applyTypeQuotas(ranked, 6);
     expect(out.filter((x) => x.memory.type === "task_summary")).toHaveLength(1);
-    expect(out.filter((x) => x.memory.type === "user_preference").length).toBeLessThanOrEqual(3);
+    expect(
+      out.filter((x) => x.memory.type === "user_preference").length,
+    ).toBeLessThanOrEqual(3);
     expect(out.length).toBeLessThanOrEqual(6);
   });
 });

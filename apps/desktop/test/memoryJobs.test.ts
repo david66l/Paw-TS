@@ -3,11 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  createDesktopMemoryWorker,
-  enqueueDesktopMemoryJob,
   type MemoryJob,
   type MemoryJobLocator,
   type MemoryJobStore,
+  createDesktopMemoryWorker,
+  enqueueDesktopMemoryJob,
 } from "../agent-host/memory-jobs.js";
 
 const roots: string[] = [];

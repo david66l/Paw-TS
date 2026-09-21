@@ -1,5 +1,5 @@
+import { exitStatusProvesVerification, parseCommandChain } from "@paw/core";
 import type { JsonValue, ToolSettlementStatusV1 } from "@paw/protocol";
-import { parseCommandChain, exitStatusProvesVerification } from "@paw/core";
 
 import type {
   CompletionReviewEvidenceOutcomeV1,

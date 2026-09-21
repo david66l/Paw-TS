@@ -30,7 +30,20 @@ const IGNORE_DIRS = new Set([
   ".next",
 ]);
 
-const SOURCE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".py", ".go", ".rs", ".java"]);
+const SOURCE_EXTS = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".mts",
+  ".cts",
+  ".py",
+  ".go",
+  ".rs",
+  ".java",
+]);
 const MAX_FILES = 1_000;
 const MAX_FILE_BYTES = 256 * 1024;
 
@@ -79,9 +92,21 @@ function writeIndex(workspaceRoot: string, index: CodeIndex): void {
   try {
     const dir = path.join(workspaceRoot, ".paw", "code-index");
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(indexPath(workspaceRoot, "repo-map.json"), JSON.stringify(index, null, 2), "utf8");
-    fs.writeFileSync(indexPath(workspaceRoot, "symbols.json"), JSON.stringify(symbolsIndex(index), null, 2), "utf8");
-    fs.writeFileSync(indexPath(workspaceRoot, "test-map.json"), JSON.stringify(testIndex(index), null, 2), "utf8");
+    fs.writeFileSync(
+      indexPath(workspaceRoot, "repo-map.json"),
+      JSON.stringify(index, null, 2),
+      "utf8",
+    );
+    fs.writeFileSync(
+      indexPath(workspaceRoot, "symbols.json"),
+      JSON.stringify(symbolsIndex(index), null, 2),
+      "utf8",
+    );
+    fs.writeFileSync(
+      indexPath(workspaceRoot, "test-map.json"),
+      JSON.stringify(testIndex(index), null, 2),
+      "utf8",
+    );
   } catch {
     // ponytail: cache write is best-effort; rebuild in memory if the filesystem says no.
   }
@@ -135,26 +160,37 @@ function indexFile(workspaceRoot: string, file: string): IndexedFile | null {
     kind,
     symbols,
     tests,
-    reason: symbols.length > 0 ? `symbols: ${symbols.slice(0, 3).join(", ")}` : kind,
+    reason:
+      symbols.length > 0 ? `symbols: ${symbols.slice(0, 3).join(", ")}` : kind,
   };
 }
 
-function scoreFile(file: IndexedFile, terms: readonly string[], mentioned: Set<string>): number {
+function scoreFile(
+  file: IndexedFile,
+  terms: readonly string[],
+  mentioned: Set<string>,
+): number {
   let score = mentioned.has(file.path) ? 100 : 0;
-  const haystack = `${file.path} ${file.symbols.join(" ")} ${file.tests.join(" ")}`.toLowerCase();
+  const haystack =
+    `${file.path} ${file.symbols.join(" ")} ${file.tests.join(" ")}`.toLowerCase();
   for (const term of terms) {
     if (path.basename(file.path).toLowerCase().includes(term)) score += 8;
     if (file.path.toLowerCase().includes(term)) score += 4;
     if (haystack.includes(term)) score += 6;
   }
   if (file.kind === "source") score += 2;
-  if (file.kind === "test" && terms.some((t) => t.includes("test") || t.includes("spec"))) score += 8;
+  if (
+    file.kind === "test" &&
+    terms.some((t) => t.includes("test") || t.includes("spec"))
+  )
+    score += 8;
   return score;
 }
 
 function extractSymbols(text: string): string[] {
   const symbols = new Set<string>();
-  const re = /\b(?:export\s+)?(?:async\s+)?(?:function|class|interface|type|const|let|var)\s+([A-Za-z_$][\w$]*)/g;
+  const re =
+    /\b(?:export\s+)?(?:async\s+)?(?:function|class|interface|type|const|let|var)\s+([A-Za-z_$][\w$]*)/g;
   for (const match of text.matchAll(re)) {
     if (match[1]) symbols.add(match[1]);
     if (symbols.size >= 20) break;
@@ -183,7 +219,9 @@ function fileKind(rel: string): IndexedFile["kind"] {
 }
 
 function tokenize(text: string): string[] {
-  return [...new Set(text.toLowerCase().match(/[a-z0-9_./-]{3,}/g) ?? [])].slice(0, 12);
+  return [
+    ...new Set(text.toLowerCase().match(/[a-z0-9_./-]{3,}/g) ?? []),
+  ].slice(0, 12);
 }
 
 function normalizeRel(value: string): string {
@@ -191,9 +229,15 @@ function normalizeRel(value: string): string {
 }
 
 function symbolsIndex(index: CodeIndex): Record<string, readonly string[]> {
-  return Object.fromEntries(index.files.filter((f) => f.symbols.length > 0).map((f) => [f.path, f.symbols]));
+  return Object.fromEntries(
+    index.files
+      .filter((f) => f.symbols.length > 0)
+      .map((f) => [f.path, f.symbols]),
+  );
 }
 
 function testIndex(index: CodeIndex): Record<string, readonly string[]> {
-  return Object.fromEntries(index.files.filter((f) => f.tests.length > 0).map((f) => [f.path, f.tests]));
+  return Object.fromEntries(
+    index.files.filter((f) => f.tests.length > 0).map((f) => [f.path, f.tests]),
+  );
 }

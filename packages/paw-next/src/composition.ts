@@ -1,11 +1,7 @@
-import { projectPawNextRequestGuidanceV1 } from "./request-guidance.js";
-import { withExecutionBudgetInputV1, type ExecutionDeadlineV1 } from "./execution-budget.js";
-import { DELIVERY_LEDGER_PLUGIN_V1, createDeliveryLedgerPluginV1, createDeliveryLedgerServiceV1, projectDeliveryLedgerV1 } from "./delivery-ledger.js";
-import { projectCanonicalSessionInputSnapshotV1 } from "@paw/runtime";
-import { projectPawWorkingStateV1 } from "./working-state.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createCompletionReviewEvidencePacketV1 } from "@paw/completion-review";
+import { projectCanonicalSessionInputSnapshotV1 } from "@paw/runtime";
 import {
   admittedMemorySourceSeqs,
   memoryUserStatement,
@@ -17,6 +13,12 @@ import {
 } from "./browser-check.js";
 import { mergeChildPermissionRules } from "./child-permissions.js";
 import {
+  DELIVERY_LEDGER_PLUGIN_V1,
+  createDeliveryLedgerPluginV1,
+  createDeliveryLedgerServiceV1,
+  projectDeliveryLedgerV1,
+} from "./delivery-ledger.js";
+import {
   ENVIRONMENT_AUDIT_MAX_TURNS,
   createEnvironmentCompletionReviewerV1,
   environmentRevision,
@@ -24,10 +26,15 @@ import {
   projectEnvironmentAcceptance,
 } from "./environment-audit.js";
 import {
+  type ExecutionDeadlineV1,
+  withExecutionBudgetInputV1,
+} from "./execution-budget.js";
+import {
   createLongHorizonCollaborationPlugin,
   createManagerStageLauncher,
   stageEvidenceIsCurrent,
 } from "./long-horizon.js";
+import { projectPawNextRequestGuidanceV1 } from "./request-guidance.js";
 import {
   type StageGraphSnapshot,
   guardStageDependencies,
@@ -40,6 +47,7 @@ import {
   createVisualBrowserCheck,
   verifyVisualEvidence,
 } from "./visual-check.js";
+import { projectPawWorkingStateV1 } from "./working-state.js";
 
 import {
   type AgentLoopContinueCursorV1,
@@ -87,6 +95,8 @@ import {
   COMPLETION_REVIEW_FEEDBACK_CALLER_ID_V1,
   type CompletionReviewCandidateV1,
   type CompletionReviewTriggerPolicyV1,
+  DEFAULT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
+  TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
   classifyVerificationCommandV1,
   completionReviewFeedbackInputIdV1,
   createCompletionReviewCandidateV1,
@@ -94,23 +104,21 @@ import {
   createCompletionReviewFallbackFeedbackV1,
   createCompletionReviewFeedbackV1,
   createModelCompletionReviewerV1,
-  DEFAULT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
   evaluateCompletionReviewGateV1,
   hasCompletionReviewSourceMutationV1,
   projectCompletionReviewToolEvidenceV1,
   projectPendingCompletionReviewFeedbackV1,
-  TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
 } from "@paw/completion-review";
 import {
   type CheckpointDistillationModelResultV1,
   type CheckpointDistillationModelV1,
   type ContextCompactionBoundaryDecisionV1,
+  DEFAULT_CONTEXT_COMPACTION_POLICY_V1,
   createCanonicalPayloadCheckpointEvidenceSourceV1,
   createCheckpointCompressionQualityGateV1,
+  createContextCompactToolPluginV1,
   createContextCompactionControllerV1,
   createContextCompactionInputPortV1,
-  createContextCompactToolPluginV1,
-  DEFAULT_CONTEXT_COMPACTION_POLICY_V1,
   createEvidenceBoundCheckpointDistillerV1,
   createModelCheckpointSemanticVerifierV1,
   planSemanticCheckpointRangeV1,
@@ -121,8 +129,8 @@ import {
   type ModelContextSectionV1,
   type ModelRequestV1,
   type TokenEstimator,
-  resolveEstimatorForModel,
   projectWorkspaceEffect,
+  resolveEstimatorForModel,
 } from "@paw/core";
 import type {
   ShellSandboxConfig,
@@ -151,6 +159,7 @@ import {
   type MemoryEvidenceCoverageEventV1,
   type MemoryEvidenceCoveragePlannerV1,
   type MemoryEvidenceSupportVerifierV1,
+  type MemoryMaintenanceOptionsV1,
   type MemoryPersonaEventV1,
   type MemoryPersonaStoreV1,
   type MemoryProviderV1,
@@ -178,11 +187,10 @@ import {
   createJsonMemoryTopicDossierExtractorV1,
   createJsonMemoryTopicExtractorV1,
   createMemoryContextResolverV1,
+  createMemoryMaintenanceControllerV1,
   createMemoryPersonaInputPortV1,
   createMemoryRetrievalInputPortV1,
   createMemoryTopicEvidenceInputPortV1,
-  createMemoryMaintenanceControllerV1,
-  type MemoryMaintenanceOptionsV1,
   createPawNextMemoryRrfPostgresProviderV1,
   createPawNextMemoryToolExecutorV1,
   createPawNextMemoryToolPluginV1,
@@ -205,6 +213,7 @@ import {
 import { createModelOutputRecoveryPluginV1 } from "@paw/model-output-recovery";
 import {
   type LanguageModel,
+  MODEL_REQUEST_SUPERVISION_V1,
   type ModelCompletionResult,
   type ModelStreamChunk,
   type NativeToolCall,
@@ -215,22 +224,19 @@ import {
   createAgentLoopModelAdapter,
   createPhaseEffortModel,
   createThinkingRecoveryModel,
-  MODEL_REQUEST_SUPERVISION_V1,
   resolveModelOutputLimit,
-  withModelObservationScope,
   toDurableModelResponseV1,
+  withModelObservationScope,
 } from "@paw/models";
 import {
-  type OutputRecallPolicyV1,
   DEFAULT_OUTPUT_RECALL_POLICY_V1,
   OUTPUT_RECALL_TOOL_PLUGIN_ID_V1,
+  type OutputRecallPolicyV1,
   createDurableOutputRecallServiceV1,
   createOutputRecallProjectorV1,
   createOutputRecallToolPluginV1,
 } from "@paw/output-recall";
-import {
-  projectProgressAdviceV1,
-} from "@paw/progress-advisor";
+import { projectProgressAdviceV1 } from "@paw/progress-advisor";
 import {
   type ControlDecisionActionV1,
   type DerivedDecisionV1,
@@ -312,8 +318,13 @@ import {
 } from "@paw/web-access";
 import { createRecoverableWorktreeV1, findGitRoot } from "@paw/workspace";
 
+import {
+  AUDIT_CORRECTION_CALLER,
+  AUDIT_EVIDENCE_INSTRUCTION,
+  auditReportCorrectionV1,
+  auditorEvidenceContextV1,
+} from "./audit-evidence.js";
 import { loadPawNextCollaborationRosterV1 } from "./collaboration-roster-adapter.js";
-import { AUDIT_EVIDENCE_INSTRUCTION, AUDIT_CORRECTION_CALLER, auditorEvidenceContextV1, auditReportCorrectionV1 } from "./audit-evidence.js";
 import {
   assertPawNextExistingIdentityV1,
   assertPawNextInlinePayloadPreflightV1,
@@ -771,8 +782,7 @@ export interface PawNextPhaseEffortTelemetryV1 {
 
 export const PAW_NEXT_THINKING_RECOVERY_POLICY_V1: PawNextThinkingRecoveryPolicyV1 =
   Object.freeze({
-    policyVersion:
-      "paw.next.thinking-recovery.v1:noaction540000:recoveries2",
+    policyVersion: "paw.next.thinking-recovery.v1:noaction540000:recoveries2",
     noActionMs: 540_000,
     maxRecoveries: 2,
   });
@@ -921,7 +931,9 @@ function preparePawNextProductRuntimeCoreV1(
   const untrackedBaseModel = createAgentLoopModelAdapter(
     phaseModel,
     options.transport ?? "complete",
-    extensions?.recoverTruncatedModelOutput ? MODEL_REQUEST_SUPERVISION_V1 : undefined,
+    extensions?.recoverTruncatedModelOutput
+      ? MODEL_REQUEST_SUPERVISION_V1
+      : undefined,
   );
   const baseModel: typeof untrackedBaseModel = Object.freeze({
     async execute(
@@ -1555,7 +1567,9 @@ function preparePawNextProductRuntimeV3(
     task.payloadRuntime,
   );
   const runConfig: InteractiveControlConfigV2 = Object.freeze({
-    ...(task.recoverReasoningTimeout ? { recoverReasoningTimeout: true as const } : {}),
+    ...(task.recoverReasoningTimeout
+      ? { recoverReasoningTimeout: true as const }
+      : {}),
     mode: "interactive",
     maxModelTurns: task.maxModelTurns,
     naturalStop: task.naturalStop,
@@ -1571,7 +1585,9 @@ function preparePawNextProductRuntimeV3(
   );
   reducer.reduce([], runConfig);
   const options: RunFreshPawNextTaskOptionsV1 = Object.freeze({
-    ...(input.executionDeadline ? { executionDeadline: input.executionDeadline } : {}),
+    ...(input.executionDeadline
+      ? { executionDeadline: input.executionDeadline }
+      : {}),
     onChildResult: input.onChildResult,
     onManagedJobsReady: input.onManagedJobsReady,
     onManagedJobUpdate: input.onManagedJobUpdate,
@@ -1589,10 +1605,18 @@ function preparePawNextProductRuntimeV3(
       ? { onJournalCommit: input.onJournalCommit }
       : {}),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(task.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
-    ...(task.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
-    ...(task.environmentAuditEvidenceRepair ? { environmentAuditEvidenceRepair: true as const } : {}),
-    ...(task.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
+    ...(task.environmentAuditRetry
+      ? { environmentAuditRetry: true as const }
+      : {}),
+    ...(task.environmentAuditSinglePass
+      ? { environmentAuditSinglePass: true as const }
+      : {}),
+    ...(task.environmentAuditEvidenceRepair
+      ? { environmentAuditEvidenceRepair: true as const }
+      : {}),
+    ...(task.compactMutationReceipts
+      ? { compactMutationReceipts: true as const }
+      : {}),
     ...(task.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.legacyOutputRecall ? { legacyOutputRecall: true as const } : {}),
@@ -1776,10 +1800,18 @@ function preparePawNextProductRuntimeV3(
     payloadRuntime,
     ...(task.memory === undefined ? {} : { memory: task.memory }),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(task.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
-    ...(task.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
-    ...(task.environmentAuditEvidenceRepair ? { environmentAuditEvidenceRepair: true as const } : {}),
-    ...(task.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
+    ...(task.environmentAuditRetry
+      ? { environmentAuditRetry: true as const }
+      : {}),
+    ...(task.environmentAuditSinglePass
+      ? { environmentAuditSinglePass: true as const }
+      : {}),
+    ...(task.environmentAuditEvidenceRepair
+      ? { environmentAuditEvidenceRepair: true as const }
+      : {}),
+    ...(task.compactMutationReceipts
+      ? { compactMutationReceipts: true as const }
+      : {}),
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.stageGraph ? { stageGraph: true as const } : {}),
     ...(task.browserAudit ? { browserAudit: true as const } : {}),
@@ -2031,7 +2063,9 @@ function productLoopRuntimeV3(
   const cacheStableContext = createPawNextV3CacheStableContextV1(
     prepared.core.context,
     prepared.runConfig,
-    prepared.options.systemPrompt?.endsWith(AUDIT_EVIDENCE_INSTRUCTION) ? prepared.options.workspaceRoot : undefined,
+    prepared.options.systemPrompt?.endsWith(AUDIT_EVIDENCE_INSTRUCTION)
+      ? prepared.options.workspaceRoot
+      : undefined,
   );
   const contextResolver =
     prepared.memoryPlugin === undefined
@@ -2108,8 +2142,18 @@ function createPawNextV3CacheStableContextV1(
           ...(projection?.evidenceAnnotations?.(evidence) ?? []),
           ...(state ? [state] : []),
           ...(delivery ? [delivery] : []),
-          ...(auditWorkspaceRoot ? [{ sourceThroughSeq: snapshot.latestInputSeq, placement: "tail" as const,
-            content: auditorEvidenceContextV1(auditWorkspaceRoot, snapshot.entries.map(e => e.fact)) }] : []),
+          ...(auditWorkspaceRoot
+            ? [
+                {
+                  sourceThroughSeq: snapshot.latestInputSeq,
+                  placement: "tail" as const,
+                  content: auditorEvidenceContextV1(
+                    auditWorkspaceRoot,
+                    snapshot.entries.map((e) => e.fact),
+                  ),
+                },
+              ]
+            : []),
         ];
       },
       runtimeActivityContent: (section) =>
@@ -2234,11 +2278,21 @@ function pawNextV3ExtensionsV1(
     );
   if (mode === "child") {
     if (!agent) throw new Error("Child extensions require an AgentSpec");
-    return pawNextV3ChildExtensionsV1(agent, shellSandbox, toolWorkspaceRoot, false, legacyOutputRecall, outputMasking, outputMaskingThresholdChars);
+    return pawNextV3ChildExtensionsV1(
+      agent,
+      shellSandbox,
+      toolWorkspaceRoot,
+      false,
+      legacyOutputRecall,
+      outputMasking,
+      outputMaskingThresholdChars,
+    );
   }
   if (!roster)
     throw new Error("Root extensions require a collaboration roster");
-  const recallPolicy = outputRecallPolicyForThresholdV1(outputMaskingThresholdChars);
+  const recallPolicy = outputRecallPolicyForThresholdV1(
+    outputMaskingThresholdChars,
+  );
   if (longHorizon === "manager")
     return Object.freeze({
       recoverTruncatedModelOutput: true,
@@ -2268,7 +2322,10 @@ function pawNextV3ExtensionsV1(
       createMcpProxyToolPluginV1(hashCanonicalJsonV1(mcp ?? null)),
       createOutputRecallToolPluginV1(
         legacyOutputRecall
-          ? { legacyWorkspaceResource: true, ...(recallPolicy === undefined ? {} : { policy: recallPolicy }) }
+          ? {
+              legacyWorkspaceResource: true,
+              ...(recallPolicy === undefined ? {} : { policy: recallPolicy }),
+            }
           : recallPolicy === undefined
             ? undefined
             : { policy: recallPolicy },
@@ -2286,7 +2343,9 @@ function pawNextV3ExtensionsV1(
       ? {}
       : {
           toolObservationProjector: createOutputRecallProjectorV1({
-            ...(compactMutationReceipts ? { compactMutationReceipts: true } : {}),
+            ...(compactMutationReceipts
+              ? { compactMutationReceipts: true }
+              : {}),
             ...(recallPolicy === undefined ? {} : { policy: recallPolicy }),
           }),
         }),
@@ -2362,7 +2421,9 @@ function pawNextV3ChildExtensionsV1(
       : childBoundary,
     ...(toolWorkspaceRoot === undefined ? {} : { toolWorkspaceRoot }),
     plugins: Object.freeze([
-      createOutputRecallToolPluginV1(legacyOutputRecall ? { legacyWorkspaceResource: true } : undefined),
+      createOutputRecallToolPluginV1(
+        legacyOutputRecall ? { legacyWorkspaceResource: true } : undefined,
+      ),
       ...(web ? [web] : []),
       ...(auditBrowser && permits(BROWSER_CHECK)
         ? [createBrowserCheckPlugin()]
@@ -2774,14 +2835,20 @@ function memoryWriterControllerV1<
   ) {
     return undefined;
   }
-  if (input.options.deferMemory) return {
-    async settleTerminal() {
-      const snapshot = await input.bundle.session.readInputSnapshot();
-      await input.options.deferMemory!(snapshot.tailSeq);
-      input.options.onMemoryWriterEvent?.({ schemaVersion: "paw.memory-writer-event.v1", type: "maintenance", reasonCode: "MemoryMaintenanceQueued", durationMs: 0 });
-      return undefined;
-    },
-  };
+  if (input.options.deferMemory)
+    return {
+      async settleTerminal() {
+        const snapshot = await input.bundle.session.readInputSnapshot();
+        await input.options.deferMemory!(snapshot.tailSeq);
+        input.options.onMemoryWriterEvent?.({
+          schemaVersion: "paw.memory-writer-event.v1",
+          type: "maintenance",
+          reasonCode: "MemoryMaintenanceQueued",
+          durationMs: 0,
+        });
+        return undefined;
+      },
+    };
   const auxiliary = checkpointModelAdapterV1(input.options.model, {
     observationScope: { runId: input.options.runId, phase: "memory_write" },
     thinkingEnabled: false,
@@ -2830,7 +2897,9 @@ function memoryWriterControllerV1<
     model: writerModel,
   });
   const writer: MemoryMaintenanceOptionsV1["writer"] = {
-    ...(input.retryFailedUnstaged ? { retryFailedUnstaged: true as const } : {}),
+    ...(input.retryFailedUnstaged
+      ? { retryFailedUnstaged: true as const }
+      : {}),
     session: input.bundle.session,
     runId: input.options.runId,
     scope: plugin.profile.scope,
@@ -3237,12 +3306,19 @@ function taskProgressContextV1<
         bundle.loadForPrefix(prefix, signal),
       listActivities: () => managedJobs.list(),
     }),
-    ...(runtime.registry.plugins.some(plugin => plugin.pluginId === DELIVERY_LEDGER_PLUGIN_V1) ? {
-      acceptanceLedger: createDeliveryLedgerServiceV1(async () => {
-        const prefix = await bundle.session.readCanonicalPrefix();
-        return { snapshot: projectCanonicalSessionInputSnapshotV1(prefix), evidence: await bundle.loadForPrefix(prefix) };
-      }),
-    } : {}),
+    ...(runtime.registry.plugins.some(
+      (plugin) => plugin.pluginId === DELIVERY_LEDGER_PLUGIN_V1,
+    )
+      ? {
+          acceptanceLedger: createDeliveryLedgerServiceV1(async () => {
+            const prefix = await bundle.session.readCanonicalPrefix();
+            return {
+              snapshot: projectCanonicalSessionInputSnapshotV1(prefix),
+              evidence: await bundle.loadForPrefix(prefix),
+            };
+          }),
+        }
+      : {}),
   });
 }
 
@@ -3898,7 +3974,9 @@ function preparePawNextReadOnlyChildV3(
     inputId: input.inputId,
     goal: input.goal,
     permissionConfig,
-    systemPrompt: agentSpecChildSystemPromptV1(input.agent) + (input.auditEvidenceReview ? `\n\n${AUDIT_EVIDENCE_INSTRUCTION}` : ""),
+    systemPrompt:
+      agentSpecChildSystemPromptV1(input.agent) +
+      (input.auditEvidenceReview ? `\n\n${AUDIT_EVIDENCE_INSTRUCTION}` : ""),
     maxModelTurns: input.maxModelTurns,
     naturalStop: "complete",
     ...(shellSandbox === undefined ? {} : { shellSandbox }),
@@ -4711,9 +4789,13 @@ export async function runExistingPawNextWorkSegmentV3(
       // Accepted queue inputs may already follow maintenance after a failed
       // admission attempt. Re-anchor the verified terminal state over settled
       // maintenance before the strict work-segment planner promotes that input.
-      const maintenanceTail = [...prefix].reverse().find((entry) =>
-        entry.record.kind !== "input_fact" || entry.record.fact.type !== "input.accepted",
-      )?.record;
+      const maintenanceTail = [...prefix]
+        .reverse()
+        .find(
+          (entry) =>
+            entry.record.kind !== "input_fact" ||
+            entry.record.fact.type !== "input.accepted",
+        )?.record;
       if (
         restored.classification.status === "terminal" &&
         maintenanceTail?.kind === "input_fact" &&
@@ -5031,10 +5113,19 @@ function runPreparedExistingPawNextTaskV3(
       ),
     allowBlockedPending: (prefix) =>
       (prepared.options.systemPrompt?.endsWith(AUDIT_EVIDENCE_INSTRUCTION) &&
-        prefixInputFacts(prefix).some(f => f.type === "input.accepted" && f.inputId === "audit-report-correction" && f.callerId === AUDIT_CORRECTION_CALLER) &&
-        !prefixInputFacts(prefix).some(f => f.type === "input.promoted" && f.inputId === "audit-report-correction")) ||
+        prefixInputFacts(prefix).some(
+          (f) =>
+            f.type === "input.accepted" &&
+            f.inputId === "audit-report-correction" &&
+            f.callerId === AUDIT_CORRECTION_CALLER,
+        ) &&
+        !prefixInputFacts(prefix).some(
+          (f) =>
+            f.type === "input.promoted" &&
+            f.inputId === "audit-report-correction",
+        )) ||
       projectPendingCompletionReviewFeedbackV1(prefixInputFacts(prefix)) !==
-      undefined,
+        undefined,
     openNextQueuedWorkSegment: (context) =>
       openNextPawNextV3WorkSegmentV1({
         ...context,
@@ -5187,19 +5278,43 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   readonly settleMemory?: () => Promise<void>;
 }): Promise<boolean> {
   if (input.options.systemPrompt?.endsWith(AUDIT_EVIDENCE_INSTRUCTION)) {
-    if (input.state.decision.kind !== "completed" || !canOpenPawNextV3WorkSegmentV1(input.state, input.prepared.runConfig)) return false;
+    if (
+      input.state.decision.kind !== "completed" ||
+      !canOpenPawNextV3WorkSegmentV1(input.state, input.prepared.runConfig)
+    )
+      return false;
     const prefix = await input.session.readCanonicalPrefix();
     const snapshot = prefixInputSnapshot(prefix);
-    const facts = snapshot.entries.map(e => e.fact);
+    const facts = snapshot.entries.map((e) => e.fact);
     const inputId = "audit-report-correction";
-    if (facts.some(f => f.type === "input.promoted" && f.inputId === inputId)) return false;
-    const accepted = facts.find(f => f.type === "input.accepted" && f.inputId === inputId && f.callerId === AUDIT_CORRECTION_CALLER);
+    if (facts.some((f) => f.type === "input.promoted" && f.inputId === inputId))
+      return false;
+    const accepted = facts.find(
+      (f) =>
+        f.type === "input.accepted" &&
+        f.inputId === inputId &&
+        f.callerId === AUDIT_CORRECTION_CALLER,
+    );
     if (!accepted) {
       const payloadEvidence = await input.loadForPrefix(prefix, input.signal);
-      const text = projectLatestAssistantTextV1({ snapshot, providerProtocol: input.options.providerProtocol ?? "openai-compatible", payloadEvidence });
-      const correction = auditReportCorrectionV1(input.options.workspaceRoot, facts, text ?? "", true);
+      const text = projectLatestAssistantTextV1({
+        snapshot,
+        providerProtocol: input.options.providerProtocol ?? "openai-compatible",
+        payloadEvidence,
+      });
+      const correction = auditReportCorrectionV1(
+        input.options.workspaceRoot,
+        facts,
+        text ?? "",
+        true,
+      );
       if (!correction) return false;
-      await input.inbox.accept({ inputId, delivery: "queue", callerId: AUDIT_CORRECTION_CALLER, content: correction });
+      await input.inbox.accept({
+        inputId,
+        delivery: "queue",
+        callerId: AUDIT_CORRECTION_CALLER,
+        content: correction,
+      });
     }
     await refreshPawNextV3TerminalDecisionV1(input);
     await startPawNextV3WorkSegmentV1({ ...input, inputId });
@@ -5334,43 +5449,64 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     if (gate.action !== "allow" || input.options.environmentAudit) {
       const controller = createCompletionReviewControllerV1({
         session: input.session,
-        ...(input.options.environmentAuditRetry && !input.options.environmentAuditSinglePass && candidate.toolEvidence.length > 0
+        ...(input.options.environmentAuditRetry &&
+        !input.options.environmentAuditSinglePass &&
+        candidate.toolEvidence.length > 0
           ? {
               retryOnceOn: ["AuditTimeout"],
               async canRetry() {
                 const currentPrefix = await input.session.readCanonicalPrefix();
                 const currentSnapshot = prefixInputSnapshot(currentPrefix);
                 const inbox = projectDurableInputInboxStateV1(currentSnapshot);
-                if (inbox.pendingQueueIds.length || inbox.pendingSteerIds.length) return false;
-                const currentCandidate = await projectCompletionReviewCandidateV1({
-                  prefix: currentPrefix, snapshot: currentSnapshot, options: input.options,
-                  loadForPrefix: input.loadForPrefix, signal: input.signal,
-                });
-                return currentCandidate?.candidateHash === candidate.candidateHash;
+                if (
+                  inbox.pendingQueueIds.length ||
+                  inbox.pendingSteerIds.length
+                )
+                  return false;
+                const currentCandidate =
+                  await projectCompletionReviewCandidateV1({
+                    prefix: currentPrefix,
+                    snapshot: currentSnapshot,
+                    options: input.options,
+                    loadForPrefix: input.loadForPrefix,
+                    signal: input.signal,
+                  });
+                return (
+                  currentCandidate?.candidateHash === candidate.candidateHash
+                );
               },
             }
           : {}),
         // A tool-free answer needs semantic delivery review, not a file-reading
         // child. Conversation can finish directly; a promise of action cannot.
-        reviewer: input.options.environmentAudit && candidate.toolEvidence.length > 0
-          ? environmentReviewer(input, candidate, graph)
-          : createModelCompletionReviewerV1({
-              ...(candidate.toolEvidence.length === 0 ? { maxOutputTokens: 512, maxTruncationRetries: 0 } : {}),
-              model: completionReviewModelAdapterV1(
-                input.options.model,
-                input.options.runId,
-                createAuxiliaryModelCompletionObserverV1({
-                  options: input.options,
-                  costTracker: input.prepared.core.costTracker,
-                  phase: "completion_review",
-                }),
-              ),
-            }),
+        reviewer:
+          input.options.environmentAudit && candidate.toolEvidence.length > 0
+            ? environmentReviewer(input, candidate, graph)
+            : createModelCompletionReviewerV1({
+                ...(candidate.toolEvidence.length === 0
+                  ? { maxOutputTokens: 512, maxTruncationRetries: 0 }
+                  : {}),
+                model: completionReviewModelAdapterV1(
+                  input.options.model,
+                  input.options.runId,
+                  createAuxiliaryModelCompletionObserverV1({
+                    options: input.options,
+                    costTracker: input.prepared.core.costTracker,
+                    phase: "completion_review",
+                  }),
+                ),
+              }),
         signal: input.signal,
       });
       const settlement = await controller.review(
         candidate,
-        gate.action === "allow" ? [candidate.toolEvidence.length === 0 ? "delivery_without_observation" : "non_trivial_change"] : gate.triggers,
+        gate.action === "allow"
+          ? [
+              candidate.toolEvidence.length === 0
+                ? "delivery_without_observation"
+                : "non_trivial_change",
+            ]
+          : gate.triggers,
       );
       const reviewerBlocked =
         settlement.status === "completed" && settlement.verdict === "block";
@@ -5400,8 +5536,11 @@ async function openNextPawNextV3WorkSegmentV1(input: {
         // An unavailable or ungrounded audit is not an implementation defect.
         // New single-pass audits stop unverified; an explicit block still feeds
         // a repair segment. Legacy sessions retain their timeout-retry policy.
-        if ((input.options.environmentAuditSinglePass && reviewerUnavailable) ||
-            (input.options.environmentAuditRetry && settlement.reasonCode === "AuditTimeout"))
+        if (
+          (input.options.environmentAuditSinglePass && reviewerUnavailable) ||
+          (input.options.environmentAuditRetry &&
+            settlement.reasonCode === "AuditTimeout")
+        )
           return false;
         const feedbackId = completionReviewFeedbackInputIdV1(
           candidate.candidateHash,
@@ -5533,19 +5672,41 @@ async function projectCompletionReviewCandidateV1(input: {
     ),
   );
   const payloadEvidence = await input.loadForPrefix(input.prefix, input.signal);
-  const effects = new Map(observed.map(({ fact }) => {
-    const settled = settlements.get(fact.callId);
-    const observation = settled?.fact.observation;
-    const payload = settled && observation?.payload ? payloadEvidence.requirePayload({
-      snapshot: input.snapshot,
-      location: { kind: "tool_observation", carrierType: "tool.settled", carrierSeq: settled.seq, callId: fact.callId },
-      payload: observation.payload,
-    }) : undefined;
-    return [fact.callId, projectWorkspaceEffect(fact.tool, payload, observation?.isError === true)] as const;
-  }));
+  const effects = new Map(
+    observed.map(({ fact }) => {
+      const settled = settlements.get(fact.callId);
+      const observation = settled?.fact.observation;
+      const payload =
+        settled && observation?.payload
+          ? payloadEvidence.requirePayload({
+              snapshot: input.snapshot,
+              location: {
+                kind: "tool_observation",
+                carrierType: "tool.settled",
+                carrierSeq: settled.seq,
+                callId: fact.callId,
+              },
+              payload: observation.payload,
+            })
+          : undefined;
+      return [
+        fact.callId,
+        projectWorkspaceEffect(
+          fact.tool,
+          payload,
+          observation?.isError === true,
+        ),
+      ] as const;
+    }),
+  );
   const directMutations = observed.filter(({ fact }) => {
     const settled = settlements.get(fact.callId)?.fact;
-    return settled && settled.status !== "rejected" && !["workspace.run_agent", "workspace_delegate"].includes(fact.tool) && effects.get(fact.callId)?.changed !== false;
+    return (
+      settled &&
+      settled.status !== "rejected" &&
+      !["workspace.run_agent", "workspace_delegate"].includes(fact.tool) &&
+      effects.get(fact.callId)?.changed !== false
+    );
   });
   const delegatedMutations = observed.flatMap(({ seq, fact }) => {
     if (
@@ -5616,14 +5777,17 @@ async function projectCompletionReviewCandidateV1(input: {
     delegatedMutations.at(-1)?.seq ?? 0,
   );
   const changedPaths = [
-    ...directMutations.flatMap(({ fact }) =>
-      [...completionReviewMutationPathsV1(fact.tool, fact.args), ...(effects.get(fact.callId)?.paths ?? [])],
-    ),
+    ...directMutations.flatMap(({ fact }) => [
+      ...completionReviewMutationPathsV1(fact.tool, fact.args),
+      ...(effects.get(fact.callId)?.paths ?? []),
+    ]),
     ...delegatedMutations.flatMap((item) => item.paths),
   ];
   const hasUnknownMutationPath = directMutations.some(
     ({ fact }) =>
-      effects.get(fact.callId)?.changed === "unknown" || (completionReviewMutationPathsV1(fact.tool, fact.args).length === 0 && !effects.get(fact.callId)?.paths.length),
+      effects.get(fact.callId)?.changed === "unknown" ||
+      (completionReviewMutationPathsV1(fact.tool, fact.args).length === 0 &&
+        !effects.get(fact.callId)?.paths.length),
   );
   const toolEvidence = projectCompletionReviewToolEvidenceV1({
     latestMutationSeq,
@@ -5765,7 +5929,10 @@ async function projectCompletionReviewCandidateV1(input: {
       completionReviewGatePolicyV1(input.options),
     ).action === "allow" &&
     !input.options.longHorizon &&
-    !(input.options.environmentAudit && (triggerProbe.mutationCount > 0 || triggerProbe.toolEvidence.length === 0))
+    !(
+      input.options.environmentAudit &&
+      (triggerProbe.mutationCount > 0 || triggerProbe.toolEvidence.length === 0)
+    )
   ) {
     return undefined;
   }
@@ -7205,7 +7372,14 @@ function createProductLoopDependenciesGeneric<
   return {
     session: input.session,
     input: input.prepared.progressAdvisor
-      ? withExecutionBudgetInputV1(input.inbox, input.session, input.options.executionDeadline, input.options.leaseScheduler ? () => input.options.leaseScheduler!.now() : undefined)
+      ? withExecutionBudgetInputV1(
+          input.inbox,
+          input.session,
+          input.options.executionDeadline,
+          input.options.leaseScheduler
+            ? () => input.options.leaseScheduler!.now()
+            : undefined,
+        )
       : input.inbox,
     context: input.prepared.context,
     model: input.prepared.model,
@@ -7748,8 +7922,15 @@ function createProductFactMapper<
         status: settlement.status,
         hasToolCalls: false,
         hasVisibleOutput: false,
-        ...("reason" in settlement && /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/.test(settlement.reason)
-          ? { errorCode: settlement.reason.match(/Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/)![0] }
+        ...("reason" in settlement &&
+        /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/.test(
+          settlement.reason,
+        )
+          ? {
+              errorCode: settlement.reason.match(
+                /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/,
+              )![0],
+            }
           : {}),
       };
     },

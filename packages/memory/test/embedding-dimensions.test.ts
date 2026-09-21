@@ -10,18 +10,19 @@
  *   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test" bun test test/embedding-dimensions.test.ts
  */
 
-import { describe, test, expect, afterAll } from "bun:test";
-import { getSql, closeSql, ping } from "../src/db/connection.js";
-import {
-  NGramEmbeddingService,
-  MEMORY_EMBEDDING_DIMENSIONS,
-} from "../src/db/modules/platform/embeddingService.js";
-import { memoryCandidateDao } from "../src/db/dao/memoryCandidate.js";
+import { afterAll, describe, expect, test } from "bun:test";
+import { closeSql, getSql, ping } from "../src/db/connection.js";
 import { governanceDecisionDao } from "../src/db/dao/governanceDecision.js";
+import { memoryCandidateDao } from "../src/db/dao/memoryCandidate.js";
+import {
+  MEMORY_EMBEDDING_DIMENSIONS,
+  NGramEmbeddingService,
+} from "../src/db/modules/platform/embeddingService.js";
 import { MemoryStore } from "../src/db/modules/write/memoryStore.js";
 import type { GovernanceDecision, MemoryCandidate } from "../src/db/types.js";
 
-process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??=
+  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -49,7 +50,9 @@ afterAll(async () => {
 describe("embedding 维度一致性", () => {
   test("统一维度常量对齐 V008 vector(1536)", () => {
     expect(MEMORY_EMBEDDING_DIMENSIONS).toBe(1536);
-    expect(new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS).dimensions).toBe(1536);
+    expect(
+      new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS).dimensions,
+    ).toBe(1536);
   });
 
   it("治理写入路径（MemoryStore）落库 1536 维 embedding", async () => {

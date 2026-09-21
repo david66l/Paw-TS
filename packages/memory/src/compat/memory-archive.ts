@@ -29,16 +29,11 @@
  * and the archive's own browseable index.
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync } from "node:fs";
 import path from "node:path";
 import { atomicWrite } from "@paw/core";
-import type { AutoMemoryEntry } from "./auto-memory.js";
 import { kindFromLegacyType } from "../shared/memory-types.js";
+import type { AutoMemoryEntry } from "./auto-memory.js";
 
 /**
  * 默认最大存活天数：低优先级记忆条目超过此天数后自动归档
@@ -110,7 +105,11 @@ export function shouldArchiveEntry(
   now: number,
   maxAgeDays = DEFAULT_MAX_AGE_DAYS,
   /** 按优先级自定义过期天数。未设置时保持旧行为：仅 low 优先级受 age 规则影响。 */
-  ttlByPriority?: { readonly high?: number; readonly mid?: number; readonly low?: number },
+  ttlByPriority?: {
+    readonly high?: number;
+    readonly mid?: number;
+    readonly low?: number;
+  },
 ): boolean {
   if (isProtectedUserPreference(entry)) return false;
 
@@ -167,7 +166,11 @@ export function archiveExpiredEntries(
   entries: readonly AutoMemoryEntry[],
   memoryDir: string,
   maxAgeDays = DEFAULT_MAX_AGE_DAYS,
-  ttlByPriority?: { readonly high?: number; readonly mid?: number; readonly low?: number },
+  ttlByPriority?: {
+    readonly high?: number;
+    readonly mid?: number;
+    readonly low?: number;
+  },
 ): { archivedNames: readonly string[] } {
   const now = Date.now();
   const archivedNames: string[] = [];
@@ -205,9 +208,9 @@ export function rebuildArchiveIndex(memoryDir: string): void {
 
   try {
     // 统计归档目录中的 .md 文件数量（排除索引自身）
-    const archiveEntries = readdirSync(archiveDir)
-      .filter((f) => f.endsWith(".md") && f !== "MEMORY.md")
-      .length;
+    const archiveEntries = readdirSync(archiveDir).filter(
+      (f) => f.endsWith(".md") && f !== "MEMORY.md",
+    ).length;
 
     // 写入简化的索引文件
     atomicWrite(

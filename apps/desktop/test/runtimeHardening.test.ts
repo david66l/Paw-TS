@@ -3,10 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { LanguageModel } from "@paw/models";
-import { DesktopNextEvents } from "../agent-host/paw-next-events.js";
-import { desktopProjectContext } from "../agent-host/project-context.js";
-import { runDesktopNext } from "../agent-host/paw-next.js";
 import { superviseModelRequest } from "../../../packages/models/src/request-supervision.js";
+import { DesktopNextEvents } from "../agent-host/paw-next-events.js";
+import { runDesktopNext } from "../agent-host/paw-next.js";
+import { desktopProjectContext } from "../agent-host/project-context.js";
 const roots: string[] = [];
 
 test("ordinary desktop does not enable unproven automatic reasoning recovery", async () => {
@@ -14,61 +14,120 @@ test("ordinary desktop does not enable unproven automatic reasoning recovery", a
   const model: LanguageModel = {
     label: "openai:no-recovery-test",
     capabilities: { contextWindow: 32000, maxOutputTokens: 4096 },
-    runtimeProfile: { protocol: "openai-compatible", model: "no-recovery-test", baseUrl: "https://invalid.local" },
+    runtimeProfile: {
+      protocol: "openai-compatible",
+      model: "no-recovery-test",
+      baseUrl: "https://invalid.local",
+    },
     async complete(_messages, options) {
       calls++;
-      const guard = superviseModelRequest(options!.signal!, { idleMs: 1000, reasoningOnlyMs: 10, wallMs: 2000 });
+      const guard = superviseModelRequest(options!.signal!, {
+        idleMs: 1000,
+        reasoningOnlyMs: 10,
+        wallMs: 2000,
+      });
       guard.event({ type: "delta", kind: "thinking", count: 1 });
       return guard.run(() => new Promise<never>(() => {}));
     },
   };
-  const result = await runDesktopNext("Implement the task", { workspaceRoot: workspace(), model, settings: {}, memoryEnabled: false, environmentAudit: false, onEvent() {}, maxSteps: 6 });
+  const result = await runDesktopNext("Implement the task", {
+    workspaceRoot: workspace(),
+    model,
+    settings: {},
+    memoryEnabled: false,
+    environmentAudit: false,
+    onEvent() {},
+    maxSteps: 6,
+  });
   expect(result.ok).toBe(false);
   expect(calls).toBe(1);
   expect(result.text).toContain("ModelReasoningWithoutActionTimeout");
 }, 30000);
 
-for (const stallsAgain of [false, true]) test(`desktop reasoning recovery ${stallsAgain ? "stops a second stall" : "writes and replays without resetting allowance"}`, async () => {
-  const root = workspace();
-  const events: any[] = [];
-  let calls = 0;
-  const model: LanguageModel = {
-    label: "openai:recovery-test",
-    capabilities: { contextWindow: 32000, maxOutputTokens: 4096 },
-    runtimeProfile: { protocol: "openai-compatible", model: "recovery-test", baseUrl: "https://invalid.local" },
-    async complete(messages, options) {
-      if (messages[0]?.content.includes("completion reviewer")) return { text: '{"decision":"allow","reasonCode":"evidence_sufficient","summary":"Fixture verified"}' };
-      calls++;
-      if (calls === 1 || stallsAgain || calls === 4) {
-        // Exercise a real host timeout with a short deterministic deadline.
-        const guard = superviseModelRequest(options!.signal!, { idleMs: 1000, reasoningOnlyMs: 10, wallMs: 2000 });
-        guard.event({ type: "delta", kind: "thinking", count: 1 });
-        return guard.run(() => new Promise<never>(() => {}));
-      }
-      const guidance = messages.map(m => m.content).join("\n");
-      expect(guidance).toContain("[Paw execution recovery;");
-      expect(guidance).toContain("usage is unknown");
-      expect(options?.maxOutputTokens).toBe(4096);
-      if (calls === 2) {
-        const args = { path: "recovered.txt", content: "recovered\n" };
-        return { text: "", finishReason: "tool_calls", toolCalls: [{ id: "write-recovered", name: "workspace_write_file", arguments: args, rawArguments: JSON.stringify(args), sourceIndex: 0, argumentsValid: true }] };
-      }
-      return { text: "Created recovered.txt", finishReason: "stop" };
-    },
-  };
-  const options = { workspaceRoot: root, conversationId: "reasoning", model, settings: {}, memoryEnabled: false, environmentAudit: false, experimentalReasoningRecovery: true as const, maxSteps: 6, resolveToolApproval: async () => true, onEvent: (event: any) => { events.push(event); } };
-  const result = await runDesktopNext("Write recovered.txt", options);
-  expect(result.ok).toBe(!stallsAgain);
-  expect(calls).toBe(stallsAgain ? 2 : 3);
-  if (!stallsAgain) {
-    expect(fs.readFileSync(path.join(root, "recovered.txt"), "utf8")).toBe("recovered\n");
-    // A new host invocation replays the original run; it must not regain an allowance.
-    const next = await runDesktopNext("Continue with another change", options);
-    expect(next.ok).toBe(false);
-    expect(calls).toBe(4);
-    expect(JSON.parse(next.text).runId).toBe(JSON.parse(result.text).runId);
-  }
-}, 30000);
+for (const stallsAgain of [false, true])
+  test(`desktop reasoning recovery ${stallsAgain ? "stops a second stall" : "writes and replays without resetting allowance"}`, async () => {
+    const root = workspace();
+    const events: any[] = [];
+    let calls = 0;
+    const model: LanguageModel = {
+      label: "openai:recovery-test",
+      capabilities: { contextWindow: 32000, maxOutputTokens: 4096 },
+      runtimeProfile: {
+        protocol: "openai-compatible",
+        model: "recovery-test",
+        baseUrl: "https://invalid.local",
+      },
+      async complete(messages, options) {
+        if (messages[0]?.content.includes("completion reviewer"))
+          return {
+            text: '{"decision":"allow","reasonCode":"evidence_sufficient","summary":"Fixture verified"}',
+          };
+        calls++;
+        if (calls === 1 || stallsAgain || calls === 4) {
+          // Exercise a real host timeout with a short deterministic deadline.
+          const guard = superviseModelRequest(options!.signal!, {
+            idleMs: 1000,
+            reasoningOnlyMs: 10,
+            wallMs: 2000,
+          });
+          guard.event({ type: "delta", kind: "thinking", count: 1 });
+          return guard.run(() => new Promise<never>(() => {}));
+        }
+        const guidance = messages.map((m) => m.content).join("\n");
+        expect(guidance).toContain("[Paw execution recovery;");
+        expect(guidance).toContain("usage is unknown");
+        expect(options?.maxOutputTokens).toBe(4096);
+        if (calls === 2) {
+          const args = { path: "recovered.txt", content: "recovered\n" };
+          return {
+            text: "",
+            finishReason: "tool_calls",
+            toolCalls: [
+              {
+                id: "write-recovered",
+                name: "workspace_write_file",
+                arguments: args,
+                rawArguments: JSON.stringify(args),
+                sourceIndex: 0,
+                argumentsValid: true,
+              },
+            ],
+          };
+        }
+        return { text: "Created recovered.txt", finishReason: "stop" };
+      },
+    };
+    const options = {
+      workspaceRoot: root,
+      conversationId: "reasoning",
+      model,
+      settings: {},
+      memoryEnabled: false,
+      environmentAudit: false,
+      experimentalReasoningRecovery: true as const,
+      maxSteps: 6,
+      resolveToolApproval: async () => true,
+      onEvent: (event: any) => {
+        events.push(event);
+      },
+    };
+    const result = await runDesktopNext("Write recovered.txt", options);
+    expect(result.ok).toBe(!stallsAgain);
+    expect(calls).toBe(stallsAgain ? 2 : 3);
+    if (!stallsAgain) {
+      expect(fs.readFileSync(path.join(root, "recovered.txt"), "utf8")).toBe(
+        "recovered\n",
+      );
+      // A new host invocation replays the original run; it must not regain an allowance.
+      const next = await runDesktopNext(
+        "Continue with another change",
+        options,
+      );
+      expect(next.ok).toBe(false);
+      expect(calls).toBe(4);
+      expect(JSON.parse(next.text).runId).toBe(JSON.parse(result.text).runId);
+    }
+  }, 30000);
 function workspace() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-hardening-"));
   roots.push(root);

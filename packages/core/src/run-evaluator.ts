@@ -59,21 +59,21 @@ export function evaluateRunFromEnvelopes(
   envelopes: readonly RunEventEnvelope[],
 ): RunMetrics {
   // 状态变量初始化
-  let firstTs = -1;            // 首条事件时间戳（-1 表示未初始化）
-  let lastTs = 0;              // 末条事件时间戳
-  let runId = "";              // 运行 ID（从首条事件中提取）
-  let goal = "";               // 运行目标（从 run.started 事件中提取）
-  let status: "completed" | "failed" = "failed";  // 运行状态，默认 failed
-  let modelLatencyMs = 0;      // 模型调用延迟累加和（毫秒）
-  let modelCalls = 0;          // 模型调用次数
-  let toolCalls = 0;           // 工具调用总次数
-  let toolSuccesses = 0;       // 工具调用成功次数
-  let totalTokens = 0;         // 总 token 消耗
-  let estimatedCost = 0;       // 估算费用
-  let costCurrency: "CNY" | "USD" = "USD";  // 费用货币单位
-  let steps = 0;               // 最大轮次索引
-  let truncationCount = 0;     // 输出截断次数
-  let pendingModelRequestTs = 0;  // 待处理的模型请求时间戳（用于计算单次延迟）
+  let firstTs = -1; // 首条事件时间戳（-1 表示未初始化）
+  let lastTs = 0; // 末条事件时间戳
+  let runId = ""; // 运行 ID（从首条事件中提取）
+  let goal = ""; // 运行目标（从 run.started 事件中提取）
+  let status: "completed" | "failed" = "failed"; // 运行状态，默认 failed
+  let modelLatencyMs = 0; // 模型调用延迟累加和（毫秒）
+  let modelCalls = 0; // 模型调用次数
+  let toolCalls = 0; // 工具调用总次数
+  let toolSuccesses = 0; // 工具调用成功次数
+  let totalTokens = 0; // 总 token 消耗
+  let estimatedCost = 0; // 估算费用
+  let costCurrency: "CNY" | "USD" = "USD"; // 费用货币单位
+  let steps = 0; // 最大轮次索引
+  let truncationCount = 0; // 输出截断次数
+  let pendingModelRequestTs = 0; // 待处理的模型请求时间戳（用于计算单次延迟）
 
   // 遍历所有事件，逐步更新状态
   for (const env of envelopes) {
@@ -88,13 +88,13 @@ export function evaluateRunFromEnvelopes(
 
     // —— 运行生命周期事件 ——
     if (ev.type === "run.started") {
-      goal = ev.goal;  // 提取运行目标描述
+      goal = ev.goal; // 提取运行目标描述
     }
     if (ev.type === "run.completed") {
       status = ev.status === "completed" ? "completed" : "failed";
     }
     if (ev.type === "run.failed") {
-      status = "failed";  // 显式标记为失败
+      status = "failed"; // 显式标记为失败
     }
 
     // —— 按事件类型分类处理 ——
@@ -110,13 +110,12 @@ export function evaluateRunFromEnvelopes(
         if (pendingModelRequestTs > 0) {
           // 计算单次请求-响应延迟并累加
           modelLatencyMs += env.ts - pendingModelRequestTs;
-          pendingModelRequestTs = 0;  // 重置，准备处理下一次请求
+          pendingModelRequestTs = 0; // 重置，准备处理下一次请求
         }
         if (ev.usage) {
           // 累加 prompt 和 completion 的 token 消耗
           totalTokens +=
-            (ev.usage.promptTokens ?? 0) +
-            (ev.usage.completionTokens ?? 0);
+            (ev.usage.promptTokens ?? 0) + (ev.usage.completionTokens ?? 0);
         }
         break;
       }
@@ -128,7 +127,7 @@ export function evaluateRunFromEnvelopes(
       // 工具调用结果返回
       case "tool.result": {
         toolCalls++;
-        if (ev.ok) toolSuccesses++;  // 仅计数成功的工具调用
+        if (ev.ok) toolSuccesses++; // 仅计数成功的工具调用
         break;
       }
       // 循环轮次更新：记录当前达到的最大轮次
@@ -150,7 +149,7 @@ export function evaluateRunFromEnvelopes(
     runId,
     goal,
     status,
-    durationMs: firstTs < 0 ? 0 : lastTs - firstTs,  // 如果没有任何事件，时长为 0
+    durationMs: firstTs < 0 ? 0 : lastTs - firstTs, // 如果没有任何事件，时长为 0
     modelLatencyMs,
     modelCalls,
     toolCalls,
@@ -182,8 +181,6 @@ export async function evaluateRunFromJsonl(path: string): Promise<RunMetrics> {
     .map((l) => l.trim())
     .filter(Boolean);
   // 将每行 JSON 字符串解析为 RunEventEnvelope 对象
-  const envelopes: RunEventEnvelope[] = lines.map((line) =>
-    JSON.parse(line),
-  );
+  const envelopes: RunEventEnvelope[] = lines.map((line) => JSON.parse(line));
   return evaluateRunFromEnvelopes(envelopes);
 }

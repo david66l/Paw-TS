@@ -59,13 +59,17 @@ describe("credentials", () => {
     const settings: PawSettingsLocal = {
       qwen_base_url: "https://legacy.dashscope.com",
     };
-    expect(resolveBaseUrl(settings, "qwen")).toBe("https://legacy.dashscope.com");
+    expect(resolveBaseUrl(settings, "qwen")).toBe(
+      "https://legacy.dashscope.com",
+    );
   });
 
   test("resolveBaseUrl falls back to env var", () => {
     process.env.DEEPSEEK_BASE_URL = "https://env.deepseek.com";
     const settings: PawSettingsLocal = {};
-    expect(resolveBaseUrl(settings, "deepseek")).toBe("https://env.deepseek.com");
+    expect(resolveBaseUrl(settings, "deepseek")).toBe(
+      "https://env.deepseek.com",
+    );
     delete process.env.DEEPSEEK_BASE_URL;
   });
 
@@ -85,7 +89,9 @@ describe("credentials", () => {
       provider: "deepseek",
       model: "top-level-model",
     };
-    expect(resolveModel(settings, "deepseek", "fallback")).toBe("top-level-model");
+    expect(resolveModel(settings, "deepseek", "fallback")).toBe(
+      "top-level-model",
+    );
   });
 
   test("hasApiKey returns false when missing", () => {
@@ -103,13 +109,19 @@ describe("credentials", () => {
   test("redactSecrets masks model configs and legacy keys", () => {
     const settings: PawSettingsLocal = {
       models: {
-        deepseek: { apiKey: "sk-deepseek-secret", baseUrl: "https://api.deepseek.com" },
+        deepseek: {
+          apiKey: "sk-deepseek-secret",
+          baseUrl: "https://api.deepseek.com",
+        },
       },
       qwen_api_key: "sk-qwen-secret",
       model: "gpt-4o",
     };
     const redacted = redactSecrets(settings);
-    const models = redacted.models as Record<string, { apiKey: unknown; baseUrl?: string }>;
+    const models = redacted.models as Record<
+      string,
+      { apiKey: unknown; baseUrl?: string }
+    >;
     expect(models.deepseek?.apiKey).toContain("…");
     expect(models.deepseek?.apiKey).not.toContain("deepseek-secret");
     expect(models.deepseek?.baseUrl).toBe("https://api.deepseek.com");

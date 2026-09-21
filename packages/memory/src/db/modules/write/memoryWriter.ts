@@ -7,11 +7,6 @@
  * 铁律: MemoryWriter 只写 memory_candidates 表，不直接创建 memory_items。
  */
 
-import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
-import { executionRecorder } from "../task/executionRecorder.js";
-import type { MemoryCandidate, WorkingMemory, MemoryType, ActorRef, ScopeDescriptor } from "../../types.js";
-import { generateId } from "../platform/idGen.js";
-import { PolicyEngine, type WritePolicy } from "../platform/policyEngine.js";
 import {
   cleanMemoryTitle,
   extractExplicitRememberText,
@@ -21,6 +16,17 @@ import {
   shouldWriteTaskSummary,
 } from "../../../shared/memory-quality.js";
 import { extractCleanMemoryQuery } from "../../../shared/memory-query.js";
+import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
+import type {
+  ActorRef,
+  MemoryCandidate,
+  MemoryType,
+  ScopeDescriptor,
+  WorkingMemory,
+} from "../../types.js";
+import { generateId } from "../platform/idGen.js";
+import { PolicyEngine, type WritePolicy } from "../platform/policyEngine.js";
+import { executionRecorder } from "../task/executionRecorder.js";
 
 export interface WriteInput {
   taskId: string;
@@ -34,7 +40,9 @@ export class MemoryWriter {
   private policy: WritePolicy;
 
   constructor(policyEngine?: PolicyEngine) {
-    this.policy = policyEngine?.getDefaults().write ?? new PolicyEngine().getDefaults().write;
+    this.policy =
+      policyEngine?.getDefaults().write ??
+      new PolicyEngine().getDefaults().write;
   }
   /**
    * 从任务结束状态生成候选记忆。
@@ -108,11 +116,17 @@ export class MemoryWriter {
       summaryLines.push(`- ${step.summary}`);
     }
     if (wm.diffSummary) {
-      summaryLines.push(`Files changed: ${wm.diffSummary.filesChanged}, +${wm.diffSummary.insertions} -${wm.diffSummary.deletions}`);
+      summaryLines.push(
+        `Files changed: ${wm.diffSummary.filesChanged}, +${wm.diffSummary.insertions} -${wm.diffSummary.deletions}`,
+      );
     }
 
     // 只有 goal 且无步骤/改动时不生成空洞 summary
-    if (realSteps.length === 0 && !wm.diffSummary && wm.executedTools.length === 0) {
+    if (
+      realSteps.length === 0 &&
+      !wm.diffSummary &&
+      wm.executedTools.length === 0
+    ) {
       // 仍可能因 durable signal（如「记住 prefer vitest」）值得写偏好；task_summary 跳过
       return null;
     }
@@ -159,7 +173,11 @@ export class MemoryWriter {
     };
   }
 
-  private buildDecisionCandidates(input: WriteInput, scope: ScopeDescriptor, now: string): MemoryCandidate[] {
+  private buildDecisionCandidates(
+    input: WriteInput,
+    scope: ScopeDescriptor,
+    now: string,
+  ): MemoryCandidate[] {
     const decisions: MemoryCandidate[] = [];
     // 从 completedSteps 提取带有明显决策标记的步骤（忽略系统 finalize）
     const decisionSteps = input.workingMemory.completedSteps.filter((s) => {
@@ -196,7 +214,9 @@ export class MemoryWriter {
         proposedScope: scope,
         proposedConfidence: 0.6,
         sourceTaskIds: [input.taskId],
-        sourceRefs: [{ sourceType: "task_trace", taskId: input.taskId, capturedAt: now }],
+        sourceRefs: [
+          { sourceType: "task_trace", taskId: input.taskId, capturedAt: now },
+        ],
         evidenceRefs: step.toolCallIds.map((_tcid) => ({
           evidenceType: "tool_result",
           capturedAt: now,
@@ -206,7 +226,10 @@ export class MemoryWriter {
         possibleConflictIds: [],
         riskLevel: "low",
         reviewRequired: false,
-        generatedBy: input.actor ?? { actorType: "system", actorId: "memory-writer" },
+        generatedBy: input.actor ?? {
+          actorType: "system",
+          actorId: "memory-writer",
+        },
         generationReason: "decision_extraction",
         sensitivity: "internal",
         createdAt: now,
@@ -216,7 +239,11 @@ export class MemoryWriter {
     return decisions;
   }
 
-  private async buildFailureCandidates(input: WriteInput, scope: ScopeDescriptor, now: string): Promise<MemoryCandidate[]> {
+  private async buildFailureCandidates(
+    input: WriteInput,
+    scope: ScopeDescriptor,
+    now: string,
+  ): Promise<MemoryCandidate[]> {
     const candidates: MemoryCandidate[] = [];
     const summary = await executionRecorder.getSummary(input.taskId);
 
@@ -240,17 +267,24 @@ export class MemoryWriter {
         proposedScope: scope,
         proposedConfidence: 0.5,
         sourceTaskIds: [input.taskId],
-        sourceRefs: [{ sourceType: "tool_result", taskId: input.taskId, capturedAt: now }],
-        evidenceRefs: [{
-          evidenceType: "tool_result",
-          capturedAt: now,
-          strength: "supporting",
-        }],
+        sourceRefs: [
+          { sourceType: "tool_result", taskId: input.taskId, capturedAt: now },
+        ],
+        evidenceRefs: [
+          {
+            evidenceType: "tool_result",
+            capturedAt: now,
+            strength: "supporting",
+          },
+        ],
         possibleDuplicateIds: [],
         possibleConflictIds: [],
         riskLevel: "medium",
         reviewRequired: true, // 失败经验需要 review
-        generatedBy: input.actor ?? { actorType: "system", actorId: "memory-writer" },
+        generatedBy: input.actor ?? {
+          actorType: "system",
+          actorId: "memory-writer",
+        },
         generationReason: "failure_extraction",
         sensitivity: "internal",
         createdAt: now,
@@ -260,7 +294,11 @@ export class MemoryWriter {
     return candidates;
   }
 
-  private buildPreferenceCandidates(input: WriteInput, scope: ScopeDescriptor, now: string): MemoryCandidate[] {
+  private buildPreferenceCandidates(
+    input: WriteInput,
+    scope: ScopeDescriptor,
+    now: string,
+  ): MemoryCandidate[] {
     // 从 WorkingMemory 的 user_feedback 约束中提取偏好
     const feedbackConstraints = input.workingMemory.constraints.filter(
       (c) =>
@@ -282,7 +320,7 @@ export class MemoryWriter {
         preferenceKey: c.id,
         value: c.text,
         origin: "explicit" as const,
-        strength: c.temporary ? "soft" as const : "default" as const,
+        strength: c.temporary ? ("soft" as const) : ("default" as const),
         appliesTo: "coding_style" as const,
         observationCount: 1,
         firstObservedAt: c.createdAt,
@@ -292,17 +330,24 @@ export class MemoryWriter {
       proposedScope: { ...scope, userId: input.userId },
       proposedConfidence: c.confirmed ? 0.85 : 0.5,
       sourceTaskIds: [input.taskId],
-      sourceRefs: [{ sourceType: "user_explicit", taskId: input.taskId, capturedAt: now }],
-      evidenceRefs: [{
-        evidenceType: "user_message",
-        capturedAt: now,
-        strength: "strong",
-      }],
+      sourceRefs: [
+        { sourceType: "user_explicit", taskId: input.taskId, capturedAt: now },
+      ],
+      evidenceRefs: [
+        {
+          evidenceType: "user_message",
+          capturedAt: now,
+          strength: "strong",
+        },
+      ],
       possibleDuplicateIds: [],
       possibleConflictIds: [],
       riskLevel: c.temporary ? "low" : "medium",
       reviewRequired: !c.confirmed,
-      generatedBy: input.actor ?? { actorType: "system", actorId: "memory-writer" },
+      generatedBy: input.actor ?? {
+        actorType: "system",
+        actorId: "memory-writer",
+      },
       generationReason: "preference_extraction",
       sensitivity: "confidential",
       createdAt: now,
@@ -348,17 +393,24 @@ export class MemoryWriter {
       proposedScope: { ...scope, userId: input.userId },
       proposedConfidence: 0.75,
       sourceTaskIds: [input.taskId],
-      sourceRefs: [{ sourceType: "user_explicit", taskId: input.taskId, capturedAt: now }],
-      evidenceRefs: [{
-        evidenceType: "user_message",
-        capturedAt: now,
-        strength: "strong",
-      }],
+      sourceRefs: [
+        { sourceType: "user_explicit", taskId: input.taskId, capturedAt: now },
+      ],
+      evidenceRefs: [
+        {
+          evidenceType: "user_message",
+          capturedAt: now,
+          strength: "strong",
+        },
+      ],
       possibleDuplicateIds: [],
       possibleConflictIds: [],
       riskLevel: "low",
       reviewRequired: false,
-      generatedBy: input.actor ?? { actorType: "system", actorId: "memory-writer" },
+      generatedBy: input.actor ?? {
+        actorType: "system",
+        actorId: "memory-writer",
+      },
       generationReason: "preference_from_goal",
       sensitivity: "confidential",
       createdAt: now,

@@ -2,19 +2,19 @@ import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  buildPawNextTaskProfileV3,
-  runExistingPawNextTaskV3,
-  runExistingPawNextWorkSegmentV3,
-  runFreshPawNextTaskV3,
-  maintainExistingPawNextMemoryV3,
-} from "@paw/paw-next";
 import type {
   MemoryRawEvidenceArchiveInputV1,
   MemoryWriterEventV1,
   MemoryWriterSourceItemV1,
 } from "@paw/memory-plugin";
 import type { LanguageModel, ModelCompletionResult } from "@paw/models";
+import {
+  buildPawNextTaskProfileV3,
+  maintainExistingPawNextMemoryV3,
+  runExistingPawNextTaskV3,
+  runExistingPawNextWorkSegmentV3,
+  runFreshPawNextTaskV3,
+} from "@paw/paw-next";
 import { desktopProfile } from "../agent-host/paw-next-profile.js";
 
 setDefaultTimeout(60_000);

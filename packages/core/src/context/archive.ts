@@ -266,7 +266,8 @@ export class ArtifactRegistry {
     const out: ArchiveSearchResult[] = [];
     for (const entry of this.byId.values()) {
       if (out.length >= limit) break;
-      const haystack = `${entry.tool} ${entry.preview} ${entry.content.slice(0, 2_000)}`.toLowerCase();
+      const haystack =
+        `${entry.tool} ${entry.preview} ${entry.content.slice(0, 2_000)}`.toLowerCase();
       if (q.split(/\s+/).every((term) => haystack.includes(term))) {
         out.push({
           id: entry.id,
@@ -348,11 +349,14 @@ export class ArtifactRegistry {
    * LRU：物化占用按 lastUsedTurn 追踪；新取回超预算时最久未用条目回退引用桩
    *  （条目本身保留，id 始终可再取回）。
    */
-  tryRecall(idOrHash: string, opts?: {
-    readonly part?: "head" | "tail" | "chunk";
-    readonly offset?: number;
-    readonly limit?: number;
-  }): RecallOutcome {
+  tryRecall(
+    idOrHash: string,
+    opts?: {
+      readonly part?: "head" | "tail" | "chunk";
+      readonly offset?: number;
+      readonly limit?: number;
+    },
+  ): RecallOutcome {
     const entry = this.byId.get(idOrHash) ?? this.getByHash(idOrHash);
     if (!entry) {
       // 无效 ID → 自动转关键词检索返回候选列表（不静默失败）；
@@ -386,7 +390,12 @@ export class ArtifactRegistry {
     if (part === "tail") {
       const len = Math.min(entry.size, limit);
       content = entry.content.slice(entry.size - len);
-      window = { part, offset: entry.size - len, length: len, total: entry.size };
+      window = {
+        part,
+        offset: entry.size - len,
+        length: len,
+        total: entry.size,
+      };
     } else if (part === "chunk") {
       const offset = Math.max(0, Math.min(opts?.offset ?? 0, entry.size));
       const len = Math.min(limit, entry.size - offset);
@@ -437,12 +446,16 @@ export class ArtifactRegistry {
       .filter((e) => e.lastUsedTurn < this.turn && e.id !== skipId)
       .sort((a, b) => a.lastUsedTurn - b.lastUsedTurn);
     for (const e of sorted) {
-      if (this.turnRecallChars + incoming - free <= this.opts.recallPerTurnChars) {
+      if (
+        this.turnRecallChars + incoming - free <=
+        this.opts.recallPerTurnChars
+      ) {
         break;
       }
       // 回退：物化占用释放，条目保留（stub 仍在上下文中，id 仍可寻址）
       const charged = this.turnCharged.get(e.id) ?? 0;
-      free += charged > 0 ? charged : Math.min(e.size, this.opts.recallPerCallChars);
+      free +=
+        charged > 0 ? charged : Math.min(e.size, this.opts.recallPerCallChars);
       this.turnCharged.delete(e.id);
     }
     this.turnRecallChars = Math.max(0, this.turnRecallChars - free);

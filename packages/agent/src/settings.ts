@@ -6,9 +6,9 @@
  */
 
 import {
+  type PawSettingsLocal,
   defaultSettingsPath,
   loadPawSettingsLocal,
-  type PawSettingsLocal,
 } from "@paw/settings";
 
 /**

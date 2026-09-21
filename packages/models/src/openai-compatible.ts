@@ -91,16 +91,12 @@ function resolveRequestThinkingV1(
   effort: "high" | "max" | undefined;
 }> {
   // A per-request phase override wins over the configured static effort.
-  const effort =
-    options?.reasoningEffort ?? profile.reasoningEffort;
+  const effort = options?.reasoningEffort ?? profile.reasoningEffort;
   // GLM-5.3 cannot disable reasoning, including bounded auxiliary calls.
   if (isGlm53(profile.model)) {
     return {
       enabled: true,
-      effort:
-        options?.thinkingEnabled === false
-          ? "high"
-          : (effort ?? "max"),
+      effort: options?.thinkingEnabled === false ? "high" : (effort ?? "max"),
     };
   }
   const enabled =

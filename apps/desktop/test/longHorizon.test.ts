@@ -323,7 +323,10 @@ test("Manager repairs an unverified stage using a fresh executor before final ac
             return response;
           }
           if (text.includes("Paw stage executor")) {
-            if (text.includes("FRESH_REPAIR") && !text.includes("SECOND_STAGE")) {
+            if (
+              text.includes("FRESH_REPAIR") &&
+              !text.includes("SECOND_STAGE")
+            ) {
               if (++repairCalls === 1) {
                 repairInputs.push(text);
                 return tool("workspace_read_file", { path: "one.txt" });

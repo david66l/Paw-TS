@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
-  allocateContextBudget,
   DEFAULT_BUDGET_RATIOS,
   LARGE_WINDOW_BUDGET_RATIOS,
+  allocateContextBudget,
   measureContextBudget,
   resolveBudgetRatios,
   shouldCompactHistory,

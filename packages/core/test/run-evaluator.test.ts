@@ -27,7 +27,11 @@ describe("evaluateRunFromEnvelopes", () => {
   test("computes duration from first to last envelope", () => {
     const m = evaluateRunFromEnvelopes([
       env(1_000, { type: "run.started", goal: "g" }),
-      env(5_000, { type: "run.completed", status: "completed", message: "done" }),
+      env(5_000, {
+        type: "run.completed",
+        status: "completed",
+        message: "done",
+      }),
     ]);
     expect(m.durationMs).toBe(4_000);
   });
@@ -73,7 +77,12 @@ describe("evaluateRunFromEnvelopes", () => {
   test("handles tool results", () => {
     const m = evaluateRunFromEnvelopes([
       env(1_000, { type: "tool.result", tool: "t1", ok: true, summary: "ok" }),
-      env(2_000, { type: "tool.result", tool: "t2", ok: false, summary: "err" }),
+      env(2_000, {
+        type: "tool.result",
+        tool: "t2",
+        ok: false,
+        summary: "err",
+      }),
       env(3_000, { type: "tool.result", tool: "t3", ok: true, summary: "ok2" }),
     ]);
     expect(m.toolCalls).toBe(3);
@@ -82,9 +91,24 @@ describe("evaluateRunFromEnvelopes", () => {
 
   test("tracks steps from loop.tick max turn", () => {
     const m = evaluateRunFromEnvelopes([
-      env(1_000, { type: "loop.tick", turn: 1, maxSteps: 10, estimatedTokens: 100 }),
-      env(2_000, { type: "loop.tick", turn: 3, maxSteps: 10, estimatedTokens: 200 }),
-      env(3_000, { type: "loop.tick", turn: 2, maxSteps: 10, estimatedTokens: 150 }),
+      env(1_000, {
+        type: "loop.tick",
+        turn: 1,
+        maxSteps: 10,
+        estimatedTokens: 100,
+      }),
+      env(2_000, {
+        type: "loop.tick",
+        turn: 3,
+        maxSteps: 10,
+        estimatedTokens: 200,
+      }),
+      env(3_000, {
+        type: "loop.tick",
+        turn: 2,
+        maxSteps: 10,
+        estimatedTokens: 150,
+      }),
     ]);
     expect(m.steps).toBe(3);
   });
@@ -122,7 +146,12 @@ describe("evaluateRunFromEnvelopes", () => {
   test("full synthetic run snapshot", () => {
     const m = evaluateRunFromEnvelopes([
       env(0, { type: "run.started", goal: "test" }),
-      env(100, { type: "loop.tick", turn: 1, maxSteps: 10, estimatedTokens: 50 }),
+      env(100, {
+        type: "loop.tick",
+        turn: 1,
+        maxSteps: 10,
+        estimatedTokens: 50,
+      }),
       env(200, { type: "model.request", label: "plan", messageCount: 3 }),
       env(1_200, {
         type: "model.done",
@@ -136,8 +165,18 @@ describe("evaluateRunFromEnvelopes", () => {
         totalTokens: 30,
         estimatedCostUsd: 0.005,
       }),
-      env(1_400, { type: "tool.result", tool: "read", ok: true, summary: "file" }),
-      env(1_500, { type: "loop.tick", turn: 2, maxSteps: 10, estimatedTokens: 100 }),
+      env(1_400, {
+        type: "tool.result",
+        tool: "read",
+        ok: true,
+        summary: "file",
+      }),
+      env(1_500, {
+        type: "loop.tick",
+        turn: 2,
+        maxSteps: 10,
+        estimatedTokens: 100,
+      }),
       env(1_600, { type: "model.request", label: "act", messageCount: 5 }),
       env(3_100, {
         type: "model.done",
@@ -151,7 +190,11 @@ describe("evaluateRunFromEnvelopes", () => {
         totalTokens: 50,
         estimatedCostUsd: 0.01,
       }),
-      env(3_300, { type: "run.completed", status: "completed", message: "done" }),
+      env(3_300, {
+        type: "run.completed",
+        status: "completed",
+        message: "done",
+      }),
     ]);
 
     expect(m.durationMs).toBe(3_300);
@@ -171,10 +214,34 @@ describe("evaluateRunFromJsonl", () => {
   test("reads JSONL and computes metrics", async () => {
     const tmp = await Bun.file("/tmp/paw-eval-test.jsonl").writer();
     const lines = [
-      JSON.stringify({ runId: "r1", seq: 1, ts: 1000, event: { type: "run.started", goal: "g" } }),
-      JSON.stringify({ runId: "r1", seq: 2, ts: 2000, event: { type: "model.request", label: "l", messageCount: 1 } }),
-      JSON.stringify({ runId: "r1", seq: 3, ts: 3500, event: { type: "model.done", text: "ok", usage: { promptTokens: 5, completionTokens: 3 } } }),
-      JSON.stringify({ runId: "r1", seq: 4, ts: 5000, event: { type: "run.completed", status: "completed", message: "done" } }),
+      JSON.stringify({
+        runId: "r1",
+        seq: 1,
+        ts: 1000,
+        event: { type: "run.started", goal: "g" },
+      }),
+      JSON.stringify({
+        runId: "r1",
+        seq: 2,
+        ts: 2000,
+        event: { type: "model.request", label: "l", messageCount: 1 },
+      }),
+      JSON.stringify({
+        runId: "r1",
+        seq: 3,
+        ts: 3500,
+        event: {
+          type: "model.done",
+          text: "ok",
+          usage: { promptTokens: 5, completionTokens: 3 },
+        },
+      }),
+      JSON.stringify({
+        runId: "r1",
+        seq: 4,
+        ts: 5000,
+        event: { type: "run.completed", status: "completed", message: "done" },
+      }),
     ];
     for (const line of lines) {
       tmp.write(line + "\n");

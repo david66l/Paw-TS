@@ -5,12 +5,17 @@
  * MVP: 函数接口，不实现 HTTP 路由（由上层 API 层调用）。
  */
 
-import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
 import { governanceDecisionDao } from "../../dao/governanceDecision.js";
+import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
 import { memoryItemDao } from "../../dao/memoryItem.js";
+import type {
+  ActorRef,
+  GovernanceDecision,
+  MemoryCandidate,
+  MemoryItem,
+} from "../../types.js";
 import { MemoryGovernance } from "../write/memoryGovernance.js";
 import { MemoryStore } from "../write/memoryStore.js";
-import type { MemoryCandidate, GovernanceDecision, MemoryItem, ActorRef } from "../../types.js";
 
 export const admin = {
   /** 列出待处理的候选 */

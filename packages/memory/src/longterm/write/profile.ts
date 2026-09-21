@@ -10,9 +10,9 @@
  * 写入门面，供 CLI / 管线 / janitor 容量强制使用。
  */
 
+import { appendOpLog } from "../observability/op-log.js";
 import type { MemoryStoreEngine, ProfileInsight } from "../store/engine.js";
 import { deriveEntryId } from "../store/id.js";
-import { appendOpLog } from "../observability/op-log.js";
 
 export const PROFILE_CAP = 15;
 export const PROFILE_MIN_SUPPORT = 3;
@@ -62,7 +62,8 @@ export function validateProfileDraft(
 ): { ok: true; supportCount: number } | { ok: false; reason: string } {
   const insight = draft.insight?.trim() ?? "";
   if (!insight) return { ok: false, reason: "empty_insight" };
-  if (!isBehaviorDescription(insight)) return { ok: false, reason: "not_behavior_description" };
+  if (!isBehaviorDescription(insight))
+    return { ok: false, reason: "not_behavior_description" };
   const evidence = (draft.evidence ?? []).map((e) => e.trim()).filter(Boolean);
   const unique = [...new Set(evidence)];
   if (unique.length < PROFILE_MIN_SUPPORT) {
@@ -108,7 +109,9 @@ async function listActiveProfiles(
   repo: string,
 ): Promise<ProfileInsight[]> {
   const rows = await engine.query({ kind: "profile", repo, limit: 200 });
-  return rows.filter((e): e is ProfileInsight => e.kind === "profile" && e.tInvalid == null);
+  return rows.filter(
+    (e): e is ProfileInsight => e.kind === "profile" && e.tInvalid == null,
+  );
 }
 
 /**
@@ -129,7 +132,9 @@ export async function admitProfile(
   }
 
   const nowIso = (opts.now?.() ?? new Date()).toISOString();
-  const evidence = [...new Set(draft.evidence.map((e) => e.trim()).filter(Boolean))];
+  const evidence = [
+    ...new Set(draft.evidence.map((e) => e.trim()).filter(Boolean)),
+  ];
   const cap = opts.cap ?? PROFILE_CAP;
   const existing = await listActiveProfiles(opts.engine, draft.repo);
 
@@ -143,10 +148,15 @@ export async function admitProfile(
     const mergedEvidence = [...new Set([...best.entry.evidence, ...evidence])];
     const updated: ProfileInsight = {
       ...best.entry,
-      insight: draft.insight.trim().length >= best.entry.insight.length
-        ? draft.insight.trim()
-        : best.entry.insight,
-      supportCount: Math.max(best.entry.supportCount, mergedEvidence.length, PROFILE_MIN_SUPPORT),
+      insight:
+        draft.insight.trim().length >= best.entry.insight.length
+          ? draft.insight.trim()
+          : best.entry.insight,
+      supportCount: Math.max(
+        best.entry.supportCount,
+        mergedEvidence.length,
+        PROFILE_MIN_SUPPORT,
+      ),
       evidence: mergedEvidence,
       confidence: Math.max(best.entry.confidence, draft.confidence ?? 0.7),
       // 不改 id：内容哈希若变会成新 id；EDIT 语义是原地更新同 id
@@ -158,7 +168,11 @@ export async function admitProfile(
     await recordOp("governed", {
       runId: opts.runId,
       entryIds: [best.entry.id],
-      detail: { op: "EDIT", kind: "profile", supportCount: withId.supportCount },
+      detail: {
+        op: "EDIT",
+        kind: "profile",
+        supportCount: withId.supportCount,
+      },
     });
     return { status: "edited", memoryId: best.entry.id, op: "EDIT" };
   }
@@ -212,7 +226,12 @@ export async function admitProfile(
   await recordOp("governed", {
     runId: opts.runId,
     entryIds: [memoryId],
-    detail: { op: "ADD", kind: "profile", supportCount: candidate.supportCount, removedId },
+    detail: {
+      op: "ADD",
+      kind: "profile",
+      supportCount: candidate.supportCount,
+      removedId,
+    },
   });
 
   if (removedId) {

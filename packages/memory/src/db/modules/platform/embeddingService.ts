@@ -67,8 +67,11 @@ export class NGramEmbeddingService implements EmbeddingService {
  * 幂等：同 memory_id 存在则更新。
  */
 export async function storeEmbedding(
-  memoryId: string, memoryVersionId: string, vector: number[],
-  model = "ngram-256", modelVersion = "1.0",
+  memoryId: string,
+  memoryVersionId: string,
+  vector: number[],
+  model = "ngram-256",
+  modelVersion = "1.0",
 ): Promise<void> {
   const sql = getSql();
   const id = `emb_${memoryId}`;
@@ -88,7 +91,9 @@ export async function storeEmbedding(
 /** 计算两个向量的余弦相似度 */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) return 0;
-  let dot = 0, na = 0, nb = 0;
+  let dot = 0,
+    na = 0,
+    nb = 0;
   for (let i = 0; i < a.length; i++) {
     dot += (a[i] ?? 0) * (b[i] ?? 0);
     na += (a[i] ?? 0) ** 2;

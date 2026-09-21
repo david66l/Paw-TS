@@ -3,19 +3,22 @@
  */
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { closeSql } from "../src/db/connection.js";
 import {
   BUILTIN_CODING_FIXTURES,
   ChatClient,
+  type LlmStats,
   resolveLlmConfig,
   runMemoryAgentBench,
-  type LlmStats,
 } from "../src/longterm/eval/index.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import { closeSql } from "../src/db/connection.js";
 
 const outPath =
   process.argv[2] ??
-  resolve(import.meta.dir, "../../../benchmarks/memory-agent-bench/last-run.json");
+  resolve(
+    import.meta.dir,
+    "../../../benchmarks/memory-agent-bench/last-run.json",
+  );
 
 const stats: LlmStats = {
   calls: 0,
@@ -24,7 +27,9 @@ const stats: LlmStats = {
   totalMs: 0,
   estimatedTokens: 0,
 };
-const cfg = resolveLlmConfig({ provider: process.env.MAB_PROVIDER ?? "deepseekv4flash" });
+const cfg = resolveLlmConfig({
+  provider: process.env.MAB_PROVIDER ?? "deepseekv4flash",
+});
 if ("error" in cfg) {
   console.error(cfg.error);
   process.exit(2);

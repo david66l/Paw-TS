@@ -99,9 +99,7 @@ export function parseYamlFrontmatter(text: string): Record<string, string> {
  *
  * Render a simple `key: value` frontmatter block wrapped in `---`.
  */
-export function stringifyYamlFrontmatter(
-  data: Record<string, string>,
-): string {
+export function stringifyYamlFrontmatter(data: Record<string, string>): string {
   const lines = Object.entries(data).map(([k, v]) => `${k}: ${v}`);
   return ["---", ...lines, "---"].join("\n");
 }
@@ -130,9 +128,7 @@ export function parseMarkdownSections(text: string): Record<string, string> {
     if (headingMatch) {
       // 遇到新标题，先保存上一个段落（如果存在）
       if (currentHeading) {
-        sections[currentHeading.toLowerCase()] = currentLines
-          .join("\n")
-          .trim();
+        sections[currentHeading.toLowerCase()] = currentLines.join("\n").trim();
       }
       // 开始累积新段落
       currentHeading = headingMatch[1]!;

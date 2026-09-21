@@ -1,14 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  ArtifactRegistry,
   ARCHIVE_STUB_PATTERN,
+  ArtifactRegistry,
   DEFAULT_ARCHIVE_OPTIONS,
   parseArchiveStub,
   simpleHash,
 } from "../src/index.js";
 
-const meta = (over: Partial<{ tool: string; ok: boolean; turn: number; callerText?: string }> = {}) => ({
+const meta = (
+  over: Partial<{
+    tool: string;
+    ok: boolean;
+    turn: number;
+    callerText?: string;
+  }> = {},
+) => ({
   tool: over.tool ?? "workspace.run_shell",
   ok: over.ok ?? true,
   turn: over.turn ?? 3,
@@ -30,7 +37,10 @@ describe("ArtifactRegistry — P3 冷库", () => {
   test("AC-P3-2 元数据：turn / tool / ok / size / preview", () => {
     const r = new ArtifactRegistry();
     const content = "line1\nline2\nline3\n".repeat(50);
-    const id = r.store(content, meta({ tool: "workspace.grep", ok: false, turn: 7 }));
+    const id = r.store(
+      content,
+      meta({ tool: "workspace.grep", ok: false, turn: 7 }),
+    );
     const e = r.get(id!);
     expect(e?.tool).toBe("workspace.grep");
     expect(e?.ok).toBe(false);
@@ -42,7 +52,10 @@ describe("ArtifactRegistry — P3 冷库", () => {
 
   test("AC-P3-3 动作+结果配对：callerText 保留", () => {
     const r = new ArtifactRegistry();
-    const id = r.store("big output".repeat(100), meta({ callerText: "run_shell: npm test" }));
+    const id = r.store(
+      "big output".repeat(100),
+      meta({ callerText: "run_shell: npm test" }),
+    );
     expect(r.get(id!)?.callerText).toBe("run_shell: npm test");
   });
 
@@ -82,7 +95,9 @@ describe("ArtifactRegistry — P3 冷库", () => {
     const id = r.store("x".repeat(30_000), meta())!;
     const out = r.tryRecall(id, { limit: 99_999 });
     expect(out.ok).toBe(true);
-    expect(out.content?.length).toBe(DEFAULT_ARCHIVE_OPTIONS.recallPerCallChars);
+    expect(out.content?.length).toBe(
+      DEFAULT_ARCHIVE_OPTIONS.recallPerCallChars,
+    );
   });
 
   test("AC-P3-4 每轮物化总预算 16K + 每步 ≤2 次", () => {
@@ -134,8 +149,14 @@ describe("ArtifactRegistry — P3 冷库", () => {
 
   test("AC-P3-9 无效 ID → 关键词检索候选（不静默失败）", () => {
     const r = new ArtifactRegistry();
-    r.store("test suite failed: 42 assertions\n" + "a".repeat(500), meta({ tool: "workspace.run_shell" }));
-    r.store("README section about deploy\n" + "b".repeat(500), meta({ tool: "workspace.read_file" }));
+    r.store(
+      "test suite failed: 42 assertions\n" + "a".repeat(500),
+      meta({ tool: "workspace.run_shell" }),
+    );
+    r.store(
+      "README section about deploy\n" + "b".repeat(500),
+      meta({ tool: "workspace.read_file" }),
+    );
     const out = r.tryRecall("no-such-id-99");
     expect(out.ok).toBe(false);
     expect(out.candidates).toBeDefined();
@@ -178,7 +199,10 @@ describe("ArtifactRegistry — P3 冷库", () => {
 
   test("stub 格式：toStub 可被 parseArchiveStub 精确解析", () => {
     const r = new ArtifactRegistry();
-    const id = r.store("preview text here " + "x".repeat(200), meta({ tool: "workspace.run_shell", turn: 7 }))!;
+    const id = r.store(
+      "preview text here " + "x".repeat(200),
+      meta({ tool: "workspace.run_shell", turn: 7 }),
+    )!;
     const stub = r.toStub(id);
     expect(ARCHIVE_STUB_PATTERN.test(stub)).toBe(true);
     const parsed = parseArchiveStub(stub);

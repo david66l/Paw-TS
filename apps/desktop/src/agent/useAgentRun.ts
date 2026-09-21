@@ -801,7 +801,8 @@ export function useAgentRun() {
           streamRawRef,
           streamThinkingRef,
         );
-        streamThinkingRef.current = ev.mode === "delta" ? streamThinkingRef.current + ev.text : ev.text;
+        streamThinkingRef.current =
+          ev.mode === "delta" ? streamThinkingRef.current + ev.text : ev.text;
         const formatted = formatModelOutputForUi(streamRawRef.current, {
           streaming: true,
         });
@@ -825,7 +826,8 @@ export function useAgentRun() {
           streamRawRef,
           streamThinkingRef,
         );
-        streamRawRef.current = ev.mode === "delta" ? streamRawRef.current + ev.text : ev.text;
+        streamRawRef.current =
+          ev.mode === "delta" ? streamRawRef.current + ev.text : ev.text;
         const formatted = formatModelOutputForUi(streamRawRef.current, {
           streaming: true,
         });

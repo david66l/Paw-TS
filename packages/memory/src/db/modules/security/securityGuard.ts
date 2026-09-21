@@ -12,20 +12,61 @@ import { generateId } from "../platform/idGen.js";
 
 const DETECTION_RULES = {
   SECRETS: [
-    { pattern: /sk-[a-zA-Z0-9]{32,}/g, type: "API_KEY", severity: "CRITICAL" as const },
-    { pattern: /AKIA[0-9A-Z]{16}/g, type: "AWS_KEY", severity: "CRITICAL" as const },
-    { pattern: /ghp_[a-zA-Z0-9]{36}/g, type: "GITHUB_TOKEN", severity: "CRITICAL" as const },
-    { pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g, type: "PRIVATE_KEY", severity: "CRITICAL" as const },
-    { pattern: /(?:password|passwd|pwd)\s*[:=]\s*['"][^'"]+['"]/gi, type: "PASSWORD", severity: "CRITICAL" as const },
-    { pattern: /eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g, type: "JWT", severity: "CRITICAL" as const },
-    { pattern: /(?:mongodb|postgresql|mysql|redis):\/\/[^@\s]+@/gi, type: "DB_CREDENTIAL", severity: "CRITICAL" as const },
+    {
+      pattern: /sk-[a-zA-Z0-9]{32,}/g,
+      type: "API_KEY",
+      severity: "CRITICAL" as const,
+    },
+    {
+      pattern: /AKIA[0-9A-Z]{16}/g,
+      type: "AWS_KEY",
+      severity: "CRITICAL" as const,
+    },
+    {
+      pattern: /ghp_[a-zA-Z0-9]{36}/g,
+      type: "GITHUB_TOKEN",
+      severity: "CRITICAL" as const,
+    },
+    {
+      pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g,
+      type: "PRIVATE_KEY",
+      severity: "CRITICAL" as const,
+    },
+    {
+      pattern: /(?:password|passwd|pwd)\s*[:=]\s*['"][^'"]+['"]/gi,
+      type: "PASSWORD",
+      severity: "CRITICAL" as const,
+    },
+    {
+      pattern: /eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g,
+      type: "JWT",
+      severity: "CRITICAL" as const,
+    },
+    {
+      pattern: /(?:mongodb|postgresql|mysql|redis):\/\/[^@\s]+@/gi,
+      type: "DB_CREDENTIAL",
+      severity: "CRITICAL" as const,
+    },
   ],
   PII: [
-    { pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, type: "EMAIL", severity: "HIGH" as const },
-    { pattern: /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, type: "PHONE", severity: "HIGH" as const },
+    {
+      pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+      type: "EMAIL",
+      severity: "HIGH" as const,
+    },
+    {
+      pattern: /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g,
+      type: "PHONE",
+      severity: "HIGH" as const,
+    },
   ],
   INTERNAL: [
-    { pattern: /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b/g, type: "INTERNAL_IP", severity: "MEDIUM" as const },
+    {
+      pattern:
+        /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b/g,
+      type: "INTERNAL_IP",
+      severity: "MEDIUM" as const,
+    },
   ],
 };
 
@@ -33,7 +74,11 @@ const REDACT_REPLACEMENT = "***REDACTED***";
 
 export type SecurityDecision =
   | { verdict: "ALLOW" }
-  | { verdict: "ALLOW_WITH_REDACTION"; redactedContent: string; findings: SecurityFinding[] }
+  | {
+      verdict: "ALLOW_WITH_REDACTION";
+      redactedContent: string;
+      findings: SecurityFinding[];
+    }
   | { verdict: "DENY"; reason: string; findings: SecurityFinding[] };
 
 export interface SecurityFinding {
@@ -46,7 +91,10 @@ export interface SecurityFinding {
 
 export const securityGuard = {
   /** 扫描内容中的敏感信息 */
-  scanContent(content: string, opts?: { scanRules?: ("SECRETS" | "PII" | "INTERNAL")[] }): SecurityDecision {
+  scanContent(
+    content: string,
+    opts?: { scanRules?: ("SECRETS" | "PII" | "INTERNAL")[] },
+  ): SecurityDecision {
     const rules = opts?.scanRules ?? ["SECRETS", "PII", "INTERNAL"];
     const allFindings: SecurityFinding[] = [];
 
@@ -99,11 +147,18 @@ export const securityGuard = {
       }
     }
 
-    return { verdict: "ALLOW_WITH_REDACTION", redactedContent: redacted, findings: allFindings.slice(0, 5) };
+    return {
+      verdict: "ALLOW_WITH_REDACTION",
+      redactedContent: redacted,
+      findings: allFindings.slice(0, 5),
+    };
   },
 
   /** 权限校验：检查 actor 是否有权访问指定作用域 */
-  checkAccess(actor: ActorRef, scope: { repositoryId?: string; userId?: string; workspaceId?: string }): boolean {
+  checkAccess(
+    actor: ActorRef,
+    scope: { repositoryId?: string; userId?: string; workspaceId?: string },
+  ): boolean {
     if (actor.actorType === "system") return true;
     if (scope.userId && actor.actorId === scope.userId) return true;
     return false;

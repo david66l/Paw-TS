@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { resolveShellSandboxConfig } from "@paw/agent";
-import type { PawNextProductProfileV3 } from "@paw/paw-next";
 import { loadSkillsFromDirectory } from "@paw/core";
 import { resolveScope } from "@paw/memory";
 import { type LanguageModel, resolveModelOutputLimit } from "@paw/models";
+import type { PawNextProductProfileV3 } from "@paw/paw-next";
 import {
   CANONICAL_DURABLE_JSON_PAYLOAD_BINDING_VERSION_V1,
   FILE_DURABLE_JSON_PAYLOAD_CODEC_V1,
@@ -14,7 +14,10 @@ import {
   VERIFIED_CANONICAL_PAYLOAD_BUDGET_POLICY_VERSION_V1,
 } from "@paw/runtime";
 import type { PawSettingsLocal } from "@paw/settings";
-import { PAW_AGENT_SYSTEM_PROMPT, PAW_CODING_EXECUTION_GUIDANCE } from "./agent-system-prompt.js";
+import {
+  PAW_AGENT_SYSTEM_PROMPT,
+  PAW_CODING_EXECUTION_GUIDANCE,
+} from "./agent-system-prompt.js";
 import { desktopProjectContext } from "./project-context.js";
 
 export const fingerprint = (value: unknown): string =>

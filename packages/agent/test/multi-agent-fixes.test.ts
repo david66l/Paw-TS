@@ -110,7 +110,9 @@ describe("断点2: trace.messages 恒空", () => {
     const dir = ws("paw-fix-trace-");
     const launcher = new DefaultSubAgentLauncher({
       workspaceRoot: dir,
-      model: makeFakeModel(['{"action":"final_answer","summary":"child done"}']),
+      model: makeFakeModel([
+        '{"action":"final_answer","summary":"child done"}',
+      ]),
       maxSteps: 3,
     });
 
@@ -128,7 +130,9 @@ describe("断点2: trace.messages 恒空", () => {
     expect(messages[0]!.role).toBe("system");
     expect(messages[0]!.content.length).toBeGreaterThan(0);
     expect(
-      messages.some((m) => m.role === "user" && m.content.includes("调查内存泄漏")),
+      messages.some(
+        (m) => m.role === "user" && m.content.includes("调查内存泄漏"),
+      ),
     ).toBe(true);
     // 最终答复经 result.summary 返回（final_answer 不落 messages）
     expect(result.summary).toBe("child done");

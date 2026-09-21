@@ -166,7 +166,7 @@ export class FileSystemSessionStore implements SessionStore {
     const entries: RunSummary[] = [];
     for (const name of fs.readdirSync(this.sessionsDir)) {
       if (!name.endsWith(".jsonl")) continue;
-      const runId = name.slice(0, -6);  // 去掉 .jsonl 后缀得到 runId
+      const runId = name.slice(0, -6); // 去掉 .jsonl 后缀得到 runId
       const s = this.getRunSummary(runId);
       if (s) entries.push(s);
     }
@@ -213,7 +213,9 @@ export class FileSystemSessionStore implements SessionStore {
         throw new Error(`Session journal line ${index + 1} is not valid JSON`);
       }
       if (!isEnvelope(parsed) || parsed.runId !== runId) {
-        throw new Error(`Session journal line ${index + 1} is not a valid envelope`);
+        throw new Error(
+          `Session journal line ${index + 1} is not a valid envelope`,
+        );
       }
       if (parsed.seq <= priorSeq) {
         throw new Error(
@@ -470,7 +472,7 @@ export class FileSystemSessionStore implements SessionStore {
         name,
         mtime: fs.statSync(path.join(this.sessionsDir, name)).mtimeMs,
       }))
-      .sort((a, b) => a.mtime - b.mtime);  // 按修改时间升序（最旧的排在最前）
+      .sort((a, b) => a.mtime - b.mtime); // 按修改时间升序（最旧的排在最前）
     while (files.length > this.maxRuns) {
       const oldest = files.shift();
       if (oldest) {

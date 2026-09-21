@@ -35,23 +35,29 @@ import {
   rmSync,
 } from "node:fs";
 import path from "node:path";
-import { atomicWrite, checkDrift, lockFile, readWithHash, scanForThreats } from "@paw/core";
+import {
+  atomicWrite,
+  checkDrift,
+  lockFile,
+  readWithHash,
+  scanForThreats,
+} from "@paw/core";
 import {
   parseYamlFrontmatter,
   splitFrontmatter,
   stringifyYamlFrontmatter,
 } from "@paw/core";
+import { memoryDir } from "@paw/core";
+import {
+  type MemoryKind,
+  type MemoryStatus,
+  isMemoryKind,
+  isMemoryStatus,
+} from "../shared/memory-types.js";
 import {
   archiveExpiredEntries,
   rebuildArchiveIndex,
 } from "./memory-archive.js";
-import {
-  isMemoryKind,
-  isMemoryStatus,
-  type MemoryKind,
-  type MemoryStatus,
-} from "../shared/memory-types.js";
-import { memoryDir } from "@paw/core";
 
 /** 记忆优先级：high（核心/重要）、mid（默认）、low（临时/次要） */
 export type MemoryPriority = "high" | "mid" | "low";
@@ -105,7 +111,6 @@ export interface AutoMemoryEntry {
   /** 关联的其他记忆名称列表，用于双向链接和知识图谱遍历 */
   readonly linked_memories?: readonly string[];
 }
-
 
 /**
  * 自动记忆存储管理器。
@@ -171,10 +176,12 @@ export class AutoMemoryStore {
       const updatedAt = fm.updatedAt ? Number(fm.updatedAt) : undefined;
       // v1 兼容：读取 embedding_v1 字段
       const embedding = fm.embedding_v1?.trim() || undefined;
-      const priority = fm.priority && isValidPriority(fm.priority) ? fm.priority : undefined;
+      const priority =
+        fm.priority && isValidPriority(fm.priority) ? fm.priority : undefined;
       const kind = fm.kind && isMemoryKind(fm.kind) ? fm.kind : undefined;
       const confidence = fm.confidence ? Number(fm.confidence) : undefined;
-      const status = fm.status && isMemoryStatus(fm.status) ? fm.status : undefined;
+      const status =
+        fm.status && isMemoryStatus(fm.status) ? fm.status : undefined;
       const tags = parseCsvList(fm.tags);
       const relatedFiles = parseCsvList(fm.relatedFiles);
       const errorSignatures = parseCsvList(fm.error_signatures);
@@ -200,16 +207,18 @@ export class AutoMemoryStore {
         ...(embedding ? { embedding } : {}),
         ...(priority ? { priority } : {}),
         ...(kind ? { kind } : {}),
-        ...(isValidConfidence(confidence)
-          ? { confidence }
-          : {}),
+        ...(isValidConfidence(confidence) ? { confidence } : {}),
         ...(status ? { status } : {}),
         ...(evidence && evidence.length > 0 ? { evidence } : {}),
         ...(tags && tags.length > 0 ? { tags } : {}),
         ...(relatedFiles && relatedFiles.length > 0 ? { relatedFiles } : {}),
-        ...(errorSignatures && errorSignatures.length > 0 ? { error_signatures: errorSignatures } : {}),
+        ...(errorSignatures && errorSignatures.length > 0
+          ? { error_signatures: errorSignatures }
+          : {}),
         ...(toolsUsed && toolsUsed.length > 0 ? { tools_used: toolsUsed } : {}),
-        ...(validUntil !== undefined && !Number.isNaN(validUntil) ? { valid_until: validUntil } : {}),
+        ...(validUntil !== undefined && !Number.isNaN(validUntil)
+          ? { valid_until: validUntil }
+          : {}),
         ...(fm.gitCommit ? { gitCommit: fm.gitCommit } : {}),
         ...(fm.branch ? { branch: fm.branch } : {}),
         ...(symbols && symbols.length > 0 ? { symbols } : {}),
@@ -234,7 +243,7 @@ export class AutoMemoryStore {
     if (threat.length > 0) {
       throw new Error(
         `Memory entry blocked: content matches threat pattern '${threat[0]}'. ` +
-        `Refusing to persist potentially malicious content to AutoMemory.`,
+          `Refusing to persist potentially malicious content to AutoMemory.`,
       );
     }
 
@@ -252,21 +261,31 @@ export class AutoMemoryStore {
     if (entry.embedding) fm.embedding_v1 = entry.embedding;
     if (entry.priority) fm.priority = entry.priority;
     if (entry.kind) fm.kind = entry.kind;
-    if (isValidConfidence(entry.confidence)) fm.confidence = String(entry.confidence);
+    if (isValidConfidence(entry.confidence))
+      fm.confidence = String(entry.confidence);
     if (entry.status) fm.status = entry.status;
     // 数组字段转为逗号分隔的字符串
-    if (entry.evidence && entry.evidence.length > 0) fm.evidence = entry.evidence.join(", ");
+    if (entry.evidence && entry.evidence.length > 0)
+      fm.evidence = entry.evidence.join(", ");
     if (entry.tags && entry.tags.length > 0) fm.tags = entry.tags.join(", ");
-    if (entry.relatedFiles && entry.relatedFiles.length > 0) fm.relatedFiles = entry.relatedFiles.join(", ");
-    if (entry.error_signatures && entry.error_signatures.length > 0) fm.error_signatures = entry.error_signatures.join(", ");
-    if (entry.tools_used && entry.tools_used.length > 0) fm.tools_used = entry.tools_used.join(", ");
-    if (entry.valid_until !== undefined) fm.valid_until = String(entry.valid_until);
+    if (entry.relatedFiles && entry.relatedFiles.length > 0)
+      fm.relatedFiles = entry.relatedFiles.join(", ");
+    if (entry.error_signatures && entry.error_signatures.length > 0)
+      fm.error_signatures = entry.error_signatures.join(", ");
+    if (entry.tools_used && entry.tools_used.length > 0)
+      fm.tools_used = entry.tools_used.join(", ");
+    if (entry.valid_until !== undefined)
+      fm.valid_until = String(entry.valid_until);
     if (entry.gitCommit) fm.gitCommit = entry.gitCommit;
     if (entry.branch) fm.branch = entry.branch;
-    if (entry.symbols && entry.symbols.length > 0) fm.symbols = entry.symbols.join(", ");
-    if (entry.tests && entry.tests.length > 0) fm.tests = entry.tests.join(", ");
-    if (entry.supersedes && entry.supersedes.length > 0) fm.supersedes = entry.supersedes.join(", ");
-    if (entry.linked_memories && entry.linked_memories.length > 0) fm.linked_memories = entry.linked_memories.join(", ");
+    if (entry.symbols && entry.symbols.length > 0)
+      fm.symbols = entry.symbols.join(", ");
+    if (entry.tests && entry.tests.length > 0)
+      fm.tests = entry.tests.join(", ");
+    if (entry.supersedes && entry.supersedes.length > 0)
+      fm.supersedes = entry.supersedes.join(", ");
+    if (entry.linked_memories && entry.linked_memories.length > 0)
+      fm.linked_memories = entry.linked_memories.join(", ");
     const fmStr = stringifyYamlFrontmatter(fm);
     // 格式：frontmatter + 空行 + 正文；加锁防并发覆写
     const content = `${fmStr}\n\n${entry.content}\n`;
@@ -396,10 +415,14 @@ export class AutoMemoryStore {
 
     // 策略3: 会话派生条目的内容签名匹配
     // 匹配格式: sess-{8位hex会话前缀}-{类别(dec/err)}-{12位hex内容哈希}
-    const sessMatch = entry.name.match(/^(sess-[a-f0-9]{8})-(dec|err)-([a-f0-9]{12})$/);
+    const sessMatch = entry.name.match(
+      /^(sess-[a-f0-9]{8})-(dec|err)-([a-f0-9]{12})$/,
+    );
     if (sessMatch) {
       const [, sessionPrefix, category, contentHash] = sessMatch;
-      const namePattern = new RegExp(`^sess-${sessionPrefix}-${category}-${contentHash}$`);
+      const namePattern = new RegExp(
+        `^sess-${sessionPrefix}-${category}-${contentHash}$`,
+      );
       for (const e of this.list()) {
         if (namePattern.test(e.name)) return e;
       }
@@ -437,18 +460,24 @@ export class AutoMemoryStore {
     const unlock = lockFile(indexPath);
     try {
       const entries = this.list();
-      const shardCount = Math.ceil(entries.length / AutoMemoryStore.MAX_SHARD_SIZE);
+      const shardCount = Math.ceil(
+        entries.length / AutoMemoryStore.MAX_SHARD_SIZE,
+      );
 
       // 第二步：写入每个分片文件（无锁——分片只在 buildIndex 内写入）
       for (let i = 0; i < shardCount; i++) {
-        const slice = entries.slice(i * AutoMemoryStore.MAX_SHARD_SIZE, (i + 1) * AutoMemoryStore.MAX_SHARD_SIZE);
+        const slice = entries.slice(
+          i * AutoMemoryStore.MAX_SHARD_SIZE,
+          (i + 1) * AutoMemoryStore.MAX_SHARD_SIZE,
+        );
         const shardLines = [
           `# Memory Index — Shard ${i + 1}`,
           "",
           "| Name | Type | Priority | Description |",
           "|------|------|----------|-------------|",
-          ...slice.map((e) =>
-            `| ${e.name} | ${e.type} | ${e.priority ?? "mid"} | ${e.description} |`
+          ...slice.map(
+            (e) =>
+              `| ${e.name} | ${e.type} | ${e.priority ?? "mid"} | ${e.description} |`,
           ),
           "",
         ];
@@ -467,7 +496,10 @@ export class AutoMemoryStore {
         "",
         `${entries.length} entries across ${shardCount} shard(s)`,
         "",
-        ...Array.from({ length: shardCount }, (_, i) => `- [Shard ${i + 1}](MEMORY-${i + 1}.md)`),
+        ...Array.from(
+          { length: shardCount },
+          (_, i) => `- [Shard ${i + 1}](MEMORY-${i + 1}.md)`,
+        ),
         "",
       ];
       const newContent = masterLines.join("\n");
@@ -604,5 +636,7 @@ function isValidPriority(p: string): p is MemoryPriority {
 }
 
 function isValidConfidence(value: number | undefined): value is number {
-  return value !== undefined && Number.isFinite(value) && value >= 0 && value <= 1;
+  return (
+    value !== undefined && Number.isFinite(value) && value >= 0 && value <= 1
+  );
 }

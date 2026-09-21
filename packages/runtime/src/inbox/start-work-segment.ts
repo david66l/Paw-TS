@@ -168,14 +168,26 @@ function captureVerification(
   }
   const runConfig = Object.freeze({
     mode: verification.runConfig.mode,
-    ...(verification.runConfig.recoverReasoningTimeout ? { recoverReasoningTimeout: true as const } : {}),
+    ...(verification.runConfig.recoverReasoningTimeout
+      ? { recoverReasoningTimeout: true as const }
+      : {}),
     maxModelTurns: verification.runConfig.maxModelTurns,
     naturalStop: verification.runConfig.naturalStop,
-    ...(verification.runConfig.liveSteering ? { liveSteering: true as const } : {}),
-    ...(verification.runConfig.settleFinalToolBatch ? { settleFinalToolBatch: true as const } : {}),
-    ...(verification.runConfig.softModelTurns === undefined ? {} : { softModelTurns: verification.runConfig.softModelTurns }),
-    ...(verification.runConfig.renewalModelTurns === undefined ? {} : { renewalModelTurns: verification.runConfig.renewalModelTurns }),
-    ...(verification.runConfig.softNoProgressTurns === undefined ? {} : { softNoProgressTurns: verification.runConfig.softNoProgressTurns }),
+    ...(verification.runConfig.liveSteering
+      ? { liveSteering: true as const }
+      : {}),
+    ...(verification.runConfig.settleFinalToolBatch
+      ? { settleFinalToolBatch: true as const }
+      : {}),
+    ...(verification.runConfig.softModelTurns === undefined
+      ? {}
+      : { softModelTurns: verification.runConfig.softModelTurns }),
+    ...(verification.runConfig.renewalModelTurns === undefined
+      ? {}
+      : { renewalModelTurns: verification.runConfig.renewalModelTurns }),
+    ...(verification.runConfig.softNoProgressTurns === undefined
+      ? {}
+      : { softNoProgressTurns: verification.runConfig.softNoProgressTurns }),
     maxSegments: verification.runConfig.maxSegments,
     maxTotalModelTurns: verification.runConfig.maxTotalModelTurns,
   });

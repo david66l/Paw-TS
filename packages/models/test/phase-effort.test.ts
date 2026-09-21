@@ -73,9 +73,9 @@ describe("phase-effort model", () => {
       executionEffort: "high",
       planningCalls: 1,
     });
-    for await (const _chunk of wrapped.completeStream!(
-      [{ role: "user", content: "aux" }],
-    )) {
+    for await (const _chunk of wrapped.completeStream!([
+      { role: "user", content: "aux" },
+    ])) {
       // drain — no tools: passthrough
     }
     await wrapped.complete([{ role: "user", content: "aux" }]);
@@ -98,7 +98,8 @@ describe("phase-effort model", () => {
       planningEffort: "max",
       executionEffort: "high",
       planningCalls: 1,
-      onEvent: (event) => events.push(`${event.call}:${event.phase}:${event.effort}`),
+      onEvent: (event) =>
+        events.push(`${event.call}:${event.phase}:${event.effort}`),
     });
     for (let index = 0; index < 2; index += 1) {
       for await (const _chunk of wrapped.completeStream!(

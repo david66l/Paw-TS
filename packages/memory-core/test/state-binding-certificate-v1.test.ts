@@ -298,9 +298,8 @@ describe("host-compiled state binding certificate v1", () => {
       sourceLock,
       proposedObservations: [oldObservation, newObservation],
     };
-    const request = buildMemoryStateObservationVerificationRequestV2(
-      verificationInput,
-    );
+    const request =
+      buildMemoryStateObservationVerificationRequestV2(verificationInput);
     const payload = JSON.parse(request.user) as {
       observations: readonly Readonly<{
         typedClaim: Readonly<{
@@ -344,15 +343,15 @@ describe("host-compiled state binding certificate v1", () => {
       ...verificationInput,
       verification,
     });
-    expect(validated[1]?.certificate.claimBinding.lifecycle.target).toMatchObject(
-      {
-        observationId: oldObservation.observationId,
-        bindingRevision: oldObservation.bindingRevision,
-        slotId: slot.slotId,
-        evidenceRef: "old-home",
-        predicateKind: "assert",
-      },
-    );
+    expect(
+      validated[1]?.certificate.claimBinding.lifecycle.target,
+    ).toMatchObject({
+      observationId: oldObservation.observationId,
+      bindingRevision: oldObservation.bindingRevision,
+      slotId: slot.slotId,
+      evidenceRef: "old-home",
+      predicateKind: "assert",
+    });
     expect(request.system).toContain("exact lifecycleTarget object");
   });
 });

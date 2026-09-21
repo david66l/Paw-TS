@@ -24,7 +24,9 @@ export async function recordRetrievalHits(
   for (const id of entryIds) {
     try {
       await engine.bumpLedger(id, "freq");
-    } catch { /* 账本允许近似（spec §4.4），单条失败可丢 */ }
+    } catch {
+      /* 账本允许近似（spec §4.4），单条失败可丢 */
+    }
   }
   await appendOpLog("read.inject", {
     runId: opts.runId,
@@ -41,7 +43,9 @@ export async function recordTaskSuccess(
   for (const id of entryIds) {
     try {
       await engine.bumpLedger(id, "utility");
-    } catch { /* 同上 */ }
+    } catch {
+      /* 同上 */
+    }
   }
 }
 
@@ -91,7 +95,9 @@ export function detectAdoption(
       return nk.length >= 4 && text.includes(nk);
     });
     const modHit = (probe.modifications ?? []).some((m) => {
-      const words = normalizeText(m).split(" ").filter((w) => w.length > 3);
+      const words = normalizeText(m)
+        .split(" ")
+        .filter((w) => w.length > 3);
       if (words.length === 0) return false;
       const hits = words.filter((w) => text.includes(w)).length;
       return hits / words.length >= 0.6;
@@ -108,5 +114,9 @@ export function probeFromEntry(entry: {
   keywords?: string[];
   modification?: string[];
 }): AdoptionProbe {
-  return { id: entry.id, keywords: entry.keywords, modifications: entry.modification };
+  return {
+    id: entry.id,
+    keywords: entry.keywords,
+    modifications: entry.modification,
+  };
 }

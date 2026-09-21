@@ -14,9 +14,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { ChatMessage } from "./manager.js";
 import { atomicWrite } from "../utils/fs.js";
 import { sanitizeRunId } from "../workspace-paths.js";
+import type { ChatMessage } from "./manager.js";
 
 export interface CompactionCommit {
   /** 提交序号（1-based，单调递增） */
@@ -59,10 +59,7 @@ export function saveCompactionCommit(opts: {
   const dir = compactionCommitsDir(opts.workspaceRoot, opts.runId);
   fs.mkdirSync(dir, { recursive: true });
   const filepath = path.join(dir, `${opts.commit.n}.json`);
-  atomicWrite(
-    filepath,
-    JSON.stringify(opts.commit, null, 2),
-  );
+  atomicWrite(filepath, JSON.stringify(opts.commit, null, 2));
   return filepath;
 }
 

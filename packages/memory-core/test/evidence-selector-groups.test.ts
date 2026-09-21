@@ -36,10 +36,7 @@ describe("evidence selector transaction groups", () => {
       intent,
       requirements: [requirement({ id: "a" }), requirement({ id: "b" })],
     });
-    expect(groups.map((group) => group.requirementIds)).toEqual([
-      ["a"],
-      ["b"],
-    ]);
+    expect(groups.map((group) => group.requirementIds)).toEqual([["a"], ["b"]]);
     expect(groups[0]?.groupId).not.toBe(groups[1]?.groupId);
   });
 

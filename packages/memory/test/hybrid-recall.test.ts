@@ -8,18 +8,16 @@
  *   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test" bun test test/hybrid-recall.test.ts
  */
 
-import { describe, test, expect, afterAll } from "bun:test";
-import { getSql, closeSql, ping } from "../src/db/connection.js";
-import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import { deriveEntryId } from "../src/longterm/store/id.js";
+import { afterAll, describe, expect, test } from "bun:test";
+import { closeSql, getSql, ping } from "../src/db/connection.js";
 import {
-  fuseRecall,
-  hybridRecall,
-  RECALL_ALPHA,
+  BONUS_RECENT,
   BONUS_SAME_BRANCH,
   BONUS_USER_STATEMENT,
-  BONUS_RECENT,
+  RECALL_ALPHA,
   type ScoredEntry,
+  fuseRecall,
+  hybridRecall,
 } from "../src/longterm/retrieval/hybrid.js";
 import type {
   EpisodicExperience,
@@ -27,8 +25,11 @@ import type {
   MemoryStoreEngine,
   SemanticFact,
 } from "../src/longterm/store/engine.js";
+import { deriveEntryId } from "../src/longterm/store/id.js";
+import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 
-process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??=
+  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -38,7 +39,10 @@ const it = dbOk ? test : test.skip;
 const NOW = new Date("2026-08-06T00:00:00Z");
 const OLD = new Date("2026-01-01T00:00:00Z"); // 超出 30 天窗口
 
-function baseEntry(id: string, overrides: Partial<MemoryEntry> = {}): SemanticFact {
+function baseEntry(
+  id: string,
+  overrides: Partial<MemoryEntry> = {},
+): SemanticFact {
   return {
     id,
     kind: "semantic",
@@ -75,11 +79,15 @@ describe("fuseRecall 融合打分（纯函数）", () => {
     const text = [{ id: "a", score: 2 }];
     const vector = [{ id: "a", score: 0.5 }];
 
-    const t1 = fuseRecall(text, vector, entries, { alpha: RECALL_ALPHA.taskStart });
+    const t1 = fuseRecall(text, vector, entries, {
+      alpha: RECALL_ALPHA.taskStart,
+    });
     // bm25 归一化 = 2/2 = 1 → 0.5*1 + 0.5*0.5 = 0.75
     expect(scoreOf(t1, "a").score).toBeCloseTo(0.75, 5);
 
-    const t2 = fuseRecall(text, vector, entries, { alpha: RECALL_ALPHA.actionFailed });
+    const t2 = fuseRecall(text, vector, entries, {
+      alpha: RECALL_ALPHA.actionFailed,
+    });
     // 0.7*1 + 0.3*0.5 = 0.85
     expect(scoreOf(t2, "a").score).toBeCloseTo(0.85, 5);
   });
@@ -93,7 +101,10 @@ describe("fuseRecall 融合打分（纯函数）", () => {
       { id: "top", score: 4 },
       { id: "half", score: 2 },
     ];
-    const items = fuseRecall(text, [], entries, { alpha: 1, context: { now: OLD } });
+    const items = fuseRecall(text, [], entries, {
+      alpha: 1,
+      context: { now: OLD },
+    });
     expect(scoreOf(items, "top").bm25Score).toBeCloseTo(1, 5);
     expect(scoreOf(items, "half").bm25Score).toBeCloseTo(0.5, 5);
   });
@@ -120,7 +131,10 @@ describe("fuseRecall 融合打分（纯函数）", () => {
       { id: "sem", score: 1 },
       { id: "epi", score: 1 },
     ];
-    const items = fuseRecall(text, [], entries, { kind: "episodic", context: { now: OLD } });
+    const items = fuseRecall(text, [], entries, {
+      kind: "episodic",
+      context: { now: OLD },
+    });
     expect(items.map((i) => i.entry.id)).toEqual(["epi"]);
   });
 
@@ -154,8 +168,14 @@ describe("fuseRecall 融合打分（纯函数）", () => {
     });
 
     expect(scoreOf(items, "plain").score).toBeCloseTo(0.4, 5);
-    expect(scoreOf(items, "branched").score).toBeCloseTo(0.4 + BONUS_SAME_BRANCH, 5);
-    expect(scoreOf(items, "userSaid").score).toBeCloseTo(0.4 + BONUS_USER_STATEMENT, 5);
+    expect(scoreOf(items, "branched").score).toBeCloseTo(
+      0.4 + BONUS_SAME_BRANCH,
+      5,
+    );
+    expect(scoreOf(items, "userSaid").score).toBeCloseTo(
+      0.4 + BONUS_USER_STATEMENT,
+      5,
+    );
     expect(scoreOf(items, "recent").score).toBeCloseTo(0.4 + BONUS_RECENT, 5);
     expect(scoreOf(items, "branched").bonuses).toEqual(["same_branch"]);
   });
@@ -183,7 +203,9 @@ describe("fuseRecall 融合打分（纯函数）", () => {
 
 describe("hybridRecall 降级（stub 引擎）", () => {
   const stubEntry = baseEntry("s1");
-  const stubEngine = (overrides: Partial<MemoryStoreEngine>): MemoryStoreEngine => ({
+  const stubEngine = (
+    overrides: Partial<MemoryStoreEngine>,
+  ): MemoryStoreEngine => ({
     put: async () => {},
     get: async () => stubEntry,
     invalidate: async () => {},
@@ -193,13 +215,20 @@ describe("hybridRecall 降级（stub 引擎）", () => {
     searchVector: async () => [{ id: "s1", score: 0.9 }],
     ledger: async () => null,
     bumpLedger: async () => {},
-    reindex: async () => ({ scanned: 0, indexed: 0, failed: 0, smoke: { total: 0, passed: 0, failedIds: [] } }),
+    reindex: async () => ({
+      scanned: 0,
+      indexed: 0,
+      failed: 0,
+      smoke: { total: 0, passed: 0, failedIds: [] },
+    }),
     ...overrides,
   });
 
   test("向量路失败 → BM25-only 且 degraded=true", async () => {
     const engine = stubEngine({
-      searchVector: async () => { throw new Error("embedding down"); },
+      searchVector: async () => {
+        throw new Error("embedding down");
+      },
     });
     const result = await hybridRecall(engine, "query");
     expect(result.degraded).toBe(true);
@@ -255,12 +284,17 @@ describe("hybridRecall db 集成", () => {
   }
 
   it("两路召回融合：语义相近条目进入候选池", async () => {
-    const fact = makeFact("Postgres migrations run in lexical order by version prefix", ["migration", "ordering"]);
+    const fact = makeFact(
+      "Postgres migrations run in lexical order by version prefix",
+      ["migration", "ordering"],
+    );
     const id = deriveEntryId(fact);
     createdIds.push(id);
     await engine.put(fact);
 
-    const result = await hybridRecall(engine, "migration version ordering", { candidates: 10 });
+    const result = await hybridRecall(engine, "migration version ordering", {
+      candidates: 10,
+    });
     expect(result.degraded).toBe(false);
     expect(result.items.map((i) => i.entry.id)).toContain(id);
   });
@@ -298,7 +332,10 @@ describe("hybridRecall db 集成", () => {
   });
 
   it("召回默认排除软失效条目", async () => {
-    const fact = makeFact("Quixotic cache invalidation strategy for session tokens", ["quixotic"]);
+    const fact = makeFact(
+      "Quixotic cache invalidation strategy for session tokens",
+      ["quixotic"],
+    );
     const id = deriveEntryId(fact);
     createdIds.push(id);
     await engine.put(fact);
@@ -328,7 +365,10 @@ describe("hybridRecall db 集成", () => {
       embeddingKey: `${fact} sealed probe`,
     });
     const mine = make(REPO, "Sealed repo probe entry for isolated retrieval");
-    const other = make(otherRepo, "Sealed repo probe entry for isolated retrieval"); // 同内容
+    const other = make(
+      otherRepo,
+      "Sealed repo probe entry for isolated retrieval",
+    ); // 同内容
     const mineId = deriveEntryId(mine);
     const otherId = deriveEntryId(other);
     createdIds.push(mineId, otherId);
@@ -354,12 +394,17 @@ describe("hybridRecall db 集成", () => {
     expect(ids).not.toContain(otherId);
 
     // 缺省 repo = 跨仓库（Governor 去重语义保留）
-    const cross = await hybridRecall(engine, "sealed probe", { candidates: 10 });
+    const cross = await hybridRecall(engine, "sealed probe", {
+      candidates: 10,
+    });
     expect(cross.items.map((i) => i.entry.id)).toContain(mineId);
   });
 
   it("reindex 冒烟回归全部通过", async () => {
-    const fact = makeFact("Smoke queries verify rebuilt indexes recall their entries", ["smoke"]);
+    const fact = makeFact(
+      "Smoke queries verify rebuilt indexes recall their entries",
+      ["smoke"],
+    );
     const id = deriveEntryId(fact);
     createdIds.push(id);
     await engine.put(fact);

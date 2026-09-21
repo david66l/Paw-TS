@@ -5,19 +5,27 @@
  *   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test" bun test test/fix-batch-a.test.ts
  */
 
-import { describe, test, expect, afterAll } from "bun:test";
-import { getSql, closeSql, ping } from "../src/db/connection.js";
-import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import { deriveEntryId } from "../src/longterm/store/id.js";
-import { queryOpLog } from "../src/longterm/observability/op-log.js";
-import { recordRetrievalHits, recordAdoption, detectAdoption } from "../src/longterm/observability/ledger.js";
+import { afterAll, describe, expect, test } from "bun:test";
+import { closeSql, getSql, ping } from "../src/db/connection.js";
 import { scanDeletionCandidates } from "../src/longterm/lifecycle/janitor.js";
+import {
+  detectAdoption,
+  recordAdoption,
+  recordRetrievalHits,
+} from "../src/longterm/observability/ledger.js";
+import { queryOpLog } from "../src/longterm/observability/op-log.js";
 import { TriggeredRetriever } from "../src/longterm/retrieval/triggered.js";
-import { MemoryWritePipeline } from "../src/longterm/write/pipeline.js";
-import { MemoryDistiller, type DistillerLlm } from "../src/longterm/write/distiller.js";
 import type { SemanticFact } from "../src/longterm/store/engine.js";
+import { deriveEntryId } from "../src/longterm/store/id.js";
+import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
+import {
+  type DistillerLlm,
+  MemoryDistiller,
+} from "../src/longterm/write/distiller.js";
+import { MemoryWritePipeline } from "../src/longterm/write/pipeline.js";
 
-process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??=
+  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -37,16 +45,32 @@ describe("#1b detectAdoption（§10.3 规则初筛）", () => {
 
   test("modification 操作序列 ≥60% 词面命中 → 采纳", () => {
     const ids = detectAdoption(
-      [{ id: "b", modifications: ["check the exports field in package configuration first"] }],
+      [
+        {
+          id: "b",
+          modifications: [
+            "check the exports field in package configuration first",
+          ],
+        },
+      ],
       "we decided to check the exports field in package configuration before anything else",
     );
     expect(ids).toEqual(["b"]);
   });
 
   test("无命中 → 不采纳；短关键词不参与", () => {
-    expect(detectAdoption([{ id: "c", keywords: ["use"] }], "the user story")).toEqual([]);
-    expect(detectAdoption([{ id: "d", keywords: ["kubernetes"] }], "plain sqlite storage")).toEqual([]);
-    expect(detectAdoption([{ id: "e", keywords: ["anything"] }], "")).toEqual([]);
+    expect(
+      detectAdoption([{ id: "c", keywords: ["use"] }], "the user story"),
+    ).toEqual([]);
+    expect(
+      detectAdoption(
+        [{ id: "d", keywords: ["kubernetes"] }],
+        "plain sqlite storage",
+      ),
+    ).toEqual([]);
+    expect(detectAdoption([{ id: "e", keywords: ["anything"] }], "")).toEqual(
+      [],
+    );
   });
 });
 
@@ -62,13 +86,26 @@ const engine = new PostgresMemoryStoreEngine();
 function makeSemantic(fact: string, keywords: string[] = []): SemanticFact {
   const now = new Date().toISOString();
   return {
-    id: "", kind: "semantic", repo: REPO, created: now, tValid: now, tInvalid: null,
-    source: "agent_verified", confidence: 0.9, evidence: [], freq: 0, utility: 0,
-    fact, keywords, embeddingKey: `${fact} ${keywords.join(" ")}`,
+    id: "",
+    kind: "semantic",
+    repo: REPO,
+    created: now,
+    tValid: now,
+    tInvalid: null,
+    source: "agent_verified",
+    confidence: 0.9,
+    evidence: [],
+    freq: 0,
+    utility: 0,
+    fact,
+    keywords,
+    embeddingKey: `${fact} ${keywords.join(" ")}`,
   };
 }
 
-const EMPTY_LLM: DistillerLlm = { complete: async () => JSON.stringify({ candidates: [] }) };
+const EMPTY_LLM: DistillerLlm = {
+  complete: async () => JSON.stringify({ candidates: [] }),
+};
 /** #10：直写需确认器；这些用例测确认通过路径 */
 const CONFIRM = { confirm: async () => true };
 
@@ -88,7 +125,9 @@ describe("修复批次 A db 集成", () => {
   });
 
   it("#1a/#1b 任务成功结算：注入条目 utility+1，轨迹引用的记采纳", async () => {
-    const entry = makeSemantic("Zephyr deploys need rotation window checks", ["zephyr"]);
+    const entry = makeSemantic("Zephyr deploys need rotation window checks", [
+      "zephyr",
+    ]);
     await engine.put(entry);
     const id = deriveEntryId(entry);
     createdIds.push(id);
@@ -99,9 +138,14 @@ describe("修复批次 A db 集成", () => {
     expect((await engine.ledger(id))!.freq).toBe(1);
 
     // 任务成功（verifier pass），轨迹中引用了 zephyr
-    const p = new MemoryWritePipeline({ distiller: new MemoryDistiller(EMPTY_LLM) });
+    const p = new MemoryWritePipeline({
+      distiller: new MemoryDistiller(EMPTY_LLM),
+    });
     await p.processEvent({
-      type: "task_succeeded", runId, trajectoryRef: `runs/${runId}`, repo: REPO,
+      type: "task_succeeded",
+      runId,
+      trajectoryRef: `runs/${runId}`,
+      repo: REPO,
       goal: "fix zephyr deploy",
       trajectory: "checked the zephyr rotation window and the deploy succeeded",
       verdict: { kind: "test", passed: true },
@@ -122,10 +166,16 @@ describe("修复批次 A db 集成", () => {
 
     const runId = `${RUN}_noadopt`;
     await recordRetrievalHits(engine, [id], { runId });
-    const p = new MemoryWritePipeline({ distiller: new MemoryDistiller(EMPTY_LLM) });
+    const p = new MemoryWritePipeline({
+      distiller: new MemoryDistiller(EMPTY_LLM),
+    });
     await p.processEvent({
-      type: "task_succeeded", runId, trajectoryRef: `runs/${runId}`, repo: REPO,
-      goal: "unrelated task", trajectory: "did something completely different and it worked",
+      type: "task_succeeded",
+      runId,
+      trajectoryRef: `runs/${runId}`,
+      repo: REPO,
+      goal: "unrelated task",
+      trajectory: "did something completely different and it worked",
       verdict: { kind: "test", passed: true },
     });
 
@@ -138,11 +188,14 @@ describe("修复批次 A db 集成", () => {
     // 构造无采纳环境：清空全库 read.adopted（各测试文件自带数据，互不影响）
     await sql`DELETE FROM memory_op_log WHERE op = 'read.adopted'`;
 
-    const entry = makeSemantic("Marble entry with eight injections and zero adoptions");
+    const entry = makeSemantic(
+      "Marble entry with eight injections and zero adoptions",
+    );
     await engine.put(entry);
     const id = deriveEntryId(entry);
     createdIds.push(id);
-    for (let i = 0; i < 8; i++) await recordRetrievalHits(engine, [id], { runId: `${RUN}_jc_${i}` });
+    for (let i = 0; i < 8; i++)
+      await recordRetrievalHits(engine, [id], { runId: `${RUN}_jc_${i}` });
 
     // 全库无 read.adopted → 信号不足，不定罪
     let candidates = await scanDeletionCandidates({ repo: REPO });
@@ -165,14 +218,25 @@ describe("修复批次 A db 集成", () => {
     const p1 = new MemoryWritePipeline({ correctionConfirmer: CONFIRM });
     const p2 = new MemoryWritePipeline({ correctionConfirmer: CONFIRM });
     await p1.enqueue({
-      type: "user_correction", text: "记住：并发处理一次性探针", messageRef: "m-conc", runId, repo: REPO,
+      type: "user_correction",
+      text: "记住：并发处理一次性探针",
+      messageRef: "m-conc",
+      runId,
+      repo: REPO,
     });
 
     // 两个实例并发抢 10 次
     const results = await Promise.all([
-      p1.processNext(), p2.processNext(), p1.processNext(), p2.processNext(),
-      p1.processNext(), p2.processNext(), p1.processNext(), p2.processNext(),
-      p1.processNext(), p2.processNext(),
+      p1.processNext(),
+      p2.processNext(),
+      p1.processNext(),
+      p2.processNext(),
+      p1.processNext(),
+      p2.processNext(),
+      p1.processNext(),
+      p2.processNext(),
+      p1.processNext(),
+      p2.processNext(),
     ]);
     expect(results.filter(Boolean)).toHaveLength(1);
 
@@ -194,7 +258,11 @@ describe("修复批次 A db 集成", () => {
     const runId = `${RUN}_stale`;
     const p = new MemoryWritePipeline({ correctionConfirmer: CONFIRM });
     await p.enqueue({
-      type: "user_correction", text: "记住：崩溃回收探针", messageRef: "m-stale", runId, repo: REPO,
+      type: "user_correction",
+      text: "记住：崩溃回收探针",
+      messageRef: "m-stale",
+      runId,
+      repo: REPO,
     });
     const sql = getSql();
     // 模拟崩溃：行卡在 processing 且 10 分钟前
@@ -215,11 +283,18 @@ describe("修复批次 A db 集成", () => {
     const p1 = new MemoryWritePipeline();
     const p2 = new MemoryWritePipeline();
     const mk = (i: number) => ({
-      type: "user_correction" as const, text: `记住：并发入队探针 ${i}`, messageRef: `m-enq-${i}`,
-      runId: `${RUN}_enq_${i}`, repo: REPO,
+      type: "user_correction" as const,
+      text: `记住：并发入队探针 ${i}`,
+      messageRef: `m-enq-${i}`,
+      runId: `${RUN}_enq_${i}`,
+      repo: REPO,
     });
     // 20 个并发入队
-    await Promise.all(Array.from({ length: 20 }, (_, i) => (i % 2 === 0 ? p1 : p2).enqueue(mk(i))));
+    await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        (i % 2 === 0 ? p1 : p2).enqueue(mk(i)),
+      ),
+    );
 
     const sql = getSql();
     const [cnt] = await sql`
@@ -232,15 +307,26 @@ describe("修复批次 A db 集成", () => {
   });
 
   it("#5 单条超预算条目被截断到预算硬顶内 + 记 read.truncated", async () => {
-    const big = makeSemantic("Obsidian oversized entry: " + "detailed step by step explanation. ".repeat(150), ["obsidian"]);
+    const big = makeSemantic(
+      "Obsidian oversized entry: " +
+        "detailed step by step explanation. ".repeat(150),
+      ["obsidian"],
+    );
     await engine.put(big);
     const id = deriveEntryId(big);
     createdIds.push(id);
 
     const runId = `${RUN}_big`;
-    const r = new TriggeredRetriever({ engine, countTokens: (t) => Math.ceil(t.length / 4), maxInjectTokens: 500 });
+    const r = new TriggeredRetriever({
+      engine,
+      countTokens: (t) => Math.ceil(t.length / 4),
+      maxInjectTokens: 500,
+    });
     const pkg = await r.retrieve({
-      type: "explicit_query", question: "obsidian oversized", repo: REPO, runId,
+      type: "explicit_query",
+      question: "obsidian oversized",
+      repo: REPO,
+      runId,
     });
 
     expect(pkg.items).toHaveLength(1);

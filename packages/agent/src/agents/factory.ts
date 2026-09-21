@@ -8,8 +8,8 @@ import {
   createDefaultLanguageModel,
 } from "@paw/models";
 import type { SharedContext } from "../orchestrator/types.js";
-import type { AgentSpec } from "./types.js";
 import { resolveAllowedTools } from "./resolve-tools.js";
+import type { AgentSpec } from "./types.js";
 import { validateAgentSpec } from "./validate.js";
 
 export interface MaterializedAgent {

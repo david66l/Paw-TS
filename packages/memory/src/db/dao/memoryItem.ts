@@ -2,7 +2,12 @@
  * MemoryItem DAO
  */
 import { getSql, parseJson } from "../connection.js";
-import type { MemoryItem, MemoryType, MemoryStatus, ScopeDescriptor } from "../types.js";
+import type {
+  MemoryItem,
+  MemoryStatus,
+  MemoryType,
+  ScopeDescriptor,
+} from "../types.js";
 
 function rowToItem(row: Record<string, unknown>): MemoryItem {
   return {
@@ -16,7 +21,8 @@ function rowToItem(row: Record<string, unknown>): MemoryItem {
     status: row.status as MemoryStatus,
     scope: parseJson(row.scope) as ScopeDescriptor,
     confidence: row.confidence as number,
-    verificationStatus: (row.verification_status as string) as MemoryItem["verificationStatus"],
+    verificationStatus:
+      row.verification_status as string as MemoryItem["verificationStatus"],
     payload: parseJson(row.payload) as Record<string, unknown>,
     tags: row.tags as string[],
     relatedFiles: row.related_files as string[],
@@ -32,13 +38,33 @@ function rowToItem(row: Record<string, unknown>): MemoryItem {
 }
 
 const memoryItemColumns = [
-  "id","schema_version","type","subject_key","subject_key_version",
-  "title","summary","status","scope","confidence","verification_status",
-  "payload","tags","related_files","related_symbols","related_test_run_ids",
-  "sensitivity","version","created_by","updated_by","created_at","updated_at",
+  "id",
+  "schema_version",
+  "type",
+  "subject_key",
+  "subject_key_version",
+  "title",
+  "summary",
+  "status",
+  "scope",
+  "confidence",
+  "verification_status",
+  "payload",
+  "tags",
+  "related_files",
+  "related_symbols",
+  "related_test_run_ids",
+  "sensitivity",
+  "version",
+  "created_by",
+  "updated_by",
+  "created_at",
+  "updated_at",
 ];
 
-function snapshotFromRow(row: Record<string, unknown>): Record<string, unknown> {
+function snapshotFromRow(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
   const snap: Record<string, unknown> = {};
   for (const col of memoryItemColumns) snap[col] = row[col];
   return snap;
@@ -46,8 +72,12 @@ function snapshotFromRow(row: Record<string, unknown>): Record<string, unknown> 
 
 async function insertVersion(
   sql: ReturnType<typeof getSql>,
-  memoryId: string, version: number, snapshot: Record<string, unknown>,
-  changeType: string, changeReason: string, governanceDecisionId?: string,
+  memoryId: string,
+  version: number,
+  snapshot: Record<string, unknown>,
+  changeType: string,
+  changeReason: string,
+  governanceDecisionId?: string,
 ): Promise<void> {
   const id = `memv_${memoryId}_${version}`;
   await sql`
@@ -75,21 +105,41 @@ export const memoryItemDao = {
       )
       RETURNING *`;
     const created = rowToItem(row as Record<string, unknown>);
-    await insertVersion(sql, created.id, created.version, snapshotFromRow(row as Record<string, unknown>), "create", "");
+    await insertVersion(
+      sql,
+      created.id,
+      created.version,
+      snapshotFromRow(row as Record<string, unknown>),
+      "create",
+      "",
+    );
     return created;
   },
 
   async findById(id: string): Promise<MemoryItem | null> {
     const sql = getSql();
-    const rows = await sql.unsafe("SELECT * FROM memory_items WHERE id = $1", [id]);
-    return rows.length > 0 ? rowToItem(rows[0] as Record<string, unknown>) : null;
+    const rows = await sql.unsafe("SELECT * FROM memory_items WHERE id = $1", [
+      id,
+    ]);
+    return rows.length > 0
+      ? rowToItem(rows[0] as Record<string, unknown>)
+      : null;
   },
 
-  async findBySubjectKey(subjectKey: string, status?: MemoryStatus): Promise<MemoryItem[]> {
+  async findBySubjectKey(
+    subjectKey: string,
+    status?: MemoryStatus,
+  ): Promise<MemoryItem[]> {
     const sql = getSql();
     const rows = status
-      ? await sql.unsafe("SELECT * FROM memory_items WHERE subject_key = $1 AND status = $2 ORDER BY updated_at DESC", [subjectKey, status])
-      : await sql.unsafe("SELECT * FROM memory_items WHERE subject_key = $1 ORDER BY updated_at DESC", [subjectKey]);
+      ? await sql.unsafe(
+          "SELECT * FROM memory_items WHERE subject_key = $1 AND status = $2 ORDER BY updated_at DESC",
+          [subjectKey, status],
+        )
+      : await sql.unsafe(
+          "SELECT * FROM memory_items WHERE subject_key = $1 ORDER BY updated_at DESC",
+          [subjectKey],
+        );
     return rows.map((r) => rowToItem(r as Record<string, unknown>));
   },
 
@@ -146,11 +196,20 @@ export const memoryItemDao = {
     return rows.map((r) => rowToItem(r as Record<string, unknown>));
   },
 
-  async update(id: string, expectedVersion: number, patch: {
-    title?: string; summary?: string; status?: MemoryStatus;
-    confidence?: number; verificationStatus?: string;
-    payload?: Record<string, unknown>; tags?: string[]; scope?: ScopeDescriptor;
-  }): Promise<MemoryItem | null> {
+  async update(
+    id: string,
+    expectedVersion: number,
+    patch: {
+      title?: string;
+      summary?: string;
+      status?: MemoryStatus;
+      confidence?: number;
+      verificationStatus?: string;
+      payload?: Record<string, unknown>;
+      tags?: string[];
+      scope?: ScopeDescriptor;
+    },
+  ): Promise<MemoryItem | null> {
     const sql = getSql();
 
     if (Object.keys(patch).length === 0) return memoryItemDao.findById(id);
@@ -172,15 +231,39 @@ export const memoryItemDao = {
       RETURNING *`;
     if (!row) return null;
     const updated = rowToItem(row as Record<string, unknown>);
-    await insertVersion(sql, updated.id, updated.version, snapshotFromRow(row as Record<string, unknown>), "update", "");
+    await insertVersion(
+      sql,
+      updated.id,
+      updated.version,
+      snapshotFromRow(row as Record<string, unknown>),
+      "update",
+      "",
+    );
     return updated;
   },
 
   /** 查询某个记忆的所有历史版本 */
-  async listVersions(memoryId: string): Promise<{ version: number; changeType: string; createdAt: string; snapshot: Record<string, unknown> }[]> {
+  async listVersions(
+    memoryId: string,
+  ): Promise<
+    {
+      version: number;
+      changeType: string;
+      createdAt: string;
+      snapshot: Record<string, unknown>;
+    }[]
+  > {
     const sql = getSql();
-    const rows = await sql`SELECT version, change_type, created_at, snapshot FROM memory_versions WHERE memory_id = ${memoryId} ORDER BY version DESC`;
-    return (rows as unknown as { version: number; change_type: string; created_at: string; snapshot: unknown }[]).map((r) => ({
+    const rows =
+      await sql`SELECT version, change_type, created_at, snapshot FROM memory_versions WHERE memory_id = ${memoryId} ORDER BY version DESC`;
+    return (
+      rows as unknown as {
+        version: number;
+        change_type: string;
+        created_at: string;
+        snapshot: unknown;
+      }[]
+    ).map((r) => ({
       version: r.version,
       changeType: r.change_type,
       createdAt: r.created_at,

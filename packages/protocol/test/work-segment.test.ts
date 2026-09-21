@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  type ControlDecisionActionV1,
   CRASH_RECOVERY_INCOMPLETE_REASONS_V1,
+  type ControlDecisionActionV1,
   RUN_JOURNAL_SCHEMA_VERSION_V1,
   type RunJournalEnvelopeV1,
   WORK_SEGMENT_POLICY_VERSION_V1,

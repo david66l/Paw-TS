@@ -1,7 +1,6 @@
 import { scanForSecrets } from "@paw/memory/longterm";
 import type { JsonValue } from "@paw/protocol";
 
-import type { MemoryWriterModelV1 } from "./model-port.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import {
   type MemoryFacetMemberRoleV2,
@@ -12,6 +11,7 @@ import {
   deriveMemoryFacetIdV2,
   normalizeMemoryFacetKeyV2,
 } from "./facet-state.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 import {
   type PawNextMemoryScopeV1,
   memoryScopeFingerprintV1,

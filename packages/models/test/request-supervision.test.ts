@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createAgentLoopModelAdapter } from "../src/agent-loop-adapter.js";
-import { superviseModelRequest } from "../src/request-supervision.js";
 import type { LanguageModel } from "../src/language-model.js";
+import { superviseModelRequest } from "../src/request-supervision.js";
 const limits = { idleMs: 70, reasoningOnlyMs: 100, wallMs: 200 };
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -121,19 +121,32 @@ test("extended budget admits a response that acts after the former reasoning cut
     label: "slow-then-productive",
     async complete(_messages, options) {
       const timer = setInterval(
-        () => options?.onObservation?.({ type: "delta", kind: "thinking", count: 1 }),
+        () =>
+          options?.onObservation?.({
+            type: "delta",
+            kind: "thinking",
+            count: 1,
+          }),
         5,
       );
       try {
         await pause(160); // Beyond the old scaled 100 ms reasoning limit.
-        options?.onObservation?.({ type: "delta", kind: "tool_fragment", count: 1 });
+        options?.onObservation?.({
+          type: "delta",
+          kind: "tool_fragment",
+          count: 1,
+        });
         return { text: "done" };
       } finally {
         clearInterval(timer);
       }
     },
   };
-  const result = await createAgentLoopModelAdapter(model, "complete", extended).execute(
+  const result = await createAgentLoopModelAdapter(
+    model,
+    "complete",
+    extended,
+  ).execute(
     { messages: [] },
     { signal: new AbortController().signal, onStreamEvent() {} },
   );

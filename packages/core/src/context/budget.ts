@@ -80,16 +80,12 @@ export function estimateContextCost(opts: {
   readonly cachedPromptTokens: number;
   readonly completionTokens?: number;
 }): ContextCostEstimate {
-  const hit = Math.max(
-    0,
-    Math.min(opts.cachedPromptTokens, opts.promptTokens),
-  );
+  const hit = Math.max(0, Math.min(opts.cachedPromptTokens, opts.promptTokens));
   const miss = Math.max(0, opts.promptTokens - hit);
   const inputCost =
     hit * COST_PRICING.readonlyInputCacheHit +
     miss * COST_PRICING.readonlyInputCacheMiss;
-  const outputCost =
-    (opts.completionTokens ?? 0) * COST_PRICING.readonlyOutput;
+  const outputCost = (opts.completionTokens ?? 0) * COST_PRICING.readonlyOutput;
   return { inputCost, outputCost, totalCost: inputCost + outputCost };
 }
 

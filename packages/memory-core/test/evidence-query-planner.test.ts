@@ -104,7 +104,9 @@ describe("typed evidence query planner v3", () => {
       "Do you think it would be a good idea for me to attend?",
       "My bike is performing better. Could there be a reason for this?",
     ]) {
-      expect(classifyMemoryEvidenceQueryV3(query).answerShape).toBe("recommend");
+      expect(classifyMemoryEvidenceQueryV3(query).answerShape).toBe(
+        "recommend",
+      );
     }
   });
 

@@ -64,7 +64,7 @@ export function truncateChars(text: string, maxChars: number): string {
  */
 export function bullets(items: readonly (string | null | false)[]): string {
   return items
-    .filter((x): x is string => typeof x === "string")  // 类型守卫：过滤后 items 类型收窄为 string[]
+    .filter((x): x is string => typeof x === "string") // 类型守卫：过滤后 items 类型收窄为 string[]
     .map((s) => `- ${s}`)
     .join("\n");
 }

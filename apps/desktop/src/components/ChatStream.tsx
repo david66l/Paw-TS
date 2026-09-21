@@ -1,20 +1,17 @@
 import {
   ArrowUp,
-  Square,
-  Paperclip,
-  PanelRight,
-  Copy,
   Check,
-  Pencil,
-  X,
-  FileText,
   Code2,
+  Copy,
+  FileText,
+  PanelRight,
+  Paperclip,
+  Pencil,
   Search,
+  Square,
   Wrench,
+  X,
 } from "lucide-react";
-import { PawMark } from "./PawMark";
-import { ContextMeter } from "./ContextMeter";
-import type { ContextSnapshot } from "../agent/useRightPanelData";
 import {
   type KeyboardEvent,
   memo,
@@ -35,12 +32,15 @@ import type {
   ToolBatch,
   UiMessage,
 } from "../agent/types";
+import type { ContextSnapshot } from "../agent/useRightPanelData";
 import { ApprovalCard } from "./ApprovalCard";
 import { AskUserCard } from "./AskUserCard";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import styles from "./ChatStream.module.css";
+import { ContextMeter } from "./ContextMeter";
 import { GlassPanel } from "./GlassPanel";
 import { Markdown } from "./Markdown";
+import { PawMark } from "./PawMark";
 import { ToolBatchCard } from "./ToolBatchCard";
 
 /** 展示时再洗一遍：历史里可能残留 final_answer JSON 原文 */

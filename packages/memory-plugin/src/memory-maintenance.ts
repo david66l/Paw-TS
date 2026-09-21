@@ -1,15 +1,15 @@
 import { createOperationDeadline } from "@paw/core";
 import {
-  createMemoryWriterControllerV1,
   type MemoryWriterControllerOptionsV1,
   type MemoryWriterControllerV1,
+  createMemoryWriterControllerV1,
 } from "./memory-writer.js";
-import {
-  createMemoryTopicOrganizerControllerV1,
-  type MemoryTopicOrganizerControllerOptionsV1,
-} from "./topic-organizer.js";
 import { createMemoryTopicDossierProjectorV1 } from "./topic-dossier-projector.js";
 import type { MemoryTopicEvidenceStoreV1 } from "./topic-evidence-store.js";
+import {
+  type MemoryTopicOrganizerControllerOptionsV1,
+  createMemoryTopicOrganizerControllerV1,
+} from "./topic-organizer.js";
 
 /** One terminal operation, not a fresh timeout for every model or topic. */
 export const MEMORY_MAINTENANCE_DEADLINE_MS = 30_000;

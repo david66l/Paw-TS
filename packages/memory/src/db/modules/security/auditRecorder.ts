@@ -6,8 +6,8 @@
  */
 
 import { getSql, parseJson } from "../../connection.js";
-import { generateId } from "../platform/idGen.js";
 import type { ActorRef } from "../../types.js";
+import { generateId } from "../platform/idGen.js";
 
 export interface AuditEvent {
   eventType: string;
@@ -35,32 +35,48 @@ export const auditRecorder = {
         governance_decision_id, transaction_id, idempotency_key,
         policy_version, task_id, sensitivity, created_at
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'internal',now())`,
-      [generateId("audit"), event.eventType, JSON.stringify(event.actor),
-        event.entityType, event.entityId, event.previousVersion ?? null,
-        event.newVersion ?? null, JSON.stringify(event.changeSummary ?? {}),
-        event.reason ?? null, event.governanceDecisionId ?? null,
-        event.transactionId ?? null, event.idempotencyKey ?? null,
-        event.policyVersion ?? null, event.taskId ?? null],
+      [
+        generateId("audit"),
+        event.eventType,
+        JSON.stringify(event.actor),
+        event.entityType,
+        event.entityId,
+        event.previousVersion ?? null,
+        event.newVersion ?? null,
+        JSON.stringify(event.changeSummary ?? {}),
+        event.reason ?? null,
+        event.governanceDecisionId ?? null,
+        event.transactionId ?? null,
+        event.idempotencyKey ?? null,
+        event.policyVersion ?? null,
+        event.taskId ?? null,
+      ],
     );
   },
 
   /** 查询某个实体的审计历史 */
-  async queryByEntity(entityType: string, entityId: string, limit = 50): Promise<AuditEvent[]> {
+  async queryByEntity(
+    entityType: string,
+    entityId: string,
+    limit = 50,
+  ): Promise<AuditEvent[]> {
     const sql = getSql();
-    const rows = await sql.unsafe(
+    const rows = (await sql.unsafe(
       `SELECT * FROM audit_records WHERE entity_type = $1 AND entity_id = $2
-       ORDER BY created_at DESC LIMIT $3`, [entityType, entityId, limit],
-    ) as Record<string, unknown>[];
+       ORDER BY created_at DESC LIMIT $3`,
+      [entityType, entityId, limit],
+    )) as Record<string, unknown>[];
     return rows.map(rowToEvent);
   },
 
   /** 查询某个任务的所有审计记录 */
   async queryByTask(taskId: string, limit = 100): Promise<AuditEvent[]> {
     const sql = getSql();
-    const rows = await sql.unsafe(
+    const rows = (await sql.unsafe(
       `SELECT * FROM audit_records WHERE task_id = $1
-       ORDER BY created_at DESC LIMIT $2`, [taskId, limit],
-    ) as Record<string, unknown>[];
+       ORDER BY created_at DESC LIMIT $2`,
+      [taskId, limit],
+    )) as Record<string, unknown>[];
     return rows.map(rowToEvent);
   },
 };

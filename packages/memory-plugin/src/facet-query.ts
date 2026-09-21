@@ -1,11 +1,11 @@
 import type { JsonValue } from "@paw/protocol";
 
-import type { MemoryWriterModelV1 } from "./model-port.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import type {
   MemoryFacetEvidenceStateV2,
   MemoryFacetStateProjectionV2,
 } from "./facet-state.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_FACET_QUERY_PLANNER_VERSION_V2 =
   "paw.memory-facet-query-planner.json.v2:id-only" as const;

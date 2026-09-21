@@ -80,8 +80,12 @@ export function createOutputRecallToolPluginV1(input?: {
   return Object.freeze({
     schemaVersion: "paw.runtime-tool-plugin.v1",
     pluginId: OUTPUT_RECALL_TOOL_PLUGIN_ID_V1,
-    pluginVersion: input?.legacyWorkspaceResource ? outputRecallPluginVersion(policy).replace("v3:journal-authority", "v2") : outputRecallPluginVersion(policy),
-    entries: Object.freeze([createRecallEntry(policy, input?.legacyWorkspaceResource)]),
+    pluginVersion: input?.legacyWorkspaceResource
+      ? outputRecallPluginVersion(policy).replace("v3:journal-authority", "v2")
+      : outputRecallPluginVersion(policy),
+    entries: Object.freeze([
+      createRecallEntry(policy, input?.legacyWorkspaceResource),
+    ]),
   });
 }
 
@@ -98,7 +102,10 @@ export function createOutputRecallProjectorV1(input?: {
     project(observation, signal) {
       throwIfAborted(signal);
       if (compactMutationReceipts) {
-        const receipt = projectMutationReceiptV1(observation, policy.maxCharsPerRecall);
+        const receipt = projectMutationReceiptV1(
+          observation,
+          policy.maxCharsPerRecall,
+        );
         if (receipt !== undefined) return receipt;
       }
       const text = canonicalJsonStringify(observation.value);
@@ -397,7 +404,20 @@ function createRecallEntry(
         // Advertising the backing store as a file resource incorrectly makes
         // a read-only child's .paw denial block its own output pagination.
         // Exclusive workspace locking still serializes recall budget updates.
-        resources: legacyWorkspaceResource ? [{ key: path.join(root, ".paw", "paw-next", "durable-json-payloads", "*"), access: "read" }] : [],
+        resources: legacyWorkspaceResource
+          ? [
+              {
+                key: path.join(
+                  root,
+                  ".paw",
+                  "paw-next",
+                  "durable-json-payloads",
+                  "*",
+                ),
+                access: "read",
+              },
+            ]
+          : [],
       };
     },
   };

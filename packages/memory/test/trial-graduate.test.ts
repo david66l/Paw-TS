@@ -4,23 +4,27 @@
  *   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test" bun test test/trial-graduate.test.ts
  */
 
-import { describe, test, expect, afterAll, beforeAll } from "bun:test";
-import { getSql, closeSql, ping } from "../src/db/connection.js";
-import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import { TriggeredRetriever } from "../src/longterm/retrieval/triggered.js";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { closeSql, getSql, ping } from "../src/db/connection.js";
 import { queryOpLog } from "../src/longterm/observability/op-log.js";
+import { TriggeredRetriever } from "../src/longterm/retrieval/triggered.js";
+import type {
+  EpisodicExperience,
+  SemanticFact,
+} from "../src/longterm/store/engine.js";
+import { deriveEntryId } from "../src/longterm/store/id.js";
+import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 import { MemoryDistiller } from "../src/longterm/write/distiller.js";
+import { MemoryWritePipeline } from "../src/longterm/write/pipeline.js";
 import {
   addTrialLesson,
   getTrialLesson,
   graduateTrialLesson,
   listTrialLessons,
 } from "../src/longterm/write/trial.js";
-import { MemoryWritePipeline } from "../src/longterm/write/pipeline.js";
-import { deriveEntryId } from "../src/longterm/store/id.js";
-import type { EpisodicExperience, SemanticFact } from "../src/longterm/store/engine.js";
 
-process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??=
+  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -45,7 +49,10 @@ function makeSemantic(fact: string): SemanticFact {
     freq: 0,
     utility: 0,
     fact,
-    keywords: fact.split(/\s+/).filter((w) => w.length > 4).slice(0, 4),
+    keywords: fact
+      .split(/\s+/)
+      .filter((w) => w.length > 4)
+      .slice(0, 4),
     embeddingKey: fact,
   };
 }
@@ -105,7 +112,10 @@ describe("graduateTrialLesson（纯转正）", () => {
     expect(entry!.evidence.some((e) => e.includes(trial.id))).toBe(true);
 
     expect(await getTrialLesson(trial.id)).toBeNull();
-    const logs = await queryOpLog({ runId: `${RUN}_grad`, op: "write.graduated" });
+    const logs = await queryOpLog({
+      runId: `${RUN}_grad`,
+      op: "write.graduated",
+    });
     expect(logs.length).toBe(1);
     expect(logs[0]!.entryIds).toContain(result!.memoryId);
     expect(logs[0]!.detail.trialId).toBe(trial.id);
@@ -133,7 +143,8 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
           if (prompt.includes("失败复盘") || prompt.includes("试用教训")) {
             return JSON.stringify({
               lesson: "我不该在没有锁定依赖版本时升级核心包。",
-              whenToUse: "When JadePeerDependencyError appears after a core package upgrade",
+              whenToUse:
+                "When JadePeerDependencyError appears after a core package upgrade",
               keywords: ["JadePeerDependencyError", "peer", "upgrade"],
             });
           }
@@ -169,13 +180,19 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     });
     const pkg = await retriever.retrieve({
       type: "action_failed",
-      errorOutput: "JadePeerDependencyError: unmet peer dependency\n    at install (pkg.ts:12:3)",
+      errorOutput:
+        "JadePeerDependencyError: unmet peer dependency\n    at install (pkg.ts:12:3)",
       lastActionSummary: "bun install (exit 1)",
       repo: REPO,
       runId: successRun,
     });
-    expect(pkg.items.some((i) => i.kind === "trial" && i.id === trialId)).toBe(true);
-    const trialLogs = await queryOpLog({ runId: successRun, op: "read.inject.trial" });
+    expect(pkg.items.some((i) => i.kind === "trial" && i.id === trialId)).toBe(
+      true,
+    );
+    const trialLogs = await queryOpLog({
+      runId: successRun,
+      op: "read.inject.trial",
+    });
     expect(trialLogs[0]!.entryIds).toContain(trialId);
 
     const ok = await pipeline.processEvent({
@@ -192,7 +209,10 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     expect(await getTrialLesson(trialId)).toBeNull();
     expect(await listTrialLessons(originRun)).toHaveLength(0);
 
-    const graduatedLogs = await queryOpLog({ runId: successRun, op: "write.graduated" });
+    const graduatedLogs = await queryOpLog({
+      runId: successRun,
+      op: "write.graduated",
+    });
     expect(graduatedLogs.length).toBe(1);
     const memoryId = graduatedLogs[0]!.entryIds[0]!;
     createdIds.push(memoryId);
@@ -220,15 +240,11 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     const originRun = `${RUN}_fail2`;
     const againRun = `${RUN}_fail_again`;
 
-    const trial = await addTrialLesson(
-      "我不该忽略 timeout 配置。",
-      originRun,
-      {
-        whenToUse: "When QuartzTimeoutError appears in flaky integration tests",
-        keywords: ["QuartzTimeoutError"],
-        distilled: true,
-      },
-    );
+    const trial = await addTrialLesson("我不该忽略 timeout 配置。", originRun, {
+      whenToUse: "When QuartzTimeoutError appears in flaky integration tests",
+      keywords: ["QuartzTimeoutError"],
+      distilled: true,
+    });
 
     const filler = makeSemantic(
       "QuartzTimeoutError usually means the integration test timeout is too low",
@@ -242,7 +258,8 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     });
     await retriever.retrieve({
       type: "action_failed",
-      errorOutput: "QuartzTimeoutError: exceeded 5000ms\n    at wait (test.ts:4:1)",
+      errorOutput:
+        "QuartzTimeoutError: exceeded 5000ms\n    at wait (test.ts:4:1)",
       lastActionSummary: "bun test (exit 1)",
       repo: REPO,
       runId: againRun,
@@ -262,7 +279,9 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     const still = await getTrialLesson(trial.id);
     expect(still).not.toBeNull();
     expect(still!.attemptsLeft).toBe(2);
-    expect(await queryOpLog({ runId: againRun, op: "write.graduated" })).toHaveLength(0);
+    expect(
+      await queryOpLog({ runId: againRun, op: "write.graduated" }),
+    ).toHaveLength(0);
   });
 
   it("无反馈信号的成功不转正（禁止盲改）", async () => {
@@ -275,7 +294,9 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
       distilled: true,
     });
 
-    const filler = makeSemantic("TopazBlindError is a synthetic keyword for graduation gating");
+    const filler = makeSemantic(
+      "TopazBlindError is a synthetic keyword for graduation gating",
+    );
     await engine.put(filler);
     createdIds.push(deriveEntryId(filler));
 
@@ -303,6 +324,8 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     });
     expect(r.status).toBe("rejected");
     expect(await getTrialLesson(trial.id)).not.toBeNull();
-    expect(await queryOpLog({ runId: blindRun, op: "write.graduated" })).toHaveLength(0);
+    expect(
+      await queryOpLog({ runId: blindRun, op: "write.graduated" }),
+    ).toHaveLength(0);
   });
 });

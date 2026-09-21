@@ -10,8 +10,8 @@ import {
   type MemoryTopicEvidenceStateV1,
 } from "@paw/protocol";
 
-import type { MemoryWriterModelV1 } from "./model-port.js";
 import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 import type {
   MemoryRawEvidenceArchiveV1,
   MemoryRawEvidenceRequestV1,

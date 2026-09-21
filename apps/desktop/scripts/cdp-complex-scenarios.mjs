@@ -3,7 +3,7 @@
  *
  * 覆盖：Memory 总库/本次命中、多轮 history、Plan、Context 文件、工具读盘、新对话 finalize
  */
-import { writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const CDP = process.env.CDP_URL || "http://127.0.0.1:9223";
@@ -25,7 +25,10 @@ function info(msg) {
 
 async function connect() {
   const list = await (await fetch(`${CDP}/json/list`)).json();
-  const page = list.find((t) => t.type === "page" && t.url?.includes("5173")) || list.find((t) => t.type === "page") || list[0];
+  const page =
+    list.find((t) => t.type === "page" && t.url?.includes("5173")) ||
+    list.find((t) => t.type === "page") ||
+    list[0];
   if (!page?.webSocketDebuggerUrl) throw new Error("No CDP page target");
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   let id = 0;
@@ -39,7 +42,9 @@ async function connect() {
     });
   };
   ws.onmessage = (ev) => {
-    const msg = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
+    const msg = JSON.parse(
+      typeof ev.data === "string" ? ev.data : ev.data.toString(),
+    );
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject, t } = pending.get(msg.id);
       clearTimeout(t);
@@ -192,12 +197,17 @@ async function waitRunDone(send, timeoutMs = 180000) {
       return st.done;
     }
     // 兜底：无 abort 且状态就绪，且已跑过一段时间
-    if (!st.hasAbort && /就绪|完成|失败/.test(st.status) && Date.now() - start > 4000) {
+    if (
+      !st.hasAbort &&
+      /就绪|完成|失败/.test(st.status) &&
+      Date.now() - start > 4000
+    ) {
       await sleep(600);
       const again = await evalJs(send, `!!window.__pawTestRunDone`);
       if (again) return true;
       // 可能事件丢了但 UI 已 idle
-      if (!st.hasAbort && Date.now() - start > 8000) return { fallback: true, status: st.status };
+      if (!st.hasAbort && Date.now() - start > 8000)
+        return { fallback: true, status: st.status };
     }
     await sleep(800);
   }
@@ -240,7 +250,8 @@ async function main() {
       })()`,
       true,
     );
-    if (meta.hasList && meta.hasOnList) pass("S0 Phase1 API present", JSON.stringify(meta));
+    if (meta.hasList && meta.hasOnList)
+      pass("S0 Phase1 API present", JSON.stringify(meta));
     else fail("S0 Phase1 API present", JSON.stringify(meta));
   } catch (e) {
     fail("S0 Phase1 API present", e.message);
@@ -272,9 +283,15 @@ async function main() {
     );
     if (lib.timeout) fail("S1 memory.list total library", "timeout");
     else if (lib.ok && lib.count > 0 && (lib.hasVitest || lib.hasIoredis))
-      pass("S1 memory.list total library", `${lib.count} items, vitest=${lib.hasVitest} ioredis=${lib.hasIoredis}`);
+      pass(
+        "S1 memory.list total library",
+        `${lib.count} items, vitest=${lib.hasVitest} ioredis=${lib.hasIoredis}`,
+      );
     else if (lib.ok && lib.count > 0)
-      pass("S1 memory.list total library", `${lib.count} items (seed keywords not all present)`);
+      pass(
+        "S1 memory.list total library",
+        `${lib.count} items (seed keywords not all present)`,
+      );
     else fail("S1 memory.list total library", JSON.stringify(lib));
 
     await clickTab(send, "Memory");
@@ -379,17 +396,30 @@ async function main() {
     const planText = await panelText(send);
 
     if (ctxHasFile)
-      pass("S4a Context panel has run data", ctxText.replace(/\s+/g, " ").slice(0, 200));
+      pass(
+        "S4a Context panel has run data",
+        ctxText.replace(/\s+/g, " ").slice(0, 200),
+      );
     else fail("S4a Context panel has run data", ctxText.slice(0, 250));
 
     // Changes may be empty if only read (we only track writes for Changes, reads go to Context)
     if (/package\.json|暂无文件变更/.test(chText))
-      pass("S4b Changes tab reachable", chText.replace(/\s+/g, " ").slice(0, 120));
-    else pass("S4b Changes tab reachable", chText.replace(/\s+/g, " ").slice(0, 120));
+      pass(
+        "S4b Changes tab reachable",
+        chText.replace(/\s+/g, " ").slice(0, 120),
+      );
+    else
+      pass(
+        "S4b Changes tab reachable",
+        chText.replace(/\s+/g, " ").slice(0, 120),
+      );
 
     const body = await chatBody(send);
     if (/@paw\/memory|memory|name/i.test(body))
-      pass("S4c tool read produced answer", body.slice(-220).replace(/\s+/g, " "));
+      pass(
+        "S4c tool read produced answer",
+        body.slice(-220).replace(/\s+/g, " "),
+      );
     else fail("S4c tool read produced answer", body.slice(-300));
 
     info(`plan panel: ${planText.replace(/\s+/g, " ").slice(0, 120)}`);
@@ -416,13 +446,20 @@ async function main() {
       !/暂无执行计划/.test(planText);
     const bodyHasStructure = /apps|packages|目录/i.test(body);
     if (hasPlanItems)
-      pass("S5 Plan panel populated", planText.replace(/\s+/g, " ").slice(0, 220));
+      pass(
+        "S5 Plan panel populated",
+        planText.replace(/\s+/g, " ").slice(0, 220),
+      );
     else if (bodyHasStructure)
       fail(
         "S5 Plan panel populated",
         `body ok but plan empty: ${planText.slice(0, 150)}`,
       );
-    else fail("S5 Plan panel populated", `plan=${planText.slice(0, 150)} body=${body.slice(-200)}`);
+    else
+      fail(
+        "S5 Plan panel populated",
+        `plan=${planText.slice(0, 150)} body=${body.slice(-200)}`,
+      );
     await shot(send, "s5-plan");
   } catch (e) {
     fail("S5 Plan complex task", e.message);
@@ -439,7 +476,11 @@ async function main() {
     // after new chat, stream should be relatively empty / welcome
     if (/开始和 Paw|描述一个任务|就绪/.test(body) || body.length < 800)
       pass("S6 chitchat + new conversation finalize", "UI reset ok");
-    else pass("S6 chitchat + new conversation finalize", "completed without crash");
+    else
+      pass(
+        "S6 chitchat + new conversation finalize",
+        "completed without crash",
+      );
     await shot(send, "s6-new-chat");
   } catch (e) {
     fail("S6 chitchat + new conversation finalize", e.message);
@@ -457,8 +498,15 @@ async function main() {
     await sleep(300);
     const mem = await panelText(send);
     if (/ioredis/i.test(body) || /ioredis|Redis/i.test(mem))
-      pass("S7 redis preference recall", `bodyHas=${/ioredis/i.test(body)} memHas=${/ioredis|Redis/i.test(mem)}`);
-    else fail("S7 redis preference recall", body.slice(-250) + " | " + mem.slice(0, 150));
+      pass(
+        "S7 redis preference recall",
+        `bodyHas=${/ioredis/i.test(body)} memHas=${/ioredis|Redis/i.test(mem)}`,
+      );
+    else
+      fail(
+        "S7 redis preference recall",
+        body.slice(-250) + " | " + mem.slice(0, 150),
+      );
     await shot(send, "s7-ioredis");
   } catch (e) {
     fail("S7 redis preference recall", e.message);
@@ -474,7 +522,11 @@ async function main() {
   }
   writeFileSync(
     join(OUT_DIR, "results.json"),
-    JSON.stringify({ passed, failed, results, at: new Date().toISOString() }, null, 2),
+    JSON.stringify(
+      { passed, failed, results, at: new Date().toISOString() },
+      null,
+      2,
+    ),
   );
   ws.close();
   process.exit(failed > 0 ? 1 : 0);

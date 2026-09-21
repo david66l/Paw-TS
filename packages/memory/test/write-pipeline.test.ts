@@ -6,27 +6,31 @@
  *   DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test" bun test test/write-pipeline.test.ts
  */
 
-import { describe, test, expect, afterAll } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import type { RunEvent } from "@paw/core";
-import { getSql, closeSql, ping } from "../src/db/connection.js";
-import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import { hybridRecall } from "../src/longterm/retrieval/hybrid.js";
+import { closeSql, getSql, ping } from "../src/db/connection.js";
 import { queryOpLog } from "../src/longterm/observability/op-log.js";
-import { scanForSecrets, shannonEntropy } from "../src/longterm/write/secrets.js";
+import { hybridRecall } from "../src/longterm/retrieval/hybrid.js";
+import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 import { detectUserCorrection } from "../src/longterm/write/correction.js";
 import {
-  MemoryDistiller,
-  validateCandidate,
-  extractJson,
   type DistillerLlm,
+  MemoryDistiller,
+  extractJson,
+  validateCandidate,
 } from "../src/longterm/write/distiller.js";
-import { listTrialLessons } from "../src/longterm/write/trial.js";
 import {
   MemoryWritePipeline,
   estimateTokens,
 } from "../src/longterm/write/pipeline.js";
+import {
+  scanForSecrets,
+  shannonEntropy,
+} from "../src/longterm/write/secrets.js";
+import { listTrialLessons } from "../src/longterm/write/trial.js";
 
-process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??=
+  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -37,11 +41,21 @@ const it = dbOk ? test : test.skip;
 
 describe("scanForSecrets", () => {
   test("已知模式命中 → reject", () => {
-    expect(scanForSecrets("调用时用 sk-a1b2c3d4e5f6g7h8i9j0k1l2m3n4 即可").action).toBe("reject");
-    expect(scanForSecrets("token 是 ghp_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7").action).toBe("reject");
-    expect(scanForSecrets("-----BEGIN PRIVATE KEY----- 之后换行").action).toBe("reject");
-    expect(scanForSecrets("aws key AKIAIOSFODNN7EXAMPLE 失效了").action).toBe("reject");
-    expect(scanForSecrets("AIzaSyD4iE5fG7hI8jK9lM0nO1pQ2rS3tU4vW5x 报错").action).toBe("reject");
+    expect(
+      scanForSecrets("调用时用 sk-a1b2c3d4e5f6g7h8i9j0k1l2m3n4 即可").action,
+    ).toBe("reject");
+    expect(
+      scanForSecrets("token 是 ghp_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7").action,
+    ).toBe("reject");
+    expect(scanForSecrets("-----BEGIN PRIVATE KEY----- 之后换行").action).toBe(
+      "reject",
+    );
+    expect(scanForSecrets("aws key AKIAIOSFODNN7EXAMPLE 失效了").action).toBe(
+      "reject",
+    );
+    expect(
+      scanForSecrets("AIzaSyD4iE5fG7hI8jK9lM0nO1pQ2rS3tU4vW5x 报错").action,
+    ).toBe("reject");
   });
 
   test("仅高熵无已知模式 → redact 打码", () => {
@@ -67,11 +81,17 @@ describe("scanForSecrets", () => {
 
 describe("detectUserCorrection", () => {
   test("规则命中", () => {
-    expect(detectUserCorrection("记住：以后都用 bun test").isCorrection).toBe(true);
+    expect(detectUserCorrection("记住：以后都用 bun test").isCorrection).toBe(
+      true,
+    );
     expect(detectUserCorrection("不要用 jest 了").isCorrection).toBe(true);
     expect(detectUserCorrection("以后都先跑类型检查").isCorrection).toBe(true);
-    expect(detectUserCorrection("I prefer pnpm over npm").isCorrection).toBe(true);
-    expect(detectUserCorrection("don't use axios here").isCorrection).toBe(true);
+    expect(detectUserCorrection("I prefer pnpm over npm").isCorrection).toBe(
+      true,
+    );
+    expect(detectUserCorrection("don't use axios here").isCorrection).toBe(
+      true,
+    );
   });
 
   test("普通请求不误报", () => {
@@ -97,12 +117,24 @@ describe("validateCandidate", () => {
   });
 
   test("缺 evidence 拒绝（纪律 4）", () => {
-    expect(validateCandidate({ ...validSemantic, evidence: [] }).ok).toBe(false);
+    expect(validateCandidate({ ...validSemantic, evidence: [] }).ok).toBe(
+      false,
+    );
   });
 
   test("文件路径/camelCase 标识符拒绝（纪律 1）", () => {
-    expect(validateCandidate({ ...validSemantic, fact: "Edit src/db/migrate.ts first" }).ok).toBe(false);
-    expect(validateCandidate({ ...validSemantic, fact: "call runMigrations before tests" }).ok).toBe(false);
+    expect(
+      validateCandidate({
+        ...validSemantic,
+        fact: "Edit src/db/migrate.ts first",
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateCandidate({
+        ...validSemantic,
+        fact: "call runMigrations before tests",
+      }).ok,
+    ).toBe(false);
   });
 
   test("episodic whenToUse 必须以 当/When 开头（纪律 2）", () => {
@@ -112,9 +144,18 @@ describe("validateCandidate", () => {
       modification: ["Check the config field"],
       evidence: ["runs/r1#step-1"],
     };
-    expect(validateCandidate({ ...base, whenToUse: "模块解析失败时" }).ok).toBe(false);
-    expect(validateCandidate({ ...base, whenToUse: "When module resolution fails after migration" }).ok).toBe(true);
-    expect(validateCandidate({ ...base, whenToUse: "当模块解析失败时" }).ok).toBe(true);
+    expect(validateCandidate({ ...base, whenToUse: "模块解析失败时" }).ok).toBe(
+      false,
+    );
+    expect(
+      validateCandidate({
+        ...base,
+        whenToUse: "When module resolution fails after migration",
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateCandidate({ ...base, whenToUse: "当模块解析失败时" }).ok,
+    ).toBe(true);
   });
 
   test("modification 超 3 条 / perspective 超 2 句拒绝（纪律 5）", () => {
@@ -142,7 +183,9 @@ describe("validateCandidate", () => {
   });
 
   test("extractJson 容忍前后废话", () => {
-    expect(extractJson('好的，以下是结果：\n{"candidates": []}\n希望有帮助')).toEqual({ candidates: [] });
+    expect(
+      extractJson('好的，以下是结果：\n{"candidates": []}\n希望有帮助'),
+    ).toEqual({ candidates: [] });
   });
 
   test("estimateTokens 粗略 chars/4", () => {
@@ -161,19 +204,26 @@ const createdIds: string[] = [];
 const emitted: RunEvent[] = [];
 
 const VALID_LLM: DistillerLlm = {
-  complete: async () => JSON.stringify({
-    candidates: [{
-      kind: "semantic",
-      fact: "The project uses a custom SQL migration runner ordered by version prefix",
-      keywords: ["migration", "sql"],
-      evidence: [`runs/${RUN}/trajectory#step-2`],
-    }],
-  }),
+  complete: async () =>
+    JSON.stringify({
+      candidates: [
+        {
+          kind: "semantic",
+          fact: "The project uses a custom SQL migration runner ordered by version prefix",
+          keywords: ["migration", "sql"],
+          evidence: [`runs/${RUN}/trajectory#step-2`],
+        },
+      ],
+    }),
 };
 
-const GARBAGE_LLM: DistillerLlm = { complete: async () => "这不是 JSON，格式完全错误" };
+const GARBAGE_LLM: DistillerLlm = {
+  complete: async () => "这不是 JSON，格式完全错误",
+};
 
-function makePipeline(opts: Partial<ConstructorParameters<typeof MemoryWritePipeline>[0]> = {}) {
+function makePipeline(
+  opts: Partial<ConstructorParameters<typeof MemoryWritePipeline>[0]> = {},
+) {
   return new MemoryWritePipeline({
     distiller: new MemoryDistiller(VALID_LLM),
     // #10：规则命中后需 LLM 确认才直写；既有用例测的是确认通过路径
@@ -216,13 +266,20 @@ describe("写入管线 db 集成", () => {
     expect(emitted.some((e) => e.type === "memory.write.enqueued")).toBe(true);
 
     expect(await p.processNext()).toBe(true);
-    const entries = await engine.query({ repo: REPO, includeInvalidated: true });
+    const entries = await engine.query({
+      repo: REPO,
+      includeInvalidated: true,
+    });
     expect(entries).toHaveLength(0);
 
     const logs = await queryOpLog({ runId, op: "write.rejected" });
     expect(logs.length).toBeGreaterThanOrEqual(1);
     expect(logs[0]!.detail.reason).toBe("secret");
-    expect(emitted.some((e) => e.type === "memory.write.rejected" && e.reason === "secret")).toBe(true);
+    expect(
+      emitted.some(
+        (e) => e.type === "memory.write.rejected" && e.reason === "secret",
+      ),
+    ).toBe(true);
   });
 
   it("§5.8-2 失败轨迹 → 无正式条目 + trial 池有新教训", async () => {
@@ -234,11 +291,15 @@ describe("写入管线 db 集成", () => {
       trajectoryRef: `runs/${runId}`,
       repo: REPO,
       goal: "migrate module system",
-      trajectory: "tried changing imports, tests still failing with resolution error",
+      trajectory:
+        "tried changing imports, tests still failing with resolution error",
     });
     expect(r.status).toBe("trialed");
 
-    const entries = await engine.query({ repo: REPO, includeInvalidated: true });
+    const entries = await engine.query({
+      repo: REPO,
+      includeInvalidated: true,
+    });
     expect(entries).toHaveLength(0);
 
     const trials = await listTrialLessons(runId);
@@ -264,7 +325,11 @@ describe("写入管线 db 集成", () => {
     const entry = await engine.get(r.memoryId);
     expect(entry!.source).toBe("user_statement");
     expect(entry!.confidence).toBe(1.0);
-    expect(emitted.some((e) => e.type === "memory.governed" && e.entryId === r.memoryId)).toBe(true);
+    expect(
+      emitted.some(
+        (e) => e.type === "memory.governed" && e.entryId === r.memoryId,
+      ),
+    ).toBe(true);
   });
 
   it("禁止盲改条款：无反馈信号的 task_succeeded 不固化", async () => {
@@ -306,8 +371,11 @@ describe("写入管线 db 集成", () => {
     expect(entry!.evidence.length).toBeGreaterThanOrEqual(1);
     // #2：固化通道写入 verified（不再一律 unverified）
     const sql = getSql();
-    const rows = await sql`SELECT verification_status FROM memory_items WHERE id = ${r.memoryIds[0]!}`;
-    expect((rows[0] as { verification_status: string }).verification_status).toBe("verified");
+    const rows =
+      await sql`SELECT verification_status FROM memory_items WHERE id = ${r.memoryIds[0]!}`;
+    expect(
+      (rows[0] as { verification_status: string }).verification_status,
+    ).toBe("verified");
   });
 
   it("测试失败 outcome 转试用通道（不固化）", async () => {
@@ -365,27 +433,46 @@ describe("写入管线 db 集成", () => {
     expect(entry!.confidence).toBe(0.3);
     expect(entry!.source).toBe("agent_inferred");
     const sql = getSql();
-    const rows = await sql`SELECT verification_status FROM memory_items WHERE id = ${r.memoryId}`;
-    expect((rows[0] as { verification_status: string }).verification_status).toBe("unverified");
+    const rows =
+      await sql`SELECT verification_status FROM memory_items WHERE id = ${r.memoryId}`;
+    expect(
+      (rows[0] as { verification_status: string }).verification_status,
+    ).toBe("unverified");
 
     // #4 双向断言：query/list 可见降级条目（仅 memory list 可见，§5.7），检索路径不可见
     const q = await engine.query({ repo: REPO });
     expect(q.map((e) => e.id)).toContain(r.memoryId);
-    expect((q.find((e) => e.id === r.memoryId) as unknown as { degraded?: boolean }).degraded).toBe(true);
+    expect(
+      (q.find((e) => e.id === r.memoryId) as unknown as { degraded?: boolean })
+        .degraded,
+    ).toBe(true);
     // 显式排除仍可用
-    const qNoDegraded = await engine.query({ repo: REPO, includeDegraded: false });
+    const qNoDegraded = await engine.query({
+      repo: REPO,
+      includeDegraded: false,
+    });
     expect(qNoDegraded.map((e) => e.id)).not.toContain(r.memoryId);
     // 自动注入路径排除：searchText / hybridRecall
     const textHits = await engine.searchText("xyzzy", 10);
     expect(textHits.map((h) => h.id)).not.toContain(r.memoryId);
-    const recalled = await hybridRecall(engine, "xyzzy weak model", { candidates: 10 });
+    const recalled = await hybridRecall(engine, "xyzzy weak model", {
+      candidates: 10,
+    });
     expect(recalled.items.map((i) => i.entry.id)).not.toContain(r.memoryId);
   });
 
   it("成本熔断：超预算降级为原文摘要（不调 LLM）", async () => {
     let llmCalled = false;
-    const countingLlm: DistillerLlm = { complete: async () => { llmCalled = true; return "{}"; } };
-    const p = makePipeline({ distiller: new MemoryDistiller(countingLlm), dailyBudget: 0 });
+    const countingLlm: DistillerLlm = {
+      complete: async () => {
+        llmCalled = true;
+        return "{}";
+      },
+    };
+    const p = makePipeline({
+      distiller: new MemoryDistiller(countingLlm),
+      dailyBudget: 0,
+    });
     const r = await p.processEvent({
       type: "task_succeeded",
       runId: `${RUN}_budget`,
@@ -402,7 +489,9 @@ describe("写入管线 db 集成", () => {
 
   it("outbox 失败重试 3 次进死信", async () => {
     const brokenEngine = {
-      put: async () => { throw new Error("db exploded"); },
+      put: async () => {
+        throw new Error("db exploded");
+      },
     } as unknown as InstanceType<typeof PostgresMemoryStoreEngine>;
     const p = makePipeline({ engine: brokenEngine });
     const runId = `${RUN}_retry`;
@@ -442,8 +531,13 @@ describe("写入管线 db 集成", () => {
     // 第二个实例（新 pipeline）从 db 队列接手
     const p2 = makePipeline();
     expect(await p2.processNext()).toBe(true);
-    const entries = await engine.query({ repo: REPO, includeInvalidated: true });
-    const found = entries.find((e) => e.kind === "semantic" && e.fact.includes("崩溃恢复"));
+    const entries = await engine.query({
+      repo: REPO,
+      includeInvalidated: true,
+    });
+    const found = entries.find(
+      (e) => e.kind === "semantic" && e.fact.includes("崩溃恢复"),
+    );
     expect(found).toBeDefined();
     createdIds.push(found!.id);
   });

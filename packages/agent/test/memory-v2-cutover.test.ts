@@ -264,8 +264,6 @@ describe("AgentOrchestrator 默认 v2 记忆", () => {
     if (rd && rd.event.type === "memory.retrieve.done") {
       expect(rd.event.totalCandidates).toBe(0);
     }
-    expect(
-      events.some((e) => e.event.type === "memory.extracted"),
-    ).toBe(false);
+    expect(events.some((e) => e.event.type === "memory.extracted")).toBe(false);
   });
 });

@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 
 import type { SessionInputSnapshot } from "@paw/agent-loop";
-import { projectWorkspaceEffect } from "@paw/core";
 import { projectCompletionReviewToolEvidenceV1 } from "@paw/completion-review";
+import { projectWorkspaceEffect } from "@paw/core";
 import type {
   DurableJsonPayloadV1,
   InputFactV1,
@@ -89,7 +89,15 @@ export function projectProgressAdviceV1(
   );
   const mutation = (call: (typeof calls)[number]["fact"]) => {
     const result = settled.get(call.callId);
-    return result && result.status !== "rejected" && projectWorkspaceEffect(call.tool, inlinePayload(result.observation?.payload), result.observation?.isError === true).changed !== false;
+    return (
+      result &&
+      result.status !== "rejected" &&
+      projectWorkspaceEffect(
+        call.tool,
+        inlinePayload(result.observation?.payload),
+        result.observation?.isError === true,
+      ).changed !== false
+    );
   };
   const verificationEvidence = projectCompletionReviewToolEvidenceV1({
     calls: calls.flatMap(({ seq, fact }) => {
@@ -144,12 +152,7 @@ export function projectProgressAdviceV1(
 
   const latestMutationSeq = Math.max(
     0,
-    ...calls
-      .filter(
-        ({ fact }) =>
-          mutation(fact),
-      )
-      .map(({ seq }) => seq),
+    ...calls.filter(({ fact }) => mutation(fact)).map(({ seq }) => seq),
   );
   const checks = verificationEvidence.filter(
     (item) => item.verificationKind !== "none",
@@ -161,7 +164,8 @@ export function projectProgressAdviceV1(
   // Migrate the legacy convergence guidance for untrusted verification status.
   // A different output filter is not new evidence; remind once per source/check baseline.
   if (
-    lane !== "closeout" && latestCheck?.outcome === "indeterminate" &&
+    lane !== "closeout" &&
+    latestCheck?.outcome === "indeterminate" &&
     latestCheck.executionStatus === "completed" &&
     checkCall?.fact.turn === latestTurn
   ) {
@@ -181,7 +185,12 @@ export function projectProgressAdviceV1(
       evidenceKey: `repair:${latestMutationSeq}:${directBaseline?.callId ?? "none"}:${latestCheck.verificationKind}`,
     });
   }
-  if (lane !== "ordinary" && budget && latestMutationSeq > 0 && budget.maxModelTurns >= 8) {
+  if (
+    lane !== "ordinary" &&
+    budget &&
+    latestMutationSeq > 0 &&
+    budget.maxModelTurns >= 8
+  ) {
     const totalTurns = snapshot.entries.filter(
       (entry) => entry.fact.type === "model.settled",
     ).length;
@@ -206,15 +215,18 @@ export function projectProgressAdviceV1(
           : latestCheck.outcome === "failed"
             ? "Use the exact current failure to repair the implementation or a test that contradicts the requirements, then rerun the declared check. Do not weaken valid tests to obtain a pass."
             : "The latest check passed for its covered scope. Inspect the final changes and remaining user requirements, including documentation and the documented test entry point; a passing subset is not full completion.";
-      return Object.freeze({ ...advice(
-        snapshot,
-        segmentStart,
-        "convergence_checkpoint",
-        gap,
-        `${remaining} model calls remain in this work budget. Preserve the implementation and reserve a call for the final response. ${next} Avoid building extra diagnostic helpers or expanding scope. Finish with the evidence and any unresolved requirements; do not claim unfinished work is complete.`,
-        undefined,
-        delegationAttempts,
-      ), evidenceKey: `closeout:${segmentStart}:${remaining <= 2 ? "final" : "window"}` });
+      return Object.freeze({
+        ...advice(
+          snapshot,
+          segmentStart,
+          "convergence_checkpoint",
+          gap,
+          `${remaining} model calls remain in this work budget. Preserve the implementation and reserve a call for the final response. ${next} Avoid building extra diagnostic helpers or expanding scope. Finish with the evidence and any unresolved requirements; do not claim unfinished work is complete.`,
+          undefined,
+          delegationAttempts,
+        ),
+        evidenceKey: `closeout:${segmentStart}:${remaining <= 2 ? "final" : "window"}`,
+      });
     }
   }
   if (lane === "closeout") return undefined;
@@ -268,10 +280,7 @@ export function projectProgressAdviceV1(
       ),
   );
   const mutationsSinceCheck = calls.filter(({ seq, fact }) => {
-    return (
-      seq > lastCheckSeq &&
-      mutation(fact)
-    );
+    return seq > lastCheckSeq && mutation(fact);
   });
   const mutationTurns = new Set(
     mutationsSinceCheck.map(({ fact }) => fact.turn),
@@ -362,31 +371,31 @@ export function projectProgressAdviceTimelineV1(
       (entry) => entry.seq <= boundary.throughSeq,
     );
     for (const lane of ["ordinary", "closeout"] as const) {
-    const projected = projectProgressAdviceV1(
-      {
-        entries: prefixEntries,
-        latestInputSeq: boundary.throughSeq,
-        tailSeq: boundary.throughSeq,
-      },
-      budget,
-      lane,
-    );
-    if (!projected || !isTimelineThreshold(projected)) continue;
-    const key =
-      projected.evidenceKey ??
-      `${projected.kind}:${projected.sourceThroughSeq}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const special =
-      projected.kind === "verification_repair" ||
-      projected.kind === "convergence_checkpoint";
-    const count = events.filter((item) =>
-      special
-        ? item.kind === projected.kind
-        : item.kind !== "verification_repair" &&
-          item.kind !== "convergence_checkpoint",
-    ).length;
-    if (count < (special ? 2 : MAX_TIMELINE_EVENTS)) events.push(projected);
+      const projected = projectProgressAdviceV1(
+        {
+          entries: prefixEntries,
+          latestInputSeq: boundary.throughSeq,
+          tailSeq: boundary.throughSeq,
+        },
+        budget,
+        lane,
+      );
+      if (!projected || !isTimelineThreshold(projected)) continue;
+      const key =
+        projected.evidenceKey ??
+        `${projected.kind}:${projected.sourceThroughSeq}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const special =
+        projected.kind === "verification_repair" ||
+        projected.kind === "convergence_checkpoint";
+      const count = events.filter((item) =>
+        special
+          ? item.kind === projected.kind
+          : item.kind !== "verification_repair" &&
+            item.kind !== "convergence_checkpoint",
+      ).length;
+      if (count < (special ? 2 : MAX_TIMELINE_EVENTS)) events.push(projected);
     }
   }
   return Object.freeze(events);

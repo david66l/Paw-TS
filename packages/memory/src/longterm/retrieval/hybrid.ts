@@ -96,7 +96,9 @@ export function fuseRecall(
   const vectorScoreById = new Map(vectorHits.map((h) => [h.id, h.score]));
   const maxText = Math.max(0, ...textHits.map((h) => h.score));
 
-  const ids = [...new Set([...textScoreById.keys(), ...vectorScoreById.keys()])];
+  const ids = [
+    ...new Set([...textScoreById.keys(), ...vectorScoreById.keys()]),
+  ];
   const out: ScoredEntry[] = [];
 
   for (const id of ids) {
@@ -124,7 +126,10 @@ export function fuseRecall(
       bonuses.push("user_statement");
     }
     const createdMs = Date.parse(entry.created);
-    if (!Number.isNaN(createdMs) && now.getTime() - createdMs <= RECENT_WINDOW_MS) {
+    if (
+      !Number.isNaN(createdMs) &&
+      now.getTime() - createdMs <= RECENT_WINDOW_MS
+    ) {
       bonus += BONUS_RECENT;
       bonuses.push("recent");
     }

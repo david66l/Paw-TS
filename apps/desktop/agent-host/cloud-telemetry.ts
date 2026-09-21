@@ -190,7 +190,11 @@ export class CloudRunTelemetry implements ModelObserver {
   }
   heartbeat(): void {
     for (const item of this.active) {
-      try { item.heartbeat(); } catch { /* Best effort. */ }
+      try {
+        item.heartbeat();
+      } catch {
+        /* Best effort. */
+      }
     }
   }
   private span(
@@ -301,12 +305,10 @@ export class CloudRunTelemetry implements ModelObserver {
             this.pending.get(key(f.callId))?.addEvent("execution.dispatched");
             break;
           case "tool.permission_resolved":
-            this.pending
-              .get(key(f.callId))
-              ?.addEvent("permission.resolved", {
-                resolution: f.resolution,
-                source: f.source,
-              });
+            this.pending.get(key(f.callId))?.addEvent("permission.resolved", {
+              resolution: f.resolution,
+              source: f.source,
+            });
             break;
           case "tool.settled":
             finish(f.callId, f.status);

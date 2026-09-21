@@ -9,18 +9,18 @@
  */
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { closeSql, ping } from "../src/db/connection.js";
 import {
   BUILTIN_CODING_FIXTURES,
   ChatClient,
+  type LlmStats,
+  type MabDimension,
   filterMabSamples,
   loadOrFetchMabHf,
   resolveLlmConfig,
   runMemoryAgentBench,
-  type LlmStats,
-  type MabDimension,
 } from "../src/longterm/eval/index.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import { closeSql, ping } from "../src/db/connection.js";
 
 const root = resolve(import.meta.dir, "../../..");
 const cacheDir =
@@ -45,7 +45,9 @@ const stats: LlmStats = {
   totalMs: 0,
   estimatedTokens: 0,
 };
-const cfg = resolveLlmConfig({ provider: process.env.MAB_PROVIDER ?? "deepseekv4flash" });
+const cfg = resolveLlmConfig({
+  provider: process.env.MAB_PROVIDER ?? "deepseekv4flash",
+});
 if ("error" in cfg) {
   console.error(cfg.error);
   process.exit(2);
@@ -61,7 +63,9 @@ const maxSamples = process.env.MAB_MAX_SAMPLES
 const maxQaPerSample = process.env.MAB_MAX_QA_PER_SAMPLE
   ? Number(process.env.MAB_MAX_QA_PER_SAMPLE)
   : 5;
-const chunkSize = process.env.MAB_CHUNK_SIZE ? Number(process.env.MAB_CHUNK_SIZE) : 2048;
+const chunkSize = process.env.MAB_CHUNK_SIZE
+  ? Number(process.env.MAB_CHUNK_SIZE)
+  : 2048;
 /** AR/TTL 默认给更多 chunk；LRU 仍可用环境变量抬到 256 */
 const maxChunks = process.env.MAB_MAX_CHUNKS
   ? Number(process.env.MAB_MAX_CHUNKS)
@@ -70,7 +74,9 @@ const maxChunks = process.env.MAB_MAX_CHUNKS
     : dimEnv?.some((d) => d === "AR" || d === "TTL" || d === "CR")
       ? 192
       : 96;
-const llmBudget = process.env.MAB_LLM_BUDGET ? Number(process.env.MAB_LLM_BUDGET) : 50_000;
+const llmBudget = process.env.MAB_LLM_BUDGET
+  ? Number(process.env.MAB_LLM_BUDGET)
+  : 50_000;
 
 const dimToSplit: Record<string, string> = {
   AR: "Accurate_Retrieval",
@@ -108,7 +114,9 @@ if (loaded.samples.length === 0) {
 const wantSf = !dimEnv || dimEnv.includes("SF");
 let samples = [
   ...loaded.samples,
-  ...(wantSf ? BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF") : []),
+  ...(wantSf
+    ? BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF")
+    : []),
 ];
 samples = filterMabSamples(samples, {
   dimensions: dimEnv,

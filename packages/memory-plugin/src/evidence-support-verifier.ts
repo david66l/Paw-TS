@@ -1,7 +1,7 @@
 import type { MemoryRawEvidenceSpanV1 } from "@paw/protocol";
 
-import type { MemoryWriterModelV1 } from "./model-port.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
+import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_EVIDENCE_SUPPORT_VERIFIER_VERSION_V1 =
   "paw.memory-evidence-support-verifier.json.v2:l0-direct-entailment" as const;

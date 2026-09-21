@@ -799,9 +799,7 @@ export async function resolveEvidencePass(input: {
               observed < timeWindow.endMs
             );
           });
-          const outWindow = hits.filter(
-            (hit) => !inWindow.includes(hit),
-          );
+          const outWindow = hits.filter((hit) => !inWindow.includes(hit));
           return Object.freeze([...inWindow, ...outWindow]);
         });
       }
@@ -1307,7 +1305,9 @@ export async function resolveEvidencePass(input: {
   // 相对时间翻译官:问题含强信号时间短语时,把换算出的绝对窗口注入
   // 需求标签(仅显示层;非时间问题 extract 返回 null,标签字节级不变)。
   let meaTimeWindowSuffix = "";
-  let meaTimeWindow: { readonly startMs: number; readonly endMs: number } | undefined;
+  let meaTimeWindow:
+    | { readonly startMs: number; readonly endMs: number }
+    | undefined;
   try {
     const cutoffMs = input.evidenceTimeUpperBound
       ? Date.parse(input.evidenceTimeUpperBound)
@@ -1334,9 +1334,7 @@ export async function resolveEvidencePass(input: {
           : requirement.label.slice(0, 192 - meaTimeWindowSuffix.length) +
             meaTimeWindowSuffix,
       searchText: requirement.searchText,
-      ...(meaTimeWindow === undefined
-        ? {}
-        : { timeWindow: meaTimeWindow }),
+      ...(meaTimeWindow === undefined ? {} : { timeWindow: meaTimeWindow }),
       selection: requirement.temporalMode === "latest" ? "latest" : "ranked",
       relation: requirement.relation ?? "direct",
       coverageMode:

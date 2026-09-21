@@ -581,7 +581,9 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     expect(Object.keys(replayed.state.evidence)).toHaveLength(1);
     expect(replayed.artifactBlobs).toHaveLength(3);
     expect(replayed.diagnostics).toHaveLength(3);
-    expect(replayed.diagnostics.some((item) => item.sourceSeq === 2)).toBeFalse();
+    expect(
+      replayed.diagnostics.some((item) => item.sourceSeq === 2),
+    ).toBeFalse();
   });
 
   test("rejects a malformed versioned rich tool commit before partial replay", () => {

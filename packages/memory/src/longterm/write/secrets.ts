@@ -35,7 +35,10 @@ const KNOWN_PATTERNS: KnownPattern[] = [
   // GitLab PAT
   { name: "gitlab:pat", re: /\bglpat-[A-Za-z0-9_-]{20,}/ },
   // JWT（三段式 base64url）
-  { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/ },
+  {
+    name: "jwt",
+    re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/,
+  },
 ];
 
 /** 高熵候选 token：base64/hex/url-safe 字符，长度 ≥20 */
@@ -64,7 +67,12 @@ function isHighEntropyToken(token: string): boolean {
 export function scanForSecrets(text: string): SecretScanResult {
   for (const { name, re } of KNOWN_PATTERNS) {
     const m = re.exec(text);
-    if (m) return { action: "reject", pattern: name, match: m[0].slice(0, 12) + "…" };
+    if (m)
+      return {
+        action: "reject",
+        pattern: name,
+        match: m[0].slice(0, 12) + "…",
+      };
   }
 
   let count = 0;
@@ -76,5 +84,7 @@ export function scanForSecrets(text: string): SecretScanResult {
     return token;
   });
 
-  return count > 0 ? { action: "redact", text: redacted, count } : { action: "pass" };
+  return count > 0
+    ? { action: "redact", text: redacted, count }
+    : { action: "pass" };
 }

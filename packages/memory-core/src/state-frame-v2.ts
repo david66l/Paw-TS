@@ -28,10 +28,16 @@ export const PAW_MEMORY_STATE_AUTHORITY_POLICY_VERSION_V2 =
   "paw.memory-state-authority.v2:origin-role-certificate" as const;
 
 export type MemoryStateSlotOperationV2 =
-  "lookup" | "collect" | "resolve_latest" | "preserve_history";
+  | "lookup"
+  | "collect"
+  | "resolve_latest"
+  | "preserve_history";
 
 export type MemoryStateDerivedOperationKindV2 =
-  "compare" | "aggregate" | "infer_preference" | "dependency_join";
+  | "compare"
+  | "aggregate"
+  | "infer_preference"
+  | "dependency_join";
 
 export interface MemoryStateQueryAnchorV2 {
   readonly start: number;
@@ -48,7 +54,10 @@ export interface MemoryStateSlotSpecV2 {
   readonly operation: MemoryStateSlotOperationV2;
   /** Answer/group operation is separate from this slot's temporal leaf. */
   readonly derivedAnswerOperation:
-    "none" | "compare" | "aggregate" | "infer_preference";
+    | "none"
+    | "compare"
+    | "aggregate"
+    | "infer_preference";
   readonly queryAnchor: MemoryStateQueryAnchorV2;
   /** Planner semantics are immutable hints, never a model-authored state key. */
   readonly semanticDescriptor: Readonly<{
@@ -58,7 +67,9 @@ export interface MemoryStateSlotSpecV2 {
   }>;
   readonly roleConstraint: "user" | "assistant";
   readonly authorityMode:
-    "user_fact" | "explicit_assistant_report" | "certified_dialogue_artifact";
+    | "user_fact"
+    | "explicit_assistant_report"
+    | "certified_dialogue_artifact";
   readonly temporalMode: MemoryEvidenceBoundTemporalConstraintV1["mode"];
   readonly evidenceTimeUpperBound: string | null;
   readonly durationEndpointContractKind:
@@ -69,7 +80,10 @@ export interface MemoryStateSlotSpecV2 {
   readonly minimumIndependentEvidence: number;
   readonly dependencySlotIds: readonly string[];
   readonly dependencyRelation:
-    "independent" | "depends_on" | "responds_to" | "supersedes";
+    | "independent"
+    | "depends_on"
+    | "responds_to"
+    | "supersedes";
   readonly originRevision: string;
   readonly temporalBindingRevision: string;
   readonly authorityPolicyRevision: typeof PAW_MEMORY_STATE_AUTHORITY_POLICY_VERSION_V2;
@@ -142,7 +156,12 @@ export interface MemoryStateObservationProposalV2 {
   readonly lifecycleRelation?: MemoryStateClaimLifecycleRelationV2;
   readonly lifecycleTargetEvidenceRef?: string;
   readonly predicateKind:
-    "assert" | "update" | "retract" | "confirm" | "prefer" | "disprefer";
+    | "assert"
+    | "update"
+    | "retract"
+    | "confirm"
+    | "prefer"
+    | "disprefer";
   readonly polarity: "positive" | "negative";
   readonly modality: "observed" | "goal" | "plan" | "forecast";
 }
@@ -156,7 +175,9 @@ export interface MemoryStateBoundObservationV2 {
   readonly contentDigest: string;
   readonly valueSpans: readonly MemoryStateExactSpanV2[];
   readonly valueComposition:
-    "single" | "contiguous_composite" | "ordered_tuple";
+    | "single"
+    | "contiguous_composite"
+    | "ordered_tuple";
   /** Exact source envelope for contiguous values; tuple text remains display-only. */
   readonly valueText: string;
   readonly eventTimeSpans: readonly MemoryStateExactSpanV2[];
@@ -515,7 +536,8 @@ export function bindMemoryStateObservationV2(input: {
       "supersedes",
       "confirms",
     ]).has(lifecycleRelation) ||
-    (lifecycleRelation === "none" && lifecycleTargetEvidenceRef !== undefined) ||
+    (lifecycleRelation === "none" &&
+      lifecycleTargetEvidenceRef !== undefined) ||
     (lifecycleRelation !== "none" &&
       (!lifecycleTarget ||
         lifecycleTarget.evidenceRef === item.evidenceRef ||
@@ -1245,9 +1267,7 @@ function strictUtcDay(
   return Object.freeze({ lower, upper, precision: "day" as const });
 }
 
-function normalizedInterval<
-  TInterval extends MemoryStateEventTimeIntervalV2,
->(
+function normalizedInterval<TInterval extends MemoryStateEventTimeIntervalV2>(
   interval: TInterval,
 ): Readonly<{
   eventTime: string;

@@ -8,10 +8,7 @@
 
 import { createHash } from "node:crypto";
 import type { MemoryEntry, MemoryKind } from "./engine.js";
-import {
-  memoryScopeFingerprint,
-  type MemoryScopeKey,
-} from "./scope-key.js";
+import { type MemoryScopeKey, memoryScopeFingerprint } from "./scope-key.js";
 
 /** 正文规范化：小写 + 折叠空白 + trim，消除无意义差异 */
 export function normalizeBody(text: string): string {
@@ -24,7 +21,9 @@ export function canonicalBody(entry: MemoryEntry): string {
     case "semantic":
       return entry.fact;
     case "episodic":
-      return [entry.whenToUse, entry.perspective, ...entry.modification].join("\n");
+      return [entry.whenToUse, entry.perspective, ...entry.modification].join(
+        "\n",
+      );
     case "profile":
       return entry.insight;
     case "vault_ref":

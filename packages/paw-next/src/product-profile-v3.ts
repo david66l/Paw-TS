@@ -248,14 +248,24 @@ export function buildPawNextTaskProfileV3(
     ...(input.requestApproval
       ? { requestApproval: input.requestApproval }
       : {}),
-    ...(profile.legacyOutputRecall ? { legacyOutputRecall: true as const } : {}),
+    ...(profile.legacyOutputRecall
+      ? { legacyOutputRecall: true as const }
+      : {}),
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(profile.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
-    ...(profile.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
-    ...(profile.environmentAuditEvidenceRepair ? { environmentAuditEvidenceRepair: true as const } : {}),
-    ...(profile.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
+    ...(profile.environmentAuditRetry
+      ? { environmentAuditRetry: true as const }
+      : {}),
+    ...(profile.environmentAuditSinglePass
+      ? { environmentAuditSinglePass: true as const }
+      : {}),
+    ...(profile.environmentAuditEvidenceRepair
+      ? { environmentAuditEvidenceRepair: true as const }
+      : {}),
+    ...(profile.compactMutationReceipts
+      ? { compactMutationReceipts: true as const }
+      : {}),
     ...(profile.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
@@ -267,7 +277,9 @@ export function buildPawNextTaskProfileV3(
   const manifest = createPawNextProductManifestV3({
     toolEffectCheckpointPolicyVersion: v1.toolEffectCheckpointPolicyVersion,
     runConfig: {
-      ...(profile.control.recoverReasoningTimeout ? { recoverReasoningTimeout: true as const } : {}),
+      ...(profile.control.recoverReasoningTimeout
+        ? { recoverReasoningTimeout: true as const }
+        : {}),
       ...(profile.control.liveSteering ? { liveSteering: true as const } : {}),
       ...(profile.control.settleFinalToolBatch
         ? { settleFinalToolBatch: true as const }
@@ -296,10 +308,18 @@ export function buildPawNextTaskProfileV3(
     payloadRuntime: profile.payloadRuntime,
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(profile.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
-    ...(profile.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
-    ...(profile.environmentAuditEvidenceRepair ? { environmentAuditEvidenceRepair: true as const } : {}),
-    ...(profile.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
+    ...(profile.environmentAuditRetry
+      ? { environmentAuditRetry: true as const }
+      : {}),
+    ...(profile.environmentAuditSinglePass
+      ? { environmentAuditSinglePass: true as const }
+      : {}),
+    ...(profile.environmentAuditEvidenceRepair
+      ? { environmentAuditEvidenceRepair: true as const }
+      : {}),
+    ...(profile.compactMutationReceipts
+      ? { compactMutationReceipts: true as const }
+      : {}),
     ...(profile.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
@@ -327,7 +347,9 @@ export function buildPawNextTaskProfileV3(
     maxModelTurns: profile.control.maxModelTurns,
     naturalStop: profile.control.naturalStop,
     ...(profile.control.liveSteering ? { liveSteering: true as const } : {}),
-    ...(profile.control.recoverReasoningTimeout ? { recoverReasoningTimeout: true as const } : {}),
+    ...(profile.control.recoverReasoningTimeout
+      ? { recoverReasoningTimeout: true as const }
+      : {}),
     ...(profile.control.settleFinalToolBatch
       ? { settleFinalToolBatch: true as const }
       : {}),
@@ -344,14 +366,24 @@ export function buildPawNextTaskProfileV3(
       ? {}
       : { shellSandbox: task.shellSandbox }),
     payloadRuntime: profile.payloadRuntime,
-    ...(profile.legacyOutputRecall ? { legacyOutputRecall: true as const } : {}),
+    ...(profile.legacyOutputRecall
+      ? { legacyOutputRecall: true as const }
+      : {}),
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(profile.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
-    ...(profile.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
-    ...(profile.environmentAuditEvidenceRepair ? { environmentAuditEvidenceRepair: true as const } : {}),
-    ...(profile.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
+    ...(profile.environmentAuditRetry
+      ? { environmentAuditRetry: true as const }
+      : {}),
+    ...(profile.environmentAuditSinglePass
+      ? { environmentAuditSinglePass: true as const }
+      : {}),
+    ...(profile.environmentAuditEvidenceRepair
+      ? { environmentAuditEvidenceRepair: true as const }
+      : {}),
+    ...(profile.compactMutationReceipts
+      ? { compactMutationReceipts: true as const }
+      : {}),
     ...(profile.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
@@ -418,20 +450,38 @@ function parseProfileV3(
   if (record.approval !== "available" && record.approval !== "unavailable") {
     throw new Error("Unsupported V3 approval mode");
   }
-  if (record.deliveryLedger !== undefined && record.deliveryLedger !== true) throw new Error("Unsupported delivery ledger policy");
-  if (record.compactMutationReceipts !== undefined && record.compactMutationReceipts !== true)
+  if (record.deliveryLedger !== undefined && record.deliveryLedger !== true)
+    throw new Error("Unsupported delivery ledger policy");
+  if (
+    record.compactMutationReceipts !== undefined &&
+    record.compactMutationReceipts !== true
+  )
     throw new Error("Unsupported mutation receipt policy");
   if (record.compactMutationReceipts && record.legacyOutputRecall)
-    throw new Error("Mutation receipts require journal-authority output recall");
-  if (record.legacyOutputRecall !== undefined && record.legacyOutputRecall !== true) throw new Error("Unsupported output recall compatibility policy");
-  if (record.environmentAuditRetry !== undefined &&
-      (record.environmentAuditRetry !== true || record.environmentAudit !== true))
+    throw new Error(
+      "Mutation receipts require journal-authority output recall",
+    );
+  if (
+    record.legacyOutputRecall !== undefined &&
+    record.legacyOutputRecall !== true
+  )
+    throw new Error("Unsupported output recall compatibility policy");
+  if (
+    record.environmentAuditRetry !== undefined &&
+    (record.environmentAuditRetry !== true || record.environmentAudit !== true)
+  )
     throw new Error("Audit retry requires environment auditing");
-  if (record.environmentAuditEvidenceRepair !== undefined &&
-      (record.environmentAuditEvidenceRepair !== true || record.environmentAuditSinglePass !== true))
+  if (
+    record.environmentAuditEvidenceRepair !== undefined &&
+    (record.environmentAuditEvidenceRepair !== true ||
+      record.environmentAuditSinglePass !== true)
+  )
     throw new Error("Audit evidence repair requires single-pass auditing");
-  if (record.environmentAuditSinglePass !== undefined &&
-      (record.environmentAuditSinglePass !== true || record.environmentAudit !== true))
+  if (
+    record.environmentAuditSinglePass !== undefined &&
+    (record.environmentAuditSinglePass !== true ||
+      record.environmentAudit !== true)
+  )
     throw new Error("Single-pass audit requires environment auditing");
   if (record.environmentAudit !== undefined && record.environmentAudit !== true)
     throw new Error("Unsupported environment audit policy");
@@ -493,10 +543,18 @@ function parseProfileV3(
     ...(record.legacyOutputRecall ? { legacyOutputRecall: true as const } : {}),
     approval: record.approval,
     ...(record.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(record.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
-    ...(record.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
-    ...(record.environmentAuditEvidenceRepair ? { environmentAuditEvidenceRepair: true as const } : {}),
-    ...(record.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
+    ...(record.environmentAuditRetry
+      ? { environmentAuditRetry: true as const }
+      : {}),
+    ...(record.environmentAuditSinglePass
+      ? { environmentAuditSinglePass: true as const }
+      : {}),
+    ...(record.environmentAuditEvidenceRepair
+      ? { environmentAuditEvidenceRepair: true as const }
+      : {}),
+    ...(record.compactMutationReceipts
+      ? { compactMutationReceipts: true as const }
+      : {}),
     ...(record.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(record.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(record.stageGraph ? { stageGraph: true as const } : {}),
@@ -636,7 +694,8 @@ function parseControlV3(
     ["liveSteering", "settleFinalToolBatch", "recoverReasoningTimeout"],
   );
   if (
-    (record.recoverReasoningTimeout !== undefined && record.recoverReasoningTimeout !== true) ||
+    (record.recoverReasoningTimeout !== undefined &&
+      record.recoverReasoningTimeout !== true) ||
     (record.liveSteering !== undefined && record.liveSteering !== true) ||
     (record.settleFinalToolBatch !== undefined &&
       record.settleFinalToolBatch !== true) ||
@@ -657,7 +716,9 @@ function parseControlV3(
     maxModelTurns: record.maxModelTurns as number,
     naturalStop: record.naturalStop,
     ...(record.liveSteering === true ? { liveSteering: true as const } : {}),
-    ...(record.recoverReasoningTimeout === true ? { recoverReasoningTimeout: true as const } : {}),
+    ...(record.recoverReasoningTimeout === true
+      ? { recoverReasoningTimeout: true as const }
+      : {}),
     ...(record.settleFinalToolBatch === true
       ? { settleFinalToolBatch: true as const }
       : {}),

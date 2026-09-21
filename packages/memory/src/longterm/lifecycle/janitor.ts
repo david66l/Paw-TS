@@ -22,10 +22,10 @@
 import type { RunEvent } from "@paw/core";
 import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
+import { appendOpLog } from "../observability/op-log.js";
 import type { MemoryStoreEngine } from "../store/engine.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import type { MemoryScopeKey } from "../store/scope-key.js";
-import { appendOpLog } from "../observability/op-log.js";
 import { enforceProfileCapacity } from "../write/profile.js";
 
 export interface LifecycleConfig {
@@ -120,14 +120,14 @@ async function loadActiveRows(
           AND COALESCE(payload->>'degraded', 'false') != 'true'
       `
     : repo
-    ? await sql`
+      ? await sql`
         SELECT id, type, freq, utility, payload->>'source' AS source,
                (payload->>'supportCount')::int AS support_count, t_valid
         FROM memory_items
         WHERE t_invalid IS NULL AND scope->>'repositoryId' = ${repo}
           AND COALESCE(payload->>'degraded', 'false') != 'true'
       `
-    : await sql`
+      : await sql`
         SELECT id, type, freq, utility, payload->>'source' AS source,
                (payload->>'supportCount')::int AS support_count, t_valid
         FROM memory_items
@@ -140,7 +140,8 @@ async function loadActiveRows(
     utility: (r.utility as number) ?? 0,
     source: (r.source as string) ?? "",
     supportCount: (r.support_count as number | null) ?? null,
-    tValid: r.t_valid instanceof Date ? r.t_valid.toISOString() : String(r.t_valid),
+    tValid:
+      r.t_valid instanceof Date ? r.t_valid.toISOString() : String(r.t_valid),
   }));
 }
 
@@ -161,7 +162,11 @@ async function loadAdoptionRates(): Promise<{
   `;
   const rates = new Map<string, { injected: number; adopted: number }>();
   let globalAdopted = 0;
-  for (const r of rows as unknown as { entry_id: string; injected: number; adopted: number }[]) {
+  for (const r of rows as unknown as {
+    entry_id: string;
+    injected: number;
+    adopted: number;
+  }[]) {
     rates.set(r.entry_id, { injected: r.injected, adopted: r.adopted });
     globalAdopted += r.adopted;
   }
@@ -186,15 +191,16 @@ export async function scanDeletionCandidates(
   const out: DeletionCandidate[] = [];
   for (const r of rows) {
     // 豁免条款（§7.2）
-    if (r.freq < cfg.deleteMinFreq) continue;                       // 试用期保护
-    if (r.source === "user_statement") continue;                    // 用户陈述永不自动删
+    if (r.freq < cfg.deleteMinFreq) continue; // 试用期保护
+    if (r.source === "user_statement") continue; // 用户陈述永不自动删
     if (r.type === "profile" && (r.supportCount ?? 0) >= 3) continue; // profile 需巩固复核
 
     // 主判据：采纳率。全库无采纳埋点数据 → 信号不足，不定罪（防误删保险）
     if (adoption.globalAdopted === 0) continue;
     const a = adoption.rates.get(r.id);
     const adoptionRate = a && a.injected > 0 ? a.adopted / a.injected : null;
-    if (adoptionRate === null || adoptionRate >= cfg.deleteMaxAdoptionRate) continue;
+    if (adoptionRate === null || adoptionRate >= cfg.deleteMaxAdoptionRate)
+      continue;
     // 辅助判据：utility/freq ≤ 阈值，或无足够 outcome 信号（utility=0 无法区分全败/无信号）
     const utilityRatio = r.freq > 0 ? r.utility / r.freq : 0;
     const noOutcomeSignal = r.utility === 0;
@@ -216,7 +222,12 @@ export async function scanDeletionCandidates(
 
 async function reviewStats(
   scope?: MemoryScopeKey,
-): Promise<{ total: number; resolved: number; rejected: number; pending: number }> {
+): Promise<{
+  total: number;
+  resolved: number;
+  rejected: number;
+  pending: number;
+}> {
   const sql = getSql();
   const [r] = await sql`
     SELECT count(*)::int AS total,
@@ -225,12 +236,21 @@ async function reviewStats(
            count(*) FILTER (WHERE status = 'pending')::int AS pending
     FROM memory_lifecycle_review
     WHERE true
-      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+      ${
+        scope
+          ? sql`AND scope->>'tenantId' = ${scope.tenantId}
         AND scope->>'userId' = ${scope.userId}
         AND scope->>'workspaceId' = ${scope.workspaceId}
-        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${scope.repositoryId}`
+          : sql``
+      }
   `;
-  return r as { total: number; resolved: number; rejected: number; pending: number };
+  return r as {
+    total: number;
+    resolved: number;
+    rejected: number;
+    pending: number;
+  };
 }
 
 /** 灰度判定：前 N 条进人工复核；之后误删率（rejected/resolved）<5% 转全自动 */
@@ -252,10 +272,14 @@ async function enqueueReview(
   // rejected/pending 已存在的条目不再进队列
   const existing = await sql`
     SELECT 1 FROM memory_lifecycle_review WHERE entry_id = ${c.id}
-      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+      ${
+        scope
+          ? sql`AND scope->>'tenantId' = ${scope.tenantId}
         AND scope->>'userId' = ${scope.userId}
         AND scope->>'workspaceId' = ${scope.workspaceId}
-        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${scope.repositoryId}`
+          : sql``
+      }
     LIMIT 1
   `;
   if (existing.length > 0) return false;
@@ -285,7 +309,10 @@ async function trimKind(
 ): Promise<string[]> {
   const ofKind = rows.filter((r) => r.type === kind);
   if (ofKind.length <= cap) return [];
-  const sorted = [...ofKind].sort((a, b) => utilityRatio(a) - utilityRatio(b) || a.tValid.localeCompare(b.tValid));
+  const sorted = [...ofKind].sort(
+    (a, b) =>
+      utilityRatio(a) - utilityRatio(b) || a.tValid.localeCompare(b.tValid),
+  );
   const victims = sorted.slice(0, ofKind.length - trimTo);
   for (const v of victims) await engine.invalidate(v.id, nowIso);
   return victims.map((v) => v.id);
@@ -300,10 +327,11 @@ export interface JanitorOptions {
   now?: () => Date;
 }
 
-export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<LifecycleReport> {
+export async function runLifecycleOnce(
+  opts: JanitorOptions = {},
+): Promise<LifecycleReport> {
   const configuredScope = opts.config?.scope ?? opts.engine?.scope;
-  const engine =
-    opts.engine ?? new PostgresMemoryStoreEngine(configuredScope);
+  const engine = opts.engine ?? new PostgresMemoryStoreEngine(configuredScope);
   const cfg = {
     ...DEFAULT_LIFECYCLE_CONFIG,
     ...opts.config,
@@ -317,7 +345,12 @@ export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<Lifec
     enqueuedForReview: [],
     autoInvalidated: [],
     alreadyInQueue: [],
-    capacity: { episodicInvalidated: [], semanticInvalidated: [], trialDropped: [], profileOverCap: 0 },
+    capacity: {
+      episodicInvalidated: [],
+      semanticInvalidated: [],
+      trialDropped: [],
+      profileOverCap: 0,
+    },
     reviewQueuePending: 0,
     autoMode: false,
   };
@@ -333,12 +366,18 @@ export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<Lifec
   // 人工 reject 的条目永不自动删（复核结论优先，含全自动模式）
   const rejectedRows = report.autoMode
     ? await sql`SELECT entry_id FROM memory_lifecycle_review WHERE status = 'rejected'
-        ${cfg.scope ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
+        ${
+          cfg.scope
+            ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
           AND scope->>'userId' = ${cfg.scope.userId}
           AND scope->>'workspaceId' = ${cfg.scope.workspaceId}
-          AND scope->>'repositoryId' = ${cfg.scope.repositoryId}` : sql``}`
+          AND scope->>'repositoryId' = ${cfg.scope.repositoryId}`
+            : sql``
+        }`
     : [];
-  const rejectedIds = new Set((rejectedRows as unknown as { entry_id: string }[]).map((r) => r.entry_id));
+  const rejectedIds = new Set(
+    (rejectedRows as unknown as { entry_id: string }[]).map((r) => r.entry_id),
+  );
 
   for (const c of candidates) {
     if (rejectedIds.has(c.id)) {
@@ -359,48 +398,88 @@ export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<Lifec
       entryIds: report.autoInvalidated,
       detail: { reason: "utility_decay", auto: true },
     });
-    opts.emit?.({ type: "memory.lifecycle.purge", entryIds: report.autoInvalidated, reason: "utility_decay" });
+    opts.emit?.({
+      type: "memory.lifecycle.purge",
+      entryIds: report.autoInvalidated,
+      reason: "utility_decay",
+    });
   }
 
   // ── 2. 容量管理（§7.3）──
   const rows = await loadActiveRows(cfg.repo, cfg.scope);
-  const episodicCut = await trimKind(rows, "episodic", cfg.episodicCap, cfg.episodicTrimTo, engine, nowIso);
-  const semanticCut = await trimKind(rows, "semantic", cfg.semanticCap, cfg.semanticTrimTo, engine, nowIso);
+  const episodicCut = await trimKind(
+    rows,
+    "episodic",
+    cfg.episodicCap,
+    cfg.episodicTrimTo,
+    engine,
+    nowIso,
+  );
+  const semanticCut = await trimKind(
+    rows,
+    "semantic",
+    cfg.semanticCap,
+    cfg.semanticTrimTo,
+    engine,
+    nowIso,
+  );
   report.capacity.episodicInvalidated = episodicCut;
   report.capacity.semanticInvalidated = semanticCut;
   const capacityCut = [...episodicCut, ...semanticCut];
   if (capacityCut.length > 0) {
-    await appendOpLog("lifecycle.purge", { entryIds: capacityCut, detail: { reason: "capacity" } });
-    opts.emit?.({ type: "memory.lifecycle.purge", entryIds: capacityCut, reason: "capacity" });
+    await appendOpLog("lifecycle.purge", {
+      entryIds: capacityCut,
+      detail: { reason: "capacity" },
+    });
+    opts.emit?.({
+      type: "memory.lifecycle.purge",
+      entryIds: capacityCut,
+      reason: "capacity",
+    });
   }
 
   // trial：超 cap FIFO + attemptsLeft 耗尽丢弃（物理删 trial 行）
   const trialRows = await sql`
     SELECT id FROM memory_trial_lessons
     WHERE true
-      ${cfg.scope ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
+      ${
+        cfg.scope
+          ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
         AND scope->>'userId' = ${cfg.scope.userId}
         AND scope->>'workspaceId' = ${cfg.scope.workspaceId}
-        AND scope->>'repositoryId' = ${cfg.scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${cfg.scope.repositoryId}`
+          : sql``
+      }
     ORDER BY created ASC
   `;
   const trialIds = (trialRows as unknown as { id: string }[]).map((r) => r.id);
   if (trialIds.length > cfg.trialCap) {
     const excess = trialIds.slice(0, trialIds.length - cfg.trialCap);
     await sql`DELETE FROM memory_trial_lessons WHERE id = ANY(${textArrayLiteral(excess)}::text[])
-      ${cfg.scope ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
+      ${
+        cfg.scope
+          ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
         AND scope->>'userId' = ${cfg.scope.userId}
         AND scope->>'workspaceId' = ${cfg.scope.workspaceId}
-        AND scope->>'repositoryId' = ${cfg.scope.repositoryId}` : sql``}`;
+        AND scope->>'repositoryId' = ${cfg.scope.repositoryId}`
+          : sql``
+      }`;
     report.capacity.trialDropped.push(...excess);
   }
-  const exhausted = await sql`DELETE FROM memory_trial_lessons WHERE attempts_left <= 0
-    ${cfg.scope ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
+  const exhausted =
+    await sql`DELETE FROM memory_trial_lessons WHERE attempts_left <= 0
+    ${
+      cfg.scope
+        ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
       AND scope->>'userId' = ${cfg.scope.userId}
       AND scope->>'workspaceId' = ${cfg.scope.workspaceId}
-      AND scope->>'repositoryId' = ${cfg.scope.repositoryId}` : sql``}
+      AND scope->>'repositoryId' = ${cfg.scope.repositoryId}`
+        : sql``
+    }
     RETURNING id`;
-  report.capacity.trialDropped.push(...(exhausted as unknown as { id: string }[]).map((r) => r.id));
+  report.capacity.trialDropped.push(
+    ...(exhausted as unknown as { id: string }[]).map((r) => r.id),
+  );
 
   // profile 超限：按效用腾位软失效（user_statement 豁免；写入侧 ADD/EDIT 见 admitProfile）
   const profileCount = rows.filter((r) => r.type === "profile").length;
@@ -442,10 +521,14 @@ export async function listReviewQueue(
   const sql = getSql();
   const rows = await sql`
     SELECT * FROM memory_lifecycle_review WHERE status = ${status}
-      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+      ${
+        scope
+          ? sql`AND scope->>'tenantId' = ${scope.tenantId}
         AND scope->>'userId' = ${scope.userId}
         AND scope->>'workspaceId' = ${scope.workspaceId}
-        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${scope.repositoryId}`
+          : sql``
+      }
     ORDER BY created_at ASC LIMIT 200
   `;
   return (rows as unknown as Record<string, unknown>[]).map((r) => ({
@@ -454,7 +537,10 @@ export async function listReviewQueue(
     reason: r.reason as string,
     snapshot: (parseJson(r.snapshot) ?? {}) as Record<string, unknown>,
     status: r.status as string,
-    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    createdAt:
+      r.created_at instanceof Date
+        ? r.created_at.toISOString()
+        : String(r.created_at),
   }));
 }
 
@@ -468,17 +554,28 @@ export async function approveReview(
   const rows = await sql`
     UPDATE memory_lifecycle_review SET status = 'approved', resolved_at = now()
     WHERE entry_id = ${entryId} AND status = 'pending'
-      ${engine.scope ? sql`AND scope->>'tenantId' = ${engine.scope.tenantId}
+      ${
+        engine.scope
+          ? sql`AND scope->>'tenantId' = ${engine.scope.tenantId}
         AND scope->>'userId' = ${engine.scope.userId}
         AND scope->>'workspaceId' = ${engine.scope.workspaceId}
-        AND scope->>'repositoryId' = ${engine.scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${engine.scope.repositoryId}`
+          : sql``
+      }
     RETURNING id
   `;
   if (rows.length === 0) return false;
   const nowIso = new Date().toISOString();
   await engine.invalidate(entryId, nowIso);
-  await appendOpLog("lifecycle.purge", { entryIds: [entryId], detail: { reason: "utility_decay", review: "approved" } });
-  opts.emit?.({ type: "memory.lifecycle.purge", entryIds: [entryId], reason: "utility_decay" });
+  await appendOpLog("lifecycle.purge", {
+    entryIds: [entryId],
+    detail: { reason: "utility_decay", review: "approved" },
+  });
+  opts.emit?.({
+    type: "memory.lifecycle.purge",
+    entryIds: [entryId],
+    reason: "utility_decay",
+  });
   return true;
 }
 
@@ -491,10 +588,14 @@ export async function rejectReview(
   const rows = await sql`
     UPDATE memory_lifecycle_review SET status = 'rejected', resolved_at = now()
     WHERE entry_id = ${entryId} AND status = 'pending'
-      ${scope ? sql`AND scope->>'tenantId' = ${scope.tenantId}
+      ${
+        scope
+          ? sql`AND scope->>'tenantId' = ${scope.tenantId}
         AND scope->>'userId' = ${scope.userId}
         AND scope->>'workspaceId' = ${scope.workspaceId}
-        AND scope->>'repositoryId' = ${scope.repositoryId}` : sql``}
+        AND scope->>'repositoryId' = ${scope.repositoryId}`
+          : sql``
+      }
     RETURNING id
   `;
   return rows.length > 0;

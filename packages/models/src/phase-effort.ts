@@ -47,10 +47,7 @@ export function createPhaseEffortModel(
   ) {
     throw new Error("phase efforts must be high or max");
   }
-  if (
-    !Number.isSafeInteger(policy.planningCalls) ||
-    policy.planningCalls < 0
-  ) {
+  if (!Number.isSafeInteger(policy.planningCalls) || policy.planningCalls < 0) {
     throw new Error("planningCalls must be a nonnegative safe integer");
   }
   let call = 0;

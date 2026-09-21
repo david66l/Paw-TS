@@ -34,7 +34,9 @@ export interface StubRunOptions {
   readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
   readonly approvalPolicy?: (tool: string) => boolean | undefined;
   /** Autonomy profile; default headless when no interactive resolvers. */
-  readonly autonomy?: import("./autonomy/profile.js").AutonomyLevel | import("./autonomy/profile.js").AutonomyProfileOptions;
+  readonly autonomy?:
+    | import("./autonomy/profile.js").AutonomyLevel
+    | import("./autonomy/profile.js").AutonomyProfileOptions;
   /** Daily coding (default) vs multi-agent orchestration. */
   readonly collaborationMode?: import("./collaboration-mode.js").CollaborationMode;
   readonly rootAgentId?: string;
@@ -72,8 +74,7 @@ function formatStubRunResult(
       : result.status === "unimplemented"
         ? 3
         : 0;
-  const ok =
-    result.status !== "failed" && result.status !== "incomplete";
+  const ok = result.status !== "failed" && result.status !== "incomplete";
   if (format === "minimal") {
     if (
       result.status === "failed" ||

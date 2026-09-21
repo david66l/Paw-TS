@@ -94,7 +94,11 @@ export interface VaultRef extends MemoryBase {
 }
 
 /** 正式库条目（四种 kind 的判别联合） */
-export type MemoryEntry = SemanticFact | EpisodicExperience | ProfileInsight | VaultRef;
+export type MemoryEntry =
+  | SemanticFact
+  | EpisodicExperience
+  | ProfileInsight
+  | VaultRef;
 
 /**
  * 试用教训（spec §4.2）：独立存储（memory_trial_lessons 表），

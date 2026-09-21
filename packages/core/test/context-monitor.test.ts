@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  type ChatMessage,
   ContextMonitor,
   DEFAULT_MONITOR_OPTIONS,
   evaluateTrigger,
-  type ChatMessage,
 } from "../src/index.js";
 
 const msg = (role: "user" | "assistant", content: string): ChatMessage => ({
@@ -47,7 +47,10 @@ describe("P5.1 evaluateTrigger 规则引擎", () => {
       msg("user", "[Tool workspace.run_shell failed]\nerror: build failed"),
       msg("assistant", "looking into it"),
       msg("user", "try again"),
-      msg("user", "[Tool workspace.run_shell failed]\nexception: still failing"),
+      msg(
+        "user",
+        "[Tool workspace.run_shell failed]\nexception: still failing",
+      ),
       msg("assistant", "still investigating"),
     ];
     const d = evaluateTrigger(messages);

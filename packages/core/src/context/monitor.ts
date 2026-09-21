@@ -12,8 +12,8 @@
  * 预算软启动（剩余 <20%）提高采样概率、<5% 必触发。
  */
 
-import type { ChatMessage } from "./manager.js";
 import { isToolResultMessage } from "../tool-result/format.js";
+import type { ChatMessage } from "./manager.js";
 
 export type TriggerReason =
   | "subtask_end"
@@ -104,7 +104,10 @@ export function evaluateTrigger(
   }
 
   // ── subtask_end：完成证据 + 低信息密度 + 错误已解决 ──
-  const lastTwo = recent.slice(-2).map((m) => m.content ?? "").join("\n");
+  const lastTwo = recent
+    .slice(-2)
+    .map((m) => m.content ?? "")
+    .join("\n");
   if (COMPLETION_EVIDENCE.test(lastTwo)) {
     // 错误已解决：工具结果错误要么从未出现，要么出现在完成信号之前。
     // 只统计工具结果中的错误——普通文本提到 "error"（文档/代码）不是未解问题。

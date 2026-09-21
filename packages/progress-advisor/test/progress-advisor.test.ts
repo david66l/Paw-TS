@@ -13,19 +13,45 @@ describe("progress advisor projection", () => {
   test("deduplicated verification repair cannot suppress either closeout window", () => {
     const facts: InputFactV1[] = [];
     addToolTurn(facts, 1, "write", "workspace_write_file", { path: "a.js" });
-    for (let turn = 2; turn <= 9; turn++) addToolTurn(facts, turn, `check-${turn}`, "workspace_run_shell", { command: `npm test | tail -${turn}` });
-    const advice = projectProgressAdviceTimelineV1(snapshot(facts), { maxModelTurns: 10, maxTotalModelTurns: 10 });
-    expect(advice.filter(a => a.kind === "verification_repair")).toHaveLength(1);
-    expect(advice.filter(a => a.kind === "convergence_checkpoint")).toHaveLength(2);
+    for (let turn = 2; turn <= 9; turn++)
+      addToolTurn(facts, turn, `check-${turn}`, "workspace_run_shell", {
+        command: `npm test | tail -${turn}`,
+      });
+    const advice = projectProgressAdviceTimelineV1(snapshot(facts), {
+      maxModelTurns: 10,
+      maxTotalModelTurns: 10,
+    });
+    expect(advice.filter((a) => a.kind === "verification_repair")).toHaveLength(
+      1,
+    );
+    expect(
+      advice.filter((a) => a.kind === "convergence_checkpoint"),
+    ).toHaveLength(2);
   });
   test("a shell write, including a failed shell, invalidates an earlier passing check", () => {
     for (const changed of [true, "unknown"] as const) {
       const facts: InputFactV1[] = [];
       addToolTurn(facts, 1, "write", "workspace_write_file", { path: "a.js" });
-      addToolTurn(facts, 2, "test", "workspace_run_shell", { command: "npm test" });
-      addToolTurn(facts, 3, "shell-write", "workspace_run_shell", { command: "node mutate.js" }, true, { workspaceEffect: { changed, paths: ["a.js"] } });
-      for (let turn = 4; turn <= 6; turn++) addToolTurn(facts, turn, `read-${turn}`, "workspace_read_file", { path: "a.js" });
-      const advice = projectProgressAdviceV1(snapshot(facts), { maxModelTurns: 10, maxTotalModelTurns: 10 });
+      addToolTurn(facts, 2, "test", "workspace_run_shell", {
+        command: "npm test",
+      });
+      addToolTurn(
+        facts,
+        3,
+        "shell-write",
+        "workspace_run_shell",
+        { command: "node mutate.js" },
+        true,
+        { workspaceEffect: { changed, paths: ["a.js"] } },
+      );
+      for (let turn = 4; turn <= 6; turn++)
+        addToolTurn(facts, turn, `read-${turn}`, "workspace_read_file", {
+          path: "a.js",
+        });
+      const advice = projectProgressAdviceV1(snapshot(facts), {
+        maxModelTurns: 10,
+        maxTotalModelTurns: 10,
+      });
       expect(advice?.kind).toBe("convergence_checkpoint");
       expect(advice?.message).toContain("current revision");
       expect(advice?.message).not.toContain("latest check passed");
@@ -688,7 +714,13 @@ function addToolTurn(
   payload?: JsonValue,
 ): void {
   // Existing scenarios use read-only shell checks unless effects are explicit.
-  if (/(?:run_shell|job_start|job_wait)$/.test(tool)) payload = { workspaceEffect: { changed: false, paths: [] }, ...(payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {}) };
+  if (/(?:run_shell|job_start|job_wait)$/.test(tool))
+    payload = {
+      workspaceEffect: { changed: false, paths: [] },
+      ...(payload && typeof payload === "object" && !Array.isArray(payload)
+        ? payload
+        : {}),
+    };
   const modelCallId = `model-${turn}`;
   facts.push(
     {

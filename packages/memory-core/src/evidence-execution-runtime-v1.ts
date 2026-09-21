@@ -11,23 +11,27 @@ import type {
 import { validateMemoryEvidenceExecutionProgramV1 } from "./evidence-execution-program-v1.js";
 import { compileMemoryQueryAnswerOriginV1 } from "./query-answer-origin.js";
 import type {
+  MemoryStateBindingCertificateV1,
+  MemoryStateBindingCertificateValidationInputV1,
+  MemoryStateValidatedObservationV1,
+} from "./state-binding-certificate-v1.js";
+import { validateMemoryStateBindingCertificateV1 } from "./state-binding-certificate-v1.js";
+import type {
   MemoryResolvedStateFrameV2,
   MemoryStateBoundObservationV2,
   MemoryStateEventTimeIntervalV2,
   MemoryStateSlotSpecV2,
 } from "./state-frame-v2.js";
-import type {
-  MemoryStateBindingCertificateValidationInputV1,
-  MemoryStateBindingCertificateV1,
-  MemoryStateValidatedObservationV1,
-} from "./state-binding-certificate-v1.js";
-import { validateMemoryStateBindingCertificateV1 } from "./state-binding-certificate-v1.js";
 
 export const PAW_MEMORY_EVIDENCE_EXECUTION_RUNTIME_VERSION_V1 =
   "paw.memory-evidence-execution-runtime.v1:proof-carrying-fail-closed" as const;
 
 export type MemoryEvidenceExecutionNodeResultStatusV1 =
-  "complete" | "partial" | "missing" | "conflict" | "unsupported";
+  | "complete"
+  | "partial"
+  | "missing"
+  | "conflict"
+  | "unsupported";
 
 export type MemoryEvidenceExecutionResultReasonV1 =
   | "plan_node_blocked"
@@ -74,7 +78,9 @@ export interface MemoryEvidenceExecutionObservationValueV1 {
   readonly valueText: string;
   readonly valueKey: string;
   readonly valueComposition:
-    "single" | "contiguous_composite" | "ordered_tuple";
+    | "single"
+    | "contiguous_composite"
+    | "ordered_tuple";
   readonly predicateKind: MemoryStateBoundObservationV2["predicateKind"];
   readonly polarity: MemoryStateBoundObservationV2["polarity"];
   readonly modality: MemoryStateBoundObservationV2["modality"];
@@ -118,9 +124,16 @@ export interface MemoryEvidenceExecutionAggregateValueV1 {
   readonly kind: "aggregate";
   readonly valueId: string;
   readonly operator:
-    "collect_unique" | "count" | "sum" | "difference" | "ratio_percent";
+    | "collect_unique"
+    | "count"
+    | "sum"
+    | "difference"
+    | "ratio_percent";
   readonly aggregationUnit:
-    "event" | "semantic_value" | "entity" | "numeric_quantity";
+    | "event"
+    | "semantic_value"
+    | "entity"
+    | "numeric_quantity";
   readonly countBasis: "enumerated_members" | "stated_cardinality" | null;
   readonly memberValueIds: readonly string[];
   readonly lowerBoundCount: number;
@@ -156,7 +169,8 @@ export interface MemoryEvidenceDurationEndpointBindingCertificateV1 {
   readonly resolvedStateFrameRevision: string;
   readonly sourceLockDigest: string;
   readonly endpointContractKind:
-    "distinct_evidence_pair" | "evidence_to_host_anchor";
+    | "distinct_evidence_pair"
+    | "evidence_to_host_anchor";
   readonly endpointValueIds: readonly string[];
   readonly endpointClaimIdentities: readonly string[];
   readonly endpointEventIdentities: readonly string[];
@@ -1194,8 +1208,7 @@ function executePersonalization(
     compilePersonalizationClaimLifecycleCertificatesV1({
       observations,
       programRevision: executionIdentity.programRevision,
-      resolvedStateFrameRevision:
-        executionIdentity.resolvedStateFrameRevision,
+      resolvedStateFrameRevision: executionIdentity.resolvedStateFrameRevision,
       sourceLockDigest: executionIdentity.sourceLockDigest,
     });
   if (!lifecycleCertificates) {
@@ -1424,7 +1437,8 @@ function compilePersonalizationClaimLifecycleCertificatesV1(input: {
   const lifecycleSources = input.observations.filter((value) =>
     new Set(["update", "retract", "confirm"]).has(value.predicateKind),
   );
-  const certificates: MemoryEvidencePersonalizationClaimLifecycleCertificateV1[] = [];
+  const certificates: MemoryEvidencePersonalizationClaimLifecycleCertificateV1[] =
+    [];
   for (const source of lifecycleSources) {
     const expectedRelation =
       source.predicateKind === "retract"
@@ -1627,8 +1641,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
     claims,
   } as never);
   const lifecycleCertificateSetRevision = hashCanonicalJsonV1({
-    schemaVersion:
-      "paw.memory-personalization-lifecycle-certificate-set.v1",
+    schemaVersion: "paw.memory-personalization-lifecycle-certificate-set.v1",
     certificateRevisions: input.lifecycleCertificates.map(
       (certificate) => certificate.certificateRevision,
     ),
@@ -1994,9 +2007,10 @@ function compileDurationEndpointCertificateV1(input: {
       endpoints.map((item) => item.eventIdentity as string),
     ),
     endpointIdentityBases: Object.freeze(
-      endpoints.map((item) => item.eventIdentityBasis as
-        | "stable_event_key"
-        | "typed_role_interval"),
+      endpoints.map(
+        (item) =>
+          item.eventIdentityBasis as "stable_event_key" | "typed_role_interval",
+      ),
     ),
     endpointTimeBases: Object.freeze(
       endpoints.map((item) => item.eventTimeBasis),
@@ -2160,8 +2174,7 @@ function observationValue(
           ...(observation.eventKey?.trim()
             ? { stableEventKey: observation.eventKey.trim() }
             : {
-                typedDurationEndpointRole:
-                  observation.durationEndpointRole,
+                typedDurationEndpointRole: observation.durationEndpointRole,
                 eventTimeInterval: observation.eventTimeInterval,
               }),
         } as never)
@@ -2184,8 +2197,7 @@ function observationValue(
     ...(observation.lifecycleTargetEvidenceRef === undefined
       ? {}
       : {
-          lifecycleTargetEvidenceRef:
-            observation.lifecycleTargetEvidenceRef,
+          lifecycleTargetEvidenceRef: observation.lifecycleTargetEvidenceRef,
         }),
     valueText,
     valueKey: normalizeValue(valueText),
@@ -2238,10 +2250,10 @@ function validateExecutionBindingCertificates(
   registryRevision: string;
 }> {
   const frameObservations = frame.slots.flatMap((slot) => [
-      ...slot.current,
-      ...slot.history,
-      ...slot.conflicts,
-    ]);
+    ...slot.current,
+    ...slot.history,
+    ...slot.conflicts,
+  ]);
   const frameById = new Map(
     frameObservations.map((observation) => [
       observation.observationId,
@@ -2273,7 +2285,10 @@ function validateExecutionBindingCertificates(
   ) {
     throw namedError("MemoryEvidenceExecutionRuntimeCertificateInvalid");
   }
-  const usedContextIdentities = new Map<string, Readonly<Record<string, unknown>>>();
+  const usedContextIdentities = new Map<
+    string,
+    Readonly<Record<string, unknown>>
+  >();
   let transactionQueryRevision: string | undefined;
   for (const item of validated) {
     const frameObservation = frameById.get(item.observation.observationId);
@@ -2308,7 +2323,8 @@ function validateExecutionBindingCertificates(
     }
     if (
       !validationContext.query.trim() ||
-      validationContext.sourceLock.sourceLockDigest !== frame.sourceLockDigest ||
+      validationContext.sourceLock.sourceLockDigest !==
+        frame.sourceLockDigest ||
       contextOriginRevision !== program.originRevision ||
       contextSlotById.size !== validationContext.slots.length ||
       contextSlotById.size < 1 ||

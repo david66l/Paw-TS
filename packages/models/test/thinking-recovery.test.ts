@@ -3,9 +3,9 @@ import { createAgentLoopModelAdapter } from "../src/agent-loop-adapter.js";
 import type { LanguageModel } from "../src/language-model.js";
 import type { ModelCompleteOptions } from "../src/model-options.js";
 import {
-  createThinkingRecoveryModel,
   THINKING_RECOVERY_BATCH_INSTRUCTION,
   THINKING_RECOVERY_INSTRUCTION,
+  createThinkingRecoveryModel,
 } from "../src/thinking-recovery.js";
 import type { ChatMessage, ModelStreamChunk } from "../src/types.js";
 
