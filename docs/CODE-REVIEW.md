@@ -717,7 +717,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | --- | --- | --- | --- |
 | 19 | 拆 `packages/protocol/src/journal/`（§R1） | 4623 行的单文件变 8 个模块，**且对外 104 个名字逐字节不变**（唯一引用者只有 `index.ts:125`） | 中 |
 | 20 | 拆 `initializeRun`（1282 行）与 `AgentOrchestrator`（4922 行）（§2.1、§A1–A3） | 可读性最大单点收益 | 中大 |
-| 21 | 拆 `packages/harness` 的 `executeTool`（~1460 行、37 个分支，§D4） | 工具层的可读性单点最大收益；宜与补测一起做 | 中大 |
+| 21 | ✅ 完成：拆 `executeTool`（1355 行、37 个分支）—— `execution.ts` 1768 → 38 行，处理器分到 9 个文件 + 派发表；导出面与测试数字逐项不变（见 11.9） | 工具层的可读性单点最大收益 | 中大 |
 | 22 | 拆 `apps/desktop` 的 931 行 `useEffect` + 引入 `useReducer`（§D1） | 订阅泄漏风险 + 状态机单一迁移点 | 中大 |
 | 23 | `tool-runner` 的 7 个并行数组 → `ToolCallPlan[]`（§A3） | 消掉 flag soup 与一个 `!` | 中 |
 | 24 | `TURN_FLAG_CODECS` 映射类型替掉三处手工镜像（§A5） | 消掉一个"加字段就静默丢状态"的悬崖 | 中 |
@@ -871,19 +871,32 @@ await expect(
 
 **顺带发现一个闸门盲区（值得单独记一笔）**：`errors.ts` 最初抽出来时没有 `export`，于是它**不是一个模块**，TypeScript 把它的声明当成了**全局**。后果是 `orchestrator.ts` 里 `classifyError(...)` 之类没有任何 import 也能通过 `packages/agent` 自己的 `tsc`（`include: ["src/**/*.ts"]`，exit 0），而 `apps/desktop` 的 `include: ["src"]` 是另一个 program、拿不到这些全局，于是报出 4 个 `Cannot find name`。**同一个文件，两个包级 tsconfig 给出不同结论** —— 这正是 §2.3「CI 不覆盖唯一的 app」与 §2.5「每个包 tsconfig 各自复制」两条的合流后果。批次 A 已经把桌面端纳入闸门，所以这次是桌面端先抓到；否则它会以「全局符号」的形态安静地留在仓库里。这也说明「23 个包都 typecheck 通过」并不等于每个文件都被严格检查过。
 
-### 11.9 #21 与 #20 不同：它是可机械完成的
+### 11.9 #21 已完成：`executeTool` 拆成 37 个处理器
 
-同样是「千行函数」，`packages/harness/src/registry/execution.ts` 的 `executeTool`（**1355 行，299–1653**）结构与 `initializeRun` 完全相反。AST 量出来的结果：
+**结果**：`packages/harness/src/registry/execution.ts` **1768 → 38 行**，只剩一个验证 + 派发的入口。
 
-- 函数体是 **41 条顶层语句**，其中 **40 条是形状一致的 `if (tool === <常量>) { … return … }`**，无 `switch`；
-- 每条分支的**自由标识符只有 2–15 个**（多数 5–8），最多的是 `SHELL`(15)、`EDIT`(11)；
-- **没有一条分支写外层局部变量** —— 每条都是「读 `ctx`/`rec` + 返回结果」。
+| 新文件 | 内容 |
+| --- | --- |
+| `registry/tool-support.ts` | 12 个参数解析/错误整形辅助（含 `ToolScope` 定义）+ `validateToolArguments` 的再导出 |
+| `registry/handlers/files.ts` | 10 个（read/list/search/glob/grep/write/edit/undo/notebook/patch） |
+| `registry/handlers/jobs.ts` | 5 |
+| `registry/handlers/shell-web.ts` | 4（run_shell/web_fetch/web_search/browser_check） |
+| `registry/handlers/task.ts` | 5 |
+| `registry/handlers/memory.ts` | 4 |
+| `registry/handlers/agents.ts` | 3 |
+| `registry/handlers/git.ts` | 3 |
+| `registry/handlers/lsp.ts` | 2 |
+| `registry/handlers/mcp.ts` | 1（+ `executeMcpProxy`） |
+| `registry/handlers/index.ts` | 37 条派发表 |
 
-也就是说 #21 可以照搬 #19 的做法：每条分支 → `handle<Tool>(ctx, rec): Promise<ToolRunResult>`，`executeTool` 退化成一张派发表。而且有一个额外的安全网：**把处理器的返回类型写成 `Promise<ToolRunResult>`，TypeScript 会强制每条路径都 return** —— 这正是拆分支最容易出错的地方（原代码里某条分支若不返回，会静默落到最后的 `unknown tool`）。
+两个设计点让它成为机械操作（与 #20 相反）：
 
-需要一并搬走的模块级常量（`READ`/`WRITE`/… 40 个工具名）应当先进 `tool-names.ts`，否则 dispatcher 与 handlers 之间会形成 import 环。
+1. 处理器只收一个 `ToolScope = { ctx, rec, tool, args }`，不再闭包捕获 `executeTool` 的局部变量 —— 这正是 #20 卡住的原因（那些块既读又写外层局部变量）。
+2. 返回类型写成 `Promise<ToolRunResult>`，于是「某条控制流不返回」变成**编译错误**。在原来的 if 链里，这种分支会静默落到最后的 `unknown tool` 结果。
 
-规模预估：40 个处理器，按域分 5–6 个文件（文件读写、job、shell/web、git、agent、memory）。这条建议在下一轮作为独立改动完成，不要与其它条目混在一次提交里。
+**验证**：`execution.ts` 的导出面逐字节不变（`executeTool`、`validateToolArguments`，用导出集合比对确认；后者从 `tool-support.ts` 再导出，所以 `@paw/harness` 的 index 一行没动）；派发表 37 条；lint 0 error；23 个包 + `apps/desktop` typecheck 通过；`test:ts` 与 `test:desktop` 的数字与改动前**完全一致**（2837 pass / 14 既存失败；202 pass / 0 fail）。
+
+**方法论提醒（写给后续的脚本化重构）**：用 AST 统计「自由标识符」时，`ts.forEachChild(node.expression, visit)` **不会访问 `node.expression` 本身** —— 对 Identifier 调用 `forEachChild` 得到的是它的子节点（没有）。本次第一版脚本因此漏掉了所有 `ctx.foo` / `rec.bar` 形式的基名，生成的处理器缺参数。正确写法是直接 `visit(node.expression)`。同一类偏差会让「这个块需要多少输入」的估算偏低，进而把不可机械化的重构误判成可机械化。
 
 ### 11.10 #30 的成本被低估了：benchmarks 有 496 个类型错误
 
