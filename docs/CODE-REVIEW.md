@@ -1035,13 +1035,35 @@ return {
 };
 ```
 
-渲染侧 `useAgentRun.ts:995-999` 仍用 `/\[([a-zA-Z0-9_-]+)\]/` 从 `ev.summary` 里抠它 —— 耦合确实存在。
+渲染侧 `useAgentRun.ts:955-967` 仍用 `/\[([a-zA-Z0-9_-]+)\]/` 从 `ev.summary` 里抠它 —— 耦合确实存在。**但本项在 11.18 被更正：它不是唯一路径，是三级兜底的最后一级。**
 
 **但"把 agentId 变成结构化字段"这个看起来很小的修法不成立。** 查了事件路径：`commitToolExecutionResult` 发给渲染进程的 `tool.result` 事件带的是 `tool/ok/summary/detail/provenance/...`（`detail` 由 `formatToolResultEventDetail` 从 payload 渲染成文本），**没有把 `payload` 透出去**。所以要让渲染侧拿到结构化的 `agentId`，就得给 `tool.result` 这个 RunEvent 类型加字段 —— 那是 `packages/core/src/run-events.ts` 的协议改动，牵动所有构造点，正是 §D2 里"导出 `DesktopRunEvent` 联合类型"那一大项，不是顺手能带的。
 
-**可做且有价值的是另一件事：把这条耦合钉成响的而不是哑的。** 现在改一句摘要措辞 → 子 Agent 名册**静默**失效；加一条生产者侧的契约测试（断言 `run_agent` 摘要匹配渲染侧依赖的那个正则形状，含/不含 `[agentId]` 两种），就把"静默失效"变成"改措辞就红"。这不需要动协议，成本是 `packages/harness/test/` 里的一个用例。**本轮未做**（构造 `run_agent` 处理器需要 stub launcher，上下文不足），留给下一轮首选。
+**可做且有价值的是另一件事：把这条耦合钉成响的而不是哑的。** 加一组生产者侧的契约测试（断言 `run_agent` 摘要匹配渲染侧依赖的那个正则形状，含/不含 `[agentId]` 两种），把"改措辞静默退化"变成"改措辞就红"。这不需要动协议，成本是 `packages/harness/test/` 里的几个用例。**已在 11.17 完成。**
 
-### 11.17 #34 已落到哪一步，以及 `createPawNextProductManifestV2/V3` 为什么不是顺手能测的
+### 11.17 §11.16 的结论方向对但强度说过头了，以及 `run_agent` 参数面的实测
+
+**更正。** 11.16 说"改一句摘要措辞 → 子 Agent 名册**静默失效**"。本轮把渲染侧的完整解析链读出来，没那么脆：`useAgentRun.ts:955-967` 是三级兜底 ——
+
+```ts
+const fromCall = callId ? runAgentSpecByCallRef.current.get(callId) : undefined; // 1. tool.call 时从 args 记下（:868）
+const fromArgs = runAgentSpecId(ev.args);                                        // 2. tool.result 自带的 args
+const fromSummary = ... ev.summary.match(/\[([a-zA-Z0-9_-]+)\]/)?.[1] ...;        // 3. 摘要正则
+const specId = fromCall ?? fromArgs ?? fromSummary;
+```
+
+前两级读的都是**结构化字段**（`agent_id`/`agentId`），改名会 tsc 报错；第 3 级只在 `ev.args` 缺席时才起作用。所以摘要措辞变了，最坏情况是兜底降级，不是名册清空。**11.16 把它写成了唯一依赖，属于又一次"强度超过证据"** —— 与 11.12 记的两次同类错误同一个形状：位置和机制都对，因果强度没验证就写死了。
+
+**仍然值得钉，只是理由变了：** 三级里只有第 3 级没有类型保护 —— 它读一段自由文本，而那段文本在 `handlers/agents.ts:48` 拼装。前两级有编译器看着，第 3 级没有。测试见 `packages/harness/test/sub-agent.test.ts`（8 个用例，本轮从 5 补到 8）：
+
+- 摘要形状（含/不含 `[….]`）—— 钉住第 3 级的输入格式；
+- `agent_id` 与 `agentId` 产生**相同**摘要 —— 钉住处理器内两个别名的等价；
+- `max_steps` 与 `maxSteps` 都作为数字到达 launcher（`[5, 7]`）；
+- **`{task: "hello"}` 仍被声明式 schema 拒绝**（`missing required field: goal`）。
+
+最后一条是本轮顺带查出来的、值得记下来的**容错度不对称**：渲染侧的 `runAgentGoal`（`useAgentRun.ts:46-55`）为了展示兜底接受 `goal/task/description/objective/prompt` **五个**键，而工具侧只认 `goal`（`handlers/agents.ts:11`，无别名），且 `goal` 是声明式必填 —— `tool-support.ts:90` 的通用校验在进处理器**之前**就拒了。这不是 bug（一边是渲染兜底，一边是硬契约），但它意味着**给渲染侧加别名永远不会让模型多一种合法写法**。测试把那个方向钉死：想让 `task` 通过，必须改 schema，而不是改 `runAgentGoal`。
+
+### 11.18 #34 已落到哪一步，以及 `createPawNextProductManifestV2/V3` 为什么不是顺手能测的
 
 **已做**：`packages/paw-next` 此前**完全在闸门之外** —— 没有 test 脚本、没有 test 目录、也不在 `test:ts` 里。现在三样都补上了，并落了 18 个用例：v1/v2/v3 三个 manifest 版本的哈希不变量（`hashPawNextProductManifestV<N>(m) === hashCanonicalJsonV1(m)`，即批次 B #6 那次收敛的回归网）、键序无关、非法值拒绝、深冻结克隆、以及 v1 的建清单确定性。`test:ts` 因此从 2842 涨到 2891 pass。
 
