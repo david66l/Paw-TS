@@ -737,7 +737,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 32 | 统一 `as unknown as` 的两个根因：内部校验器改 `asserts` 谓词（§R7） | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
 | 33 | `run-journal.ts` 的不变量表化 + 唯一 error code（§R2） | 让"work segment 启动前必须成立什么"可被单点回答 |
 | 34 | 给 `packages/paw-next` 补测试（它是桌面端唯一入口，却零测试，§C7） | 风险最高的模块从零保障到有保障 |
-| 35 | 给 `packages/harness` 补测试：`logShellAudit`/`flushAuditLog`、`errorCodeForToolPayload`、12 个无测试的工具 id（§D9） | 该包测试比 0.28，而它决定策略与审计 |
+| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例，含优先级与大小写）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）。仍为 0 命中：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp`、`run_skill`（见 11.20，其中网络类需要桩，`run_skill` 只差一个桩注册表） | 该包测试比 0.28，而它决定策略与审计 |
 
 > 建议在第 12 条之前先落地第 6 条：`canonicalJsonStringifyV1` 签名一变，`orchestrator.ts` 里若干 `as never` / `as unknown as` 会自然消失，重构时的噪声更少。
 
@@ -1096,3 +1096,33 @@ const specId = fromCall ?? fromArgs ?? fromSummary;
 **验证**：`packages/agent` 874 pass / 12 fail —— 12 条与 §11.8 记录的既有失败**逐条同名同数**（`candidate-review`、`ContextCompactor`、`context-assembler`×4、`loop-authority`、`loop-v2-provider-terminal`、`operations-run-session`、`orchestrator`、`status-snapshot`、`worktree`），无新增。新增 `packages/agent/test/tool-batch-plan.test.ts` 5 个用例（1:1 与顺序、策略阻止穿透、暂存字段默认值、越界兜底、空批次）。lint 0 error / **432** warning（435 − 3 个 `!`，与上表吻合）；typecheck 23/23。
 
 **没做的部分**：`planToolBatch` 这个函数本身。要它成立，得先把规划阶段那三个 `await` 的副作用改成显式依赖（比如把 `emit`/`checkpointSeq` 作为参数传入并在外部按序驱动），那是独立的一步。**当前的 `ToolCallPlan` 已经为那一步准备好了形状** —— 一旦规划能一次算完，`lockConflict`/`approval`/`checkpointNum` 就能从可变字段升为 `readonly`，构造点仍然只有 `createToolCallPlans` 一处。
+
+### 11.20 #35 补 harness 未测工具：`list_dir`/`glob`/`grep`，以及"缺参数"的两种含义
+
+**§D9 三项的当前状态**（本轮自己重新数过，没沿用报告的数字）：
+
+| §D9 项 | 状态 |
+|---|---|
+| `logShellAudit` / `flushAuditLog` / `getPendingAuditEntries` | ✅ `test/shell-audit.test.ts`（4 例） |
+| `errorCodeForToolPayload` | ✅ `test/tool-support.test.ts`（19 例：11 条策略拒绝关键词 + 4 条用户错误 + 大小写 + 优先级） |
+| 12 个无测试的工具 id | 🟡 `create_agent` ✅（`create-agent.test.ts` 11 处）；本轮补 `list_dir`/`glob`/`grep` ✅（`file-tools.test.ts` 14 例）。**仍为 0 命中**：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp`、`run_skill` |
+
+> 复核口径：`packages/harness/test/` 是**平铺**的（18 → 19 个文件，无子目录），所以 `Select-String -Path packages\harness\test\*.ts` 的命中数就是全量。`workspace.search` 报 3 处命中，来自 `registry.test.ts`，不在缺口里。
+
+**本轮最有价值的产出不是"多测了三个工具"，而是撞出了一条此前没被记录的分歧：**
+
+"缺参数"在工具层有**两种**含义，落到**两个不同的错误码**：
+
+- 键**不存在** → `validateToolArguments` 在进处理器之前拒绝，`E_SCHEMA_INVALID`；
+- 键存在但为**空串**（或显式 `undefined`）→ 通过校验，落到处理器自己的分支，`E_USER`。
+
+根因是必填检查为 `!(name in rec)` —— **只看键在不在，不看值是否为空**（`tool-support.ts:87`），而紧随其后的类型检查又对 `undefined` 显式放行（`:98`）。于是：
+
+- `workspace.glob` / `workspace.grep` 的 `E_USER missing pattern` 分支是可达的，但只经空串；
+- `workspace.list_dir` 的 `path = "."` 兜底（`handlers/files.ts:54`）**只能经显式 `{path: undefined}` 到达** —— 省略键会被 `E_SCHEMA_INVALID` 拦掉，传非字符串会被类型检查拦掉。这不是死代码，但可达路径只有一条很窄的缝，值得钉住。
+
+三种情形都写进了 `file-tools.test.ts`，各自断言 `error_code` 与 `summary`。这与 §11.17 记的 `run_agent` 别名不对称是**同一个形状**：声明式 schema 与处理器各自维护一份"什么是合法输入"的判断，两者不一致时没有任何信号，只有模型看到两种错误码。
+
+**另外补了一条接线测试**：`list_dir` 传 `../..` → `ok:false` 且 `error_code === "E_POLICY_DENIED"`。分类器本身在 `tool-support.test.ts` 里已单独测过，但那是喂字面量；这条走的是真实调用链 —— `read.ts:144` 产生 `"Directory escapes workspace: …"` → `errorCodeForToolPayload` 的子串匹配命中 `"escapes workspace"` → `E_POLICY_DENIED`。**策略分类器与路径守卫之间此前没有端到端用例。**
+
+**方法论记一笔（本会话第 4 次同类错误）。** 中途我用 `Select-String -Path packages\*\src\**\*.ts -Pattern "errorCodeForToolPayload"` 查引用，得到 0 命中，并据此准备写下"导出但无人调用"。**PowerShell 的 `-Path` 不递归展开 `**`**，那个 glob 只匹配了一层目录，而真实调用点在 `packages/harness/src/registry/handlers/files.ts`（10 处）。改用 `grep` 工具后立刻看到 26 处命中。§11.13 那条规则要再收紧一句：**验证"没有"时不能只用一条命令，要么换工具复核，要么先证明搜索范围覆盖了目标。**
