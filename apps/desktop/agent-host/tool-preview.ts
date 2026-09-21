@@ -37,12 +37,14 @@ function sanitize(value: unknown, depth: number): unknown {
  * 一行摘要：优先取最有定位价值的字段（路径 / 模式 / 命令 / 查询 / 目标）。
  * 无匹配字段时返回空串（调用方不渲染摘要行）。
  *
- * `pattern` 与 `relPath` 都必须在这里：
- *  - `workspace.glob` / `workspace.grep` / `workspace.search` 的参数只有 `pattern`；
- *  - `workspace.apply_patch` 的参数用 `relPath`（处理器在 `packages/workspace`,
- *    不在 harness 的 handlers 目录里 —— 这正是上一轮把它误判为"死键"的原因）。
- * 缺任何一个，对应工具在**审批卡**上都是一行空摘要：审批人看不到模型要动什么。
- * 渲染侧 `toolCards.ts` 与 `useRightPanelData.ts` 用的是同一组键。
+ * `pattern` 必须在这里：`workspace.glob` / `workspace.grep` / `workspace.search`
+ * 的参数只有 `pattern`，此前不在列表里 —— 审批卡上这类调用是空摘要，审批人看不到
+ * 模型要搜什么。
+ *
+ * `relPath` 保留只是为了与渲染侧 `toolCards.ts` / `useRightPanelData.ts` 的键表
+ * 一致：**目前没有任何工具把它当参数发出**（`workspace.apply_patch` 的参数是
+ * `patch`，其中的 `relPath` 是 `patch-tools.ts` 解析 diff 后自己派生的字段）。
+ * 也就是说它不是缺陷修复，只是防御性对齐 —— 将来真有工具用它时两侧行为一致。
  */
 export function summarizeToolArgs(_tool: string, args: unknown): string {
   if (args === null || typeof args !== "object") return "";

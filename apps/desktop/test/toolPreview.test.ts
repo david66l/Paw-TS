@@ -29,16 +29,17 @@ describe("summarizeToolArgs", () => {
     expect(summarizeToolArgs("workspace.grep", { pattern: "TODO", path: "src" })).toBe("src");
   });
 
-  test("apply_patch 的 relPath 也要显示出来", () => {
-    // apply_patch 的参数用 relPath（处理器在 packages/workspace，不在 harness 的
-    // handlers 目录里）。它一度被误判为死键，于是审批卡上这类调用同样是空摘要。
-    expect(summarizeToolArgs("workspace.apply_patch", { relPath: "src/x.ts", patch: "..." })).toBe(
-      "src/x.ts",
-    );
-    // path 仍然优先于 relPath，顺序与渲染侧保持一致
+  test("relPath 被接受只是为了与渲染侧键表对齐", () => {
+    // 目前没有工具把 relPath 当参数发出：workspace.apply_patch 的参数是 patch，
+    // 其中的 relPath 是 patch-tools.ts 解析 diff 后派生的字段。这条用例钉的是
+    // 「两侧键表一致」这一防御性行为，不是某个真实调用形态。
+    expect(summarizeToolArgs("workspace.apply_patch", { relPath: "src/x.ts" })).toBe("src/x.ts");
+    // path 仍然优先于 relPath，顺序与渲染侧一致
     expect(summarizeToolArgs("workspace.edit_file", { path: "a.ts", relPath: "b.ts" })).toBe(
       "a.ts",
     );
+    // 真实形态：apply_patch 只带 patch 文本，没有可提取的定位行
+    expect(summarizeToolArgs("workspace.apply_patch", { patch: "--- a/x\n+++ b/x" })).toBe("");
   });
 });
 
