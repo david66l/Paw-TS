@@ -103,7 +103,7 @@ truth.
 ## Verification
 
 ```powershell
-bun run typecheck:memory-plugin
+bun run --filter @paw/memory-plugin typecheck
 bun test packages/memory-plugin/test
 bunx tsc --noEmit -p benchmarks/amb/tsconfig.json
 bun test legacy/apps/cli/test/paw-next-composition-v2.test.ts

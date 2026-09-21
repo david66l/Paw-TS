@@ -54,9 +54,9 @@
 ## Current verification commands
 
 ```powershell
-bun run typecheck:memory-core
+bun run --filter @paw/memory-core typecheck
 bun test packages/memory-core
-bun run typecheck:memory-plugin
+bun run --filter @paw/memory-plugin typecheck
 bun test packages/memory-plugin/test packages/memory/test/longterm-embedding-provider.test.ts
 bunx tsc --noEmit -p benchmarks/amb/tsconfig.json
 bun test benchmarks/amb

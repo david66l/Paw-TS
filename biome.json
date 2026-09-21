@@ -9,6 +9,9 @@
     "ignore": ["../claude-code/**", "../src/paw/**", "dist/**", "node_modules/**", "legacy/**"]
   },
   "organizeImports": { "enabled": true },
+  "css": {
+    "parser": { "cssModules": true }
+  },
   "linter": {
     "enabled": true,
     "rules": {
@@ -19,6 +22,16 @@
       "suspicious": { "noExplicitAny": "warn" }
     }
   },
+  "overrides": [
+    {
+      "include": ["**/test/**", "**/*.test.ts", "**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "style": { "noNonNullAssertion": "off" }
+        }
+      }
+    }
+  ],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

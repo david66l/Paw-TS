@@ -24,6 +24,25 @@ jobs:
       - name: Memory cutover gate
         run: bash scripts/check-memory-cutover.sh
 
+  # Electron end-to-end check. Informational until it is proven on CI hardware:
+  # it launches a real BrowserWindow under xvfb, so a runner-side flake must not
+  # block a merge. Promote to blocking once it has a stable track record.
+  desktop-native:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Native desktop window (Electron + Vite)
+        run: xvfb-run -a bun run --filter '@paw/desktop' test:native
+
   memory-db:
     runs-on: ubuntu-latest
     services:
@@ -55,27 +74,12 @@ jobs:
       - name: Apply memory migrations
         run: bun run memory:migrate
 
-      - name: Memory Runtime + health + legacy migrate tests
+      # The whole DB-gated suite, not a hand-maintained file list: the previous
+      # 17-file enumeration silently skipped new tests.
+      - name: Memory suite (DATABASE_URL required)
+        run: bun run test:memory
+
+      - name: Agent memory cutover tests
         run: |
-          bun test packages/memory/test/health.test.ts
-          bun test packages/memory/test/runtime.e2e.test.ts
-          bun test packages/memory/test/migrate-legacy.test.ts
           bun test packages/agent/test/memory-runtime-cutover.test.ts
-
-      - name: v2 longterm memory pipeline + engine tests
-        run: |
-          bun test packages/memory/test/longterm-store.test.ts
-          bun test packages/memory/test/write-pipeline.test.ts
-          bun test packages/memory/test/governor.test.ts
-          bun test packages/memory/test/hybrid-recall.test.ts
-          bun test packages/memory/test/triggered-retrieval.test.ts
-          bun test packages/memory/test/lifecycle.test.ts
-          bun test packages/memory/test/observability.test.ts
-          bun test packages/memory/test/red-team.test.ts
-
-      - name: v2 runtime cutover tests
-        run: |
-          bun test packages/memory/test/runtime-v2.e2e.test.ts
-          bun test packages/memory/test/v2-degrade.test.ts
-          bun test packages/memory/test/migrate-v1-to-v2.test.ts
           bun test packages/agent/test/memory-v2-cutover.test.ts
