@@ -29,6 +29,7 @@
     "playwright": "^1.62.1"
   },
   "scripts": {
+    "test": "bun test test",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"
   }
 }
