@@ -647,7 +647,8 @@ setSessions((prev) => {
 **D8. 跨边界与包内的重复实现** — `severity: medium`
 - 工具参数摘要器存在两份且**键与截断长度都不同**：`apps/desktop/agent-host/tool-preview.ts:45`（键含 `file`，截断 200）vs `apps/desktop/src/agent/toolCards.ts:11-19`（键含 `relPath`，slice 120）—— 审批卡与工具卡会对同一次调用给出不同描述。
 - 工作区相对 posix 路径归一化**实现了 4 次**：`workspace/src/files/read.ts:304-305` 与**逐字节副本** `:513-514`、`workspace/src/code-index.ts:189-191`、`workspace/src/watch.ts:96`。
-- SSE 读取/解码/切分 + 工具调用累积块**复制 3 份**：`models/src/openai-compatible.ts:516-539`（循环内）、`:601-640`（尾部缓冲 flush）、`anthropic-compatible.ts:465`；**且副本已经分叉** —— `:516` 用 `continue` 短路 `isDoneMarker`，flush 副本在 `:604` 每个分支重测一次，而 `:630` 的工具增量循环**完全不测**。也就是说"我们是否见到 [DONE]"取决于同一份载荷落在哪个缓冲区。
+- SSE 读取/解码/切分 + 工具调用累积块**复制 3 份**：`models/src/openai-compatible.ts`（循环内 ~`:458`、尾部缓冲 flush ~`:542`）、`anthropic-compatible.ts`（解码/切分部分）。
+  **更正（见 §11.11）**：报告原文说「`:630` 的工具增量循环完全不测 `isDoneMarker`，因此『我们是否见到 [DONE]』取决于载荷落在哪个缓冲区」—— 结构描述属实（循环内那条路径用 `continue` 短路终结标记，flush 路径改为逐个分支重测，而工具增量循环确实漏了判断），**但行为后果不成立**：`openai-stream-parse.ts` 对 `"[DONE]"` 只返回 `{ textDelta: "", isDoneMarker: true }`，没有 `toolCallDeltas` 字段，所以那个循环本来就恒不执行。两处副本的真实差异只是写法不一致，不是可观测的行为差异；真正剩下的工作是把它抽成共享累积器（可读性），而非修 bug。
 
 **D9. harness 里风险最高的未测逻辑（点名）** — `severity: medium`
 - `shell-audit.ts:115`/`:177`/`:229-238`：模块级 `_flushTimer = setInterval(...)` 与按天滚动写入只有人主动调 `flushAuditLog()` 才会拆除。而 363 个测试文件里 `logShellAudit`/`flushAuditLog`/`getPendingAuditEntries` **0 引用** —— 也就是"把 shell 历史持久化"的定时器完全没测。
