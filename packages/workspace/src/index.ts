@@ -88,14 +88,12 @@ export {
 
 // ---- Git 操作 ----
 export {
-  gitCommit,
   gitDiff,
   gitLog,
   gitStatus,
   gitStatusAsync,
   gitLogAsync,
   gitDiffAsync,
-  type GitCommitResult,
   type GitDiffResult,
   type GitLogResult,
   type GitStatusResult,

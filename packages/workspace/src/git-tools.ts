@@ -6,7 +6,7 @@
  * - gitStatus()：解析 --porcelain -b 输出
  * - gitLog()：自定义 pretty 格式
  * - gitDiff()：标准 diff 输出
- * - gitCommit()：带 message 的 commit
+ * - 注意：这里**不**提供 gitCommit。历史上有一个走同步 spawnSync 的实现，无人引用，已删除；需要提交时请用异步 API。
  *
  * 安全措施：10s 超时 + 1MB 输出缓冲
  */
@@ -36,12 +36,6 @@ export interface GitLogResult {
 
 export interface GitDiffResult {
   readonly diff?: string;
-  readonly error?: string;
-}
-
-export interface GitCommitResult {
-  readonly ok: boolean;
-  readonly message?: string;
   readonly error?: string;
 }
 
@@ -238,12 +232,4 @@ export async function gitDiffAsync(
     signal,
   );
   return r.ok ? { diff: r.stdout } : { error: r.error };
-}
-
-export function gitCommit(workspaceRoot: string, message: string): GitCommitResult {
-  const r = runGit(workspaceRoot, ["commit", "-m", message]);
-  if (!r.ok) {
-    return { ok: false, error: r.error };
-  }
-  return { ok: true, message: r.stdout.trim() };
 }
