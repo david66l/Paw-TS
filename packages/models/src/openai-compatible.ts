@@ -32,6 +32,7 @@ import {
   parseOpenAiChatCompletionStreamDataPayload,
   parseOpenAiUsageJson,
 } from "./openai-stream-parse.js";
+import { takeSseDataPayloads } from "./sse.js";
 import { extractThinkBlocks } from "./think-extraction.js";
 import type { ChatMessage, ModelCompletionResult, ModelStreamChunk } from "./types.js";
 
@@ -431,17 +432,12 @@ export class OpenAICompatibleModel implements LanguageModel {
             count: value.byteLength,
           });
         buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
-        const lines = buffer.split("\n");
-        buffer = done ? "" : (lines.pop() ?? "");
-        for (const line of lines) {
-          const trimmed = line.replace(/\r$/, "").trim();
-          if (!trimmed.startsWith("data: ")) {
-            continue;
-          }
+        const { payloads, carry } = takeSseDataPayloads(buffer, done);
+        buffer = carry;
+        for (const payload of payloads) {
           if (sawDoneMarker) {
             throw new Error("OpenAI-compatible stream emitted data after [DONE]");
           }
-          const payload = trimmed.slice(6);
           const part = parseOpenAiChatCompletionStreamDataPayload(payload);
           if (part.textDelta.length)
             emitModelObservation(options, {

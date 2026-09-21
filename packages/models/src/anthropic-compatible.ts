@@ -30,6 +30,7 @@ import {
   type ToolDefinition,
   resolveRequestMaxOutputTokens,
 } from "./model-options.js";
+import { takeSseDataPayloads } from "./sse.js";
 import type {
   ChatMessage,
   ModelCompletionResult,
@@ -424,14 +425,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
             count: value.byteLength,
           });
         buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
-        const lines = buffer.split("\n");
-        buffer = done ? "" : (lines.pop() ?? "");
-        for (const line of lines) {
-          const trimmed = line.replace(/\r$/, "").trim();
-          if (!trimmed.startsWith("data: ")) {
-            continue;
-          }
-          const payload = trimmed.slice(6);
+        const { payloads, carry } = takeSseDataPayloads(buffer, done);
+        buffer = carry;
+        for (const payload of payloads) {
           const part = parseAnthropicStreamPayload(payload);
           for (const chunk of processPart(part)) {
             yield chunk;
