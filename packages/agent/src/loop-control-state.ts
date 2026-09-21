@@ -67,7 +67,56 @@ export interface LoopControlCheckpointV1 {
   };
 }
 
+/** 崩溃检查点的 section 名（`schemaVersion` 之外的全部字段）。 */
+type CheckpointSectionV1 = keyof Omit<LoopControlCheckpointV1, "schemaVersion">;
+
+/**
+ * `TurnFlags` 的每个字段在崩溃检查点里的归属。
+ *
+ * 这张表的唯一目的是让**编译器参与决策**：`-?` 作用于 `keyof TurnFlags`，所以
+ * 新增一个 `TurnFlags` 字段而不在这里登记，就无法编译。登记时必须写明它进哪个
+ * section，或者用 `null` 显式声明「不进检查点」。于是
+ * 「新字段静默地从崩溃检查点里消失、只在崩溃恢复后表现为状态丢了」
+ * 这条路径被关掉 —— 那正是这个文件此前最大的隐患。
+ *
+ * `CheckpointedTurnFlag` 与 `restoreLoopControlFlagsV1` 的返回类型都由它推导，
+ * 不再手工维护第二份 22 个名字的字段清单。
+ */
+export const TURN_FLAG_CODECS = {
+  providerTerminal: "providerTerminal",
+  loopV2ReadinessFeedbackKey: "readiness",
+  loopV2ReadinessNudges: "readiness",
+  pendingControl: "pendingControl",
+  formatErrorNudges: "protocolRecovery",
+  noActionNudges: "protocolRecovery",
+  hasEverUsedTools: "protocolRecovery",
+  autoContinueNudges: "completionGates",
+  verifyNudges: "completionGates",
+  acceptanceNudges: "completionGates",
+  candidateReviewNudges: "completionGates",
+  candidateReviewRevision: "completionGates",
+  candidateReviewSummaryFingerprint: "completionGates",
+  _maxStepsWarned: "lateGuidance",
+  _budgetGuardWarned: "lateGuidance",
+  _implementationWarned: "lateGuidance",
+  _convergenceEvidenceKey: "lateGuidance",
+  failureSignatures: "toolLoop",
+  idleFuseTrips: "toolLoop",
+  repeatTool: "toolLoop",
+  codingPhase: "toolLoop",
+  codingPhaseViolationTurns: "toolLoop",
+  // 显式豁免：MEA nudge 计数与「本轮是否用过工具」是纯当轮状态，不参与崩溃恢复。
+  meaNudges: null,
+  lastTurnHadToolCall: null,
+} as const satisfies { readonly [K in keyof TurnFlags]-?: CheckpointSectionV1 | null };
+
+/** 会被写进崩溃检查点并在恢复时还原的 `TurnFlags` 字段。 */
+export type CheckpointedTurnFlag = {
+  [K in keyof TurnFlags]-?: (typeof TURN_FLAG_CODECS)[K] extends null ? never : K;
+}[keyof TurnFlags];
+
 const PROTOCOL_ISSUES = new Set(["empty_response", "truncated_response", "missing_tool_calls"]);
+
 const CONTROL_KINDS = new Set<CrashSafePendingControlV1["kind"]>([
   "readiness",
   "protocol_recovery",
@@ -290,33 +339,7 @@ export function restoreLoopControlFlagsV1(input: {
     readonly summaryFingerprint?: string;
   };
   readonly allowLegacyReadiness?: boolean;
-}): Partial<
-  Pick<
-    TurnFlags,
-    | "providerTerminal"
-    | "loopV2ReadinessFeedbackKey"
-    | "loopV2ReadinessNudges"
-    | "pendingControl"
-    | "formatErrorNudges"
-    | "noActionNudges"
-    | "hasEverUsedTools"
-    | "autoContinueNudges"
-    | "verifyNudges"
-    | "acceptanceNudges"
-    | "candidateReviewNudges"
-    | "candidateReviewRevision"
-    | "candidateReviewSummaryFingerprint"
-    | "_budgetGuardWarned"
-    | "_implementationWarned"
-    | "_convergenceEvidenceKey"
-    | "_maxStepsWarned"
-    | "failureSignatures"
-    | "idleFuseTrips"
-    | "repeatTool"
-    | "codingPhase"
-    | "codingPhaseViolationTurns"
-  >
-> {
+}): Partial<Pick<TurnFlags, CheckpointedTurnFlag>> {
   const checkpoint = parseLoopControlCheckpointV1(input.value);
   if (input.value !== undefined && !checkpoint) {
     throw new Error("Invalid loop-control checkpoint");

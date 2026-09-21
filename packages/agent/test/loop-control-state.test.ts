@@ -4,17 +4,94 @@ import { advanceRepeatToolReminder } from "../src/lifecycle/repeat-tool-reminder
 import { formatRecoveryHints, recoveryHintForToolResult } from "../src/lifecycle/tool-recovery.js";
 import { checkVerification } from "../src/lifecycle/verification-gate.js";
 import {
+  TURN_FLAG_CODECS,
   checkpointLoopControlV1,
   consumeSelectedPendingControlV1,
   parseLoopControlCheckpointV1,
   resetLoopControlForRewindV1,
   restoreLoopControlFlagsV1,
 } from "../src/loop-control-state.js";
+import type { TurnFlags } from "../src/orchestrator/types.js";
 import { TaskStateManager } from "../src/task-state.js";
 
 const READINESS_KEY = "a".repeat(64);
 
 describe("Loop control checkpoint v1", () => {
+  /**
+   * 判题用的显式表达式：只用已被其它用例证明能通过严格校验的取值。
+   * 字段名在这里手写、不从注册表反推 —— 它才有资格与实现比对。
+   */
+  const KNOWN_GOOD_FLAGS: TurnFlags = {
+    autoContinueNudges: 0,
+    lastTurnHadToolCall: false,
+    formatErrorNudges: 2,
+    noActionNudges: 3,
+    hasEverUsedTools: true,
+    providerTerminal: {
+      runId: "run-registry",
+      lastTurn: 3,
+      pendingProtocolIssue: "empty_response",
+    },
+    loopV2ReadinessFeedbackKey: READINESS_KEY,
+    loopV2ReadinessNudges: 1,
+    pendingControl: {
+      kind: "readiness",
+      text: "repair the missing verification",
+    },
+  };
+
+  test("the registry and the encoder agree on which section each flag lands in", () => {
+    const checkpoint = checkpointLoopControlV1(KNOWN_GOOD_FLAGS);
+    expect(checkpoint).toBeDefined();
+    const produced = Object.keys(checkpoint as object).sort();
+    expect(produced).toEqual([
+      "pendingControl",
+      "protocolRecovery",
+      "providerTerminal",
+      "readiness",
+      "schemaVersion",
+    ]);
+    // 注册表把这些字段登记到哪个 section，那个 section 就必须真的出现在产物里
+    for (const flag of [
+      "providerTerminal",
+      "loopV2ReadinessFeedbackKey",
+      "loopV2ReadinessNudges",
+      "pendingControl",
+      "formatErrorNudges",
+      "noActionNudges",
+      "hasEverUsedTools",
+    ] as const) {
+      expect(produced).toContain(TURN_FLAG_CODECS[flag]);
+    }
+
+    // 解码侧：登记为可往返的字段必须真的回来
+    const restored = restoreLoopControlFlagsV1({
+      runId: "run-registry",
+      startTurn: 3,
+      value: checkpoint,
+      legacyMessages: [],
+    });
+    for (const flag of [
+      "providerTerminal",
+      "loopV2ReadinessFeedbackKey",
+      "loopV2ReadinessNudges",
+      "pendingControl",
+      "formatErrorNudges",
+      "noActionNudges",
+      "hasEverUsedTools",
+    ] as const) {
+      expect(restored[flag]).toBeDefined();
+    }
+  });
+
+  test("the two exempt flags are the only ones the checkpoint never carries", () => {
+    const exempt = Object.entries(TURN_FLAG_CODECS)
+      .filter(([, section]) => section === null)
+      .map(([flag]) => flag)
+      .sort();
+    expect(exempt).toEqual(["lastTurnHadToolCall", "meaNudges"]);
+  });
+
   test("consumes pending only when the exact candidate won selection", () => {
     const pending = {
       kind: "tool_guidance" as const,
