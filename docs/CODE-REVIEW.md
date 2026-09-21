@@ -722,7 +722,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 22 | 拆 `apps/desktop` 的 931 行 `useEffect` + 引入 `useReducer`（§D1） | 订阅泄漏风险 + 状态机单一迁移点 | 中大 |
 | 23 | ✅ 完成：7 个并行数组 → `ToolCallPlan[]`，`executeOne(call, i)` → `executeOne(plan)`，3 处 `!` 归零；`planToolBatch` 本身未抽（规划步骤含 3 个交错的 `await`，属行为面重构，见 11.19） | 消掉 flag soup 与 `!` | 中 |
 | 24 | 🟡 部分完成：`TURN_FLAG_CODECS` 登记表已落地并**被编译器强制**（新增 `TurnFlags` 字段不登记就编译失败，已 A/B 验证），`restore` 的返回类型改为由它推导、22 名字的 `Pick` 清单删除；编码/解码函数体仍是手工 spread（§A5） | 消掉"加字段就静默丢状态"的悬崖 | 中 |
-| 25 | 拆 `resolveEvidencePass`（1324 行）（§M4） | 让承重不变量可被 review | 中大 |
+| 25 | 🟡 第一轮完成：相对时间窗口解析 + 稳定重排抽到 `memory-core/src/evidence-resolution/relative-time-window.ts`（16 个用例钉住"软加权不是硬过滤"、引用相等的零触发、半开区间、失败保持原序），两处重复前导合一，函数净减 24 行。**剩余**：主函数仍 1593 行；下一刀必须先立 `ResolutionPassState`（selector 门不是自包含的，见 11.21），不是继续找函数抽 | 让承重不变量可被 review | 中大 |
 | 26 | 渲染进程边界：导出 `DesktopRunEvent` 联合类型，`agentId` 改真字段（§D2） | 消掉"改一句摘要就静默破坏子 Agent 名册" | 中 |
 | 27 | 跨包同名不同义改名去歧义（§3） | 消除读者陷阱 | 中（面广但机械） |
 | 28 | `db/rows.ts` 行类型 + DAO 断言收敛（§M1、M7） | 把静默 `undefined` 变编译错误 | 中大 |
@@ -1126,3 +1126,33 @@ const specId = fromCall ?? fromArgs ?? fromSummary;
 **另外补了一条接线测试**：`list_dir` 传 `../..` → `ok:false` 且 `error_code === "E_POLICY_DENIED"`。分类器本身在 `tool-support.test.ts` 里已单独测过，但那是喂字面量；这条走的是真实调用链 —— `read.ts:144` 产生 `"Directory escapes workspace: …"` → `errorCodeForToolPayload` 的子串匹配命中 `"escapes workspace"` → `E_POLICY_DENIED`。**策略分类器与路径守卫之间此前没有端到端用例。**
 
 **方法论记一笔（本会话第 4 次同类错误）。** 中途我用 `Select-String -Path packages\*\src\**\*.ts -Pattern "errorCodeForToolPayload"` 查引用，得到 0 命中，并据此准备写下"导出但无人调用"。**PowerShell 的 `-Path` 不递归展开 `**`**，那个 glob 只匹配了一层目录，而真实调用点在 `packages/harness/src/registry/handlers/files.ts`（10 处）。改用 `grep` 工具后立刻看到 26 处命中。§11.13 那条规则要再收紧一句：**验证"没有"时不能只用一条命令，要么换工具复核，要么先证明搜索范围覆盖了目标。**
+
+### 11.21 #25（§M4）第一刀：`resolveEvidencePass` 的相对时间重排抽出
+
+**这是多轮工作的第一轮，不是 #25 的完成。** `resolveEvidencePass` 现在 **1593 行**（审查时 1324 是函数体，文件 1610 行），它自己那句"含至少 7 个阶段"是准的，但那些阶段的接缝**并不都是干净的**：多处共享同一个闭包里的可变状态（`requirementHits`、`selectedRefsByRequirement`、`supportAssessments`…），一次抽一个阶段的成本远高于 §A3 那种纯数据表示收敛。所以先挑**唯一一处真正自包含**的：
+
+**抽出的东西**：`packages/memory-core/src/evidence-resolution/relative-time-window.ts`
+
+| 导出 | 作用 |
+|---|---|
+| `resolveRelativeTimeWindowV1(query, upperBound)` | 两处共用的前导：解析 cutoff → 守卫有限性 → 调 `extractRelativeTimeWindowV1` → 失败返回 `undefined` |
+| `reorderHitsByRelativeTimeWindowV1(requirementHits, window)` | 纯函数：按窗口稳定重排，窗口内优先、组内保序，**不过滤** |
+| `applyRelativeTimeReorderV1(hits, query, upperBound)` | 解析 + 重排，并保证不抛（失败返回入参原序） |
+
+**为什么挑这一处**：它是审查 §M4 亲手点名的那个例子的邻居 —— 注释写着"这是软加权,不是硬过滤"，而这条不变量原先活在一个千行函数内部的匿名 `try` 块里，既没有名字也没有用例。抽出来后它成了一个具名纯函数，16 个用例钉住语义：
+
+- **不触发时的引用相等**：无时间短语 / 无 cutoff → 返回**入参本身**（不是拷贝），调用方能据此判断"零触发"；
+- **软加权**：窗口外的命中仍然在结果里，只被排到后面（专门有一条断言总数与集合不变）；
+- **稳定**：组内相对顺序不变；
+- **半开区间**：`start` 含、`end` 不含；
+- `observedAt` 缺失或不可解析 → 落到窗口外，不抛；
+- 每个需求独立重排；
+- 解析失败（畸形 cutoff）→ 原序返回，不抛。
+
+**顺带消掉的重复**：`:1189-1205` 那段（给证据包需求标签拼 `[时间窗:…]`）本来和重排各写了一遍同样的前导。两处的**失败默认值不同**（重排保持原序、标签保持空串），所以只收敛解析，不收敛失败动作。另外把原来的"两次 `filter` + `includes`"换成单遍分类：等价，但不再是 O(n²)，也不再依赖 `includes` 反推补集。
+
+**一处我差点弄错、已修正**：`resolveRelativeTimeWindowV1` 只保证**解析**不抛，而标签那段后面还有 `toISOString()` —— 它在日期无效时抛 `RangeError`。原代码的 `try` 覆盖的是**整块**，我第一版把它缩到了解析器内部，等于悄悄丢了那层保护。已补回整块 `try/catch`，并在注释里写明为什么解析器的保证不够。这类"重构时把保护范围缩小"的损失没有测试会报，只能靠逐块比对原语义发现。
+
+**验证**：memory-core 287 pass / 0 fail（271 + 16 新增）；memory-core + memory-plugin 合计 600 pass / 2 skip / 0 fail；lint 0 error / 432 warning（与上一轮相同）；typecheck 23/23。函数体净减 24 行（1610 → 1593 行的文件）。
+
+**下一刀的判断依据**（留给后续轮次，避免重新勘察）：按"是否共享闭包可变状态"排序，`selector 权威门`（`:721` 起，注释"默认关闭，这样 selector 失败永远不会让 `undefined` 在下游被理解成'接受所有命中'"）**不是**自包含的 —— 它写 `selectedRefsByRequirement`、读 `sourceLocalLockedIds`/`assistantLeafPresent`/`evidenceGroundedRoleBindingEligible`/`certifiedAssistantDialogueCandidate` 四个上游布尔量；要抽它得先把这四个量收进一个显式的 `ResolutionPassState`。**所以 #25 的下一步是设计那个状态类型，而不是继续找下一个函数抽。** 这也意味着 §M4 说的"主函数退化为 ~60 行编排器"需要先把状态对象立起来，那是个比"按接缝拆"更前置的动作。

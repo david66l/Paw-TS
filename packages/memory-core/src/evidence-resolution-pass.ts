@@ -21,6 +21,10 @@ import type {
   MemoryEvidenceResolutionV1,
 } from "./evidence-resolution-contracts.js";
 import {
+  applyRelativeTimeReorderV1,
+  resolveRelativeTimeWindowV1,
+} from "./evidence-resolution/relative-time-window.js";
+import {
   abortError,
   applyMemoryDeterministicSupportFloorV1,
   buildDialogueSourceDiscoveryV1,
@@ -49,7 +53,6 @@ import {
   memoryQueryAnswerOriginAllowsLateBindingV1,
 } from "./query-answer-origin.js";
 import type { MemoryEvidenceBoundTemporalConstraintV1 } from "./query-plan-contracts.js";
-import { extractRelativeTimeWindowV1 } from "./relative-time-anchor.js";
 import {
   type MemoryRequirementFairAcquisitionReportV1,
   buildMemoryRequirementFairAcquisitionV1,
@@ -709,31 +712,12 @@ export async function resolveEvidencePass(input: {
   // 相对时间翻译官(检索层):问题含强信号时间短语时,把命中按
   // observedAt 是否落在换算窗口内做稳定重排(窗口内优先,组内保序)。
   // 非时间问题 extract 返回 null,重排零触发;这是软加权,不是硬过滤。
-  try {
-    const cutoffMs = input.evidenceTimeUpperBound
-      ? Date.parse(input.evidenceTimeUpperBound)
-      : undefined;
-    if (cutoffMs !== undefined && Number.isFinite(cutoffMs)) {
-      const timeWindow = extractRelativeTimeWindowV1(input.query, cutoffMs);
-      if (timeWindow) {
-        requirementHits = requirementHits.map((hits) => {
-          const inWindow = hits.filter((hit) => {
-            const observed = hit.observedAt ? Date.parse(hit.observedAt) : undefined;
-            return (
-              observed !== undefined &&
-              Number.isFinite(observed) &&
-              observed >= timeWindow.startMs &&
-              observed < timeWindow.endMs
-            );
-          });
-          const outWindow = hits.filter((hit) => !inWindow.includes(hit));
-          return Object.freeze([...inWindow, ...outWindow]);
-        });
-      }
-    }
-  } catch {
-    // 排序增强失败保持原序,绝不阻断主流程。
-  }
+  // 实现见 evidence-resolution/relative-time-window.ts(§M4 的第一刀)。
+  requirementHits = applyRelativeTimeReorderV1(
+    requirementHits,
+    input.query,
+    input.evidenceTimeUpperBound,
+  );
   if (input.requirements.length > 0 && input.supportSelector) {
     // A configured selector is an authority gate. Start closed so an empty
     // candidate set, malformed plugin result, or selector failure can never
@@ -1186,18 +1170,17 @@ export async function resolveEvidencePass(input: {
   // 需求标签(仅显示层;非时间问题 extract 返回 null,标签字节级不变)。
   let meaTimeWindowSuffix = "";
   let meaTimeWindow: { readonly startMs: number; readonly endMs: number } | undefined;
+  // 与上方重排共用同一段解析（evidence-resolution/relative-time-window.ts）；
+  // 这里的失败默认值不同：标签保持空串。`resolveRelativeTimeWindowV1` 只保证
+  // **解析**不抛，下面还有 `toISOString()` —— 它在日期无效时抛 RangeError，
+  // 所以这里保留原有的整块 try/catch，不能只靠解析器的保证。
   try {
-    const cutoffMs = input.evidenceTimeUpperBound
-      ? Date.parse(input.evidenceTimeUpperBound)
-      : undefined;
-    if (cutoffMs !== undefined && Number.isFinite(cutoffMs)) {
-      const window = extractRelativeTimeWindowV1(input.query, cutoffMs);
-      if (window) {
-        meaTimeWindow = { startMs: window.startMs, endMs: window.endMs };
-        const startDay = new Date(window.startMs).toISOString().slice(0, 10);
-        const endDay = new Date(window.endMs - 1).toISOString().slice(0, 10);
-        meaTimeWindowSuffix = ` [时间窗:${window.resolvedText};${startDay}~${endDay}]`;
-      }
+    const labelTimeWindow = resolveRelativeTimeWindowV1(input.query, input.evidenceTimeUpperBound);
+    if (labelTimeWindow) {
+      const startDay = new Date(labelTimeWindow.startMs).toISOString().slice(0, 10);
+      const endDay = new Date(labelTimeWindow.endMs - 1).toISOString().slice(0, 10);
+      meaTimeWindow = { startMs: labelTimeWindow.startMs, endMs: labelTimeWindow.endMs };
+      meaTimeWindowSuffix = ` [时间窗:${labelTimeWindow.resolvedText};${startDay}~${endDay}]`;
     }
   } catch {
     meaTimeWindowSuffix = "";
