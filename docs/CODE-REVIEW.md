@@ -734,7 +734,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | # | 动作 | 影响 |
 | --- | --- | --- |
 | 31 | `packages/agent` 的 `exports` 收成 `"."` + `"./internal"`，去掉 `export *`（§A7） | 让 788 个符号里的 8 个真正成为契约，其余变内部；此后所有内部重构不再是"潜在破坏性变更" |
-| 32 | 统一 `as unknown as` 的两个根因：内部校验器改 `asserts` 谓词（§R7） | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
+| 32 | 🟡 (a) 已完成：(b) **早已由批次 B #6 顺带做完**（两个 `canonicalJsonStringifyV1` 现在都收 `unknown`，§R7 的前提过期）。4 个形状校验器改成 `asserts` 谓词，**实测消掉 13 处断言**（3 个 `as unknown as` + 10 个具名断言，去掉注释后计数）。**剩余**：`assertCheckpointSourcesInRange`/`assertJournalCommitShape` 是**关系**校验器，结构上不可能是 `asserts` 谓词（§11.22），`session-execution-lease.ts:1485` 那处需另想办法 | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
 | 33 | `run-journal.ts` 的不变量表化 + 唯一 error code（§R2） | 让"work segment 启动前必须成立什么"可被单点回答 |
 | 34 | 给 `packages/paw-next` 补测试（它是桌面端唯一入口，却零测试，§C7） | 风险最高的模块从零保障到有保障 |
 | 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例，含优先级与大小写）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）。仍为 0 命中：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp`、`run_skill`（见 11.20，其中网络类需要桩，`run_skill` 只差一个桩注册表） | 该包测试比 0.28，而它决定策略与审计 |
@@ -1156,3 +1156,49 @@ const specId = fromCall ?? fromArgs ?? fromSummary;
 **验证**：memory-core 287 pass / 0 fail（271 + 16 新增）；memory-core + memory-plugin 合计 600 pass / 2 skip / 0 fail；lint 0 error / 432 warning（与上一轮相同）；typecheck 23/23。函数体净减 24 行（1610 → 1593 行的文件）。
 
 **下一刀的判断依据**（留给后续轮次，避免重新勘察）：按"是否共享闭包可变状态"排序，`selector 权威门`（`:721` 起，注释"默认关闭，这样 selector 失败永远不会让 `undefined` 在下游被理解成'接受所有命中'"）**不是**自包含的 —— 它写 `selectedRefsByRequirement`、读 `sourceLocalLockedIds`/`assistantLeafPresent`/`evidenceGroundedRoleBindingEligible`/`certifiedAssistantDialogueCandidate` 四个上游布尔量；要抽它得先把这四个量收进一个显式的 `ResolutionPassState`。**所以 #25 的下一步是设计那个状态类型，而不是继续找下一个函数抽。** 这也意味着 §M4 说的"主函数退化为 ~60 行编排器"需要先把状态对象立起来，那是个比"按接缝拆"更前置的动作。
+
+### 11.22 #32（§R7）完成一半：(a) 已做并实测，而 (b) 早就做完了
+
+**先更正报告的一处前提。** §R7(b) 说"约 30 处是 `X as unknown as JsonValue` 的纯放宽，因为 `canonicalJsonStringifyV1` 只收 `JsonValue`"。**这个前提已经不存在了**：`packages/core/src/canonical-json.ts:28` 与 `packages/memory-core/src/canonical.ts:27` 现在**都**是 `(value: unknown)` —— 那是批次 B #6 收敛 canonical JSON 时的副产品。所以 (b) 不需要再做，§R7 把它列为待办是过期信息。
+
+**(a) 已完成，实测数字。** 把 4 个内部校验器从"返回 `void`"改成 `asserts value is T` 谓词：
+
+| 校验器 | 位置 | 改成 |
+|---|---|---|
+| `assertDurableJsonPayload` | `validate-primitives.ts:96` | `asserts value is DurableJsonPayloadV1` |
+| `assertTaskCheckpoint` | `validate-wire.ts:54` | `asserts value is TaskCheckpointV1` |
+| `assertTaskCheckpointItem` | `validate-wire.ts:105` | `asserts value is TaskCheckpointItemV1` |
+| `assertRecord` | `validate-lifecycle.ts:15` | `asserts value is RunJournalRecordV1` |
+
+**实测消掉 13 处断言**（§R7 估的是"~10"），全部按**代码行**计数、排除注释：
+
+- `as unknown as`：**3 → 0**（`validate-input-fact.ts`、`validate-lifecycle.ts`、`task-checkpoint-distillation.ts` 各 1）；
+- 具名断言：**10 → 0**（`parse.ts` 2、`validate-input-fact.ts` 4、`validate-lifecycle.ts` 2、`validate-wire.ts` 1、`task-checkpoint-distillation.ts` 1）。
+
+> 计数方法本身有个坑值得记：我第一遍用裸 `grep "as unknown as"` 得到"3 → 3"，因为**我在注释里引用了被删掉的那行代码**，注释文本被算成了命中。排除注释行后才是 3 → 0。**在注释里引用被删除的代码会让任何基于文本的计数失真** —— 这次是靠逐文件对照发现的，否则会得出"没减少"的反结论。
+
+**§R7 有一处不成立：四个校验器里有两个结构上不可能是 `asserts` 谓词。** 报告把它们并列成同一类，但它们不是：
+
+- `assertCheckpointSourcesInRange(checkpoint, fromSeq, throughSeq)` 收的是**已经定型**的 `TaskCheckpointV1`，校验的是**三个参数之间的关系**（每个 item 的 `sourceSeqs` 是否落在 `[from, through]`）。它不窄化任何东西，`asserts checkpoint is TaskCheckpointV1` 是空操作。
+- `assertJournalCommitShape(value)` 收 `Pick<JournalCommitEvent, …>`，校验的是**字段之间的关系**（`batchStartSeq === previousTailSeq + 1`、`artifactFileName` 由前两者推出）。同样不是形状守卫。
+
+**可断言的是"形状校验器"，不是"关系校验器"。** 这个区分决定了 #32 的剩余面：`session-execution-lease.ts:1485` 的 `assertJournalCommitShape(value as unknown as JournalCommitEvent)` **不会因为这次改动消失**，它需要的是给那个函数换个参数类型（`unknown` + 内部形状校验），那是另一件事；报告把它算进"~10 处"是不成立的。
+
+**顺带发现（`validate-lifecycle.ts:735`，值得单独记）**：那里原本写
+
+```ts
+const checkpoint = fact.checkpoint as DurableJsonPayloadV1;
+if (checkpoint.kind === "inline") {
+  assertCheckpointSourcesInRange(checkpoint.value as unknown as TaskCheckpointV1, …);
+```
+
+这两个断言**同时在替两件没验证的事撒谎**：
+
+1. `fact.checkpoint` 在这个事实类型上是**可选**的（`DurableJsonPayloadV1 | undefined`），`as` 顺手把它断言成了必填 —— 去掉断言后 tsc 立刻报 `possibly 'undefined'`，这是断言掩盖可选性的直接证据；
+2. `checkpoint.value` 是 `JsonValue`，`as unknown as TaskCheckpointV1` 声称它是任务检查点，但**这里从未校验过**。它的兄弟分支（`validate-input-fact.ts`）是先 `assertDurableJsonPayload` 再 `assertTaskCheckpoint` 的，这里只做了前一半。少了这层校验时，若 `checkpoint.value` 是任意 JSON（例如 `{}`），`taskCheckpointItems` 展开 `undefined` 会抛 **TypeError**，而不是给出干净的校验错误。
+
+修法是就地补齐：显式的 `undefined` 守卫给出干净错误 + 就地 `assertTaskCheckpoint`。代价是 O(items) 的重复校验（这些本来就是校验路径），换来的是这段代码不再依赖"另一个文件里校验过"这个类型系统看不见的前提。
+
+`task-checkpoint-distillation.ts:249` 同理，但方向相反：原先写 `immutableCanonicalJsonCloneV1(parseTaskCheckpointV1(x))` 再把克隆 `as unknown as TaskCheckpointV1` —— 断言的是"canonical 克隆保持形状"这个**未验证的假设**，而下游编码与哈希用的正是那个克隆。改成先克隆再 `parseTaskCheckpointV1(克隆)`：校验的正好是被使用的那个值。（注意这里需要**两个视图**：codec 收 `JsonValue`，而 `TaskCheckpointV1` 缺索引签名不可赋值给它；范围校验收收窄后的类型。两者运行时是同一个对象。）
+
+**验证**：protocol 69 pass / 0 fail；protocol + runtime 438 pass / 3 skip / 0 fail；lint 0 error / 432 warning（未变）；typecheck 23/23。

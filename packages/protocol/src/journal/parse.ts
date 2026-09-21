@@ -1,5 +1,5 @@
 /** The public parse/assert/is surface for journal wire values. */
-import type { RunJournalEnvelopeV1, RunJournalRecordV1 } from "./facts.js";
+import type { RunJournalEnvelopeV1 } from "./facts.js";
 import { assertLifecycleIdentities, assertRecord } from "./validate-lifecycle.js";
 import {
   assertExact,
@@ -58,7 +58,7 @@ export function isToolObservationV1(value: unknown): value is ToolObservationV1 
 
 export function parseTaskCheckpointV1(value: unknown): TaskCheckpointV1 {
   assertTaskCheckpoint(value, "task checkpoint");
-  return value as TaskCheckpointV1;
+  return value;
 }
 
 export function assertTaskCheckpointV1(value: unknown): asserts value is TaskCheckpointV1 {
@@ -90,7 +90,7 @@ export function parseRunJournalEnvelopeV1(value: unknown): RunJournalEnvelopeV1 
   assertNonNegativeInteger(envelope.ts, "ts");
   assertRecord(envelope.record);
 
-  const record = envelope.record as RunJournalRecordV1;
+  const record = envelope.record;
   if (
     record.kind === "derived_decision" &&
     record.decision.inputThroughSeq >= (envelope.seq as number)

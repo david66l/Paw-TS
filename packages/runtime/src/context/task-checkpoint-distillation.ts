@@ -246,14 +246,19 @@ async function settleDistillation(
   let settlement: ContextCheckpointDistillationSettledFactV1;
   if (isCompletedResult(value)) {
     try {
-      const checkpoint = immutableCanonicalJsonCloneV1(parseTaskCheckpointV1(value.checkpoint));
-      assertCheckpointSourcesInRange(
-        checkpoint as unknown as TaskCheckpointV1,
-        sourceFromSeq,
-        sourceThroughSeq,
-      );
-      const payload = await codec.encode(checkpoint, signal);
-      const expectedHash = await codec.hash(checkpoint);
+      // 校验**克隆之后**的值，而不是先校验原值再断言克隆。
+      // `immutableCanonicalJsonCloneV1` 返回 `JsonValue`，所以原先这里写
+      // `checkpoint as unknown as TaskCheckpointV1` 来把类型掰回去 ——
+      // 那是替"canonical 克隆保持形状"这个未验证的假设撒谎（§R7）。
+      // 下游编码与哈希用的正是这个克隆，所以校验它才是对的。
+      const cloned = immutableCanonicalJsonCloneV1(value.checkpoint);
+      // 同一个对象：`parseTaskCheckpointV1` 校验后原样返回入参。
+      // 两个视图各取所需 —— codec 收 `JsonValue`（`TaskCheckpointV1` 缺索引
+      // 签名，不可赋值给它），范围校验收收窄后的类型。
+      const checkpoint = parseTaskCheckpointV1(cloned);
+      assertCheckpointSourcesInRange(checkpoint, sourceFromSeq, sourceThroughSeq);
+      const payload = await codec.encode(cloned, signal);
+      const expectedHash = await codec.hash(cloned);
       if (payload.hash !== expectedHash) {
         throw new Error("Distilled checkpoint payload hash mismatch");
       }

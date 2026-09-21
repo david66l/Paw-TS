@@ -1,4 +1,6 @@
 /** Field-level assertions used by every other validator. */
+import type { DurableJsonPayloadV1 } from "./primitives.js";
+
 export function expectObject(value: unknown, field: string): Record<string, unknown> {
   if (
     typeof value !== "object" ||
@@ -93,7 +95,15 @@ export function assertOneOf(value: unknown, expected: readonly string[], field: 
   }
 }
 
-export function assertDurableJsonPayload(value: unknown, field: string): void {
+/**
+ * 校验 durable JSON payload 的形状（inline / artifact_ref 两支），
+ * 并把收窄结果交给类型系统 —— 调用点因此不必再写
+ * `fact.checkpoint as DurableJsonPayloadV1`（§R7）。
+ */
+export function assertDurableJsonPayload(
+  value: unknown,
+  field: string,
+): asserts value is DurableJsonPayloadV1 {
   const payload = expectObject(value, field);
   if (payload.kind === "inline") {
     assertExactKeys(payload, ["kind", "value", "hash"], [], field);

@@ -1,6 +1,5 @@
 /** Per-fact validation for the input fact union. */
 import { assertEnvironmentAuditEvidenceV1 } from "../environment-audit.js";
-import type { DurableJsonPayloadV1 } from "./primitives.js";
 import {
   assertMemoryAtomProposal,
   assertMemoryCard,
@@ -48,7 +47,6 @@ import {
   MEMORY_WRITE_POLICY_VERSION_V1,
   WORK_SEGMENT_POLICY_VERSION_V1,
 } from "./versions.js";
-import type { TaskCheckpointV1 } from "./wire-task-checkpoint.js";
 import type { ToolObservationV1 } from "./wire-tool.js";
 
 export function assertInputFact(value: unknown): void {
@@ -604,7 +602,7 @@ export function assertInputFact(value: unknown): void {
       assertBoolean(fact.hasVisibleOutput, "hasVisibleOutput");
       if (hasOwn(fact, "response")) {
         assertDurableJsonPayload(fact.response, "response");
-        const response = fact.response as DurableJsonPayloadV1;
+        const response = fact.response;
         if (response.kind === "inline") {
           assertModelResponse(response.value);
         }
@@ -908,7 +906,7 @@ export function assertInputFact(value: unknown): void {
       );
       if (hasOwn(fact, "checkpoint")) {
         assertDurableJsonPayload(fact.checkpoint, "checkpoint");
-        const checkpoint = fact.checkpoint as DurableJsonPayloadV1;
+        const checkpoint = fact.checkpoint;
         if (checkpoint.kind === "inline") {
           assertTaskCheckpoint(checkpoint.value, "checkpoint.value");
         }
@@ -958,11 +956,11 @@ export function assertInputFact(value: unknown): void {
       }
       assertSingleLineString(fact.sourceInputHash, "sourceInputHash");
       assertDurableJsonPayload(fact.checkpoint, "checkpoint");
-      const payload = fact.checkpoint as DurableJsonPayloadV1;
+      const payload = fact.checkpoint;
       if (payload.kind === "inline") {
         assertTaskCheckpoint(payload.value, "checkpoint.value");
         assertCheckpointSourcesInRange(
-          payload.value as unknown as TaskCheckpointV1,
+          payload.value,
           fact.sourceFromSeq as number,
           fact.sourceThroughSeq as number,
         );

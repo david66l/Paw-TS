@@ -1,5 +1,4 @@
 /** Validators for wire values that are not facts. */
-import type { DurableJsonPayloadV1 } from "./primitives.js";
 import {
   assertBoolean,
   assertDurableJsonPayload,
@@ -51,7 +50,22 @@ export function assertUnitInterval(value: unknown, field: string): void {
   }
 }
 
-export function assertTaskCheckpoint(value: unknown, field: string): void {
+/**
+ * 校验 task checkpoint 的形状，并把结论交给类型系统。
+ *
+ * 原先返回 `void`：运行时逐项校验了 exact keys、schemaVersion 与每个 item，
+ * 却没告诉编译器，于是调用点必须自己补断言（`parse.ts:61` 的
+ * `value as TaskCheckpointV1`、`validate-input-fact.ts:965` 的
+ * `payload.value as unknown as TaskCheckpointV1`）。改成 `asserts` 谓词后
+ * 那些断言消失（docs/CODE-REVIEW.md §R7）。
+ *
+ * 注意运行时比类型**更严**（至少一个 sourced item），这对 `asserts` 是安全的：
+ * 断言一个比已验证条件更弱的类型永远成立。
+ */
+export function assertTaskCheckpoint(
+  value: unknown,
+  field: string,
+): asserts value is TaskCheckpointV1 {
   const checkpoint = expectObject(value, field);
   assertExactKeys(
     checkpoint,
@@ -102,7 +116,10 @@ export function assertTaskCheckpoint(value: unknown, field: string): void {
   }
 }
 
-export function assertTaskCheckpointItem(value: unknown, field: string): void {
+export function assertTaskCheckpointItem(
+  value: unknown,
+  field: string,
+): asserts value is TaskCheckpointItemV1 {
   const item = expectObject(value, field);
   assertExactKeys(item, ["statement", "sourceSeqs"], [], field);
   assertNonEmptyString(item.statement, `${field}.statement`);
@@ -318,7 +335,7 @@ export function assertInputAttachments(value: unknown): void {
     assertNonEmptyString(attachment.name, `attachments[${index}].name`);
     assertOptionalStringField(attachment, "mimeType");
     assertDurableJsonPayload(attachment.content, `attachments[${index}].content`);
-    const content = attachment.content as DurableJsonPayloadV1;
+    const content = attachment.content;
     if (content.kind === "inline" && typeof content.value !== "string") {
       throw new Error("inline attachment content must be a string");
     }

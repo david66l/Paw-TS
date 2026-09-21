@@ -3,16 +3,29 @@ import {
   type ControlDecisionActionV1,
   type InputFactV1,
   type RunJournalEnvelopeV1,
+  type RunJournalRecordV1,
   isCrashRecoveryIncompleteActionV1,
 } from "./facts.js";
 import type { DurableJsonPayloadV1, JsonValue } from "./primitives.js";
 import { assertInputFact } from "./validate-input-fact.js";
 import { assertExactKeys, expectObject } from "./validate-primitives.js";
-import { assertCheckpointSourcesInRange, assertDerivedDecision } from "./validate-wire.js";
+import {
+  assertCheckpointSourcesInRange,
+  assertDerivedDecision,
+  assertTaskCheckpoint,
+} from "./validate-wire.js";
 import type { InputAttachmentV1 } from "./wire-model-response.js";
-import type { TaskCheckpointV1 } from "./wire-task-checkpoint.js";
 
-export function assertRecord(value: unknown): void {
+/**
+ * 校验 journal record 的内容（两支：`input_fact` / `derived_decision`），
+ * 并把收窄结果交给类型系统。
+ *
+ * 原先返回 `void`，唯一调用点只能自己补一次断言
+ * （`parse.ts:93` 的 `envelope.record as RunJournalRecordV1`）。§R7 记的就是
+ * 这类"内部校验器不告诉编译器"的签名问题 —— 同一个文件里
+ * `assertRunJournalEnvelopeV1` 的公共边界写法一直是对的。
+ */
+export function assertRecord(value: unknown): asserts value is RunJournalRecordV1 {
   const record = expectObject(value, "record");
   if (record.kind === "input_fact") {
     assertExactKeys(record, ["kind", "fact"], [], "input record");
@@ -722,10 +735,28 @@ export function assertLifecycleIdentities(envelopes: readonly RunJournalEnvelope
           throw new Error(`duplicate checkpoint distillation settlement: ${fact.claimId}`);
         }
         if (fact.status === "completed") {
-          const checkpoint = fact.checkpoint as DurableJsonPayloadV1;
+          // 这里原先写 `fact.checkpoint as DurableJsonPayloadV1` 与
+          // `checkpoint.value as unknown as TaskCheckpointV1` —— 两个断言都在替
+          // **另一个文件里**做过的校验撒谎：`validate-input-fact.ts` 的同一事实
+          // 分支已经先 assertDurableJsonPayload 再 assertTaskCheckpoint。就地
+          // 重校验一次（O(items)），换来这段代码不再依赖"上游校验过"这个类型
+          // 系统看不见的前提（§R7）。少了这层显式校验时，`checkpoint.value`
+          // 若是任意 JSON，`taskCheckpointItems` 会在展开 `undefined` 时抛
+          // TypeError，而不是给出干净的校验错误。
+          const checkpoint = fact.checkpoint;
+          if (!checkpoint) {
+            // 原先的 `as DurableJsonPayloadV1` 顺手把这个可选字段断言成了必填。
+            // 上游（`validate-input-fact.ts:917`）确实要求 completed 必须带
+            // checkpoint，但那是另一个文件的前提；这里给出干净的校验错误，
+            // 而不是让 `checkpoint.kind` 抛 TypeError。
+            throw new Error(
+              `completed checkpoint distillation settlement has no checkpoint: ${fact.claimId}`,
+            );
+          }
           if (checkpoint.kind === "inline") {
+            assertTaskCheckpoint(checkpoint.value, "checkpoint.value");
             assertCheckpointSourcesInRange(
-              checkpoint.value as unknown as TaskCheckpointV1,
+              checkpoint.value,
               claim.sourceFromSeq,
               claim.sourceThroughSeq,
             );
