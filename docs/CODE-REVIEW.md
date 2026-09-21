@@ -983,3 +983,17 @@ bunx tsc --noEmit -p benchmarks/tsconfig.json
 | 「`relPath` 是活的，审批卡因此漏了它」 | 反过来过度纠正：把「派生字段」与「单元测试里的合成对象」当成了"有工具发出它"的证据 |
 
 代价是 4 个来回。规矩很简单：**说"没有"之前，先说明你搜了哪里、为什么那个范围是完备的。** 静态扫描给出的是「在我看的地方没找到」，不是「不存在」。
+
+### 11.14 已核实但本轮未落地的两件事（下一步可直接执行）
+
+**① `workspace/src/git-tools.ts` 的 `gitCommit` 可以删。** §D10 说它「未使用，且是阻塞式 `spawnSync`」，实测确认：
+
+- 函数体是 7 行，实现走同步 `runGit`（`spawnSync`，`timeout: 10_000`）；
+- 它在 `packages/workspace/src/index.ts:91` 被再导出，但**全仓没有任何调用点**；
+- 同文件的同步兄弟 `gitDiff` / `gitLog` / `gitStatus` **是活的**（`packages/agent/src/candidate-review.ts` 用 `gitDiff`，`packages/workspace/test/git-tools.test.ts` 用三个），所以**只删 `gitCommit`**，不要顺手删 `runGit` 或那些同步函数。
+
+删除面一共四处：`git-tools.ts` 的文件头注释行（`:9`）、`GitCommitResult` 接口（`:42-46`）、`gitCommit` 函数（`:243-249`）、`index.ts` 里的 `gitCommit,` 与 `type GitCommitResult,`。本轮尝试过并**已完整回滚**（低上下文下连续两次改错，见下），仓库停在 `530c437` 的绿状态，删除留给下一轮一次性做完。
+
+**② 一个 §3「跨包同名不同义」的实证。** `\bgitCommit\b` 全仓有 10 处匹配，其中 **7 处是 `packages/memory` 里记忆记录上的 `gitCommit?: string` 字段**（提交哈希），与这个函数毫无关系。这正好是 §3 说的读者陷阱：同一个名字，一个是 git 操作函数，一个是记录字段。做 #27 的改名时可以把这一对当样板。
+
+**关于本轮的方法论教训（补 §11.13）**：上面①我在上下文将尽时连续犯了两个错 —— 先把 `GitCommitResult` 替换成了一个猜的名字（造成重复的 `GitStatusResult`），再把待删函数改写成「保留但弱化返回值」的形态（既没删掉死代码，又静默改变了它的契约）。两次都由 `git checkout --` 回滚。**结论：低上下文时不要做需要多次精确编辑的重构；先把发现写进文档，把执行留给状态更好的下一轮。**
