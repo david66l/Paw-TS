@@ -1,4 +1,5 @@
 import type { JsonValue, ToolSettlementStatusV1 } from "@paw/protocol";
+import { parseCommandChain, exitStatusProvesVerification } from "@paw/core";
 
 import type {
   CompletionReviewEvidenceOutcomeV1,
@@ -33,12 +34,14 @@ export function projectCompletionReviewToolEvidenceV1(input: {
       const exitCode = projectExitCode(call);
       const timedOut = projectTimedOut(call);
       const outcome = projectOutcome(call, timedOut);
+      const observedOutput = projectObservedOutput(call);
       return Object.freeze({
         callId: call.callId,
         tool: call.tool,
         executionStatus: call.status,
         outcome:
-          outcome === "passed" && masksVerificationExitV1(command)
+          (outcome === "passed" || outcome === "failed") &&
+          masksVerificationExitV1(command)
             ? "indeterminate"
             : outcome,
         verificationKind,
@@ -47,6 +50,7 @@ export function projectCompletionReviewToolEvidenceV1(input: {
         summary: call.summary,
         afterLatestMutation:
           input.latestMutationSeq === 0 || call.seq > input.latestMutationSeq,
+        ...(observedOutput ? { observedOutput } : {}),
         ...(call.isError === undefined ? {} : { isError: call.isError }),
         ...(exitCode === undefined ? {} : { exitCode }),
         ...(timedOut ? { timedOut: true } : {}),
@@ -55,12 +59,63 @@ export function projectCompletionReviewToolEvidenceV1(input: {
   );
 }
 
+function projectObservedOutput(
+  call: CompletionReviewRawToolEvidenceV1,
+): CompletionReviewToolEvidenceV1["observedOutput"] {
+  if (isTool(call.tool, "read_file")) {
+    const content = stringField(call.payload, "content");
+    if (content === undefined) return undefined;
+    const shown = numberField(call.payload, "line_count");
+    const total = numberField(call.payload, "total_lines");
+    const byteSize = numberField(call.payload, "byte_size");
+    return Object.freeze({
+      kind: "file_read",
+      text: content.slice(0, 4_000),
+      truncated:
+        content.length > 4_000 ||
+        booleanField(call.payload, "truncated") === true,
+      partial:
+        booleanField(call.payload, "partial") === true ||
+        (numberField(call.args, "offset") ?? 0) > 0 ||
+        shown === undefined ||
+        total === undefined ||
+        shown !== total,
+      normalizesLineEndings: true,
+      ...(byteSize === undefined ? {} : { byteSize }),
+    });
+  }
+  if (isTool(call.tool, "run_shell")) {
+    const stdout = stringField(call.payload, "stdout");
+    const stderr = stringField(call.payload, "stderr");
+    if (stdout === undefined && stderr === undefined) return undefined;
+    const text = `stdout:\n${(stdout ?? "").slice(0, 2_000)}\nstderr:\n${(stderr ?? "").slice(0, 1_500)}`;
+    return Object.freeze({
+      kind: "shell_output",
+      text,
+      truncated:
+        (stdout?.length ?? 0) > 2_000 ||
+        (stderr?.length ?? 0) > 1_500 ||
+        booleanField(call.payload, "truncated") === true ||
+        booleanField(call.payload, "output_truncated") === true,
+      partial: false,
+    });
+  }
+  return undefined;
+}
+
 function projectVerificationTargetV1(
   command: string | undefined,
   kind: CompletionReviewVerificationKindV1,
 ): string | undefined {
   if (!command?.trim() || kind === "none") return undefined;
-  const invocation = verificationInvocationV1(command, kind);
+  const runner =
+    parseCommandChain(command)?.find(
+      (segment) => classifyVerificationCommandV1(segment.text) === kind,
+    )?.text ?? command;
+  const invocation = verificationInvocationV1(runner, kind).replace(
+    /\s+2>&1\s*$/u,
+    "",
+  );
   const withoutTrailingCommand = invocation.replace(/;\s*\S[\s\S]*$/u, "");
   const withoutOutputFilter = withoutTrailingCommand.replace(
     /\s+(?:\d?>&\d+\s*)?\|\s*(?:tail|head|grep|tee)\b[\s\S]*$/iu,
@@ -77,7 +132,12 @@ function masksVerificationExitV1(command: string | undefined): boolean {
   if (!command) return false;
   const kind = classifyVerificationCommandV1(command);
   if (kind === "none") return false;
-  return /;\s*\S/u.test(verificationInvocationV1(command, kind));
+  const chain = parseCommandChain(command);
+  if (!chain) return true;
+  const index = chain.findIndex(
+    (segment) => classifyVerificationCommandV1(segment.text) === kind,
+  );
+  return index < 0 || !exitStatusProvesVerification(chain, index);
 }
 
 function verificationInvocationV1(

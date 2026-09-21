@@ -2,7 +2,7 @@ import type {
   PawNextChildControlV1,
   PawNextLiveInputV1,
   RunFreshPawNextTaskInputV3,
-} from "@paw/cli/paw-next";
+} from "@paw/paw-next";
 
 import { desktopAttachments } from "./paw-next-attachments.js";
 

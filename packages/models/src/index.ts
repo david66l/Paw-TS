@@ -52,6 +52,10 @@ export type {
   ModelRuntimeProfile,
 } from "./language-model.js";
 export type { ModelCompleteOptions, ToolDefinition } from "./model-options.js";
+export {
+  FALLBACK_MODEL_OUTPUT_TOKENS,
+  resolveModelOutputLimit,
+} from "./model-options.js";
 export type {
   Attachment,
   ChatMessage,
@@ -62,4 +66,28 @@ export type {
 } from "./types.js";
 
 // ── 工具函数 ──
+export { withModelObserver, withModelObservationScope } from "./observation.js";
+export type {
+  ModelObserver,
+  ModelObservation,
+  ModelObservationEvent,
+} from "./observation.js";
 export { extractThinkBlocks } from "./think-extraction.js";
+export { MODEL_REQUEST_SUPERVISION_V1 } from "./request-supervision.js";
+export {
+  createThinkingRecoveryModel,
+  THINKING_RECOVERY_POLICY,
+} from "./thinking-recovery.js";
+export type {
+  ThinkingRecoveryEvent,
+  ThinkingRecoveryOptions,
+} from "./thinking-recovery.js";
+export {
+  createPhaseEffortModel,
+  PHASE_EFFORT_POLICY,
+} from "./phase-effort.js";
+export type {
+  PhaseEffortEvent,
+  PhaseEffortOptions,
+  ReasoningEffortPhase,
+} from "./phase-effort.js";

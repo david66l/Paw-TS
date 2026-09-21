@@ -13,16 +13,16 @@ runner and is excluded because Paw saw it before the shared runner baseline.
 
 ```bash
 # Build the runtime manifest from the fixed local SWE-bench Lite JSONL.
-bun run packages/eval/scripts/prepare-swe-compare.ts
+bun run legacy/packages/eval/scripts/prepare-swe-compare.ts
 
 # Force a real official verifier run without exposing the task to an agent.
-bun run packages/eval/scripts/preflight-swe-compare.ts \
+bun run legacy/packages/eval/scripts/preflight-swe-compare.ts \
   --instance astropy__astropy-12907
 
 # Run one frozen arm. Omit --skip-verifier for the official score.
-bun run packages/eval/scripts/run-swe-compare.ts \
+bun run legacy/packages/eval/scripts/run-swe-compare.ts \
   --instance astropy__astropy-12907 --runner paw
-bun run packages/eval/scripts/run-swe-compare.ts \
+bun run legacy/packages/eval/scripts/run-swe-compare.ts \
   --instance astropy__astropy-12907 --runner claude
 ```
 
@@ -38,10 +38,10 @@ unseen holdout is opened. Its results are neither a holdout nor a headline
 score, and the CLI rejects Claude runs against this manifest.
 
 ```bash
-bun run packages/eval/scripts/prepare-paw-seen-dev.ts
-bun run packages/eval/scripts/preflight-swe-compare.ts \
+bun run legacy/packages/eval/scripts/prepare-paw-seen-dev.ts
+bun run legacy/packages/eval/scripts/preflight-swe-compare.ts \
   --manifest paw-seen-dev-v1.json --instance pylint-dev__pylint-7228
-bun run packages/eval/scripts/run-swe-compare.ts \
+bun run legacy/packages/eval/scripts/run-swe-compare.ts \
   --manifest paw-seen-dev-v1.json --instance pylint-dev__pylint-7228 --runner paw
 ```
 
@@ -50,7 +50,7 @@ If a Paw run finished but Git patch collection failed, its successful
 calling the model again:
 
 ```bash
-bun run packages/eval/scripts/run-swe-compare.ts \
+bun run legacy/packages/eval/scripts/run-swe-compare.ts \
   --recover-paw-result-patch benchmarks/swe-compare/runs/<run-id>/result.json
 ```
 
@@ -69,10 +69,10 @@ run, these tasks become seen development evidence and are never promoted to a
 holdout or headline score.
 
 ```bash
-bun run packages/eval/scripts/prepare-paw-fresh-dev.ts
-bun run packages/eval/scripts/preflight-swe-compare.ts \
+bun run legacy/packages/eval/scripts/prepare-paw-fresh-dev.ts
+bun run legacy/packages/eval/scripts/preflight-swe-compare.ts \
   --manifest paw-fresh-dev-v2.json --instance <frozen-instance-id>
-bun run packages/eval/scripts/run-swe-compare.ts \
+bun run legacy/packages/eval/scripts/run-swe-compare.ts \
   --manifest paw-fresh-dev-v2.json --instance <frozen-instance-id> --runner paw
 ```
 
@@ -120,7 +120,7 @@ v2. The code freezes these constraints before any v3 task ID is generated:
 - the official evaluator remains post-run scoring only.
 
 The tracked preparation entry point is
-`packages/eval/scripts/prepare-paw-fresh-qualification.ts`, but it must not be
+`legacy/packages/eval/scripts/prepare-paw-fresh-qualification.ts`, but it must not be
 run yet. The current runner deliberately rejects `instance_image` manifests
 because the safe command executor is the next implementation step. This
 fail-closed state prevents a manifest from promising container-backed local

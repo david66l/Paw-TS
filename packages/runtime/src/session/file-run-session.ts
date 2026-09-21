@@ -651,7 +651,10 @@ export class FileRunSessionV1
   private async commitRecords(
     records: readonly RunJournalEnvelopeV1["record"][],
   ): Promise<"committed" | "conflict"> {
-    this.assertActive();
+    // Every caller checks authority inside serializeMutation, then enters here
+    // without yielding. Rechecking the full lease history at this point adds no
+    // fencing guarantee. Keep the checks after publication/hooks and in the
+    // authority CAS, where ownership can actually have changed.
     validateExistingDirectoryTree(this.workspaceRoot, this.artifactsDir);
     const previousHead = this.currentHead();
     const startSeq = previousHead.tailSeq + 1;

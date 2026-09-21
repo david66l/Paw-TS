@@ -1192,7 +1192,7 @@ export class AgentOrchestrator {
         }
         const jobRecoveryNotices = managedJobs.takeRecoveryNotices();
         if (jobRecoveryNotices.length > 0) {
-          ctxMgr.addUser(
+          ctxMgr.addHostMessage(
             [
               "[Managed job recovery v1]",
               "A previous Paw process ended with background work whose terminal effects were not durably committed. Old PIDs were not reattached because PID identity can be reused. Treat every listed outcome as unknown; inspect the workspace and rerun required verification.",
@@ -1749,7 +1749,7 @@ export class AgentOrchestrator {
         ? `\n... and ${staleFiles.length - AgentOrchestrator.MAX_STALE_FILES} more`
         : "";
     // 以 user 消息的形式注入到上下文中，模型会像看到用户提示一样处理
-    ctxMgr.addUser(
+    ctxMgr.addHostMessage(
       `Note: the following file(s) were modified externally since the last turn and may be stale:\n${shown.map((f) => `- ${f}`).join("\n")}${suffix}`,
     );
   }
@@ -3515,7 +3515,19 @@ export class AgentOrchestrator {
     nativeAssistantContent?: string;
   }> {
     // 内部请求超时必须与父级取消区分：前者可重试，后者应立即停 run。
-    const timeout = AbortSignal.timeout(this.modelRequestTimeoutMs);
+    // 用显式 setTimeout 而不是 AbortSignal.timeout：显式句柄在调用结束后可以
+    // 立即 clearTimeout 释放，不会让每次模型调用都留下一个 120s 的悬挂定时器；
+    // 同时它本身就是事件循环上的可唤醒句柄，不依赖运行时对内部定时器的调度。
+    const timeoutController = new AbortController();
+    const timeoutTimer = setTimeout(() => {
+      timeoutController.abort(
+        new DOMException(
+          `Model request timeout after ${this.modelRequestTimeoutMs}ms`,
+          "TimeoutError",
+        ),
+      );
+    }, this.modelRequestTimeoutMs);
+    const timeout = timeoutController.signal;
     const combinedSignal = signal
       ? AbortSignal.any([signal, timeout])
       : timeout;
@@ -3746,6 +3758,9 @@ export class AgentOrchestrator {
         throw new ModelRequestTimeoutError(this.modelRequestTimeoutMs, error);
       }
       throw error;
+    } finally {
+      // 调用结束（成功 / 失败 / 超时）都必须释放超时定时器。
+      clearTimeout(timeoutTimer);
     }
   }
 

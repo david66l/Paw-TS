@@ -10,7 +10,10 @@ import type {
   MemoryStoreEngine,
 } from "@paw/memory/longterm";
 import type { InputFactV1, JsonValue, MemoryCardV1 } from "@paw/protocol";
-import type { JournalContextRuntimeV1 } from "@paw/runtime";
+import {
+  type JournalContextRuntimeV1,
+  createJournalContextV1,
+} from "@paw/runtime";
 
 import { hashCanonicalJsonV1 } from "../src/canonical.js";
 import {
@@ -60,6 +63,78 @@ const profile: PawNextMemoryPluginProfileV1 = Object.freeze({
 });
 
 describe("Paw Next memory plugin", () => {
+  test.each(["completed", "degraded"] as const)("empty %s retrieval records its receipt without invoking context planning or building", async status => {
+    const session = new FakeSession(initialSnapshot());
+    let retrievals = 0;
+    let boundaries = 0;
+    const port = createMemoryRetrievalInputPortV1({
+      baseInput: { async reportSafeBoundary() { boundaries++; }, async consumePromotedInputIds() { return []; } },
+      session,
+      context: {
+        async plan() { throw new Error("Empty retrieval must not start context planning"); },
+        async build() { throw new Error("Empty retrieval must not start auxiliary model work"); },
+      },
+      estimator: estimator(), profile,
+      provider: { providerVersion: profile.providerVersion, async retrieve() { retrievals++; return { status, cards: [], reasonCode: "empty_scope" }; } },
+      signal: new AbortController().signal,
+    });
+    await port.reportSafeBoundary("before_first_model_request");
+    await port.reportSafeBoundary("before_first_model_request");
+    expect(lastMemoryFact(session)).toMatchObject({ status, cards: [], reasonCode: "empty_scope" });
+    expect(retrievals).toBe(1);
+    expect(boundaries).toBe(2);
+  });
+  test("optional automatic resolution times out once per query without blocking subsequent turns", async () => {
+    let calls = 0;
+    let signal: AbortSignal | undefined;
+    const decorated = createToolDrivenMemoryContextV1(
+      toolDrivenContext(),
+      profile,
+      {
+        contextResolver: {
+          resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
+          resolve(_query, s) {
+            calls++;
+            signal = s;
+            return new Promise(() => {});
+          },
+        },
+      },
+    );
+    const options = { signal: new AbortController().signal };
+    const request = await decorated.build(initialSnapshot(), options);
+    expect(signal?.aborted).toBe(true);
+    expect(request.messages).toHaveLength(2);
+    await decorated.build(initialSnapshot(), options);
+    expect(calls).toBe(1);
+  });
+  test("hung retrieval journals a degraded receipt and does not retry on the next boundary", async () => {
+    const session = new FakeSession(initialSnapshot());
+    let calls = 0;
+    const port = createMemoryRetrievalInputPortV1({
+      baseInput: baseInput([]),
+      session,
+      context: context(),
+      estimator: estimator(),
+      profile,
+      provider: {
+        providerVersion: profile.providerVersion,
+        retrieve() {
+          calls++;
+          return new Promise(() => {});
+        },
+      },
+      signal: new AbortController().signal,
+    });
+    await port.reportSafeBoundary("before_first_model_request");
+    expect(lastMemoryFact(session)).toMatchObject({
+      status: "degraded",
+      reasonCode: "memory_retrieval_timeout",
+      cards: [],
+    });
+    await port.reportSafeBoundary("after_model_turn_without_tool_calls");
+    expect(calls).toBe(1);
+  });
   test("captures a stable L0 episode even when semantic extraction is skipped", async () => {
     const session = new FakeSession(initialSnapshot());
     const archived: Array<{
@@ -290,39 +365,43 @@ describe("Paw Next memory plugin", () => {
 
   test("auto-resolves one query once and pins the packet across model turns", async () => {
     let resolverCalls = 0;
-    const decorated = createToolDrivenMemoryContextV1(context(), profile, {
-      contextResolver: {
-        resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
-        async resolve() {
-          resolverCalls += 1;
-          return {
-            schemaVersion: "paw.memory-resolved-context.v1",
-            resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
-            packetRevision: "packet-auto-1",
-            mode: "planned",
-            stop: "sufficient",
-            requirements: [],
-            verification: {
-              status: "verified",
-              supportingCount: 1,
-              contradictionCount: 0,
-              unknownCount: 0,
-            },
-            evidence: [
-              {
-                memoryId: "memory-auto-1",
-                layer: "L0",
-                statement: "The user explicitly confirmed the event.",
-                supportRole: "supporting",
-                evidenceRefs: ["conversation:event"],
+    const decorated = createToolDrivenMemoryContextV1(
+      toolDrivenContext(),
+      profile,
+      {
+        contextResolver: {
+          resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
+          async resolve() {
+            resolverCalls += 1;
+            return {
+              schemaVersion: "paw.memory-resolved-context.v1",
+              resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
+              packetRevision: "packet-auto-1",
+              mode: "planned",
+              stop: "sufficient",
+              requirements: [],
+              verification: {
+                status: "verified",
+                supportingCount: 1,
+                contradictionCount: 0,
+                unknownCount: 0,
               },
-            ],
-            topics: [],
-            spans: [],
-          };
+              evidence: [
+                {
+                  memoryId: "memory-auto-1",
+                  layer: "L0",
+                  statement: "The user explicitly confirmed the event.",
+                  supportRole: "supporting",
+                  evidenceRefs: ["conversation:event"],
+                },
+              ],
+              topics: [],
+              spans: [],
+            };
+          },
         },
       },
-    });
+    );
 
     const first = await decorated.build(initialSnapshot(), {
       signal: new AbortController().signal,
@@ -340,6 +419,33 @@ describe("Paw Next memory plugin", () => {
     );
     expect(firstResolved?.content).toContain("memory-auto-1");
     expect(firstResolved?.contentHash).toBe(secondResolved?.contentHash);
+    const planned = await decorated.plan(initialSnapshot(), {
+      signal: new AbortController().signal,
+    });
+    expect(planned.request).toEqual(second);
+    expect(planned.tokens.selectedInputTokens).toBe(
+      JSON.stringify(materializeModelRequestMessagesV1(second)).length,
+    );
+    expect(resolverCalls).toBe(1);
+  });
+
+  test("optional memory navigation cannot overflow a full protected request", async () => {
+    const snapshot = initialSnapshot();
+    const signal = new AbortController().signal;
+    const baseline = await toolDrivenContext().plan(snapshot, { signal });
+    const decorated = createToolDrivenMemoryContextV1(
+      toolDrivenContext(baseline.tokens.selectedInputTokens + 512),
+      profile,
+    );
+    const planned = await decorated.plan(snapshot, { signal });
+    expect(planned.request.contextSections).toBeUndefined();
+    expect(planned.tokens.hardHeadroomTokens).toBe(0);
+    expect(planned.tokens.fullInputTokens).toBe(
+      planned.tokens.selectedInputTokens,
+    );
+    expect(await decorated.build(snapshot, { signal })).toEqual(
+      planned.request,
+    );
   });
 
   test("records disabled and failed retrieval without blocking the base input", async () => {
@@ -1797,6 +1903,33 @@ function estimator() {
       );
     },
   };
+}
+
+function toolDrivenContext(
+  contextWindowTokens = 100_000,
+): JournalContextRuntimeV1 {
+  return createJournalContextV1({
+    system: "system",
+    providerProtocol: "openai-compatible",
+    payloads: {
+      resolve: async (payload) => {
+        if (payload.kind !== "inline") throw new Error("unexpected artifact");
+        return payload.value;
+      },
+      hash: hashCanonicalJsonV1,
+    },
+    budget: {
+      contextWindowTokens,
+      reservedOutputTokens: 512,
+      estimationMarginTokens: 0,
+      estimatorId: "fixture",
+      estimatorVersion: "1",
+      estimator: {
+        count: (value) => value.length,
+        countMessages: (messages) => JSON.stringify(messages).length,
+      },
+    },
+  });
 }
 
 function context(hardHeadroomTokens = 2_000): JournalContextRuntimeV1 {

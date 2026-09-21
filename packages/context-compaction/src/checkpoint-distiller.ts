@@ -1,3 +1,4 @@
+import { createOperationDeadline } from "@paw/core";
 import { type TaskCheckpointV1, parseTaskCheckpointV1 } from "@paw/protocol";
 import type {
   TaskCheckpointDistillerResultV1,
@@ -11,7 +12,7 @@ import {
 } from "./checkpoint-evidence.js";
 
 export const CHECKPOINT_DISTILLER_POLICY_VERSION_V1 =
-  "paw.checkpoint-distiller.v1:p256000:o4096:t45000:vrequired" as const;
+  "paw.checkpoint-distiller.v2:p256000:o4096:t45000:vrequired:hard-deadline" as const;
 
 const DISTILLER_SYSTEM_V1 = `You are a read-only task checkpoint distiller.
 Convert the supplied Journal evidence into exactly one JSON TaskCheckpoint.
@@ -142,10 +143,15 @@ export function createEvidenceBoundCheckpointDistillerV1(
       if (callOptions.signal.aborted) {
         return failure("cancelled", "CheckpointDistillationCancelled");
       }
-      const timeout = AbortSignal.timeout(policy.timeoutMs);
-      const signal = AbortSignal.any([callOptions.signal, timeout]);
+      const deadline = createOperationDeadline(
+        callOptions.signal,
+        policy.timeoutMs,
+      );
+      const signal = deadline.signal;
       try {
-        const evidence = await loadEvidence(input, { signal });
+        const evidence = await deadline.run(() =>
+          loadEvidence(input, { signal }),
+        );
         if (
           evidence.sourceFromSeq !== input.sourceFromSeq ||
           evidence.sourceThroughSeq !== input.sourceThroughSeq
@@ -156,13 +162,15 @@ export function createEvidenceBoundCheckpointDistillerV1(
         if (prompt.length > policy.maxPromptChars) {
           return failure("failed", "CheckpointPromptTooLarge");
         }
-        const completion = await model(
-          {
-            system: DISTILLER_SYSTEM_V1,
-            user: prompt,
-            maxOutputTokens: policy.maxOutputTokens,
-          },
-          { signal },
+        const completion = await deadline.run(() =>
+          model(
+            {
+              system: DISTILLER_SYSTEM_V1,
+              user: prompt,
+              maxOutputTokens: policy.maxOutputTokens,
+            },
+            { signal },
+          ),
         );
         if (completion.status !== "completed") {
           return completion.status === "truncated"
@@ -180,9 +188,8 @@ export function createEvidenceBoundCheckpointDistillerV1(
         if (!deterministic.ok) {
           return failure("failed", "CheckpointEvidenceRejected");
         }
-        const semantic = await verifier(
-          Object.freeze({ checkpoint, evidence }),
-          { signal },
+        const semantic = await deadline.run(() =>
+          verifier(Object.freeze({ checkpoint, evidence }), { signal }),
         );
         if (semantic.status !== "supported") {
           return failure(
@@ -206,10 +213,12 @@ export function createEvidenceBoundCheckpointDistillerV1(
         if (callOptions.signal.aborted) {
           return failure("cancelled", "CheckpointDistillationCancelled");
         }
-        if (timeout.aborted) {
+        if (deadline.timedOut) {
           return failure("unknown", "CheckpointDistillationTimeout");
         }
         return failure("unknown", stableErrorCode(error));
+      } finally {
+        deadline.dispose();
       }
     },
   });

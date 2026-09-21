@@ -260,14 +260,22 @@ export function isNativeToolTurn(value: unknown): value is NativeToolTurn {
 }
 
 /**
- * 系统注入消息的前缀。
- * 这些消息由 orchestrator 生成（工具结果、nudge、警告等），
- * 不是用户输入，因此免于用户输入清洗。
+ * Host-control 消息的前缀。
+ * 这些消息由 orchestrator 生成（工具结果、nudge、警告、账本等），
+ * 是 host 自己写的，因此免于用户输入清洗。
+ *
+ * SECURITY: 这个谓词基于内容嗅探，**绝不能**用来决定「用户文本是否清洗」。
+ * `[` 和 `<` 同时是 `sanitizeUserInput` 要中和的载荷的首字符
+ * （`[Tool ...]`、`<tool_call>`），用它做信任判断会让用户消息只要以方括号
+ * 开头就自行豁免清洗。因此：
+ *   - 用户输入走 `addUser()` —— 永远清洗；
+ *   - host 注入走 `addHostMessage()` —— 永不清洗。
+ * 信任来源必须是显式的调用点，而不是内容长什么样。
  */
-const SYSTEM_INJECTED_PREFIXES = ["[", "Note:", "CRITICAL", "<", "#"] as const;
+const HOST_CONTROL_PREFIXES = ["[", "Note:", "CRITICAL", "<", "#"] as const;
 
-function isSystemInjectedMessage(content: string): boolean {
-  return SYSTEM_INJECTED_PREFIXES.some((prefix) => content.startsWith(prefix));
+function isHostControlMessage(content: string): boolean {
+  return HOST_CONTROL_PREFIXES.some((prefix) => content.startsWith(prefix));
 }
 
 export class ContextManager {
@@ -294,14 +302,13 @@ export class ContextManager {
   }
 
   /**
-   * 追加 user 消息（可选附件）。
-   * 对用户输入执行清洗：中和伪造的工具结果和工具调用模式。
-   * 系统注入消息（工具结果、nudge、警告）不经过清洗。
+   * 追加 **用户** 消息（可选附件）。
+   *
+   * 永远执行用户输入清洗：中和伪造的工具结果、工具调用 JSON、action JSON
+   * 和 XML 工具标签。用户文本无法通过改变自身开头字符来豁免清洗。
    */
   addUser(content: string, attachments?: readonly Attachment[]): void {
-    const sanitized = isSystemInjectedMessage(content)
-      ? content
-      : sanitizeUserInput(content).text;
+    const sanitized = sanitizeUserInput(content).text;
 
     const msg: ChatMessage =
       attachments && attachments.length > 0
@@ -311,8 +318,20 @@ export class ContextManager {
     this.maybeTruncate();
   }
 
+  /**
+   * 追加 **host 注入** 的 user-role 消息（工具结果、nudge、警告、账本等）。
+   *
+   * 与 `addUser` 的唯一区别是跳过用户输入清洗 —— 因为内容由 orchestrator
+   * 自己生成。信任由调用点显式声明，不再由内容前缀推断。
+   * 任何来自用户、模型或外部文件的文本都必须走 `addUser`。
+   */
+  addHostMessage(content: string): void {
+    this.history.push({ role: "user", content });
+    this.maybeTruncate();
+  }
+
   upsertUserByPrefix(prefix: string, content: string): void {
-    const sanitized = isSystemInjectedMessage(content)
+    const sanitized = isHostControlMessage(content)
       ? content
       : sanitizeUserInput(content).text;
     const idx = this.history.findIndex(
@@ -331,7 +350,7 @@ export class ContextManager {
    * This preserves the cacheable prefix before rapidly changing telemetry.
    */
   upsertUserByPrefixBeforeLatest(prefix: string, content: string): void {
-    const sanitized = isSystemInjectedMessage(content)
+    const sanitized = isHostControlMessage(content)
       ? content
       : sanitizeUserInput(content).text;
     this.history = this.history.filter(

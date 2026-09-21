@@ -18,6 +18,94 @@ import {
 } from "../src/index.js";
 
 describe("collaboration plugin", () => {
+  test("reports the combined child context budget at the provider boundary", () => {
+    const registry = createFrozenToolRegistryV1({
+      plugins: [
+        createCollaborationToolPluginV1({
+          policy: { ...DEFAULT_COLLABORATION_POLICY_V1, maxGoalChars: 100 },
+        }),
+      ],
+    });
+    const entry = registry.resolveProviderName("workspace_delegate");
+    expect(entry?.definition.function.description).toContain(
+      "must fit 100 characters total",
+    );
+    const validate = (goal: string) =>
+      registry.validateAndClassify(
+        {
+          id: "bounded-call",
+          name: "workspace_delegate",
+          arguments: {
+            goal,
+            kind: "investigation",
+            agent_id: "investigator",
+            scope: ["abc"],
+          },
+        },
+        process.cwd(),
+      );
+    // Goal 86 + scope 3 + heading/bullet formatting 11 = exactly 100.
+    expect(validate("x".repeat(86)).ok).toBe(true);
+    const rejected = validate("x".repeat(87));
+    expect(rejected.ok).toBe(false);
+    if (rejected.ok) throw new Error("overlong task accepted");
+    expect(rejected.result.summary).toContain("101/100 characters");
+    expect(rejected.result.summary).toContain(
+      "goal=87, scope=3, acceptance=0, formatting=11",
+    );
+    expect(rejected.result.summary).toContain(
+      "Shorten by at least 1 characters",
+    );
+    expect(rejected.result.summary).toContain("reference workspace files");
+  });
+
+  test("identifies the overlong acceptance item including its task and lengths", () => {
+    expect(() =>
+      normalizeCollaborationDelegationV1({
+        args: {
+          goal: "Inspect",
+          kind: "investigation",
+          tasks: [
+            {
+              id: "parse",
+              goal: "Inspect parser",
+              kind: "investigation",
+              agent_id: "investigator",
+              acceptance: ["Read the file", "x".repeat(501)],
+            },
+          ],
+        },
+      }),
+    ).toThrow(
+      "task parse acceptance[1] has 501 characters; allowed range is 1-500",
+    );
+    const args = {
+      goal: "Inspect",
+      kind: "investigation",
+      agent_id: "investigator",
+    };
+    expect(() =>
+      normalizeCollaborationDelegationV1({
+        args: { ...args, scope: Array(13).fill("src") },
+      }),
+    ).toThrow("scope has 13 items; maximum is 12");
+    expect(() =>
+      normalizeCollaborationDelegationV1({
+        args: { ...args, acceptance: [" "] },
+      }),
+    ).toThrow("acceptance[0] has 0 characters");
+    expect(() =>
+      normalizeCollaborationDelegationV1({
+        args: { ...args, acceptance: [3] },
+      }),
+    ).toThrow("acceptance[0] must be a string");
+    expect(() =>
+      normalizeCollaborationDelegationV1({
+        args: { ...args, acceptance: "done" },
+      }),
+    ).toThrow("acceptance must be a string array");
+  });
+
   test("derives child authority from AgentSpec rather than semantic scope", () => {
     const verifier = DEFAULT_COLLABORATION_ROSTER_V1.agents.find(
       (agent) => agent.id === "verifier",

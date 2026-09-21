@@ -48,6 +48,7 @@
 
 import { get_encoding } from "tiktoken";
 import type { ChatMessage } from "./context/manager.js";
+import { createBoundedTokenCounter } from "./token-count-cache.js";
 
 /**
  * Token 估算器接口
@@ -154,6 +155,11 @@ export class TiktokenEstimator implements TokenEstimator {
   // 懒加载：首次 count 时初始化（避免构造即触发 ~20s 的 o200k 加载）
   private enc: ReturnType<typeof get_encoding> | null = null;
   private readonly encodingName: "cl100k_base" | "o200k_base";
+  // Cache raw text counts, never mutable message objects or calibrated totals.
+  // Per-instance ownership keeps encodings isolated and releases text with the estimator.
+  private readonly cachedCount = createBoundedTokenCounter((text) =>
+    this.countUncached(text),
+  );
 
   constructor(encodingName: "cl100k_base" | "o200k_base" = "cl100k_base") {
     this.encodingName = encodingName;
@@ -165,6 +171,10 @@ export class TiktokenEstimator implements TokenEstimator {
   }
 
   count(text: string): number {
+    return this.cachedCount(text);
+  }
+
+  private countUncached(text: string): number {
     /**
      * 大文本分块策略：
      * tiktoken WASM 在大字符串（>50KB）上存在超线性性能退化，

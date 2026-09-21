@@ -12,6 +12,7 @@
  * Playwright: bun add -d playwright && bunx playwright install chromium
  */
 
+import { spawnSync } from "node:child_process";
 import {
   appendFileSync,
   copyFileSync,
@@ -21,32 +22,32 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { runStubRun } from "../../packages/agent/src/stub-run.ts";
 import {
+  type FeatureItem,
   appendProgressSession,
-  auditFeatureLedger,
   artifactPaths,
+  auditFeatureLedger,
   countPassing,
   countRemaining,
   ensureWorkspace,
   hasFeatureList,
-  loadHarnessLedger,
   loadFeatureList,
+  loadHarnessLedger,
   nextOpenFeature,
+  saveFeatureList,
   saveHarnessLedger,
   writeInitialProgress,
-  type FeatureItem,
 } from "./artifacts.ts";
+import { captureProgressSnapshot, evaluateProgressDelta } from "./progress.ts";
 import { buildCodingGoal, buildInitializerGoal } from "./prompts.ts";
 import {
-  captureProgressSnapshot,
-  evaluateProgressDelta,
-} from "./progress.ts";
-import {
-  reconcilePassesWithE2e,
-  verifyFeaturesE2e,
-} from "./verify-e2e.ts";
+  type RevealCheckpointRecord,
+  loadHiddenFeatures,
+  revealBatch,
+  saveHiddenFeatures,
+} from "./reveal.ts";
+import { reconcilePassesWithE2e, verifyFeaturesE2e } from "./verify-e2e.ts";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -68,6 +69,12 @@ const verifyOnly = flag("--verify-only");
 const headed = flag("--headed");
 const skipE2e = flag("--skip-e2e");
 const seedReference = flag("--seed-reference");
+/**
+ * SlopCodeBench-style iterative reveal: requirements arrive in successive
+ * batches; earlier features are re-verified (regression-checked) before the
+ * next batch is revealed. 0/absent = all requirements visible from session 0.
+ */
+const revealBatchSize = Number(arg("--reveal-batch") ?? "0");
 const workspaceRoot = path.resolve(
   arg("--workspace") ??
     path.join(repoRoot, "benchmarks/longrun-harness/.workspace", preset),
@@ -86,10 +93,19 @@ function seedPreset(): void {
     copyFileSync(path.join(fixtureDir, "app_spec.txt"), paths.appSpecPath);
   }
   if (!hasFeatureList(workspaceRoot)) {
-    copyFileSync(
-      path.join(fixtureDir, "feature_list.json"),
-      paths.featureListPath,
-    );
+    if (revealBatchSize > 0) {
+      // Iterative mode: only the first batch is visible; the full fixture
+      // contract stays harness-private until checkpoints unlock it.
+      const full = loadFeatureList(fixtureDir);
+      const visible = full.slice(0, revealBatchSize);
+      saveFeatureList(workspaceRoot, visible);
+      saveHiddenFeatures(workspaceRoot, full.slice(revealBatchSize));
+    } else {
+      copyFileSync(
+        path.join(fixtureDir, "feature_list.json"),
+        paths.featureListPath,
+      );
+    }
   }
   writeInitialProgress(workspaceRoot);
 
@@ -129,7 +145,9 @@ function ensureGit(cwd: string): void {
     gitOk(cwd, ["config", "user.name", "paw-longrun"]);
   }
   const excludePath = path.join(cwd, ".git", "info", "exclude");
-  const existing = existsSync(excludePath) ? readFileSync(excludePath, "utf8") : "";
+  const existing = existsSync(excludePath)
+    ? readFileSync(excludePath, "utf8")
+    : "";
   const harnessExcludes = ["feature_list.json", ".paw/", ".paw-e2e-last.json"];
   const missing = harnessExcludes.filter(
     (entry) => !existing.split(/\r?\n/).includes(entry),
@@ -294,9 +312,16 @@ async function main(): Promise<void> {
   const t0 = Date.now();
   const sessions: Array<Record<string, unknown>> = [];
   let canonicalFeatures = loadHarnessLedger(workspaceRoot);
+  let hiddenFeatures = loadHiddenFeatures(workspaceRoot);
+  const checkpoints: RevealCheckpointRecord[] = [];
+  const regressionEvents: Array<{
+    readonly id: string;
+    readonly session: number;
+  }> = [];
   let ledgerPassClaims = 0;
   let ledgerContractViolations = 0;
   let noProgressSessions = 0;
+  let checkpointIndex = 0;
 
   if (verifyOnly) {
     const features = canonicalFeatures;
@@ -319,9 +344,7 @@ async function main(): Promise<void> {
     );
     writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
     console.log(JSON.stringify(report, null, 2));
-    process.exit(
-      rec.e2eOk && countRemaining(rec.features) === 0 ? 0 : 1,
-    );
+    process.exit(rec.e2eOk && countRemaining(rec.features) === 0 ? 0 : 1);
   }
 
   let sessionIndex = 0;
@@ -361,6 +384,46 @@ async function main(): Promise<void> {
       const rec = await e2eAndReconcile(features);
       features = rec.features;
       canonicalFeatures = rec.features;
+      for (const id of rec.flipped) {
+        regressionEvents.push({ id, session: sessionIndex });
+      }
+      // Iterative reveal: only a regression-free checkpoint unlocks the next
+      // batch; regressions flip features back to open and are reworked first.
+      if (countRemaining(features) === 0 && hiddenFeatures.length > 0) {
+        checkpointIndex += 1;
+        const revealed = revealBatch(
+          workspaceRoot,
+          canonicalFeatures,
+          hiddenFeatures,
+          revealBatchSize,
+        );
+        canonicalFeatures = revealed.canonical;
+        hiddenFeatures = revealed.hidden;
+        checkpoints.push({
+          checkpointIndex,
+          revealedIds: revealed.revealed.map((f) => f.id),
+          revealedTotal: canonicalFeatures.length,
+          hiddenRemaining: hiddenFeatures.length,
+          regressions: [],
+          sessionsUsed: sessionIndex,
+          elapsedMs: Date.now() - t0,
+        });
+        appendFileSync(
+          artifactPaths(workspaceRoot).progressPath,
+          [
+            ``,
+            `## Requirement checkpoint ${checkpointIndex} — ${new Date().toISOString()}`,
+            ``,
+            `All ${canonicalFeatures.length - revealed.revealed.length} previously revealed features still pass full E2E. New requirements unlocked: ${revealed.revealed.map((f) => f.id).join(", ")}. Read feature_list.json again before coding.`,
+            ``,
+          ].join("\n"),
+          "utf8",
+        );
+        console.error(
+          `[longrun] checkpoint ${checkpointIndex}: revealed ${revealed.revealed.map((f) => f.id).join(", ")} (${hiddenFeatures.length} still hidden)`,
+        );
+        continue;
+      }
       if (countRemaining(features) === 0) break;
     }
 
@@ -399,6 +462,9 @@ async function main(): Promise<void> {
     saveHarnessLedger(workspaceRoot, canonicalFeatures);
     const rec = await e2eAndReconcile(canonicalFeatures, [feature.id]);
     canonicalFeatures = rec.features;
+    for (const id of rec.flipped) {
+      regressionEvents.push({ id, session: sessionIndex });
+    }
     const currentResult = rec.results.find((r) => r.id === feature.id);
     const progressAfter = captureProgressSnapshot(workspaceRoot);
     const progress = evaluateProgressDelta({
@@ -428,7 +494,8 @@ async function main(): Promise<void> {
       blockedFeatureIds.delete(feature.id);
       noProgressByFeature.delete(feature.id);
     } else {
-      const evidence = currentResult?.error ??
+      const evidence =
+        currentResult?.error ??
         `agent status ${coding.status}; target E2E did not pass`;
       lastFailureByFeature.set(feature.id, evidence.slice(0, 2000));
       const noProgress = progress.progressed
@@ -464,15 +531,22 @@ async function main(): Promise<void> {
   const report = {
     suite: "longrun-harness",
     preset,
+    mode: revealBatchSize > 0 ? "iterative-reveal" : "all-at-once",
+    revealBatchSize: revealBatchSize > 0 ? revealBatchSize : undefined,
     workspaceRoot,
     generatedAt: new Date().toISOString(),
     elapsedMs: Date.now() - t0,
     sessions,
+    checkpoints,
     metrics: {
       sessionCount: sessionIndex,
       passing: countPassing(finalE2e.features),
       remaining: countRemaining(finalE2e.features),
       total: finalE2e.features.length,
+      totalContractFeatures: finalE2e.features.length + hiddenFeatures.length,
+      checkpointsPassed: checkpoints.length,
+      regressionCount: regressionEvents.length,
+      regressionEvents,
       e2eOk: finalE2e.e2eOk,
       flippedToFail: finalE2e.flipped,
       stalledFeatures: [...blockedFeatureIds],
@@ -484,6 +558,7 @@ async function main(): Promise<void> {
     e2e: finalE2e.results,
     passed:
       countRemaining(finalE2e.features) === 0 &&
+      hiddenFeatures.length === 0 &&
       finalE2e.e2eOk &&
       finalE2e.features.length > 0,
   };

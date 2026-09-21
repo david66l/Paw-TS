@@ -45,6 +45,8 @@ export type MemoryWriterEventTypeV1 =
   | "archive"
   | "relation"
   | "settle"
+  | "maintenance"
+  | "recovery_pending"
   | "skip";
 
 /** Content-free telemetry: hashes, IDs, counts, status, and duration only. */
@@ -74,6 +76,8 @@ export interface MemoryWriterControllerV1 {
 }
 
 export interface MemoryWriterControllerOptionsV1 {
+  /** Explicit maintenance only. Failed pre-stage attempts may retry the same evidence. */
+  readonly retryFailedUnstaged?: true;
   readonly session: Pick<
     Session<InputFactV1, DerivedDecisionV1>,
     "readInputSnapshot" | "commitInputFacts"
@@ -183,12 +187,14 @@ export function createMemoryWriterControllerV1(
       if (options.signal.aborted) return undefined;
 
       const snapshot = await readSnapshot();
+      const retry = options.retryFailedUnstaged ? retryableMemorySource(snapshot) : undefined;
       const source = projectMemoryWriteSourceV1(
         snapshot,
         outcome,
         maxSourceChars,
         options.sourceAdmission?.(snapshot),
         options.userInputContent,
+        retry?.claim,
       );
       if (!source) {
         emit(options.onEvent, {
@@ -211,6 +217,7 @@ export function createMemoryWriterControllerV1(
         extractorVersion: options.extractor.extractorVersion,
         conflictResolverVersion:
           options.conflictResolver?.resolverVersion ?? "not_configured",
+        ...(retry ? { retryOf: retry.claim.writeId, attempt: retry.attempt } : {}),
       } as JsonValue);
       const claimedAt = now();
       const claim: MemoryWriteClaimedFactV1 = Object.freeze({
@@ -241,6 +248,7 @@ export function createMemoryWriterControllerV1(
       });
       if (!claimed || options.signal.aborted) return undefined;
 
+      let stageCommitStarted = false;
       try {
         const conflicts = await options.store.recall(
           source.searchText,
@@ -298,6 +306,7 @@ export function createMemoryWriterControllerV1(
           atoms: Object.freeze([...atoms]),
         });
         const stageStart = now();
+        stageCommitStarted = true;
         await commitUniqueMemoryFactV1({
           initialSnapshot: await readSnapshot(),
           fact: staged,
@@ -321,10 +330,12 @@ export function createMemoryWriterControllerV1(
           now,
         });
       } catch (error) {
-        const status = options.signal.aborted ? "interrupted" : "failed";
+        // A rejected journal acknowledgement does not prove that the staged
+        // candidate was not committed. Preserve the claim for journal recovery.
+        if (stageCommitStarted || options.signal.aborted) throw error;
         return settleWithoutStageV1({
           claim,
-          status,
+          status: "failed",
           reasonCode: stableReasonCode(error),
           readSnapshot,
           commitFacts,
@@ -336,12 +347,58 @@ export function createMemoryWriterControllerV1(
   });
 }
 
+/** Attempts are derived from durable claims, never a process-local retry counter. */
+function retryableMemorySource(snapshot: SessionInputSnapshot<InputFactV1>) {
+  const claims = snapshot.entries.flatMap(({ fact }) =>
+    fact.type === "memory.write_claimed" ? [fact] : [],
+  );
+  const settlements = new Map(
+    snapshot.entries.flatMap(({ fact }) =>
+      fact.type === "memory.write_settled"
+        ? [[fact.writeId, fact] as const]
+        : [],
+    ),
+  );
+  const staged = new Set(
+    snapshot.entries.flatMap(({ fact }) =>
+      fact.type === "memory.candidate_staged" ? [fact.writeId] : [],
+    ),
+  );
+  for (const claim of claims) {
+    const attempts = claims.filter(
+      (other) =>
+        other.scopeFingerprint === claim.scopeFingerprint &&
+        other.sourceInputHash === claim.sourceInputHash &&
+        other.sourceFromSeq === claim.sourceFromSeq &&
+        other.sourceThroughSeq === claim.sourceThroughSeq,
+    );
+    if (
+      attempts.length >= 3 ||
+      attempts.some(
+        (attempt) =>
+          staged.has(attempt.writeId) || !settlements.has(attempt.writeId),
+      )
+    )
+      continue;
+    if (
+      attempts.every((attempt) =>
+        ["failed", "interrupted"].includes(
+          settlements.get(attempt.writeId)!.status,
+        ),
+      )
+    )
+      return { claim, attempt: attempts.length + 1 };
+  }
+  return undefined;
+}
+
 export function projectMemoryWriteSourceV1(
   snapshot: SessionInputSnapshot<InputFactV1>,
   outcome: MemoryWriterTerminalOutcomeV1,
   maxSourceChars = 24_000,
   admitted?: ReadonlySet<number>,
   userInputContent?: (content: string) => string,
+  sourceRange?: { sourceFromSeq: number; sourceThroughSeq: number },
 ):
   | Readonly<{
       trigger: MemoryWriteClaimedFactV1["trigger"];
@@ -361,7 +418,9 @@ export function projectMemoryWriteSourceV1(
   );
   const sourceEntries = snapshot.entries.filter(
     (entry) =>
-      entry.seq > lastThrough && !entry.fact.type.startsWith("memory."),
+      (sourceRange
+        ? entry.seq >= sourceRange.sourceFromSeq && entry.seq <= sourceRange.sourceThroughSeq
+        : entry.seq > lastThrough) && !entry.fact.type.startsWith("memory."),
   );
   const [firstSourceEntry] = sourceEntries;
   const lastSourceEntry = sourceEntries.at(-1);
@@ -492,7 +551,9 @@ async function applyStagedWriteV1(input: {
   readonly now: () => number;
 }): Promise<MemoryWriteSettledFactV1> {
   const started = input.now();
+  let applyStarted = false;
   try {
+    input.options.signal.throwIfAborted();
     if (input.options.sourceAdmission) {
       const snapshot = await input.readSnapshot();
       const admitted = input.options.sourceAdmission(snapshot);
@@ -517,6 +578,8 @@ async function applyStagedWriteV1(input: {
         throw new Error("MemorySourceNoLongerAdmitted");
       }
     }
+    input.options.signal.throwIfAborted();
+    applyStarted = true;
     const result = await input.options.store.apply(
       {
         writeId: input.claim.writeId,
@@ -562,6 +625,20 @@ async function applyStagedWriteV1(input: {
     });
     return settlement;
   } catch (error) {
+    if (applyStarted || input.options.signal.aborted) {
+      // A database timeout or missing journal acknowledgement is an unknown
+      // outcome, not a failed write. Resume the durable staged payload with the
+      // same idempotency key; never re-extract it or close it with empty IDs.
+      emit(input.options.onEvent, {
+        schemaVersion: "paw.memory-writer-event.v1",
+        type: "recovery_pending",
+        writeId: input.claim.writeId,
+        proposalHash: input.staged.proposalHash,
+        reasonCode: "MemoryWriteApplyOutcomeUnknown",
+        durationMs: Math.max(0, input.now() - started),
+      });
+      throw error;
+    }
     return settleWithoutStageV1({
       claim: input.claim,
       staged: input.staged,

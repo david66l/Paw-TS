@@ -5,7 +5,8 @@ Repo-local overview for reviewers and implementers.
 ## Stack
 
 - **Runtime**: Bun + TypeScript monorepo (`packages/*`, `apps/*`)
-- **Apps**: `apps/cli` (headless), `apps/tui` (OpenTUI + Solid)
+- **Apps**: `apps/desktop` (Electron + React). The former `apps/cli` / `apps/tui` entry points are archived under `legacy/`.
+- **Shared composition**: `packages/paw-next` — Paw Next V3 assembly used by the desktop host
 - **Agent core**: `packages/agent` — `AgentOrchestrator` ReAct loop
 - **Platform**:
   - `packages/core` — sessions, context compression, events, system prompt
@@ -71,7 +72,7 @@ beginTask → buildContextSection → onToolResult*
          → completeTask → candidates → governance → memory_items
 ```
 
-**Doctor:** `bun run cli -- doctor` reports settings + memory backend (Postgres ping + migrations when `db`).
+**Health:** `bun run memory:test:health` reports settings + memory backend (Postgres ping + schema checks when `db`). The former `paw-ts doctor` subcommand is archived with the CLI under `legacy/apps/cli`.
 
 ## Multi-agent
 
@@ -93,7 +94,7 @@ beginTask → buildContextSection → onToolResult*
 
 ```bash
 bun run check:ts
+bun run check:deps
 bun run memory:migrate
-DATABASE_URL=postgresql:///paw_memory_test bun run memory:test:runtime
-bun run cli -- doctor
+DATABASE_URL=postgresql:///paw_memory_test bun run memory:test:health
 ```

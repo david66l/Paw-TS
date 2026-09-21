@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -10,14 +10,20 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  auditFeatureLedger,
+  type FeatureItem,
   artifactPaths,
+  auditFeatureLedger,
   loadHarnessLedger,
   saveFeatureList,
   saveHarnessLedger,
-  type FeatureItem,
 } from "./artifacts.ts";
 import { captureProgressSnapshot, evaluateProgressDelta } from "./progress.ts";
+import {
+  loadHiddenFeatures,
+  revealBatch,
+  saveHiddenFeatures,
+  takeNextBatch,
+} from "./reveal.ts";
 import { reconcilePassesWithE2e } from "./verify-e2e.ts";
 
 function feature(over: Partial<FeatureItem> = {}): FeatureItem {
@@ -46,9 +52,7 @@ describe("longrun harness control plane", () => {
       [feature()],
       [feature({ description: "easier contract" })],
     );
-    expect(audit.contractViolations).toEqual([
-      "feature contract changed: f1",
-    ]);
+    expect(audit.contractViolations).toEqual(["feature contract changed: f1"]);
   });
 
   test("duplicate feature ids are rejected as a contract violation", () => {
@@ -142,10 +146,19 @@ describe("longrun harness control plane", () => {
       mkdirSync(path.join(root, ".paw"), { recursive: true });
       writeFileSync(path.join(root, "app.ts"), "export const value = 1;\n");
       writeFileSync(path.join(root, "feature_list.json"), "[]\n");
-      writeFileSync(path.join(root, ".paw", "longrun-feature-ledger.json"), "[]\n");
+      writeFileSync(
+        path.join(root, ".paw", "longrun-feature-ledger.json"),
+        "[]\n",
+      );
       const before = captureProgressSnapshot(root);
-      writeFileSync(path.join(root, "feature_list.json"), "[{\"passes\":true}]\n");
-      writeFileSync(path.join(root, ".paw", "longrun-feature-ledger.json"), "[{\"passes\":true}]\n");
+      writeFileSync(
+        path.join(root, "feature_list.json"),
+        '[{"passes":true}]\n',
+      );
+      writeFileSync(
+        path.join(root, ".paw", "longrun-feature-ledger.json"),
+        '[{"passes":true}]\n',
+      );
       const ledgerOnly = captureProgressSnapshot(root);
       expect(ledgerOnly.sourceTreeHash).toBe(before.sourceTreeHash);
       writeFileSync(path.join(root, "app.ts"), "export const value = 2;\n");
@@ -154,5 +167,59 @@ describe("longrun harness control plane", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("iterative requirement reveal (SlopCodeBench-style)", () => {
+  function workspace(): string {
+    return mkdtempSync(path.join(tmpdir(), "paw-longrun-reveal-"));
+  }
+
+  test("hidden store round-trips and takeNextBatch partitions", () => {
+    const root = workspace();
+    const hidden = [
+      feature({ id: "b1" }),
+      feature({ id: "b2" }),
+      feature({ id: "b3" }),
+    ];
+    saveHiddenFeatures(root, hidden);
+    expect(loadHiddenFeatures(root).map((f) => f.id)).toEqual([
+      "b1",
+      "b2",
+      "b3",
+    ]);
+    const { batch, rest } = takeNextBatch(hidden, 2);
+    expect(batch.map((f) => f.id)).toEqual(["b1", "b2"]);
+    expect(rest.map((f) => f.id)).toEqual(["b3"]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("revealBatch appends to the canonical ledger and shrinks hidden", () => {
+    const root = workspace();
+    const canonical = [feature({ id: "f1", passes: true })];
+    const hidden = [feature({ id: "f2" }), feature({ id: "f3" })];
+    const result = revealBatch(root, canonical, hidden, 1);
+    expect(result.revealed.map((f) => f.id)).toEqual(["f2"]);
+    expect(result.canonical.map((f) => f.id)).toEqual(["f1", "f2"]);
+    expect(result.hidden.map((f) => f.id)).toEqual(["f3"]);
+    // The agent-visible mirror shows the revealed prefix only.
+    expect(
+      JSON.parse(readFileSync(artifactPaths(root).featureListPath, "utf8")).map(
+        (f: { id: string }) => f.id,
+      ),
+    ).toEqual(["f1", "f2"]);
+    expect(loadHiddenFeatures(root).map((f) => f.id)).toEqual(["f3"]);
+    // Canonical ledger survives and matches the revealed prefix.
+    expect(loadHarnessLedger(root).map((f) => f.id)).toEqual(["f1", "f2"]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("revealing from an empty hidden store is a no-op", () => {
+    const root = workspace();
+    const canonical = [feature({ id: "f1" })];
+    const result = revealBatch(root, canonical, [], 2);
+    expect(result.revealed).toEqual([]);
+    expect(result.canonical.map((f) => f.id)).toEqual(["f1"]);
+    rmSync(root, { recursive: true, force: true });
   });
 });

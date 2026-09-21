@@ -46,7 +46,11 @@ describe("checkWorkspacePath", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-ws-"));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), "paw-out-"));
     fs.writeFileSync(path.join(outside, "secret.txt"), "nope");
-    fs.symlinkSync(outside, path.join(root, "linked"), "dir");
+    fs.symlinkSync(
+      outside,
+      path.join(root, "linked"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
 
     const d = checkWorkspacePath(root, "linked/secret.txt");
     expect(d.allowed).toBe(false);
@@ -59,7 +63,11 @@ describe("checkWorkspacePath", () => {
   test("rejects symlink escape when target file does not exist yet", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-ws-"));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), "paw-out-"));
-    fs.symlinkSync(outside, path.join(root, "linked"), "dir");
+    fs.symlinkSync(
+      outside,
+      path.join(root, "linked"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
 
     const d = checkWorkspacePath(root, "linked/new.txt");
     expect(d.allowed).toBe(false);
@@ -98,6 +106,24 @@ describe("checkWorkspacePath", () => {
 });
 
 describe("isPathInsideRoot", () => {
+  test("platform-equivalent root spellings remain inside while siblings do not", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "Paw-Case-Root-"));
+    try {
+      const alternate = root.toLowerCase();
+      expect(isPathInsideRoot(root, alternate)).toBe(
+        process.platform === "win32",
+      );
+      if (process.platform === "win32")
+        expect(checkWorkspacePath(root, alternate).allowed).toBe(true);
+      expect(isPathInsideRoot(root, `${alternate}-sibling`)).toBe(false);
+      expect(checkWorkspacePath(root, "../outside").allowed).toBe(false);
+    } finally {
+      const resolved = fs.realpathSync(root);
+      expect(path.dirname(resolved)).toBe(fs.realpathSync(os.tmpdir()));
+      expect(path.basename(resolved).startsWith("Paw-Case-Root-")).toBe(true);
+      fs.rmSync(resolved, { recursive: true, force: true });
+    }
+  });
   test("child is inside", () => {
     expect(isPathInsideRoot("/a/b", "/a/b/c")).toBe(true);
   });

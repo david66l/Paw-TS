@@ -156,4 +156,48 @@ describe("selectors", () => {
     const summary = appStateSummary(state);
     expect(summary).toContain("…");
   });
+
+  // runId 会被直接插值进 `<runId>.json`。旧实现不做任何包含性校验，
+  // 于是 save/load/delete 都能越过 states 目录（delete 尤其危险）。
+  describe("runId containment", () => {
+    let root: string;
+    let store: FileSystemAppStateStore;
+
+    beforeEach(() => {
+      root = mkdtempSync(path.join(tmpdir(), "paw-states-"));
+      store = new FileSystemAppStateStore({
+        statesDir: path.join(root, ".paw", "states"),
+      });
+    });
+
+    afterEach(() => {
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    test("save rejects a runId that escapes the states directory", () => {
+      expect(() =>
+        store.save(makeState({ runId: "../../escaped" })),
+      ).toThrow(/escapes the states directory/);
+    });
+
+    test("delete rejects a runId that escapes the states directory", () => {
+      expect(() => store.delete("../../escaped")).toThrow(
+        /escapes the states directory/,
+      );
+    });
+
+    test("load returns null for an escaping runId instead of reading outside", () => {
+      expect(store.load("../../escaped")).toBeNull();
+    });
+
+    test("ordinary runIds still round-trip", () => {
+      const state = makeState({ runId: "run.2026-01-01_abc" });
+      store.save(state);
+      expect(store.load("run.2026-01-01_abc")?.runId).toBe(
+        "run.2026-01-01_abc",
+      );
+      store.delete("run.2026-01-01_abc");
+      expect(store.load("run.2026-01-01_abc")).toBeNull();
+    });
+  });
 });

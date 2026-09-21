@@ -2,13 +2,22 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  LONG_HORIZON_MANAGER_PROMPT,
+  type PawNextPhaseEffortPolicyV1,
+  type PawNextPhaseEffortTelemetryV1,
+  type PawNextThinkingRecoveryPolicyV1,
+  type PawNextThinkingRecoveryTelemetryV1,
   type RunFreshPawNextTaskInputV3,
+  assertExecutionDeadlineV1,
   buildPawNextTaskProfileV3,
+  compactExistingPawNextTaskV3,
+  maintainExistingPawNextMemoryV3,
   projectEnvironmentAcceptance,
   runExistingPawNextTaskV3,
   runExistingPawNextWorkSegmentV3,
   runFreshPawNextTaskV3,
-} from "@paw/cli/paw-next";
+  type ExecutionDeadlineV1,
+} from "@paw/paw-next";
 import {
   CostTracker,
   FileSystemSessionStore,
@@ -32,21 +41,34 @@ import {
   defaultSettingsPath,
   loadPawSettingsLocal,
 } from "@paw/settings";
-import { LONG_HORIZON_MANAGER_PROMPT } from "../../cli/src/paw-next/long-horizon.js";
+import { PAW_INCREMENTAL_VERIFICATION_GUIDANCE } from "./agent-system-prompt.js";
 import type { DesktopNextControls } from "./paw-next-controls.js";
 import { DesktopNextEvents } from "./paw-next-events.js";
 import { desktopAgentModels } from "./paw-next-models.js";
 import { desktopProfile, fingerprint } from "./paw-next-profile.js";
+import { arrangeDesktopTask } from "./task-arrangement.js";
+import { desktopCloudTelemetry, type CloudRunTelemetry } from "./cloud-telemetry.js";
 
 import type { InputAttachmentV1 } from "@paw/protocol";
 import { desktopAttachments } from "./paw-next-attachments.js";
+import { enqueueDesktopMemoryJob } from "./memory-jobs.js";
 
 import type { DesktopMonitorSnapshot } from "../src/agent/monitorTypes.js";
 
 interface DesktopRunRecord {
   version: 1;
+  executionDeadline?: ExecutionDeadlineV1;
+  incrementalVerification?: true;
+  deliveryLedger?: true;
+  legacyOutputRecall?: true;
+  maxSteps?: number;
+  mcpAllowedTools?: readonly string[];
   liveSteering?: true;
   environmentAudit?: true;
+  environmentAuditRetry?: true;
+  environmentAuditSinglePass?: true;
+  environmentAuditEvidenceRepair?: true;
+  compactMutationReceipts?: true;
   auditedMemory?: true;
   stageGraph?: true;
   browserAudit?: true;
@@ -67,6 +89,14 @@ interface DesktopRunRecord {
   };
 }
 export interface DesktopNextOptions {
+  /** Explicit caller/user time limit. Unspecified desktop tasks are unbounded. */
+  executionDeadline?: ExecutionDeadlineV1;
+  operation?: "compact" | "memory";
+  memoryRunId?: string;
+  expectedConfigHash?: string;
+  /** Production defaults to durable background work; tests may opt in explicitly. */
+  backgroundMemory?: boolean;
+  memoryQueueDirectory?: string;
   taskMode?: "standard" | "long";
   visualAudit?: true;
   attachments?: unknown;
@@ -91,7 +121,25 @@ export interface DesktopNextOptions {
   settings?: PawSettingsLocal;
   memoryEnabled?: boolean;
   environmentAudit?: boolean;
+  /** New conversations only; false retains the legacy audit timeout/retry policy. */
+  environmentAuditSinglePass?: boolean;
+  environmentAuditEvidenceRepair?: boolean;
+  /** Explicit experiment; normal desktop sessions do not retry thinking timeouts. */
+  experimentalReasoningRecovery?: true;
+  /**
+   * Benchmark seam over the model-level thinking-only rescue (default on via
+   * the V3 extensions): `false` disables it for the control arm; an explicit
+   * policy retunes deadlines. The production host never sets this.
+   */
+  thinkingRecovery?: false | PawNextThinkingRecoveryPolicyV1;
+  /** Process-local rescue telemetry; benchmark accounting only. */
+  onThinkingRecoveryEvent?: (event: PawNextThinkingRecoveryTelemetryV1) => void;
+  /** Benchmark seam over phase-aware reasoning effort (default off). */
+  phaseEffort?: false | PawNextPhaseEffortPolicyV1;
+  onPhaseEffortEvent?: (event: PawNextPhaseEffortTelemetryV1) => void;
   leaseScheduler?: SessionLeaseSchedulerV1;
+  /** Offline monitoring integration tests only. */
+  telemetry?: CloudRunTelemetry;
 }
 const busy = new Set<string>();
 
@@ -140,16 +188,39 @@ export async function runDesktopNext(
   goal: string,
   options: DesktopNextOptions,
 ): Promise<{ ok: boolean; text: string }> {
+  const cloud = desktopCloudTelemetry();
+  let telemetry = options.telemetry;
+  try { telemetry ??= cloud?.start(); } catch { /* Monitoring must not block a run. */ }
+  if (!telemetry) return executeDesktopNext(goal, options);
+  let status = "failed";
+  try {
+    const result = await telemetry.run(() => executeDesktopNext(goal, options, telemetry));
+    status = result.ok ? "completed" : "failed";
+    try { status = JSON.parse(result.text).status ?? status; } catch { /* No result body is sent. */ }
+    return result;
+  } finally {
+    try { telemetry.finish(options.abortSignal?.aborted ? "cancelled" : status); } catch { /* Best effort. */ }
+    void cloud?.flush().catch(() => {});
+  }
+}
+
+async function executeDesktopNext(
+  goal: string,
+  options: DesktopNextOptions,
+  telemetry?: CloudRunTelemetry,
+): Promise<{ ok: boolean; text: string }> {
   const workspaceRoot = fs.realpathSync.native(
     path.resolve(options.workspaceRoot),
   );
   const conversationId = options.conversationId ?? randomUUID();
-  const file = conversationFile(workspaceRoot, conversationId);
+  if (options.memoryRunId && (options.operation !== "memory" || !/^desktop-next-[\w-]+$/.test(options.memoryRunId))) throw new Error("Invalid memory run locator");
+  const file = options.memoryRunId ? path.join(stateDir(workspaceRoot), `${options.memoryRunId}.json`) : conversationFile(workspaceRoot, conversationId);
   if (busy.has(file))
     throw new Error("此对话已有任务运行，请等待完成或停止当前任务。");
   busy.add(file);
   let projection: DesktopNextEvents | undefined;
   let record: DesktopRunRecord | undefined;
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   try {
     options.abortSignal?.throwIfAborted();
     const attachments = desktopAttachments(options.attachments);
@@ -163,21 +234,76 @@ export async function runDesktopNext(
     const collaborationModels =
       options.collaborationModels ?? agentModels?.models;
     const previous = readRecord(file);
+    const inheritedDeadline = options.intent === "recover"
+      ? previous?.executionDeadline
+      : undefined;
+    if (
+      inheritedDeadline && options.executionDeadline &&
+      (inheritedDeadline.deadlineAtMs !== options.executionDeadline.deadlineAtMs ||
+        inheritedDeadline.reserveMs !== options.executionDeadline.reserveMs ||
+        (options.executionDeadline.admissionPolicy !== undefined && inheritedDeadline.admissionPolicy !== options.executionDeadline.admissionPolicy))
+    )
+      throw new Error("无法恢复：任务时间预算已变化，请新建任务。");
+    const executionDeadline = inheritedDeadline ?? (options.executionDeadline && options.intent !== "recover"
+      ? { admissionPolicy: "recent_round_floor_v1" as const, ...options.executionDeadline }
+      : options.executionDeadline);
+    if (executionDeadline && !options.operation) {
+      assertExecutionDeadlineV1(executionDeadline);
+      const controller = new AbortController();
+      const expire = () => {
+        const remaining = executionDeadline.deadlineAtMs - Date.now();
+        if (remaining <= 0) controller.abort(new Error("ExecutionDeadlineExceeded"));
+        else deadlineTimer = setTimeout(expire, Math.min(remaining, 2_147_483_647));
+      };
+      expire();
+      options = {
+        ...options,
+        executionDeadline,
+        abortSignal: options.abortSignal
+          ? AbortSignal.any([options.abortSignal, controller.signal])
+          : controller.signal,
+      };
+      options.abortSignal!.throwIfAborted();
+    }
+    let legacyOutputRecall = previous?.legacyOutputRecall;
+    if (options.expectedConfigHash && previous?.configHash !== options.expectedConfigHash) throw new Error("Memory job configuration changed");
+    let arrangement = {
+      taskMode: "standard" as "standard" | "long",
+      visualAudit: false,
+    };
+    if (options.intent !== "recover" && !options.taskMode && !options.model) {
+      try {
+        arrangement = await arrangeDesktopTask(
+          model,
+          goal,
+          options.abortSignal,
+        );
+      } catch {
+        options.abortSignal?.throwIfAborted(); /* Ordinary execution remains available if routing fails. */
+      }
+    }
     const taskMode =
-      options.intent === "recover" ? previous?.taskMode : options.taskMode;
+      options.intent === "recover"
+        ? previous?.taskMode
+        : (options.taskMode ?? arrangement.taskMode);
     const visualAudit =
       options.intent === "recover"
         ? previous?.visualAudit
-        : options.visualAudit;
+        : (options.visualAudit ??
+          (arrangement.visualAudit && model.capabilities?.imageInput
+            ? true
+            : undefined));
     if (visualAudit && options.environmentAudit === false)
       throw new Error("视觉验收需要启用环境审计。");
     let profile = desktopProfile(
       workspaceRoot,
       model,
       settings,
-      options.maxSteps ?? settings.max_steps,
+      options.maxSteps ?? (options.intent === "recover" ? previous?.maxSteps : undefined) ?? settings.max_steps,
       options.memoryEnabled,
     );
+    if (options.experimentalReasoningRecovery)
+      profile = { ...profile, control: { ...profile.control, recoverReasoningTimeout: true } };
     if (taskMode === "long")
       profile = {
         ...profile,
@@ -200,6 +326,10 @@ export async function runDesktopNext(
       settings.mcp_servers.length
     ) {
       const servers = settings.mcp_servers as McpServerConfig[];
+      if (options.operation === "memory") {
+        if (!previous?.mcpAllowedTools) throw new Error("Memory maintenance requires the original MCP catalog");
+        profile = { ...profile, mcp: { policyVersion: "paw.mcp-runtime.v1", servers, allowedTools: previous.mcpAllowedTools } };
+      } else {
       const manager = new McpClientManager();
       try {
         for (const server of servers) {
@@ -218,6 +348,7 @@ export async function runDesktopNext(
         };
       } finally {
         await manager.disconnectAll();
+      }
       }
     }
     // Only an opaque binding goes through profile construction. The configured
@@ -249,13 +380,15 @@ export async function runDesktopNext(
     const build = (
       identity: Pick<
         DesktopRunRecord,
-        "sessionId" | "runId" | "inputId" | "goal"
+        "sessionId" | "runId" | "inputId" | "goal" | "incrementalVerification" | "deliveryLedger" | "environmentAuditSinglePass" | "environmentAuditEvidenceRepair"
       >,
       legacyRecovery = false,
       legacyAudit = false,
       legacyMemoryAdmission = false,
       legacyStageGraph = false,
       legacyBrowserAudit = false,
+      legacyAuditRetry = false,
+      legacyMutationReceipts = false,
     ) => {
       const { liveSteering: _steering, ...legacyControl } = profile.control;
       void _steering;
@@ -265,12 +398,15 @@ export async function runDesktopNext(
         legacyAudit || options.environmentAudit === false
           ? profileWithoutAudit
           : profile;
+      const retryProfile = !legacyAuditRetry && !legacyAudit && options.environmentAudit !== false
+        ? { ...selectedProfile, environmentAuditRetry: true as const }
+        : selectedProfile;
       const memoryProfile =
         !legacyMemoryAdmission &&
         !legacyAudit &&
         options.environmentAudit !== false
-          ? { ...selectedProfile, auditedMemory: true as const }
-          : selectedProfile;
+          ? { ...retryProfile, auditedMemory: true as const }
+          : retryProfile;
       const graphProfile =
         taskMode === "long" && !legacyStageGraph
           ? { ...memoryProfile, stageGraph: true as const }
@@ -288,9 +424,24 @@ export async function runDesktopNext(
       const activeProfile = legacyRecovery
         ? { ...visualProfile, control: legacyControl }
         : visualProfile;
+      const receiptProfile = !legacyMutationReceipts && !legacyOutputRecall
+        ? { ...activeProfile, compactMutationReceipts: true as const }
+        : activeProfile;
+      const selectedCompatibleProfile = legacyOutputRecall ? { ...receiptProfile, legacyOutputRecall: true as const } : receiptProfile;
+      const verificationProfile = identity.incrementalVerification
+        ? { ...selectedCompatibleProfile, systemPrompt: `${selectedCompatibleProfile.systemPrompt}\n\n${PAW_INCREMENTAL_VERIFICATION_GUIDANCE}` }
+        : selectedCompatibleProfile;
+      const deliveryProfile = identity.deliveryLedger && taskMode !== "long"
+        ? { ...verificationProfile, deliveryLedger: true as const }
+        : verificationProfile;
+      const singlePassProfile = identity.environmentAuditSinglePass && !legacyAudit && options.environmentAudit !== false
+        ? { ...deliveryProfile, environmentAuditSinglePass: true as const }
+        : deliveryProfile;
+      const compatibleProfile = identity.environmentAuditEvidenceRepair && "environmentAuditSinglePass" in singlePassProfile
+        ? { ...singlePassProfile, environmentAuditEvidenceRepair: true as const } : singlePassProfile;
       const first = buildPawNextTaskProfileV3({
         identity: { workspaceRoot, ...identity },
-        profile: activeProfile,
+        profile: compatibleProfile,
         apiKey: credentialBinding,
         model,
         collaborationModels,
@@ -298,7 +449,7 @@ export async function runDesktopNext(
       });
       return buildPawNextTaskProfileV3({
         identity: { workspaceRoot, ...identity },
-        profile: { ...activeProfile, configHash: first.configHash },
+        profile: { ...compatibleProfile, configHash: first.configHash },
         apiKey: credentialBinding,
         model,
         collaborationModels,
@@ -315,8 +466,16 @@ export async function runDesktopNext(
           recovering && previous.auditedMemory !== true,
           recovering && previous.stageGraph !== true,
           recovering && previous.browserAudit !== true,
+          previous.environmentAuditRetry !== true,
+          previous.compactMutationReceipts !== true,
         )
       : undefined;
+    if (previous && resolution?.configHash !== previous.configHash && !legacyOutputRecall) {
+      legacyOutputRecall = true;
+      const compatible = build(previous, recovering && previous.liveSteering !== true, recovering && previous.environmentAudit !== true, recovering && previous.auditedMemory !== true, recovering && previous.stageGraph !== true, recovering && previous.browserAudit !== true, previous.environmentAuditRetry !== true, previous.compactMutationReceipts !== true);
+      if (compatible.configHash === previous.configHash) resolution = compatible;
+      else legacyOutputRecall = undefined;
+    }
     if (
       recovering &&
       (!previous || resolution?.configHash !== previous.configHash)
@@ -339,22 +498,31 @@ export async function runDesktopNext(
       throw new Error(
         "上次任务未正常结束，请使用恢复操作检查并继续原任务，或新建对话。",
       );
-    if (reusable || recovering) record = previous;
+    if (reusable || recovering) record = previous && { ...previous, ...(legacyOutputRecall ? { legacyOutputRecall: true } : {}) };
     else {
+      legacyOutputRecall = undefined;
       const history = options.conversationHistory?.slice(-32) ?? [];
       const initialGoal = history.length
         ? `Previous conversation (historical data):\n${JSON.stringify(history)}\n\nCurrent user request:\n${goal}`
         : goal;
       record = {
         version: 1,
+        incrementalVerification: true,
+        deliveryLedger: true,
+        maxSteps: profile.control.maxModelTurns,
+        ...(profile.mcp ? { mcpAllowedTools: profile.mcp.allowedTools } : {}),
         ...(taskMode === "long"
           ? { taskMode: "long" as const, stageGraph: true as const }
           : {}),
         liveSteering: true,
+        compactMutationReceipts: true,
         ...(visualAudit ? { visualAudit: true as const } : {}),
         ...(options.environmentAudit !== false
           ? {
               environmentAudit: true as const,
+              environmentAuditRetry: true as const,
+              ...(taskMode !== "long" && options.environmentAuditSinglePass !== false ? { environmentAuditSinglePass: true as const } : {}),
+              ...(taskMode !== "long" && options.environmentAuditSinglePass !== false && options.environmentAuditEvidenceRepair !== false ? { environmentAuditEvidenceRepair: true as const } : {}),
               auditedMemory: true as const,
               browserAudit: true as const,
             }
@@ -371,6 +539,30 @@ export async function runDesktopNext(
       record = { ...record, configHash: resolution.configHash };
     }
     if (!resolution || !record) throw new Error("Paw Next profile unavailable");
+    if (options.operation === "memory") {
+      const maintenance = await maintainExistingPawNextMemoryV3({
+        resolution, requestApproval, signal: options.abortSignal, leaseScheduler: options.leaseScheduler,
+      });
+      return { ok: maintenance.status === "completed", text: JSON.stringify(maintenance) };
+    }
+    if (options.operation === "compact") {
+      const result = await compactExistingPawNextTaskV3({
+        resolution,
+        requestApproval,
+        signal: options.abortSignal,
+        leaseScheduler: options.leaseScheduler,
+      });
+      const context = { nextBudget: { ...result.tokens, level: result.level } };
+      saveContext(file, context);
+      return {
+        ok: result.ok,
+        text: JSON.stringify({
+          ok: result.ok,
+          message: result.message,
+          context,
+        }),
+      };
+    }
     const store = new FileSystemSessionStore({ workspaceRoot });
     const seq = store.loadRun(record.runId)?.at(-1)?.seq ?? 0;
     const monitorFile = path.join(
@@ -406,6 +598,7 @@ export async function runDesktopNext(
     );
     record = {
       ...record,
+      executionDeadline: options.executionDeadline,
       status: "running",
       segments: record.segments + (recovering ? 0 : 1),
       ...(reusable && !recovering
@@ -432,13 +625,36 @@ export async function runDesktopNext(
     const costTracker = new CostTracker();
     let rootTurns = 0;
     const input: RunFreshPawNextTaskInputV3 = {
+      ...(options.executionDeadline ? { executionDeadline: options.executionDeadline } : {}),
+      ...((options.backgroundMemory ?? !options.model) && resolution.taskOptions.memory?.mode === "read_write" ? {
+        deferMemory: async (sourceThroughSeq: number) => {
+          enqueueDesktopMemoryJob(options.memoryQueueDirectory ?? path.join(process.cwd(), ".paw", "desktop-memory-ingress"), {
+            workspaceRoot, runId: record!.runId, configHash: resolution!.configHash, sourceThroughSeq,
+          });
+        },
+      } : {}),
       leaseScheduler: options.leaseScheduler,
+      ...(options.thinkingRecovery !== undefined
+        ? { thinkingRecovery: options.thinkingRecovery }
+        : {}),
+      ...(options.onThinkingRecoveryEvent
+        ? { onThinkingRecoveryEvent: options.onThinkingRecoveryEvent }
+        : {}),
+      ...(options.phaseEffort !== undefined
+        ? { phaseEffort: options.phaseEffort }
+        : {}),
+      ...(options.onPhaseEffortEvent
+        ? { onPhaseEffortEvent: options.onPhaseEffortEvent }
+        : {}),
       resolution,
       initialAttachments: attachments,
       requestApproval,
       costTracker,
       ...(options.abortSignal ? { signal: options.abortSignal } : {}),
-      onJournalCommit: projection.committed.bind(projection),
+      onJournalCommit(events) {
+        telemetry?.committed(events);
+        projection?.committed(events);
+      },
       onChildResult: projection.monitor.result.bind(projection.monitor),
       onStageGraph: projection.monitor.stageGraph.bind(projection.monitor),
       onManagedJobsReady: (runId, jobs) =>
@@ -453,14 +669,24 @@ export async function runDesktopNext(
         projection?.childControl(child);
       },
       onContextBudget(event) {
-        if (event.runId === record?.runId)
+        if (event.runId === record?.runId) {
+          saveContext(file, {
+            nextBudget: { ...event.tokens, level: event.level },
+          });
           projection?.emit({
             type: "context.next_budget",
             ...event.tokens,
             level: event.level,
           });
+        }
       },
       onModelStreamEvent: projection.stream.bind(projection),
+      onMemoryWriterEvent(event) {
+        projection?.memoryMaintenance("write", event);
+      },
+      onMemoryTopicOrganizerEvent(event) {
+        projection?.memoryMaintenance("topic", event);
+      },
       onModelSettlement(event) {
         if (!event.usage) return;
         projection?.emit({ type: "cost.update", ...costTracker.snapshot() });
@@ -494,15 +720,19 @@ export async function runDesktopNext(
       ? projectEnvironmentAcceptance(result.inputFacts)
       : "not_required";
     const status = decision.kind;
+    const admissionStopped = status === "failed" && result.inputFacts.some(fact =>
+      fact.type === "runtime.failed" && fact.area === "input" &&
+      fact.message.startsWith("ExecutionBudgetInsufficientForRequest:"));
     const answer = result.assistantText?.trim();
+    const auditTimedOut = acceptance === "unverified" && [...result.inputFacts].reverse().find(fact =>
+      fact.type === "completion.review_settled")?.reasonCode === "AuditTimeout";
     const message =
-      acceptance === "unverified" && status === "completed"
-        ? [
-            answer,
-            "执行已结束，但独立环境审计尚未通过；请查看任务面板中的验收结果。",
-          ]
-            .filter(Boolean)
-            .join("\n\n")
+      admissionStopped
+        ? "根据本任务近期耗时，剩余时间不足以继续一次请求，已停止执行并保留已有结果。任务尚未完成。"
+        : acceptance === "unverified" && status === "completed"
+        ? auditTimedOut
+          ? "已有产物和验证记录已保留，但独立验收达到时限，任务尚未通过最终验收。请查看任务面板中的验收结果。"
+          : "已有产物和验证记录已保留，但独立验收尚未通过，任务不能标记为完成。请查看任务面板中的验收结果。"
         : status === "completed" || status === "await_user"
           ? answer || ("reason" in decision ? decision.reason : "")
           : status === "aborted"
@@ -522,7 +752,7 @@ export async function runDesktopNext(
       record,
     );
     const uiStatus =
-      status === "continue" ||
+      admissionStopped || status === "continue" ||
       (status === "completed" && acceptance === "unverified")
         ? "incomplete"
         : status;
@@ -565,9 +795,67 @@ export async function runDesktopNext(
     }
     throw error;
   } finally {
+    if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
     options.controls?.close();
     busy.delete(file);
   }
+}
+
+function saveContext(file: string, context: unknown) {
+  const target = path.join(
+    path.dirname(path.dirname(file)),
+    "desktop-context",
+    path.basename(file),
+  );
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(temporary, JSON.stringify(context), { mode: 0o600 });
+  fs.renameSync(temporary, target);
+}
+
+export function readDesktopContext(
+  workspaceRoot: string,
+  conversationId: string,
+) {
+  const file = conversationFile(
+    fs.realpathSync.native(path.resolve(workspaceRoot)),
+    conversationId,
+  );
+  try {
+    return JSON.parse(
+      fs.readFileSync(
+        path.join(
+          path.dirname(path.dirname(file)),
+          "desktop-context",
+          path.basename(file),
+        ),
+        "utf8",
+      ),
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function compactDesktopContext(
+  workspaceRoot: string,
+  conversationId: string,
+) {
+  if (!conversationId?.trim()) throw new Error("缺少会话编号。");
+  const result = await runDesktopNext("", {
+    workspaceRoot,
+    conversationId,
+    intent: "recover",
+    operation: "compact",
+    abortSignal: AbortSignal.timeout(240_000),
+    resolveToolApproval: async () => false,
+    onEvent: () => {},
+  });
+  return JSON.parse(result.text) as {
+    ok: boolean;
+    message: string;
+    context?: unknown;
+  };
 }
 
 function readMonitorFile(file: string): DesktopMonitorSnapshot | undefined {

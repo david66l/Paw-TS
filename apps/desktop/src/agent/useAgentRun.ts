@@ -786,6 +786,8 @@ export function useAgentRun() {
         return;
       }
       if (t === "model.request") {
+        streamRawRef.current = "";
+        streamThinkingRef.current = "";
         setStatusText("调用模型…");
         // 新一轮模型调用 = 上一批工具执行告一段落
         finalizeOpenToolBatch();
@@ -799,8 +801,7 @@ export function useAgentRun() {
           streamRawRef,
           streamThinkingRef,
         );
-        // orchestrator 已发累计快照（thinkingAcc），直接采用最新全文，禁止再 merge 拼接
-        streamThinkingRef.current = ev.text;
+        streamThinkingRef.current = ev.mode === "delta" ? streamThinkingRef.current + ev.text : ev.text;
         const formatted = formatModelOutputForUi(streamRawRef.current, {
           streaming: true,
         });
@@ -824,8 +825,7 @@ export function useAgentRun() {
           streamRawRef,
           streamThinkingRef,
         );
-        // model.chunk 同样是累计快照 acc
-        streamRawRef.current = ev.text;
+        streamRawRef.current = ev.mode === "delta" ? streamRawRef.current + ev.text : ev.text;
         const formatted = formatModelOutputForUi(streamRawRef.current, {
           streaming: true,
         });
@@ -1431,10 +1431,7 @@ export function useAgentRun() {
       goal: string,
       intent: "continue" | "recover" = "continue",
       attachments: readonly DesktopAttachment[] = [],
-      taskMode: "standard" | "long" = localStorage.getItem("paw.taskMode") ===
-      "long"
-        ? "long"
-        : "standard",
+      taskMode?: "standard" | "long",
     ) => {
       const desk = api();
       const text =
@@ -1577,9 +1574,6 @@ export function useAgentRun() {
       try {
         const { requestId } = await desk.startRun({
           goal: text,
-          ...(localStorage.getItem("paw.visualAudit") === "true"
-            ? { visualAudit: true as const }
-            : {}),
           ...(taskMode === "long" ? { taskMode } : {}),
           attachments,
           intent,
@@ -1897,6 +1891,7 @@ export function useAgentRun() {
     deleteSession,
     sessions,
     activeSessionId,
+    runtimeSessionId: runtimeConversationId(activeSessionId),
     isRunning: status === "running",
     conversationId: conversationIdRef.current,
     lastRunId,

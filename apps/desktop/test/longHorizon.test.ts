@@ -297,6 +297,7 @@ test("Manager repairs an unverified stage using a fresh executor before final ac
   const f = fixture();
   let rootCalls = 0;
   let rejected = false;
+  let repairCalls = 0;
   const repairInputs: string[] = [];
   const result = await runDesktopNext(
     "Create one.txt and two.txt containing checked",
@@ -322,8 +323,13 @@ test("Manager repairs an unverified stage using a fresh executor before final ac
             return response;
           }
           if (text.includes("Paw stage executor")) {
-            if (text.includes("FRESH_REPAIR") && !text.includes("SECOND_STAGE"))
-              repairInputs.push(text);
+            if (text.includes("FRESH_REPAIR") && !text.includes("SECOND_STAGE")) {
+              if (++repairCalls === 1) {
+                repairInputs.push(text);
+                return tool("workspace_read_file", { path: "one.txt" });
+              }
+              return final("Rechecked one.txt: it contains checked.");
+            }
             return f.model.complete(messages, options);
           }
           if (++rootCalls === 2)
@@ -368,6 +374,7 @@ test("Manager repairs an unverified stage using a fresh executor before final ac
   );
   expect(JSON.parse(result.text).acceptance).toBe("verified");
   expect(repairInputs.length).toBe(1);
+  expect(repairCalls).toBe(2);
   expect(repairInputs[0]).not.toContain("first-executor-trace-secret");
   expect(fs.readFileSync(path.join(f.root, "two.txt"), "utf8")).toBe("checked");
 });

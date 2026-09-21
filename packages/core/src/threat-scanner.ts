@@ -1,7 +1,7 @@
 /**
  * 威胁扫描器：检测 prompt 注入、外泄、C2 攻击模式。
  *
- * 对标 hermes tools/threat_patterns.py，完整移植 40+ 条规则 + 不可见 Unicode 检测。
+ * 对标 hermes tools/threat_patterns.py，移植 36 条规则 + 不可见 Unicode 检测。
  *
  * 三级 scope 体系（与 hermes 一致）：
  * - "all"：经典注入 + 外泄（最少误报，适用所有文本）
@@ -131,7 +131,7 @@ function definePatterns(): void {
   p(String.raw`authorized_keys`, "ssh_backdoor", "strict");
   p(String.raw`\$HOME/\.ssh|\~/\.ssh`, "ssh_access", "strict");
   p(String.raw`\$HOME/\.hermes/\.env|\~/\.hermes/\.env`, "hermes_env", "strict");
-  p(String.raw`(?:update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}(?:AGENTS\.md|CLAUDE\.md|\.cursorrules|\.clinerules)`, "agent_config_mod", "strict");
+  p(String.raw`(?:update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}(?:PAW\.md|AGENTS\.md|CLAUDE\.md|settings\.local\.json|\.cursorrules|\.clinerules)`, "agent_config_mod", "strict");
   p(String.raw`(?:update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}\.hermes/(?:config\.yaml|SOUL\.md)`, "hermes_config_mod", "strict");
 
   // ═══ Hardcoded secrets (strict) ═══

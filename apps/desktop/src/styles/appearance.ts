@@ -8,13 +8,15 @@ export function readAppearance(): Appearance {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
     return {
-      color: ["calm", "aurora", "paper"].includes(saved?.color)
-        ? saved.color
-        : "calm",
+      color:
+        saved?.version === 2 &&
+        ["calm", "aurora", "paper"].includes(saved?.color)
+          ? saved.color
+          : "paper",
       material: saved?.material === "soft" ? "soft" : "lens",
     };
   } catch {
-    return { color: "calm", material: "lens" };
+    return { color: "paper", material: "lens" };
   }
 }
 
@@ -27,7 +29,10 @@ export function applyAppearance(appearance: Appearance): void {
 
 export function saveAppearance(appearance: Appearance): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appearance));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...appearance, version: 2 }),
+    );
   } catch {
     // The selected skin still works when local storage is unavailable.
   }

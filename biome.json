@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["../claude-code/**", "../src/paw/**", "dist/**", "node_modules/**"]
+    "ignore": ["../claude-code/**", "../src/paw/**", "dist/**", "node_modules/**", "legacy/**"]
   },
   "organizeImports": { "enabled": true },
   "linter": {

@@ -1,3 +1,9 @@
+import {
+  emitModelObservation,
+  observeModelComplete,
+  observeModelStream,
+  observedModelFetch,
+} from "./observation.js";
 /**
  * OpenAI Chat Completions 兼容客户端（HTTPS fetch）。
  * ===================================================
@@ -84,6 +90,9 @@ function resolveRequestThinkingV1(
   enabled: boolean | undefined;
   effort: "high" | "max" | undefined;
 }> {
+  // A per-request phase override wins over the configured static effort.
+  const effort =
+    options?.reasoningEffort ?? profile.reasoningEffort;
   // GLM-5.3 cannot disable reasoning, including bounded auxiliary calls.
   if (isGlm53(profile.model)) {
     return {
@@ -91,7 +100,7 @@ function resolveRequestThinkingV1(
       effort:
         options?.thinkingEnabled === false
           ? "high"
-          : (profile.reasoningEffort ?? "max"),
+          : (effort ?? "max"),
     };
   }
   const enabled =
@@ -105,8 +114,7 @@ function resolveRequestThinkingV1(
     // Explicitly disabling reasoning for a bounded auxiliary call must also
     // suppress the configured effort knob; sending both is contradictory on
     // DeepSeek-compatible endpoints.
-    effort:
-      options?.thinkingEnabled === false ? undefined : profile.reasoningEffort,
+    effort: options?.thinkingEnabled === false ? undefined : effort,
   };
 }
 
@@ -167,7 +175,25 @@ export class OpenAICompatibleModel implements LanguageModel {
     };
   }
 
-  async complete(
+  complete(
+    messages: readonly ChatMessage[],
+    options?: ModelCompleteOptions,
+  ): Promise<ModelCompletionResult> {
+    return observeModelComplete(this, options, (observed) =>
+      this.completeRequest(messages, observed),
+    );
+  }
+
+  completeStream(
+    messages: readonly ChatMessage[],
+    options?: ModelCompleteOptions,
+  ): AsyncIterable<ModelStreamChunk> {
+    return observeModelStream(this, options, (observed) =>
+      this.streamRequest(messages, observed),
+    );
+  }
+
+  private async completeRequest(
     messages: readonly ChatMessage[],
     options?: ModelCompleteOptions,
   ): Promise<ModelCompletionResult> {
@@ -206,15 +232,26 @@ export class OpenAICompatibleModel implements LanguageModel {
       body.tools = options.tools;
     }
     Object.assign(body, glmRequestFields(this.model));
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
+    const res = await observedModelFetch(
+      url,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: options?.signal,
       },
-      body: JSON.stringify(body),
-      signal: options?.signal,
-    });
+      options,
+      {
+        type: "request",
+        streaming: false,
+        maxOutputTokens:
+          typeof body.max_tokens === "number" ? body.max_tokens : undefined,
+        reasoningEffort: requestThinking.effort,
+      },
+    );
     const raw = await res.text();
     if (!res.ok) {
       throw new Error(
@@ -313,7 +350,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     };
   }
 
-  async *completeStream(
+  private async *streamRequest(
     messages: readonly ChatMessage[],
     options?: ModelCompleteOptions,
   ): AsyncIterable<ModelStreamChunk> {
@@ -354,31 +391,57 @@ export class OpenAICompatibleModel implements LanguageModel {
       baseStreamBody.tools = options.tools;
     }
     Object.assign(baseStreamBody, glmRequestFields(this.model, true));
-    let res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-      },
-      body: JSON.stringify({
-        ...baseStreamBody,
-        stream_options: { include_usage: true },
-      }),
-      signal: options?.signal,
-    });
-    if (!res.ok && res.status === 400) {
-      const errOnce = await res.text();
-      res = await fetch(url, {
+    let res = await observedModelFetch(
+      url,
+      {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify(baseStreamBody),
+        body: JSON.stringify({
+          ...baseStreamBody,
+          stream_options: { include_usage: true },
+        }),
         signal: options?.signal,
-      });
+      },
+      options,
+      {
+        type: "request",
+        streaming: true,
+        maxOutputTokens:
+          typeof baseStreamBody.max_tokens === "number"
+            ? baseStreamBody.max_tokens
+            : undefined,
+        reasoningEffort: requestThinking.effort,
+      },
+    );
+    if (!res.ok && res.status === 400) {
+      const errOnce = await res.text();
+      res = await observedModelFetch(
+        url,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify(baseStreamBody),
+          signal: options?.signal,
+        },
+        options,
+        {
+          type: "request",
+          streaming: true,
+          maxOutputTokens:
+            typeof baseStreamBody.max_tokens === "number"
+              ? baseStreamBody.max_tokens
+              : undefined,
+          reasoningEffort: requestThinking.effort,
+        },
+      );
       if (!res.ok) {
         const retryErr = await res.text();
         throw new Error(
@@ -412,6 +475,11 @@ export class OpenAICompatibleModel implements LanguageModel {
           throw abortError();
         }
         const { done, value } = await reader.read();
+        if (value?.byteLength)
+          emitModelObservation(options, {
+            type: "bytes",
+            count: value.byteLength,
+          });
         buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
         const lines = buffer.split("\n");
         buffer = done ? "" : (lines.pop() ?? "");
@@ -427,6 +495,24 @@ export class OpenAICompatibleModel implements LanguageModel {
           }
           const payload = trimmed.slice(6);
           const part = parseOpenAiChatCompletionStreamDataPayload(payload);
+          if (part.textDelta.length)
+            emitModelObservation(options, {
+              type: "delta",
+              kind: "text",
+              count: part.textDelta.length,
+            });
+          if (part.thinkingDelta?.length)
+            emitModelObservation(options, {
+              type: "delta",
+              kind: "thinking",
+              count: part.thinkingDelta.length,
+            });
+          if (part.toolCallDeltas?.length)
+            emitModelObservation(options, {
+              type: "delta",
+              kind: "tool_fragment",
+              count: part.toolCallDeltas.length,
+            });
           if (part.isDoneMarker) {
             sawDoneMarker = true;
             continue;
@@ -494,6 +580,24 @@ export class OpenAICompatibleModel implements LanguageModel {
           }
           const payload = trimmed.slice(6);
           const part = parseOpenAiChatCompletionStreamDataPayload(payload);
+          if (part.textDelta.length)
+            emitModelObservation(options, {
+              type: "delta",
+              kind: "text",
+              count: part.textDelta.length,
+            });
+          if (part.thinkingDelta?.length)
+            emitModelObservation(options, {
+              type: "delta",
+              kind: "thinking",
+              count: part.thinkingDelta.length,
+            });
+          if (part.toolCallDeltas?.length)
+            emitModelObservation(options, {
+              type: "delta",
+              kind: "tool_fragment",
+              count: part.toolCallDeltas.length,
+            });
           if (part.isDoneMarker) {
             sawDoneMarker = true;
           }
@@ -574,6 +678,7 @@ export class OpenAICompatibleModel implements LanguageModel {
         throw new Error(`OpenAI-compatible duplicate tool call id ${call.id}`);
       }
       callIds.add(call.id);
+      emitModelObservation(options, { type: "tool_assembled" });
       yield {
         type: "tool_use",
         id: call.id,

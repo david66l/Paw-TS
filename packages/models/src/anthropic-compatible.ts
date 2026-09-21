@@ -1,3 +1,9 @@
+import {
+  emitModelObservation,
+  observeModelComplete,
+  observeModelStream,
+  observedModelFetch,
+} from "./observation.js";
 /**
  * Anthropic Messages API 兼容客户端（HTTPS fetch）。
  * ===================================================
@@ -180,7 +186,25 @@ export class AnthropicCompatibleModel implements LanguageModel {
     };
   }
 
-  async complete(
+  complete(
+    messages: readonly ChatMessage[],
+    options?: ModelCompleteOptions,
+  ): Promise<ModelCompletionResult> {
+    return observeModelComplete(this, options, (observed) =>
+      this.completeRequest(messages, observed),
+    );
+  }
+
+  completeStream(
+    messages: readonly ChatMessage[],
+    options?: ModelCompleteOptions,
+  ): AsyncIterable<ModelStreamChunk> {
+    return observeModelStream(this, options, (observed) =>
+      this.streamRequest(messages, observed),
+    );
+  }
+
+  private async completeRequest(
     messages: readonly ChatMessage[],
     options?: ModelCompleteOptions,
   ): Promise<ModelCompletionResult> {
@@ -200,9 +224,13 @@ export class AnthropicCompatibleModel implements LanguageModel {
     };
     if (
       options?.thinkingEnabled !== false &&
-      this.runtimeProfile.reasoningEffort !== undefined
+      (options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort) !==
+        undefined
     ) {
-      body.output_config = { effort: this.runtimeProfile.reasoningEffort };
+      body.output_config = {
+        effort:
+          options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort,
+      };
     }
     if (system) {
       body.system = system;
@@ -210,16 +238,30 @@ export class AnthropicCompatibleModel implements LanguageModel {
     if (options?.tools && options.tools.length > 0) {
       body.tools = toAnthropicTools(options.tools);
     }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "x-api-key": this.apiKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
+    const res = await observedModelFetch(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": this.apiKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: options?.signal,
       },
-      body: JSON.stringify(body),
-      signal: options?.signal,
-    });
+      options,
+      {
+        type: "request",
+        streaming: false,
+        maxOutputTokens:
+          typeof body.max_tokens === "number" ? body.max_tokens : undefined,
+        reasoningEffort:
+          options?.thinkingEnabled === false
+            ? undefined
+            : this.runtimeProfile.reasoningEffort,
+      },
+    );
     const raw = await res.text();
     if (!res.ok) {
       throw new Error(`Anthropic HTTP ${res.status}: ${raw.slice(0, 500)}`);
@@ -249,7 +291,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     return result;
   }
 
-  async *completeStream(
+  private async *streamRequest(
     messages: readonly ChatMessage[],
     options?: ModelCompleteOptions,
   ): AsyncIterable<ModelStreamChunk> {
@@ -270,9 +312,13 @@ export class AnthropicCompatibleModel implements LanguageModel {
     };
     if (
       options?.thinkingEnabled !== false &&
-      this.runtimeProfile.reasoningEffort !== undefined
+      (options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort) !==
+        undefined
     ) {
-      body.output_config = { effort: this.runtimeProfile.reasoningEffort };
+      body.output_config = {
+        effort:
+          options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort,
+      };
     }
     if (system) {
       body.system = system;
@@ -280,17 +326,31 @@ export class AnthropicCompatibleModel implements LanguageModel {
     if (options?.tools && options.tools.length > 0) {
       body.tools = toAnthropicTools(options.tools);
     }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "x-api-key": this.apiKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
+    const res = await observedModelFetch(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": this.apiKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify(body),
+        signal: options?.signal,
       },
-      body: JSON.stringify(body),
-      signal: options?.signal,
-    });
+      options,
+      {
+        type: "request",
+        streaming: true,
+        maxOutputTokens:
+          typeof body.max_tokens === "number" ? body.max_tokens : undefined,
+        reasoningEffort:
+          options?.thinkingEnabled === false
+            ? undefined
+            : this.runtimeProfile.reasoningEffort,
+      },
+    );
     if (!res.ok) {
       const errText = await res.text();
       throw new Error(
@@ -316,6 +376,24 @@ export class AnthropicCompatibleModel implements LanguageModel {
       }
     >();
     const processPart = (part: AnthropicStreamPart): ModelStreamChunk[] => {
+      if (part.textDelta.length)
+        emitModelObservation(options, {
+          type: "delta",
+          kind: "text",
+          count: part.textDelta.length,
+        });
+      if (part.thinkingDelta.length)
+        emitModelObservation(options, {
+          type: "delta",
+          kind: "thinking",
+          count: part.thinkingDelta.length,
+        });
+      if (part.toolUseStart || part.toolUseDelta)
+        emitModelObservation(options, {
+          type: "delta",
+          kind: "tool_fragment",
+          count: 1,
+        });
       if (sawMessageStop) {
         throw new Error("Anthropic stream emitted data after message_stop");
       }
@@ -379,6 +457,11 @@ export class AnthropicCompatibleModel implements LanguageModel {
           throw abortError();
         }
         const { done, value } = await reader.read();
+        if (value?.byteLength)
+          emitModelObservation(options, {
+            type: "bytes",
+            count: value.byteLength,
+          });
         buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
         const lines = buffer.split("\n");
         buffer = done ? "" : (lines.pop() ?? "");
@@ -431,6 +514,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
         );
       }
       callIds.add(toolUse.id);
+      emitModelObservation(options, { type: "tool_assembled" });
       yield {
         type: "tool_use",
         id: toolUse.id,

@@ -38,6 +38,7 @@ export function createCollaborationToolPluginV1(input?: {
     input?.policy ?? DEFAULT_COLLABORATION_POLICY_V1,
   );
   const roster = input?.roster ?? DEFAULT_COLLABORATION_ROSTER_V1;
+  const contextBudgetDescription = `Each child's goal + scope + acceptance, including headings and bullet formatting, must fit ${policy.maxGoalChars} characters total. Keep criteria concise and reference workspace files instead of copying their contents.`;
   const taskProperties = {
     id: {
       type: "string",
@@ -47,7 +48,7 @@ export function createCollaborationToolPluginV1(input?: {
     goal: {
       type: "string",
       maxLength: policy.maxGoalChars,
-      description: "One bounded deliverable",
+      description: `One bounded deliverable; combined child context limit: ${policy.maxGoalChars} characters.`,
     },
     kind: {
       type: "string",
@@ -91,7 +92,7 @@ export function createCollaborationToolPluginV1(input?: {
     type: "function",
     function: {
       name: COLLABORATION_PROVIDER_TOOL_NAME_V1,
-      description: collaborationToolDescriptionV1(roster),
+      description: `${collaborationToolDescriptionV1(roster)}\n${contextBudgetDescription}`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -99,7 +100,7 @@ export function createCollaborationToolPluginV1(input?: {
           goal: {
             type: "string",
             maxLength: policy.maxGoalChars,
-            description: "Single-task goal or overall mission goal",
+            description: `Single-task goal or overall mission goal; combined child context limit: ${policy.maxGoalChars} characters.`,
           },
           kind: {
             type: "string",

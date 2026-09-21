@@ -731,6 +731,12 @@ export {
 } from "./topic-evidence-input-port.js";
 export { createMemoryTopicEvidenceSectionsV1 } from "./topic-evidence-context.js";
 export {
+  createMemoryMaintenanceControllerV1,
+  MEMORY_MAINTENANCE_DEADLINE_MS,
+  MEMORY_MAINTENANCE_POLICY_VERSION_V1,
+  type MemoryMaintenanceOptionsV1,
+} from "./memory-maintenance.js";
+export {
   createMemoryWriterControllerV1,
   projectMemoryEpisodeArchiveInputsV1,
   projectRawEvidenceArchiveInputsV1,

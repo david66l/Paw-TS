@@ -64,13 +64,15 @@ function isIgnoredUnderDir(relParts: string[]): boolean {
   return relParts.some((p) => LIST_IGNORE_DIR.has(p));
 }
 
-
 export interface ReadFileResult {
   readonly path?: string;
   readonly content?: string;
   readonly line_count?: number;
   readonly total_lines?: number;
   readonly size?: number;
+  /** Whole-file byte count, unlike size (characters of normalized displayed text). */
+  readonly byte_size?: number;
+  readonly partial?: boolean;
   readonly error?: string;
 }
 
@@ -88,7 +90,8 @@ export function readWorkspaceFile(
   if (!fs.existsSync(filepath) || !fs.statSync(filepath).isFile()) {
     return { error: `File not found: ${relPath}`, content: "" };
   }
-  const allText = fs.readFileSync(filepath, { encoding });
+  const raw = fs.readFileSync(filepath);
+  const allText = raw.toString(encoding);
   const allLines = allText.split(/\r?\n/);
   const total_lines = allLines.length;
   let lines = allLines;
@@ -105,6 +108,8 @@ export function readWorkspaceFile(
     line_count: lines.length,
     total_lines,
     size: content.length,
+    byte_size: raw.byteLength,
+    partial: offset > 0 || lines.length !== total_lines,
   };
 }
 

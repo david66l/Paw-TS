@@ -106,7 +106,7 @@ truth.
 bun run typecheck:memory-plugin
 bun test packages/memory-plugin/test
 bunx tsc --noEmit -p benchmarks/amb/tsconfig.json
-bun test apps/cli/test/paw-next-composition-v2.test.ts
+bun test legacy/apps/cli/test/paw-next-composition-v2.test.ts
 python -m unittest discover -s benchmarks/amb -p "test_*.py"
 ```
 

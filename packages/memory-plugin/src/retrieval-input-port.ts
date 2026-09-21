@@ -1,3 +1,4 @@
+import { withMemoryDeadline } from "./memory-deadline.js";
 import type {
   LoopInputPort,
   LoopSafeBoundary,
@@ -29,6 +30,7 @@ import {
 
 export const PAW_MEMORY_SEARCH_PLAN_VERSION_V2 =
   "paw.memory-search-plan.v2:lexical-anchors" as const;
+
 
 export interface MemoryProviderQueryV1 {
   readonly queryId: string;
@@ -116,16 +118,15 @@ export function createMemoryRetrievalInputPortV1(
           const snapshot = await readSnapshot();
           const query = projectCurrentMemoryQueryV1(snapshot, profile);
           if (query && !hasReceipt(snapshot, query.queryId)) {
-            const fact = await settleRetrieval({
-              snapshot,
-              query,
-              profile,
-              provider,
-              context: planContext,
-              buildContext,
-              estimator: options.estimator,
-              signal: options.signal,
-            });
+            let fact: MemoryRetrievalSettledFactV1 | undefined;
+            try {
+              fact = await withMemoryDeadline(options.signal, signal => settleRetrieval({
+                snapshot, query, profile, provider, context: planContext, buildContext,
+                estimator: options.estimator, signal,
+              }));
+            } catch (error) {
+              if (!options.signal.aborted) fact = receipt(query, profile.providerVersion, "degraded", [], error instanceof Error && error.name === "MemoryContextTimeout" ? "memory_retrieval_timeout" : "memory_retrieval_failed");
+            }
             if (fact && !options.signal.aborted) {
               await commitReceiptBestEffort({
                 initialSnapshot: snapshot,
@@ -383,6 +384,18 @@ async function settleRetrieval(input: {
       throw new Error("Memory provider returned an invalid status");
     }
     const cards = freezeProviderCards(result.cards, input.query);
+    // Empty retrieval injects no section, so there is nothing to budget. In
+    // particular, do not invoke a decorated context builder here: its optional
+    // resolver would start a paid request inside this shorter retrieval deadline.
+    if (cards.length === 0) {
+      return receipt(
+        input.query,
+        input.provider.providerVersion,
+        result.status,
+        cards,
+        result.reasonCode,
+      );
+    }
     const contextPlan = await input.context(input.snapshot, {
       signal: input.signal,
     });

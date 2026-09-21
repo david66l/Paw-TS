@@ -55,7 +55,13 @@ export interface MemoryTopicOrganizerStoreV1 {
 
 export interface MemoryTopicOrganizerEventV1 {
   readonly schemaVersion: "paw.memory-topic-organizer-event.v1";
-  readonly type: "claim" | "stage" | "apply" | "settle" | "skip";
+  readonly type:
+    | "claim"
+    | "stage"
+    | "apply"
+    | "settle"
+    | "skip"
+    | "recovery_pending";
   readonly organizationId?: string;
   readonly sourceWriteId?: string;
   readonly sourceRevision?: string;
@@ -202,6 +208,7 @@ export function createMemoryTopicOrganizerControllerV1(
         });
       }
 
+      let stageCommitStarted = false;
       try {
         const proposals = await options.extractor.extract(
           {
@@ -223,6 +230,7 @@ export function createMemoryTopicOrganizerControllerV1(
           topics: Object.freeze([...proposals]),
         });
         const stageStarted = now();
+        stageCommitStarted = true;
         await commitUniqueTopicFactV1({
           initialSnapshot: await readSnapshot(),
           fact: staged,
@@ -246,9 +254,10 @@ export function createMemoryTopicOrganizerControllerV1(
           now,
         });
       } catch (error) {
+        if (stageCommitStarted || options.signal.aborted) throw error;
         return settleTopicFailureV1({
           claim,
-          status: options.signal.aborted ? "interrupted" : "failed",
+          status: "failed",
           reasonCode: stableReasonCode(error),
           readSnapshot,
           commitFacts,
@@ -318,6 +327,7 @@ async function applyStagedOrganizationV1(
 ): Promise<MemoryTopicOrganizationSettledFactV1> {
   const started = input.now();
   try {
+    input.options.signal.throwIfAborted();
     const result = await input.options.store.apply(
       {
         organizationId: input.claim.organizationId,
@@ -367,16 +377,17 @@ async function applyStagedOrganizationV1(
     });
     return settlement;
   } catch (error) {
-    return settleTopicFailureV1({
-      claim: input.claim,
-      staged: input.staged,
-      status: input.options.signal.aborted ? "interrupted" : "failed",
-      reasonCode: stableReasonCode(error),
-      readSnapshot: input.readSnapshot,
-      commitFacts: input.commitFacts,
-      now: input.now,
-      onEvent: input.options.onEvent,
+    // There is no acknowledgement proving the staged operation failed. Keep it
+    // recoverable even when the provider rejects before returning a result.
+    emit(input.options.onEvent, {
+      schemaVersion: "paw.memory-topic-organizer-event.v1",
+      type: "recovery_pending",
+      organizationId: input.claim.organizationId,
+      proposalHash: input.staged.proposalHash,
+      reasonCode: "MemoryTopicApplyOutcomeUnknown",
+      durationMs: Math.max(0, input.now() - started),
     });
+    throw error;
   }
 }
 

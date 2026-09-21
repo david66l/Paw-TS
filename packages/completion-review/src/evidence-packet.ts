@@ -9,10 +9,14 @@ import type {
 import { hasCompletionReviewSourceMutationV1 } from "./policy.js";
 
 export const COMPLETION_REVIEW_EVIDENCE_PACKET_POLICY_VERSION_V1 =
-  "paw.completion-review-evidence-packet.v1" as const;
+  "paw.completion-review-evidence-packet.v3:observed-output:shared-shell-status" as const;
 
 export type CompletionReviewVerificationStateV1 =
-  "not_required" | "missing" | "passed" | "failed" | "indeterminate";
+  | "not_required"
+  | "missing"
+  | "passed"
+  | "failed"
+  | "indeterminate";
 
 export interface CompletionReviewVerificationEvidenceV1 {
   readonly callId: string;
@@ -29,6 +33,18 @@ export interface CompletionReviewVerificationEvidenceV1 {
 }
 
 export interface CompletionReviewEvidencePacketV1 {
+  readonly observations: readonly Pick<
+    CompletionReviewToolEvidenceV1,
+    | "callId"
+    | "tool"
+    | "args"
+    | "executionStatus"
+    | "outcome"
+    | "afterLatestMutation"
+    | "observedOutput"
+    | "exitCode"
+    | "timedOut"
+  >[];
   readonly policyVersion: typeof COMPLETION_REVIEW_EVIDENCE_PACKET_POLICY_VERSION_V1;
   readonly candidateHash: string;
   readonly goal: string;
@@ -93,6 +109,24 @@ export function createCompletionReviewEvidencePacketV1(
   );
 
   return Object.freeze({
+    observations: Object.freeze(
+      candidate.toolEvidence
+        .filter((item) => item.observedOutput)
+        .slice(-8)
+        .map((item) =>
+          Object.freeze({
+            callId: item.callId,
+            tool: item.tool,
+            args: item.args,
+            executionStatus: item.executionStatus,
+            outcome: item.outcome,
+            afterLatestMutation: item.afterLatestMutation,
+            observedOutput: item.observedOutput,
+            ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }),
+            ...(item.timedOut === undefined ? {} : { timedOut: item.timedOut }),
+          }),
+        ),
+    ),
     policyVersion: COMPLETION_REVIEW_EVIDENCE_PACKET_POLICY_VERSION_V1,
     candidateHash: candidate.candidateHash,
     goal: candidate.goal,

@@ -1,3 +1,4 @@
+import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import type { PendingApprovalItem } from "../agent/types";
 import styles from "./ApprovalCard.module.css";
@@ -22,9 +23,9 @@ export function ApprovalCard({
     <div className={styles.card} role="alertdialog" aria-label="工具审批请求">
       <div className={styles.head}>
         <span className={styles.icon} aria-hidden>
-          🛡
+          <ShieldCheck size={18} />
         </span>
-        <span className={styles.title}>审批请求</span>
+        <span className={styles.title}>这一步需要你的批准</span>
         {queueSize > 1 ? (
           <span className={styles.queue}>还有 {queueSize - 1} 条待审批</span>
         ) : null}

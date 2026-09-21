@@ -5,6 +5,7 @@ import type { JournalContextRuntimeV1 } from "@paw/runtime";
 import { canonicalJsonStringifyV1, hashTextV1 } from "./canonical.js";
 import type { MemoryContextResolverV1 } from "./context-resolver.js";
 import { createMemoryEvidenceCoverageSectionV1 } from "./evidence-coverage-context.js";
+import { withMemoryDeadline } from "./memory-deadline.js";
 import { createMemoryContextSectionV1 } from "./memory-section.js";
 import { projectMemoryResolvedContextToolV1 } from "./memory-tools.js";
 import { createMemoryPersonaEvidenceSectionV1 } from "./persona-evidence-context.js";
@@ -161,113 +162,124 @@ export function createToolDrivenMemoryContextV1(
   }> = {},
 ): JournalContextRuntimeV1 {
   if (profile.mode === "off") return base;
-  const plan = base.plan.bind(base);
-  const build = base.build.bind(base);
+  const basePlan = base.plan.bind(base);
   const guide = memoryToolGuideSection();
   const resolvedByQueryId = new Map<
     string,
     Promise<ModelContextSectionV1 | undefined>
   >();
+  const plan: JournalContextRuntimeV1["plan"] = async (
+    snapshot,
+    options,
+    projection,
+  ) => {
+    let additions: ModelContextSectionV1[] = [];
+    try {
+      const topicReceipt = [...snapshot.entries]
+        .reverse()
+        .find(
+          (entry) =>
+            entry.fact.type === "memory.topic_evidence_settled" &&
+            entry.fact.status !== "failed" &&
+            entry.fact.indexEntries.length > 0,
+        );
+      const topicIndex =
+        topicReceipt?.fact.type === "memory.topic_evidence_settled"
+          ? createMemoryTopicEvidenceSectionsV1(
+              topicReceipt.fact,
+              topicReceipt.seq,
+            )[0]
+          : undefined;
+      const personaReceipt = [...snapshot.entries]
+        .reverse()
+        .find(
+          (entry) =>
+            entry.fact.type === "memory.persona_projection_settled" &&
+            entry.fact.status === "completed",
+        );
+      const persona =
+        personaReceipt?.fact.type === "memory.persona_projection_settled"
+          ? createMemoryPersonaEvidenceSectionV1(
+              personaReceipt.fact,
+              personaReceipt.seq,
+            )
+          : undefined;
+      const query = projectCurrentMemoryQueryV1(snapshot, profile);
+      let resolved: ModelContextSectionV1 | undefined;
+      if (query && resolverOptions.contextResolver) {
+        let pending = resolvedByQueryId.get(query.queryId);
+        if (!pending) {
+          const sourceSeq = [...snapshot.entries]
+            .reverse()
+            .find(
+              (entry) =>
+                entry.fact.type === "input.promoted" &&
+                entry.fact.inputId === query.inputId,
+            )?.seq;
+          const resolver = resolverOptions.contextResolver;
+          pending = withMemoryDeadline(options.signal, (signal) =>
+            resolver.resolve(query.text, signal),
+          )
+            .then((packet) => {
+              const content = canonicalJsonStringifyV1(
+                projectMemoryResolvedContextToolV1(
+                  packet,
+                  resolverOptions.maxResolvedChars ?? 8_000,
+                ) as never,
+              );
+              return Object.freeze({
+                schemaVersion: 1 as const,
+                kind: "memory_cards" as const,
+                id: `memory-resolved-context:${query.queryId}`,
+                policyVersion: packet.resolverVersion,
+                sourceFromSeq: sourceSeq ?? 1,
+                sourceThroughSeq: sourceSeq ?? snapshot.tailSeq,
+                contentHash: hashTextV1(content),
+                content,
+              });
+            })
+            .catch((error: unknown) => {
+              // Cache an empty optional packet for this query after timeout;
+              // rebuilding context must not repeatedly pay the same deadline.
+              if (
+                options.signal.aborted ||
+                !(
+                  error instanceof Error &&
+                  error.name === "MemoryContextTimeout"
+                )
+              )
+                resolvedByQueryId.delete(query.queryId);
+              resolverOptions.onDiagnostic?.(stableErrorCode(error));
+              return undefined;
+            });
+          resolvedByQueryId.set(query.queryId, pending);
+          while (resolvedByQueryId.size > 8) {
+            const oldest = resolvedByQueryId.keys().next().value;
+            if (oldest !== undefined) resolvedByQueryId.delete(oldest);
+            else break;
+          }
+        }
+        resolved = await pending;
+      }
+      additions = [resolved, persona, topicIndex, guide].filter(
+        (section): section is ModelContextSectionV1 => section !== undefined,
+      );
+    } catch {
+      // Optional retrieval failure does not bypass the authoritative planner.
+    }
+    options.signal.throwIfAborted();
+    return basePlan(snapshot, options, {
+      ...projection,
+      optionalSections: [...(projection?.optionalSections ?? []), ...additions],
+    });
+  };
   return Object.freeze({
     plan,
     async build(
       snapshot: Parameters<JournalContextRuntimeV1["build"]>[0],
       options: Parameters<JournalContextRuntimeV1["build"]>[1],
-    ): Promise<ModelRequestV1> {
-      const request = await build(snapshot, options);
-      try {
-        const topicReceipt = [...snapshot.entries]
-          .reverse()
-          .find(
-            (entry) =>
-              entry.fact.type === "memory.topic_evidence_settled" &&
-              entry.fact.status !== "failed" &&
-              entry.fact.indexEntries.length > 0,
-          );
-        const topicIndex =
-          topicReceipt?.fact.type === "memory.topic_evidence_settled"
-            ? createMemoryTopicEvidenceSectionsV1(
-                topicReceipt.fact,
-                topicReceipt.seq,
-              )[0]
-            : undefined;
-        const personaReceipt = [...snapshot.entries]
-          .reverse()
-          .find(
-            (entry) =>
-              entry.fact.type === "memory.persona_projection_settled" &&
-              entry.fact.status === "completed",
-          );
-        const persona =
-          personaReceipt?.fact.type === "memory.persona_projection_settled"
-            ? createMemoryPersonaEvidenceSectionV1(
-                personaReceipt.fact,
-                personaReceipt.seq,
-              )
-            : undefined;
-        const query = projectCurrentMemoryQueryV1(snapshot, profile);
-        let resolved: ModelContextSectionV1 | undefined;
-        if (query && resolverOptions.contextResolver) {
-          let pending = resolvedByQueryId.get(query.queryId);
-          if (!pending) {
-            const sourceSeq = [...snapshot.entries]
-              .reverse()
-              .find(
-                (entry) =>
-                  entry.fact.type === "input.promoted" &&
-                  entry.fact.inputId === query.inputId,
-              )?.seq;
-            pending = resolverOptions.contextResolver
-              .resolve(query.text, options.signal)
-              .then((packet) => {
-                const content = canonicalJsonStringifyV1(
-                  projectMemoryResolvedContextToolV1(
-                    packet,
-                    resolverOptions.maxResolvedChars ?? 8_000,
-                  ) as never,
-                );
-                return Object.freeze({
-                  schemaVersion: 1 as const,
-                  kind: "memory_cards" as const,
-                  id: `memory-resolved-context:${query.queryId}`,
-                  policyVersion: packet.resolverVersion,
-                  sourceFromSeq: sourceSeq ?? 1,
-                  sourceThroughSeq: sourceSeq ?? snapshot.tailSeq,
-                  contentHash: hashTextV1(content),
-                  content,
-                });
-              })
-              .catch((error: unknown) => {
-                resolvedByQueryId.delete(query.queryId);
-                resolverOptions.onDiagnostic?.(stableErrorCode(error));
-                return undefined;
-              });
-            resolvedByQueryId.set(query.queryId, pending);
-            while (resolvedByQueryId.size > 8) {
-              const oldest = resolvedByQueryId.keys().next().value;
-              if (oldest !== undefined) resolvedByQueryId.delete(oldest);
-              else break;
-            }
-          }
-          resolved = await pending;
-        }
-        const additions = [guide, persona, topicIndex, resolved].filter(
-          (section): section is ModelContextSectionV1 => section !== undefined,
-        );
-        const known = new Set(
-          (request.contextSections ?? []).map((section) => section.id),
-        );
-        return Object.freeze({
-          ...request,
-          contextSections: Object.freeze([
-            ...(request.contextSections ?? []),
-            ...additions.filter((section) => !known.has(section.id)),
-          ]),
-        });
-      } catch {
-        // Navigation is optional evidence and cannot block the agent loop.
-        return request;
-      }
+    ) {
+      return (await plan(snapshot, options)).request;
     },
   });
 }

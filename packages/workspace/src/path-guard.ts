@@ -76,11 +76,11 @@ export function isPathInsideRoot(
   const target = path.resolve(targetResolved);
   if (root === target) return true;
   const rel = path.relative(root, target);
+  // Windows resource identities are case-folded; path.relative recognizes
+  // equivalent roots even when the original strings differ in case.
+  if (rel === "") return true;
   return (
-    rel !== "" &&
-    !rel.startsWith(`..${path.sep}`) &&
-    rel !== ".." &&
-    !path.isAbsolute(rel)
+    !rel.startsWith(`..${path.sep}`) && rel !== ".." && !path.isAbsolute(rel)
   );
 }
 

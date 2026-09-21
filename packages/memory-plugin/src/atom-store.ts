@@ -171,20 +171,25 @@ export function createMemoryAtomWriterStoreV1(input: {
         });
         const id = entry.id;
         const existing = await input.engine.get(id);
+        signal.throwIfAborted();
         if (!existing) await input.engine.put(entry);
+        signal.throwIfAborted();
         storedIds.push(id);
 
         // Put replacement first. A crash can leave both active, but never loses the
         // old evidence; replay then deterministically completes invalidation.
         for (const targetId of atom.targetIds) {
+          signal.throwIfAborted();
           if (targetId === id) continue;
           const target = await input.engine.get(targetId);
+          signal.throwIfAborted();
           if (!target) {
             throw new Error(
               "Memory atom target is missing from the scoped store",
             );
           }
           await input.engine.invalidate(targetId, writtenAt);
+          signal.throwIfAborted();
           invalidatedIds.push(targetId);
         }
         if (input.temporalGraph) {

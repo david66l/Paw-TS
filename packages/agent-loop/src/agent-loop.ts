@@ -476,8 +476,13 @@ async function settleModelCall<
   try {
     return await dependencies.model.execute(request, {
       signal,
-      onStreamEvent: async (event) => {
-        await dependencies.onModelStreamEvent?.(event);
+      onStreamEvent: (event) => {
+        // Ephemeral display observers must not back-pressure provider reads.
+        // Canonical model/tool facts are committed separately after settlement.
+        try {
+          const pending = dependencies.onModelStreamEvent?.(event);
+          if (pending) void Promise.resolve(pending).catch(() => {});
+        } catch { /* A disconnected UI is not an inference failure. */ }
       },
     });
   } catch (error) {

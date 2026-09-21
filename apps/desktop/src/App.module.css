@@ -8,10 +8,10 @@
 /* 三栏之间的拖拽分隔条 */
 .resizer {
   flex-shrink: 0;
-  width: 6px;
+  width: 1px;
   cursor: col-resize;
   position: relative;
-  z-index: 5;
+  z-index: 2;
   -webkit-app-region: no-drag;
 }
 

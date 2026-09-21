@@ -26,8 +26,12 @@ export interface InteractiveControlStateV1 extends LoopControlState {
 
 /** 多工作段运行开始时冻结的交互控制规则。 */
 export interface InteractiveControlConfigV2 extends InteractiveControlConfigV1 {
+  /** One journal-counted recovery per run, only for a proven thinking-only timeout. */
+  readonly recoverReasoningTimeout?: true;
   /** Opt-in, frozen in the manifest; historical configurations keep their original stop semantics. */
   readonly liveSteering?: true;
+  /** Frozen opt-in: settle the last admitted turn's tools before stopping. */
+  readonly settleFinalToolBatch?: true;
   /** 包含隐式初始段（segment 0）的最大工作段数量。 */
   readonly maxSegments: number;
   /** 同一 run 内所有工作段合计的模型回合上限。 */
@@ -127,7 +131,11 @@ export function createInteractiveControlReducerV2(): ControlReducer<
         segmentFacts,
         segmentModelFacts,
         segmentToolFacts,
-        config,
+        {
+          ...config,
+          allowReasoningRecovery: config.recoverReasoningTimeout === true &&
+            allModelFacts.filter(isReasoningTimeout).length === 1,
+        },
       );
       const budgetMayOverride =
         baseDecision.kind === "continue" || baseDecision.kind === "completed";
@@ -146,7 +154,11 @@ export function createInteractiveControlReducerV2(): ControlReducer<
                 }
               : allModelFacts.length > config.maxTotalModelTurns ||
                   (allModelFacts.length === config.maxTotalModelTurns &&
-                    baseDecision.kind === "continue")
+                    baseDecision.kind === "continue" &&
+                    !(
+                      config.settleFinalToolBatch &&
+                      hasPendingToolBatch(segmentFacts)
+                    ))
                 ? {
                     kind: "incomplete",
                     reason: "total-model-turn-budget-exhausted",
@@ -179,6 +191,12 @@ function modelSettlements(
   );
 }
 
+function isReasoningTimeout(fact: Extract<InputFactV1, { type: "model.settled" }>): boolean {
+  return fact.status === "unknown" &&
+    fact.errorCode === "ModelReasoningWithoutActionTimeout" &&
+    !fact.hasToolCalls && !fact.hasVisibleOutput;
+}
+
 function toolSettlements(
   facts: readonly InputFactV1[],
 ): readonly Extract<InputFactV1, { type: "tool.settled" }>[] {
@@ -192,7 +210,11 @@ function decide(
   inputFacts: readonly InputFactV1[],
   modelFacts: readonly Extract<InputFactV1, { type: "model.settled" }>[],
   toolFacts: readonly Extract<InputFactV1, { type: "tool.settled" }>[],
-  config: InteractiveControlConfigV1 & { readonly liveSteering?: true },
+  config: InteractiveControlConfigV1 & {
+    readonly liveSteering?: true;
+    readonly settleFinalToolBatch?: true;
+    readonly allowReasoningRecovery?: boolean;
+  },
 ): ControlDecision {
   const abort = findLast(inputFacts, "abort.requested");
   if (abort) {
@@ -230,7 +252,9 @@ function decide(
         reason: latestModel.errorCode ?? "model-failed",
       };
     case "unknown":
-      return { kind: "incomplete", reason: "model-result-unknown" };
+      if (config.allowReasoningRecovery && isReasoningTimeout(latestModel) &&
+          modelFacts.length < config.maxModelTurns) return { kind: "continue" };
+      return { kind: "incomplete", reason: /^Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout$/.test(latestModel.errorCode ?? "") ? latestModel.errorCode! : "model-result-unknown" };
     case "cancelled":
       return { kind: "incomplete", reason: "model-cancelled" };
     case "truncated":
@@ -239,7 +263,11 @@ function decide(
       break;
   }
 
-  if (modelFacts.length >= config.maxModelTurns && latestModel.hasToolCalls) {
+  if (
+    modelFacts.length >= config.maxModelTurns &&
+    latestModel.hasToolCalls &&
+    (!config.settleFinalToolBatch || modelFacts.length > config.maxModelTurns)
+  ) {
     return { kind: "incomplete", reason: "model-turn-budget-exhausted" };
   }
   if (latestModel.hasToolCalls) {
@@ -252,6 +280,12 @@ function decide(
     }
     if (batch.some((fact) => fact.status === "rejected")) {
       return { kind: "await_user", reason: "tool-permission-rejected" };
+    }
+    if (
+      modelFacts.length >= config.maxModelTurns &&
+      !hasPendingToolBatch(inputFacts)
+    ) {
+      return { kind: "incomplete", reason: "model-turn-budget-exhausted" };
     }
     return { kind: "continue" };
   }
@@ -282,6 +316,22 @@ function hasUnconsumedSteer(facts: readonly InputFactV1[]): boolean {
   }
   return [...accepted].some(
     (id) => !promoted.has(id) || promoted.get(id)! > lastDispatch,
+  );
+}
+
+function hasPendingToolBatch(facts: readonly InputFactV1[]): boolean {
+  const latest = findLast(facts, "model.settled");
+  if (!latest || latest.status !== "completed" || !latest.hasToolCalls)
+    return false;
+  const tail = facts.slice(facts.lastIndexOf(latest) + 1);
+  const settled = new Set(
+    tail.flatMap((fact) => (fact.type === "tool.settled" ? [fact.callId] : [])),
+  );
+  return tail.some(
+    (fact) =>
+      fact.type === "tool.call_observed" &&
+      fact.modelCallId === latest.modelCallId &&
+      !settled.has(fact.callId),
   );
 }
 
@@ -337,6 +387,9 @@ function assertConfig(config: InteractiveControlConfigV1): void {
 function assertConfigV2(config: InteractiveControlConfigV2): void {
   assertConfig(config);
   if (
+    (config.recoverReasoningTimeout !== undefined && config.recoverReasoningTimeout !== true) ||
+    (config.settleFinalToolBatch !== undefined &&
+      config.settleFinalToolBatch !== true) ||
     !Number.isSafeInteger(config.maxSegments) ||
     config.maxSegments <= 0 ||
     !Number.isSafeInteger(config.maxTotalModelTurns) ||

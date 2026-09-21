@@ -1,4 +1,5 @@
 import path from "node:path";
+import { captureWorkspaceRevision, compareWorkspaceRevisions } from "../workspace-revision.js";
 
 import {
   type ToolErrorCode,
@@ -14,9 +15,9 @@ import {
   editWorkspaceFile,
   fetchWebPage,
   generateBrief,
-  gitDiff,
-  gitLog,
-  gitStatus,
+  gitDiffAsync,
+  gitLogAsync,
+  gitStatusAsync,
   globWorkspaceFiles,
   grepWorkspaceText,
   listWorkspaceFiles,
@@ -41,6 +42,7 @@ import {
   ACCEPTANCE_UPDATE,
   APPLY_PATCH,
   BRIEF,
+  CONTEXT_COMPACT,
   CONTEXT_RECALL,
   CREATE_AGENT,
   EDIT,
@@ -912,6 +914,7 @@ export async function executeTool(
       ...(ctx.abortSignal ? { signal: ctx.abortSignal } : {}),
     };
     const onChunk = ctx.onShellChunk;
+    const before = await captureWorkspaceRevision(ctx.workspaceRoot);
     const r =
       onChunk || ctx.abortSignal
         ? await runShellInWorkspaceStreaming(ctx.workspaceRoot, cmd, {
@@ -924,6 +927,7 @@ export async function executeTool(
               : {}),
           })
         : runShellInWorkspace(ctx.workspaceRoot, cmd, shellOpts);
+    const workspaceEffect = compareWorkspaceRevisions(before, await captureWorkspaceRevision(ctx.workspaceRoot));
     if (r.error) {
       const msg = r.timed_out ? "timeout" : r.error;
       const code: ToolErrorCode = r.timed_out
@@ -931,7 +935,7 @@ export async function executeTool(
         : r.requiresApproval
           ? "E_POLICY_DENIED"
           : errorCodeForToolPayload(r);
-      return toolErrorResult("run_shell", code, msg);
+      return { ...toolErrorResult("run_shell", code, msg), payload: { ...r, ...makeToolError(code, msg), workspaceEffect } };
     }
     const code = r.exit_code ?? "?";
     const interpretation = interpretShellExitCode(cmd, r.exit_code);
@@ -946,7 +950,7 @@ export async function executeTool(
         : `run_shell: exit ${code}`;
     return {
       ok: !isError,
-      payload: enriched,
+      payload: { ...enriched, workspaceEffect },
       summary,
     };
   }
@@ -1128,6 +1132,18 @@ export async function executeTool(
         : `progress_read: no task list, ${outcome.value.activities.length} background job(s)`,
     };
   }
+  if (tool === CONTEXT_COMPACT) {
+    // Pure journal marker: the request is honored by the compaction boundary
+    // middleware right after this tool batch settles (user_requested reason).
+    return {
+      ok: true,
+      payload: {
+        requested: true,
+        note: "Compaction checkpoint requested; it runs at the next safe boundary.",
+      },
+      summary: "context_compact: checkpoint requested",
+    };
+  }
   if (tool === NOTEBOOK_EDIT) {
     const filePath = typeof rec.path === "string" ? rec.path : "";
     if (!filePath) {
@@ -1189,7 +1205,7 @@ export async function executeTool(
     };
   }
   if (tool === GIT_STATUS) {
-    const r = gitStatus(ctx.workspaceRoot);
+    const r = await gitStatusAsync(ctx.workspaceRoot, ctx.abortSignal);
     if (r.error) {
       return { ok: false, payload: r, summary: `git_status: ${r.error}` };
     }
@@ -1206,7 +1222,7 @@ export async function executeTool(
   if (tool === GIT_LOG) {
     const maxCount =
       num(rec.max_count, undefined) ?? num(rec.maxCount, undefined) ?? 10;
-    const r = gitLog(ctx.workspaceRoot, maxCount);
+    const r = await gitLogAsync(ctx.workspaceRoot, maxCount, ctx.abortSignal);
     if (r.error) {
       return { ok: false, payload: r, summary: `git_log: ${r.error}` };
     }
@@ -1216,7 +1232,7 @@ export async function executeTool(
   if (tool === GIT_DIFF) {
     const diffPath =
       typeof rec.path === "string" && rec.path.trim() ? rec.path : undefined;
-    const r = gitDiff(ctx.workspaceRoot, diffPath);
+    const r = await gitDiffAsync(ctx.workspaceRoot, diffPath, ctx.abortSignal);
     if (r.error) {
       return { ok: false, payload: r, summary: `git_diff: ${r.error}` };
     }

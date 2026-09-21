@@ -13,12 +13,66 @@ import {
   createCompletionReviewFeedbackV1,
   createModelCompletionReviewerV1,
   evaluateCompletionReviewGateV1,
+  TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
   evaluateCompletionReviewTriggersV1,
   projectCompletionReviewToolEvidenceV1,
   projectPendingCompletionReviewFeedbackV1,
 } from "../src/index.js";
 
 describe("completion review evidence projector", () => {
+  test("shared legacy shell analysis rejects masked status and preserves direct checks", () => {
+    for (const command of [
+      "npm test | tail -10",
+      "node --test test/a.js 2>&1 | tail -12",
+      "npm test || true",
+      "true || npm test",
+      "npm test; echo done",
+      "npm test &",
+      "npm run lint | head -5",
+    ]) {
+      for (const isError of [false, true]) {
+        const [evidence] = projectCompletionReviewToolEvidenceV1({
+          latestMutationSeq: 0,
+          calls: [
+            {
+              seq: 1,
+              callId: "check",
+              tool: "workspace_run_shell",
+              status: "completed",
+              args: { command },
+              summary: "shell result",
+              isError,
+              payload: { exit_code: isError ? 1 : 0 },
+            },
+          ],
+        });
+        expect(evidence?.outcome).toBe("indeterminate");
+      }
+    }
+    for (const command of [
+      "npm test",
+      "cd project && npm test",
+      "npm test && echo done",
+      "node --test --test-name-pattern 'a|b' test/a.js",
+    ]) {
+      const [evidence] = projectCompletionReviewToolEvidenceV1({
+        latestMutationSeq: 0,
+        calls: [
+          {
+            seq: 1,
+            callId: "check",
+            tool: "workspace_run_shell",
+            status: "completed",
+            args: { command },
+            summary: "shell result",
+            isError: false,
+            payload: { exit_code: 0 },
+          },
+        ],
+      });
+      expect(evidence?.outcome).toBe("passed");
+    }
+  });
   test("recognizes Django and Python test runners", () => {
     expect(
       classifyVerificationCommandV1(
@@ -36,6 +90,30 @@ describe("completion review evidence projector", () => {
     expect(
       classifyVerificationCommandV1("python -m unittest tests.test_i18n"),
     ).toBe("test");
+  });
+
+  test("a direct rerun resolves the same target previously hidden by an output pipeline", () => {
+    const evidence = projectCompletionReviewToolEvidenceV1({
+      latestMutationSeq: 0,
+      calls: [
+        "node --test test/a.js 2>&1 | tail -10",
+        "node --test test/a.js",
+      ].map((command, index) => ({
+        seq: index + 1,
+        callId: `check-${index}`,
+        tool: "workspace_run_shell",
+        status: "completed" as const,
+        args: { command },
+        summary: "exit 0",
+        isError: false,
+        payload: { exit_code: 0 },
+      })),
+    });
+    expect(evidence[0]?.outcome).toBe("indeterminate");
+    expect(evidence[1]?.outcome).toBe("passed");
+    expect(evidence[0]?.verificationTarget).toBe(
+      evidence[1]?.verificationTarget,
+    );
   });
 
   test("separates shell execution from a failed test outcome", () => {
@@ -160,6 +238,41 @@ describe("completion review policy", () => {
       "user_requested",
       "non_trivial_change",
     ]);
+  });
+
+  test("tight preset drops the near-always-on unverified-source trigger", () => {
+    const source = candidate({
+      goal: "Implement the fix",
+      changedPaths: ["src/a.ts"],
+      mutationCount: 1,
+    });
+    // Default: an unverified source mutation alone forces a reviewer call.
+    expect(evaluateCompletionReviewTriggersV1(source)).toEqual([
+      "missing_fresh_verification",
+    ]);
+    // Tight accounting arm: same candidate is allowed through unless size,
+    // explicit request, or failed verification evidence demands review.
+    expect(
+      evaluateCompletionReviewTriggersV1(
+        source,
+        TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
+      ),
+    ).toEqual([]);
+    expect(
+      evaluateCompletionReviewGateV1(source, TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1),
+    ).toEqual({ action: "allow" });
+
+    const nonTrivial = candidate({
+      goal: "Implement the fix",
+      changedPaths: ["src/a.ts"],
+      mutationCount: 3,
+    });
+    expect(
+      evaluateCompletionReviewTriggersV1(
+        nonTrivial,
+        TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
+      ),
+    ).toEqual(["non_trivial_change"]);
   });
 
   test("fresh shell evidence avoids only the missing-verification trigger", () => {
@@ -416,6 +529,46 @@ describe("completion review evidence packet and deterministic routing", () => {
 });
 
 describe("completion reviewer", () => {
+  test("does not accept a verdict returned after parent cancellation", async () => {
+    const controller = new AbortController();
+    const reviewer = createModelCompletionReviewerV1({
+      model: {
+        async complete() {
+          controller.abort();
+          return {
+            status: "completed",
+            text: JSON.stringify({
+              decision: "allow",
+              reasonCode: "evidence_sufficient",
+              summary: "late verdict",
+            }),
+          };
+        },
+      },
+    });
+    expect(
+      await reviewer.review(candidate(), { signal: controller.signal }),
+    ).toEqual({
+      status: "cancelled",
+      errorCode: "CompletionReviewCancelled",
+    });
+  });
+
+  test("settles the review deadline even when the model ignores cancellation", async () => {
+    const reviewer = createModelCompletionReviewerV1({
+      timeoutMs: 15,
+      model: { complete: () => new Promise(() => {}) },
+    });
+    expect(
+      await reviewer.review(candidate(), {
+        signal: new AbortController().signal,
+      }),
+    ).toEqual({
+      status: "unknown",
+      errorCode: "CompletionReviewTimeout",
+    });
+  }, 500);
+
   test("parses one strict model verdict", async () => {
     let packet: Record<string, unknown> | undefined;
     const reviewer = createModelCompletionReviewerV1({
@@ -441,7 +594,8 @@ describe("completion reviewer", () => {
       reasonCode: "missing_verification",
     });
     expect(packet).toMatchObject({
-      policyVersion: "paw.completion-review-evidence-packet.v1",
+      policyVersion:
+        "paw.completion-review-evidence-packet.v3:observed-output:shared-shell-status",
       verification: { state: "not_required", latestByTarget: [] },
     });
     expect(packet).not.toHaveProperty("toolEvidence");
@@ -506,6 +660,49 @@ describe("completion reviewer", () => {
 });
 
 describe("completion review controller", () => {
+  test("journals review timeout once and never promotes a late verdict to allow", async () => {
+    const session = new MemoryReviewSession();
+    let resolveLate!: (value: { status: "completed"; text: string }) => void;
+    let calls = 0;
+    const controller = createCompletionReviewControllerV1({
+      session,
+      reviewer: createModelCompletionReviewerV1({
+        timeoutMs: 15,
+        model: {
+          complete: () => {
+            calls++;
+            return new Promise((resolve) => {
+              resolveLate = resolve;
+            });
+          },
+        },
+      }),
+      signal: new AbortController().signal,
+      clock: () => 10,
+    });
+    const value = candidate();
+    const first = await controller.review(value, ["user_requested"]);
+    resolveLate({
+      status: "completed",
+      text: JSON.stringify({
+        decision: "allow",
+        reasonCode: "evidence_sufficient",
+        summary: "too late",
+      }),
+    });
+    await Promise.resolve();
+    expect(await controller.review(value, ["user_requested"])).toEqual(first);
+    expect(calls).toBe(1);
+    expect(
+      session.facts.filter((fact) => fact.type === "completion.review_settled"),
+    ).toEqual([
+      expect.objectContaining({
+        status: "unknown",
+        reasonCode: "CompletionReviewTimeout",
+      }),
+    ]);
+  });
+
   test("persists claim and settlement and reuses the candidate result", async () => {
     const session = new MemoryReviewSession();
     let calls = 0;

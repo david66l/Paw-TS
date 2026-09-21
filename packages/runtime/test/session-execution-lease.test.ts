@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -25,6 +25,37 @@ afterEach(() => {
 });
 
 describe("cross-process Session execution lease", () => {
+  test("each authority read checks formal files once and still detects changed history", async () => {
+    const root = tempRoot();
+    const lease = acquired(acquire(options(root, "single-pass", "run-1", 0)));
+    await lease.renew();
+    const files = eventFiles(root, "single-pass");
+    const stat = spyOn(fs, "lstatSync");
+    const read = spyOn(fs, "readFileSync");
+    try {
+      lease.assertHeld();
+      for (const file of files) {
+        expect(stat.mock.calls.filter((args) => args[0] === file)).toHaveLength(
+          1,
+        );
+        expect(read.mock.calls.filter((args) => args[0] === file)).toHaveLength(
+          1,
+        );
+      }
+    } finally {
+      stat.mockRestore();
+      read.mockRestore();
+    }
+    // A previous successful read must never become a cache that trusts changed bytes.
+    const original = readJson(files[0] as string);
+    fs.writeFileSync(
+      files[0] as string,
+      `${JSON.stringify({ ...original, ownerId: "other-owner" })}\n`,
+    );
+    expect(() => lease.assertHeld()).toThrow(SessionExecutionLeaseLostError);
+    expect(lease.signal.aborted).toBe(true);
+  });
+
   test("two real processes compete for one initial immutable event", async () => {
     const root = tempRoot();
     const barrier = path.join(root, "start");

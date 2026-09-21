@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -171,9 +177,56 @@ describe("loadSkillsFromDirectory", () => {
     expect(skills.length).toBe(0);
     rmSync(tmpDir, { recursive: true, force: true });
   });
-});
 
-function mkdirSync(p: string, opts?: { recursive?: boolean }): void {
-  const { mkdirSync: fsMkdir } = require("node:fs");
-  fsMkdir(p, opts);
-}
+  // `.paw/skills/` 是用户可控目录，递归必须有界。旧实现没有深度上限也没有
+  // 环检测，`statSync` 又会跟随符号链接，一个自引用目录链接就能无限递归爆栈。
+  describe("bounded recursion", () => {
+    function skillAt(root: string, depth: number): string {
+      let dir = root;
+      for (let i = 0; i < depth; i++) dir = path.join(dir, `level-${i}`);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        path.join(dir, "SKILL.md"),
+        "---\nname: deep\n---\nbody",
+        "utf8",
+      );
+      return dir;
+    }
+
+    test("finds a skill a few levels down", () => {
+      const root = mkdtempSync(path.join(tmpdir(), "paw-skills-deep-"));
+      skillAt(root, 3);
+      expect(loadSkillsFromDirectory(root).length).toBe(1);
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    test("stops at the depth limit instead of recursing forever", () => {
+      const root = mkdtempSync(path.join(tmpdir(), "paw-skills-deep-"));
+      skillAt(root, 40);
+      // 关键性质是「返回」而不是「找到」：无上限时会一直递归下去。
+      expect(loadSkillsFromDirectory(root).length).toBe(0);
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    test("survives a self-referencing directory symlink", () => {
+      const root = mkdtempSync(path.join(tmpdir(), "paw-skills-loop-"));
+      const child = path.join(root, "loop");
+      mkdirSync(child, { recursive: true });
+      try {
+        // Windows 上创建符号链接需要权限，失败时跳过而不是误判为通过。
+        symlinkSync(root, path.join(child, "back"), "dir");
+      } catch {
+        rmSync(root, { recursive: true, force: true });
+        return;
+      }
+      writeFileSync(
+        path.join(root, "SKILL.md"),
+        "---\nname: top\n---\nbody",
+        "utf8",
+      );
+      const skills = loadSkillsFromDirectory(root);
+      expect(skills.length).toBe(1);
+      rmSync(root, { recursive: true, force: true });
+    });
+  });
+});

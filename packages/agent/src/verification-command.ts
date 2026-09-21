@@ -1,7 +1,4 @@
-import {
-  type ShellCommandSegment,
-  parseCommandChain,
-} from "./shell-command.js";
+import { exitStatusProvesVerification, parseCommandChain } from "@paw/core";
 
 export type VerificationCommandFamily =
   | "pytest"
@@ -189,27 +186,6 @@ function analyzeSegment(
     return { family: "cargo" };
   }
   return undefined;
-}
-
-function exitStatusProvesVerification(
-  chain: readonly ShellCommandSegment[],
-  verificationIndex: number,
-): boolean {
-  // An earlier OR fallback may skip this verification entirely when its left
-  // side succeeds. A background predecessor is similarly not an ordered proof.
-  for (let index = 0; index < verificationIndex; index += 1) {
-    const connector = chain[index]?.connectorAfter;
-    if (connector === "||" || connector === "&") return false;
-  }
-
-  // A following `&&` can only produce overall success after this runner
-  // succeeds. Pipes, fallbacks, sequential lists, and background execution can
-  // all replace or detach the runner's status, so they are not pass evidence.
-  for (let index = verificationIndex; index < chain.length; index += 1) {
-    const connector = chain[index]?.connectorAfter;
-    if (connector && connector !== "&&") return false;
-  }
-  return true;
 }
 
 /** Analyze whether a shell command actually intends to execute assertions. */

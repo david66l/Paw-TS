@@ -415,6 +415,8 @@
 
 .roleItem,
 .roleItemOff {
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -442,9 +444,18 @@
 .roleBody {
   flex: 1;
   min-width: 0;
+  text-align: left;
   display: flex;
-  align-items: baseline;
-  gap: 7px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.rolePet,
+.roleName {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .rolePet {
@@ -1103,4 +1114,89 @@
 
 :global(:root[data-color-theme="paper"]) .tab:hover {
   background: #f5f3ec80;
+}
+
+/* Workspace design */
+
+:global(:root) .right.right {
+  background: var(--workspace-panel);
+  padding: 0;
+  border-left: 1px solid var(--glass-border-soft);
+}
+.panelHeading {
+  height: 65px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--glass-border-soft);
+}
+.panelHeading strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.panelHeading button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+.panelHeading button:hover {
+  background: var(--accent-soft);
+}
+:global(:root) .panel.panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+:global(:root) .panel.panel::before,
+:global(:root) .panel.panel::after {
+  display: none;
+}
+:global(:root) .tabs.tabs {
+  padding: 14px 16px 10px;
+  background: none;
+  backdrop-filter: none;
+  gap: 5px;
+}
+:global(:root) .tab.tab,
+:global(:root) .tabActive.tabActive {
+  flex: none;
+  min-width: 0;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 400;
+  box-shadow: none;
+}
+:global(:root) .tabActive.tabActive {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+:global(:root) .body.body {
+  padding: 18px 16px;
+}
+.runHeading {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 14px 0;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+@media (max-width: 1000px) {
+  :global(:root) .right.right {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    min-width: 280px;
+    z-index: 25;
+    box-shadow: -8px 0 30px #35263e12;
+  }
 }

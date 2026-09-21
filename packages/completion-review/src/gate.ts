@@ -2,7 +2,11 @@ import type { CompletionReviewTriggerV1 } from "@paw/protocol";
 
 import type { CompletionReviewCandidateV1 } from "./candidate.js";
 import { createCompletionReviewEvidencePacketV1 } from "./evidence-packet.js";
-import { evaluateCompletionReviewTriggersV1 } from "./policy.js";
+import {
+  type CompletionReviewTriggerPolicyV1,
+  DEFAULT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
+  evaluateCompletionReviewTriggersV1,
+} from "./policy.js";
 
 export const COMPLETION_REVIEW_GATE_POLICY_VERSION_V1 =
   "paw.completion-review-gate.v3" as const;
@@ -16,6 +20,7 @@ export type CompletionReviewGateDecisionV1 =
 
 export function evaluateCompletionReviewGateV1(
   candidate: CompletionReviewCandidateV1,
+  policy: CompletionReviewTriggerPolicyV1 = DEFAULT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
 ): CompletionReviewGateDecisionV1 {
   const packet = createCompletionReviewEvidencePacketV1(candidate);
   const evidenceTriggers = packet.verification.latestByTarget.flatMap((item) =>
@@ -25,7 +30,10 @@ export function evaluateCompletionReviewGateV1(
         ? (["fresh_verification_inconclusive"] as const)
         : [],
   );
-  const policyTriggers = evaluateCompletionReviewTriggersV1(candidate).filter(
+  const policyTriggers = evaluateCompletionReviewTriggersV1(
+    candidate,
+    policy,
+  ).filter(
     (trigger) =>
       trigger !== "missing_fresh_verification" ||
       packet.verification.state === "missing",

@@ -32,6 +32,121 @@ const config: InteractiveControlConfigV2 = {
 describe("interactive control reducer v2 work segments", () => {
   const v1 = createInteractiveControlReducerV1();
   const v2 = createInteractiveControlReducerV2();
+  test("reasoning recovery is journal-counted across segments and never bypasses hard stops", () => {
+    const recovery = { ...config, recoverReasoningTimeout: true as const };
+    const timeout = (turn: number): InputFactV1 => ({ ...model(turn, "unknown", false), errorCode: "ModelReasoningWithoutActionTimeout" });
+    const facts = [timeout(1)];
+    expect(v2.reduce(facts, recovery).decision.kind).toBe("continue");
+    expect(v2.reduce(JSON.parse(JSON.stringify(facts)), recovery)).toEqual(v2.reduce(facts, recovery));
+    expect(v2.reduce([...facts, timeout(2)], recovery).decision.kind).toBe("incomplete");
+    expect(v2.reduce([...facts, model(2, "completed", false), segment(1), promotion("next"), timeout(3)], recovery).decision.kind).toBe("incomplete");
+    expect(v2.reduce(facts, { ...recovery, maxModelTurns: 1 }).decision.kind).toBe("incomplete");
+    expect(v2.reduce([model(1, "completed", false), model(2, "completed", false), segment(1), promotion("next"), timeout(3)], { ...recovery, maxTotalModelTurns: 3 }).decision).toEqual({ kind: "incomplete", reason: "total-model-turn-budget-exhausted" });
+    expect(v2.reduce([...facts, { type: "abort.requested", source: "user" }], recovery).decision.kind).toBe("aborted");
+    for (const errorCode of ["ModelRequestIdleTimeout", "ModelRequestWallTimeout", "OtherError"]) {
+      expect(v2.reduce([{ ...model(1, "unknown", false), errorCode }], recovery).decision.kind).toBe("incomplete");
+    }
+    expect(v2.reduce([{ ...model(1, "unknown", true), errorCode: "ModelReasoningWithoutActionTimeout" }], recovery).decision.kind).toBe("incomplete");
+  });
+  test("supervision stop codes survive replay without turning partial responses into success", () => {
+    for (const errorCode of ["ModelRequestIdleTimeout", "ModelRequestWallTimeout", "ModelReasoningWithoutActionTimeout"]) {
+      const facts: InputFactV1[] = [{ type: "model.settled", modelCallId: "model-1", turn: 1, status: "unknown", hasToolCalls: false, hasVisibleOutput: false, errorCode }];
+      expect(v2.reduce(facts, config).decision).toEqual({ kind: "incomplete", reason: errorCode });
+      expect(v2.reduce(JSON.parse(JSON.stringify(facts)), config)).toEqual(v2.reduce(facts, config));
+    }
+  });
+
+  test("opt-in settles every last-turn tool, then stops without admitting another model turn", () => {
+    const limit = {
+      ...config,
+      maxModelTurns: 1,
+      maxTotalModelTurns: 1,
+      settleFinalToolBatch: true as const,
+    };
+    const facts: InputFactV1[] = [
+      model(1, "completed", true),
+      observed("a", 1),
+      { ...observed("b", 1), order: 1 },
+    ];
+    expect(v2.reduce(facts, limit).decision.kind).toBe("continue");
+    expect(
+      v2.reduce(facts, { ...config, maxModelTurns: 1, maxTotalModelTurns: 1 })
+        .decision.kind,
+    ).toBe("incomplete");
+    facts.push(tool("a", "completed"));
+    expect(v2.reduce(facts, limit).decision.kind).toBe("continue");
+    // Replaying a partial batch produces the same decision, with no in-memory allowance.
+    expect(v2.reduce(JSON.parse(JSON.stringify(facts)), limit)).toEqual(
+      v2.reduce(facts, limit),
+    );
+    facts.push(tool("b", "failed"));
+    expect(v2.reduce(facts, limit).decision).toEqual({
+      kind: "incomplete",
+      reason: "model-turn-budget-exhausted",
+    });
+    expect(v2.reduce([model(1, "completed", false)], limit).decision.kind).toBe(
+      "completed",
+    );
+  });
+
+  test("last-turn opt-in preserves cancellation, denied permission and unknown effects", () => {
+    const limit = {
+      ...config,
+      maxModelTurns: 1,
+      maxTotalModelTurns: 1,
+      settleFinalToolBatch: true as const,
+    };
+    const facts: InputFactV1[] = [
+      model(1, "completed", true),
+      observed("a", 1),
+    ];
+    expect(
+      v2.reduce([...facts, { type: "abort.requested", source: "user" }], limit)
+        .decision.kind,
+    ).toBe("aborted");
+    expect(
+      v2.reduce([...facts, tool("a", "rejected")], limit).decision.kind,
+    ).toBe("await_user");
+    expect(
+      v2.reduce([...facts, tool("a", "unknown")], limit).decision,
+    ).toMatchObject({ reason: "tool-result-unknown" });
+    expect(
+      v2.reduce([...facts, tool("a", "cancelled")], limit).decision,
+    ).toMatchObject({ reason: "tool-cancelled" });
+    expect(v2.reduce([model(1, "completed", true)], limit).decision.kind).toBe(
+      "incomplete",
+    );
+  });
+
+  test("total budget only admits pending tools in the active segment", () => {
+    const limit = {
+      ...config,
+      maxModelTurns: 2,
+      maxTotalModelTurns: 2,
+      settleFinalToolBatch: true as const,
+    };
+    const past: InputFactV1[] = [
+      model(1, "completed", false),
+      segment(1),
+      promotion("segment-1"),
+    ];
+    const facts: InputFactV1[] = [
+      ...past,
+      model(2, "completed", true),
+      observed("last", 2),
+    ];
+    expect(v2.reduce(facts, limit).decision.kind).toBe("continue");
+    expect(
+      v2.reduce([...facts, tool("last", "completed")], limit).decision,
+    ).toEqual({
+      kind: "incomplete",
+      reason: "total-model-turn-budget-exhausted",
+    });
+    expect(
+      v2.reduce([...facts, segment(2), promotion("segment-2")], limit).decision
+        .kind,
+    ).toBe("incomplete");
+  });
 
   test("keeps implicit segment zero decisions equivalent to reducer v1", () => {
     const cases: readonly InputFactV1[][] = [

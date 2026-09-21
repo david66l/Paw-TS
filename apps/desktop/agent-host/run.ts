@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
-import { loadPawNextCollaborationRosterV1 } from "@paw/cli/paw-next";
+import { loadPawNextCollaborationRosterV1 } from "@paw/paw-next";
 import {
   desktopCheckpointNamespace,
   finalizeDesktopNext,
   listDesktopNextMemories,
   readDesktopMonitor,
+  readDesktopContext,
+  compactDesktopContext,
   runDesktopNext,
 } from "./paw-next.js";
 /**
@@ -47,8 +49,16 @@ type HistoryTurn = {
 };
 
 import { DesktopNextControls } from "./paw-next-controls.js";
+import { createDesktopMemoryWorker, postgresMemoryJobStore } from "./memory-jobs.js";
 
 type InMsg =
+  | {
+      type: "context.get" | "context.compact";
+      requestId: string;
+      operationId: string;
+      conversationId: string;
+      workspaceRoot?: string;
+    }
   | { type: "jobs.refresh"; requestId: string; operationId: string }
   | {
       type: "job.stop";
@@ -584,11 +594,33 @@ async function handleControl(
         | "child.cancel"
         | "jobs.refresh"
         | "job.stop"
-        | "monitor.get";
+        | "monitor.get"
+        | "context.get"
+        | "context.compact";
     }
   >,
 ) {
   try {
+    if (msg.type === "context.get" || msg.type === "context.compact") {
+      const data =
+        msg.type === "context.get"
+          ? readDesktopContext(
+              resolveRoot(msg.workspaceRoot),
+              msg.conversationId,
+            )
+          : await compactDesktopContext(
+              resolveRoot(msg.workspaceRoot),
+              msg.conversationId,
+            );
+      emit({
+        type: "control.done",
+        requestId: msg.requestId,
+        operationId: msg.operationId,
+        ok: true,
+        data,
+      });
+      return;
+    }
     if (msg.type === "monitor.get") {
       const data = readDesktopMonitor(
         resolveRoot(msg.workspaceRoot),
@@ -611,7 +643,7 @@ async function handleControl(
       result = await control.submit(msg.inputId, msg.content, msg.attachments);
     else if (msg.type === "child.cancel") control.cancel(msg.childId);
     else if (msg.type === "jobs.refresh") control.refreshJobs();
-    else {
+    else if (msg.type === "job.stop") {
       control.stopJob(msg.runId, msg.jobId);
       control.refreshJobs();
     }
@@ -665,6 +697,8 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
       : undefined;
 
   try {
+    await memoryWorker.yieldToForeground();
+    ac.signal.throwIfAborted();
     const r = await runDesktopNext(goal, {
       controls,
       attachments: msg.attachments,
@@ -672,7 +706,11 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
       workspaceRoot,
       maxSteps: msg.maxSteps,
       intent: msg.intent,
-      taskMode: msg.taskMode === "long" ? "long" : "standard",
+      // Omitted mode must reach the model router; defaulting here disables it.
+      taskMode:
+        msg.taskMode === "long" || msg.taskMode === "standard"
+          ? msg.taskMode
+          : undefined,
       conversationHistory: Array.isArray(msg.history) ? history : undefined,
       conversationId,
       abortSignal: ac.signal,
@@ -1122,6 +1160,8 @@ function handleLine(line: string): void {
   switch (msg.type) {
     case "jobs.refresh":
     case "job.stop":
+    case "context.get":
+    case "context.compact":
     case "monitor.get":
     case "input.submit":
     case "child.cancel":
@@ -1202,9 +1242,29 @@ const rl = createInterface({
   input: process.stdin,
   crlfDelay: Number.POSITIVE_INFINITY,
 });
+const memoryWorker = createDesktopMemoryWorker({
+  directory: path.join(process.cwd(), ".paw", "desktop-memory-ingress"),
+  store: postgresMemoryJobStore(),
+  idle: () => controllers.size === 0,
+  async run(job, signal) {
+    const result = await runDesktopNext("Background memory maintenance", {
+      operation: "memory", intent: "recover", memoryRunId: job.runId,
+      expectedConfigHash: job.configHash, workspaceRoot: job.workspaceRoot,
+      abortSignal: signal, resolveToolApproval: async () => false, onEvent() {},
+    });
+    return JSON.parse(result.text);
+  },
+});
+if (process.env.PAW_MEMORY_WORKER_DISABLED !== "1") memoryWorker.start();
 rl.on("line", handleLine);
-rl.on("close", () => {
+rl.on("close", async () => {
+  memoryWorker.stop();
   for (const c of controllers.values()) c.abort();
+  // A bounded best-effort flush; exporter failures cannot keep the host alive.
+  await Promise.race([
+    import("./cloud-telemetry.js").then((m) => m.shutdownDesktopCloudTelemetry()).catch(() => {}),
+    new Promise<void>((resolve) => setTimeout(resolve, 2_500)),
+  ]);
   process.exit(0);
 });
 

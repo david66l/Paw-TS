@@ -141,15 +141,44 @@ export class FileSystemAppStateStore implements AppStateStore {
     mkdirSync(this.statesDir, { recursive: true });
   }
 
+  /**
+   * 解析某个 runId 对应的状态文件路径，并强制包含性校验。
+   *
+   * runId 会被直接插值进文件名，因此 `../../x` 这类取值会让 save/load/delete
+   * 越过 `.paw/states/`（delete 尤其危险：可删除工作区外的任意 .json）。
+   * 这里沿用 checkpoint.ts / path-guard 的同一套「resolve + relative 包含性」
+   * 判定：合法的 runId（含点、连字符）全部保留，只有逃逸才失败关闭。
+   */
+  private statePath(runId: string): string {
+    const root = path.resolve(this.statesDir);
+    const resolved = path.resolve(root, `${runId}.json`);
+    const relative = path.relative(root, resolved);
+    if (
+      relative.length === 0 ||
+      path.isAbsolute(relative) ||
+      relative === ".." ||
+      relative.startsWith(`..${path.sep}`)
+    ) {
+      throw new Error(
+        `app state run id escapes the states directory: ${JSON.stringify(runId)}`,
+      );
+    }
+    return resolved;
+  }
+
   /** 将状态序列化为 JSON 并写入文件 */
   save(state: AppState): void {
-    const file = path.join(this.statesDir, `${state.runId}.json`);
-    atomicWrite(file, JSON.stringify(state, null, 2));
+    atomicWrite(this.statePath(state.runId), JSON.stringify(state, null, 2));
   }
 
   /** 从 JSON 文件加载状态，文件不存在时返回 null */
   load(runId: string): AppState | null {
-    const file = path.join(this.statesDir, `${runId}.json`);
+    let file: string;
+    try {
+      file = this.statePath(runId);
+    } catch {
+      return null;
+    }
     try {
       const raw = readFileSync(file, "utf-8");
       return JSON.parse(raw) as AppState;
@@ -184,7 +213,8 @@ export class FileSystemAppStateStore implements AppStateStore {
 
   /** 删除指定 runId 的状态文件 */
   delete(runId: string): void {
-    const file = path.join(this.statesDir, `${runId}.json`);
+    // 路径解析放在 try 之外：逃逸的 runId 必须显式报错，而不是被静默吞掉。
+    const file = this.statePath(runId);
     try {
       rmSync(file);
     } catch {

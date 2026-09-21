@@ -30,14 +30,21 @@ export function createCompletionReviewControllerV1(options: {
     reviewerId: string;
     review(
       candidate: CompletionReviewCandidateV1,
-      options: Readonly<{ signal: AbortSignal }>,
+      options: Readonly<{ signal: AbortSignal; attempt?: 0 | 1 }>,
     ): Promise<CompletionReviewerResultV1>;
   }>;
   readonly signal: AbortSignal;
+  /** Opt-in bounded retry. The caller freezes this policy in its run identity. */
+  readonly retryOnceOn?: readonly string[];
+  /** Revalidate the candidate and pending input before starting a retry. */
+  readonly canRetry?: () => Promise<boolean>;
   readonly clock?: () => number;
 }): CompletionReviewControllerV1 {
   const clock = options.clock ?? Date.now;
   const review = options.reviewer.review.bind(options.reviewer);
+  const retryReasons = new Set(options.retryOnceOn ?? []);
+  if ([...retryReasons].some((reason) => !reason.trim()))
+    throw new Error("Completion review retry reasons are invalid");
   if (!options.reviewer.reviewerId.trim() || !options.signal) {
     throw new Error("Completion review controller options are invalid");
   }
@@ -49,46 +56,81 @@ export function createCompletionReviewControllerV1(options: {
       if (triggers.length === 0) {
         throw new Error("Completion review requires at least one trigger");
       }
-      const reviewId = `completion-review-${candidate.candidateHash.slice(0, 32)}`;
-      const existing = findReview(
-        await options.session.readInputSnapshot(),
-        reviewId,
-        candidate.candidateHash,
-      );
-      if (existing.settlement) return existing.settlement;
-      if (!existing.claimed) {
-        await claim();
-      }
-      const result = await review(candidate, { signal: options.signal });
-      const settlement = toSettlement(reviewId, result, clock());
-      await options.session.appendInputFacts([settlement]);
-      return settlement;
+      const first = await reviewAttempt(0);
+      if (
+        options.signal.aborted ||
+        first.status === "completed" ||
+        !retryReasons.has(first.reasonCode)
+      )
+        return first;
+      const retryTailSeq = (await options.session.readInputSnapshot()).tailSeq;
+      if (options.canRetry && !(await options.canRetry())) return first;
+      return reviewAttempt(1, retryTailSeq, first);
 
-      async function claim(): Promise<void> {
-        while (true) {
-          const snapshot = await options.session.readInputSnapshot();
-          const projected = findReview(
-            snapshot,
-            reviewId,
-            candidate.candidateHash,
-          );
-          if (projected.claimed) return;
-          const committed = await options.session.commitInputFacts(
-            snapshot.tailSeq,
-            [
-              {
-                type: "completion.review_claimed",
-                reviewId,
-                candidateHash: candidate.candidateHash,
-                policyVersion: COMPLETION_REVIEW_POLICY_VERSION_V1,
-                reviewerId: options.reviewer.reviewerId,
-                triggers: Object.freeze([...new Set(triggers)]),
-                sourceThroughSeq: candidate.sourceThroughSeq,
-                claimedAt: clock(),
-              },
-            ],
-          );
-          if (committed === "committed") return;
+      async function reviewAttempt(
+        attempt: 0 | 1,
+        retryTailSeq?: number,
+        fallback?: CompletionReviewSettledFactV1,
+      ): Promise<CompletionReviewSettledFactV1> {
+        const reviewId = `completion-review-${candidate.candidateHash.slice(0, 32)}${attempt ? "-retry-1" : ""}`;
+        const snapshot = await options.session.readInputSnapshot();
+        if (retryTailSeq !== undefined && snapshot.tailSeq !== retryTailSeq)
+          return fallback!;
+        const existing = findReview(
+          snapshot,
+          reviewId,
+          candidate.candidateHash,
+        );
+        if (existing.settlement) return existing.settlement;
+        options.signal.throwIfAborted();
+        if (!existing.claimed) {
+          if (!(await claim())) return fallback!;
+        }
+        const result = await review(candidate, {
+          signal: options.signal,
+          attempt,
+        });
+        const settlement = toSettlement(
+          reviewId,
+          options.signal.aborted
+            ? { status: "unknown", errorCode: "CompletionReviewCancelled" }
+            : result,
+          clock(),
+        );
+        await options.session.appendInputFacts([settlement]);
+        return settlement;
+
+        async function claim(): Promise<boolean> {
+          while (true) {
+            options.signal.throwIfAborted();
+            const snapshot = await options.session.readInputSnapshot();
+            // Linearize retry eligibility with its durable claim. A queued
+            // input racing the guard must not silently start an obsolete audit.
+            if (retryTailSeq !== undefined && snapshot.tailSeq !== retryTailSeq)
+              return false;
+            const projected = findReview(
+              snapshot,
+              reviewId,
+              candidate.candidateHash,
+            );
+            if (projected.claimed) return true;
+            const committed = await options.session.commitInputFacts(
+              snapshot.tailSeq,
+              [
+                {
+                  type: "completion.review_claimed",
+                  reviewId,
+                  candidateHash: candidate.candidateHash,
+                  policyVersion: COMPLETION_REVIEW_POLICY_VERSION_V1,
+                  reviewerId: options.reviewer.reviewerId,
+                  triggers: Object.freeze([...new Set(triggers)]),
+                  sourceThroughSeq: candidate.sourceThroughSeq,
+                  claimedAt: clock(),
+                },
+              ],
+            );
+            if (committed === "committed") return true;
+          }
         }
       }
     },

@@ -10,6 +10,248 @@ import {
 } from "../src/index.js";
 
 describe("progress advisor projection", () => {
+  test("deduplicated verification repair cannot suppress either closeout window", () => {
+    const facts: InputFactV1[] = [];
+    addToolTurn(facts, 1, "write", "workspace_write_file", { path: "a.js" });
+    for (let turn = 2; turn <= 9; turn++) addToolTurn(facts, turn, `check-${turn}`, "workspace_run_shell", { command: `npm test | tail -${turn}` });
+    const advice = projectProgressAdviceTimelineV1(snapshot(facts), { maxModelTurns: 10, maxTotalModelTurns: 10 });
+    expect(advice.filter(a => a.kind === "verification_repair")).toHaveLength(1);
+    expect(advice.filter(a => a.kind === "convergence_checkpoint")).toHaveLength(2);
+  });
+  test("a shell write, including a failed shell, invalidates an earlier passing check", () => {
+    for (const changed of [true, "unknown"] as const) {
+      const facts: InputFactV1[] = [];
+      addToolTurn(facts, 1, "write", "workspace_write_file", { path: "a.js" });
+      addToolTurn(facts, 2, "test", "workspace_run_shell", { command: "npm test" });
+      addToolTurn(facts, 3, "shell-write", "workspace_run_shell", { command: "node mutate.js" }, true, { workspaceEffect: { changed, paths: ["a.js"] } });
+      for (let turn = 4; turn <= 6; turn++) addToolTurn(facts, turn, `read-${turn}`, "workspace_read_file", { path: "a.js" });
+      const advice = projectProgressAdviceV1(snapshot(facts), { maxModelTurns: 10, maxTotalModelTurns: 10 });
+      expect(advice?.kind).toBe("convergence_checkpoint");
+      expect(advice?.message).toContain("current revision");
+      expect(advice?.message).not.toContain("latest check passed");
+    }
+  });
+  test("untrusted verification guides a direct rerun once per evidence baseline", () => {
+    const facts: InputFactV1[] = [];
+    addToolTurn(facts, 1, "write", "workspace_write_file", { path: "a.js" });
+    addToolTurn(facts, 2, "masked", "workspace_run_shell", {
+      command: "npm test | tail -10",
+    });
+    const first = projectProgressAdviceTimelineV1(snapshot(facts));
+    expect(first[0]?.kind).toBe("verification_repair");
+    expect(first[0]?.message).toContain("direct command");
+    addToolTurn(facts, 3, "masked-again", "workspace_run_shell", {
+      command: "npm test | grep failed",
+    });
+    expect(projectProgressAdviceTimelineV1(snapshot(facts))).toEqual(first);
+    addToolTurn(
+      facts,
+      4,
+      "direct",
+      "workspace_run_shell",
+      { command: "npm test" },
+      true,
+    );
+    addToolTurn(facts, 5, "masked-new", "workspace_run_shell", {
+      command: "npm test | tail -5",
+    });
+    expect(
+      projectProgressAdviceTimelineV1(snapshot(facts)).filter(
+        (item) => item.kind === "verification_repair",
+      ),
+    ).toHaveLength(2);
+    addToolTurn(facts, 6, "direct-pass", "workspace_run_shell", {
+      command: "npm test",
+    });
+    expect(projectProgressAdviceV1(snapshot(facts))).toBeUndefined();
+  });
+
+  test("closeout uses remaining frozen budget and fresh evidence without declaring success", () => {
+    const facts: InputFactV1[] = [];
+    const budget = { maxModelTurns: 10, maxTotalModelTurns: 10 };
+    for (let turn = 1; turn <= 6; turn++)
+      addToolTurn(facts, turn, `write-${turn}`, "workspace_write_file", {
+        path: "a.js",
+      });
+    const atWindow = projectProgressAdviceTimelineV1(snapshot(facts), budget);
+    expect(atWindow.at(-1)?.kind).toBe("convergence_checkpoint");
+    expect(atWindow.at(-1)?.message).toContain("4 model calls remain");
+    expect(atWindow.at(-1)?.message).toContain("declared test command");
+    addToolTurn(facts, 7, "check", "workspace_run_shell", {
+      command: "npm test",
+    });
+    addToolTurn(facts, 8, "diff", "workspace_read_file", { path: "a.js" });
+    const later = projectProgressAdviceTimelineV1(snapshot(facts), budget);
+    expect(later.slice(0, atWindow.length)).toEqual([...atWindow]);
+    expect(later.at(-1)?.message).toContain("2 model calls remain");
+    expect(later.at(-1)?.message).toContain(
+      "passing subset is not full completion",
+    );
+    expect(projectProgressAdviceTimelineV1(snapshot(facts))).not.toContainEqual(
+      later.at(-1),
+    );
+  });
+
+  test("late background checks do not supply fresh closeout evidence", () => {
+    const facts: InputFactV1[] = [];
+    addToolTurn(
+      facts,
+      1,
+      "start",
+      "workspace_job_start",
+      { command: "npm test" },
+      false,
+      { jobId: "job" },
+    );
+    for (let turn = 2; turn <= 3; turn++)
+      addToolTurn(facts, turn, `write-${turn}`, "workspace_write_file", {
+        path: "a.js",
+      });
+    addToolTurn(facts, 4, "wait", "workspace_job_wait", { id: "job" }, false, {
+      snapshot: { status: "completed", detail: "exit code: 0" },
+    });
+    const projected = projectProgressAdviceV1(snapshot(facts), {
+      maxModelTurns: 8,
+      maxTotalModelTurns: 8,
+    });
+    expect(projected?.kind).toBe("convergence_checkpoint");
+    expect(projected?.message).toContain("current revision");
+    expect(projected?.message).not.toContain("latest check passed");
+  });
+  test("continuous successful writes retain an independent validation cadence", () => {
+    const facts: InputFactV1[] = [];
+    for (let turn = 1; turn <= 4; turn += 1) {
+      addToolTurn(facts, turn, `write-${turn}`, "workspace_write_file", {
+        path: `src/${turn}.ts`,
+      });
+    }
+    expect(projectProgressAdviceV1(snapshot(facts))).toMatchObject({
+      kind: "verification_due",
+      modelTurnsWithoutProgress: 0,
+      unverifiedMutationTurns: 4,
+    });
+    const first = projectProgressAdviceTimelineV1(snapshot(facts));
+    expect(first).toHaveLength(1);
+    for (let turn = 5; turn <= 8; turn += 1) {
+      addToolTurn(facts, turn, `write-${turn}`, "workspace_write_file", {
+        path: `src/${turn}.ts`,
+      });
+    }
+    const later = projectProgressAdviceTimelineV1(snapshot(facts));
+    expect(later).toHaveLength(2);
+    expect(later[0]).toEqual(first[0]);
+    expect(later[1]?.unverifiedMutationTurns).toBe(8);
+    addToolTurn(facts, 9, "read", "workspace_read_file", { path: "src/8.ts" });
+    expect(projectProgressAdviceTimelineV1(snapshot(facts))).toEqual(later);
+  });
+
+  test("a failed check supplies feedback but further unverified edits trigger again", () => {
+    const facts: InputFactV1[] = [];
+    for (let turn = 1; turn <= 4; turn += 1) {
+      addToolTurn(facts, turn, `write-${turn}`, "workspace_write_file", {
+        path: `src/${turn}.ts`,
+      });
+    }
+    addToolTurn(
+      facts,
+      5,
+      "test",
+      "workspace_run_shell",
+      { command: "npm test" },
+      true,
+    );
+    for (let turn = 6; turn <= 8; turn += 1) {
+      addToolTurn(facts, turn, `fix-${turn}`, "workspace_edit_file", {
+        path: `src/${turn}.ts`,
+      });
+    }
+    expect(projectProgressAdviceV1(snapshot(facts))).toBeUndefined();
+    addToolTurn(facts, 9, "fix-9", "workspace_edit_file", { path: "src/9.ts" });
+    expect(projectProgressAdviceV1(snapshot(facts))).toMatchObject({
+      kind: "verification_due",
+      unverifiedMutationTurns: 4,
+    });
+  });
+
+  test("masked checks and failed file writes do not reset the validation cadence", () => {
+    const facts: InputFactV1[] = [];
+    for (let turn = 1; turn <= 3; turn += 1) {
+      addToolTurn(facts, turn, `write-${turn}`, "workspace.write_file", {
+        path: `src/${turn}.ts`,
+      });
+    }
+    addToolTurn(
+      facts,
+      4,
+      "failed-write",
+      "workspace.write_file",
+      { path: "missing/a.ts" },
+      true,
+    );
+    expect(projectProgressAdviceV1(snapshot(facts))).toBeUndefined();
+    addToolTurn(facts, 5, "masked", "workspace.run_shell", {
+      command: "npm test; echo done",
+    });
+    addToolTurn(facts, 6, "write-6", "workspace.write_file", {
+      path: "src/6.ts",
+    });
+    expect(projectProgressAdviceV1(snapshot(facts))).toMatchObject({
+      kind: "verification_due",
+      unverifiedMutationTurns: 4,
+    });
+  });
+
+  test("late background verification cannot cover edits made after the job started", () => {
+    const facts: InputFactV1[] = [];
+    addToolTurn(
+      facts,
+      1,
+      "job",
+      "workspace_job_start",
+      { command: "npm test" },
+      false,
+      { jobId: "test-job" },
+    );
+    for (let turn = 2; turn <= 4; turn += 1) {
+      addToolTurn(facts, turn, `write-${turn}`, "workspace_write_file", {
+        path: `src/${turn}.ts`,
+      });
+    }
+    addToolTurn(
+      facts,
+      5,
+      "wait",
+      "workspace_job_wait",
+      { id: "test-job" },
+      false,
+      { snapshot: { status: "completed" } },
+    );
+    addToolTurn(facts, 6, "write-6", "workspace_write_file", {
+      path: "src/6.ts",
+    });
+    expect(projectProgressAdviceV1(snapshot(facts))).toMatchObject({
+      kind: "verification_due",
+      unverifiedMutationTurns: 4,
+    });
+    addToolTurn(facts, 7, "fresh-check", "workspace_run_shell", {
+      command: "npm test",
+    });
+    addToolTurn(facts, 8, "write-8", "workspace_write_file", {
+      path: "src/8.ts",
+    });
+    expect(projectProgressAdviceV1(snapshot(facts))).toBeUndefined();
+  });
+
+  test("multiple file tools in one model turn count once", () => {
+    const facts: InputFactV1[] = [];
+    for (let index = 1; index <= 4; index += 1) {
+      addToolTurn(facts, 1, `write-${index}`, "workspace_write_file", {
+        path: `src/${index}.ts`,
+      });
+    }
+    expect(projectProgressAdviceV1(snapshot(facts))).toBeUndefined();
+  });
+
   test("reframes four diverse read-only turns without blocking them", () => {
     const facts: InputFactV1[] = [];
     for (let turn = 1; turn <= 4; turn += 1) {
@@ -87,7 +329,7 @@ describe("progress advisor projection", () => {
       command: "python tests/runtests.py i18n -v 1; echo done",
     });
     expect(projectProgressAdviceV1(snapshot(facts))).toMatchObject({
-      kind: "inspect_gap",
+      kind: "verification_repair",
       modelTurnsWithoutProgress: 6,
     });
 
@@ -443,7 +685,10 @@ function addToolTurn(
   tool: string,
   args: JsonValue,
   isError = false,
+  payload?: JsonValue,
 ): void {
+  // Existing scenarios use read-only shell checks unless effects are explicit.
+  if (/(?:run_shell|job_start|job_wait)$/.test(tool)) payload = { workspaceEffect: { changed: false, paths: [] }, ...(payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {}) };
   const modelCallId = `model-${turn}`;
   facts.push(
     {
@@ -471,6 +716,15 @@ function addToolTurn(
         schemaVersion: "paw.tool-observation.v1",
         isError,
         summary: `${tool} completed`,
+        ...(payload === undefined
+          ? {}
+          : {
+              payload: {
+                kind: "inline" as const,
+                value: payload,
+                hash: "fixture-inline",
+              },
+            }),
       },
     },
   );

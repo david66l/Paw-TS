@@ -1,3 +1,11 @@
+import {
+  FolderOpen,
+  MessageSquare,
+  NotebookText,
+  Settings2,
+  SquarePen,
+} from "lucide-react";
+import { PawMark } from "./PawMark";
 import { memo, useEffect, useState } from "react";
 import type { ChatSession } from "../agent/sessionTypes";
 import styles from "./Sidebar.module.css";
@@ -12,6 +20,7 @@ export type SidebarProps = {
   readonly onNewConversation: () => void;
   readonly onSelectSession: (id: string) => void;
   readonly onDeleteSession: (id: string) => void;
+  readonly onOpenMemory: () => void;
   readonly onOpenSettings: () => void;
 };
 
@@ -50,12 +59,12 @@ export const Sidebar = memo(function Sidebar({
   onSelectSession,
   onDeleteSession,
   onOpenSettings,
+  onOpenMemory,
 }: SidebarProps) {
   // 保持 state 数组顺序：切换不重排；新建会话已 unshift 到顶部
   const list = sessions;
 
   const workspaceName = workspaceLabel(repoRoot);
-  const workspaceInitial = workspaceName.charAt(0).toUpperCase() || "P";
 
   // 右键菜单：{会话 id, 光标坐标}。任意点击 / Esc / 滚动 / 失焦即关。
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(
@@ -88,17 +97,10 @@ export const Sidebar = memo(function Sidebar({
       <div className={styles.dragRegion} aria-hidden />
 
       <div className={styles.brandRow}>
-        <div className={styles.logo} aria-hidden>
-          🐾
-        </div>
+        <PawMark size={42} />
         <div className={styles.brandText}>
           <span className={styles.brand}>Paw</span>
-          <span
-            className={hostReady ? styles.hostOn : styles.hostOff}
-            title={hostReady ? "Paw Next 已就绪" : "Paw Next 尚未就绪"}
-          >
-            {hostReady ? "在线" : "离线"}
-          </span>
+          <small className={styles.tagline}>A LITTLE FORWARD.</small>
         </div>
       </div>
 
@@ -108,13 +110,17 @@ export const Sidebar = memo(function Sidebar({
         onClick={onNewConversation}
         disabled={isRunning}
       >
-        <span className={styles.plus}>+</span>
-        新对话
+        <SquarePen size={17} />
+        <span>新任务</span>
       </button>
 
+      <div className={styles.workspace} title={repoRoot}>
+        <FolderOpen size={16} />
+        <span>{workspaceName}</span>
+      </div>
       <div className={styles.section}>
         <div className={styles.sectionHead}>
-          <span className={styles.sectionLabel}>会话</span>
+          <span className={styles.sectionLabel}>最近对话</span>
           <span className={styles.sectionCount}>{list.length}</span>
         </div>
         <div className={styles.sessionList} role="list">
@@ -140,15 +146,7 @@ export const Sidebar = memo(function Sidebar({
                   onClick={() => onSelectSession(s.id)}
                   title={s.title}
                 >
-                  <span
-                    className={
-                      active
-                        ? isRunning
-                          ? styles.runningDot
-                          : styles.idleDot
-                        : styles.idleDotMuted
-                    }
-                  />
+                  <MessageSquare size={15} />
                   <span className={styles.sessionTitle}>{s.title}</span>
                   <span className={styles.sessionTime}>
                     {active && isRunning
@@ -163,38 +161,28 @@ export const Sidebar = memo(function Sidebar({
       </div>
 
       <div className={styles.footerCards}>
-        {/* 设置行 —— 打开设置弹窗（配色 / 材质） */}
+        <button
+          type="button"
+          className={styles.settingsRow}
+          title="记忆"
+          onClick={onOpenMemory}
+        >
+          <NotebookText size={17} />
+          <span>记忆</span>
+        </button>
         <button
           type="button"
           className={styles.settingsRow}
           title="设置"
           onClick={onOpenSettings}
         >
-          <span className={styles.settingsIcon} aria-hidden>
-            ⚙
-          </span>
-          <span className={styles.settingsText}>设置</span>
+          <Settings2 size={17} />
+          <span>设置</span>
         </button>
-
-        {/* ponytail: 本地用户占位卡 —— 无账号系统，头像/名称为占位，
-            副标题填真实工作区名，title 挂完整路径。caret 下拉待接（账户/切换）。 */}
-        <button
-          type="button"
-          className={styles.profileCard}
-          title={repoRoot || undefined}
-          onClick={() => {}}
-        >
-          <span className={styles.avatar} aria-hidden>
-            {workspaceInitial}
-          </span>
-          <span className={styles.profileText}>
-            <span className={styles.profileName}>本地用户</span>
-            <span className={styles.profileSub}>{workspaceName}</span>
-          </span>
-          <span className={styles.profileCaret} aria-hidden>
-            ⌄
-          </span>
-        </button>
+        <div className={styles.connection}>
+          <i data-ready={hostReady} />
+          <span>{hostReady ? "本地工作区已连接" : "正在连接工作区…"}</span>
+        </div>
       </div>
 
       {menu ? (

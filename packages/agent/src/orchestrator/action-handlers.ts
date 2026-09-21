@@ -340,7 +340,7 @@ function handleAcceptanceUpdate(
   ctx.ctxMgr.addAssistant(text, thinking);
   const applied = ctx.taskState.applyAcceptanceUpdate(action, ctx.turn);
   if (!applied.ok) {
-    ctx.ctxMgr.addUser(`[AcceptanceLedger] ${applied.error}`);
+    ctx.ctxMgr.addHostMessage(`[AcceptanceLedger] ${applied.error}`);
   }
   const nextFlags: TurnFlags = {
     ...flags,

@@ -145,3 +145,52 @@ test("GLM credentials resolve nested, legacy and environment values and redact s
     else process.env.GLM_BASE_URL = oldUrl;
   }
 });
+
+// `mcp_servers` 不在 pawSettingsLocalSchema 的已知字段里（靠 .passthrough()
+// 透传），因此 models/flat 两条脱敏路径都覆盖不到它 —— 而 MCP server 的 env
+// 恰恰是放 token 的地方。`bun run cli -- config` 与 `doctor` 都会打印这份
+// settings，所以它必须被脱敏。
+describe("redactSecrets MCP servers", () => {
+  test("masks every MCP env value while keeping key names", () => {
+    const settings = {
+      provider: "glm",
+      mcp_servers: [
+        {
+          name: "filesystem",
+          command: "npx",
+          args: ["-y", "@modelcontextprotocol/server-filesystem"],
+          env: {
+            GITHUB_TOKEN: "ghp_supersecrettokenvalue",
+            API_KEY: "another-secret-value-here",
+            LOG_LEVEL: "debug",
+          },
+        },
+      ],
+    } as unknown as PawSettingsLocal;
+
+    const redacted = JSON.stringify(redactSecrets(settings));
+    expect(redacted).not.toContain("ghp_supersecrettokenvalue");
+    expect(redacted).not.toContain("another-secret-value-here");
+    // 键名保留，便于诊断「配了哪些环境变量」
+    expect(redacted).toContain("GITHUB_TOKEN");
+    expect(redacted).toContain("API_KEY");
+    // 非密钥字段不受影响
+    expect(redacted).toContain("filesystem");
+  });
+
+  test("tolerates a missing or malformed mcp_servers field", () => {
+    expect(() =>
+      redactSecrets({ provider: "glm" } as PawSettingsLocal),
+    ).not.toThrow();
+    expect(() =>
+      redactSecrets({
+        mcp_servers: "not-an-array",
+      } as unknown as PawSettingsLocal),
+    ).not.toThrow();
+    expect(() =>
+      redactSecrets({
+        mcp_servers: [null, 42, { name: "x" }],
+      } as unknown as PawSettingsLocal),
+    ).not.toThrow();
+  });
+});

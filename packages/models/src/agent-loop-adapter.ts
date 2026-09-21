@@ -11,6 +11,7 @@ import {
 } from "@paw/protocol";
 import type { LanguageModel } from "./language-model.js";
 import type { ModelCompleteOptions } from "./model-options.js";
+import { superviseModelRequest, type RequestSupervisionLimits } from "./request-supervision.js";
 import type {
   ChatMessage,
   ModelCompletionResult,
@@ -41,6 +42,7 @@ export type PawAgentLoopModel = Model<
 export function createAgentLoopModelAdapter(
   model: LanguageModel,
   transport: PawModelTransport,
+  supervision?: RequestSupervisionLimits,
 ): PawAgentLoopModel {
   return {
     async execute(request, callOptions) {
@@ -48,22 +50,32 @@ export function createAgentLoopModelAdapter(
         return cancelledSettlement(callOptions.signal);
       }
 
+      const supervisor = supervision ? superviseModelRequest(callOptions.signal, supervision) : undefined;
       const options: ModelCompleteOptions = {
         ...request.options,
-        signal: callOptions.signal,
+        signal: supervisor?.signal ?? callOptions.signal,
+        ...(supervisor ? { onObservation: supervisor.event } : {}),
       };
       try {
+        const execute = async () => {
         const messages = materializeModelRequestMessagesV1(request);
-        const completion = normalizeCompletion(
+        return normalizeCompletion(
           transport === "complete"
             ? await model.complete(messages, options)
             : await collectStreamCompletion(
                 model,
                 messages,
                 options,
-                callOptions.onStreamEvent,
+                (event) => {
+                  if (options.signal?.aborted) return;
+                  if (event.type === "text" || event.type === "thinking") supervisor?.event({ type: "delta", kind: event.type, count: event.delta.length });
+                  else if (event.type === "tool_use") supervisor?.event({ type: "tool_assembled" });
+                  return callOptions.onStreamEvent(event);
+                },
               ),
         );
+        };
+        const completion = supervisor ? await supervisor.run(execute) : await execute();
         if (isTruncated(completion.finishReason)) {
           return {
             status: "truncated",

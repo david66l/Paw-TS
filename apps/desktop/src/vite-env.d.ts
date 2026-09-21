@@ -67,6 +67,15 @@ export type HostStatus = {
 };
 
 export type PawDesktopApi = {
+  compactContext: (opts: { conversationId: string }) => Promise<{
+    ok: boolean;
+    message: string;
+    context?: import("./agent/useRightPanelData").ContextSnapshot;
+  }>;
+  getContext: (opts: { conversationId: string }) => Promise<{
+    ok: boolean;
+    data?: import("./agent/useRightPanelData").ContextSnapshot;
+  }>;
   readonly platform: string;
   readonly versions: {
     readonly electron: string;

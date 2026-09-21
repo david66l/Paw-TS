@@ -344,8 +344,20 @@ function normalizeTask(
     maxSteps: maxSteps as number,
     agentId: agent.id,
   });
-  if (formatDelegatedGoal(task).length > policy.maxGoalChars) {
-    throw new Error(`Task ${id} context exceeds the child goal limit`);
+  const contextLength = formatDelegatedGoal(task).length;
+  if (contextLength > policy.maxGoalChars) {
+    const scopeLength = scope.reduce((sum, item) => sum + item.length, 0);
+    const acceptanceLength = acceptance.reduce(
+      (sum, item) => sum + item.length,
+      0,
+    );
+    const formattingLength =
+      contextLength - goal.length - scopeLength - acceptanceLength;
+    throw new Error(
+      `Task ${id} context exceeds the child goal limit: ${contextLength}/${policy.maxGoalChars} characters ` +
+        `(goal=${goal.length}, scope=${scopeLength}, acceptance=${acceptanceLength}, formatting=${formattingLength}). ` +
+        `Shorten by at least ${contextLength - policy.maxGoalChars} characters. Use concise scope and acceptance; reference workspace files instead of copying their contents.`,
+    );
   }
   return task;
 }
@@ -688,7 +700,9 @@ function assertOnlyKeys(
 function boundedText(value: unknown, label: string, limit: number): string {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text || text.length > limit) {
-    throw new Error(`${label} must be between 1 and ${limit} characters`);
+    throw new Error(
+      `${label} must be between 1 and ${limit} characters (received ${text.length})`,
+    );
   }
   return text;
 }
@@ -700,17 +714,27 @@ function stringList(
   maxChars: number,
 ): readonly string[] {
   if (value === undefined) return Object.freeze([]);
-  if (
-    !Array.isArray(value) ||
-    value.length > maxItems ||
-    !value.every(
-      (item) =>
-        typeof item === "string" &&
-        item.trim().length > 0 &&
-        item.trim().length <= maxChars,
-    )
-  ) {
-    throw new Error(`${label} must be a bounded string array`);
+  if (!Array.isArray(value))
+    throw new Error(
+      `${label} must be a string array with at most ${maxItems} items, each 1-${maxChars} characters`,
+    );
+  if (value.length > maxItems)
+    throw new Error(
+      `${label} has ${value.length} items; maximum is ${maxItems}. Remove or combine ${value.length - maxItems} items.`,
+    );
+  for (const [index, item] of value.entries()) {
+    if (typeof item !== "string")
+      throw new Error(`${label}[${index}] must be a string`);
+    const length = item.trim().length;
+    if (length === 0 || length > maxChars) {
+      const advice =
+        length === 0
+          ? "Provide a nonempty item or remove it."
+          : `Shorten this item by at least ${length - maxChars} characters.`;
+      throw new Error(
+        `${label}[${index}] has ${length} characters; allowed range is 1-${maxChars}. ${advice}`,
+      );
+    }
   }
   return Object.freeze([...new Set(value.map((item) => item.trim()))]);
 }

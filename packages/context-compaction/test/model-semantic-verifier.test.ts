@@ -11,6 +11,33 @@ import {
 } from "./support/checkpoint-fixture.js";
 
 describe("model checkpoint semantic verifier", () => {
+  test("settles a model that ignores the semantic verification deadline", async () => {
+    const verifier = createModelCheckpointSemanticVerifierV1({
+      model: { complete: () => new Promise(() => {}) },
+      policy: { timeoutMs: 15, maxPromptChars: 192_000, maxOutputTokens: 512 },
+    });
+    expect(await runVerifier(verifier)).toEqual({
+      status: "unknown",
+      errorCode: "CheckpointSemanticVerificationTimeout",
+    });
+  });
+
+  test("does not accept support reported during cancellation", async () => {
+    const parent = new AbortController();
+    const verifier = createModelCheckpointSemanticVerifierV1({
+      model: {
+        async complete() {
+          parent.abort();
+          return { status: "completed", text: '{"status":"supported"}' };
+        },
+      },
+    });
+    expect(await runVerifier(verifier, parent.signal)).toEqual({
+      status: "unknown",
+      errorCode: "CheckpointSemanticVerificationCancelled",
+    });
+  });
+
   test("accepts only the exact supported verdict", async () => {
     const requests: CheckpointDistillationModelRequestV1[] = [];
     const verifier = createModelCheckpointSemanticVerifierV1({

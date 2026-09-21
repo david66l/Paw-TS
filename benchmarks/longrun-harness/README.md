@@ -44,6 +44,10 @@ bun run benchmarks/longrun-harness/run.ts --preset todo-mini --max-no-progress-s
 # 长跑（默认最多 24 班 / 4 小时）
 bun run benchmarks/longrun-harness/run.ts --preset todo-mini
 
+# SlopCodeBench 式迭代需求：每批揭示 3 个需求，全部通过且无回归才解锁下一批
+# 每个检查点记录 passRate / regressions / sessions / elapsedMs；回归的需求被翻回 open 并优先返工
+bun run benchmarks/longrun-harness/run.ts --preset todo-mini --reveal-batch 3
+
 # 有头模式看浏览器
 bun run benchmarks/longrun-harness/run.ts --preset todo-mini --seed-reference --verify-only --headed
 ```

@@ -273,82 +273,18 @@ export class FileSystemSessionStore implements SessionStore {
    * - 支持提前终止（break 循环或调用 return()）
    *
    * ## 生命周期管理
-   * - `cleanup()` 确保流在迭代结束后或出错时被正确销毁
-   * - 多次调用 cleanup 不会产生副作用（done 标志位保护）
+   * - `replayFile` 的 `finally` 负责销毁流（正常结束、提前 break、抛异常三条路径）
+   * - 损坏行按既有语义跳过，不影响其余事件
    */
   replayRun(runId: string): AsyncIterable<RunEventEnvelope> | null {
     const p = this.runPath(runId);
     if (!fs.existsSync(p)) return null;
-    const stream = fs.createReadStream(p, { encoding: "utf8" });
-    let buffer = "";
-    let done = false;
-    const cleanup = () => {
-      if (!done) {
-        done = true;
-        stream.destroy();
-      }
-    };
+    // 每次迭代各自开一条流：既保持「可多次迭代」的既有语义，也避免把流状态
+    // 泄漏到 generator 之外。逐块解析由 replayFile 的 for-await 完成 ——
+    // 旧实现用 stream.once("data"/"end"/"error") 每个 chunk 注册三个监听器，
+    // 但只有一个会触发，其余永久挂在流上（监听器随 chunk 数线性泄漏）。
     return {
-      [Symbol.asyncIterator](): AsyncIterator<RunEventEnvelope> {
-        return {
-          async next(): Promise<IteratorResult<RunEventEnvelope>> {
-            if (done) return { value: undefined, done: true };
-            while (true) {
-              // 查找 buffer 中是否已有完整行（以换行符为界）
-              const newlineIndex = buffer.indexOf("\n");
-              if (newlineIndex !== -1) {
-                const line = buffer.slice(0, newlineIndex);
-                buffer = buffer.slice(newlineIndex + 1);
-                if (line.trim() === "") continue;
-                try {
-                  const obj = JSON.parse(line) as unknown;
-                  if (isEnvelope(obj)) {
-                    return { value: obj, done: false };
-                  }
-                } catch {
-                  // 跳过损坏行，继续查找下一行
-                }
-                continue;
-              }
-              // buffer 中没有完整行，等待更多数据
-              const chunk = await new Promise<string | null>((resolve) => {
-                stream.once("data", (data) => resolve(String(data)));
-                stream.once("end", () => resolve(null));
-                stream.once("error", () => resolve(null));
-              });
-              if (chunk === null) {
-                // 流已结束
-                cleanup();
-                // 处理 buffer 中可能剩余的最后一行（可能没有尾随换行符）
-                if (buffer.trim() !== "") {
-                  const line = buffer;
-                  buffer = "";
-                  try {
-                    const obj = JSON.parse(line) as unknown;
-                    if (isEnvelope(obj)) {
-                      return { value: obj, done: false };
-                    }
-                  } catch {
-                    // 跳过损坏的最后一行
-                  }
-                }
-                return { value: undefined, done: true };
-              }
-              buffer += chunk;
-            }
-          },
-          /** 迭代器提前终止时清理流资源 */
-          async return(): Promise<IteratorResult<RunEventEnvelope>> {
-            cleanup();
-            return { value: undefined, done: true };
-          },
-          /** 迭代器抛出异常时清理流资源后重新抛出 */
-          async throw(e?: unknown): Promise<IteratorResult<RunEventEnvelope>> {
-            cleanup();
-            throw e;
-          },
-        };
-      },
+      [Symbol.asyncIterator]: () => replayFile(p),
     };
   }
 
@@ -369,11 +305,12 @@ export class FileSystemSessionStore implements SessionStore {
 
     const fd = fs.openSync(p, "r");
     try {
-      // 读取文件头部以获取开始信息
-      const buf = Buffer.alloc(8192);
-      const n = fs.readSync(fd, buf, 0, 8192, 0);
-      const head = buf.toString("utf8", 0, n);
-      const firstLine = head.split("\n")[0];
+      // 读取首行以获取开始信息。
+      //
+      // 旧实现固定读 8192 字节再 split("\n")[0]：如果第一条事件超过 8KB，
+      // 拿到的就是半截 JSON，解析失败后 startedAt 静默变成 0、goal 变成 ""。
+      // 这里改为按换行符定位真正的首行，并设上限避免病态文件拖垮摘要。
+      const firstLine = readFirstLineSync(fd);
       let startedAt = 0;
       let goal = "";
       if (firstLine) {
@@ -470,26 +407,37 @@ export class FileSystemSessionStore implements SessionStore {
    * 快速估算 JSONL 文件的行数。
    *
    * ## 算法
-   * 1. 读取文件首 4KB 作为样本
-   * 2. 计算样本中的行数和平均行长
-   * 3. 用文件总大小除以平均行长估算总行数
+   * 1. 读取文件首 4KB 作为字节样本
+   * 2. 数出样本中的行数，得到「每行平均字节数」
+   * 3. 用文件总字节数除以每行平均字节数
+   *
+   * ## 为什么必须用字节而不是字符串长度
+   * `fileSize` 来自 `statSync`，单位是**字节**。先前实现用
+   * `sample.length`（UTF-16 码元数）当分子，两者量纲不同：纯 ASCII 时恰好
+   * 相等所以看不出问题，而中文内容每个字符占 3 字节却只有 1 个码元，
+   * 估算值会被放大约 3 倍。这里统一用 `bytesRead`。
    *
    * ## 优缺点
    * - 优点：O(1) 时间复杂度，不受文件大小影响
    * - 缺点：假设行长度分布均匀，对于行长度差异极大的文件可能不够准确
-   * - 适用场景：运行事件的行长度分布通常比较均匀，误差在可接受范围内
    */
   private estimateLineCount(p: string, fileSize: number): number {
     // 采样首 4KB 计算平均行长
     const fd = fs.openSync(p, "r");
-    const buf = Buffer.alloc(4096);
-    const n = fs.readSync(fd, buf, 0, 4096, 0);
-    fs.closeSync(fd);
-    const sample = buf.toString("utf8", 0, n);
-    const lines = sample.split("\n").filter((l) => l.trim() !== "");
-    if (lines.length === 0) return 0;
-    const avg = sample.length / lines.length;
-    return Math.round(fileSize / avg);
+    let bytesRead = 0;
+    let sample: string;
+    try {
+      const buf = Buffer.alloc(4096);
+      bytesRead = fs.readSync(fd, buf, 0, 4096, 0);
+      sample = buf.toString("utf8", 0, bytesRead);
+    } finally {
+      fs.closeSync(fd);
+    }
+    if (bytesRead === 0) return 0;
+    const lines = sample.split("\n").filter((l) => l.trim() !== "").length;
+    if (lines === 0) return 0;
+    const bytesPerLine = bytesRead / lines;
+    return Math.round(fileSize / bytesPerLine);
   }
 
   /**
@@ -499,14 +447,28 @@ export class FileSystemSessionStore implements SessionStore {
    * 删除最旧的记录直到数量回到限制范围内。
    * 此方法在每次 saveEvent 后自动调用。
    */
+  /**
+   * 自动清理旧记录。
+   *
+   * 当 JSONL 文件数量超过 `maxRuns` 时，按修改时间升序排列，
+   * 删除最旧的记录直到数量回到限制范围内。
+   * 此方法在每次 saveEvent 后自动调用。
+   *
+   * 性能：先只做一次 `readdirSync` 数个数，未超限就直接返回 ——
+   * 旧实现对**每个**文件都 `statSync` 一次，且每次写事件都执行一遍，
+   * 于是写一个事件的开销是 O(运行数) 次系统调用。`maxRuns` 语义不变：
+   * 一旦超限，仍然立即精确裁剪回上限。
+   */
   private maybePrune(): void {
     if (this.maxRuns <= 0) return;
-    const files = fs
+    const names = fs
       .readdirSync(this.sessionsDir)
-      .filter((n) => n.endsWith(".jsonl"))
-      .map((n) => ({
-        name: n,
-        mtime: fs.statSync(path.join(this.sessionsDir, n)).mtimeMs,
+      .filter((n) => n.endsWith(".jsonl"));
+    if (names.length <= this.maxRuns) return;
+    const files = names
+      .map((name) => ({
+        name,
+        mtime: fs.statSync(path.join(this.sessionsDir, name)).mtimeMs,
       }))
       .sort((a, b) => a.mtime - b.mtime);  // 按修改时间升序（最旧的排在最前）
     while (files.length > this.maxRuns) {
@@ -540,4 +502,75 @@ function isEnvelope(v: unknown): v is RunEventEnvelope {
     "event" in v &&
     typeof (v as Record<string, unknown>).event === "object"
   );
+}
+
+/** 解析一行 JSONL；空行与损坏行返回 null（回放语义：跳过）。 */
+function parseEnvelopeLine(line: string): RunEventEnvelope | null {
+  if (line.trim() === "") return null;
+  try {
+    const obj = JSON.parse(line) as unknown;
+    return isEnvelope(obj) ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 从已打开的文件描述符读取第一条完整行（按字节定位换行符）。
+ *
+ * 在 Buffer 上找 `0x0A` 再解码，避免把多字节 UTF-8 序列截断。
+ * 超过 `maxBytes` 仍未遇到换行时，返回已读到的内容（而不是静默返回空串），
+ * 让调用方的 JSON 解析失败保持可见。
+ */
+function readFirstLineSync(fd: number, maxBytes = 1_048_576): string {
+  const chunk = Buffer.alloc(65_536);
+  const parts: Buffer[] = [];
+  let position = 0;
+  while (position < maxBytes) {
+    const bytesRead = fs.readSync(fd, chunk, 0, chunk.length, position);
+    if (bytesRead <= 0) break;
+    const slice = chunk.subarray(0, bytesRead);
+    const newlineIndex = slice.indexOf(0x0a);
+    if (newlineIndex !== -1) {
+      parts.push(Buffer.from(slice.subarray(0, newlineIndex)));
+      break;
+    }
+    parts.push(Buffer.from(slice));
+    position += bytesRead;
+  }
+  return Buffer.concat(parts).toString("utf8").replace(/\r$/, "");
+}
+
+/**
+ * 以恒定内存流式回放一个 JSONL 会话文件。
+ *
+ * 使用流的异步迭代协议（`for await`）而不是手动注册 `data`/`end`/`error`
+ * 监听器：后者每读一个 chunk 就注册三个 `once` 监听器，而其中只有一个会触发，
+ * 剩下的会一直挂在流对象上，监听器数量随文件块数线性增长。
+ * `finally` 保证正常结束、调用方提前 `break`、以及抛异常三条路径都会销毁流。
+ */
+async function* replayFile(
+  filePath: string,
+): AsyncGenerator<RunEventEnvelope, void, undefined> {
+  const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+  let buffer = "";
+  try {
+    for await (const chunk of stream) {
+      buffer += String(chunk);
+      let newlineIndex = buffer.indexOf("\n");
+      while (newlineIndex !== -1) {
+        const line = buffer.slice(0, newlineIndex);
+        buffer = buffer.slice(newlineIndex + 1);
+        const envelope = parseEnvelopeLine(line);
+        if (envelope) yield envelope;
+        newlineIndex = buffer.indexOf("\n");
+      }
+    }
+    // 末行可能没有尾随换行符。
+    const trailing = parseEnvelopeLine(buffer);
+    if (trailing) yield trailing;
+    buffer = "";
+  } finally {
+    stream.destroy();
+  }
 }

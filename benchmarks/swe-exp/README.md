@@ -28,19 +28,19 @@ P1 编码收益验收：复用 [SWE-Exp](https://github.com/YerbaPage/SWE-Exp) �
 ```bash
 # 1 对冒烟：agent on/off + 官方 harness（Docker；Windows 用 win_shim）
 $env:DATABASE_URL="postgresql://postgres@127.0.0.1:54329/paw_memory_test"
-bun run packages/eval/scripts/run-swe-exp-agent.ts --max-pairs 1
+bun run legacy/packages/eval/scripts/run-swe-exp-agent.ts --max-pairs 1
 
 # 先只跑 agent 产 patch（跳过 harness，稍后补评）
-bun run packages/eval/scripts/run-swe-exp-agent.ts --max-pairs 1 --skip-harness
+bun run legacy/packages/eval/scripts/run-swe-exp-agent.ts --max-pairs 1 --skip-harness
 
 # 中断续跑（同一 suite-run-id，跳过已完成臂）
-bun run packages/eval/scripts/run-swe-exp-agent.ts --suite-run-id agent-... --max-pairs 5
+bun run legacy/packages/eval/scripts/run-swe-exp-agent.ts --suite-run-id agent-... --max-pairs 5
 
 # 已有 checkpoint 只补跑/重跑官方 harness，不再调用模型
-bun run packages/eval/scripts/run-swe-exp-agent.ts --suite-run-id agent-... --eval-only --max-pairs 5
+bun run legacy/packages/eval/scripts/run-swe-exp-agent.ts --suite-run-id agent-... --eval-only --max-pairs 5
 
 # 或 CLI
-bun run apps/cli/src/main.ts eval swe-exp --mode agent --max-samples 1 --json
+bun run legacy/apps/cli/src/main.ts eval swe-exp --mode agent --max-samples 1 --json
 ```
 
 真实 agent 默认采用能力优先预算：64 步 / 25 分钟；`--max-steps`、`--timeout-ms` 仍可显式覆盖。`[coding_phase_budget]` 导航阈值仅保留为实验变量，不在 SWE-Exp 默认 goal 中启用。
@@ -73,7 +73,7 @@ Sphinx `8282 history → 8435 probe`，同 commit/模型/32 步，官方 SWE-ben
 ## 从 SWE-bench JSONL 构对
 
 ```ts
-import { loadSweInstancesJsonl, buildSameRepoPairs } from "@paw/eval";
+import { loadSweInstancesJsonl, buildSameRepoPairs } from "../../legacy/packages/eval/src/index.js";
 
 const instances = loadSweInstancesJsonl("swe-bench-lite.jsonl");
 const pairs = buildSameRepoPairs(instances, { maxPairs: 50, minSimilarity: 0.08 });

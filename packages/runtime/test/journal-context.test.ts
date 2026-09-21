@@ -48,6 +48,35 @@ function createJournalContextV1(
 }
 
 describe("journal context", () => {
+  test("evidence annotations share one verified load, preserve native turns and enter token accounting", async () => {
+    const fixture = canonicalFixtureSnapshot({ artifactToolObservations: true });
+    const loader = issuedEvidenceLoader(fixture.snapshot, fixture.artifacts, []);
+    let loads = 0;
+    const context = createJournalContextV1({
+      payloads: fixture.resolver,
+      loadPayloadEvidence: async (...args) => { loads++; return loader(...args); },
+    });
+    const plain = await context.plan(fixture.snapshot, { signal });
+    loads = 0;
+    const plan = await context.plan(fixture.snapshot, { signal }, {
+      evidenceAnnotations(evidence) {
+        expect(evidence).toBeDefined();
+        for (const { seq, fact } of fixture.snapshot.entries) {
+          if (fact.type !== "tool.settled" || !fact.observation?.payload) continue;
+          expect(evidence!.requirePayload({ snapshot: fixture.snapshot, payload: fact.observation.payload, location: { kind: "tool_observation", carrierType: "tool.settled", carrierSeq: seq, callId: fact.callId } })).toBeDefined();
+        }
+        return [{ sourceThroughSeq: fixture.snapshot.latestInputSeq, content: "current evidence", placement: "tail" }];
+      },
+    });
+    expect(loads).toBe(1);
+    expect(plan.request.messages.at(-1)?.content).toBe("current evidence");
+    expect(plan.request.messages.slice(0, -1)).toEqual([...plain.request.messages]);
+    expect(plan.tokens.selectedInputTokens).toBeGreaterThan(plain.tokens.selectedInputTokens);
+    await expect(context.plan(fixture.snapshot, { signal }, {
+      evidenceAnnotations: () => [{ sourceThroughSeq: fixture.snapshot.latestInputSeq + 1, content: "future", placement: "tail" }],
+    })).rejects.toThrow("Invalid context annotation");
+  });
+
   test("renders durable runtime activity as host evidence, not user input", async () => {
     const snapshot = snapshotOf([
       promoted("initial request", "initial"),
@@ -938,6 +967,249 @@ describe("journal context task checkpoints", () => {
 });
 
 describe("journal context plan", () => {
+  test("sweeps tight budgets without losing required guidance or changing the output reserve", async () => {
+    const snapshot = snapshotOf([
+      promoted("goal", "initial"),
+      promoted("older evidence", "steer"),
+      promoted("recent evidence", "steer"),
+      promoted("latest", "steer"),
+    ]);
+    for (let window = 35; window <= 100; window += 5) {
+      const budget = weightedBudget(window, () => 10);
+      const plan = await createJournalContextPlannerV1({
+        payloads: resolverFor(new Map()),
+        providerProtocol: "openai-compatible",
+        budget,
+      }).plan(
+        snapshot,
+        { signal },
+        {
+          annotations: [
+            {
+              sourceThroughSeq: 2,
+              content: "active hint",
+              fallbackContent: "active fallback",
+              placement: "after_unit",
+            },
+            {
+              sourceThroughSeq: 1,
+              content: "optional hint",
+              placement: "after_unit",
+            },
+          ],
+        },
+      );
+      expect(
+        plan.request.messages.filter((message) =>
+          message.content.startsWith("active"),
+        ),
+      ).toHaveLength(1);
+      expect(plan.tokens.selectedInputTokens).toBe(
+        budget.estimator.countMessages(
+          materializeModelRequestMessagesV1(plan.request),
+        ),
+      );
+      expect(
+        plan.tokens.selectedInputTokens + plan.tokens.reservedOutputTokens,
+      ).toBeLessThanOrEqual(window);
+      expect(plan.selection.selectedUnitSourceSeqs).toContain(1);
+      expect(plan.selection.selectedUnitSourceSeqs).toContain(4);
+      expect(plan.request.options?.maxOutputTokens).toBe(5);
+    }
+  });
+
+  test("reserves active guidance before selecting history and reports the actual request", async () => {
+    const snapshot = snapshotOf([
+      promoted("goal", "initial"),
+      promoted("old evidence", "steer"),
+      promoted("latest", "steer"),
+    ]);
+    let reported = 0;
+    const budget = weightedBudget(35, () => 10);
+    const planner = createJournalContextPlannerV1({
+      payloads: resolverFor(new Map()),
+      providerProtocol: "openai-compatible",
+      budget,
+      onTokenPlan: (tokens) => {
+        reported = tokens.selectedInputTokens;
+      },
+    });
+    const baseline = await planner.plan(snapshot, { signal });
+    expect(baseline.selection.selectedUnitSourceSeqs).toEqual([1, 2, 3]);
+    const projection = {
+      annotations: [
+        {
+          sourceThroughSeq: 2,
+          content: "historic hint",
+          fallbackContent: "current hint",
+          placement: "after_unit" as const,
+        },
+      ],
+    };
+    const plan = await planner.plan(snapshot, { signal }, projection);
+    expect(plan.selection.selectedUnitSourceSeqs).toEqual([1, 3]);
+    expect(plan.request.messages.map((message) => message.content)).toEqual([
+      "goal",
+      "latest",
+      "current hint",
+    ]);
+    expect(plan.tokens.selectedInputTokens).toBe(30);
+    expect(plan.tokens.hardHeadroomTokens).toBe(0);
+    expect(reported).toBe(
+      budget.estimator.countMessages(
+        materializeModelRequestMessagesV1(plan.request),
+      ),
+    );
+    expect(plan.request.options?.maxOutputTokens).toBe(5);
+    expect(
+      await planner.plan(structuredClone(snapshot), { signal }, projection),
+    ).toEqual(plan);
+  });
+
+  test("keeps only active fallback guidance when a checkpoint covers the anchor", async () => {
+    const planner = createJournalContextPlannerV1({
+      payloads: resolverFor(new Map()),
+      providerProtocol: "openai-compatible",
+      budget: generousBudget(),
+    });
+    const active = {
+      sourceThroughSeq: 3,
+      content: "obsolete advice",
+      fallbackContent: "current evidence needs verification",
+      placement: "after_unit" as const,
+    };
+    const plan = await planner.plan(
+      checkpointedPlainSnapshot(),
+      { signal },
+      { annotations: [active] },
+    );
+    expect(plan.request.messages.at(-1)?.content).toBe(active.fallbackContent);
+    expect(
+      plan.request.messages.some(
+        (message) => message.content === active.content,
+      ),
+    ).toBe(false);
+    expect(plan.selection.checkpointCoveredUnitSourceSeqs).toEqual([3]);
+    const resolved = await planner.plan(
+      checkpointedPlainSnapshot(),
+      { signal },
+      {
+        annotations: [
+          {
+            sourceThroughSeq: 3,
+            content: active.content,
+            placement: "after_unit",
+          },
+        ],
+      },
+    );
+    expect(JSON.stringify(resolved.request)).not.toContain("advice");
+  });
+
+  test("optional reminders cannot displace protected evidence or overflow a full window", async () => {
+    const planner = createJournalContextPlannerV1({
+      payloads: resolverFor(new Map()),
+      providerProtocol: "openai-compatible",
+      budget: weightedBudget(15, () => 10),
+    });
+    const snapshot = snapshotOf([promoted("goal", "initial")]);
+    const optional = {
+      sourceThroughSeq: 1,
+      content: "old optional reminder",
+      placement: "after_unit" as const,
+    };
+    const plan = await planner.plan(
+      snapshot,
+      { signal },
+      { annotations: [optional] },
+    );
+    expect(plan.request.messages.map((message) => message.content)).toEqual([
+      "goal",
+    ]);
+    await expect(
+      planner.plan(
+        snapshot,
+        { signal },
+        { annotations: [{ ...optional, fallbackContent: "required hint" }] },
+      ),
+    ).rejects.toThrow("protected context budget exceeds window");
+  });
+
+  test("activity conversion is budgeted in its final role and is included in telemetry", async () => {
+    const snapshot = snapshotOf([
+      promoted("goal", "initial"),
+      {
+        type: "runtime.activity_started",
+        activityId: "activity",
+        activityKind: "managed_job",
+        label: "build",
+        startedAt: 1,
+      },
+    ]);
+    const budget = weightedBudget(35, (message) =>
+      message.role === "system" ? 1 : 10,
+    );
+    const plan = await createJournalContextPlannerV1({
+      payloads: resolverFor(new Map()),
+      providerProtocol: "openai-compatible",
+      budget,
+    }).plan(
+      snapshot,
+      { signal },
+      { runtimeActivityContent: () => "untrusted runtime evidence" },
+    );
+    expect(plan.request.contextSections).toBeUndefined();
+    expect(plan.request.messages.map((message) => message.role)).toEqual([
+      "user",
+      "user",
+    ]);
+    expect(plan.tokens.selectedInputTokens).toBe(20);
+    expect(
+      plan.tokens.categories?.reduce(
+        (sum, category) => sum + category.tokens,
+        0,
+      ),
+    ).toBe(20);
+  });
+
+  test("annotations never split native tool exchanges or mutate canonical history", async () => {
+    const fixture = fixtureSnapshot();
+    const planner = createJournalContextPlannerV1({
+      payloads: fixture.resolver,
+      providerProtocol: "openai-compatible",
+      budget: generousBudget(),
+    });
+    const plain = await planner.plan(fixture.snapshot, { signal });
+    const unit = plain.selection.eligibleUnits.find(
+      (item) => item.kind === "model",
+    )!;
+    const before = JSON.stringify(fixture.snapshot);
+    const plan = await planner.plan(
+      fixture.snapshot,
+      { signal },
+      {
+        annotations: [
+          {
+            sourceThroughSeq: unit.sourceThroughSeq,
+            content: "hint",
+            fallbackContent: "hint",
+            placement: "after_unit",
+          },
+        ],
+      },
+    );
+    expect(
+      plan.request.messages.filter((message) => message.nativeToolTurn),
+    ).toEqual(
+      plain.request.messages.filter((message) => message.nativeToolTurn),
+    );
+    const hint = plan.request.messages.findIndex(
+      (message) => message.content === "hint",
+    );
+    expect(plan.request.messages[hint - 1]?.nativeToolTurn).toBeDefined();
+    expect(JSON.stringify(fixture.snapshot)).toBe(before);
+  });
+
   test("reports lossless projection without inventing semantic compression", async () => {
     const snapshot = snapshotOf([promoted("only goal", "initial")]);
     const planner = createJournalContextPlannerV1({

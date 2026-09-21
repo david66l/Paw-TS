@@ -379,7 +379,7 @@ def source_artifact_paths() -> tuple[Path, ...]:
             files.add(package_json)
         files.update(package_src.parent.glob("tsconfig*.json"))
         files.update(package_src.rglob("*.sql"))
-    cli_src = ROOT / "apps/cli/src"
+    cli_src = ROOT / "packages/paw-next/src"
     files.update(cli_src.rglob("*.ts"))
     files.update(cli_src.rglob("*.tsx"))
     files.update(HERE.glob("*.py"))
@@ -390,8 +390,8 @@ def source_artifact_paths() -> tuple[Path, ...]:
         ROOT / "package.json",
         ROOT / "bun.lock",
         ROOT / "tsconfig.base.json",
-        ROOT / "apps/cli/package.json",
-        ROOT / "apps/cli/tsconfig.json",
+        ROOT / "packages/paw-next/package.json",
+        ROOT / "packages/paw-next/tsconfig.json",
         HERE / "UPSTREAM_COMMIT",
         upstream / "pyproject.toml",
         upstream / "uv.lock",

@@ -1,5 +1,6 @@
 import path from "node:path";
-
+import { projectMutationReceiptV1 } from "./mutation-receipt.js";
+export { MUTATION_RECEIPT_POLICY_V1 } from "./mutation-receipt.js";
 import type { ToolDefinition } from "@paw/core";
 import {
   CONTEXT_RECALL,
@@ -22,7 +23,7 @@ import {
 
 export const OUTPUT_RECALL_TOOL_PLUGIN_ID_V1 = "paw.output-recall" as const;
 export const OUTPUT_RECALL_TOOL_PLUGIN_VERSION_V1 =
-  "paw.output-recall.v2:t12000:h3000:l2000:dt3000:dh1000:dl500:c8000:u32000:r256000" as const;
+  "paw.output-recall.v3:journal-authority:t12000:h3000:l2000:dt3000:dh1000:dl500:c8000:u32000:r256000" as const;
 export const OUTPUT_RECALL_PROJECTION_SCHEMA_V1 =
   "paw.output-recall-stub.v1" as const;
 
@@ -71,6 +72,7 @@ const DELEGATED_PREVIEW_TAIL_CHARS_V1 = 500;
 /** Model-visible plugin only; execution remains in Harness via a neutral port. */
 export function createOutputRecallToolPluginV1(input?: {
   readonly policy?: OutputRecallPolicyV1;
+  readonly legacyWorkspaceResource?: true;
 }): RuntimeToolPluginV1 {
   const policy = freezeOutputRecallPolicyV1(
     input?.policy ?? DEFAULT_OUTPUT_RECALL_POLICY_V1,
@@ -78,21 +80,27 @@ export function createOutputRecallToolPluginV1(input?: {
   return Object.freeze({
     schemaVersion: "paw.runtime-tool-plugin.v1",
     pluginId: OUTPUT_RECALL_TOOL_PLUGIN_ID_V1,
-    pluginVersion: outputRecallPluginVersion(policy),
-    entries: Object.freeze([createRecallEntry(policy)]),
+    pluginVersion: input?.legacyWorkspaceResource ? outputRecallPluginVersion(policy).replace("v3:journal-authority", "v2") : outputRecallPluginVersion(policy),
+    entries: Object.freeze([createRecallEntry(policy, input?.legacyWorkspaceResource)]),
   });
 }
 
 /** Replaces only the model view of large durable tool observations. */
 export function createOutputRecallProjectorV1(input?: {
   readonly policy?: OutputRecallPolicyV1;
+  readonly compactMutationReceipts?: true;
 }): ToolObservationProjectorV1 {
+  const compactMutationReceipts = input?.compactMutationReceipts === true;
   const policy = freezeOutputRecallPolicyV1(
     input?.policy ?? DEFAULT_OUTPUT_RECALL_POLICY_V1,
   );
   const projector: ToolObservationProjectorV1 = {
     project(observation, signal) {
       throwIfAborted(signal);
+      if (compactMutationReceipts) {
+        const receipt = projectMutationReceiptV1(observation, policy.maxCharsPerRecall);
+        if (receipt !== undefined) return receipt;
+      }
       const text = canonicalJsonStringify(observation.value);
       const preview = projectionPreviewPolicyV1(observation.tool, policy);
       if (
@@ -241,7 +249,7 @@ function outputRecallPluginVersion(policy: OutputRecallPolicyV1): string {
     return OUTPUT_RECALL_TOOL_PLUGIN_VERSION_V1;
   }
   return [
-    "paw.output-recall.v2",
+    "paw.output-recall.v3:journal-authority",
     `t${policy.previewThresholdChars}`,
     `h${policy.previewHeadChars}`,
     `l${policy.previewTailChars}`,
@@ -287,6 +295,7 @@ function projectionPreviewPolicyV1(
 
 function createRecallEntry(
   policy: OutputRecallPolicyV1,
+  legacyWorkspaceResource = false,
 ): RuntimeToolPluginEntryV1 {
   const canonical = toolDefinitions().find(
     (item) => item.function.name === PROVIDER_TOOL_NAME,
@@ -298,6 +307,37 @@ function createRecallEntry(
       ...canonical.function,
       description:
         "Read a bounded window from a large durable tool output. Use the exact id shown in a large_tool_output stub. Page with part=chunk and offset.",
+      // V3 resolves durable artifact references, unlike the legacy archive search.
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            pattern: ARTIFACT_REF.source,
+            description:
+              "Exact paw-payload:v1:<64 lowercase hex characters> id from a large_tool_output stub. Unknown ids fail; there is no keyword-search fallback.",
+          },
+          part: {
+            type: "string",
+            enum: ["head", "tail", "chunk"],
+            description: "Window to read (default head); chunk uses offset",
+          },
+          offset: {
+            type: "integer",
+            minimum: 0,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "Zero-based character offset for part=chunk (default 0)",
+          },
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: policy.maxCharsPerRecall,
+            description: `Maximum characters to return (default and hard cap ${policy.maxCharsPerRecall})`,
+          },
+        },
+        required: ["id"],
+      },
     },
   };
   const entry: RuntimeToolPluginEntryV1 = {
@@ -352,18 +392,12 @@ function createRecallEntry(
         effectClass: "read",
         permissionCategory: "read",
         concurrencyMode: "exclusive",
-        resources: [
-          {
-            key: path.join(
-              root,
-              ".paw",
-              "paw-next",
-              "durable-json-payloads",
-              "*",
-            ),
-            access: "read",
-          },
-        ],
+        // This capability reads only exact outputs already bound to this
+        // session's canonical journal; it grants no workspace file access.
+        // Advertising the backing store as a file resource incorrectly makes
+        // a read-only child's .paw denial block its own output pagination.
+        // Exclusive workspace locking still serializes recall budget updates.
+        resources: legacyWorkspaceResource ? [{ key: path.join(root, ".paw", "paw-next", "durable-json-payloads", "*"), access: "read" }] : [],
       };
     },
   };

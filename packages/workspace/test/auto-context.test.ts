@@ -93,7 +93,11 @@ describe("discoverContext", () => {
       "utf8",
     );
     const r = discoverContext(root, "how does login work");
-    expect(r.filesRead).toContain(path.join("src", "auth", "login.ts"));
+    // discoverContext 返回的工作区相对路径按约定始终是 posix 分隔符
+    // （见 files/read.ts 的 relPosix 与 glob.test.ts 的 "src/a.ts"）。
+    // 这里不能用 path.join 构造期望值：在 Windows 上它会得到反斜杠，
+    // 断言就变成在测宿主平台而不是被测契约。
+    expect(r.filesRead).toContain("src/auth/login.ts");
     expect(r.content).toContain("export function login()");
   });
 

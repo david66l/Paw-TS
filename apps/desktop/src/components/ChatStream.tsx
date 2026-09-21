@@ -1,4 +1,21 @@
 import {
+  ArrowUp,
+  Square,
+  Paperclip,
+  PanelRight,
+  Copy,
+  Check,
+  Pencil,
+  X,
+  FileText,
+  Code2,
+  Search,
+  Wrench,
+} from "lucide-react";
+import { PawMark } from "./PawMark";
+import { ContextMeter } from "./ContextMeter";
+import type { ContextSnapshot } from "../agent/useRightPanelData";
+import {
   type KeyboardEvent,
   memo,
   useCallback,
@@ -8,7 +25,6 @@ import {
   useState,
 } from "react";
 import { formatModelTextForUi } from "../agent/formatModelText";
-import { runStatusLabel } from "../agent/types";
 import type {
   FileChangeItem,
   PendingApprovalItem,
@@ -42,6 +58,13 @@ import {
 } from "../agent/attachments";
 
 export type ChatStreamProps = {
+  readonly context: ContextSnapshot | null;
+  readonly onCompressContext: () => Promise<{ ok: boolean; message: string }>;
+  readonly modelPresets: readonly { id: string; model: string }[];
+  readonly provider?: string;
+  readonly onProviderChange: (id: string) => void;
+  readonly inspectorOpen: boolean;
+  readonly onToggleInspector: () => void;
   readonly messages: readonly UiMessage[];
   readonly status: RunStatus;
   readonly statusText: string;
@@ -84,7 +107,7 @@ function Avatar({ kind }: { kind: "user" | "assistant" }) {
   if (kind === "user") {
     return <div className={styles.avatarUser}>你</div>;
   }
-  return <div className={styles.avatarPaw}>🐾</div>;
+  return <PawMark size={28} />;
 }
 
 /**
@@ -178,7 +201,7 @@ function RowActions({
           title="编辑重发"
           onClick={() => onEdit(text)}
         >
-          ✎
+          <Pencil size={15} />
         </button>
       ) : null}
       <button
@@ -193,7 +216,7 @@ function RowActions({
           });
         }}
       >
-        {copied ? "✓" : "⧉"}
+        {copied ? <Check size={15} /> : <Copy size={15} />}
       </button>
     </div>
   );
@@ -413,6 +436,13 @@ const ExecutionCard = memo(function ExecutionCard({
 });
 
 export function ChatStream({
+  context,
+  onCompressContext,
+  modelPresets,
+  provider,
+  onProviderChange,
+  inspectorOpen,
+  onToggleInspector,
   messages,
   status,
   statusText,
@@ -420,8 +450,6 @@ export function ChatStream({
   error,
   hostReady,
   modelLabel,
-  skillsCount,
-  lastRunId,
   activities,
   selectedActivityId,
   toolBatches,
@@ -431,7 +459,6 @@ export function ChatStream({
   onCancelChild,
   onRetryChild,
   onAbort,
-  onClear,
   pendingApprovals,
   onResolveApproval,
   pendingAsk,
@@ -441,12 +468,6 @@ export function ChatStream({
   onDismissError,
   approvalMode,
 }: ChatStreamProps) {
-  const [visualAudit, setVisualAudit] = useState(
-    () => localStorage.getItem("paw.visualAudit") === "true",
-  );
-  const [taskMode, setTaskMode] = useState<"standard" | "long">(() =>
-    localStorage.getItem("paw.taskMode") === "long" ? "long" : "standard",
-  );
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<DesktopAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
@@ -523,7 +544,7 @@ export function ChatStream({
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const accepted = await onSend(t, attachments, taskMode);
+      const accepted = await onSend(t, attachments);
       if (accepted !== false) setAttachments([]);
       if (accepted !== false)
         setDraft((current) => (current.trim() === t ? "" : current));
@@ -541,26 +562,12 @@ export function ChatStream({
     }
   };
 
-  const statusBadge =
-    status === "running"
-      ? styles.badgeRunning
-      : status === "failed"
-        ? styles.badgeFailed
-        : status === "completed"
-          ? styles.badgeDone
-          : status === "aborted"
-            ? styles.badgeAborted
-            : styles.badgeIdle;
-
-  const statusLabel =
-    status === "idle" && !hostReady ? "连接中" : runStatusLabel(status);
-
   const firstUser = messages.find((m) => m.role === "user")?.content?.trim();
   const sessionTitle = firstUser
     ? firstUser.length > 36
       ? `${firstUser.slice(0, 36)}…`
       : firstUser
-    : "当前会话";
+    : "新任务";
   const firstApproval = pendingApprovals[0];
 
   return (
@@ -570,44 +577,18 @@ export function ChatStream({
           <div className={styles.topTitle} title={firstUser || undefined}>
             {sessionTitle}
           </div>
-          <div className={styles.topMeta}>
-            {[
-              status === "completed" || status === "failed"
-                ? hostReady
-                  ? "Agent 就绪"
-                  : statusText
-                : statusText,
-              lastRunId ? `run ${lastRunId.slice(0, 16)}` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </div>
         </div>
         <div className={styles.topRight}>
-          <span
-            className={styles.modelChip}
-            title={
-              modelLabel && modelLabel !== "—"
-                ? `当前模型：${modelLabel}${
-                    typeof skillsCount === "number"
-                      ? ` · ${skillsCount} skills`
-                      : ""
-                  }`
-                : hostReady
-                  ? "正在读取模型配置…"
-                  : "Agent 未就绪"
-            }
+          <span className={styles.topMeta}>{isRunning ? statusText : ""}</span>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="任务详情"
+            aria-expanded={inspectorOpen}
+            onClick={onToggleInspector}
           >
-            {modelLabel && modelLabel !== "—"
-              ? modelLabel
-              : hostReady
-                ? "模型…"
-                : "—"}
-          </span>
-          <span className={`${styles.badge} ${statusBadge}`}>
-            <span className={styles.badgeDot} />
-            {statusLabel}
-          </span>
+            <PanelRight size={18} />
+          </button>
         </div>
       </header>
 
@@ -618,21 +599,44 @@ export function ChatStream({
       >
         {messages.length === 0 ? (
           <div className={styles.empty}>
-            <div className={styles.emptyIcon}>🐾</div>
-            <div className={styles.emptyTitle}>开始和 Paw 协作</div>
-            <div className={styles.emptyBody}>
-              描述任务，或输入 /help 查看 doctor、undo、run 历史等命令
-            </div>
+            <PawMark size={90} className={styles.heroMark} />
+            <h1 className={styles.emptyTitle}>让想法往前一步。</h1>
+            <p className={styles.emptyBody}>
+              从一个问题、一个想法，或一项具体的修改开始。
+            </p>
             <div className={styles.suggestions}>
-              {["列出工作区顶层目录", "/doctor", "/help"].map((s) => (
+              {[
+                {
+                  title: "开始一次修改",
+                  text: "描述目标，Paw 帮你完成",
+                  draft: "帮我修改这个项目：",
+                  icon: Code2,
+                },
+                {
+                  title: "理解这个项目",
+                  text: "梳理结构，找到关键入口",
+                  draft: "帮我梳理这个项目的结构与关键入口。",
+                  icon: Search,
+                },
+                {
+                  title: "解决一个问题",
+                  text: "一起定位原因并验证",
+                  draft: "帮我排查这个问题：",
+                  icon: Wrench,
+                },
+              ].map((item) => (
                 <button
-                  key={s}
+                  key={item.title}
                   type="button"
-                  className={styles.chip}
-                  disabled={isRunning || !hostReady}
-                  onClick={() => onSend(s)}
+                  className={styles.starter}
+                  onClick={() => {
+                    setDraft(item.draft);
+                    inputRef.current?.focus();
+                  }}
                 >
-                  {s}
+                  <item.icon size={19} />
+                  <strong>{item.title}</strong>
+                  <small>{item.text}</small>
                 </button>
               ))}
             </div>
@@ -741,7 +745,7 @@ export function ChatStream({
                 {a.type === "image" ? (
                   <img src={a.content} alt={a.name} />
                 ) : (
-                  "▧"
+                  <FileText size={16} />
                 )}{" "}
                 {a.name}
                 <button
@@ -754,7 +758,7 @@ export function ChatStream({
                     )
                   }
                 >
-                  ×
+                  <X size={14} />
                 </button>
               </span>
             ))}
@@ -773,6 +777,7 @@ export function ChatStream({
             ref={inputRef}
             className={styles.input}
             rows={2}
+            aria-label="描述任务"
             placeholder={
               isRunning
                 ? "补充要求或调整方向，Enter 追加指令"
@@ -786,96 +791,81 @@ export function ChatStream({
             disabled={!hostReady}
           />
           <div className={styles.composerBar}>
-            <span className={styles.hint}>
-              {isRunning
-                ? "追加指令将在模型或工具完成后纳入上下文"
-                : hostReady
-                  ? approvalMode === "auto"
-                    ? "本机 Bun · 自动批准工具"
-                    : "本机 Bun · 修改性工具需审批"
-                  : "宿主未就绪"}
-            </span>
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label="添加附件"
+              title="添加文本、代码或图片"
+              disabled={!hostReady || readingFiles || submitting}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip size={18} />
+            </button>
             <div className={styles.actions}>
-              <label
-                className={styles.secondaryBtn}
-                title="对本地网页截图进行独立视觉验收，需要支持图片的模型，会增加模型调用。"
-              >
-                <input
-                  type="checkbox"
-                  aria-label="视觉验收"
-                  checked={visualAudit}
-                  disabled={isRunning || submitting}
-                  onChange={(event) => {
-                    setVisualAudit(event.target.checked);
-                    localStorage.setItem(
-                      "paw.visualAudit",
-                      String(event.target.checked),
-                    );
-                  }}
-                />
-                视觉验收
-              </label>
+              <ContextMeter
+                context={context}
+                busy={isRunning}
+                onCompress={onCompressContext}
+              />
               <select
-                aria-label="任务模式"
-                value={taskMode}
-                disabled={isRunning || submitting}
-                className={styles.secondaryBtn}
-                title="长任务：分阶段独立执行和验收，会增加模型调用。"
-                onChange={(e) => {
-                  const mode = e.target.value === "long" ? "long" : "standard";
-                  setTaskMode(mode);
-                  localStorage.setItem("paw.taskMode", mode);
-                }}
+                className={styles.modelSelect}
+                aria-label="模型"
+                value={provider ?? ""}
+                disabled={isRunning || submitting || !hostReady}
+                onChange={(event) => onProviderChange(event.target.value)}
               >
-                <option value="standard">普通任务</option>
-                <option value="long">长任务</option>
+                {!modelPresets.some((p) => p.id === provider) && (
+                  <option value={provider ?? ""}>
+                    {modelLabel || "选择模型"}
+                  </option>
+                )}
+                {modelPresets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.model}
+                  </option>
+                ))}
               </select>
               <button
                 type="button"
-                className={styles.secondaryBtn}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!hostReady || readingFiles || submitting}
-                title="UTF-8 文本或代码（256 KB），PNG/JPEG/WebP/GIF（2 MB），最多 4 个"
-              >
-                {readingFiles ? "读取中…" : "添加附件"}
-              </button>
-              <button
-                type="button"
-                className={styles.secondaryBtn}
-                onClick={onClear}
-                disabled={isRunning || messages.length === 0}
-              >
-                清空
-              </button>
-              {isRunning ? (
-                <button
-                  type="button"
-                  className={styles.abortBtn}
-                  onClick={onAbort}
-                >
-                  中止
-                </button>
-              ) : null}
-              <button
-                type="button"
                 className={styles.sendBtn}
-                onClick={submit}
+                onClick={
+                  isRunning && !draft.trim() && !attachments.length
+                    ? onAbort
+                    : submit
+                }
                 disabled={
-                  (!draft.trim() && !attachments.length) ||
                   !hostReady ||
                   submitting ||
-                  readingFiles
+                  readingFiles ||
+                  (!isRunning && !draft.trim() && !attachments.length)
                 }
-                aria-label={isRunning ? "追加指令" : "发送"}
+                aria-label={
+                  isRunning && !draft.trim() && !attachments.length
+                    ? "停止任务"
+                    : isRunning
+                      ? "追加指令"
+                      : "发送"
+                }
               >
-                {submitting ? "发送中…" : isRunning ? "追加指令" : "发送"}
-                <span className={styles.sendIcon} aria-hidden>
-                  ↵
-                </span>
+                {isRunning && !draft.trim() && !attachments.length ? (
+                  <Square size={15} />
+                ) : (
+                  <ArrowUp size={19} />
+                )}
               </button>
             </div>
           </div>
         </GlassPanel>
+        <div className={styles.composerFoot}>
+          <span>
+            {isRunning
+              ? "正在执行 · 随时补充要求"
+              : approvalMode === "auto"
+                ? "已开启自动批准"
+                : "修改文件前询问你"}
+          </span>
+          <span>Enter 发送 · Shift Enter 换行</span>
+        </div>
       </div>
     </section>
   );

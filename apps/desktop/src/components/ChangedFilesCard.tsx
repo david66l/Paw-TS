@@ -1,3 +1,4 @@
+import { Files } from "lucide-react";
 import { memo, useState } from "react";
 import { totalChangeStats } from "../agent/toolCards";
 import type { FileChangeItem } from "../agent/types";
@@ -62,7 +63,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
     <div className={styles.card}>
       <div className={styles.head}>
         <span className={styles.headIcon} aria-hidden>
-          Δ
+          <Files size={18} />
         </span>
         <span className={styles.headTitle}>变更 {changes.length} 个文件</span>
         <span className={styles.stat}>

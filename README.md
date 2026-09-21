@@ -1,12 +1,12 @@
 # Paw (TypeScript)
 
-Bun monorepo for a **local-first coding agent**: CLI + TUI, tool harness, context compression, and memory (file or Postgres Runtime).
+Bun monorepo for a **local-first coding agent**: Electron desktop app, tool harness, context compression, and memory (file or Postgres Runtime).
 
 ```bash
 cd paw-ts
 bun install
-bun run tui          # interactive terminal UI
-bun run cli -- --help
+bun run desktop      # Electron desktop app (Vite + Electron)
+bun run typecheck    # tsc --noEmit on all workspaces
 ```
 
 Do not import Python code or depend on `../src/paw` from this tree.
@@ -25,8 +25,9 @@ Do not import Python code or depend on `../src/paw` from this tree.
 | `packages/models` | OpenAI / Anthropic / Ollama adapters |
 | `packages/settings` | Local settings / credentials |
 | `packages/store` | Task planner |
-| `packages/eval` | Evaluation harness |
-| `apps/cli`, `apps/tui` | Entry points |
+| `packages/paw-next` | **Shared Paw Next V3 composition** used by the desktop app |
+| `apps/desktop` | Electron + React desktop app (the only app) |
+| `legacy/` | Archived CLI / TUI / eval code — **not** in the workspace |
 
 Turn loop (simplified): **retrieve memory → compress context → model → parse action → run tools → persist → (db) completeTask / (file) extract**.
 
@@ -64,8 +65,11 @@ repository after an explicit license is chosen.
 ```bash
 export DATABASE_URL=postgresql:///paw_memory
 bun run memory:migrate
-bun run cli -- doctor    # settings + Postgres ping + migrations
+bun run memory:test:health   # settings + Postgres ping + schema health
 ```
+
+> The old `paw-ts doctor` subcommand was archived together with the CLI
+> (`legacy/apps/cli`, see `legacy/README.md`).
 
 ```bash
 # 旧 MD → Postgres（幂等）

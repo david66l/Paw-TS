@@ -88,6 +88,8 @@ interface StoreIdentity {
   readonly payloadRoot: string;
   readonly versionRoot: string;
   readonly storeDir: string;
+  /** Immutable lexical paths only. Filesystem state is never cached here. */
+  readonly directoryChain: readonly string[];
 }
 
 interface PayloadArtifactEnvelopeV1 {
@@ -242,6 +244,7 @@ function storeIdentity(
     payloadRoot,
     FILE_DURABLE_JSON_PAYLOAD_CODEC_V1.version,
   );
+  const storeDir = path.join(versionRoot, storeKey);
   return Object.freeze({
     workspaceRoot,
     workspaceIdentityHash,
@@ -250,7 +253,8 @@ function storeIdentity(
     policy,
     payloadRoot,
     versionRoot,
-    storeDir: path.join(versionRoot, storeKey),
+    storeDir,
+    directoryChain: directoryChainWithinWorkspace(workspaceRoot, storeDir),
   });
 }
 
@@ -358,7 +362,8 @@ function readAndVerifyArtifact(
     throw new Error("Durable JSON payload reference is invalid");
   }
   const envelopeHash = match[1] as string;
-  validateReaderDirectories(identity);
+  // readStableArtifactFile validates the live directory chain immediately before
+  // opening. Keep the second check below after reading and verifying the bytes.
   const finalPath = path.join(identity.storeDir, `${envelopeHash}.json`);
   const raw = readStableArtifactFile(
     identity,
@@ -693,31 +698,31 @@ function isStableRegularFile(
 }
 
 function ensureWriterDirectories(identity: StoreIdentity): void {
-  for (const directory of [
-    path.join(identity.workspaceRoot, ".paw"),
-    path.join(identity.workspaceRoot, ".paw", "paw-next"),
-    identity.payloadRoot,
-    identity.versionRoot,
-    identity.storeDir,
-  ]) {
+  for (const [index, directory] of identity.directoryChain.entries()) {
     try {
       fs.mkdirSync(directory);
     } catch (error) {
       if (!fsError(error, "EEXIST")) throw error;
     }
-    validateDirectoryChain(identity.workspaceRoot, directory);
+    validateDirectoryChain(
+      identity.workspaceRoot,
+      identity.directoryChain.slice(0, index + 1),
+    );
   }
 }
 
 function validateWriterDirectories(identity: StoreIdentity): void {
-  validateDirectoryChain(identity.workspaceRoot, identity.storeDir);
+  validateDirectoryChain(identity.workspaceRoot, identity.directoryChain);
 }
 
 function validateReaderDirectories(identity: StoreIdentity): void {
-  validateDirectoryChain(identity.workspaceRoot, identity.storeDir);
+  validateDirectoryChain(identity.workspaceRoot, identity.directoryChain);
 }
 
-function validateDirectoryChain(workspaceRoot: string, target: string): void {
+function directoryChainWithinWorkspace(
+  workspaceRoot: string,
+  target: string,
+): readonly string[] {
   const relative = path.relative(workspaceRoot, target);
   if (
     relative === "" ||
@@ -727,13 +732,27 @@ function validateDirectoryChain(workspaceRoot: string, target: string): void {
     throw new Error("Durable JSON payload path escaped the workspace");
   }
   let current = workspaceRoot;
+  const directories: string[] = [];
   for (const segment of relative.split(path.sep)) {
     current = path.join(current, segment);
+    directories.push(current);
+  }
+  return Object.freeze(directories);
+}
+
+function validateDirectoryChain(
+  workspaceRoot: string,
+  directories: readonly string[],
+): void {
+  for (const current of directories) {
     const stat = fs.lstatSync(current);
     if (!stat.isDirectory() || stat.isSymbolicLink()) {
       throw new Error("Durable JSON payload path contains an unsafe directory");
     }
     const canonical = fs.realpathSync.native(current);
+    // Exact equality to an already-contained lexical path proves containment.
+    // Preserve the original relative-path check for casing or alias differences.
+    if (canonical === current) continue;
     const canonicalRelative = path.relative(workspaceRoot, canonical);
     if (
       canonicalRelative === "" ||

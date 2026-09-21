@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  useCallback,
   useEffect,
   useState,
 } from "react";
@@ -36,15 +37,17 @@ export function App() {
     () => readAppearance().material,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [rightTab, setRightTab] = useState<RightTabId>("plan");
   const [sidebarWidth, setSidebarWidth] = useState(() =>
-    readWidth("paw.width.sidebar", 252),
+    readWidth("paw.width.sidebar", 230),
   );
   const [rightWidth, setRightWidth] = useState(() =>
-    readWidth("paw.width.right", 320),
+    readWidth("paw.width.right", 280),
   );
   const agent = useAgentRun();
-  const panelData = useRightPanelData();
+  const panelData = useRightPanelData(agent.runtimeSessionId, agent.hostReady);
 
   useEffect(() => {
     const appearance = { color: colorTheme, material: materialTheme };
@@ -132,6 +135,10 @@ export function App() {
         onNewConversation={agent.newConversation}
         onSelectSession={agent.selectSession}
         onDeleteSession={agent.deleteSession}
+        onOpenMemory={() => {
+          setRightTab("memory");
+          setInspectorOpen(true);
+        }}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div
@@ -145,6 +152,21 @@ export function App() {
       />
       <ChatStream
         key={agent.activeSessionId}
+        context={panelData.context}
+        onCompressContext={async () => {
+          if (!window.pawDesktop)
+            return { ok: false, message: "请在桌面端使用上下文压缩。" };
+          const result = await window.pawDesktop.compactContext({
+            conversationId: agent.runtimeSessionId,
+          });
+          if (result.context) panelData.updateContext(result.context);
+          return result;
+        }}
+        modelPresets={agent.modelPresets}
+        provider={agent.provider}
+        onProviderChange={agent.changeProvider}
+        inspectorOpen={inspectorOpen}
+        onToggleInspector={() => setInspectorOpen((value) => !value)}
         messages={agent.messages}
         status={agent.status}
         statusText={agent.statusText}
@@ -161,6 +183,7 @@ export function App() {
         onViewDetails={(id) => {
           agent.selectActivity(id);
           setRightTab("agents");
+          setInspectorOpen(true);
         }}
         onSend={(text, attachments, taskMode) =>
           agent.send(text, "continue", attachments, taskMode)
@@ -178,34 +201,39 @@ export function App() {
         onDismissError={agent.dismissError}
         approvalMode={agent.approvalMode}
       />
-      <div
-        className={styles.resizer}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="调整右栏宽度"
-        tabIndex={0}
-        onPointerDown={startResize("right")}
-        onKeyDown={onResizerKey("right")}
-      />
-      <RightPanel
-        monitor={agent.monitor}
-        isRunning={agent.isRunning}
-        onStopJob={agent.stopJob}
-        plan={panelData.plan}
-        changes={panelData.changes}
-        context={panelData.context}
-        memory={panelData.memory}
-        activities={agent.activities}
-        selectedActivityId={agent.selectedActivityId}
-        agentRoster={agent.agentRoster}
-        agentRunStatus={agent.agentRunStatus}
-        tab={rightTab}
-        onTabChange={setRightTab}
-        onRefreshMemoryLibrary={panelData.refreshMemoryLibrary}
-      />
+      {inspectorOpen && (
+        <>
+          <div
+            className={styles.resizer}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整右栏宽度"
+            tabIndex={0}
+            onPointerDown={startResize("right")}
+            onKeyDown={onResizerKey("right")}
+          />
+          <RightPanel
+            onClose={() => setInspectorOpen(false)}
+            monitor={agent.monitor}
+            isRunning={agent.isRunning}
+            onStopJob={agent.stopJob}
+            plan={panelData.plan}
+            changes={panelData.changes}
+            context={panelData.context}
+            memory={panelData.memory}
+            activities={agent.activities}
+            selectedActivityId={agent.selectedActivityId}
+            agentRoster={agent.agentRoster}
+            agentRunStatus={agent.agentRunStatus}
+            tab={rightTab}
+            onTabChange={setRightTab}
+            onRefreshMemoryLibrary={panelData.refreshMemoryLibrary}
+          />
+        </>
+      )}
       <SettingsModal
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={closeSettings}
         colorTheme={colorTheme}
         onColorThemeChange={setColorTheme}
         materialTheme={materialTheme}

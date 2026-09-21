@@ -72,6 +72,8 @@ interface TrackedJobV1 {
   output?: string;
   previewOutput: string;
   unreadOutput: string;
+  /** Cumulative oldest-byte drops reported by the producer cursor. */
+  droppedBytesTotal: number;
   readonly startedAt: number;
   finishedAt?: number;
   reported: boolean;
@@ -187,6 +189,7 @@ export class ManagedJobRegistryV1 {
       reported: false,
       previewOutput: "",
       unreadOutput: "",
+      droppedBytesTotal: 0,
       waiters: new Set(),
     };
     this.jobs.set(id, job);
@@ -218,6 +221,8 @@ export class ManagedJobRegistryV1 {
     this.collectOutput(job);
     const text = job.readOutput
       ? job.unreadOutput
+        ? this.truncationNotice(job) + job.unreadOutput
+        : ""
       : isTerminal(job.status)
         ? (job.output ?? "")
         : "";
@@ -231,7 +236,9 @@ export class ManagedJobRegistryV1 {
     const job = this.expectOwned(ownerId, id);
     this.collectOutput(job);
     return Object.freeze({
-      text: job.previewOutput,
+      text: job.previewOutput
+        ? this.truncationNotice(job) + job.previewOutput
+        : job.previewOutput,
       snapshot: this.snapshot(job),
     });
   }
@@ -243,10 +250,26 @@ export class ManagedJobRegistryV1 {
         .subarray(-(job.outputLimitBytes ?? 64 * 1024))
         .toString("utf8");
     if (chunk) {
-      job.previewOutput = tail(job.previewOutput + chunk);
-      job.unreadOutput = tail(job.unreadOutput + chunk);
+      // The producer cursor prefixes bounded reads with its drop notice, but
+      // the tail() windows below can chop that notice off the front. Track
+      // the drops here and re-emit one canonical notice from read()/peek().
+      const dropped = chunk.match(
+        /^\[managed output truncated: (\d+) oldest bytes dropped\]\n/,
+      );
+      const body = dropped
+        ? chunk.slice(dropped[0].length)
+        : chunk;
+      if (dropped) job.droppedBytesTotal += Number(dropped[1]);
+      job.previewOutput = tail(job.previewOutput + body);
+      job.unreadOutput = tail(job.unreadOutput + body);
     } else if (!job.readOutput && isTerminal(job.status))
       job.previewOutput = tail(job.output ?? "");
+  }
+
+  private truncationNotice(job: TrackedJobV1): string {
+    return job.droppedBytesTotal > 0
+      ? `[managed output truncated: ${job.droppedBytesTotal} oldest bytes dropped]\n`
+      : "";
   }
 
   kill(

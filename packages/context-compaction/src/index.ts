@@ -80,3 +80,11 @@ export {
   createCanonicalPayloadCheckpointEvidenceSourceV1,
   type CanonicalPayloadCheckpointEvidenceSourceOptionsV1,
 } from "./canonical-evidence-source.js";
+
+export {
+  CONTEXT_COMPACT_PROVIDER_TOOL_V1,
+  CONTEXT_COMPACT_TOOL_PLUGIN_ID_V1,
+  CONTEXT_COMPACT_TOOL_PLUGIN_VERSION_V1,
+  createContextCompactToolPluginV1,
+  projectPendingContextCompactRequestV1,
+} from "./compact-request.js";

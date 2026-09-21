@@ -58,7 +58,7 @@ apps/desktop/
 
 ```text
 React UI → Electron IPC → Bun agent-host
-                          └─ @paw/cli/paw-next（共享 V3 组装入口）
+                          └─ @paw/paw-next（共享 V3 组装入口）
                              ├─ 持久化 Session / 工作段 / 执行租约
                              ├─ Agent Loop / 工具审批 / 检查点
                              ├─ Collaboration 调度 / 独立子 Agent

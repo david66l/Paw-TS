@@ -52,9 +52,17 @@
  *   它们作为隐式技能注入到每个会话的系统提示词中
  */
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseYamlFrontmatter, splitFrontmatter } from "./markdown.js";
+
+/**
+ * 技能目录递归扫描的最大深度。
+ *
+ * `.paw/skills/` 是用户可控目录，因此递归必须有界：既防止误建的深目录树，
+ * 也让符号链接成环时有一个确定的终止条件（配合 realpath 去重）。
+ */
+const MAX_SKILL_SCAN_DEPTH = 8;
 
 /**
  * 技能定义 —— 一个可复用的、参数化的工作流。
@@ -208,12 +216,37 @@ export class SkillRegistry {
  * - 如果子目录不包含技能标记文件，则递归进入其子目录继续搜索
  * - 如果子目录包含技能标记文件，则将其作为一个技能加载（不再递归）
  *
+ * ## 递归边界
+ * - 深度上限 `MAX_SKILL_SCAN_DEPTH`
+ * - 用 realpath 去过重：`statSync` 会跟随符号链接，一个自引用的目录链接
+ *   （或任意链接环）在无保护时会无限递归直到爆栈
+ *
  * ## 容错设计
  * - 无法读取的目录或文件会被静默跳过（try-catch 包裹每个条目的处理逻辑）
  * - 格式错误的文件不会影响其他正确文件的加载
  */
 export function loadSkillsFromDirectory(dir: string): SkillDefinition[] {
+  return loadSkillsFromDirectoryBounded(dir, 0, new Set<string>());
+}
+
+function loadSkillsFromDirectoryBounded(
+  dir: string,
+  depth: number,
+  visited: Set<string>,
+): SkillDefinition[] {
   const skills: SkillDefinition[] = [];
+  if (depth > MAX_SKILL_SCAN_DEPTH) return skills;
+
+  // 符号链接会指向已经访问过的目录，必须按真实路径去重。
+  let realDir: string;
+  try {
+    realDir = realpathSync.native?.(dir) ?? realpathSync(dir);
+  } catch {
+    return skills; // 目录不存在或无法解析
+  }
+  if (visited.has(realDir)) return skills;
+  visited.add(realDir);
+
   let entries: string[];
   try {
     entries = readdirSync(dir);
@@ -236,7 +269,7 @@ export function loadSkillsFromDirectory(dir: string): SkillDefinition[] {
           }
         } else {
           // 不是技能目录，递归进入其子目录继续搜索
-          skills.push(...loadSkillsFromDirectory(full));
+          skills.push(...loadSkillsFromDirectoryBounded(full, depth + 1, visited));
         }
       } else if (entry.endsWith(".json")) {
         const raw = readFileSync(full, "utf-8");

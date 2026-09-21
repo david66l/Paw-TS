@@ -54,7 +54,7 @@ function createTodoWriteEntry(
       function: Object.freeze({
         ...definition.function,
         description:
-          "Replace the durable task-progress list once per tool batch. Keep at most one item in_progress and update completed items immediately.",
+          "Record or update a task plan when useful. Each call replaces the full list; call at most once per tool batch when progress changes, not after every tool. Keep stable item ids and at most one item in_progress; use status=done for completed items.",
       }),
     }),
     deferred: false,

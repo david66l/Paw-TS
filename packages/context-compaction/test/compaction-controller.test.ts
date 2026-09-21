@@ -11,11 +11,56 @@ import {
 import {
   type ContextCompactionBoundaryDecisionV1,
   createContextCompactionControllerV1,
+  createEvidenceBoundCheckpointDistillerV1,
 } from "../src/index.js";
 
 const signal = new AbortController().signal;
 
 describe("context compaction controller", () => {
+  test("journals a distillation timeout without committing a checkpoint", async () => {
+    const session = new MemorySession(sourceFacts());
+    const controller = createContextCompactionControllerV1({
+      session,
+      distiller: createEvidenceBoundCheckpointDistillerV1({
+        evidence: { load: () => new Promise(() => {}) },
+        model: {
+          complete: () => {
+            throw new Error("must not call model");
+          },
+        },
+        verifier: {
+          verify: () => {
+            throw new Error("must not verify");
+          },
+        },
+        policy: {
+          timeoutMs: 15,
+          maxPromptChars: 256_000,
+          maxOutputTokens: 4096,
+        },
+      }),
+      codec: inlineCodec(),
+      signal,
+    });
+    await controller.handleDecision(distillDecision());
+    const facts = (await session.readInputSnapshot()).entries.map(
+      (entry) => entry.fact,
+    );
+    expect(
+      facts.filter(
+        (fact) => fact.type === "context.checkpoint_distillation_settled",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        status: "unknown",
+        errorCode: "CheckpointDistillationTimeout",
+      }),
+    ]);
+    expect(
+      facts.some((fact) => fact.type === "context.checkpoint_recorded"),
+    ).toBe(false);
+  });
+
   test("uses Runtime's claim, settlement, and checkpoint transaction", async () => {
     const session = new MemorySession(sourceFacts());
     let calls = 0;

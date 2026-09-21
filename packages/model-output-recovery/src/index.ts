@@ -1,5 +1,9 @@
 import type { ModelSettlement } from "@paw/agent-loop";
 import type { ChatMessage, ModelTokenUsage } from "@paw/core";
+import {
+  FALLBACK_MODEL_OUTPUT_TOKENS,
+  resolveModelOutputLimit,
+} from "@paw/models";
 import type {
   ModelCompletionResult,
   ModelStreamChunk,
@@ -9,13 +13,12 @@ import type {
 } from "@paw/models";
 
 export const MODEL_OUTPUT_RECOVERY_POLICY_VERSION_V1 =
-  "paw.model-output-recovery.v1:d32000:l64000:h128000:c3" as const;
+  "paw.model-output-recovery.v2:native:f8192:c3" as const;
 
 export const DEFAULT_MODEL_OUTPUT_RECOVERY_POLICY_V1 = Object.freeze({
   policyVersion: MODEL_OUTPUT_RECOVERY_POLICY_VERSION_V1,
-  defaultMaxOutputTokens: 32_000,
-  lowerTierMaxOutputTokens: 64_000,
-  upperTierMaxOutputTokens: 128_000,
+  outputLimit: "model-capability" as const,
+  fallbackMaxOutputTokens: FALLBACK_MODEL_OUTPUT_TOKENS,
   maxContinuations: 3,
 });
 
@@ -26,6 +29,8 @@ export interface ModelOutputRecoveryBudgetV1 {
 
 export interface ModelOutputRecoveryPluginOptionsV1 {
   readonly nativeMaxOutputTokens?: number;
+  /** A composed runtime must not recover beyond its planned output reserve. */
+  readonly reservedOutputTokens?: number;
   readonly maxContinuations?: number;
 }
 
@@ -35,31 +40,15 @@ const CONTINUATION_INSTRUCTION = [
   "No tool call from the truncated response was executed; emit any still-needed tool call again as one complete call.",
 ].join(" ");
 
-/** Resolve the default request budget and the larger truncation-recovery cap. */
+/** Initial output and recovery both follow the selected model's capability. */
 export function resolveModelOutputRecoveryBudgetV1(
   nativeMaxOutputTokens?: number,
 ): ModelOutputRecoveryBudgetV1 {
-  if (
-    nativeMaxOutputTokens !== undefined &&
-    (!Number.isSafeInteger(nativeMaxOutputTokens) || nativeMaxOutputTokens <= 0)
-  ) {
-    throw new Error("nativeMaxOutputTokens must be a positive safe integer");
-  }
-  const policy = DEFAULT_MODEL_OUTPUT_RECOVERY_POLICY_V1;
-  const tierCeiling =
-    nativeMaxOutputTokens === undefined ||
-    nativeMaxOutputTokens < policy.upperTierMaxOutputTokens
-      ? policy.lowerTierMaxOutputTokens
-      : policy.upperTierMaxOutputTokens;
-  const recoveryMaxOutputTokens = Math.min(
-    nativeMaxOutputTokens ?? tierCeiling,
-    tierCeiling,
+  const recoveryMaxOutputTokens = resolveModelOutputLimit(
+    nativeMaxOutputTokens,
   );
   return Object.freeze({
-    defaultMaxOutputTokens: Math.min(
-      policy.defaultMaxOutputTokens,
-      recoveryMaxOutputTokens,
-    ),
+    defaultMaxOutputTokens: recoveryMaxOutputTokens,
     recoveryMaxOutputTokens,
   });
 }
@@ -74,6 +63,12 @@ export function createModelOutputRecoveryPluginV1(
 ): PawAgentLoopModel {
   const budget = resolveModelOutputRecoveryBudgetV1(
     options.nativeMaxOutputTokens,
+  );
+  const outputCeiling = Math.min(
+    budget.recoveryMaxOutputTokens,
+    options.reservedOutputTokens === undefined
+      ? budget.recoveryMaxOutputTokens
+      : resolveModelOutputLimit(options.reservedOutputTokens),
   );
   const maxContinuations =
     options.maxContinuations ??
@@ -91,7 +86,7 @@ export function createModelOutputRecoveryPluginV1(
       let currentRequest = withOutputBudget(
         request,
         request.options?.maxOutputTokens ?? budget.defaultMaxOutputTokens,
-        budget.recoveryMaxOutputTokens,
+        outputCeiling,
       );
 
       for (let attempt = 0; ; attempt += 1) {
@@ -133,7 +128,7 @@ export function createModelOutputRecoveryPluginV1(
         currentRequest = continuationRequest(
           currentRequest,
           settlement.message,
-          budget.recoveryMaxOutputTokens,
+          outputCeiling,
         );
       }
     },

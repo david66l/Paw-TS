@@ -21,6 +21,7 @@ export {
 export {
   COMPLETION_REVIEW_TRIGGER_POLICY_VERSION_V1,
   DEFAULT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
+  TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
   evaluateCompletionReviewTriggersV1,
   freezeCompletionReviewTriggerPolicyV1,
   hasCompletionReviewSourceMutationV1,

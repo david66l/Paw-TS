@@ -109,7 +109,10 @@ function startAgentHost() {
       });
       return;
     }
-    if (msg.type === "approval.closed") { sendToRenderer("agent:approval-closed", msg); return; }
+    if (msg.type === "approval.closed") {
+      sendToRenderer("agent:approval-closed", msg);
+      return;
+    }
     if (msg.type === "approval.request") {
       sendToRenderer("agent:approval-request", {
         requestId: msg.requestId,
@@ -290,7 +293,8 @@ function createWindow() {
     title: "Paw",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: "#eef2fb",
+    backgroundColor: "#fcfbf9",
+    icon: path.join(__dirname, "../resources/paw.ico"),
     vibrancy: "under-window",
     visualEffectState: "active",
     webPreferences: {
@@ -374,20 +378,54 @@ function setupIpc() {
     return { requestId, workspaceRoot };
   });
 
-  for (const [channel, type] of [["agent:submit-input", "input.submit"], ["agent:cancel-child", "child.cancel"], ["agent:refresh-jobs", "jobs.refresh"], ["agent:stop-job", "job.stop"], ["agent:get-monitor", "monitor.get"]]) {
+  for (const [channel, type] of [
+    ["agent:submit-input", "input.submit"],
+    ["agent:cancel-child", "child.cancel"],
+    ["agent:refresh-jobs", "jobs.refresh"],
+    ["agent:stop-job", "job.stop"],
+    ["agent:get-monitor", "monitor.get"],
+    ["agent:get-context", "context.get"],
+    ["agent:compact-context", "context.compact"],
+  ]) {
     ipcMain.handle(channel, (_evt, payload) => {
       if (!agentReady || !agentProc || typeof payload?.requestId !== "string")
         return { ok: false, error: "Agent 宿主未就绪。" };
       const operationId = require("node:crypto").randomUUID();
       return new Promise((resolve) => {
-        const timer = setTimeout(() => {
-          pendingControls.delete(operationId);
-          resolve({ ok: false, error: "操作回执超时；重试追加指令会使用相同编号，不会重复入队。" });
-        }, 15000);
-        pendingControls.set(operationId, { requestId: payload.requestId, timer, resolve });
+        const timer = setTimeout(
+          () => {
+            pendingControls.delete(operationId);
+            resolve({
+              ok: false,
+              error: "操作回执超时；重试追加指令会使用相同编号，不会重复入队。",
+            });
+          },
+          type === "context.compact" ? 250000 : 15000,
+        );
+        pendingControls.set(operationId, {
+          requestId: payload.requestId,
+          timer,
+          resolve,
+        });
         try {
-          writeAgent({ type, requestId: payload.requestId, operationId,
-            ...(type === "input.submit" ? { inputId: payload.inputId, content: payload.content, attachments: payload.attachments } : { childId: payload.childId, runId: payload.runId, jobId: payload.jobId, conversationId: payload.conversationId, workspaceRoot: payload.workspaceRoot }) });
+          writeAgent({
+            type,
+            requestId: payload.requestId,
+            operationId,
+            ...(type === "input.submit"
+              ? {
+                  inputId: payload.inputId,
+                  content: payload.content,
+                  attachments: payload.attachments,
+                }
+              : {
+                  childId: payload.childId,
+                  runId: payload.runId,
+                  jobId: payload.jobId,
+                  conversationId: payload.conversationId,
+                  workspaceRoot: payload.workspaceRoot,
+                }),
+          });
         } catch (error) {
           clearTimeout(timer);
           pendingControls.delete(operationId);

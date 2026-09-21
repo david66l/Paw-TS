@@ -126,10 +126,18 @@ export function toolResultsDir(workspaceRoot: string, runId: string): string {
  *
  * 防止路径遍历攻击和文件系统兼容性问题。
  *
+ * 注意 `.` 与 `-` 等字符本身是合法的（`run.2026-01-01` 这类 id 必须保留），
+ * 因此上面的字符白名单会放行 `.` 和 `..` —— 它们同时是合法的路径段，
+ * `path.join(dir, "..", "tool-results")` 会跳出 dir。所以这里必须再折叠
+ * 一次「全部由点组成」的结果。`checkpointsDir` 因为允许点会破坏命名空间
+ * 身份而直接拒绝（见该处注释），这里则保留兼容性、只做无害化替换。
+ *
  * Make a run id safe to use as a file/directory name.
  */
 export function sanitizeRunId(id: string): string {
-  return id.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safe = id.replace(/[^a-zA-Z0-9._-]/g, "_");
+  // `.` 与 `..` 是路径段，不是文件名。任何全点结果都必须失去点的含义。
+  return /^\.+$/.test(safe) ? safe.replace(/\./g, "_") : safe;
 }
 
 /**

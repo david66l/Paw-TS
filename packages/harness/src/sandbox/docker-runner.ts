@@ -291,3 +291,90 @@ export function buildDockerShellExecSpec(
     pullPolicy,
   };
 }
+
+/** Persistent session container spec: one long-lived `docker run -i` shell. */
+export interface DockerShellSessionSpawnSpecV1 {
+  readonly runtime: string;
+  readonly args: readonly string[];
+  readonly containerName: string;
+}
+
+/**
+ * Build the spawn spec for a persistent sandbox shell session.
+ *
+ * Security parity with {@link buildDockerShellExecSpec}: the same trusted
+ * workspace bind (readonly only when configured), pids/memory/cpu limits,
+ * network policy, and strict-mode read-only root + tmpfs. Differences are
+ * lifecycle only: the container runs one interactive shell reading commands
+ * from stdin, and `--rm` removes it when that shell exits.
+ */
+export function buildDockerSessionSpawnSpecV1(
+  config: ShellSandboxConfig,
+  input: {
+    readonly workspaceRoot: string;
+    readonly sessionKey: string;
+  },
+): DockerShellSessionSpawnSpecV1 | { readonly error: string } {
+  const containerRoot = resolveContainerWorkspaceRoot(
+    config.containerWorkspaceRoot,
+  );
+  if ("error" in containerRoot) return containerRoot;
+
+  const runtime = config.runtime ?? detectContainerRuntime();
+  if (!runtime) {
+    return {
+      error:
+        "shell sandbox is enabled but neither docker nor podman is available",
+    };
+  }
+
+  const workspaceRoot = path.resolve(input.workspaceRoot);
+  const containerWorkspaceRoot = containerRoot.root;
+  const image = config.image.trim() || DEFAULT_SANDBOX_IMAGE;
+  const pullPolicy = config.pullPolicy ?? "missing";
+  const commandShell = config.commandShell ?? "sh";
+  const memoryMb = config.memoryMb ?? 2048;
+  const cpus = config.cpus ?? 2;
+  // Docker names allow [a-zA-Z0-9][a-zA-Z0-9_.-]*; session keys are
+  // `${sessionId}:${runId}` so fold anything else into a stable slug.
+  const keySlug = input.sessionKey.replace(/[^a-zA-Z0-9_.-]+/g, "-").slice(0, 48);
+  const containerName = `paw-session-${process.pid}-${keySlug}-${randomUUID().slice(0, 8)}`;
+
+  const args: string[] = [
+    "run",
+    "--rm",
+    "--name",
+    containerName,
+    "--stop-timeout",
+    "1",
+    "--pull",
+    pullPolicy,
+    "-i",
+    "-w",
+    containerWorkspaceRoot,
+    "--mount",
+    `type=bind,source=${workspaceRoot},target=${containerWorkspaceRoot}${
+      config.workspaceReadOnly ? ",readonly" : ""
+    }`,
+    "--pids-limit",
+    "256",
+    "--memory",
+    `${memoryMb}m`,
+    "--cpus",
+    String(cpus),
+  ];
+  if (config.network === "deny") {
+    args.push("--network", "none");
+  }
+  if (config.mode === "strict") {
+    args.push(
+      "--read-only",
+      "--tmpfs",
+      "/tmp:exec,nosuid,size=512m",
+    );
+  }
+  // One interactive shell for the whole session; commands arrive via stdin.
+  args.push(image, commandShell);
+
+  return { runtime, args, containerName };
+}

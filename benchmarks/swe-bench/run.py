@@ -56,7 +56,7 @@ def run_paw_ts(workspace: Path, goal: str, run_id: str, memory_on: bool) -> dict
     # This assumes paw-ts has a headless mode that accepts --goal and --workspace-root.
     # Adjust the invocation to match your actual CLI interface.
     cmd = [
-        "bun", "run", "apps/cli/src/main.ts",
+        "bun", "run", "legacy/apps/cli/src/main.ts",
         "stub-run",
         "--workspace-root", str(workspace),
         "--goal", goal,

@@ -14,6 +14,91 @@ import {
 } from "./support/checkpoint-fixture.js";
 
 describe("evidence-bound checkpoint distiller", () => {
+  test("a late distillation result cannot start semantic verification", async () => {
+    let resolveLate!: (value: { status: "completed"; text: string }) => void;
+    let verifierCalls = 0;
+    const distiller = createEvidenceBoundCheckpointDistillerV1({
+      model: {
+        complete: () =>
+          new Promise((resolve) => {
+            resolveLate = resolve;
+          }),
+      },
+      verifier: countingVerifier(() => {
+        verifierCalls++;
+        return { status: "supported" };
+      }),
+      policy: { timeoutMs: 15, maxPromptChars: 256_000, maxOutputTokens: 4096 },
+    });
+    expect(await runDistiller(distiller)).toEqual({
+      status: "unknown",
+      errorCode: "CheckpointDistillationTimeout",
+    });
+    resolveLate({
+      status: "completed",
+      text: JSON.stringify(validCheckpoint()),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(verifierCalls).toBe(0);
+  });
+
+  test("distillation deadline also bounds an uncooperative semantic verifier", async () => {
+    const distiller = createEvidenceBoundCheckpointDistillerV1({
+      model: completedModel(JSON.stringify(validCheckpoint())),
+      verifier: { verify: () => new Promise(() => {}) },
+      policy: { timeoutMs: 15, maxPromptChars: 256_000, maxOutputTokens: 4096 },
+    });
+    expect(await runDistiller(distiller)).toEqual({
+      status: "unknown",
+      errorCode: "CheckpointDistillationTimeout",
+    });
+  });
+
+  test("cancellation during distillation cannot produce an accepted checkpoint", async () => {
+    const parent = new AbortController();
+    let verifierCalls = 0;
+    const distiller = createEvidenceBoundCheckpointDistillerV1({
+      model: {
+        async complete() {
+          parent.abort();
+          return {
+            status: "completed",
+            text: JSON.stringify(validCheckpoint()),
+          };
+        },
+      },
+      verifier: countingVerifier(() => {
+        verifierCalls++;
+        return { status: "supported" };
+      }),
+    });
+    expect(await runDistiller(distiller, parent.signal)).toEqual({
+      status: "cancelled",
+      errorCode: "CheckpointDistillationCancelled",
+    });
+    expect(verifierCalls).toBe(0);
+  });
+
+  test("bounds a stalled evidence loader before issuing any model request", async () => {
+    let calls = 0;
+    const distiller = createEvidenceBoundCheckpointDistillerV1({
+      evidence: { load: () => new Promise(() => {}) },
+      model: {
+        async complete() {
+          calls++;
+          return { status: "completed", text: "{}" };
+        },
+      },
+      verifier: countingVerifier(() => ({ status: "supported" })),
+      policy: { timeoutMs: 15, maxPromptChars: 256_000, maxOutputTokens: 4096 },
+    });
+    expect(await runDistiller(distiller)).toEqual({
+      status: "unknown",
+      errorCode: "CheckpointDistillationTimeout",
+    });
+    expect(calls).toBe(0);
+  }, 500);
+
   test("accepts strict JSON only after deterministic and semantic verification", async () => {
     const requests: CheckpointDistillationModelRequestV1[] = [];
     const model = completedModel(JSON.stringify(validCheckpoint()), requests);

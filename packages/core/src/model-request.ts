@@ -15,6 +15,12 @@ export interface ToolDefinition {
 export interface ModelRequestOptionsV1 {
   readonly maxOutputTokens?: number;
   readonly thinkingEnabled?: boolean;
+  /**
+   * Per-request reasoning-effort override for phase-aware hosts. Undefined
+   * preserves the model's configured runtime profile; recorded in the
+   * durable request snapshot so replays reproduce the exact effort used.
+   */
+  readonly reasoningEffort?: "high" | "max";
   readonly tools?: readonly ToolDefinition[];
 }
 

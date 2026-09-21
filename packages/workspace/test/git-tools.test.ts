@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,9 +8,18 @@ import { gitDiff, gitLog, gitStatus } from "../src/git-tools.js";
 
 describe("git tools", () => {
   function initGitRepo(dir: string): void {
-    execSync("git init", { cwd: dir });
-    execSync("git config user.email 'test@test.com'", { cwd: dir });
-    execSync("git config user.name 'Test'", { cwd: dir });
+    git(dir, ["init"]);
+    git(dir, ["config", "user.email", "test@test.com"]);
+    git(dir, ["config", "user.name", "Test"]);
+  }
+
+  function git(cwd: string, args: string[]): void {
+    execFileSync("git", args, {
+      cwd,
+      windowsHide: true,
+      timeout: 10_000,
+      stdio: "pipe",
+    });
   }
 
   test("gitStatus on non-git dir returns error", () => {
@@ -32,8 +41,8 @@ describe("git tools", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-git-"));
     initGitRepo(root);
     writeFileSync(path.join(root, "a.txt"), "hello", "utf8");
-    execSync("git add a.txt", { cwd: root });
-    execSync("git commit -m 'initial'", { cwd: root });
+    git(root, ["add", "a.txt"]);
+    git(root, ["commit", "-m", "initial"]);
     writeFileSync(path.join(root, "a.txt"), "world", "utf8");
     const r = gitStatus(root);
     expect(r.error).toBeUndefined();
@@ -45,8 +54,8 @@ describe("git tools", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-git-"));
     initGitRepo(root);
     writeFileSync(path.join(root, "a.txt"), "hello", "utf8");
-    execSync("git add a.txt", { cwd: root });
-    execSync("git commit -m 'first'", { cwd: root });
+    git(root, ["add", "a.txt"]);
+    git(root, ["commit", "-m", "first"]);
     const r = gitLog(root, 5);
     expect(r.error).toBeUndefined();
     expect(r.commits?.length).toBe(1);
@@ -57,8 +66,8 @@ describe("git tools", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-git-"));
     initGitRepo(root);
     writeFileSync(path.join(root, "a.txt"), "hello", "utf8");
-    execSync("git add a.txt", { cwd: root });
-    execSync("git commit -m 'initial'", { cwd: root });
+    git(root, ["add", "a.txt"]);
+    git(root, ["commit", "-m", "initial"]);
     writeFileSync(path.join(root, "a.txt"), "world", "utf8");
     const r = gitDiff(root);
     expect(r.error).toBeUndefined();

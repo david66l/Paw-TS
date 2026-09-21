@@ -9,3 +9,9 @@ export {
   type ProgressAdviceKindV1,
   type ProgressAdviceV1,
 } from "./projector.js";
+
+export {
+  RUN_DIAGNOSTICS_POLICY_VERSION_V1,
+  projectRunDiagnosticsV1,
+  type RunDiagnosticsV1,
+} from "./run-diagnostics.js";

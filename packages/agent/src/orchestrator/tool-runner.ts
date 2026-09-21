@@ -1355,7 +1355,7 @@ export function finalizeToolExecutionContext(
     if (tr.newMessages) {
       for (const msg of tr.newMessages) {
         if (msg.role === "user") {
-          ctx.ctxMgr.addUser(wrapCapabilityContentV1(sourceTool, msg.content));
+          ctx.ctxMgr.addHostMessage(wrapCapabilityContentV1(sourceTool, msg.content));
         } else if (msg.role === "assistant")
           ctx.ctxMgr.addAssistant(msg.content);
       }

@@ -23,6 +23,46 @@ afterEach(() => {
 });
 
 describe("Paw Next fenced durable file Session", () => {
+  test("rechecks authority after publication before committing a queued write", async () => {
+    const root = tempRoot();
+    let now = 42;
+    const result = acquireFileSessionExecutionLeaseV1({
+      workspaceRoot: root,
+      sessionId: "session-1",
+      runId: "run-1",
+      ownerId: "publication-expiry",
+      ttlMs: 100,
+      baseTailSeq: 0,
+      basePrefixHash: EMPTY_RUN_JOURNAL_PREFIX_HASH_V1,
+      clock: () => now,
+    });
+    if (result.status !== "acquired")
+      throw new Error("expected acquired lease");
+    const session = new FileRunSessionV1({
+      workspaceRoot: root,
+      sessionId: "session-1",
+      runId: "run-1",
+      executionLease: result.lease,
+      clock: () => now,
+      commitHooks: {
+        afterArtifactPublished: () => {
+          now = 142;
+        },
+      },
+    });
+    await expect(session.appendInputFacts([attemptStarted()])).rejects.toThrow(
+      SessionExecutionLeaseLostError,
+    );
+    expect(
+      readFileSessionJournalCommitIndexV1({
+        workspaceRoot: root,
+        sessionId: "session-1",
+        runId: "run-1",
+      }).head.tailSeq,
+    ).toBe(0);
+    session.close();
+  });
+
   test("committed observers see detached immutable batches and cannot fail execution", async () => {
     const root = tempRoot();
     const lease = acquire(root);

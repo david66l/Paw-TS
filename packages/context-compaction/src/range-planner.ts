@@ -25,7 +25,7 @@ export type ContextCompactionPlanV1 =
     }>
   | Readonly<{
       action: "distill";
-      reason: "near_soft_limit" | "fallback_omission_active";
+      reason: "near_soft_limit" | "fallback_omission_active" | "user_requested";
       usageRatioBasisPoints: number;
       range: SemanticCheckpointRangePlanV1;
     }>;

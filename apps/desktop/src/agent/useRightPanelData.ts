@@ -61,6 +61,7 @@ export interface ChangeEntry {
 
 export interface ContextSnapshot {
   nextBudget?: {
+    categories?: readonly { id: string; label: string; tokens: number }[];
     contextWindowTokens: number;
     selectedInputTokens: number;
     reservedOutputTokens: number;
@@ -123,6 +124,7 @@ export interface MemorySnapshot {
 }
 
 export interface RightPanelData {
+  updateContext: (context: ContextSnapshot) => void;
   plan: PlanState;
   changes: ChangeEntry[];
   context: ContextSnapshot | null;
@@ -272,7 +274,10 @@ const emptyMemory = (): MemorySnapshot => ({
   libraryOk: null,
 });
 
-export function useRightPanelData(): RightPanelData {
+export function useRightPanelData(
+  conversationId?: string,
+  hostReady = false,
+): RightPanelData {
   const [plan, setPlan] = useState<PlanState>({ items: [] });
   const [changes, setChanges] = useState<ChangeEntry[]>([]);
   const [context, setContext] = useState<ContextSnapshot | null>(null);
@@ -281,8 +286,21 @@ export function useRightPanelData(): RightPanelData {
   const changesRef = useRef<ChangeEntry[]>([]);
   const recentFilesRef = useRef<string[]>([]);
   const pendingListReq = useRef<string | null>(null);
+  const contextVersion = useRef(0);
+  const currentConversation = useRef(conversationId);
+  currentConversation.current = conversationId;
+  const updateContext = useCallback(
+    (value: ContextSnapshot) => {
+      if (currentConversation.current === conversationId) {
+        contextVersion.current++;
+        setContext(value);
+      }
+    },
+    [conversationId],
+  );
 
   const reset = useCallback(() => {
+    contextVersion.current++;
     setPlan({ items: [] });
     changesRef.current = [];
     recentFilesRef.current = [];
@@ -296,6 +314,28 @@ export function useRightPanelData(): RightPanelData {
       libraryError: prev?.libraryError,
     }));
   }, []);
+
+  useEffect(() => {
+    reset();
+    let current = true;
+    const version = contextVersion.current;
+    if (conversationId && hostReady)
+      void api()
+        ?.getContext?.({ conversationId })
+        .then((result) => {
+          if (
+            current &&
+            version === contextVersion.current &&
+            result.ok &&
+            result.data
+          )
+            setContext(result.data);
+        })
+        .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [conversationId, hostReady, reset]);
 
   const refreshMemoryLibrary = useCallback(() => {
     const desk = api();
@@ -512,6 +552,7 @@ export function useRightPanelData(): RightPanelData {
           return;
         }
         if (typ === "context.next_budget") {
+          contextVersion.current++;
           const names = [
             "contextWindowTokens",
             "selectedInputTokens",
@@ -528,6 +569,18 @@ export function useRightPanelData(): RightPanelData {
             setContext((prev) => ({
               ...prev,
               nextBudget: {
+                categories: Array.isArray(ev.categories)
+                  ? ev.categories.filter(
+                      (c): c is { id: string; label: string; tokens: number } =>
+                        !!c &&
+                        typeof c === "object" &&
+                        typeof c.id === "string" &&
+                        typeof c.label === "string" &&
+                        typeof c.tokens === "number" &&
+                        Number.isFinite(c.tokens) &&
+                        c.tokens >= 0,
+                    )
+                  : undefined,
                 contextWindowTokens: ev.contextWindowTokens as number,
                 selectedInputTokens: ev.selectedInputTokens as number,
                 reservedOutputTokens: ev.reservedOutputTokens as number,
@@ -626,6 +679,7 @@ export function useRightPanelData(): RightPanelData {
 
   return {
     plan,
+    updateContext,
     changes,
     context,
     memory,

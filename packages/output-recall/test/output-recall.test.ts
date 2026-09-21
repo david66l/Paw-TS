@@ -125,9 +125,22 @@ describe("output recall extension", () => {
   });
 
   test("installs an exact-id, capped, read-only Harness tool", () => {
+    const plugin = createOutputRecallToolPluginV1({ policy });
+    const parameters = plugin.entries[0]!.definition.function.parameters as {
+      properties: { id: { pattern: string }; limit: { maximum: number } };
+    };
+    // Advertised constraints must follow this instance's policy and resolver,
+    // not the legacy archive-search contract or its hard-coded 8000-char cap.
+    expect(new RegExp(parameters.properties.id.pattern).test(artifactId)).toBe(
+      true,
+    );
+    expect(
+      new RegExp(parameters.properties.id.pattern).test("search words"),
+    ).toBe(false);
+    expect(parameters.properties.limit.maximum).toBe(8);
     const registry = createFrozenToolRegistryV1({
       tools: [],
-      plugins: [createOutputRecallToolPluginV1({ policy })],
+      plugins: [plugin],
     });
     const valid = registry.validateAndClassify(
       {
@@ -165,6 +178,41 @@ describe("output recall extension", () => {
         },
         process.cwd(),
       ).ok,
+    ).toBe(false);
+  });
+
+  test("child can page its journal outputs while private workspace files remain denied", () => {
+    const registry = createFrozenToolRegistryV1({
+      tools: ["workspace.read_file"],
+      plugins: [createOutputRecallToolPluginV1()],
+      pathPolicy: {
+        readRoots: ["."],
+        writeRoots: [],
+        denyPaths: [".paw", ".git"],
+      },
+      shellBoundary: "deny",
+    });
+    const classify = (name: string, args: Record<string, unknown>) =>
+      registry.validateAndClassify(
+        { id: "child-read", name, arguments: args },
+        process.cwd(),
+      );
+    const recall = classify("context_recall", { id: artifactId });
+    expect(recall.ok).toBe(true);
+    if (recall.ok)
+      expect(recall.value.classification).toMatchObject({
+        resources: [],
+        concurrencyMode: "exclusive",
+        effectClass: "read",
+      });
+    expect(
+      classify("workspace_read_file", { path: ".paw/settings.local.json" }).ok,
+    ).toBe(false);
+    expect(classify("workspace_read_file", { path: "../secret.txt" }).ok).toBe(
+      false,
+    );
+    expect(
+      classify("context_recall", { id: ".paw/settings.local.json" }).ok,
     ).toBe(false);
   });
 

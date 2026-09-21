@@ -6,6 +6,29 @@ import path from "node:path";
 import { listWorkspaceFiles, readWorkspaceFile } from "../src/files/read.js";
 
 describe("readWorkspaceFile", () => {
+  test("distinguishes original UTF-8 bytes from normalized displayed characters", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-ws-"));
+    fs.writeFileSync(path.join(root, "unicode.txt"), "猫\r\n", "utf8");
+    try {
+      expect(readWorkspaceFile(root, "unicode.txt")).toMatchObject({
+        content: "猫\n",
+        size: 2,
+        byte_size: 5,
+        partial: false,
+      });
+      expect(
+        readWorkspaceFile(root, "unicode.txt", { limit: 1 }),
+      ).toMatchObject({
+        content: "猫",
+        size: 1,
+        byte_size: 5,
+        partial: true,
+      });
+    } finally {
+      if (path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-ws-")))
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
   test("reads utf8 file with offset/limit", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-ws-"));
     fs.writeFileSync(path.join(root, "a.txt"), "l0\nl1\nl2", "utf8");

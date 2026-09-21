@@ -14,6 +14,15 @@ export type CompletionReviewVerificationKindV1 =
   | "none";
 
 export interface CompletionReviewToolEvidenceV1 {
+  /** Actual host-observed output; execution success alone is not task correctness. */
+  readonly observedOutput?: Readonly<{
+    kind: "file_read" | "shell_output";
+    text: string;
+    truncated: boolean;
+    partial: boolean;
+    byteSize?: number;
+    normalizesLineEndings?: true;
+  }>;
   readonly callId: string;
   readonly tool: string;
   readonly executionStatus: ToolSettlementStatusV1;
@@ -134,6 +143,17 @@ function freezeEvidence(
     args: cloneJson(value.args),
     summary: singleLine(value.summary).slice(0, 2_000),
     afterLatestMutation: value.afterLatestMutation,
+    ...(value.observedOutput
+      ? {
+          observedOutput: Object.freeze({
+            ...value.observedOutput,
+            text: value.observedOutput.text.slice(0, 4_000),
+            truncated:
+              value.observedOutput.truncated ||
+              value.observedOutput.text.length > 4_000,
+          }),
+        }
+      : {}),
     ...(value.isError === undefined ? {} : { isError: value.isError }),
     ...(value.exitCode === undefined ? {} : { exitCode: value.exitCode }),
     ...(value.timedOut === undefined ? {} : { timedOut: value.timedOut }),

@@ -16,6 +16,9 @@ export class DesktopNextEvents {
   private seq: number;
   private text = "";
   private thinking = "";
+  private textDelta = "";
+  private thinkingDelta = "";
+  private streamTimer?: ReturnType<typeof setTimeout>;
   private calls = new Map<string, { tool: string; args: unknown }>();
   private children = new Map<string, string>();
   private activities = new Map<string, string>();
@@ -47,8 +50,39 @@ export class DesktopNextEvents {
   }
   private pending = new Set<Promise<void>>();
 
+  memoryMaintenance(phase: "write" | "topic", event: {
+    type: string;
+    writeId?: string;
+    organizationId?: string;
+    reasonCode?: string;
+    durationMs: number;
+  }): void {
+    const operationId = event.writeId ?? event.organizationId;
+    this.emit({
+      type: "memory.maintenance",
+      phase,
+      action: event.type,
+      ...(operationId === undefined ? {} : { operationId }),
+      ...(event.reasonCode === undefined ? {} : { reasonCode: event.reasonCode }),
+      durationMs: event.durationMs,
+    });
+  }
+
   async flush(): Promise<void> {
+    this.flushStream();
     await Promise.all([...this.pending]);
+  }
+  private flushStream(): void {
+    clearTimeout(this.streamTimer);
+    this.streamTimer = undefined;
+    const text = this.textDelta;
+    const thinking = this.thinkingDelta;
+    this.textDelta = this.thinkingDelta = "";
+    // This lane is an ephemeral projection. Journal persistence remains strict.
+    try {
+      if (thinking) this.emit({ type: "model.thinking", text: thinking, mode: "delta" });
+      if (text) this.emit({ type: "model.chunk", text, mode: "delta" });
+    } catch { /* The final canonical response can restore a disconnected UI. */ }
   }
   constructor(
     readonly runId: string,
@@ -98,17 +132,22 @@ export class DesktopNextEvents {
     if (identity && identity.runId !== this.runId) return;
     if (chunk.type === "text") {
       this.text += chunk.delta;
-      this.emit({ type: "model.chunk", text: this.text });
+      this.textDelta += chunk.delta;
     } else if (chunk.type === "thinking") {
       this.thinking += chunk.delta;
-      this.emit({ type: "model.thinking", text: this.thinking });
+      this.thinkingDelta += chunk.delta;
     } else if (chunk.type === "done") {
+      this.flushStream();
       this.emit({
         type: "model.done",
         text: this.text,
         thinking: this.thinking,
         ...(chunk.usage ? { usage: chunk.usage } : {}),
       });
+    }
+    if ((this.textDelta || this.thinkingDelta) && !this.streamTimer) {
+      this.streamTimer = setTimeout(() => this.flushStream(), 50);
+      this.streamTimer.unref?.();
     }
   }
 
@@ -142,6 +181,7 @@ export class DesktopNextEvents {
       ) {
         this.emit({ type: "input.promoted", inputId: fact.inputId });
       } else if (fact.type === "model.dispatch_recorded" && !childId) {
+        this.flushStream();
         this.text = "";
         this.thinking = "";
         this.emit({

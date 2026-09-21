@@ -35,7 +35,9 @@ import {
   canonicalJsonStringifyV1,
   immutableCanonicalJsonCloneV1,
 } from "./canonical-json.js";
+import { insertJournalContextAnnotationsV1 } from "./journal-context-annotations.js";
 import type {
+  JournalContextAnnotationV1,
   JournalContextPlanV1,
   JournalContextPlannerV1,
   JournalContextRuntimeV1,
@@ -136,8 +138,32 @@ export function createJournalContextPlannerV1(
 ): JournalContextPlannerV1 {
   const frozen = freezeOptions(options);
   return {
-    async plan(snapshot, callOptions) {
+    async plan(snapshot, callOptions, projection) {
       throwIfAborted(callOptions);
+      const validateAnnotation = (item: JournalContextAnnotationV1) => {
+        if (
+          !Number.isSafeInteger(item.sourceThroughSeq) ||
+          item.sourceThroughSeq < 1 ||
+          item.sourceThroughSeq > snapshot.latestInputSeq ||
+          typeof item.content !== "string" ||
+          !["after_unit", "after_boundary", "tail"].includes(item.placement) ||
+          (item.fallbackContent !== undefined &&
+            typeof item.fallbackContent !== "string")
+        ) {
+          throw new Error("Invalid context annotation");
+        }
+        return Object.freeze({ ...item });
+      };
+      const annotations = (projection?.annotations ?? []).map(validateAnnotation);
+      const runtimeActivityContent = projection?.runtimeActivityContent;
+      const optionalSections = (projection?.optionalSections ?? []).map(
+        (section) => Object.freeze({ ...section }),
+      );
+      // Validate before admission, including duplicate identifiers and content schema.
+      materializeModelRequestMessagesV1({
+        messages: [],
+        contextSections: optionalSections,
+      });
       const systemMessages: ChatMessage[] =
         frozen.system === undefined
           ? []
@@ -172,6 +198,11 @@ export function createJournalContextPlannerV1(
         : undefined;
       throwIfAborted(callOptions);
       payloadEvidence?.assertSnapshot(snapshot);
+      annotations.push(
+        ...(projection?.evidenceAnnotations?.(payloadEvidence) ?? []).map(
+          validateAnnotation,
+        ),
+      );
       const projected: ProjectedTimelineUnit[] = [];
       for (const unit of timeline) {
         throwIfAborted(callOptions);
@@ -223,17 +254,71 @@ export function createJournalContextPlannerV1(
       );
       const contextSections = [
         ...(checkpointProjection?.sections ?? []),
-        ...(activitySection ? [activitySection] : []),
+        ...(activitySection && !runtimeActivityContent
+          ? [activitySection]
+          : []),
       ];
+      if (activitySection && runtimeActivityContent) {
+        const content = runtimeActivityContent(activitySection);
+        if (typeof content !== "string")
+          throw new Error("Invalid runtime activity projection");
+        annotations.push({
+          sourceThroughSeq: activitySection.sourceThroughSeq,
+          content,
+          fallbackContent: content,
+          placement: "after_boundary",
+        });
+      }
       const eligibleProjected = checkpointProjection
         ? projected.filter(
             (_item, index) => !checkpointProjection.coveredIndices.has(index),
           )
         : projected;
-      const fixedMessages = materializeModelRequestMessagesV1({
-        messages: systemMessages,
-        ...(contextSections.length === 0 ? {} : { contextSections }),
+      const requiredAnnotations = annotations.filter(
+        (item) => item.fallbackContent !== undefined,
+      );
+      const optionalAnnotations = annotations.filter(
+        (item) => item.fallbackContent === undefined,
+      );
+      const render = (
+        indices: ReadonlySet<number>,
+        admitted: readonly JournalContextAnnotationV1[],
+        extraSections: readonly ModelContextSectionV1[] = [],
+      ) => ({
+        messages: insertJournalContextAnnotationsV1(
+          systemMessages,
+          [...indices]
+            .sort((a, b) => a - b)
+            .map((index) => {
+              const item = eligibleProjected[index];
+              if (!item) throw new Error("Context selection index is invalid");
+              return {
+                message: item.message,
+                sourceFromSeq: item.unit.sourceSeq,
+                sourceThroughSeq: timelineUnitThroughSeq(item.unit),
+              };
+            }),
+          admitted,
+        ),
+        ...(contextSections.length + extraSections.length === 0
+          ? {}
+          : { contextSections: [...contextSections, ...extraSections] }),
       });
+      const estimate = (
+        indices: ReadonlySet<number>,
+        admitted: readonly JournalContextAnnotationV1[],
+        extraSections: readonly ModelContextSectionV1[] = [],
+      ) =>
+        estimateRequestInputTokens(
+          materializeModelRequestMessagesV1(
+            render(indices, admitted, extraSections),
+          ),
+          frozen.tools,
+          frozen.budget.estimator,
+        );
+      const fixedMessages = materializeModelRequestMessagesV1(
+        render(new Set(), requiredAnnotations),
+      );
       const expandedFixedTokens = estimateRequestInputTokens(
         fixedMessages,
         frozen.tools,
@@ -248,6 +333,62 @@ export function createJournalContextPlannerV1(
         frozen.tools,
         frozen.budget,
         segmentBoundary?.rootPromotionSeq,
+        (indices) =>
+          materializeModelRequestMessagesV1(
+            render(indices, requiredAnnotations),
+          ),
+      );
+      // Current host evidence participates in selection. Historical reminders may
+      // consume only remaining soft headroom and never displace protected turns.
+      const selected = new Set(selection.selectedIndices);
+      const admitted = new Set(requiredAnnotations);
+      const inOrder = () => annotations.filter((item) => admitted.has(item));
+      for (const item of [...optionalAnnotations].reverse()) {
+        if (
+          item.placement === "after_unit" &&
+          !selection.selectedIndices.some((index) => {
+            const unit = eligibleProjected[index]?.unit;
+            return (
+              unit &&
+              unit.sourceSeq <= item.sourceThroughSeq &&
+              timelineUnitThroughSeq(unit) >= item.sourceThroughSeq
+            );
+          })
+        )
+          continue;
+        admitted.add(item);
+        if (
+          estimate(selected, inOrder()) >
+          hardInputLimit - frozen.budget.estimationMarginTokens
+        )
+          admitted.delete(item);
+      }
+      const admittedSections: ModelContextSectionV1[] = [];
+      const knownSectionIds = new Set(
+        contextSections.map((section) => section.id),
+      );
+      for (const section of optionalSections) {
+        if (knownSectionIds.has(section.id)) continue;
+        if (
+          estimate(selected, inOrder(), [...admittedSections, section]) <=
+          hardInputLimit - frozen.budget.estimationMarginTokens
+        ) {
+          admittedSections.push(section);
+          knownSectionIds.add(section.id);
+        }
+      }
+      const projectedRequest = render(selected, inOrder(), admittedSections);
+      const selectedInputTokens = estimate(
+        selected,
+        inOrder(),
+        admittedSections,
+      );
+      if (selectedInputTokens > hardInputLimit)
+        throw new Error("selected context budget exceeds window");
+      const fullInputTokens = estimate(
+        new Set(eligibleProjected.map((_, index) => index)),
+        inOrder(),
+        admittedSections,
       );
       const requestOptions = {
         maxOutputTokens: frozen.budget.reservedOutputTokens,
@@ -257,8 +398,7 @@ export function createJournalContextPlannerV1(
         ...(frozen.tools === undefined ? {} : { tools: frozen.tools }),
       };
       const request: ModelRequestV1 = {
-        messages: [...systemMessages, ...selection.messages],
-        ...(contextSections.length === 0 ? {} : { contextSections }),
+        ...projectedRequest,
         ...(Object.keys(requestOptions).length === 0
           ? {}
           : { options: requestOptions }),
@@ -284,6 +424,11 @@ export function createJournalContextPlannerV1(
               ? "semantic_checkpoint"
               : "lossless_projection",
         tokens: {
+          categories: contextCategoryEstimates(
+            request,
+            frozen.budget.estimator,
+            selectedInputTokens,
+          ),
           contextWindowTokens: frozen.budget.contextWindowTokens,
           reservedOutputTokens: frozen.budget.reservedOutputTokens,
           hardInputLimitTokens: hardInputLimit,
@@ -291,17 +436,17 @@ export function createJournalContextPlannerV1(
             hardInputLimit - frozen.budget.estimationMarginTokens,
           fixedInputTokens: expandedFixedTokens,
           protectedInputTokens: selection.protectedInputTokens,
-          fullInputTokens: selection.fullInputTokens,
-          selectedInputTokens: selection.selectedInputTokens,
+          fullInputTokens,
+          selectedInputTokens,
           estimatedOmittedInputTokens: Math.max(
             0,
-            selection.fullInputTokens - selection.selectedInputTokens,
+            fullInputTokens - selectedInputTokens,
           ),
-          hardHeadroomTokens: hardInputLimit - selection.selectedInputTokens,
+          hardHeadroomTokens: hardInputLimit - selectedInputTokens,
           softHeadroomTokens:
             hardInputLimit -
             frozen.budget.estimationMarginTokens -
-            selection.selectedInputTokens,
+            selectedInputTokens,
           estimatorId: frozen.budget.estimatorId,
           estimatorVersion: frozen.budget.estimatorVersion,
         },
@@ -1317,6 +1462,7 @@ function selectTimelineMessages(
   tools: readonly ToolDefinition[] | undefined,
   budget: JournalContextBudgetV1,
   segmentRootPromotionSeq?: number,
+  projectMessages?: (indices: ReadonlySet<number>) => readonly ChatMessage[],
 ): TimelineMessageSelectionV1 {
   const protectedIndices = protectedTimelineIndices(
     projected,
@@ -1327,7 +1473,7 @@ function selectTimelineMessages(
   const softTarget = hardInputLimit - budget.estimationMarginTokens;
   const estimateSelected = (indices: ReadonlySet<number>): number =>
     estimateRequestInputTokens(
-      [
+      projectMessages?.(indices) ?? [
         ...systemMessages,
         ...[...indices]
           .sort((left, right) => left - right)
@@ -1437,6 +1583,72 @@ function protectedTimelineUnitIndices(
   }
   protectedIndices.add(timeline.length - 1);
   return protectedIndices;
+}
+
+/** Additive display estimates; allocation reconciles to the planner's total. */
+function contextCategoryEstimates(
+  request: ModelRequestV1,
+  estimator: ContextTokenEstimatorV1,
+  total: number,
+) {
+  const groups = [
+    { id: "system", label: "系统指令 · 规则与技能", weight: 0 },
+    { id: "tools", label: "工具定义 · MCP", weight: 0 },
+    { id: "memory_cards", label: "工作区记忆", weight: 0 },
+    { id: "input", label: "用户消息与附件", weight: 0 },
+    { id: "conversation", label: "模型回复与工具结果", weight: 0 },
+    { id: "task_checkpoint", label: "压缩摘要", weight: 0 },
+    { id: "runtime_activity", label: "子任务与后台状态", weight: 0 },
+    { id: "protocol", label: "消息格式与协议", weight: 0 },
+  ];
+  const add = (id: string, weight: number) => {
+    const group = groups.find((g) => g.id === id);
+    if (group) group.weight += Math.max(0, weight);
+  };
+  for (const message of request.messages)
+    add(
+      message.role === "system"
+        ? "system"
+        : message.role === "user"
+          ? "input"
+          : "conversation",
+      estimator.countMessages([message]),
+    );
+  if (request.options?.tools?.length)
+    add(
+      "tools",
+      estimator.count(canonicalUnknownStringify(request.options.tools)),
+    );
+  for (const section of request.contextSections ?? [])
+    add(
+      section.kind,
+      estimator.countMessages(
+        materializeModelRequestMessagesV1({
+          messages: [],
+          contextSections: [section],
+        }),
+      ),
+    );
+  // Keep the final measurement provider-shaped, including image token rules.
+  estimateRequestInputTokens(
+    materializeModelRequestMessagesV1(request),
+    request.options?.tools,
+    estimator,
+  );
+  const weight = groups.reduce((sum, g) => sum + g.weight, 0);
+  let allocated = 0;
+  return Object.freeze(
+    groups.map((g, index) => {
+      const tokens =
+        index === groups.length - 1
+          ? total - allocated
+          : weight
+            ? Math.floor((total * g.weight) / weight)
+            : 0;
+      allocated += tokens;
+      return Object.freeze({ id: g.id, label: g.label, tokens });
+    }),
+  );
 }
 
 function estimateRequestInputTokens(

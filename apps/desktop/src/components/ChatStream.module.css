@@ -253,12 +253,12 @@
 }
 
 .bubbleUser {
-  background: rgba(255, 255, 255, 0.28) !important;
-  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 6px 18px
-    rgba(40, 70, 130, 0.08) !important;
+    rgba(40, 70, 130, 0.08);
 }
 
 .roleRow {
@@ -841,9 +841,9 @@
 }
 
 :global(:root[data-color-theme="paper"]) .bubbleUser {
-  background: #e7e3d799 !important;
-  border-color: var(--glass-border) !important;
-  box-shadow: none !important;
+  background: #e7e3d799;
+  border-color: var(--glass-border);
+  box-shadow: none;
   backdrop-filter: none;
 }
 
@@ -932,18 +932,73 @@
   border-color: #8992764d;
 }
 
-.inputBadge { font-size: 11px; color: var(--text-secondary); }
-.childItem { min-width: 0; padding: 4px 0; }
-.childAction { border: 1px solid var(--border-subtle, #8884); border-radius: 6px; padding: 4px 8px; background: transparent; color: inherit; cursor: pointer; white-space: nowrap; font: inherit; font-size: 11px; }
-.childAction:disabled { opacity: .45; cursor: default; }
-.childSummary { margin: 4px 0 0 16px; font-size: 12px; color: var(--text-secondary); }
-.childSummary summary { cursor: pointer; }
-.childSummary p { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow-y: auto; }
+.inputBadge {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.childItem {
+  min-width: 0;
+  padding: 4px 0;
+}
+.childAction {
+  border: 1px solid var(--border-subtle, #8884);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 11px;
+}
+.childAction:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.childSummary {
+  margin: 4px 0 0 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.childSummary summary {
+  cursor: pointer;
+}
+.childSummary p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 160px;
+  overflow-y: auto;
+}
 
-.attachmentTray { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 0; }
-.attachmentChip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--glass-border); border-radius: 8px; font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
-.attachmentChip img { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; }
-.attachmentChip button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+.attachmentTray {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+.attachmentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  font-size: 12px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.attachmentChip img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.attachmentChip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
 
 /* Short native windows reserve room for the task input and welcome actions. */
 @media (max-height: 700px) {
@@ -963,5 +1018,260 @@
   :global(:root[data-color-theme="paper"]) .emptyBody {
     font-size: 12px;
     line-height: 1.5;
+  }
+}
+
+/* Workspace design */
+
+:global(:root) .main.main {
+  padding: 0;
+  gap: 0;
+  background: var(--bg-app);
+}
+:global(:root) .topBar.topBar {
+  min-height: 65px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--glass-border-soft);
+}
+:global(:root) .topTitle.topTitle {
+  font-size: 13px;
+  font-weight: 500;
+}
+:global(:root) .topMeta.topMeta {
+  font-size: 11px;
+}
+:global(:root) .stream.stream {
+  padding: 28px 32px;
+  gap: 24px;
+}
+:global(:root) .empty.empty {
+  gap: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  max-width: 640px;
+  width: 100%;
+  margin: auto;
+  padding: 32px 0;
+}
+:global(:root) .empty.empty::before,
+:global(:root) .empty.empty::after {
+  display: none;
+}
+.heroMark {
+  display: block;
+  margin: 0 auto 22px;
+}
+@media (max-height: 720px) {
+  :global(:root) .empty.empty {
+    padding: 0;
+  }
+  :global(:root) .stream.stream {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .heroMark {
+    width: 52px;
+    height: 52px;
+    margin-bottom: 12px;
+  }
+  :global(:root) .emptyTitle.emptyTitle {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+  :global(:root) .suggestions.suggestions {
+    margin-top: 20px;
+  }
+}
+:global(:root) .emptyTitle.emptyTitle {
+  margin: 0 0 12px;
+  font: 500 30px / 1.35 var(--font-ui);
+  letter-spacing: -.7px;
+}
+:global(:root) .emptyBody.emptyBody {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  max-width: none;
+}
+:global(:root) .suggestions.suggestions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 32px 0 0;
+  width: 100%;
+}
+.starter {
+  text-align: left;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-bg-strong);
+  padding: 16px 13px;
+}
+.starter:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+.starter svg {
+  display: block;
+  color: var(--accent);
+  margin-bottom: 13px;
+}
+.starter strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+}
+.starter small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+:global(:root) .composerWrap.composerWrap {
+  padding: 0 28px 14px;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+}
+:global(:root) .composer.composer {
+  padding: 14px 14px 10px;
+  border: 1px solid #dcd5e3;
+  border-radius: 14px;
+  background: var(--glass-bg-strong);
+  box-shadow: 0 4px 20px #37254406;
+  overflow: visible;
+  backdrop-filter: none;
+}
+:global(:root) .composer.composer::before,
+:global(:root) .composer.composer::after {
+  display: none;
+}
+:global(:root) .input.input {
+  min-height: 62px;
+  max-height: 180px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+:global(:root) .composerBar.composerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  padding: 5px 0 0;
+  margin: 0;
+}
+:global(:root) .actions.actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-left: auto;
+}
+.iconButton {
+  width: 33px;
+  height: 33px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  -webkit-app-region: no-drag;
+}
+.iconButton:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.modelSelect {
+  font-size: 11px;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 7px;
+  width: 145px;
+  max-width: 160px;
+  background: var(--glass-bg-chip);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+:global(:root) .sendBtn.sendBtn {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+  border: 0;
+}
+.composerFoot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 9px 4px 0;
+}
+:global(:root) .bubbleUser.bubbleUser {
+  background: #f0edf3;
+  border: none;
+  border-radius: 12px 12px 3px 12px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+:global(:root) .bubbleUser.bubbleUser::before,
+:global(:root) .bubbleUser.bubbleUser::after {
+  display: none;
+}
+:global(:root) .role.role {
+  font-weight: 500;
+}
+:global(:root) .avatarUser.avatarUser {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+}
+@media (max-width: 760px) {
+  .composerFoot > span:last-child {
+    display: none;
+  }
+  :global(:root) .suggestions.suggestions {
+    grid-template-columns: 1fr;
+  }
+  .starter {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 0 8px;
+    padding: 12px;
+  }
+  .starter svg {
+    grid-row: span 2;
+    margin: 4px 0;
+  }
+}
+@media (max-width: 600px) {
+  :global(:root) .stream.stream {
+    padding: 18px 12px;
+  }
+  :global(:root) .composerWrap.composerWrap {
+    padding: 0 10px 12px;
+  }
+  :global(:root) .composer.composer {
+    padding: 12px 8px 8px;
+  }
+  .modelSelect {
+    width: 124px;
+  }
+  :global(:root) .topBar.topBar {
+    padding: 12px;
+  }
+  :global(:root) .emptyTitle.emptyTitle {
+    font-size: 23px;
   }
 }

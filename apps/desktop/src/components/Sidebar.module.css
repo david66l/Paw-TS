@@ -616,3 +616,163 @@
   background: #68645c3d;
   border: none;
 }
+
+/* Workspace design */
+
+:global(:root) .sidebar.sidebar {
+  background: var(--workspace-side);
+  padding: 0 14px 16px;
+  gap: 22px;
+  border-right: 1px solid var(--glass-border-soft);
+}
+:global(:root) .dragRegion.dragRegion {
+  height: 24px;
+}
+:global(:root) .brandRow.brandRow {
+  padding: 0 8px;
+  gap: 10px;
+}
+:global(:root) .brand.brand {
+  font: 500 30px / 1.1 var(--font-editorial, Georgia, serif);
+  letter-spacing: -1px;
+}
+.tagline {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+:global(:root) .newBtn.newBtn {
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 2px 3px #32244404;
+}
+.newBtn svg {
+  color: var(--accent);
+}
+.workspace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  font-size: 12px;
+  min-width: 0;
+  color: var(--text-secondary);
+}
+.workspace span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:global(:root) .sectionHead.sectionHead {
+  padding: 0 10px 10px;
+}
+:global(:root) .sectionCount.sectionCount {
+  display: none;
+}
+:global(:root) .sectionLabel.sectionLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+:global(:root) .sessionItem.sessionItem,
+:global(:root) .sessionItemActive.sessionItemActive {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  margin: 0 0 4px;
+}
+:global(:root) .sessionItemActive.sessionItemActive {
+  background: var(--accent-soft);
+}
+:global(:root) .sessionMain.sessionMain {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+}
+.sessionMain svg {
+  flex: none;
+  color: var(--text-muted);
+}
+:global(:root) .sessionTitle.sessionTitle {
+  font-size: 12px;
+  font-weight: 400;
+}
+:global(:root) .sessionTime.sessionTime {
+  display: none;
+}
+:global(:root) .footerCards.footerCards {
+  margin-top: auto;
+  border-top: 1px solid var(--glass-border);
+  padding-top: 14px;
+  gap: 6px;
+}
+:global(:root) .settingsRow.settingsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  box-shadow: none;
+  padding: 9px 12px;
+  font-size: 12px;
+}
+.settingsRow:hover {
+  background: var(--accent-soft);
+}
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.connection i {
+  width: 6px;
+  height: 6px;
+  background: #b99b73;
+  border-radius: 50%;
+}
+.connection i[data-ready="true"] {
+  background: #73866d;
+}
+@media (max-width: 600px) {
+  :global(:root) .sidebar.sidebar {
+    width: 52px;
+    min-width: 52px;
+    padding: 0 5px 12px;
+  }
+  .brandText,
+  .newBtn span,
+  .sectionHead,
+  .sessionTitle,
+  .workspace,
+  .connection,
+  .settingsRow span {
+    display: none !important;
+  }
+  :global(:root) .brandRow.brandRow {
+    padding: 0;
+  }
+  :global(:root) .newBtn.newBtn {
+    padding: 9px;
+    justify-content: center;
+  }
+  :global(:root) .sessionMain.sessionMain {
+    justify-content: center;
+    padding: 10px 5px;
+  }
+}

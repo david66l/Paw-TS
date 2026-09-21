@@ -1,5 +1,5 @@
 /**
- * Git 工具集 — 通过 spawnSync 调用 git CLI。
+ * Git 工具集 — 运行时使用可取消的异步 git CLI；保留旧同步调用接口。
  * ===========================================
  *
  * 所有 git 操作通过子进程调用原生 git 命令，解析输出后返回结构化结果。
@@ -11,7 +11,7 @@
  * 安全措施：10s 超时 + 1MB 输出缓冲
  */
 
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 
 export interface GitStatusResult {
   readonly branch?: string;
@@ -55,6 +55,7 @@ function runGit(
       encoding: "utf8",
       timeout: 10_000,
       maxBuffer: 1024 * 1024,
+      windowsHide: true,
     });
     if (result.error) {
       return { ok: false, error: result.error.message };
@@ -73,7 +74,53 @@ function runGit(
 }
 
 export function gitStatus(workspaceRoot: string): GitStatusResult {
-  const r = runGit(workspaceRoot, ["status", "--porcelain", "-b"]);
+  return parseGitStatus(runGit(workspaceRoot, ["status", "--porcelain", "-b"]));
+}
+
+/** Runtime tools must not block the host's streaming, lease and cancellation timers. */
+function runGitAsync(
+  cwd: string,
+  args: string[],
+  signal?: AbortSignal,
+): Promise<ReturnType<typeof runGit>> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve({ ok: false, error: "Git operation aborted" });
+      return;
+    }
+    const child = execFile(
+      "git",
+      args,
+      {
+        cwd,
+        encoding: "utf8",
+        timeout: 10_000,
+        maxBuffer: 1024 * 1024,
+        windowsHide: true,
+        ...(signal ? { signal } : {}),
+      },
+      (error, stdout, stderr) => {
+        resolve(
+          error
+            ? { ok: false, error: stderr || error.message }
+            : { ok: true, stdout },
+        );
+      },
+    );
+    child.stdin?.end();
+  });
+}
+
+export async function gitStatusAsync(
+  workspaceRoot: string,
+  signal?: AbortSignal,
+): Promise<GitStatusResult> {
+  return parseGitStatus(
+    await runGitAsync(workspaceRoot, ["status", "--porcelain", "-b"], signal),
+  );
+}
+
+function parseGitStatus(r: ReturnType<typeof runGit>): GitStatusResult {
   if (!r.ok) {
     return { error: r.error };
   }
@@ -137,12 +184,29 @@ export function gitStatus(workspaceRoot: string): GitStatusResult {
 }
 
 export function gitLog(workspaceRoot: string, maxCount = 10): GitLogResult {
-  const r = runGit(workspaceRoot, [
+  return parseGitLog(runGit(workspaceRoot, gitLogArgs(maxCount)));
+}
+
+function gitLogArgs(maxCount: number): string[] {
+  return [
     "log",
     `--max-count=${maxCount}`,
     "--pretty=format:%H|%an|%ad|%s",
     "--date=short",
-  ]);
+  ];
+}
+
+export async function gitLogAsync(
+  workspaceRoot: string,
+  maxCount = 10,
+  signal?: AbortSignal,
+): Promise<GitLogResult> {
+  return parseGitLog(
+    await runGitAsync(workspaceRoot, gitLogArgs(maxCount), signal),
+  );
+}
+
+function parseGitLog(r: ReturnType<typeof runGit>): GitLogResult {
   if (!r.ok) {
     return { error: r.error };
   }
@@ -179,6 +243,19 @@ export function gitDiff(
     return { error: r.error };
   }
   return { diff: r.stdout };
+}
+
+export async function gitDiffAsync(
+  workspaceRoot: string,
+  filePath?: string,
+  signal?: AbortSignal,
+): Promise<GitDiffResult> {
+  const r = await runGitAsync(
+    workspaceRoot,
+    filePath ? ["diff", "--", filePath] : ["diff"],
+    signal,
+  );
+  return r.ok ? { diff: r.stdout } : { error: r.error };
 }
 
 export function gitCommit(

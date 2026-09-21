@@ -5,10 +5,13 @@ import path from "node:path";
 import {
   buildPawNextTaskProfileV3,
   runExistingPawNextTaskV3,
+  runExistingPawNextWorkSegmentV3,
   runFreshPawNextTaskV3,
-} from "@paw/cli/paw-next";
+  maintainExistingPawNextMemoryV3,
+} from "@paw/paw-next";
 import type {
   MemoryRawEvidenceArchiveInputV1,
+  MemoryWriterEventV1,
   MemoryWriterSourceItemV1,
 } from "@paw/memory-plugin";
 import type { LanguageModel, ModelCompletionResult } from "@paw/models";
@@ -49,6 +52,7 @@ function fixture(
   mode: "pass" | "block" | "repair" | "changed",
   explicit = false,
   importedHistory = false,
+  maxSegments = mode === "repair" ? 3 : 1,
 ) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-audited-memory-"));
   roots.push(root);
@@ -134,7 +138,7 @@ function fixture(
   const active = {
     ...profile,
     auditedMemory: true as const,
-    control: { ...profile.control, maxSegments: mode === "repair" ? 3 : 1 },
+    control: { ...profile.control, maxSegments },
   };
   const identity = {
     workspaceRoot: root,
@@ -241,6 +245,143 @@ function fixture(
     counts: () => ({ applies, extracts, rootCalls, auditCalls }),
   };
 }
+
+test("deferred memory survives reopening, retries extraction once and never reruns task tools", async () => {
+  const f = fixture("pass", false, false, 2);
+  const queued: number[] = [];
+  const first = await runFreshPawNextTaskV3({
+    ...f.input,
+    deferMemory: async (seq) => {
+      queued.push(seq);
+    },
+  });
+  expect(first.state.decision.kind).toBe("completed");
+  expect(queued.length).toBeGreaterThan(0);
+  expect(f.counts().extracts).toBe(0);
+  expect(f.counts().applies).toBe(0);
+  const before = f.counts();
+  let failed = false;
+  const originalModel = f.input.resolution.taskOptions.model;
+  const transientModel = {
+    ...originalModel,
+    async complete(...args: Parameters<typeof originalModel.complete>) {
+      if (
+        !failed &&
+        args[0][0]?.content.includes("long-term memory proposal extractor")
+      ) {
+        failed = true;
+        throw new Error("429 temporary provider busy");
+      }
+      return originalModel.complete(...args);
+    },
+  };
+  const maintenance = {
+    ...f.input,
+    resolution: {
+      ...f.input.resolution,
+      taskOptions: { ...f.input.resolution.taskOptions, model: transientModel },
+    },
+  };
+  expect(await maintainExistingPawNextMemoryV3(maintenance)).toMatchObject({
+    status: "retry",
+  });
+  expect(await maintainExistingPawNextMemoryV3(f.input)).toMatchObject({
+    status: "completed",
+  });
+  expect(f.counts()).toMatchObject({
+    applies: 1,
+    extracts: 1,
+    rootCalls: before.rootCalls,
+    auditCalls: before.auditCalls,
+  });
+  expect(await maintainExistingPawNextMemoryV3(f.input)).toMatchObject({
+    status: "completed",
+  });
+  expect(f.counts().applies).toBe(1);
+  expect(f.counts().extracts).toBe(1);
+  const continued = await runExistingPawNextWorkSegmentV3({
+    ...f.input,
+    deferMemory: async (tail) => {
+      queued.push(tail);
+    },
+    work: {
+      inputId: "after-background-memory",
+      callerId: "desktop-user",
+      content: "请继续核验 note.txt。",
+    },
+  });
+  expect(continued.segmentStart.status).toBe("started");
+  expect(continued.state.decision.kind).toBe("completed");
+});
+
+test("background maintenance does not acknowledge an unknown write until the same staged ID settles", async () => {
+  const f = fixture("pass");
+  await runFreshPawNextTaskV3({ ...f.input, deferMemory: async () => {} });
+  const ids: string[] = [];
+  const input = {
+    ...f.input,
+    memoryWriterStore: {
+      ...f.input.memoryWriterStore,
+      async apply(request: { writeId: string }) {
+        ids.push(request.writeId);
+        const result = await f.input.memoryWriterStore.apply();
+        if (ids.length === 1) throw new Error("acknowledgement lost");
+        return result;
+      },
+    },
+  };
+  await expect(maintainExistingPawNextMemoryV3(input)).rejects.toThrow(
+    "acknowledgement lost",
+  );
+  expect(await maintainExistingPawNextMemoryV3(input)).toMatchObject({
+    status: "completed",
+  });
+  expect(ids).toHaveLength(2);
+  expect(new Set(ids).size).toBe(1);
+  expect(f.counts().extracts).toBe(1);
+});
+
+test("desktop V3 completion survives an unknown memory write and recovery settles the same staged ID", async () => {
+  const f = fixture("pass");
+  const writeIds: string[] = [];
+  const diagnostics: MemoryWriterEventV1[] = [];
+  const input = {
+    ...f.input,
+    onMemoryWriterEvent: (event: MemoryWriterEventV1) =>
+      diagnostics.push(event),
+    memoryWriterStore: {
+      ...f.input.memoryWriterStore,
+      async apply(request: { writeId: string }) {
+        writeIds.push(request.writeId);
+        const result = await f.input.memoryWriterStore.apply();
+        if (writeIds.length === 1)
+          throw new Error("database committed but acknowledgement was lost");
+        return result;
+      },
+    },
+  };
+  const first = await runFreshPawNextTaskV3(input);
+  expect(first.state.decision.kind).toBe("completed");
+  expect(
+    first.inputFacts.some((fact) => fact.type === "memory.candidate_staged"),
+  ).toBe(true);
+  expect(
+    first.inputFacts.some((fact) => fact.type === "memory.write_settled"),
+  ).toBe(false);
+  expect(diagnostics.some((event) => event.type === "recovery_pending")).toBe(
+    true,
+  );
+  const beforeRecovery = f.counts();
+  const resumed = await runExistingPawNextTaskV3(input);
+  expect(resumed.state.decision.kind).toBe("completed");
+  expect(
+    resumed.inputFacts.filter((fact) => fact.type === "memory.write_settled"),
+  ).toMatchObject([{ status: "completed", storedIds: ["verified-memory"] }]);
+  expect(writeIds).toHaveLength(2);
+  expect(new Set(writeIds).size).toBe(1);
+  expect(f.counts().extracts).toBe(beforeRecovery.extracts);
+  expect(f.counts().rootCalls).toBe(beforeRecovery.rootCalls);
+});
 
 test("desktop composition writes only after independent audit and settled recovery is idempotent", async () => {
   const f = fixture("pass");

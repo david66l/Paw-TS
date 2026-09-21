@@ -282,10 +282,10 @@ export type RunEvent =
     }
   /** 模型返回的文本块（流式或单次），累积了当前已收到的所有 assistant 文本 */
   /** Accumulated assistant text so far (streaming or single-shot). */
-  | { readonly type: "model.chunk"; readonly text: string }
+  | { readonly type: "model.chunk"; readonly text: string; readonly mode?: "delta" }
   /** 模型返回的思考/推理文本块（流式），累积了当前已收到的所有 thinking 文本 */
   /** Accumulated thinking/reasoning text so far (streaming). */
-  | { readonly type: "model.thinking"; readonly text: string }
+  | { readonly type: "model.thinking"; readonly text: string; readonly mode?: "delta" }
   /** 模型调用完成：携带完整文本、token 用量和可选的 thinking 文本 */
   | {
       readonly type: "model.done";
@@ -731,6 +731,15 @@ export type RunEvent =
       readonly totalTokens: number;
       /** 是否降级（embedding/精排不可用，召回直取） */
       readonly degraded?: boolean;
+    }
+  /** Content-free diagnostics for the journal-backed memory terminal operation. */
+  | {
+      readonly type: "memory.maintenance";
+      readonly phase: "write" | "topic";
+      readonly action: string;
+      readonly operationId?: string;
+      readonly reasonCode?: string;
+      readonly durationMs: number;
     }
   /** 记忆写入事件入队（spec v2 §9.5；异步写管线，M4 接线） */
   | {

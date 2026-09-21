@@ -119,3 +119,13 @@ benchmarks/success-laundering/
 packages/memory/scripts/run-success-laundering.ts
 packages/memory/src/longterm/eval/success-laundering.ts
 packages/memory/test/success-laundering.test.ts
+
+# Benchmark run output (local only) — matches the benchmarks/*/runs/ convention above
+benchmarks/mechanism-matrix/.runs/
+
+# Reference literature (local research material, not product source; ~17 MB of PDFs)
+参考文献/
+
+# This repo uses bun.lock; the pnpm manifests are leftovers and would be a second lockfile
+pnpm-lock.yaml
+pnpm-workspace.yaml

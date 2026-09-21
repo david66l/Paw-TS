@@ -51,6 +51,8 @@ export const MEMORY_LIST = "memory.list" as const;
 export const MEMORY_READ = "memory.read" as const;
 export const MEMORY_SAVE = "memory.save" as const;
 export const CONTEXT_RECALL = "context.recall" as const;
+/** Model-invoked compaction request; honored at the next safe boundary. */
+export const CONTEXT_COMPACT = "context.compact" as const;
 /** Stable provider-visible gateway for dynamic MCP capabilities. */
 export const MCP_PROXY = "workspace.use_mcp" as const;
 
@@ -133,6 +135,7 @@ const BUILTIN_TOOLS = [
   MEMORY_READ,
   MEMORY_SAVE,
   CONTEXT_RECALL,
+  CONTEXT_COMPACT,
   MCP_PROXY,
 ] as const;
 
@@ -166,6 +169,7 @@ export function toolRequiresApproval(
     tool === MEMORY_LIST ||
     tool === MEMORY_READ ||
     tool === CONTEXT_RECALL ||
+    tool === CONTEXT_COMPACT ||
     (tool === MCP_PROXY && args?.action === "search") ||
     tool === ACCEPTANCE_UPDATE ||
     tool === JOB_LIST ||
@@ -273,11 +277,11 @@ export function toolDefinitions(
     ),
     fn(
       READ,
-      "Read a file from the workspace. Returns content with line numbers.",
+      "Read a UTF-8 file from the workspace. Returns plain text content plus line counts; content has no added line-number prefixes. Use offset and limit to read a range.",
       {
         path: { type: "string", description: "Relative path to the file" },
-        offset: { type: "integer", description: "Line offset from start" },
-        limit: { type: "integer", description: "Max lines to read" },
+        offset: { type: "integer", description: "Zero-based line offset; default 0 starts at the first line" },
+        limit: { type: "integer", description: "Maximum lines to read; omit to read the remaining file" },
       },
       ["path"],
     ),
@@ -315,13 +319,13 @@ export function toolDefinitions(
     ),
     fn(
       WRITE,
-      "Create or overwrite a file in the workspace.",
+      "Create a file or replace its entire content with UTF-8 text. Parent directories are created by default. Use workspace_edit_file for targeted changes to existing text.",
       {
         path: { type: "string", description: "Relative path to the file" },
         content: { type: "string", description: "UTF-8 text content" },
         create_directories: {
           type: "boolean",
-          description: "Create parent directories if needed",
+          description: "Create parent directories if needed (default true)",
         },
       },
       ["path", "content"],
@@ -489,6 +493,11 @@ export function toolDefinitions(
     fn(
       PROGRESS_READ,
       "Read the latest durable task progress together with live background job status.",
+      {},
+    ),
+    fn(
+      CONTEXT_COMPACT,
+      "Request a context compaction checkpoint at the next safe boundary. Call it when a module or debugging round is finished and the early history (explored files, old command output) is no longer needed verbatim; it is distilled into a structured checkpoint (goal, confirmed facts, ruled-out hypotheses, changed files, verification state) while recent turns stay verbatim. The request runs after this tool batch settles; nothing else happens inline.",
       {},
     ),
     fn(

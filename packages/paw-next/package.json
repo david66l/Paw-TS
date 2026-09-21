@@ -1,0 +1,34 @@
+{
+  "name": "@paw/paw-next",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Paw Next V3 共享组装入口。桌面端与 CLI 共用；无 CLI 启动副作用。",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@paw/agent": "workspace:*",
+    "@paw/agent-loop": "workspace:*",
+    "@paw/collaboration": "workspace:*",
+    "@paw/completion-review": "workspace:*",
+    "@paw/context-compaction": "workspace:*",
+    "@paw/core": "workspace:*",
+    "@paw/harness": "workspace:*",
+    "@paw/memory-plugin": "workspace:*",
+    "@paw/model-output-recovery": "workspace:*",
+    "@paw/models": "workspace:*",
+    "@paw/output-recall": "workspace:*",
+    "@paw/progress-advisor": "workspace:*",
+    "@paw/protocol": "workspace:*",
+    "@paw/runtime": "workspace:*",
+    "@paw/settings": "workspace:*",
+    "@paw/task-progress": "workspace:*",
+    "@paw/web-access": "workspace:*",
+    "@paw/workspace": "workspace:*",
+    "playwright": "^1.62.1"
+  },
+  "scripts": {
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  }
+}

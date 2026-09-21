@@ -1,3 +1,4 @@
+import { MessageCircleQuestion } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import styles from "./AskUserCard.module.css";
 
@@ -39,7 +40,7 @@ export function AskUserCard({
     <div className={styles.card} role="alertdialog" aria-label="Paw 的提问">
       <div className={styles.head}>
         <span className={styles.icon} aria-hidden>
-          🐾
+          <MessageCircleQuestion size={18} />
         </span>
         <span className={styles.title}>Paw 想问你</span>
         {timeoutSec ? (

@@ -11,18 +11,18 @@ const callOptions = () => ({
 });
 
 describe("model output recovery plugin", () => {
-  test("uses 32K by default and selects a 64K or 128K native tier", () => {
+  test("uses each model's native output limit without fixed tiers", () => {
     expect(resolveModelOutputRecoveryBudgetV1()).toEqual({
-      defaultMaxOutputTokens: 32_000,
-      recoveryMaxOutputTokens: 64_000,
+      defaultMaxOutputTokens: 8_192,
+      recoveryMaxOutputTokens: 8_192,
     });
     expect(resolveModelOutputRecoveryBudgetV1(100_000)).toEqual({
-      defaultMaxOutputTokens: 32_000,
-      recoveryMaxOutputTokens: 64_000,
+      defaultMaxOutputTokens: 100_000,
+      recoveryMaxOutputTokens: 100_000,
     });
     expect(resolveModelOutputRecoveryBudgetV1(200_000)).toEqual({
-      defaultMaxOutputTokens: 32_000,
-      recoveryMaxOutputTokens: 128_000,
+      defaultMaxOutputTokens: 200_000,
+      recoveryMaxOutputTokens: 200_000,
     });
     expect(resolveModelOutputRecoveryBudgetV1(16_000)).toEqual({
       defaultMaxOutputTokens: 16_000,
@@ -30,7 +30,7 @@ describe("model output recovery plugin", () => {
     });
   });
 
-  test("continues a truncated response with the larger cap and combines usage", async () => {
+  test("continues with the native cap and combines usage and reasoning", async () => {
     const requests: PawModelRequest[] = [];
     const model: PawAgentLoopModel = {
       async execute(request) {
@@ -71,7 +71,7 @@ describe("model output recovery plugin", () => {
     expect(result.status).toBe("success");
     if (result.status !== "success") throw new Error("expected success");
     expect(requests.map((request) => request.options?.maxOutputTokens)).toEqual(
-      [32_000, 128_000],
+      [200_000, 200_000],
     );
     expect(requests[1]?.messages.at(-2)).toEqual({
       role: "assistant",
@@ -87,6 +87,40 @@ describe("model output recovery plugin", () => {
       completionTokens: 32_002,
       totalTokens: 32_032,
     });
+  });
+
+  test("recovery respects both a smaller context reserve and the native limit", async () => {
+    for (const [native, reserve, expected] of [
+      [384_000, 384_000, 384_000],
+      [128_000, 16_000, 16_000],
+      [4_096, 8_192, 4_096],
+    ]) {
+      const limits: Array<number | undefined> = [];
+      const model: PawAgentLoopModel = {
+        async execute(request) {
+          limits.push(request.options?.maxOutputTokens);
+          return limits.length === 1
+            ? {
+                status: "truncated",
+                message: { text: "", finishReason: "length" },
+                toolCalls: [],
+                reason: "cut off",
+                finishReason: "length",
+              }
+            : { status: "success", message: { text: "done" }, toolCalls: [] };
+        },
+      };
+      await createModelOutputRecoveryPluginV1(model, {
+        nativeMaxOutputTokens: native,
+        reservedOutputTokens: reserve,
+      }).execute(
+        { messages: [], options: { maxOutputTokens: 1024 } },
+        callOptions(),
+      );
+      expect(limits).toEqual([1024, expected]);
+    }
+    expect(() => resolveModelOutputRecoveryBudgetV1(0)).toThrow();
+    expect(() => resolveModelOutputRecoveryBudgetV1(Number.NaN)).toThrow();
   });
 
   test("never exposes a tool call from a truncated attempt", async () => {

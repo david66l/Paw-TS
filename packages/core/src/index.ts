@@ -477,3 +477,7 @@ export {
   scanForThreats,
   firstThreatMessage,
 } from "./threat-scanner.js";
+
+export * from "./shell-command.js";
+export { projectWorkspaceEffect } from "./workspace-effect.js";
+export { createOperationDeadline } from "./operation-deadline.js";

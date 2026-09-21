@@ -8,6 +8,7 @@
 import {
   existsSync,
   closeSync,
+  fsyncSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -125,7 +126,13 @@ function isPidAlive(pid: number): boolean {
  * 原子写入文件。
  *
  * 对标 hermes 的: write .tmp → fsync → os.replace
- * 步骤：写临时文件 → fsync 保证落盘 → rename 原子替换。
+ * 步骤：写临时文件 → fsync 保证落盘 → rename 原子替换 → fsync 目录项。
+ *
+ * 注意：`fsyncSync` 必须是**顶层静态 import**。此前这里写成
+ * `require("node:fs")` 并包在空 catch 里：本仓库是 `"type": "module"`，
+ * 在 Node ESM 下 `require` 未定义会抛 ReferenceError，被 catch 吞掉后
+ * fsync 从不执行 —— 而函数签名与调用方（safeWrite 的「完整写入安全链」）
+ * 都假设它执行了。Bun 恰好提供 require，所以这个缺陷只在 Node 上显形。
  */
 export function atomicWrite(filePath: string, content: string): void {
   const dir = path.dirname(filePath);
@@ -138,16 +145,26 @@ export function atomicWrite(filePath: string, content: string): void {
     // fsync 强制刷盘，防止断电后半截文件
     const fd = openSync(tmpPath, "r+");
     try {
-      // ponytail: Node fsyncSync → fs.fsyncSync(fd)
-      const { fsyncSync } = require("node:fs");
       fsyncSync(fd);
     } catch {
-      // fsyncSync may throw on some platforms; non-fatal
+      // 少数平台/文件系统不支持 fsync；不阻断写入，但不再假装已完成。
     } finally {
       closeSync(fd);
     }
     // rename = 同文件系统内的原子替换
     renameSync(tmpPath, filePath);
+    // 目录项也要落盘，否则 rename 本身可能在断电后丢失。
+    // Windows 不允许 fsync 目录（openSync 会失败），因此保持 best-effort。
+    try {
+      const dirFd = openSync(dir, "r");
+      try {
+        fsyncSync(dirFd);
+      } finally {
+        closeSync(dirFd);
+      }
+    } catch {
+      // best-effort：平台不支持目录 fsync
+    }
   } catch (e) {
     // 清理临时文件
     try {

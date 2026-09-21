@@ -17,6 +17,20 @@ export const DEFAULT_COMPLETION_REVIEW_TRIGGER_POLICY_V1: CompletionReviewTrigge
     requiredPathPrefixes: Object.freeze([]),
   });
 
+/**
+ * Accounting arm for the completion-review overhead question: review only
+ * explicit requests, project-required paths, non-trivial change sizes, and
+ * failed/inconclusive verification evidence. Unverified source mutations
+ * alone no longer force a review model call. Compare against the default on
+ * the same tasks before changing the default.
+ */
+export const TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1: CompletionReviewTriggerPolicyV1 =
+  Object.freeze({
+    nonTrivialMutationCount: 3,
+    reviewUnverifiedSourceChanges: false,
+    requiredPathPrefixes: Object.freeze([]),
+  });
+
 export function evaluateCompletionReviewTriggersV1(
   candidate: CompletionReviewCandidateV1,
   policy: CompletionReviewTriggerPolicyV1 = DEFAULT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,

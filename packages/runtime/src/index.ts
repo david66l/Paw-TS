@@ -172,6 +172,10 @@ export type {
   JournalContextTimelineUnitPlanV1,
   JournalContextTokenPlanV1,
 } from "./context/journal-context-plan.js";
+export type {
+  JournalContextAnnotationV1,
+  JournalContextRequestProjectionV1,
+} from "./context/journal-context-plan.js";
 export {
   createAndCommitTaskCheckpointV1,
   bindTaskCheckpointSourceV1,

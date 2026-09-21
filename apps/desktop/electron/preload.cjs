@@ -24,6 +24,20 @@ contextBridge.exposeInMainWorld("pawDesktop", {
   refreshJobs: (opts) => ipcRenderer.invoke("agent:refresh-jobs", opts),
   stopJob: (opts) => ipcRenderer.invoke("agent:stop-job", opts),
   getMonitor: (opts) => ipcRenderer.invoke("agent:get-monitor", opts),
+  getContext: (opts) =>
+    ipcRenderer.invoke("agent:get-context", {
+      ...opts,
+      requestId: `context-${opts.conversationId}`,
+    }),
+  compactContext: async (opts) => {
+    const result = await ipcRenderer.invoke("agent:compact-context", {
+      ...opts,
+      requestId: `compact-${opts.conversationId}`,
+    });
+    return (
+      result.data ?? { ok: false, message: result.error || "上下文压缩失败。" }
+    );
+  },
   submitInput: (opts) => ipcRenderer.invoke("agent:submit-input", opts),
   cancelChild: (opts) => ipcRenderer.invoke("agent:cancel-child", opts),
 

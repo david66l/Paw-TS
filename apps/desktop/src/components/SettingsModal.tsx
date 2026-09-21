@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import type { ColorTheme, MaterialTheme } from "../styles/appearance";
 import styles from "./SettingsModal.module.css";
 
@@ -62,13 +63,33 @@ export function SettingsModal({
   approvalMode,
   onApprovalModeChange,
 }: SettingsModalProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     if (!open) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (e.key === "Tab") {
+        const controls = [
+          ...(dialogRef.current?.querySelectorAll<HTMLElement>(
+            "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
+          ) ?? []),
+        ];
+        if (e.shiftKey && document.activeElement === controls[0]) {
+          e.preventDefault();
+          controls.at(-1)?.focus();
+        } else if (!e.shiftKey && document.activeElement === controls.at(-1)) {
+          e.preventDefault();
+          controls[0]?.focus();
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      previousFocus?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -82,6 +103,7 @@ export function SettingsModal({
         onClick={onClose}
       />
       <dialog
+        ref={dialogRef}
         className={styles.dialog}
         open
         aria-modal="true"
@@ -95,7 +117,7 @@ export function SettingsModal({
             aria-label="关闭"
             onClick={onClose}
           >
-            ×
+            <X size={18} />
           </button>
         </header>
 
@@ -127,7 +149,7 @@ export function SettingsModal({
               <div className={styles.rowText}>
                 <div className={styles.rowLabel}>审批模式</div>
                 <div className={styles.rowDesc}>
-                  修改性工具（写文件 / 编辑 / shell）是否需要逐条确认
+                  控制修改文件、运行命令前的确认
                 </div>
               </div>
               <Segmented
@@ -186,8 +208,7 @@ export function SettingsModal({
 
             {colorTheme === "paper" ? (
               <p className={styles.skinNote}>
-                来自 Louis.dev
-                的纸张纹理、薰衣草紫与衬线标题。外观选择会自动保存。
+                暖白、薰衣草紫与清晰的内容层级。外观选择会自动保存。
               </p>
             ) : (
               <div className={styles.row}>

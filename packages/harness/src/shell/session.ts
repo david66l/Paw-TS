@@ -32,7 +32,10 @@ import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 
 import type { ShellSandboxConfig } from "../sandbox/types.js";
-import { buildDockerSessionSpawnSpecV1 } from "../sandbox/docker-runner.js";
+import {
+  type DockerShellSessionSpawnSpecV1,
+  buildDockerSessionSpawnSpecV1,
+} from "../sandbox/docker-runner.js";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 60_000;
 const MIN_COMMAND_TIMEOUT_MS = 1_000;
@@ -93,7 +96,7 @@ abstract class PersistentShellSessionBase implements ShellSession {
   protected constructor(
     readonly key: string,
     readonly backend: "local" | "docker",
-    private readonly initialCwd: string,
+    protected readonly initialCwd: string,
   ) {}
 
   async run(
@@ -170,7 +173,7 @@ abstract class PersistentShellSessionBase implements ShellSession {
         const match = text.match(new RegExp(`${marker}(-?\\d+)__`));
         if (!match) return;
         const stdout = text
-          .slice(0, Math.max(0, match.index))
+          .slice(0, Math.max(0, match.index ?? 0))
           .replace(/\r?\n$/, "");
         finish({
           exitCode: Number(match[1]),
@@ -273,13 +276,13 @@ abstract class PersistentShellSessionBase implements ShellSession {
 }
 
 class LocalShellSession extends PersistentShellSessionBase {
-  constructor(key: string, private readonly hostCwd: string) {
+  constructor(key: string, hostCwd: string) {
     super(key, "local", hostCwd);
   }
 
   protected spawnInternals(): LiveSessionInternals {
     const proc = spawn("bash", [], {
-      cwd: this.hostCwd,
+      cwd: this.initialCwd,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -301,7 +304,7 @@ class LocalShellSession extends PersistentShellSessionBase {
 }
 
 class DockerShellSession extends PersistentShellSessionBase {
-  private readonly spec: ReturnType<typeof buildDockerSessionSpawnSpecV1>;
+  private readonly spec: DockerShellSessionSpawnSpecV1;
 
   constructor(
     key: string,
@@ -309,10 +312,12 @@ class DockerShellSession extends PersistentShellSessionBase {
     sandbox: ShellSandboxConfig,
   ) {
     super(key, "docker", hostCwd);
-    this.spec = buildDockerSessionSpawnSpecV1(sandbox, {
+    const spec = buildDockerSessionSpawnSpecV1(sandbox, {
       workspaceRoot: hostCwd,
       sessionKey: key,
     });
+    if ("error" in spec) throw new Error(spec.error);
+    this.spec = spec;
   }
 
   protected spawnInternals(): LiveSessionInternals {

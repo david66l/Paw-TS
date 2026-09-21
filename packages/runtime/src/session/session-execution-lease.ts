@@ -1338,7 +1338,10 @@ function readAuthority(
   mode: AuthorityReadMode = "recovering",
 ): Authority {
   validatePathTree(paths, mode);
-  const names = eventFileNames(paths.eventsDir, mode);
+  // readEventFile checks each formal file immediately before reading it. Do not
+  // walk the same files for a second metadata check during name enumeration.
+  // Strict inventory readers use this same path with repair disabled.
+  const names = enumerateEventFileNames(paths.eventsDir);
   const events: TransitionEvent[] = [];
   let current: Projection | undefined;
   let previousHash = ZERO_HASH;
@@ -1665,18 +1668,17 @@ function readEventFile(
   return { value, contentHash: hashText(content) };
 }
 
-function eventFileNames(
-  directory: string,
-  mode: AuthorityReadMode = "recovering",
-): string[] {
+/** Validate the directory's namespace; callers validate formal file contents. */
+function enumerateEventFileNames(directory: string): string[] {
   const committed: string[] = [];
   for (const name of fs.readdirSync(directory).sort()) {
-    const full = path.join(directory, name);
     if (EVENT_FILE.test(name)) {
-      assertStableAuthorityFile(full, "Session lease event", mode);
       committed.push(name);
     } else if (TEMP_FILE.test(name) && !name.startsWith("identity")) {
-      assertStrictTemporaryFile(full, "Session lease temporary event");
+      assertStrictTemporaryFile(
+        path.join(directory, name),
+        "Session lease temporary event",
+      );
     } else {
       throw new Error(`Unrecognized Session lease event entry: ${name}`);
     }

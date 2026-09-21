@@ -107,6 +107,7 @@ export interface HarnessToolExecutorOptionsV1 {
     | "managedJobs"
     | "payloadRecall"
     | "taskProgress"
+    | "acceptanceLedger"
     | "webAccess"
     | "browserCheck"
     | "subAgentLauncher"
@@ -161,6 +162,9 @@ export function createHarnessToolExecutorV1(
       : {}),
     ...(options.context.taskProgress
       ? { taskProgress: options.context.taskProgress }
+      : {}),
+    ...(options.context.acceptanceLedger
+      ? { acceptanceLedger: options.context.acceptanceLedger }
       : {}),
     ...(options.context.webAccess
       ? { webAccess: options.context.webAccess }

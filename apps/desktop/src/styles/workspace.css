@@ -1,0 +1,54 @@
+/* Shared matte surfaces for the desktop workspace. */
+:root {
+  --workspace-side: #f4f1ed;
+  --workspace-panel: #f8f6f3;
+}
+:root[data-color-theme="paper"] {
+  --bg-app: #fcfbf9;
+  --bg-app-gradient: #fcfbf9;
+  --glass-bg: #fcfbf9;
+  --glass-bg-strong: #ffffff;
+  --glass-bg-subtle: #f4f1ed;
+  --glass-bg-chip: #f8f6fa;
+  --glass-bg-chip-hover: #eee8f4;
+  --glass-bg-chip-active: #eee8f4;
+  --glass-border: #e5dfe9;
+  --glass-border-strong: #dcd5e3;
+  --glass-border-soft: #eee9ef;
+  --glass-border-outer: #e5dfe9;
+  --text-primary: #302c35;
+  --text-secondary: #6d6676;
+  --text-muted: #817887;
+  --accent: #8060a2;
+  --accent-rgb: 128, 96, 162;
+  --accent-soft: #eee8f4;
+  --accent-border: #c2acd2;
+  --text-accent: #785797;
+  --button-primary-bg: #8060a2;
+  --button-primary-border: #8060a2;
+  --glass-shadow: none;
+  --glass-shadow-soft: none;
+  --button-primary-shadow: none;
+}
+:root[data-color-theme="paper"] body::before {
+  display: none;
+}
+:root[data-color-theme="paper"] .md :is(h1, h2, h3) {
+  font-family: var(--font-ui);
+}
+:root[data-color-theme="paper"] .md pre {
+  background: #f5f2f7;
+  border: 1px solid #e9e3ee;
+}
+button:disabled {
+  cursor: default;
+}
+button svg {
+  flex-shrink: 0;
+  vertical-align: middle;
+  stroke-width: 1.7;
+}
+select {
+  font: inherit;
+  color: inherit;
+}

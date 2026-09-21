@@ -60,7 +60,7 @@ bun run typecheck:memory-plugin
 bun test packages/memory-plugin/test packages/memory/test/longterm-embedding-provider.test.ts
 bunx tsc --noEmit -p benchmarks/amb/tsconfig.json
 bun test benchmarks/amb
-bun test --timeout 30000 apps/cli/test/paw-next-composition-v2.test.ts
+bun test --timeout 30000 legacy/apps/cli/test/paw-next-composition-v2.test.ts
 benchmarks/amb/upstream/.venv/Scripts/python.exe -m unittest discover -s benchmarks/amb -p "test_*.py"
 ```
 

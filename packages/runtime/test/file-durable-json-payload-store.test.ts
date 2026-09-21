@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import type { DurableJsonPayloadV1, JsonValue } from "@paw/protocol";
 import {
   DEFAULT_FILE_DURABLE_JSON_PAYLOAD_POLICY_V1,
@@ -32,6 +32,117 @@ afterEach(() => {
 });
 
 describe("file durable JSON payload store", () => {
+  test("reads validate each directory before and after I/O without trusting prior reads", async () => {
+    const root = tempRoot();
+    const writer = createWriter(root, acquire(root));
+    const binding = modelBinding(4, "directory-checks");
+    const payload = await writer.prepare({ verified: true }, binding, signal());
+    const file = artifactPath(root, payload);
+    const canonicalRoot = fs.realpathSync.native(root);
+    const directories: string[] = [];
+    let current = canonicalRoot;
+    for (const segment of path
+      .relative(canonicalRoot, path.dirname(file))
+      .split(path.sep)) {
+      current = path.join(current, segment);
+      directories.push(current);
+    }
+    const stat = spyOn(fs, "lstatSync");
+    const realpath = spyOn(fs.realpathSync, "native");
+    try {
+      expect(await writer.resolve(payload, binding, signal())).toEqual({
+        verified: true,
+      });
+      for (const directory of directories) {
+        expect(
+          stat.mock.calls.filter((args) => args[0] === directory),
+        ).toHaveLength(2);
+        expect(
+          realpath.mock.calls.filter((args) => args[0] === directory),
+        ).toHaveLength(2);
+      }
+    } finally {
+      stat.mockRestore();
+      realpath.mockRestore();
+    }
+    const bytes = fs.readFileSync(file, "utf8");
+    fs.writeFileSync(file, bytes.replace('"verified":true', '"verified":null'));
+    await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
+      "envelope hash mismatch",
+    );
+  });
+
+  test("the post-read check rejects an ancestor replaced with a junction to the same bytes", async () => {
+    const root = tempRoot();
+    const writer = createWriter(root, acquire(root));
+    const binding = modelBinding(5, "post-read-swap");
+    const payload = await writer.prepare({ verified: true }, binding, signal());
+    const file = artifactPath(root, payload);
+    const storeDir = path.dirname(file);
+    const displaced = path.join(root, "displaced-store");
+    const originalBytes = fs.readFileSync(file);
+    const originalClose = fs.closeSync;
+    let swapped = false;
+    const close = spyOn(fs, "closeSync").mockImplementation((descriptor) => {
+      originalClose(descriptor);
+      if (swapped) return;
+      swapped = true;
+      // Both final paths must remain in this isolated test workspace.
+      for (const target of [storeDir, displaced]) {
+        const relative = path.relative(
+          path.resolve(root),
+          path.resolve(target),
+        );
+        if (
+          !relative ||
+          path.isAbsolute(relative) ||
+          relative.split(path.sep).includes("..")
+        ) {
+          throw new Error("Test move escaped fixture");
+        }
+      }
+      fs.renameSync(storeDir, displaced);
+      fs.symlinkSync(
+        displaced,
+        storeDir,
+        process.platform === "win32" ? "junction" : "dir",
+      );
+    });
+    try {
+      await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
+        "unsafe directory",
+      );
+      expect(swapped).toBe(true);
+    } finally {
+      close.mockRestore();
+    }
+    expect(fs.readFileSync(path.join(displaced, path.basename(file)))).toEqual(
+      originalBytes,
+    );
+  });
+
+  test("canonical paths escaping through a same-prefix sibling fail the containment fallback", async () => {
+    const root = tempRoot();
+    const writer = createWriter(root, acquire(root));
+    const binding = modelBinding(6, "canonical-escape");
+    const payload = await writer.prepare({ value: true }, binding, signal());
+    const storeDir = path.dirname(artifactPath(root, payload));
+    const original = fs.realpathSync.native;
+    const realpath = spyOn(fs.realpathSync, "native").mockImplementation(((
+      ...args: Parameters<typeof original>
+    ) =>
+      args[0] === storeDir
+        ? `${fs.realpathSync(root)}-sibling`
+        : original(...args)) as typeof original);
+    try {
+      await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
+        "escaped the workspace",
+      );
+    } finally {
+      realpath.mockRestore();
+    }
+  });
+
   test("round-trips canonical immutable JSON without overwriting identical content", async () => {
     const root = tempRoot();
     const lease = acquire(root);

@@ -31,8 +31,27 @@ import type {
 
 export type ToolDefinition = CoreToolDefinition;
 
+/** Used only when the selected model has no declared output capability. */
+export const FALLBACK_MODEL_OUTPUT_TOKENS = 8_192;
+
+export function resolveModelOutputLimit(
+  nativeMaxOutputTokens?: number,
+): number {
+  if (
+    nativeMaxOutputTokens !== undefined &&
+    (!Number.isSafeInteger(nativeMaxOutputTokens) || nativeMaxOutputTokens <= 0)
+  ) {
+    throw new Error("nativeMaxOutputTokens must be a positive safe integer");
+  }
+  return nativeMaxOutputTokens ?? FALLBACK_MODEL_OUTPUT_TOKENS;
+}
+
 /** 单次模型完成调用的选项 */
 export interface ModelCompleteOptions extends ModelRequestOptionsV1 {
+  /** In-process metadata callback, excluded from request serialization and replay. */
+  readonly onObservation?: (
+    event: import("./observation.js").ModelObservationEvent,
+  ) => void;
   /** 用于取消正在进行的模型请求的 AbortSignal */
   readonly signal?: AbortSignal;
   /** Per-request positive output-token cap for bounded auxiliary protocols. */

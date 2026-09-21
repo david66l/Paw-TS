@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type { RunEventEnvelope } from "../src/run-events.js";
 import { FileSystemSessionStore } from "../src/session-store.js";
+import { sanitizeRunId, toolResultsDir } from "../src/workspace-paths.js";
 
 describe("FileSystemSessionStore", () => {
   let root: string;
@@ -314,5 +315,93 @@ describe("FileSystemSessionStore", () => {
     expect(collected.length).toBe(2);
     expect(collected[0]?.event.type).toBe("run.started");
     expect(collected[1]?.event.type).toBe("run.completed");
+  });
+
+  test("replayRun can be iterated more than once", async () => {
+    for (let i = 1; i <= 3; i++) {
+      store.saveEvent("r1", {
+        runId: "r1",
+        seq: i,
+        ts: 1000 + i,
+        event: { type: "model.chunk", text: `chunk ${i}` },
+      });
+    }
+    const iterable = store.replayRun("r1");
+    const first = [];
+    for await (const ev of iterable!) first.push(ev.seq);
+    const second = [];
+    for await (const ev of iterable!) second.push(ev.seq);
+    expect(first).toEqual([1, 2, 3]);
+    // 旧实现共享一条已销毁的流，第二次迭代会直接返回空。
+    expect(second).toEqual([1, 2, 3]);
+  });
+
+  // eventCount 用「文件字节数 / 每行字节数」估算。旧实现拿 UTF-16 码元数当
+  // 分子，中文内容会高估约 2-3 倍（每字 3 字节但只占 1 个码元）。
+  test("getRunSummary estimates CJK event counts without a byte/char mismatch", () => {
+    const total = 50;
+    for (let i = 0; i < total; i++) {
+      store.saveEvent("cjk", {
+        runId: "cjk",
+        seq: i + 1,
+        ts: 1000 + i,
+        event: {
+          type: "model.chunk",
+          text: `第${i}步：这是一段用于测试字节与字符长度差异的中文内容，需要足够长。`,
+        },
+      });
+    }
+    const s = store.getRunSummary("cjk");
+    expect(s).toBeDefined();
+    // 估算允许有误差，但不允许量纲错误带来的成倍偏差。
+    expect(s?.eventCount).toBeGreaterThanOrEqual(total - 10);
+    expect(s?.eventCount).toBeLessThanOrEqual(total + 15);
+  });
+
+  test("getRunSummary reads the whole first line instead of truncating at 8KB", () => {
+    const sessionsDir = path.join(root, ".paw", "sessions");
+    void sessionsDir;
+    const longGoal = "g".repeat(20_000);
+    store.saveEvent("big-head", {
+      runId: "big-head",
+      seq: 1,
+      ts: 4242,
+      event: { type: "run.started", goal: longGoal },
+    });
+    const s = store.getRunSummary("big-head");
+    // 旧实现固定读前 8192 字节，首行超长时解析失败 → startedAt 静默变 0、goal 变空。
+    expect(s?.startedAt).toBe(4242);
+    expect(s?.goal).toBe(longGoal);
+  });
+});
+
+describe("sanitizeRunId", () => {
+  test("neutralizes all-dot ids that would act as path segments", () => {
+    // `.` 与 `..` 通过字符白名单，却会被 path.join 当作目录跳转。
+    expect(sanitizeRunId("..")).toBe("__");
+    expect(sanitizeRunId(".")).toBe("_");
+    expect(sanitizeRunId("...")).toBe("___");
+  });
+
+  test("keeps legitimate ids containing dots", () => {
+    expect(sanitizeRunId("run.2026-01-01")).toBe("run.2026-01-01");
+    expect(sanitizeRunId("run-1")).toBe("run-1");
+  });
+
+  test("replaces separators as before", () => {
+    expect(sanitizeRunId("../../../etc/passwd")).toBe(
+      ".._.._.._etc_passwd",
+    );
+    expect(sanitizeRunId("a/b\\c")).toBe("a_b_c");
+  });
+
+  test("toolResultsDir cannot be escaped with a dot id", () => {
+    const isolated = mkdtempSync(path.join(tmpdir(), "paw-toolres-"));
+    const dir = toolResultsDir(isolated, "..");
+    const relative = path.relative(
+      path.join(isolated, ".paw", "sessions"),
+      dir,
+    );
+    expect(relative.startsWith("..")).toBe(false);
   });
 });

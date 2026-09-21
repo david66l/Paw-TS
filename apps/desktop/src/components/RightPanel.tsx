@@ -1,3 +1,12 @@
+import {
+  X,
+  Bot,
+  Circle,
+  CircleCheck,
+  FileText,
+  NotebookText,
+  CircleGauge,
+} from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { shortToolName } from "../agent/toolCards";
 import type { AgentRunStatus, RunActivity, SubAgentInfo } from "../agent/types";
@@ -24,13 +33,9 @@ export type RightTabId =
   | "jobs";
 
 const TABS: readonly { id: RightTabId; label: string }[] = [
-  { id: "plan", label: "Plan" },
-  { id: "tasks", label: "任务" },
-  { id: "jobs", label: "后台" },
-  { id: "changes", label: "Changes" },
-  { id: "context", label: "Context" },
-  { id: "memory", label: "Memory" },
-  { id: "agents", label: "Agents" },
+  { id: "plan", label: "计划" },
+  { id: "changes", label: "文件" },
+  { id: "agents", label: "运行" },
 ];
 
 const AGENT_DOT: Record<SubAgentInfo["status"], string> = {
@@ -60,6 +65,7 @@ export type AgentRosterItem = {
 };
 
 export interface RightPanelProps {
+  readonly onClose: () => void;
   readonly monitor: DesktopMonitorSnapshot | null;
   readonly isRunning: boolean;
   readonly onStopJob: (runId: string, jobId: string) => void;
@@ -85,7 +91,17 @@ export interface RightPanelProps {
 function EmptyState({ icon, label }: { icon: string; label: string }) {
   return (
     <div className={styles.empty}>
-      <div className={styles.emptyIcon}>{icon}</div>
+      <div className={styles.emptyIcon}>
+        {icon === "Δ" ? (
+          <FileText size={22} />
+        ) : icon === "◈" ? (
+          <NotebookText size={22} />
+        ) : icon === "◇" ? (
+          <CircleGauge size={22} />
+        ) : (
+          <Circle size={22} />
+        )}
+      </div>
       <div className={styles.emptyTitle}>{label}</div>
     </div>
   );
@@ -159,7 +175,7 @@ function PlanTab({ plan }: { plan: PlanState }) {
         <>
           <div className={styles.planHeadRow}>
             <span className={styles.planHeadCount}>
-              {done} of {total} steps
+              {done} / {total} 步
             </span>
             <span className={styles.planHeadPct}>{pct}%</span>
           </div>
@@ -182,7 +198,13 @@ function PlanTab({ plan }: { plan: PlanState }) {
                   }`}
                 >
                   <span className={`${styles.planIcon} ${icon.cls}`}>
-                    {icon.glyph}
+                    {isDone ? (
+                      <CircleCheck size={16} />
+                    ) : item.status === "failed" ? (
+                      <X size={16} />
+                    ) : (
+                      <Circle size={16} />
+                    )}
                   </span>
                   <span className={styles.planIndex}>{idx + 1}</span>
                   <div className={styles.planTextCol}>
@@ -395,7 +417,9 @@ function AgentsTab({
                     title={roleStatusText(st)}
                     aria-label={roleStatusText(st)}
                   />
-                  <span className={styles.roleAvatar}>{r.emoji ?? "◎"}</span>
+                  <span className={styles.roleAvatar}>
+                    <Bot size={17} />
+                  </span>
                   <div className={styles.roleBody}>
                     <span className={styles.rolePet}>{r.name}</span>
                     <span className={styles.roleName}>{r.role}</span>
@@ -818,6 +842,7 @@ function MemoryTab({
 // ponytail: memo — App 每个 model.chunk 都重渲染，但面板数据（plan/changes/
 // context/memory 均为 useState 值，回调为 useCallback）多数 chunk 不变，浅比较跳过。
 export const RightPanel = memo(function RightPanel({
+  onClose,
   monitor,
   isRunning,
   onStopJob,
@@ -844,7 +869,12 @@ export const RightPanel = memo(function RightPanel({
 
   return (
     <aside className={styles.right}>
-      <div className={styles.dragPad} aria-hidden />
+      <div className={styles.panelHeading}>
+        <strong>{tab === "memory" ? "工作区记忆" : "任务详情"}</strong>
+        <button type="button" aria-label="收起任务详情" onClick={onClose}>
+          <X size={17} />
+        </button>
+      </div>
       <GlassPanel className={styles.panel} variant="default" padding="none">
         <div className={styles.tabs} role="tablist" aria-label="右侧面板">
           {TABS.map((t) => (
@@ -876,12 +906,35 @@ export const RightPanel = memo(function RightPanel({
           {tab === "changes" && <ChangesTab changes={changes} />}
           {tab === "context" && <ContextTab context={context} />}
           {tab === "agents" && (
-            <AgentsTab
-              activities={activities}
-              selectedActivityId={selectedActivityId}
-              roster={agentRoster}
-              runStatus={agentRunStatus}
-            />
+            <>
+              <details open>
+                <summary className={styles.runHeading}>执行者</summary>
+                <AgentsTab
+                  activities={activities}
+                  selectedActivityId={selectedActivityId}
+                  roster={agentRoster}
+                  runStatus={agentRunStatus}
+                />
+              </details>
+              <details>
+                <summary className={styles.runHeading}>任务与验收</summary>
+                <TaskOverview snapshot={monitor} />
+              </details>
+              <details>
+                <summary className={styles.runHeading}>后台服务</summary>
+                <BackgroundJobs
+                  snapshot={monitor}
+                  live={isRunning}
+                  onStop={onStopJob}
+                />
+              </details>
+              <details>
+                <summary className={styles.runHeading}>
+                  上下文与调用统计
+                </summary>
+                <ContextTab context={context} />
+              </details>
+            </>
           )}
           {tab === "memory" && (
             <MemoryTab

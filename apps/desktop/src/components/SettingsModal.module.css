@@ -346,3 +346,62 @@
     transform: translateY(0) scale(1);
   }
 }
+
+/* Workspace design */
+
+:global(:root) .dialog.dialog {
+  background: var(--bg-app);
+  border: 1px solid var(--glass-border);
+  border-radius: 15px;
+  box-shadow: 0 16px 65px #2e22412b;
+  backdrop-filter: none;
+}
+:global(:root) .dialog.dialog::before,
+:global(:root) .dialog.dialog::after {
+  display: none;
+}
+
+:global(:root) .overlay.overlay {
+  backdrop-filter: none;
+  background: #2c253a30;
+}
+:global(:root) .row.row {
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--glass-border-soft);
+  border-radius: 0;
+  padding: 15px 0;
+}
+:global(:root) .section.section {
+  gap: 0;
+}
+:global(:root) .rowLabel.rowLabel {
+  font-size: 12px;
+  font-weight: 500;
+}
+:global(:root) .rowDesc.rowDesc {
+  font-size: 11px;
+  line-height: 1.6;
+}
+:global(:root) .title.title {
+  font: 500 20px / 1.5 var(--font-ui);
+}
+:global(:root) .skinName.skinName {
+  font-weight: 500;
+}
+:global(:root) .skinPreview[data-skin="paper"] {
+  background: linear-gradient(90deg, #f4f1ed 26%, #fcfbf9 26%);
+}
+:global(:root) .skinNote.skinNote {
+  font-size: 11px;
+  margin-top: 12px;
+}
+:global(:root) .segmented.segmented {
+  border-radius: 7px;
+}
+:global(:root) .seg.seg,
+:global(:root) .segActive.segActive {
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+}

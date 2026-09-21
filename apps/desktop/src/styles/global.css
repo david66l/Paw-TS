@@ -1,5 +1,6 @@
 @import "./tokens.css";
 @import "./paper.css";
+@import "./workspace.css";
 
 *,
 *::before,
@@ -35,8 +36,7 @@ body::before {
   inset: -20%;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(
+  background: radial-gradient(
       42% 36% at 12% 18%,
       rgba(110, 160, 255, 0.38) 0%,
       transparent 70%

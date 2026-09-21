@@ -20,6 +20,42 @@ const scope: PawNextMemoryScopeV1 = Object.freeze({
 });
 
 describe("memory temporal graph", () => {
+  for (const boundary of ["get-new", "put", "get-old"]) {
+    test(`does not start another mutation after cancellation during ${boundary}`, async () => {
+      const old = semantic({ id: "old-memory", fact: "Old preference", source: "user_statement", tValid: "2025-01-01T00:00:00.000Z", tInvalid: null });
+      const entries = new Map<string, MemoryEntry>([[old.id, old]]);
+      const calls: string[] = [];
+      const abort = new AbortController();
+      let release!: () => void;
+      let reached!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const entered = new Promise<void>((resolve) => { reached = resolve; });
+      const pause = async (name: string) => {
+        calls.push(name);
+        if (name === boundary) { reached(); await gate; }
+      };
+      const base = memoryEngine(entries, () => {});
+      const engine: MemoryStoreEngine = { ...base,
+        async get(id) { await pause(id === old.id ? "get-old" : "get-new"); return base.get(id); },
+        async put(entry) { await pause("put"); return base.put(entry); },
+        async invalidate(id, when) { await pause("invalidate"); return base.invalidate(id, when); },
+      };
+      const store = createMemoryAtomWriterStoreV1({ engine, scope });
+      const pending = store.apply({ writeId: "write", runId: "run", repositoryId: scope.repositoryId, claimedAt: Date.now(), atoms: [{
+        schemaVersion: "paw.memory-atom-proposal.v1", atomId: "atom", kind: "profile", action: "update", statement: "New preference", keywords: ["preference"], authority: "user_asserted", confidence: 0.98, priority: 90, sourceSeqs: [2], targetIds: [old.id], contentHash: "hash",
+      }] }, abort.signal);
+      const settled = pending.then(() => undefined, (error: unknown) => error);
+      await entered;
+      abort.abort(new DOMException("cancel", "AbortError"));
+      const startedCalls = [...calls];
+      release();
+      expect(await settled).toMatchObject({ name: "AbortError" });
+      expect(calls).toEqual(startedCalls);
+      expect(entries.get(old.id)?.tInvalid).toBeNull();
+      expect(entries.size).toBe(boundary === "get-new" ? 1 : 2);
+    });
+  }
+
   test("recalls conflict candidates from both lexical and vector neighborhoods", async () => {
     const lexical = semantic({
       id: "lexical-memory",

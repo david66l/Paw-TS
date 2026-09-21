@@ -200,6 +200,30 @@ export function redactSecrets(settings: PawSettingsLocal): PawSettingsLocal {
     }
   }
 
+  // 脱敏 MCP server 的 env。
+  //
+  // `mcp_servers` 不在 pawSettingsLocalSchema 的已知字段里（靠 .passthrough()
+  // 透传），因此上面的 models/flat 两条路径都不会覆盖它 —— 而 MCP server 的
+  // env 恰恰是放 token 的地方。键名无法可靠区分敏感与否，所以这里对**所有**
+  // env 值统一掩码，只保留键名供诊断。
+  const mcpServers = copy.mcp_servers;
+  if (Array.isArray(mcpServers)) {
+    copy.mcp_servers = mcpServers.map((server) => {
+      if (!server || typeof server !== "object") return server;
+      const entry: Record<string, unknown> = { ...server };
+      if (entry.env && typeof entry.env === "object") {
+        const envCopy: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(
+          entry.env as Record<string, unknown>,
+        )) {
+          envCopy[key] = typeof value === "string" ? maskKey(value) : value;
+        }
+        entry.env = envCopy;
+      }
+      return entry;
+    });
+  }
+
   return copy as PawSettingsLocal;
 }
 
