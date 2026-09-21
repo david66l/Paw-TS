@@ -1307,3 +1307,34 @@ expires_at              timestamptz    -- 可空
 - `db/dao/governanceDecision.ts` 是最后一个有盲断言的 DAO（8 处）。它比前两个麻烦：有 **8 个可空列**（`resulting_memory_id`、`adjusted_type`、`adjusted_scope`、`adjusted_confidence`、`adjusted_payload`、`target_memory_id`、`expected_version`、`executed_at`），而且它已经在两处写了 `?? undefined`、另几处仍是会漏 `null` 的 `as string | undefined`。做之前**必须先读 `V0xx__governance_decisions.sql` 逐列确认可空性**，不能照抄前两个的形状。
 - `workingMemory.ts` / `taskSession.ts` 该目录下断言数为 0，但仍应确认它们的映射是否直接返回驱动行。
 - §M7：`workingMemory.ts:40` 用 `JSON.stringify(wm)` 而非 `sql.json`（同一目录两种 JSONB 序列化）；`db/` 内 `textArrayLiteral`（`connection.ts:56`，注释里明确说它是为冷连接数组 bug 准备的解法）**零调用**，而 DAO 仍在用 `sql.array`；`j()`（`connection.ts:39`）全仓无调用者。
+
+### 11.26 我据一个**无效对照**回退了一次改动 —— `test:memory` 的失败数是不确定的
+
+**发生了什么。** 我按计划给第三个 DAO（`governanceDecision.ts`，9 个可空列）加行类型，把 `null` 兑现成 `undefined`、把 `timestamptz` 从 `Date` 兑现成 ISO 串。跑 `bun test packages/memory` 得到 **1006 pass / 8 fail**，而此前记的基线是 **1009 / 5**，新增的 3 个恰好都是 `红队` 里与 Governor 决策有关的用例，结论由 `noop` 变成 `degraded`。而 `degraded` 会经 `pipeline.ts:779 storeDegraded` **真的写入**一条降级条目，那几个用例断言的正是"不入库、不占注入位" —— 看起来是安全相关的行为回归。
+
+于是我**回退了**那次改动。
+
+**然后回退版本的失败数是 11，那 3 个用例照样失败。** 也就是说它们与我的改动无关。清库重建之后，**回退版本只剩 3 个失败**，`红队` 三条全绿。
+
+**实测到的失败数分布：**
+
+| 库状态 | pass / fail |
+|---|---|
+| 清库 + 首次运行 | **1011 / 3** |
+| 同一库第 2 次运行 | 1009 / 5 |
+| 同一库第 3 次运行 | 1009 / 5 |
+| 会话中途（库已被前面若干轮跑脏） | 1006 / 8、1003 / 11 |
+
+所以：
+
+1. **失败集合是不确定的**（观测到 3 / 5 / 8 / 11 四种），成因是 §11.3.5 记的跨文件互相污染叠加库内残留；
+2. **单次运行的"改前 vs 改后"对照不构成证据** —— 我本轮那次 `5 → 8` 的对照，两次运行的库状态根本不同，是**无效对照**，据此回退是**误判**；
+3. 由此推论：本会话第 41、42 轮在 `test:memory` 上写的"改动前后同为 1009 / 5、失败用例同名"**方向大概是对的，但方法不够格** —— 它们同样是单次运行。当时那两对数字恰好落在稳定区间（同一库连续两次都是 1009 / 5），但我不该把它当作严格证明。
+
+**这件事本身值得记下来**，因为它比那个 DAO 更值钱：`test:memory` 是全套闸门里唯一一个"失败数会漂"的部分，而**我在它上面做了三次对照、其中一次做错了决定**。正确做法是：每次对照前 `DROP DATABASE` + 重新 migrate，或者跑 N 次比较**失败集合**而不是失败**数量**。
+
+**`governanceDecision.ts` 的处理**：本轮**维持回退**。理由不是"它有问题"（那个证据已被推翻），而是**我还没有可信的对照**。它的行类型与 `memoryItem`/`memoryCandidate` 同形，值得做；下一轮做它时请按上面的方法对照，而不是单跑一次。
+
+**顺带确认的一件事**：清库之后 `红队`、`Governor §5.8-3`、`生命周期 trial 容量` 这几条都会通过 —— 它们是**库状态敏感**的，不是"既有失败"。此前几轮把它们当作固定的"既有 5 条失败"来对比数字，口径是错的：清库后的下界是 **3** 条（`readonly CLI 切换`、`memory-mechanism fixtures`、`Memory Evaluator 单条评估`）。
+
+**本轮验证**：`packages/memory` 清库后 1011 / 3、同库复跑两次均 1009 / 5；lint 0 error / 432 warning；typecheck 23/23；test:ts 2941 pass / 6 skip / 14 fail。**本轮没有功能性改动落地** —— 进入工作树的只有 `rows.ts` 里那段"为什么这个 DAO 还没有行类型"的说明注释。
