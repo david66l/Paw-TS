@@ -41,6 +41,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { toWorkspaceRelPosix } from "./workspace-path.js";
 
 /** 单个符号的信息 */
 export interface SymbolInfo {
@@ -413,7 +414,7 @@ export function searchWorkspaceSymbols(
       continue;
     }
     // 将绝对路径转为相对于工作区的路径（统一使用正斜杠）
-    const rel = path.relative(workspaceRoot, filePath).split(path.sep).join("/");
+    const rel = toWorkspaceRelPosix(workspaceRoot, filePath);
     // 每个文件最多返回 MAX_RESULTS_PER_FILE 个符号
     const capped = matched.slice(0, MAX_RESULTS_PER_FILE);
     matches.push({ file: rel, symbols: capped });

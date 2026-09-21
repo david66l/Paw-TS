@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { discoverContext } from "./project-context.js";
+import { toPosixPath, toWorkspaceRelPosix } from "./workspace-path.js";
 
 export interface CodeContextBlock {
   readonly path: string;
@@ -54,7 +55,7 @@ export function selectCodeContext(
   limit = 5,
 ): readonly CodeContextBlock[] {
   const index = buildCodeIndex(workspaceRoot);
-  const wanted = new Set(mentionedPaths.map(normalizeRel));
+  const wanted = new Set(mentionedPaths.map(toPosixPath));
   const terms = tokenize(query);
   const scored = index.files
     .map((file) => ({ file, score: scoreFile(file, terms, wanted) }))
@@ -72,7 +73,7 @@ export function selectCodeContext(
 
   const fallback = discoverContext(workspaceRoot, query, mentionedPaths);
   return fallback.filesRead.slice(0, limit).map((file) => ({
-    path: normalizeRel(file),
+    path: toPosixPath(file),
     symbols: [],
     tests: [],
     reason: "discoverContext fallback",
@@ -141,7 +142,7 @@ function walkFiles(workspaceRoot: string): string[] {
 }
 
 function indexFile(workspaceRoot: string, file: string): IndexedFile | null {
-  const rel = normalizeRel(path.relative(workspaceRoot, file));
+  const rel = toWorkspaceRelPosix(workspaceRoot, file);
   const ext = path.extname(rel).toLowerCase();
   const kind = fileKind(rel);
   let text = "";
@@ -211,10 +212,6 @@ function fileKind(rel: string): IndexedFile["kind"] {
 
 function tokenize(text: string): string[] {
   return [...new Set(text.toLowerCase().match(/[a-z0-9_./-]{3,}/g) ?? [])].slice(0, 12);
-}
-
-function normalizeRel(value: string): string {
-  return value.split(path.sep).join("/");
 }
 
 function symbolsIndex(index: CodeIndex): Record<string, readonly string[]> {

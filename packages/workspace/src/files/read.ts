@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { checkWorkspacePath } from "../path-guard.js";
+import { toPosixPath, toWorkspaceRelPosix } from "../workspace-path.js";
 
 const LIST_IGNORE_DIR = new Set([
   ".git",
@@ -37,18 +38,6 @@ const LIST_IGNORE_DIR = new Set([
 ]);
 
 const MAX_LIST_FILES = 200;
-
-/**
- * 工作区相对路径，统一使用 posix 分隔符。
- *
- * 检索与 glob 两条路径此前各自内联了一份逐字节相同的副本（都闭包捕获同一个
- * `workspaceRoot`）。返回给调用方与模型的路径必须只有一种形态，因此保留
- * 唯一实现：`glob.test.ts` 断言的 `"src/a.ts"` 与 `auto-context.test.ts`
- * 断言的 `"src/auth/login.ts"` 都依赖这里的约定。
- */
-function toWorkspaceRelPosix(workspaceRoot: string, fullPath: string): string {
-  return path.relative(workspaceRoot, fullPath).split(path.sep).join("/");
-}
 
 function fnmatchLite(fileName: string, pattern: string | undefined): boolean {
   if (!pattern) {
@@ -137,7 +126,7 @@ export interface ListFilesResult {
 
 /** Normalize a relative path to posix and mark directories with trailing `/`. */
 function formatListEntry(relPath: string, isDirectory: boolean): string {
-  const posix = relPath.split(path.sep).join("/");
+  const posix = toPosixPath(relPath);
   if (!isDirectory) {
     return posix;
   }
