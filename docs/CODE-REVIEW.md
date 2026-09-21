@@ -792,7 +792,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 15 | ✅ 完成 | `openai-compatible.ts` / `anthropic-compatible.ts` 的 `finally` 改为 `await reader.cancel().catch(() => {})` 后再 `releaseLock()` |
 | 16 | ✅ 完成 | 删掉两条不可达的块设备 deny 规则（真防护在 `shell-policy.ts:309` 的重定向目标检查，已有用例）；新增 `shell-policy-config.test.ts`（43 例：锚定/`*`/`?`/转义/大小写/last-match-wins） |
 | 17 | 🟡 部分 | `releaseTransition` 两处裸抛统一为 `throw this.markLost(error)`（与 `linearizeTransition` 一致）；**但没有**把 `linearize*` 的抛出接进 `failClosed` —— 见 11.5 |
-| 18 | 🟡 部分 | 已消掉「同一正则跑两遍 + 从英文散文抠 code」（`composition.ts`）；`normalizeErrorCode` 拒绝字面量 `"Error"`、`observation.ts` 优先读 `evidence.payload.code` 仍未做 |
+| 18 | 🟡 部分 | 已完成：`normalizeErrorCode`/`normalizeCode` 拒绝字面量 `"Error"`（不再铸出 `errorCode: "Error"`）；`canonicalErrorCode` 优先读 `evidence.payload.code`，执行器的 `E_TOOL_EXECUTOR_BOUNDARY`/`E_TOOL_RESULT_INVALID` 终于能到达 journal；消掉 `composition.ts` 里「同一正则跑两遍再从英文散文抠 code」。仍未做：`LoopError`/settlement/端口输入**携带**显式 `code`（跨包协议变更），以及 `interactive-control.ts` 两处对超时文案的精确比较 —— 见 §11.6 |
 
 批次 B 的闸门实测（`typecheck` 23/23、`lint` 0 error、`test:ts` 2790 pass/6 skip、`test:desktop` 190 pass/0 fail、`test:memory`（真实 Postgres）407 pass）与基线一致，唯一新增失败在逐项 A/B 后确认均为既存问题。
 
@@ -832,3 +832,17 @@ await expect(
 但**不能**据此宣告该改动有害：把这条命令在干净基线上跑 8 次，**基线本身也失败了 1 次**（同一条用例，报同样的 `Session lease identity must not have an external hardlink`）。也就是说这个多进程用例家族本身就是间歇性的 —— 这本身是一条值得记录的新发现，它意味着这几个「硬门」不能按单次运行来信任。
 
 最终决定：不引入这个 catch。理由是机制而非统计 —— 争抢 head 失败的一方若执行 `failClosed`，就会 `close()` 掉**赢家**正在写的 run 目录，用一个说得通的机制去换一个未经验证的收益不划算。代码里已写明这一判断及其证据强度（8 次里 1 次的基线噪声）。真正需要保留的是 `releaseTransition` 两处裸抛的统一，那条跑了 6 次全绿且无机制上的 downside。
+
+### 11.6 #18 只做了一半，剩下的是协议变更
+
+做完的三件事都已补测试，且**在旧实现上会失败**（`tool-observation.test.ts` 新增 3 例，其中 2 例在旧代码上红）：
+
+- `normalizeErrorCode` / `normalizeCode` 拒绝字面量 `"Error"`；
+- `canonicalErrorCode` 优先读 `evidence.payload.code`，于是 `agent-loop-tool-executor.ts:379`/`:460` 的语义 code 终于能进 journal；
+- `composition.ts` 不再把同一个正则跑两遍从英文散文里抠 code。
+
+**没做的**是 §R4 的根因修复：让 `LoopError`/settlement/端口输入**携带**显式 `code`。这不是能顺手带上的改动 —— `LoopError` 是 `packages/agent-loop` 的跨包类型，`ToolSettlement`/`ModelSettlement` 的每个构造点都要跟着改，还要动 `interactive-control.ts:196`/`:257` 对超时文案的精确比较。做完之前的现状是：超时类 code 仍然依赖 `agent-loop-adapter.ts` 拼出的那句英文。
+
+### 11.7 剩余工作
+
+批次 C（#19–#30）与批次 D（#31–#35）尚未开始，全部是结构性重构（拆 `run-journal.ts` 的 4623 行、拆 `initializeRun` 的 1282 行、拆 `AgentOrchestrator` 的 4922 行、`packages/agent` 的 `exports` 收口等）。建议每条单独提交并单独跑闸门：这些改动的影响面是「可读性」，而不是本批次这种可被测试直接钉住的行为。

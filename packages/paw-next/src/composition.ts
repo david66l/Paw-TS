@@ -7350,7 +7350,11 @@ function hashText(value: string): string {
 
 function normalizeCode(value: string): string {
   const normalized = value.trim().replace(/[^A-Za-z0-9._:@/-]/g, "_");
-  return normalized && /^[A-Za-z0-9]/.test(normalized) ? normalized.slice(0, 512) : "E_RUNTIME";
+  if (!normalized || !/^[A-Za-z0-9]/.test(normalized)) return "E_RUNTIME";
+  // 裸 `throw new Error(x)` 的 name 就是 "Error"：把它当 code 会让每个未分类
+  // 失败塌缩成同一个 `errorCode: "Error"`，看起来合法却没有信息（§R4）。
+  if (normalized === "Error") return "E_RUNTIME";
+  return normalized.slice(0, 512);
 }
 
 /**

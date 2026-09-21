@@ -56,18 +56,36 @@ function canonicalStatus(
   }
 }
 
+/**
+ * 执行器自己给出的语义 code（`E_TOOL_EXECUTOR_BOUNDARY` 等）。
+ *
+ * 它比 `error.name` 精确：`error.name` 对裸 `throw new Error(x)` 就是字符串
+ * "Error"，写进 `errorCode` 等于铸出一个看起来合法、实际没有分类信息的 id。
+ */
+function evidenceErrorCode(evidence: ToolRunResult | undefined): string | undefined {
+  const payload: unknown = evidence?.payload;
+  if (payload === null || typeof payload !== "object") return undefined;
+  const code = (payload as { code?: unknown }).code;
+  return typeof code === "string" ? normalizeErrorCode(code, "E_TOOL_UNKNOWN") : undefined;
+}
+
 function canonicalErrorCode(settlement: ToolSettlement<ToolRunResult>): string | undefined {
   switch (settlement.status) {
     case "success":
       return undefined;
     case "failed":
-      return normalizeErrorCode(settlement.error.name, "E_TOOL_FAILED");
+      return (
+        evidenceErrorCode(settlement.evidence) ??
+        normalizeErrorCode(settlement.error.name, "E_TOOL_FAILED")
+      );
     case "denied":
       return "E_TOOL_REJECTED";
     case "cancelled":
       return "E_TOOL_CANCELLED";
     case "unknown":
-      return "E_TOOL_UNKNOWN";
+      // 执行器的 code 此前根本到不了 journal：这里对所有 unknown 硬编码，
+      // 于是崩溃恢复看到的分类永远是 E_TOOL_UNKNOWN。
+      return evidenceErrorCode(settlement.evidence) ?? "E_TOOL_UNKNOWN";
   }
 }
 
@@ -84,9 +102,20 @@ function settlementSummary(settlement: ToolSettlement<ToolRunResult>): string {
   }
 }
 
+/**
+ * JS 内建错误类名。它们不携带分类信息，不能当成 error code 用。
+ *
+ * `errorCode` 对崩溃恢复是承重的（journal 用它判断崩溃后能否开启新的 work
+ * segment），所以宁可当场回退到一个明确的兜底值，也不要让每个未分类失败
+ * 都塌缩成同一个 `errorCode: "Error"`。
+ */
+const GENERIC_ERROR_NAMES: ReadonlySet<string> = new Set(["Error"]);
+
 function normalizeErrorCode(value: string, fallback: string): string {
   const normalized = value.trim().replace(/[^A-Za-z0-9._:@/-]/g, "_");
-  return normalized && /^[A-Za-z0-9]/.test(normalized) ? normalized.slice(0, 512) : fallback;
+  if (!normalized || !/^[A-Za-z0-9]/.test(normalized)) return fallback;
+  if (GENERIC_ERROR_NAMES.has(normalized)) return fallback;
+  return normalized.slice(0, 512);
 }
 
 function toJsonValue(value: unknown, field: string, seen: Set<object>): JsonValue {
