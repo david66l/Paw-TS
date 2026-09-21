@@ -112,9 +112,7 @@ import {
   restoreLoopControlFlagsV1,
 } from "./loop-control-state.js";
 import {
-  type ControlReductionV1,
   type LoopKernelVersion,
-  type LoopV2LegacyTerminalV1,
   type LoopV2LiveCandidateAssessmentV1,
   LoopV2LiveReviewRuntimeV1,
   type LoopV2ShadowObserver,
@@ -122,7 +120,6 @@ import {
   type VerificationRecordV2,
   buildLoopV2LiveCandidateArtifactV1,
   buildLoopV2ProjectionCheckpointV1,
-  canonicalJson,
   collectVerificationProbeRepositoryTargetsV1,
   createLoopV2ShadowObserver,
   createProviderTerminalStateV2,
@@ -160,11 +157,9 @@ import type { MeaAuditorConfig } from "./mea/index.js";
 // @paw/models：LLM 适配层 — 模型抽象、消息类型、流式解析
 // ─────────────────────────────────────────────────────────────
 import {
-  AnthropicCompatibleModel,
   type ChatMessage,
   type LanguageModel,
   type NativeToolCall,
-  OpenAICompatibleModel,
   createDefaultLanguageModel,
   extractThinkBlocks,
 } from "@paw/models";
@@ -222,19 +217,20 @@ import {
   parseWaitingUserInteractionV1,
   prepareInteractionResumeV1,
 } from "./durable-interaction.js";
-import type { ToolEffectPolicy, ToolExecutionPolicy } from "./execution-policy.js";
+import { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import { decideCompletion, decideIncomplete } from "./lifecycle/completion-policy.js";
 import {
   type ProgressBaselineV1,
   computeProgressBaselineV1,
   evaluateInvestigationStallV1,
 } from "./lifecycle/investigation-stall.js";
-import { memoryOutcomeFromDecision } from "./lifecycle/memory-outcome.js";
 import {
-  type VerificationPolicy,
-  goalAllowsSkipVerification,
-  goalRequiresMutation,
-} from "./lifecycle/verification-gate.js";
+  type LoopGuidanceCandidateV1,
+  applyLoopGuidanceReceiptV1,
+  deriveLoopGuidanceCandidatesV1,
+} from "./lifecycle/loop-guidance.js";
+import { memoryOutcomeFromDecision } from "./lifecycle/memory-outcome.js";
+import { goalAllowsSkipVerification, goalRequiresMutation } from "./lifecycle/verification-gate.js";
 import type { TestMapV1 } from "./loop-v2/test-map.js";
 import { buildTestMapV1, findImpactedTests } from "./loop-v2/test-map.js";
 import { preFlightTestInfrastructure, verifyImpactedTests } from "./loop-v2/test-warden.js";
@@ -251,130 +247,34 @@ import { handleAction } from "./orchestrator/action-handlers.js";
 import type { NativeToolError } from "./orchestrator/action-handlers.js";
 import { AgentGroup } from "./orchestrator/agent-group.js";
 import { CONTEXT_PACKAGE_PREFIX } from "./orchestrator/constants.js";
+import {
+  ModelRequestTimeoutError,
+  classifyError,
+  computeRetryDelay,
+  isRetryable,
+} from "./orchestrator/errors.js";
 import { fixMalformedToolArguments } from "./orchestrator/fix-malformed-args.js";
+import type { AgentOrchestratorOptions } from "./orchestrator/options.js";
+import {
+  CONSTRAINT_SYSTEM_INJECTED_PREFIXES,
+  CONSTRAINT_TASK_PIVOT_PATTERN,
+  buildMemoryLlmOptions,
+  isSameRevisionCandidateExtension,
+  loopV2LegacyTerminalFromRunResult,
+  normalizeNativeControlAction,
+  providerProtocolRecoveryMessageV2,
+  providerTurnBoundaryMessageV2,
+} from "./orchestrator/support.js";
 import {
   annotateUntrustedShellExitSummary,
   annotateVerificationFailureRecords,
   commitToolExecutionResult,
 } from "./orchestrator/tool-runner.js";
 import { type PayloadDeduper, createPayloadDeduper } from "./orchestrator/truncate-payload.js";
-
-/**
- * 约束生命周期：任务转向触发信号（仅决定"该问 LLM 调和了"，
- * 不做语义判定——判定全部由 constraint-reconcile 的 LLM 负责）。
- */
-const CONSTRAINT_TASK_PIVOT_PATTERN =
-  /^(?:new task|next task|now (?:do|work on|handle|fix)|新任务|接下来(?:做|处理|修复)|下一步(?:做|处理|修复)|换个任务)/i;
-
-/** 系统注入的 user 消息（约束调和候选必须排除——不是用户意图） */
-const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
-  "[Context Package]",
-  "[Status Snapshot v1]",
-  "[Context Summary]",
-  "[Previous session context]",
-  "[You stopped",
-  "[Max steps",
-  "[MAX_STEPS",
-  "[model produced only reasoning]",
-  "[Task]",
-  "[Memory refresh]",
-  "[Context guard]",
-  "[Loop reminder]",
-  "[Convergence checkpoint]",
-  "[ProviderProtocol:",
-  "[LoopControl:",
-  "[LoopV2Readiness:",
-  "[LoopV2SemanticReview:",
-  "[ProgressAdvice:",
-  "[TestWarden]",
-  "[ImpactedTests]",
-  "[Managed jobs are unfinished:",
-  "[Managed job recovery v1]",
-  "[Continue from where you were cut off",
-  "Plan updated:",
-  "Current plan:",
-  "Note:",
-];
-
-function loopV2LegacyTerminalFromRunResult(result: RunResult): LoopV2LegacyTerminalV1 {
-  if (
-    result.status !== "completed" &&
-    result.status !== "incomplete" &&
-    result.status !== "failed" &&
-    result.status !== "aborted"
-  ) {
-    throw new Error(`Unsupported loop v2 terminal status: ${result.status}`);
-  }
-  return {
-    status: result.status,
-    ...(result.outcome ? { outcome: result.outcome } : {}),
-    ...(result.completionReason ? { reasonCode: result.completionReason } : {}),
-  };
-}
-
-function providerProtocolRecoveryMessageV2(
-  issue: "empty_response" | "truncated_response" | "missing_tool_calls",
-): string {
-  if (issue === "truncated_response") {
-    return "[ProviderProtocol:truncated_response] The previous response was discarded before any tool execution because it was truncated. Retry the complete tool call or candidate response once; do not continue partial JSON.";
-  }
-  if (issue === "missing_tool_calls") {
-    return "[ProviderProtocol:missing_tool_calls] The provider declared tool calls but supplied none. Emit the complete structured calls once, or return a visible candidate response.";
-  }
-  return "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response.";
-}
-
-function providerTurnBoundaryMessageV2(reduction: ControlReductionV1): string {
-  if (
-    reduction.effects[0]?.type === "call_model" &&
-    reduction.effects[0].reason === "repair_required" &&
-    reduction.state.openRepairObligation
-  ) {
-    const obligation = reduction.state.openRepairObligation;
-    return `[LoopControl:repair_required id=${obligation.id}] The durable ${obligation.kind} obligation remains open. Execute the matching tool action now. Prose, repeated reads, unrelated successful tools, and another final_answer do not satisfy it.`;
-  }
-  return "[LoopControl:turn_boundary] Your previous natural-language response ended the provider turn but did not submit a completion candidate. Continue with the next required tool/action. If the task is actually ready, submit the structured final_answer action explicitly.";
-}
-
-function isSameRevisionCandidateExtension(
-  candidateReport: LoopV2ShadowReport,
-  restoredReport: LoopV2ShadowReport,
-): boolean {
-  if (candidateReport.reportHash === restoredReport.reportHash) return true;
-  if (
-    candidateReport.state.currentMutationRevision !== restoredReport.state.currentMutationRevision
-  )
-    return false;
-  const candidateEvents = candidateReport.projectedEvents;
-  const restoredEvents = restoredReport.projectedEvents;
-  if (restoredEvents.length < candidateEvents.length) return false;
-  for (let index = 0; index < candidateEvents.length; index += 1) {
-    if (canonicalJson(candidateEvents[index]) !== canonicalJson(restoredEvents[index])) {
-      return false;
-    }
-  }
-  const candidateIdentity = candidateReport.state.currentCandidate;
-  return restoredEvents.slice(candidateEvents.length).every((envelope) => {
-    if (envelope.event.type === "mutation.recorded") return false;
-    if (envelope.event.type !== "candidate.proposed") return true;
-    return (
-      candidateIdentity !== undefined &&
-      envelope.event.candidate.mutationRevision === candidateIdentity.mutationRevision &&
-      envelope.event.candidate.candidateInputHash === candidateIdentity.candidateInputHash
-    );
-  });
-}
-import { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
-import {
-  type LoopGuidanceCandidateV1,
-  applyLoopGuidanceReceiptV1,
-  deriveLoopGuidanceCandidatesV1,
-} from "./lifecycle/loop-guidance.js";
 import type { PhaseContext, SharedContext, TurnFlags, TurnState } from "./orchestrator/types.js";
 import {
   type ParseDiagnosis,
   diagnoseParseFailure,
-  isStructuredActionKind,
   parseAgentActionFromModelText,
   parseAgentActionsFromModelText,
 } from "./parse-agent-action.js";
@@ -385,205 +285,14 @@ import { RunStatusTelemetryV1, formatStatusSnapshotV1 } from "./status-snapshot.
 import { TaskStateManager, formatTaskProgressForContext } from "./task-state.js";
 
 // ═════════════════════════════════════════════════════════════
-// 公开接口
-// ═════════════════════════════════════════════════════════════
-
-/** 模型发出 ask_user 动作时，传递给外部审批回调的参数 */
-export interface AskUserResolveInput {
-  readonly question: string;
-  /** 超时时间（秒），null 表示无超时 */
-  readonly timeoutSec: number | null;
-}
-
-/** 工具审批回调的输入：工具名 + 参数 */
-export interface ToolApprovalInput {
-  readonly tool: string;
-  readonly args: unknown;
-}
-
-/**
- * AgentOrchestrator 构造选项。
- *
- * 设计思路：所有外部依赖通过选项注入（依赖反转），方便测试和隔离。
- * 一个 orchestrator 实例可以多次调用 run() 执行不同的 Run。
- */
-export interface AgentOrchestratorOptions {
-  /** 主模型（可选，不传则从工作区配置自动选择默认模型） */
-  readonly model?: LanguageModel;
-  /** 事件回调：每产生一个 RunEvent 就触发，用于 TUI/CLI 实时展示 */
-  readonly onEvent?: (envelope: RunEventEnvelope) => void;
-  /** 计划快照的最大条目数 */
-  readonly planSnapshotMaxItems?: number;
-  /** ask_user 审批回调：模型向用户提问时调用，返回用户的回答文本 */
-  readonly resolveAskUser?: (input: AskUserResolveInput) => Promise<string>;
-  /** 工具审批回调：执行工具前调用，返回 true 表示批准执行 */
-  readonly resolveToolApproval?: (input: ToolApprovalInput) => Promise<boolean>;
-  /** 工具审批策略：传入工具名，返回 true/false/undefined（undefined 表示需询问用户） */
-  readonly approvalPolicy?: (tool: string) => boolean | undefined;
-  /** MCP（Model Context Protocol）服务器配置列表 */
-  readonly mcpServers?: readonly McpServerConfig[];
-  /** 会话持久化存储 */
-  readonly sessionStore?: SessionStore;
-  /** Todo 列表存储 */
-  readonly todoStore?: TodoStore;
-  /** 上下文管理器（可注入自定义实现） */
-  readonly contextManager?: ContextManager;
-  /** 子 Agent 启动器：用于探索、压缩、记忆提取等子任务 */
-  readonly subAgentLauncher?: SubAgentLauncher;
-  /** MEA 独立审计配置（off/shadow/enforce）；仅顶层运行启用，子运行不继承。 */
-  readonly meaAuditor?: MeaAuditorConfig;
-  /** 并行子 Agent 的文件锁（仅子 Agent orchestrator 注入；root 不传） */
-  readonly fileLock?: import("@paw/harness").FileLockLike;
-  /** 应用状态存储：用于断点续跑（resume） */
-  readonly appStateStore?: AppStateStore;
-  /** Skill 注册表 */
-  readonly skillRegistry?: SkillRegistryType;
-  /** Skill 文件目录路径 */
-  readonly skillsDir?: string;
-  /** 成本追踪器 */
-  readonly costTracker?: CostTracker;
-  /** 文件系统监听器：检测外部文件变更 */
-  readonly watcher?: WorkspaceWatcher;
-  /**
-   * 子 Agent 策略：
-   * - "read_only"：子 Agent 禁止执行修改性工具
-   * - "read_write"：子 Agent 拥有全部权限
-   */
-  readonly childPolicy?: "read_only" | "read_write";
-  /**
-   * 运行模式：
-   * - "full"：完整的 Agent（默认），构建完整 system prompt
-   * - "child"：子 Agent 模式，使用精简的 child system prompt
-   */
-  readonly runMode?: "full" | "child";
-  /** 子 Agent 模式下，父 Agent 传递的上下文 */
-  readonly sharedContext?: SharedContext;
-  /** 辅助模型：用于压缩和记忆提取（默认复用主模型以节省配置） */
-  readonly auxiliaryModel?: LanguageModel;
-  /** 测试注入：覆盖重试等待函数，默认 setTimeout */
-  readonly retrySleep?: (ms: number) => Promise<void>;
-  /** 测试/运行时覆盖单次模型请求超时；默认 120 秒。 */
-  readonly modelRequestTimeoutMs?: number;
-  /**
-   * 运行后记忆提取策略：
-   * - "background"：后台异步提取，不阻塞响应（默认）
-   * - "await"：同步等待提取完成
-   * - "off"：关闭记忆提取
-   */
-  readonly memoryExtraction?: "background" | "await" | "off";
-  /**
-   * v2 记忆 LLM 接线策略：
-   * - "agent"：蒸馏/精排用主模型（fake 模型自动跳过，避免污染预设响应），裁决用 settings 强模型（默认）
-   * - "settings"：全部由 v2 runtime 按 settings.local.json 解析（无配置则降级）
-   * - "off"：不接任何 LLM（蒸馏降级 append-only / 裁决直 ADD）
-   */
-  readonly memoryLlm?: "agent" | "settings" | "off";
-  /** 评估钩子：非侵入式收集 trace 数据，不影响正常流程 */
-  readonly evalHooks?: EvalHooks;
-  /**
-   * 模型工具配置（完整名，如 workspace.read_file）。
-   * undefined/null = 低层兼容全量；数组 = 精确集合。生产 coding 工厂
-   * 必须显式传入核心集合，低层类不暗中选择部署策略。
-   * 同一配置会在 run 初始化时解析为 CapabilitySet，同时约束 schema、
-   * 文本动作解析和执行器。
-   */
-  readonly allowedTools?: readonly string[] | null;
-  /** 注入 system prompt 的 Agent 花名册文本（狸花调度用） */
-  readonly agentCatalogText?: string;
-  /** 身份/人设附加段（如狸花 body） */
-  readonly agentIdentityText?: string;
-  /** create_agent 工具实现（写盘 + registry） */
-  readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
-  /** P5.1 侧信道 monitor 配置（采样率/冷却/预算软启动，测试可注入） */
-  readonly monitorOptions?: import("@paw/core").ContextMonitorOptions;
-  /** Trusted, task-scoped policy checked before tool side effects. */
-  readonly toolExecutionPolicy?: ToolExecutionPolicy;
-  /** Trusted before/after audit for filesystem or process effects. */
-  readonly toolEffectPolicy?: ToolEffectPolicy;
-  /** Trusted completion authority; defaults to local verification. */
-  readonly verificationPolicy?: VerificationPolicy;
-  /** Trusted execution environment override; workspace settings are the fallback. */
-  readonly shellSandbox?: import("@paw/harness").ShellSandboxConfig;
-  /** Independent semantic review before completing a mutated task. */
-  readonly candidateReviewer?: CandidateReviewer;
-  /** Independent one-call review model used only by explicit loop v2. */
-  readonly loopV2SemanticReviewModel?: LanguageModel;
-  /**
-   * Adversarial verification-probe model (fresh context, host-executed
-   * boundary probes before certification). Absent disables the probe gate.
-   */
-  readonly loopV2VerificationProbeModel?: LanguageModel;
-  /** Loop kernel selection; defaults to PAW_LOOP_KERNEL_VERSION, then v1. */
-  readonly loopKernelVersion?: LoopKernelVersion;
-  /** Terminal v2-shadow diagnostics. Observer failures never affect the run. */
-  readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
-  /** Strict derived candidate facts for explicit v2; callback failures are diagnostic-only. */
-  readonly onLoopV2CandidateAssessment?: (assessment: LoopV2LiveCandidateAssessmentV1) => void;
-}
-
-/**
- * 将原生 tool-call 的控制动作名称（如 "action-final_answer"）归一化为
- * 对应的 AgentAction。覆盖 DeepSeek 等原生 tool-call 提供商可能产生的
- * 各种别名变体（连字符/下划线/前缀）。只在 native tool-call 进入
- * unknown_tool 拒绝之前调用；归一化后的动作不进入 workspace 工具
- * 执行器，走正常的 action 分发路径。
- */
-function normalizeNativeControlAction(
-  name: string,
-  args: Record<string, unknown> | undefined,
-): AgentAction | null {
-  const normalized = name.toLowerCase().replace(/[-_.]/g, "_");
-  // 去掉可能的 "action_" 前缀
-  const kind = normalized.replace(/^action_/, "");
-  if (!isStructuredActionKind(kind)) return null;
-
-  const payload = args ?? {};
-  if (kind === "final_answer" || kind === "finalanswer") {
-    const summary =
-      typeof payload.summary === "string"
-        ? payload.summary
-        : typeof payload.text === "string"
-          ? payload.text
-          : typeof payload.message === "string"
-            ? payload.message
-            : "(completed)";
-    return { type: "final_answer", summary };
-  }
-  if (kind === "ask_user" || kind === "askuser") {
-    const question = typeof payload.question === "string" ? payload.question : "";
-    if (!question) return null;
-    const ctx =
-      payload.context && typeof payload.context === "object"
-        ? (payload.context as Record<string, unknown>)
-        : {};
-    let timeoutSec: number | null = null;
-    if (typeof payload.timeout_sec === "number") {
-      timeoutSec = payload.timeout_sec;
-    } else if (typeof payload.timeoutSec === "number") {
-      timeoutSec = payload.timeoutSec;
-    }
-    return {
-      type: "ask_user",
-      question,
-      context: ctx,
-      timeoutSec,
-    };
-  }
-  if (kind === "abort") {
-    return {
-      type: "abort",
-      reason: typeof payload.reason === "string" ? payload.reason : "aborted",
-      canResume: false,
-    };
-  }
-  // plan_update / acceptance_update 需要复杂嵌套参数，
-  // 暂不支持原生桥接（模型可用文本 JSON 发出）
-  return null;
-}
-
-// ═════════════════════════════════════════════════════════════
 // AgentOrchestrator：核心调度器
 // ═════════════════════════════════════════════════════════════
+
+export type {
+  AgentOrchestratorOptions,
+  AskUserResolveInput,
+  ToolApprovalInput,
+} from "./orchestrator/options.js";
 
 export class AgentOrchestrator {
   // ── 静态常量 ──
@@ -5048,161 +4757,4 @@ export class AgentOrchestrator {
       compactThreshold: snapshot.compactThreshold,
     });
   }
-}
-
-// ═════════════════════════════════════════════════════════════
-// 错误分类 & 重试策略
-// ═════════════════════════════════════════════════════════════
-
-/**
- * 可重试错误类型：
- * - rate_limit：429 限流 → 等 Retry-After 或固定阶梯
- * - server_error：5xx 服务端错误 → 指数退避
- * - timeout：请求超时 → 指数退避
- * - network：网络层故障（DNS/连接重置等）→ 指数退避
- * - transient：其他瞬时错误 → 指数退避
- * - non_retryable：不可重试（4xx 认证/参数错误、熔断器打开、未知错误）
- */
-type RetryableErrorType =
-  | "rate_limit"
-  | "server_error"
-  | "timeout"
-  | "network"
-  | "transient"
-  | "non_retryable";
-
-class ModelRequestTimeoutError extends Error {
-  constructor(timeoutMs: number, options?: unknown) {
-    super(`Model request timeout after ${timeoutMs}ms`, {
-      ...(options === undefined ? {} : { cause: options }),
-    });
-    this.name = "ModelRequestTimeoutError";
-  }
-}
-
-interface ErrorClassification {
-  readonly type: RetryableErrorType;
-  /** 限流响应中的 Retry-After 时间（毫秒） */
-  readonly retryAfterMs?: number;
-}
-
-/**
- * 分类错误以决定重试策略。
- *
- * 采用白名单策略：只对明确的瞬时性错误类型启用重试，
- * 未知错误默认不可重试（安全第一，避免对持久性错误反复重试浪费资源）。
- */
-function classifyError(err: unknown): ErrorClassification {
-  if (!(err instanceof Error)) {
-    // 非 Error 类型的 throw（如 throw "string"）默认不可重试
-    return { type: "non_retryable" };
-  }
-  const msg = err.message;
-
-  if (err instanceof ModelRequestTimeoutError) return { type: "timeout" };
-
-  // 429 限流 — 尝试提取 Retry-After 头
-  if (/\b429\b/.test(msg)) {
-    const retryAfterMatch = msg.match(/retry[_-]?after[\s:]*(\d+)/i);
-    if (retryAfterMatch) {
-      const seconds = Number.parseInt(retryAfterMatch[1]!, 10);
-      if (Number.isFinite(seconds) && seconds > 0) {
-        return { type: "rate_limit", retryAfterMs: seconds * 1000 };
-      }
-    }
-    return { type: "rate_limit" };
-  }
-
-  // 5xx 服务端错误（可重试）
-  if (/\b5\d\d\b/.test(msg)) return { type: "server_error" };
-
-  // 4xx 客户端错误（不可重试：认证失败、参数错误等）
-  if (/\b4\d\d\b/.test(msg)) return { type: "non_retryable" };
-
-  // 超时
-  if (/\btimeout\b|ETIMEDOUT/i.test(msg)) return { type: "timeout" };
-
-  // 网络层故障
-  if (/fetch|network|ECONN|ENOTFOUND|DNS|ECONNRESET/i.test(msg)) {
-    return { type: "network" };
-  }
-
-  // 默认：未知错误不重试（白名单策略）
-  return { type: "non_retryable" };
-}
-
-/** 判断错误是否可以重试 */
-function isRetryable(classification: ErrorClassification): boolean {
-  return classification.type !== "non_retryable";
-}
-
-/**
- * 计算重试延迟。
- *
- * 策略：
- * - 限流（rate_limit）：
- *   - 有 Retry-After → 按指示等待 + 随机抖动
- *   - 无 Retry-After → 固定阶梯：5s → 10s → 20s
- * - 其他可重试错误（server_error/timeout/network/transient）：
- *   - 指数退避：1s → 2s → 4s...，上限 30s
- *   - 每次叠加 0.5x–1.0x 随机抖动，避免惊群效应
- *
- * 为什么要加抖动（jitter）？
- * 多个并发请求同时失败后，如果都在同一个时间点重试，
- * 可能导致服务端再次过载。随机抖动让重试分散在不同的时间点。
- */
-function computeRetryDelay(attempt: number, classification: ErrorClassification): number {
-  const jitter = 0.5 + Math.random() * 0.5; // 0.5x – 1.0x 随机因子
-
-  if (classification.type === "rate_limit") {
-    if (classification.retryAfterMs) {
-      return classification.retryAfterMs * jitter;
-    }
-    // 固定阶梯：第1次 5s，第2次 10s，第3次+ 20s
-    const fixed = [5_000, 10_000, 20_000];
-    return (fixed[attempt - 1] ?? 20_000) * jitter;
-  }
-
-  // 指数退避：base = 1000 * 2^(attempt-1)，上限 30s
-  const base = 1_000 * 2 ** (attempt - 1);
-  return Math.min(base * jitter, 30_000);
-}
-
-// ── 记忆 LLM 接线辅助（v2）──
-
-/**
- * v2 记忆 LLM 接线：
- * - "agent"：蒸馏/精排用主模型（label === "fake" 时跳过——FakeLanguageModel 按序消费预设
- *   响应，背景蒸馏会污染测试的预设序列）；裁决由 v2 runtime 按 settings 解析强模型
- * - "settings"：不传 llm（v2 runtime 内部解析 settings；无配置则降级）
- * - "off"：llm: null 禁用全部 LLM（含 settings 解析，蒸馏降级 append-only / 裁决直 ADD）
- */
-function buildMemoryLlmOptions(
-  mode: "agent" | "settings" | "off",
-  model: LanguageModel,
-): {
-  llm?: {
-    distill: (p: string) => Promise<string>;
-    rerank: (p: string) => Promise<string>;
-  } | null;
-} {
-  if (mode === "off") return { llm: null };
-  if (mode === "agent" && isRealAdapterModel(model)) {
-    const complete = (prompt: string) =>
-      model
-        .complete([{ role: "user", content: prompt }] satisfies ChatMessage[])
-        .then((r) => r.text);
-    return { llm: { distill: complete, rerank: complete } };
-  }
-  // settings / 测试替身模型：由 v2 runtime 自行解析 settings 强模型；解析不到则降级
-  return {};
-}
-
-/**
- * 是否真实适配器模型（OpenAI/Anthropic 兼容类）。
- * 测试替身（FakeLanguageModel / 内联 stub）不是实例——跳过接线：
- * 背景蒸馏/改写会吞掉测试模型的预设响应序列，且跨进程残留事件会污染后续测试。
- */
-function isRealAdapterModel(model: LanguageModel): boolean {
-  return model instanceof OpenAICompatibleModel || model instanceof AnthropicCompatibleModel;
 }
