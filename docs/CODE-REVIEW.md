@@ -726,7 +726,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 26 | 渲染进程边界：导出 `DesktopRunEvent` 联合类型，`agentId` 改真字段（§D2） | 消掉"改一句摘要就静默破坏子 Agent 名册" | 中 |
 | 27 | 跨包同名不同义改名去歧义（§3） | 消除读者陷阱 | 中（面广但机械） |
 | 28 | 🟡 三刀完成：`db/rows.ts` 落地 `MemoryItemRow` / `MemoryCandidateRow` / `GovernanceDecisionRow`（按驱动实际返回值描述：时间列是 `Date`、可空列是 `| null`），三个 DAO 的标量列零断言、断言集中在驱动边界 `sql.unsafe<Row[]>`；`memoryItem.ts` 断言 **40 → 17**；**A/B 实测**列改名报 `TS2339`（§M1 的危害已关闭，三个 DAO 各自验证过）；顺带修掉三类类型谎言（`timestamptz`→`Date` 被断言成 `string`、可空列 `null` 被断言成 `\ | undefined`），并暴露出被双重断言掩盖的两个既有问题。`governanceDecision` 的落地用了"清库 + 比较失败集合"，见 11.27。**剩余**：`db/` 仍有 45 处 `as any`/`as unknown as`（DAO 之外）、§M7 未动（接续清单见 11.25） | 把静默 `undefined` 变编译错误 | 中大 |
-| 29 | 🟡 三分之二完成：`toWorkspaceRelPath()` ✅（4 处副本 → `workspace/src/workspace-path.ts` 的两个操作）、共享 `summarizeToolArgs` ✅（审批卡漏了 `pattern`，glob/grep/search 此前给审批人显示空摘要；两侧截断长度差异保留并说明理由）；`sse.ts` 未抽。**剩余部分的性质已在 11.38 查清**：要抽的只是纯字符串处理 `(buffer, done) → {payloads, carry}`，**不触碰流式状态机**（我上一轮"风险不划算"的判断下粗了）；四处位置已列出。**但开工前必须先判定 `anthropic-compatible.ts:444` 那段收尾冲刷是否可达**（`:427-428` 似乎已把 `buffer` 清空），判定结果决定是"只抽读循环 + 删死代码"还是"两处都抽" | 消掉已分叉副本 | 中 |
+| 29 | 🟡 `toWorkspaceRelPath()` ✅、共享 `summarizeToolArgs` ✅；**两处永不执行的收尾冲刷已删除**（`anthropic-compatible.ts` 10 行、`openai-compatible.ts` 89 行，判定依据是穷举循环出口，见 11.39）。`sse.ts` 未抽，但**抽取面已收敛为干净的两处**（读循环各一处，只含纯字符串处理 `(buffer, done) → {payloads, carry}`，不触碰载荷解析与发射路径）| 消掉已分叉副本 | 中 |
 | 30 | 📏 已测量、未接线：`benchmarks/tsconfig.json` 已加，实测 **496 个类型错误**（报告估的"小"偏低）；未并入 `check:ts`，否则闸门立刻变红。修法见 §11.10 | 3 万行回到闸门内 | 小（实为中大） |
 
 **批次 D —— 结构收敛（做完前三批后再评估收益）**
@@ -1658,3 +1658,28 @@ case "unknown":
 - 若它其实可达（例如循环在某条路径上 `break` 早于那次赋值，或有别的写入路径）→ 两处都要抽。
 
 **本轮没有去判定哪一种**，因为"这段代码不可达"正是本会话被推翻过数次的那类断言（§11.12 的 SSE `[DONE]`、§11.20 的 `relPath`），而下结论需要把两个循环的所有 `break`/`continue` 路径走完。**留给下一轮的第一件事就是走完这两条路径**，然后按上面的分支二选一。前置结论（四处位置与"抽取面只含纯字符串处理"）已经写在这里，不必重新勘察。
+
+### 11.39 那条收尾冲刷**确实不可达**，已删除；证据是把出口走穷举，不是搜索
+
+上一轮列出的待判定问题本轮解决了：`if (buffer.trim())` 收尾冲刷**不可达**，两个文件里都已删除（`anthropic-compatible.ts` 10 行、`openai-compatible.ts` 89 行）。
+
+**判定依据是走穷举所有出口，而不是"没搜到调用"**：
+
+```ts
+while (true) {                                   // :415
+  if (options?.signal?.aborted) { ...; throw abortError(); }   // :418  ← 出口一：throw，走 finally
+  const { done, value } = await reader.read();   // :420
+  buffer += decoder.decode(...);                 // :426
+  const lines = buffer.split("\n");              // :427
+  buffer = done ? "" : (lines.pop() ?? "");      // :428  ← done 为真时 buffer 已被清空
+  for (const line of lines) { ... }              // :429-439  只有 continue，没有 break/return
+  if (done) { break; }                           // :441  ← 出口二，且必然紧跟在 :428 之后
+}
+if (buffer.trim()) { ... }                       // :444  ← 永远不成立
+```
+
+循环只有两个出口：`:418` 的 `throw`（走 `finally`，到不了 `:444`）与 `:441` 的 `break`（受 `done` 保护，而 `:428` 已在同一轮把 `buffer` 写成 `""`）。内层 `for` 只有 `continue`。**所以正常退出时 `buffer` 必为空串**，`:444` 是死代码。`openai-compatible.ts` 的 `:512-516` 是同一形状。
+
+**旁证（不是主证据，但说明它不是空转）**：`packages/models` 里有 6 个测试文件用 `ReadableStream` 桩驱动真正的流式循环（`thinking-recovery-wire`、`reasoning-config`、`openai-native-tool-turn`、`ollama-model`、`agent-loop-adapter`，以及 **Anthropic 的 `anthropic-native-tool`**），删除后 **112 pass / 0 fail**。也就是说两个循环都被端到端覆盖过 —— 若那段代码真会在这些场景里执行，至少有一条会红。
+
+**这样一来 #29 的抽取面变干净了**：只剩**读循环各一处**（`anthropic-compatible.ts:427-439`、`openai-compatible.ts:434-444`），两处都只需抽纯字符串处理 `(buffer, done) → { payloads, carry }`，各自的载荷解析与发射路径不动。**没有第二处需要抽了** —— 上一轮列为"二选一"的另一支（两处都抽）随死代码一起消失。

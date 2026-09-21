@@ -441,16 +441,6 @@ export class AnthropicCompatibleModel implements LanguageModel {
           break;
         }
       }
-      if (buffer.trim()) {
-        const trimmed = buffer.replace(/\r$/, "").trim();
-        if (trimmed.startsWith("data: ")) {
-          const payload = trimmed.slice(6);
-          const part = parseAnthropicStreamPayload(payload);
-          for (const chunk of processPart(part)) {
-            yield chunk;
-          }
-        }
-      }
     } finally {
       // 与 openai-compatible 同一处生命周期缺陷：提前退出时若不 `cancel()`，
       // 被放弃的响应体会继续占着 socket。`cancel()` 幂等。
