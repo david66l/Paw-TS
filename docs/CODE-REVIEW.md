@@ -725,7 +725,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 25 | 🟡 第一轮完成：相对时间窗口解析 + 稳定重排抽到 `memory-core/src/evidence-resolution/relative-time-window.ts`（16 个用例钉住"软加权不是硬过滤"、引用相等的零触发、半开区间、失败保持原序），两处重复前导合一，函数净减 24 行。**剩余**：主函数仍 1593 行；下一刀必须先立 `ResolutionPassState`（selector 门不是自包含的，见 11.21），不是继续找函数抽 | 让承重不变量可被 review | 中大 |
 | 26 | 渲染进程边界：导出 `DesktopRunEvent` 联合类型，`agentId` 改真字段（§D2） | 消掉"改一句摘要就静默破坏子 Agent 名册" | 中 |
 | 27 | 跨包同名不同义改名去歧义（§3） | 消除读者陷阱 | 中（面广但机械） |
-| 28 | `db/rows.ts` 行类型 + DAO 断言收敛（§M1、M7） | 把静默 `undefined` 变编译错误 | 中大 |
+| 28 | 🟡 第一刀完成：`db/rows.ts` 落地 `MemoryItemRow`（按驱动实际返回值描述，时间列是 `Date`），`rowToItem` 标量列零断言、断言集中在驱动边界 `sql.unsafe<MemoryItemRow[]>`；`memoryItem.ts` 断言 **40 → 17**；**A/B 实测**列改名现在报 `TS2339`（§M1 的危害已关闭）；顺带修掉 `timestamptz`→`Date` 被断言成 `string` 的类型谎言，并暴露出被双重断言掩盖的两个既有问题（payload 联合不匹配、`RETURNING *` 可能为 undefined）。**剩余**：其余 DAO 无行类型、`db/` 仍有 45 处 `as any`/`as unknown as`、§M7 未动 | 把静默 `undefined` 变编译错误 | 中大 |
 | 29 | 🟡 三分之二完成：`toWorkspaceRelPath()` ✅（4 处副本 → `workspace/src/workspace-path.ts` 的两个操作）、共享 `summarizeToolArgs` ✅（审批卡漏了 `pattern`，glob/grep/search 此前给审批人显示空摘要；两侧截断长度差异保留并说明理由）；`sse.ts` + `ToolCallAccumulator` 未抽 —— 实测两处副本只有写法差异、无可观测行为差异（§11.11），剩下的纯属可读性 | 消掉已分叉副本 | 中 |
 | 30 | 📏 已测量、未接线：`benchmarks/tsconfig.json` 已加，实测 **496 个类型错误**（报告估的"小"偏低）；未并入 `check:ts`，否则闸门立刻变红。修法见 §11.10 | 3 万行回到闸门内 | 小（实为中大） |
 
@@ -1239,3 +1239,46 @@ if (checkpoint.kind === "inline") {
 **对剩余工作量的诚实判断（#33 未完成的部分）**：§R2 要的 `LifecycleInvariantV1` 表（`{id, code, check(state, fact, prefix)}`）**没有做**，29 个累加器的状态对象也没有立。但现在做它的**收益比报告写作时低了**：可区分性已经拿到（0 重复文案 + 14 个稳定 code + 61 处带 id 的模板串），表剩下的价值只有"可发现性"——能把"work segment 启动前必须成立什么"一次列出来。而代价是把 29 个跨分支共享的可变累加器收进一个类型化状态对象，那和 #25 的 `ResolutionPassState` 是同一类改动、同一类风险。**建议与 #25 的状态对象一起做，而不是单独做。**
 
 **验证**：protocol 75 pass / 0 fail（69 + 6 新增，含既有的 `canonical work segment protocol` 全套 11 例仍通过）；lint 0 error / 432 warning；typecheck 23/23；test:ts 2941 pass / 6 skip / 14 fail（+6 即本轮新增，14 条既有失败同名同数）。
+
+### 11.24 #28（§M1）第一刀：行类型落地，并用 A/B 证明列改名现在会编译失败
+
+**先确认一件旧事**：§11.3 记的"`listMemories()` 跨用户返回"**已经修好了**。`db/dao/memoryItem.ts` 的 `query` 现在把所有传入的过滤器都拼进 SQL（`scopeRepoId`、`scopeUserId`、`tags && …`），并且它的文档注释就写着这件事：
+
+> The previous version branched over a few hand-picked combinations and silently ignored the rest: `tags` never reached SQL at all, and `scopeUserId` was dropped unless a type *and* a repository were also supplied. Callers therefore received a wider result set than they asked for — **across users that is a disclosure, not a nuisance**.
+
+也就是说批次 B #8 连同 §M2 一起把这个信息泄漏关掉了。本轮是**核实**，不是重做。
+
+**本轮做的（#28 的第一刀）**：新增 `packages/memory/src/db/rows.ts`，`MemoryItemRow` 按**驱动实际返回的 JS 值**描述 `memory_items` 的 22 列（不是按 SQL 列类型 —— 见下面的时间列）。
+
+- `rowToItem(row: MemoryItemRow): MemoryItem` 里标量列**零断言**；
+- 驱动边界集中断言一次：`sql.unsafe<MemoryItemRow[]>(...)` 与 `sql<MemoryItemRow[]>`（`RETURNING *`）；
+- `memoryItem.ts` 的断言 **40 → 17**（按代码行计、排除注释）。
+
+**A/B 证明（§M1 的全部意义所在）**：把 `MemoryItemRow` 里的 `subject_key` 改名为 `subject_key_RENAMED`，`packages/memory` 立即报
+
+```
+src/db/dao/memoryItem.ts(23,21): error TS2339: Property 'subject_key' does not exist on type 'MemoryItemRow'.
+```
+
+改回后 `git diff` 为 0 变更。**§M1 说的"数据库列改名后得到的是运行期 `undefined` 字段，而不是编译错误"这一条，现在是编译错误，并且是实测过的。**
+
+**顺带修掉一个实证的类型谎言。** 我写了一个临时探针（用完即删）连上真实的 Postgres 容器，打印驱动返回值的 `typeof`：
+
+```
+tz   typeof=object isDate=true ctor=Date      <- now()::timestamptz
+tags typeof=object isArray=true ctor=Array
+jb   typeof=object ctor=Object
+```
+
+即 **`timestamptz` 到手是 `Date` 对象**。而原先的 `rowToItem` 写 `created_at as string`，`MemoryItem.createdAt` 也声明为 `string` —— 类型是假的，运行期是 `Date`。现在显式 `row.created_at.toISOString()`，让声明的 `string` 成真。改之前查过全仓：**没有任何地方对 `createdAt`/`updatedAt` 做字符串操作，也没有任何地方按 `Date` 用它**（`packages` 全仓 0 命中），JSON 序列化结果与改动前一致（`Date` 本来就序列化成 ISO 串）。
+
+**消掉双重断言之后冒出来的两个既有问题（值得记：它们正被那句 `as unknown as` 掩盖着）**：
+
+1. `payload: parseJson(row.payload) as Record<string, unknown>` **并不满足** `MemoryItem["payload"]` —— 后者是按 `type` 分支的 payload 联合（`RulePayload | ProjectKnowledgePayload | …`）。`as unknown as MemoryItem` 把这条不匹配一路吞掉了。现在窄化为 `as MemoryItem["payload"]`。
+2. `create` 的 `RETURNING *` 解构出的 `row` 可能是 `undefined`，而旧的 `row as Record<string, unknown>` 连这个也断言掉了 —— `row.id` 会抛 TypeError。现在有显式守卫与描述性错误。
+
+**为什么"`rowToItem` 内部零断言"这一步做不到（§M1 的措辞略满）**：`MemoryItem` 是**按 `type` 判别的联合**，各成员的 `payload` 形状不同，而数据库行里 `type`（text）与 `payload`（jsonb）的对应关系无法被类型系统表达。所以还剩**一处**断言，且它现在只承担"判别式联合"这一件事 —— **列名校验已经移到编译期**。要把它也消掉，得按 `type` 分支构造联合成员，并顺带定义每种 payload 的校验，那是独立的一件事。
+
+**测试基线 A/B**：`bun test packages/memory`（需 `DATABASE_URL`，本机容器 `paw-ts-memory-pg`）在**改动前**是 1009 pass / 5 fail，改动后**同样是 1009 pass / 5 fail 且失败用例同名**（`6.0b Memory Evaluator`、`readonly 切换`、`Governor §5.8-3`、`trial 容量`、`memory-mechanism fixtures`）。即那 5 条是 §11.3.5 记的跨文件污染，与本次改动无关 —— 我用 `git stash push -u -- packages/memory/src/db` 做了真正的 A/B，不是凭印象。
+
+**#28 未完成的部分**：其余 DAO（`workingMemory.ts`、`memoryCandidate.ts`、版本表等）还没有行类型；`db/` 里仍有 **45** 处 `as any`/`as unknown as`；§M7（三套 SQL 约定并存、`textArrayLiteral` 零调用、`j()` 无调用者）未动。

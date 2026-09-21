@@ -2,33 +2,54 @@
  * MemoryItem DAO
  */
 import { getSql, parseJson } from "../connection.js";
+import type { MemoryItemRow } from "../rows.js";
 import type { MemoryItem, MemoryStatus, MemoryType, ScopeDescriptor } from "../types.js";
 
-function rowToItem(row: Record<string, unknown>): MemoryItem {
+/**
+ * 行 → 领域对象。**标量列零断言** —— 它们直接来自 `MemoryItemRow`
+ * （§M1：类型由 `db/rows.ts` 提供，不再是 22 个字段断言 + 一次双重断言）。
+ *
+ * 剩下的断言只有两类，且都是真实需要的：
+ * - jsonb 列：`parseJson` 的返回类型是 `unknown`，必须在此收窄；
+ * - 两个枚举列（`type` / `status`）：列里存的是 `text`，窄化到
+ *   `MemoryType` / `MemoryStatus` 是**未经校验的**断言，与改动前一致 ——
+ *   本次没有把"非法枚举值静默通过"改成抛错，那是另一个行为决定。
+ */
+function rowToItem(row: MemoryItemRow): MemoryItem {
   return {
-    id: row.id as string,
-    schemaVersion: row.schema_version as number,
+    id: row.id,
+    schemaVersion: row.schema_version,
     type: row.type as MemoryType,
-    subjectKey: row.subject_key as string,
-    subjectKeyVersion: row.subject_key_version as number,
-    title: row.title as string,
-    summary: row.summary as string,
+    subjectKey: row.subject_key,
+    subjectKeyVersion: row.subject_key_version,
+    title: row.title,
+    summary: row.summary,
     status: row.status as MemoryStatus,
     scope: parseJson(row.scope) as ScopeDescriptor,
-    confidence: row.confidence as number,
-    verificationStatus: row.verification_status as string as MemoryItem["verificationStatus"],
-    payload: parseJson(row.payload) as Record<string, unknown>,
-    tags: row.tags as string[],
-    relatedFiles: row.related_files as string[],
-    relatedSymbols: row.related_symbols as string[],
-    relatedTestRunIds: row.related_test_run_ids as string[],
+    confidence: row.confidence,
+    verificationStatus: row.verification_status as MemoryItem["verificationStatus"],
+    payload: parseJson(row.payload) as MemoryItem["payload"],
+    tags: row.tags,
+    relatedFiles: row.related_files,
+    relatedSymbols: row.related_symbols,
+    relatedTestRunIds: row.related_test_run_ids,
     sensitivity: row.sensitivity as MemoryItem["sensitivity"],
-    version: row.version as number,
+    version: row.version,
     createdBy: parseJson(row.created_by) as MemoryItem["createdBy"],
     updatedBy: parseJson(row.updated_by) as MemoryItem["updatedBy"],
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
-  } as unknown as MemoryItem;
+    // timestamptz 到手是 `Date`，而 `MemoryItem` 声明的是 `string` ——
+    // 原先的 `as string` 让这个不一致一直藏着（§M1 的实证例子）。
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+    // 唯一剩下的一处断言，且只针对**判别式联合**：`MemoryItem` 是按 `type`
+    // 判别的联合，各成员的 `payload` 形状不同，而数据库行里 `type`（text）
+    // 与 `payload`（jsonb）之间的对应关系无法被类型系统表达。
+    //
+    // 它**不再**承担列名校验 —— 那部分已经由 `MemoryItemRow` 在编译期完成：
+    // 列改名、改类型、漏字段现在都是编译错误，而不是运行期 `undefined`。
+    // 这正是 §M1 要的效果；把这一处也消掉需要按 `type` 分支构造联合成员，
+    // 那是另一件事（并且要连带定义每种 payload 的校验）。
+  } as MemoryItem;
 }
 
 const memoryItemColumns = [
@@ -81,7 +102,9 @@ async function insertVersion(
 export const memoryItemDao = {
   async create(item: MemoryItem): Promise<MemoryItem> {
     const sql = getSql();
-    const [row] = await sql`
+    // 断言的唯一位置：驱动边界。`RETURNING *` 的形状由 `MemoryItemRow` 声明，
+    // 之后的映射不再需要逐字段断言（§M1）。
+    const [row] = await sql<MemoryItemRow[]>`
       INSERT INTO memory_items (
         id, schema_version, type, subject_key, subject_key_version,
         title, summary, status, scope, confidence, verification_status,
@@ -96,36 +119,37 @@ export const memoryItemDao = {
         ${item.createdAt}, ${item.updatedAt}
       )
       RETURNING *`;
-    const created = rowToItem(row as Record<string, unknown>);
-    await insertVersion(
-      sql,
-      created.id,
-      created.version,
-      snapshotFromRow(row as Record<string, unknown>),
-      "create",
-      "",
-    );
+    // `RETURNING *` 必然带一行；原先的 `as Record<string, unknown>` 顺手把
+    // 可能为 undefined 这件事也断言掉了（`row.id` 会抛 TypeError）。
+    if (!row) {
+      throw new Error("memory item insert returned no row");
+    }
+    const created = rowToItem(row);
+    await insertVersion(sql, created.id, created.version, snapshotFromRow(row), "create", "");
     return created;
   },
 
   async findById(id: string): Promise<MemoryItem | null> {
     const sql = getSql();
-    const rows = await sql.unsafe("SELECT * FROM memory_items WHERE id = $1", [id]);
-    return rows.length > 0 ? rowToItem(rows[0] as Record<string, unknown>) : null;
+    const rows = await sql.unsafe<MemoryItemRow[]>("SELECT * FROM memory_items WHERE id = $1", [
+      id,
+    ]);
+    const row = rows[0];
+    return row ? rowToItem(row) : null;
   },
 
   async findBySubjectKey(subjectKey: string, status?: MemoryStatus): Promise<MemoryItem[]> {
     const sql = getSql();
     const rows = status
-      ? await sql.unsafe(
+      ? await sql.unsafe<MemoryItemRow[]>(
           "SELECT * FROM memory_items WHERE subject_key = $1 AND status = $2 ORDER BY updated_at DESC",
           [subjectKey, status],
         )
-      : await sql.unsafe(
+      : await sql.unsafe<MemoryItemRow[]>(
           "SELECT * FROM memory_items WHERE subject_key = $1 ORDER BY updated_at DESC",
           [subjectKey],
         );
-    return rows.map((r) => rowToItem(r as Record<string, unknown>));
+    return rows.map((r) => rowToItem(r));
   },
 
   /**
@@ -178,13 +202,13 @@ export const memoryItemDao = {
     const limitParam = bind(limit);
     const offsetParam = bind(offset);
 
-    const rows = await sql.unsafe(
+    const rows = await sql.unsafe<MemoryItemRow[]>(
       `SELECT * FROM memory_items
         WHERE ${conditions.join(" AND ")}
         ORDER BY updated_at DESC LIMIT ${limitParam} OFFSET ${offsetParam}`,
       values,
     );
-    return rows.map((r) => rowToItem(r as Record<string, unknown>));
+    return rows.map((r) => rowToItem(r));
   },
 
   async update(
@@ -206,7 +230,7 @@ export const memoryItemDao = {
     if (Object.keys(patch).length === 0) return memoryItemDao.findById(id);
 
     // Build query with tagged template composition
-    const [row] = await sql`
+    const [row] = await sql<MemoryItemRow[]>`
       UPDATE memory_items SET
         title = ${patch.title ?? sql`title`},
         summary = ${patch.summary ?? sql`summary`},
@@ -221,15 +245,8 @@ export const memoryItemDao = {
       WHERE id = ${id} AND version = ${expectedVersion}
       RETURNING *`;
     if (!row) return null;
-    const updated = rowToItem(row as Record<string, unknown>);
-    await insertVersion(
-      sql,
-      updated.id,
-      updated.version,
-      snapshotFromRow(row as Record<string, unknown>),
-      "update",
-      "",
-    );
+    const updated = rowToItem(row);
+    await insertVersion(sql, updated.id, updated.version, snapshotFromRow(row), "update", "");
     return updated;
   },
 
