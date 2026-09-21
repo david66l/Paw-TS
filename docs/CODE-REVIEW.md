@@ -870,3 +870,17 @@ await expect(
 下一步的可行顺序：先定义 `RunSession`（把 `run()` 解构的 22 个字段和 `PhaseContext` 的 35 个字段中重合的部分收进去），再让 `initializeRun` 退化成「构造 RunSession + 调用三个具名步骤」，最后才是拆 class body。报告里那条「新增/修改的方法不超过 ~150 行」的机械约束应当与它同时落地。
 
 **顺带发现一个闸门盲区（值得单独记一笔）**：`errors.ts` 最初抽出来时没有 `export`，于是它**不是一个模块**，TypeScript 把它的声明当成了**全局**。后果是 `orchestrator.ts` 里 `classifyError(...)` 之类没有任何 import 也能通过 `packages/agent` 自己的 `tsc`（`include: ["src/**/*.ts"]`，exit 0），而 `apps/desktop` 的 `include: ["src"]` 是另一个 program、拿不到这些全局，于是报出 4 个 `Cannot find name`。**同一个文件，两个包级 tsconfig 给出不同结论** —— 这正是 §2.3「CI 不覆盖唯一的 app」与 §2.5「每个包 tsconfig 各自复制」两条的合流后果。批次 A 已经把桌面端纳入闸门，所以这次是桌面端先抓到；否则它会以「全局符号」的形态安静地留在仓库里。这也说明「23 个包都 typecheck 通过」并不等于每个文件都被严格检查过。
+
+### 11.9 #21 与 #20 不同：它是可机械完成的
+
+同样是「千行函数」，`packages/harness/src/registry/execution.ts` 的 `executeTool`（**1355 行，299–1653**）结构与 `initializeRun` 完全相反。AST 量出来的结果：
+
+- 函数体是 **41 条顶层语句**，其中 **40 条是形状一致的 `if (tool === <常量>) { … return … }`**，无 `switch`；
+- 每条分支的**自由标识符只有 2–15 个**（多数 5–8），最多的是 `SHELL`(15)、`EDIT`(11)；
+- **没有一条分支写外层局部变量** —— 每条都是「读 `ctx`/`rec` + 返回结果」。
+
+也就是说 #21 可以照搬 #19 的做法：每条分支 → `handle<Tool>(ctx, rec): Promise<ToolRunResult>`，`executeTool` 退化成一张派发表。而且有一个额外的安全网：**把处理器的返回类型写成 `Promise<ToolRunResult>`，TypeScript 会强制每条路径都 return** —— 这正是拆分支最容易出错的地方（原代码里某条分支若不返回，会静默落到最后的 `unknown tool`）。
+
+需要一并搬走的模块级常量（`READ`/`WRITE`/… 40 个工具名）应当先进 `tool-names.ts`，否则 dispatcher 与 handlers 之间会形成 import 环。
+
+规模预估：40 个处理器，按域分 5–6 个文件（文件读写、job、shell/web、git、agent、memory）。这条建议在下一轮作为独立改动完成，不要与其它条目混在一次提交里。
