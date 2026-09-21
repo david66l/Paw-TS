@@ -1777,9 +1777,6 @@ export function useAgentRun() {
     [status, hostReady, finalizeSessionMemory, commitSessions],
   );
 
-  /** 兼容：清空 → 当前会话消息；侧栏「新对话」用 newConversation */
-  const clear = newConversation;
-
   return {
     messages,
     monitor,
@@ -1793,7 +1790,6 @@ export function useAgentRun() {
     cancelChild,
     retryChild,
     abort,
-    clear,
     clearCurrentMessages,
     newConversation,
     selectSession,
