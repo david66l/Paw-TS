@@ -95,16 +95,47 @@ export type MemoryCandidateRow = {
   readonly expires_at: Date | null;
 };
 
-// 注意：`governance_decisions` 的行类型**本轮没有加**，但理由不是"它有问题"。
-//
-// 我加了它、看到 `bun test packages/memory` 的失败从 5 升到 8（三个 `红队` 用例的
-// Governor 结论由 `noop` 变 `degraded`，而 `degraded` 会经 `pipeline.ts:779
-// storeDegraded` 真的写入一条降级条目），于是按"可能是安全相关的行为回归"回退了。
-//
-// **回退之后失败继续涨到 11，且那三个用例照样失败** —— 所以它们与这次改动无关。
-// 真正的原因是**测试库跨轮次累积状态**：同一份代码连跑三次得到 5 / 8 / 11，
-// 清库重建后回退版本只剩 **3** 个失败。也就是说之前那次"5 → 8"的对照**本身无效**
-// （两次运行的库状态不同），我据此回退是**误判**。
-//
-// 结论：这个 DAO 的行类型值得做，但**必须在每次运行前清库**才有可信的对照。
-// 详见 docs/CODE-REVIEW.md §11.26。
+/**
+ * `governance_decisions` 的一行（`V005__governance_decisions.sql`）。
+ *
+ * 三个 DAO 里可空列最多的一张（**9 个**）。它不是同一个形状：INSERT 把可省略的
+ * 字段写成 `?? null`，所以"调用方没传"在库里就是 `NULL`，而
+ * `memoryStore.ts:153`（`expectedVersion`）、`:163` 与
+ * `governanceExecutor.ts:184`（`adjustedConfidence`）用的判断是 `!== undefined`。
+ * 旧映射把 `NULL` 断言成 `| undefined`，于是那些判断会把"没值"当成"有值"。
+ * 映射改成 `?? undefined` 后它们才名副其实。
+ *
+ * **这个 DAO 的对照方法值得记一笔**：第 43 轮我据一次单跑（5 → 8）误判它引入了
+ * 行为回归并回退，见 §11.26。本轮改为「每侧都清库 + 比较失败**集合**」才落地。
+ */
+export type GovernanceDecisionRow = {
+  readonly id: string;
+  readonly schema_version: number;
+  readonly candidate_id: string;
+  readonly decision: string;
+  readonly reasons: unknown;
+  /** 可空列。 */
+  readonly resulting_memory_id: string | null;
+  /** 可空列。 */
+  readonly resulting_status: string | null;
+  /** 可空列。 */
+  readonly adjusted_type: string | null;
+  /** 可空列。 */
+  readonly adjusted_scope: unknown;
+  /** 可空列。 */
+  readonly adjusted_confidence: number | null;
+  /** 可空列。 */
+  readonly adjusted_payload: unknown;
+  readonly required_actions: unknown;
+  readonly policy_version: string;
+  readonly decided_by: unknown;
+  readonly status: string;
+  /** 可空列。 */
+  readonly target_memory_id: string | null;
+  /** 可空列。 */
+  readonly expected_version: number | null;
+  /** 可空列：timestamptz → `Date`。 */
+  readonly executed_at: Date | null;
+  readonly decided_at: Date;
+  readonly created_at: Date;
+};

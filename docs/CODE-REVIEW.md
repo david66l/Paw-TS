@@ -725,7 +725,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 25 | 🟡 第一轮完成：相对时间窗口解析 + 稳定重排抽到 `memory-core/src/evidence-resolution/relative-time-window.ts`（16 个用例钉住"软加权不是硬过滤"、引用相等的零触发、半开区间、失败保持原序），两处重复前导合一，函数净减 24 行。**剩余**：主函数仍 1593 行；下一刀必须先立 `ResolutionPassState`（selector 门不是自包含的，见 11.21），不是继续找函数抽 | 让承重不变量可被 review | 中大 |
 | 26 | 渲染进程边界：导出 `DesktopRunEvent` 联合类型，`agentId` 改真字段（§D2） | 消掉"改一句摘要就静默破坏子 Agent 名册" | 中 |
 | 27 | 跨包同名不同义改名去歧义（§3） | 消除读者陷阱 | 中（面广但机械） |
-| 28 | 🟡 两刀完成：`db/rows.ts` 落地 `MemoryItemRow` 与 `MemoryCandidateRow`（按驱动实际返回值描述：时间列是 `Date`、可空列是 `| null`），两个 DAO 的标量列零断言、断言集中在驱动边界 `sql.unsafe<Row[]>`；`memoryItem.ts` 断言 **40 → 17**；**A/B 实测**列改名现在报 `TS2339`（§M1 的危害已关闭）；顺带修掉三处类型谎言（`timestamptz`→`Date` 被断言成 `string`、可空列的 `null` 被断言成 `| undefined`），并暴露出被双重断言掩盖的两个既有问题。**剩余**：`governanceDecision.ts`（8 个可空列，须先读迁移）、`db/` 仍有 45 处 `as any`/`as unknown as`、§M7 未动（见 11.25 的接续清单） | 把静默 `undefined` 变编译错误 | 中大 |
+| 28 | 🟡 三刀完成：`db/rows.ts` 落地 `MemoryItemRow` / `MemoryCandidateRow` / `GovernanceDecisionRow`（按驱动实际返回值描述：时间列是 `Date`、可空列是 `| null`），三个 DAO 的标量列零断言、断言集中在驱动边界 `sql.unsafe<Row[]>`；`memoryItem.ts` 断言 **40 → 17**；**A/B 实测**列改名报 `TS2339`（§M1 的危害已关闭，三个 DAO 各自验证过）；顺带修掉三类类型谎言（`timestamptz`→`Date` 被断言成 `string`、可空列 `null` 被断言成 `\ | undefined`），并暴露出被双重断言掩盖的两个既有问题。`governanceDecision` 的落地用了"清库 + 比较失败集合"，见 11.27。**剩余**：`db/` 仍有 45 处 `as any`/`as unknown as`（DAO 之外）、§M7 未动（接续清单见 11.25） | 把静默 `undefined` 变编译错误 | 中大 |
 | 29 | 🟡 三分之二完成：`toWorkspaceRelPath()` ✅（4 处副本 → `workspace/src/workspace-path.ts` 的两个操作）、共享 `summarizeToolArgs` ✅（审批卡漏了 `pattern`，glob/grep/search 此前给审批人显示空摘要；两侧截断长度差异保留并说明理由）；`sse.ts` + `ToolCallAccumulator` 未抽 —— 实测两处副本只有写法差异、无可观测行为差异（§11.11），剩下的纯属可读性 | 消掉已分叉副本 | 中 |
 | 30 | 📏 已测量、未接线：`benchmarks/tsconfig.json` 已加，实测 **496 个类型错误**（报告估的"小"偏低）；未并入 `check:ts`，否则闸门立刻变红。修法见 §11.10 | 3 万行回到闸门内 | 小（实为中大） |
 
@@ -1338,3 +1338,31 @@ expires_at              timestamptz    -- 可空
 **顺带确认的一件事**：清库之后 `红队`、`Governor §5.8-3`、`生命周期 trial 容量` 这几条都会通过 —— 它们是**库状态敏感**的，不是"既有失败"。此前几轮把它们当作固定的"既有 5 条失败"来对比数字，口径是错的：清库后的下界是 **3** 条（`readonly CLI 切换`、`memory-mechanism fixtures`、`Memory Evaluator 单条评估`）。
 
 **本轮验证**：`packages/memory` 清库后 1011 / 3、同库复跑两次均 1009 / 5；lint 0 error / 432 warning；typecheck 23/23；test:ts 2941 pass / 6 skip / 14 fail。**本轮没有功能性改动落地** —— 进入工作树的只有 `rows.ts` 里那段"为什么这个 DAO 还没有行类型"的说明注释。
+
+### 11.27 用正确的方法重做 §11.26 那个 DAO：结论是"改了没事"，我上一轮的回退是误判
+
+按 §11.26 定下的方法重做 `governanceDecision.ts` 的行类型：**每一侧都先 `DROP DATABASE` + 重新 migrate，再比较失败集合**（而不是比较失败数量）。
+
+**对照结果：**
+
+| 侧 | 库 | pass / fail | 失败集合 |
+|---|---|---|---|
+| 基线（未改） | 清库 | 1011 / 3 | readonly CLI、memory-mechanism fixtures、Memory Evaluator |
+| 改动后（第 1 次） | 清库 | 1011 / 3 | 同上，**逐条同名** |
+| 改动后（第 2 次） | 清库 | 1011 / 3 | 同上，**逐条同名** |
+
+基线侧有两次独立的清库观测（第 43 轮一次 + 本轮一次），也都是 1011 / 3 且集合相同。**两侧各两次、四次运行全部落在 1011 / 3 且失败集合逐条一致。**
+
+结论：**这个改动对 `packages/memory` 的行为是中性的**，第 43 轮那次"5 → 8"确实是无效对照导致的误判，而当时的回退决定是错的。这也反过来验证了 §11.26 的分析：那 3 个 `红队` 用例的 `noop → degraded` 与本次改动无关，是库状态造成的。
+
+**A/B 证明行类型确实生效**（与 `memory_items` 同法）：把 `expected_version` 改名为 `expected_version_RENAMED`，`packages/memory` 立即报
+
+```
+src/db/dao/governanceDecision.ts(37,26): error TS2339: Property 'expected_version' does not exist on type 'GovernanceDecisionRow'.
+```
+
+改回后核对：`_RENAMED` 命中 0、`readonly expected_version: number | null` 命中 1。
+
+**这个 DAO 与另外两个不同的地方**：9 个可空列，且 INSERT 把可省略字段写成 `?? null`，所以"调用方没传"在库里就是 `NULL`。而 `memoryStore.ts:153`（`expectedVersion`）、`:163` 与 `governanceExecutor.ts:184`（`adjustedConfidence`）用的是 `!== undefined` 判断 —— 旧映射把 `NULL` 断言成 `| undefined` 时，这些判断会把"没值"当成"有值"。现在映射统一 `?? undefined`，判断才名副其实。时间列同样：`executed_at`/`decided_at`/`created_at` 到手是 `Date`，类型声明是 `string`，改为显式 `toISOString()`。
+
+**这一轮真正的产出其实是方法**：同一个改动，用单跑对照得到"引入回归"的结论并回退，用清库 + 比较集合得到"中性"的结论。§11.26 已经把方法写下来了，本轮是它的第一次应用，而它推翻了自己上一轮的结论。
