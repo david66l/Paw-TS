@@ -1700,3 +1700,28 @@ for (const payload of payloads) { /* 各自的解析与发射，未改动 */ }
 **新测试** `packages/models/test/sse.test.ts`（7 例）钉的是抽取时最容易走样的**行处理边界**：不完整的尾巴留进 `carry`、`done` 时不留尾巴且处理没有换行结尾的最后一行、CRLF 的 `\r` 先剥掉、`event:`/空行/注释行跳过、空缓冲。另有一条专门钉 `"data: "` **必须带空格** —— SSE 规范允许省略空格，但改动前的行为就是不认，抽取必须原样保留，这条用例防止有人"顺手修正"成更宽松的匹配而改变线上行为。
 
 **验证**：`packages/models` **119 pass / 0 fail**（112 + 7 新增）；两个流式循环仍由既有的 `ReadableStream` 桩用例端到端覆盖，全部通过 —— 说明抽取没改变可观测行为。
+
+### 11.41 剩余工作与下一步（交接清单）
+
+本节只列**尚未完成**的项，每项给出「状态 → 下一步 → 已探明的前置/坑」。前面各节记的是过程与证据，这里是可以直接照着做的部分。批次 A（#1–#5）与批次 B（#6–#18）的多数条目已在早期轮次落地，下表只留仍有剩余面的。
+
+| # | 状态 | 下一步（具体动作） | 已探明的前置 / 坑 |
+|---|---|---|---|
+| 17 | 部分：只统一了 `releaseTransition` | 决定是否改那条被钉住的用例，或保留分歧并写清理由 | **§R3 的修法照抄不成立**：`runtime/test/session-execution-lease.test.ts:127` 正是断言 `linearizeJournalBatch` 的裸抛。要看 `file-run-session.ts` 的 `failClosed` 包装才能判断哪种对 |
+| 18 | 部分 | 给 `normalizeErrorCode` 加"拒绝字面量 `Error`"的守卫（小而可测） | **journal 那一半已经修好了**（§11.32）：`observation.ts:88` 现在优先读 `evidence.payload.code`，且 `runtime/test/tool-observation.test.ts:100-127` 已钉住。剩下的是 `LoopError`/settlement 携带显式 code |
+| 20 | 未动 | 先立 `RunSession` 设计，再拆 `initializeRun` | 与 #25 的 `ResolutionPassState` 同类；都属于"先把状态对象立起来" |
+| 24 | 部分 | 把 `TURN_FLAG_CODECS` 从 `section` 扩展成 `{section, omitRule\|sample}` | 见 §11.37：手工 spread **无法**从现有登记表推导（缺的是逐字段的省略规则），且一致性用例只手写了 **7/22** 条 |
+| 25 | 部分（第一刀） | 设计 `ResolutionPassState`，再抽 selector 权威门 | 见 §11.21：selector 门**不自包含**，写 `selectedRefsByRequirement`、读四个上游布尔量 |
+| 27 | 未动 | 按 §3 的清单逐对改名 | `gitCommit` 那一对**已自然消失**（死函数已删）；其余同名不同义对未在本会话枚举 |
+| 28 | 部分（三刀） | `db/` 里 DAO 之外的 45 处 `as any`/`as unknown as`；三个 DAO 的位置参数 `sql.unsafe` 仍非 tagged template | 见 §11.25 的接续清单。**`j()` 不要删** —— 它在 `migrate-v1-to-v2.test.ts:44` 有调用者（§11.29 更正） |
+| 30 | 已测量未接线 | 按 §11.10 的方法修 496 个类型错误，然后并入 `check:ts` | `benchmarks/tsconfig.json` 已在；**并入前闸门会立刻变红** |
+| 31 | 未动 | `packages/agent` 的 `exports` 收成 `"."` + `"./internal"` | 无前置；但面广，建议单独一轮 |
+| 32 | 部分 | `session-execution-lease.ts:1485` 那处 `assertJournalCommitShape(value as unknown as JournalCommitEvent)` | 见 §11.22：它收 `Pick<…>` 且校验**字段间关系**，不是形状守卫 → 改参数类型为 `unknown` + 内部形状校验，不是加 `asserts` |
+| 33 | 可区分性已完整解决 | 与 #25 的 `ResolutionPassState` **一起**做（不变量表 + 29 个累加器的状态对象） | 见 §11.23：单做的收益只剩"可发现性"，风险与 #25 同级 |
+| 34 | 部分 | 补 `createPawNextProductManifestV2/V3` 的契约测试 | 见 §11.18：v3 的 `create` 从 `:156` 起串了 9 个校验（work-segment 策略 → mutation receipt → audit retry 需要 environment auditing → … → stage graph 需要 long-task Manager 模式），要从 `CreatePawNextProductManifestInputV3` 的类型反推最小合法输入，**不要试错** |
+| 35 | ✅ 完成 | — | 见 11.31–11.36 |
+
+**两条跨项的方法论提醒**（本会话反复应验，放在这里以免下一轮重新踩）：
+
+1. **验证"没有"或"不可达"时，必须穷举出口/换工具复核，不能只靠一次搜索。** 正例：§11.39 那段死代码是靠走遍循环的两个出口判定的；反例：§11.20 的 `j()`（用不递归的 glob 得出"无调用者"）与 §11.12 的两处被推翻断言。
+2. **在 `test:memory` 上做对照前必须清库，并比较失败集合而不是失败数量。** 见 §11.26：同一份代码因库状态不同会给出 3 / 5 / 8 / 11 四种失败数，单跑对照会得出错误结论（我据此误退回了一次正确的改动）。`test:ts` 侧还有一个 `fenced FileRunSession` 多进程用例会偶发失败（§11.40 观测到它在总数不变的情况下 fail→pass 翻转），比较时按**集合**看。
